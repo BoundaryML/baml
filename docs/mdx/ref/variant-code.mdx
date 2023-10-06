@@ -1,0 +1,24 @@
+---
+title: "@variant[code]"
+---
+
+<Warning>This is an advanced feature. We caution against using it.</Warning>
+
+This a way to use a heuristic inside of your pipelines. If you feel this is the
+right choice, please reach out and ask first! You can read more about them [here](/mdx/ref/method#variant-code).
+
+```gloo
+@variant[code] my_code_example for GetSentiment {
+    @method impl {
+        @lang[py] {
+            async def impl(arg: InputType) -> OutputType:
+                # Some implementation
+        }
+    }
+}
+```
+
+The `impl` method is a special method that is used to implement the heuristic.
+You can import any library or run any code you want inside of it. The only
+requirement is that it must take in the `InputType` and return the `OutputType`
+as defined by `GetSentiment`.

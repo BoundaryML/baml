@@ -1,0 +1,108 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "Gloo",
+  "logo": {
+    "light": "/logo/favicon.png",
+    "dark": "/logo/favicon.png"
+  },
+  "favicon": "/favicon.png",
+  "colors": {
+    "primary": "#8b5cf6",
+    "light": "#a5b4fc",
+    "dark": "#020617",
+    "background": {
+      "dark": "#020617"
+    },
+    "anchors": {
+      "from": "#FF7F57",
+      "to": "#a5b4fc"
+    }
+  },
+  "topbarLinks": [
+    {
+      "name": "Support",
+      "url": "mailto:contact@trygloo.com"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "Schedule call",
+    "url": "https://calendly.com/gloo-vai/30min"
+  },
+  "tabs": [],
+  "navigation": [
+    {
+      "group": "Get Started",
+      "pages": [
+        "mdx/overview",
+        "mdx/installation",
+        "mdx/quickstart",
+        "mdx/running-tests"
+      ]
+    },
+    {
+      "group": "Concepts",
+      "pages": [
+        "mdx/what-is-gloo",
+        "mdx/why-gloo",
+        "mdx/should-you-use-gloo"
+      ]
+    },
+    {
+      "group": "Guides",
+      "pages": [
+        {
+          "group": "Basic",
+          "pages": [
+            "mdx/examples/classification",
+            "mdx/examples/extraction",
+            "mdx/examples/translation",
+            "mdx/examples/summarization",
+            "mdx/examples/q-and-a"
+          ]
+        },
+        {
+          "group": "Advanced",
+          "pages": ["mdx/examples/chat-bot"]
+        }
+      ]
+    },
+    {
+      "group": "Reference",
+      "pages": [
+        {
+          "group": "Gloo Config Syntax",
+          "pages": [
+            {
+              "group": "Types",
+              "pages": ["mdx/ref/type", "mdx/ref/enum", "mdx/ref/class"]
+            },
+            {
+              "group": "Functions",
+              "pages": [
+                "mdx/ref/function",
+                "mdx/ref/test-group",
+                {
+                  "group": "@variant",
+                  "pages": ["mdx/ref/variant-llm", "mdx/ref/variant-code"]
+                }
+              ]
+            },
+            {
+              "group": "clients",
+              "pages": ["mdx/ref/client-llm", "mdx/ref/client-code"]
+            },
+            "mdx/ref/method"
+          ]
+        }
+      ]
+    }
+  ],
+  "footerSocials": {
+    "twitter": "https://twitter.com/trygloo",
+    "github": "https://github.com/GlooHQ"
+  },
+  "modeToggle": {
+    "default": "light",
+    "isHidden": false
+  }
+}

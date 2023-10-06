@@ -1,0 +1,192 @@
+---
+title: '@test_group'
+---
+
+Test groups offer a way to create tests for [@function](/mdx/ref/function) definitions that test every [@variant](/mdx/ref/variant-llm).
+
+Lets assume you have a function called `GetSentiment` with two different variants `v1` and `v2` (each variant being a unique prompt). In gloo, you'll automatically get tests created for each variant you define with no extra work.
+
+<CodeGroup>
+```gloo Gloo
+@test_group GroupName for GetSentiment {
+    @input Some string goes here
+    @input {
+        Some multiline string
+        goes here.
+    }
+}
+```
+
+```python Python Equivalent (pytest)
+from textwrap import dedent
+from path.to.GetSentiment import GetSentimentV1, GetSentimentV2
+
+@parametrize("version", ["v1", "v2"])
+class TestGroupName:
+    async def test_case_0(self, version):
+        arg = "Some string goes here"
+        if version == "v1":
+            await GetSentimentV1(arg)
+        elif version == "v2":
+            await GetSentimentV2(arg)
+
+    async def test_case_1(self):
+        arg = dedent("""\
+            Some multiline string
+            goes here.""")
+        if version == "v1":
+            await GetSentimentV1(arg)
+        elif version == "v2":
+            await GetSentimentV2(arg)
+```
+
+```typescript TypeScript Equivalent (jest)
+import { GetSentimentV1, GetSentimentV2 } from 'path/to/GetSentiment';
+
+describe('GroupName', () => {
+  test.each(['v1', 'v2'])('test_case_0 - %s', async (version) => {
+    const arg = "Some string goes here";
+    if (version === 'v1') {
+      await GetSentimentV1(arg);
+    } else if (version === 'v2') {
+      await GetSentimentV2(arg);
+    }
+  });
+
+  test.each(['v1', 'v2'])('test_case_1 - %s', async (version) => {
+    const arg = ```Some multiline string
+      goes here.```;
+    if (version === 'v1') {
+      await GetSentimentV1(arg);
+    } else if (version === 'v2') {
+      await GetSentimentV2(arg);
+    }
+  });
+});
+```
+</CodeGroup>
+
+## Properties
+`@test_group` names must be unique per function, but can be reused across multiple functions.
+
+### @input
+
+`@input` is used to specify an input value per test case.
+A single `@test_group` can have multiple `@input` properties.
+
+#### @case
+
+Anytime you wish to add properties on a per test case basis, you can use the `@case` decorator.
+This can includes things like naming a test case, or adding a custom assert method for that test case.
+
+#### @case names
+If you'd like to name an individual test case, you can use the `@case` decorator.
+
+<CodeGroup>
+```gloo Gloo
+@test_group GroupName for GetSentiment {
+    @case SpecialTestCase {
+        @input Some string goes here
+    }
+    @input {
+        Some multiline string
+        goes here.
+    }
+}
+```
+
+```python Python Equivalent (pytest)
+from textwrap import dedent
+from path.to.GetSentiment import GetSentimentV1, GetSentimentV2
+
+@parametrize("version", ["v1", "v2"])
+class TestGroupName:
+    async def test_SpecialTestCase(self, version):
+        arg = "Some string goes here"
+        if version == "v1":
+            await GetSentimentV1(arg)
+        elif version == "v2":
+            await GetSentimentV2(arg)
+
+    async def test_case_1(self):
+        arg = dedent("""\
+            Some multiline string
+            goes here.""")
+        if version == "v1":
+            await GetSentimentV1(arg)
+        elif version == "v2":
+            await GetSentimentV2(arg)
+```
+
+```typescript TypeScript Equivalent (jest)
+import { GetSentimentV1, GetSentimentV2 } from 'path/to/GetSentiment';
+
+describe('GroupName', () => {
+  test.each(['v1', 'v2'])('SpecialTestCase - %s', async (version) => {
+    const arg = "Some string goes here";
+    if (version === 'v1') {
+      await GetSentimentV1(arg);
+    } else if (version === 'v2') {
+      await GetSentimentV2(arg);
+    }
+  });
+
+  test.each(['v1', 'v2'])('test_case_1 - %s', async (version) => {
+    const arg = ```Some multiline string
+      goes here.```;
+    if (version === 'v1') {
+      await GetSentimentV1(arg);
+    } else if (version === 'v2') {
+      await GetSentimentV2(arg);
+    }
+  });
+});
+```
+</CodeGroup>
+
+
+### @method (custom asserts)
+
+To add an assert for your test case, you can use `@method`.
+
+You can read more about [custom asserts here](/mdx/ref/method).
+
+Gloo will run that assert on every test case in that `@test_group`.
+
+<Info>You don't have to call the function, just define it. Gloo will call it for you after each function call.</Info>
+```gloo Gloo
+@test_group GroupName for GetSentiment {
+    @method assert1 {
+        @lang[py] {
+            def assert1(arg: str, result: Sentiment):
+                assert result == Sentiment.POSITIVE
+        }
+    }
+    ...
+}
+```
+
+
+<Tip>Instead of `def assert1(arg: str, result: Sentiment):` you can use  `def assert1(arg: InputType, result: OutputType):`. Gloo defines `InputType` and `OutputType` in the scope of every `@method` for a `@test_group`</Tip>
+
+#### @case asserts
+For an assert on a single test case, you can use `@method` scoped to `@case`.
+
+<CodeGroup>
+```gloo Gloo
+@test_group GroupName for GetSentiment {
+    @case SpecialTestCase {
+        @method assert1 {
+            @lang[py] {
+                def assert1(arg: str, result: Sentiment):
+                    assert result == Sentiment.POSITIVE
+            }
+        }
+        @input "Some string goes here"
+    }
+    @input "Some other string goes here"
+}
+```
+</CodeGroup>
+
+## Complex input values

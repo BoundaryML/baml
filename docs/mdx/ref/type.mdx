@@ -1,0 +1,100 @@
+---
+title: "Supported Types"
+---
+
+## Primitives
+
+| Type   |  Since          |                  |
+| ----------- | ------------------------ | ---------------------- |
+| null   | `gloo>=0.2.0`   |    |
+| bool | `gloo>=0.2.0` |  |
+| int | `gloo>=0.2.0` |  |
+| float   | `gloo>=0.2.0`   |    |
+| string   | `gloo>=0.2.0`   |    |
+| char   | `gloo>=0.2.0`   |    |
+
+## Constructed Types
+
+| Type   | Since          | Syntax                 |  Usage |
+| ----------- | ------------------------ | ---------------------- | ---- |
+| Enum   |  `gloo>=0.2.0`  | See [enum](enum) Docs   
+| Custom Classes   |  `gloo>=0.2.0`  | See [class](class) Docs  
+| Optional   | `gloo>=0.2.0`   |  `type?`   | `int?` |
+| Union   | `gloo>=0.2.0`   | `type\|type\|`   |  `int\|MyClass\|` | 
+| List | `gloo>=0.2.0` | `type[]` | `string[]` |
+| Dictionary |  |  |
+| Set   |    |    |
+| Tuple   |    |    |
+
+
+<Warning>`(` and `)` are not yet supported for complex inline type.</Warning>
+
+Constructed types can be composed together as well.
+
+Here are some examples and what their equivalents are in different languages.
+
+### Example 1
+
+<CodeGroup>
+```gloo Gloo
+int?|string[]|MyClass|
+```
+
+```python Python Equivalent
+Union[Optional[int], List[str], MyClass]
+```
+
+```typescript TypeScript Equivalent
+(number | undefined) | string[] | MyClass
+```
+</CodeGroup>
+
+
+### Example 2
+<CodeGroup>
+```gloo Gloo
+char[]
+```
+
+```python Python Equivalent
+List[str]
+```
+
+```typescript TypeScript Equivalent
+string[]
+```
+</CodeGroup>
+
+
+### Example 3
+
+<CodeGroup>
+```gloo Gloo
+int|float|[]
+```
+```python Python Equivalent
+List[Union[int, float]]
+```
+
+```typescript TypeScript Equivalent
+number[]
+```
+
+
+</CodeGroup>
+
+### Example 4
+
+<CodeGroup>
+```gloo Gloo
+int?|string[]|MyClass|[]?
+```
+
+```python Python Equivalent
+Optional[List[Union[Optional[int], List[str], MyClass]]]
+```
+
+```typescript TypeScript Equivalent
+((number | undefined) | string[] | MyClass)[] | undefined
+```
+</CodeGroup>

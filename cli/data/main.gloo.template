@@ -1,0 +1,48 @@
+@client[llm] GPT35Client {
+    @provider openai
+    model gpt-3.5-turbo
+    temperature 0
+    api_key @ENV.OPENAI_API_KEY
+}
+
+@client[llm] GPT4Client {
+    @provider openai
+    model gpt-4
+    temperature 0
+    api_key @ENV.OPENAI_API_KEY
+}
+
+
+@function ClassifySentiment {
+    @input   string
+    @output  bool
+}
+
+@test_group MyTests for ClassifySentiment {
+    @case MyCase1 {
+        @input I am very very happy today.
+    }
+
+    @case MyCase2 {
+        @input I am ecstatic!
+    }
+
+    @case MyCase3 {
+        @input {
+            someone stole my bag
+            and it sucked.
+        }
+    }
+}
+
+@variant[llm] v1 for ClassifySentiment {
+    @client[llm] GPT35Client
+    @prompt {
+        Tell me if the following input is happy or not.
+
+        INPUT:
+        {@input}
+        
+        True / False:
+    }
+}

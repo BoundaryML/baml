@@ -1,0 +1,419 @@
+---
+title: "Entity Extraction"
+---
+
+# Use cases
+
+What types of problems are entity extraction problems?
+- Filling out a form with a chat bot
+- Getting specific details out of long form text
+- Calling a function in your code with some parameters after analyzing some text (like OpenAI Functions)
+
+## Walkthrough
+We'll be continuing our example of a Siri-like agent from the [Classification](../classification) tutorial.
+
+As a reminder:
+We want to be able to:
+- Book meetings
+- Ask about our availability
+- Set reminders
+
+For this tutorial, we'll be focusing on booking meetings.
+
+### Setup
+First we need to define our inputs and outputs.
+
+To do that, we'll first define our function:
+
+The function is named `ExtractMeetingDetails` and takes in a string and outputs a `MeetingDetails` object.
+
+```gloo meetings.gloo
+@function ExtractMeetingDetails {
+    @input string
+    @output MeetingDetails
+}
+```
+
+Next we'll define our `MeetingDetails` type:
+```gloo meetings.gloo
+@class MeetingDetails {
+    title string
+    start_time string
+    end_time string
+    attendees string[]
+}
+```
+
+### Prompt definition
+
+Now, we'll define how we call the LLM to extract the meeting details.
+
+We'll need to define a `@variant` of `ExtractMeetingDetails` that uses the `GPT35Client` to call the LLM.
+
+We'll add the variant directly to our `meetings.gloo` file and define the `GPT35Client` in `clients.gloo`.
+
+
+<CodeGroup>
+```gloo meetings.gloo
+@variant[llm] v1 for ExtractMeetingDetails {
+    @client[llm] GPT35Client
+    @prompt {
+        Given the user message, extract relevant details.
+
+        Message: {@input}
+
+        Output JSON:
+        {@output.json}
+
+        JSON:
+    }
+}
+```
+```gloo clients.gloo
+@client[llm] GPT35Client {
+    @provider openai
+    model gpt-3.5-turbo
+    temperature 0
+    api_key @ENV.OPENAI_API_KEY
+}
+```
+</CodeGroup>
+
+This prompt generates the following prompt:
+```
+Given the user message, extract relevant details.
+
+Message: {@input}
+
+Output JSON:
+{
+    "title": string,
+    "start_time": string,
+    "end_time": string,
+    "attendees": string[]
+}
+```
+
+### Using ExtractMeetingDetails in python
+Now that we've defined our function, we can use it in any python code.
+
+```python main.py
+import asyncio
+from generated.function import ExtractMeetingDetails
+from gloo_py.stringify import StringifyError
+
+async def main():
+    message = 'Book a meeting with John at 3pm tomorrow.'
+    try:
+        meeting_details = await ExtractMeetingDetails('v1', message)
+        # Note that meeting_details is a MeetingDetails object.
+        print(meeting_details)
+        # Prints:
+        # MeetingDetails(title='Meeting with John', start_time='3pm', end_time='4pm', attendees=['John'])
+    except StringifyError:
+        # You can capture any parsing errors here.
+        print('Failed to parse meeting details.')
+
+if __name__ == '__main__':
+    asyncio.run(main())
+```
+
+### Using nested objects
+
+When it comes to adding more complex types, you can use nested objects. For example, for attendees, we may want to get the name and email of each attendee.
+All we'd have to do is update our `MeetingDetails` class to include a nested `Attendee` class. However, we should ensure that the `email` field is optional
+as the user may not always provide an email.
+
+```gloo meetings.gloo
+
+@class MeetingDetails {
+    title string
+    start_time string
+    end_time string
+    attendees Attendee[]
+}
+
+@class Attendee {
+    name string
+    email string?
+}
+```
+
+Now, our prompt would automatically update to:
+```
+Given the user message, extract relevant details.
+
+Message: {@input}
+
+Output JSON:
+{
+    "title": string,
+    "start_time": string,
+    "end_time": string,
+    "attendees": {
+        "name": string,
+        "email": string | null
+    }[]
+}
+```
+
+### Getting ISO dates
+In order to call the google calendar API, we can't just get '3pm' as the start time. We need to get an ISO date string, and it needs to know what today is.
+
+We'll do this in two different ways:
+#### Option 1. Complex input type
+We can simply change the input type of our function to be a `MeetingRequest` object.
+
+```gloo meetings.gloo
+@class MeetingRequest {
+    message string
+    today string
+}
+
+@function ExtractMeetingDetails {
+    @input MeetingRequest
+    @output MeetingDetails
+}
+```
+
+Then we'd update the variant to use the `message` and `today` fields.
+
+```gloo meetings.gloo
+@variant[llm] v1 for ExtractMeetingDetails {
+    @client[llm] GPT35Client
+    @prompt {
+        Given the user message, extract relevant details.
+
+        Message: {@input.message}
+
+        Today: {@input.today}
+
+        Output JSON:
+        {@output.json}
+
+        JSON:
+    }
+}
+```
+
+<Info>Note that you're able to access nested fields using the dot notation.</Info>
+
+The generated prompt here would be:
+```
+Given the user message, extract relevant details.
+
+Message: {@input.message}
+
+Today: {@input.today}
+
+Output JSON:
+{
+    "title": string,
+    "start_time": string,
+    "end_time": string,
+    "attendees": {
+        "name": string,
+        "email": string | null
+    }[]
+}
+```
+
+To use the function, I would simply do:
+```python main.py
+from datetime import datetime
+from generated.functions import ExtractMeetingDetails
+from generated.custom_types import MeetingRequest
+
+    # ...
+    meeting_details = await ExtractMeetingDetails('v1', MeetingRequest(
+        message='Book a meeting with John at 3pm tomorrow.',
+        today=datetime.now().isoformat()
+    ))
+```
+
+However this still may not be enough. What if we want to get the start time and end time as ISO dates as well?
+```diff meeting.gloo
+ @variant[llm] v1 for ExtractMeetingDetails {
+     @client[llm] GPT35Client
++    @stringify MeetingDetails {
++        start_time @describe{ISO date string}
++        end_time @describe{ISO date string}
++    }
+...
+}
+```
+
+This would generate the following prompt:
+```diff
+ Given the user message, extract relevant details.
+
+ Message: {@input.message}
+
+ Today: {@input.today}
+
+ Output JSON:
+ {
+     "title": string,
+-    "start_time": string,
+-    "end_time": string,
++    "start_time": ISO date string,
++    "end_time": ISO date string,
+     "attendees": {
+         "name": string,
+         "email": string | null
+     }[]
+ }
+```
+
+#### Option 2. Using custom_vars
+Another option is to use custom variables directly in the prompt.
+
+```diff meetings.gloo
+@function ExtractMeetingDetails {
+    @input string
+    @output MeetingDetails
+}
+
+@variant[llm] v1 for ExtractMeetingDetails {
+    @client[llm] GPT35Client
+
++    @method custom_vars {
++        @lang[py] {
++            from datetime import datetime
++
++            def custom_vars() -> typing.Dict[str, str]:
++                return {
++                    'today': datetime.now().isoformat()
++                }
++        }
++    }
+
+    @prompt {
+        Given the user message, extract relevant details.
+
+        Message: {@input}
+
++        Today: {@today}
+
+        Output JSON:
+        {@output.json}
+
+        JSON:
+    }
+}
+```
+
+Now, you no longer have to change the caller code, and you can use the function like this:
+```python main.py
+from generated.functions import ExtractMeetingDetails
+
+    # ...
+    meeting_details = await ExtractMeetingDetails('v1', 
+        'Book a meeting with John at 3pm tomorrow.')
+```
+
+## Final code
+<CodeGroup>
+
+```python app/pipeline.py
+import asyncio
+# ClassifyMessage and Category are from the classification tutorial.
+from generated.function import ExtractMeetingDetails, ClassifyMessage
+from generated.custom_types import Category
+from gloo_py.stringify import StringifyError
+
+async def handle_meeting(message: str):
+    try:
+        meeting_details = await ExtractMeetingDetails('v1', message)
+    except StringifyError:
+        # You can capture any parsing errors here.
+        print('Failed to parse meeting details.')
+        return
+
+    # Note that meeting_details is a MeetingDetails object.
+    print(meeting_details)
+    # Prints:
+    # MeetingDetails(
+    #    title='Meeting with John',
+    #    start_time='<iso date string>',
+    #    end_time='<iso date string>',
+    #    attendees=[Attendee(name='John', email=None)]
+    #)
+    
+    # Write code to call some API to book a meeting with
+    # meeting_details.
+
+
+async def main():
+    message = 'Book a meeting with John at 3pm tomorrow.'
+    
+    category = await ClassifyMessage('v1', message)
+
+    if category == Category.MEETING:
+        await handle_meeting(message)
+    elif category == Category.AVAILABILITY:
+        # ...
+    elif category == Category.REMINDER:
+        # ...
+    
+if __name__ == '__main__':
+    asyncio.run(main())
+```
+
+```gloo meetings.gloo
+@class MeetingDetails {
+    title string
+    start_time string
+    end_time string
+    attendees Attendee[]
+}
+
+@class Attendee {
+    name string
+    email string
+}
+
+@function ExtractMeetingDetails {
+    @input string
+    @output MeetingDetails
+}
+
+@variant[llm] v1 for ExtractMeetingDetails {
+    @client[llm] GPT35Client
+
+    @method custom_vars {
+        @lang[py] {
+            from datetime import datetime
+
+            def custom_vars() -> typing.Dict[str, str]:
+                return {
+                    'today': datetime.now().isoformat()
+                }
+        }
+    }
+
+    @prompt {
+        Given the user message, extract relevant details.
+
+        Message: {@input}
+
+        Today: {@today}
+
+        Output JSON:
+        {@output.json}
+
+        JSON:
+    }
+}
+```
+
+```gloo clients.gloo
+@client[llm] GPT35Client {
+    @provider openai
+    model gpt-3.5-turbo
+    temperature 0
+    api_key @ENV.OPENAI_API_KEY
+}
+```
+
+</CodeGroup>

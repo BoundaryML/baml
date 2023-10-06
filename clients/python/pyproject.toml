@@ -1,0 +1,52 @@
+[build-system]
+requires = [ "poetry-core",]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "gloo-lib"
+version = "1.1.23"
+description = ""
+authors = [ "Gloo <contact@trygloo.com>",]
+[[tool.poetry.packages]]
+include = "gloo_py"
+from = "."
+
+[[tool.poetry.packages]]
+include = "gloo_stringify"
+from = "."
+
+[[tool.poetry.packages]]
+include = "gloo_internal"
+from = "."
+
+[[tool.poetry.packages]]
+include = "gloo_testing"
+from = "."
+
+[tool.mypy]
+strict = true
+
+[tool.poetry.dependencies]
+python = "^3.8"
+pydantic = "^2.3.0"
+aiohttp = "^3.8.5"
+coloredlogs = "^15.0.1"
+pytest = "^7.4.2"
+pytest-asyncio = "^0.21.1"
+openai = ">=0.27.9"
+types-requests = "^2.31.0.2"
+anthropic = "^0.3.11"
+python-dotenv = "^1.0.0"
+
+[tool.mypy."coloredlogs.*"]
+ignore_missing_imports = true
+
+[tool.poetry.plugins.pytest11]
+pytest-gloo = "gloo_testing.pytest_gloo"
+
+[tool.poetry.group.dev.dependencies]
+mypy = "^1.5.1"
+types-decorator = "^5.1.8.4"
+types-mock = "^5.1.0.2"
+mock = "^5.1.0"
+ruff = "^0.0.291"

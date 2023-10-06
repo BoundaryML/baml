@@ -1,0 +1,261 @@
+---
+title: "Quickstart"
+description: Start building with Gloo in 5 minutes
+---
+
+Gloo allows developers to build, test and deploy powerful LLM apps using a task-based (aka "function-based") architecture.
+
+In order for any chatbot or LLM-powered app to interface with your existing code, you need to be able to mold its output into a structured format your program can understand.
+
+<Tip>
+  An AI agent that uses "tools" is really just performing a classification task.
+  The input is a question, and the output is a list of tools. This is just one
+  example. Gloo allows you to define tasks like these in very simple steps, and
+  in the future, use the LLM-generated data to train specialized models.
+</Tip>
+
+Gloo consists of the following parts:
+
+1. **Gloo CLI**
+2. **Gloo Task Definitions**
+3. **Gloo Dashboard + Data** warehouse to view tests, or query your data to train your own models.
+
+## Building a semantic search task
+
+In this guide we will walk through how you can build a semantic search task using Gloo.
+
+#### Prerequisites:
+
+1. Install [Node + NPM](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm)
+1. Install npx: `npm install -g npx`, which can run the Gloo CLI without installing it globally
+1. Run `npx @gloo-ai/client --version`, and if you see the version you're now ready to go.
+
+### Step 1: Add the task to a tasks.yaml file
+
+The `tasks.yaml` is a definition of all, or a subset of tasks you want your program to perform using generative models. You can think of each task as the equivalent of an LLM prompt with a specific instruction and an output schema.
+
+This file can have many different tasks (e.g. summarize, translate, classify), that you can run in sequence (or in parallel) to make an LLM "pipeline" (aka an AI agent).
+
+```yaml project/tasks/tasks.yaml
+tasks:
+  SearchDocuments:
+    input: SearchInput
+    output: SearchOutput
+  # You could add more tasks here
+  # Summarize...
+  #   input: ....
+
+types:
+  ## Search
+  SearchInput:
+    query: string
+    context: string
+  SearchOutput:
+    clues: list<string>
+    reasoning: string
+    answer: string
+```
+
+Each input and output maps to a `type` defined in the `types` section.
+
+### Generate your Task Definitions
+
+Next we will use the **Gloo CLI** to generate your task definitions with this command:
+
+```bash
+npx @gloo-ai/client generate python --yaml tasks/tasks.yaml
+```
+
+This will generate a few files in your project:
+
+```bash
+tasks/
+  task_search_documents/
+    v0/
+      generated.py
+      task.py
+      test.py # Coming soon
+```
+
+<Warning>
+  You must run this CLI anytime you change the tasks.yaml file. The CLI will
+  automatically create a new version of your task.py if it detects your new yaml
+  is incompatible with the existing task.py.
+</Warning>
+
+### Edit your generated Task Definition
+
+Now we can edit the generated `task.py`. At a glance, you will see a lot of commented out functions.
+Below we go over each of these functions and what they do.
+
+We will leverage the input variables defined in `task.yaml` schema to build our prompt, and we will ensure the output instructions can output the schema we desire.
+
+Recall that for our **Search** task the desired output schema is:
+
+```yaml
+SearchOutput:
+  clues: list<string>
+  reasoning: string
+  answer: string
+```
+
+Which translates to this JSON:
+
+```json
+{
+  "clues": string[],
+  "reasoning": string,
+  "answer": string,
+}
+```
+
+We now edit the prompt so our LLM actually spits out that output format.
+
+```python task.py
+  class search(GlooLLMTaskInterface):
+     # ...
+
+      def edit_llm_client(self) -> LLMClient:
+        return OpenAILLMClient(model_name="gpt-3.5-turbo", temperature=0)
+
+      def edit_prompt_template(self) -> str:
+          return f"""
+          Answer the question given using the following context:
+
+          Context: {VARS.in_SearchInput.context}
+          Question: {VARS.in_SearchInput.query}
+
+          Respond in the following format:
+          {
+            "clues": string[],
+            "reasoning": string,
+            "answer": string,
+          }
+
+          JSON:
+          """
+     # ...
+
+  async def run_v0(*, input: SearchInputModel) -> SearchOutputModel:
+      task = search()
+      return await task.run(input)
+```
+
+Note how we were able to refer to variables defined in the `task.yaml` **SearchInput** fields. These are all automatically generated, and as you guessed it, the output format can also be generated using your generated **SearchOutput** schema fields. This will generate the same text as above:
+
+```string
+...
+Output in the following format:
+
+{
+  "{VARS.out_SearchOutput.clues}": string[],
+  "{VARS.out_SearchOutput.reasoning}": string,
+  "{VARS.out_SearchOutput.answer}": string,
+}
+...
+```
+
+All of these variable substitutions are tracked by Gloo and can be tracked individually in the dashboard. Gloo will let you use this data to dive deep into potential issues caused by specific sections of your prompt. I.e. you could narrow down which part of your prompt causes the most impact in generating good or bad responses.
+-- (dashboard link) --
+
+<Card title="Task.py" icon="lightbulb" iconType="duotone" color="#0aeb04">
+
+In general, view the `tasks.yaml` as a definition of _what_ tasks are, and the generated `task.py` files as definitions for _how_ they are executed. In the case of LLM apps, the "how" is done using prompt engineering and a combination of different LLM model parameters like temperature, etc. You can see both are defined in the next example.
+
+</Card>
+
+### Run the task
+
+```Python
+from tasks.task_search_documents import run_search_documents
+import asyncio
+
+def run_search()
+  context = perform_semantic_search(query)
+  input = SearchInputModel(
+    query="What is the capital of France?",
+    context={context},
+  )
+  # Note you can run synchronous version by importing run_search_documents_sync instead.
+  output = asyncio.run(run_search_documents(input=input))
+  print(output)
+```
+
+### Advanced prompt engineering
+
+Recall the simple schema we have:
+
+```
+  {
+    "clues": string[],
+    ...
+  }
+```
+
+Using `string[]` may not be the best description for `clues`. For example, you may want to indicate what kind of clues you want the model to actually output. Maybe you only want sentiment-based clues, or entities, or facts. We need something more than just declaring the type of `clues`. To do this, there a a couple of ways.
+
+#### 1. Add a "clues" instruction using a prompt template variable
+
+Instructions can be provided at the top of the prompt. Depending on the LLM model, performance may change by adding these at the beginning, rather than within the schema itself.
+
+To experiment with this... -TODO-
+
+#### 2. Use the Output -> JSON converter to define a custom description.
+
+Gloo comes with a built-in function called `edit_types_json_converter` that allows you to define the output format "description" and use it in your prompt.
+
+We will change the clues property in these ways:
+
+1. Change the name to "hints" in the prompt
+2. Add more information about what type of clues to retrieve.
+
+```python task.py
+class search(...)
+  def edit_types_json_converter(self) -> search__Description:
+    return {
+      "SearchOutput": {
+          "clues": {
+              "name": "hints",
+              "description": "string[], where each clue is an entity that will help answer the question in a factual way",
+          },
+          ... other fields search output ...
+      },
+    }
+
+  def edit_prompt_template()
+    return f'''
+    Answer the question given using the following context:
+
+    Context: {VARS.in_SearchInput.context}
+    Question: {VARS.in_SearchInput.query}
+
+    Respond in the following format:
+    {
+      "{VARS.out_SearchOutput.clues}": {VARS.out_SearchOutput.clues.desc},
+      "reasoning": string,
+      "answer": string,
+    }
+
+    JSON:
+    '''
+```
+
+Note we refer to the description using the variable: `{VARS.out_SearchOutput.clues.desc}`. Gloo gives you a reference to all your input and output variables, as well as their descriptions.
+
+Now that we've finished the edit, our prompt will now have the custom description and name.
+
+```string
+...
+{
+  "hints": string[], where each clue is an entity that will help answer the question in a factual way,
+  "reasoning": string,
+  "answer": string,
+}
+...
+```
+
+Even though this property is called "hints" in the prompt, the actual output of this task will contain a "clues" property (what was defined in our `tasks.yaml`). This allows you to prompt engineer more easily without having to change all your variable names all the time.
+
+## Testing
+
+(TODO)

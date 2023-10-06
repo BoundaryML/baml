@@ -1,0 +1,59 @@
+@enum Topic {
+    ANSWERING_SYSTEM
+    ACCOUNT_BALANCE
+    VEHICLE_REGISTRATION
+    VIOLATIONS
+    PAYMENT_HISTORY
+    PAYMENT_METHOD
+    REQUESTED_ESCALATION
+    UPDATE_CONTACT_INFO
+    MAINTENANCE_REQUEST
+    LANDSCAPING_REQUEST
+    COMPLAINTS
+    NO_REPLY
+    OTHER
+}
+
+@function TopicRouter {
+    @input string
+    @output Topic
+}
+
+@test_group AnsweringSystem for TopicRouter {
+    @method validate {
+        @lang[py] {
+            def validate(input: InputType, output: OutputType):
+                assert output == Topic.ANSWERING_SYSTEM
+        }
+    }
+    @input What's the pet policy?
+    @input Am I allowed to have a 70-pound rottweiler?
+    @input How do I pay my dues?
+    @input How do I pay my assessments?
+}
+
+@test_group AccountBalance for TopicRouter {
+    @method validate {
+        @lang[py] {
+            def validate(input: InputType, output: OutputType):
+                assert output == Topic.ACCOUNT_BALANCE
+        }
+    }
+    @input What is my balance
+    @input what is my account balance?
+    @input I just wanna know how much do I have left
+}
+
+@test_group VehicleRegistration for TopicRouter {
+    @method validate {
+        @lang[py] {
+            def validate(input: InputType, output: OutputType):
+                assert output == Topic.VEHICLE_REGISTRATION
+        }
+    }
+    @input What vehicles do I own?
+    @input Are my vehicles on record with the HOA?
+    @input Can you confirm the vehicles I've registered with the association?
+    @input How many and which vehicles do I have listed with the community?
+    @input Can you tell me what vehicles I have registered with the HOA?
+}

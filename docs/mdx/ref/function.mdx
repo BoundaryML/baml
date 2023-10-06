@@ -1,0 +1,39 @@
+---
+title: "@function"
+---
+
+A function is a definition of an input and output.
+
+The implementation of the function is described in a [variant](/mdx/ref/variant-llm).
+
+We specifically seprate out functions and their defintions because in machine learnings,
+its often common to swap out model parameters, what model architecture is used, or even
+if you're using an LLM vs a Heuristic vs a combination of both to get the answer.
+
+With gloo, you can swap out the function definition and keep the rest of the code that uses the
+function the same.
+
+<CodeGroup>
+```gloo Gloo
+@function GetSentiment {
+    @input   string
+    @output  string
+}
+```
+
+```python Python Equivalent
+from typing import Callable
+
+GetSentiment = Callable[[str], str]
+```
+
+```typescript Typescript Equivalent
+type GetSentiment = (str: string) => string;
+```
+</CodeGroup>
+
+## Properties
+| Property | Type | Description | Required |
+| -------- | ---- | ----------- | -------- |
+| `@input` | Any [type](/docs/types) | The input type of the function | YES |
+| `@output` | Any [type](/docs/types) | The output type of the function | YES|

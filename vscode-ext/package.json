@@ -1,0 +1,80 @@
+{
+  "name": "gloo",
+  "displayName": "Gloo",
+  "description": "Gloo intellisense",
+  "version": "0.3.5",
+  "publisher": "Gloo",
+  "repository": "https://github.com/GlooHQ/gloo-lang",
+  "homepage": "https://trygloo.com",
+  "icon": "logo.png",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "Gloo extension settings",
+      "properties": {
+        "gloo.path": {
+          "type": "string",
+          "default": "gloo",
+          "description": "Override the gloo CLI path"
+        }
+      }
+    },
+    "languages": [
+      {
+        "id": "gloo",
+        "aliases": [
+          "Gloo",
+          "gloo"
+        ],
+        "extensions": [
+          ".gloo"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "gloo",
+        "scopeName": "source.gloo",
+        "path": "./syntaxes/gloo.tmLanguage.json"
+      }
+    ],
+    "activationEvents": [
+      "onLanguage:gloo"
+    ],
+    "snippets": [
+      {
+        "language": "gloo",
+        "path": "./snippets/glooSnippets.json"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "pnpm run compile",
+    "compile": "tsc -p ./",
+    "lint": "eslint \"src/**/*.ts\"",
+    "watch": "tsc -watch -p ./",
+    "build:dev": "pnpm version prerelease --preid=dev --no-git-tag-version && vsce package",
+    "build:beta": "pnpm version prerelease --preid=beta && vsce package && pnpm version patch",
+    "build:stable": "vsce package"
+  },
+  "devDependencies": {
+    "@types/glob": "^8.1.0",
+    "@types/mocha": "^10.0.1",
+    "@types/node": "^16.18.46",
+    "@types/vscode": "^1.73.0",
+    "@typescript-eslint/eslint-plugin": "^5.42.0",
+    "@typescript-eslint/parser": "^5.42.0",
+    "@vscode/test-electron": "^2.3.4",
+    "@vscode/vsce": "^2.21.1",
+    "eslint": "^8.26.0",
+    "typescript": "^5.1.3"
+  }
+}

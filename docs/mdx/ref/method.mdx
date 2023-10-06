@@ -1,0 +1,157 @@
+---
+title: "@method"
+---
+
+`@method` is used to inject function code. They are an advanced concept that should be used
+after you are comfortable with the basics of Gloo.
+
+This is available on the following:
+* `@class`
+* `@test_group`
+    * `@case`
+* `@variant[llm]`
+* `@variant[code]`
+
+
+## Supported Languages
+
+| Language | Tag | Supported |
+| -------- | --- | --------- |
+| python  | `@lang[py]` | 3.10+ |
+
+## Syntax guide
+```gloo Syntax
+@method <name> {
+    @lang[<lang>] {
+        <code>
+    }
+}
+```
+
+### @class
+
+When used inside `@class`, methods are properties to a class. 
+
+<CodeGroup>
+```gloo @class
+@class Foo {
+    costs float[]
+
+    @method adder {
+        @lang[py] {
+            @property
+            def adder(self) -> float:
+                # Note you have access to self and all the properties of Foo
+                return sum(self.costs)
+        }
+    }
+}
+```
+```python Python Equivalent
+from pydantic import BaseModel
+from typing import List
+
+class Foo(BaseModel):
+    costs: List[float]
+
+    @property
+    def adder(self) -> float:
+        # Note you have access to self and all the properties of Foo
+        return sum(self.costs)
+```
+
+```typescript Typescript Equivalent
+// But now no Zod (so parsing is not as convenient).
+class Foo {
+    costs: number[];
+
+    get adder(): number {
+        // Note you have access to this and all the properties of Foo
+        return this.costs.reduce((a, b) => a + b, 0)
+    }
+}
+```
+</CodeGroup>
+
+### @test_group
+```gloo @test_group
+@test_group Group1 for GetSetiment {
+    @method assert1 {
+        @lang[py] {
+            # In a @test_group, the parameters are always the same:
+            # 1. The input type
+            # 2. The output type
+            # Gloo will automatically generate the correct type for you
+            # based on the @input and @output of the function
+            # (GetSentiment)
+            def adder1(arg: InputType, output: OutputType) -> None:
+                assert output == OutputType.POSITIVE
+        }
+    }
+    ...
+}
+```
+
+
+#### @case
+```gloo @case
+@test_group Group1 for GetSetiment {
+    @case {
+        @input "I'm so happy today!"
+        @method assert1 {
+            @lang[py] {
+                # @test_case methods work exactly like @test_group methods
+                # except they only run for the specific test case.
+                def adder1(arg: InputType, output: OutputType) -> None:
+                    assert output == OutputType.POSITIVE
+            }
+        }
+    }
+    @input ...
+}
+```
+
+### @variant[llm]
+```gloo @variant[llm]
+@variant[llm] v1 for GetSentiment {
+    @method custom_vars {
+        @lang[py] {
+            # custom_vars is a special method that allows you to inject
+            # variables into the prompt. This is useful for things like
+            # adding non-input values (e.g.today's date or example responses)
+            # that are only scoped to the implementation of this LLM.
+            def custom_vars() -> typing.Dict[str, str]:
+                return {
+                    "some_var": "my substitution value"
+                }
+        }
+    }
+    @prompt {
+        ...
+        Uses of {@some_var}  will be replaced with "my substitution value".
+        ...
+    }
+}
+```
+
+### @variant[code]
+```gloo @variant[code]
+@variant[code] v2 for GetSentiment {
+    @method impl {
+        @lang[py] {
+            # impl is a special method that allows you to inject
+            # code into the implementation of this variant.
+            async def impl(arg: InputType) -> OutputType:
+                # Note that you have access to the input type and output type
+                # of the variant.
+                from generated.functions import GetSentiment
+
+                # Conditionally call the LLM, only if you don't have context.
+                if 'yes' in arg:
+                    return OutputType.POSITIVE
+
+                # Call the LLM Variant
+                return await GetSentiment('v1', arg)
+        }
+    }
+}

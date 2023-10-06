@@ -1,0 +1,82 @@
+---
+title: "Installation"
+---
+
+## Gloo Compiler
+
+You'll need to install the gloo compiler -- `gloo` -- to your path.
+
+
+<CodeGroup>
+
+```bash Mac
+brew tap gloohq/gloo
+brew install gloo
+```
+
+
+```bash Linux (debian)
+curl -fsSL https://raw.githubusercontent.com/GlooHQ/homebrew-gloo/main/install-gloo.sh | bash
+```
+
+```bash Windows (via scoop)
+# You can install scoop at https://scoop.sh/
+scoop bucket add gloo-bucket https://github.com/gloohq/homebrew-gloo
+scoop install gloo
+```
+</CodeGroup>
+
+### Update instructions
+
+<CodeGroup>
+
+```bash Mac
+gloo update
+```
+
+
+```bash Linux (debian)
+curl -fsSL https://raw.githubusercontent.com/GlooHQ/homebrew-gloo/main/install-gloo.sh | bash
+```
+
+```bash Windows (via scoop)
+scoop update
+scoop update gloo
+```
+</CodeGroup>
+
+
+## Gloo Extension
+
+Use our [VSCode Exension](https://marketplace.visualstudio.com/items?itemName=gloo.gloo) for syntax highlighting, auto building `.gloo` files, and inline syntax errors.
+
+<Info>It also works with [Cursor](https://cursor.so/)!</Info>
+
+<Warning>If you don't use the VSCode extension, you'll need to run: `gloo build` (no args) every time you edit a `.gloo` file.</Warning>
+
+
+
+### Initialize Gloo in your project
+
+```
+gloo init
+```
+
+This will create a gloo.yaml file
+
+![](/images/glooinit.png)
+
+### Folder structure
+
+```
+.
+|-- gloo.yaml
+├── app
+│   └── your application files
+├── gloo
+│   └── your gloo files live here
+├── pyproject.toml
+└── generated
+    └── translated, runnable python code from .gloo.
+          Don't edit these files.
+```

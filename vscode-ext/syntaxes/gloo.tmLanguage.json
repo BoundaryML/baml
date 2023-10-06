@@ -1,0 +1,606 @@
+{
+    "fileTypes": ["gloo"],
+    "name": "Gloo",
+    "patterns": [
+        { "include": "#variantGroup" },
+        { "include": "#enumGroup" },
+        { "include": "#classGroup" },
+        { "include": "#functionGroup" },
+        { "include": "#testGroupGroup" },
+        { "include": "#clientDefinitionGroup" },
+        { "include": "#keywordPattern" },
+        { "include": "#backupKeywordPattern" }
+    ],
+    "repository": {
+        "environmentVariablePattern": {
+            "match": ".*\\s*(@ENV\\.[_\\w]*)",
+            "captures": {
+                "1": {
+                    "name": "variable.environment.gloo"
+                }
+            }
+        },
+        "dependsOnPhrasePattern": {
+            "begin": "(@depends_on)\\s*\\{",
+            "end": "\\}",
+            "beginCaptures": {
+                "1": {
+                    "name": "keyword.control.gloo"
+                }
+            },
+            "patterns": [
+                {
+                    "match": "\\b(\\w+)\\b",
+                    "captures": {
+                        "1": {
+                            "name": "entity.name.function.gloo"
+                        }
+                    }
+                }
+            ]
+        },
+        "dependsOnWordPattern": {
+            "match": "@depends_on",
+            "name": "keyword.control.gloo"
+        },
+        "dependsOnGroup": {
+            "patterns": [
+                { "include": "#dependsOnPhrasePattern" },
+                { "include": "#dependsOnWordPattern" }
+            ]
+        },
+        "nestedBrace": {
+            "begin": "\\{",
+            "end": "\\}",
+            "patterns": [
+                {
+                    "include": "#nestedBrace"
+                }
+            ]
+        },
+        "langPyPhrasePattern": {
+            "begin": "(@lang\\[py])\\s*\\{",
+            "end": "\\}",
+            "beginCaptures": {
+                "1": {
+                    "name": "keyword.control.gloo"
+                }
+            },
+            "name": "source.gloo.embedded.python",
+            "patterns": [
+                {
+                    "include": "source.python"
+                }
+            ]
+        },
+        "langPhrasePattern": {
+            "begin": "(@lang\\[\\w+\\])\\s*\\{",
+            "end": "\\}",
+            "beginCaptures": {
+                "1": {
+                    "name": "keyword.control.gloo"
+                }
+            },
+            "patterns": [
+                {
+                    "include": "#nestedBrace"
+                }
+            ]
+        },
+        "langWordPattern": {
+            "match": "@lang(\\[(\\w*\\])?)?",
+            "name": "keyword.control.gloo"
+        },
+        "langGroup": {
+            "patterns": [
+                { "include": "#langPyPhrasePattern" },
+                { "include": "#langPhrasePattern" },
+                { "include": "#langWordPattern" }
+            ]
+        },
+        "methodPhrasePattern": {
+            "begin": "(@method)\\s+(\\w+[_\\w]*)\\s*\\{",
+            "end": "\\}",
+            "beginCaptures": {
+                "1": {
+                    "name": "keyword.control.gloo"
+                },
+                "2": {
+                    "name": "entity.name.function.gloo"
+                }
+            },
+            "patterns": [{ "include": "#langGroup" }]
+        },
+        "methodWordPattern": {
+            "match": "(@method)\\s+(\\w+[_\\w]*)?",
+            "captures": {
+                "1": {
+                    "name": "keyword.control.gloo"
+                },
+                "2": {
+                    "name": "entity.name.function.gloo"
+                }
+            }
+        },
+        "methodGroup": {
+            "patterns": [
+                { "include": "#methodPhrasePattern" },
+                { "include": "#methodWordPattern" }
+            ]
+        },
+
+        "inputTypePattern": {
+            "begin": "^\\s*@input\\s+",
+            "end": "$",
+            "patterns": [
+                {
+                    "include": "#primitivePattern"
+                },
+                {
+                    "match": "\\b\\w+",
+                    "name": "entity.name.class.gloo"
+                }
+            ]
+        },
+        "outputTypePattern": {
+            "begin": "^\\s*@output\\s+",
+            "end": "$",
+            "patterns": [
+                {
+                    "include": "#primitivePattern"
+                },
+                {
+                    "match": "\\b\\w+",
+                    "name": "entity.name.class.gloo"
+                }
+            ]
+        },
+        "inputStringPattern": {
+            "match": "^\\s*@input\\s+(.+)$",
+            "captures": {
+                "1": {
+                    "name": "string.unquoted.gloo"
+                }
+            }
+        },
+        "inputMultilineStringPattern": {
+            "begin": "^\\s*@input\\s*\\{",
+            "end": "\\}",
+            "contentName": "string.unquoted.multiline.gloo"
+        },
+        "inputPythonPattern": {
+            "begin": "^\\s*@input\\[py\\]\\s*\\{",
+            "end": "\\}",
+            "contentName": "source.python",
+            "patterns": [
+                {
+                    "include": "source.python"
+                }
+            ]
+        },
+        "inputStringGroup": {
+            "patterns": [
+                { "include": "#inputPythonPattern" },
+                { "include": "#inputMultilineStringPattern" },
+                { "include": "#inputStringPattern" }
+            ]
+        },
+        "stringVariablePattern": {
+            "match": "\\{[^}]+\\}",
+            "name": "variable.string.gloo"
+        },
+        "promptPattern": {
+            "match": "^\\s*@prompt\\s+(.*)$",
+            "captures": {
+                "1": {
+                    "name": "string.unquoted.multiline.gloo"
+                }
+            }
+        },
+        "promptMultilinePattern": {
+            "begin": "^\\s*@prompt\\s*\\{",
+            "end": "\\}",
+            "contentName": "string.unquoted.multiline.gloo",
+            "patterns": [
+                {
+                    "include": "#stringVariablePattern"
+                },
+                { "include": "#nestedBrace" }
+            ]
+        },
+        "promptGroup": {
+            "patterns": [
+                { "include": "#promptMultilinePattern" },
+                { "include": "#promptPattern" }
+            ]
+        },
+        "clientTypePattern": {
+            "match": "@client\\[\\w+\\]\\s+(\\w+)",
+            "captures": {
+                "1": {
+                    "name": "storage.type.gloo"
+                }
+            }
+        },
+        "classVariablePattern": {
+            "begin": "\\w+\\s+",
+            "end": "$",
+            "patterns": [
+                {
+                    "include": "#primitivePattern"
+                },
+                {
+                    "match": "\\b\\w+",
+                    "name": "entity.name.class.gloo"
+                }
+            ]
+        },
+        "clientVariablePattern": {
+            "match": "^(@?[_\\w]+)\\s+(@?[_\\w\\-\\.]+(?:\\[\\]|\\?)?)",
+            "captures": {
+                "1": {
+                    "name": "text.plain.gloo"
+                },
+                "2": {
+                    "name": "storage.type.gloo"
+                }
+            }
+        },
+        "casePhrasePattern": {
+            "begin": "(@case)\\s+(\\w+)*\\s*\\{",
+            "end": "\\}",
+            "beginCaptures": {
+                "1": {
+                    "name": "keyword.control.gloo"
+                },
+                "2": {
+                    "name": "entity.name.class.gloo"
+                }
+            },
+            "patterns": [
+                { "include": "#inputStringGroup" },
+                { "include": "#methodGroup" }
+            ]
+        },
+        "caseWordPattern": {
+            "match": "(@case)(?:\\s+(\\w+))?",
+            "captures": {
+                "1": {
+                    "name": "keyword.control.gloo"
+                },
+                "2": {
+                    "name": "entity.name.class.gloo"
+                }
+            }
+        },
+        "caseGroup": {
+            "patterns": [
+                { "include": "#casePhrasePattern" },
+                { "include": "#caseWordPattern" }
+            ]
+        },
+        "renamePhrasePattern": {
+            "begin": "(@rename)\\s*\\{",
+            "end": "\\}",
+            "name": "string.unquoted.gloo",
+            "captures": {
+                "0": {
+                    "name": "keyword.control.gloo"
+                }
+            },
+            "patterns": [{ "include": "#stringVariablePattern" }]
+        },
+        "renameWordPattern": {
+            "match": "@rename\\b",
+            "name": "keyword.control.gloo"
+        },
+        "renameGroup": {
+            "patterns": [
+                { "include": "#renamePhrasePattern" },
+                { "include": "#renameWordPattern" }
+            ]
+        },
+        "describePhrasePattern": {
+            "begin": "\\s*(@describe)\\s*\\{",
+            "end": "\\}",
+            "name": "string.unquoted.gloo",
+            "captures": {
+                "0": {
+                    "name": "keyword.control.gloo"
+                }
+            },
+            "patterns": [{ "include": "#stringVariablePattern" }]
+        },
+        "describeWordPattern": {
+            "match": "@describe\\b",
+            "name": "keyword.control.gloo"
+        },
+        "describeGroup": {
+            "patterns": [
+                { "include": "#describePhrasePattern" },
+                { "include": "#describeWordPattern" }
+            ]
+        },
+        "skipPattern": {
+            "match": "\\s+@skip\\s*$",
+            "name": "keyword.control.skip.gloo"
+        },
+        "stringifyPhrasePattern": {
+            "begin": "(@stringify)\\s+(\\w+)\\s*\\{",
+            "end": "\\}",
+            "beginCaptures": {
+                "1": {
+                    "name": "keyword.control.gloo"
+                },
+                "2": {
+                    "name": "entity.name.class.gloo"
+                }
+            },
+            "patterns": [
+                { "include": "#renameGroup" },
+                { "include": "#describeGroup" },
+                { "include": "#skipPattern" }
+            ]
+        },
+        "stringifyWordPattern": {
+            "match": "(@stringify)(\\s+\\w+)?",
+            "captures": {
+                "1": {
+                    "name": "keyword.control.gloo"
+                },
+                "2": {
+                    "name": "entity.name.class.gloo"
+                }
+            }
+        },
+        "stringifyGroup": {
+            "patterns": [
+                { "include": "#stringifyPhrasePattern" },
+                { "include": "#stringifyWordPattern" }
+            ]
+        },
+        "testGroupPhrasePattern": {
+            "begin": "^\\s*(@test_group)\\s+([_\\w]+)\\s+(for)\\s+([_\\w]+)\\s*\\{",
+            "end": "\\}",
+            "beginCaptures": {
+                "1": {
+                    "name": "keyword.control.gloo"
+                },
+                "2": {
+                    "name": "entity.name.class.gloo"
+                },
+                "3": {
+                    "name": "keyword.control.gloo"
+                },
+                "4": {
+                    "name": "entity.name.function.gloo"
+                }
+            },
+            "patterns": [
+                { "include": "#inputStringGroup" },
+                { "include": "#caseGroup" },
+                { "include": "#methodGroup" }
+            ]
+        },
+        "testGroupWordPattern": {
+            "match": "(@test_group)\\s+(?:(?!for\\b)(\\w+)\\s+(?:(for)(\\s+\\w+)?)?)?",
+            "captures": {
+                "1": {
+                    "name": "keyword.control.gloo"
+                },
+                "2": {
+                    "name": "entity.name.class.gloo"
+                },
+                "3": {
+                    "name": "keyword.control.gloo"
+                },
+                "4": {
+                    "name": "entity.name.function.gloo"
+                }
+            }
+        },
+        "testGroupGroup": {
+            "patterns": [
+                { "include": "#testGroupPhrasePattern" },
+                { "include": "#testGroupWordPattern" }
+            ]
+        },
+        "functionPhrasePattern": {
+            "begin": "(@function)\\s+(\\w+)\\s*\\{",
+            "end": "\\}",
+            "beginCaptures": {
+                "1": {
+                    "name": "keyword.control.gloo"
+                },
+                "2": {
+                    "name": "entity.name.function.custom.gloo"
+                }
+            },
+            "patterns": [
+                { "include": "#inputTypePattern" },
+                { "include": "#outputTypePattern" }
+            ]
+        },
+        "functionWordPattern": {
+            "match": "(@function)(?:\\s+(\\w+))?",
+            "captures": {
+                "1": {
+                    "name": "keyword.control.gloo"
+                },
+                "2": {
+                    "name": "entity.name.function.custom.gloo"
+                }
+            }
+        },
+        "functionGroup": {
+            "patterns": [
+                { "include": "#functionPhrasePattern" },
+                { "include": "#functionWordPattern" }
+            ]
+        },
+        "classPhrasePattern": {
+            "begin": "(@class)\\s+(\\w+)\\s*\\{",
+            "end": "\\}",
+            "beginCaptures": {
+                "1": {
+                    "name": "keyword.control.gloo"
+                },
+                "2": {
+                    "name": "entity.name.class.gloo"
+                }
+            },
+            "patterns": [
+                {
+                    "include": "#methodPattern"
+                },
+                { "include": "#promptPattern" },
+                { "include": "#methodGroup" },
+                { "include": "#classVariablePattern" },
+                { "include": "#primitivePattern" }
+            ]
+        },
+        "classWordPattern": {
+            "begin": "(@class)(?:\\s+([\\w]+))?",
+            "captures": {
+                "1": {
+                    "name": "keyword.control.gloo"
+                },
+                "2": {
+                    "name": "entity.name.class.gloo"
+                }
+            }
+        },
+        "classGroup": {
+            "patterns": [
+                { "include": "#classPhrasePattern" },
+                { "include": "#classWordPattern" }
+            ]
+        },
+        "variantPhrasePattern": {
+            "begin": "^\\s*(@variant\\[\\w+\\])\\s+(\\w+[_\\w]*)\\s+(for)\\s+(\\w+)\\s*\\{",
+            "end": "\\}",
+            "beginCaptures": {
+                "1": {
+                    "name": "keyword.control.gloo"
+                },
+                "2": {
+                    "name": "entity.name.class.gloo"
+                },
+                "3": {
+                    "name": "keyword.control.gloo"
+                },
+                "4": {
+                    "name": "entity.name.function.gloo"
+                }
+            },
+            "patterns": [
+                { "include": "#promptGroup" },
+                { "include": "#clientTypePattern" },
+                { "include": "#dependsOnGroup" },
+                { "include": "#stringifyGroup" },
+                { "include": "#methodGroup" }
+            ]
+        },
+        "variantWordPattern": {
+            "match": "(@variant(?:\\[\\w*\\]?)?)\\s+(?:(?!for\\b)(\\w+)\\s+(?:(for)(\\s+\\w+)?)?)?",
+            "captures": {
+                "1": {
+                    "name": "keyword.control.gloo"
+                },
+                "2": {
+                    "name": "entity.name.class.gloo"
+                },
+                "3": {
+                    "name": "keyword.control.gloo"
+                },
+                "4": {
+                    "name": "entity.name.function.gloo"
+                }
+            }
+        },
+        "variantGroup": {
+            "patterns": [
+                { "include": "#variantPhrasePattern" },
+                { "include": "#variantWordPattern" }
+            ]
+        },
+        "enumPattern": {
+            "begin": "(@enum)\\s+(\\w+)\\s*\\{",
+            "end": "\\}",
+            "beginCaptures": {
+                "1": {
+                    "name": "keyword.control.gloo"
+                },
+                "2": {
+                    "name": "entity.name.class.gloo"
+                }
+            }
+        },
+        "enumWordPattern": {
+            "match": "(@enum)(\\s+\\w+)?",
+            "captures": {
+                "1": {
+                    "name": "keyword.control.gloo"
+                },
+                "2": {
+                    "name": "entity.name.class.gloo"
+                }
+            }
+        },
+        "enumGroup": {
+            "patterns": [
+                { "include": "#enumPhrasePattern" },
+                { "include": "#enumWordPattern" }
+            ]
+        },
+        "clientDefinitionPhrasePattern": {
+            "begin": "(@client\\[\\w+\\])\\s+([_\\w]+)\\s*\\{",
+            "end": "\\}",
+            "beginCaptures": {
+                "1": {
+                    "name": "keyword.control.gloo"
+                },
+                "2": {
+                    "name": "entity.name.class.gloo"
+                }
+            },
+            "patterns": [
+                { "include": "#environmentVariablePattern" },
+                { "include": "#clientVariablePattern" }
+            ]
+        },
+        "clientDefinitionWordPattern": {
+            "match": "(@client(?:\\[\\w*\\]?)?)(\\s+\\w+)?",
+            "captures": {
+                "1": {
+                    "name": "keyword.control.gloo"
+                },
+                "2": {
+                    "name": "entity.name.class.gloo"
+                }
+            }
+        },
+        "clientDefinitionGroup": {
+            "patterns": [
+                { "include": "#clientDefinitionPhrasePattern" },
+                { "include": "#clientDefinitionWordPattern" }
+            ]
+        },
+        "backupKeywordPattern": {
+            "match": "\\s*(@method|@lang\\[\\w*\\]|@method|@describe|@rename|@function|@stringify|@prompt|)",
+            "name": "invalid.illegal.unrecognized-keyword.gloo"
+        },
+        "primitivePattern": {
+            "match": "\\b(char|string|int|float|bool|null)\\b(\\[\\]|\\?)?",
+            "captures": {
+                "1": {
+                    "name": "storage.type.gloo"
+                },
+                "2": {
+                    "name": "text.plain.gloo"
+                }
+            }
+        }
+    },
+    "scopeName": "source.gloo"
+}

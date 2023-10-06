@@ -1,0 +1,235 @@
+---
+title: "Classification"
+---
+
+# Use cases
+
+What types of problems are classification problems?
+- Deciding which tools an AI agent should use
+- Sentiment analysis
+- Labeling emails
+- Spam detection
+- Customer Intent detection
+
+## Walkthrough - Creating a Chatbot that uses tools
+Let's say we're writing an AI agent similar to Siri. We want to be able to:
+- Book meetings
+- Ask about our availability
+- Set reminders
+
+To do this we need to decompose our Chatbot pipeline so that we always perform a classification step
+to figure out what the chatbot should do. Splitting your LLM prompts into subtasks will make it easier to test changes over time.
+
+General chatbot architecture:
+
+User message -> Classify message -> Use tool, or respond back
+
+### Setup
+
+#### Define your classification function in Gloo configs
+<Info>If you have the [VSCode extension](/mdx/installation#gloo-extension), **.gloo** files will have syntax highlighting!</Info>
+``` gloo main.gloo
+@function ClassifyMessage {
+  @input string
+  @output Category
+}
+
+@enum Category {
+  BOOK_MEETING
+  AVALABILITY_QUERY
+  SET_REMINDER
+}
+```
+
+#### Define an LLM variant
+Now we have to define an `LLM variant` for that function, which defines how the function is executed.
+In the future, you could replace this with a different model, instead of an LLM.
+
+An LLM variant has three things
+1. [required] An LLM client
+2. [required] A prompt
+3. [optional] output schema descriptions (or `@stringify`)
+
+<Tip>Feel free to add any of these objects in any .gloo file. All objects are imported globally and can be referenced from anywhere.</Tip>
+
+```gloo main.gloo
+@client[llm] GPT35Client {
+    @provider openai
+    model gpt-3.5-turbo
+    temperature 0
+    api_key @ENV.OPENAI_API_KEY 
+} 
+
+@variant[llm] v1 for ClassifyMessage {
+  @client[llm] GPT35Client
+  @prompt {
+    Given a message, classify it into one of the following categories: BOOK_MEETING, AVALABILITY_QUERY, SET_REMINDER
+
+    Message:
+    ---
+    {@input}
+    ---
+
+    Classification:
+  }
+}
+
+```
+
+Note how we can inject the function's **@input** variable into the prompt by writing `{@input}`. 
+<Tip>If your **@input** was an object, you'd also be able to write `{@input.property}`. See our entity extraction.</Tip>
+
+#### Run your function
+Every time you save a .gloo file, the Gloo CLI will generate relevant python code under your desired output folder.
+
+Since our output folder is configured as "generated" in our gloo.yaml file in our project we can import from there.
+
+``` python app/pipeline.py
+from generated.functions import ClassifyMessage
+import asyncio
+
+async def call_sentiment_fn():
+    res = await ClassifyMessage("v1", args="Can I schedule an meeting?")
+    print(res)
+    ## Response is typed as a Category
+
+
+def call_sentiment_sync():
+    asyncio.run(ClassifyMessage("v1", args="Can I schedule a meeting?"))
+
+```
+
+### Improving our prompt with enum aliases and descriptions
+You probably want to add some descriptions as to what each class actually means, or change the enum name that gets injected in the prompt for better results.
+
+In our case, we will rename all our classes to symbols, such as "K1, K2, K3" so that the LLM can focus on the class descriptions we provide more than the names of them. This is an interesting technique called "Symbol tuning".
+
+To do this we will leverage a unique property called **@stringify**. @stringify basically means "define how this class or object will be described to the LLM".
+ See below how it's used:
+
+```diff main.gloo
+@variant[llm] v1 for ClassifyMessage {
+  @client[llm] GPT35Client
++  @stringify Category {
++    BOOK_MEETING 
++    @rename{k1}
++    @describe{
++      When the user wants to book a meeting on our internal system.
++    }
++
++    AVAILABILITY_QUERY
++    @rename{k2}
++    @describe{
++      When the user is asking for their calendar availability.
++    }
++
++    SET_REMINDER
++    @rename{k3}
++    @describe{
++      When the user wants to set a calendar reminder.
++    }
++  }
+  @prompt {
+    Given a message, classify it into one of the following categories:
++    {@Category.values}
+
+    Message:
+    ---
+    {@input}
+    ---
+
+    Classification:
+  }
+}
+```
+We added two things here:
+1. **@stringify** definition for our **Category** enum, with the new aliases and descriptions.
+2. Used Gloo's **\{@Category.values\}** unique enum property, which writes down each enum and its description in the prompt. You can only use `.values` on enums to list them in your prompt.
+
+**Resulting prompt**
+```
+Given a message, classify it into one of the following categories:
+k1: When the user wants to book a meeting on our internal system.
+k2: When the user is asking for their calendar availability.
+k3: When the user wants to set a calendar reminder.
+
+Message:
+I want to set a reminder
+
+Classification:
+```
+
+<Tip>Gloo will automatically parse the symbols you added back into each enum when you run your code. No need to change the rest of your code!</Tip>
+
+### Final code
+
+<CodeGroup>
+```gloo main.gloo
+@function ClassifyMessage {
+  @input string
+  @output Category
+}
+
+@enum Category {
+  BOOK_MEETING
+  AVALABILITY_QUERY
+  SET_REMINDER
+}
+
+@variant[llm] v1 for ClassifyMessage {
+    @client[llm] GPT35Client
+    @stringify Category {
+        BOOK_MEETING 
+        @rename{k1}
+        @describe{
+        When the user wants to book a meeting on our internal system.
+        }
+    
+        AVAILABILITY_QUERY
+        @rename{k2}
+        @describe{
+        When the user is asking for their calendar availability.
+        }
+    
+        SET_REMINDER
+        @rename{k3}
+        @describe{
+        When the user wants to set a calendar reminder.
+        }
+    }
+    @prompt {
+        Given a message, classify it into one of the following categories:
+        {@Category.values}
+    
+        Message:
+        ---
+        {@input}
+        ---
+    
+        Classification:
+    }
+}
+```
+
+```gloo clients.gloo
+@client[llm] GPT35Client {
+    @provider openai
+    model gpt-3.5-turbo
+    temperature 0
+    api_key @ENV.OPENAI_API_KEY 
+}
+```
+
+```python app/pipeline.py
+from generated.functions import ClassifyMessage
+import asyncio
+
+async def call_sentiment_fn():
+    res = await ClassifyMessage("v1", args="Can I schedule an meeting?")
+    print(res)
+    ## Prints Category.BOOK_MEETING
+
+if __name__ == "__main__":
+    asyncio.run(call_sentiment_fn())
+```
+</CodeGroup>

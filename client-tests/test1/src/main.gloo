@@ -1,0 +1,50 @@
+@enum MessageSender {
+    AI
+    RESIDENT
+}
+
+@class Message {
+    sender MessageSender
+    body   string
+
+    @method as_str {
+        @lang[py] {
+            @property
+            def as_str(self) -> str:
+                return f'{self.sender}: {self.body}'
+        }
+    }
+}
+  
+@class Conversation {
+    thread Message[]
+
+    @method as_str {
+        @lang[py] {
+            @property
+            def as_str(self) -> str:
+                history = '\n'.join(map(lambda m: m.as_str, self.thread))
+                return f"Conversation:\n{history}"
+        }
+    }
+
+
+    @method most_recent_message {
+        @lang[py] {
+            @property
+            def most_recent_message(self) -> str:
+                if len(self.thread) <= 0: return ""
+                return self.thread[-1].as_str
+        }
+    }
+
+    @method historical_messages {
+        @lang[py] {
+            @property
+            def historical_messages(self) -> str:
+                if len(self.thread) <= 1: return ""
+                history = '\n'.join(map(lambda m: m.as_str, self.thread[:-1]))
+                return f"Prior Conversation:\n{history}"
+        }
+    }
+}

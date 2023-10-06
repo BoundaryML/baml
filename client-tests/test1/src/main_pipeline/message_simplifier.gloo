@@ -1,0 +1,91 @@
+@function MessageSimplifier {
+    @input Conversation
+    @output string
+}
+
+@test_group group1 for MessageSimplifier {
+    @case single_message {
+        @input {
+            Conversation(thread=[
+                Message(
+                    sender=MessageSender.AI,
+                    body='Hi, how can i help you today?'
+                )
+            ])
+        }
+    }
+    @input {
+        Conversation(thread=[
+            Message(
+                sender=MessageSender.AI,
+                body='Hi, how can i help you today?'
+            ),
+            Message(
+                sender=MessageSender.RESIDENT,
+                body="I'm having an issue with my water system"
+            ),
+        ])
+    }
+    @case double_message {
+        @input {
+            Conversation(thread=[
+                Message(
+                    sender=MessageSender.RESIDENT,
+                    body="I'm having an issue with my water system"
+                ),
+                Message(
+                    sender=MessageSender.AI,
+                    body="Oh no! I've reported the issue to the manager."
+                ),
+                Message(
+                    sender=MessageSender.RESIDENT,
+                    body="Thanks!"
+                ),
+                Message(
+                    sender=MessageSender.RESIDENT,
+                    body="I want to build a garden. Are there any rules that apply?"
+                ),
+            ])
+        }
+    }
+}
+
+@variant[llm] v1 for MessageSimplifier {
+    @client[llm] AZURE_DEFAULT
+
+    @method custom_vars {
+        @lang[py] {
+            def custom_vars() -> typing.Dict[str, str]:
+                return {
+                    "example_1": """\
+                                Prior Conversations:
+                                Human: What are the vehicles I have registered?
+                                AI: You have a white toyota prius 2015.
+
+                                Most Recent Message:
+                                Human: My Neighbor is an ass.
+
+                                Simplified message:
+                                Human: I'd like to file a complaint about my neighbor
+                                """
+                }
+        }
+    }
+
+    @prompt {
+        Given a chat conversation between a human and ai
+        simplify the most recent message from the human into a single sentence that includes all prior relevant context. Don't include any previously answered questions. 
+
+        {@example_1}
+        {@input.historical_messages}
+
+        Most Recent Message:
+        {@input.most_recent_message}
+
+        Simplified message:
+        Human:
+    }
+}
+
+@variant[code] v2 for MessageSimplifier {
+}

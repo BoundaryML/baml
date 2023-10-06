@@ -1,0 +1,50 @@
+{
+  "folders": [
+    {
+      "name": "Rust CLI",
+      "path": "cli"
+    },
+    {
+      "name": "VSCode Extension",
+      "path": "vscode-ext"
+    },
+    {
+      "name": "Python Client",
+      "path": "clients/python"
+    },
+    {
+      "name": "Docs",
+      "path": "docs"
+    },
+    {
+      "name": "Release Tools",
+      "path": "release"
+    },
+    {
+      "name": "test1/python",
+      "path": "client-tests/test1/python"
+    },
+    {
+      "path": ".github"
+    }
+  ],
+  "settings": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "[rust]": {
+      "editor.defaultFormatter": "rust-lang.rust-analyzer"
+    },
+    "[python]": {
+      "editor.defaultFormatter": "ms-python.black-formatter"
+    },
+    "[cpp]": {
+      "editor.defaultFormatter": "xaver.clang-format"
+    },
+    "mypy.enabled": false,
+    "gloo.path": "${workspaceFolder}/cli/target/debug",
+    "editor.tabSize": 2
+  },
+  "extensions": {
+    "recommendations": ["xaver.clang-format"]
+  }
+}

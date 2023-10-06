@@ -1,0 +1,106 @@
+{
+  "@case": {
+    "prefix": "@case",
+    "body": ["@case ${1:TestCaseName} {", "\t$0", "}"],
+    "description": "Snippet for @case block"
+  },
+  "@client definition": {
+    "prefix": "@client",
+    "body": ["@client[${1:ModelType}] ${2:ClientName} {", "\t$0", "}"],
+    "description": "Snippet for @client definition"
+  },
+  "@client type": {
+    "prefix": "@client",
+    "body": ["@client[${1:ModelType}] ${2:ClientName}"],
+    "description": "Snippet for @client type"
+  },
+  "@class": {
+    "prefix": "@class",
+    "body": ["@class ${1:ClassName} {", "\t$0", "}"],
+    "description": "Snippet for @class definition"
+  },
+  "@describe": {
+    "prefix": "@describe",
+    "body": ["@describe{$0}"],
+    "description": "Snippet for @describe"
+  },
+  "@enum": {
+    "prefix": "@enum",
+    "body": ["@enum ${1:EnumName} {", "\t$0", "}"],
+    "description": "Snippet for @enum definition"
+  },
+  "@function": {
+    "prefix": "@function",
+    "body": [
+      "@function ${1:FunctionName} {",
+      "\t@input ${2:InputType}",
+      "\t@output ${3:OutputType}",
+      "\t$0",
+      "}"
+    ],
+    "description": "Custom Gloo function snippet"
+  },
+  "@input block": {
+    "prefix": "@input",
+    "body": ["@input {", "\t$0", "}"],
+    "description": "Snippet for @input block"
+  },
+  "@input type": {
+    "prefix": "@input",
+    "body": ["@input $0"],
+    "description": "Snippet for @input type"
+  },
+  "@lang block": {
+    "prefix": "@lang",
+    "body": ["@lang[${1:Language}] {", "\t$0", "}"],
+    "description": "Snippet for @prompt block"
+  },
+  "@method block": {
+    "prefix": "@method",
+    "body": ["@method ${1:MethodName} {", "\t$0", "}"]
+  },
+  "@output": {
+    "prefix": "@output",
+    "body": ["@output {", "\t$0", "}"],
+    "description": "Snippet for @output block"
+  },
+  "@output type": {
+    "prefix": "@output",
+    "body": ["@output $0"],
+    "description": "Snippet for @output type"
+  },
+  "@prompt block": {
+    "prefix": "@prompt",
+    "body": ["@prompt {", "\t$0", "}"],
+    "description": "Snippet for @prompt block"
+  },
+  "@skip": {
+    "prefix": "@skip",
+    "body": ["@skip"],
+    "name": "@skip"
+  },
+  "@stringify": {
+    "prefix": "@stringify",
+    "body": ["@stringify ${1:OutputTypeName} {", "\t$0", "}"],
+    "description": "Snippet for @stringify block"
+  },
+  "@rename": {
+    "prefix": "@rename",
+    "body": ["@rename{$0}"],
+    "description": "Snippet for @rename"
+  },
+  "@test_group": {
+    "prefix": "@test_group",
+    "body": ["@test_group ${1:GroupName} for ${2:FunctionName} {", "\t$0", "}"],
+    "description": "Snippet for @test_group block"
+  },
+  "@variant": {
+    "prefix": "@variant",
+    "body": [
+      "@variant[${1:ModelType}] ${2:VariantName} for ${3:FunctionName} {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Snippet for @variant block"
+  }
+}
