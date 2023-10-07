@@ -123,8 +123,8 @@ jobs:
         if [ "${{ steps.diff_check.outputs.client_python_changed }}" == "1" ]; then
           COMMIT_MSG+="[NIGHTLY:client-python] "
         fi
-        echo git commit -am "${COMMIT_MSG}[AUTO] Version bump for nightly release"
+        git commit -am "${COMMIT_MSG}[AUTO] Version bump for nightly release"
     
-    # - name: Push changes
-    #   run: |
-    #       git push
+    - name: Push changes
+      run: |
+          git push
