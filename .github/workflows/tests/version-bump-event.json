@@ -1,0 +1,8 @@
+{
+  "ref": "refs/heads/canary",
+  "head_commit": {
+    "modified": ["vscode-ext/somefile"],
+    "author": "action@github.com",
+    "message": "[NIGHTLY:vscode_ext] [AUTO] Version bump for nightly release"
+  }
+}

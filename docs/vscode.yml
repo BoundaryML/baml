@@ -1,0 +1,82 @@
+name: Deploy Extension
+
+# on:
+# push:
+#   paths:
+#     - "vscode-ext/**"
+#     - ".github/workflows/vscode.yml" # Always include the workflow file itself to catch any changes
+# pull_request:
+#   paths:
+#     - "vscode-ext/**"
+#     - ".github/workflows/vscode.yml" # Always include the workflow file itself to catch any changes
+
+jobs:
+  build-and-deploy:
+    # If there are no changes in the 'vscode-ext' directory, don't run the job
+    if: github.event_name == 'push' && contains(toJson(github.event.commits), 'vscode-ext/')
+    runs-on: ubuntu-latest
+
+    steps:
+      # Check out the repo
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+
+      # Set up Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: 18
+
+      - uses: pnpm/action-setup@v2
+        name: Install pnpm
+        with:
+          version: 8
+          run_install: false
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - uses: actions/cache@v3
+        name: Setup pnpm cache
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('vscode-ext/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+      
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: vscode-ext/
+
+      # Build the VSCode Extension
+      - name: Build VSCode Extension
+        run: |
+          version=$(node -p "require('./package.json').version")
+          commit=$(git rev-parse --short HEAD)
+          pnpm run vscode:package -o gloo-${version}-${commit}.vsix
+        working-directory: vscode-ext/
+
+      # Upload the artifact (helpful for debugging and manual downloads)
+      - name: Upload VSCode Extension Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: gloo-vscode
+          path: vscode-ext/gloo-${version}-${commit}.vsix
+
+      # Post the artifact link to the code review on pull requests
+      - name: Post Artifact Link
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v4
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const artifactUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}/artifacts`;
+            github.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `VSCode Extension Artifact: [Download Here](${artifactUrl})`
+            });

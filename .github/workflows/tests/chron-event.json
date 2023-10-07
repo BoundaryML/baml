@@ -1,0 +1,13 @@
+{
+  "schedule": [
+    {
+      "cron": "0 0 * * *"
+    }
+  ],
+  "ref": "refs/heads/canary",
+  "head_commit": {
+    "modified": ["vscode-ext/somefile"],
+    "author": "foo@example.com",
+    "message": "Some random commit"
+  }
+}
