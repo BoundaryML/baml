@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     # This string matches nightly_version.yml
-    if: contains(github.event.head_commit.message, '[AUTO] Version bump for nightly release')
+    if: (contains(github.event.head_commit.message, '[AUTO:prerelease]') || contains(github.event.head_commit.message, '[AUTO:patch]') || contains(github.event.head_commit.message, '[AUTO:major]') || contains(github.event.head_commit.message, '[AUTO:minor]'))
 
     steps:
       - name: Checkout Repository
@@ -20,14 +20,10 @@ jobs:
         id: get_changes
         run: |
           COMMIT_MSG="${{ github.event.head_commit.message }}"
-          echo "::set-output name=cli_changed::$(if [[ $COMMIT_MSG == *"[NIGHTLY:cli]"* ]]; then echo 1; else echo 0; fi)"
-          echo "::set-output name=vscode_ext_changed::$(if [[ $COMMIT_MSG == *"[NIGHTLY:vscode_ext]"* ]]; then echo 1; else echo 0; fi)"
-          echo "::set-output name=client_python_changed::$(if [[ $COMMIT_MSG == *"[NIGHTLY:client-python]"* ]]; then echo 1; else echo 0; fi)"
+          echo "cli_changed=${COMMIT_MSG//*'[NIGHTLY:cli]'*/1}" >> $GITHUB_ENV
+          echo "vscode_ext_changed=${COMMIT_MSG//*'[NIGHTLY:vscode_ext]'*/1}" >> $GITHUB_ENV
+          echo "client_python_changed=${COMMIT_MSG//*'[NIGHTLY:client-python]'*/1}" >> $GITHUB_ENV
 
-      - run: |
-          pwd
-          ls .github
-      
       - name: VSCode Extension
         if: steps.get_changes.outputs.vscode_ext_changed == '1'
         uses: ./.github/actions/vscode
