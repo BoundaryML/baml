@@ -1,5 +1,8 @@
 name: Canary Version Bumper
 
+permissions:
+  contents: write
+
 on:
   schedule:
     - cron: "0 0 * * *" # every day
@@ -127,4 +130,4 @@ jobs:
 
       - name: Push changes
         run: |
-          git push https://${{ secrets.GH_PAT }}@github.com/GlooHQ/gloo-lang.git canary
+          git push
