@@ -127,6 +127,4 @@ jobs:
 
       - name: Push changes
         run: |
-          git push
-        env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
+          git push https://${{ secrets.GH_PAT }}@github.com/GlooHQ/gloo-lang.git canary
