@@ -128,3 +128,5 @@ jobs:
       - name: Push changes
         run: |
           git push
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
