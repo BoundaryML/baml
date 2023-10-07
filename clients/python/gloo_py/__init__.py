@@ -7,7 +7,7 @@ from gloo_internal.tracer import trace, update_trace_tags
 from gloo_internal.llm_client import LLMClient, OpenAILLMClient
 
 
-__version__ = "1.1.23"
+__version__ = "1.1.24-canary.0"
 
 __all__ = [
     "CodeVariant",
