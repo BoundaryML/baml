@@ -11,15 +11,15 @@ on:
         required: true
         default: 'prerelease'
       CLI:
-        description: 'Bump Rust CLI'
+        description: 'Bump Rust CLI (AUTO,0,1)'
         required: true
         default: 'AUTO'
       CLIENT_PYTHON:
-        description: 'Bump Python Client'
+        description: 'Bump Python Client (AUTO,0,1)'
         required: true
         default: 'AUTO'
       VSCODE_EXT:
-        description: 'Bump VSCode Extension'
+        description: 'Bump VSCode Extension (AUTO,0,1)'
         required: true
         default: 'AUTO'
 
@@ -40,28 +40,55 @@ jobs:
         if [ -z "$COMMIT_HASH" ]; then
           COMMIT_HASH=$(git rev-list --max-parents=0 HEAD)
         fi
-        echo ::set-output name=hash::${COMMIT_HASH}
+        echo hash=${COMMIT_HASH} >> $GITHUB_OUTPUT
 
     - name: Check for changes in specified folders since last autorelease
       id: diff_check
       run: |
+        vscode_ext_changed=1
         if [ "${{ github.event.inputs.VSCODE_EXT }}" == "AUTO" ]; then
-          git diff --quiet ${{ steps.last_commit.outputs.hash }} HEAD -- ./vscode-ext && echo ::set-output name=vscode_ext_changed::0 || echo ::set-output name=vscode_ext_changed::1
+          git diff --quiet ${{ steps.last_commit.outputs.hash }} HEAD -- ./vscode-ext || vscode_ext_changed=0
         else
-          echo ::set-output name=vscode_ext_changed::${{ github.event.inputs.VSCODE_EXT }}
+          vscode_ext_changed=${{ github.event.inputs.VSCODE_EXT }}
         fi
+        echo vscode_ext_changed=${vscode_ext_changed} >> $GITHUB_OUTPUT
+        
+        cli_changed=1
         if [ "${{ github.event.inputs.CLI }}" == "AUTO" ]; then
-          git diff --quiet ${{ steps.last_commit.outputs.hash }} HEAD -- ./cli && echo ::set-output name=cli_changed::0 || echo ::set-output name=cli_changed::1
+          git diff --quiet ${{ steps.last_commit.outputs.hash }} HEAD -- ./cli || cli_changed=0
         else
-          echo ::set-output name=cli_changed::${{ github.event.inputs.CLI }}
+          cli_changed=${{ github.event.inputs.CLI }}
         fi
-        if [ "${{ github.event.inputs.CLIENT_PYTHON }}" == "AUTO" ]; then
-          git diff --quiet ${{ steps.last_commit.outputs.hash }} HEAD -- ./client/python && echo ::set-output name=client_python_changed::0 || echo ::set-output name=client_python_changed::1
-        else
-          echo ::set-output name=client_python_changed::${{ github.event.inputs.CLIENT_PYTHON }}
-        fi
-        git diff --quiet ${{ steps.last_commit.outputs.hash }} HEAD -- ./docs && echo ::set-output name=docs_changed::0 || echo ::set-output name=docs_changed::1
+        echo cli_changed=${cli_changed} >> $GITHUB_OUTPUT
 
+        client_python_changed=1
+        if [ "${{ github.event.inputs.CLIENT_PYTHON }}" == "AUTO" ]; then
+          git diff --quiet ${{ steps.last_commit.outputs.hash }} HEAD -- ./client/python || client_python_changed=0
+        else
+          client_python_changed=${{ github.event.inputs.CLIENT_PYTHON }}
+        fi
+        echo client_python_changed=${client_python_changed} >> $GITHUB_OUTPUT
+
+        docs_changed=1
+        git diff --quiet ${{ steps.last_commit.outputs.hash }} HEAD -- ./docs || docs_changed=0
+        echo docs_changed=${docs_changed} >> $GITHUB_OUTPUT
+
+        changed=0
+        if [ $vscode_ext_changed -eq 1 ] || [ $cli_changed -eq 1 ] || [ $client_python_changed -eq 1 ]; then
+          changed=1
+        fi
+        echo bumping_version=${changed} >> $GITHUB_OUTPUT
+
+    - name: Set up python
+      if: steps.diff_check.outputs.bumping_version == '1'
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    - name: Install bumpversion
+      if: steps.diff_check.outputs.bumping_version == '1'
+      run: |
+        python -m pip install --upgrade pip
+        pip install bumpversion
 
     - name: Bump version - vscode-ext
       if: steps.diff_check.outputs.vscode_ext_changed == '1'
@@ -82,7 +109,7 @@ jobs:
       working-directory: ./clients/python
     
     - name: Create new commit
-      if: steps.diff_check.outputs.vscode_ext_changed == '1' || steps.diff_check.outputs.cli_changed == '1' || steps.diff_check.outputs.client_python_changed == '1'
+      if: steps.diff_check.outputs.bumping_version == '1'
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
