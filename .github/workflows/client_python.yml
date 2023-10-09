@@ -60,7 +60,6 @@ jobs:
         working-directory: clients/python
       
       - name: Create artifact
-        if: github.event.inputs.release == 'y'
         uses: actions/upload-artifact@v3
         with:
           name: python-client
