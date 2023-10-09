@@ -57,21 +57,33 @@ jobs:
       - name: Build Python Client
         run: poetry build
         working-directory: clients/python
-      
+
       - name: Create artifact
         uses: actions/upload-artifact@v3
         with:
           name: python-client
-          path: clients/python/dist/
-      
-      - name: Release
-        if: github.event.inputs.release == 'y'
-        run: echo poetry publish
+          path: clients/python/
 
-      - name: Save dependencies to cache
-        uses: actions/cache@v3
+  release:
+    runs-on: ubuntu-latest
+    needs: compile
+    # if: github.event.inputs.release == 'y'
+
+    steps:
+      - name: Get artifact
+        uses: actions/download-artifact@v2
         with:
-          path: clients/python/.venv
-          key: venv-${{ runner.os }}-${{ hashFiles('clients/python/poetry.lock') }}
-          restore-keys: |
-            venv-${{ runner.os }}-
+          name: python-client
+          path: ./
+      - name: Install Poetry
+        run: |
+          pipx install poetry
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: poetry
+          cache-dependency-path: poetry.lock
+      - name: Publish
+        run: |
+          echo poetry publish
