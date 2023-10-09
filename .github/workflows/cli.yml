@@ -1,0 +1,105 @@
+name: Gloo CLI
+
+on:
+  pull_request:
+    paths:
+      - 'cli/**'
+    branches:
+      - canary
+  push:
+    paths:
+      - 'cli/**'
+    branches:
+      - canary
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'Should this be a release? (y/n)'
+        required: true
+        default: 'y'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    name: Build ${{ matrix.platform.name }}
+
+    strategy:
+      matrix:
+        platform:
+          - os: ubuntu-20.04
+            target: x86_64-unknown-linux-gnu
+            bin: gloo
+            name: gloo-linux-x86_64
+            command: build
+
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bin: gloo.exe
+            name: gloo-Windows-x86_64
+            command: both
+
+          - os: macOS-latest
+            target: x86_64-apple-darwin
+            bin: gloo
+            name: gloo-Darwin-x86_64
+            command: both
+          - os: macOS-latest
+            target: aarch64-apple-darwin
+            bin: gloo
+            name: gloo-Darwin-apple-silicon
+            command: both
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4   
+      
+      - name: Build binary
+        uses: houseabsolute/actions-rust-cross@v0
+        with:
+          command: ${{ matrix.platform.command }}
+          target: ${{ matrix.platform.target }}
+          args: "--locked --release"
+          strip: true
+          working-directory: cli
+      - name: Add artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.platform.name }}
+          path: cli/target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }}
+      
+
+  release:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event.inputs.release == 'y'
+
+    steps:
+      - name: List
+        run: ls -la
+      - name: Checkout code
+        uses: actions/checkout@v4   
+      
+      - name: List
+        run: ls -la
+
+      - name: Get artifact [Darwin-Intel]
+        uses: actions/download-artifact@v3
+        with:
+          name: gloo-Darwin-x86_64
+          path: cli/target/x86_64-apple-darwin/release/
+      - name: Get artifact [Darwin-Silicon]
+        uses: actions/download-artifact@v3
+        with:
+          name: gloo-Darwin-apple-silicon
+          path: cli/target/aarch64-apple-darwin/release/
+      - name: Get artifact [Linux]
+        uses: actions/download-artifact@v3
+        with:
+          name: gloo-linux-x86_64
+          path: cli/target/x86_64-unknown-linux-gnu/release/
+      - name: Get artifact [Windows]
+        uses: actions/download-artifact@v3
+        with:
+          name: gloo-Windows-x86_64
+          path: cli/target/x86_64-pc-windows-msvc/release/
+        
