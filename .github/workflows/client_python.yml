@@ -62,7 +62,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: python-client
-          path: clients/python/
+          path: clients/python/dist
 
   release:
     runs-on: ubuntu-latest
@@ -70,20 +70,19 @@ jobs:
     # if: github.event.inputs.release == 'y'
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4   
+
       - name: Get artifact
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: python-client
-          path: ./
+          path: ./clients/python/dist
+        
       - name: Install Poetry
         run: |
           pipx install poetry
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-          cache: poetry
-          cache-dependency-path: poetry.lock
+
       - name: Publish
         run: |
-          echo poetry publish
+          poetry publish
