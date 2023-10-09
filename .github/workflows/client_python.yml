@@ -15,7 +15,7 @@ on:
     inputs:
       release:
         description: 'Should this be a release? (y/n)'
-        required: false
+        required: true
         default: 'y'
 
 jobs:
