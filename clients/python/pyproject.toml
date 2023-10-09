@@ -50,6 +50,7 @@ types-decorator = "^5.1.8.4"
 types-mock = "^5.1.0.2"
 mock = "^5.1.0"
 ruff = "^0.0.291"
+black = "^23.9.1"
 
 [tool.ruff]
 ignore = ["E501"]

@@ -8,7 +8,7 @@ on:
       - canary
 
 jobs:
-  bump_version:
+  compile:
     runs-on: ubuntu-latest
 
     steps:
