@@ -6,6 +6,17 @@ on:
       - 'clients/python/**'
     branches:
       - canary
+  push:
+    paths:
+      - 'clients/python/**'
+    branches:
+      - canary
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'Should this be a release? (y/n)'
+        required: false
+        default: 'y'
 
 jobs:
   compile:
@@ -47,7 +58,18 @@ jobs:
       - name: Build Python Client
         run: poetry build
         working-directory: clients/python
-  
+      
+      - name: Create artifact
+        if: github.event.inputs.release == 'y'
+        uses: actions/upload-artifact@v3
+        with:
+          name: python-client
+          path: clients/python/dist/
+      
+      - name: Release
+        if: github.event.inputs.release == 'y'
+        run: echo poetry publish
+
       - name: Save dependencies to cache
         uses: actions/cache@v3
         with:
@@ -55,8 +77,3 @@ jobs:
           key: venv-${{ runner.os }}-${{ hashFiles('clients/python/poetry.lock') }}
           restore-keys: |
             venv-${{ runner.os }}-
-  
-      - name: Publish Python Client
-        run: echo poetry publish
-        working-directory: clients/python
-  
