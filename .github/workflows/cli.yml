@@ -19,7 +19,7 @@ on:
       release:
         description: 'Should this be a release? (y/n)'
         required: true
-        default: 'y'
+        default: 'n'
 
 jobs:
   build:
@@ -76,7 +76,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
 
-    if: github.event.inputs.release == 'y'
+    # if: github.event.inputs.release == 'y'
 
     steps:
       - name: List
