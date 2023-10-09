@@ -1,5 +1,8 @@
 name: Gloo CLI
 
+permissions: 
+  pull-requests: write
+
 on:
   pull_request:
     paths:
@@ -47,7 +50,7 @@ jobs:
             target: aarch64-apple-darwin
             bin: gloo
             name: gloo-Darwin-apple-silicon
-            command: both
+            command: build # Can't test on macOS-latest because it's Intel
 
     runs-on: ${{ matrix.platform.os }}
     steps:
@@ -72,11 +75,13 @@ jobs:
   release:
     runs-on: ubuntu-latest
     needs: build
+
     if: github.event.inputs.release == 'y'
 
     steps:
       - name: List
         run: ls -la
+
       - name: Checkout code
         uses: actions/checkout@v4   
       
@@ -103,4 +108,34 @@ jobs:
         with:
           name: gloo-Windows-x86_64
           path: cli/target/x86_64-pc-windows-msvc/release/
-        
+      - name: Generate Hashes
+        id: hash
+        run: |
+          tar -czvf gloo-linux-x86_64.tar.gz cli/target/x86_64-unknown-linux-gnu/release/gloo
+          tar -czvf gloo-apple-intel.tar.gz cli/target/x86_64-apple-darwin/release/gloo
+          tar -czvf gloo-apple-arm.tar.gz cli/target/aarch64-apple-darwin/release/gloo
+          echo "linux_hash=$(shasum -a 256 gloo-linux-x86_64.tar.gz | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
+          echo "darwin_intel_hash=$(shasum -a 256 gloo-apple-intel.tar.gz | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
+          echo "darwin_arm_hash=$(shasum -a 256 gloo-apple-arm.tar.gz | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
+          echo "windows_hash=$(shasum -a 256 cli/target/x86_64-pc-windows-msvc/release/gloo.exe | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
+          echo "version=$(cat cli/Cargo.toml | grep version | cut -d ' ' -f 3 | sed 's/"//g')" >> $GITHUB_OUTPUT
+      
+      
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: "cli-${{ steps.hash.outputs.version }}"
+          files: |
+            gloo-linux-x86_64.tar.gz
+            gloo-apple-intel.tar.gz
+            gloo-apple-arm.tar.gz
+            cli/target/x86_64-pc-windows-msvc/release/gloo.exe
+          draft: true
+          prerelease: true
+          body: |
+            ## Hashes
+            Linux: `${{ steps.hash.outputs.linux_hash }}`
+            Mac: Intel: `${{ steps.hash.outputs.darwin_intel_hash }}`
+            Mac: Apple Silicon: `${{ steps.hash.outputs.darwin_arm_hash }}`
+            Windows: `${{ steps.hash.outputs.windows_hash }}`
+          
