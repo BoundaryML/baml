@@ -1,4 +1,9 @@
 name: Compile VSCode Extension
+inputs:
+  release:
+    description: "Whether to release the extension (0 / prerelease / stable)"
+    required: false
+    default: "0"
 runs:
   using: composite
   steps:
@@ -35,7 +40,6 @@ runs:
     - name: Build VSCode Extension
       run: |
         pnpm run vscode:package
-        echo "version=$(pnpm run vscode:version --silent)" >> $GITHUB_ENV
       working-directory: vscode-ext/
 
     # Upload the artifact (helpful for debugging and manual downloads)
@@ -44,3 +48,13 @@ runs:
       with:
         name: gloo-vscode
         path: vscode-ext/gloo-*.vsix
+
+    - name: Release Extension
+      if: ${{ inputs.release }} == 'prerelease' || ${{ inputs.release }} == 'stable'
+      run: |
+        if [ "${{ inputs.release }}" = "prerelease" ]; then
+          echo pnpm run vscode:release --pre-release -p ${{ secrets.VSCE_PAT }}
+        else
+          echo pnpm run vscode:release -p ${{ secrets.VSCE_PAT }}
+        fi
+      working-directory: vscode-ext/

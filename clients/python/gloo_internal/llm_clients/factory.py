@@ -12,7 +12,7 @@ class LLMClientRegistry:
     ) -> typing.Callable[[typing.Type[LLMClient]], typing.Type[LLMClient]]:
         def decorator(sub_cls: typing.Type[LLMClient]) -> typing.Type[LLMClient]:
             if not issubclass(sub_cls, LLMClient):
-                raise TypeError(f"Registered class must inherit from LLMClient")
+                raise TypeError("Registered class must inherit from LLMClient")
             if isinstance(provider, str):
                 if provider in cls._registry:
                     raise ValueError(

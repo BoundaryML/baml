@@ -62,12 +62,10 @@
     "esbuild": "pnpm run esbuild-base --sourcemap",
     "esbuild-watch": "pnpm run esbuild-base --sourcemap --watch",
     "vscode:package": "vsce package --no-dependencies",
+    "vscode:release": "vsce publish",
     "compile": "tsc -p ./",
     "lint": "eslint \"src/**/*.ts\"",
-    "watch": "tsc -watch -p ./",
-    "build:dev": "pnpm version prerelease --preid=dev --no-git-tag-version && vsce package",
-    "build:beta": "pnpm version prerelease --preid=beta && vsce package && pnpm version patch",
-    "build:stable": "vsce package"
+    "watch": "tsc -watch -p ./"
   },
   "devDependencies": {
     "@types/glob": "^8.1.0",

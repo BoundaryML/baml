@@ -112,10 +112,9 @@ jobs:
         working-directory: ./clients/python
 
       - name: Create new commit
+        id: commit
         if: steps.diff_check.outputs.bumping_version == '1'
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
           COMMIT_MSG=""
           if [ "${{ steps.diff_check.outputs.cli_changed }}" == "1" ]; then
             COMMIT_MSG+="[NIGHTLY:cli] "
@@ -126,8 +125,17 @@ jobs:
           if [ "${{ steps.diff_check.outputs.client_python_changed }}" == "1" ]; then
             COMMIT_MSG+="[NIGHTLY:client-python] "
           fi
-          git commit -am "[AUTO:${{ github.event.inputs.TYPE }}] Version bump for nightly release ${COMMIT_MSG}"
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            git commit -am "[MANUAL:${{ github.event.inputs.TYPE }}] Version bump for manual release\nTriggered by: ${{ github.event.sender.login }}\n${COMMIT_MSG}"
+          else
+            git commit -am "[AUTO:${{ github.event.inputs.TYPE }}] Version bump for nightly release\n${COMMIT_MSG}"
+          fi
+          echo "commit_hash=$(git rev-parse HEAD)" >> $GITHUB_ENV
 
       - name: Push changes
         run: |
           git push
+
+      - name: Trigger Release
+        run: |
+          curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/vnd.github.v3+json" https://api.github.com/repos/${{ github.repository }}/actions/workflows/another_workflow.yml/dispatches -d '{"ref":"${{ steps.commit.outputs.commit_hash }}"}'

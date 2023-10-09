@@ -1,5 +1,4 @@
 from __future__ import annotations
-import atexit
 import datetime
 
 import http
