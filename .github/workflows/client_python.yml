@@ -72,12 +72,15 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4   
+      
+      - name: List
+        run: ls -la
 
       - name: Get artifact
         uses: actions/download-artifact@v3
         with:
           name: python-client
-          path: ./clients/python/dist
+          path: clients/python/dist
         
       - name: Install Poetry
         run: |
@@ -86,3 +89,4 @@ jobs:
       - name: Publish
         run: |
           poetry publish
+        working-directory: clients/python
