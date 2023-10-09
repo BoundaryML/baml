@@ -24,6 +24,7 @@ jobs:
     name: Build ${{ matrix.platform.name }}
 
     strategy:
+      fail-fast: false # Don't stop all builds if one fails
       matrix:
         platform:
           - os: ubuntu-20.04
