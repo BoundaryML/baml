@@ -20,7 +20,6 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
     name: Build ${{ matrix.platform.name }}
 
     strategy:
@@ -50,6 +49,7 @@ jobs:
             name: gloo-Darwin-apple-silicon
             command: both
 
+    runs-on: ${{ matrix.platform.os }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4   
