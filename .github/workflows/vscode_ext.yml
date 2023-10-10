@@ -113,7 +113,7 @@ jobs:
           cache-dependency-path: vscode-ext/pnpm-lock.yaml
 
       - name: Install Dependencies
-        run: pnpm install --frozen-lockfile --dev
+        run: pnpm install --frozen-lockfile
         working-directory: vscode-ext/
 
       - name: Publish
@@ -175,7 +175,7 @@ jobs:
           cache-dependency-path: vscode-ext/pnpm-lock.yaml
 
       - name: Install Dependencies
-        run: pnpm install --frozen-lockfile --dev
+        run: pnpm install --frozen-lockfile
         working-directory: vscode-ext/
 
       - name: Publish

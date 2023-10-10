@@ -109,7 +109,10 @@ jobs:
       - name: Mint token
         id: mint
         uses: tschm/token-mint-action@v1.0.2
-
+      
+      - name: Install Poetry
+        run: |
+          pipx install poetry
 
       - name: Publish the package with poetry
         run: |
@@ -162,7 +165,10 @@ jobs:
       - name: Mint token
         id: mint
         uses: tschm/token-mint-action@v1.0.2
-  
+      
+      - name: Install Poetry
+        run: |
+          pipx install poetry
   
       - name: Publish the package with poetry
         run: |
