@@ -103,7 +103,6 @@ jobs:
       - name: Create pull request
         uses: peter-evans/create-pull-request@v5
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
           branch: auto-bump-version
           labels: "auto-bump"
           title: "[VersionBump]${COMMIT_MSG}"
@@ -111,4 +110,4 @@ jobs:
           body: |
             [MANUAL] Version bump
             Triggered by: ${{ github.event.sender.login }}
-            ${{ github.env.COMMIT_MSG }}
+            ${COMMIT_MSG}
