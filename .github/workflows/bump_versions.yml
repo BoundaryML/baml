@@ -105,4 +105,4 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git push origin ${{ github.actor }}/bump-version
-          gh pr create --title "${COMMIT_MSG}" --body "Automated flow to bump version${COMMIT_MSG}" --label "auto-bump" -a hellovai
+          gh pr create --title "${COMMIT_MSG}" --body "Automated flow to bump version${COMMIT_MSG}" --label "auto-bump"
