@@ -93,7 +93,7 @@ jobs:
       - name: Pre-release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: "py_client-${{ steps.hash.outputs.version }}"
+          tag_name: "py_client/v${{ steps.hash.outputs.version }}"
           files: |
             clients/python/dist/gloo_lib-${{ steps.hash.outputs.version }}.tar.gz
             clients/python/dist/gloo_lib-${{ steps.hash.outputs.version }}-py3-none-any.whl
@@ -142,7 +142,7 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: "py_client-${{ steps.hash.outputs.version }}"
+          tag_name: "release/py_client/v${{ steps.hash.outputs.version }}"
           files: |
             clients/python/dist/gloo_lib-${{ steps.hash.outputs.version }}.tar.gz
             clients/python/dist/gloo_lib-${{ steps.hash.outputs.version }}-py3-none-any.whl

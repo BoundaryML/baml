@@ -121,7 +121,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           name: "Cli: ${{ steps.hash.outputs.version }}"
-          tag_name: "releases/cli/${{ steps.hash.outputs.version }}"
+          tag_name: "cli/v${{ steps.hash.outputs.version }}"
           files: |
             gloo-linux-x86_64.tar.gz
             gloo-apple-intel.tar.gz
@@ -187,7 +187,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           name: "Cli: ${{ steps.hash.outputs.version }}"
-          tag_name: "releases/cli/${{ steps.hash.outputs.version }}"
+          tag_name: "releases/cli/v${{ steps.hash.outputs.version }}"
           files: |
             gloo-linux-x86_64.tar.gz
             gloo-apple-intel.tar.gz
