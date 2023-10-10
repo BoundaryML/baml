@@ -104,6 +104,7 @@ jobs:
         uses: peter-evans/create-pull-request@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          branch: auto-bump-version
           labels: "auto-bump"
           title: "[VersionBump]${COMMIT_MSG}"
           commit-message: Automated flow to bump version${COMMIT_MSG}
