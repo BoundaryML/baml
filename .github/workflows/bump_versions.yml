@@ -105,15 +105,7 @@ jobs:
       - id: commit
         run: |
           echo "COMMIT_MSG=${COMMIT_MSG}" >> $GITHUB_ENV
-
-      - name: Create pull request
-        uses: peter-evans/create-pull-request@v5
-        with:
-          branch: auto-bump-version
-          labels: "auto-bump"
-          title: "[VersionBump]${{ steps.commit.outputs.COMMIT_MSG }}"
-          commit-message: Automated flow to bump version${{ steps.commit.outputs.COMMIT_MSG }}
-          body: |
-            [MANUAL] Version bump
-            Triggered by: ${{ github.event.sender.login }}
-            ${{ steps.commit.outputs.COMMIT_MSG }}
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          git commit -am "${COMMIT_MSG}"
+          gh pr create --fill --title "${COMMIT_MSG}" --body "Automated flow to bump version${COMMIT_MSG}" --label "auto-bump"
