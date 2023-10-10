@@ -86,7 +86,7 @@ jobs:
             echo "Version ($VERSION) is not a pre-release build"
             exit 1
           fi
-          echo "version="${VERSION%.dev*}" >> $GITHUB_OUTPUT
+          echo "version=${VERSION%.dev*}" >> $GITHUB_OUTPUT
           echo "full_version=$VERSION" >> $GITHUB_OUTPUT
           echo "tarball_hash=$(shasum -a 256 clients/python/dist/gloo_lib-$VERSION.tar.gz | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
           echo "whl_hash=$(shasum -a 256 clients/python/dist/gloo_lib-$VERSION-py3-none-any.whl | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
