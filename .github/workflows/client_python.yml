@@ -86,27 +86,34 @@ jobs:
             echo "Version ($VERSION) is not a pre-release build"
             exit 1
           fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$(echo $VERSION | cut -d '+' -f 1)" >> $GITHUB_OUTPUT
+          echo "full_version=$VERSION" >> $GITHUB_OUTPUT
           echo "tarball_hash=$(shasum -a 256 clients/python/dist/gloo_lib-$VERSION.tar.gz | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
           echo "whl_hash=$(shasum -a 256 clients/python/dist/gloo_lib-$VERSION-py3-none-any.whl | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
 
       - name: Pre-release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: "py_client/v${{ steps.hash.outputs.version }}"
+          tag_name: "unstable/py_client/v${{ steps.hash.outputs.version }}"
           files: |
             clients/python/dist/gloo_lib-${{ steps.hash.outputs.version }}.tar.gz
             clients/python/dist/gloo_lib-${{ steps.hash.outputs.version }}-py3-none-any.whl
           prerelease: true
           body: |
             ## Hashes
+            Full Build: ${{ steps.hash.outputs.full_version }}
             Tarball: ${{ steps.hash.outputs.hash }}
             Wheel: ${{ steps.hash.outputs.whl_hash }}
      
-      - name: Publish package distributions to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-            packages-dir: clients/python/dist
+
+      - name: Mint token
+        id: mint
+        uses: tschm/token-mint-action@v1.0.2
+
+
+      - name: Publish the package with poetry
+        run: |
+          poetry publish -u __token__ -p '${{ steps.mint.outputs.api-token }}'
     
 
   release:
@@ -146,13 +153,17 @@ jobs:
           files: |
             clients/python/dist/gloo_lib-${{ steps.hash.outputs.version }}.tar.gz
             clients/python/dist/gloo_lib-${{ steps.hash.outputs.version }}-py3-none-any.whl
-          prerelease: true # Must manually upgrade to release
+          prerelease: false
           body: |
             ## Hashes
             Tarball: ${{ steps.hash.outputs.hash }}
             Wheel: ${{ steps.hash.outputs.whl_hash }}
-      
-      - name: Publish package distributions to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-           packages-dir: clients/python/dist
+
+      - name: Mint token
+        id: mint
+        uses: tschm/token-mint-action@v1.0.2
+  
+  
+      - name: Publish the package with poetry
+        run: |
+          poetry publish -u __token__ -p '${{ steps.mint.outputs.api-token }}'

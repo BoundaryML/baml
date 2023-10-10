@@ -81,18 +81,21 @@ jobs:
             echo "Version ($VERSION) is not a pre-release build"
             exit 1
           fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "vsix_hash=$(shasum -a 256 vscode-ext/gloo-${VERSION} | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
+
+          echo "version=$(echo $VERSION | cut -d '-' -f 1)" >> $GITHUB_OUTPUT
+          echo "full_version=$VERSION" >> $GITHUB_OUTPUT
+          echo "vsix_hash=$(shasum -a 256 vscode-ext/gloo-${VERSION}.vsix | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
 
       - name: Pre-release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: "vscode_ext/v${{ steps.hash.outputs.version }}"
+          tag_name: "unstable/vscode_ext/v${{ steps.hash.outputs.version }}"
           files: |
-            vscode-ext/gloo-${{ steps.hash.outputs.version }}.vsix
+            vscode-ext/gloo-${{ steps.hash.outputs.full_version }}.vsix
           prerelease: true
           body: |
             ## Hashes
+            Full Version: ${{ steps.hash.outputs.full_version }}
             VSIX: ${{ steps.hash.outputs.vsix_hash }}
 
       - uses: pnpm/action-setup@v2
@@ -144,9 +147,9 @@ jobs:
             exit 1
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "vsix_hash=$(shasum -a 256 vscode-ext/gloo-${VERSION} | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
+          echo "vsix_hash=$(shasum -a 256 vscode-ext/gloo-${VERSION}.vsix | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
 
-      - name: Pre-release
+      - name: Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: "release/vscode_ext/v${{ steps.hash.outputs.version }}"

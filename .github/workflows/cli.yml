@@ -115,13 +115,13 @@ jobs:
           echo "darwin_intel_hash=$(shasum -a 256 gloo-apple-intel.tar.gz | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
           echo "darwin_arm_hash=$(shasum -a 256 gloo-apple-arm.tar.gz | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
           echo "windows_hash=$(shasum -a 256 cli/target/x86_64-pc-windows-msvc/release/gloo.exe | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$(echo $VERSION | cut -d '-' -f 1)" >> $GITHUB_OUTPUT
+          echo "full_version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
-          name: "Cli: ${{ steps.hash.outputs.version }}"
-          tag_name: "cli/v${{ steps.hash.outputs.version }}"
+          tag_name: "unstable/cli/v${{ steps.hash.outputs.version }}"
           files: |
             gloo-linux-x86_64.tar.gz
             gloo-apple-intel.tar.gz
@@ -130,6 +130,7 @@ jobs:
           prerelease: true # Must manually upgrade to release once homebrew is updated.
           body: |
             ## Hashes
+            Full Version: `${{ steps.hash.outputs.full_version }}`
             Linux: `${{ steps.hash.outputs.linux_hash }}`
             Mac: Intel: `${{ steps.hash.outputs.darwin_intel_hash }}`
             Mac: Apple Silicon: `${{ steps.hash.outputs.darwin_arm_hash }}`

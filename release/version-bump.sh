@@ -4,6 +4,17 @@ set -e
 
 VALID_VERSIONS=("none" "prerelease" "pre" "patch" "minor" "major")
 
+CURRENT_BRANCH=$(git branch --show-current)
+git fetch origin > /dev/null 2>&1
+if [[ $(git diff --stat) != '' ]]; then
+  echo "Your repo is dirty. Please commit your changes before bumping the version."
+  exit 1
+fi
+if [[ $(git diff --stat origin/${CURRENT_BRANCH}) != '' ]]; then
+  echo "Your branch is not in sync with origin. Please sync before bumping the version."
+  exit 1
+fi
+
 for COMPONENT in "CLI" "Python Client" "VSCode Extension"; do
   while true; do
     echo "Enter the version type for ${COMPONENT} [none, prerelease, pre, patch, minor, major] (none):"
@@ -30,9 +41,8 @@ done
 if [ "$CLI" != "none" ] || [ "$CLIENT_PYTHON" != "none" ] || [ "$VSCODE_EXT" != "none" ]
 then
   TIMESTAMP=$(date +%s%3N)
-  CURRENT_BRANCH=$(git branch --show-current)
   git checkout -b ${USER}/bump-version/${TIMESTAMP}
-  
+
   if [ "$CLI" != "none" ]
   then
     pushd cli
