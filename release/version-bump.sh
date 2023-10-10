@@ -30,6 +30,7 @@ done
 if [ "$CLI" != "none" ] || [ "$CLIENT_PYTHON" != "none" ] || [ "$VSCODE_EXT" != "none" ]
 then
   TIMESTAMP=$(date +%s%3N)
+  CURRENT_BRANCH=$(git branch --show-current)
   git checkout -b ${USER}/bump-version/${TIMESTAMP}
   
   if [ "$CLI" != "none" ]
@@ -58,4 +59,5 @@ then
   
   git commit -am "${COMMIT_MSG}"
   gh pr create --title "${COMMIT_MSG}" --body "Automated flow to bump version${COMMIT_MSG}"
+  git checkout ${CURRENT_BRANCH}
 fi
