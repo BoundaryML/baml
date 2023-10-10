@@ -70,4 +70,5 @@ then
   git commit -am "${COMMIT_MSG}"
   gh pr create --title "${COMMIT_MSG}" --body "Automated flow to bump version${COMMIT_MSG}"
   git checkout ${CURRENT_BRANCH}
+  git branch -D ${USER}/bump-version/${TIMESTAMP}
 fi
