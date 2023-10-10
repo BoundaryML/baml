@@ -99,6 +99,10 @@ jobs:
           echo "::notice file=clients/python/pyproject.toml::Upgrading to version ${VERSION}"
           echo "COMMIT_MSG=${COMMIT_MSG} [BUMP:py_client:${VERSION}]" >> $GITHUB_ENV
         working-directory: ./clients/python
+      
+      - id: commit
+        run: |
+          echo "COMMIT_MSG=${COMMIT_MSG} [NIGHTLY]" >> $GITHUB_OUTPUT
 
       - name: Create pull request
         uses: peter-evans/create-pull-request@v5
@@ -106,9 +110,9 @@ jobs:
           token: ${{ secrets.PAT }}
           branch: auto-bump-version
           labels: "auto-bump"
-          title: "[VersionBump]${{ github.env.COMMIT_MSG }}"
-          commit-message: Automated flow to bump version${{ github.env.COMMIT_MSG }}
+          title: "[VersionBump]${{ steps.commit.outputs.COMMIT_MSG }}"
+          commit-message: Automated flow to bump version${{ steps.commit.outputs.COMMIT_MSG }}
           body: |
             [MANUAL] Version bump
             Triggered by: ${{ github.event.sender.login }}
-            ${{ github.env.COMMIT_MSG }}
+            ${{ steps.commit.outputs.COMMIT_MSG }}
