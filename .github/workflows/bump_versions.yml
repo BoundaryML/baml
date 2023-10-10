@@ -98,11 +98,12 @@ jobs:
           echo "COMMIT_MSG=${COMMIT_MSG}" >> $GITHUB_ENV
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
-          git checkout -b ${{ github.actor }}/bump-version
+          TIMESTAMP=$(date +%s%3)
+          git checkout -b ${{ github.actor }}/bump-version/${TIMESTAMP}
           git commit -am "${COMMIT_MSG}"
+          git push origin ${{ github.actor }}/bump-version/${TIMESTAMP}
       - id: pr
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git push origin ${{ github.actor }}/bump-version
-          gh pr create --title "${COMMIT_MSG}" --body "Automated flow to bump version${COMMIT_MSG}" --label "auto-bump"
+          gh pr create --title "${COMMIT_MSG}" --body "Automated flow to bump version${COMMIT_MSG}"
