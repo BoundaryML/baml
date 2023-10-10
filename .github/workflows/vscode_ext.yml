@@ -19,6 +19,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - uses: pnpm/action-setup@v2
       # Set up Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v3
@@ -86,6 +87,8 @@ jobs:
             ## Hashes
             VSIX: ${{ steps.hash.outputs.vsix_hash }}
 
+      - uses: pnpm/action-setup@v2
+
       # Set up Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v3
@@ -142,6 +145,7 @@ jobs:
             ## Hashes
             VSIX: ${{ steps.hash.outputs.vsix_hash }}
 
+      - uses: pnpm/action-setup@v2
       # Set up Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v3
