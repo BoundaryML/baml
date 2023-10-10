@@ -105,8 +105,8 @@ jobs:
         run: |
           VERSION=$(cat cli/Cargo.toml | grep version | cut -d ' ' -f 3 | sed 's/"//g')
           if [[ $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+\+canary\.[0-9]+$ ]]; then
-          echo "Version ($VERSION) is not a pre-release build"
-          exit 1
+            echo "Version ($VERSION) is not a pre-release build"
+            exit 1
           fi
           tar -czvf gloo-linux-x86_64.tar.gz cli/target/x86_64-unknown-linux-gnu/release/gloo
           tar -czvf gloo-apple-intel.tar.gz cli/target/x86_64-apple-darwin/release/gloo
@@ -171,8 +171,8 @@ jobs:
         run: |
           VERSION=$(cat cli/Cargo.toml | grep version | cut -d ' ' -f 3 | sed 's/"//g')
           if [[ $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-          echo "Version ($VERSION) is not a release build"
-          exit 1
+            echo "Version ($VERSION) is not a release build"
+            exit 1
           fi
           tar -czvf gloo-linux-x86_64.tar.gz cli/target/x86_64-unknown-linux-gnu/release/gloo
           tar -czvf gloo-apple-intel.tar.gz cli/target/x86_64-apple-darwin/release/gloo

@@ -75,11 +75,11 @@ jobs:
           path: vscode-ext/
 
       - id: hash
-        run:
+        run: |
           VERSION=$(cat vscode-ext/package.json| grep version | cut -d ' ' -f 4 | sed 's/[",]//g')
           if [[ $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+\+canary\.[0-9]+$ ]]; then
-          echo "Version ($VERSION) is not a pre-release build"
-          exit 1
+            echo "Version ($VERSION) is not a pre-release build"
+            exit 1
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "vsix_hash=$(shasum -a 256 vscode-ext/gloo-${VERSION} | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
@@ -137,11 +137,11 @@ jobs:
           path: vscode-ext/
 
       - id: hash
-        run:
+        run: |
           VERSION=$(cat vscode-ext/package.json| grep version | cut -d ' ' -f 4 | sed 's/[",]//g')
           if [[ $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-          echo "Version ($VERSION) is not a release build"
-          exit 1
+            echo "Version ($VERSION) is not a release build"
+            exit 1
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "vsix_hash=$(shasum -a 256 vscode-ext/gloo-${VERSION} | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
