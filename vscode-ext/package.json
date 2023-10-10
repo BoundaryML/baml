@@ -2,7 +2,7 @@
   "name": "gloo",
   "displayName": "Gloo",
   "description": "Gloo intellisense",
-  "version": "0.5.0-canary.1",
+  "version": "0.5.0-canary.2",
   "publisher": "Gloo",
   "repository": "https://github.com/GlooHQ/gloo-lang",
   "homepage": "https://trygloo.com",
