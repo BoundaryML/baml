@@ -21,6 +21,7 @@ jobs:
     steps:
       - uses: pnpm/action-setup@v2
         with:
+          package_json_file: vscode-ext/package.json
           run_install: false
       # Set up Node.js
       - name: Setup Node.js
@@ -91,6 +92,7 @@ jobs:
 
       - uses: pnpm/action-setup@v2
         with:
+          package_json_file: vscode-ext/package.json
           run_install: false
 
       # Set up Node.js
@@ -151,6 +153,7 @@ jobs:
 
       - uses: pnpm/action-setup@v2
         with:
+          package_json_file: vscode-ext/package.json
           run_install: false
 
       # Set up Node.js
