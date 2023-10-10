@@ -20,6 +20,8 @@ jobs:
 
     steps:
       - uses: pnpm/action-setup@v2
+        with:
+          run_install: false
       # Set up Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v3
@@ -88,6 +90,8 @@ jobs:
             VSIX: ${{ steps.hash.outputs.vsix_hash }}
 
       - uses: pnpm/action-setup@v2
+        with:
+          run_install: false
 
       # Set up Node.js
       - name: Setup Node.js
@@ -146,6 +150,9 @@ jobs:
             VSIX: ${{ steps.hash.outputs.vsix_hash }}
 
       - uses: pnpm/action-setup@v2
+        with:
+          run_install: false
+
       # Set up Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v3
