@@ -82,11 +82,11 @@ jobs:
       - id: hash
         run: |
           VERSION=$(cat clients/python/pyproject.toml | grep version | cut -d ' ' -f 3 | sed 's/"//g')
-          if [[ $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+\\+canary\.[0-9]+$ ]]; then
+          if [[ $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+\.dev[0-9]+$ ]]; then
             echo "Version ($VERSION) is not a pre-release build"
             exit 1
           fi
-          echo "version=$(echo $VERSION | cut -d '+' -f 1)" >> $GITHUB_OUTPUT
+          echo "version="${VERSION%.dev*}" >> $GITHUB_OUTPUT
           echo "full_version=$VERSION" >> $GITHUB_OUTPUT
           echo "tarball_hash=$(shasum -a 256 clients/python/dist/gloo_lib-$VERSION.tar.gz | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
           echo "whl_hash=$(shasum -a 256 clients/python/dist/gloo_lib-$VERSION-py3-none-any.whl | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
@@ -102,7 +102,7 @@ jobs:
           body: |
             ## Hashes
             Full Build: ${{ steps.hash.outputs.full_version }}
-            Tarball: ${{ steps.hash.outputs.hash }}
+            Tarball: ${{ steps.hash.outputs.tarball_hash }}
             Wheel: ${{ steps.hash.outputs.whl_hash }}
      
 
@@ -159,7 +159,7 @@ jobs:
           prerelease: false
           body: |
             ## Hashes
-            Tarball: ${{ steps.hash.outputs.hash }}
+            Tarball: ${{ steps.hash.outputs.tarball_hash }}
             Wheel: ${{ steps.hash.outputs.whl_hash }}
 
       - name: Mint token
