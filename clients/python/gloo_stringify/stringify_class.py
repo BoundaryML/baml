@@ -63,7 +63,7 @@ class StringifyClass(StringifyBase[U]):
             StringifyCtx.set_instance_for_current_context(cls, instance)
             instance._initialized = False  # type: ignore
         else:
-            instance._initialized = True 
+            instance._initialized = True
         return instance
 
     def __init__(

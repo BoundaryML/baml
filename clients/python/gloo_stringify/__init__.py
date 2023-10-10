@@ -1,5 +1,12 @@
 from .stringify_enum import StringifyEnum, EnumFieldDescription
-from .stringify_primitive import StringifyBool, StringifyNone, StringifyInt, StringifyString, StringifyFloat, StringifyChar
+from .stringify_primitive import (
+    StringifyBool,
+    StringifyNone,
+    StringifyInt,
+    StringifyString,
+    StringifyFloat,
+    StringifyChar,
+)
 from .stringify_optional import StringifyOptional
 from .stringify_union import StringifyUnion
 from .stringify_list import StringifyList

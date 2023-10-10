@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "gloo-lib"
-version = "1.1.24-canary.0"
+version = "1.1.24+canary.0"
 description = ""
 authors = [ "Gloo <contact@trygloo.com>",]
 [[tool.poetry.packages]]
@@ -50,3 +50,7 @@ types-decorator = "^5.1.8.4"
 types-mock = "^5.1.0.2"
 mock = "^5.1.0"
 ruff = "^0.0.291"
+black = "^23.9.1"
+
+[tool.ruff]
+ignore = ["E501"]

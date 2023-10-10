@@ -3,6 +3,6 @@
   "head_commit": {
     "modified": ["vscode-ext/somefile"],
     "author": "action@github.com",
-    "message": "[NIGHTLY:vscode_ext] [AUTO] Version bump for nightly release"
+    "message": "[AUTO] Version bump for nightly release [NIGHTLY:vscode_ext] [NIGHTLY:cli] [NIGHTLY:client-python]"
   }
 }

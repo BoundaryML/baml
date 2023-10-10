@@ -99,3 +99,5 @@ $RECYCLE.BIN/
 .venv
 
 # End of https://www.toptal.com/developers/gitignore/api/visualstudiocode,macos,windows,linux
+
+tmp/

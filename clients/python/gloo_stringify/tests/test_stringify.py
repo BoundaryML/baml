@@ -125,7 +125,7 @@ class TestPrimitive:
         ],
     )
     @pytest.mark.parametrize("l", [None, json.dumps, str])
-    def test_int(self, l: Any, actual: Any, expected: int) -> None:
+    def test_int(self, l: Any, actual: Any, expected: int) -> None:  # noqa: E741
         if l:
             actual = l(actual)
         with StringifyCtx():
@@ -145,7 +145,7 @@ class TestPrimitive:
         ],
     )
     @pytest.mark.parametrize("l", [None, json.dumps, str])
-    def test_float(self, l: Any, actual: Any, expected: int) -> None:
+    def test_float(self, l: Any, actual: Any, expected: int) -> None:  # noqa: E741
         if l:
             actual = l(actual)
         with StringifyCtx():
@@ -187,7 +187,7 @@ class TestPrimitive:
         ],
     )
     @pytest.mark.parametrize("l", [None, json.dumps, str])
-    def test_bool(self, l: Any, actual: Any, expected: int) -> None:
+    def test_bool(self, l: Any, actual: Any, expected: int) -> None:  # noqa: E741
         if l:
             actual = l(actual)
         with StringifyCtx():

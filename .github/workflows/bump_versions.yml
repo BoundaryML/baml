@@ -1,0 +1,112 @@
+name: Bump versions
+
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      CLI:
+        description: "Rust CLI"
+        required: false
+        type: choice
+        options:
+          - none
+          - prerelease
+          - pre
+          - patch
+          - minor
+          - major
+        default: none
+      CLIENT_PYTHON:
+        description: "Python Client"
+        required: false
+        type: choice
+        options:
+          - none
+          - prerelease
+          - pre
+          - patch
+          - minor
+          - major
+        default: none
+      VSCODE_EXT:
+        description: "VSCode Extension"
+        required: false
+        type: choice
+        options:
+          - none
+          - prerelease
+          - pre
+          - patch
+          - minor
+          - major
+        default: none
+
+jobs:
+  bump_version:
+    runs-on: ubuntu-latest
+
+    if: github.event.inputs.CLI != 'none' || github.event.inputs.CLIENT_PYTHON != 'none' || github.event.inputs.VSCODE_EXT != 'none'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get last nightly commit hash on main
+        id: last_commit
+        run: |
+          COMMIT_HASH=$(git log --oneline main | grep -E "\[NIGHTLY\]" | head -n 1 | awk '{print $1}')
+          if [ -z "$COMMIT_HASH" ]; then
+            COMMIT_HASH=$(git rev-list --max-parents=0 HEAD)
+          fi
+          echo hash=${COMMIT_HASH} >> $GITHUB_OUTPUT
+
+      - name: Set up python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+          cache: pip
+
+      - name: Install bumpversion
+        run: |
+          python -m pip install --upgrade pip
+          pip install bumpversion
+
+      - name: Bump version - vscode-ext
+        id: vscode_ext
+        if: github.event.inputs.VSCODE_EXT != 'none'
+        run: |
+          VERSION=$(bumpversion --allow-dirty ${{ github.event.inputs.VSCODE_EXT }} --list | grep new_version | cut -d '=' -f 2)
+          echo "::notice file=vscode-ext/package.json::Upgrading to version ${VERSION}"
+          echo "COMMIT_MSG=${COMMIT_MSG} [BUMP:vscode_ext:${VERSION}]" >> $GITHUB_ENV
+        working-directory: ./vscode-ext
+
+      - name: Bump version - cli
+        id: cli
+        if: github.event.inputs.CLI != 'none'
+        run: |
+          VERSION=$(bumpversion --allow-dirty ${{ github.event.inputs.CLI }} --list | grep new_version | cut -d '=' -f 2)
+          echo "::notice file=cli/Cargo.toml::Upgrading to version ${VERSION}"
+          echo "COMMIT_MSG=${COMMIT_MSG} [BUMP:cli:${VERSION}]" >> $GITHUB_ENV
+        working-directory: ./cli
+
+      - name: Bump version - client_python
+        id: py_client
+        if: github.event.inputs.CLIENT_PYTHON != 'none'
+        run: |
+          VERSION=$(bumpversion --allow-dirty ${{ github.event.inputs.CLIENT_PYTHON }} --list | grep new_version | cut -d '=' -f 2)
+          echo "::notice file=clients/python/pyproject.toml::Upgrading to version ${VERSION}"
+          echo "COMMIT_MSG=${COMMIT_MSG} [BUMP:py_client:${VERSION}]" >> $GITHUB_ENV
+        working-directory: ./clients/python
+
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          labels: "auto-bump"
+          title: "[VersionBump]${COMMIT_MSG}"
+          commit-message: Automated flow to bump version${COMMIT_MSG}
+          body: |
+            [MANUAL] Version bump
+            Triggered by: ${{ github.event.sender.login }}
+            ${{ github.env.COMMIT_MSG }}
