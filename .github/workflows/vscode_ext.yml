@@ -71,7 +71,7 @@ jobs:
       - name: Get artifact
         uses: actions/download-artifact@v3
         with:
-          name: gloo-vscode
+          name: gloo-vscode.vsix
           path: vscode-ext/
 
       - id: hash
