@@ -117,7 +117,7 @@ jobs:
       - name: Publish the package with poetry
         run: |
           poetry publish -u __token__ -p '${{ steps.mint.outputs.api-token }}'
-    
+        working-directory: clients/python
 
   release:
     permissions:
@@ -173,3 +173,4 @@ jobs:
       - name: Publish the package with poetry
         run: |
           poetry publish -u __token__ -p '${{ steps.mint.outputs.api-token }}'
+        working-directory: clients/python

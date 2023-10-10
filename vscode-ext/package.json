@@ -62,7 +62,7 @@
     "esbuild": "pnpm run esbuild-base --sourcemap",
     "esbuild-watch": "pnpm run esbuild-base --sourcemap --watch",
     "vscode:package": "vsce package --no-dependencies",
-    "vscode:publish": "vsce publish",
+    "vscode:publish": "vsce publish --no-dependencies",
     "compile": "tsc -p ./",
     "lint": "eslint \"src/**/*.ts\"",
     "watch": "tsc -watch -p ./"
