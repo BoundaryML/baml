@@ -95,10 +95,9 @@ jobs:
       
       - id: commit
         run: |
-          echo "COMMIT_MSG=${COMMIT_MSG}" >> $GITHUB_ENV
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
-          TIMESTAMP=$(date +%s%3)
+          TIMESTAMP=$(date +%s%3N)
           git checkout -b ${{ github.actor }}/bump-version/${TIMESTAMP}
           git commit -am "${COMMIT_MSG}"
           git push origin ${{ github.actor }}/bump-version/${TIMESTAMP}
