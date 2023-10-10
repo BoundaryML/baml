@@ -6,31 +6,48 @@ permissions:
 on:
   workflow_dispatch:
     inputs:
-      TYPE:
-        description: "Bump Type (prerelease, pre, patch, minor, major). Use prerelease for nightly builds."
-        required: true
-        default: "prerelease"
       CLI:
-        description: "Bump Rust CLI"
-        required: true
-        type: boolean
-        default: false
+        description: "Rust CLI"
+        required: false
+        type: choice
+        options:
+          - none
+          - prerelease
+          - pre
+          - patch
+          - minor
+          - major
+        default: none
       CLIENT_PYTHON:
-        description: "Bump Python Client"
-        required: true
-        type: boolean
-        default: false
+        description: "Python Client"
+        required: false
+        type: choice
+        options:
+          - none
+          - prerelease
+          - pre
+          - patch
+          - minor
+          - major
+        default: none
       VSCODE_EXT:
-        description: "Bump VSCode Extension"
-        required: true
-        type: boolean
-        default: false
+        description: "VSCode Extension"
+        required: false
+        type: choice
+        options:
+          - none
+          - prerelease
+          - pre
+          - patch
+          - minor
+          - major
+        default: none
 
 jobs:
   bump_version:
     runs-on: ubuntu-latest
-    if: github.event.inputs.CLIENT_PYTHON || github.event.inputs.CLI || github.event.inputs.VSCODE_EXT
 
+    if: github.event.inputs.CLI != 'none' || github.event.inputs.CLIENT_PYTHON != 'none' || github.event.inputs.VSCODE_EXT != 'none'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -57,52 +74,39 @@ jobs:
 
       - name: Bump version - vscode-ext
         id: vscode_ext
-        if: github.event.inputs.VSCODE_EXT == '1'
+        if: github.event.inputs.VSCODE_EXT != 'none'
         run: |
-          VERSION=$(bumpversion --allow-dirty minor ${{ github.event.inputs.TYPE }} --list | grep new_version | cut -d '=' -f 2)
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          VERSION=$(bumpversion --allow-dirty ${{ github.event.inputs.VSCODE_EXT }} --list | grep new_version | cut -d '=' -f 2)
+          echo "::notice file=vscode-ext/package.json::Upgrading to version ${VERSION}"
+          echo "COMMIT_MSG=${COMMIT_MSG} [BUMP:vscode_ext:${VERSION}]" >> $GITHUB_ENV
         working-directory: ./vscode-ext
 
       - name: Bump version - cli
         id: cli
-        if: github.event.inputs.CLI == '1'
+        if: github.event.inputs.CLI != 'none'
         run: |
-          VERSION=$(bumpversion --allow-dirty minor ${{ github.event.inputs.TYPE }} --list | grep new_version | cut -d '=' -f 2)
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          VERSION=$(bumpversion --allow-dirty ${{ github.event.inputs.CLI }} --list | grep new_version | cut -d '=' -f 2)
+          echo "::notice file=cli/Cargo.toml::Upgrading to version ${VERSION}"
+          echo "COMMIT_MSG=${COMMIT_MSG} [BUMP:cli:${VERSION}]" >> $GITHUB_ENV
         working-directory: ./cli
 
       - name: Bump version - client_python
         id: py_client
-        if: github.event.inputs.CLIENT_PYTHON == '1'
+        if: github.event.inputs.CLIENT_PYTHON != 'none'
         run: |
-          VERSION=$(bumpversion --allow-dirty minor ${{ github.event.inputs.TYPE }} --list | grep new_version | cut -d '=' -f 2)
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          VERSION=$(bumpversion --allow-dirty ${{ github.event.inputs.CLIENT_PYTHON }} --list | grep new_version | cut -d '=' -f 2)
+          echo "::notice file=clients/python/pyproject.toml::Upgrading to version ${VERSION}"
+          echo "COMMIT_MSG=${COMMIT_MSG} [BUMP:py_client:${VERSION}]" >> $GITHUB_ENV
         working-directory: ./clients/python
 
-      - name: Create new commit
-        id: commit
-        run: |
-          COMMIT_MSG=""
-          if [ "${{ github.event.inputs.CLI }}" == "1" ]; then
-            COMMIT_MSG+=" [BUMP:cli:${{ steps.cli.outputs.version }}]"
-          fi
-          if [ "${{ github.event.inputs.VSCODE_EXT }}" == "1" ]; then
-            COMMIT_MSG+=" [BUMP:vscode_ext:${{ steps.vscode_ext.outputs.version }}]"
-          fi
-          if [ "${{ github.event.inputs.CLIENT_PYTHON }}" == "1" ]; then
-            COMMIT_MSG+=" [BUMP:py_client:${{ steps.py_client.outputs.version }}]"
-          fi
-          echo "COMMIT_MSG=${COMMIT_MSG}" >> $GITHUB_OUTPUT
-
       - name: Create pull request
-        if: github.event_name == 'workflow_dispatch'
         uses: peter-evans/create-pull-request@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           labels: "auto-bump"
-          title: "[Version Bump] [${{ github.event.inputs.TYPE }}]${{ github.env.COMMIT_MSG }}"
-          commit-message: Automated flow to bump version${{ github.env.COMMIT_MSG }}
+          title: "[VersionBump]${COMMIT_MSG}"
+          commit-message: Automated flow to bump version${COMMIT_MSG}
           body: |
-            [MANUAL:${{ github.event.inputs.TYPE }}] Version bump
+            [MANUAL] Version bump
             Triggered by: ${{ github.event.sender.login }}
             ${{ github.env.COMMIT_MSG }}
