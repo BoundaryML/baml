@@ -103,11 +103,12 @@ jobs:
       - name: Create pull request
         uses: peter-evans/create-pull-request@v5
         with:
+          token: ${{ secrets.PAT }}
           branch: auto-bump-version
           labels: "auto-bump"
-          title: "[VersionBump]${COMMIT_MSG}"
-          commit-message: Automated flow to bump version${COMMIT_MSG}
+          title: "[VersionBump]${{ github.env.COMMIT_MSG }}"
+          commit-message: Automated flow to bump version${{ github.env.COMMIT_MSG }}
           body: |
             [MANUAL] Version bump
             Triggered by: ${{ github.event.sender.login }}
-            ${COMMIT_MSG}
+            ${{ github.env.COMMIT_MSG }}
