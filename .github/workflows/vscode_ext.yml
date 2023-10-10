@@ -23,7 +23,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          cache: 'pnpm'
+          cache: "pnpm"
           node-version: 18
           cache-dependency-path: vscode-ext/pnpm-lock.yaml
 
@@ -90,7 +90,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          cache: 'pnpm'
+          cache: "pnpm"
           node-version: 18
           cache-dependency-path: vscode-ext/pnpm-lock.yaml
 
@@ -100,7 +100,7 @@ jobs:
 
       - name: Publish
         run: |
-          pnpm run vscode:publish
+          pnpm run vscode:publish --pre-release --no-git-tag-version -p ${{ secrets.VSCODE_PAT }}
         working-directory: vscode-ext/
 
   release:
@@ -146,7 +146,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          cache: 'pnpm'
+          cache: "pnpm"
           node-version: 18
           cache-dependency-path: vscode-ext/pnpm-lock.yaml
 
@@ -156,5 +156,5 @@ jobs:
 
       - name: Publish
         run: |
-          pnpm run vscode:publish
+          pnpm run vscode:publish --no-git-tag-version -p ${{ secrets.VSCODE_PAT }}
         working-directory: vscode-ext/
