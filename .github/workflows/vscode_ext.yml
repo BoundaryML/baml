@@ -91,7 +91,7 @@ jobs:
         with:
           tag_name: "unstable/vscode_ext/v${{ steps.hash.outputs.version }}"
           files: |
-            vscode-ext/gloo-${{ steps.hash.outputs.full_version }}.vsix
+            vscode-ext/gloo-${{ steps.hash.outputs.version }}.vsix
           prerelease: true
           body: |
             ## Hashes
