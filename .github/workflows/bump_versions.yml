@@ -107,5 +107,11 @@ jobs:
           echo "COMMIT_MSG=${COMMIT_MSG}" >> $GITHUB_ENV
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
+          git checkout -b ${{ github.actor_id }}/bump-version
           git commit -am "${COMMIT_MSG}"
+      - id: pr
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
           gh pr create --fill --title "${COMMIT_MSG}" --body "Automated flow to bump version${COMMIT_MSG}" --label "auto-bump"
+       
