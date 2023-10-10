@@ -45,7 +45,7 @@ jobs:
         id: build
         run: |
           pnpm run vscode:package
-          VERSION=$(cat vscode-ext/package.json| grep version | cut -d ' ' -f 4 | sed 's/[",]//g')
+          VERSION=$(cat package.json| grep version | cut -d ' ' -f 4 | sed 's/[",]//g')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
         working-directory: vscode-ext/
 
