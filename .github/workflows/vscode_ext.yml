@@ -19,6 +19,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - uses: pnpm/action-setup@v2
         with:
           package_json_file: vscode-ext/package.json
