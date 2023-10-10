@@ -52,6 +52,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
       - name: Get last nightly commit hash on main
         id: last_commit
@@ -102,12 +104,13 @@ jobs:
       
       - id: commit
         run: |
-          echo "COMMIT_MSG=${COMMIT_MSG} [NIGHTLY]" >> $GITHUB_OUTPUT
+          git checkout -b auto-bump-version
+          git commit -a -m "[VersionBump]${COMMIT_MSG}"
+          gh pr create --fill --title "[VersionBump]${COMMIT_MSG}" --body "Automated flow to bump version${COMMIT_MSG}" --label "auto-bump"
 
       - name: Create pull request
         uses: peter-evans/create-pull-request@v5
         with:
-          token: ${{ secrets.PAT }}
           branch: auto-bump-version
           labels: "auto-bump"
           title: "[VersionBump]${{ steps.commit.outputs.COMMIT_MSG }}"
