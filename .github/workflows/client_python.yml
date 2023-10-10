@@ -3,20 +3,16 @@ name: Python Client
 on:
   pull_request:
     paths:
-      - 'clients/python/**'
+      - "clients/python/**"
     branches:
       - canary
   push:
     paths:
-      - 'clients/python/**'
+      - "clients/python/.bumpversion.cfg"
     branches:
       - canary
-  workflow_dispatch:
-    inputs:
-      release:
-        description: 'Should this be a release? (y/n)'
-        required: true
-        default: 'y'
+    tags:
+      - "release/py_client/v*.*.*"
 
 jobs:
   build:
@@ -24,36 +20,36 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4   
-      
+        uses: actions/checkout@v4
+
       - name: Install Poetry
         run: |
           pipx install poetry
-      
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: "3.11"
           cache: poetry
           cache-dependency-path: clients/python/poetry.lock
-      
+
       - name: Set Poetry environment
         run: |
           poetry env use 3.11
         working-directory: clients/python
-          
+
       - name: Install dependencies
         run: |
           poetry install --no-root
         working-directory: clients/python
-  
+
       - name: Lint Python Client
         run: |
           poetry run mypy .
           poetry run ruff check .
           poetry run black --check .
         working-directory: clients/python
-  
+
       - name: Build Python Client
         run: poetry build
         working-directory: clients/python
@@ -64,24 +60,99 @@ jobs:
           name: python-client
           path: clients/python/dist
 
-  release:
+  pre-release:
     runs-on: ubuntu-latest
     needs: build
-    if: github.event.inputs.release == 'y'
+    if: github.ref == 'refs/heads/canary'
+    environment: nightly
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4   
-      
-      - name: List
-        run: ls -la
+        uses: actions/checkout@v4
 
       - name: Get artifact
         uses: actions/download-artifact@v3
         with:
           name: python-client
           path: clients/python/dist
-        
+
+      - id: hash
+        run:
+          VERSION=$(cat clients/python/pyproject.toml | grep version | cut -d ' ' -f 3 | sed 's/"//g')
+          if [[ $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+\+canary\.[0-9]+$ ]]; then
+          echo "Version ($VERSION) is not a pre-release build"
+          exit 1
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tarball_hash=$(shasum -a 256 clients/python/dist/gloo_lib-$VERSION.tar.gz | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
+          echo "whl_hash=$(shasum -a 256 clients/python/dist/gloo_lib-$VERSION-py3-none-any.whl | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
+
+      - name: Pre-release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: "py_client-${{ steps.hash.outputs.version }}"
+          files: |
+            clients/python/dist/gloo_lib-${{ steps.hash.outputs.version }}.tar.gz
+            clients/python/dist/gloo_lib-${{ steps.hash.outputs.version }}-py3-none-any.whl
+          prerelease: true
+          body: |
+            ## Hashes
+            Tarball: ${{ steps.hash.outputs.hash }}
+            Wheel: ${{ steps.hash.outputs.whl_hash }}
+
+      - name: Install Poetry
+        run: |
+          pipx install poetry
+
+      - name: Publish
+        run: |
+          poetry publish
+        working-directory: clients/python
+
+  release:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/release/')
+    environment: release
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: python-client
+          path: clients/python/dist
+
+      - id: hash
+        run:
+          VERSION=$(cat clients/python/pyproject.toml | grep version | cut -d ' ' -f 3 | sed 's/"//g')
+          if [[ $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "Version ($VERSION) is not a release build"
+          exit 1
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tarball_hash=$(shasum -a 256 clients/python/dist/gloo_lib-$VERSION.tar.gz | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
+          echo "whl_hash=$(shasum -a 256 clients/python/dist/gloo_lib-$VERSION-py3-none-any.whl | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: "py_client-${{ steps.hash.outputs.version }}"
+          files: |
+            clients/python/dist/gloo_lib-${{ steps.hash.outputs.version }}.tar.gz
+            clients/python/dist/gloo_lib-${{ steps.hash.outputs.version }}-py3-none-any.whl
+          prerelease: true # Must manually upgrade to release
+          body: |
+            ## Hashes
+            Tarball: ${{ steps.hash.outputs.hash }}
+            Wheel: ${{ steps.hash.outputs.whl_hash }}
+
       - name: Install Poetry
         run: |
           pipx install poetry

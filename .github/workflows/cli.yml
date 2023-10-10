@@ -1,26 +1,18 @@
 name: Gloo CLI
 
-permissions: 
-  contents: write
-
 on:
   pull_request:
     paths:
-      - 'cli/**'
+      - "cli/**"
     branches:
       - canary
   push:
     paths:
-      - 'cli/.bumpversion.cfg'
+      - "cli/.bumpversion.cfg"
     branches:
       - canary
-      - main
-  workflow_dispatch:
-    inputs:
-      release:
-        description: 'Should this be a release? (y/n)'
-        required: true
-        default: 'n'
+    tags:
+      - "release/cli/v*.*.*"
 
 jobs:
   build:
@@ -56,7 +48,7 @@ jobs:
     runs-on: ${{ matrix.platform.os }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4   
+        uses: actions/checkout@v4
       - uses: Swatinem/rust-cache@v2
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v0
@@ -64,7 +56,7 @@ jobs:
           command: ${{ matrix.platform.command }}
           target: ${{ matrix.platform.target }}
           args: "--locked --release"
-          strip: true
+          strip: ${{ github.event_name != 'pull_request' }}
           working-directory: cli
 
       - name: Add artifact
@@ -72,18 +64,19 @@ jobs:
         with:
           name: ${{ matrix.platform.name }}
           path: cli/target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }}
-      
 
-  release:
+  pre-release:
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     needs: build
-
-    if: github.event.inputs.release == 'y' || github.ref == 'refs/heads/canary' || github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/canary'
+    environment: nightly
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4   
-      
+        uses: actions/checkout@v4
+
       - name: Get artifact [Darwin-Intel]
         uses: actions/download-artifact@v3
         with:
@@ -104,9 +97,13 @@ jobs:
         with:
           name: gloo-Windows-x86_64
           path: cli/target/x86_64-pc-windows-msvc/release/
-      - name: Generate Hashes
-        id: hash
+      - id: hash
         run: |
+          VERSION=$(cat cli/Cargo.toml | grep version | cut -d ' ' -f 3 | sed 's/"//g')
+          if [[ $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+\+canary\.[0-9]+$ ]]; then
+          echo "Version ($VERSION) is not a pre-release build"
+          exit 1
+          fi
           tar -czvf gloo-linux-x86_64.tar.gz cli/target/x86_64-unknown-linux-gnu/release/gloo
           tar -czvf gloo-apple-intel.tar.gz cli/target/x86_64-apple-darwin/release/gloo
           tar -czvf gloo-apple-arm.tar.gz cli/target/aarch64-apple-darwin/release/gloo
@@ -114,23 +111,91 @@ jobs:
           echo "darwin_intel_hash=$(shasum -a 256 gloo-apple-intel.tar.gz | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
           echo "darwin_arm_hash=$(shasum -a 256 gloo-apple-arm.tar.gz | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
           echo "windows_hash=$(shasum -a 256 cli/target/x86_64-pc-windows-msvc/release/gloo.exe | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
-          echo "version=$(cat cli/Cargo.toml | grep version | cut -d ' ' -f 3 | sed 's/"//g')" >> $GITHUB_OUTPUT
-      
-      
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: "cli-${{ steps.hash.outputs.version }}"
+          name: "Cli: ${{ steps.hash.outputs.version }}"
+          tag_name: "releases/cli/${{ steps.hash.outputs.version }}"
           files: |
             gloo-linux-x86_64.tar.gz
             gloo-apple-intel.tar.gz
             gloo-apple-arm.tar.gz
             cli/target/x86_64-pc-windows-msvc/release/gloo.exe
-          prerelease: true # Must manually upgrade to release
+          prerelease: true # Must manually upgrade to release once homebrew is updated.
           body: |
             ## Hashes
             Linux: `${{ steps.hash.outputs.linux_hash }}`
             Mac: Intel: `${{ steps.hash.outputs.darwin_intel_hash }}`
             Mac: Apple Silicon: `${{ steps.hash.outputs.darwin_arm_hash }}`
             Windows: `${{ steps.hash.outputs.windows_hash }}`
-          
+  release:
+    permissions:
+      contents: write
+      pull-requests: write
+    runs-on: ubuntu-latest
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/release/')
+    environment: release
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get artifact [Darwin-Intel]
+        uses: actions/download-artifact@v3
+        with:
+          name: gloo-Darwin-x86_64
+          path: cli/target/x86_64-apple-darwin/release/
+      - name: Get artifact [Darwin-Silicon]
+        uses: actions/download-artifact@v3
+        with:
+          name: gloo-Darwin-apple-silicon
+          path: cli/target/aarch64-apple-darwin/release/
+      - name: Get artifact [Linux]
+        uses: actions/download-artifact@v3
+        with:
+          name: gloo-linux-x86_64
+          path: cli/target/x86_64-unknown-linux-gnu/release/
+      - name: Get artifact [Windows]
+        uses: actions/download-artifact@v3
+        with:
+          name: gloo-Windows-x86_64
+          path: cli/target/x86_64-pc-windows-msvc/release/
+      - id: hash
+        run: |
+          VERSION=$(cat cli/Cargo.toml | grep version | cut -d ' ' -f 3 | sed 's/"//g')
+          if [[ $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "Version ($VERSION) is not a release build"
+          exit 1
+          fi
+          tar -czvf gloo-linux-x86_64.tar.gz cli/target/x86_64-unknown-linux-gnu/release/gloo
+          tar -czvf gloo-apple-intel.tar.gz cli/target/x86_64-apple-darwin/release/gloo
+          tar -czvf gloo-apple-arm.tar.gz cli/target/aarch64-apple-darwin/release/gloo
+          echo "linux_hash=$(shasum -a 256 gloo-linux-x86_64.tar.gz | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
+          echo "darwin_intel_hash=$(shasum -a 256 gloo-apple-intel.tar.gz | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
+          echo "darwin_arm_hash=$(shasum -a 256 gloo-apple-arm.tar.gz | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
+          echo "windows_hash=$(shasum -a 256 cli/target/x86_64-pc-windows-msvc/release/gloo.exe | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: "Cli: ${{ steps.hash.outputs.version }}"
+          tag_name: "releases/cli/${{ steps.hash.outputs.version }}"
+          files: |
+            gloo-linux-x86_64.tar.gz
+            gloo-apple-intel.tar.gz
+            gloo-apple-arm.tar.gz
+            cli/target/x86_64-pc-windows-msvc/release/gloo.exe
+          prerelease: true # Must manually upgrade to release once homebrew is updated.
+          body: |
+            ## Hashes
+            Linux: `${{ steps.hash.outputs.linux_hash }}`
+            Mac: Intel: `${{ steps.hash.outputs.darwin_intel_hash }}`
+            Mac: Apple Silicon: `${{ steps.hash.outputs.darwin_arm_hash }}`
+            Windows: `${{ steps.hash.outputs.windows_hash }}`
+
+      # TODO: Create a pull request on GlooHQ/homebrew-gloo to update the version by running
+      # release/patch-homebrew.sh
