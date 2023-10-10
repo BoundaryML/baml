@@ -50,6 +50,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            cli
+
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v0
         with:
