@@ -82,7 +82,7 @@ jobs:
       - id: hash
         run: |
           VERSION=$(cat clients/python/.bumpversion.cfg | grep current_version | cut -d '=' -f 2 | sed 's/[", ]//g')
-          if [[ $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+\.dev[0-9]+$ ]]; then
+          if [[ ! $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+\.dev[0-9]+$ ]]; then
             echo "Version ($VERSION) is not a pre-release build"
             exit 1
           fi
@@ -141,7 +141,7 @@ jobs:
       - id: hash
         run: |
           VERSION=$(cat clients/python/.bumpversion.cfg | grep current_version | cut -d '=' -f 2 | sed 's/[", ]//g')
-          if [[ $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          if [[ ! $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Version ($VERSION) is not a release build"
             exit 1
           fi
