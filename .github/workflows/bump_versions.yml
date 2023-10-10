@@ -55,15 +55,6 @@ jobs:
         with:
           ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-      - name: Get last nightly commit hash on main
-        id: last_commit
-        run: |
-          COMMIT_HASH=$(git log --oneline main | grep -E "\[NIGHTLY\]" | head -n 1 | awk '{print $1}')
-          if [ -z "$COMMIT_HASH" ]; then
-            COMMIT_HASH=$(git rev-list --max-parents=0 HEAD)
-          fi
-          echo hash=${COMMIT_HASH} >> $GITHUB_OUTPUT
-
       - name: Set up python
         uses: actions/setup-python@v4
         with:
@@ -113,5 +104,5 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh pr create --fill --title "${COMMIT_MSG}" --body "Automated flow to bump version${COMMIT_MSG}" --label "auto-bump"
+          gh pr create --title "${COMMIT_MSG}" --body "Automated flow to bump version${COMMIT_MSG}" --label "auto-bump" --head -a hellovai
        
