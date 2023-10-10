@@ -1,6 +1,6 @@
 [package]
 name = "gloo"
-version = "0.2.5-canary.0"
+version = "0.3.0-canary.0"
 edition = "2021"
 build = "build.rs"
 
