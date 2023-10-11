@@ -39,7 +39,12 @@ class LLMClient:
         **kwargs: typing.Any,
     ) -> None:
         self.__provider = provider
-        self.__type = str(kwargs.pop("__type", "chat"))
+        self.__type = str(
+            kwargs.pop(
+                "__type",
+                "chat" if provider == "openai" or provider == "azure" else "completion",
+            )
+        )
         self.__retry = __retry
         self.__default_fallback = __default_fallback__
         self.__fallback = __fallback__

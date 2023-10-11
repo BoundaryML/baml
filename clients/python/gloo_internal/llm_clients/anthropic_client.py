@@ -20,7 +20,6 @@ class AnthropicLLMClient(LLMClient):
         __retry = kwargs.pop("__retry", kwargs.pop("max_retries", 0))
         super().__init__(provider=provider, __retry=__retry, **kwargs)
 
-        client_kwargs = {}
         client_arg_names = [
             "api_key",
             "auth_token",
@@ -33,11 +32,11 @@ class AnthropicLLMClient(LLMClient):
             "connection_pool_limits",
             "_strict_response_validation",
         ]
-        for arg_name in client_arg_names:
-            if arg_name in self.kwargs:
-                client_kwargs[arg_name] = self.kwargs.pop(arg_name)
+        client_kwargs = {
+            k: self.kwargs.pop(k) for k in client_arg_names if k in self.kwargs
+        }
 
-        # Let gloo handle retries
+        # Gloo handles retries, so set max_retries to 0
         self.__client = anthropic.AsyncAnthropic(**client_kwargs, max_retries=0)
 
     def get_model_name(self) -> str:
@@ -85,11 +84,11 @@ class AnthropicLLMClient(LLMClient):
     async def _run_completion(
         self, prompt: str
     ) -> typing.Tuple[str, api_types.LLMOutputModel]:
-        messages = f"{anthropic.HUMAN_PROMPT} {prompt}{anthropic.AI_PROMPT}"
+        messages = prompt
         aprompt_tokens = self.__client.count_tokens(messages)
         response: anthropic.types.Completion = await self.__client.completions.create(
             prompt=messages,
-            **self.__call_args,
+            **self.kwargs,
         )
 
         model = response.model
