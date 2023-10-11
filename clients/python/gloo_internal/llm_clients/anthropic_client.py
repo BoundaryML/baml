@@ -11,43 +11,33 @@ from .. import api_types
 class AnthropicLLMClient(LLMClient):
     def __init__(self, provider: str, **kwargs: typing.Any) -> None:
         if "max_tokens_to_sample" not in kwargs:
+            # Anthropic requires a max_tokens_to_sample
             kwargs["max_tokens_to_sample"] = 300
-        if "model" not in kwargs:
-            assert False, "AnthropicLLMClient requires a model"
 
         if "max_retries" in kwargs and "__retry" in kwargs:
             assert False, "Cannot specify both max_retries and __retry"
 
         __retry = kwargs.pop("__retry", kwargs.pop("max_retries", 0))
-        super().__init__(provider=provider, **kwargs, __retry=__retry)
+        super().__init__(provider=provider, __retry=__retry, **kwargs)
 
         client_kwargs = {}
-        if "api_key" in kwargs:
-            client_kwargs["api_key"] = kwargs.pop("api_key")
-        if "auth_token" in kwargs:
-            client_kwargs["auth_token"] = kwargs.pop("auth_token")
-        if "base_url" in kwargs:
-            client_kwargs["base_url"] = kwargs.pop("base_url")
-        if "timeout" in kwargs:
-            client_kwargs["timeout"] = kwargs.pop("timeout")
-        if "default_headers" in kwargs:
-            client_kwargs["default_headers"] = kwargs.pop("default_headers")
-        if "default_query" in kwargs:
-            client_kwargs["default_query"] = kwargs.pop("default_query")
-        if "transport" in kwargs:
-            client_kwargs["transport"] = kwargs.pop("transport")
-        if "proxies" in kwargs:
-            client_kwargs["proxies"] = kwargs.pop("proxies")
-        if "connection_pool_limits" in kwargs:
-            client_kwargs["connection_pool_limits"] = kwargs.pop(
-                "connection_pool_limits"
-            )
-        if "_strict_response_validation" in kwargs:
-            client_kwargs["_strict_response_validation"] = kwargs.pop(
-                "_strict_response_validation"
-            )
-        self.__call_args = kwargs
+        client_arg_names = [
+            "api_key",
+            "auth_token",
+            "base_url",
+            "timeout",
+            "default_headers",
+            "default_query",
+            "transport",
+            "proxies",
+            "connection_pool_limits",
+            "_strict_response_validation",
+        ]
+        for arg_name in client_arg_names:
+            if arg_name in self.kwargs:
+                client_kwargs[arg_name] = self.kwargs.pop(arg_name)
 
+        # Let gloo handle retries
         self.__client = anthropic.AsyncAnthropic(**client_kwargs, max_retries=0)
 
     def get_model_name(self) -> str:
