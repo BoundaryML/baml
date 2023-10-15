@@ -1,6 +1,9 @@
 {
   "folders": [
     {
+      "path": "engine"
+    },
+    {
       "name": "Rust CLI",
       "path": "cli"
     },
