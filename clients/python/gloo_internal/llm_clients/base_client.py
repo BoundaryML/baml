@@ -33,7 +33,7 @@ class LLMClient:
     def __init__(
         self,
         provider: str,
-        __retry: int = 0,
+        __retries__: int = 0,
         __default_fallback__: typing.Union["LLMClient", None] = None,
         __fallback__: typing.Union[typing.Dict[int, "LLMClient"], None] = None,
         **kwargs: typing.Any,
@@ -45,7 +45,7 @@ class LLMClient:
                 "chat" if provider == "openai" or provider == "azure" else "completion",
             )
         )
-        self.__retry = __retry
+        self.__retry = __retries__
         self.__default_fallback = __default_fallback__
         self.__fallback = __fallback__
         self.__kwargs = kwargs
