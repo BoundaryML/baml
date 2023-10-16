@@ -13,7 +13,7 @@ pub(crate) fn parse_function(
     pair: Pair<'_>,
     doc_comment: Option<Pair<'_>>,
     diagnostics: &mut Diagnostics,
-) -> Function {
+) -> Result<Function, DatamodelError> {
     let pair_span = pair.as_span();
     let mut name: Option<Identifier> = None;
     let mut attributes: Vec<Attribute> = Vec::new();
@@ -76,15 +76,26 @@ pub(crate) fn parse_function(
         }
     }
 
-    match name {
-        Some(name) => Function {
+    match (name, input, output) {
+        (Some(name), Some(input), Some(output)) => Ok(Function {
             name,
-            input: input.unwrap(),
-            output: output.unwrap(),
+            input,
+            output,
             attributes,
             documentation: doc_comment.and_then(parse_comment_block),
             span: Span::from(pair_span),
-        },
-        _ => panic!("Encountered impossible function declaration during parsing",),
+        }),
+        (Some(name), _, _) => Err(DatamodelError::new_model_validation_error(
+            "This function declaration is invalid. It is missing an input field.",
+            "function",
+            &name.name,
+            pair_span.into(),
+        )),
+        _ => Err(DatamodelError::new_model_validation_error(
+            "This function declaration is invalid. It is either missing a name or a type.",
+            "function",
+            "unknown",
+            pair_span.into(),
+        )),
     }
 }

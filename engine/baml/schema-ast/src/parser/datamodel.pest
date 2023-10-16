@@ -36,13 +36,14 @@ interface_declaration = {
     }
 
 field_declaration = {
-    identifier
+    field_key
     ~ field_type?
     ~ (NEWLINE? ~ field_attribute)*
     ~ trailing_comment?
     ~ NEWLINE
     }
 
+field_key = @{ identifier }
 class_contents = {
     (field_declaration | (block_attribute ~ NEWLINE) | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
 }
@@ -78,15 +79,17 @@ field_attribute = { "@" ~ attribute_name ~ arguments_list? }
 // ######################################
 
 // Pest is greedy, order is very important here.
-field_type = { unsupported_optional_list_type | list_type | optional_type | legacy_required_type | legacy_list_type | base_type  }
+field_type = { union_list_type | union_type | field_type_base }
+union_list_type = { ("(" ~ union_type ~ ")[]") }
+union_type = { (field_type_base ~ ("|" ~ field_type_base)+) }
+field_type_base = { unsupported_optional_list_type | list_type | optional_type  | base_type  }
 
 primitive_types = { "string" | "int" | "float" | "bool" | "char" }
 base_type = { primitive_types | identifier } // Called base type to not conflict with type rust keyword
 unsupported_optional_list_type = { base_type ~ "[]" ~ "?" }
 list_type = { base_type ~ "[]" }
 optional_type = { base_type ~ "?" }
-legacy_required_type = { base_type ~ "!" }
-legacy_list_type = { "[" ~ base_type ~ "]" }
+
 
 // ######################################
 // Type Alias
@@ -116,19 +119,19 @@ numeric_literal = @{ ("-")? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
 // String literals. These behave specially in BAML.
 // ######################################
 single_word = @{ ASCII_ALPHANUMERIC ~ (ASCII_ALPHANUMERIC | "_" | "-")* }
-unquoted_string_literal = { (!NEWLINE ~ !WHITESPACE ~ ANY) ~ (!NEWLINE ~ !WHITESPACE ~ ANY)*}
+unquoted_string_literal = { (!"#" ~ !NEWLINE ~ !WHITESPACE ~ ANY) ~ (!"#" ~ !NEWLINE ~ !WHITESPACE ~ ANY)*}
 quoted_string_content = @{ (!"\"" ~ !NEWLINE ~ ANY)* }
 quoted_string_literal = ${ "\"" ~ quoted_string_content ~ "\"" }
 // TODO: Support comments in raw string literals
-raw_string_literal = ${ 
-    ("#\"" ~ ("\"#" ~ ANY)* ~ "\"#") 
+raw_string_literal = { 
+    ("#\"" ~ (!"\"#" ~ ANY)* ~ "\"#") 
     | ("##\"" ~ (!"\"##" ~ ANY)* ~ "\"##") 
     | ("###\"" ~ (!"\"###" ~ ANY)* ~ "\"###") 
     | ("####\"" ~ (!"\"####" ~ ANY)* ~ "\"####") 
     | ("#####\"" ~ (!"\"#####" ~ ANY)* ~ "\"#####")
 }
 unterminated_raw_string_literal = ${ 
-    ("#\"" ~ ("\"#" ~ ANY)*)
+    ("#\"" ~ (!"\"#" ~ ANY)*)
     | ("##\"" ~ (!"\"##" ~ ANY)*)
     | ("###\"" ~ (!"\"###" ~ ANY)*)
     | ("####\"" ~ (!"\"####" ~ ANY)*)
@@ -170,7 +173,8 @@ ENUM_KEYWORD = { "enum" }
 CLASS_KEYWORD = { "class" }
 FUNCTION_KEYWORD = { "function" }
 
-template_args = { "<" ~ expression? ~ ">" }
+empty_template_args = ${ "<>" }
+template_args = { empty_template_args | ("<" ~ expression? ~ ">") }
 CLIENT_KEYWORD = { "client" }
 GENERATOR_KEYWORD = { "generator" }
 VARIANT_KEYWORD = { "variant" }

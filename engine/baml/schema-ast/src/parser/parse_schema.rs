@@ -1,5 +1,5 @@
 use super::{
-    parse_class::parse_class, parse_client_generator, parse_enum::parse_enum,
+    parse_class::parse_class, parse_client_generator_variant, parse_enum::parse_enum,
     parse_function::parse_function, BAMLParser, Rule,
 };
 use crate::ast::*;
@@ -46,17 +46,23 @@ pub fn parse_schema(datamodel_string: &str, diagnostics: &mut Diagnostics) -> Sc
                                 top_level_definitions.push(Top::Class(parse_class(current, pending_block_comment.take(), diagnostics)));
                             },
                             Rule::FUNCTION_KEYWORD => {
-                                top_level_definitions.push(Top::Function(parse_function(current, pending_block_comment.take(), diagnostics)));
+                                match parse_function(current, pending_block_comment.take(), diagnostics) {
+                                    Ok(function) => top_level_definitions.push(Top::Function(function)),
+                                    Err(e) => diagnostics.push_error(e),
+                                }
                             },
                             _ => unreachable!(),
                         };
                     }
                     Rule::config_block => {
-                        top_level_definitions.push(parse_client_generator::parse_config_block(
+                        match parse_client_generator_variant::parse_config_block(
                             current,
                             pending_block_comment.take(),
                             diagnostics,
-                        ));
+                        ) {
+                            Ok(config) => top_level_definitions.push(config),
+                            Err(e) => diagnostics.push_error(e),
+                        }
                     }
                     Rule::EOI => {}
                     Rule::CATCH_ALL => diagnostics.push_error(DatamodelError::new_validation_error(

@@ -2,6 +2,8 @@ use crate::ast::{
     traits::WithSpan, Class, Client, Enum, Function, GeneratorConfig, Identifier, Span,
 };
 
+use super::Variant;
+
 /// Enum for distinguishing between top-level entries
 #[derive(Debug, Clone)]
 pub enum Top {
@@ -14,6 +16,9 @@ pub enum Top {
 
     // Clients to run
     Client(Client),
+
+    // Variant to run
+    Variant(Variant),
 
     // Generator
     Generator(GeneratorConfig),
@@ -29,6 +34,8 @@ impl Top {
             Top::Function(_) => "function",
             Top::Client(m) if m.is_llm() => "client<llm>",
             Top::Client(_) => "client<?>",
+            Top::Variant(v) if v.is_llm() => "variant<llm>",
+            Top::Variant(_) => "variant<?>",
             Top::Generator(_) => "generator",
         }
     }
@@ -41,6 +48,7 @@ impl Top {
             Top::Class(x) => &x.name,
             Top::Function(x) => &x.name,
             Top::Client(x) => &x.name,
+            Top::Variant(x) => &x.name,
             Top::Generator(x) => &x.name,
         }
     }
@@ -85,6 +93,13 @@ impl Top {
             _ => None,
         }
     }
+
+    pub fn as_variant(&self) -> Option<&Variant> {
+        match self {
+            Top::Variant(variant) => Some(variant),
+            _ => None,
+        }
+    }
 }
 
 impl WithSpan for Top {
@@ -94,6 +109,7 @@ impl WithSpan for Top {
             Top::Class(class) => class.span(),
             Top::Function(func) => func.span(),
             Top::Client(client) => client.span(),
+            Top::Variant(variant) => variant.span(),
             Top::Generator(gen) => gen.span(),
         }
     }

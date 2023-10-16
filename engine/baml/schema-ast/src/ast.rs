@@ -15,6 +15,7 @@ mod indentation_type;
 mod newline_type;
 mod top;
 mod traits;
+mod variant;
 
 pub(crate) use self::comment::Comment;
 
@@ -35,6 +36,7 @@ pub use r#class::{Class, FieldId};
 pub use r#enum::{Enum, EnumValue, EnumValueId};
 pub use top::Top;
 pub use traits::{WithAttributes, WithDocumentation, WithIdentifier, WithName, WithSpan};
+pub use variant::Variant;
 
 /// AST representation of a prisma schema.
 ///
@@ -154,6 +156,25 @@ impl std::ops::Index<GeneratorConfigId> for SchemaAst {
     }
 }
 
+/// An opaque identifier for a model in a schema AST. Use the
+/// `schema[model_id]` syntax to resolve the id to an `ast::Model`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct VariantConfigId(u32);
+impl VariantConfigId {
+    /// Used for range bounds when iterating over BTrees.
+    pub const ZERO: VariantConfigId = VariantConfigId(0);
+    /// Used for range bounds when iterating over BTrees.
+    pub const MAX: VariantConfigId = VariantConfigId(u32::MAX);
+}
+
+impl std::ops::Index<VariantConfigId> for SchemaAst {
+    type Output = Variant;
+
+    fn index(&self, index: VariantConfigId) -> &Self::Output {
+        self.tops[index.0 as usize].as_variant().unwrap()
+    }
+}
+
 /// An identifier for a top-level item in a schema AST. Use the `schema[top_id]`
 /// syntax to resolve the id to an `ast::Top`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -172,6 +193,9 @@ pub enum TopId {
 
     // A generator declaration
     Generator(GeneratorConfigId),
+
+    // A variant declaration
+    Variant(VariantConfigId),
 }
 
 impl TopId {
@@ -217,6 +241,7 @@ impl std::ops::Index<TopId> for SchemaAst {
             TopId::Function(FunctionId(idx)) => idx,
             TopId::Client(ClientId(idx)) => idx,
             TopId::Generator(GeneratorConfigId(idx)) => idx,
+            TopId::Variant(VariantConfigId(idx)) => idx,
         };
 
         &self.tops[idx as usize]
@@ -230,5 +255,6 @@ fn top_idx_to_top_id(top_idx: usize, top: &Top) -> TopId {
         Top::Function(_) => TopId::Function(FunctionId(top_idx as u32)),
         Top::Client(_) => TopId::Client(ClientId(top_idx as u32)),
         Top::Generator(_) => TopId::Generator(GeneratorConfigId(top_idx as u32)),
+        Top::Variant(_) => unimplemented!("Variant top id"),
     }
 }

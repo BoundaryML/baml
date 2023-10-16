@@ -13,7 +13,7 @@ pub(crate) fn parse_config_block(
     pair: Pair<'_>,
     doc_comment: Option<Pair<'_>>,
     diagnostics: &mut Diagnostics,
-) -> Top {
+) -> Result<Top, DatamodelError> {
     let pair_span = pair.as_span();
     let mut template_args = None;
     let mut name: Option<Identifier> = None;
@@ -25,8 +25,16 @@ pub(crate) fn parse_config_block(
         match current.as_rule() {
             Rule::BLOCK_OPEN | Rule::BLOCK_CLOSE => {}
             Rule::template_args => {
-                // TODO: Correctly parse template args.
-                template_args = Some(current.as_str());
+                let mut inner = current.into_inner();
+                for current in &mut inner {
+                    match current.as_rule() {
+                        Rule::empty_template_args => {}
+                        Rule::expression => {
+                            template_args = Some(parse_expression(current, diagnostics));
+                        }
+                        _ => parsing_catch_all(&current, "template args"),
+                    }
+                }
             }
             Rule::config_contents => {
                 let mut pending_field_comment: Option<Pair<'_>> = None;
@@ -62,30 +70,38 @@ pub(crate) fn parse_config_block(
         }
     }
 
-    match kw {
-        Some("client") => Top::Client(Client {
-            name: name.unwrap(),
+    match (kw, name, template_args) {
+        (Some("client") | Some("variant"), _, None) => Err(DatamodelError::new_validation_error(
+            "Missing template for client or variant. (did you forget <llm>)",
+            Span::from(pair_span),
+        )),
+        (Some("client"), Some(name), Some(template_args)) => Ok(Top::Client(Client {
+            name,
             fields,
             attributes,
             documentation: doc_comment.and_then(parse_comment_block),
             span: Span::from(pair_span),
-            client_type: template_args.unwrap_or("").to_string(),
-        }),
-        Some("generator") => {
-            if !template_args.is_none() {
-                diagnostics.push_error(DatamodelError::new_validation_error(
-                    "Template arguments are not allowed for generators.",
-                    Span::from(pair_span),
-                ));
-            }
-            Top::Generator(GeneratorConfig {
-                name: name.unwrap(),
-                fields,
-                attributes,
-                documentation: doc_comment.and_then(parse_comment_block),
-                span: Span::from(pair_span),
-            })
-        }
+            client_type: template_args.to_string(),
+        })),
+        (Some("variant"), Some(name), Some(template_args)) => Ok(Top::Variant(Variant {
+            name,
+            fields,
+            attributes,
+            documentation: doc_comment.and_then(parse_comment_block),
+            span: Span::from(pair_span),
+            variant_type: template_args.to_string(),
+        })),
+        (Some("generator"), Some(name), None) => Ok(Top::Generator(GeneratorConfig {
+            name: name,
+            fields,
+            attributes,
+            documentation: doc_comment.and_then(parse_comment_block),
+            span: Span::from(pair_span),
+        })),
+        (Some("generator"), _, Some(template_args)) => Err(DatamodelError::new_validation_error(
+            "Template arguments are not allowed for generators.",
+            Span::from(pair_span),
+        )),
         _ => unreachable!("Encountered impossible model declaration during parsing",),
     }
 }

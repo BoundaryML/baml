@@ -1,5 +1,6 @@
 use super::{
-    Comment, Identifier, Span, WithDocumentation, WithIdentifier, WithName, WithSpan, Attribute, traits::WithAttributes,
+    traits::WithAttributes, Attribute, Comment, Identifier, Span, WithDocumentation,
+    WithIdentifier, WithName, WithSpan,
 };
 
 /// A field definition in a model or a composite type.
@@ -41,25 +42,25 @@ pub struct Field {
 }
 
 impl Field {
-        /// Finds the position span of the argument in the given field attribute.
-        pub fn span_for_argument(&self, attribute: &str, argument: &str) -> Option<Span> {
-            self.attributes
-                .iter()
-                .filter(|a| a.name() == attribute)
-                .flat_map(|a| a.arguments.iter())
-                .filter(|a| a.name.as_ref().map(|n| n.name.as_str()) == Some(argument))
-                .map(|a| a.span)
-                .next()
-        }
-    
-        /// Finds the position span of the given attribute.
-        pub fn span_for_attribute(&self, attribute: &str) -> Option<Span> {
-            self.attributes
-                .iter()
-                .filter(|a| a.name() == attribute)
-                .map(|a| a.span)
-                .next()
-        }
+    /// Finds the position span of the argument in the given field attribute.
+    pub fn span_for_argument(&self, attribute: &str, argument: &str) -> Option<Span> {
+        self.attributes
+            .iter()
+            .filter(|a| a.name() == attribute)
+            .flat_map(|a| a.arguments.iter())
+            .filter(|a| a.name.as_ref().map(|n| n.name.as_str()) == Some(argument))
+            .map(|a| a.span)
+            .next()
+    }
+
+    /// Finds the position span of the given attribute.
+    pub fn span_for_attribute(&self, attribute: &str) -> Option<Span> {
+        self.attributes
+            .iter()
+            .filter(|a| a.name() == attribute)
+            .map(|a| a.span)
+            .next()
+    }
 
     /// The name of the field
     pub fn name(&self) -> &str {
@@ -132,6 +133,8 @@ impl FieldArity {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum FieldType {
+    PrimitiveType(String, Span),
+    Union(Vec<(FieldArity, FieldType)>, Span),
     Supported(Identifier),
     /// Unsupported("...")
     Unsupported(String, Span),
@@ -140,6 +143,8 @@ pub enum FieldType {
 impl FieldType {
     pub fn span(&self) -> Span {
         match self {
+            FieldType::Union(_, span) => *span,
+            FieldType::PrimitiveType(_, span) => *span,
             FieldType::Supported(ident) => ident.span,
             FieldType::Unsupported(_, span) => *span,
         }
@@ -148,6 +153,8 @@ impl FieldType {
     pub fn as_unsupported(&self) -> Option<(&str, &Span)> {
         match self {
             FieldType::Unsupported(name, span) => Some((name, span)),
+            FieldType::Union(_, _) => None,
+            FieldType::PrimitiveType(_, _) => None,
             FieldType::Supported(_) => None,
         }
     }

@@ -2,7 +2,7 @@ mod helpers;
 mod parse_arguments;
 mod parse_attribute;
 mod parse_class;
-mod parse_client_generator;
+mod parse_client_generator_variant;
 mod parse_comments;
 mod parse_enum;
 mod parse_expression;

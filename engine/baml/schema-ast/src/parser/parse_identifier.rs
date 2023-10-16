@@ -45,7 +45,7 @@ pub fn parse_identifier(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Identi
                 ),
             }
         }
-        Rule::attribute_name | Rule::single_word => Identifier {
+        Rule::field_key | Rule::attribute_name | Rule::single_word => Identifier {
             name: pair.as_str().to_string(),
             span: pair.as_span().into(),
         },
