@@ -1,4 +1,4 @@
-use crate::ast::{Span};
+use crate::ast::Span;
 use std::fmt;
 
 /// Represents arbitrary, even nested, expressions.
@@ -24,13 +24,21 @@ impl fmt::Display for Expression {
             Expression::StringValue(val, _) => write!(f, "{}", crate::string_literal(val)),
             Expression::ConstantValue(val, _) => fmt::Display::fmt(val, f),
             Expression::Array(vals, _) => {
-                let vals = vals.iter().map(ToString::to_string).collect::<Vec<_>>().join(",");
+                let vals = vals
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(",");
                 write!(f, "[{vals}]")
-            },
-            Expression::Map(vals,_ ) => {
-                let vals = vals.iter().map(|(k, v)| format!("{}: {}", k, v)).collect::<Vec<_>>().join(",");
+            }
+            Expression::Map(vals, _) => {
+                let vals = vals
+                    .iter()
+                    .map(|(k, v)| format!("{}: {}", k, v))
+                    .collect::<Vec<_>>()
+                    .join(",");
                 write!(f, "{{{vals}}}")
-            },
+            }
         }
     }
 }
@@ -83,7 +91,7 @@ impl Expression {
 
     pub fn is_env_expression(&self) -> bool {
         match &self {
-            Self::ConstantValue(name, _) => name.starts_with("@ENV."),
+            Self::ConstantValue(name, _) => name.starts_with("#ENV."),
             _ => false,
         }
     }
@@ -93,7 +101,13 @@ impl Expression {
         match self {
             Expression::NumericValue(_, _) => "numeric",
             Expression::StringValue(_, _) => "string",
-            Expression::ConstantValue(_, _) => "literal",
+            Expression::ConstantValue(s, _) => {
+                if s.starts_with("#ENV.") {
+                    "env"
+                } else {
+                    "literal"
+                }
+            }
             Expression::Map(_, _) => "map",
             Expression::Array(_, _) => "array",
         }

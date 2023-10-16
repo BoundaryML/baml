@@ -1,12 +1,11 @@
 use super::{
-    parse_class::parse_class, parse_enum::parse_enum, parse_function::parse_function, BAMLParser,
-    Rule,
+    parse_class::parse_class, parse_client_generator, parse_enum::parse_enum,
+    parse_function::parse_function, BAMLParser, Rule,
 };
 use crate::ast::*;
 use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 use pest::Parser;
 
-#[cfg(debug_assertions)]
 fn pretty_print<'a>(pair: pest::iterators::Pair<'a, Rule>, indent_level: usize) {
     // Indentation for the current level
     let indent = "  ".repeat(indent_level);
@@ -28,7 +27,9 @@ pub fn parse_schema(datamodel_string: &str, diagnostics: &mut Diagnostics) -> Sc
         Ok(mut datamodel_wrapped) => {
             let datamodel = datamodel_wrapped.next().unwrap();
 
-            // Pretty print the parse result in case of an error.
+            // Run the code with:
+            // cargo build --features "debug_parser"
+            #[cfg(feature = "debug_parser")]
             pretty_print(datamodel.clone(), 0);
 
             let mut top_level_definitions: Vec<Top> = vec![];
@@ -49,6 +50,13 @@ pub fn parse_schema(datamodel_string: &str, diagnostics: &mut Diagnostics) -> Sc
                             },
                             _ => unreachable!(),
                         };
+                    }
+                    Rule::config_block => {
+                        top_level_definitions.push(parse_client_generator::parse_config_block(
+                            current,
+                            pending_block_comment.take(),
+                            diagnostics,
+                        ));
                     }
                     Rule::EOI => {}
                     Rule::CATCH_ALL => diagnostics.push_error(DatamodelError::new_validation_error(

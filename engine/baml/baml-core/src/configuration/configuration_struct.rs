@@ -1,8 +1,5 @@
 use super::Generator;
-use crate::{
-    internal_baml_diagnostics::{DatamodelError, Diagnostics},
-    PreviewFeature,
-};
+use crate::{internal_baml_diagnostics::Diagnostics, PreviewFeature};
 use enumflags2::BitFlags;
 
 #[derive(Debug)]
@@ -23,8 +20,6 @@ impl Configuration {
     pub fn preview_features(&self) -> BitFlags<PreviewFeature> {
         self.generators
             .iter()
-            .fold(BitFlags::empty(), |acc, generator| {
-                acc | generator.preview_features.unwrap_or_default()
-            })
+            .fold(BitFlags::empty(), |acc, generator| acc)
     }
 }

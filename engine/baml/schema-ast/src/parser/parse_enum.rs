@@ -2,6 +2,7 @@ use super::{
     helpers::{parsing_catch_all, Pair},
     parse_attribute::parse_attribute,
     parse_comments::*,
+    parse_identifier::parse_identifier,
     Rule,
 };
 use crate::ast::{Attribute, Comment, Enum, EnumValue, Identifier};
@@ -23,7 +24,7 @@ pub fn parse_enum(
     for current in pairs {
         match current.as_rule() {
             Rule::BLOCK_OPEN | Rule::BLOCK_CLOSE | Rule::ENUM_KEYWORD => {}
-            Rule::identifier => name = Some(current.into()),
+            Rule::identifier => name = parse_identifier(current.into(), diagnostics),
             Rule::enum_contents => {
                 let mut pending_value_comment = None;
                 inner_span = Some(current.as_span().into());
@@ -80,7 +81,7 @@ fn parse_enum_value(
 
     for current in pair.into_inner() {
         match current.as_rule() {
-            Rule::identifier => name = Some(current.into()),
+            Rule::identifier => name = parse_identifier(current.into(), diagnostics),
             Rule::field_attribute => attributes.push(parse_attribute(current, diagnostics)),
             Rule::trailing_comment => {
                 comment = match (comment, parse_trailing_comment(current)) {

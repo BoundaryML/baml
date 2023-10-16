@@ -15,6 +15,15 @@ pub struct StringFromEnvVar {
 impl StringFromEnvVar {
     pub(crate) fn coerce(expr: &ast::Expression, diagnostics: &mut Diagnostics) -> Option<Self> {
         match expr {
+            ast::Expression::ConstantValue(value, _) => {
+                if value.starts_with("#ENV.") {
+                    Some(StringFromEnvVar::new_from_env_var(
+                        value.trim_start_matches("#ENV.").to_owned(),
+                    ))
+                } else {
+                    Some(StringFromEnvVar::new_literal(value.clone()))
+                }
+            }
             ast::Expression::StringValue(value, _) => {
                 Some(StringFromEnvVar::new_literal(value.clone()))
             }

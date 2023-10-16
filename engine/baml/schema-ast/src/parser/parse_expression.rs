@@ -1,5 +1,6 @@
 use super::{
     helpers::{parsing_catch_all, Pair},
+    parse_identifier::parse_identifier_string,
     Rule,
 };
 use crate::ast::*;
@@ -16,7 +17,18 @@ pub(crate) fn parse_expression(
         Rule::string_literal => {
             Expression::StringValue(parse_string_literal(first_child, diagnostics), span)
         }
-        Rule::identifier => Expression::ConstantValue(first_child.as_str().to_string(), span),
+        Rule::identifier => match parse_identifier_string(first_child, diagnostics) {
+            Ok((name, as_identifer)) => {
+                if as_identifer {
+                    Expression::ConstantValue(name, span)
+                } else {
+                    Expression::StringValue(name, span)
+                }
+            }
+            Err(_) => unreachable!(
+                "Encountered impossible identifier during parsing: Identifer in expression"
+            ),
+        },
         Rule::dict_expression => parse_dict(first_child, diagnostics),
         Rule::array_expression => parse_array(first_child, diagnostics),
         _ => unreachable!(
@@ -64,8 +76,30 @@ fn parse_dict(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
 
 fn parse_dict_entry(token: Pair<'_>, diagnostics: &mut Diagnostics) -> (Expression, Expression) {
     let mut inner = token.into_inner();
-    let key = parse_expression(inner.next().unwrap(), diagnostics);
+    let key = parse_dict_key(inner.next().unwrap(), diagnostics);
     let value = parse_expression(inner.next().unwrap(), diagnostics);
 
     (key, value)
+}
+
+fn parse_dict_key(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
+    assert!(token.as_rule() == Rule::dict_key);
+    let span = token.as_span();
+    for current in token.into_inner() {
+        return match current.as_rule() {
+            Rule::identifier => {
+                let name = current.as_str().to_string();
+                Expression::ConstantValue(name, Span::from(span))
+            }
+            Rule::quoted_string_literal => {
+                Expression::ConstantValue(current.as_str().to_string(), Span::from(span))
+            }
+            other => unreachable!(
+                "Encountered impossible dict key during parsing: {:?} {:?}",
+                other,
+                current.as_str()
+            ),
+        };
+    }
+    unreachable!("Encountered impossible dict key during parsing")
 }

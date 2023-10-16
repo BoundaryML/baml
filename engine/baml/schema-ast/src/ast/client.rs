@@ -1,6 +1,6 @@
 use super::{
-    traits::WithAttributes, Attribute, Comment, Field, Identifier, Span, WithDocumentation,
-    WithIdentifier, WithSpan,
+    traits::WithAttributes, Attribute, Comment, ConfigBlockProperty, Field, Identifier, Span,
+    WithDocumentation, WithIdentifier, WithSpan,
 };
 
 /// An opaque identifier for a field in an AST model. Use the
@@ -16,7 +16,7 @@ impl FieldId {
 }
 
 impl std::ops::Index<FieldId> for Client {
-    type Output = Field;
+    type Output = ConfigBlockProperty;
 
     fn index(&self, index: FieldId) -> &Self::Output {
         &self.fields[index.0 as usize]
@@ -59,7 +59,7 @@ pub struct Client {
     /// ```
     pub attributes: Vec<Attribute>,
 
-    pub fields: Vec<Field>,
+    pub fields: Vec<ConfigBlockProperty>,
 
     pub(crate) client_type: String,
 
@@ -68,14 +68,16 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn iter_fields(&self) -> impl ExactSizeIterator<Item = (FieldId, &Field)> + Clone {
+    pub fn iter_fields(
+        &self,
+    ) -> impl ExactSizeIterator<Item = (FieldId, &ConfigBlockProperty)> + Clone {
         self.fields
             .iter()
             .enumerate()
             .map(|(idx, field)| (FieldId(idx as u32), field))
     }
 
-    pub fn fields(&self) -> &[Field] {
+    pub fn fields(&self) -> &[ConfigBlockProperty] {
         &self.fields
     }
 

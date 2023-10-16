@@ -1,15 +1,16 @@
 mod helpers;
+mod parse_arguments;
+mod parse_attribute;
+mod parse_class;
+mod parse_client_generator;
 mod parse_comments;
 mod parse_enum;
-mod parse_class;
-mod parse_schema;
-mod parse_field;
-mod parse_types;
 mod parse_expression;
-mod parse_attribute;
-mod parse_arguments;
+mod parse_field;
 mod parse_function;
-mod parse_client;
+mod parse_identifier;
+mod parse_schema;
+mod parse_types;
 
 pub use parse_schema::parse_schema;
 

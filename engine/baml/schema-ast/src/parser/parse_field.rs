@@ -2,6 +2,7 @@ use super::{
     helpers::{parsing_catch_all, Pair},
     parse_attribute::parse_attribute,
     parse_comments::*,
+    parse_identifier::parse_identifier,
     parse_types::parse_field_type,
     Rule,
 };
@@ -23,7 +24,7 @@ pub(crate) fn parse_field(
 
     for current in pair.into_inner() {
         match current.as_rule() {
-            Rule::identifier => name = Some(current.into()),
+            Rule::identifier => name = parse_identifier(current.into(), diagnostics),
             Rule::field_type => field_type = Some(parse_field_type(current, diagnostics)?),
             Rule::field_attribute => {
                 attributes.push(parse_attribute(current, diagnostics));

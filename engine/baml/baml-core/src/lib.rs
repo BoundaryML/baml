@@ -12,6 +12,7 @@ mod common;
 mod configuration;
 mod validate;
 
+use self::validate::generator_loader;
 pub use crate::{
     common::{PreviewFeature, PreviewFeatures, ALL_PREVIEW_FEATURES},
     configuration::{Configuration, StringFromEnvVar},
@@ -56,8 +57,10 @@ fn validate_configuration(
     schema_ast: &ast::SchemaAst,
     diagnostics: &mut Diagnostics,
 ) -> Configuration {
+    let generators = generator_loader::load_generators_from_ast(schema_ast, diagnostics);
+
     Configuration {
-        generators: Vec::new(),
+        generators,
         warnings: diagnostics.warnings().to_owned(),
     }
 }

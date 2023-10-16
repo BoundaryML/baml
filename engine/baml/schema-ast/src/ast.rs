@@ -3,6 +3,7 @@ mod attribute;
 mod r#class;
 mod client;
 mod comment;
+mod config;
 mod r#enum;
 mod expression;
 mod field;
@@ -20,6 +21,7 @@ pub(crate) use self::comment::Comment;
 pub use argument::{Argument, ArgumentsList, EmptyArgument};
 pub use attribute::{Attribute, AttributeContainer, AttributeId};
 pub use client::Client;
+pub use config::ConfigBlockProperty;
 pub use expression::Expression;
 pub use field::{Field, FieldArity, FieldType};
 pub use find_at_position::*;
@@ -56,6 +58,11 @@ impl SchemaAst {
             .iter()
             .enumerate()
             .map(|(top_idx, top)| (top_idx_to_top_id(top_idx, top), top))
+    }
+
+    /// Iterate over all the generator blocks in the schema.
+    pub fn generators(&self) -> impl Iterator<Item = &GeneratorConfig> {
+        self.tops.iter().filter_map(|top| top.as_generator())
     }
 }
 

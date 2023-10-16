@@ -116,7 +116,7 @@ numeric_literal = @{ ("-")? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
 // String literals. These behave specially in BAML.
 // ######################################
 single_word = @{ ASCII_ALPHANUMERIC ~ (ASCII_ALPHANUMERIC | "_" | "-")* }
-unquoted_string_literal = { (!NEWLINE ~ !WHITESPACE ~ ANY) ~ (!NEWLINE ~ ANY)* }
+unquoted_string_literal = { (!NEWLINE ~ !WHITESPACE ~ ANY) ~ (!NEWLINE ~ !WHITESPACE ~ ANY)*}
 quoted_string_content = @{ (!"\"" ~ !NEWLINE ~ ANY)* }
 quoted_string_literal = ${ "\"" ~ quoted_string_content ~ "\"" }
 // TODO: Support comments in raw string literals
@@ -151,7 +151,8 @@ doc_content = @{ (!NEWLINE ~ ANY)* }
 // ######################################
 // Shared Building Blocks and Comments
 // ######################################
-identifier = @{ ASCII_ALPHANUMERIC ~ (ASCII_ALPHANUMERIC | "_" | "-")* }
+valid_identifier = @{ ASCII_ALPHA_UPPER ~ (ASCII_ALPHANUMERIC | "_" | "-")* }
+identifier = { valid_identifier | single_word }
 
 WHITESPACE = _{ " " | "\t" }
 NEWLINE = _{ "\n" | "\r\n" | "\r" }
