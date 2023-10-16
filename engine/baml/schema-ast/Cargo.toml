@@ -1,0 +1,13 @@
+[package]
+edition = "2021"
+name = "internal-baml-schema-ast"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+licence-file.workspace = true
+
+[dependencies]
+internal-baml-diagnostics = { path = "../diagnostics", version = "^0.0.1" }
+
+pest = "2.1.3"
+pest_derive = "2.1.0"

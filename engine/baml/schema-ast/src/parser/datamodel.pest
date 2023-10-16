@@ -1,0 +1,175 @@
+schema = {
+    SOI
+    ~ (interface_declaration | config_block | enum_declaration | type_alias | arbitrary_block | comment_block | empty_lines | CATCH_ALL)*
+    ~ EOI
+}
+
+// a block definition without a keyword. Is not valid. Just acts as a catch for the parser to display a nice error.
+arbitrary_block = { identifier ~ BLOCK_OPEN ~ ((!BLOCK_CLOSE ~ ANY) | NEWLINE)* ~ BLOCK_CLOSE }
+
+// ######################################
+// Enum
+// ######################################
+enum_declaration = {
+    ENUM_KEYWORD
+    ~ identifier
+    ~ BLOCK_OPEN
+    ~ enum_contents
+    ~ BLOCK_CLOSE
+    }
+
+enum_value_declaration = { identifier ~ (NEWLINE? ~ field_attribute)* ~ trailing_comment? ~ NEWLINE }
+enum_contents = {
+    (enum_value_declaration | block_attribute | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)* 
+}
+
+// ######################################
+// Interface blocks are configs which only have types as values.
+// ######################################
+
+interface_declaration = { 
+    (CLASS_KEYWORD | FUNCTION_KEYWORD)
+    ~ identifier
+    ~ BLOCK_OPEN
+    ~ class_contents
+    ~ BLOCK_CLOSE
+    }
+
+field_declaration = {
+    identifier
+    ~ field_type?
+    ~ (NEWLINE? ~ field_attribute)*
+    ~ trailing_comment?
+    ~ NEWLINE
+    }
+
+class_contents = {
+    (field_declaration | (block_attribute ~ NEWLINE) | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
+}
+
+// ######################################
+// Configuration blocks (generators, clients, variants are syntactically identical)
+// The value of each key is an expression.
+// ######################################
+config_block = {
+    (CLIENT_KEYWORD | GENERATOR_KEYWORD | VARIANT_KEYWORD)
+    ~ template_args?
+    ~ identifier
+    ~ BLOCK_OPEN
+    ~ config_contents
+    ~ BLOCK_CLOSE
+    }
+
+key_value = { single_word ~ expression? ~ trailing_comment? }
+
+config_contents = {
+    ((key_value ~ NEWLINE) | (block_attribute ~ NEWLINE) | comment_block | empty_lines| BLOCK_LEVEL_CATCH_ALL)*
+}
+
+// ######################################
+// Attributes
+// ######################################
+attribute_name = @{ single_word  }
+block_attribute = { "@@" ~ attribute_name ~ arguments_list? }
+field_attribute = { "@" ~ attribute_name ~ arguments_list? }
+
+// ######################################
+// Field Type
+// ######################################
+
+// Pest is greedy, order is very important here.
+field_type = { unsupported_optional_list_type | list_type | optional_type | legacy_required_type | legacy_list_type | base_type  }
+
+primitive_types = { "string" | "int" | "float" | "bool" | "char" }
+base_type = { primitive_types | identifier } // Called base type to not conflict with type rust keyword
+unsupported_optional_list_type = { base_type ~ "[]" ~ "?" }
+list_type = { base_type ~ "[]" }
+optional_type = { base_type ~ "?" }
+legacy_required_type = { base_type ~ "!" }
+legacy_list_type = { "[" ~ base_type ~ "]" }
+
+// ######################################
+// Type Alias
+// ######################################
+type_alias = { TYPE_KEYWORD ~ identifier ~ base_type ~ (NEWLINE? ~ field_attribute)*  }
+
+// ######################################
+// Arguments
+// ######################################
+arguments_list = { "(" ~ expression? ~ ")" }
+
+// ######################################
+// Expressions & Functions
+// ######################################
+dict_key = { identifier | quoted_string_literal }
+dict_entry = { dict_key ~ expression }
+dict_expression = { "{" ~ NEWLINE ~ (dict_entry ~ ( NEWLINE ~ dict_entry )*)? ~ NEWLINE ~ "}" }
+array_expression = { "[" ~ (expression ~ ( "," ~ expression )*)? ~ "]" }
+expression = { dict_expression | array_expression | numeric_literal | identifier | string_literal }
+
+// ######################################
+// Literals / Values
+// ######################################
+numeric_literal = @{ ("-")? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
+
+// ######################################
+// String literals. These behave specially in BAML.
+// ######################################
+single_word = @{ ASCII_ALPHANUMERIC ~ (ASCII_ALPHANUMERIC | "_" | "-")* }
+unquoted_string_literal = { (!NEWLINE ~ !WHITESPACE ~ ANY) ~ (!NEWLINE ~ ANY)* }
+quoted_string_content = @{ (!"\"" ~ !NEWLINE ~ ANY)* }
+quoted_string_literal = ${ "\"" ~ quoted_string_content ~ "\"" }
+// TODO: Support comments in raw string literals
+raw_string_literal = ${ 
+    ("#\"" ~ ("\"#" ~ ANY)* ~ "\"#") 
+    | ("##\"" ~ (!"\"##" ~ ANY)* ~ "\"##") 
+    | ("###\"" ~ (!"\"###" ~ ANY)* ~ "\"###") 
+    | ("####\"" ~ (!"\"####" ~ ANY)* ~ "\"####") 
+    | ("#####\"" ~ (!"\"#####" ~ ANY)* ~ "\"#####")
+}
+unterminated_raw_string_literal = ${ 
+    ("#\"" ~ ("\"#" ~ ANY)*)
+    | ("##\"" ~ (!"\"##" ~ ANY)*)
+    | ("###\"" ~ (!"\"###" ~ ANY)*)
+    | ("####\"" ~ (!"\"####" ~ ANY)*)
+    | ("#####\"" ~ (!"\"#####" ~ ANY)*)
+}
+unterminated_quoted_string_literal = ${ "\"" ~ quoted_string_content }
+unterminated_string_literal = ${ unterminated_raw_string_literal | unterminated_quoted_string_literal }
+string_literal = { raw_string_literal | quoted_string_literal | single_word | unquoted_string_literal | unterminated_string_literal }
+
+
+// ######################################
+// Comments and Documentation Comments
+// ######################################
+comment_block = ${ ((doc_comment | comment) ~ NEWLINE?)+ }
+trailing_comment = ${ doc_comment | comment }
+doc_comment = { WHITESPACE* ~ "///" ~ doc_content }
+comment = { WHITESPACE* ~ (!"///") ~ "//" ~ doc_content }
+doc_content = @{ (!NEWLINE ~ ANY)* }
+
+// ######################################
+// Shared Building Blocks and Comments
+// ######################################
+identifier = @{ ASCII_ALPHANUMERIC ~ (ASCII_ALPHANUMERIC | "_" | "-")* }
+
+WHITESPACE = _{ " " | "\t" }
+NEWLINE = _{ "\n" | "\r\n" | "\r" }
+empty_lines = @{ (WHITESPACE* ~ NEWLINE)+ }
+
+// the any part is to not crash on comments next to an open block, see test `parse_comments_without_crasing_or_loosing_info`
+BLOCK_OPEN = { "{" ~ (!NEWLINE ~ ANY)* ~ NEWLINE }
+BLOCK_CLOSE = { "}" }
+
+BLOCK_LEVEL_CATCH_ALL = { !BLOCK_CLOSE ~ CATCH_ALL }
+CATCH_ALL = { (!NEWLINE ~ ANY)+ ~ NEWLINE? }
+
+TYPE_KEYWORD = { "type" }
+ENUM_KEYWORD = { "enum" }
+CLASS_KEYWORD = { "class" }
+FUNCTION_KEYWORD = { "function" }
+
+template_args = { "<" ~ expression? ~ ">" }
+CLIENT_KEYWORD = { "client" }
+GENERATOR_KEYWORD = { "generator" }
+VARIANT_KEYWORD = { "variant" }

@@ -1,0 +1,30 @@
+use super::Generator;
+use crate::{
+    internal_baml_diagnostics::{DatamodelError, Diagnostics},
+    PreviewFeature,
+};
+use enumflags2::BitFlags;
+
+#[derive(Debug)]
+pub struct Configuration {
+    pub generators: Vec<Generator>,
+    pub warnings: Vec<internal_baml_diagnostics::DatamodelWarning>,
+}
+
+impl Configuration {
+    pub fn validate_that_one_datasource_is_provided(&self) -> Result<(), Diagnostics> {
+        Ok(())
+    }
+
+    pub fn max_identifier_length(&self) -> usize {
+        1024
+    }
+
+    pub fn preview_features(&self) -> BitFlags<PreviewFeature> {
+        self.generators
+            .iter()
+            .fold(BitFlags::empty(), |acc, generator| {
+                acc | generator.preview_features.unwrap_or_default()
+            })
+    }
+}

@@ -1,0 +1,13 @@
+[package]
+edition = "2021"
+name = "internal-baml-diagnostics"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+licence = "Apache-2.0"
+licence-file.workspace = true
+
+[dependencies]
+colored = "2"
+pest = "2.1.3"
+indoc.workspace = true
