@@ -23,7 +23,7 @@ pub(crate) fn parse_function(
     for current in pair.into_inner() {
         match current.as_rule() {
             Rule::FUNCTION_KEYWORD | Rule::BLOCK_OPEN | Rule::BLOCK_CLOSE => {}
-            Rule::identifier => name = parse_identifier(current.into(), diagnostics),
+            Rule::identifier => name = Some(parse_identifier(current.into(), diagnostics)),
             Rule::class_contents => {
                 let mut pending_field_comment: Option<Pair<'_>> = None;
 

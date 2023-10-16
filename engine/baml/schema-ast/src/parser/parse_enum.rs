@@ -24,7 +24,7 @@ pub fn parse_enum(
     for current in pairs {
         match current.as_rule() {
             Rule::BLOCK_OPEN | Rule::BLOCK_CLOSE | Rule::ENUM_KEYWORD => {}
-            Rule::identifier => name = parse_identifier(current.into(), diagnostics),
+            Rule::identifier => name = Some(parse_identifier(current.into(), diagnostics)),
             Rule::enum_contents => {
                 let mut pending_value_comment = None;
                 inner_span = Some(current.as_span().into());
@@ -81,7 +81,7 @@ fn parse_enum_value(
 
     for current in pair.into_inner() {
         match current.as_rule() {
-            Rule::identifier => name = parse_identifier(current.into(), diagnostics),
+            Rule::identifier => name = Some(parse_identifier(current.into(), diagnostics)),
             Rule::field_attribute => attributes.push(parse_attribute(current, diagnostics)),
             Rule::trailing_comment => {
                 comment = match (comment, parse_trailing_comment(current)) {

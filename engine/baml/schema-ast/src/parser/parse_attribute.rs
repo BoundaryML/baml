@@ -15,7 +15,7 @@ pub(crate) fn parse_attribute(
 
     for current in pair.into_inner() {
         match current.as_rule() {
-            Rule::attribute_name => name = parse_identifier(current.into(), diagnostics),
+            Rule::attribute_name => name = Some(parse_identifier(current.into(), diagnostics)),
             Rule::arguments_list => parse_arguments_list(current, &mut arguments, diagnostics),
             _ => parsing_catch_all(&current, "attribute"),
         }

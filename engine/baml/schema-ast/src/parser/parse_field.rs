@@ -24,7 +24,7 @@ pub(crate) fn parse_field(
 
     for current in pair.into_inner() {
         match current.as_rule() {
-            Rule::identifier => name = parse_identifier(current.into(), diagnostics),
+            Rule::identifier => name = Some(parse_identifier(current.into(), diagnostics)),
             Rule::field_type => field_type = Some(parse_field_type(current, diagnostics)?),
             Rule::field_attribute => {
                 attributes.push(parse_attribute(current, diagnostics));
