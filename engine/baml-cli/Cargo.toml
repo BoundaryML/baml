@@ -13,6 +13,7 @@ check-latest = "1.0.2"
 clap = { version = "4.4.6", features = ["derive"] }
 colored = "2.0.4"
 env_logger = "0.10.0"
+glob = "0.3.1"
 log = "0.4.20"
 semver = "1.0.20"
 

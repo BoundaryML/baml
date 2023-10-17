@@ -10,6 +10,7 @@ mod parse_field;
 mod parse_function;
 mod parse_identifier;
 mod parse_schema;
+mod parse_template_args;
 mod parse_types;
 
 pub use parse_schema::parse_schema;

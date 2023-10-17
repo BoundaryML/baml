@@ -3,7 +3,7 @@ use colored::*;
 use log::{error, info, warn};
 use semver;
 
-use crate::command::run_command_with_error;
+use crate::{command::run_command_with_error, errors::CliError};
 
 fn get_version() -> (semver::Version, Option<semver::Version>) {
     if let Ok(current_version) = semver::Version::parse(crate_version!()) {
@@ -50,7 +50,7 @@ pub fn version_check() {
     }
 }
 
-pub fn update() -> Result<(), Option<&'static str>> {
+pub fn update() -> Result<(), CliError> {
     // Check if the latest version is installed
     let (current_version, update_available) = get_version();
     // Update to the latest version
@@ -61,12 +61,7 @@ pub fn update() -> Result<(), Option<&'static str>> {
             current_version,
             latest_version
         );
-        if let Err(error) = impl_update() {
-            if let Some(error_msg) = error.1 {
-                error!("{0}\n\n{1}", error.0, error_msg);
-            }
-            return Err(Some(error.0));
-        }
+        impl_update()?;
     } else {
         println!(
             "{} {}:{}",
@@ -78,9 +73,9 @@ pub fn update() -> Result<(), Option<&'static str>> {
     Ok(())
 }
 
-fn impl_update() -> Result<(), (&'static str, Option<String>)> {
+fn impl_update() -> Result<(), CliError> {
     if cfg!(debug_assertions) {
-        return Err(("Not available for debug builds", None));
+        return Err("Not available for debug builds".into());
     }
 
     if cfg!(target_os = "macos") {
@@ -90,22 +85,22 @@ fn impl_update() -> Result<(), (&'static str, Option<String>)> {
     } else if cfg!(target_os = "linux") {
         update_linux()
     } else {
-        Err(("Unsupported platform", None))
+        Err("Unsupported platform".into())
     }
 }
 
-fn update_macos() -> Result<(), (&'static str, Option<String>)> {
+fn update_macos() -> Result<(), CliError> {
     run_command_with_error("brew", ["tap", "gloohq/gloo"], "brew tap gloohq/gloo")?;
     run_command_with_error("brew", ["update"], "brew update")?;
     run_command_with_error("brew", ["upgrade", "gloo"], "brew upgrade gloo")
 }
 
-fn update_windows() -> Result<(), (&'static str, Option<String>)> {
+fn update_windows() -> Result<(), CliError> {
     run_command_with_error("scoop", ["update"], "scoop update")?;
     run_command_with_error("scoop", ["update", "gloo"], "scoop update gloo")
 }
 
-fn update_linux() -> Result<(), (&'static str, Option<String>)> {
+fn update_linux() -> Result<(), CliError> {
     static LINUX_INSTALL_SCRIPT: &str =
         "https://raw.githubusercontent.com/GlooHQ/homebrew-gloo/main/install-gloo.sh";
 

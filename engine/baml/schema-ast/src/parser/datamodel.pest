@@ -174,7 +174,8 @@ CLASS_KEYWORD = { "class" }
 FUNCTION_KEYWORD = { "function" }
 
 empty_template_args = ${ "<>" }
-template_args = { empty_template_args | ("<" ~ expression? ~ ">") }
+template_arg = {quoted_string_literal | single_word}
+template_args = { empty_template_args | ("<" ~ template_arg ~ ("," ~ template_arg)* ~ ">") }
 CLIENT_KEYWORD = { "client" }
 GENERATOR_KEYWORD = { "generator" }
-VARIANT_KEYWORD = { "variant" }
+VARIANT_KEYWORD = { "impl" }

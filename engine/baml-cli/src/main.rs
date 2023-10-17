@@ -4,6 +4,7 @@ use std::io::Write;
 
 mod builder;
 mod command;
+mod errors;
 mod update;
 
 use clap::{Args, Parser, Subcommand};
@@ -72,9 +73,7 @@ pub(crate) fn main() {
     };
 
     if let Err(error) = response {
-        if let Some(error_msg) = error {
-            log::error!("{}", error_msg);
-        }
+        log::error!("{}", error);
         std::process::exit(1);
     }
 }

@@ -7,7 +7,6 @@ generator Default {
 client<llm> SomeOtherClient {
   @@provider(openai)
   @@retry(3)
-  @@default
 
   model gpt-3-test
   my_custom_var "some string with spaces"
@@ -18,22 +17,25 @@ client<llm> SomeOtherClient {
   }
 }
 
-class FooBar {
-  package Int
-  fighter String
-}
-
 function FooBar {
   input Int[] | String
   output (Int | string[])[]
 }
 
-variant<llm> TestMe {
-  client {
-    GPT4Client default
-  }
-
+impl<llm, FooBar> SomeName {
+  client SomeOtherClient
   prompt #"
-    What the fuck is going on here?!!
+    does something
   "#
+}
+
+generator Default {
+  language python
+  output ../path/to/dir
+  features {
+    openai true
+    anthropic true
+    fast true
+    slow true
+  }
 }

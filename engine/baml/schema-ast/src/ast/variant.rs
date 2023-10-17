@@ -63,6 +63,8 @@ pub struct Variant {
 
     pub(crate) variant_type: String,
 
+    pub(crate) function_name: Identifier,
+
     /// The location of this model in the text representation.
     pub(crate) span: Span,
 }
