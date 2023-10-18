@@ -27,12 +27,14 @@ fn parse_base_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> FieldType {
     let current = pair.into_inner().next().unwrap();
     match current.as_rule() {
         Rule::identifier => FieldType::Supported(Identifier {
+            path: None,
             name: current.as_str().to_string(),
-            span: Span::from(current.as_span()),
+            span: diagnostics.span(current.as_span()),
         }),
         Rule::primitive_types => FieldType::Supported(Identifier {
+            path: None,
             name: current.as_str().to_string(),
-            span: Span::from(current.as_span()),
+            span: diagnostics.span(current.as_span()),
         }),
         _ => unreachable!(
             "Encountered impossible type during parsing:{:?} {:?}",
@@ -49,7 +51,7 @@ fn parse_union_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> FieldType 
         pair.as_rule()
     );
 
-    let span = Span::from(pair.as_span());
+    let span = diagnostics.span(pair.as_span());
     let mut candidates = Vec::new();
 
     for current in pair.into_inner() {
@@ -87,7 +89,7 @@ fn parse_field_type_base(
         )),
         Rule::unsupported_optional_list_type => Err(DatamodelError::new_legacy_parser_error(
             "Optional lists are not supported. Use either `Type[]` or `Type?`.",
-            current.as_span().into(),
+            diagnostics.span(current.as_span()),
         )),
         _ => unreachable!(
             "Encountered impossible type during parsing: {:?}",

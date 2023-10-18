@@ -5,7 +5,6 @@ use enumflags2::BitFlags;
 #[derive(Debug)]
 pub struct Configuration {
     pub generators: Vec<Generator>,
-    pub warnings: Vec<internal_baml_diagnostics::DatamodelWarning>,
 }
 
 impl Configuration {

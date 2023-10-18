@@ -1,9 +1,9 @@
-use super::{ Identifier, Span, Attribute};
+use super::{Attribute, Identifier, Span};
 
 /// An AST node with a span.
 pub trait WithSpan {
     /// The span of the node.
-    fn span(&self) -> Span;
+    fn span(&self) -> &Span;
 }
 
 /// An AST node with a name (from the identifier).

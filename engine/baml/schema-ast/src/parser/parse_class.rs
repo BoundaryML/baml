@@ -45,7 +45,7 @@ pub(crate) fn parse_class(
                         Rule::BLOCK_LEVEL_CATCH_ALL => {
                             diagnostics.push_error(DatamodelError::new_validation_error(
                                 "This line is not a valid field or attribute definition.",
-                                item.as_span().into(),
+                                diagnostics.span(item.as_span()),
                             ))
                         }
                         _ => parsing_catch_all(&item, "model"),
@@ -62,7 +62,7 @@ pub(crate) fn parse_class(
             fields,
             attributes,
             documentation: doc_comment.and_then(parse_comment_block),
-            span: Span::from(pair_span),
+            span: diagnostics.span(pair_span),
         },
         _ => panic!("Encountered impossible model declaration during parsing",),
     }

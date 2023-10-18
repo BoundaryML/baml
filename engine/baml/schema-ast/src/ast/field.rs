@@ -49,7 +49,7 @@ impl Field {
             .filter(|a| a.name() == attribute)
             .flat_map(|a| a.arguments.iter())
             .filter(|a| a.name.as_ref().map(|n| n.name.as_str()) == Some(argument))
-            .map(|a| a.span)
+            .map(|a| a.span.clone())
             .next()
     }
 
@@ -58,7 +58,7 @@ impl Field {
         self.attributes
             .iter()
             .filter(|a| a.name() == attribute)
-            .map(|a| a.span)
+            .map(|a| a.span.clone())
             .next()
     }
 
@@ -75,8 +75,8 @@ impl WithIdentifier for Field {
 }
 
 impl WithSpan for Field {
-    fn span(&self) -> Span {
-        self.span
+    fn span(&self) -> &Span {
+        &self.span
     }
 }
 
@@ -141,12 +141,12 @@ pub enum FieldType {
 }
 
 impl FieldType {
-    pub fn span(&self) -> Span {
+    pub fn span(&self) -> &Span {
         match self {
-            FieldType::Union(_, span) => *span,
-            FieldType::PrimitiveType(_, span) => *span,
-            FieldType::Supported(ident) => ident.span,
-            FieldType::Unsupported(_, span) => *span,
+            FieldType::Union(_, span) => span,
+            FieldType::PrimitiveType(_, span) => span,
+            FieldType::Supported(ident) => &ident.span,
+            FieldType::Unsupported(_, span) => span,
         }
     }
 

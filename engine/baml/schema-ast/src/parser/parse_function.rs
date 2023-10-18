@@ -47,7 +47,7 @@ pub(crate) fn parse_function(
                                                 &name.clone().unwrap().name,
                                                 field.name(),
                                                 "function",
-                                                field.identifier().span,
+                                                field.identifier().span.clone(),
                                             )),
                                             None => input = Some(field),
                                         }
@@ -56,7 +56,7 @@ pub(crate) fn parse_function(
                                     _ => {
                                         diagnostics.push_error(DatamodelError::new_validation_error(
                                             "Unsupport field name in function. Only `input` and `output` are allowed.",
-                                            Span::from(pair_span),
+                                            diagnostics.span(pair_span),
                                         ))
                                     },
                                 }
@@ -66,7 +66,7 @@ pub(crate) fn parse_function(
                         Rule::comment_block => pending_field_comment = Some(item),
                         Rule::BLOCK_LEVEL_CATCH_ALL => diagnostics.push_error(DatamodelError::new_validation_error(
                             "This line is not a valid field or attribute definition.",
-                            item.as_span().into(),
+                            diagnostics.span(item.as_span()),
                         )),
                         _ => parsing_catch_all(&item, "model"),
                     }
@@ -83,19 +83,19 @@ pub(crate) fn parse_function(
             output,
             attributes,
             documentation: doc_comment.and_then(parse_comment_block),
-            span: Span::from(pair_span),
+            span: diagnostics.span(pair_span),
         }),
         (Some(name), _, _) => Err(DatamodelError::new_model_validation_error(
             "This function declaration is invalid. It is missing an input field.",
             "function",
             &name.name,
-            pair_span.into(),
+            diagnostics.span(pair_span),
         )),
         _ => Err(DatamodelError::new_model_validation_error(
             "This function declaration is invalid. It is either missing a name or a type.",
             "function",
             "unknown",
-            pair_span.into(),
+            diagnostics.span(pair_span),
         )),
     }
 }

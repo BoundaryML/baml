@@ -54,6 +54,10 @@ pub struct SchemaAst {
 }
 
 impl SchemaAst {
+    pub fn new() -> Self {
+        SchemaAst { tops: Vec::new() }
+    }
+
     /// Iterate over all the top-level items in the schema.
     pub fn iter_tops(&self) -> impl Iterator<Item = (TopId, &Top)> {
         self.tops
@@ -71,7 +75,6 @@ impl SchemaAst {
 /// An opaque identifier for an enum in a schema AST.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct EnumId(u32);
-
 impl std::ops::Index<EnumId> for SchemaAst {
     type Output = Enum;
 
@@ -84,13 +87,6 @@ impl std::ops::Index<EnumId> for SchemaAst {
 /// `schema[model_id]` syntax to resolve the id to an `ast::Model`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ClassId(u32);
-impl ClassId {
-    /// Used for range bounds when iterating over BTrees.
-    pub const ZERO: ClassId = ClassId(0);
-    /// Used for range bounds when iterating over BTrees.
-    pub const MAX: ClassId = ClassId(u32::MAX);
-}
-
 impl std::ops::Index<ClassId> for SchemaAst {
     type Output = Class;
 
@@ -103,13 +99,6 @@ impl std::ops::Index<ClassId> for SchemaAst {
 /// `schema[model_id]` syntax to resolve the id to an `ast::Model`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FunctionId(u32);
-impl FunctionId {
-    /// Used for range bounds when iterating over BTrees.
-    pub const ZERO: FunctionId = FunctionId(0);
-    /// Used for range bounds when iterating over BTrees.
-    pub const MAX: FunctionId = FunctionId(u32::MAX);
-}
-
 impl std::ops::Index<FunctionId> for SchemaAst {
     type Output = Function;
 
@@ -122,13 +111,6 @@ impl std::ops::Index<FunctionId> for SchemaAst {
 /// `schema[model_id]` syntax to resolve the id to an `ast::Model`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ClientId(u32);
-impl ClientId {
-    /// Used for range bounds when iterating over BTrees.
-    pub const ZERO: ClientId = ClientId(0);
-    /// Used for range bounds when iterating over BTrees.
-    pub const MAX: ClientId = ClientId(u32::MAX);
-}
-
 impl std::ops::Index<ClientId> for SchemaAst {
     type Output = Client;
 
@@ -141,13 +123,6 @@ impl std::ops::Index<ClientId> for SchemaAst {
 /// `schema[model_id]` syntax to resolve the id to an `ast::Model`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GeneratorConfigId(u32);
-impl GeneratorConfigId {
-    /// Used for range bounds when iterating over BTrees.
-    pub const ZERO: GeneratorConfigId = GeneratorConfigId(0);
-    /// Used for range bounds when iterating over BTrees.
-    pub const MAX: GeneratorConfigId = GeneratorConfigId(u32::MAX);
-}
-
 impl std::ops::Index<GeneratorConfigId> for SchemaAst {
     type Output = GeneratorConfig;
 
@@ -160,13 +135,6 @@ impl std::ops::Index<GeneratorConfigId> for SchemaAst {
 /// `schema[model_id]` syntax to resolve the id to an `ast::Model`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct VariantConfigId(u32);
-impl VariantConfigId {
-    /// Used for range bounds when iterating over BTrees.
-    pub const ZERO: VariantConfigId = VariantConfigId(0);
-    /// Used for range bounds when iterating over BTrees.
-    pub const MAX: VariantConfigId = VariantConfigId(u32::MAX);
-}
-
 impl std::ops::Index<VariantConfigId> for SchemaAst {
     type Output = Variant;
 
@@ -255,6 +223,6 @@ fn top_idx_to_top_id(top_idx: usize, top: &Top) -> TopId {
         Top::Function(_) => TopId::Function(FunctionId(top_idx as u32)),
         Top::Client(_) => TopId::Client(ClientId(top_idx as u32)),
         Top::Generator(_) => TopId::Generator(GeneratorConfigId(top_idx as u32)),
-        Top::Variant(_) => unimplemented!("Variant top id"),
+        Top::Variant(_) => TopId::Variant(VariantConfigId(top_idx as u32)),
     }
 }

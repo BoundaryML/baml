@@ -1,10 +1,12 @@
-use super::{Comment, Field, Identifier, Span, WithDocumentation, WithIdentifier, WithSpan, Attribute, traits::WithAttributes};
+use super::{
+    traits::WithAttributes, Attribute, Comment, Field, Identifier, Span, WithDocumentation,
+    WithIdentifier, WithSpan,
+};
 
 /// An opaque identifier for a field in an AST model. Use the
 /// `model[field_id]` syntax to resolve the id to an `ast::Field`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FieldId(pub(super) u32);
-
 
 /// A model declaration.
 #[derive(Debug, Clone)]
@@ -73,8 +75,8 @@ impl WithIdentifier for Function {
 }
 
 impl WithSpan for Function {
-    fn span(&self) -> Span {
-        self.span
+    fn span(&self) -> &Span {
+        &self.span
     }
 }
 

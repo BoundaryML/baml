@@ -87,8 +87,8 @@ impl WithIdentifier for GeneratorConfig {
 }
 
 impl WithSpan for GeneratorConfig {
-    fn span(&self) -> Span {
-        self.span
+    fn span(&self) -> &Span {
+        &self.span
     }
 }
 

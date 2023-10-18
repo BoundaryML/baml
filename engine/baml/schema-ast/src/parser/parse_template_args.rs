@@ -41,12 +41,14 @@ fn parse_template_arg(
     let mut inner = token.into_inner();
 
     match inner.peek().unwrap().as_rule() {
-        Rule::quoted_string_content => {
-            Expression::ConstantValue(inner.next().unwrap().as_str().into(), span.into())
-        }
-        Rule::single_word => {
-            Expression::ConstantValue(inner.next().unwrap().as_str().into(), span.into())
-        }
+        Rule::quoted_string_content => Expression::ConstantValue(
+            inner.next().unwrap().as_str().into(),
+            diagnostics.span(span),
+        ),
+        Rule::single_word => Expression::ConstantValue(
+            inner.next().unwrap().as_str().into(),
+            diagnostics.span(span),
+        ),
         _ => unreachable!(),
     }
 }

@@ -32,7 +32,7 @@ impl StringFromEnvVar {
                     "String",
                     expr.describe_value_type(),
                     &expr.to_string(),
-                    expr.span(),
+                    expr.span().clone(),
                 ));
                 None
             }
@@ -77,14 +77,14 @@ impl EnvFunction {
             } else {
                 diagnostics.push_error(DatamodelError::new_functional_evaluation_error(
                     "Expected this to be an env function.",
-                    expr.span(),
+                    expr.span().clone(),
                 ));
                 return None;
             }
         } else {
             diagnostics.push_error(DatamodelError::new_functional_evaluation_error(
                 "This is not a function expression but expected it to be one.",
-                expr.span(),
+                expr.span().clone(),
             ));
             return None;
         };

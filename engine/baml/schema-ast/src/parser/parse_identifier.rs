@@ -26,17 +26,19 @@ pub fn parse_identifier(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Identi
             let current = pair.into_inner().next().unwrap();
             match current.as_rule() {
                 Rule::valid_identifier => Identifier {
+                    path: None,
                     name: current.as_str().to_string(),
-                    span: current.as_span().into(),
+                    span: diagnostics.span(current.as_span()),
                 },
                 Rule::single_word => {
                     diagnostics.push_error(DatamodelError::new_validation_error(
                         "Identifiers must be capitalized.",
-                        current.as_span().into(),
+                        diagnostics.span(current.as_span()),
                     ));
                     Identifier {
+                        path: None,
                         name: current.as_str().to_string(),
-                        span: current.as_span().into(),
+                        span: diagnostics.span(current.as_span()),
                     }
                 }
                 _ => unreachable!(
@@ -46,8 +48,9 @@ pub fn parse_identifier(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Identi
             }
         }
         Rule::field_key | Rule::attribute_name | Rule::single_word => Identifier {
+            path: None,
             name: pair.as_str().to_string(),
-            span: pair.as_span().into(),
+            span: diagnostics.span(pair.as_span()),
         },
         _ => unreachable!(
             "Encountered impossible field during parsing: {:?} {:?}",

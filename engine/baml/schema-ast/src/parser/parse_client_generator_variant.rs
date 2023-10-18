@@ -47,7 +47,7 @@ pub(crate) fn parse_config_block(
                         Rule::BLOCK_LEVEL_CATCH_ALL => {
                             diagnostics.push_error(DatamodelError::new_validation_error(
                                 "This line is not a valid field or attribute definition.",
-                                item.as_span().into(),
+                                diagnostics.span(item.as_span()),
                             ))
                         }
                         _ => parsing_catch_all(&item, "model"),
@@ -65,7 +65,7 @@ pub(crate) fn parse_config_block(
     match (kw, name, template_args) {
         (Some("client") | Some("impl"), _, None) => Err(DatamodelError::new_validation_error(
             "Missing template for client or variant. (did you forget <llm>)",
-            Span::from(pair_span),
+            diagnostics.span(pair_span),
         )),
         (Some("client"), Some(name), Some(args)) => match args.len() {
             1 => Ok(Top::Client(Client {
@@ -73,46 +73,47 @@ pub(crate) fn parse_config_block(
                 fields,
                 attributes,
                 documentation: doc_comment.and_then(parse_comment_block),
-                span: Span::from(pair_span),
+                span: diagnostics.span(pair_span),
                 client_type: args.first().unwrap().to_string(),
             })),
             _ => Err(DatamodelError::new_validation_error(
                 "client requires 2 template args. (did you forget <llm>)",
-                Span::from(pair_span),
+                diagnostics.span(pair_span),
             )),
         },
         (Some("impl"), Some(name), Some(args)) => match args.len() {
             2 => {
                 let target_function = args.index(1);
                 let identifier = Identifier {
+                    path: None,
                     name: target_function.to_string(),
-                    span: target_function.span(),
+                    span: target_function.span().clone(),
                 };
                 Ok(Top::Variant(Variant {
                     name,
                     fields,
                     attributes,
                     documentation: doc_comment.and_then(parse_comment_block),
-                    span: Span::from(pair_span),
+                    span: diagnostics.span(pair_span),
                     variant_type: args.first().unwrap().to_string(),
                     function_name: identifier,
                 }))
             }
             _ => Err(DatamodelError::new_validation_error(
                 "impl requires 2 template args. (did you forget <llm, FunctionName>)",
-                Span::from(pair_span),
+                diagnostics.span(pair_span),
             )),
         },
         (Some("generator"), _, Some(_)) => Err(DatamodelError::new_validation_error(
             "Template arguments are not allowed for generators.",
-            Span::from(pair_span),
+            diagnostics.span(pair_span),
         )),
         (Some("generator"), Some(name), None) => Ok(Top::Generator(GeneratorConfig {
             name,
             fields,
             attributes,
             documentation: doc_comment.and_then(parse_comment_block),
-            span: Span::from(pair_span),
+            span: diagnostics.span(pair_span),
         })),
         _ => unreachable!("Encountered impossible model declaration during parsing",),
     }
@@ -153,7 +154,7 @@ fn parse_key_value(
         Some(name) => ConfigBlockProperty {
             name,
             value,
-            span: Span::from(pair_span),
+            span: diagnostics.span(pair_span),
             documentation: comment,
         },
         _ => unreachable!(

@@ -48,13 +48,13 @@ pub(crate) fn parse_field(
             arity,
             attributes,
             documentation: comment,
-            span: Span::from(pair_span),
+            span: diagnostics.span(pair_span),
         }),
         _ => Err(DatamodelError::new_model_validation_error(
             "This field declaration is invalid. It is either missing a name or a type.",
             container_type,
             model_name,
-            pair_span.into(),
+            diagnostics.span(pair_span),
         )),
     }
 }

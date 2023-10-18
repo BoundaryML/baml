@@ -674,6 +674,7 @@ version = "0.0.1"
 dependencies = [
  "colored",
  "indoc",
+ "log",
  "pest",
 ]
 
@@ -681,11 +682,13 @@ dependencies = [
 name = "internal-baml-parser-database"
 version = "0.0.1"
 dependencies = [
+ "colored",
  "either",
  "enumflags2",
  "indexmap 1.9.3",
  "internal-baml-diagnostics",
  "internal-baml-schema-ast",
+ "log",
  "rustc-hash",
 ]
 
@@ -694,6 +697,7 @@ name = "internal-baml-schema-ast"
 version = "0.0.1"
 dependencies = [
  "internal-baml-diagnostics",
+ "log",
  "pest",
  "pest_derive",
 ]

@@ -20,7 +20,7 @@ pub(crate) fn parse_arguments_list(
             Rule::expression => arguments.arguments.push(ast::Argument {
                 name: None,
                 value: parse_expression(current, diagnostics),
-                span: ast::Span::from(current_span),
+                span: diagnostics.span(current_span),
             }),
             _ => parsing_catch_all(&current, "attribute arguments"),
         }

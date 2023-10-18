@@ -9,7 +9,7 @@ pub(crate) fn parse_attribute(
     pair: Pair<'_>,
     diagnostics: &mut internal_baml_diagnostics::Diagnostics,
 ) -> Attribute {
-    let span = Span::from(pair.as_span());
+    let span = diagnostics.span(pair.as_span());
     let mut name = None;
     let mut arguments: ArgumentsList = ArgumentsList::default();
 

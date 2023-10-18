@@ -11,7 +11,7 @@ pub(crate) fn parse_expression(
     diagnostics: &mut internal_baml_diagnostics::Diagnostics,
 ) -> Expression {
     let first_child = token.into_inner().next().unwrap();
-    let span = Span::from(first_child.as_span());
+    let span = diagnostics.span(first_child.as_span());
     match first_child.as_rule() {
         Rule::numeric_literal => Expression::NumericValue(first_child.as_str().to_string(), span),
         Rule::string_literal => {
@@ -49,7 +49,7 @@ fn parse_array(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
         }
     }
 
-    Expression::Array(elements, Span::from(span))
+    Expression::Array(elements, diagnostics.span(span))
 }
 
 fn parse_string_literal(token: Pair<'_>, diagnostics: &mut Diagnostics) -> String {
@@ -71,7 +71,7 @@ fn parse_dict(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
         }
     }
 
-    Expression::Map(entries, Span::from(span))
+    Expression::Map(entries, diagnostics.span(span))
 }
 
 fn parse_dict_entry(token: Pair<'_>, diagnostics: &mut Diagnostics) -> (Expression, Expression) {
@@ -89,10 +89,10 @@ fn parse_dict_key(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression 
         return match current.as_rule() {
             Rule::identifier => {
                 let name = current.as_str().to_string();
-                Expression::ConstantValue(name, Span::from(span))
+                Expression::ConstantValue(name, diagnostics.span(span))
             }
             Rule::quoted_string_literal => {
-                Expression::ConstantValue(current.as_str().to_string(), Span::from(span))
+                Expression::ConstantValue(current.as_str().to_string(), diagnostics.span(span))
             }
             other => unreachable!(
                 "Encountered impossible dict key during parsing: {:?} {:?}",

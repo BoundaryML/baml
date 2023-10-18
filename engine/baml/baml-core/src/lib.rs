@@ -3,10 +3,12 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 
 pub use internal_baml_diagnostics;
+use internal_baml_parser_database::ParserDatabase;
 pub use internal_baml_parser_database::{self, is_reserved_type_name};
-pub use internal_baml_schema_ast::{self, ast, SourceFile};
+use internal_baml_schema_ast::ast::SchemaAst;
+pub use internal_baml_schema_ast::{self, ast};
 
-use internal_baml_diagnostics::Diagnostics;
+use internal_baml_diagnostics::{Diagnostics, SourceFile};
 
 mod common;
 mod configuration;
@@ -32,35 +34,50 @@ impl std::fmt::Debug for ValidatedSchema {
 
 /// The most general API for dealing with Prisma schemas. It accumulates what analysis and
 /// validation information it can, and returns it along with any error and warning diagnostics.
-pub fn validate(file: SourceFile) -> ValidatedSchema {
+pub fn validate(files: Vec<SourceFile>) -> ValidatedSchema {
     let mut diagnostics = Diagnostics::new();
-    let db = internal_baml_parser_database::ParserDatabase::new(file, &mut diagnostics);
-    let configuration = validate_configuration(db.ast(), &mut diagnostics);
-    let out = validate::validate(db, configuration.preview_features(), diagnostics);
+    let mut db = internal_baml_parser_database::ParserDatabase::new();
 
-    ValidatedSchema {
-        diagnostics: out.diagnostics,
-        // configuration,
-        db: out.db,
+    files
+        .iter()
+        .for_each(|file| match internal_baml_schema_ast::parse_schema(file) {
+            Ok((ast, err)) => {
+                diagnostics.push(err);
+                db.add_ast(ast);
+            }
+            Err(err) => diagnostics.push(err),
+        });
+
+    if diagnostics.has_errors() {
+        return ValidatedSchema { db, diagnostics };
     }
+
+    let (configuration, diag) = validate_configuration(db.ast());
+    diagnostics.push(diag);
+
+    if diagnostics.has_errors() {
+        return ValidatedSchema { db, diagnostics };
+    }
+
+    validate::validate(&db, configuration.preview_features(), &mut diagnostics);
+
+    ValidatedSchema { db, diagnostics }
 }
 
 /// Loads all configuration blocks from a datamodel using the built-in source definitions.
-pub fn parse_configuration(schema: &str) -> Result<Configuration, Diagnostics> {
-    let mut diagnostics = Diagnostics::default();
-    let ast = internal_baml_schema_ast::parse_schema(schema, &mut diagnostics);
-    let out = validate_configuration(&ast, &mut diagnostics);
+pub fn parse_configuration(main_schema: &SourceFile) -> Result<Configuration, Diagnostics> {
+    let mut ast = SchemaAst::new();
+
+    let (ast, mut diagnostics) = internal_baml_schema_ast::parse_schema(main_schema)?;
+
+    let (out, diag) = validate_configuration(&ast);
+    diagnostics.push(diag);
     diagnostics.to_result().map(|_| out)
 }
 
-fn validate_configuration(
-    schema_ast: &ast::SchemaAst,
-    diagnostics: &mut Diagnostics,
-) -> Configuration {
-    let generators = generator_loader::load_generators_from_ast(schema_ast, diagnostics);
+fn validate_configuration(schema_ast: &ast::SchemaAst) -> (Configuration, Diagnostics) {
+    let mut diagnostics = Diagnostics::new();
+    let generators = generator_loader::load_generators_from_ast(schema_ast, &mut diagnostics);
 
-    Configuration {
-        generators,
-        warnings: diagnostics.warnings().to_owned(),
-    }
+    (Configuration { generators }, diagnostics)
 }

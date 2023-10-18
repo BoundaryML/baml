@@ -11,17 +11,21 @@ pub trait DiagnosticColorer {
 /// the offending portion of the source code, for human-friendly reading.
 pub(crate) fn pretty_print(
     f: &mut dyn std::io::Write,
-    file_name: &str,
-    text: &str,
-    span: Span,
+    span: &Span,
     description: &str,
     colorer: &'static dyn DiagnosticColorer,
 ) -> std::io::Result<()> {
+    let file_name = span.file.path();
+    let text = span.file.as_str();
+
     let start_line_number = text[..span.start].matches('\n').count();
     let end_line_number = text[..span.end].matches('\n').count();
     let file_lines = text.split('\n').collect::<Vec<&str>>();
 
-    let chars_in_line_before: usize = file_lines[..start_line_number].iter().map(|l| l.len()).sum();
+    let chars_in_line_before: usize = file_lines[..start_line_number]
+        .iter()
+        .map(|l| l.len())
+        .sum();
     // Don't forget to count the all the line breaks.
     let chars_in_line_before = chars_in_line_before + start_line_number;
 
@@ -31,7 +35,9 @@ pub(crate) fn pretty_print(
     let end_in_line = std::cmp::min(start_in_line + (span.end - span.start), line.len());
 
     let prefix = &line[..start_in_line];
-    let offending = colorer.primary_color(&line[start_in_line..end_in_line]).bold();
+    let offending = colorer
+        .primary_color(&line[start_in_line..end_in_line])
+        .bold();
     let suffix = &line[end_in_line..];
 
     let arrow = "-->".bright_blue().bold();
@@ -46,7 +52,11 @@ pub(crate) fn pretty_print(
     writeln!(f, "  {arrow}  {file_path}")?;
     writeln!(f, "{}", format_line_number(0))?;
 
-    writeln!(f, "{}", format_line_number_with_line(start_line_number, &file_lines))?;
+    writeln!(
+        f,
+        "{}",
+        format_line_number_with_line(start_line_number, &file_lines)
+    )?;
     writeln!(
         f,
         "{}{}{}{}",
@@ -67,7 +77,11 @@ pub(crate) fn pretty_print(
     }
 
     for line_number in start_line_number + 2..end_line_number + 2 {
-        writeln!(f, "{}", format_line_number_with_line(line_number, &file_lines))?;
+        writeln!(
+            f,
+            "{}",
+            format_line_number_with_line(line_number, &file_lines)
+        )?;
     }
 
     writeln!(f, "{}", format_line_number(0))
@@ -75,7 +89,14 @@ pub(crate) fn pretty_print(
 
 fn format_line_number_with_line(line_number: usize, lines: &[&str]) -> colored::ColoredString {
     if line_number > 0 && line_number <= lines.len() {
-        colored::ColoredString::from(format!("{}{}", format_line_number(line_number), lines[line_number - 1]).as_str())
+        colored::ColoredString::from(
+            format!(
+                "{}{}",
+                format_line_number(line_number),
+                lines[line_number - 1]
+            )
+            .as_str(),
+        )
     } else {
         format_line_number(line_number)
     }

@@ -59,9 +59,9 @@ impl fmt::Display for CliError {
             CliError::BAMLError(error) => write!(
                 f,
                 "{0} {1} {2} {0}",
-                "Failed to parse BAML file:".bold(),
-                error.warnings_to_pretty_string("somefile.baml", "file contents"),
-                error.to_pretty_string("somefile.baml", "file contents"),
+                "Compiler failed".bold(),
+                error.warnings_to_pretty_string(),
+                error.to_pretty_string(),
             ),
             CliError::StringError(err) => write!(f, "{}", err),
             CliError::GlobError(err) => write!(f, "{}", err),

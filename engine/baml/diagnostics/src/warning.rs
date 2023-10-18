@@ -47,20 +47,13 @@ impl DatamodelWarning {
     }
 
     /// The source span the warning applies to.
-    pub fn span(&self) -> Span {
-        self.span
+    pub fn span(&self) -> &Span {
+        &self.span
     }
 
-    pub fn pretty_print(
-        &self,
-        f: &mut dyn std::io::Write,
-        file_name: &str,
-        text: &str,
-    ) -> std::io::Result<()> {
+    pub fn pretty_print(&self, f: &mut dyn std::io::Write) -> std::io::Result<()> {
         pretty_print(
             f,
-            file_name,
-            text,
             self.span(),
             self.message.as_ref(),
             &DatamodelWarningColorer {},

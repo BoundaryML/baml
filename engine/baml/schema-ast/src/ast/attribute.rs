@@ -29,7 +29,7 @@ impl Attribute {
         self.arguments
             .iter()
             .find(|a| a.name.as_ref().map(|n| n.name.as_str()) == Some(argument))
-            .map(|a| a.span)
+            .map(|a| a.span.clone())
     }
 }
 
@@ -40,8 +40,8 @@ impl WithIdentifier for Attribute {
 }
 
 impl WithSpan for Attribute {
-    fn span(&self) -> Span {
-        self.span
+    fn span(&self) -> &Span {
+        &self.span
     }
 }
 
@@ -84,8 +84,9 @@ impl Index<AttributeContainer> for super::SchemaAst {
             // AttributeContainer::Model(model_id) => &self[model_id].attributes,
             // AttributeContainer::ModelField(model_id, field_id) => &self[model_id][field_id].attributes,
             AttributeContainer::Enum(enum_id) => &self[enum_id].attributes,
-            AttributeContainer::EnumValue(enum_id, value_idx) => &self[enum_id].values[value_idx as usize].attributes,
-            // AttributeContainer::CompositeTypeField(ctid, field_id) => &self[ctid][field_id].attributes,
+            AttributeContainer::EnumValue(enum_id, value_idx) => {
+                &self[enum_id].values[value_idx as usize].attributes
+            } // AttributeContainer::CompositeTypeField(ctid, field_id) => &self[ctid][field_id].attributes,
         }
     }
 }

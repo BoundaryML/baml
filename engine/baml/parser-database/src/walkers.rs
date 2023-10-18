@@ -8,7 +8,6 @@
 
 mod r#enum;
 
-
 pub use r#enum::*;
 
 /// A generic walker. Only walkers intantiated with a concrete ID type (`I`) are useful.
@@ -56,6 +55,9 @@ impl crate::ParserDatabase {
         self.ast()
             .iter_tops()
             .filter_map(|(top_id, _)| top_id.as_enum_id())
-            .map(move |enum_id| Walker { db: self, id: enum_id })
+            .map(move |enum_id| Walker {
+                db: self,
+                id: enum_id,
+            })
     }
 }

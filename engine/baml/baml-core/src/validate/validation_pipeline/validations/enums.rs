@@ -11,7 +11,7 @@ pub(super) fn database_name_clashes(ctx: &mut Context<'_>) {
     for enm in ctx.db.walk_enums() {
         if !database_names.insert(enm.name()) {
             ctx.push_error(DatamodelError::new_duplicate_enum_database_name_error(
-                enm.ast_enum().span(),
+                enm.ast_enum().span().clone(),
             ));
         }
     }

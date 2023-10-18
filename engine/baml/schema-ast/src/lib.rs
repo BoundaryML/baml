@@ -3,14 +3,13 @@
 #![deny(rust_2018_idioms, unsafe_code)]
 #![allow(clippy::derive_partial_eq_without_eq)]
 
-pub use self::{parser::parse_schema, source_file::SourceFile};
+pub use self::parser::parse_schema;
 
 /// The AST data structure. It aims to faithfully represent the syntax of a Prisma Schema, with
 /// source span information.
 pub mod ast;
 
 mod parser;
-mod source_file;
 
 /// Transform the input string into a valid (quoted and escaped) PSL string literal.
 ///

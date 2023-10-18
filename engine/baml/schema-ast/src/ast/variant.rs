@@ -95,8 +95,8 @@ impl WithIdentifier for Variant {
 }
 
 impl WithSpan for Variant {
-    fn span(&self) -> Span {
-        self.span
+    fn span(&self) -> &Span {
+        &self.span
     }
 }
 

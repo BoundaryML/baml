@@ -103,7 +103,7 @@ impl Top {
 }
 
 impl WithSpan for Top {
-    fn span(&self) -> Span {
+    fn span(&self) -> &Span {
         match self {
             Top::Enum(en) => en.span(),
             Top::Class(class) => class.span(),

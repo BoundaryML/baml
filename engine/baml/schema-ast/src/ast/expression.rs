@@ -44,48 +44,48 @@ impl fmt::Display for Expression {
 }
 
 impl Expression {
-    pub fn as_array(&self) -> Option<(&[Expression], Span)> {
+    pub fn as_array(&self) -> Option<(&[Expression], &Span)> {
         match self {
-            Expression::Array(arr, span) => Some((arr, *span)),
+            Expression::Array(arr, span) => Some((arr, span)),
             _ => None,
         }
     }
 
-    pub fn as_string_value(&self) -> Option<(&str, Span)> {
+    pub fn as_string_value(&self) -> Option<(&str, &Span)> {
         match self {
-            Expression::StringValue(s, span) => Some((s, *span)),
+            Expression::StringValue(s, span) => Some((s, span)),
             _ => None,
         }
     }
 
-    pub fn as_constant_value(&self) -> Option<(&str, Span)> {
+    pub fn as_constant_value(&self) -> Option<(&str, &Span)> {
         match self {
-            Expression::ConstantValue(s, span) => Some((s, *span)),
+            Expression::ConstantValue(s, span) => Some((s, span)),
             _ => None,
         }
     }
 
-    pub fn as_map(&self) -> Option<(&[(Expression, Expression)], Span)> {
+    pub fn as_map(&self) -> Option<(&[(Expression, Expression)], &Span)> {
         match self {
-            Expression::Map(map, span) => Some((map, *span)),
+            Expression::Map(map, span) => Some((map, span)),
             _ => None,
         }
     }
 
-    pub fn as_numeric_value(&self) -> Option<(&str, Span)> {
+    pub fn as_numeric_value(&self) -> Option<(&str, &Span)> {
         match self {
-            Expression::NumericValue(s, span) => Some((s, *span)),
+            Expression::NumericValue(s, span) => Some((s, span)),
             _ => None,
         }
     }
 
-    pub fn span(&self) -> Span {
+    pub fn span(&self) -> &Span {
         match &self {
-            Self::NumericValue(_, span) => *span,
-            Self::StringValue(_, span) => *span,
-            Self::ConstantValue(_, span) => *span,
-            Self::Map(_, span) => *span,
-            Self::Array(_, span) => *span,
+            Self::NumericValue(_, span) => span,
+            Self::StringValue(_, span) => span,
+            Self::ConstantValue(_, span) => span,
+            Self::Map(_, span) => span,
+            Self::Array(_, span) => span,
         }
     }
 

@@ -44,7 +44,7 @@ pub(crate) fn get_src_dir(baml_dir: &Option<String>) -> Result<(PathBuf, Configu
         Ok(contents) => contents,
         Err(err) => return Err((&main_baml, err).into()),
     };
-    let config = parse_configuration(&main_baml_contents)?;
+    let config = parse_configuration(main_baml, &main_baml_contents)?;
 
     Ok((baml_dir, config))
 }

@@ -93,8 +93,8 @@ impl WithIdentifier for Client {
 }
 
 impl WithSpan for Client {
-    fn span(&self) -> Span {
-        self.span
+    fn span(&self) -> &Span {
+        &self.span
     }
 }
 

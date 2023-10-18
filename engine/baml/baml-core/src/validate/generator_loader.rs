@@ -12,9 +12,9 @@ const OUTPUT_KEY: &str = "output";
 const FIRST_CLASS_PROPERTIES: &[&str] = &[LANGUAGE_KEY, OUTPUT_KEY];
 
 /// Load and validate Generators defined in an AST.
-pub(crate) fn load_generators_from_ast(
-    ast_schema: &ast::SchemaAst,
-    diagnostics: &mut Diagnostics,
+pub(crate) fn load_generators_from_ast<'i>(
+    ast_schema: &'i ast::SchemaAst,
+    diagnostics: &'i mut Diagnostics,
 ) -> Vec<Generator> {
     let mut generators: Vec<Generator> = Vec::new();
 
@@ -42,7 +42,7 @@ fn lift_generator(
                     arg.name.name.as_str(),
                     generator_name,
                     "generator",
-                    ast_generator.span(),
+                    ast_generator.span().clone(),
                 ));
 
                 None
@@ -56,7 +56,7 @@ fn lift_generator(
                 "String",
                 expr.describe_value_type(),
                 &expr.to_string(),
-                expr.span(),
+                expr.span().clone(),
             ))
         }
     }
@@ -67,7 +67,7 @@ fn lift_generator(
             diagnostics.push_error(DatamodelError::new_generator_argument_not_found_error(
                 LANGUAGE_KEY,
                 &ast_generator.name(),
-                ast_generator.span(),
+                ast_generator.span().clone(),
             ));
             return None;
         }
@@ -92,7 +92,7 @@ fn lift_generator(
                     &prop.name.name,
                     generator_name,
                     "generator",
-                    prop.span,
+                    prop.span.clone(),
                 ));
                 continue;
             }

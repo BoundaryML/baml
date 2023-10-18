@@ -1,5 +1,6 @@
 use super::DatamodelError;
-use crate::warning::DatamodelWarning;
+use crate::{warning::DatamodelWarning, SourceFile, Span};
+use log::info;
 
 /// Represents a list of validation or parser errors and warnings.
 ///
@@ -7,6 +8,7 @@ use crate::warning::DatamodelWarning;
 /// It is used to not error out early and instead show multiple errors at once.
 #[derive(Debug)]
 pub struct Diagnostics {
+    current_file: Option<SourceFile>,
     errors: Vec<DatamodelError>,
     warnings: Vec<DatamodelWarning>,
 }
@@ -14,9 +16,21 @@ pub struct Diagnostics {
 impl Diagnostics {
     pub fn new() -> Diagnostics {
         Diagnostics {
+            current_file: None,
             errors: Vec::new(),
             warnings: Vec::new(),
         }
+    }
+
+    pub fn span(&self, p: pest::Span<'_>) -> Span {
+        match self.current_file {
+            Some(ref file) => Span::new(file.clone(), p.start(), p.end()),
+            None => panic!("No current file set."),
+        }
+    }
+
+    pub fn set_source(&mut self, source: &SourceFile) {
+        self.current_file = Some(source.clone())
     }
 
     pub fn warnings(&self) -> &[DatamodelWarning] {
@@ -52,42 +66,36 @@ impl Diagnostics {
         }
     }
 
-    pub fn to_pretty_string(&self, file_name: &str, datamodel_string: &str) -> String {
+    pub fn to_pretty_string(&self) -> String {
         let mut message: Vec<u8> = Vec::new();
 
         for err in self.errors() {
-            err.pretty_print(&mut message, file_name, datamodel_string)
+            err.pretty_print(&mut message)
                 .expect("printing datamodel error");
         }
 
         String::from_utf8_lossy(&message).into_owned()
     }
 
-    pub fn warnings_to_pretty_string(&self, file_name: &str, datamodel_string: &str) -> String {
+    pub fn warnings_to_pretty_string(&self) -> String {
         let mut message: Vec<u8> = Vec::new();
 
         for warn in self.warnings() {
-            warn.pretty_print(&mut message, file_name, datamodel_string)
+            warn.pretty_print(&mut message)
                 .expect("printing datamodel warning");
         }
 
         String::from_utf8_lossy(&message).into_owned()
     }
-}
 
-impl From<DatamodelError> for Diagnostics {
-    fn from(error: DatamodelError) -> Self {
-        let mut col = Diagnostics::new();
-        col.push_error(error);
-        col
-    }
-}
-
-impl From<DatamodelWarning> for Diagnostics {
-    fn from(warning: DatamodelWarning) -> Self {
-        let mut col = Diagnostics::new();
-        col.push_warning(warning);
-        col
+    pub fn push(&mut self, mut other: Diagnostics) {
+        info!(
+            "Pushing {} errors and {} warnings",
+            other.errors.len(),
+            other.warnings.len()
+        );
+        self.errors.append(&mut other.errors);
+        self.warnings.append(&mut other.warnings);
     }
 }
 

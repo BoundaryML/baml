@@ -22,8 +22,8 @@ impl_coercions! {
     'a;
     constant : "constant" => &'a str;
     string : "string" => &'a str;
-    string_with_span : "string" => (&'a str, ast::Span);
-    constant_with_span : "constant" => (&'a str, ast::Span);
+    string_with_span : "string" => (&'a str, &'a ast::Span);
+    constant_with_span : "constant" => (&'a str, &'a ast::Span);
     boolean : "boolean" => bool;
     integer : "numeric" => i64;
     float : "float" => f64;
@@ -43,24 +43,27 @@ pub mod coerce_opt {
         expr.as_string_value().map(|(s, _)| s)
     }
 
-    pub fn string_with_span<'a>(expr: &'a ast::Expression) -> Option<(&'a str, ast::Span)> {
+    pub fn string_with_span<'a>(expr: &'a ast::Expression) -> Option<(&'a str, &ast::Span)> {
         expr.as_string_value()
     }
 
-    pub fn constant_with_span<'a>(expr: &'a ast::Expression) -> Option<(&'a str, ast::Span)> {
+    pub fn constant_with_span<'a>(expr: &'a ast::Expression) -> Option<(&'a str, &ast::Span)> {
         expr.as_constant_value()
     }
 
     pub fn boolean<'a>(expr: &'a ast::Expression) -> Option<bool> {
-        expr.as_constant_value().and_then(|(constant, _)| constant.parse().ok())
+        expr.as_constant_value()
+            .and_then(|(constant, _)| constant.parse().ok())
     }
 
     pub fn integer<'a>(expr: &'a ast::Expression) -> Option<i64> {
-        expr.as_numeric_value().and_then(|(num, _)| num.parse().ok())
+        expr.as_numeric_value()
+            .and_then(|(num, _)| num.parse().ok())
     }
 
     pub fn float<'a>(expr: &'a ast::Expression) -> Option<f64> {
-        expr.as_numeric_value().and_then(|(num, _)| num.parse().ok())
+        expr.as_numeric_value()
+            .and_then(|(num, _)| num.parse().ok())
     }
 }
 
@@ -75,7 +78,7 @@ const fn coerce<'a, T>(
                 expected_type,
                 expr.describe_value_type(),
                 &expr.to_string(),
-                expr.span(),
+                expr.span().clone(),
             ));
             None
         }

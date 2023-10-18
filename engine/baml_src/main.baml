@@ -1,6 +1,10 @@
 generator Default {
   language python
   output ../generate
+  switches {
+    cheap true
+    FooBar:cheap false
+  }
 }
 
 // This is preferred
@@ -17,17 +21,44 @@ client<llm> SomeOtherClient {
   }
 }
 
+//switch<client<llm>> MyClient {
+//  default cheap
+//  cheap SomeOtherClient
+//  expensive SuperPowerClient
+//  anthropic AnthropicClient
+//}
+
 function FooBar {
   input Int[] | String
   output (Int | string[])[]
 }
 
 impl<llm, FooBar> SomeName {
-  client SomeOtherClient
+  client MyClient
   prompt #"
     does something
+    asdf #// This is a comment //# goes here
+    a ;asdf;kljla
+    asflk;jasdf
+    {#input.some_field}
+
+    {#print_type<json>(output)}
   "#
 }
+
+impl<llm, FooBar> SomeName2 {
+  client MyClient
+  prompt #"
+    does something
+    asdf #// This is a comment //# goes here
+    a ;asdf;kljla
+    asflk;jasdf
+    {#input.some_field}
+
+    {#print_type<json>(output)}
+  "#
+}
+
 
 generator Default {
   language python
@@ -38,4 +69,9 @@ generator Default {
     fast true
     slow true
   }
+}
+
+class Bar {
+  a int
+  b string
 }

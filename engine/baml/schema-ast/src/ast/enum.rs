@@ -1,4 +1,7 @@
-use super::{Comment, Identifier, Span, WithDocumentation, WithIdentifier, WithSpan, Attribute, traits::WithAttributes};
+use super::{
+    traits::WithAttributes, Attribute, Comment, Identifier, Span, WithDocumentation,
+    WithIdentifier, WithSpan,
+};
 
 /// An opaque identifier for a value in an AST enum. Use the
 /// `r#enum[enum_value_id]` syntax to resolve the id to an `ast::EnumValue`.
@@ -92,8 +95,8 @@ impl WithIdentifier for Enum {
 }
 
 impl WithSpan for Enum {
-    fn span(&self) -> Span {
-        self.span
+    fn span(&self) -> &Span {
+        &self.span
     }
 }
 
@@ -133,8 +136,8 @@ impl WithAttributes for EnumValue {
 }
 
 impl WithSpan for EnumValue {
-    fn span(&self) -> Span {
-        self.span
+    fn span(&self) -> &Span {
+        &self.span
     }
 }
 

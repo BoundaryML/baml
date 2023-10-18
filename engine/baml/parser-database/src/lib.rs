@@ -34,13 +34,16 @@ mod interner;
 mod names;
 mod types;
 
+use std::{collections::HashMap, path::PathBuf};
+
 pub use coerce_expression::{coerce, coerce_array, coerce_opt};
-pub use internal_baml_schema_ast::{ast, SourceFile};
+pub use internal_baml_schema_ast::ast;
+use internal_baml_schema_ast::ast::SchemaAst;
 pub use names::is_reserved_type_name;
 pub use types::{ScalarFieldId, ScalarFieldType, ScalarType};
 
 use self::{context::Context, interner::StringId, types::Types};
-use internal_baml_diagnostics::{DatamodelError, Diagnostics};
+use internal_baml_diagnostics::{DatamodelError, Diagnostics, SourceFile};
 use names::Names;
 
 /// ParserDatabase is a container for a Schema AST, together with information
@@ -64,83 +67,60 @@ use names::Names;
 ///   Currently only index name collisions.
 pub struct ParserDatabase {
     ast: ast::SchemaAst,
-    file: internal_baml_schema_ast::SourceFile,
     interner: interner::StringInterner,
     names: Names,
     types: Types,
 }
 
 impl ParserDatabase {
+    /// Create a new, empty ParserDatabase.
+    pub fn new() -> Self {
+        ParserDatabase {
+            ast: ast::SchemaAst { tops: vec![] },
+            interner: Default::default(),
+            names: Default::default(),
+            types: Default::default(),
+        }
+    }
+
     /// See the docs on [ParserDatabase](/struct.ParserDatabase.html).
-    pub fn new(file: internal_baml_schema_ast::SourceFile, diagnostics: &mut Diagnostics) -> Self {
-        let ast = internal_baml_schema_ast::parse_schema(file.as_str(), diagnostics);
+    pub fn add_ast(&mut self, ast: SchemaAst) {
+        self.ast.tops.extend(ast.tops);
+    }
+
+    /// See the docs on [ParserDatabase](/struct.ParserDatabase.html).
+    pub fn validate(&mut self, mut diag: Diagnostics) -> Result<(), Diagnostics> {
+        diag.to_result()?;
 
         let mut interner = Default::default();
-        let mut names = Default::default();
-        let mut types = Default::default();
-        let mut ctx = Context::new(&ast, &mut interner, &mut names, &mut types, diagnostics);
+        let mut ctx = Context::new(
+            &self.ast,
+            &mut interner,
+            &mut self.names,
+            &mut self.types,
+            &mut diag,
+        );
 
         // First pass: resolve names.
         names::resolve_names(&mut ctx);
 
         // Return early on name resolution errors.
-        if ctx.diagnostics.has_errors() {
-            return ParserDatabase {
-                ast,
-                file,
-                interner,
-                names,
-                types,
-            };
-        }
+        ctx.diagnostics.to_result()?;
 
         // Second pass: resolve top-level items and field types.
         types::resolve_types(&mut ctx);
 
         // Return early on type resolution errors.
-        if ctx.diagnostics.has_errors() {
-            // attributes::create_default_attributes(&mut ctx);
-
-            return ParserDatabase {
-                ast,
-                file,
-                interner,
-                names,
-                types,
-                // relations,
-            };
-        }
-
-        // Third pass: validate model and field attributes. All these
-        // validations should be _order independent_ and only rely on
-        // information from previous steps, not from other attributes.
-        // attributes::resolve_attributes(&mut ctx);
-
-        // Fourth step: relation inference
-        // relations::infer_relations(&mut ctx);
-
-        ParserDatabase {
-            ast,
-            file,
-            interner,
-            names,
-            types,
-        }
+        ctx.diagnostics.to_result()
     }
 
     /// The parsed AST.
     pub fn ast(&self) -> &ast::SchemaAst {
         &self.ast
     }
-
     /// The total number of enums in the schema. This is O(1).
     pub fn enums_count(&self) -> usize {
         self.types.enum_attributes.len()
-    }
-
-    /// The source file contents.
-    pub fn source(&self) -> &str {
-        self.file.as_str()
     }
 }
 

@@ -71,8 +71,8 @@ impl Argument {
 }
 
 impl WithSpan for Argument {
-    fn span(&self) -> Span {
-        self.span
+    fn span(&self) -> &Span {
+        &self.span
     }
 }
 

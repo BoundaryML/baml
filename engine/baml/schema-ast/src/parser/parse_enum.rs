@@ -27,7 +27,7 @@ pub fn parse_enum(
             Rule::identifier => name = Some(parse_identifier(current.into(), diagnostics)),
             Rule::enum_contents => {
                 let mut pending_value_comment = None;
-                inner_span = Some(current.as_span().into());
+                inner_span = Some(diagnostics.span(current.as_span()));
 
                 for item in current.into_inner() {
                     match item.as_rule() {
@@ -45,7 +45,7 @@ pub fn parse_enum(
                         Rule::BLOCK_LEVEL_CATCH_ALL => {
                             diagnostics.push_error(DatamodelError::new_validation_error(
                                 "This line is not an enum value definition.",
-                                item.as_span().into(),
+                                diagnostics.span(item.as_span()),
                             ))
                         }
                         _ => parsing_catch_all(&item, "enum"),
@@ -62,7 +62,7 @@ pub fn parse_enum(
             values,
             attributes,
             documentation: comment,
-            span: Span::from(pair_span),
+            span: diagnostics.span(pair_span),
             inner_span: inner_span.unwrap(),
         },
         _ => panic!("Encountered impossible enum declaration during parsing, name is missing.",),
@@ -103,7 +103,7 @@ fn parse_enum_value(
             name,
             attributes,
             documentation: comment,
-            span: Span::from(pair_span),
+            span: diagnostics.span(pair_span),
         }),
         _ => panic!("Encountered impossible enum value declaration during parsing, name is missing: {pair_str:?}",),
     }

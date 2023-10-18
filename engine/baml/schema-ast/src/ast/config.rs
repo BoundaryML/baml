@@ -44,8 +44,8 @@ impl WithIdentifier for ConfigBlockProperty {
 }
 
 impl WithSpan for ConfigBlockProperty {
-    fn span(&self) -> Span {
-        self.span
+    fn span(&self) -> &Span {
+        &self.span
     }
 }
 

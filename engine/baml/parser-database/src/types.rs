@@ -174,14 +174,20 @@ pub(super) struct EnumAttributes {
 fn visit_enum<'db>(enm: &'db ast::Enum, ctx: &mut Context<'db>) {
     if enm.values.is_empty() {
         let msg = "An enum must have at least one value.";
-        ctx.push_error(DatamodelError::new_validation_error(msg, enm.span()))
+        ctx.push_error(DatamodelError::new_validation_error(
+            msg,
+            enm.span().clone(),
+        ))
     }
 }
 
 fn visit_class<'db>(class: &'db ast::Class, ctx: &mut Context<'db>) {
     if class.fields().is_empty() {
         let msg = "A class must have at least one field.";
-        ctx.push_error(DatamodelError::new_validation_error(msg, class.span()))
+        ctx.push_error(DatamodelError::new_validation_error(
+            msg,
+            class.span().clone(),
+        ))
     }
 }
 

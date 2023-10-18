@@ -1,6 +1,6 @@
 mod dir_utils;
 
-use baml::{parse_configuration, parse_schema};
+use baml::{parse_configuration, parse_schema, SourceFile};
 use colored::*;
 use log::{error, info, warn};
 use std::path::PathBuf;
@@ -27,13 +27,20 @@ fn default_baml_dir() -> Result<PathBuf, &'static str> {
 
 pub fn build(baml_dir: &Option<String>) -> Result<(), CliError> {
     let (baml_dir, config) = get_src_dir(baml_dir)?;
-    let src_files = get_src_files(&baml_dir)?;
+    let mut src_files = get_src_files(&baml_dir)?;
 
     info!(
         "Building: {} ({} BAML files found)",
         baml_dir.to_string_lossy().bold(),
         src_files.len()
     );
+
+    let parsed = parse_schema(
+        src_files
+            .iter()
+            .map(|path| SourceFile::from((path.clone(), std::fs::read_to_string(&path).unwrap())))
+            .collect::<Vec<_>>(),
+    )?;
 
     Ok(())
 }
