@@ -7,6 +7,8 @@ use internal_baml_parser_database::ParserDatabase;
 pub use internal_baml_parser_database::{self, is_reserved_type_name};
 use internal_baml_schema_ast::ast::SchemaAst;
 pub use internal_baml_schema_ast::{self, ast};
+use rayon::prelude::*;
+use std::sync::Mutex;
 
 use internal_baml_diagnostics::{Diagnostics, SourceFile};
 
@@ -38,15 +40,24 @@ pub fn validate(files: Vec<SourceFile>) -> ValidatedSchema {
     let mut diagnostics = Diagnostics::new();
     let mut db = internal_baml_parser_database::ParserDatabase::new();
 
-    files
-        .iter()
-        .for_each(|file| match internal_baml_schema_ast::parse_schema(file) {
-            Ok((ast, err)) => {
-                diagnostics.push(err);
-                db.add_ast(ast);
-            }
-            Err(err) => diagnostics.push(err),
-        });
+    {
+        let diagnostics = Mutex::new(&mut diagnostics);
+        let db = Mutex::new(&mut db);
+        files
+            .par_iter()
+            .for_each(|file| match internal_baml_schema_ast::parse_schema(file) {
+                Ok((ast, err)) => {
+                    let mut diagnostics = diagnostics.lock().unwrap();
+                    let mut db = db.lock().unwrap();
+                    diagnostics.push(err);
+                    db.add_ast(ast);
+                }
+                Err(err) => {
+                    let mut diagnostics = diagnostics.lock().unwrap();
+                    diagnostics.push(err);
+                }
+            });
+    }
 
     if diagnostics.has_errors() {
         return ValidatedSchema { db, diagnostics };
@@ -66,8 +77,6 @@ pub fn validate(files: Vec<SourceFile>) -> ValidatedSchema {
 
 /// Loads all configuration blocks from a datamodel using the built-in source definitions.
 pub fn parse_configuration(main_schema: &SourceFile) -> Result<Configuration, Diagnostics> {
-    let mut ast = SchemaAst::new();
-
     let (ast, mut diagnostics) = internal_baml_schema_ast::parse_schema(main_schema)?;
 
     let (out, diag) = validate_configuration(&ast);

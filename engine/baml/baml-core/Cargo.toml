@@ -14,6 +14,7 @@ internal-baml-parser-database = { path = "../parser-database", version = "^0.0.1
 serde.workspace = true
 serde_json.workspace = true
 enumflags2 = "0.7"
+rayon = "1.8.0"
 
 
 [dev-dependencies]
