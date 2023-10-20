@@ -6,8 +6,11 @@
 //! - Know about relations.
 //! - Do not know anything about connectors, they are generic.
 
+mod r#class;
 mod r#enum;
+mod field;
 
+pub use r#class::*;
 pub use r#enum::*;
 
 /// A generic walker. Only walkers intantiated with a concrete ID type (`I`) are useful.
@@ -55,9 +58,20 @@ impl crate::ParserDatabase {
         self.ast()
             .iter_tops()
             .filter_map(|(top_id, _)| top_id.as_enum_id())
-            .map(move |enum_id| Walker {
+            .map(move |top_id| Walker {
                 db: self,
-                id: enum_id,
+                id: top_id,
+            })
+    }
+
+    /// Walk all classes in the schema.
+    pub fn walk_classes(&self) -> impl Iterator<Item = ClassWalker<'_>> {
+        self.ast()
+            .iter_tops()
+            .filter_map(|(top_id, _)| top_id.as_class_id())
+            .map(move |top_id| Walker {
+                db: self,
+                id: top_id,
             })
     }
 }

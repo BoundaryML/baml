@@ -1,6 +1,6 @@
 schema = {
     SOI
-    ~ (interface_declaration | config_block | enum_declaration | type_alias | arbitrary_block | comment_block | empty_lines | CATCH_ALL)*
+    ~ (interface_declaration | variant_block | config_block | enum_declaration | type_alias | arbitrary_block | comment_block | empty_lines | CATCH_ALL)*
     ~ EOI
 }
 
@@ -49,11 +49,43 @@ class_contents = {
 }
 
 // ######################################
-// Configuration blocks (generators, clients, variants are syntactically identical)
+// Configuration blocks (generators, clients are syntactically identical)
+// The value of each key is an expression.
+// ######################################
+
+serializer_block = {
+    SERIALIZER_KEYWORD
+    ~ identifier
+    ~ BLOCK_OPEN
+    ~ serializer_contents
+    ~ BLOCK_CLOSE
+}
+
+serializer_field = { identifier ~ (NEWLINE? ~ field_attribute)* ~ trailing_comment? ~ NEWLINE }
+
+serializer_contents = {
+    (serializer_field | (block_attribute ~ NEWLINE) | comment_block | empty_lines| BLOCK_LEVEL_CATCH_ALL)*
+}
+
+variant_block = {
+    VARIANT_KEYWORD
+    ~ template_args?
+    ~ identifier
+    ~ BLOCK_OPEN
+    ~ variant_contents
+    ~ BLOCK_CLOSE
+    }
+
+variant_contents = {
+    ( serializer_block | (key_value ~ NEWLINE) | (block_attribute ~ NEWLINE) | comment_block | empty_lines| BLOCK_LEVEL_CATCH_ALL)*
+}
+
+// ######################################
+// Configuration blocks (generators, clients are syntactically identical)
 // The value of each key is an expression.
 // ######################################
 config_block = {
-    (CLIENT_KEYWORD | GENERATOR_KEYWORD | VARIANT_KEYWORD)
+    (CLIENT_KEYWORD | GENERATOR_KEYWORD)
     ~ template_args?
     ~ identifier
     ~ BLOCK_OPEN
@@ -61,7 +93,7 @@ config_block = {
     ~ BLOCK_CLOSE
     }
 
-key_value = { single_word ~ expression? ~ trailing_comment? }
+key_value = { single_word ~ expression? ~ (NEWLINE? ~ field_attribute)* ~ trailing_comment? }
 
 config_contents = {
     ((key_value ~ NEWLINE) | (block_attribute ~ NEWLINE) | comment_block | empty_lines| BLOCK_LEVEL_CATCH_ALL)*
@@ -179,3 +211,4 @@ template_args = { empty_template_args | ("<" ~ template_arg ~ ("," ~ template_ar
 CLIENT_KEYWORD = { "client" }
 GENERATOR_KEYWORD = { "generator" }
 VARIANT_KEYWORD = { "impl" }
+SERIALIZER_KEYWORD = { "serializer" }

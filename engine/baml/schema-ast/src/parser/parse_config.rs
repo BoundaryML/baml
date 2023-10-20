@@ -1,11 +1,9 @@
-use std::ops::Index;
-
 use super::{
     helpers::{parsing_catch_all, Pair},
     parse_attribute::parse_attribute,
     parse_comments::*,
     parse_expression::parse_expression,
-    parse_identifier::{parse_identifier, parse_identifier_string},
+    parse_identifier::parse_identifier,
     parse_template_args::parse_template_args,
     Rule,
 };
@@ -55,16 +53,14 @@ pub(crate) fn parse_config_block(
                 }
             }
             Rule::identifier => name = Some(parse_identifier(current.into(), diagnostics)),
-            Rule::GENERATOR_KEYWORD | Rule::CLIENT_KEYWORD | Rule::VARIANT_KEYWORD => {
-                kw = Some(current.as_str())
-            }
+            Rule::GENERATOR_KEYWORD | Rule::CLIENT_KEYWORD => kw = Some(current.as_str()),
             _ => parsing_catch_all(&current, "client"),
         }
     }
 
     match (kw, name, template_args) {
-        (Some("client") | Some("impl"), _, None) => Err(DatamodelError::new_validation_error(
-            "Missing template for client or variant. (did you forget <llm>)",
+        (Some("client"), _, None) => Err(DatamodelError::new_validation_error(
+            "Missing template for client. (did you forget <llm>)",
             diagnostics.span(pair_span),
         )),
         (Some("client"), Some(name), Some(args)) => match args.len() {
@@ -78,29 +74,6 @@ pub(crate) fn parse_config_block(
             })),
             _ => Err(DatamodelError::new_validation_error(
                 "client requires 2 template args. (did you forget <llm>)",
-                diagnostics.span(pair_span),
-            )),
-        },
-        (Some("impl"), Some(name), Some(args)) => match args.len() {
-            2 => {
-                let target_function = args.index(1);
-                let identifier = Identifier {
-                    path: None,
-                    name: target_function.to_string(),
-                    span: target_function.span().clone(),
-                };
-                Ok(Top::Variant(Variant {
-                    name,
-                    fields,
-                    attributes,
-                    documentation: doc_comment.and_then(parse_comment_block),
-                    span: diagnostics.span(pair_span),
-                    variant_type: args.first().unwrap().to_string(),
-                    function_name: identifier,
-                }))
-            }
-            _ => Err(DatamodelError::new_validation_error(
-                "impl requires 2 template args. (did you forget <llm, FunctionName>)",
                 diagnostics.span(pair_span),
             )),
         },
@@ -119,13 +92,14 @@ pub(crate) fn parse_config_block(
     }
 }
 
-fn parse_key_value(
+pub(crate) fn parse_key_value(
     pair: Pair<'_>,
     doc_comment: Option<Pair<'_>>,
     diagnostics: &mut Diagnostics,
 ) -> ConfigBlockProperty {
     let mut name: Option<Identifier> = None;
     let mut value: Option<Expression> = None;
+    let mut attributes = Vec::new();
     let mut comment: Option<Comment> = doc_comment.and_then(parse_comment_block);
     let (pair_span, pair_str) = (pair.as_span(), pair.as_str());
 
@@ -134,6 +108,7 @@ fn parse_key_value(
             Rule::single_word => {
                 name = Some(parse_identifier(current.into(), diagnostics));
             }
+            Rule::field_attribute => attributes.push(parse_attribute(current, diagnostics)),
             Rule::expression => value = Some(parse_expression(current, diagnostics)),
             Rule::trailing_comment => {
                 comment = match (comment, parse_trailing_comment(current)) {
@@ -154,6 +129,7 @@ fn parse_key_value(
         Some(name) => ConfigBlockProperty {
             name,
             value,
+            attributes,
             span: diagnostics.span(pair_span),
             documentation: comment,
         },

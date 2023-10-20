@@ -32,6 +32,8 @@ pub struct ConfigBlockProperty {
     /// ```
     pub value: Option<Expression>,
 
+    pub attributes: Vec<Attribute>,
+
     pub(crate) documentation: Option<Comment>,
     /// The node span.
     pub span: Span,

@@ -28,22 +28,21 @@
 
 pub mod walkers;
 
+mod attributes;
 mod coerce_expression;
 mod context;
 mod interner;
 mod names;
 mod types;
 
-use std::{collections::HashMap, path::PathBuf};
-
 pub use coerce_expression::{coerce, coerce_array, coerce_opt};
 pub use internal_baml_schema_ast::ast;
 use internal_baml_schema_ast::ast::SchemaAst;
 pub use names::is_reserved_type_name;
-pub use types::{ScalarFieldId, ScalarFieldType, ScalarType};
+pub use types::StaticType;
 
 use self::{context::Context, interner::StringId, types::Types};
-use internal_baml_diagnostics::{DatamodelError, Diagnostics, SourceFile};
+use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 use names::Names;
 
 /// ParserDatabase is a container for a Schema AST, together with information
@@ -111,6 +110,9 @@ impl ParserDatabase {
         types::resolve_types(&mut ctx);
 
         // Return early on type resolution errors.
+        ctx.diagnostics.to_result()?;
+
+        attributes::resolve_attributes(&mut ctx);
         ctx.diagnostics.to_result()
     }
 

@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use super::DatamodelError;
 use crate::{warning::DatamodelWarning, SourceFile, Span};
 use log::info;
@@ -6,16 +8,18 @@ use log::info;
 ///
 /// This is used to accumulate multiple errors and warnings during validation.
 /// It is used to not error out early and instead show multiple errors at once.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Diagnostics {
+    pub root_path: PathBuf,
     current_file: Option<SourceFile>,
     errors: Vec<DatamodelError>,
     warnings: Vec<DatamodelWarning>,
 }
 
 impl Diagnostics {
-    pub fn new() -> Diagnostics {
+    pub fn new(root_path: PathBuf) -> Diagnostics {
         Diagnostics {
+            root_path,
             current_file: None,
             errors: Vec::new(),
             warnings: Vec::new(),
@@ -96,11 +100,5 @@ impl Diagnostics {
         );
         self.errors.append(&mut other.errors);
         self.warnings.append(&mut other.warnings);
-    }
-}
-
-impl Default for Diagnostics {
-    fn default() -> Self {
-        Self::new()
     }
 }

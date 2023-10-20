@@ -13,6 +13,7 @@ mod generator_config;
 mod identifier;
 mod indentation_type;
 mod newline_type;
+mod serializer;
 mod top;
 mod traits;
 mod variant;
@@ -34,9 +35,10 @@ pub use internal_baml_diagnostics::Span;
 pub use newline_type::NewlineType;
 pub use r#class::{Class, FieldId};
 pub use r#enum::{Enum, EnumValue, EnumValueId};
+pub use serializer::{Serializer, SerializerField, SerializerFieldId};
 pub use top::Top;
 pub use traits::{WithAttributes, WithDocumentation, WithIdentifier, WithName, WithSpan};
-pub use variant::Variant;
+pub use variant::{FieldId as VariantFieldId, SerializerId as VariantSerializerId, Variant};
 
 /// AST representation of a prisma schema.
 ///

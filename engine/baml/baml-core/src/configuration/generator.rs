@@ -2,7 +2,7 @@ use crate::{configuration::StringFromEnvVar, PreviewFeature};
 use enumflags2::BitFlags;
 use internal_baml_parser_database::ast::Expression;
 use serde::{ser::SerializeSeq, Serialize, Serializer};
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf};
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(untagged)]
@@ -41,8 +41,9 @@ impl From<&Expression> for GeneratorConfigValue {
 #[serde(rename_all = "camelCase")]
 pub struct Generator {
     pub name: String,
-    pub language: StringFromEnvVar,
-    pub output: Option<StringFromEnvVar>,
+    pub language: String,
+    pub source_path: PathBuf,
+    pub output: Option<String>,
     pub config: HashMap<String, GeneratorConfigValue>,
 
     #[serde(skip_serializing_if = "Option::is_none")]

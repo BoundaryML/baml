@@ -6,7 +6,7 @@ use super::{
 /// An opaque identifier for a value in an AST enum. Use the
 /// `r#enum[enum_value_id]` syntax to resolve the id to an `ast::EnumValue`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct EnumValueId(pub(super) u32);
+pub struct EnumValueId(pub u32);
 
 impl EnumValueId {
     /// Used for range bounds when iterating over BTreeMaps.
@@ -75,8 +75,6 @@ pub struct Enum {
     pub(crate) documentation: Option<Comment>,
     /// The location of this enum in the text representation.
     pub span: Span,
-    /// The span of the inner contents.
-    pub inner_span: Span,
 }
 
 impl Enum {

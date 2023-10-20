@@ -1,9 +1,12 @@
 use crate::{
     ast::WithSpan,
-    configuration::{Generator, GeneratorConfigValue, StringFromEnvVar},
+    configuration::{Generator, GeneratorConfigValue},
     internal_baml_diagnostics::*,
 };
-use internal_baml_parser_database::ast::{self, Expression, WithDocumentation, WithName};
+use internal_baml_parser_database::{
+    ast::{self, Expression, WithDocumentation, WithName},
+    coerce,
+};
 use std::collections::HashMap;
 
 const LANGUAGE_KEY: &str = "language";
@@ -62,7 +65,7 @@ fn lift_generator(
     }
 
     let language = match args.get(LANGUAGE_KEY) {
-        Some(val) => StringFromEnvVar::coerce(val, diagnostics)?,
+        Some(val) => coerce::string(val, diagnostics)?,
         None => {
             diagnostics.push_error(DatamodelError::new_generator_argument_not_found_error(
                 LANGUAGE_KEY,
@@ -75,7 +78,8 @@ fn lift_generator(
 
     let output = args
         .get(OUTPUT_KEY)
-        .and_then(|v| StringFromEnvVar::coerce(v, diagnostics));
+        .and_then(|v| coerce::string(v, diagnostics))
+        .and_then(|v| Some(v.to_string()));
 
     let mut properties = HashMap::new();
 
@@ -103,7 +107,8 @@ fn lift_generator(
 
     Some(Generator {
         name: String::from(ast_generator.name()),
-        language,
+        language: String::from(language),
+        source_path: diagnostics.root_path.clone(),
         output,
         config: properties,
         documentation: ast_generator.documentation().map(String::from),

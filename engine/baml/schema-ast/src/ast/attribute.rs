@@ -48,10 +48,24 @@ impl WithSpan for Attribute {
 /// A node containing attributes.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum AttributeContainer {
-    // ModelField(super::ModelId, super::FieldId),
+    Class(super::ClassId),
+    ClassField(super::ClassId, super::FieldId),
     Enum(super::EnumId),
-    EnumValue(super::EnumId, u32),
-    // CompositeTypeField(super::CompositeTypeId, super::FieldId),
+    EnumValue(super::EnumId, super::EnumValueId),
+    Variant(super::VariantConfigId),
+    VariantField(super::VariantConfigId, super::VariantFieldId),
+    VariantSerializer(super::VariantConfigId, super::VariantSerializerId),
+    VariantSerializerField(
+        super::VariantConfigId,
+        super::VariantSerializerId,
+        super::SerializerFieldId,
+    ),
+}
+
+impl From<(super::VariantConfigId, super::VariantFieldId)> for AttributeContainer {
+    fn from((enm, val): (super::VariantConfigId, super::VariantFieldId)) -> Self {
+        Self::VariantField(enm, val)
+    }
 }
 
 impl From<super::EnumId> for AttributeContainer {
@@ -60,9 +74,56 @@ impl From<super::EnumId> for AttributeContainer {
     }
 }
 
-impl From<(super::EnumId, u32)> for AttributeContainer {
-    fn from((enm, val): (super::EnumId, u32)) -> Self {
+impl From<(super::EnumId, super::EnumValueId)> for AttributeContainer {
+    fn from((enm, val): (super::EnumId, super::EnumValueId)) -> Self {
         Self::EnumValue(enm, val)
+    }
+}
+
+// For Class variant
+impl From<super::ClassId> for AttributeContainer {
+    fn from(v: super::ClassId) -> Self {
+        Self::Class(v)
+    }
+}
+
+// For ClassField variant
+impl From<(super::ClassId, super::FieldId)> for AttributeContainer {
+    fn from((cls, fld): (super::ClassId, super::FieldId)) -> Self {
+        Self::ClassField(cls, fld)
+    }
+}
+
+// For Variant variant
+impl From<super::VariantConfigId> for AttributeContainer {
+    fn from(v: super::VariantConfigId) -> Self {
+        Self::Variant(v)
+    }
+}
+
+// For VariantSerializer variant
+impl From<(super::VariantConfigId, super::VariantSerializerId)> for AttributeContainer {
+    fn from((var, ser): (super::VariantConfigId, super::VariantSerializerId)) -> Self {
+        Self::VariantSerializer(var, ser)
+    }
+}
+
+// For VariantSerializerField variant
+impl
+    From<(
+        super::VariantConfigId,
+        super::VariantSerializerId,
+        super::SerializerFieldId,
+    )> for AttributeContainer
+{
+    fn from(
+        (var, ser, fld): (
+            super::VariantConfigId,
+            super::VariantSerializerId,
+            super::SerializerFieldId,
+        ),
+    ) -> Self {
+        Self::VariantSerializerField(var, ser, fld)
     }
 }
 
@@ -81,12 +142,24 @@ impl Index<AttributeContainer> for super::SchemaAst {
 
     fn index(&self, index: AttributeContainer) -> &Self::Output {
         match index {
-            // AttributeContainer::Model(model_id) => &self[model_id].attributes,
-            // AttributeContainer::ModelField(model_id, field_id) => &self[model_id][field_id].attributes,
+            AttributeContainer::Class(model_id) => &self[model_id].attributes,
+            AttributeContainer::ClassField(model_id, field_id) => {
+                &self[model_id][field_id].attributes
+            }
             AttributeContainer::Enum(enum_id) => &self[enum_id].attributes,
             AttributeContainer::EnumValue(enum_id, value_idx) => {
-                &self[enum_id].values[value_idx as usize].attributes
-            } // AttributeContainer::CompositeTypeField(ctid, field_id) => &self[ctid][field_id].attributes,
+                &self[enum_id][value_idx].attributes
+            }
+            AttributeContainer::Variant(variant_id) => &self[variant_id].attributes,
+            AttributeContainer::VariantField(variant_id, field_id) => {
+                &self[variant_id][field_id].attributes
+            }
+            AttributeContainer::VariantSerializer(variant_id, serializer_idx) => {
+                &self[variant_id][serializer_idx].attributes
+            }
+            AttributeContainer::VariantSerializerField(variant_id, serializer_idx, field_idx) => {
+                &self[variant_id][serializer_idx][field_idx].attributes
+            }
         }
     }
 }

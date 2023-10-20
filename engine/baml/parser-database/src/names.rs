@@ -4,8 +4,7 @@ pub use validate_reserved_names::is_reserved_type_name;
 
 use crate::{
     ast::{self, TopId, WithAttributes},
-    types::ScalarType,
-    Context, DatamodelError, StringId,
+    Context, DatamodelError, StaticType, StringId,
 };
 use colored::Colorize;
 
@@ -44,12 +43,12 @@ pub(super) fn resolve_names(ctx: &mut Context<'_>) {
         let namespace = match (top_id, top) {
             (_, ast::Top::Enum(ast_enum)) => {
                 tmp_names.clear();
-                validate_identifier(&ast_enum.name, "Enum", ctx);
+                validate_identifier(&ast_enum.name, "enum", ctx);
                 validate_enum_name(ast_enum, ctx.diagnostics);
                 // validate_attribute_identifiers(ast_enum, ctx);
 
                 for value in &ast_enum.values {
-                    validate_identifier(&value.name, "Enum Value", ctx);
+                    validate_identifier(&value.name, "enum value", ctx);
                     // validate_attribute_identifiers(value, ctx);
 
                     if !tmp_names.insert(&value.name.name) {
@@ -69,7 +68,7 @@ pub(super) fn resolve_names(ctx: &mut Context<'_>) {
                 validate_attribute_identifiers(ast_class, ctx);
 
                 for (field_id, field) in ast_class.iter_fields() {
-                    validate_identifier(field.identifier(), "Field", ctx);
+                    validate_identifier(field.identifier(), "field", ctx);
                     validate_attribute_identifiers(field, ctx);
                     let field_name_id = ctx.interner.intern(field.name());
 
@@ -100,6 +99,7 @@ pub(super) fn resolve_names(ctx: &mut Context<'_>) {
                 &mut names.tops
             }
             (_, ast::Top::Generator(generator)) => {
+                validate_identifier(generator.identifier(), "generator", ctx);
                 check_for_duplicate_properties(top, &generator.fields, &mut tmp_names, ctx);
                 &mut names.generators
             }
@@ -145,7 +145,7 @@ fn duplicate_top_error(existing: &ast::Top, duplicate: &ast::Top) -> DatamodelEr
 }
 
 fn assert_is_not_a_reserved_scalar_type(ident: &ast::Identifier, ctx: &mut Context<'_>) {
-    if ScalarType::try_from_str(&ident.name).is_some() {
+    if StaticType::try_from_str(&ident.name).is_some() {
         ctx.push_error(DatamodelError::new_reserved_scalar_type_error(
             &ident.name,
             ident.span.clone(),
@@ -183,7 +183,7 @@ fn validate_identifier(ident: &ast::Identifier, schema_item: &str, ctx: &mut Con
             &format!("The name of a {schema_item} must not be empty."),
             ident.span.clone(),
         ))
-    } else if ident.name.chars().next().unwrap().is_alphabetic() {
+    } else if !ident.name.chars().next().unwrap().is_alphabetic() {
         ctx.push_error(DatamodelError::new_validation_error(
             &format!("The name of a {schema_item} must start with a letter."),
             ident.span.clone(),

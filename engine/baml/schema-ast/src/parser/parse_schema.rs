@@ -1,8 +1,10 @@
+use std::path::PathBuf;
+
 use super::{
-    parse_class::parse_class, parse_client_generator_variant, parse_enum::parse_enum,
-    parse_function::parse_function, BAMLParser, Rule,
+    parse_class::parse_class, parse_config, parse_enum::parse_enum, parse_function::parse_function,
+    BAMLParser, Rule,
 };
-use crate::ast::*;
+use crate::{ast::*, parser::parse_variant};
 use internal_baml_diagnostics::{DatamodelError, Diagnostics, SourceFile};
 use log::info;
 use pest::Parser;
@@ -22,8 +24,11 @@ fn pretty_print<'a>(pair: pest::iterators::Pair<'a, Rule>, indent_level: usize) 
 }
 
 /// Parse a PSL string and return its AST.
-pub fn parse_schema(source: &SourceFile) -> Result<(SchemaAst, Diagnostics), Diagnostics> {
-    let mut diagnostics = Diagnostics::new();
+pub fn parse_schema(
+    root_path: &PathBuf,
+    source: &SourceFile,
+) -> Result<(SchemaAst, Diagnostics), Diagnostics> {
+    let mut diagnostics = Diagnostics::new(root_path.clone());
     diagnostics.set_source(source);
 
     info!("Parsing schema `{}`.", source.path());
@@ -62,12 +67,22 @@ pub fn parse_schema(source: &SourceFile) -> Result<(SchemaAst, Diagnostics), Dia
                         };
                     }
                     Rule::config_block => {
-                        match parse_client_generator_variant::parse_config_block(
+                        match parse_config::parse_config_block(
                             current,
                             pending_block_comment.take(),
                             &mut diagnostics,
                         ) {
                             Ok(config) => top_level_definitions.push(config),
+                            Err(e) => diagnostics.push_error(e),
+                        }
+                    }
+                    Rule::variant_block => {
+                        match parse_variant::parse_variant_block(
+                            current,
+                            pending_block_comment.take(),
+                            &mut diagnostics,
+                        ) {
+                            Ok(config) => top_level_definitions.push(Top::Variant(config)),
                             Err(e) => diagnostics.push_error(e),
                         }
                     }

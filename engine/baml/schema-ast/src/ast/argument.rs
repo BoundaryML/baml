@@ -11,20 +11,6 @@ pub struct ArgumentsList {
     ///         ^^^^^^^^^^^^^^^^^^^^^^^^
     /// ```
     pub arguments: Vec<Argument>,
-    /// The arguments without a value:
-    ///
-    /// ```ignore
-    /// @default("george", map: )
-    ///                    ^^^^
-    /// ```
-    pub empty_arguments: Vec<EmptyArgument>,
-    /// The trailing comma at the end of the arguments list.
-    ///
-    /// ```ignore
-    /// @relation(fields: [a, b], references: [id, name], )
-    ///                                                 ^
-    /// ```
-    pub trailing_comma: Option<Span>,
 }
 
 impl ArgumentsList {

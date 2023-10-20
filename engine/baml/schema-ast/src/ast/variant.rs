@@ -1,6 +1,6 @@
 use super::{
-    traits::WithAttributes, Attribute, Comment, ConfigBlockProperty, Field, Identifier, Span,
-    WithDocumentation, WithIdentifier, WithSpan,
+    traits::WithAttributes, Attribute, Comment, ConfigBlockProperty, Field, Identifier, Serializer,
+    Span, WithDocumentation, WithIdentifier, WithSpan,
 };
 
 /// An opaque identifier for a field in an AST model. Use the
@@ -20,6 +20,26 @@ impl std::ops::Index<FieldId> for Variant {
 
     fn index(&self, index: FieldId) -> &Self::Output {
         &self.fields[index.0 as usize]
+    }
+}
+
+/// An opaque identifier for a field in an AST model. Use the
+/// `model[field_id]` syntax to resolve the id to an `ast::Field`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SerializerId(pub(super) u32);
+
+impl SerializerId {
+    /// Used for range bounds when iterating over BTreeMaps.
+    pub const MIN: SerializerId = SerializerId(0);
+    /// Used for range bounds when iterating over BTreeMaps.
+    pub const MAX: SerializerId = SerializerId(u32::MAX);
+}
+
+impl std::ops::Index<SerializerId> for Variant {
+    type Output = Serializer;
+
+    fn index(&self, index: SerializerId) -> &Self::Output {
+        &self.serializers[index.0 as usize]
     }
 }
 
@@ -61,6 +81,8 @@ pub struct Variant {
 
     pub fields: Vec<ConfigBlockProperty>,
 
+    pub serializers: Vec<Serializer>,
+
     pub(crate) variant_type: String,
 
     pub(crate) function_name: Identifier,
@@ -77,6 +99,15 @@ impl Variant {
             .iter()
             .enumerate()
             .map(|(idx, field)| (FieldId(idx as u32), field))
+    }
+
+    pub fn iter_serializers(
+        &self,
+    ) -> impl ExactSizeIterator<Item = (SerializerId, &Serializer)> + Clone {
+        self.serializers
+            .iter()
+            .enumerate()
+            .map(|(idx, field)| (SerializerId(idx as u32), field))
     }
 
     pub fn fields(&self) -> &[ConfigBlockProperty] {

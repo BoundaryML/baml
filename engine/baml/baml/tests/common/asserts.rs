@@ -1,5 +1,4 @@
 use baml::internal_baml_diagnostics::DatamodelWarning;
-use baml::internal_baml_parser_database::ScalarType;
 use baml::internal_baml_schema_ast::ast::{self};
 use baml::StringFromEnvVar;
 
@@ -19,21 +18,6 @@ pub(crate) trait WarningAsserts {
 
 pub(crate) trait TypeAssert<'a> {
     // fn assert_has_scalar_field(&self, t: &str) -> walkers::CompositeTypeFieldWalker<'a>;
-}
-
-pub(crate) trait ScalarFieldAssert {
-    fn assert_scalar_type(&self, t: ScalarType) -> &Self;
-    // fn assert_is_single_field_id(&self) -> walkers::PrimaryKeyWalker<'_>;
-    // fn assert_is_single_field_unique(&self) -> walkers::IndexWalker<'_>;
-    fn assert_not_single_field_unique(&self) -> &Self;
-    fn assert_ignored(&self, ignored: bool) -> &Self;
-    fn assert_with_documentation(&self, t: &str) -> &Self;
-    fn assert_required(&self) -> &Self;
-    fn assert_optional(&self) -> &Self;
-    fn assert_list(&self) -> &Self;
-    // fn assert_default_value(&self) -> walkers::DefaultValueWalker<'_>;
-    fn assert_mapped_name(&self, name: &str) -> &Self;
-    fn assert_is_updated_at(&self) -> &Self;
 }
 
 pub(crate) trait DefaultValueAssert {

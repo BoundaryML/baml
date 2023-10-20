@@ -1,4 +1,4 @@
-clss Foo {
+class Foo {
   a int
   b string
 }

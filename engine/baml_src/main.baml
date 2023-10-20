@@ -50,7 +50,7 @@ impl<llm, FooBar> SomeName2 {
   client MyClient
   prompt #"
     does something
-    asdf #// This is a comment //# goes here
+    asdf {#// This is a comment //#} goes here
     a ;asdf;kljla
     asflk;jasdf
     {#input.some_field}

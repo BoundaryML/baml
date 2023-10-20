@@ -36,6 +36,7 @@ pub fn build(baml_dir: &Option<String>) -> Result<(), CliError> {
     );
 
     let parsed = parse_schema(
+        &baml_dir,
         src_files
             .iter()
             .map(|path| SourceFile::from((path.clone(), std::fs::read_to_string(&path).unwrap())))
