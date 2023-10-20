@@ -27,7 +27,7 @@ fn default_baml_dir() -> Result<PathBuf, &'static str> {
 
 pub fn build(baml_dir: &Option<String>) -> Result<(), CliError> {
     let (baml_dir, config) = get_src_dir(baml_dir)?;
-    let mut src_files = get_src_files(&baml_dir)?;
+    let src_files = get_src_files(&baml_dir)?;
 
     info!(
         "Building: {} ({} BAML files found)",
@@ -45,7 +45,8 @@ pub fn build(baml_dir: &Option<String>) -> Result<(), CliError> {
 
     parsed.diagnostics.to_result()?;
 
-    generate_schema(&parsed, &config);
-
+    if let Err(err) = generate_schema(&parsed, &config) {
+        return Err(err.to_string().into());
+    }
     Ok(())
 }

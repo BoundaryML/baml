@@ -38,6 +38,6 @@ pub fn validate(root_path: &PathBuf, files: Vec<SourceFile>) -> ValidatedSchema 
 }
 
 /// Generate a schema from a validated schema.
-pub fn generate_schema(schema: &ValidatedSchema, config: &Configuration) {
+pub fn generate_schema(schema: &ValidatedSchema, config: &Configuration) -> std::io::Result<()> {
     internal_baml_core::generate(&schema.db, config)
 }

@@ -1,3 +1,5 @@
+use crate::types::{ClassAttributes, ToStringAttributes};
+
 use super::{ClassWalker, Walker};
 use internal_baml_schema_ast::ast::{self, FieldArity, FieldType};
 
@@ -18,6 +20,12 @@ impl<'db> FieldWalker<'db> {
     /// The field type.
     pub fn r#type(self) -> (FieldArity, &'db FieldType) {
         (self.ast_field().arity, &self.ast_field().field_type)
+    }
+
+    /// The parsed attributes.
+    #[track_caller]
+    pub(crate) fn attributes(self) -> &'db ToStringAttributes {
+        &self.db.types.class_attributes[&self.id.0].field_serilizers[&self.id.1]
     }
 
     /// Traverse the field's parent model.

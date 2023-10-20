@@ -6,7 +6,8 @@ function FooBar {
 
 
 enum Foo2 {
-  VALUE @alias(foo)
+  VALUE
+  @alias(foo)
   @meta(description, #"
   This is the description
   "#) 

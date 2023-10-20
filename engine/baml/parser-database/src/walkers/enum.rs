@@ -1,6 +1,10 @@
 use internal_baml_schema_ast::ast::{IndentationType, NewlineType, WithDocumentation, WithName};
 
-use crate::{ast, walkers::Walker};
+use crate::{
+    ast,
+    types::{EnumAttributes, ToStringAttributes},
+    walkers::Walker,
+};
 
 /// An `enum` declaration in the schema.
 pub type EnumWalker<'db> = Walker<'db, ast::EnumId>;
@@ -42,6 +46,12 @@ impl<'db> EnumWalker<'db> {
     pub fn newline(self) -> NewlineType {
         NewlineType::Unix
     }
+
+    /// The parsed attributes.
+    #[track_caller]
+    pub(crate) fn attributes(self) -> &'db EnumAttributes {
+        &self.db.types.enum_attributes[&self.id]
+    }
 }
 
 impl<'db> EnumValueWalker<'db> {
@@ -57,5 +67,11 @@ impl<'db> EnumValueWalker<'db> {
     /// The name of the value.
     pub fn name(self) -> &'db str {
         &self.r#enum().ast_enum()[self.id.1].name()
+    }
+
+    /// The parsed attributes.
+    #[track_caller]
+    pub(crate) fn attributes(self) -> &'db ToStringAttributes {
+        &self.db.types.enum_attributes[&self.id.0].value_serilizers[&self.id.1]
     }
 }

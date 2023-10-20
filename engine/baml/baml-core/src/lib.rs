@@ -35,10 +35,11 @@ impl std::fmt::Debug for ValidatedSchema {
     }
 }
 
-pub fn generate(db: &ParserDatabase, configuration: &Configuration) {
+pub fn generate(db: &ParserDatabase, configuration: &Configuration) -> std::io::Result<()> {
     for gen in configuration.generators.iter() {
-        generate::generate_pipeline(db, gen);
+        generate::generate_pipeline(db, gen)?;
     }
+    Ok(())
 }
 
 /// The most general API for dealing with Prisma schemas. It accumulates what analysis and

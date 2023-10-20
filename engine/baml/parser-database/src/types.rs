@@ -13,7 +13,7 @@ pub(crate) use to_string_attributes::{
     DynamicStringAttributes, StaticStringAttributes, ToStringAttributes,
 };
 pub(crate) use types::EnumAttributes;
-pub use types::*;
+pub(crate) use types::*;
 
 pub(super) fn resolve_types(ctx: &mut Context<'_>) {
     for (top_id, top) in ctx.ast.iter_tops() {
