@@ -8,8 +8,8 @@
       "path": "cli"
     },
     {
-      "name": "VSCode Extension",
-      "path": "vscode-ext"
+      "name": "typescript",
+      "path": "typescript"
     },
     {
       "name": "Python Client",
@@ -45,7 +45,16 @@
     },
     "mypy.enabled": false,
     "gloo.path": "${workspaceFolder}/cli/target/debug",
-    "editor.tabSize": 2
+    "editor.tabSize": 2,
+    "jest.disabledWorkspaceFolders": [
+      "test1/python",
+      "Python Client",
+      "Release Tools",
+      "Docs",
+      "engine",
+      ".github",
+      "Rust CLI"
+    ]
   },
   "extensions": {
     "recommendations": ["xaver.clang-format"]

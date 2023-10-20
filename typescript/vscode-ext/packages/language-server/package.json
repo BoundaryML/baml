@@ -1,0 +1,64 @@
+{
+  "name": "@gloo-ai/baml-language-server",
+  "description": "Baml Language Server",
+  "displayName": "Baml Language Server",
+  "version": "0.1.0",
+  "author": "Gloo",
+  "license": "Apache-2.0",
+  "publisher": "Gloo",
+  "engines": {
+    "node": ">=14"
+  },
+  "prisma": {
+    "enginesVersion": "42bfcd0e4a2e9f73937c1ed5c2f42bf08d07289a",
+    "cliVersion": "5.5.0-dev.60"
+  },
+  "bin": {
+    "baml-language-server": "dist/src/bin.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prisma/language-tools.git",
+    "directory": "packages/language-server"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "npm run build -- -w",
+    "test": "nyc --reporter=clover --reporter=text-summary mocha --ui tdd --useColors true ./dist/src/__test__/**/*.test.js",
+    "pretest": "tsc"
+  },
+  "main": "./dist/index.js",
+  "typings": "dist/src/index",
+  "dependencies": {
+    "@gloo-ai/baml-schema-wasm": "*",
+    "@types/js-levenshtein": "1.1.2",
+    "js-levenshtein": "1.1.6",
+    "klona": "2.0.6",
+    "nyc": "15.1.0",
+    "vscode-languageserver": "8.1.0",
+    "vscode-languageserver-textdocument": "1.0.11",
+    "vscode-uri": "^3.0.8"
+  },
+  "devDependencies": {
+    "@types/mocha": "10.0.3",
+    "@types/node": "14.18.63",
+    "mocha": "10.2.0",
+    "ts-dedent": "2.2.0",
+    "typescript": "5.2.2"
+  },
+  "keywords": [
+    "autocomplete",
+    "intellisense",
+    "language",
+    "prisma",
+    "server",
+    "formatting",
+    "linting"
+  ],
+  "bugs": {
+    "url": "https://github.com/prisma/language-tools/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

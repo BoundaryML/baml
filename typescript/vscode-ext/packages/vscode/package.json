@@ -1,0 +1,126 @@
+{
+  "name": "baml-insider",
+  "displayName": "Baml - Insider",
+  "description": "This is the Insider Build of the Baml VS Code extension (only use it if you are also using the dev version of the CLI).",
+  "version": "0.1.0",
+  "publisher": "Gloo",
+  "repository": "https://github.com/GlooHQ/gloo-lang",
+  "homepage": "https://trygloo.com",
+  "icon": "logo.png",
+  "engines": {
+    "vscode": "^1.56.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/src/extension.js",
+  "contributes": {
+    "configuration": {
+      "type": "object",
+      "title": "Baml extension settings",
+      "properties": {
+        "baml.path": {
+          "type": "string",
+          "default": "baml",
+          "description": "Override the baml CLI path"
+        },
+        "baml.fileWatcher": {
+          "scope": "window",
+          "type": "boolean",
+          "default": true,
+          "description": "Enable, when checked, the File Watcher functionality for Baml Client."
+        },
+        "baml.trace.server": {
+          "scope": "window",
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "on",
+          "description": "Setting for logging between the VS Code extension and the language server."
+        }
+      }
+    },
+    "languages": [
+      {
+        "id": "baml",
+        "aliases": [
+          "Baml",
+          "baml"
+        ],
+        "extensions": [
+          ".baml"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./logo.png",
+          "dark": "./logo.png"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "baml",
+        "scopeName": "source.baml",
+        "path": "./syntaxes/baml.tmLanguage.json"
+      }
+    ],
+    "activationEvents": [
+      "onLanguage:baml"
+    ],
+    "snippets": [
+      {
+        "language": "baml",
+        "path": "./snippets/basicSnippets.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "baml.restartLanguageServer",
+        "title": "Restart Language Server",
+        "category": "Baml"
+      },
+      {
+        "command": "baml.filewatcherEnable",
+        "title": "Enable the File Watcher functionality for Baml Client.",
+        "category": "Baml"
+      },
+      {
+        "command": "baml.filewatcherDisable",
+        "title": "Disable the File Watcher functionality for Baml Client.",
+        "category": "Baml"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "pnpm run esbuild-base --minify",
+    "esbuild-base": "esbuild ./src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node",
+    "esbuild-build": "pnpm run esbuild-base --sourcemap",
+    "esbuild-watch": "pnpm run esbuild-base --sourcemap --watch",
+    "vscode:package": "vsce package --no-dependencies",
+    "vscode:publish": "vsce publish --no-dependencies",
+    "lint": "eslint \"src/**/*.ts\"",
+    "watch": "tsc -watch -p ./",
+    "build": "tsc -p ./"
+  },
+  "dependencies": {
+    "env-paths": "2.2.1",
+    "minimatch": "6.2.0",
+    "vscode-languageclient": "7.0.0",
+    "watcher": "1.2.0"
+  },
+  "devDependencies": {
+    "@types/glob": "8.1.0",
+    "@types/mocha": "10.0.3",
+    "@types/vscode": "1.56.0",
+    "@vscode/test-electron": "2.3.5",
+    "is-ci": "3.0.1",
+    "mocha": "10.2.0",
+    "ovsx": "0.8.3",
+    "typescript": "5.2.2",
+    "@vscode/vsce": "2.21.1"
+  },
+  "preview": true
+}

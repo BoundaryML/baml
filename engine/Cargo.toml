@@ -2,10 +2,13 @@
 resolver = "2"
 members = [
   "baml/*",
-  "baml-cli"
+  "baml-cli",
+  "baml-fmt",
+  "baml-schema-wasm",
 ]
 
 [workspace.dependencies]
+baml = { path = "./baml/baml"}
 serde_json = { version = "1", features = ["float_roundtrip", "preserve_order"] }
 serde = { version = "1", features = ["derive"] }
 indoc = "2.0.1"

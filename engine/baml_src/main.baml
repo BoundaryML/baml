@@ -1,3 +1,46 @@
+// Enum 
+enum Sentiment {
+  SAD
+  HAPPY 
+}
+
+enum Sentiment2 {
+  // comment
+  ANGRY
+
+
+}
+
+// Interface blocks 
+class Interface1 {
+  prop String
+  prop2 Int
+  propArray String[]
+  boolean Bool
+}
+
+class InterfaceTwo {
+  interface1 Interface1
+
+  // comment
+  prop2 String
+}
+
+function FunctionOne {
+  input Interface1
+  // comment
+  output InterfaceTwo
+}
+
+function FunctionTwo {
+  input Interface1
+  output String
+}
+
+
+
+
+
 generator Default {
   language python
   output /Users/vbv/repos/gloo-lang/clients/python/baml_client/generated
