@@ -14,13 +14,6 @@ impl<'db> ClassWalker<'db> {
         self.ast_class().name()
     }
 
-    /// Traverse the fields of the classs in the order they were defined.
-    pub fn fields(self) -> impl ExactSizeIterator<Item = FieldWalker<'db>> + Clone {
-        self.ast_class()
-            .iter_fields()
-            .map(move |(field_id, _)| self.walk((self.id, field_id)))
-    }
-
     /// The ID of the class in the db
     pub fn class_id(self) -> ast::ClassId {
         self.id

@@ -1,5 +1,5 @@
 use super::{ClassWalker, Walker};
-use internal_baml_schema_ast::ast;
+use internal_baml_schema_ast::ast::{self, FieldArity, FieldType};
 
 /// A model field, scalar or relation.
 pub type FieldWalker<'db> = Walker<'db, (ast::ClassId, ast::FieldId)>;
@@ -13,6 +13,11 @@ impl<'db> FieldWalker<'db> {
     /// The field name.
     pub fn name(self) -> &'db str {
         self.ast_field().name()
+    }
+
+    /// The field type.
+    pub fn r#type(self) -> (FieldArity, &'db FieldType) {
+        (self.ast_field().arity, &self.ast_field().field_type)
     }
 
     /// Traverse the field's parent model.

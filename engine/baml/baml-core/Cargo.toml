@@ -15,6 +15,8 @@ serde.workspace = true
 serde_json.workspace = true
 enumflags2 = "0.7"
 rayon = "1.8.0"
+handlebars = "4.4.0"
+log = "0.4.20"
 
 
 [dev-dependencies]

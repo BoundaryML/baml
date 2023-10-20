@@ -547,6 +547,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "handlebars"
+version = "4.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c39b3bc2a8f715298032cf5087e58573809374b08160aa7d750582bdb82d2683"
+dependencies = [
+ "log",
+ "pest",
+ "pest_derive",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -693,10 +707,12 @@ dependencies = [
  "either",
  "enumflags2",
  "expect-test",
+ "handlebars",
  "indoc",
  "internal-baml-diagnostics",
  "internal-baml-parser-database",
  "internal-baml-schema-ast",
+ "log",
  "rayon",
  "serde",
  "serde_json",

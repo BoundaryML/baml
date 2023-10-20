@@ -7,6 +7,23 @@ generator Default {
   }
 }
 
+// generator Default {
+//   language python
+//   output ../path/to/dir
+//   features {
+//     openai true
+//     anthropic true
+//     fast true
+//     slow true
+//   }
+// }
+
+enum FAAAAA {
+  POSITIVE
+  NEGATIVE
+  HEALTHY
+}
+
 // This is preferred
 client<llm> SomeOtherClient {
   @@provider(openai)
@@ -60,17 +77,6 @@ impl<llm, FooBar> SomeName2 {
   "#
 }
 
-
-generator Default {
-  language python
-  output ../path/to/dir
-  features {
-    openai true
-    anthropic true
-    fast true
-    slow true
-  }
-}
 
 class Bar {
   a int
