@@ -48,8 +48,7 @@ impl Field {
             .iter()
             .filter(|a| a.name() == attribute)
             .flat_map(|a| a.arguments.iter())
-            .filter(|a| a.name.as_ref().map(|n| n.name.as_str()) == Some(argument))
-            .map(|a| a.span.clone())
+            .map(|(_, a)| a.span.clone())
             .next()
     }
 
@@ -132,8 +131,17 @@ impl FieldArity {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum TypeValue {
+    String,
+    Int,
+    Float,
+    Boolean,
+    Char,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum FieldType {
-    PrimitiveType(String, Span),
+    PrimitiveType(TypeValue, Span),
     Union(Vec<(FieldArity, FieldType)>, Span),
     Supported(Identifier),
     /// Unsupported("...")

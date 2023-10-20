@@ -45,11 +45,11 @@ pub(super) fn resolve_names(ctx: &mut Context<'_>) {
                 tmp_names.clear();
                 validate_identifier(&ast_enum.name, "enum", ctx);
                 validate_enum_name(ast_enum, ctx.diagnostics);
-                // validate_attribute_identifiers(ast_enum, ctx);
+                validate_attribute_identifiers(ast_enum, ctx);
 
                 for value in &ast_enum.values {
                     validate_identifier(&value.name, "enum value", ctx);
-                    // validate_attribute_identifiers(value, ctx);
+                    validate_attribute_identifiers(value, ctx);
 
                     if !tmp_names.insert(&value.name.name) {
                         ctx.push_error(DatamodelError::new_duplicate_enum_value_error(
@@ -198,7 +198,7 @@ fn validate_identifier(ident: &ast::Identifier, schema_item: &str, ctx: &mut Con
             schema_item,
             ident.name.chars().next().unwrap().is_uppercase(),
         ) {
-            ("Attribute", _) => true,
+            ("Attribute" | "field", _) => true,
             (_, false) => {
                 ctx.push_error(DatamodelError::new_validation_error(
                     &format!(

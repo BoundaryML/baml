@@ -1,7 +1,6 @@
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 
 use super::*;
-use crate::interner::StringId;
 
 #[derive(Default, Debug)]
 pub(super) struct AttributesValidationState {
@@ -11,7 +10,7 @@ pub(super) struct AttributesValidationState {
 
     /// The attribute being validated.
     pub(super) attribute: Option<ast::AttributeId>,
-    pub(super) args: HashMap<Option<StringId>, usize>, // the _remaining_ arguments of `attribute`
+    pub(super) args: VecDeque<ast::ArguementId>, // the _remaining_ arguments of `attribute`
 }
 
 impl AttributesValidationState {

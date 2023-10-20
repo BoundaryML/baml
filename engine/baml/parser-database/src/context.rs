@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use internal_baml_schema_ast::ast::ArguementId;
+
 use crate::{
     ast, ast::WithName, interner::StringInterner, names::Names, types::Types, DatamodelError,
     Diagnostics, StringId,
@@ -151,25 +153,14 @@ impl<'db> Context<'db> {
     /// Use this to implement unnamed argument behavior.
     pub(crate) fn visit_default_arg_with_idx(
         &mut self,
-        name: &'static str,
-    ) -> Result<(usize, &'db ast::Expression), DatamodelError> {
-        let name_s = self.interner.intern(name);
-        match (
-            self.attributes.args.remove(&Some(name_s)),
-            self.attributes.args.remove(&None),
-        ) {
-            (Some(arg_idx), None) | (None, Some(arg_idx)) => {
+        name: &str,
+    ) -> Result<(ArguementId, &'db ast::Expression), DatamodelError> {
+        match self.attributes.args.pop_front() {
+            Some(arg_idx) => {
                 let arg = self.arg_at(arg_idx);
                 Ok((arg_idx, &arg.value))
             }
-            (Some(arg_idx), Some(_)) => {
-                let arg = self.arg_at(arg_idx);
-                Err(DatamodelError::new_duplicate_default_argument_error(
-                    name,
-                    arg.span.clone(),
-                ))
-            }
-            (None, None) => Err(DatamodelError::new_argument_not_found_error(
+            None => Err(DatamodelError::new_argument_not_found_error(
                 name,
                 self.current_attribute().span.clone(),
             )),
@@ -186,8 +177,8 @@ impl<'db> Context<'db> {
         };
 
         let diagnostics = &mut self.diagnostics;
-        for arg_idx in self.attributes.args.values() {
-            let arg = &attr.arguments.arguments[*arg_idx];
+        while let Some(arg_idx) = self.attributes.args.pop_front() {
+            let arg = &attr.arguments[arg_idx];
             diagnostics.push_error(DatamodelError::new_unused_argument_error(arg.span.clone()));
         }
 
@@ -224,8 +215,8 @@ impl<'db> Context<'db> {
         &self.ast[id]
     }
 
-    fn arg_at(&self, idx: usize) -> &'db ast::Argument {
-        &self.current_attribute().arguments.arguments[idx]
+    fn arg_at(&self, idx: ArguementId) -> &'db ast::Argument {
+        &self.current_attribute().arguments[idx]
     }
 
     /// Discard arguments without validation.
@@ -245,43 +236,14 @@ impl<'db> Context<'db> {
             panic!("State error: we cannot start validating new arguments before `validate_visited_arguments()` or `discard_arguments()` has been called.\n{:#?}", self.attributes);
         }
 
-        let mut is_reasonably_valid = true;
-
         let arguments = &attribute.arguments;
 
         self.attributes.attribute = Some(attribute_id);
         self.attributes.args.clear();
         self.attributes.args.reserve(arguments.arguments.len());
-        let mut unnamed_arguments = Vec::new();
 
-        for (arg_idx, arg) in arguments.arguments.iter().enumerate() {
-            let arg_name = arg
-                .name
-                .as_ref()
-                .map(|name| self.interner.intern(&name.name));
-            if let Some(existing_argument) = self.attributes.args.insert(arg_name, arg_idx) {
-                if arg.is_unnamed() {
-                    if unnamed_arguments.is_empty() {
-                        let existing_arg_value =
-                            &attribute.arguments.arguments[existing_argument].value;
-                        unnamed_arguments.push(existing_arg_value.to_string())
-                    }
-
-                    unnamed_arguments.push(arg.value.to_string())
-                } else {
-                    self.push_error(DatamodelError::new_duplicate_argument_error(
-                        &arg.name.as_ref().unwrap().name,
-                        arg.span.clone(),
-                    ));
-                }
-            }
-        }
-
-        if !unnamed_arguments.is_empty() {
-            self.push_attribute_validation_error(
-                &format!("You provided multiple unnamed arguments. This is not possible. Did you forget the brackets? Did you mean `[{}]`?", unnamed_arguments.join(", ")),
-                false,
-                )
+        for (arg_id, _) in arguments.iter() {
+            self.attributes.args.push_back(arg_id);
         }
 
         true

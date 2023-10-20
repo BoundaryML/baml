@@ -20,12 +20,12 @@ mod variant;
 
 pub(crate) use self::comment::Comment;
 
-pub use argument::{Argument, ArgumentsList, EmptyArgument};
+pub use argument::{ArguementId, Argument, ArgumentsList};
 pub use attribute::{Attribute, AttributeContainer, AttributeId};
 pub use client::Client;
 pub use config::ConfigBlockProperty;
 pub use expression::Expression;
-pub use field::{Field, FieldArity, FieldType};
+pub use field::{Field, FieldArity, FieldType, TypeValue};
 pub use find_at_position::*;
 pub use function::Function;
 pub use generator_config::GeneratorConfig;

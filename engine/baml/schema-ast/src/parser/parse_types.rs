@@ -31,11 +31,20 @@ fn parse_base_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> FieldType {
             name: current.as_str().to_string(),
             span: diagnostics.span(current.as_span()),
         }),
-        Rule::primitive_types => FieldType::Supported(Identifier {
-            path: None,
-            name: current.as_str().to_string(),
-            span: diagnostics.span(current.as_span()),
-        }),
+        Rule::primitive_types => FieldType::PrimitiveType(
+            match current.as_str() {
+                "string" => TypeValue::String,
+                "int" => TypeValue::Int,
+                "float" => TypeValue::Float,
+                "boolean" => TypeValue::Boolean,
+                "char" => TypeValue::Char,
+                _ => unreachable!(
+                    "Encountered impossible type during parsing: {:?}",
+                    current.tokens()
+                ),
+            },
+            diagnostics.span(current.as_span()),
+        ),
         _ => unreachable!(
             "Encountered impossible type during parsing:{:?} {:?}",
             current.as_rule(),

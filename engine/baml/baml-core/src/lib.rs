@@ -7,6 +7,7 @@ use internal_baml_parser_database::ParserDatabase;
 pub use internal_baml_parser_database::{self, is_reserved_type_name};
 use internal_baml_schema_ast::ast::SchemaAst;
 pub use internal_baml_schema_ast::{self, ast};
+use log::info;
 use rayon::prelude::*;
 use std::{path::PathBuf, sync::Mutex};
 
@@ -67,6 +68,10 @@ pub fn validate(root_path: &PathBuf, files: Vec<SourceFile>) -> ValidatedSchema 
 
     if diagnostics.has_errors() {
         return ValidatedSchema { db, diagnostics };
+    }
+
+    if let Err(d) = db.validate(&mut diagnostics) {
+        return ValidatedSchema { db, diagnostics: d };
     }
 
     let (configuration, diag) = validate_configuration(root_path, db.ast());

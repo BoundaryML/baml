@@ -24,6 +24,8 @@ pub(super) fn resolve_types(ctx: &mut Context<'_>) {
                 visit_function(function, ctx)
             }
             (ast::TopId::Variant(_), ast::Top::Variant(variant)) => visit_variant(variant, ctx),
+            (ast::TopId::Client(_), ast::Top::Client(client)) => {}
+            (ast::TopId::Generator(_), ast::Top::Generator(generator)) => {}
             _ => unreachable!(),
         }
     }

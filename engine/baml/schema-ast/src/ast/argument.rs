@@ -1,6 +1,26 @@
 use super::{Expression, Identifier, Span, WithSpan};
 use std::fmt::{Display, Formatter};
 
+/// An opaque identifier for a value in an AST enum. Use the
+/// `r#enum[enum_value_id]` syntax to resolve the id to an `ast::EnumValue`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ArguementId(pub u32);
+
+impl ArguementId {
+    /// Used for range bounds when iterating over BTreeMaps.
+    pub const MIN: ArguementId = ArguementId(0);
+    /// Used for range bounds when iterating over BTreeMaps.
+    pub const MAX: ArguementId = ArguementId(u32::MAX);
+}
+
+impl std::ops::Index<ArguementId> for ArgumentsList {
+    type Output = Argument;
+
+    fn index(&self, index: ArguementId) -> &Self::Output {
+        &self.arguments[index.0 as usize]
+    }
+}
+
 /// A list of arguments inside parentheses.
 #[derive(Debug, Clone, Default)]
 pub struct ArgumentsList {
@@ -14,21 +34,17 @@ pub struct ArgumentsList {
 }
 
 impl ArgumentsList {
-    pub(crate) fn iter(&self) -> std::slice::Iter<'_, Argument> {
-        self.arguments.iter()
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = (ArguementId, &Argument)> {
+        self.arguments
+            .iter()
+            .enumerate()
+            .map(|(idx, field)| (ArguementId(idx as u32), field))
     }
 }
 
 /// An argument, either for attributes or for function call expressions.
 #[derive(Debug, Clone)]
 pub struct Argument {
-    /// The argument name, if applicable.
-    ///
-    /// ```ignore
-    /// @id(map: "myIndex")
-    ///     ^^^
-    /// ```
-    pub name: Option<Identifier>,
     /// The argument value.
     ///
     /// ```ignore
@@ -42,17 +58,7 @@ pub struct Argument {
 
 impl Display for Argument {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if let Some(name) = &self.name {
-            f.write_str(&name.name)?;
-            f.write_str(":")?;
-        }
         Display::fmt(&self.value, f)
-    }
-}
-
-impl Argument {
-    pub fn is_unnamed(&self) -> bool {
-        self.name.is_none()
     }
 }
 
@@ -60,17 +66,4 @@ impl WithSpan for Argument {
     fn span(&self) -> &Span {
         &self.span
     }
-}
-
-/// An argument with a name but no value. Example:
-///
-/// ```ignore
-/// @relation(onDelete: )
-/// ```
-///
-/// This is of course invalid, but we parse it in order to provide better diagnostics and
-/// for autocompletion.
-#[derive(Debug, Clone)]
-pub struct EmptyArgument {
-    pub name: Identifier,
 }

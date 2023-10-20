@@ -31,8 +31,6 @@ pub fn parse_schema(
     let mut diagnostics = Diagnostics::new(root_path.clone());
     diagnostics.set_source(source);
 
-    info!("Parsing schema `{}`.", source.path());
-
     let datamodel_result = BAMLParser::parse(Rule::schema, source.as_str());
     match datamodel_result {
         Ok(mut datamodel_wrapped) => {
@@ -111,14 +109,6 @@ pub fn parse_schema(
                     _ => unreachable!(),
                 }
             }
-            info!(
-                "\n\n\nParsed schema `{:?}`.",
-                top_level_definitions
-                    .iter()
-                    .map(|t| t.name())
-                    .collect::<Vec<_>>()
-                    .join(" | ")
-            );
 
             Ok((
                 SchemaAst {

@@ -45,12 +45,12 @@ client<llm> SomeOtherClient {
 //  anthropic AnthropicClient
 //}
 
-function FooBar {
+function FooBar2 {
   input Int[] | String
   output (Int | string[])[]
 }
 
-impl<llm, FooBar> SomeName {
+impl<llm, FooBar2> SomeName {
   client MyClient
   prompt #"
     does something

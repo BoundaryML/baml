@@ -38,6 +38,7 @@ mod types;
 pub use coerce_expression::{coerce, coerce_array, coerce_opt};
 pub use internal_baml_schema_ast::ast;
 use internal_baml_schema_ast::ast::SchemaAst;
+use log::info;
 pub use names::is_reserved_type_name;
 pub use types::StaticType;
 
@@ -88,7 +89,7 @@ impl ParserDatabase {
     }
 
     /// See the docs on [ParserDatabase](/struct.ParserDatabase.html).
-    pub fn validate(&mut self, mut diag: Diagnostics) -> Result<(), Diagnostics> {
+    pub fn validate(&mut self, mut diag: &mut Diagnostics) -> Result<(), Diagnostics> {
         diag.to_result()?;
 
         let mut interner = Default::default();
