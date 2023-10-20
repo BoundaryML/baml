@@ -36,3 +36,8 @@ pub fn parse_schema(
 pub fn validate(root_path: &PathBuf, files: Vec<SourceFile>) -> ValidatedSchema {
     internal_baml_core::validate(root_path, files)
 }
+
+/// Generate a schema from a validated schema.
+pub fn generate_schema(schema: &ValidatedSchema, config: &Configuration) {
+    internal_baml_core::generate(&schema.db, config)
+}

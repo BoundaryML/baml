@@ -24,7 +24,6 @@ pub use crate::{
 };
 
 pub struct ValidatedSchema {
-    pub configuration: Option<Configuration>,
     pub db: internal_baml_parser_database::ParserDatabase,
     pub diagnostics: Diagnostics,
 }
@@ -67,31 +66,19 @@ pub fn validate(root_path: &PathBuf, files: Vec<SourceFile>) -> ValidatedSchema 
     }
 
     if diagnostics.has_errors() {
-        return ValidatedSchema {
-            configuration: None,
-            db,
-            diagnostics,
-        };
+        return ValidatedSchema { db, diagnostics };
     }
 
     let (configuration, diag) = validate_configuration(root_path, db.ast());
     diagnostics.push(diag);
 
     if diagnostics.has_errors() {
-        return ValidatedSchema {
-            configuration: None,
-            db,
-            diagnostics,
-        };
+        return ValidatedSchema { db, diagnostics };
     }
 
     validate::validate(&db, configuration.preview_features(), &mut diagnostics);
 
-    ValidatedSchema {
-        configuration: Some(configuration),
-        db,
-        diagnostics,
-    }
+    ValidatedSchema { db, diagnostics }
 }
 
 /// Loads all configuration blocks from a datamodel using the built-in source definitions.
