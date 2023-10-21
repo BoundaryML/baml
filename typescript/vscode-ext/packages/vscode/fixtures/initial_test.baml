@@ -4,7 +4,7 @@ enum Sentiment {
   HAPPY 
 }
 
-enu Sentiment2 {
+enum Sentiment2 {
   // comment
   ANGRY @alias("angry")
   @meta(describe, "this is a description")
@@ -42,7 +42,6 @@ function FunctionOne {
   input Interface1
   // comment
   output InterfaceTwo
-
   
 }
 
@@ -83,7 +82,7 @@ client<llm> SomeOtherClient {
     array_key [ "abc", "abc", aaa    ],
     key2 "some random value", hello "world", thing "hello"
     block_string #"hello there my frien
-                d"#
+                sefs d"#
     inline_raw_string #"inline "raw" string,,"#
     keyStringNoSpacesWorksWithoutQuotes NoQuotes!!123,
     valueWithSpacesIllegal hello there my friend
@@ -97,6 +96,7 @@ client<llm> SomeOtherClient {
     ]
     array2 [ "one", "two" ]
     array3Numbers [ 1, 2, 3 ]
+    nullVal null
     nestedKey {
       key "value"
       key2 "value2"
@@ -108,9 +108,9 @@ client<llm> SomeOtherClient {
   myInteger 100
   block_string #"
     hello there my friend
-    #{//a comment in a prompt}
+    {#//a comment in a prompt}
 
-    #{variable.thing} #{//these are only valid of }
+    {#variable.thing} {#//these are only valid of #}
   "#
 }
 
