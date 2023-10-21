@@ -23,6 +23,7 @@ import * as MessageHandler from './lib/MessageHandler'
 import type { LSOptions, LSSettings } from './lib/types'
 import { getVersion, getEnginesVersion, getCliVersion } from './lib/wasm/internals'
 import { BamlDirCache } from './file/fileCache'
+import { LinterInput } from './lib/wasm/lint'
 
 const packageJson = require('../../package.json') // eslint-disable-line
 console.log('Server-side -- packageJson', packageJson)
@@ -166,10 +167,34 @@ export function startServer(options?: LSOptions): void {
     connection.window.showErrorMessage(errorMessage)
   }
 
-  function validateTextDocument(textDocument: TextDocument) {
+  function throwError(errorMessage: string): void {
+    throw new Error(errorMessage)
+  }
 
-    const diagnostics: Diagnostic[] = MessageHandler.handleDiagnosticsRequest(textDocument, showErrorToast)
-    void connection.sendDiagnostics({ uri: textDocument.uri, diagnostics })
+  function validateTextDocument(textDocument: TextDocument) {
+    try {
+      const srcDocs = bamlCache.getDocuments(textDocument);
+      const rootPath = bamlCache.getBamlDir(textDocument);
+      if (!rootPath) {
+        console.error("Could not find root path for " + textDocument.uri);
+        return;
+      }
+      const linterInput: LinterInput = {
+        root_path: rootPath,
+        files: srcDocs.map((doc) => {
+          return {
+            path: doc.uri,
+            content: doc.getText(),
+          }
+        }),
+      }
+      const diagnostics: Diagnostic[] = MessageHandler.handleDiagnosticsRequest(textDocument, linterInput, showErrorToast)
+      void connection.sendDiagnostics({ uri: textDocument.uri, diagnostics })
+    } catch (e: any) {
+      if (e instanceof Error) {
+        console.log("Error validating doc" + e.message + " " + e.stack);
+      }
+    }
   }
 
   documents.onDidChangeContent((change: { document: TextDocument }) => {

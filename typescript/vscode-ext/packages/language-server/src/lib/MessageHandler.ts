@@ -20,7 +20,8 @@ import {
 } from 'vscode-languageserver'
 import type { TextDocument } from 'vscode-languageserver-textdocument'
 import { fullDocumentRange } from './ast/findAtPosition'
-import lint from './wasm/lint'
+import lint, { LinterInput } from './wasm/lint'
+import { FileCache } from '../file/fileCache'
 
 // import format from './prisma-schema-wasm/format'
 // import lint from './prisma-schema-wasm/lint'
@@ -54,12 +55,12 @@ import lint from './wasm/lint'
 
 export function handleDiagnosticsRequest(
   document: TextDocument,
+  linterInput: LinterInput,
   onError?: (errorMessage: string) => void,
 ): Diagnostic[] {
-  console.log('running handleDiagnosticsRequest() from baml-schema-wasm' + document.uri);
-  // return []
-  const text = document.getText(fullDocumentRange(document))
-  const res = lint(text, (errorMessage: string) => {
+
+
+  const res = lint(linterInput, (errorMessage: string) => {
     if (onError) {
       onError(errorMessage)
     }
@@ -80,14 +81,17 @@ export function handleDiagnosticsRequest(
     }
   }
 
-  for (const diag of res) {
+  const documentDiagnostics = res.filter((diag) => diag.source_file === document.uri)
+
+  for (const diag of documentDiagnostics) {
     const diagnostic: Diagnostic = {
       range: {
         start: document.positionAt(diag.start),
         end: document.positionAt(diag.end),
       },
       message: diag.text,
-      source: '',
+      source: 'baml',
+
     }
     if (diag.is_warning) {
       diagnostic.severity = DiagnosticSeverity.Warning

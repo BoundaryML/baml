@@ -1,4 +1,5 @@
-use std::path::PathBuf;
+use serde::Deserialize;
+use std::{path::PathBuf, sync::Arc};
 
 use baml::{
     internal_baml_diagnostics::{DatamodelError, DatamodelWarning},
@@ -11,12 +12,32 @@ pub struct MiniError {
     end: usize,
     text: String,
     is_warning: bool,
+    source_file: String,
 }
 
-pub(crate) fn run(schema: &str) -> String {
-    let single_elem_vec: Vec<SourceFile> = vec![SourceFile::from(("<unknown>".into(), schema))];
-    let path = PathBuf::from("./unknown");
-    let schema = baml::validate(&path, single_elem_vec);
+#[derive(Deserialize)]
+struct File {
+    path: String,
+    content: String,
+}
+
+#[derive(Deserialize)]
+struct Input {
+    root_path: String,
+    files: Vec<File>,
+}
+
+pub(crate) fn run(input: &str) -> String {
+    let input: Input = serde_json::from_str(input).expect("Failed to parse input");
+
+    let files: Vec<SourceFile> = input
+        .files
+        .into_iter()
+        .map(|file| SourceFile::new_allocated(file.path.into(), Arc::from(file.content)))
+        .collect();
+
+    let path = PathBuf::from(input.root_path);
+    let schema = baml::validate(&path, files);
     let diagnostics = &schema.diagnostics;
 
     let mut mini_errors: Vec<MiniError> = diagnostics
@@ -27,6 +48,7 @@ pub(crate) fn run(schema: &str) -> String {
             end: err.span().end,
             text: err.message().to_string(),
             is_warning: false,
+            source_file: err.span().file.path(),
         })
         .collect();
 
@@ -38,6 +60,7 @@ pub(crate) fn run(schema: &str) -> String {
             end: warn.span().end,
             text: warn.message().to_owned(),
             is_warning: true,
+            source_file: warn.span().file.path(),
         })
         .collect();
 

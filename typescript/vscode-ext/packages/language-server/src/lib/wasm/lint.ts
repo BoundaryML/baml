@@ -6,9 +6,20 @@ export interface LinterError {
   end: number
   text: string
   is_warning: boolean
+  source_file: string
 }
 
-export default function lint(text: string, onError?: (errorMessage: string) => void): LinterError[] {
+export interface LinterSourceFile {
+  path: string;
+  content: string;
+}
+
+export interface LinterInput {
+  root_path: string
+  files: LinterSourceFile[]
+}
+
+export default function lint(input: LinterInput, onError?: (errorMessage: string) => void): LinterError[] {
   console.log('running lint() from baml-schema-wasm')
   try {
     if (process.env.FORCE_PANIC_baml_SCHEMA) {
@@ -17,9 +28,10 @@ export default function lint(text: string, onError?: (errorMessage: string) => v
         languageWasm.debug_panic()
       })
     }
+    console.log("lint input " + JSON.stringify(input, null, 2));
 
-    const result = languageWasm.lint(text)
-    console.log("lint result", JSON.stringify(result, null, 2));
+    const result = languageWasm.lint(JSON.stringify(input));
+    console.log("lint result " + JSON.stringify(result, null, 2));
 
     return JSON.parse(result) as LinterError[]
   } catch (e) {

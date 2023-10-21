@@ -5,7 +5,7 @@ import { convertToTextDocument, gatherFiles } from "./fileUtils";
 export class BamlDirCache {
   private readonly cache: Map<string, FileCache> = new Map();
 
-  private getBamlDir(textDocument: TextDocument) {
+  public getBamlDir(textDocument: TextDocument) {
     let currentPath = textDocument.uri;
     let parentDir: string | null = null;
     while (currentPath !== path.parse(currentPath).root) {
@@ -70,7 +70,8 @@ export class BamlDirCache {
   }
 }
 
-class FileCache {
+export class FileCache {
+  // document uri to the text doc
   private readonly cache: Map<string, TextDocument> = new Map();
   constructor() { }
 
@@ -84,5 +85,9 @@ class FileCache {
 
   public getDocuments() {
     return Array.from(this.cache.values() ?? []);
+  }
+
+  public getDocument(uri: string) {
+    return this.cache.get(uri);
   }
 }

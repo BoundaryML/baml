@@ -176,9 +176,17 @@ module.exports.__wbg_setmessage_20c12941eb9d34d6 = function(arg0, arg1) {
     global.PRISMA_WASM_PANIC_REGISTRY.set_message(getStringFromWasm0(arg0, arg1));
 };
 
+module.exports.__wbg_log_a5902a3973808db6 = function(arg0, arg1) {
+    console.log(getStringFromWasm0(arg0, arg1));
+};
+
 module.exports.__wbindgen_error_new = function(arg0, arg1) {
     const ret = new Error(getStringFromWasm0(arg0, arg1));
     return addHeapObject(ret);
+};
+
+module.exports.__wbindgen_throw = function(arg0, arg1) {
+    throw new Error(getStringFromWasm0(arg0, arg1));
 };
 
 const path = require('path').join(__dirname, 'baml_schema_build_bg.wasm');

@@ -9,7 +9,12 @@
       "dependsOn": ["^watch"],
       "outputs": ["dist/**"]
     },
-    "@gloo-ai/baml-language-server": {
+    "@gloo-ai/baml-schema-wasm#build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"],
+      "cache": false
+    },
+    "@gloo-ai/baml-language-server#build": {
       "dependsOn": ["@gloo-ai/baml-schema-wasm#build"],
       "outputs": ["dist/**"]
     },
