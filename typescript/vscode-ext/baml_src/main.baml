@@ -7,10 +7,10 @@ enum Sentiment {
 enum Sentiment2 {  
   // comment
   ANGRY @alias("angry")
-  ANGRY
-}   
 
-enum BadEnum {  
-  SAD
+}   
+ 
+enu BadEnum {   
+  SAD 
   ANGRY
 } 

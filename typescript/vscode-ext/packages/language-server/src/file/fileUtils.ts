@@ -39,14 +39,14 @@ export function gatherFiles(dir: string, fileList: string[] = []): string[] {
     }
   });
 
-  return fileList;
+  return fileList.map((filePath) => URI.file(filePath).toString());
 }
 
 
 export function convertToTextDocument(filePath: string): TextDocument {
-  const fileContent = fs.readFileSync(filePath, 'utf-8');
+  const fileContent = fs.readFileSync(URI.parse(filePath).fsPath, 'utf-8');
   return TextDocument.create(
-    URI.file(filePath).toString(),
+    filePath.toString(),
     'plaintext',
     1,
     fileContent

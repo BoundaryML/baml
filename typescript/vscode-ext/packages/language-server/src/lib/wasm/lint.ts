@@ -28,10 +28,10 @@ export default function lint(input: LinterInput, onError?: (errorMessage: string
         languageWasm.debug_panic()
       })
     }
-    console.log("lint input " + JSON.stringify(input, null, 2));
+    // console.log("lint input " + JSON.stringify(input, null, 2));
 
     const result = languageWasm.lint(JSON.stringify(input));
-    console.log("lint result " + JSON.stringify(result, null, 2));
+    // console.log("lint result " + JSON.stringify(result, null, 2));
 
     return JSON.parse(result) as LinterError[]
   } catch (e) {

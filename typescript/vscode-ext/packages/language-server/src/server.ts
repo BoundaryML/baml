@@ -132,16 +132,20 @@ export function startServer(options?: LSOptions): void {
   })
 
   documents.onDidOpen((e) => {
-
-    console.log("opened doc " + e.document.uri);
+    // TODO: revalidate if something changed
+    bamlCache.refreshDirectory(e.document);
     bamlCache.addDocument(e.document);
   });
 
   // Only keep settings for open documents
   documents.onDidClose((e) => {
-    bamlCache.removeDocument(e.document);
+    bamlCache.refreshDirectory(e.document);
+    // Revalidate all open files since this one may have been deleted.
+    // we could be smarter and only do this if the doc was deleted, not just closed.
+    documents.all().forEach(validateTextDocument)
     documentSettings.delete(e.document.uri)
   })
+
 
   // function getDocumentSettings(resource: string): Thenable<LSSettings> {
   //   if (!hasConfigurationCapability) {
@@ -188,7 +192,7 @@ export function startServer(options?: LSOptions): void {
           }
         }),
       }
-      const diagnostics: Diagnostic[] = MessageHandler.handleDiagnosticsRequest(textDocument, linterInput, showErrorToast)
+      const diagnostics: Diagnostic[] = MessageHandler.handleDiagnosticsRequest(documents, linterInput, showErrorToast)
       void connection.sendDiagnostics({ uri: textDocument.uri, diagnostics })
     } catch (e: any) {
       if (e instanceof Error) {
@@ -198,7 +202,6 @@ export function startServer(options?: LSOptions): void {
   }
 
   documents.onDidChangeContent((change: { document: TextDocument }) => {
-
     validateTextDocument(change.document)
   })
 
@@ -227,14 +230,6 @@ export function startServer(options?: LSOptions): void {
     return MessageHandler.handleCompletionResolveRequest(completionItem)
   })
 
-  // Unused now
-  // TODO remove or experiment new file watcher
-  connection.onDidChangeWatchedFiles(() => {
-    // Monitored files have changed in VS Code
-    connection.console.log(`Types have changed. Sending request to restart TS Language Server.`)
-    // Restart TS Language Server
-    void connection.sendNotification('baml/didChangeWatchedFiles', {})
-  })
 
 
   connection.onHover((params: HoverParams) => {

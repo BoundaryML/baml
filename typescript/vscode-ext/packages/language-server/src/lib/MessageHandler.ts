@@ -17,6 +17,7 @@ import {
   DocumentSymbol,
   SymbolKind,
   LocationLink,
+  TextDocuments,
 } from 'vscode-languageserver'
 import type { TextDocument } from 'vscode-languageserver-textdocument'
 import { fullDocumentRange } from './ast/findAtPosition'
@@ -54,11 +55,10 @@ import { FileCache } from '../file/fileCache'
 // } from './ast'
 
 export function handleDiagnosticsRequest(
-  document: TextDocument,
+  documents: TextDocuments<TextDocument>,
   linterInput: LinterInput,
   onError?: (errorMessage: string) => void,
 ): Diagnostic[] {
-
 
   const res = lint(linterInput, (errorMessage: string) => {
     if (onError) {
@@ -66,44 +66,53 @@ export function handleDiagnosticsRequest(
     }
   })
 
-  const diagnostics: Diagnostic[] = []
-  if (
-    res.some(
-      (diagnostic) =>
-        diagnostic.text === "Field declarations don't require a `:`." ||
-        diagnostic.text === 'Model declarations have to be indicated with the `model` keyword.',
-    )
-  ) {
-    if (onError) {
-      onError(
-        "Unexpected error.",
+  let allDiagnostics: Diagnostic[] = []
+
+  documents.all().forEach(document => {
+    const documentDiagnostics: Diagnostic[] = []
+
+    if (
+      res.some(
+        (diagnostic) =>
+          diagnostic.text === "Field declarations don't require a `:`." ||
+          diagnostic.text === 'Model declarations have to be indicated with the `model` keyword.',
       )
+    ) {
+      if (onError) {
+        onError("Unexpected error.")
+      }
     }
-  }
 
-  const documentDiagnostics = res.filter((diag) => diag.source_file === document.uri)
+    try {
+      const filteredDiagnostics = res.filter((diag) => diag.source_file === document.uri)
 
-  for (const diag of documentDiagnostics) {
-    const diagnostic: Diagnostic = {
-      range: {
-        start: document.positionAt(diag.start),
-        end: document.positionAt(diag.end),
-      },
-      message: diag.text,
-      source: 'baml',
-
+      for (const diag of filteredDiagnostics) {
+        const diagnostic: Diagnostic = {
+          range: {
+            start: document.positionAt(diag.start),
+            end: document.positionAt(diag.end),
+          },
+          message: diag.text,
+          source: 'baml',
+        }
+        if (diag.is_warning) {
+          diagnostic.severity = DiagnosticSeverity.Warning
+        } else {
+          diagnostic.severity = DiagnosticSeverity.Error
+        }
+        documentDiagnostics.push(diagnostic)
+      }
+    } catch (e: any) {
+      if (e instanceof Error) {
+        console.log("Error handling diagnostics" + e.message + " " + e.stack);
+      }
     }
-    if (diag.is_warning) {
-      diagnostic.severity = DiagnosticSeverity.Warning
-    } else {
-      diagnostic.severity = DiagnosticSeverity.Error
-    }
-    diagnostics.push(diagnostic)
-  }
 
-  return diagnostics
+    allDiagnostics = allDiagnostics.concat(documentDiagnostics)
+  })
+
+  return allDiagnostics
 }
-
 /**
  * This handler provides the modification to the document to be formatted.
  */

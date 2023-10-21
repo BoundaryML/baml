@@ -1,10 +1,10 @@
 class Thingy {
    one One
-   two Two
+   two Two 
 } 
+  
 
-
-
+ 
 
 
 

@@ -4,13 +4,13 @@ enum Sentiment {
   HAPPY 
 }
 
-enum Sentiment2 {
+enu Sentiment2 {
   // comment
   ANGRY @alias("angry")
   @meta(describe, "this is a description")
   @meta(keywords, "this is a keyword")
 }
-
+ 
 // Interface blocks 
 class Interface1 {
   prop String

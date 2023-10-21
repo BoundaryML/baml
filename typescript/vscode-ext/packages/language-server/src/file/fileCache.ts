@@ -1,67 +1,80 @@
 import path from "path";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { convertToTextDocument, gatherFiles } from "./fileUtils";
+const BAML_SRC = 'baml_src';
 
 export class BamlDirCache {
   private readonly cache: Map<string, FileCache> = new Map();
 
-  public getBamlDir(textDocument: TextDocument) {
+  public getBamlDir(textDocument: TextDocument): string | null {
     let currentPath = textDocument.uri;
-    let parentDir: string | null = null;
     while (currentPath !== path.parse(currentPath).root) {
       currentPath = path.dirname(currentPath);
-      if (path.basename(currentPath) === 'baml_src') {
-        parentDir = currentPath;
-        break;
+      if (path.basename(currentPath) === BAML_SRC) {
+        return currentPath;
       }
     }
-
-    return parentDir;
-
+    console.error("No baml dir found");
+    return null;
   }
 
-  private getFileCache(textDocument: TextDocument) {
+  private getFileCache(textDocument: TextDocument): FileCache | null {
     const key = this.getBamlDir(textDocument);
-    if (!key) {
-      console.error("No baml dir found")
-      return null;
+    return this.cache.get(key ?? "") ?? null;
+  }
+  private createFileCacheIfNotExist(textDocument: TextDocument): FileCache | null {
+    const key = this.getBamlDir(textDocument);
+    let fileCache = this.getFileCache(textDocument);
+    if (!fileCache && key) {
+      console.log(`Creating file cache for ${key}`);
+      fileCache = new FileCache();
+      const allFiles = gatherFiles(key);
+      allFiles.forEach((filePath) => {
+        const doc = convertToTextDocument(filePath);
+        fileCache?.addFile(doc);
+      });
+      this.cache.set(key, fileCache);
+    } else if (!key) {
+      console.error("Could not find parent directory");
     }
-    const fileCache = this.cache.get(key);
     return fileCache;
   }
 
-  public addDocument(textDocument: TextDocument) {
+  public refreshDirectory(textDocument: TextDocument): void {
     try {
-      let fileCache = this.getFileCache(textDocument);
-      if (!fileCache) {
-        console.log("Creating file cache for " + this.getBamlDir(textDocument))
-        fileCache = new FileCache();
-        const parentDir = this.getBamlDir(textDocument);
-        if (parentDir) {
-          const allFiles = gatherFiles(parentDir);
-          allFiles.forEach((filePath) => {
-            const doc = convertToTextDocument(filePath);
-            fileCache?.addFile(doc);
-          });
-        } else {
-          console.error("Could not find parent directory");
-          return;
-        }
-        this.cache.set(parentDir, fileCache);
+      const fileCache = this.createFileCacheIfNotExist(textDocument);
+      const parentDir = this.getBamlDir(textDocument);
+      if (fileCache && parentDir) {
+        const allFiles = gatherFiles(parentDir);
+        fileCache.getDocuments().forEach((doc) => {
+
+          if (!allFiles.includes(doc.uri)) {
+            fileCache.removeFile(doc);
+          }
+        });
+      } else {
+        console.error("Could not find parent directory");
       }
-      fileCache?.addFile(textDocument);
     } catch (e: any) {
       if (e instanceof Error) {
-        console.log("Error adding doc" + e.message + " " + e.stack);
+        console.log(`Error refreshing directory: ${e.message} ${e.stack}`);
       }
     }
   }
 
-  public removeDocument(textDocument: TextDocument) {
-    const fileCache = this.getFileCache(textDocument)
-    if (fileCache) {
-      fileCache.removeFile(textDocument);
+  public addDocument(textDocument: TextDocument): void {
+    try {
+      const fileCache = this.createFileCacheIfNotExist(textDocument);
+      fileCache?.addFile(textDocument);
+    } catch (e: any) {
+      if (e instanceof Error) {
+        console.log(`Error adding doc: ${e.message} ${e.stack}`);
+      }
     }
+  }
+  public removeDocument(textDocument: TextDocument): void {
+    const fileCache = this.getFileCache(textDocument);
+    fileCache?.removeFile(textDocument);
   }
 
   public getDocuments(textDocument: TextDocument) {
