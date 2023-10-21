@@ -8,9 +8,9 @@ enum Sentiment2 {
   // comment
   ANGRY @alias("angry")
 
-}   
+}    
  
-enu BadEnum {   
+enum BadEnum {   
   SAD 
   ANGRY
 } 

@@ -53,20 +53,21 @@ import { FileCache } from '../file/fileCache'
 //   getDocumentationForBlock,
 //   getDatamodelBlock,
 // } from './ast'
-
 export function handleDiagnosticsRequest(
   documents: TextDocuments<TextDocument>,
   linterInput: LinterInput,
   onError?: (errorMessage: string) => void,
-): Diagnostic[] {
+): Map<string, Diagnostic[]> {
 
+  // console.log("linterInput " + JSON.stringify(linterInput, null, 2));
+  // console.log("docs uris\n" + documents.all().map(doc => doc.uri + " \n"));
   const res = lint(linterInput, (errorMessage: string) => {
     if (onError) {
       onError(errorMessage)
     }
   })
 
-  let allDiagnostics: Diagnostic[] = []
+  let allDiagnostics: Map<string, Diagnostic[]> = new Map()
 
   documents.all().forEach(document => {
     const documentDiagnostics: Diagnostic[] = []
@@ -85,6 +86,8 @@ export function handleDiagnosticsRequest(
 
     try {
       const filteredDiagnostics = res.filter((diag) => diag.source_file === document.uri)
+      // console.log(`document uri ${document.uri}`);
+      // console.log(`filteredDiagnostics ` + filteredDiagnostics.length)
 
       for (const diag of filteredDiagnostics) {
         const diagnostic: Diagnostic = {
@@ -106,9 +109,10 @@ export function handleDiagnosticsRequest(
       if (e instanceof Error) {
         console.log("Error handling diagnostics" + e.message + " " + e.stack);
       }
+      onError?.(e.message)
     }
 
-    allDiagnostics = allDiagnostics.concat(documentDiagnostics)
+    allDiagnostics.set(document.uri, documentDiagnostics)
   })
 
   return allDiagnostics

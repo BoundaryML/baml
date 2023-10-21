@@ -79,23 +79,24 @@ export function startServer(options?: LSOptions): void {
 
     const result: InitializeResult = {
       capabilities: {
-        definitionProvider: true,
-        documentFormattingProvider: true,
-        completionProvider: {
-          resolveProvider: true,
-          triggerCharacters: ['@', '"', '.'],
-        },
-        hoverProvider: true,
-        renameProvider: true,
-        documentSymbolProvider: true,
+        definitionProvider: false,
+
+        documentFormattingProvider: false,
+        // completionProvider: {
+        //   resolveProvider: false,
+        //   triggerCharacters: ['@', '"', '.'],
+        // },
+        hoverProvider: false,
+        renameProvider: false,
+        documentSymbolProvider: false,
       },
     }
 
-    if (hasCodeActionLiteralsCapability) {
-      result.capabilities.codeActionProvider = {
-        codeActionKinds: [CodeActionKind.QuickFix],
-      }
-    }
+    // if (hasCodeActionLiteralsCapability) {
+    //   result.capabilities.codeActionProvider = {
+    //     codeActionKinds: [CodeActionKind.QuickFix],
+    //   }
+    // }
 
     return result
   })
@@ -132,18 +133,34 @@ export function startServer(options?: LSOptions): void {
   })
 
   documents.onDidOpen((e) => {
-    // TODO: revalidate if something changed
-    bamlCache.refreshDirectory(e.document);
-    bamlCache.addDocument(e.document);
+    try {
+      // TODO: revalidate if something changed
+      bamlCache.refreshDirectory(e.document);
+      bamlCache.addDocument(e.document);
+    } catch (e: any) {
+      if (e instanceof Error) {
+        console.log("Error opening doc" + e.message + " " + e.stack);
+      } else {
+        console.log("Error opening doc" + e);
+      }
+    }
   });
 
   // Only keep settings for open documents
   documents.onDidClose((e) => {
-    bamlCache.refreshDirectory(e.document);
-    // Revalidate all open files since this one may have been deleted.
-    // we could be smarter and only do this if the doc was deleted, not just closed.
-    documents.all().forEach(validateTextDocument)
-    documentSettings.delete(e.document.uri)
+    try {
+      bamlCache.refreshDirectory(e.document);
+      // Revalidate all open files since this one may have been deleted.
+      // we could be smarter and only do this if the doc was deleted, not just closed.
+      documents.all().forEach(validateTextDocument)
+      documentSettings.delete(e.document.uri)
+    } catch (e: any) {
+      if (e instanceof Error) {
+        console.log("Error closing doc" + e.message + " " + e.stack);
+      } else {
+        console.log("Error closing doc" + e);
+      }
+    }
   })
 
 
@@ -171,9 +188,6 @@ export function startServer(options?: LSOptions): void {
     connection.window.showErrorMessage(errorMessage)
   }
 
-  function throwError(errorMessage: string): void {
-    throw new Error(errorMessage)
-  }
 
   function validateTextDocument(textDocument: TextDocument) {
     try {
@@ -192,11 +206,15 @@ export function startServer(options?: LSOptions): void {
           }
         }),
       }
-      const diagnostics: Diagnostic[] = MessageHandler.handleDiagnosticsRequest(documents, linterInput, showErrorToast)
-      void connection.sendDiagnostics({ uri: textDocument.uri, diagnostics })
+      const diagnostics = MessageHandler.handleDiagnosticsRequest(documents, linterInput, showErrorToast);
+      for (const [uri, diagnosticList] of diagnostics) {
+        void connection.sendDiagnostics({ uri, diagnostics: diagnosticList });
+      }
     } catch (e: any) {
       if (e instanceof Error) {
         console.log("Error validating doc" + e.message + " " + e.stack);
+      } else {
+        console.log("Error validating doc" + e);
       }
     }
   }
@@ -218,54 +236,55 @@ export function startServer(options?: LSOptions): void {
   //   }
   // })
 
-  connection.onCompletion((params: CompletionParams) => {
-    const doc = getDocument(params.textDocument.uri)
-    if (doc) {
-      return MessageHandler.handleCompletionRequest(params, doc, showErrorToast)
-    }
-  })
+  // connection.onCompletion((params: CompletionParams) => {
+  //   const doc = getDocument(params.textDocument.uri)
+  //   if (doc) {
+  //     return MessageHandler.handleCompletionRequest(params, doc, showErrorToast)
+  //   }
+  // })
 
   // This handler resolves additional information for the item selected in the completion list.
-  connection.onCompletionResolve((completionItem: CompletionItem) => {
-    return MessageHandler.handleCompletionResolveRequest(completionItem)
-  })
+  // connection.onCompletionResolve((completionItem: CompletionItem) => {
+  //   return MessageHandler.handleCompletionResolveRequest(completionItem)
+  // })
 
 
 
-  connection.onHover((params: HoverParams) => {
-    const doc = getDocument(params.textDocument.uri)
-    if (doc) {
-      return MessageHandler.handleHoverRequest(doc, params)
-    }
-  })
+  // connection.onHover((params: HoverParams) => {
+  //   const doc = getDocument(params.textDocument.uri)
+  //   if (doc) {
+  //     return MessageHandler.handleHoverRequest(doc, params)
+  //   }
+  // })
 
-  connection.onDocumentFormatting((params: DocumentFormattingParams) => {
-    const doc = getDocument(params.textDocument.uri)
-    if (doc) {
-      return MessageHandler.handleDocumentFormatting(params, doc, showErrorToast)
-    }
-  })
+  // connection.onDocumentFormatting((params: DocumentFormattingParams) => {
+  //   const doc = getDocument(params.textDocument.uri)
+  //   if (doc) {
+  //     return MessageHandler.handleDocumentFormatting(params, doc, showErrorToast)
+  //   }
+  // })
 
-  connection.onCodeAction((params: CodeActionParams) => {
-    const doc = getDocument(params.textDocument.uri)
-    if (doc) {
-      return MessageHandler.handleCodeActions(params, doc, showErrorToast)
-    }
-  })
+  // connection.onCodeAction((params: CodeActionParams) => {
+  //   const doc = getDocument(params.textDocument.uri)
+  //   if (doc) {
+  //     return MessageHandler.handleCodeActions(params, doc, showErrorToast)
+  //   }
+  // })
 
-  connection.onRenameRequest((params: RenameParams) => {
-    const doc = getDocument(params.textDocument.uri)
-    if (doc) {
-      return MessageHandler.handleRenameRequest(params, doc)
-    }
-  })
+  // connection.onRenameRequest((params: RenameParams) => {
+  //   const doc = getDocument(params.textDocument.uri)
+  //   if (doc) {
+  //     return MessageHandler.handleRenameRequest(params, doc)
+  //   }
+  // })
 
-  connection.onDocumentSymbol((params: DocumentSymbolParams) => {
-    const doc = getDocument(params.textDocument.uri)
-    if (doc) {
-      return MessageHandler.handleDocumentSymbol(params, doc)
-    }
-  })
+  // connection.onDocumentSymbol((params: DocumentSymbolParams) => {
+  //   return [];
+  //   // const doc = getDocument(params.textDocument.uri)
+  //   // if (doc) {
+  //   //   return MessageHandler.handleDocumentSymbol(params, doc)
+  //   // }
+  // })
 
   console.log('Server-side -- listening to connection')
   // Make the text document manager listen on the connection
