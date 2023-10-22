@@ -11,7 +11,7 @@ CLS = typing.TypeVar("CLS", bound=type)
 {{> interface}}
 
 class BAML{{name}}Impl:
-    {{> func_def func_name="run" args=this.args return=this.return}}
+    {{> func_def func_name="run" unnamed_args=this.unnamed_args args=this.args return=this.return}}
         ...
 
 class BAML{{name}}:

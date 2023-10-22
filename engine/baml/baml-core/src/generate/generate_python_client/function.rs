@@ -1,11 +1,13 @@
 use handlebars::{handlebars_helper, JsonRender};
-use internal_baml_parser_database::walkers::Walker;
+use internal_baml_parser_database::walkers::{ArgWalker, Walker};
 use internal_baml_schema_ast::ast::{
     ClassId, FieldArity, FieldId, FieldType, FunctionArg, FunctionArgs, FunctionId, Identifier,
     NamedFunctionArgList, TypeValue, WithDocumentation, WithName,
 };
 use log::info;
 use serde_json::json;
+
+use crate::generate::generate_python_client::file::clean_file_name;
 
 use super::{
     file::File,
@@ -14,21 +16,24 @@ use super::{
     FileCollector,
 };
 
-impl JsonHelper for FunctionArgs {
+impl JsonHelper for ArgWalker<'_> {
     fn json(&self, f: &mut File) -> serde_json::Value {
-        match self {
-            FunctionArgs::Named(arg_list) => json!({
-                "named_args": arg_list.args.iter().map(|(id, arg)| {
-                    json!({
-                        "name": id.to_py_string(f),
-                        "type": arg.to_py_string(f),
-                    })
-                }).collect::<Vec<_>>(),
+        let _ = self
+            .required_classes()
+            .map(|cls| f.add_import(&format!("..types.classes.{}", cls.file_name()), cls.name()))
+            .collect::<Vec<_>>();
+        let _ = self
+            .required_enums()
+            .map(|enm| f.add_import(&format!("..types.enums.{}", enm.file_name()), enm.name()))
+            .collect::<Vec<_>>();
+
+        match self.ast_arg() {
+            (Some(idn), arg) => json!({
+                "name": idn.to_py_string(f),
+                "type": arg.to_py_string(f),
             }),
-            FunctionArgs::Unnamed(arg) => json!({
-                "unnamed_arg": json!({
-                    "type": arg.to_py_string(f),
-                })
+            (None, arg) => json!({
+                "type": arg.to_py_string(f),
             }),
         }
     }
@@ -38,8 +43,9 @@ impl JsonHelper for Walker<'_, FunctionId> {
     fn json(&self, f: &mut File) -> serde_json::Value {
         json!({
             "name": self.ast_function().name(),
-            "args": self.ast_function().input().json(f),
-            "return": self.ast_function().output().json(f),
+            "unnamed_args": self.is_positional_args(),
+            "args": self.walk_input_args().map(|a| a.json(f)).collect::<Vec<_>>(),
+            "return": self.walk_output_args().map(|a| a.json(f)).collect::<Vec<_>>(),
             "doc_string": self.ast_function().documentation(),
             "impls": vec!["impl0", "impl1"],
         })
@@ -47,18 +53,37 @@ impl JsonHelper for Walker<'_, FunctionId> {
 }
 
 impl WithWritePythonString for Walker<'_, FunctionId> {
+    fn file_name(&self) -> String {
+        format!("fx_{}", clean_file_name(self.name()))
+    }
+
     fn write_py_file(&self, fc: &mut FileCollector) {
-        fc.start_py_file("functions", self.name());
+        fc.start_py_file("functions", "__init__");
+        fc.complete_file();
+
+        fc.start_py_file("functions", self.file_name());
         let json = self.json(fc.last_file());
         render_template(super::template::HSTemplate::Function, fc.last_file(), json);
         fc.complete_file();
 
-        fc.start_py_file("functions", format!("{}.pyi", self.name()));
+        fc.start_py_file("functions", format!("{}.pyi", self.file_name()));
         let json = self.json(fc.last_file());
         render_template(
             super::template::HSTemplate::FunctionPYI,
             fc.last_file(),
             json,
+        );
+        fc.complete_file();
+
+        fc.start_py_file(".", "test_fixtures");
+        fc.last_file()
+            .add_import(".baml_types", &format!("I{}", self.name()));
+        render_template(
+            super::template::HSTemplate::FunctionTestFixture,
+            fc.last_file(),
+            json!({
+                "name": self.name(),
+            }),
         );
         fc.complete_file();
     }

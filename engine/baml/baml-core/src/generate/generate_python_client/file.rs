@@ -15,16 +15,29 @@ pub(super) struct FileCollector {
 }
 
 impl FileCollector {
+    pub fn start_export_file<'a>(&'a mut self, path: impl AsRef<str>, name: impl AsRef<str>) {
+        self.start_py_file_impl(path, name, true);
+    }
     pub fn start_py_file<'a>(&'a mut self, path: impl AsRef<str>, name: impl AsRef<str>) {
+        self.start_py_file_impl(path, name, false);
+    }
+
+    fn start_py_file_impl<'a>(
+        &'a mut self,
+        path: impl AsRef<str>,
+        name: impl AsRef<str>,
+        is_export: bool,
+    ) {
         let cleaned_path = clean_file_name(&path);
         let cleaned_name = clean_file_name(&name);
         // Add .py to the end of the name if another extension is not already present
-        let cleaned_name = if cleaned_name.ends_with(".py") || cleaned_name.ends_with(".pyi") {
+        let cleaned_name = if cleaned_name.contains('.') {
             cleaned_name
         } else {
             format!("{}.py", cleaned_name)
         };
-        let key = PathBuf::from(cleaned_path).join(cleaned_name);
+
+        let key = PathBuf::from(&cleaned_path).join(&cleaned_name);
 
         if self.last_file.is_some() {
             panic!(
@@ -34,12 +47,15 @@ impl FileCollector {
         }
 
         self.last_file = Some(key.clone());
+        let is_export = is_export || cleaned_name == "__init__.py";
 
-        if self.files.contains_key(&key) {
-            panic!("Rewriting file: {:?}", key);
+        // Create a new file if its not already present.
+        if !self.files.contains_key(&key) {
+            self.files.insert(
+                key.clone(),
+                File::new(&cleaned_path, &cleaned_name, is_export),
+            );
         }
-
-        self.files.insert(key.clone(), File::new(path, name));
     }
 
     pub fn complete_file<'a>(&'a mut self) {
@@ -97,9 +113,10 @@ pub(super) struct File {
     name: String,
     content: String,
     imports: HashMap<String, HashSet<String>>,
+    is_export: bool,
 }
 
-fn clean_file_name(name: impl AsRef<str>) -> String {
+pub(super) fn clean_file_name(name: impl AsRef<str>) -> String {
     name.as_ref()
         .to_ascii_lowercase()
         .chars()
@@ -114,12 +131,13 @@ fn clean_file_name(name: impl AsRef<str>) -> String {
 }
 
 impl File {
-    pub(super) fn new(path: impl AsRef<str>, name: impl AsRef<str>) -> Self {
+    pub(super) fn new(path: impl AsRef<str>, name: impl AsRef<str>, is_export: bool) -> Self {
         Self {
-            path: clean_file_name(path).into(),
-            name: format!("{}.py", clean_file_name(name)),
+            path: path.as_ref().into(),
+            name: name.as_ref().into(),
             content: String::new(),
             imports: HashMap::new(),
+            is_export,
         }
     }
 
@@ -188,27 +206,56 @@ impl File {
     }
 
     pub(super) fn content(&self) -> String {
-        let mut buffer = self
-            .imports
-            .iter()
-            .fold(String::new(), |mut buffer, (module, names)| {
-                buffer.push_str(&format!("from {} import ", module));
-                buffer.push_str(
-                    &names
-                        .iter()
-                        .fold(String::new(), |mut buffer, name| {
-                            buffer.push_str(name);
-                            buffer.push_str(", ");
-                            buffer
-                        })
-                        .trim_end_matches(", "),
-                );
-                buffer.push('\n');
-                buffer
-            });
+        let mut modules = self.imports.keys().collect::<Vec<_>>();
+        modules.sort();
+
+        let mut exports = vec![];
+
+        let mut buffer = modules.iter().fold(String::new(), |mut buffer, module| {
+            buffer.push_str(&format!("from {} import ", module));
+            let mut imports = self
+                .imports
+                .get(*module)
+                .unwrap()
+                .into_iter()
+                .collect::<Vec<_>>();
+            imports.sort();
+            buffer.push_str(
+                &imports
+                    .iter()
+                    .fold(String::new(), |mut buffer, name| {
+                        buffer.push_str(name);
+                        buffer.push_str(", ");
+                        buffer
+                    })
+                    .trim_end_matches(", "),
+            );
+
+            if module.starts_with(".") && self.is_export {
+                exports.extend(imports);
+            }
+
+            buffer.push('\n');
+            buffer
+        });
 
         buffer.push_str("\n\n");
         buffer.push_str(&self.content);
+
+        if !exports.is_empty() {
+            buffer.push_str("\n\n__all__ = [\n");
+            buffer.push_str(
+                &exports
+                    .iter()
+                    .fold(String::new(), |mut buffer, name| {
+                        buffer.push_str(&format!("    '{}',\n", name));
+                        buffer
+                    })
+                    .trim_end_matches(",\n"),
+            );
+            buffer.push_str("\n]\n");
+        }
+
         buffer
     }
 }

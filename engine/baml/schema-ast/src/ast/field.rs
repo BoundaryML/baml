@@ -137,6 +137,7 @@ pub enum TypeValue {
     Float,
     Boolean,
     Char,
+    Null,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -164,6 +165,29 @@ impl FieldType {
             FieldType::Union(_, _) => None,
             FieldType::PrimitiveType(_, _) => None,
             FieldType::Supported(_) => None,
+        }
+    }
+
+    pub fn is_optional(&self) -> bool {
+        match self {
+            FieldType::Union(types, _) => types
+                .iter()
+                .any(|(arity, t)| arity.is_optional() || t.is_optional()),
+            FieldType::PrimitiveType(t, _) => t == &TypeValue::Null,
+            FieldType::Supported(_) => false,
+            FieldType::Unsupported(_, _) => false,
+        }
+    }
+
+    pub fn flat_idns(&self) -> Vec<&Identifier> {
+        match self {
+            FieldType::Union(types, _) => types
+                .iter()
+                .flat_map(|(_, t)| t.flat_idns())
+                .collect::<Vec<_>>(),
+            FieldType::PrimitiveType(_, _) => vec![],
+            FieldType::Supported(ident) => vec![ident],
+            FieldType::Unsupported(_, _) => vec![],
         }
     }
 }

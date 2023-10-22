@@ -11,9 +11,12 @@ handlebars_helper!(join: |{sep:str=", "}, *args|
 #[derive(Debug)]
 pub(super) enum HSTemplate {
     Function,
+    FunctionTestFixture,
     FunctionPYI,
     Enum,
     Class,
+    Client,
+    BAMLClient,
 }
 
 fn init_hs() -> handlebars::Handlebars<'static> {
@@ -47,6 +50,15 @@ fn use_partial(
     f: &mut File,
 ) -> String {
     match template {
+        HSTemplate::BAMLClient => {
+            register_partial_file!(reg, "export", "generated_baml_client");
+            String::from("generated_baml_client")
+        }
+        HSTemplate::Client => {
+            register_partial_file!(reg, "types", "client");
+            f.add_import("..._impl.provider", "llm_provider_factory");
+            String::from("client")
+        }
         HSTemplate::Class => {
             register_partial_file!(reg, "types", "class");
             f.add_import("pydantic", "BaseModel");
@@ -70,6 +82,12 @@ fn use_partial(
             register_partial_file!(reg, "functions", "function_py");
             f.add_import("..._impl.functions", "BaseBAMLFunction");
             String::from("function_py")
+        }
+        HSTemplate::FunctionTestFixture => {
+            register_partial_file!(reg, "functions", "fixture");
+            f.add_import("_pytest.fixtures", "FixtureRequest");
+            f.add_import(".generated_baml_client", "baml");
+            String::from("fixture")
         }
         HSTemplate::FunctionPYI => {
             register_partial_file!(reg, "functions", "arg_list");

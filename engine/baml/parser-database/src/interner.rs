@@ -5,6 +5,7 @@
 //! they were interned with.
 
 use indexmap::IndexSet;
+use log::info;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub(crate) struct StringId(usize);

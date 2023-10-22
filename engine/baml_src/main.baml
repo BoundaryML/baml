@@ -1,6 +1,6 @@
 generator Default {
   language python
-  output ../generate
+  output /Users/vbv/repos/gloo-lang/clients/python/baml_client/generated
   switches {
     cheap true
     FooBar:cheap false

@@ -1,8 +1,11 @@
+"""
+This module provides the implementation for BAML functions.
+It includes classes and helper functions to register, run and test BAML functions.
+"""
+
 import inspect
 import types
 import typing
-
-from typeguard import typechecked
 
 import pytest
 from _pytest.fixtures import FixtureRequest
@@ -12,6 +15,17 @@ T = typing.TypeVar("T")
 
 
 def __parse_arg(arg: typing.Any, t: typing.Type[T], _default: T) -> T:
+    """
+    Parses the argument based on the provided type.
+
+    Args:
+        arg: The argument to parse.
+        t: The type to parse the argument into.
+        _default: The default value to return if parsing fails.
+
+    Returns:
+        The parsed argument or the default value if parsing fails.
+    """
     if arg is None:
         return _default
     if isinstance(arg, t):
@@ -26,6 +40,10 @@ RET = typing.TypeVar("RET", covariant=True)
 
 
 class CB(typing.Generic[RET], typing.Protocol):
+    """
+    Protocol for a callable object.
+    """
+
     def __call__(
         self, *args: typing.Any, **kwargs: typing.Any
     ) -> typing.Awaitable[RET]:
@@ -33,27 +51,83 @@ class CB(typing.Generic[RET], typing.Protocol):
 
 
 class BAMLImpl(typing.Generic[RET]):
+    """
+    Class representing a BAML implementation.
+    """
+
     __cb: CB[RET]
 
     def __init__(self, cb: CB[RET]) -> None:
+        """
+        Initializes a BAML implementation.
+
+        Args:
+            cb: The callable object to use for the implementation.
+        """
         self.__cb = cb
 
     async def run(self, **kwargs: typing.Any) -> RET:
+        """
+        Runs the BAML implementation.
+
+        Args:
+            **kwargs: The arguments to pass to the callable object.
+
+        Returns:
+            The result of the callable object.
+        """
         return await self.__cb(**kwargs)
 
 
 class BaseBAMLFunction(typing.Generic[RET]):
+    """
+    Base class for a BAML function.
+    """
+
     __impls: typing.Dict[str, BAMLImpl[RET]]
 
-    def __init__(self, name: str, interface: typing.Any) -> None:
+    def __init__(
+        self, name: str, interface: typing.Any, impl_names: typing.List[str]
+    ) -> None:
+        """
+        Initializes a BAML function.
+
+        Args:
+            name: The name of the function.
+            interface: The interface for the function.
+        """
+        self.__impl_names = impl_names
         self.__impls = {}
         self.__name = name
         self.__interface = interface
 
+    def debug_validate(self) -> None:
+        """
+        Validates the BAML function.
+        """
+        missing_impls = set(self.__impl_names) - set(self.__impls.keys())
+        assert (
+            len(missing_impls) == 0
+        ), f"Some impls not registered: {self.__name}:{' '.join(missing_impls)}"
+        for impl in self.__impls.values():
+            assert isinstance(impl, BAMLImpl), f"Invalid impl: {impl}"
+
     def register_impl(self, name: str) -> typing.Callable[[CB[RET]], None]:
+        """
+        Registers an implementation for the BAML function.
+
+        Args:
+            name: The name of the implementation.
+
+        Returns:
+            A decorator to use for the implementation function.
+        """
         assert (
             name not in self.__impls
         ), f"Already called: register_impl for {self.__name}:{name}"
+        assert (
+            name in self.__impl_names
+        ), f"Unknown impl: {self.__name}:{name}. Valid impl names: {' '.join(self.__impl_names)}"
 
         def decorator(cb: CB[RET]) -> None:
             # Runtime check
@@ -67,6 +141,18 @@ class BaseBAMLFunction(typing.Generic[RET]):
         return decorator
 
     def get_impl(self, name: str) -> BAMLImpl[RET]:
+        """
+        Gets an implementation for the BAML function.
+
+        Args:
+            name: The name of the implementation.
+
+        Returns:
+            The implementation.
+        """
+        assert (
+            name in self.__impl_names
+        ), f"Unknown impl: {self.__name}:{name}. Valid impl names: {' '.join(self.__impl_names)}"
         assert (
             name in self.__impls
         ), f"Never called register_impl for {self.__name}:{name}"
@@ -74,10 +160,22 @@ class BaseBAMLFunction(typing.Generic[RET]):
 
     @property
     def _name(self) -> str:
+        """
+        Gets the name of the BAML function.
+
+        Returns:
+            The name of the function.
+        """
         return self.__name
 
     @property
     def _impls(self) -> typing.Dict[str, BAMLImpl[RET]]:
+        """
+        Gets the implementations for the BAML function.
+
+        Returns:
+            A dictionary of implementations.
+        """
         return self.__impls
 
     def __parametrize_test_methods(
@@ -87,6 +185,13 @@ class BaseBAMLFunction(typing.Generic[RET]):
     ) -> T:
         """
         Applies pytest.mark.parametrize to each test method in the test class.
+
+        Args:
+            test_class: The test class to parametrize.
+            excluded_impls: The implementations to exclude from the test.
+
+        Returns:
+            The parametrized test class.
         """
         selected_impls = filter(
             lambda k: k not in (excluded_impls or []), self.__impls.keys()
@@ -105,9 +210,28 @@ class BaseBAMLFunction(typing.Generic[RET]):
         return test_class
 
     def __test_wrapper(self, impls: typing.Iterable[str]) -> pytest.MarkDecorator:
+        """
+        Creates a pytest.mark.parametrize decorator for the given implementations.
+
+        Args:
+            impls: The implementations to include in the test.
+
+        Returns:
+            A pytest.mark.parametrize decorator.
+        """
         return pytest.mark.parametrize(f"{self._name}TestHandler", impls, indirect=True)
 
     def test(self, *args: typing.Any, **kwargs: typing.Any) -> typing.Any:
+        """
+        Creates a test for the BAML function.
+
+        Args:
+            *args: The arguments for the test.
+            **kwargs: The keyword arguments for the test.
+
+        Returns:
+            The test.
+        """
         if len(args) == 1:
             if len(kwargs) > 0:
                 raise ValueError("To specify parameters, use keyword arguments.")

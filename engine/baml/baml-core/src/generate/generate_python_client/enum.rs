@@ -1,6 +1,7 @@
-use internal_baml_parser_database::walkers::Walker;
-use internal_baml_schema_ast::ast::EnumId;
+use internal_baml_parser_database::walkers::EnumWalker;
 use serde_json::json;
+
+use crate::generate::generate_python_client::file::clean_file_name;
 
 use super::{
     file::{File, FileCollector},
@@ -8,7 +9,7 @@ use super::{
     traits::{JsonHelper, WithWritePythonString},
 };
 
-impl JsonHelper for Walker<'_, EnumId> {
+impl JsonHelper for EnumWalker<'_> {
     fn json(&self, _f: &mut File) -> serde_json::Value {
         json!({
             "name": self.name(),
@@ -17,9 +18,20 @@ impl JsonHelper for Walker<'_, EnumId> {
     }
 }
 
-impl WithWritePythonString for Walker<'_, EnumId> {
+impl WithWritePythonString for EnumWalker<'_> {
+    fn file_name(&self) -> String {
+        format!("enm_{}", clean_file_name(self.name()))
+    }
+
     fn write_py_file<'a>(&'a self, fc: &'a mut FileCollector) {
-        fc.start_py_file("types/enums", self.name());
+        fc.start_py_file("types/enums", "__init__");
+        fc.complete_file();
+        fc.start_py_file("types", "__init__");
+        fc.last_file()
+            .add_import(&format!(".enums.{}", self.file_name()), self.name());
+        fc.complete_file();
+
+        fc.start_py_file("types/enums", self.file_name());
         let json = self.json(fc.last_file());
         render_template(super::template::HSTemplate::Enum, fc.last_file(), json);
         fc.complete_file();

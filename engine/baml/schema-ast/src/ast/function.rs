@@ -1,9 +1,36 @@
-use std::collections::HashMap;
-
 use super::{
     traits::WithAttributes, Attribute, Comment, FieldArity, FieldType, Identifier, Span,
     WithDocumentation, WithIdentifier, WithSpan,
 };
+
+/// An opaque identifier for a value in an AST enum. Use the
+/// `r#enum[enum_value_id]` syntax to resolve the id to an `ast::EnumValue`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct FuncArguementId(pub u32);
+
+impl FuncArguementId {
+    /// Used for range bounds when iterating over BTreeMaps.
+    pub const MIN: FuncArguementId = FuncArguementId(0);
+    /// Used for range bounds when iterating over BTreeMaps.
+    pub const MAX: FuncArguementId = FuncArguementId(u32::MAX);
+}
+
+impl std::ops::Index<FuncArguementId> for NamedFunctionArgList {
+    type Output = (Identifier, FunctionArg);
+
+    fn index(&self, index: FuncArguementId) -> &Self::Output {
+        &self.args[index.0 as usize]
+    }
+}
+
+impl std::ops::Index<FuncArguementId> for FunctionArg {
+    type Output = FunctionArg;
+
+    fn index(&self, index: FuncArguementId) -> &Self::Output {
+        assert_eq!(index, FuncArguementId(0), "FunctionArg only has one arg");
+        &self
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct FunctionArg {
@@ -22,6 +49,17 @@ pub struct NamedFunctionArgList {
     pub(crate) documentation: Option<Comment>,
     pub args: Vec<(Identifier, FunctionArg)>,
     pub(crate) span: Span,
+}
+
+impl NamedFunctionArgList {
+    pub fn iter_args(
+        &self,
+    ) -> impl ExactSizeIterator<Item = (FuncArguementId, &(Identifier, FunctionArg))> {
+        self.args
+            .iter()
+            .enumerate()
+            .map(|(id, arg)| (FuncArguementId(id as u32), arg))
+    }
 }
 
 #[derive(Debug, Clone)]

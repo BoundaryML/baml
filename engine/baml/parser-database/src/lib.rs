@@ -38,6 +38,7 @@ mod types;
 pub use coerce_expression::{coerce, coerce_array, coerce_opt};
 pub use internal_baml_schema_ast::ast;
 use internal_baml_schema_ast::ast::SchemaAst;
+use interner::StringInterner;
 use log::info;
 pub use names::is_reserved_type_name;
 pub use types::StaticType;
@@ -92,10 +93,9 @@ impl ParserDatabase {
     pub fn validate(&mut self, mut diag: &mut Diagnostics) -> Result<(), Diagnostics> {
         diag.to_result()?;
 
-        let mut interner = Default::default();
         let mut ctx = Context::new(
             &self.ast,
-            &mut interner,
+            &mut self.interner,
             &mut self.names,
             &mut self.types,
             &mut diag,

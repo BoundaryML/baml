@@ -7,11 +7,14 @@
 //! - Do not know anything about connectors, they are generic.
 
 mod r#class;
+mod client;
 mod r#enum;
 mod field;
 mod function;
 
+pub use client::*;
 pub use function::*;
+use log::info;
 pub use r#class::*;
 pub use r#enum::*;
 
@@ -50,6 +53,15 @@ impl crate::ParserDatabase {
             .map(|enum_id| self.walk(enum_id))
     }
 
+    /// Find a model by name.
+    pub fn find_class<'db>(&'db self, name: &str) -> Option<ClassWalker<'db>> {
+        self.interner
+            .lookup(name)
+            .and_then(|name_id| self.names.tops.get(&name_id))
+            .and_then(|top_id| top_id.as_class_id())
+            .map(|model_id| self.walk(model_id))
+    }
+
     /// Traverse a schema element by id.
     pub fn walk<I>(&self, id: I) -> Walker<'_, I> {
         Walker { db: self, id }
@@ -82,6 +94,17 @@ impl crate::ParserDatabase {
         self.ast()
             .iter_tops()
             .filter_map(|(top_id, _)| top_id.as_function_id())
+            .map(move |top_id| Walker {
+                db: self,
+                id: top_id,
+            })
+    }
+
+    /// Walk all classes in the schema.
+    pub fn walk_clients(&self) -> impl Iterator<Item = ClientWalker<'_>> {
+        self.ast()
+            .iter_tops()
+            .filter_map(|(top_id, _)| top_id.as_client_id())
             .map(move |top_id| Walker {
                 db: self,
                 id: top_id,

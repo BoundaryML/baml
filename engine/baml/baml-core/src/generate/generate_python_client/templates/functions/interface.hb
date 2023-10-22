@@ -4,18 +4,18 @@ class I{{name}}(Protocol):
     This is the interface for a function.
 
     Args:
-        {{#if args.unnamed_arg}}
-        arg: {{args.unnamed_arg.type}}
+        {{#if unnamed_args}}
+        arg: {{args.0.type}}
         {{else}}
-        {{#each args.named_args}}
+        {{#each args}}
         {{this.name}}: {{this.type}}
         {{/each}}
         {{/if}}
 
     Returns:
-        {{return.unnamed_arg.type}}
+        {{return.0.type}}
     """
 
-    {{> func_def func_name="__call__" args=this.args return=this.return}}
+    {{> func_def func_name="__call__" unnamed_args=this.unnamed_args args=this.args return=this.return}}
         ...
 

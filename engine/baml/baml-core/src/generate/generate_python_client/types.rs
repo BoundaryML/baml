@@ -15,6 +15,7 @@ impl WithToCode for TypeValue {
             TypeValue::Int => "int".to_string(),
             TypeValue::Float => "float".to_string(),
             TypeValue::Boolean => "bool".to_string(),
+            TypeValue::Null => "None".to_string(),
         }
     }
 }

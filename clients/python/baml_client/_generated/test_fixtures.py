@@ -23,7 +23,9 @@ from .baml_client import baml
 
 def MyFunctionImpl(request: FixtureRequest) -> IMyFunction:
     """
-    To use this fixture, add this to your test:
+    To use this fixture, add this to your test.
+    Note the parameter name must match the name of this fixture.
+
 
     ```python
     @baml.MyFunction.test
@@ -33,5 +35,9 @@ def MyFunctionImpl(request: FixtureRequest) -> IMyFunction:
     ```
 
     See the docstring for baml.MyFunction.test for more information.
+
+
+    See pytest documentation for more information on fixtures:
+    https://docs.pytest.org/en/latest/fixture.html
     """
     return baml.MyFunction.get_impl(request.param).run

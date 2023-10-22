@@ -2,6 +2,8 @@ use super::file::{File, FileCollector};
 
 pub(super) trait WithWritePythonString {
     fn write_py_file<'a>(&'a self, fc: &'a mut FileCollector);
+
+    fn file_name(&self) -> String;
 }
 
 pub(super) trait WithToCode {
