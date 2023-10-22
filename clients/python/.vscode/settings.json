@@ -1,0 +1,4 @@
+{
+  "mypy.enabled": true,
+  "mypy.runUsingActiveInterpreter": true
+}

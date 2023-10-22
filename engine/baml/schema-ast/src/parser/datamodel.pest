@@ -1,6 +1,6 @@
 schema = {
     SOI
-    ~ (interface_declaration | variant_block | config_block | enum_declaration | type_alias | arbitrary_block | comment_block | empty_lines | CATCH_ALL)*
+    ~ (interface_declaration | function_declaration | variant_block | config_block | enum_declaration | type_alias | arbitrary_block | comment_block | empty_lines | CATCH_ALL)*
     ~ EOI
 }
 
@@ -28,12 +28,12 @@ enum_contents = {
 // ######################################
 
 interface_declaration = { 
-    (CLASS_KEYWORD | FUNCTION_KEYWORD)
+    CLASS_KEYWORD
     ~ identifier
     ~ BLOCK_OPEN
     ~ class_contents
     ~ BLOCK_CLOSE
-    }
+}
 
 field_declaration = {
     field_key
@@ -41,12 +41,49 @@ field_declaration = {
     ~ (NEWLINE? ~ field_attribute)*
     ~ trailing_comment?
     ~ NEWLINE
-    }
+}
 
 field_key = @{ identifier }
 class_contents = {
     (field_declaration | (block_attribute ~ NEWLINE) | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
 }
+
+
+// ######################################
+// Interface blocks are configs which only have types as values.
+// ######################################
+
+function_declaration = { 
+    FUNCTION_KEYWORD
+    ~ identifier
+    ~ BLOCK_OPEN
+    ~ function_contents
+    ~ BLOCK_CLOSE
+}
+
+input_field_declaration = {
+    "input"
+    ~ function_field_type?
+    ~ trailing_comment?
+    ~ NEWLINE
+}
+
+output_field_declaration = {
+    "output"
+    ~ function_field_type?
+    ~ trailing_comment?
+    ~ NEWLINE
+}
+
+
+function_field_type = { field_type | named_argument_list }
+function_contents = {
+    (input_field_declaration | output_field_declaration | (block_attribute ~ NEWLINE) | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
+}
+
+named_argument = { single_word ~ ":" ~ field_type }
+// Be forgiving and allow trailing comma
+named_argument_list = { "(" ~ named_argument? ~ ("," ~ named_argument)* ~ ","? ~ ")" }
 
 // ######################################
 // Configuration blocks (generators, clients are syntactically identical)

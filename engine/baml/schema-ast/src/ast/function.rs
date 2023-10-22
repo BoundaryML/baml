@@ -1,12 +1,34 @@
+use std::collections::HashMap;
+
 use super::{
-    traits::WithAttributes, Attribute, Comment, Field, Identifier, Span, WithDocumentation,
-    WithIdentifier, WithSpan,
+    traits::WithAttributes, Attribute, Comment, FieldArity, FieldType, Identifier, Span,
+    WithDocumentation, WithIdentifier, WithSpan,
 };
 
-/// An opaque identifier for a field in an AST model. Use the
-/// `model[field_id]` syntax to resolve the id to an `ast::Field`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct FieldId(pub(super) u32);
+#[derive(Debug, Clone)]
+pub struct FunctionArg {
+    /// The arity of the field.
+    pub arity: FieldArity,
+
+    /// The field's type.
+    pub field_type: FieldType,
+
+    /// The location of this field in the text representation.
+    pub(crate) span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct NamedFunctionArgList {
+    pub(crate) documentation: Option<Comment>,
+    pub args: Vec<(Identifier, FunctionArg)>,
+    pub(crate) span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub enum FunctionArgs {
+    Unnamed(FunctionArg),
+    Named(NamedFunctionArgList),
+}
 
 /// A model declaration.
 #[derive(Debug, Clone)]
@@ -28,8 +50,8 @@ pub struct Function {
     ///   ^^^^^^^^^^^^
     /// }
     /// ```
-    pub(crate) input: Field,
-    pub(crate) output: Field,
+    pub(crate) input: FunctionArgs,
+    pub(crate) output: FunctionArgs,
     /// The documentation for this model.
     ///
     /// ```ignore
@@ -60,10 +82,10 @@ pub struct Function {
 }
 
 impl Function {
-    pub fn input(&self) -> &Field {
+    pub fn input(&self) -> &FunctionArgs {
         &self.input
     }
-    pub fn output(&self) -> &Field {
+    pub fn output(&self) -> &FunctionArgs {
         &self.output
     }
 }
@@ -89,5 +111,28 @@ impl WithAttributes for Function {
 impl WithDocumentation for Function {
     fn documentation(&self) -> Option<&str> {
         self.documentation.as_ref().map(|doc| doc.text.as_str())
+    }
+}
+
+impl WithSpan for NamedFunctionArgList {
+    fn span(&self) -> &Span {
+        &self.span
+    }
+}
+impl WithSpan for FunctionArg {
+    fn span(&self) -> &Span {
+        &self.span
+    }
+}
+
+impl WithDocumentation for NamedFunctionArgList {
+    fn documentation(&self) -> Option<&str> {
+        self.documentation.as_ref().map(|doc| doc.text.as_str())
+    }
+}
+
+impl WithDocumentation for FunctionArg {
+    fn documentation(&self) -> Option<&str> {
+        None
     }
 }

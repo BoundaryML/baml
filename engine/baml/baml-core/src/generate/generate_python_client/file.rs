@@ -1,4 +1,3 @@
-use super::traits::WithFile;
 use log::info;
 use std::io::Write;
 use std::{
@@ -11,17 +10,54 @@ const TAB: &str = "                                                             
 
 #[derive(Debug, Default)]
 pub(super) struct FileCollector {
+    last_file: Option<PathBuf>,
     files: HashMap<PathBuf, File>,
 }
 
 impl FileCollector {
-    pub fn add_file(&mut self, obj: impl WithFile) -> &mut File {
-        let file = obj.file();
-        let key = file.path.join(&file.name);
-        if let Some(prev) = self.files.insert(key.clone(), file) {
-            panic!("File already exists: {:?}", prev.path());
+    pub fn start_py_file<'a>(&'a mut self, path: impl AsRef<str>, name: impl AsRef<str>) {
+        let cleaned_path = clean_file_name(&path);
+        let cleaned_name = clean_file_name(&name);
+        // Add .py to the end of the name if another extension is not already present
+        let cleaned_name = if cleaned_name.ends_with(".py") || cleaned_name.ends_with(".pyi") {
+            cleaned_name
+        } else {
+            format!("{}.py", cleaned_name)
+        };
+        let key = PathBuf::from(cleaned_path).join(cleaned_name);
+
+        if self.last_file.is_some() {
+            panic!(
+                "File already started: {:?}. Can't start {:?}",
+                self.last_file, key
+            );
         }
-        self.files.get_mut(&key).unwrap()
+
+        self.last_file = Some(key.clone());
+
+        if self.files.contains_key(&key) {
+            panic!("Rewriting file: {:?}", key);
+        }
+
+        self.files.insert(key.clone(), File::new(path, name));
+    }
+
+    pub fn complete_file<'a>(&'a mut self) {
+        if self.last_file.is_none() {
+            panic!("No file to complete");
+        }
+
+        self.last_file = None;
+    }
+
+    pub fn last_file(&mut self) -> &mut File {
+        if self.last_file.is_none() {
+            panic!("No file to complete");
+        }
+        self.last_file
+            .as_ref()
+            .and_then(|path| self.files.get_mut(path))
+            .unwrap()
     }
 
     pub fn write(&self, output: &Option<String>) -> std::io::Result<()> {
@@ -64,7 +100,6 @@ pub(super) struct File {
 }
 
 fn clean_file_name(name: impl AsRef<str>) -> String {
-    info!("clean_file_name: {:?}", name.as_ref());
     name.as_ref()
         .to_ascii_lowercase()
         .chars()
@@ -128,6 +163,16 @@ impl File {
                 self.add_empty_line();
             }
         }
+    }
+
+    pub(super) fn add_empty_indent(&mut self, indent: usize) {
+        let num_spaces = indent * TAB_SIZE;
+
+        let prefix = match num_spaces > TAB.len() {
+            true => panic!("Indentation too large"),
+            false => &TAB[..num_spaces],
+        };
+        self.add_string(&prefix);
     }
 
     pub(super) fn add_empty_line(&mut self) {

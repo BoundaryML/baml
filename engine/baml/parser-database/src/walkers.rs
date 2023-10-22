@@ -9,7 +9,9 @@
 mod r#class;
 mod r#enum;
 mod field;
+mod function;
 
+pub use function::*;
 pub use r#class::*;
 pub use r#enum::*;
 
@@ -69,6 +71,17 @@ impl crate::ParserDatabase {
         self.ast()
             .iter_tops()
             .filter_map(|(top_id, _)| top_id.as_class_id())
+            .map(move |top_id| Walker {
+                db: self,
+                id: top_id,
+            })
+    }
+
+    /// Walk all classes in the schema.
+    pub fn walk_functions(&self) -> impl Iterator<Item = FunctionWalker<'_>> {
+        self.ast()
+            .iter_tops()
+            .filter_map(|(top_id, _)| top_id.as_function_id())
             .map(move |top_id| Walker {
                 db: self,
                 id: top_id,

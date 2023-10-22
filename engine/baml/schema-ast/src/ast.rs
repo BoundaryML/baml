@@ -27,7 +27,7 @@ pub use config::ConfigBlockProperty;
 pub use expression::Expression;
 pub use field::{Field, FieldArity, FieldType, TypeValue};
 pub use find_at_position::*;
-pub use function::Function;
+pub use function::{Function, FunctionArg, FunctionArgs, NamedFunctionArgList};
 pub use generator_config::GeneratorConfig;
 pub use identifier::Identifier;
 pub use indentation_type::IndentationType;

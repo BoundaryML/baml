@@ -2,11 +2,10 @@ use super::{
     helpers::{parsing_catch_all, Pair},
     parse_attribute::parse_attribute,
     parse_comments::*,
-    parse_field::parse_field,
     parse_identifier::parse_identifier,
     Rule,
 };
-use crate::ast::*;
+use crate::{ast::*, parser::parse_types::parse_field_type};
 use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
 pub(crate) fn parse_function(
@@ -17,57 +16,68 @@ pub(crate) fn parse_function(
     let pair_span = pair.as_span();
     let mut name: Option<Identifier> = None;
     let mut attributes: Vec<Attribute> = Vec::new();
-    let mut input: Option<Field> = None;
-    let mut output: Option<Field> = None;
+    let mut input = None;
+    let mut output = None;
 
     for current in pair.into_inner() {
         match current.as_rule() {
             Rule::FUNCTION_KEYWORD | Rule::BLOCK_OPEN | Rule::BLOCK_CLOSE => {}
             Rule::identifier => name = Some(parse_identifier(current.into(), diagnostics)),
-            Rule::class_contents => {
+            Rule::function_contents => {
                 let mut pending_field_comment: Option<Pair<'_>> = None;
 
                 for item in current.into_inner() {
                     match item.as_rule() {
-                        Rule::block_attribute  => {
+                        Rule::block_attribute => {
                             attributes.push(parse_attribute(item, diagnostics));
                         }
-                        Rule::field_declaration => match parse_field(
-                            &name.as_ref().unwrap().name,
-                            "function",
-                            item,
-                            pending_field_comment.take(),
-                            diagnostics,
-                        ) {
-                            Ok(field) => {
-                                match field.name() {
-                                    "input" => {
-                                        match input {
-                                            Some(_) => diagnostics.push_error(DatamodelError::new_duplicate_field_error(
-                                                &name.clone().unwrap().name,
-                                                field.name(),
-                                                "function",
-                                                field.identifier().span.clone(),
-                                            )),
-                                            None => input = Some(field),
-                                        }
-                                    },
-                                    "output" => output = Some(field),
-                                    _ => {
+                        Rule::output_field_declaration => {
+                            if output.is_some() {
+                                diagnostics.push_error(DatamodelError::new_duplicate_field_error(
+                                    &name.clone().unwrap().name,
+                                    "output",
+                                    "function",
+                                    diagnostics.span(pair_span),
+                                ))
+                            } else {
+                                match parse_function_field_type(item, pending_field_comment.take(), diagnostics) {
+                                    Ok(FunctionArgs::Named(arg)) => {
                                         diagnostics.push_error(DatamodelError::new_validation_error(
-                                            "Unsupport field name in function. Only `input` and `output` are allowed.",
-                                            diagnostics.span(pair_span),
+                                            "Named arguments are not supported for function output. Define a new class instead.",
+                                            arg.span,
                                         ))
                                     },
+                                    Ok(FunctionArgs::Unnamed(arg)) => output = Some(FunctionArgs::Unnamed(arg)),
+                                    Err(err) => diagnostics.push_error(err),
                                 }
                             }
-                            Err(err) => diagnostics.push_error(err),
-                        },
+                        }
+                        Rule::input_field_declaration => {
+                            if input.is_some() {
+                                diagnostics.push_error(DatamodelError::new_duplicate_field_error(
+                                    &name.clone().unwrap().name,
+                                    "input",
+                                    "function",
+                                    diagnostics.span(pair_span),
+                                ))
+                            } else {
+                                match parse_function_field_type(
+                                    item,
+                                    pending_field_comment.take(),
+                                    diagnostics,
+                                ) {
+                                    Ok(out) => input = Some(out),
+                                    Err(err) => diagnostics.push_error(err),
+                                }
+                            }
+                        }
                         Rule::comment_block => pending_field_comment = Some(item),
-                        Rule::BLOCK_LEVEL_CATCH_ALL => diagnostics.push_error(DatamodelError::new_validation_error(
-                            "This line is not a valid field or attribute definition.",
-                            diagnostics.span(item.as_span()),
-                        )),
+                        Rule::BLOCK_LEVEL_CATCH_ALL => {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                "This line is not a valid field or attribute definition.",
+                                diagnostics.span(item.as_span()),
+                            ))
+                        }
                         _ => parsing_catch_all(&item, "model"),
                     }
                 }
@@ -98,4 +108,98 @@ pub(crate) fn parse_function(
             diagnostics.span(pair_span),
         )),
     }
+}
+
+fn parse_function_field_type(
+    pair: Pair<'_>,
+    block_comment: Option<Pair<'_>>,
+    diagnostics: &mut Diagnostics,
+) -> Result<FunctionArgs, DatamodelError> {
+    assert!(
+        pair.as_rule() == Rule::output_field_declaration
+            || pair.as_rule() == Rule::input_field_declaration,
+        "parse_function_field_type called on the wrong rule: {:?}",
+        pair.as_rule()
+    );
+    let mut comment = block_comment.and_then(parse_comment_block);
+    let span = diagnostics.span(pair.as_span());
+
+    for current in pair.into_inner() {
+        match current.as_rule() {
+            Rule::function_field_type => {
+                for item in current.into_inner() {
+                    match item.as_rule() {
+                        Rule::field_type => {
+                            return Ok(FunctionArgs::Unnamed(parse_function_arg(
+                                item,
+                                diagnostics,
+                            )?));
+                        }
+                        Rule::trailing_comment => {
+                            comment = match (comment, parse_trailing_comment(item)) {
+                                (c, None) | (None, c) => c,
+                                (Some(existing), Some(new)) => Some(Comment {
+                                    text: [existing.text, new.text].join("\n"),
+                                }),
+                            };
+                        }
+                        Rule::named_argument_list => {
+                            let mut args: Vec<(Identifier, FunctionArg)> = Vec::new();
+                            for arg in item.into_inner() {
+                                let mut name = None;
+                                let mut r#type = None;
+                                match arg.as_rule() {
+                                    Rule::single_word => {
+                                        name = Some(parse_identifier(arg, diagnostics));
+                                    }
+                                    Rule::field_type => {
+                                        r#type = Some(parse_function_arg(arg, diagnostics)?);
+                                    }
+                                    _ => parsing_catch_all(&arg, "function field"),
+                                }
+                                if let (Some(name), Some(r#type)) = (name, r#type) {
+                                    args.push((name, r#type));
+                                } else {
+                                    panic!("parse_function_field_type: named_argument_list: missing name or type")
+                                }
+                            }
+                            return Ok(FunctionArgs::Named(NamedFunctionArgList {
+                                documentation: comment,
+                                args,
+                                span,
+                            }));
+                        }
+                        _ => unreachable!(
+                            "parse_function_field_type: unexpected rule: {:?}",
+                            item.as_rule()
+                        ),
+                    }
+                }
+            }
+            _ => unreachable!(
+                "parse_function_field_type: unexpected rule: {:?}",
+                current.as_rule()
+            ),
+        }
+    }
+    panic!("parse_function_field_type: missing function_field_type")
+}
+
+fn parse_function_arg(
+    pair: Pair<'_>,
+    diagnostics: &mut Diagnostics,
+) -> Result<FunctionArg, DatamodelError> {
+    assert!(
+        pair.as_rule() == Rule::field_type,
+        "parse_function_arg called on the wrong rule: {:?}",
+        pair.as_rule()
+    );
+    let span = diagnostics.span(pair.as_span());
+
+    let (arity, r#type) = parse_field_type(pair, diagnostics)?;
+    Ok(FunctionArg {
+        span,
+        arity,
+        field_type: r#type,
+    })
 }

@@ -55,15 +55,15 @@ pub fn parse_schema(
                             Rule::CLASS_KEYWORD => {
                                 top_level_definitions.push(Top::Class(parse_class(current, pending_block_comment.take(), &mut diagnostics)));
                             },
-                            Rule::FUNCTION_KEYWORD => {
-                                match parse_function(current, pending_block_comment.take(), &mut diagnostics) {
-                                    Ok(function) => top_level_definitions.push(Top::Function(function)),
-                                    Err(e) => diagnostics.push_error(e),
-                                }
-                            },
                             _ => unreachable!(),
                         };
                     }
+                    Rule::function_declaration => {
+                        match parse_function(current, pending_block_comment.take(), &mut diagnostics) {
+                            Ok(function) => top_level_definitions.push(Top::Function(function)),
+                            Err(e) => diagnostics.push_error(e),
+                        }
+                    },
                     Rule::config_block => {
                         match parse_config::parse_config_block(
                             current,

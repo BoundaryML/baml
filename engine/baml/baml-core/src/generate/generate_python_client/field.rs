@@ -1,59 +1,63 @@
-use internal_baml_parser_database::walkers::Walker;
-use internal_baml_schema_ast::ast::{ClassId, FieldArity, FieldId, FieldType, TypeValue};
+// use internal_baml_parser_database::walkers::Walker;
+// use internal_baml_schema_ast::ast::{ClassId, FieldArity, FieldId, FieldType, TypeValue};
 
-use super::{file::File, traits::WithPythonString};
+// use super::{file::FileCollector, traits::WithToCode};
 
-impl WithPythonString for Walker<'_, (ClassId, FieldId)> {
-    fn python_string(&self, file: &mut File) {
-        file.add_indent_string(format!("{}: ", self.name()), 1);
-        self.r#type().python_string(file);
-        file.add_empty_line();
-    }
-}
+// impl WithUpdatePythonString for Walker<'_, (ClassId, FieldId)> {
+//     fn update_py_file<'a>(&'a self, fc: &'a mut super::file::File) {
+//         fc.add_indent_string(format!("{}: ", self.name()), 1);
+//         self.r#type().update_py_file(fc);
 
-impl WithPythonString for (FieldArity, &FieldType) {
-    fn python_string(&self, file: &mut File) {
-        match self.0 {
-            FieldArity::Required => match self.1 {
-                FieldType::PrimitiveType(s, _) => s.python_string(file),
-                FieldType::Supported(idn) => file.add_string(&idn.name),
-                FieldType::Union(types, _) => {
-                    file.add_import("typing", "Union");
-                    file.add_string("Union[");
-                    for (i, (arity, field)) in types.iter().enumerate() {
-                        if i > 0 {
-                            file.add_string(", ");
-                        }
-                        (arity.clone(), field).python_string(file);
-                    }
-                    file.add_string("]");
-                }
-                FieldType::Unsupported(..) => panic!("Unsupported field type"),
-            },
-            FieldArity::List => {
-                file.add_import("typing", "List");
-                file.add_string("List[");
-                (FieldArity::Required, self.1).python_string(file);
-                file.add_string("]");
-            }
-            FieldArity::Optional => {
-                file.add_import("typing", "Optional");
-                file.add_string("Optional[");
-                (FieldArity::Required, self.1).python_string(file);
-                file.add_string("]");
-            }
-        }
-    }
-}
+//         if self.r#type().0 == FieldArity::Optional {
+//             fc.add_string(" = None");
+//         }
+//         fc.add_empty_line();
+//     }
+// }
 
-impl WithPythonString for TypeValue {
-    fn python_string(&self, file: &mut File) {
-        match self {
-            TypeValue::String => file.add_string("str"),
-            TypeValue::Int => file.add_string("int"),
-            TypeValue::Float => file.add_string("float"),
-            TypeValue::Boolean => file.add_string("bool"),
-            TypeValue::Char => file.add_string("str"),
-        }
-    }
-}
+// impl WithUpdatePythonString for (FieldArity, &FieldType) {
+//     fn update_py_file<'a>(&'a self, fc: &'a mut super::file::File) {
+//         match self.0 {
+//             FieldArity::Required => match self.1 {
+//                 FieldType::PrimitiveType(s, _) => s.update_py_file(fc),
+//                 FieldType::Supported(idn) => fc.add_string(&idn.name),
+//                 FieldType::Union(types, _) => {
+//                     fc.add_import("typing", "Union");
+//                     fc.add_string("Union[");
+//                     for (i, (arity, field)) in types.iter().enumerate() {
+//                         if i > 0 {
+//                             fc.add_string(", ");
+//                         }
+//                         (arity.clone(), field).update_py_file(fc);
+//                     }
+//                     fc.add_string("]");
+//                 }
+//                 FieldType::Unsupported(..) => panic!("Unsupported field type"),
+//             },
+//             FieldArity::List => {
+//                 fc.add_import("typing", "List");
+//                 fc.add_string("List[");
+//                 (FieldArity::Required, self.1).update_py_file(fc);
+//                 fc.add_string("]");
+//             }
+//             FieldArity::Optional => {
+//                 fc.add_import("typing", "Optional");
+//                 fc.add_string("Optional[");
+//                 (FieldArity::Required, self.1).update_py_file(fc);
+//                 fc.add_string("]");
+//             }
+//         }
+//     }
+// }
+
+// impl WithUpdatePythonString for TypeValue {
+//     fn update_py_file<'a>(&'a self, fc: &'a mut super::file::File) {
+//         match self {
+//             TypeValue::String => fc.add_string("str"),
+//             TypeValue::Int => fc.add_string("int"),
+//             TypeValue::Float => fc.add_string("float"),
+//             TypeValue::Boolean => fc.add_string("bool"),
+//             TypeValue::Char => fc.add_string("str"),
+//         }
+//     }
+// }

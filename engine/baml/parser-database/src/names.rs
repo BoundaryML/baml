@@ -93,9 +93,6 @@ pub(super) fn resolve_names(ctx: &mut Context<'_>) {
                 validate_function_name(ast_function, "function", ctx.diagnostics);
                 validate_attribute_identifiers(ast_function, ctx);
 
-                validate_attribute_identifiers(ast_function.input(), ctx);
-                validate_attribute_identifiers(ast_function.output(), ctx);
-
                 &mut names.tops
             }
             (_, ast::Top::Generator(generator)) => {
