@@ -99,7 +99,6 @@ fn use_partial(
             f.add_import("typing", "Protocol");
 
             register_partial_file!(reg, "functions", "function_pyi");
-            f.add_import("..._impl.functions", "BaseBAMLFunction");
             String::from("function_pyi")
         }
     }

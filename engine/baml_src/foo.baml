@@ -1,5 +1,5 @@
 function FooBar {
-  input Foo|Foo2
+  input (arg: Bar)
   output Bar
 }
 

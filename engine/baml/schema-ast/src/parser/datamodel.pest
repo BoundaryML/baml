@@ -81,7 +81,7 @@ function_contents = {
     (input_field_declaration | output_field_declaration | (block_attribute ~ NEWLINE) | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
 }
 
-named_argument = { single_word ~ ":" ~ field_type }
+named_argument = { single_word ~ ":" ~ field_type? }
 // Be forgiving and allow trailing comma
 named_argument_list = { "(" ~ named_argument? ~ ("," ~ named_argument)* ~ ","? ~ ")" }
 

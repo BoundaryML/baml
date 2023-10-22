@@ -7,6 +7,7 @@ use super::{
 };
 use crate::{ast::*, parser::parse_types::parse_field_type};
 use internal_baml_diagnostics::{DatamodelError, Diagnostics};
+use log::info;
 
 pub(crate) fn parse_function(
     pair: Pair<'_>,
@@ -145,22 +146,40 @@ fn parse_function_field_type(
                         }
                         Rule::named_argument_list => {
                             let mut args: Vec<(Identifier, FunctionArg)> = Vec::new();
-                            for arg in item.into_inner() {
+                            for named_arg in item.into_inner() {
+                                assert!(
+                                    named_arg.as_rule() == Rule::named_argument,
+                                    "parse_function_field_type: unexpected rule: {:?}",
+                                    named_arg.as_rule()
+                                );
                                 let mut name = None;
                                 let mut r#type = None;
-                                match arg.as_rule() {
-                                    Rule::single_word => {
-                                        name = Some(parse_identifier(arg, diagnostics));
+                                for arg in named_arg.into_inner() {
+                                    match arg.as_rule() {
+                                        Rule::single_word => {
+                                            name = Some(parse_identifier(arg, diagnostics));
+                                        }
+                                        Rule::field_type => {
+                                            r#type = Some(parse_function_arg(arg, diagnostics)?);
+                                        }
+                                        _ => parsing_catch_all(&arg, "named_argument_list"),
                                     }
-                                    Rule::field_type => {
-                                        r#type = Some(parse_function_arg(arg, diagnostics)?);
-                                    }
-                                    _ => parsing_catch_all(&arg, "function field"),
                                 }
-                                if let (Some(name), Some(r#type)) = (name, r#type) {
-                                    args.push((name, r#type));
-                                } else {
-                                    panic!("parse_function_field_type: named_argument_list: missing name or type")
+
+                                match (name, r#type) {
+                                    (Some(name), Some(r#type)) => args.push((name, r#type)),
+                                    (Some(name), None) => diagnostics.push_error(
+                                        DatamodelError::new_validation_error(
+                                            &format!(
+                                                "No type specified for argument: {}",
+                                                name.name
+                                            ),
+                                            name.span,
+                                        ),
+                                    ),
+                                    (None, _) => {
+                                        unreachable!("parse_function_field_type: unexpected rule:")
+                                    }
                                 }
                             }
                             return Ok(FunctionArgs::Named(NamedFunctionArgList {
