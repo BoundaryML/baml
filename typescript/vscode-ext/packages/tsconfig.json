@@ -1,11 +1,10 @@
 {
-  "extends": "../../../tsconfig.json",
+  "extends": "../../tsconfig.json",
   "compilerOptions": {
     "module": "commonjs",
     "noUnusedLocals": false,
     "target": "es6",
     "outDir": "out",
-    "rootDir": "src",
     "lib": ["es6"],
     "sourceMap": true,
     "esModuleInterop": true,
@@ -16,5 +15,6 @@
     "noUnusedParameters": false
   },
   "include": ["src"],
-  "exclude": ["node_modules", ".vscode-test"]
+  "exclude": ["node_modules", ".vscode-test"],
+  "references": [{ "path": "./vscode" }, { "path": "./language-server" }]
 }

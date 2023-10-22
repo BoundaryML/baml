@@ -1,3 +1,4 @@
 packages:
   - 'vscode-ext/packages/*'
+  - 'vscode-ext/packages'
   - 'baml-schema-wasm'

@@ -11,7 +11,7 @@ import TelemetryReporter from '../../telemetryReporter'
 import { checkForMinimalColorTheme, createLanguageServer, isDebugOrTestSession, restartClient } from '../../util'
 import { BamlVSCodePlugin } from '../types'
 
-const packageJson = require('../../../../package.json') // eslint-disable-line
+const packageJson = require('../../../package.json') // eslint-disable-line
 
 let client: LanguageClient
 let serverModule: string
@@ -31,6 +31,7 @@ const activateClient = (
 
   const disposable = client.start()
 
+
   // Start the client. This will also launch the server
   context.subscriptions.push(disposable)
 }
@@ -38,58 +39,6 @@ const activateClient = (
 const onFileChange = (filepath: string) => {
   console.debug(`File ${filepath} has changed, restarting TS Server.`)
   void commands.executeCommand('typescript.restartTsServer')
-}
-
-function startGenerateWatcher() {
-  if (fileWatcher !== undefined) {
-    return
-  }
-
-  // macOS watcher to be removed in future releases
-  const rootPath = workspace.workspaceFolders?.[0].uri.path
-  if (os.platform() === 'darwin' && rootPath !== undefined) {
-    fileWatcher = new FileWatcher(rootPath, {
-      depth: 9,
-      debounce: 500,
-      recursive: true,
-      ignoreInitial: true,
-      ignore: (targetPath: string) => {
-        if (targetPath === rootPath) {
-          return false
-        }
-        return !minimatch(targetPath, '**/node_modules/.prisma/client/index.d.ts')
-      },
-    })
-    console.log(`Watching ${rootPath} for changes (old watcher).`)
-  } else {
-    const prismaCache = paths('prisma').cache
-    const signalsPath = path.join(prismaCache, 'last-generate')
-    const fwOptions = { debounce: 500, ignoreInitial: true }
-    fileWatcher = new FileWatcher(signalsPath, fwOptions)
-    console.log(`Watching ${signalsPath} for changes (new watcher).`)
-  }
-
-  fileWatcher.on('change', onFileChange)
-  fileWatcher.on('add', onFileChange)
-}
-
-function stopGenerateWatcher() {
-  if (fileWatcher === undefined) {
-    return
-  }
-
-  fileWatcher.close()
-  fileWatcher = undefined
-
-  console.log('Stopped watching for changes.')
-}
-
-function setGenerateWatcher(enabled: boolean) {
-  if (enabled) {
-    startGenerateWatcher()
-  } else {
-    stopGenerateWatcher()
-  }
 }
 
 const plugin: BamlVSCodePlugin = {
@@ -114,8 +63,14 @@ const plugin: BamlVSCodePlugin = {
     //   serverModule = require.resolve('@prisma/language-server/dist/src/bin');
     // }
     console.log('debugmode', isDebugMode())
-    serverModule = context.asAbsolutePath(path.join('../../packages/language-server/dist/src/bin'))
-    console.log(`serverModule: ${serverModule}`)
+    // serverModule = context.asAbsolutePath(path.join('../../packages/language-server/dist/src/bin'))
+
+    serverModule = context.asAbsolutePath(
+      path.join('language-server', 'out', 'bin')
+    );
+
+
+    console.log(`serverModules: ${serverModule}`)
 
     // The debug options for the server
     // --inspect=6009: runs the server in Node's Inspector mode so VS Code can attach to the server for debugging
@@ -189,6 +144,7 @@ const plugin: BamlVSCodePlugin = {
       //   },
       // } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
     }
+    console.log('clientOptions', clientOptions)
 
     context.subscriptions.push(
       // when the file watcher settings change, we need to ensure they are applied
@@ -203,18 +159,11 @@ const plugin: BamlVSCodePlugin = {
         window.showInformationMessage('Baml language server restarted.') // eslint-disable-line @typescript-eslint/no-floating-promises
       }),
 
-      commands.registerCommand('baml.filewatcherEnable', async () => {
-        const prismaConfig = workspace.getConfiguration('prisma')
-        await prismaConfig.update('fileWatcher', true /* value */, false /* workspace */)
-      }),
 
-      commands.registerCommand('baml.filewatcherDisable', async () => {
-        const prismaConfig = workspace.getConfiguration('prisma')
-        await prismaConfig.update('fileWatcher', false /* value */, false /* workspace */)
-      }),
     )
 
     activateClient(context, serverOptions, clientOptions)
+    console.log('activated')
 
     if (!isDebugOrTest) {
       // eslint-disable-next-line

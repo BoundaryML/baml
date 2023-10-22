@@ -19,7 +19,7 @@ export class GlooCodeLensProvider implements vscode.CodeLensProvider {
       if (insideTestGroupBlock && lineText.includes('@input')) {
         const range = new vscode.Range(line, 0, line, lineText.length)
         const command: vscode.Command = {
-          title: '▶️ Run Test',
+          title: '▶️ Run Testt',
           command: 'extension.runGlooTest',
           arguments: [document.uri],
         }

@@ -4,7 +4,8 @@
   "compilerOptions": {
     "module": "commonjs",
     "target": "es6",
-    "outDir": "dist",
+    "outDir": "out",
+    "rootDir": "src",
     "noUnusedLocals": false,
     "lib": ["es6"],
     "sourceMap": true,
@@ -12,7 +13,8 @@
     "strict": true,
     "resolveJsonModule": true,
     "composite": true,
-    "typeRoots": ["./node_modules/@types"]
+    "typeRoots": ["./node_modules/@types"],
+    "tsBuildInfoFile": "./out/.tsbuildinfo"
   },
   "include": ["src/**/*", "src/lib/**/*", "src/**/*.json"],
   "exclude": ["node_modules", ".vscode-test"]

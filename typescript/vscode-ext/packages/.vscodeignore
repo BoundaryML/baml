@@ -8,3 +8,10 @@ vsc-extension-quickstart.md
 **/.eslintrc.json
 **/*.map
 **/*.ts
+.turbo
+node_modules/**
+.eslintignore
+.eslintrc.js
+.prettierignore
+*.vsix
+.turbo
