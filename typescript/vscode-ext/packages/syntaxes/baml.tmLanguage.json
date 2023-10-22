@@ -136,7 +136,12 @@
       "captures": {
         "1": { "name": "keyword.other.block_attribute" }
       },
-      "patterns": [{ "include": "#comment" }, { "include": "#key_value" }, { "include": "#string_literal" }]
+      "patterns": [
+        { "include": "#comment" },
+        { "include": "#key_value" },
+        { "include": "#block_string_pair" },
+        { "include": "#string_literal" }
+      ]
     },
     "key_value": {
       "begin": "\\s*\\{",
@@ -182,8 +187,9 @@
         { "include": "#key_custom_string_pair" }
       ]
     },
+
     "block_string_pair": {
-      "begin": "(\\w+)\\s*#(\"){1,3}",
+      "begin": "(\\w+)?\\s*#(\"){1,3}",
       "beginCaptures": {
         "1": { "name": "variable.other.readwrite" }
       },
