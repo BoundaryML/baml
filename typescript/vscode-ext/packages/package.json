@@ -88,9 +88,7 @@
     ]
   },
   "scripts": {
-    "lint": "eslint \"src/**/*.ts\"",
-    "watch": "bash ./watch.sh",
-    "build": "bash ./build.sh"
+    "lint": "eslint \"src/**/*.ts\""
   },
   "dependencies": {
     "env-paths": "2.2.1",

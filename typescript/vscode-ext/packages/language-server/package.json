@@ -25,7 +25,7 @@
     "vscode:prepublish": "node ./esbuild.js --minify",
     "esbuild-base": "node ./esbuild.js",
     "esbuild-build": "node ./esbuild.js --sourcemap",
-    "esbuild-watch": "node ./packages/language-server/esbuild.js --sourcemap --watch",
+    "esbuild-watch": "node ./esbuild.js --sourcemap --watch",
     "vscode:package": "vsce package --no-dependencies",
     "vscode:publish": "vsce publish --no-dependencies",
     "lint": "eslint \"src/**/*.ts\"",

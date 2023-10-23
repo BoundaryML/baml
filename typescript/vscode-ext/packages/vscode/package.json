@@ -1,6 +1,6 @@
 {
-  "name": "baml-insider",
-  "displayName": "Baml - Insider",
+  "name": "baml-client",
+  "displayName": "Baml - Insider - Client",
   "description": "This is the Insider Build of the Baml VS Code extension (only use it if you are also using the dev version of the CLI).",
   "version": "0.1.1",
   "publisher": "Gloo",
