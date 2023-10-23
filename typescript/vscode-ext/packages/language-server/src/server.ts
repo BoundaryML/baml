@@ -60,16 +60,15 @@ export function startServer(options?: LSOptions): void {
 
   connection.onInitialize((params: InitializeParams) => {
     // Logging first...
-    connection.console.info(`Default version of Prisma 'prisma-schema-wasm': ${getVersion()}`)
+    connection.console.info(`Default version of Prisma 'prisma-schema-wasm' : ${getVersion()}`)
 
     connection.console.info(
       // eslint-disable-next-line
       `Extension name ${packageJson?.name} with version ${packageJson?.version}`,
     )
     const prismaEnginesVersion = getEnginesVersion()
-    connection.console.info(`Prisma Engines version: ${prismaEnginesVersion}`)
     // const prismaCliVersion = getCliVersion()
-    // connection.console.info(`Prisma CLI version: ${prismaCliVersion}`)
+    // connection.console.info(`Prisma CLI v ersion: ${prismaCliVersion}`)
 
     // ... and then capabilities of the language server
     const capabilities = params.capabilities

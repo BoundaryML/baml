@@ -139,6 +139,7 @@
       "patterns": [
         { "include": "#comment" },
         { "include": "#key_value" },
+        { "include": "#string_unquoted" },
         { "include": "#block_string_pair" },
         { "include": "#string_literal" }
       ]
@@ -265,6 +266,10 @@
     "string_quoted": {
       "match": "\"[^\"]*\"",
       "name": "string.quoted.double"
+    },
+    "string_unquoted": {
+      "match": "\\b\\w+\\b",
+      "name": "string.unquoted"
     },
     "constant_numeric": {
       "match": "\\b\\d+\\b",
