@@ -14,7 +14,6 @@
     "skipLibCheck": true,
     "noUnusedParameters": false
   },
-  "include": ["src"],
-  "exclude": ["node_modules", ".vscode-test"],
-  "references": [{ "path": "./vscode" }, { "path": "./language-server" }]
+  "include": ["vscode", "language-server"],
+  "exclude": ["node_modules", ".vscode-test"]
 }

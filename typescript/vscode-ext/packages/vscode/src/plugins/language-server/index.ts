@@ -1,12 +1,8 @@
-import minimatch from 'minimatch'
-import os from 'os'
-import path from 'path'
+import * as path from 'path'
 
-import paths from 'env-paths'
 import { commands, ExtensionContext, window, workspace } from 'vscode'
 import { LanguageClientOptions } from 'vscode-languageclient'
 import { LanguageClient, ServerOptions, TransportKind } from 'vscode-languageclient/node'
-import FileWatcher from 'watcher'
 import TelemetryReporter from '../../telemetryReporter'
 import { checkForMinimalColorTheme, createLanguageServer, isDebugOrTestSession, restartClient } from '../../util'
 import { BamlVSCodePlugin } from '../types'
@@ -16,7 +12,6 @@ const packageJson = require('../../../package.json') // eslint-disable-line
 let client: LanguageClient
 let serverModule: string
 let telemetry: TelemetryReporter
-let fileWatcher: FileWatcher.type | undefined
 
 const isDebugMode = () => process.env.VSCODE_DEBUG_MODE === 'true'
 const isE2ETestOnPullRequest = () => process.env.PRISMA_USE_LOCAL_LS === 'true'

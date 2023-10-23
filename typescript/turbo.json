@@ -18,6 +18,7 @@
       "dependsOn": ["@gloo-ai/baml-schema-wasm#build"],
       "outputs": ["dist/**"]
     },
-    "lint": {}
+    "lint": {},
+    "clean": {}
   }
 }

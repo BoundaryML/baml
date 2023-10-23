@@ -59,7 +59,7 @@ export function handleDiagnosticsRequest(
   onError?: (errorMessage: string) => void,
 ): Map<string, Diagnostic[]> {
 
-  // console.log("linterInput " + JSON.stringify(linterInput, null, 2));
+  console.log("linterInput  " + JSON.stringify(linterInput, null, 2));
   // console.log("docs uris\n" + documents.all().map(doc => doc.uri + " \n"));
   const res = lint(linterInput, (errorMessage: string) => {
     if (onError) {

@@ -23,6 +23,7 @@ fn register_panic_hook() {
     SET_HOOK.call_once(|| {
         panic::set_hook(Box::new(|info| {
             let message = &info.to_string();
+            log(message);
             prisma_set_wasm_panic_message(message);
         }));
     });

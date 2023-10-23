@@ -9,7 +9,13 @@ enu Sentiment2 {
   ANGRY @alias("angry", {
     key "value"
   })
-}     
+}
+
+client<llm> GPT35 {
+  provider hello
+  thingy yes
+  
+}
  
 enum BadEnum {   
   SAD 
