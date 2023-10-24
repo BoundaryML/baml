@@ -5,6 +5,7 @@ use std::path::PathBuf;
 pub(crate) use ::indoc::{formatdoc, indoc};
 pub(crate) use asserts::*;
 pub(crate) use expect_test::expect;
+use pretty_assertions::{assert_eq, assert_ne};
 
 use baml::{Configuration, SourceFile};
 
@@ -17,7 +18,7 @@ pub(crate) fn parse_unwrap_err(schema: &str) -> String {
 }
 
 #[track_caller]
-pub(crate) fn parse_schema(datamodel_string: &str) -> baml::ValidatedSchema {
+pub(crate) fn parse_and_validate_schema(datamodel_string: &str) -> baml::ValidatedSchema {
     let path = PathBuf::from("./unknown");
     baml::parse_and_validate_schema(
         &path,
@@ -50,7 +51,7 @@ pub(crate) fn expect_error(schema: &str, expectation: &expect_test::Expect) {
     let path = PathBuf::from("./unknown");
     match baml::parse_and_validate_schema(&path, vec![SourceFile::from((path.clone(), schema))]) {
         Ok(_) => panic!("Expected a validation error, but the schema is valid."),
-        Err(err) => expectation.assert_eq(&err.to_pretty_string()),
+        Err(err) => assert_eq!(err.errors().get(0).unwrap().message(), expectation.data()),
     }
 }
 

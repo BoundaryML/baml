@@ -7,10 +7,7 @@ use std::collections::HashSet;
 pub(super) fn validate(ctx: &mut Context<'_>) {
     for cls in ctx.db.walk_classes() {
         let ast_class = cls.ast_class();
-        ctx.push_warning(DatamodelWarning::new(
-            "random message".to_string(),
-            ast_class.span().clone(),
-        ));
+
         for c in cls.static_fields() {
             let field = c.ast_field();
         }

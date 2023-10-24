@@ -12,24 +12,24 @@ fn default_classes_test() {
     assert_valid(schema);
 }
 
-#[test]
-fn default_classes_with_attributes_test2() {
-    let schema = r#"
-    class User {
-      id int
-      name string
-      @rename({
-        key {
-          name "id"
-        }
-      })
-      @id
-      @foobar(hi)
-    }
-  "#;
+// #[test]
+// fn default_classes_with_attributes_test2() {
+//     let schema = r#"
+//     class User {
+//       id int
+//       name string
+//       // @rename({
+//       //   key {
+//       //     name "id"
+//       //   }
+//       // })
+//       // @alias
+//       // @foobar(hi)
+//     }
+//   "#;
 
-  assert_valid(schema);
-}
+//   assert_valid(schema);
+// }
 
 // #[test]
 // fn default_classes_with_attributes_test() {

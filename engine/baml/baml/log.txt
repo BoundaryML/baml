@@ -1,0 +1,101 @@
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 4 tests
+....
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+F
+failures:
+
+---- functions_unknown_types stdout ----
+schema -> "// test comment\nfunction Foo {\n  input Bar\n  output Baz\n}\n\n//\n// error\n//"
+  comment_block -> "// test comment\n"
+    comment -> "// test comment"
+      doc_content -> " test comment"
+  function_declaration -> "function Foo {\n  input Bar\n  output Baz\n}"
+    FUNCTION_KEYWORD -> "function"
+    identifier -> "Foo"
+      valid_identifier -> "Foo"
+    BLOCK_OPEN -> "{\n"
+    function_contents -> "input Bar\n  output Baz\n"
+      input_field_declaration -> "input Bar\n"
+        function_field_type -> "Bar"
+          field_type -> "Bar"
+            field_type_base -> "Bar"
+              base_type -> "Bar"
+                identifier -> "Bar"
+                  valid_identifier -> "Bar"
+      output_field_declaration -> "output Baz\n"
+        function_field_type -> "Baz"
+          field_type -> "Baz"
+            field_type_base -> "Baz"
+              base_type -> "Baz"
+                identifier -> "Baz"
+                  valid_identifier -> "Baz"
+    BLOCK_CLOSE -> "}"
+  empty_lines -> "\n\n"
+  comment_block -> "//\n// error\n//"
+    comment -> "//"
+      doc_content -> ""
+    comment -> "// error"
+      doc_content -> " error"
+    comment -> "//"
+      doc_content -> ""
+  EOI -> ""
+No argument found
+thread 'functions_unknown_types' panicked at '
+Snapshot comparison failed. Run the test again with UPDATE_EXPECT=1 in the environment to update the snapshot.
+
+===== EXPECTED ====
+//
+error
+//
+
+====== FOUND ======
+error: Error validating: Hi there
+  -->  /Users/aaronvillalpando/Projects/gloo-lang/engine/baml/baml/tests/validation_files/functions/unknown_types.baml:3
+   | 
+ 2 | function Foo {
+ 3 |   input Bar
+   | 
+
+======= DIFF ======
+[41m//
+error
+//[0m[42merror: Error validating: Hi there
+  -->  /Users/aaronvillalpando/Projects/gloo-lang/engine/baml/baml/tests/validation_files/functions/unknown_types.baml:3
+   | 
+ 2 | function Foo {
+ 3 |   input Bar
+   | [0m
+
+      ', baml/baml/tests/panic_with_diff/mod.rs:4:5
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    functions_unknown_types
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
