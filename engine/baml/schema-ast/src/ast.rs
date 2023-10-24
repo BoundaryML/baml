@@ -169,6 +169,13 @@ pub enum TopId {
 }
 
 impl TopId {
+    pub fn as_variant_id(self) -> Option<VariantConfigId> {
+        match self {
+            TopId::Variant(id) => Some(id),
+            _ => None,
+        }
+    }
+
     /// Try to interpret the top as an enum.
     pub fn as_enum_id(self) -> Option<EnumId> {
         match self {

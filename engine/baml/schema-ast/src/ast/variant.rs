@@ -110,24 +110,6 @@ impl Variant {
             .map(|(idx, field)| (SerializerId(idx as u32), field))
     }
 
-    fn find_field(&self, name: &str) -> Option<&ConfigBlockProperty> {
-        self.fields.iter().find(|f| f.name() == name)
-    }
-
-    pub fn prompt(&self) -> Option<&str> {
-        self.find_field("prompt").and_then(|f| {
-            f.value
-                .as_ref()
-                .and_then(|v| v.as_string_value().and_then(|s| Some(s.0)))
-        })
-    }
-
-    pub fn default_client(&self) -> Option<&str> {
-        self.find_field("client")
-            .and_then(|f| f.value.as_ref().and_then(|v| v.as_string_value()))
-            .map(|s| s.0)
-    }
-
     pub fn is_llm(&self) -> bool {
         self.variant_type == "llm"
     }

@@ -2,7 +2,7 @@ use crate::{context::Context, DatamodelError};
 
 use internal_baml_schema_ast::ast::{
     self, ClassId, EnumId, EnumValueId, FieldId, SerializerFieldId, TopId, VariantConfigId,
-    VariantSerializerId, WithSpan,
+    VariantSerializerId, WithName, WithSpan,
 };
 use rustc_hash::FxHashMap as HashMap;
 
@@ -23,7 +23,9 @@ pub(super) fn resolve_types(ctx: &mut Context<'_>) {
             (ast::TopId::Function(_), ast::Top::Function(function)) => {
                 visit_function(function, ctx)
             }
-            (ast::TopId::Variant(_), ast::Top::Variant(variant)) => visit_variant(variant, ctx),
+            (ast::TopId::Variant(idx), ast::Top::Variant(variant)) => {
+                visit_variant(idx, variant, ctx)
+            }
             (ast::TopId::Client(_), ast::Top::Client(client)) => {}
             (ast::TopId::Generator(_), ast::Top::Generator(generator)) => {}
             _ => unreachable!(),
@@ -32,10 +34,17 @@ pub(super) fn resolve_types(ctx: &mut Context<'_>) {
 }
 
 #[derive(Debug, Default)]
+pub struct VariantProperties {
+    pub client: String,
+    pub prompt: String,
+}
+
+#[derive(Debug, Default)]
 pub(super) struct Types {
     pub(super) enum_attributes: HashMap<ast::EnumId, EnumAttributes>,
     pub(super) class_attributes: HashMap<ast::ClassId, ClassAttributes>,
     pub(super) variant_attributes: HashMap<ast::VariantConfigId, VariantAttributes>,
+    pub(super) variant_properties: HashMap<ast::VariantConfigId, VariantProperties>,
 }
 
 impl Types {
@@ -109,7 +118,76 @@ fn visit_class<'db>(class: &'db ast::Class, ctx: &mut Context<'db>) {
 
 fn visit_function<'db>(function: &'db ast::Function, ctx: &mut Context<'db>) {}
 
-fn visit_variant<'db>(class: &'db ast::Variant, ctx: &mut Context<'db>) {}
+fn visit_variant<'db>(idx: VariantConfigId, variant: &'db ast::Variant, ctx: &mut Context<'db>) {
+    if !variant.is_llm() {
+        ctx.push_error(DatamodelError::new_validation_error(
+            "Only LLM variants are supported. Use: variant<llm>",
+            variant.span().clone(),
+        ));
+        return;
+    }
+
+    let mut client = None;
+    let mut prompt = None;
+
+    variant
+        .iter_fields()
+        .for_each(|(idx, field)| match field.name() {
+            "client" => client = field.value.as_ref(),
+            "prompt" => prompt = field.value.as_ref(),
+            config => ctx.push_error(DatamodelError::new_validation_error(
+                &format!("Unknown field `{}` in variant<llm>", config),
+                field.span().clone(),
+            )),
+            _ => unreachable!("variant<llm> unreachable"),
+        });
+
+    match (client, prompt) {
+        (Some(client), Some(prompt)) => {
+            match (client.as_string_value(), prompt.as_string_value()) {
+                (Some((client, _)), Some((prompt, _))) => {
+                    ctx.types.variant_properties.insert(
+                        idx,
+                        VariantProperties {
+                            client: client.to_string(),
+                            prompt: prompt.to_string(),
+                        },
+                    );
+                }
+                (None, Some(_)) => ctx.push_error(DatamodelError::new_validation_error(
+                    "Expected a string value for `client` field in variant<llm>",
+                    client.span().clone(),
+                )),
+                (Some(_), None) => ctx.push_error(DatamodelError::new_validation_error(
+                    "Expected a string value for `prompt` field in variant<llm>",
+                    prompt.span().clone(),
+                )),
+                (None, None) => {
+                    ctx.push_error(DatamodelError::new_validation_error(
+                        "Expected a string value for `prompt` field in variant<llm>",
+                        prompt.span().clone(),
+                    ));
+                    ctx.push_error(DatamodelError::new_validation_error(
+                        "Expected a string value for `client` field in variant<llm>",
+                        client.span().clone(),
+                    ));
+                }
+            }
+        }
+        (None, Some(_)) => ctx.push_error(DatamodelError::new_validation_error(
+            "Missing `client` field in variant<llm>",
+            variant.span().clone(),
+        )),
+        (Some(_), None) => ctx.push_error(DatamodelError::new_validation_error(
+            "Missing `prompt` field in variant<llm>",
+            variant.span().clone(),
+        )),
+        (None, None) => ctx.push_error(DatamodelError::new_validation_error(
+            "Missing `client` and `prompt` fields in variant<llm>",
+            variant.span().clone(),
+        )),
+    }
+}
 
 /// Prisma's builtin scalar types.
 #[derive(Debug, Copy, Clone, PartialEq, Hash, Eq)]

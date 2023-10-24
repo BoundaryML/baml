@@ -1,5 +1,5 @@
 use handlebars::{handlebars_helper, JsonRender};
-use internal_baml_parser_database::walkers::{ArgWalker, FunctionImplWalker, Walker};
+use internal_baml_parser_database::walkers::{ArgWalker, VariantWalker, Walker};
 use internal_baml_schema_ast::ast::{
     ClassId, FieldArity, FieldId, FieldType, FunctionArg, FunctionArgs, FunctionId, Identifier,
     NamedFunctionArgList, TypeValue, WithDocumentation, WithName,
@@ -16,10 +16,10 @@ use super::{
     FileCollector,
 };
 
-impl JsonHelper for FunctionImplWalker<'_> {
+impl JsonHelper for VariantWalker<'_> {
     fn json(&self, f: &mut File) -> serde_json::Value {
-        let func = self.walk_function();
-        let client = self.client();
+        let func = self.walk_function().unwrap();
+        let client = self.client().unwrap();
         f.add_import(
             &format!(".{}", func.file_name()),
             &format!("BAML{}", func.name()),
@@ -28,13 +28,13 @@ impl JsonHelper for FunctionImplWalker<'_> {
         json!({
             "name": self.name(),
             "function": func.json(f),
-            "prompt": self.ast_variant().prompt().unwrap_or("This is a default prompt"),
+            "prompt": self.properties().prompt,
             "client": client.name(),
         })
     }
 }
 
-impl WithWritePythonString for FunctionImplWalker<'_> {
+impl WithWritePythonString for VariantWalker<'_> {
     fn file_name(&self) -> String {
         format!(
             "fx_{}_impl_{}",

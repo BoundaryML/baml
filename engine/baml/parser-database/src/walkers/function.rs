@@ -5,7 +5,7 @@ use log::info;
 
 use crate::ast::{self, WithName};
 
-use super::{ClassWalker, EnumWalker, FunctionImplWalker, Walker};
+use super::{ClassWalker, EnumWalker, VariantWalker, Walker};
 
 use std::iter::ExactSizeIterator;
 
@@ -63,7 +63,7 @@ impl<'db> FunctionWalker<'db> {
     }
 
     /// Iterates over the variants for this function.
-    pub fn walk_variants(self) -> impl ExactSizeIterator<Item = FunctionImplWalker<'db>> {
+    pub fn walk_variants(self) -> impl ExactSizeIterator<Item = VariantWalker<'db>> {
         self.db
             .ast()
             .iter_tops()
@@ -71,9 +71,9 @@ impl<'db> FunctionWalker<'db> {
                 (ast::TopId::Variant(id), ast::Top::Variant(impl_))
                     if impl_.function_name() == self.name() =>
                 {
-                    Some(FunctionImplWalker {
+                    Some(VariantWalker {
                         db: self.db,
-                        id: (self.id, id),
+                        id: id,
                     })
                 }
                 _ => None,

@@ -72,6 +72,15 @@ impl crate::ParserDatabase {
             .map(|model_id| self.walk(model_id))
     }
 
+    /// Find a function by name.
+    pub fn find_function<'db>(&'db self, name: &str) -> Option<FunctionWalker<'db>> {
+        self.interner
+            .lookup(name)
+            .and_then(|name_id| self.names.tops.get(&name_id))
+            .and_then(|top_id| top_id.as_function_id())
+            .map(|model_id| self.walk(model_id))
+    }
+
     /// Traverse a schema element by id.
     pub fn walk<I>(&self, id: I) -> Walker<'_, I> {
         Walker { db: self, id }
@@ -115,6 +124,17 @@ impl crate::ParserDatabase {
         self.ast()
             .iter_tops()
             .filter_map(|(top_id, _)| top_id.as_client_id())
+            .map(move |top_id| Walker {
+                db: self,
+                id: top_id,
+            })
+    }
+
+    /// Walk all variants in the schema.
+    pub fn walk_variants(&self) -> impl Iterator<Item = VariantWalker<'_>> {
+        self.ast()
+            .iter_tops()
+            .filter_map(|(top_id, _)| top_id.as_variant_id())
             .map(move |top_id| Walker {
                 db: self,
                 id: top_id,
