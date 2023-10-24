@@ -58,6 +58,7 @@ impl Expression {
     pub fn as_string_value(&self) -> Option<(&str, &Span)> {
         match self {
             Expression::StringValue(s, span) => Some((s, span)),
+            Expression::ConstantValue(s, span) if !(s == "true" || s == "false") => Some((s, span)),
             _ => None,
         }
     }

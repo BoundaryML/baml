@@ -1,3 +1,4 @@
+use crate::coerce;
 use crate::{context::Context, DatamodelError};
 
 use internal_baml_schema_ast::ast::{
@@ -143,37 +144,23 @@ fn visit_variant<'db>(idx: VariantConfigId, variant: &'db ast::Variant, ctx: &mu
         });
 
     match (client, prompt) {
-        (Some(client), Some(prompt)) => {
-            match (client.as_string_value(), prompt.as_string_value()) {
-                (Some((client, _)), Some((prompt, _))) => {
-                    ctx.types.variant_properties.insert(
-                        idx,
-                        VariantProperties {
-                            client: client.to_string(),
-                            prompt: prompt.to_string(),
-                        },
-                    );
-                }
-                (None, Some(_)) => ctx.push_error(DatamodelError::new_validation_error(
-                    "Expected a string value for `client` field in variant<llm>",
-                    client.span().clone(),
-                )),
-                (Some(_), None) => ctx.push_error(DatamodelError::new_validation_error(
-                    "Expected a string value for `prompt` field in variant<llm>",
-                    prompt.span().clone(),
-                )),
-                (None, None) => {
-                    ctx.push_error(DatamodelError::new_validation_error(
-                        "Expected a string value for `prompt` field in variant<llm>",
-                        prompt.span().clone(),
-                    ));
-                    ctx.push_error(DatamodelError::new_validation_error(
-                        "Expected a string value for `client` field in variant<llm>",
-                        client.span().clone(),
-                    ));
-                }
+        (Some(client), Some(prompt)) => match (
+            coerce::string(client, &mut ctx.diagnostics),
+            coerce::string(prompt, &mut ctx.diagnostics),
+        ) {
+            (Some(client), Some(prompt)) => {
+                ctx.types.variant_properties.insert(
+                    idx,
+                    VariantProperties {
+                        client: client.to_string(),
+                        prompt: prompt.to_string(),
+                    },
+                );
             }
-        }
+            _ => {
+                // Errors are handled by coerce.
+            }
+        },
         (None, Some(_)) => ctx.push_error(DatamodelError::new_validation_error(
             "Missing `client` field in variant<llm>",
             variant.span().clone(),

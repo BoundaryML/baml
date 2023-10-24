@@ -11,7 +11,7 @@ pub fn parse_identifier_string(
     assert!(pair.as_rule() == Rule::identifier);
     let current = pair.into_inner().next().unwrap();
     match current.as_rule() {
-        Rule::valid_identifier => Ok((current.to_string(), true)),
+        Rule::valid_identifier => Ok((current.as_str().to_string(), true)),
         Rule::single_word => Ok((current.as_str().to_string(), false)),
         _ => unreachable!(
             "Encountered impossible field during parsing: {:?}",

@@ -71,8 +71,8 @@ struct EnvFunction {
 impl EnvFunction {
     fn from_ast(expr: &ast::Expression, diagnostics: &mut Diagnostics) -> Option<EnvFunction> {
         let args = if let ast::Expression::ConstantValue(name, _) = &expr {
-            if name.starts_with("@ENV.") {
-                let parsed = name.trim_start_matches("@ENV.");
+            if name.starts_with("#ENV.") {
+                let parsed = name.trim_start_matches("#ENV.");
                 parsed
             } else {
                 diagnostics.push_error(DatamodelError::new_functional_evaluation_error(
