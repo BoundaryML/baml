@@ -82,6 +82,7 @@ pub fn validate(root_path: &PathBuf, files: Vec<SourceFile>) -> ValidatedSchema 
         return ValidatedSchema { db, diagnostics };
     }
 
+    // actually run the validation pipeline
     validate::validate(&db, configuration.preview_features(), &mut diagnostics);
 
     ValidatedSchema { db, diagnostics }

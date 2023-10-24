@@ -10,7 +10,7 @@ use baml::{Configuration, SourceFile};
 
 pub(crate) fn parse_unwrap_err(schema: &str) -> String {
     let path = PathBuf::from("./unknown");
-    baml::parse_schema(&path, vec![SourceFile::from((path.clone(), schema))])
+    baml::parse_and_validate_schema(&path, vec![SourceFile::from((path.clone(), schema))])
         .map(drop)
         .unwrap_err()
         .to_pretty_string()
@@ -19,7 +19,7 @@ pub(crate) fn parse_unwrap_err(schema: &str) -> String {
 #[track_caller]
 pub(crate) fn parse_schema(datamodel_string: &str) -> baml::ValidatedSchema {
     let path = PathBuf::from("./unknown");
-    baml::parse_schema(
+    baml::parse_and_validate_schema(
         &path,
         vec![SourceFile::from((path.clone(), datamodel_string))],
     )
@@ -48,7 +48,7 @@ pub(crate) fn parse_configuration(datamodel_string: &str) -> Configuration {
 #[track_caller]
 pub(crate) fn expect_error(schema: &str, expectation: &expect_test::Expect) {
     let path = PathBuf::from("./unknown");
-    match baml::parse_schema(&path, vec![SourceFile::from((path.clone(), schema))]) {
+    match baml::parse_and_validate_schema(&path, vec![SourceFile::from((path.clone(), schema))]) {
         Ok(_) => panic!("Expected a validation error, but the schema is valid."),
         Err(err) => expectation.assert_eq(&err.to_pretty_string()),
     }
@@ -61,7 +61,7 @@ pub(crate) fn parse_and_render_error(schema: &str) -> String {
 #[track_caller]
 pub(crate) fn assert_valid(schema: &str) {
     let path = PathBuf::from("./unknown");
-    match baml::parse_schema(&path, vec![SourceFile::from((path.clone(), schema))]) {
+    match baml::parse_and_validate_schema(&path, vec![SourceFile::from((path.clone(), schema))]) {
         Ok(_) => (),
         Err(err) => panic!("{}", err.to_pretty_string()),
     }

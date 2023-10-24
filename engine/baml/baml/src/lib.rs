@@ -22,7 +22,7 @@ pub fn parse_configuration(
 }
 
 /// Parse and analyze a Prisma schema.
-pub fn parse_schema(
+pub fn parse_and_validate_schema(
     root_path: &PathBuf,
     files: impl Into<Vec<SourceFile>>,
 ) -> Result<ValidatedSchema, Diagnostics> {

@@ -1,6 +1,6 @@
 mod dir_utils;
 
-use baml::{generate_schema, parse_configuration, parse_schema, SourceFile};
+use baml::{generate_schema, parse_and_validate_schema, parse_configuration, SourceFile};
 use colored::*;
 use log::{error, info, warn};
 use std::path::PathBuf;
@@ -35,7 +35,7 @@ pub fn build(baml_dir: &Option<String>) -> Result<(), CliError> {
         src_files.len()
     );
 
-    let mut parsed = parse_schema(
+    let mut parsed = parse_and_validate_schema(
         &baml_dir,
         src_files
             .iter()

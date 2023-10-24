@@ -257,15 +257,6 @@ impl DatamodelError {
         )
     }
 
-    pub fn new_composite_type_validation_error(
-        message: &str,
-        composite_type_name: &str,
-        span: Span,
-    ) -> DatamodelError {
-        let msg = format!("Error validating composite type \"{composite_type_name}\": {message}",);
-        Self::new(msg, span)
-    }
-
     pub fn new_enum_validation_error(message: &str, enum_name: &str, span: Span) -> DatamodelError {
         Self::new(
             format!("Error validating enum `{enum_name}`: {message}"),
@@ -344,25 +335,11 @@ impl DatamodelError {
         Self::new(message.into(), span)
     }
 
-    pub fn new_environment_functional_evaluation_error(
-        var_name: String,
-        span: Span,
-    ) -> DatamodelError {
-        Self::new(format!("Environment variable not found: {var_name}."), span)
-    }
-
     pub fn new_type_not_found_error(type_name: &str, span: Span) -> DatamodelError {
         let msg = format!(
             "Type \"{type_name}\" is neither a built-in type, nor refers to another model, custom type, or enum."
         );
         Self::new(msg, span)
-    }
-
-    pub fn new_scalar_type_not_found_error(type_name: &str, span: Span) -> DatamodelError {
-        Self::new(
-            format!("Type \"{type_name}\" is not a built-in type."),
-            span,
-        )
     }
 
     pub fn new_attribute_not_known_error(attribute_name: &str, span: Span) -> DatamodelError {
@@ -377,71 +354,8 @@ impl DatamodelError {
         Self::new(format!("Argument not known: \"{property_name}\"."), span)
     }
 
-    pub fn new_default_unknown_function(function_name: &str, span: Span) -> DatamodelError {
-        DatamodelError::new(format!(
-                "Unknown function in @default(): `{function_name}` is not known. You can read about the available functions here: https://pris.ly/d/attribute-functions"
-            ),
-            span
-        )
-    }
-
-    pub fn new_invalid_model_error(msg: &str, span: Span) -> DatamodelError {
-        DatamodelError::new(format!("Invalid model: {msg}"), span)
-    }
-
-    pub fn new_datasource_provider_not_known_error(provider: &str, span: Span) -> DatamodelError {
-        Self::new(
-            format!("Datasource provider not known: \"{provider}\"."),
-            span,
-        )
-    }
-
-    pub fn new_shadow_database_is_same_as_main_url_error(
-        source_name: String,
-        span: Span,
-    ) -> DatamodelError {
-        let msg = format!("shadowDatabaseUrl is the same as url for datasource \"{source_name}\". Please specify a different database as shadow database.");
-        Self::new(msg, span)
-    }
-
-    pub fn new_preview_feature_not_known_error(
-        preview_feature: &str,
-        expected_preview_features: String,
-        span: Span,
-    ) -> DatamodelError {
-        let msg = format!(
-            "The preview feature \"{preview_feature}\" is not known. Expected one of: {expected_preview_features}",
-        );
-        Self::new(msg, span)
-    }
-
     pub fn new_value_parser_error(expected_type: &str, raw: &str, span: Span) -> DatamodelError {
         let msg = format!("Expected {expected_type}, but found {raw}.");
-        Self::new(msg, span)
-    }
-
-    pub fn new_native_type_argument_count_mismatch_error(
-        native_type: &str,
-        required_count: usize,
-        given_count: usize,
-        span: Span,
-    ) -> DatamodelError {
-        let msg = format!("Native type {native_type} takes {required_count} arguments, but received {given_count}.");
-        Self::new(msg, span)
-    }
-
-    pub fn new_native_type_name_unknown(
-        connector_name: &str,
-        native_type: &str,
-        span: Span,
-    ) -> DatamodelError {
-        let msg =
-            format!("Native type {native_type} is not supported for {connector_name} connector.");
-        DatamodelError::new(msg, span)
-    }
-
-    pub fn new_native_type_parser_error(native_type: &str, span: Span) -> DatamodelError {
-        let msg = format!("Invalid Native type {native_type}.");
         Self::new(msg, span)
     }
 
@@ -457,13 +371,13 @@ impl DatamodelError {
         Self::new(msg, span)
     }
 
-    pub fn new_schemas_array_empty_error(span: Span) -> DatamodelError {
-        let msg = "If provided, the schemas array can not be empty.".to_string();
-        Self::new(msg, span)
-    }
-
-    pub fn new_referential_integrity_and_relation_mode_cooccur_error(span: Span) -> DatamodelError {
-        let msg = "The `referentialIntegrity` and `relationMode` attributes cannot be used together. Please use only `relationMode` instead.".to_string();
+    pub fn new_missing_required_property_error(
+        property_name: &str,
+        object_name: &str,
+        span: Span,
+    ) -> DatamodelError {
+        let msg =
+            format!("The required property \"{property_name}\" on \"{object_name}\" is missing.",);
         Self::new(msg, span)
     }
 

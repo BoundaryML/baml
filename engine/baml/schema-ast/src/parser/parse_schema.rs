@@ -24,6 +24,7 @@ fn pretty_print<'a>(pair: pest::iterators::Pair<'a, Rule>, indent_level: usize) 
 }
 
 /// Parse a PSL string and return its AST.
+/// It does NOT validate the AST.
 pub fn parse_schema(
     root_path: &PathBuf,
     source: &SourceFile,

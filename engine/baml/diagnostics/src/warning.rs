@@ -20,13 +20,6 @@ impl DatamodelWarning {
         DatamodelWarning { message, span }
     }
 
-    pub fn new_feature_deprecated(feature: &str, span: Span) -> DatamodelWarning {
-        let message = format!(
-            "Preview feature \"{feature}\" is deprecated. The functionality can be used without specifying it as a preview feature."
-        );
-        Self::new(message, span)
-    }
-
     pub fn new_field_validation(
         message: &str,
         model: &str,
