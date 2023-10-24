@@ -33,7 +33,7 @@ class OpenAILLMClient(LLMClient):
                 return 401
             if isinstance(e, o_error.InvalidRequestError):
                 return 400
-            if type(e.code) is int:
+            if isinstance(e.code, int):
                 return e.code
         return super()._exception_to_code(e)
 
