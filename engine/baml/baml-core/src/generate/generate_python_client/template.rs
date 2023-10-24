@@ -1,12 +1,9 @@
-use handlebars::{handlebars_helper, JsonRender};
-use log::info;
+use handlebars::handlebars_helper;
 
 use super::file::File;
 
-// a helper joins all values, using both hash and parameters
-handlebars_helper!(join: |{sep:str=", "}, *args|
-                   args.iter().map(|a| a.render()).collect::<Vec<String>>().join(sep)
-);
+handlebars_helper!(BLOCK_OPEN: |*_args| "{");
+handlebars_helper!(BLOCK_CLOSE: |*_args| "}");
 
 #[derive(Debug)]
 pub(super) enum HSTemplate {
@@ -17,11 +14,14 @@ pub(super) enum HSTemplate {
     Class,
     Client,
     BAMLClient,
+    Variant,
 }
 
 fn init_hs() -> handlebars::Handlebars<'static> {
     let mut reg = handlebars::Handlebars::new();
-    reg.register_helper("join", Box::new(join));
+    reg.register_helper("BLOCK_OPEN", Box::new(BLOCK_OPEN));
+    reg.register_helper("BLOCK_CLOSE", Box::new(BLOCK_CLOSE));
+
     reg
 }
 
@@ -50,6 +50,15 @@ fn use_partial(
     f: &mut File,
 ) -> String {
     match template {
+        HSTemplate::Variant => {
+            register_partial_file!(reg, "functions", "arg_list");
+            register_partial_file!(reg, "functions", "arg_values");
+            register_partial_file!(reg, "functions", "func_def");
+            f.add_import("..._impl.deserializer", "Deserializer");
+
+            register_partial_file!(reg, "functions", "variant");
+            String::from("variant")
+        }
         HSTemplate::BAMLClient => {
             register_partial_file!(reg, "export", "generated_baml_client");
             String::from("generated_baml_client")
@@ -62,18 +71,19 @@ fn use_partial(
         HSTemplate::Class => {
             register_partial_file!(reg, "types", "class");
             f.add_import("pydantic", "BaseModel");
+            f.add_import("...._impl.deserializer", "register_deserializer");
             String::from("class")
         }
         HSTemplate::Enum => {
             register_partial!(reg, "enum_value", r#"{{name}} = "{{name}}""#);
             register_partial_file!(reg, "types", "enum");
             f.add_import("enum", "Enum");
+            f.add_import("...._impl.deserializer", "register_deserializer");
             String::from("enum")
         }
         HSTemplate::Function => {
             register_partial_file!(reg, "functions", "arg_list");
-            register_partial_file!(reg, "functions", "func_def");
-            f.add_import("typing", "Awaitable");
+            register_partial_file!(reg, "functions", "method_def");
 
             register_partial_file!(reg, "functions", "interface");
             f.add_import("typing", "runtime_checkable");
@@ -91,8 +101,7 @@ fn use_partial(
         }
         HSTemplate::FunctionPYI => {
             register_partial_file!(reg, "functions", "arg_list");
-            register_partial_file!(reg, "functions", "func_def");
-            f.add_import("typing", "Awaitable");
+            register_partial_file!(reg, "functions", "method_def");
 
             register_partial_file!(reg, "functions", "interface");
             f.add_import("typing", "runtime_checkable");

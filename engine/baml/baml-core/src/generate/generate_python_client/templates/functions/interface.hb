@@ -16,6 +16,6 @@ class I{{name}}(Protocol):
         {{return.0.type}}
     """
 
-    {{> func_def func_name="__call__" unnamed_args=this.unnamed_args args=this.args return=this.return}}
+    {{> method_def func_name="__call__" unnamed_args=this.unnamed_args args=this.args return=this.return}}
         ...
 

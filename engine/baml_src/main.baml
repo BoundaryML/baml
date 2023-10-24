@@ -25,7 +25,7 @@ enum FAAAAA {
 }
 
 // This is preferred
-client<llm> SomeOtherClient {
+client<llm> MyClient {
   @@provider(openai)
   @@retry(3)
 

@@ -16,8 +16,8 @@ enum Foo2 {
   FIELD
   OTHERWISE
 
-  // Values @serializer_template({
-  //   value_template #""#
-  //   deliminter \n
-  // })
+  // Values @serializer_template(
+  //   #"h"#,
+  //   \n
+  // )
 }

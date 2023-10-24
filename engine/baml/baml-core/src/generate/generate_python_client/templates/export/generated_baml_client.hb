@@ -1,6 +1,6 @@
 class BAMLClient:
     {{#each functions}}
-    {{this}} = BAML{{this}}()
+    {{this}} = BAML{{this}}
     {{/each}}
 
 baml = BAMLClient()

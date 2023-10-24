@@ -47,7 +47,7 @@ impl JsonHelper for Walker<'_, FunctionId> {
             "args": self.walk_input_args().map(|a| a.json(f)).collect::<Vec<_>>(),
             "return": self.walk_output_args().map(|a| a.json(f)).collect::<Vec<_>>(),
             "doc_string": self.ast_function().documentation(),
-            "impls": vec!["impl0", "impl1"],
+            "impls": self.walk_variants().map(|v| v.name()).collect::<Vec<_>>(),
         })
     }
 }

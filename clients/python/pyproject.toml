@@ -38,6 +38,7 @@ types-requests = "^2.31.0.2"
 anthropic = "^0.3.11"
 python-dotenv = "^1.0.0"
 typeguard = "^4.1.5"
+json5 = "^0.9.14"
 
 [tool.mypy."coloredlogs.*"]
 ignore_missing_imports = true

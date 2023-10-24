@@ -11,12 +11,13 @@ mod client;
 mod r#enum;
 mod field;
 mod function;
+mod variants;
 
 pub use client::*;
 pub use function::*;
-use log::info;
 pub use r#class::*;
 pub use r#enum::*;
+pub use variants::*;
 
 /// A generic walker. Only walkers intantiated with a concrete ID type (`I`) are useful.
 #[derive(Clone, Copy)]
@@ -59,6 +60,15 @@ impl crate::ParserDatabase {
             .lookup(name)
             .and_then(|name_id| self.names.tops.get(&name_id))
             .and_then(|top_id| top_id.as_class_id())
+            .map(|model_id| self.walk(model_id))
+    }
+
+    /// Find a client by name.
+    pub fn find_client<'db>(&'db self, name: &str) -> Option<ClientWalker<'db>> {
+        self.interner
+            .lookup(name)
+            .and_then(|name_id| self.names.tops.get(&name_id))
+            .and_then(|top_id| top_id.as_client_id())
             .map(|model_id| self.walk(model_id))
     }
 

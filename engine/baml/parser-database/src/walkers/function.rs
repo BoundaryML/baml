@@ -1,9 +1,11 @@
-use internal_baml_schema_ast::ast::{ArguementId, FuncArguementId, Identifier};
+use internal_baml_schema_ast::ast::{
+    ArguementId, FuncArguementId, Identifier, Variant, VariantConfigId,
+};
 use log::info;
 
 use crate::ast::{self, WithName};
 
-use super::{ClassWalker, EnumWalker, Walker};
+use super::{ClassWalker, EnumWalker, FunctionImplWalker, Walker};
 
 use std::iter::ExactSizeIterator;
 
@@ -58,6 +60,26 @@ impl<'db> FunctionWalker<'db> {
             db: self.db,
             id: (self.id, false, FuncArguementId(f)),
         })
+    }
+
+    /// Iterates over the variants for this function.
+    pub fn walk_variants(self) -> impl ExactSizeIterator<Item = FunctionImplWalker<'db>> {
+        self.db
+            .ast()
+            .iter_tops()
+            .filter_map(|(id, t)| match (id, t) {
+                (ast::TopId::Variant(id), ast::Top::Variant(impl_))
+                    if impl_.function_name() == self.name() =>
+                {
+                    Some(FunctionImplWalker {
+                        db: self.db,
+                        id: (self.id, id),
+                    })
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
     }
 }
 

@@ -17,6 +17,7 @@ mod function;
 mod template;
 mod traits;
 mod types;
+mod variants;
 
 fn generate_py_file<'a>(obj: &impl WithWritePythonString, fc: &'a mut FileCollector) {
     obj.write_py_file(fc);
@@ -27,8 +28,11 @@ pub(crate) fn generate_py(db: &ParserDatabase, gen: &Generator) -> std::io::Resu
     db.walk_enums().for_each(|e| generate_py_file(&e, &mut fc));
     db.walk_classes()
         .for_each(|c| generate_py_file(&c, &mut fc));
-    db.walk_functions()
-        .for_each(|f| generate_py_file(&f, &mut fc));
+    db.walk_functions().for_each(|f| {
+        generate_py_file(&f, &mut fc);
+        f.walk_variants()
+            .for_each(|v| generate_py_file(&v, &mut fc));
+    });
     db.walk_clients()
         .for_each(|f| generate_py_file(&f, &mut fc));
     generate_py_file(db, &mut fc);

@@ -1,6 +1,6 @@
 use super::{
     traits::WithAttributes, Attribute, Comment, ConfigBlockProperty, Field, Identifier, Serializer,
-    Span, WithDocumentation, WithIdentifier, WithSpan,
+    Span, WithDocumentation, WithIdentifier, WithName, WithSpan,
 };
 
 /// An opaque identifier for a field in an AST model. Use the
@@ -110,12 +110,30 @@ impl Variant {
             .map(|(idx, field)| (SerializerId(idx as u32), field))
     }
 
-    pub fn fields(&self) -> &[ConfigBlockProperty] {
-        &self.fields
+    fn find_field(&self, name: &str) -> Option<&ConfigBlockProperty> {
+        self.fields.iter().find(|f| f.name() == name)
+    }
+
+    pub fn prompt(&self) -> Option<&str> {
+        self.find_field("prompt").and_then(|f| {
+            f.value
+                .as_ref()
+                .and_then(|v| v.as_string_value().and_then(|s| Some(s.0)))
+        })
+    }
+
+    pub fn default_client(&self) -> Option<&str> {
+        self.find_field("client")
+            .and_then(|f| f.value.as_ref().and_then(|v| v.as_string_value()))
+            .map(|s| s.0)
     }
 
     pub fn is_llm(&self) -> bool {
         self.variant_type == "llm"
+    }
+
+    pub fn function_name(&self) -> &str {
+        &self.function_name.name
     }
 }
 

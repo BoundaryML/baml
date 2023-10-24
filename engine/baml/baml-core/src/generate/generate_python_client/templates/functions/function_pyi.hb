@@ -11,10 +11,10 @@ CLS = typing.TypeVar("CLS", bound=type)
 {{> interface}}
 
 class BAML{{name}}Impl:
-    {{> func_def func_name="run" unnamed_args=this.unnamed_args args=this.args return=this.return}}
+    {{> method_def func_name="run" unnamed_args=this.unnamed_args args=this.args return=this.return}}
         ...
 
-class BAML{{name}}:
+class IBAML{{name}}:
     def register_impl(
         self, name: ImplName
     ) -> typing.Callable[[I{{name}}], I{{name}}]:
@@ -88,3 +88,5 @@ class BAML{{name}}:
         ```
         """
         ...
+
+BAML{{name}}: IBAML{{name}}
