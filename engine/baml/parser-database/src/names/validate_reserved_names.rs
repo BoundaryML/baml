@@ -63,13 +63,13 @@ pub(crate) fn validate_enum_name(ast_enum: &ast::Enum, diagnostics: &mut Diagnos
 // https://github.com/prisma/prisma/blob/master/src/packages/client/src/generation/generateClient.ts#L443
 const RESERVED_NAMES: &[&str] = &[
     "BamlClient",
-    "Int",
-    "String",
-    "Bool",
-    "Char",
-    "Float",
-    "Dict",
-    "Union",
-    "Optional",
-    "List",
+    // "Int",
+    // "String",
+    // "Bool",
+    // "Char",
+    // "Float",
+    // "Dict",
+    // "Union",
+    // "Optional",
+    // "List",
 ];

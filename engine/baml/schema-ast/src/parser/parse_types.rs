@@ -25,26 +25,28 @@ pub fn parse_field_type(
 
 fn parse_base_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> FieldType {
     let current = pair.into_inner().next().unwrap();
+    println!("parse_base_type: {:?}", current.as_str());
     match current.as_rule() {
-        Rule::identifier => FieldType::Supported(Identifier {
-            path: None,
-            name: current.as_str().to_string(),
-            span: diagnostics.span(current.as_span()),
-        }),
         Rule::primitive_types => FieldType::PrimitiveType(
             match current.as_str() {
-                "String" => TypeValue::String,
-                "Int" => TypeValue::Int,
-                "Float" => TypeValue::Float,
-                "Bool" => TypeValue::Bool,
-                "Char" => TypeValue::Char,
+                "string" => TypeValue::String,
+                "int" => TypeValue::Int,
+                "float" => TypeValue::Float,
+                "bool" => TypeValue::Boolean,
+                "char" => TypeValue::Char,
                 _ => unreachable!(
-                    "Encountered impossible type during parsing: {:?}",
+                    "Encountered impossible type during parsing: {:?} {:?}",
+                    current.as_rule(),
                     current.tokens()
                 ),
             },
             diagnostics.span(current.as_span()),
         ),
+        Rule::identifier => FieldType::Supported(Identifier {
+            path: None,
+            name: current.as_str().to_string(),
+            span: diagnostics.span(current.as_span()),
+        }),
         _ => unreachable!(
             "Encountered impossible type during parsing:{:?} {:?}",
             current.as_rule(),

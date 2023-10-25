@@ -153,7 +153,7 @@ union_list_type = { ("(" ~ union_type ~ ")[]") }
 union_type = { (field_type_base ~ ("|" ~ field_type_base)+) }
 field_type_base = { unsupported_optional_list_type | list_type | optional_type  | base_type  }
 
-primitive_types = { "String" | "Int" | "Float" | "Bool" | "Char" }
+primitive_types = { "string" | "int" | "float" | "bool" | "char" }
 base_type = { primitive_types | identifier } // Called base type to not conflict with type rust keyword
 unsupported_optional_list_type = { base_type ~ "[]" ~ "?" }
 list_type = { base_type ~ "[]" }
