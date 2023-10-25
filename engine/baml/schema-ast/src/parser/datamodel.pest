@@ -196,18 +196,18 @@ quoted_string_content = @{ (!"\"" ~ !NEWLINE ~ ANY)* }
 quoted_string_literal = ${ "\"" ~ quoted_string_content ~ "\"" }
 // TODO: Support comments in raw string literals
 raw_string_literal = { 
-    ("#\"" ~ (!"\"#" ~ ANY)* ~ "\"#") 
-    | ("##\"" ~ (!"\"##" ~ ANY)* ~ "\"##") 
-    | ("###\"" ~ (!"\"###" ~ ANY)* ~ "\"###") 
+    ("#####\"" ~ (!"\"#####" ~ ANY)* ~ "\"#####")
     | ("####\"" ~ (!"\"####" ~ ANY)* ~ "\"####") 
-    | ("#####\"" ~ (!"\"#####" ~ ANY)* ~ "\"#####")
+    | ("###\"" ~ (!"\"###" ~ ANY)* ~ "\"###") 
+    | ("##\"" ~ (!"\"##" ~ ANY)* ~ "\"##") 
+    | ("#\"" ~ (!"\"#" ~ ANY)* ~ "\"#") 
 }
 unterminated_raw_string_literal = ${ 
-    ("#\"" ~ (!"\"#" ~ ANY)*)
-    | ("##\"" ~ (!"\"##" ~ ANY)*)
-    | ("###\"" ~ (!"\"###" ~ ANY)*)
+    ("#####\"" ~ (!"\"#####" ~ ANY)*)
     | ("####\"" ~ (!"\"####" ~ ANY)*)
-    | ("#####\"" ~ (!"\"#####" ~ ANY)*)
+    | ("###\"" ~ (!"\"###" ~ ANY)*)
+    | ("##\"" ~ (!"\"##" ~ ANY)*)
+    | ("#\"" ~ (!"\"#" ~ ANY)*)
 }
 unterminated_quoted_string_literal = ${ "\"" ~ quoted_string_content }
 unterminated_string_literal = ${ unterminated_raw_string_literal | unterminated_quoted_string_literal }
