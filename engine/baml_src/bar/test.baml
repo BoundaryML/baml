@@ -1,4 +1,4 @@
 class Foo {
-  a int
-  b string
+  a Int
+  b String
 }

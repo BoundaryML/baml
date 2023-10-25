@@ -11,8 +11,8 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
             if let FieldType::Supported(identifier) = &arg.1.field_type {
                 ctx.db.find_class(&identifier.name).map_or_else(
                     || {
-                        let error = DatamodelError::new_validation_error(
-                            "Hi there",
+                        let error = DatamodelError::new_type_not_found_error(
+                            &identifier.name,
                             identifier.span.clone(),
                         );
                         ctx.push_error(error.clone());

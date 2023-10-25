@@ -43,7 +43,7 @@ function FunctionTwo {
 
 generator Default {
   language python
-  output /Users/vbv/repos/gloo-lang/clients/python/baml_client/generated
+  output /Users/aaronvillalpando/Projects/gloo-lang/clients/python/baml_client/generated
   switches {
     cheap true
     FooBar:cheap false
@@ -90,7 +90,7 @@ client<llm> MyClient {
 
 function FooBar2 {
   input Int[] | String
-  output (Int | string[])[]
+  output (Int | String[])[]
 }
 
 impl<llm, FooBar2> SomeName {
@@ -122,6 +122,6 @@ impl<llm, FooBar> SomeName2 {
 
 
 class Bar {
-  a int
-  b string
+  a Int
+  b String
 }

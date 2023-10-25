@@ -4,8 +4,8 @@ use crate::common::*;
 fn default_classes_test() {
     let schema = r#"
       class User {
-        id int
-        name string
+        id Int
+        name String
       }
     "#;
 

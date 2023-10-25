@@ -33,11 +33,11 @@ fn parse_base_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> FieldType {
         }),
         Rule::primitive_types => FieldType::PrimitiveType(
             match current.as_str() {
-                "string" => TypeValue::String,
-                "int" => TypeValue::Int,
-                "float" => TypeValue::Float,
-                "boolean" => TypeValue::Boolean,
-                "char" => TypeValue::Char,
+                "String" => TypeValue::String,
+                "Int" => TypeValue::Int,
+                "Float" => TypeValue::Float,
+                "Bool" => TypeValue::Bool,
+                "Char" => TypeValue::Char,
                 _ => unreachable!(
                     "Encountered impossible type during parsing: {:?}",
                     current.tokens()

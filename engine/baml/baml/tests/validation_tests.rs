@@ -8,6 +8,7 @@ use std::{
     path::{self, PathBuf},
     sync::Arc,
 };
+use strip_ansi_escapes::strip_str;
 
 const TESTS_ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/validation_files");
 
@@ -80,7 +81,30 @@ fn run_validation_test(test_file_path: &str) {
 
     let diagnostics = match (last_comment_contents.is_empty(), validation_result) {
         (true, Ok(_)) => return, // expected and got a valid schema
-        (false, Err(diagnostics)) if last_comment_contents == diagnostics => return, // we expected the diagnostics we got
+        (false, Err(diagnostics)) => {
+            // remove the span source file location since it depends on whos running the test
+            let pruned_last_comment_contents = strip_str(&String::from_utf8_lossy(
+                last_comment_contents
+                    .lines()
+                    .filter(|line| !line.contains("-->"))
+                    .collect::<String>()
+                    .as_bytes(),
+            ));
+
+            let pruned_diagnostics = strip_str(&String::from_utf8_lossy(
+                diagnostics
+                    .lines()
+                    .filter(|line| !line.contains("-->"))
+                    .collect::<String>()
+                    .as_bytes(),
+            ));
+
+            if pruned_last_comment_contents == pruned_diagnostics {
+                return; // we expected the diagnostics we got
+            } else {
+                diagnostics
+            }
+        }
         (_, Err(diagnostics)) => diagnostics,
         (false, Ok(_)) => String::new(), // expected diagnostics, got none
     };

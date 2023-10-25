@@ -135,7 +135,7 @@ pub enum TypeValue {
     String,
     Int,
     Float,
-    Boolean,
+    Bool,
     Char,
     Null,
 }
