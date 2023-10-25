@@ -25,15 +25,14 @@ pub fn parse_field_type(
 
 fn parse_base_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> FieldType {
     let current = pair.into_inner().next().unwrap();
-    println!("parse_base_type: {:?}", current.as_str());
     match current.as_rule() {
         Rule::primitive_types => FieldType::PrimitiveType(
             match current.as_str() {
-                "string" => TypeValue::String,
-                "int" => TypeValue::Int,
-                "float" => TypeValue::Float,
-                "bool" => TypeValue::Boolean,
-                "char" => TypeValue::Char,
+                "String" => TypeValue::String,
+                "Int" => TypeValue::Int,
+                "Float" => TypeValue::Float,
+                "Bool" => TypeValue::Bool,
+                "Char" => TypeValue::Char,
                 _ => unreachable!(
                     "Encountered impossible type during parsing: {:?} {:?}",
                     current.as_rule(),

@@ -42,7 +42,7 @@ pub fn parse_enum(
                         Rule::comment_block => pending_value_comment = Some(item),
                         Rule::BLOCK_LEVEL_CATCH_ALL => {
                             diagnostics.push_error(DatamodelError::new_validation_error(
-                                "This line is not an enum value definition.",
+                                "This line is not an enum value definition. Check for extra commas",
                                 diagnostics.span(item.as_span()),
                             ))
                         }

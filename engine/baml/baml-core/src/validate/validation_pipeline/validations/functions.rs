@@ -1,25 +1,14 @@
+use crate::validate::validation_pipeline::context::Context;
 use internal_baml_diagnostics::DatamodelError;
 use internal_baml_schema_ast::ast::{FieldType, FuncArguementId};
 
-use crate::validate::validation_pipeline::context::Context;
+use super::common::validate_type_exists;
 
 pub(super) fn validate(ctx: &mut Context<'_>) {
     for cls in ctx.db.walk_functions() {
-        for input_args in cls.walk_input_args() {
-            let arg = input_args.ast_arg();
-
-            if let FieldType::Supported(identifier) = &arg.1.field_type {
-                ctx.db.find_class(&identifier.name).map_or_else(
-                    || {
-                        let error = DatamodelError::new_type_not_found_error(
-                            &identifier.name,
-                            identifier.span.clone(),
-                        );
-                        ctx.push_error(error.clone());
-                    },
-                    |_| {},
-                );
-            }
+        for args in cls.walk_input_args().chain(cls.walk_output_args()) {
+            let arg = args.ast_arg();
+            validate_type_exists(ctx, &arg.1.field_type)
         }
     }
 }

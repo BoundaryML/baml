@@ -58,19 +58,6 @@ impl DatamodelError {
         )
     }
 
-    pub fn new_source_argument_not_found_error(
-        argument_name: &str,
-        source_name: &str,
-        span: Span,
-    ) -> DatamodelError {
-        Self::new(
-            format!(
-                "Argument \"{argument_name}\" is missing in data source block \"{source_name}\"."
-            ),
-            span,
-        )
-    }
-
     pub fn new_generator_argument_not_found_error(
         argument_name: &str,
         generator_name: &str,

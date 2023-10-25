@@ -61,10 +61,10 @@ pub struct Client {
 
     pub fields: Vec<ConfigBlockProperty>,
 
-    pub(crate) client_type: String,
+    pub client_type: String,
 
     /// The location of this model in the text representation.
-    pub(crate) span: Span,
+    pub span: Span,
 }
 
 impl Client {

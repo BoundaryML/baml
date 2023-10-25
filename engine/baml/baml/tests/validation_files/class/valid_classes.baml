@@ -7,10 +7,11 @@ class Interface1 {
 }
 
 class InterfaceTwo {
-  interface string
+  interface String
   prop2 String
 }
 
 class InterfaceThree {
-  prop InterfaceTwo
+  field InterfaceTwo
+  bool String
 }

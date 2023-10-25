@@ -135,7 +135,7 @@ pub enum TypeValue {
     String,
     Int,
     Float,
-    Boolean,
+    Bool,
     Char,
     Null,
 }
@@ -152,8 +152,8 @@ pub enum FieldType {
 impl FieldType {
     pub fn span(&self) -> &Span {
         match self {
-            FieldType::Union(_, span) => span,
             FieldType::PrimitiveType(_, span) => span,
+            FieldType::Union(_, span) => span,
             FieldType::Supported(ident) => &ident.span,
             FieldType::Unsupported(_, span) => span,
         }
@@ -161,9 +161,9 @@ impl FieldType {
 
     pub fn as_unsupported(&self) -> Option<(&str, &Span)> {
         match self {
+            FieldType::PrimitiveType(_, _) => None,
             FieldType::Unsupported(name, span) => Some((name, span)),
             FieldType::Union(_, _) => None,
-            FieldType::PrimitiveType(_, _) => None,
             FieldType::Supported(_) => None,
         }
     }

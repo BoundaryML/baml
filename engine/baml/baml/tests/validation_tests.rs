@@ -117,7 +117,11 @@ fn run_validation_test(test_file_path: &str) {
             .unwrap_or(source_file.as_str());
         file.write_all(schema.as_bytes()).unwrap();
 
+        file.write_all(b"\n").unwrap();
+
         for line in diagnostics.lines() {
+            // remove colored chars
+            let line = strip_str(line);
             writeln!(file, "// {line}").unwrap();
         }
         return;
