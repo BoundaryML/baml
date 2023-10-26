@@ -34,4 +34,14 @@ fn validate_prompt(ctx: &mut Context<'_>, prompt: &str, span: &Span) {
             span.clone(),
         ));
     }
+    let validated_prompt =
+        internal_baml_prompt_parser::parse_prompt(&ctx.diagnostics.root_path, &span.file, prompt);
+    match validated_prompt {
+        Ok((_, mut diagnostics)) => {
+            println!("Prompt valid!");
+        }
+        Err(mut diagnostics) => {
+            println!("error {:?}", diagnostics.to_pretty_string());
+        }
+    }
 }

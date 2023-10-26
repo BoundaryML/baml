@@ -845,6 +845,7 @@ dependencies = [
  "indoc",
  "internal-baml-diagnostics",
  "internal-baml-parser-database",
+ "internal-baml-prompt-parser",
  "internal-baml-schema-ast",
  "log",
  "rayon",
@@ -875,6 +876,16 @@ dependencies = [
  "internal-baml-schema-ast",
  "log",
  "rustc-hash",
+]
+
+[[package]]
+name = "internal-baml-prompt-parser"
+version = "0.0.1"
+dependencies = [
+ "internal-baml-diagnostics",
+ "log",
+ "pest",
+ "pest_derive",
 ]
 
 [[package]]

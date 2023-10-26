@@ -24,7 +24,7 @@ fn pretty_print<'a>(pair: pest::iterators::Pair<'a, Rule>, indent_level: usize) 
 }
 
 /// Parse a PSL string and return its AST.
-/// It does NOT validate the AST.
+/// It validates some basic things on the AST like name conflicts. Further validation is in baml-core
 pub fn parse_schema(
     root_path: &PathBuf,
     source: &SourceFile,
