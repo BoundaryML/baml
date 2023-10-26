@@ -20,10 +20,12 @@ client<llm> MyClient {
 impl<llm, Foo> FooImpl{
   client MyClient
   prompt #"
-    A: ${#input.a}
-    B: ${#input.b}
-
-    {#print_enum(AsStr, Bar)}
-    {#print_type(JSON, output)}
+    A {#input.a}
+    
+    the rest of the prompt
+      tabbed-in
+    JSON:
+    {#print_enum(enumarg)}
+    {#print_type(typearg)}
   "#
 }

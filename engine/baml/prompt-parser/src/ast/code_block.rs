@@ -1,5 +1,7 @@
 use crate::ast::{Span, WithDocumentation, WithSpan};
 
+use super::Variable;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CodeBlockId(pub u32);
 
@@ -10,9 +12,18 @@ impl CodeBlockId {
     pub const MAX: CodeBlockId = CodeBlockId(u32::MAX);
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum CodeType {
+    PrintEnum,
+    PrintType,
+    Variable,
+}
+
 #[derive(Debug, Clone)]
 pub struct CodeBlock {
     pub block: String,
+    pub code_type: CodeType,
+    pub arguments: Vec<Variable>,
     pub span: Span,
 }
 

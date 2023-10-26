@@ -1,17 +1,16 @@
 mod code_block;
 mod comment_block;
-mod find_at_position;
-mod line;
 mod prompt_text;
 mod top;
 mod traits;
+mod variable;
 
-pub use code_block::{CodeBlock, CodeBlockId};
+pub use code_block::{CodeBlock, CodeBlockId, CodeType};
 pub use comment_block::{CommentBlock, CommentBlockId};
-pub use find_at_position::*;
 pub use internal_baml_diagnostics::Span;
 pub use prompt_text::{PromptText, PromptTextId};
 pub use top::Top;
+pub use variable::{Variable, VariableId};
 
 pub use traits::{WithDocumentation, WithName, WithSpan};
 

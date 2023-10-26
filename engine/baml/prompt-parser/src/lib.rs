@@ -2,7 +2,7 @@
 
 #![deny(rust_2018_idioms, unsafe_code)]
 #![allow(clippy::derive_partial_eq_without_eq)]
-mod ast;
+pub mod ast;
 mod parser;
 
 pub use self::parser::parse_prompt;

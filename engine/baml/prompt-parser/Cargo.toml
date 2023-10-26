@@ -12,6 +12,7 @@ log = "0.4.20"
 
 pest = "2.1.3"
 pest_derive = "2.1.0"
+textwrap = "0.16.0"
 
 
 [features]

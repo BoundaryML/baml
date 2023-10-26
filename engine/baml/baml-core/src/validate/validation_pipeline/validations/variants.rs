@@ -1,6 +1,7 @@
 use internal_baml_diagnostics::{DatamodelError, Span};
 
 use crate::{ast::WithSpan, validate::validation_pipeline::context::Context};
+use internal_baml_prompt_parser::ast::{Top, TopId};
 
 pub(super) fn validate(ctx: &mut Context<'_>) {
     for variant in ctx.db.walk_variants() {
@@ -36,11 +37,24 @@ fn validate_prompt(ctx: &mut Context<'_>, prompt: &str, span: &Span) {
     }
     let validated_prompt =
         internal_baml_prompt_parser::parse_prompt(&ctx.diagnostics.root_path, &span.file, prompt);
+    println!("prompt:");
     match validated_prompt {
-        Ok((_, mut diagnostics)) => {
-            println!("Prompt valid!");
+        Ok((ast, _)) => {
+            for (top_id, top) in ast.iter_tops() {
+                match (top_id, top) {
+                    (TopId::PromptText(_), Top::PromptText(prompt)) => {
+                        print!("{}", prompt.text);
+                    }
+                    (TopId::CodeBlock(_), Top::CodeBlock(code_block)) => {
+                        print!("`{}`", code_block.block);
+                    }
+                    _ => {
+                        // print!("{:?}", top_id);
+                    }
+                }
+            }
         }
-        Err(mut diagnostics) => {
+        Err(diagnostics) => {
             println!("error {:?}", diagnostics.to_pretty_string());
         }
     }

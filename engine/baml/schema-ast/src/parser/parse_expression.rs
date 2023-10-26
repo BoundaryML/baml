@@ -55,7 +55,13 @@ fn parse_array(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
 fn parse_string_literal(token: Pair<'_>, diagnostics: &mut Diagnostics) -> String {
     assert!(token.as_rule() == Rule::string_literal);
     let contents = token.clone().into_inner().next().unwrap();
-    let contents_str = contents.as_str();
+    let contents_str = match contents.as_rule() {
+        Rule::raw_string_literal => {
+            let contents = contents.into_inner().next().unwrap();
+            contents.as_str().to_string()
+        }
+        _ => contents.to_string(),
+    };
 
     contents_str.to_string()
 }

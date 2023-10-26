@@ -21,7 +21,6 @@ pub(crate) fn parse_field(
     let mut attributes: Vec<Attribute> = Vec::new();
     let mut field_type: Option<(FieldArity, FieldType)> = None;
     let mut comment: Option<Comment> = block_comment.and_then(parse_comment_block);
-    println!("parse_field: {:?}", pair.as_str());
 
     for current in pair.into_inner() {
         match current.as_rule() {

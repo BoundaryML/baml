@@ -4,13 +4,13 @@ entry = {
 
 segment = { empty_lines | code_block | comment_block | dangling_code_block | dangling_comment_block | prompt_text }
 
-code_block    = { BLOCK_OPEN ~ (print_block | input_block | single_arg) ~ BLOCK_CLOSE }
-input_block   = { input_keyword ~ ("." ~ identifier)* }
+code_block    = { BLOCK_OPEN ~ (print_block | variable) ~ BLOCK_CLOSE }
+// input_block   = { input_keyword ~ ("." ~ identifier)* }
 print_block   = { print_keyword ~ template_args? ~ arg_list }
 template_args = { "<" ~ identifier ~ ">" }
-print_keyword = { "print" ~ identifier }
-arg_list      = { "(" ~ (single_arg ~ ("," ~ single_arg)*)? ~ ")" }
-single_arg    = { identifier ~ ("." ~ identifier)* }
+print_keyword = _{ "print" ~ identifier }
+arg_list      = _{ "(" ~ (variable ~ ("," ~ variable)*)? ~ ")" }
+variable    = { identifier ~ ("." ~ identifier)* }
 
 input_keyword = { "input" }
 identifier    = { (ASCII_ALPHA | "_")+ }
