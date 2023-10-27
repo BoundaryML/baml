@@ -12,28 +12,28 @@ enum Sentiment2 {
 }
 
 // Interface blocks 
-class Interface1 {
+class Type1 {
   prop String
   prop2 Int
   propArray String[]
   boolean Bool
 }
 
-class InterfaceTwo {
-  interface1 Interface1
+class Type2 {
+  interface1 Type1
 
   // comment
   prop2 String
 }
 
 function FunctionOne {
-  input Interface1
+  input Type1
   // comment
-  output InterfaceTwo
+  output Type2
 }
 
 function FunctionTwo {
-  input Interface1
+  input Type1
   output String
 }
 
@@ -43,23 +43,12 @@ function FunctionTwo {
 
 generator Default {
   language python
-  output /Users/aaronvillalpando/Projects/gloo-lang/clients/python/baml_client/generated
+  output "hello"
   switches {
     cheap true
     FooBar:cheap false
   }
 }
-
-// generator Default {
-//   language python
-//   output ../path/to/dir
-//   features {
-//     openai true
-//     anthropic true
-//     fast true
-//     slow true
-//   }
-// }
 
 enum FAAAAA {
   POSITIVE
@@ -69,16 +58,10 @@ enum FAAAAA {
 
 // This is preferred
 client<llm> MyClient {
-  @@provider(openai)
-  @@retry(3)
-
-  model gpt-3-test
+  provider openai
+  model gpt-35-turbo
   my_custom_var "some string with spaces"
-  dictionary_key {
-    array_key [ "abc", "abc", aaa    ]
-    key2 "some random value"
-    "key with" "is this value"
-  }
+ 
 }
 
 //switch<client<llm>> MyClient {
@@ -89,8 +72,8 @@ client<llm> MyClient {
 //}
 
 function FooBar2 {
-  input Int[] | String
-  output (Int | String[])[]
+  input String
+  output String
 }
 
 impl<llm, FooBar2> SomeName {
@@ -106,22 +89,4 @@ impl<llm, FooBar2> SomeName {
   "#
 }
 
-impl<llm, FooBar> SomeName2 {
-  client MyClient
-  prompt #"
-    does something
-    asdf {#// This is a comment //#} {#//goes//#} here
-    {#// This is awesome}
-    a ;asdf;kljla
-    asflk;jasdf\t
-    {#input.some_field}
 
-    {#print_type<json>(output)}
-  "#
-}
-
-
-class Bar {
-  a Int
-  b String
-}

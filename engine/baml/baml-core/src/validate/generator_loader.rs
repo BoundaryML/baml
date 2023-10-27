@@ -80,6 +80,8 @@ fn lift_generator(
         .get(OUTPUT_KEY)
         .and_then(|v| coerce::string(v, diagnostics))
         .and_then(|v| Some(v.to_string()));
+    println!("output: {:?}", output);
+    println!("output expression {:?}", args.get(OUTPUT_KEY));
 
     let mut properties = HashMap::new();
 

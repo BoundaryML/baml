@@ -92,7 +92,11 @@ pub fn parse_prompt(
                                     &mut top_level_definitions,
                                     &diagnostics,
                                 ),
-                                _ => unreachable!(),
+                                _ => unreachable!(
+                                    "Unexpected rule: {:?} {:?}",
+                                    inner.as_rule(),
+                                    inner.as_str()
+                                ),
                             }
                         }
                     }

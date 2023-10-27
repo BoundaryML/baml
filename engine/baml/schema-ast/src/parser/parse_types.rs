@@ -24,7 +24,7 @@ pub fn parse_field_type(
 }
 
 fn parse_base_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> FieldType {
-    let current = pair.into_inner().next().unwrap();
+    let current = pair.clone().into_inner().next().unwrap();
     match current.as_rule() {
         Rule::primitive_types => FieldType::PrimitiveType(
             match current.as_str() {
@@ -34,8 +34,10 @@ fn parse_base_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> FieldType {
                 "Bool" => TypeValue::Bool,
                 "Char" => TypeValue::Char,
                 _ => unreachable!(
-                    "Encountered impossible type during parsing: {:?} {:?}",
+                    "Encountered impossible type during parsing: {:?}\n {:?} {:?}\n {:?}",
                     current.as_rule(),
+                    pair.clone().as_str(),
+                    current.as_str(),
                     current.tokens()
                 ),
             },

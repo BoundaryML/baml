@@ -16,4 +16,4 @@ pest_derive = "2.1.0"
 
 [features]
 debug_parser = []
-# default = ["debug_parser"]
+default = ["debug_parser"]
