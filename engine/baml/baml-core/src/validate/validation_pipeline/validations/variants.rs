@@ -76,20 +76,6 @@ fn validate_prompt(
         Ok((ast, _)) => {
             process_ast(ctx, walker, ast.clone(), span);
             let mut full_prompt_text = String::new();
-
-            for (top_id, top) in ast.iter_tops() {
-                match (top_id, top) {
-                    (TopId::PromptText(_), Top::PromptText(prompt)) => {
-                        full_prompt_text.push_str(&prompt.text);
-                    }
-
-                    _ => (),
-                }
-            }
-            println!("full prompt text1:--------\n{}\n----", full_prompt_text);
-            full_prompt_text = full_prompt_text.to_string();
-            let dedent = max_leading_whitespace_to_remove(&full_prompt_text);
-            full_prompt_text = String::new();
             for (top_id, top) in ast.iter_tops() {
                 match (top_id, top) {
                     (TopId::PromptText(_), Top::PromptText(prompt)) => {
@@ -101,11 +87,8 @@ fn validate_prompt(
                     _ => (),
                 }
             }
-            println!("dedent {}", dedent);
-            // code blocks etc are not indented, so we fix it here
-            let new_text = indent_unindented_lines(&full_prompt_text, dedent);
-            // then we dedent the whole thing
-            full_prompt_text = textwrap::dedent(&new_text).trim().to_string();
+
+            full_prompt_text = textwrap::dedent(&full_prompt_text).trim().to_string();
             println!("\nfull prompt text:--------\n{}\n----", full_prompt_text)
         }
         Err(diagnostics) => println!("error {:?}", diagnostics.to_pretty_string()),
