@@ -32,7 +32,7 @@ pub struct Class {
     /// model Foo { .. }
     ///       ^^^
     /// ```
-    pub(crate) name: Identifier,
+    pub name: Identifier,
     /// The fields of the model.
     ///
     /// ```ignore

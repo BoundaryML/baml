@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 use crate::ast::*;
 use internal_baml_diagnostics::{DatamodelError, Diagnostics, SourceFile, Span};
@@ -20,19 +20,41 @@ fn pretty_print<'a>(pair: pest::iterators::Pair<'a, Rule>, indent_level: usize) 
         pretty_print(inner_pair, indent_level + 1);
     }
 }
+
+fn max_leading_whitespace_to_remove(input: &str) -> usize {
+    input
+        .lines()
+        .filter(|line| !line.trim().is_empty()) // Filter out empty lines
+        .map(|line| line.chars().take_while(|c| c.is_whitespace()).count()) // Count leading whitespaces for each line
+        .min()
+        .unwrap_or(0) // Return the minimum count or 0 if there are no lines
+}
+
 pub fn parse_prompt(
     root_path: &PathBuf,
     source: &SourceFile,
-    prompt: &str,
+    prompt_tuple: (String, Span),
 ) -> Result<(PromptAst, Diagnostics), Diagnostics> {
     let mut diagnostics = Diagnostics::new(root_path.clone());
     diagnostics.set_source(source);
 
     // remove the first \n that is the first character if it exists
     // also remove the last \n if it exists
-    let prompt = prompt.trim_matches('\n');
+    let mut span_offset = 0;
+    let prompt = prompt_tuple.0;
+    if prompt.starts_with('\n') {
+        span_offset = 1;
+    }
+
+    // let prompt = prompt.trim_matches('\n');
+    span_offset += max_leading_whitespace_to_remove(&prompt);
+
+    span_offset += prompt_tuple.1.start;
+    // add 2 more for now to account for the 2 characters in the prompt raw string "\"#". TODO: fix this.
+    span_offset += 2;
+    diagnostics.set_span_offset(span_offset);
     // now dedent the prompt
-    let prompt = textwrap::dedent(prompt);
+    let prompt = prompt.clone(); //textwrap::dedent(prompt);
 
     let parse_result = BAMLPromptParser::parse(Rule::entry, &prompt);
 
@@ -75,6 +97,7 @@ pub fn parse_prompt(
                     _ => unreachable!("Unexpected rule: {:?}", pair.as_rule()),
                 }
             }
+
             Ok((
                 PromptAst {
                     tops: top_level_definitions,
@@ -86,13 +109,13 @@ pub fn parse_prompt(
             let location: Span = match err.location {
                 pest::error::InputLocation::Pos(pos) => Span {
                     file: source.clone(),
-                    start: pos,
-                    end: pos,
+                    start: pos + span_offset,
+                    end: pos + span_offset,
                 },
                 pest::error::InputLocation::Span((from, to)) => Span {
                     file: source.clone(),
-                    start: from,
-                    end: to,
+                    start: from + span_offset,
+                    end: to + span_offset,
                 },
             };
 
@@ -104,6 +127,7 @@ pub fn parse_prompt(
             };
 
             diagnostics.push_error(DatamodelError::new_parser_error(expected, location));
+
             Err(diagnostics)
         }
     }

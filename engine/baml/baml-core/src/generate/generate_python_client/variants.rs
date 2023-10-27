@@ -28,7 +28,7 @@ impl JsonHelper for VariantWalker<'_> {
         json!({
             "name": self.name(),
             "function": func.json(f),
-            "prompt": self.properties().prompt,
+            "prompt": self.properties().prompt.0,
             "client": client.name(),
         })
     }

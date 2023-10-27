@@ -20,7 +20,9 @@ client<llm> MyClient {
 impl<llm, Foo> FooImpl{
   client MyClient
   prompt #"
-    A {#input.a}
+    A {#input.e}
+    {#InputType.e}
+    {#input.e.y}
     
     the rest of the prompt
       tabbed-in

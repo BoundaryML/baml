@@ -2,7 +2,7 @@ entry = {
     SOI ~ segment* ~ EOI
 }
 
-segment = { empty_lines | code_block | comment_block | dangling_code_block | dangling_comment_block | prompt_text }
+segment = {  code_block | comment_block | dangling_code_block | dangling_comment_block | empty_lines |prompt_text  }
 
 code_block    = { BLOCK_OPEN ~ (print_block | variable) ~ BLOCK_CLOSE }
 // input_block   = { input_keyword ~ ("." ~ identifier)* }
@@ -32,5 +32,5 @@ comment_block = { comment }
 
 WHITESPACE  = _{ " " | "\t" }
 NEWLINE     = _{ "\n" | "\r\n" | "\r" }
-empty_lines = @{ (WHITESPACE* ~ NEWLINE)+ }
+empty_lines = { (WHITESPACE+ ~ NEWLINE)+ }
 prompt_text =  { (!"{#" ~ !"{//" ~ !"{///" ~ ANY)+ }

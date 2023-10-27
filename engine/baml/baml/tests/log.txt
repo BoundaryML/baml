@@ -1,0 +1,127 @@
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+segment -> "\n    A"
+  prompt_text -> "\n    A"
+segment -> "{#input.a}"
+  code_block -> "{#input.a}"
+    variable -> "input.a"
+      identifier -> "input"
+      identifier -> "a"
+segment -> "!!"
+  prompt_text -> "!!"
+segment -> "{// A\n    multiline\n    comment //}"
+  comment_block -> "{// A\n    multiline\n    comment //}"
+    comment -> "{// A\n    multiline\n    comment //}"
+      comment_text_1 -> "A\n    multiline\n    comment"
+segment -> "\n\n\n"
+  prompt_text -> "\n\n\n"
+segment -> "{#input.a.c}"
+  code_block -> "{#input.a.c}"
+    variable -> "input.a.c"
+      identifier -> "input"
+      identifier -> "a"
+      identifier -> "c"
+segment -> "\n    \n    the rest of the prompt\n    no-tab\n      tab1\n        tab2\n    morespaces here\n"
+  prompt_text -> "\n    \n    the rest of the prompt\n    no-tab\n      tab1\n        tab2\n    morespaces here\n"
+segment -> "{#InputType.a}"
+  code_block -> "{#InputType.a}"
+    variable -> "InputType.a"
+      identifier -> "InputType"
+      identifier -> "a"
+segment -> "{#input.a}"
+  code_block -> "{#input.a}"
+    variable -> "input.a"
+      identifier -> "input"
+      identifier -> "a"
+segment -> "hi there\n    JSON:\n"
+  prompt_text -> "hi there\n    JSON:\n"
+segment -> "{#print_enum(Sentiment)}"
+  code_block -> "{#print_enum(Sentiment)}"
+    print_block -> "print_enum(Sentiment)"
+      identifier -> "_enum"
+      variable -> "Sentiment"
+        identifier -> "Sentiment"
+segment -> "\n    "
+  prompt_text -> "\n    "
+segment -> "{#print_type(output)}"
+  code_block -> "{#print_type(output)}"
+    print_block -> "print_type(output)"
+      identifier -> "_type"
+      variable -> "output"
+        identifier -> "output"
+segment -> "\n  "
+  prompt_text -> "\n  "
+EOI -> ""
+full prompt text1:--------
+
+    A!!
+
+
+
+    
+    the rest of the prompt
+    no-tab
+      tab1
+        tab2
+    morespaces here
+hi there
+    JSON:
+
+    
+  
+----
+    A!!
+    the rest of the prompt
+    no-tab
+      tab1
+        tab2
+    morespaces here
+hi there
+    JSON:
+dedent 0
+
+full prompt text:--------
+A{input.a}!!
+
+
+{input.a.c}
+
+    the rest of the prompt
+    no-tab
+      tab1
+        tab2
+    morespaces here
+{InputType.a}{input.a}hi there
+    JSON:
+{print_enum(Sentiment)}
+    {print_type(output)}
+----
+test variants_prompt_valid_prompt ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s
+

@@ -1,6 +1,7 @@
 use crate::coerce;
 use crate::{context::Context, DatamodelError};
 
+use internal_baml_diagnostics::Span;
 use internal_baml_schema_ast::ast::{
     self, ClassId, EnumId, EnumValueId, FieldId, SerializerFieldId, TopId, VariantConfigId,
     VariantSerializerId, WithName, WithSpan,
@@ -34,10 +35,10 @@ pub(super) fn resolve_types(ctx: &mut Context<'_>) {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone)]
 pub struct VariantProperties {
     pub client: String,
-    pub prompt: String,
+    pub prompt: (String, Span),
 }
 
 #[derive(Debug, Default)]
@@ -146,14 +147,14 @@ fn visit_variant<'db>(idx: VariantConfigId, variant: &'db ast::Variant, ctx: &mu
     match (client, prompt) {
         (Some(client), Some(prompt)) => match (
             coerce::string(client, &mut ctx.diagnostics),
-            coerce::string(prompt, &mut ctx.diagnostics),
+            coerce::string_with_span(prompt, &mut ctx.diagnostics),
         ) {
-            (Some(client), Some(prompt)) => {
+            (Some(client), Some((prompt_string, prompt_span))) => {
                 ctx.types.variant_properties.insert(
                     idx,
                     VariantProperties {
                         client: client.to_string(),
-                        prompt: prompt.to_string(),
+                        prompt: (prompt_string.to_string(), prompt_span.clone()),
                     },
                 );
             }

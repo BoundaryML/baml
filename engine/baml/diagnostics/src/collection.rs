@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 use super::DatamodelError;
 use crate::{warning::DatamodelWarning, SourceFile, Span};
@@ -14,6 +14,7 @@ pub struct Diagnostics {
     current_file: Option<SourceFile>,
     errors: Vec<DatamodelError>,
     warnings: Vec<DatamodelWarning>,
+    current_offset: usize,
 }
 
 impl Diagnostics {
@@ -23,18 +24,27 @@ impl Diagnostics {
             current_file: None,
             errors: Vec::new(),
             warnings: Vec::new(),
+            current_offset: 0,
         }
     }
 
     pub fn span(&self, p: pest::Span<'_>) -> Span {
         match self.current_file {
-            Some(ref file) => Span::new(file.clone(), p.start(), p.end()),
+            Some(ref file) => Span::new(
+                file.clone(),
+                p.start() + self.current_offset,
+                p.end() + self.current_offset,
+            ),
             None => panic!("No current file set."),
         }
     }
 
     pub fn set_source(&mut self, source: &SourceFile) {
         self.current_file = Some(source.clone())
+    }
+
+    pub fn set_span_offset(&mut self, offset: usize) {
+        self.current_offset = offset;
     }
 
     pub fn warnings(&self) -> &[DatamodelWarning] {
@@ -100,5 +110,37 @@ impl Diagnostics {
         );
         self.errors.append(&mut other.errors);
         self.warnings.append(&mut other.warnings);
+    }
+
+    pub fn adjust_spans(&mut self, position_mapping: &HashMap<usize, usize>) {
+        self.errors = self
+            .errors
+            .iter()
+            .map(|err| {
+                let new_start = *position_mapping
+                    .get(&err.span().start)
+                    .unwrap_or(&err.span().start);
+                let new_end = *position_mapping
+                    .get(&err.span().end)
+                    .unwrap_or(&err.span().end);
+                let new_span = Span::new(err.span().file.clone(), new_start, new_end);
+                DatamodelError::new(err.message().to_string(), new_span)
+            })
+            .collect();
+
+        self.warnings = self
+            .warnings
+            .iter()
+            .map(|warn| {
+                let new_start = *position_mapping
+                    .get(&warn.span().start)
+                    .unwrap_or(&warn.span().start);
+                let new_end = *position_mapping
+                    .get(&warn.span().end)
+                    .unwrap_or(&warn.span().end);
+                let new_span = Span::new(warn.span().file.clone(), new_start, new_end);
+                DatamodelWarning::new(warn.message().to_string(), new_span)
+            })
+            .collect();
     }
 }
