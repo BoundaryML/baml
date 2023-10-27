@@ -66,6 +66,9 @@ pub fn parse_prompt(
                 pretty_print(pair.clone(), 0);
 
                 match pair.as_rule() {
+                    Rule::WHITESPACE => {
+                        handle_prompt_text(pair, &mut top_level_definitions, &diagnostics)
+                    }
                     Rule::segment => {
                         for inner in pair.into_inner() {
                             match inner.as_rule() {
