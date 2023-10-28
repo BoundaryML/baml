@@ -87,7 +87,7 @@ pub fn parse_schema(
                     }
                     Rule::EOI => {}
                     Rule::CATCH_ALL => diagnostics.push_error(DatamodelError::new_validation_error(
-                        "This line is invalid. It does not start with any known Prisma schema keyword.",
+                        "This line is invalid. It does not start with any known Baml schema keyword.",
                         diagnostics.span(current.as_span()),
                     )),
                     Rule::comment_block => {

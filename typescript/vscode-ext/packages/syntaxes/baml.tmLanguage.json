@@ -56,7 +56,11 @@
         "2": { "name": "entity.name.type" }
       },
       "end": "\\}",
-      "patterns": [{ "include": "#comment" }, { "include": "#field_declaration_type" }]
+      "patterns": [
+        { "include": "#comment" },
+        { "include": "#field_declaration_type" },
+        { "include": "#block_attribute" }
+      ]
     },
     "function_declaration": {
       "begin": "(function)\\s+(\\w+)\\s*\\{",
@@ -118,10 +122,12 @@
       ]
     },
     "impl_declaration": {
-      "begin": "(impl)\\s*(<[^>]+>)?\\s+(\\w+)\\s*\\{",
+      "begin": "(impl)\\s*(<([^,>]+),\\s*([^>]+)>)?\\s+(\\w+)\\s*\\{",
       "beginCaptures": {
         "1": { "name": "keyword.control.declaration" },
-        "3": { "name": "entity.name" }
+        "3": { "name": "support.type" },
+        "4": { "name": "entity.name.function" },
+        "5": { "name": "entity.name" }
       },
       "end": "\\}",
       "patterns": [
