@@ -50,7 +50,7 @@
       ]
     },
     "interface_declaration": {
-      "begin": "(class)\\s+(\\w+)\\s*\\{",
+      "begin": "(class|override)\\s+(\\w+)\\s*\\{",
       "beginCaptures": {
         "1": { "name": "keyword.control.declaration.interface" },
         "2": { "name": "entity.name.type" }
@@ -132,6 +132,7 @@
       "end": "\\}",
       "patterns": [
         { "include": "#comment" },
+        { "include": "#interface_declaration" },
         { "include": "#block_attribute" },
         { "include": "#property_assignment_expression" }
       ]
