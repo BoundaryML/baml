@@ -78,10 +78,10 @@ impl<llm, FooBar2> SomeName {
   client MyClient
   prompt #"
     does something
-    asdf #// This is a comment //# goes here
+    asdf {#// This is a comment //#} goes here
     a ;asdf;kljla
     asflk;jasdf
-    {#input.some_field.foo}
+    {#input}
 
     {#print_type<json>(output)}
   "#

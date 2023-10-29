@@ -12,7 +12,7 @@ enum Foo2 {
   @meta(foo, #"car, bar, start"#)
 
   FIELD
-  @meta(foo, #""#)
+  @meta(foo, #"f"#)
 
   OTHERWISE
 }
