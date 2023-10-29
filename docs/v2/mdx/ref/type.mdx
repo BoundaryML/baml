@@ -1,0 +1,100 @@
+---
+title: "Supported Types"
+---
+
+## Primitives
+
+| Type   | Since         |     |
+| ------ | ------------- | --- |
+| null   | `baml>=0.2.0` |     |
+| bool   | `baml>=0.2.0` |     |
+| int    | `baml>=0.2.0` |     |
+| float  | `baml>=0.2.0` |     |
+| string | `baml>=0.2.0` |     |
+| char   | `baml>=0.2.0` |     |
+
+## Constructed Types
+
+| Type           | Since         | Syntax                  | Usage            |
+| -------------- | ------------- | ----------------------- | ---------------- |
+| Enum           | `baml>=0.2.0` | See [enum](enum) Docs   |
+| Custom Classes | `baml>=0.2.0` | See [class](class) Docs |
+| Optional       | `baml>=0.2.0` | `type?`                 | `int?`           |
+| Union          | `baml>=0.2.0` | `type\|type\|`          | `int\|MyClass\|` |
+| List           | `baml>=0.2.0` | `type[]`                | `string[]`       |
+| Dictionary     |               |                         |
+| Set            |               |                         |
+| Tuple          |               |                         |
+
+<Warning>`(` and `)` are not yet supported for complex inline type.</Warning>
+
+Constructed types can be composed together as well.
+
+Here are some examples and what their equivalents are in different languages.
+
+### Example 1
+
+<CodeGroup>
+```baml Baml
+int?|string[]|MyClass|
+```
+
+```python Python Equivalent
+Union[Optional[int], List[str], MyClass]
+```
+
+```typescript TypeScript Equivalent
+(number | undefined) | string[] | MyClass
+```
+
+</CodeGroup>
+
+### Example 2
+
+<CodeGroup>
+```baml Baml
+char[]
+```
+
+```python Python Equivalent
+List[str]
+```
+
+```typescript TypeScript Equivalent
+string[]
+```
+
+</CodeGroup>
+
+### Example 3
+
+<CodeGroup>
+```baml Baml
+int|float|[]
+```
+```python Python Equivalent
+List[Union[int, float]]
+```
+
+```typescript TypeScript Equivalent
+number[]
+```
+
+</CodeGroup>
+
+### Example 4
+
+<CodeGroup>
+```baml Baml
+int?|string[]|MyClass|[]?
+```
+
+```python Python Equivalent
+Optional[List[Union[Optional[int], List[str], MyClass]]]
+```
+
+```typescript TypeScript Equivalent
+((number | undefined) | string[] | MyClass)[] | undefined
+```
+
+</CodeGroup>

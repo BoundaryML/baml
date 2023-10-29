@@ -1,0 +1,34 @@
+---
+title: "@enum"
+---
+
+To define your own custom enum in Gloo:
+
+<CodeGroup>
+```gloo Gloo
+@enum MyEnum {
+  Value1
+  Value2
+  Value3
+}
+```
+
+```python Python Equivalent
+from enum import StrEnum
+
+class MyEnum(StrEnum):
+  Value1 = "Value1"
+  Value2 = "Value2"
+  Value3 = "Value3"
+```
+
+```Typescript Typescript Equivalent
+enum MyEnum {
+  Value1 = "Value1",
+  Value2 = "Value2",
+  Value3 = "Value3",
+}
+```
+</CodeGroup>
+
+You may have as many values as you'd like. Values may not be duplicated or empty. Values may not contain spaces or special characters and must not start with a number.

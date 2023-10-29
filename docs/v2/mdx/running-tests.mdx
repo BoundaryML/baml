@@ -1,0 +1,41 @@
+---
+title: "Running Tests"
+---
+
+To run tests on gloo, you can run pytest.
+
+You can read more about the `-k` arg of pytest here ([PyTest Docs](https://docs.pytest.org/en/latest/example/markers.html#using-k-expr-to-select-tests-based-on-their-name))
+
+```bash
+# From your project root
+# Runs all tests generated from @test_group
+# For every function, for every variant
+pytest -m gloo_test
+```
+
+To run tests for just one function
+```bash
+# From your project root
+# Note the underscore at the end of the folder name
+pytest -m gloo_test ./generated/[function_name]_
+```
+
+To run tests for just one test group
+```bash
+# From your project root
+pytest -m gloo_test -k [test_group_name]
+```
+
+To run a specific test case in a test group
+```bash
+# From your project root
+pytest -m gloo_test -k '[test_group_name] and [test_case_name]'
+```
+
+## Coming Soon
+```bash
+# From anywhere within your project
+gloo test --function [function_name]
+gloo test --group [test_group_name]
+gloo test --group [test_group_name] --case [test_case_name]
+```

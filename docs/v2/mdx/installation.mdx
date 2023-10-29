@@ -1,0 +1,81 @@
+---
+title: "Installation"
+---
+
+## Baml Compiler
+
+You'll need to install the baml compiler -- `baml` -- to your path.
+
+<CodeGroup>
+
+```bash Mac
+brew tap GlooHQ/baml
+brew install baml
+```
+
+```bash Linux (debian)
+curl -fsSL https://raw.githubusercontent.com/BamlHQ/homebrew-baml/main/install-baml.sh | bash
+```
+
+```bash Windows (via scoop)
+# You can install scoop at https://scoop.sh/
+scoop bucket add baml-bucket https://github.com/bamlhq/homebrew-baml
+scoop install baml
+```
+
+</CodeGroup>
+
+### Update instructions
+
+<CodeGroup>
+
+```bash Mac
+baml update
+```
+
+```bash Linux (debian)
+curl -fsSL https://raw.githubusercontent.com/BamlHQ/homebrew-baml/main/install-baml.sh | bash
+```
+
+```bash Windows (via scoop)
+scoop update
+scoop update baml
+```
+
+</CodeGroup>
+
+## Baml Extension
+
+Use our [VSCode Exension](https://marketplace.visualstudio.com/items?itemName=baml.baml) for syntax highlighting, auto building `.baml` files, and inline syntax errors.
+
+<Info>It also works with [Cursor](https://cursor.so/)!</Info>
+
+<Warning>
+  If you don't use the VSCode extension, you'll need to run: `baml build` (no
+  args) every time you edit a `.baml` file.
+</Warning>
+
+### Initialize Baml in your project
+
+```
+baml init
+```
+
+This will create a baml.yaml file
+
+![](/images/bamlinit.png)
+
+### Folder structure
+
+```
+.
+|-- baml.yaml
+├── app
+│   └── your application files
+├── baml
+│   └── your baml files live here
+├── pyproject.toml
+└── generated
+    └── translated, runnable python code from .baml.
+          Don't edit these files.
+```
