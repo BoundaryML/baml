@@ -26,8 +26,6 @@
     "esbuild-base": "node ./esbuild.js",
     "esbuild-build": "node ./esbuild.js --sourcemap",
     "esbuild-watch": "node ./esbuild.js --sourcemap --watch",
-    "vscode:package": "vsce package --no-dependencies",
-    "vscode:publish": "vsce publish --no-dependencies",
     "lint": "eslint \"src/**/*.ts\"",
     "watch": "pnpm run esbuild-watch",
     "build": "pnpm run esbuild-base",
