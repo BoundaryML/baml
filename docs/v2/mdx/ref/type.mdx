@@ -6,22 +6,22 @@ title: "Supported Types"
 
 | Type   | Since         |     |
 | ------ | ------------- | --- |
-| null   | `baml>=0.2.0` |     |
-| bool   | `baml>=0.2.0` |     |
-| int    | `baml>=0.2.0` |     |
-| float  | `baml>=0.2.0` |     |
-| string | `baml>=0.2.0` |     |
-| char   | `baml>=0.2.0` |     |
+| null   | `baml>=0.1.0` |     |
+| bool   | `baml>=0.1.0` |     |
+| int    | `baml>=0.1.0` |     |
+| float  | `baml>=0.1.0` |     |
+| string | `baml>=0.1.0` |     |
+| char   | `baml>=0.1.0` |     |
 
 ## Constructed Types
 
 | Type           | Since         | Syntax                  | Usage            |
 | -------------- | ------------- | ----------------------- | ---------------- |
-| Enum           | `baml>=0.2.0` | See [enum](enum) Docs   |
-| Custom Classes | `baml>=0.2.0` | See [class](class) Docs |
-| Optional       | `baml>=0.2.0` | `type?`                 | `int?`           |
-| Union          | `baml>=0.2.0` | `type\|type\|`          | `int\|MyClass\|` |
-| List           | `baml>=0.2.0` | `type[]`                | `string[]`       |
+| Enum           | `baml>=0.1.0` | See [enum](enum) Docs   |
+| Custom Classes | `baml>=0.1.0` | See [class](class) Docs |
+| Optional       | `baml>=0.1.0` | `type?`                 | `int?`           |
+| Union          | `baml>=0.1.0` | `type\|type\|`          | `int\|MyClass\|` |
+| List           | `baml>=0.1.0` | `type[]`                | `string[]`       |
 | Dictionary     |               |                         |
 | Set            |               |                         |
 | Tuple          |               |                         |
@@ -86,7 +86,7 @@ number[]
 
 <CodeGroup>
 ```baml Baml
-int?|string[]|MyClass|[]?
+(int?|string[]|MyClass)[]
 ```
 
 ```python Python Equivalent

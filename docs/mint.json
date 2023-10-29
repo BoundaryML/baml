@@ -28,24 +28,46 @@
     "name": "Schedule call",
     "url": "https://calendly.com/gloo-vai/30min"
   },
+  "versions": ["v2", "v1"],
   "tabs": [],
   "navigation": [
     {
       "group": "Get Started",
       "pages": [
-        "mdx/overview",
-        "mdx/installation",
-        "mdx/quickstart",
-        "mdx/running-tests"
-      ]
+        "v1/mdx/overview",
+        "v1/mdx/installation",
+        "v1/mdx/quickstart",
+        "v1/mdx/running-tests"
+      ],
+      "version": "v1"
+    },
+    {
+      "group": "Get Started",
+      "pages": [
+        "v2/mdx/overview",
+        "v2/mdx/installation",
+        "v2/mdx/quickstart",
+        "v2/mdx/running-tests"
+      ],
+      "version": "v2"
     },
     {
       "group": "Concepts",
       "pages": [
-        "mdx/what-is-gloo",
-        "mdx/why-gloo",
-        "mdx/should-you-use-gloo"
-      ]
+        "v1/mdx/what-is-gloo",
+        "v1/mdx/why-gloo",
+        "v1/mdx/should-you-use-gloo"
+      ],
+      "version": "v1"
+    },
+    {
+      "group": "Concepts",
+      "pages": [
+        "v2/mdx/what-is-gloo",
+        "v2/mdx/why-gloo",
+        "v2/mdx/should-you-use-gloo"
+      ],
+      "version": "v2"
     },
     {
       "group": "Guides",
@@ -53,18 +75,39 @@
         {
           "group": "Basic",
           "pages": [
-            "mdx/examples/classification",
-            "mdx/examples/extraction",
-            "mdx/examples/translation",
-            "mdx/examples/summarization",
-            "mdx/examples/q-and-a"
+            "v1/mdx/examples/classification",
+            "v1/mdx/examples/extraction",
+            "v1/mdx/examples/translation",
+            "v1/mdx/examples/summarization",
+            "v1/mdx/examples/q-and-a"
           ]
         },
         {
           "group": "Advanced",
-          "pages": ["mdx/examples/chat-bot"]
+          "pages": ["v1/mdx/examples/chat-bot"]
         }
-      ]
+      ],
+      "version": "v1"
+    },
+    {
+      "group": "Guides",
+      "pages": [
+        {
+          "group": "Basic",
+          "pages": [
+            "v2/mdx/examples/classification",
+            "v2/mdx/examples/extraction",
+            "v2/mdx/examples/translation",
+            "v2/mdx/examples/summarization",
+            "v2/mdx/examples/q-and-a"
+          ]
+        },
+        {
+          "group": "Advanced",
+          "pages": ["v2/mdx/examples/chat-bot"]
+        }
+      ],
+      "version": "v2"
     },
     {
       "group": "Reference",
@@ -95,6 +138,41 @@
           ]
         }
       ]
+    },
+    {
+      "group": "Reference",
+      "pages": [
+        {
+          "group": "Gloo Config Syntax",
+          "pages": [
+            {
+              "group": "Types",
+              "pages": [
+                "v2/mdx/ref/type",
+                "v2/mdx/ref/enum",
+                "v2/mdx/ref/class"
+              ]
+            },
+            {
+              "group": "Functions",
+              "pages": [
+                "v2/mdx/ref/function",
+                "v2/mdx/ref/test-group",
+                {
+                  "group": "@variant",
+                  "pages": ["v2/mdx/ref/variant-llm", "v2/mdx/ref/variant-code"]
+                }
+              ]
+            },
+            {
+              "group": "clients",
+              "pages": ["v2/mdx/ref/client-llm", "v2/mdx/ref/client-code"]
+            },
+            "v2/mdx/ref/method"
+          ]
+        }
+      ],
+      "version": "v2"
     }
   ],
   "footerSocials": {

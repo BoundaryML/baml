@@ -33,15 +33,15 @@ User message -> Classify message -> Use tool, or respond back
 
 <Info>If you have the [VSCode extension](/mdx/installation#baml-extension), **.baml** files will have syntax highlighting!</Info>
 ``` baml main.baml
-@function ClassifyMessage {
-  @input string
-  @output Category
+function ClassifyMessage {
+  input string
+  output Category
 }
 
-@enum Category {
-BOOK_MEETING
-AVALABILITY_QUERY
-SET_REMINDER
+enum Category {
+  BOOK_MEETING
+  AVALABILITY_QUERY
+  SET_REMINDER
 }
 
 ````
@@ -58,32 +58,34 @@ An LLM variant has three things
 <Tip>Feel free to add any of these objects in any .baml file. All objects are imported globally and can be referenced from anywhere.</Tip>
 
 ```baml main.baml
-@client[llm] GPT35Client {
-    @provider openai
-    model gpt-3.5-turbo
-    temperature 0
-    api_key @ENV.OPENAI_API_KEY
+client<llm> GPT35Client {
+    provider openai
+    options {
+      model gpt-3.5-turbo
+      temperature 0
+      api_key @ENV.OPENAI_API_KEY
+    }
 }
 
-@variant[llm] v1 for ClassifyMessage {
-  @client[llm] GPT35Client
-  @prompt {
+impl<llm, ClassifyMessage> v1 {
+  client<llm> GPT35Client
+  prompt #"
     Given a message, classify it into one of the following categories: BOOK_MEETING, AVALABILITY_QUERY, SET_REMINDER
 
     Message:
     ---
-    {@input}
+    {#input}
     ---
 
     Classification:
-  }
+  "#
 }
 
 ````
 
-Note how we can inject the function's **@input** variable into the prompt by writing `{@input}`.
+Note how we can inject the function's **#input** variable into the prompt by writing `{#input}`.
 
-<Tip>If your **@input** was an object, you'd also be able to write `{@input.property}`. See our entity extraction.</Tip>
+<Tip>If your **#input** was an object, you'd also be able to write `{#input.property}`. See our entity extraction.</Tip>
 
 #### Run your function
 
@@ -112,38 +114,56 @@ You probably want to add some descriptions as to what each class actually means,
 
 In our case, we will rename all our classes to symbols, such as "K1, K2, K3" so that the LLM can focus on the class descriptions we provide more than the names of them. This is an interesting technique called "Symbol tuning".
 
-To do this we will leverage a unique property called **@stringify**. @stringify basically means "define how this class or object will be described to the LLM".
-See below how it's used:
+To do this we can add `attributes`, denoted with the **@** for our enum values.
+
+```baml Baml
+enum Category {
+  BOOK_MEETING @rename(k1) @describe(
+    When the user wants to book a meeting on our internal system.
+  )
+  AVALABILITY_QUERY @rename(k2) @describe(
+    When the user is asking for their calendar availability.
+  )
+
+  // This format also works
+  SET_REMINDER 
+  @rename(k3) 
+  @describe(
+    When the user wants to set a calendar reminder.
+  )
+}
+
+...
+...
+   prompt #"
+      Given a message, classify it into one of the following categories:
+      {#print_enum(Category)}
+   "#
+```
+
+
+### Advanced overrides
+You can also override a particular field in your enum for a specific **impl** of your function.
+These overrides will take precedence over the other ones defined in the enum definition.
 
 ```diff main.baml
-@variant[llm] v1 for ClassifyMessage {
-  @client[llm] GPT35Client
-+  @stringify Category {
+impl<llm, ClassifyMessage> V1 {
+   client GPT35Client
++  override Category {
 +    BOOK_MEETING
 +    @rename{k1}
 +    @describe{
 +      When the user wants to book a meeting on our internal system.
 +    }
-+
-+    AVAILABILITY_QUERY
-+    @rename{k2}
-+    @describe{
-+      When the user is asking for their calendar availability.
-+    }
-+
-+    SET_REMINDER
-+    @rename{k3}
-+    @describe{
-+      When the user wants to set a calendar reminder.
-+    }
 +  }
-  @prompt {
+
+  prompt {
     Given a message, classify it into one of the following categories:
-+    {@Category.values}
++   {#print_enum(Category)}
 
     Message:
     ---
-    {@input}
+    {#input}
     ---
 
     Classification:
@@ -153,8 +173,8 @@ See below how it's used:
 
 We added two things here:
 
-1. **@stringify** definition for our **Category** enum, with the new aliases and descriptions.
-2. Used Baml's **\{@Category.values\}** unique enum property, which writes down each enum and its description in the prompt. You can only use `.values` on enums to list them in your prompt.
+1. **override** definition for our **Category** enum, with the new aliases and descriptions.
+2. Used Baml's **\{#print_enum(Category)}** helper function to print out the enum, which writes down each enum and its description in the prompt.
 
 **Resulting prompt**
 
@@ -179,61 +199,55 @@ Classification:
 
 <CodeGroup>
 ```baml main.baml
-@function ClassifyMessage {
-  @input string
-  @output Category
+function ClassifyMessage {
+  input string
+  output Category
 }
 
-@enum Category {
-BOOK_MEETING
-AVALABILITY_QUERY
-SET_REMINDER
+enum Category {
+  BOOK_MEETING @rename(k1) @describe(
+    When the user wants to book a meeting on our internal system.
+  )
+  AVALABILITY_QUERY @rename(k2) @describe(
+    When the user is asking for their calendar availability.
+  )
+
+  // This format also works
+  SET_REMINDER 
+  @rename(k3) 
+  @describe(
+    When the user wants to set a calendar reminder.
+  )
 }
 
-@variant[llm] v1 for ClassifyMessage {
-@client[llm] GPT35Client
-@stringify Category {
-BOOK_MEETING
-@rename{k1}
-@describe{
-When the user wants to book a meeting on our internal system.
-}
+impl<llm, ClassifyMessage> V1 {
+   client GPT35Client
+  prompt {
+    Given a message, classify it into one of the following categories:
++   {#print_enum(Category)}
 
-        AVAILABILITY_QUERY
-        @rename{k2}
-        @describe{
-        When the user is asking for their calendar availability.
-        }
+    Message:
+    ---
+    {#input}
+    ---
 
-        SET_REMINDER
-        @rename{k3}
-        @describe{
-        When the user wants to set a calendar reminder.
-        }
-    }
-    @prompt {
-        Given a message, classify it into one of the following categories:
-        {@Category.values}
-
-        Message:
-        ---
-        {@input}
-        ---
-
-        Classification:
-    }
+    Classification:
+  }
 
 }
 
 ````
 
 ```baml clients.baml
-@client[llm] GPT35Client {
-    @provider openai
-    model gpt-3.5-turbo
-    temperature 0
-    api_key @ENV.OPENAI_API_KEY
+client<llm> GPT35Client {
+    provider openai
+    options {
+      model gpt-3.5-turbo
+      temperature 0
+      api_key @ENV.OPENAI_API_KEY
+    }
 }
+
 ````
 
 ```python app/pipeline.py

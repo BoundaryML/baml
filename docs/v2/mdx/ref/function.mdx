@@ -4,17 +4,17 @@ title: "@function"
 
 A function is a definition of an input and output.
 
-The implementation of the function is described in a [variant](/mdx/ref/variant-llm).
+The implementation of the function is described in a [variant](./variant-llm).
 
 We specifically seprate out functions and their defintions because in machine learnings,
 its often common to swap out model parameters, what model architecture is used, or even
 if you're using an LLM vs a Heuristic vs a combination of both to get the answer.
 
-With gloo, you can swap out the function definition and keep the rest of the code that uses the
+With baml, you can swap out the function definition and keep the rest of the code that uses the
 function the same.
 
 <CodeGroup>
-```gloo Gloo
+```baml Baml
 @function GetSentiment {
     @input   string
     @output  string
