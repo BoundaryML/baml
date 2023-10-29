@@ -1,5 +1,7 @@
 use internal_baml_diagnostics::DatamodelError;
-use internal_baml_schema_ast::ast;
+use internal_baml_schema_ast::ast::{
+    Class, ClassId, Enum, EnumId, Top, TopId, Variant, VariantConfigId, WithSpan,
+};
 use log::info;
 
 mod alias;
@@ -16,13 +18,13 @@ pub(super) fn resolve_attributes(ctx: &mut Context<'_>) {
     for top in ctx.ast.iter_tops() {
         info!("Resolving attributes for {:?}", top.0);
         match top {
-            (ast::TopId::Class(class_id), ast::Top::Class(ast_class)) => {
+            (TopId::Class(class_id), Top::Class(ast_class)) => {
                 resolve_class_attributes(class_id, ast_class, ctx)
             }
-            (ast::TopId::Enum(enum_id), ast::Top::Enum(ast_enum)) => {
+            (TopId::Enum(enum_id), Top::Enum(ast_enum)) => {
                 resolve_enum_attributes(enum_id, ast_enum, ctx)
             }
-            (ast::TopId::Variant(ctid), ast::Top::Variant(ast_variant)) if ast_variant.is_llm() => {
+            (TopId::Variant(ctid), Top::Variant(ast_variant)) if ast_variant.is_llm() => {
                 resolve_llm_variant_attributes(ctid, ast_variant, ctx)
             }
             _ => (),
@@ -30,14 +32,10 @@ pub(super) fn resolve_attributes(ctx: &mut Context<'_>) {
     }
 }
 
-fn resolve_enum_attributes<'db>(
-    enum_id: ast::EnumId,
-    ast_enum: &'db ast::Enum,
-    ctx: &mut Context<'db>,
-) {
+fn resolve_enum_attributes<'db>(enum_id: EnumId, ast_enum: &'db Enum, ctx: &mut Context<'db>) {
     let mut enum_attributes = EnumAttributes::default();
 
-    for (value_idx, value) in ast_enum.iter_values() {
+    for (value_idx, _value) in ast_enum.iter_values() {
         ctx.visit_attributes((enum_id, value_idx).into());
         if let Some(attrs) = to_string_attribute::visit(ctx, false) {
             enum_attributes.value_serilizers.insert(value_idx, attrs);
@@ -53,11 +51,7 @@ fn resolve_enum_attributes<'db>(
     ctx.types.enum_attributes.insert(enum_id, enum_attributes);
 }
 
-fn resolve_class_attributes<'db>(
-    class_id: ast::ClassId,
-    ast_class: &'db ast::Class,
-    ctx: &mut Context<'db>,
-) {
+fn resolve_class_attributes<'db>(class_id: ClassId, ast_class: &'db Class, ctx: &mut Context<'db>) {
     let mut class_attributes = ClassAttributes::default();
 
     for (field_id, _) in ast_class.iter_fields() {
@@ -79,8 +73,8 @@ fn resolve_class_attributes<'db>(
 }
 
 fn resolve_llm_variant_attributes<'db>(
-    variant_id: ast::VariantConfigId,
-    ast_variant: &'db ast::Variant,
+    variant_id: VariantConfigId,
+    ast_variant: &'db Variant,
     ctx: &mut Context<'db>,
 ) {
     let mut variant_attributes = VariantAttributes::default();
@@ -94,7 +88,7 @@ fn resolve_llm_variant_attributes<'db>(
 
     for (serializer_idx, serializer) in ast_variant.iter_serializers() {
         let mut serializer_attr = SerializerAttributes::default();
-        for (field_id, value_idx) in serializer.iter_fields() {
+        for (field_id, _value_idx) in serializer.iter_fields() {
             ctx.visit_attributes((variant_id, serializer_idx, field_id).into());
             if let Some(attrs) = to_string_attribute::visit(ctx, false) {
                 serializer_attr.field_serilizers.insert(field_id, attrs);
@@ -108,7 +102,7 @@ fn resolve_llm_variant_attributes<'db>(
         {
             ctx.push_error(DatamodelError::new_validation_error(
                 "Duplicate serializer name.",
-                serializer.name.span.clone(),
+                serializer.name.span().clone(),
             ));
         }
     }

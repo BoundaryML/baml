@@ -1,6 +1,6 @@
 use super::{
-    traits::WithAttributes, Attribute, Comment, ConfigBlockProperty, Field, Identifier, Serializer,
-    Span, WithDocumentation, WithIdentifier, WithName, WithSpan,
+    traits::WithAttributes, Attribute, Comment, ConfigBlockProperty, Identifier, Serializer, Span,
+    WithDocumentation, WithIdentifier, WithSpan,
 };
 
 /// An opaque identifier for a field in an AST model. Use the
@@ -114,8 +114,8 @@ impl Variant {
         self.variant_type == "llm"
     }
 
-    pub fn function_name(&self) -> &str {
-        &self.function_name.name
+    pub fn function_name(&self) -> &Identifier {
+        &self.function_name
     }
 }
 

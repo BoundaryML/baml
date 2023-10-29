@@ -1,9 +1,7 @@
 function Foo {
-  input String
-  output String
+  input string
+  output string
 }
-
-
 
 impl<llm, Foo> FooImpl {
   prompt "hello world"
@@ -11,11 +9,11 @@ impl<llm, Foo> FooImpl {
 }
 
 // error: Error validating: Unknown client `MadeUpClient`
-//   -->  /Users/aaronvillalpando/Projects/gloo-lang/engine/baml/baml/tests/validation_files/variants/prompt_client_unknown.baml:8
+//   -->  /Users/vbv/repos/gloo-lang/engine/baml/baml/tests/validation_files/variants/client_unknown.baml:6
 //    | 
-//  7 | 
-//  8 | impl<llm, Foo> FooImpl {
-//  9 |   prompt "hello world"
-// 10 |   client MadeUpClient
-// 11 | }
+//  5 | 
+//  6 | impl<llm, Foo> FooImpl {
+//  7 |   prompt "hello world"
+//  8 |   client MadeUpClient
+//  9 | }
 //    | 

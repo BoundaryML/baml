@@ -1,6 +1,5 @@
 use baml::internal_baml_diagnostics::DatamodelWarning;
 use baml::internal_baml_schema_ast::ast::{self};
-use baml::StringFromEnvVar;
 
 pub(crate) trait DatamodelAssert<'a> {
     // fn assert_has_model(&'a self, name: &str) -> walkers::ModelWalker<'a>;
@@ -9,7 +8,6 @@ pub(crate) trait DatamodelAssert<'a> {
 
 pub(crate) trait DatasourceAsserts {
     fn assert_name(&self, name: &str) -> &Self;
-    fn assert_url(&self, url: StringFromEnvVar) -> &Self;
 }
 
 pub(crate) trait WarningAsserts {
@@ -77,7 +75,7 @@ impl DefaultValueAssert for ast::Expression {
     #[track_caller]
     fn assert_bool(&self, expected: bool) -> &Self {
         assert!(
-            matches!(self, ast::Expression::ConstantValue(actual, _) if actual == &format!("{expected}"))
+            matches!(self, ast::Expression::Identifier(ast::Identifier::Local(actual, _)) if actual == &format!("{expected}"))
         );
 
         self
@@ -85,8 +83,7 @@ impl DefaultValueAssert for ast::Expression {
 
     #[track_caller]
     fn assert_constant(&self, expected: &str) -> &Self {
-        assert!(matches!(self, ast::Expression::ConstantValue(actual, _) if actual == expected));
-
+        matches!(self, ast::Expression::Identifier(ast::Identifier::Local(actual, _)) if actual == expected);
         self
     }
 

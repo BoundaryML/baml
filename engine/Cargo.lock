@@ -851,6 +851,7 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
+ "strsim 0.10.0",
  "textwrap 0.16.0",
  "whoami",
 ]
@@ -894,6 +895,7 @@ dependencies = [
 name = "internal-baml-schema-ast"
 version = "0.0.1"
 dependencies = [
+ "either",
  "internal-baml-diagnostics",
  "log",
  "pest",

@@ -1,7 +1,7 @@
 mod panic_with_diff;
 
 use baml::{SourceFile, ValidatedSchema};
-use internal_baml_core::internal_baml_schema_ast::parse_schema;
+
 use std::{
     fs,
     io::Write as _,

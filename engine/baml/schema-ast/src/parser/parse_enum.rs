@@ -6,7 +6,7 @@ use super::{
     Rule,
 };
 use crate::ast::{Attribute, Comment, Enum, EnumValue, Identifier};
-use internal_baml_diagnostics::{DatamodelError, Diagnostics, Span};
+use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
 pub fn parse_enum(
     pair: Pair<'_>,

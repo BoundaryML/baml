@@ -9,7 +9,7 @@ mod lint;
 mod validate;
 
 use baml::{internal_baml_parser_database::ast, SourceFile};
-use log::*;
+
 use lsp_types::{Position, Range};
 
 /// The API is modelled on an LSP [completion

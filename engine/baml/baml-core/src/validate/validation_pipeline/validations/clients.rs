@@ -1,4 +1,4 @@
-use internal_baml_schema_ast::ast::FieldType;
+use internal_baml_schema_ast::ast::{WithName};
 
 use crate::validate::validation_pipeline::context::Context;
 
@@ -9,7 +9,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
         let mut provider_exists = false;
 
         ast_client.iter_fields().for_each(|field| {
-            if &field.1.name.name == "provider" {
+            if field.1.name.name() == "provider" {
                 provider_exists = true;
             }
         });

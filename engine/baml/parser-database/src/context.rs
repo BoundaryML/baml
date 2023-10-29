@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+
 
 use internal_baml_schema_ast::ast::ArguementId;
 
@@ -102,7 +102,7 @@ impl<'db> Context<'db> {
 
         while !has_valid_attribute {
             let first_attr = iter_attributes(self.attributes.attributes.as_ref(), self.ast)
-                .filter(|(_, attr)| attr.name.name == name)
+                .filter(|(_, attr)| attr.name.name() == name)
                 .find(|(attr_id, _)| self.attributes.unused_attributes.contains(attr_id));
             let (attr_id, attr) = if let Some(first_attr) = first_attr {
                 first_attr
@@ -121,7 +121,7 @@ impl<'db> Context<'db> {
     #[must_use]
     pub(crate) fn visit_optional_single_attr(&mut self, name: &'static str) -> bool {
         let mut attrs = iter_attributes(self.attributes.attributes.as_ref(), self.ast)
-            .filter(|(_, a)| a.name.name == name);
+            .filter(|(_, a)| a.name.name() == name);
         let (first_idx, first) = match attrs.next() {
             Some(first) => first,
             None => return false,
@@ -130,10 +130,10 @@ impl<'db> Context<'db> {
 
         if attrs.next().is_some() {
             for (idx, attr) in iter_attributes(self.attributes.attributes.as_ref(), self.ast)
-                .filter(|(_, a)| a.name.name == name)
+                .filter(|(_, a)| a.name.name() == name)
             {
                 diagnostics.push_error(DatamodelError::new_duplicate_attribute_error(
-                    &attr.name.name,
+                    &attr.name.name(),
                     attr.span.clone(),
                 ));
                 assert!(self.attributes.unused_attributes.remove(&idx));
@@ -196,7 +196,7 @@ impl<'db> Context<'db> {
         for attribute_id in &self.attributes.unused_attributes {
             let attribute = &self.ast[*attribute_id];
             diagnostics.push_error(DatamodelError::new_attribute_not_known_error(
-                &attribute.name.name,
+                &attribute.name.name(),
                 attribute.span.clone(),
             ))
         }

@@ -5,8 +5,7 @@ use super::{
     parse_attribute::parse_attribute,
     parse_comments::*,
     parse_config::parse_key_value,
-    parse_expression::parse_expression,
-    parse_identifier::{parse_identifier, parse_identifier_string},
+    parse_identifier::parse_identifier,
     parse_serializer::parse_serializer,
     parse_template_args::parse_template_args,
     Rule,
@@ -67,7 +66,7 @@ pub(crate) fn parse_variant_block(
 
     match (name, template_args) {
         (_, None) => Err(DatamodelError::new_validation_error(
-            "Missing template for impl. (did you forget <llm>)",
+            "Missing template for impl. (did you forget <llm, FunctionName>)",
             diagnostics.span(pair_span),
         )),
         (Some(name), Some(args)) => match args.len() {
@@ -76,16 +75,17 @@ pub(crate) fn parse_variant_block(
                 if variant_type.is_none() {
                     return Err(DatamodelError::new_validation_error(
                         "impl's first template arg should be an executor. (did you forget <llm, FunctionName>).",
-                        diagnostics.span(pair_span),
+                        args[0].span().clone(),
                     ));
                 }
 
-                let target_function = args.index(1);
-                let identifier = Identifier {
-                    path: None,
-                    name: target_function.to_string(),
-                    span: target_function.span().clone(),
-                };
+                let identifier = args.index(1).as_identifer();
+                if identifier.is_none() {
+                    return Err(DatamodelError::new_validation_error(
+                        "impl's second template arg should be a function name. (did you forget <llm, FunctionName>).",
+                        args[1].span().clone(),
+                    ));
+                }
                 Ok(Variant {
                     name,
                     fields,
@@ -94,7 +94,7 @@ pub(crate) fn parse_variant_block(
                     documentation: doc_comment.and_then(parse_comment_block),
                     span: diagnostics.span(pair_span),
                     variant_type: variant_type.unwrap().to_string(),
-                    function_name: identifier,
+                    function_name: identifier.unwrap().to_owned(),
                 })
             }
             _ => Err(DatamodelError::new_validation_error(

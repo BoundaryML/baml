@@ -38,9 +38,6 @@ mod types;
 pub use coerce_expression::{coerce, coerce_array, coerce_opt};
 pub use internal_baml_schema_ast::ast;
 use internal_baml_schema_ast::ast::SchemaAst;
-use interner::StringInterner;
-use log::info;
-pub use names::is_reserved_type_name;
 pub use types::StaticType;
 
 use self::{context::Context, interner::StringId, types::Types};

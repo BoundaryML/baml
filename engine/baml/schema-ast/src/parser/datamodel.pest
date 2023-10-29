@@ -36,14 +36,13 @@ interface_declaration = {
 }
 
 field_declaration = {
-    field_key
+    identifier
     ~ field_type?
     ~ (NEWLINE? ~ field_attribute)*
     ~ trailing_comment?
     ~ NEWLINE
 }
 
-field_key = @{ identifier }
 class_contents = {
     (field_declaration | (block_attribute ~ NEWLINE) | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
 }
@@ -81,7 +80,7 @@ function_contents = {
     (input_field_declaration | output_field_declaration | (block_attribute ~ NEWLINE) | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
 }
 
-named_argument = { single_word ~ ":" ~ field_type? }
+named_argument = { identifier ~ ":" ~ field_type? }
 // Be forgiving and allow trailing comma
 named_argument_list = { "(" ~ named_argument? ~ ("," ~ named_argument)* ~ ","? ~ ")" }
 
@@ -130,7 +129,7 @@ config_block = {
     ~ BLOCK_CLOSE
     }
 
-key_value = { single_word ~ expression? ~ (NEWLINE? ~ field_attribute)* ~ trailing_comment? }
+key_value = { identifier ~ template_args? ~ expression? ~ (NEWLINE? ~ field_attribute)* ~ trailing_comment? }
 
 config_contents = {
     ((key_value ~ NEWLINE) | (block_attribute ~ NEWLINE) | comment_block | empty_lines| BLOCK_LEVEL_CATCH_ALL)*
@@ -139,27 +138,33 @@ config_contents = {
 // ######################################
 // Attributes
 // ######################################
-attribute_name = @{ single_word  }
-block_attribute = { "@@" ~ attribute_name ~ arguments_list? }
-field_attribute = { "@" ~ attribute_name ~ arguments_list? }
+block_attribute = { "@@" ~ identifier ~ arguments_list? }
+field_attribute = { "@" ~ identifier ~ arguments_list? }
 
 // ######################################
 // Field Type
 // ######################################
 
 // Pest is greedy, order is very important here.
-field_type = { union_list_type | union_type | field_type_base }
-union_list_type = { ("(" ~ union_type ~ ")[]") }
-union_type = { (field_type_base ~ ("|" ~ field_type_base)+) }
-field_type_base = { unsupported_optional_list_type | list_type | optional_type  | base_type  }
+field_type = { (union | non_union) ~ optional_token? }
+optional_token = {"?"}
+union = { base_type ~ ("|" ~ base_type)+ }
+base_type = { array_notation | dict | identifier | group | tuple }
 
-primitive_types = { ("String" | "Int" | "Float" | "Bool" | "Char") ~ !ASCII_ALPHANUMERIC }
+array_suffix = {"[]"}
+array_notation = { base_type_without_array ~ array_suffix+ }
 
-base_type = { primitive_types | identifier } // Called base type to not conflict with type rust keyword
-unsupported_optional_list_type = { base_type ~ "[]" ~ "?" }
-list_type = { base_type ~ "[]" }
-optional_type = { base_type ~ "?" }
+dict = { "{" ~ field_type ~ ":" ~ field_type ~ "}" }
+group = { "(" ~ field_type ~ ")" }
+tuple = { "(" ~ field_type ~ ("," ~ field_type)+ ~ ")" }
 
+base_type_without_array = { dict | identifier | group | tuple }
+
+non_union = { array_notation | dict | identifier | group | tuple }
+
+path_identifier = {single_word ~ ("." ~ single_word)+}
+identifier = { path_identifier | single_word }
+single_word = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_" | "-" )* }
 
 // ######################################
 // Type Alias
@@ -175,10 +180,11 @@ arguments_list = { "(" ~ expression? ~ ("," ~ expression)? ~ ")" }
 // Expressions & Functions
 // ######################################
 dict_key = { identifier | quoted_string_literal }
-dict_entry = { dict_key ~ expression }
-dict_expression = { "{" ~ NEWLINE ~ (dict_entry ~ ( NEWLINE ~ dict_entry )*)? ~ NEWLINE ~ "}" }
-array_expression = { "[" ~ (expression ~ ( "," ~ expression )*)? ~ "]" }
-expression = { dict_expression | array_expression | numeric_literal | identifier | string_literal }
+dict_entry = { (comment_block | empty_lines)* ~ dict_key ~ expression ~ trailing_comment? }
+splitter = _{ ("," ~ NEWLINE?) | NEWLINE }
+dict_expression = { "{" ~ empty_lines? ~ (dict_entry ~ ( splitter ~ dict_entry )*)? ~ comment_block? ~ NEWLINE? ~ empty_lines? ~ "}" }
+array_expression = { "[" ~ empty_lines? ~ (expression ~ trailing_comment? ~ ( splitter ~ expression ~ trailing_comment? )*)? ~ empty_lines? ~ "]" }
+expression = { dict_expression | array_expression | numeric_literal | string_literal }
 
 // ######################################
 // Literals / Values
@@ -188,33 +194,36 @@ numeric_literal = @{ ("-")? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
 // ######################################
 // String literals. These behave specially in BAML.
 // ######################################
-single_word = @{ ASCII_ALPHANUMERIC ~ (ASCII_ALPHANUMERIC | "_" | "-")* }
-banned_chars = @{"#" | "@" | NEWLINE}
-banned_start_chars = {WHITESPACE | "{" | "(" | "[" | banned_chars}
-banned_end_chars = {WHITESPACE | "}" | ")" | "]" | banned_chars}
+banned_chars = @{"#" | "@" | "{" | "(" | "[" | "<"  | "}" | ")" | "]" | ">" | "," | NEWLINE}
+banned_start_chars = {WHITESPACE | banned_chars}
+banned_end_chars = {WHITESPACE | banned_chars}
 unquoted_string_literal = { (!banned_start_chars ~ ANY) ~ (!banned_chars ~ ANY)* ~ (!banned_end_chars ~ ANY)* }
 quoted_string_content = @{ (!"\"" ~ !NEWLINE ~ ANY)* }
 quoted_string_literal = ${ "\"" ~ quoted_string_content ~ "\"" }
 // TODO: Support comments in raw string literals
-raw_string_literal_content = @{ (!"\"" ~ ANY)* }
+raw_string_literal_content_1 = @{ (!"\"#" ~ ANY)* }
+raw_string_literal_content_2 = @{ (!"\"##" ~ ANY)* }
+raw_string_literal_content_3 = @{ (!"\"###" ~ ANY)* }
+raw_string_literal_content_4 = @{ (!"\"####" ~ ANY)* }
+raw_string_literal_content_5 = @{ (!"\"#####" ~ ANY)* }
 
 raw_string_literal = { 
-    ("#####\"" ~ raw_string_literal_content ~ "\"#####")
-    | ("####\"" ~ raw_string_literal_content ~ "\"####") 
-    | ("###\"" ~ raw_string_literal_content ~ "\"###") 
-    | ("##\"" ~ raw_string_literal_content ~ "\"##") 
-    | ("#\"" ~ raw_string_literal_content ~ "\"#") 
+    ("#####\"" ~ raw_string_literal_content_5 ~ "\"#####")
+    | ("####\"" ~ raw_string_literal_content_4 ~ "\"####") 
+    | ("###\"" ~ raw_string_literal_content_3 ~ "\"###") 
+    | ("##\"" ~ raw_string_literal_content_2 ~ "\"##") 
+    | ("#\"" ~ raw_string_literal_content_1 ~ "\"#") 
 }
 unterminated_raw_string_literal = ${ 
-    ("#####\"" ~ (!"\"#####" ~ ANY)*)
-    | ("####\"" ~ (!"\"####" ~ ANY)*)
-    | ("###\"" ~ (!"\"###" ~ ANY)*)
-    | ("##\"" ~ (!"\"##" ~ ANY)*)
-    | ("#\"" ~ (!"\"#" ~ ANY)*)
+    ("#####\"" ~ raw_string_literal_content_5)
+    | ("####\"" ~ raw_string_literal_content_4)
+    | ("###\"" ~ raw_string_literal_content_3)
+    | ("##\"" ~ raw_string_literal_content_2)
+    | ("#\"" ~ raw_string_literal_content_1)
 }
 unterminated_quoted_string_literal = ${ "\"" ~ quoted_string_content }
 unterminated_string_literal = ${ unterminated_raw_string_literal | unterminated_quoted_string_literal }
-string_literal = { raw_string_literal | quoted_string_literal | single_word | unquoted_string_literal | unterminated_string_literal }
+string_literal = { raw_string_literal | quoted_string_literal | unquoted_string_literal | unterminated_string_literal }
 
 
 // ######################################
@@ -229,9 +238,6 @@ doc_content = @{ (!NEWLINE ~ ANY)* }
 // ######################################
 // Shared Building Blocks and Comments
 // ######################################
-valid_identifier = @{ ASCII_ALPHA_UPPER ~ (ASCII_ALPHANUMERIC | "_" | "-")* }
-identifier = { valid_identifier | single_word }
-
 WHITESPACE = _{ " " | "\t" }
 NEWLINE = _{ "\n" | "\r\n" | "\r" }
 empty_lines = @{ (WHITESPACE* ~ NEWLINE)+ }
@@ -248,9 +254,8 @@ ENUM_KEYWORD = { "enum" }
 CLASS_KEYWORD = { "class" }
 FUNCTION_KEYWORD = { "function" }
 
-empty_template_args = ${ "<>" }
-template_arg = {quoted_string_literal | single_word}
-template_args = { empty_template_args | ("<" ~ template_arg ~ ("," ~ template_arg)* ~ ">") }
+empty_template_args = ${ "<" ~ ">" }
+template_args = { empty_template_args | ("<" ~ expression ~ ("," ~ expression)* ~ ">") }
 CLIENT_KEYWORD = { "client" }
 GENERATOR_KEYWORD = { "generator" }
 VARIANT_KEYWORD = { "impl" }

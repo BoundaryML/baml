@@ -5,20 +5,20 @@ function Foo {
 
 class InputType {
   a InputType2
-  b Bool
+  b bool
 }
 
 class OtherInput {
-  d String
+  d string
 }
 
 class InputType2 {
-  c String
+  c string
 }
 
 class OutputType {
-  x String
-  y Bool
+  x string
+  y bool
 }
 
 client<llm> MyClient {
@@ -44,7 +44,7 @@ impl<llm, Foo> FooImpl{
       tab1
         tab2
     morespaces here
-    {#InputType.a} {#input.a} hi there
+    {#input.a} {#input.a} hi there
     JSON:
     {#print_enum(Sentiment)}
     {#print_type(output)}

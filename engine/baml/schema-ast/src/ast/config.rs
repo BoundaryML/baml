@@ -1,6 +1,5 @@
 use crate::ast::{
-    Attribute, Comment, Expression, Identifier, Span, WithAttributes, WithDocumentation,
-    WithIdentifier, WithSpan,
+    Attribute, Comment, Expression, Identifier, Span, WithDocumentation, WithIdentifier, WithSpan,
 };
 
 /// A named property in a config block.
@@ -22,6 +21,8 @@ pub struct ConfigBlockProperty {
     /// }
     /// ```
     pub name: Identifier,
+    /// The property template arguments.
+    pub template_args: Option<Vec<Expression>>,
     /// The property value.
     ///
     /// ```ignore

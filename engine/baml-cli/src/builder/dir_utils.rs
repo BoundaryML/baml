@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use baml::{parse_configuration, Configuration};
-use colored::Colorize;
+
 
 use crate::errors::CliError;
 

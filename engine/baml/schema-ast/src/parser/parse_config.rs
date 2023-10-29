@@ -7,7 +7,7 @@ use super::{
     parse_template_args::parse_template_args,
     Rule,
 };
-use crate::ast::*;
+use crate::{assert_correct_parser, ast::*, unreachable_rule};
 use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
 pub(crate) fn parse_config_block(
@@ -97,15 +97,18 @@ pub(crate) fn parse_key_value(
     doc_comment: Option<Pair<'_>>,
     diagnostics: &mut Diagnostics,
 ) -> ConfigBlockProperty {
+    assert_correct_parser!(pair, Rule::key_value);
+
     let mut name: Option<Identifier> = None;
     let mut value: Option<Expression> = None;
     let mut attributes = Vec::new();
     let mut comment: Option<Comment> = doc_comment.and_then(parse_comment_block);
+    let mut template_args = None;
     let (pair_span, pair_str) = (pair.as_span(), pair.as_str());
 
     for current in pair.into_inner() {
         match current.as_rule() {
-            Rule::single_word => {
+            Rule::identifier => {
                 name = Some(parse_identifier(current.into(), diagnostics));
             }
             Rule::field_attribute => attributes.push(parse_attribute(current, diagnostics)),
@@ -118,16 +121,17 @@ pub(crate) fn parse_key_value(
                     }),
                 };
             }
-            _ => unreachable!(
-                "Encountered impossible source property declaration during parsing: {:?}",
-                current.tokens()
-            ),
+            Rule::template_args => {
+                template_args = parse_template_args(current, diagnostics);
+            }
+            _ => unreachable_rule!(current, Rule::key_value),
         }
     }
 
     match name {
         Some(name) => ConfigBlockProperty {
             name,
+            template_args,
             value,
             attributes,
             span: diagnostics.span(pair_span),

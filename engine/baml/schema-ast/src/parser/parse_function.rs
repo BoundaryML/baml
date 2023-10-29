@@ -5,9 +5,9 @@ use super::{
     parse_identifier::parse_identifier,
     Rule,
 };
-use crate::{ast::*, parser::parse_types::parse_field_type};
+use crate::{assert_correct_parser, ast::*, parser::parse_types::parse_field_type};
 use internal_baml_diagnostics::{DatamodelError, Diagnostics};
-use log::info;
+
 
 pub(crate) fn parse_function(
     pair: Pair<'_>,
@@ -35,7 +35,7 @@ pub(crate) fn parse_function(
                         Rule::output_field_declaration => {
                             if output.is_some() {
                                 diagnostics.push_error(DatamodelError::new_duplicate_field_error(
-                                    &name.clone().unwrap().name,
+                                    "<unknown>",
                                     "output",
                                     "function",
                                     diagnostics.span(pair_span),
@@ -56,7 +56,7 @@ pub(crate) fn parse_function(
                         Rule::input_field_declaration => {
                             if input.is_some() {
                                 diagnostics.push_error(DatamodelError::new_duplicate_field_error(
-                                    &name.clone().unwrap().name,
+                                    "<unknown>",
                                     "input",
                                     "function",
                                     diagnostics.span(pair_span),
@@ -99,13 +99,13 @@ pub(crate) fn parse_function(
         (Some(name), _, _) => Err(DatamodelError::new_model_validation_error(
             "This function declaration is invalid. It is missing an input field.",
             "function",
-            &name.name,
+            &name.name(),
             diagnostics.span(pair_span),
         )),
         _ => Err(DatamodelError::new_model_validation_error(
             "This function declaration is invalid. It is either missing a name or a type.",
             "function",
-            "unknown",
+            "<unknown>",
             diagnostics.span(pair_span),
         )),
     }
@@ -147,16 +147,13 @@ fn parse_function_field_type(
                         Rule::named_argument_list => {
                             let mut args: Vec<(Identifier, FunctionArg)> = Vec::new();
                             for named_arg in item.into_inner() {
-                                assert!(
-                                    named_arg.as_rule() == Rule::named_argument,
-                                    "parse_function_field_type: unexpected rule: {:?}",
-                                    named_arg.as_rule()
-                                );
+                                assert_correct_parser!(named_arg, Rule::named_argument);
+
                                 let mut name = None;
                                 let mut r#type = None;
                                 for arg in named_arg.into_inner() {
                                     match arg.as_rule() {
-                                        Rule::single_word => {
+                                        Rule::identifier => {
                                             name = Some(parse_identifier(arg, diagnostics));
                                         }
                                         Rule::field_type => {
@@ -172,9 +169,9 @@ fn parse_function_field_type(
                                         DatamodelError::new_validation_error(
                                             &format!(
                                                 "No type specified for argument: {}",
-                                                name.name
+                                                name.name()
                                             ),
-                                            name.span,
+                                            name.span().clone(),
                                         ),
                                     ),
                                     (None, _) => {
@@ -215,10 +212,14 @@ fn parse_function_arg(
     );
     let span = diagnostics.span(pair.as_span());
 
-    let (arity, r#type) = parse_field_type(pair, diagnostics)?;
-    Ok(FunctionArg {
-        span,
-        arity,
-        field_type: r#type,
-    })
+    match parse_field_type(pair, diagnostics) {
+        Some(ftype) => Ok(FunctionArg {
+            span,
+            field_type: ftype,
+        }),
+        None => Err(DatamodelError::new_validation_error(
+            "Failed to find type",
+            span,
+        )),
+    }
 }

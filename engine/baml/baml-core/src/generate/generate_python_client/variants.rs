@@ -1,10 +1,9 @@
-use handlebars::{handlebars_helper, JsonRender};
-use internal_baml_parser_database::walkers::{ArgWalker, VariantWalker, Walker};
+
+use internal_baml_parser_database::walkers::{VariantWalker};
 use internal_baml_schema_ast::ast::{
-    ClassId, FieldArity, FieldId, FieldType, FunctionArg, FunctionArgs, FunctionId, Identifier,
-    NamedFunctionArgList, TypeValue, WithDocumentation, WithName,
+    WithName,
 };
-use log::info;
+
 use serde_json::json;
 
 use crate::generate::generate_python_client::file::clean_file_name;
@@ -26,7 +25,7 @@ impl JsonHelper for VariantWalker<'_> {
         );
         f.add_import(&format!("..clients.{}", client.file_name()), client.name());
         json!({
-            "name": self.name(),
+            "name": self.identifier().name(),
             "function": func.json(f),
             "prompt": self.properties().prompt.0,
             "client": client.name(),
@@ -38,8 +37,8 @@ impl WithWritePythonString for VariantWalker<'_> {
     fn file_name(&self) -> String {
         format!(
             "fx_{}_impl_{}",
-            clean_file_name(self.function_name()),
-            clean_file_name(self.name())
+            clean_file_name(self.function_identifier().name()),
+            clean_file_name(self.identifier().name())
         )
     }
 

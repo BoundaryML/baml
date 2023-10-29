@@ -3,9 +3,10 @@ use crate::{context::Context, DatamodelError};
 
 use internal_baml_diagnostics::Span;
 use internal_baml_schema_ast::ast::{
-    self, ClassId, EnumId, EnumValueId, FieldId, SerializerFieldId, TopId, VariantConfigId,
+    self, ClassId, EnumId, EnumValueId, FieldId, SerializerFieldId, VariantConfigId,
     VariantSerializerId, WithName, WithSpan,
 };
+
 use rustc_hash::FxHashMap as HashMap;
 
 mod to_string_attributes;
@@ -28,8 +29,8 @@ pub(super) fn resolve_types(ctx: &mut Context<'_>) {
             (ast::TopId::Variant(idx), ast::Top::Variant(variant)) => {
                 visit_variant(idx, variant, ctx)
             }
-            (ast::TopId::Client(_), ast::Top::Client(client)) => {}
-            (ast::TopId::Generator(_), ast::Top::Generator(generator)) => {}
+            (ast::TopId::Client(_), ast::Top::Client(_client)) => {}
+            (ast::TopId::Generator(_), ast::Top::Generator(_generator)) => {}
             _ => unreachable!(),
         }
     }
@@ -56,7 +57,7 @@ impl Types {
     ) -> either::Either<StaticFieldId, DynamicFieldId> {
         match self.class_attributes.get(&class_id) {
             Some(attrs) => match attrs.field_serilizers.get(&field_id) {
-                Some(ToStringAttributes::Dynamic(attrs)) => either::Either::Right(field_id.into()),
+                Some(ToStringAttributes::Dynamic(_attrs)) => either::Either::Right(field_id.into()),
                 _ => either::Either::Left(field_id.into()),
             },
             None => either::Either::Left(field_id.into()),
@@ -69,7 +70,7 @@ impl Types {
     ) -> either::Either<StaticFieldId, DynamicFieldId> {
         match self.enum_attributes.get(&enum_id) {
             Some(attrs) => match attrs.value_serilizers.get(&value_id) {
-                Some(ToStringAttributes::Dynamic(attrs)) => either::Either::Right(value_id.into()),
+                Some(ToStringAttributes::Dynamic(_attrs)) => either::Either::Right(value_id.into()),
                 _ => either::Either::Left(value_id.into()),
             },
             None => either::Either::Left(value_id.into()),
@@ -118,7 +119,7 @@ fn visit_class<'db>(class: &'db ast::Class, ctx: &mut Context<'db>) {
     }
 }
 
-fn visit_function<'db>(function: &'db ast::Function, ctx: &mut Context<'db>) {}
+fn visit_function<'db>(_function: &'db ast::Function, _ctx: &mut Context<'db>) {}
 
 fn visit_variant<'db>(idx: VariantConfigId, variant: &'db ast::Variant, ctx: &mut Context<'db>) {
     if !variant.is_llm() {
@@ -134,14 +135,29 @@ fn visit_variant<'db>(idx: VariantConfigId, variant: &'db ast::Variant, ctx: &mu
 
     variant
         .iter_fields()
-        .for_each(|(idx, field)| match field.name() {
-            "client" => client = field.value.as_ref(),
-            "prompt" => prompt = field.value.as_ref(),
+        .for_each(|(_idx, field)| match field.name() {
+            "client" => {
+                if field.template_args.is_some() {
+                    ctx.push_error(DatamodelError::new_validation_error(
+                        "Did you mean `client` instead of `client<...>`?",
+                        field.span().clone(),
+                    ));
+                }
+                client = field.value.as_ref()
+            }
+            "prompt" => {
+                if field.template_args.is_some() {
+                    ctx.push_error(DatamodelError::new_validation_error(
+                        "Did you mean `prompt` instead of `prompt<...>`?",
+                        field.span().clone(),
+                    ));
+                }
+                prompt = field.value.as_ref()
+            }
             config => ctx.push_error(DatamodelError::new_validation_error(
-                &format!("Unknown field `{}` in variant<llm>", config),
+                &format!("Unknown field `{}` in impl<llm>", config),
                 field.span().clone(),
             )),
-            _ => unreachable!("variant<llm> unreachable"),
         });
 
     match (client, prompt) {

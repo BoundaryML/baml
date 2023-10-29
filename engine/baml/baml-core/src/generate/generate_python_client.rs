@@ -4,7 +4,7 @@ use serde_json::json;
 use crate::configuration::Generator;
 
 use self::{
-    file::{File, FileCollector},
+    file::{FileCollector},
     traits::WithWritePythonString,
 };
 

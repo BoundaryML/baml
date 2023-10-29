@@ -1,7 +1,7 @@
 mod context;
 mod validations;
 
-use crate::{configuration, internal_baml_diagnostics::Diagnostics, PreviewFeature};
+use crate::{internal_baml_diagnostics::Diagnostics, PreviewFeature};
 use enumflags2::BitFlags;
 use internal_baml_parser_database::ParserDatabase;
 

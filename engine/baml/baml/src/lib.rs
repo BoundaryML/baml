@@ -7,7 +7,7 @@ pub use internal_baml_core::{
     self,
     internal_baml_diagnostics::{self, Diagnostics, SourceFile},
     internal_baml_parser_database::{self},
-    internal_baml_schema_ast, Configuration, StringFromEnvVar, ValidatedSchema,
+    internal_baml_schema_ast, Configuration, ValidatedSchema,
 };
 
 /// Parses and validate a schema, but skip analyzing everything except datasource and generator

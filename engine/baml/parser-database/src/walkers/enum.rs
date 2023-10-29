@@ -14,7 +14,7 @@ pub type EnumValueWalker<'db> = Walker<'db, (ast::EnumId, ast::EnumValueId)>;
 impl<'db> EnumWalker<'db> {
     /// The name of the enum.
     pub fn name(self) -> &'db str {
-        &self.ast_enum().name.name
+        &self.ast_enum().name()
     }
 
     /// The AST node.

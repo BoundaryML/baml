@@ -1,6 +1,6 @@
 function Foo {
-  input String
-  output String
+  input string
+  output string
 }
 
 client<llm> MyClient {
@@ -17,8 +17,9 @@ impl Impl2 {
   client MyClient
 }
 
+
 // error: Error validating: impl requires 2 template args. (did you forget <llm, FunctionName>)
-//   -->  /Users/aaronvillalpando/Projects/gloo-lang/engine/baml/baml/tests/validation_files/variants/missing_template_args.baml:10
+//   -->  /Users/vbv/repos/gloo-lang/engine/baml/baml/tests/validation_files/variants/missing_template_args.baml:10
 //    | 
 //  9 | 
 // 10 | impl<llm> Impl1 {
@@ -26,8 +27,8 @@ impl Impl2 {
 // 12 |   client MyClient
 // 13 | }
 //    | 
-// error: Error validating: Missing template for impl. (did you forget <llm>)
-//   -->  /Users/aaronvillalpando/Projects/gloo-lang/engine/baml/baml/tests/validation_files/variants/missing_template_args.baml:15
+// error: Error validating: Missing template for impl. (did you forget <llm, FunctionName>)
+//   -->  /Users/vbv/repos/gloo-lang/engine/baml/baml/tests/validation_files/variants/missing_template_args.baml:15
 //    | 
 // 14 | 
 // 15 | impl Impl2 {

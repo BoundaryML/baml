@@ -4,12 +4,12 @@ use super::{
     Rule,
 };
 use crate::ast::{self, Identifier};
-use internal_baml_diagnostics::{DatamodelError, Diagnostics, Span};
+use internal_baml_diagnostics::{Diagnostics};
 
 pub(crate) fn parse_arguments_list(
     token: Pair<'_>,
     arguments: &mut ast::ArgumentsList,
-    args_for: &Option<Identifier>,
+    _args_for: &Option<Identifier>,
     diagnostics: &mut Diagnostics,
 ) {
     debug_assert_eq!(token.as_rule(), Rule::arguments_list);
@@ -18,12 +18,10 @@ pub(crate) fn parse_arguments_list(
         match current.as_rule() {
             // At the top level only unnamed args are supported.
             // For multiple args, pass in a dictionary.
-            Rule::expression => match parse_expression(current, diagnostics) {
-                arg => arguments.arguments.push(ast::Argument {
-                    value: arg,
-                    span: diagnostics.span(current_span),
-                }),
-            },
+            Rule::expression => arguments.arguments.push(ast::Argument {
+                value: parse_expression(current, diagnostics),
+                span: diagnostics.span(current_span),
+            }),
             _ => parsing_catch_all(&current, "attribute arguments"),
         }
     }

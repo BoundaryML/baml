@@ -1,21 +1,25 @@
+
+
 use super::{
     helpers::{parsing_catch_all, Pair},
     parse_identifier::parse_identifier,
     Rule,
 };
-use crate::{ast::*, parser::parse_arguments::parse_arguments_list};
+use crate::{assert_correct_parser, ast::*, parser::parse_arguments::parse_arguments_list};
 
 pub(crate) fn parse_attribute(
     pair: Pair<'_>,
     diagnostics: &mut internal_baml_diagnostics::Diagnostics,
 ) -> Attribute {
+    assert_correct_parser!(pair, Rule::block_attribute, Rule::field_attribute);
+
     let span = diagnostics.span(pair.as_span());
     let mut name = None;
     let mut arguments: ArgumentsList = ArgumentsList::default();
 
     for current in pair.into_inner() {
         match current.as_rule() {
-            Rule::attribute_name => name = Some(parse_identifier(current.into(), diagnostics)),
+            Rule::identifier => name = parse_identifier(current.into(), diagnostics).into(),
             Rule::arguments_list => {
                 parse_arguments_list(current, &mut arguments, &name, diagnostics)
             }
@@ -23,10 +27,12 @@ pub(crate) fn parse_attribute(
         }
     }
 
-    let name = name.unwrap();
-    Attribute {
-        name,
-        arguments,
-        span,
+    match name {
+        Some(name) => Attribute {
+            name,
+            arguments,
+            span,
+        },
+        None => unreachable!("Name should always be defined for attribute."),
     }
 }

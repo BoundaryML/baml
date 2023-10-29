@@ -1,12 +1,8 @@
-use log::info;
 use std::io::Write;
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
 };
-
-const TAB_SIZE: usize = 4;
-const TAB: &str = "                                                                  ";
 
 #[derive(Debug, Default)]
 pub(super) struct FileCollector {
@@ -158,6 +154,9 @@ impl File {
     }
 
     pub(super) fn add_indent_string(&mut self, string: impl AsRef<str>, indent: usize) {
+        const TAB_SIZE: usize = 4;
+        const TAB: &str = "                                                                  ";
+
         let num_spaces = indent * TAB_SIZE;
 
         let prefix = match num_spaces > TAB.len() {
@@ -184,6 +183,9 @@ impl File {
     }
 
     pub(super) fn add_empty_indent(&mut self, indent: usize) {
+        const TAB_SIZE: usize = 4;
+        const TAB: &str = "                                                                  ";
+
         let num_spaces = indent * TAB_SIZE;
 
         let prefix = match num_spaces > TAB.len() {

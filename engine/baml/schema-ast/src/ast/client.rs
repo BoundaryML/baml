@@ -1,5 +1,5 @@
 use super::{
-    traits::WithAttributes, Attribute, Comment, ConfigBlockProperty, Field, Identifier, Span,
+    traits::WithAttributes, Attribute, Comment, ConfigBlockProperty, Identifier, Span,
     WithDocumentation, WithIdentifier, WithSpan,
 };
 

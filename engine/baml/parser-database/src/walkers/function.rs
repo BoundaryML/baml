@@ -1,7 +1,8 @@
+
 use internal_baml_schema_ast::ast::{
-    ArguementId, FuncArguementId, Identifier, Variant, VariantConfigId,
+    FuncArguementId, Identifier,
 };
-use log::info;
+
 
 use crate::ast::{self, WithName};
 
@@ -69,7 +70,7 @@ impl<'db> FunctionWalker<'db> {
             .iter_tops()
             .filter_map(|(id, t)| match (id, t) {
                 (ast::TopId::Variant(id), ast::Top::Variant(impl_))
-                    if impl_.function_name() == self.name() =>
+                    if impl_.function_name().name() == self.name() =>
                 {
                     Some(VariantWalker {
                         db: self.db,
@@ -120,7 +121,7 @@ impl<'db> ArgWalker<'db> {
     /// The name of the function.
     pub fn is_optional(self) -> bool {
         let (_, arg) = self.ast_arg();
-        arg.arity.is_optional() || arg.field_type.is_optional()
+        arg.field_type.is_nullable()
     }
 
     /// The name of the function.
@@ -129,7 +130,7 @@ impl<'db> ArgWalker<'db> {
         arg.field_type
             .flat_idns()
             .into_iter()
-            .filter_map(|idn| self.db.find_enum(&idn.name))
+            .filter_map(|idn| self.db.find_enum(&idn))
     }
 
     /// The name of the function.
@@ -138,6 +139,6 @@ impl<'db> ArgWalker<'db> {
         arg.field_type
             .flat_idns()
             .into_iter()
-            .filter_map(|idn| self.db.find_class(&idn.name))
+            .filter_map(|idn| self.db.find_class(&idn))
     }
 }

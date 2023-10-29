@@ -1,6 +1,8 @@
+use internal_baml_diagnostics::DatamodelError;
+
 use super::{
-    traits::WithAttributes, Attribute, Comment, Identifier, Span, WithDocumentation,
-    WithIdentifier, WithName, WithSpan,
+    identifier::TypeValue, traits::WithAttributes, Attribute, Comment, Identifier, Span,
+    WithDocumentation, WithIdentifier, WithName, WithSpan,
 };
 
 /// A field definition in a model or a composite type.
@@ -20,8 +22,6 @@ pub struct Field {
     /// ^^^^
     /// ```
     pub(crate) name: Identifier,
-    /// The arity of the field.
-    pub arity: FieldArity,
     /// The comments for this field.
     ///
     /// ```ignore
@@ -43,7 +43,7 @@ pub struct Field {
 
 impl Field {
     /// Finds the position span of the argument in the given field attribute.
-    pub fn span_for_argument(&self, attribute: &str, argument: &str) -> Option<Span> {
+    pub fn span_for_argument(&self, attribute: &str, _argument: &str) -> Option<Span> {
         self.attributes
             .iter()
             .filter(|a| a.name() == attribute)
@@ -63,7 +63,7 @@ impl Field {
 
     /// The name of the field
     pub fn name(&self) -> &str {
-        &self.name.name
+        &self.name.name()
     }
 }
 
@@ -108,19 +108,9 @@ pub enum FieldArity {
     /// name String?
     /// ```
     Optional,
-    /// The field can have multiple values stored in the same column.
-    ///
-    /// ```ignore
-    /// name String[]
-    /// ```
-    List,
 }
 
 impl FieldArity {
-    pub fn is_list(&self) -> bool {
-        matches!(self, &FieldArity::List)
-    }
-
     pub fn is_optional(&self) -> bool {
         matches!(self, &FieldArity::Optional)
     }
@@ -131,63 +121,94 @@ impl FieldArity {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum TypeValue {
-    String,
-    Int,
-    Float,
-    Bool,
-    Char,
-    Null,
-}
-
-#[derive(Debug, Clone, PartialEq)]
 pub enum FieldType {
-    PrimitiveType(TypeValue, Span),
-    Union(Vec<(FieldArity, FieldType)>, Span),
-    Supported(Identifier),
-    /// Unsupported("...")
-    Unsupported(String, Span),
+    Identifier(FieldArity, Identifier),
+    // The second field is the number of dims for the list
+    List(Box<FieldType>, u32, Span),
+    Tuple(FieldArity, Vec<FieldType>, Span),
+    // Unions don't have arity, as they are can be flattened.
+    Union(FieldArity, Vec<FieldType>, Span),
+    Dictionary(Box<(FieldType, FieldType)>, Span),
 }
 
 impl FieldType {
     pub fn span(&self) -> &Span {
         match self {
-            FieldType::PrimitiveType(_, span) => span,
-            FieldType::Union(_, span) => span,
-            FieldType::Supported(ident) => &ident.span,
-            FieldType::Unsupported(_, span) => span,
+            FieldType::Identifier(.., idn) => idn.span(),
+            FieldType::Union(.., span) => span,
+            FieldType::Tuple(.., span) => span,
+            FieldType::Dictionary(.., span) => span,
+            FieldType::List(.., span) => span,
         }
     }
 
-    pub fn as_unsupported(&self) -> Option<(&str, &Span)> {
+    pub fn to_nullable(&self) -> Result<Self, DatamodelError> {
+        if self.is_nullable() {
+            return Ok(self.to_owned());
+        }
         match self {
-            FieldType::PrimitiveType(_, _) => None,
-            FieldType::Unsupported(name, span) => Some((name, span)),
-            FieldType::Union(_, _) => None,
-            FieldType::Supported(_) => None,
+            FieldType::Identifier(_arity, Identifier::Primitive(TypeValue::Null, _)) => {
+                Ok(self.to_owned())
+            }
+            FieldType::Identifier(_arity, idn) => {
+                Ok(FieldType::Identifier(FieldArity::Optional, idn.to_owned()))
+            }
+            FieldType::Union(arity, items, span) => {
+                let mut items = items.clone();
+
+                items.push(FieldType::Identifier(
+                    FieldArity::Required,
+                    Identifier::Primitive(TypeValue::Null, span.clone()),
+                ));
+                Ok(FieldType::Union(*arity, items, span.to_owned()))
+            }
+            FieldType::Tuple(_arity, options, span) => Ok(FieldType::Tuple(
+                FieldArity::Optional,
+                options.to_owned(),
+                span.to_owned(),
+            )),
+            FieldType::Dictionary(.., span) => Err(DatamodelError::new_validation_error(
+                "Dictionaries can not be optional",
+                span.clone(),
+            )),
+            FieldType::List(.., span) => Err(DatamodelError::new_validation_error(
+                "Lists can not be optional",
+                span.clone(),
+            )),
         }
     }
 
-    pub fn is_optional(&self) -> bool {
+    pub fn is_nullable(&self) -> bool {
         match self {
-            FieldType::Union(types, _) => types
-                .iter()
-                .any(|(arity, t)| arity.is_optional() || t.is_optional()),
-            FieldType::PrimitiveType(t, _) => t == &TypeValue::Null,
-            FieldType::Supported(_) => false,
-            FieldType::Unsupported(_, _) => false,
+            FieldType::Identifier(arity, t) => {
+                arity.is_optional()
+                    || match t {
+                        Identifier::Primitive(TypeValue::Null, _) => true,
+                        _ => false,
+                    }
+            }
+            FieldType::Union(arity, f, ..) => {
+                arity.is_optional() || f.iter().any(|t| t.is_nullable())
+            }
+            FieldType::Tuple(arity, ..) => arity.is_optional(),
+            // Lists can't be nullable
+            FieldType::Dictionary(_kv, _) => false,
+            FieldType::List(_t, _, _) => false,
         }
     }
 
+    // All the identifiers used in this type.
     pub fn flat_idns(&self) -> Vec<&Identifier> {
         match self {
-            FieldType::Union(types, _) => types
-                .iter()
-                .flat_map(|(_, t)| t.flat_idns())
-                .collect::<Vec<_>>(),
-            FieldType::PrimitiveType(_, _) => vec![],
-            FieldType::Supported(ident) => vec![ident],
-            FieldType::Unsupported(_, _) => vec![],
+            FieldType::Identifier(.., idn) => vec![idn],
+            FieldType::Union(_, f, ..) => f.iter().flat_map(|t| t.flat_idns()).collect(),
+            FieldType::Tuple(_, f, ..) => f.iter().flat_map(|t| t.flat_idns()).collect(),
+            FieldType::Dictionary(kv, _) => {
+                let mut idns = kv.1.flat_idns();
+                idns.extend(kv.0.flat_idns());
+                idns
+            }
+            FieldType::List(t, _, _) => t.flat_idns(),
         }
     }
 }

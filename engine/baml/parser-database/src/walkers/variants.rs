@@ -1,5 +1,7 @@
+use internal_baml_schema_ast::ast::Identifier;
+
 use crate::{
-    ast::{self, WithName},
+    ast::{self, WithIdentifier},
     types::VariantProperties,
 };
 
@@ -10,12 +12,12 @@ pub type VariantWalker<'db> = Walker<'db, ast::VariantConfigId>;
 
 impl<'db> VariantWalker<'db> {
     /// The name of the function.
-    pub fn name(self) -> &'db str {
-        self.ast_variant().name()
+    pub fn identifier(self) -> &'db Identifier {
+        self.ast_variant().identifier()
     }
 
     /// The name of the function.
-    pub fn function_name(self) -> &'db str {
+    pub fn function_identifier(self) -> &'db Identifier {
         self.ast_variant().function_name()
     }
 
@@ -35,7 +37,7 @@ impl<'db> VariantWalker<'db> {
 
     /// The function node.
     pub fn walk_function(self) -> Option<FunctionWalker<'db>> {
-        self.db.find_function(self.function_name())
+        self.db.find_function(self.function_identifier())
     }
 
     /// The AST node.

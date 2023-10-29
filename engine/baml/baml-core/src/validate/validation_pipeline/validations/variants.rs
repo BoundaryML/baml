@@ -1,64 +1,62 @@
+use either::Either;
 use internal_baml_diagnostics::{DatamodelError, Span};
 use internal_baml_parser_database::walkers::FunctionWalker;
-use internal_baml_schema_ast::ast::{Class, FieldType, FunctionId};
-use serde::de;
+use internal_baml_schema_ast::ast::{self, FieldType, WithName};
+use log::{info, warn};
 
 use crate::{ast::WithSpan, validate::validation_pipeline::context::Context};
 use internal_baml_prompt_parser::ast::{CodeBlock, CodeType, PromptAst, Top, TopId, Variable};
 
 pub(super) fn validate(ctx: &mut Context<'_>) {
     for variant in ctx.db.walk_variants() {
-        let mut fn_walker = None;
-        if let Some(function) = variant.walk_function() {
-            // Function exists, do something with it
-            fn_walker = Some(function);
-        } else {
-            ctx.push_error(DatamodelError::new_validation_error(
-                &format!("Function not found: {}", variant.function_name()),
-                variant.ast_variant().span().clone(),
-            ));
-        }
-
         let client = &variant.properties().client;
 
         if ctx.db.find_client(client).is_none() {
             ctx.push_error(DatamodelError::new_validation_error(
-                &format!("Unknown client `{}`", client.as_str()),
+                &format!("Unknown client `{}`", client),
                 variant.ast_variant().span().clone(),
             ));
         }
 
-        validate_prompt(
-            ctx,
-            fn_walker,
-            variant.properties().prompt.clone(),
-            &variant.ast_variant().span(),
-        );
-    }
-}
-
-fn max_leading_whitespace_to_remove(input: &str) -> usize {
-    input
-        .lines()
-        .filter(|line| {
-            let is_valid = !line.trim().is_empty() && !line.trim().eq("\n");
-            if is_valid {
-                println!("{}", line); // Print the line if it made it past the filter
+        if let Some(fn_walker) = variant.walk_function() {
+            // Function exists, do something with it
+            match validate_prompt(
+                ctx,
+                fn_walker,
+                variant.properties().prompt.clone(),
+                &variant.ast_variant().span(),
+            ) {
+                Some(prompt) => {
+                    info!(
+                        "Prompt: for {}:{}\n---\n{}\n---\n",
+                        fn_walker.name(),
+                        variant.identifier().name(),
+                        prompt
+                    );
+                }
+                None => warn!(
+                    "Prompt: for {}:{}\n---\n{}\n---\n",
+                    fn_walker.name(),
+                    variant.identifier().name(),
+                    "Prompt could not be validated"
+                ),
             }
-            is_valid
-        }) // Filter out empty lines and lines that are only newlines
-        .map(|line| line.chars().take_while(|c| c.is_whitespace()).count()) // Count leading whitespaces for each line
-        .min()
-        .unwrap_or(0) // Return the minimum count or 0 if there are no lines
+        } else {
+            ctx.push_error(DatamodelError::new_validation_error(
+                "Function not found",
+                variant.function_identifier().span().clone(),
+            ));
+        }
+    }
 }
 
 // TODO: add a database of attributes, types, etc to each of the code blocks etc so we can access everything easily. E.g. store the field type of each codeblock variable path, etc.
 fn validate_prompt(
     ctx: &mut Context<'_>,
-    walker: Option<FunctionWalker<'_>>,
+    walker: FunctionWalker<'_>,
     prompt: (String, Span),
     span: &Span,
-) {
+) -> Option<String> {
     if prompt.0.is_empty() {
         ctx.push_error(DatamodelError::new_validation_error(
             "Prompt cannot be empty",
@@ -73,7 +71,9 @@ fn validate_prompt(
     );
 
     match validated_prompt {
-        Ok((ast, _)) => {
+        Ok((ast, d)) => {
+            ctx.diagnostics.push(d);
+
             process_ast(ctx, walker, ast.clone(), span);
             let mut full_prompt_text = String::new();
             for (top_id, top) in ast.iter_tops() {
@@ -88,34 +88,16 @@ fn validate_prompt(
                 }
             }
 
-            full_prompt_text = textwrap::dedent(&full_prompt_text).trim().to_string();
-            println!("\nfull prompt text:--------\n{}\n----", full_prompt_text)
+            Some(textwrap::dedent(&full_prompt_text).trim().to_string())
         }
-        Err(diagnostics) => println!("error {:?}", diagnostics.to_pretty_string()),
+        Err(diagnostics) => {
+            ctx.diagnostics.push(diagnostics);
+            None
+        }
     }
 }
 
-fn indent_unindented_lines(full_prompt_text: &str, dedent: usize) -> String {
-    let mut result = String::new();
-    let indent_str = " ".repeat(dedent);
-    for line in full_prompt_text.lines() {
-        if line.chars().take(dedent).all(|c| c.is_whitespace()) {
-            result.push_str(line);
-        } else {
-            result.push_str(&indent_str);
-            result.push_str(line);
-        }
-        result.push('\n');
-    }
-    result
-}
-
-fn process_ast(
-    ctx: &mut Context<'_>,
-    walker: Option<FunctionWalker<'_>>,
-    ast: PromptAst,
-    span: &Span,
-) {
+fn process_ast(ctx: &mut Context<'_>, walker: FunctionWalker<'_>, ast: PromptAst, span: &Span) {
     for (top_id, top) in ast.iter_tops() {
         match (top_id, top) {
             (TopId::CodeBlock(_), Top::CodeBlock(code_block)) => {
@@ -128,33 +110,32 @@ fn process_ast(
 
 fn process_code_block(
     ctx: &mut Context<'_>,
-    walker: Option<FunctionWalker<'_>>,
+    walker: FunctionWalker<'_>,
     code_block: &CodeBlock,
     span: &Span,
 ) {
-    if let CodeType::Variable = code_block.code_type {
-        process_variable(ctx, walker, code_block, span);
+    match code_block.code_type {
+        CodeType::Variable => process_variable(ctx, walker, code_block, span),
+        other => warn!("Code block type not supported {:?}", other),
     }
 }
 
 fn process_variable(
     ctx: &mut Context<'_>,
-    walker: Option<FunctionWalker<'_>>,
+    walker: FunctionWalker<'_>,
     code_block: &CodeBlock,
     span: &Span,
 ) {
-    if let Some(variable) = code_block.arguments.first() {
-        let var_name = variable.path.first().unwrap();
-        if var_name == "input" && variable.path.len() > 1 {
-            if let Some(walker) = walker {
-                process_input(ctx, walker, variable, span);
-            }
-        }
-    } else {
+    if code_block.arguments.len() != 1 {
         ctx.push_error(DatamodelError::new_validation_error(
-            "Variable does not exist",
+            "Empty block detected",
             code_block.span.clone(),
         ));
+        return;
+    }
+    let variable = code_block.arguments.first().unwrap();
+    if let Err(e) = process_input(ctx, walker, variable, span) {
+        ctx.push_error(e);
     }
 }
 
@@ -163,124 +144,135 @@ fn process_input(
     walker: FunctionWalker<'_>,
     variable: &Variable,
     span: &Span,
-) {
-    let first_input_arg_class = get_first_input_arg_class(&walker);
-    if let Some(name) = first_input_arg_class {
-        if let Some(class) = ctx.db.find_class(name.as_str()) {
-            validate_variable_path(
-                ctx,
-                variable.path.clone(),
-                &variable.span,
-                1,
-                class.ast_class().clone(),
-            );
+) -> Result<(), DatamodelError> {
+    if variable.path.is_empty() {
+        return Err(DatamodelError::new_validation_error(
+            "Variable path cannot be empty",
+            span.clone(),
+        ));
+    }
+
+    if variable.path[0] != "input" {
+        return Err(DatamodelError::new_validation_error(
+            "Must start with `input`",
+            span.clone(),
+        ));
+    }
+
+    match walker.ast_function().input() {
+        ast::FunctionArgs::Unnamed(arg) => {
+            validate_variable_path(ctx, variable, 1, &arg.field_type)
+        }
+        ast::FunctionArgs::Named(args) => {
+            if args.iter_args().len() <= 1 {
+                return Err(DatamodelError::new_validation_error(
+                    "Named arguments must have at least one argument (input.my_var_name)",
+                    span.clone(),
+                ));
+            }
+            let path_name = &variable.path[1];
+            match args
+                .iter_args()
+                .find(|(_, (name, _))| name.name() == path_name)
+            {
+                Some((_, (_, arg))) => validate_variable_path(ctx, variable, 2, &arg.field_type),
+                None => Err(DatamodelError::new_validation_error(
+                    &format!(
+                        "Unknown arg `{}`. Could be one of: {}",
+                        path_name,
+                        args.iter_args()
+                            .map(|(_, (name, _))| name.name())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ),
+                    span.clone(),
+                )),
+            }
         }
     }
 }
 
-fn get_first_input_arg_class(walker: &FunctionWalker<'_>) -> Option<String> {
-    walker
-        .walk_input_args()
-        .next()
-        .and_then(|arg| Some(arg.ast_arg().1))
-        .and_then(|f| match &f.field_type {
-            FieldType::Supported(s) => Some(s.name.clone()),
-
-            _ => None,
-        })
-}
 fn validate_variable_path(
     ctx: &mut Context<'_>,
-    path: Vec<String>,
-    span: &Span,
-    index: usize,
-    current_class: Class,
-) {
-    if index >= path.clone().len() {
-        return;
+    variable: &Variable,
+    next_index: usize,
+    current: &ast::FieldType,
+) -> Result<(), DatamodelError> {
+    if next_index >= variable.path.len() {
+        // Consider throwing a warning if current is not primitive.
+        return Ok(());
     }
 
-    let part = &path.clone()[index];
-
-    let field = current_class
-        .fields()
-        .into_iter()
-        .find(|field| field.name() == part.as_str());
-    if let Some(field) = field {
-        let field_type = field.clone().field_type;
-        match field_type {
-            FieldType::Union(s, span) => {
-                // TODO: traverse recursively and gather all root types?
-                // for union in s {
-                //     let curr_class = ctx.db.find_class(union.name.as_str());
-                //     if curr_class.is_none() {
-                //         ctx.diagnostics
-                //             .push_error(DatamodelError::new_validation_error(
-                //                 &format!(
-                //                     "Unknown attribute `{}` in class `{}`",
-                //                     part.as_str(),
-                //                     current_class.name.name.as_str()
-                //                 ),
-                //                 span.clone(),
-                //             ));
-                //     } else {
-                //         validate_variable_path(
-                //             ctx,
-                //             path.clone(),
-                //             span,
-                //             index + 1,
-                //             Some(current_class),
-                //         )
-                //     }
-                // }
-                return;
-            }
-            FieldType::Supported(s) => {
-                let curr_class = ctx.db.find_class(s.name.as_str());
-
-                if let Some(curr_class) = curr_class {
-                    validate_variable_path(
-                        ctx,
-                        path.clone(),
-                        span,
-                        index + 1,
-                        curr_class.ast_class().clone(),
-                    )
-                } else {
-                    ctx.diagnostics
-                        .push_error(DatamodelError::new_validation_error(
-                            &format!(
-                                "Unknown attributee `{}` in class `{}`.",
-                                part.as_str(),
-                                s.name.as_str()
-                            ),
-                            span.clone(),
-                        ));
-                    return;
+    let next_path_name = variable.path[next_index].clone();
+    match current {
+        FieldType::Union(_, ft, _) => match ft
+            .into_iter()
+            .any(|ft| validate_variable_path(ctx, variable, next_index, ft).is_ok())
+        {
+            true => Ok(()),
+            false => Err(DatamodelError::new_validation_error(
+                &format!("Unknown field `{}` in Union", next_path_name),
+                variable.span.clone(),
+            )),
+        },
+        FieldType::Dictionary(_, _) => Err(DatamodelError::new_validation_error(
+            "Dictionary types are not supported",
+            variable.span.clone(),
+        )),
+        FieldType::Tuple(_, _, _) => Err(DatamodelError::new_validation_error(
+            "Tuple types are not supported",
+            variable.span.clone(),
+        )),
+        FieldType::List(_, _, _) => Err(DatamodelError::new_validation_error(
+            "List types are not yet indexable in the prompt",
+            variable.span.clone(),
+        )),
+        FieldType::Identifier(_, idn) => match ctx.db.find_type(&idn) {
+            Some(Either::Left(cls)) => {
+                match cls
+                    .static_fields()
+                    .find(|f| f.name() == next_path_name.as_str())
+                {
+                    Some(field) => {
+                        validate_variable_path(ctx, variable, next_index + 1, field.r#type())
+                    }
+                    None => Err(DatamodelError::new_validation_error(
+                        &format!(
+                            "Unknown field `{}` in class `{}`",
+                            next_path_name,
+                            idn.name()
+                        ),
+                        variable.span.clone(),
+                    )),
                 }
             }
-            FieldType::PrimitiveType(s, field_span) => {
-                if (path.len() > index + 1) {
-                    ctx.diagnostics
-                        .push_error(DatamodelError::new_validation_error(
-                            &format!("Attribute `{}` does not exist", path[index + 1].as_str(),),
-                            span.clone(),
-                        ));
-                }
-            }
-            _ => {}
-        }
-        // If it is a field, validate the next part in the path
-        //validate_variable_path(ctx, path, span, index + 1, current_class);
-    } else {
-        ctx.diagnostics
-            .push_error(DatamodelError::new_validation_error(
-                &format!(
-                    "Unknown attribute `{}` in class `{}`",
-                    part.as_str(),
-                    current_class.name.name.as_str()
-                ),
-                span.clone(),
-            ));
+            Some(Either::Right(_)) => Err(DatamodelError::new_validation_error(
+                "Enum values are not indexable in the prompt",
+                variable.span.clone(),
+            )),
+            None => match idn {
+                ast::Identifier::Primitive(_p, _) => Err(DatamodelError::new_validation_error(
+                    &format!(
+                        "{0} has no field {1}. {0} is of type: {2}",
+                        variable.path[..next_index].join("."),
+                        next_path_name,
+                        idn.name()
+                    ),
+                    variable.span.clone(),
+                )),
+                ast::Identifier::Ref(_, _) => Err(DatamodelError::new_validation_error(
+                    "Namespace imports (using '.') are not yet supported.",
+                    variable.span.clone(),
+                )),
+                ast::Identifier::ENV(_, _) => Err(DatamodelError::new_validation_error(
+                    "Environment variables are not indexable in the prompt",
+                    variable.span.clone(),
+                )),
+                _ => Err(DatamodelError::new_validation_error(
+                    &format!("Unknown type `{}`.", idn.name()),
+                    variable.span.clone(),
+                )),
+            },
+        },
     }
 }

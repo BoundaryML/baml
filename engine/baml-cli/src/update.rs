@@ -1,6 +1,6 @@
 use check_latest::{crate_name, crate_version, user_agent, Versions};
 use colored::*;
-use log::{error, info, warn};
+use log::{info, warn};
 use semver;
 
 use crate::{command::run_command_with_error, errors::CliError};

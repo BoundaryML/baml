@@ -6,7 +6,6 @@ use super::{
 };
 use crate::{ast::*, parser::parse_variant};
 use internal_baml_diagnostics::{DatamodelError, Diagnostics, SourceFile};
-use log::info;
 use pest::Parser;
 
 #[cfg(feature = "debug_parser")]

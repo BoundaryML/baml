@@ -1,4 +1,4 @@
-use super::{Expression, Identifier, Span, WithSpan};
+use super::{Expression, Span, WithSpan};
 use std::fmt::{Display, Formatter};
 
 /// An opaque identifier for a value in an AST enum. Use the

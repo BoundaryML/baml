@@ -39,10 +39,10 @@ fn lift_generator(
         .fields()
         .iter()
         .map(|arg| match &arg.value {
-            Some(expr) => Some((arg.name.name.as_str(), expr)),
+            Some(expr) => Some((arg.name(), expr)),
             None => {
                 diagnostics.push_error(DatamodelError::new_config_property_missing_value_error(
-                    arg.name.name.as_str(),
+                    arg.name(),
                     generator_name,
                     "generator",
                     ast_generator.span().clone(),
@@ -56,7 +56,7 @@ fn lift_generator(
     if let Some(expr) = args.get(LANGUAGE_KEY) {
         if !expr.is_string() {
             diagnostics.push_error(DatamodelError::new_type_mismatch_error(
-                "String",
+                "string",
                 expr.describe_value_type(),
                 &expr.to_string(),
                 expr.span().clone(),
@@ -95,7 +95,7 @@ fn lift_generator(
             Some(val) => GeneratorConfigValue::from(val),
             None => {
                 diagnostics.push_error(DatamodelError::new_config_property_missing_value_error(
-                    &prop.name.name,
+                    prop.name(),
                     generator_name,
                     "generator",
                     prop.span.clone(),
@@ -104,7 +104,7 @@ fn lift_generator(
             }
         };
 
-        properties.insert(prop.name.name.clone(), value);
+        properties.insert(prop.name().to_string(), value);
     }
 
     Some(Generator {

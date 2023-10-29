@@ -19,6 +19,6 @@ impl Configuration {
     pub fn preview_features(&self) -> BitFlags<PreviewFeature> {
         self.generators
             .iter()
-            .fold(BitFlags::empty(), |acc, generator| acc)
+            .fold(BitFlags::empty(), |acc, _generator| acc)
     }
 }

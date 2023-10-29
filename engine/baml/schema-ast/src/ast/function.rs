@@ -1,6 +1,6 @@
 use super::{
-    traits::WithAttributes, Attribute, Comment, FieldArity, FieldType, Identifier, Span,
-    WithDocumentation, WithIdentifier, WithSpan,
+    traits::WithAttributes, Attribute, Comment, FieldType, Identifier, Span, WithDocumentation,
+    WithIdentifier, WithSpan,
 };
 
 /// An opaque identifier for a value in an AST enum. Use the
@@ -34,9 +34,6 @@ impl std::ops::Index<FuncArguementId> for FunctionArg {
 
 #[derive(Debug, Clone)]
 pub struct FunctionArg {
-    /// The arity of the field.
-    pub arity: FieldArity,
-
     /// The field's type.
     pub field_type: FieldType,
 

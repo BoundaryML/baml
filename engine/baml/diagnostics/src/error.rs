@@ -244,6 +244,10 @@ impl DatamodelError {
         )
     }
 
+    pub fn new_name_error(_type: &str, message: &str, span: Span) -> DatamodelError {
+        Self::new(format!("Invalid name for `{_type}`: {message}"), span)
+    }
+
     pub fn new_enum_validation_error(message: &str, enum_name: &str, span: Span) -> DatamodelError {
         Self::new(
             format!("Error validating enum `{enum_name}`: {message}"),
@@ -322,10 +326,29 @@ impl DatamodelError {
         Self::new(message.into(), span)
     }
 
-    pub fn new_type_not_found_error(type_name: &str, span: Span) -> DatamodelError {
-        let msg = format!(
-            "Type \"{type_name}\" is neither a built-in type, nor refers to another model, custom type, or enum."
-        );
+    pub fn new_type_not_found_error(
+        type_name: &str,
+        close_names: Vec<&str>,
+        span: Span,
+    ) -> DatamodelError {
+        let msg = if close_names.is_empty() {
+            // If no names are close enough, suggest nothing or provide a generic message
+            format!("Type `{}` does not exist.", type_name)
+        } else if close_names.len() == 1 {
+            // If there's only one close name, suggest it
+            format!(
+                "Type `{}` does not exist. Did you mean `{}`?",
+                type_name, close_names[0]
+            )
+        } else {
+            // If there are multiple close names, suggest them all
+            let suggestions = close_names.join("`, `");
+            format!(
+                "Type `{}` does not exist. Did you mean one of these: `{}`?",
+                type_name, suggestions
+            )
+        };
+
         Self::new(msg, span)
     }
 

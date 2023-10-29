@@ -1,17 +1,20 @@
 // Interface blocks 
 class Interface1 {
-  prop String
-  prop2 Int
-  propArray String[]
-  boolean Bool
+  prop string
+  prop2 int
+  propArray string[]
+  boolean bool
 }
 
 class InterfaceTwo {
-  interface String
-  prop2 String
+  interface string
+  prop2 string
 }
 
 class InterfaceThree {
   field InterfaceTwo
-  bool String
+  another_fiel string
 }
+
+
+

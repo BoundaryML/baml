@@ -7,23 +7,21 @@ enum Sentiment {
 enum Sentiment2 {
   // comment
   ANGRY
-
-
 }
 
 // Interface blocks 
 class Type1 {
-  prop String
-  prop2 Int
-  propArray String[]
-  boolean Bool
+  prop string
+  prop2 int
+  propArray string[]
+  boolean bool
 }
 
 class Type2 {
   interface1 Type1
 
   // comment
-  prop2 String
+  prop2 string
 }
 
 function FunctionOne {
@@ -34,7 +32,7 @@ function FunctionOne {
 
 function FunctionTwo {
   input Type1
-  output String
+  output string
 }
 
 
@@ -72,8 +70,8 @@ client<llm> MyClient {
 //}
 
 function FooBar2 {
-  input String
-  output String
+  input string
+  output string
 }
 
 impl<llm, FooBar2> SomeName {
@@ -83,10 +81,8 @@ impl<llm, FooBar2> SomeName {
     asdf #// This is a comment //# goes here
     a ;asdf;kljla
     asflk;jasdf
-    {#input.some_field}
+    {#input.some_field.foo}
 
     {#print_type<json>(output)}
   "#
 }
-
-

@@ -1,5 +1,5 @@
 use crate::ast::{
-    traits::WithSpan, Class, Client, Enum, Function, GeneratorConfig, Identifier, Span,
+    traits::WithSpan, Class, Client, Enum, Function, GeneratorConfig, Identifier, Span, WithName,
 };
 
 use super::Variant;
@@ -34,8 +34,8 @@ impl Top {
             Top::Function(_) => "function",
             Top::Client(m) if m.is_llm() => "client<llm>",
             Top::Client(_) => "client<?>",
-            Top::Variant(v) if v.is_llm() => "variant<llm>",
-            Top::Variant(_) => "variant<?>",
+            Top::Variant(v) if v.is_llm() => "impl<llm>",
+            Top::Variant(_) => "impl<?>",
             Top::Generator(_) => "generator",
         }
     }
@@ -55,7 +55,7 @@ impl Top {
 
     /// The name of the item.
     pub fn name(&self) -> &str {
-        &self.identifier().name
+        &self.identifier().name()
     }
 
     /// Try to interpret the item as an enum declaration.

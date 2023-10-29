@@ -10,7 +10,7 @@ use crate::ast::*;
 use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
 pub(crate) fn parse_field(
-    model_name: &str,
+    model_name: &Option<Identifier>,
     container_type: &'static str,
     pair: Pair<'_>,
     block_comment: Option<Pair<'_>>,
@@ -19,13 +19,13 @@ pub(crate) fn parse_field(
     let pair_span = pair.as_span();
     let mut name: Option<Identifier> = None;
     let mut attributes: Vec<Attribute> = Vec::new();
-    let mut field_type: Option<(FieldArity, FieldType)> = None;
+    let mut field_type = None;
     let mut comment: Option<Comment> = block_comment.and_then(parse_comment_block);
 
     for current in pair.into_inner() {
         match current.as_rule() {
-            Rule::field_key => name = Some(parse_identifier(current.into(), diagnostics)),
-            Rule::field_type => field_type = Some(parse_field_type(current, diagnostics)?),
+            Rule::identifier => name = Some(parse_identifier(current.into(), diagnostics)),
+            Rule::field_type => field_type = parse_field_type(current, diagnostics),
             Rule::field_attribute => {
                 attributes.push(parse_attribute(current, diagnostics));
             }
@@ -42,10 +42,9 @@ pub(crate) fn parse_field(
     }
 
     match (name, field_type) {
-        (Some(name), Some((arity, field_type))) => Ok(Field {
+        (Some(name), Some(field_type)) => Ok(Field {
             field_type,
             name,
-            arity,
             attributes,
             documentation: comment,
             span: diagnostics.span(pair_span),
@@ -53,7 +52,7 @@ pub(crate) fn parse_field(
         _ => Err(DatamodelError::new_model_validation_error(
             "This field declaration is invalid. It is either missing a name or a type.",
             container_type,
-            model_name,
+            model_name.as_ref().map_or("<unknown>", |f| f.name()),
             diagnostics.span(pair_span),
         )),
     }

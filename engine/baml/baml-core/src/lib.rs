@@ -4,11 +4,11 @@
 
 pub use internal_baml_diagnostics;
 use internal_baml_parser_database::ParserDatabase;
-pub use internal_baml_parser_database::{self, is_reserved_type_name};
-use internal_baml_prompt_parser::ast as prompt_ast;
-use internal_baml_schema_ast::ast::SchemaAst;
+pub use internal_baml_parser_database::{self};
+
+
 pub use internal_baml_schema_ast::{self, ast};
-use log::info;
+
 use rayon::prelude::*;
 use std::{path::PathBuf, sync::Mutex};
 
@@ -22,7 +22,7 @@ mod validate;
 use self::validate::generator_loader;
 pub use crate::{
     common::{PreviewFeature, PreviewFeatures, ALL_PREVIEW_FEATURES},
-    configuration::{Configuration, StringFromEnvVar},
+    configuration::Configuration,
 };
 
 pub struct ValidatedSchema {

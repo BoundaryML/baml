@@ -1,4 +1,4 @@
-use crate::ast::{Span, WithDocumentation, WithSpan};
+use crate::ast::{Span, WithSpan};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PromptTextId(pub u32);

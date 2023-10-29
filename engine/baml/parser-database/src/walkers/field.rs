@@ -1,7 +1,7 @@
-use crate::types::{ClassAttributes, ToStringAttributes};
+use crate::types::{ToStringAttributes};
 
 use super::{ClassWalker, Walker};
-use internal_baml_schema_ast::ast::{self, FieldArity, FieldType};
+use internal_baml_schema_ast::ast::{self, FieldType};
 
 /// A model field, scalar or relation.
 pub type FieldWalker<'db> = Walker<'db, (ast::ClassId, ast::FieldId)>;
@@ -18,8 +18,8 @@ impl<'db> FieldWalker<'db> {
     }
 
     /// The field type.
-    pub fn r#type(self) -> (FieldArity, &'db FieldType) {
-        (self.ast_field().arity, &self.ast_field().field_type)
+    pub fn r#type(self) -> &'db FieldType {
+        &self.ast_field().field_type
     }
 
     /// The parsed attributes.

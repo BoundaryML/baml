@@ -1,10 +1,9 @@
-use handlebars::{handlebars_helper, JsonRender};
+
 use internal_baml_parser_database::walkers::{ArgWalker, Walker};
 use internal_baml_schema_ast::ast::{
-    ClassId, FieldArity, FieldId, FieldType, FunctionArg, FunctionArgs, FunctionId, Identifier,
-    NamedFunctionArgList, TypeValue, WithDocumentation, WithName,
+    FunctionId, WithDocumentation, WithName,
 };
-use log::info;
+
 use serde_json::json;
 
 use crate::generate::generate_python_client::file::clean_file_name;
@@ -47,7 +46,7 @@ impl JsonHelper for Walker<'_, FunctionId> {
             "args": self.walk_input_args().map(|a| a.json(f)).collect::<Vec<_>>(),
             "return": self.walk_output_args().map(|a| a.json(f)).collect::<Vec<_>>(),
             "doc_string": self.ast_function().documentation(),
-            "impls": self.walk_variants().map(|v| v.name()).collect::<Vec<_>>(),
+            "impls": self.walk_variants().map(|v| v.identifier().name()).collect::<Vec<_>>(),
         })
     }
 }

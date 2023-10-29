@@ -1,14 +1,14 @@
 function One {
-  input String
-  output String
+  input string
+  output string
 }
 
 class Hello {
-  world String
+  world string
 }
 
 class Hello2 {
-  world String
+  world string
 }
 
 function Two {

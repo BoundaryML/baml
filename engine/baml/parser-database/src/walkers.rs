@@ -14,7 +14,9 @@ mod function;
 mod variants;
 
 pub use client::*;
+use either::Either;
 pub use function::*;
+use internal_baml_schema_ast::ast::{Identifier, TopId, WithName};
 pub use r#class::*;
 pub use r#enum::*;
 pub use variants::*;
@@ -46,21 +48,38 @@ where
 
 impl crate::ParserDatabase {
     /// Find an enum by name.
-    pub fn find_enum<'db>(&'db self, name: &str) -> Option<EnumWalker<'db>> {
-        self.interner
-            .lookup(name)
-            .and_then(|name_id| self.names.tops.get(&name_id))
-            .and_then(|top_id| top_id.as_enum_id())
-            .map(|enum_id| self.walk(enum_id))
+    pub fn find_enum<'db>(&'db self, idn: &Identifier) -> Option<EnumWalker<'db>> {
+        self.find_type(idn).and_then(|either| match either {
+            Either::Right(class) => Some(class),
+            _ => None,
+        })
+    }
+
+    /// Find a type by name.
+    pub fn find_type<'db>(
+        &'db self,
+        idn: &Identifier,
+    ) -> Option<Either<ClassWalker<'db>, EnumWalker<'db>>> {
+        match idn {
+            Identifier::Local(local, _) => self
+                .interner
+                .lookup(local)
+                .and_then(|name_id| self.names.tops.get(&name_id))
+                .map(|top_id| match top_id {
+                    TopId::Class(class_id) => Either::Left(self.walk(*class_id)),
+                    TopId::Enum(enum_id) => Either::Right(self.walk(*enum_id)),
+                    _ => unreachable!(),
+                }),
+            _ => None,
+        }
     }
 
     /// Find a model by name.
-    pub fn find_class<'db>(&'db self, name: &str) -> Option<ClassWalker<'db>> {
-        self.interner
-            .lookup(name)
-            .and_then(|name_id| self.names.tops.get(&name_id))
-            .and_then(|top_id| top_id.as_class_id())
-            .map(|model_id| self.walk(model_id))
+    pub fn find_class<'db>(&'db self, idn: &Identifier) -> Option<ClassWalker<'db>> {
+        self.find_type(idn).and_then(|either| match either {
+            Either::Left(class) => Some(class),
+            _ => None,
+        })
     }
 
     /// Find a client by name.
@@ -73,9 +92,9 @@ impl crate::ParserDatabase {
     }
 
     /// Find a function by name.
-    pub fn find_function<'db>(&'db self, name: &str) -> Option<FunctionWalker<'db>> {
+    pub fn find_function<'db>(&'db self, idn: &Identifier) -> Option<FunctionWalker<'db>> {
         self.interner
-            .lookup(name)
+            .lookup(idn.name())
             .and_then(|name_id| self.names.tops.get(&name_id))
             .and_then(|top_id| top_id.as_function_id())
             .map(|model_id| self.walk(model_id))
@@ -84,6 +103,15 @@ impl crate::ParserDatabase {
     /// Traverse a schema element by id.
     pub fn walk<I>(&self, id: I) -> Walker<'_, I> {
         Walker { db: self, id }
+    }
+
+    /// Get all the types that are valid in the schema. (including primitives)
+    pub fn valid_type_names(&self) -> Vec<&str> {
+        let mut names: Vec<_> = self.walk_classes().map(|c| c.name()).collect();
+        names.extend(self.walk_enums().map(|e| e.name()));
+        // Add primitive types
+        names.extend(vec!["string", "int", "float", "bool"]);
+        names
     }
 
     /// Walk all enums in the schema.

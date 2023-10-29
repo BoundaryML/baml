@@ -4,9 +4,17 @@ function Foo {
   output Baz
 }
 
-// error: Type "Bar" is neither a built-in type, nor refers to another model, custom type, or enum.
-//   -->  /Users/aaronvillalpando/Projects/gloo-lang/engine/baml/baml/tests/validation_files/functions/nonexistent_input_output_types.baml:3
+
+
+// error: Type `Bar` does not exist.
+//   -->  /Users/vbv/repos/gloo-lang/engine/baml/baml/tests/validation_files/functions/nonexistent_input_output_types.baml:3
 //    | 
 //  2 | function Foo {
 //  3 |   input Bar
+//    | 
+// error: Type `Baz` does not exist.
+//   -->  /Users/vbv/repos/gloo-lang/engine/baml/baml/tests/validation_files/functions/nonexistent_input_output_types.baml:4
+//    | 
+//  3 |   input Bar
+//  4 |   output Baz
 //    | 

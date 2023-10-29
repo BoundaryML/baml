@@ -1,4 +1,4 @@
-use crate::ast::{Span, WithDocumentation, WithSpan};
+use crate::ast::{Span, WithSpan};
 
 use super::Variable;
 

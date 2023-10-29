@@ -1,5 +1,5 @@
 use internal_baml_parser_database::walkers::Walker;
-use internal_baml_schema_ast::ast::{ClassId, FieldArity};
+use internal_baml_schema_ast::ast::ClassId;
 use serde_json::json;
 
 use crate::generate::generate_python_client::file::clean_file_name;
@@ -38,7 +38,7 @@ impl JsonHelper for Walker<'_, ClassId> {
                 json!({
                 "name": field.name(),
                 "type": field.r#type().to_py_string(f),
-                "optional": field.r#type().0 == FieldArity::Optional,
+                "optional": field.r#type().is_nullable(),
             })).collect::<Vec<_>>(),
         })
     }

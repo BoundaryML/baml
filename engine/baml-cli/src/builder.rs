@@ -1,8 +1,8 @@
 mod dir_utils;
 
-use baml::{generate_schema, parse_and_validate_schema, parse_configuration, SourceFile};
+use baml::{generate_schema, parse_and_validate_schema, SourceFile};
 use colored::*;
-use log::{error, info, warn};
+use log::{info};
 use std::path::PathBuf;
 
 use crate::{

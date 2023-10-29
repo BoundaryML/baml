@@ -21,6 +21,8 @@ log = "0.4.20"
 chrono = "0.4.31"
 whoami = "1.4.1"
 textwrap = "0.16.0"
+either = "1.6.1"
+strsim = "0.10.0"
 
 
 [dev-dependencies]

@@ -6,7 +6,7 @@ use super::{
     parse_identifier::parse_identifier,
     Rule,
 };
-use crate::ast::*;
+use crate::{assert_correct_parser, ast::*};
 use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
 pub(crate) fn parse_class(
@@ -14,6 +14,8 @@ pub(crate) fn parse_class(
     doc_comment: Option<Pair<'_>>,
     diagnostics: &mut Diagnostics,
 ) -> Class {
+    assert_correct_parser!(pair, Rule::interface_declaration);
+
     let pair_span = pair.as_span();
     let mut name: Option<Identifier> = None;
     let mut attributes: Vec<Attribute> = Vec::new();
@@ -32,7 +34,7 @@ pub(crate) fn parse_class(
                             attributes.push(parse_attribute(item, diagnostics));
                         }
                         Rule::field_declaration => match parse_field(
-                            &name.as_ref().unwrap().name,
+                            &name,
                             "class",
                             item,
                             pending_field_comment.take(),
@@ -48,7 +50,7 @@ pub(crate) fn parse_class(
                                 diagnostics.span(item.as_span()),
                             ))
                         }
-                        _ => parsing_catch_all(&item, "model"),
+                        _ => parsing_catch_all(&item, "class"),
                     }
                 }
             }

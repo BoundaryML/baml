@@ -1,6 +1,6 @@
 use crate::validate::validation_pipeline::context::Context;
-use internal_baml_diagnostics::DatamodelError;
-use internal_baml_schema_ast::ast::{FieldType, FuncArguementId};
+
+
 
 use super::common::validate_type_exists;
 

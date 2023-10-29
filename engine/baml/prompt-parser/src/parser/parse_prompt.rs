@@ -1,8 +1,8 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{path::PathBuf};
 
-use crate::ast::*;
+use crate::{assert_correct_parser, ast::*, unreachable_rule};
 use internal_baml_diagnostics::{DatamodelError, Diagnostics, SourceFile, Span};
-use log::info;
+
 use pest::Parser;
 
 use super::{BAMLPromptParser, Rule};
@@ -92,11 +92,7 @@ pub fn parse_prompt(
                                     &mut top_level_definitions,
                                     &diagnostics,
                                 ),
-                                _ => unreachable!(
-                                    "Unexpected rule: {:?} {:?}",
-                                    inner.as_rule(),
-                                    inner.as_str()
-                                ),
+                                _ => unreachable_rule!(inner, Rule::segment),
                             }
                         }
                     }
@@ -144,12 +140,13 @@ fn handle_code_block(
     top_level_definitions: &mut Vec<Top>,
     diagnostics: &mut Diagnostics,
 ) {
-    let pair_clone = pair.clone();
+    assert_correct_parser!(pair, Rule::code_block);
+
     for current in pair.into_inner() {
         match current.as_rule() {
             Rule::variable => handle_variable(current, top_level_definitions, diagnostics),
             Rule::print_block => handle_print_block(current, top_level_definitions, diagnostics),
-            _ => unreachable!(),
+            _ => unreachable_rule!(current, Rule::code_block),
         }
     }
 }
@@ -159,8 +156,11 @@ fn handle_variable(
     top_level_definitions: &mut Vec<Top>,
     diagnostics: &mut Diagnostics,
 ) {
+    assert_correct_parser!(current, Rule::variable);
+
+    let span = diagnostics.span(current.as_span());
+    let raw_text = current.as_str().to_string();
     let type_path = current
-        .clone()
         .into_inner()
         .filter_map(|inner| {
             if let Rule::identifier = inner.as_rule() {
@@ -176,17 +176,16 @@ fn handle_variable(
         .collect::<Vec<_>>();
 
     let variable = Variable {
-        path: type_path.clone(),
-        text: current.as_str().to_string(),
-        span: diagnostics.span(current.as_span().clone()),
+        path: type_path,
+        text: raw_text.clone(),
+        span: span.clone(),
     };
-    let new_code_block = CodeBlock {
+    top_level_definitions.push(Top::CodeBlock(CodeBlock {
         code_type: CodeType::Variable,
-        block: current.as_str().to_string(),
+        block: raw_text,
         arguments: vec![variable],
-        span: diagnostics.span(current.as_span().clone()),
-    };
-    top_level_definitions.push(Top::CodeBlock(new_code_block));
+        span,
+    }));
 }
 
 fn handle_print_block(
@@ -194,6 +193,8 @@ fn handle_print_block(
     top_level_definitions: &mut Vec<Top>,
     diagnostics: &mut Diagnostics,
 ) {
+    assert_correct_parser!(current, Rule::print_block);
+
     let code = &current.as_str().to_string();
     let block_span = &diagnostics.span(current.as_span().clone());
     let mut printer_type: Option<CodeType> = None;
@@ -210,6 +211,9 @@ fn handle_print_block(
                 }
                 _ => {}
             },
+            Rule::template_args => {
+                // TODO: actually read this.
+            }
             Rule::variable => {
                 for current in current.into_inner() {
                     match current.as_rule() {
@@ -223,10 +227,7 @@ fn handle_print_block(
                     }
                 }
             }
-            _ => diagnostics.push_error(DatamodelError::new_parser_error(
-                "Missing argument or incorrect function. Use print_type(YourClassName)".to_string(),
-                diagnostics.span(current.as_span().clone()),
-            )),
+            _ => unreachable_rule!(current, Rule::print_block),
         }
     }
 
@@ -252,14 +253,16 @@ fn handle_print_block(
 }
 
 fn handle_comment_block(
-    _pair: pest::iterators::Pair<'_, Rule>,
+    pair: pest::iterators::Pair<'_, Rule>,
     top_level_definitions: &mut Vec<Top>,
     diagnostics: &Diagnostics,
 ) {
+    assert_correct_parser!(pair, Rule::comment_block);
+
     // handle comment block
     top_level_definitions.push(Top::CommentBlock(CommentBlock {
-        span: diagnostics.span(_pair.as_span().clone()),
-        block: _pair.as_str().to_string(),
+        span: diagnostics.span(pair.as_span().clone()),
+        block: pair.as_str().to_string(),
     }));
 }
 

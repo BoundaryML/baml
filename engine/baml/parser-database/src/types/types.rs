@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use internal_baml_schema_ast::ast::{EnumValueId, FieldId, SerializerFieldId, VariantSerializerId};
 
-use crate::interner::StringId;
+
 
 use super::to_string_attributes::ToStringAttributes;
 

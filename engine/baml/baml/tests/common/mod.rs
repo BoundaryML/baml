@@ -2,10 +2,10 @@ mod asserts;
 
 use std::path::PathBuf;
 
-pub(crate) use ::indoc::{formatdoc, indoc};
-pub(crate) use asserts::*;
-pub(crate) use expect_test::expect;
-use pretty_assertions::{assert_eq, assert_ne};
+
+
+
+use pretty_assertions::{assert_eq};
 
 use baml::{Configuration, SourceFile};
 
@@ -27,7 +27,7 @@ pub(crate) fn parse_and_validate_schema(datamodel_string: &str) -> baml::Validat
     .unwrap()
 }
 
-pub(crate) fn parse_config(path: PathBuf, schema: &str) -> Result<Configuration, String> {
+pub(crate) fn parse_config(_path: PathBuf, schema: &str) -> Result<Configuration, String> {
     let path = PathBuf::from("./unknown");
     baml::parse_configuration(&path, path.clone(), schema).map_err(|err| err.to_pretty_string())
 }

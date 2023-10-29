@@ -1,4 +1,4 @@
-use crate::ast::{Span, WithDocumentation, WithSpan};
+use crate::ast::{Span, WithSpan};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct VariableId(pub u32);
@@ -12,7 +12,9 @@ impl VariableId {
 
 #[derive(Debug, Clone)]
 pub struct Variable {
+    /// Entire unparsed text of the variable.  (input.something.bar)
     pub text: String,
+    /// [input, something, bar]
     pub path: Vec<String>,
     pub span: Span,
 }

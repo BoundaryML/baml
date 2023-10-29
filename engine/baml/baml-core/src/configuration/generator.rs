@@ -1,7 +1,6 @@
-use crate::{configuration::StringFromEnvVar, PreviewFeature};
-use enumflags2::BitFlags;
+use crate::ast::WithName;
 use internal_baml_parser_database::ast::Expression;
-use serde::{ser::SerializeSeq, Serialize, Serializer};
+use serde::Serialize;
 use std::{collections::HashMap, path::PathBuf};
 
 #[derive(Debug, Serialize, Clone)]
@@ -23,7 +22,6 @@ impl From<&Expression> for GeneratorConfigValue {
         match expr {
             Expression::NumericValue(val, _) => val.clone().into(),
             Expression::StringValue(val, _) => val.clone().into(),
-            Expression::ConstantValue(val, _) => val.clone().into(),
             Expression::Array(elements, _) => {
                 Self::Array(elements.iter().map(From::from).collect())
             }
@@ -33,6 +31,8 @@ impl From<&Expression> for GeneratorConfigValue {
                     .map(|(k, v)| (k.to_string(), From::from(v)))
                     .collect(),
             ),
+            Expression::Identifier(idn) => idn.name().to_string().into(),
+            Expression::RawStringValue(val, _) => val.clone().into(),
         }
     }
 }
