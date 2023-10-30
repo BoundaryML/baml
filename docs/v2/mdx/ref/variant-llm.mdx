@@ -1,15 +1,14 @@
 ---
-title: "impl<llm, FunctionName>"
+title: "impl"
 ---
 
-An **impl<llm, FunctionName>** is an implementation of a `function` which uses an LLM. BAML automatically provides:
+An **impl\<llm, FunctionName\>** is an implementation of a `function` which uses an LLM. BAML automatically provides:
 
 1. **A type-safe API for your LLM** -- LLMs can sometimes forget a comma, or may add a comment inside a JSON. BAML handles all this for you.
 2. **Stable type definitions** -- You can alias your type property names dynamically in prompts, and BAML will map those changes to your original type definitions so your code stays the same.
 3. **Compile time checks for prompt variables**
 4. **Organization** -- everything (configs, variables, renames) related to each prompt are defined and visible in one place
 5. **Observability** -- All events are published via OpenTelemetry, and can be tracked in the Gloo Dashboard
-6. **Flexibility** -- hand over your .baml files to someone else so they can run your functions. We will soon support compilation to other languages.
 
 <CodeGroup>
 ```baml Baml
@@ -115,30 +114,24 @@ Using \{#input\} in your prompt is the equivalent of `str(arg)`.
 
 #### How #input behaves if it's a custom type
 
-Sometimes you might want to have your function take in an object. In this case, adding `{#input}` to your prompt is still used to access `str(your-object)`, but you can inject individual properties like this:
-
-`#input.property1` to inject `str(arg.property1)`
-
-This can be done with class `#method` as well ([See Methods](./method#class)), with `#input.methodName`.
+If you add **\{#input\}** directly to your prompt when the input is a custom `class`, we serialize the object to JSON into your prompt. To prevent this you can inject each field individually like `{#input.field}`.
 
 ### Formatting the #output
 
 The #output is the function's return type.
 
-Using `#print_type(output)` in the prompt is used to print out the JSON schema of the output type in your prompt.
+`#print_type(output)` in the prompt is used to print out the JSON schema of the output type in your prompt.
 Baml automatically generates a JSON schema for you, but you can customize them with schema attributes.
-
+ 
 #### Add a custom output schema description
 
 In LLMs it is often useful to rename or provide descriptions about the task you are attempting to do. For example, you may want to rename a property from `duration` to `duration_in_minutes` so the LLM can understand what value it should output better.
 
-`#stringify` allows you to change the default JSON schema of any property or sub-property of your output type.
-
-You can use it to change the `#print_type(output)` from being serialized as:
+For example we may want to change the **print_type(output)** from
 
 ```
 {
-  "duration": 10
+  "duration": "integer"
 }
 ```
 
@@ -146,43 +139,69 @@ to
 
 ```json
 {
-  "duration_in_minutes": 10
+  "duration_in_minutes": "The duration in minutes, as an integer"
 }
 ```
 
-without having to change your code or the actual type definition.
+without having to change your code or prompt.
 
-`{@output.json}` will automatically parse all your @stringify'd properties and replace the default JSON schema with your own custom aliases and descriptions of each field.
+To do this you can just add **@alias** and **@description** attributes to the `class` definition.
+    
+```diff
+function GetDuration {
+    input string
+    output Duration
+}
 
-#### @stringify -- Enums
+class Duration {
+    duration int 
++    @alias(duration_in_minutes) 
++    @description(The duration in minutes, as an integer)
+}
 
-You can use `@EnumName.values` to automatically inject all the `value: description` pairs of your enums.
-For values without a description, only `value` will be injected.
+impl<llm, GetDuration> V1 {
+    prompt #"
+        Given a sentence, return the duration of the sentence.
+
+        {#input}
+
+        Duration:
+        {#print_type(output)}
+
+        Duration:
+    "#
+}
+
+
+```
+
+`{#print_type(output)}` will automatically parse all your field attributes and replace the default JSON schema with your own custom aliases and descriptions of each field.
+
+#### print_enum
+    
+`{#print_enum(enum)}` is used to print out the values of an enum in your prompt.
 
 To modify the description of each value, see the examples below.
 
 <CodeGroup>
 ```baml Ex 1: describe
-@enum Sentiment {
-    Positive
-    Negative
-    Neutral
+enum Sentiment {
+    Positive @description(When the sentence is about good things that happened recently)
+    Negative @description(When the sentence is about bad things that happened recently)
+    Neutral @description(Sentences that are neutral or happend too long ago to be relevant)
 }
-@variant[llm] v1 for GetSentiment {
-    ..
-    @stringify Sentiment {
-    Positive
-    @describe{When the sentence is about good things that happened recently}
 
-        Negative
-        @describe{When the sentence is about bad things that happened recently}
+impl<llm, GetSentiment> V1 {
+    prompt #"
+        Given a sentence, return the sentiment of the sentence.
 
-        Neutral
-        @describe{
-            Sentences that are neutral or happend too long ago to be relevant
-        }
-    }
+        {#input}
 
+        Sentiments:
+        {#print_enum(Sentiment)}
+
+        Sentiment:
+    "#
 }
 
 ````
@@ -190,7 +209,7 @@ To modify the description of each value, see the examples below.
 ```baml Ex 1: Prompt
 Given a sentence, return the sentiment of the sentence.
 
-{@input}
+{#input}
 
 Sentiments:
 Positive: When the sentence is about good things that happened recently
@@ -203,25 +222,20 @@ Sentiment:
 ```baml Ex 2: Rename
 # In this example, we rename what we call each `Sentiment` value, but still
 # guarantee the `Sentiment` enum as an output (thanks to Baml's parser).
-@variant[llm] v2 for GetSentiment {
-    ...
-    @stringify Sentiment {
-        Positive @rename{Good}
-        @describe{When the sentence is about good things that happened recently}
-
-        Negative @rename{Bad}
-        @describe{When the sentence is about bad things that happened recently}
-
-        Neutral
-        @describe{Sentences that are neutral or happend too long ago to be relevant}
-    }
+class Sentiment {
+    Positive @alias(Good) @description(When the sentence is about good things that happened recently)
+    Negative @alias(Bad) @description(When the sentence is about bad things that happened recently)
+    Neutral @description(Sentences that are neutral or happend too long ago to be relevant)
 }
+
+...
+
 ```
 
 ```baml Ex 2: Prompt
 Given a sentence, return the sentiment of the sentence.
 
-{@input}
+{#input}
 
 Sentiments:
 Good: When the sentence is about good things that happened recently
@@ -231,147 +245,27 @@ Neutral: Sentences that are neutral or happend too long ago to be relevant
 Sentiment:
 ```
 
-```baml Ex 3: Skip
+```diff Ex 3: Skip
 # You can also skip any values you don't want to parse.
-@variant[llm] v2 for GetSentiment {
-    ...
-    @stringify Sentiment {
-        Positive @rename{Good}
-        @describe{When the sentence is about good things that happened recently}
 
-        Negative @rename{Bad}
-        @describe{When the sentence is about bad things that happened recently}
-
-        Neutral @rename{Neither} @skip
-        @describe{
-            Sentences that are neutral or happend too long ago to be relevant
-        }
-    }
+class Sentiment {
+    Positive @alias(Good) @description(When the sentence is about good things that happened recently)
+    Negative @alias(Bad) @description(When the sentence is about bad things that happened recently)
++    Neutral @alias(Neither) @skip @description(Sentences that are neutral or happend too long ago to be relevant)
 }
+
 ```
 
 ```baml Ex 3: Prompt
 Given a sentence, return the sentiment of the sentence.
 
-{@input}
+{#input}
 
 Sentiments:
 Good: When the sentence is about good things that happened recently
 Bad: When the sentence is about bad things that happened recently
 
 Sentiment:
-```
-
-</CodeGroup>
-
-#### @stringify -- Class
-
-Just like enums, you have access to `@describe` and `@rename` for class properties. `@skip` is not avaiable.
-
-There is a special method you can use to represent the class as a string: `@ClassName.json`.
-
-In all of the examples below, the output of the function will still be the type: `Person[]`.
-
-```baml
-@class Person {
-    name string
-    age int
-}
-
-@function GetPerson {
-    @input string
-    @output Person[]
-}
-```
-
-<CodeGroup>
-
-```baml Ex 1: Basic
-@variant[llm] v1 for GetPerson {
-    @prompt {
-        Given the sentence, return all the details about all people detected.
-
-        {@input}
-
-        Output JSON:
-        {@output.json}
-
-        JSON:
-    }
-}
-```
-
-```baml Ex 1: Prompt
-Given the sentence, return all the details about all people detected.
-
-{@input}
-
-Output JSON:
-{ "name": string, "age": int }[]
-
-JSON:
-```
-
-```baml Ex 2: Describe
-# In this example, we'll add a description to get more details.
-@variant[llm] v2 for GetPerson {
-    @stringify Person {
-        age @describe{in months}
-    }
-
-    @prompt {
-        Given the sentence, return all the details about all people detected.
-
-        {@input}
-
-        Output JSON:
-        {@output.json}
-
-        JSON:
-    }
-}
-```
-
-```baml Ex 2: Prompt
-Given the sentence, return all the details about all people detected.
-
-{@input}
-
-Output JSON:
-{ "name": string, "age": age in months }[]
-
-JSON:
-```
-
-```baml Ex 3: Rename
-# In this example, we'll instead rename the property to `age_in_months`.
-@variant[llm] v3 for GetPerson {
-    @stringify Person {
-        age @rename{age_in_months}
-    }
-
-    @prompt {
-        Given the sentence, return all the details about all people detected.
-
-        {@input}
-
-        Output JSON:
-        {@output.json}
-
-        JSON:
-    }
-}
-```
-
-```baml Ex 3: Prompt
-Given the sentence, return all the details about all people detected.
-
-{@input}
-
-Output JSON:
-{ "name": string, "age_in_months": int }[]
-
-JSON:
 ```
 
 </CodeGroup>

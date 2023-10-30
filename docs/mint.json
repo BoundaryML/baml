@@ -36,7 +36,6 @@
       "pages": [
         "v1/mdx/overview",
         "v1/mdx/installation",
-        "v1/mdx/quickstart",
         "v1/mdx/running-tests"
       ],
       "version": "v1"
@@ -46,29 +45,11 @@
       "pages": [
         "v2/mdx/overview",
         "v2/mdx/installation",
-        "v2/mdx/quickstart",
         "v2/mdx/running-tests"
       ],
       "version": "v2"
     },
-    {
-      "group": "Concepts",
-      "pages": [
-        "v1/mdx/what-is-gloo",
-        "v1/mdx/why-gloo",
-        "v1/mdx/should-you-use-gloo"
-      ],
-      "version": "v1"
-    },
-    {
-      "group": "Concepts",
-      "pages": [
-        "v2/mdx/what-is-gloo",
-        "v2/mdx/why-gloo",
-        "v2/mdx/should-you-use-gloo"
-      ],
-      "version": "v2"
-    },
+
     {
       "group": "Guides",
       "pages": [
@@ -76,15 +57,8 @@
           "group": "Basic",
           "pages": [
             "v1/mdx/examples/classification",
-            "v1/mdx/examples/extraction",
-            "v1/mdx/examples/translation",
-            "v1/mdx/examples/summarization",
-            "v1/mdx/examples/q-and-a"
+            "v1/mdx/examples/extraction"
           ]
-        },
-        {
-          "group": "Advanced",
-          "pages": ["v1/mdx/examples/chat-bot"]
         }
       ],
       "version": "v1"
@@ -96,15 +70,8 @@
           "group": "Basic",
           "pages": [
             "v2/mdx/examples/classification",
-            "v2/mdx/examples/extraction",
-            "v2/mdx/examples/translation",
-            "v2/mdx/examples/summarization",
-            "v2/mdx/examples/q-and-a"
+            "v2/mdx/examples/extraction"
           ]
-        },
-        {
-          "group": "Advanced",
-          "pages": ["v2/mdx/examples/chat-bot"]
         }
       ],
       "version": "v2"
@@ -117,27 +84,32 @@
           "pages": [
             {
               "group": "Types",
-              "pages": ["mdx/ref/type", "mdx/ref/enum", "mdx/ref/class"]
+              "pages": [
+                "v1/mdx/ref/type",
+                "v1/mdx/ref/enum",
+                "v1/mdx/ref/class"
+              ]
             },
             {
               "group": "Functions",
               "pages": [
-                "mdx/ref/function",
-                "mdx/ref/test-group",
+                "v1/mdx/ref/function",
+                "v1/mdx/ref/test-group",
                 {
                   "group": "@variant",
-                  "pages": ["mdx/ref/variant-llm", "mdx/ref/variant-code"]
+                  "pages": ["v1/mdx/ref/variant-llm", "v1/mdx/ref/variant-code"]
                 }
               ]
             },
             {
               "group": "clients",
-              "pages": ["mdx/ref/client-llm", "mdx/ref/client-code"]
+              "pages": ["v1/mdx/ref/client-llm", "v1/mdx/ref/client-code"]
             },
-            "mdx/ref/method"
+            "v1/mdx/ref/method"
           ]
         }
-      ]
+      ],
+      "version": "v1"
     },
     {
       "group": "Reference",
@@ -157,18 +129,16 @@
               "group": "Functions",
               "pages": [
                 "v2/mdx/ref/function",
-                "v2/mdx/ref/test-group",
                 {
-                  "group": "@variant",
-                  "pages": ["v2/mdx/ref/variant-llm", "v2/mdx/ref/variant-code"]
+                  "group": "impl",
+                  "pages": ["v2/mdx/ref/variant-llm"]
                 }
               ]
             },
             {
               "group": "clients",
               "pages": ["v2/mdx/ref/client-llm", "v2/mdx/ref/client-code"]
-            },
-            "v2/mdx/ref/method"
+            }
           ]
         }
       ],

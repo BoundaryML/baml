@@ -1,10 +1,10 @@
 ---
-title: "@function"
+title: "function"
 ---
 
 A function is a definition of an input and output.
 
-The implementation of the function is described in a [variant](./variant-llm).
+The implementation of the function is described in a [variant](variant-llm).
 
 We specifically seprate out functions and their defintions because in machine learnings,
 its often common to swap out model parameters, what model architecture is used, or even
@@ -15,9 +15,9 @@ function the same.
 
 <CodeGroup>
 ```baml Baml
-@function GetSentiment {
-    @input   string
-    @output  string
+function GetSentiment {
+    input   string
+    output  string
 }
 ```
 
@@ -35,5 +35,5 @@ type GetSentiment = (str: string) => string;
 ## Properties
 | Property | Type | Description | Required |
 | -------- | ---- | ----------- | -------- |
-| `@input` | Any [type](/docs/types) | The input type of the function | YES |
-| `@output` | Any [type](/docs/types) | The output type of the function | YES|
+| `input` | Any [type](/docs/types) | The input type of the function | YES |
+| `output` | Any [type](/docs/types) | The output type of the function | YES|

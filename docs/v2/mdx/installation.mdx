@@ -57,25 +57,7 @@ Use our [VSCode Exension](https://marketplace.visualstudio.com/items?itemName=ba
 
 ### Initialize Baml in your project
 
-```
-baml init
-```
+TODO - add more details.
 
-This will create a baml.yaml file
-
-![](/images/bamlinit.png)
-
-### Folder structure
-
-```
-.
-|-- baml.yaml
-├── app
-│   └── your application files
-├── baml
-│   └── your baml files live here
-├── pyproject.toml
-└── generated
-    └── translated, runnable python code from .baml.
-          Don't edit these files.
-```
+Create a `baml_src` directory. This is where your `.baml` files will live.
+Add a `main.baml` file, and you're all set! The VSCode extension should start giving you syntax errors, and automatically generating python code as you type.

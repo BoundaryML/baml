@@ -32,16 +32,16 @@ To do that, we'll first define our function:
 The function is named `ExtractMeetingDetails` and takes in a string and outputs a `MeetingDetails` object.
 
 ```baml meetings.baml
-@function ExtractMeetingDetails {
-    @input string
-    @output MeetingDetails
+function ExtractMeetingDetails {
+    input string
+    output MeetingDetails
 }
 ```
 
 Next we'll define our `MeetingDetails` type:
 
 ```baml meetings.baml
-@class MeetingDetails {
+class MeetingDetails {
     title string
     start_time string
     end_time string
@@ -59,28 +59,30 @@ We'll add the variant directly to our `meetings.baml` file and define the `GPT35
 
 <CodeGroup>
 ```baml meetings.baml
-@variant[llm] v1 for ExtractMeetingDetails {
-    @client[llm] GPT35Client
-    @prompt {
+impl<llm, ExtractMeetingDetails> V1 {
+    client GPT35Client
+    prompt #"
         Given the user message, extract relevant details.
 
-        Message: {@input}
+        Message: {#input}
 
         Output JSON:
-        {@output.json}
+        {#print_type(output)}
 
         JSON:
-    }
+    "#
 
 }
 
 ````
 ```baml clients.baml
-@client[llm] GPT35Client {
-    @provider openai
-    model gpt-3.5-turbo
-    temperature 0
-    api_key @ENV.OPENAI_API_KEY
+client<llm> GPT35Client {
+    provider openai
+    options {
+        model gpt-3.5-turbo
+        temperature 0
+        api_key env.OPENAI_API_KEY
+    }
 }
 ````
 
@@ -91,7 +93,7 @@ This prompt generates the following prompt:
 ```
 Given the user message, extract relevant details.
 
-Message: {@input}
+Message: {#input}
 
 Output JSON:
 {
@@ -135,14 +137,14 @@ as the user may not always provide an email.
 
 ```baml meetings.baml
 
-@class MeetingDetails {
+class MeetingDetails {
     title string
     start_time string
     end_time string
     attendees Attendee[]
 }
 
-@class Attendee {
+class Attendee {
     name string
     email string?
 }
@@ -153,7 +155,7 @@ Now, our prompt would automatically update to:
 ```
 Given the user message, extract relevant details.
 
-Message: {@input}
+Message: {#input}
 
 Output JSON:
 {
@@ -178,34 +180,34 @@ We'll do this in two different ways:
 We can simply change the input type of our function to be a `MeetingRequest` object.
 
 ```baml meetings.baml
-@class MeetingRequest {
+class MeetingRequest {
     message string
     today string
 }
 
-@function ExtractMeetingDetails {
-    @input MeetingRequest
-    @output MeetingDetails
+function ExtractMeetingDetails {
+    input MeetingRequest
+    output MeetingDetails
 }
 ```
 
 Then we'd update the variant to use the `message` and `today` fields.
 
 ```baml meetings.baml
-@variant[llm] v1 for ExtractMeetingDetails {
-    @client[llm] GPT35Client
-    @prompt {
+impl<llm, ExtractMeetingDetails> V1 {
+    client GPT35Client
+    prompt #"
         Given the user message, extract relevant details.
 
-        Message: {@input.message}
+        Message: {#input.message}
 
-        Today: {@input.today}
+        Today: {#input.today}
 
         Output JSON:
-        {@output.json}
+        {#print_type(output)}
 
         JSON:
-    }
+    "#
 }
 ```
 
@@ -218,9 +220,9 @@ The generated prompt here would be:
 ```
 Given the user message, extract relevant details.
 
-Message: {@input.message}
+Message: {#input.message}
 
-Today: {@input.today}
+Today: {#input.today}
 
 Output JSON:
 {
@@ -251,14 +253,14 @@ from generated.custom_types import MeetingRequest
 However this still may not be enough. What if we want to get the start time and end time as ISO dates as well?
 
 ```diff meeting.baml
- @variant[llm] v1 for ExtractMeetingDetails {
-     @client[llm] GPT35Client
-+    @stringify MeetingDetails {
-+        start_time @describe{ISO date string}
-+        end_time @describe{ISO date string}
-+    }
-...
+class MeetingDetails {
+    title string 
++    start_time string  @description(ISO date string)
++    end_time string    @description(ISO date string)
+    attendees Attendee[]
 }
+...
+
 ```
 
 This would generate the following prompt:
@@ -266,9 +268,9 @@ This would generate the following prompt:
 ```diff
  Given the user message, extract relevant details.
 
- Message: {@input.message}
+ Message: {#input.message}
 
- Today: {@input.today}
+ Today: {#input.today}
 
  Output JSON:
  {
@@ -282,45 +284,6 @@ This would generate the following prompt:
          "email": string | null
      }[]
  }
-```
-
-#### Option 2. Using custom_vars
-
-Another option is to use custom variables directly in the prompt.
-
-```diff meetings.baml
-@function ExtractMeetingDetails {
-    @input string
-    @output MeetingDetails
-}
-
-@variant[llm] v1 for ExtractMeetingDetails {
-    @client[llm] GPT35Client
-
-+    @method custom_vars {
-+        @lang[py] {
-+            from datetime import datetime
-+
-+            def custom_vars() -> typing.Dict[str, str]:
-+                return {
-+                    'today': datetime.now().isoformat()
-+                }
-+        }
-+    }
-
-    @prompt {
-        Given the user message, extract relevant details.
-
-        Message: {@input}
-
-+        Today: {@today}
-
-        Output JSON:
-        {@output.json}
-
-        JSON:
-    }
-}
 ```
 
 Now, you no longer have to change the caller code, and you can use the function like this:
@@ -383,58 +346,57 @@ if __name__ == '__main__':
 ```
 
 ```baml meetings.baml
-@class MeetingDetails {
+function ExtractMeetingDetails {
+    input MeetingRequest
+    output MeetingDetails
+}
+
+class MeetingRequest {
+    message string
+    today string
+}
+
+class MeetingDetails {
     title string
     start_time string
     end_time string
     attendees Attendee[]
+    today string
 }
 
-@class Attendee {
+class Attendee {
     name string
     email string
 }
 
-@function ExtractMeetingDetails {
-    @input string
-    @output MeetingDetails
-}
 
-@variant[llm] v1 for ExtractMeetingDetails {
-    @client[llm] GPT35Client
 
-    @method custom_vars {
-        @lang[py] {
-            from datetime import datetime
+impl<llm, ExtractMeetingDetails> V1 {
+    client<llm> GPT35Client
 
-            def custom_vars() -> typing.Dict[str, str]:
-                return {
-                    'today': datetime.now().isoformat()
-                }
-        }
-    }
-
-    @prompt {
+    prompt #"
         Given the user message, extract relevant details.
 
-        Message: {@input}
+        Message: {#input.message}
 
-        Today: {@today}
+        Today: {#input.today}
 
         Output JSON:
-        {@output.json}
+        {#print_type(output)}
 
         JSON:
-    }
+    "#
 }
 ```
 
 ```baml clients.baml
-@client[llm] GPT35Client {
-    @provider openai
-    model gpt-3.5-turbo
-    temperature 0
-    api_key @ENV.OPENAI_API_KEY
+client<llm> GPT35Client {
+    provider openai
+    options {
+        model gpt-3.5-turbo
+        temperature 0
+        api_key env.OPENAI_API_KEY
+    }
 }
 ```
 

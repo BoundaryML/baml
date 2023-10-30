@@ -46,14 +46,14 @@ enum Category {
 
 ````
 
-#### Define an LLM variant
+#### Implement your function
 Now we have to define an `LLM variant` for that function, which defines how the function is executed.
 In the future, you could replace this with a different model, instead of an LLM.
 
 An LLM variant has three things
 1. [required] An LLM client
 2. [required] A prompt
-3. [optional] output schema descriptions (or `@stringify`)
+3. [optional] output schema descriptions
 
 <Tip>Feel free to add any of these objects in any .baml file. All objects are imported globally and can be referenced from anywhere.</Tip>
 
@@ -63,7 +63,7 @@ client<llm> GPT35Client {
     options {
       model gpt-3.5-turbo
       temperature 0
-      api_key @ENV.OPENAI_API_KEY
+      api_key env.OPENAI_API_KEY
     }
 }
 
@@ -85,7 +85,7 @@ impl<llm, ClassifyMessage> v1 {
 
 Note how we can inject the function's **#input** variable into the prompt by writing `{#input}`.
 
-<Tip>If your **#input** was an object, you'd also be able to write `{#input.property}`. See our entity extraction.</Tip>
+<Tip>If your **#input** was an object, you'd also be able to write `{#input.property}`. See [extraction docs](extraction).</Tip>
 
 #### Run your function
 
@@ -114,31 +114,39 @@ You probably want to add some descriptions as to what each class actually means,
 
 In our case, we will rename all our classes to symbols, such as "K1, K2, K3" so that the LLM can focus on the class descriptions we provide more than the names of them. This is an interesting technique called "Symbol tuning".
 
-To do this we can add `attributes`, denoted with the **@** for our enum values.
+To do this we can add `attributes` to an enum or class, denoted with the **@**, and then leverage the built-in **print_enum** helper function to print out the enum values in our prompt.
 
-```baml Baml
+```diff Baml
 enum Category {
-  BOOK_MEETING @rename(k1) @describe(
-    When the user wants to book a meeting on our internal system.
-  )
-  AVALABILITY_QUERY @rename(k2) @describe(
-    When the user is asking for their calendar availability.
-  )
++  BOOK_MEETING @alias(k1) @description(
++    When the user wants to book a meeting on our internal system.
++  )
++  AVALABILITY_QUERY @alias(k2) @description(
++    When the user is asking for their calendar availability.
++  )
 
-  // This format also works
-  SET_REMINDER 
-  @rename(k3) 
-  @describe(
-    When the user wants to set a calendar reminder.
-  )
+   // This format also works
+   SET_REMINDER 
++  @alias(k3) 
++  @description(
++    When the user wants to set a calendar reminder.
+   )
 }
 
 ...
 ...
    prompt #"
       Given a message, classify it into one of the following categories:
-      {#print_enum(Category)}
++      {#print_enum(Category)}
    "#
+```
+**Resulting prompt**
+
+```
+Given a message, classify it into one of the following categories:
+k1: When the user wants to book a meeting on our internal system.
+k2: When the user is asking for their calendar availability.
+k3: When the user wants to set a calendar reminder.
 ```
 
 
@@ -151,10 +159,10 @@ impl<llm, ClassifyMessage> V1 {
    client GPT35Client
 +  override Category {
 +    BOOK_MEETING
-+    @rename{k1}
-+    @describe{
++    @alias(k1)
++    @description(
 +      When the user wants to book a meeting on our internal system.
-+    }
++    )
 +  }
 
   prompt {
@@ -205,17 +213,17 @@ function ClassifyMessage {
 }
 
 enum Category {
-  BOOK_MEETING @rename(k1) @describe(
+  BOOK_MEETING @alias(k1) @description(
     When the user wants to book a meeting on our internal system.
   )
-  AVALABILITY_QUERY @rename(k2) @describe(
+  AVALABILITY_QUERY @alias(k2) @description(
     When the user is asking for their calendar availability.
   )
 
   // This format also works
   SET_REMINDER 
-  @rename(k3) 
-  @describe(
+  @alias(k3) 
+  @description(
     When the user wants to set a calendar reminder.
   )
 }
