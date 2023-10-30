@@ -207,7 +207,7 @@
       "patterns": [
         {
           "name": "comment.line.double-slash.your-language",
-          "match": "\\{#//.*?\\}"
+          "match": "\\{//.*?\\}"
         },
         {
           "name": "constant.character",
