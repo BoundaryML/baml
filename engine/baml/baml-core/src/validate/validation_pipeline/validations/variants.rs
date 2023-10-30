@@ -1,3 +1,5 @@
+use std::{env::var, fmt::format};
+
 use either::Either;
 use internal_baml_diagnostics::{DatamodelError, Span};
 use internal_baml_parser_database::walkers::FunctionWalker;
@@ -58,127 +60,18 @@ fn validate_prompt(
     span: &Span,
 ) -> Option<String> {
     if prompt.0.is_empty() {
-        ctx.push_error(DatamodelError::new_validation_error(
-            "Prompt cannot be empty",
-            span.clone(),
-        ));
+        // Return an empty string if the prompt is empty.
+        return Some(String::new());
     }
 
-    let validated_prompt = internal_baml_prompt_parser::parse_prompt(
-        &ctx.diagnostics.root_path,
-        &span.file,
-        prompt.clone(),
-    );
+    let parsed_prompt =
+        internal_baml_prompt_parser::parse_prompt(&ctx.diagnostics.root_path, &span.file, prompt);
 
-    match validated_prompt {
+    match parsed_prompt {
         Ok((ast, d)) => {
             ctx.diagnostics.push(d);
-
-            process_ast(ctx, walker, ast.clone(), span);
-            let mut prev_white_space: Option<String> = None;
-            let mut post_white_space: Option<String> = None;
-            let mut is_comment = false;
-            let mut full_prompt_text = String::new();
-
-            let handle_comment = |prev_white_space: &mut Option<String>,
-                                  post_white_space: &mut Option<String>|
-             -> Option<String> {
-                // Determine if post_white_space or prev_white_space should be used
-                // based on whichever one is longer.
-                let ws = match (&prev_white_space, &post_white_space) {
-                    (Some(prev), Some(post)) => {
-                        let prev_score: u32 = prev
-                            .chars()
-                            .map(|c| match c.to_string().as_str() {
-                                " " => 1,
-                                "\t" => 10,
-                                "\n" | "\r" | "\r\n" => 100,
-                                _ => 1000,
-                            })
-                            .sum();
-                        let post_score = post
-                            .chars()
-                            .map(|c| match c.to_string().as_str() {
-                                " " => 1,
-                                "\t" => 10,
-                                "\n" | "\r" | "\r\n" => 100,
-                                _ => 1000,
-                            })
-                            .sum();
-                        if prev_score > post_score {
-                            prev.clone()
-                        } else {
-                            post.clone()
-                        }
-                    }
-                    (Some(prev), None) => prev.clone(),
-                    (None, Some(post)) => post.clone(),
-                    (None, None) => return None,
-                };
-                *prev_white_space = None;
-                *post_white_space = None;
-
-                Some(ws.clone())
-            };
-
-            for (top_id, top) in ast.iter_tops().peekable() {
-                match (top_id, top) {
-                    (_, Top::PromptText(prompt)) => {
-                        is_comment = false;
-                        match handle_comment(&mut prev_white_space, &mut post_white_space) {
-                            Some(ws) => full_prompt_text.push_str(&ws),
-                            None => (),
-                        }
-                        full_prompt_text.push_str(&prompt.text);
-                    }
-                    (_, Top::CodeBlock(code_block)) => {
-                        is_comment = false;
-                        match handle_comment(&mut prev_white_space, &mut post_white_space) {
-                            Some(ws) => full_prompt_text.push_str(&ws),
-                            None => (),
-                        }
-                        full_prompt_text.push_str(&format!("{{{}}}", code_block.block.as_str()));
-                    }
-                    (_, Top::WhiteSpace(ws, _)) => {
-                        if is_comment {
-                            post_white_space = match post_white_space {
-                                Some(existing_ws) => {
-                                    Some(format!("{}{}", existing_ws, ws.to_string()))
-                                }
-                                None => Some(ws.to_string()),
-                            };
-                        } else {
-                            prev_white_space = match prev_white_space {
-                                Some(existing_ws) => {
-                                    Some(format!("{}{}", existing_ws, ws.to_string()))
-                                }
-                                None => Some(ws.to_string()),
-                            };
-                        }
-                    }
-                    (_, Top::CommentBlock(_)) => {
-                        if is_comment {
-                            // Already in a comment and finding another comment block
-                            // subsequently.
-                            // This resets the after comment white space.
-                            match handle_comment(&mut prev_white_space, &mut post_white_space) {
-                                Some(ws) => prev_white_space = Some(ws),
-                                None => (),
-                            }
-                        } else {
-                            is_comment = true;
-                        }
-                    }
-                }
-            }
-
-            // Whitespace at the end is kept.
-            match handle_comment(&mut prev_white_space, &mut post_white_space) {
-                Some(ws) => full_prompt_text.push_str(&ws),
-                None => (),
-            }
-
-            Some(textwrap::dedent(&full_prompt_text).trim().to_string())
+            let processed_prompt = process_ast(ctx, walker, ast.clone(), span);
+            Some(textwrap::dedent(&processed_prompt).trim().to_string())
         }
         Err(diagnostics) => {
             ctx.diagnostics.push(diagnostics);
@@ -187,15 +80,119 @@ fn validate_prompt(
     }
 }
 
-fn process_ast(ctx: &mut Context<'_>, walker: FunctionWalker<'_>, ast: PromptAst, span: &Span) {
+fn handle_comment(
+    prev_white_space: &mut Option<String>,
+    post_white_space: &mut Option<String>,
+) -> Option<String> {
+    // Determine if post_white_space or prev_white_space should be used
+    // based on whichever one is longer.
+    let ws = match (&prev_white_space, &post_white_space) {
+        (Some(prev), Some(post)) => {
+            let prev_score: u32 = prev
+                .chars()
+                .map(|c| match c.to_string().as_str() {
+                    " " => 1,
+                    "\t" => 10,
+                    "\n" | "\r" | "\r\n" => 100,
+                    _ => 1000,
+                })
+                .sum();
+            let post_score = post
+                .chars()
+                .map(|c| match c.to_string().as_str() {
+                    " " => 1,
+                    "\t" => 10,
+                    "\n" | "\r" | "\r\n" => 100,
+                    _ => 1000,
+                })
+                .sum();
+            if prev_score > post_score {
+                prev.clone()
+            } else {
+                post.clone()
+            }
+        }
+        (Some(prev), None) => prev.clone(),
+        (None, Some(post)) => post.clone(),
+        (None, None) => return None,
+    };
+    *prev_white_space = None;
+    *post_white_space = None;
+
+    Some(ws.clone())
+}
+
+fn process_ast(
+    ctx: &mut Context<'_>,
+    walker: FunctionWalker<'_>,
+    ast: PromptAst,
+    span: &Span,
+) -> String {
+    let mut prev_white_space: Option<String> = None;
+    let mut post_white_space: Option<String> = None;
+    let mut is_comment = false;
+    let mut full_prompt_text = String::new();
+
     for (top_id, top) in ast.iter_tops() {
         match (top_id, top) {
-            (TopId::CodeBlock(_), Top::CodeBlock(code_block)) => {
-                process_code_block(ctx, walker, code_block, span)
+            (_, Top::PromptText(prompt)) => {
+                is_comment = false;
+                match handle_comment(&mut prev_white_space, &mut post_white_space) {
+                    Some(ws) => full_prompt_text.push_str(&ws),
+                    None => (),
+                }
+                full_prompt_text.push_str(&prompt.text);
             }
-            _ => (),
+            (_, Top::WhiteSpace(ws, _)) => {
+                if is_comment {
+                    post_white_space = match post_white_space {
+                        Some(existing_ws) => Some(format!("{}{}", existing_ws, ws.to_string())),
+                        None => Some(ws.to_string()),
+                    };
+                } else {
+                    prev_white_space = match prev_white_space {
+                        Some(existing_ws) => Some(format!("{}{}", existing_ws, ws.to_string())),
+                        None => Some(ws.to_string()),
+                    };
+                }
+            }
+            (_, Top::CommentBlock(_)) => {
+                if is_comment {
+                    // Already in a comment and finding another comment block
+                    // subsequently.
+                    // This resets the after comment white space.
+                    match handle_comment(&mut prev_white_space, &mut post_white_space) {
+                        Some(ws) => prev_white_space = Some(ws),
+                        None => (),
+                    }
+                } else {
+                    is_comment = true;
+                }
+            }
+            (_, Top::CodeBlock(code_block)) => {
+                is_comment = false;
+                match handle_comment(&mut prev_white_space, &mut post_white_space) {
+                    Some(ws) => full_prompt_text.push_str(&ws),
+                    None => (),
+                }
+                let replacement = process_code_block(ctx, walker, code_block, span);
+                match replacement {
+                    Some(replacement) => {
+                        full_prompt_text.push_str(&format!("{{{}}}", &replacement))
+                    }
+                    None => {
+                        info!(
+                            "Failed to find replacement for code block: {:?}",
+                            code_block.block.as_str()
+                        );
+                        full_prompt_text.push_str(&format!("{{{}}}", code_block.block.as_str()))
+                    }
+                }
+            }
         }
     }
+
+    full_prompt_text
 }
 
 fn process_code_block(
@@ -203,29 +200,156 @@ fn process_code_block(
     walker: FunctionWalker<'_>,
     code_block: &CodeBlock,
     span: &Span,
-) {
+) -> Option<String> {
+    if code_block.arguments.len() != 1 {
+        ctx.push_error(DatamodelError::new_validation_error(
+            "Must specify exactly one argument",
+            code_block.span.clone(),
+        ));
+        return None;
+    }
+    let variable = code_block.arguments.first().unwrap();
+
+    if variable.text.is_empty() || variable.path.is_empty() {
+        ctx.push_error(DatamodelError::new_validation_error(
+            "Variable path cannot be empty",
+            variable.span.clone(),
+        ));
+        return None;
+    }
+
     match code_block.code_type {
-        CodeType::Variable => process_variable(ctx, walker, code_block, span),
-        other => warn!("Code block type not supported {:?}", other),
+        CodeType::Variable => process_variable(ctx, walker, variable),
+        CodeType::PrintEnum => process_print_enum(ctx, walker, variable),
+        CodeType::PrintType => process_print_type(ctx, walker, variable),
+    }
+}
+
+fn process_print_enum(
+    ctx: &mut Context<'_>,
+    walker: FunctionWalker<'_>,
+    variable: &Variable,
+) -> Option<String> {
+    if variable.text == "output" {
+        ctx.push_error(DatamodelError::new_validation_error(
+            "output can only be used with print_type()",
+            variable.span.clone(),
+        ));
+        return None;
+    }
+
+    match ctx.db.find_type_by_str(&variable.text) {
+        Some(Either::Right(enum_walker)) => {
+            match walker
+                .walk_output_args()
+                .map(|f| {
+                    f.required_enums()
+                        .any(|idn| idn.name() == enum_walker.name())
+                })
+                .any(|f| f)
+            {
+                true => Some(format!("BamlClientString__{}", variable.text)),
+                false => {
+                    ctx.push_error(DatamodelError::new_validation_error(
+                        &format!(
+                            "Enum `{}` is not used in in the output of function `{}`.{}",
+                            variable.text,
+                            walker.name(),
+                            {
+                                let enum_options = walker
+                                    .walk_output_args()
+                                    .map(|f| f.required_enums())
+                                    .flatten()
+                                    .map(|idn| idn.name())
+                                    .collect::<Vec<_>>();
+                                if enum_options.is_empty() {
+                                    "".to_string()
+                                } else {
+                                    format!("Options are: {}", enum_options.join(", "))
+                                }
+                            }
+                        ),
+                        variable.span.clone(),
+                    ));
+                    None
+                }
+            }
+        }
+        Some(Either::Left(_)) => {
+            ctx.push_error(DatamodelError::new_validation_error(
+                "Expected enum, found class",
+                variable.span.clone(),
+            ));
+            return None;
+        }
+        None => {
+            ctx.push_error(DatamodelError::new_validation_error(
+                &format!("Unknown enum `{}`", variable.text),
+                variable.span.clone(),
+            ));
+            return None;
+        }
+    }
+}
+
+fn process_print_type(
+    ctx: &mut Context<'_>,
+    walker: FunctionWalker<'_>,
+    variable: &Variable,
+) -> Option<String> {
+    if variable.text == "output" {
+        return Some(format!("BamlClientString__{}__Output", walker.name()));
+    }
+
+    match ctx.db.find_type_by_str(&variable.text) {
+        Some(Either::Left(cls_walker)) => {
+            // Also validate the function uses the enum.
+            match walker.walk_output_args().any(|f| {
+                f.required_classes()
+                    .any(|idn| idn.name() == cls_walker.name())
+            }) {
+                true => Some(format!("BamlClientString__{}", variable.text)),
+                false => {
+                    ctx.push_error(DatamodelError::new_validation_error(
+                        &format!(
+                            "Class `{}` is not used in in the output of function `{}`",
+                            variable.text,
+                            walker.name()
+                        ),
+                        variable.span.clone(),
+                    ));
+                    None
+                }
+            }
+        }
+        Some(Either::Right(_)) => {
+            ctx.push_error(DatamodelError::new_validation_error(
+                "Expected class, found enum",
+                variable.span.clone(),
+            ));
+            return None;
+        }
+        None => {
+            ctx.push_error(DatamodelError::new_validation_error(
+                &format!("Unknown enum `{}`", variable.text),
+                variable.span.clone(),
+            ));
+            return None;
+        }
     }
 }
 
 fn process_variable(
     ctx: &mut Context<'_>,
     walker: FunctionWalker<'_>,
-    code_block: &CodeBlock,
-    span: &Span,
-) {
-    if code_block.arguments.len() != 1 {
-        ctx.push_error(DatamodelError::new_validation_error(
-            "Empty block detected",
-            code_block.span.clone(),
-        ));
-        return;
-    }
-    let variable = code_block.arguments.first().unwrap();
-    if let Err(e) = process_input(ctx, walker, variable, span) {
-        ctx.push_error(e);
+    variable: &Variable,
+) -> Option<String> {
+    match process_input(ctx, walker, variable) {
+        Ok(p) => Some(p),
+        Err(err) => {
+            ctx.push_error(err);
+            None
+        }
     }
 }
 
@@ -233,15 +357,7 @@ fn process_input(
     ctx: &mut Context<'_>,
     walker: FunctionWalker<'_>,
     variable: &Variable,
-    span: &Span,
-) -> Result<(), DatamodelError> {
-    if variable.path.is_empty() {
-        return Err(DatamodelError::new_validation_error(
-            "Variable path cannot be empty",
-            span.clone(),
-        ));
-    }
-
+) -> Result<String, DatamodelError> {
     if variable.path[0] != "input" {
         return Err(DatamodelError::new_validation_error(
             "Must start with `input`",
@@ -251,13 +367,16 @@ fn process_input(
 
     match walker.ast_function().input() {
         ast::FunctionArgs::Unnamed(arg) => {
-            validate_variable_path(ctx, variable, 1, &arg.field_type)
+            validate_variable_path(ctx, variable, 1, &arg.field_type)?;
+            let mut new_path = variable.path.clone();
+            new_path[0] = "arg".to_string();
+            return Ok(new_path.join("."));
         }
         ast::FunctionArgs::Named(args) => {
             if args.iter_args().len() <= 1 {
                 return Err(DatamodelError::new_validation_error(
                     "Named arguments must have at least one argument (input.my_var_name)",
-                    span.clone(),
+                    variable.span.clone(),
                 ));
             }
             let path_name = &variable.path[1];
@@ -265,7 +384,10 @@ fn process_input(
                 .iter_args()
                 .find(|(_, (name, _))| name.name() == path_name)
             {
-                Some((_, (_, arg))) => validate_variable_path(ctx, variable, 2, &arg.field_type),
+                Some((_, (_, arg))) => {
+                    validate_variable_path(ctx, variable, 2, &arg.field_type)?;
+                    return Ok(variable.path[1..].join("."));
+                }
                 None => Err(DatamodelError::new_validation_error(
                     &format!(
                         "Unknown arg `{}`. Could be one of: {}",
@@ -275,7 +397,7 @@ fn process_input(
                             .collect::<Vec<_>>()
                             .join(", ")
                     ),
-                    span.clone(),
+                    variable.span.clone(),
                 )),
             }
         }

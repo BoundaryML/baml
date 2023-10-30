@@ -1,8 +1,5 @@
-
-use internal_baml_schema_ast::ast::{
-    FuncArguementId, Identifier,
-};
-
+use either::Either;
+use internal_baml_schema_ast::ast::{FuncArguementId, Identifier};
 
 use crate::ast::{self, WithName};
 
@@ -130,7 +127,12 @@ impl<'db> ArgWalker<'db> {
         arg.field_type
             .flat_idns()
             .into_iter()
-            .filter_map(|idn| self.db.find_enum(&idn))
+            .flat_map(|idn| match self.db.find_type(idn) {
+                Some(Either::Right(walker)) => vec![walker],
+                Some(Either::Left(walker)) => walker.required_enums().collect(),
+                None => vec![],
+            })
+            .into_iter()
     }
 
     /// The name of the function.
@@ -139,6 +141,15 @@ impl<'db> ArgWalker<'db> {
         arg.field_type
             .flat_idns()
             .into_iter()
-            .filter_map(|idn| self.db.find_class(&idn))
+            .flat_map(|idn| match self.db.find_type(idn) {
+                Some(Either::Left(walker)) => {
+                    let mut classes = walker.required_classes().collect::<Vec<_>>();
+                    classes.push(walker);
+                    classes
+                }
+                Some(Either::Right(_)) => vec![],
+                None => vec![],
+            })
+            .into_iter()
     }
 }

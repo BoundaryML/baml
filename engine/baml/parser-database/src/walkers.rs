@@ -54,6 +54,20 @@ impl crate::ParserDatabase {
             _ => None,
         })
     }
+    /// Find a type by name.
+    pub fn find_type_by_str<'db>(
+        &'db self,
+        name: &str,
+    ) -> Option<Either<ClassWalker<'db>, EnumWalker<'db>>> {
+        self.interner
+            .lookup(name)
+            .and_then(|name_id| self.names.tops.get(&name_id))
+            .and_then(|top_id| match top_id {
+                TopId::Class(class_id) => Some(Either::Left(self.walk(*class_id))),
+                TopId::Enum(enum_id) => Some(Either::Right(self.walk(*enum_id))),
+                _ => None,
+            })
+    }
 
     /// Find a type by name.
     pub fn find_type<'db>(
@@ -61,15 +75,7 @@ impl crate::ParserDatabase {
         idn: &Identifier,
     ) -> Option<Either<ClassWalker<'db>, EnumWalker<'db>>> {
         match idn {
-            Identifier::Local(local, _) => self
-                .interner
-                .lookup(local)
-                .and_then(|name_id| self.names.tops.get(&name_id))
-                .map(|top_id| match top_id {
-                    TopId::Class(class_id) => Either::Left(self.walk(*class_id)),
-                    TopId::Enum(enum_id) => Either::Right(self.walk(*enum_id)),
-                    _ => unreachable!(),
-                }),
+            Identifier::Local(local, _) => self.find_type_by_str(local),
             _ => None,
         }
     }

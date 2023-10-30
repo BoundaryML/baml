@@ -65,6 +65,19 @@ pub enum FunctionArgs {
     Named(NamedFunctionArgList),
 }
 
+impl FunctionArgs {
+    pub fn flat_idns(&self) -> Vec<&Identifier> {
+        match self {
+            FunctionArgs::Unnamed(arg) => arg.field_type.flat_idns(),
+            FunctionArgs::Named(named) => named
+                .args
+                .iter()
+                .flat_map(|(idn, arg)| std::iter::once(idn).chain(arg.field_type.flat_idns()))
+                .collect(),
+        }
+    }
+}
+
 /// A model declaration.
 #[derive(Debug, Clone)]
 pub struct Function {

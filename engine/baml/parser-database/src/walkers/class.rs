@@ -1,9 +1,11 @@
+use either::Either;
+
 use crate::{
     ast::{self, WithName},
     types::ClassAttributes,
 };
 
-use super::field::FieldWalker;
+use super::{field::FieldWalker, EnumWalker};
 
 /// A `class` declaration in the Prisma schema.
 pub type ClassWalker<'db> = super::Walker<'db, ast::ClassId>;
@@ -58,5 +60,31 @@ impl<'db> ClassWalker<'db> {
             })
             .collect::<Vec<_>>()
             .into_iter()
+    }
+
+    /// Find all enums used by this class and any of its fields.
+    pub fn required_enums(self) -> impl Iterator<Item = EnumWalker<'db>> {
+        self.static_fields()
+            .flat_map(|f| f.r#type().flat_idns())
+            .flat_map(|idn| match self.db.find_type(idn) {
+                Some(Either::Right(walker)) => vec![walker],
+                Some(Either::Left(walker)) => walker.required_enums().collect(),
+                None => vec![],
+            })
+    }
+
+    /// Find all classes used by this class and any of its fields.
+    pub fn required_classes(self) -> impl Iterator<Item = ClassWalker<'db>> {
+        self.static_fields()
+            .flat_map(|f| f.r#type().flat_idns())
+            .flat_map(|idn| match self.db.find_type(idn) {
+                Some(Either::Left(walker)) => {
+                    let mut classes = walker.required_classes().collect::<Vec<_>>();
+                    classes.push(walker);
+                    classes
+                }
+                Some(Either::Right(_)) => vec![],
+                None => vec![],
+            })
     }
 }

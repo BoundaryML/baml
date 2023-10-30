@@ -22,7 +22,7 @@ class InputType2 {
 }
 
 class OutputType {
-  x string
+  x Sentiment
   y bool
 }
 

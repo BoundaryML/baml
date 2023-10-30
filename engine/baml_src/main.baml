@@ -69,7 +69,7 @@ function FooBar2 {
   output string
 }
 
-impl<llm, FooBar1> SomeName {
+impl<llm, FooBar2> SomeName {
   client MyClient
   prompt #"
     does something
@@ -78,6 +78,6 @@ impl<llm, FooBar1> SomeName {
     asflk;jasdf
     {#input}
 
-    {#print_type(Foo)}
+    {#print_type(output)}
   "#
 }
