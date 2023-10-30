@@ -1,3 +1,8 @@
+generator Default {
+  language python
+  output /Users/vbv/repos/gloo-lang/clients/python/baml_client/_generated
+}
+
 // Enum 
 enum Sentiment {
   SAD
@@ -38,17 +43,6 @@ function FunctionTwo {
 
 
 
-
-
-generator Default {
-  language python
-  output "hello"
-  switches {
-    cheap true
-    FooBar:cheap false
-  }
-}
-
 enum FAAAAA {
   POSITIVE
   NEGATIVE
@@ -80,10 +74,10 @@ impl<llm, FooBar1> SomeName {
   prompt #"
     does something
     asdf {// This is a comment //} goes here
-    a ;asdf;kljla 
+    a ;asdf;kljla
     asflk;jasdf
     {#input}
 
-    {#print_type(output)}
+    {#print_type(Foo)}
   "#
 }

@@ -2,8 +2,8 @@ entry = {
     SOI ~ segment* ~ EOI
 }
 
-segment = {  code_block | comment_block | dangling_code_block | dangling_comment_block | prompt_text | whitespaces  }
-whitespaces = { (" " | "\t")+ }
+segment = {  code_block | comment_block | dangling_code_block | dangling_comment_block | prompt_text | whitespaces }
+whitespaces = { WHITESPACE+ }
 code_block    = { BLOCK_OPEN ~ (print_block | variable) ~ BLOCK_CLOSE }
 // input_block   = { input_keyword ~ ("." ~ identifier)* }
 print_block   = { print_keyword ~ template_args? ~ arg_list }
@@ -12,7 +12,6 @@ print_keyword = _{ "print" ~ identifier }
 arg_list      = _{ "(" ~ (variable ~ ("," ~ variable)*)? ~ ")" }
 variable    = { identifier ~ ("." ~ identifier)* }
 
-input_keyword = { "input" }
 identifier    = { (ASCII_ALPHA | "_")+ }
 
 comment_text_2 = { (!"///}" ~ ANY)* }
@@ -32,6 +31,5 @@ comment_block = @{ comment }
 
 WHITESPACE  = { " " | "\t" }
 NEWLINE     = _{ "\n" | "\r\n" | "\r" }
-empty_lines = { (WHITESPACE+ ~ NEWLINE)+ }
 // ignore matched whitespace with the @ since we do that separately to ensure we keep all proper format
-prompt_text =  @{ (!"{#" ~ !"{//" ~ !"{///" ~ ANY)+ }
+prompt_text =  @{ (!("{#" | "{//" | "{///") ~ ANY)+ }

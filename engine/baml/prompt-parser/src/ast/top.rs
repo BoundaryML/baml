@@ -6,6 +6,7 @@ pub enum Top {
     CommentBlock(CommentBlock),
     CodeBlock(CodeBlock),
     PromptText(PromptText),
+    WhiteSpace(String, Span),
 }
 
 impl Top {
@@ -15,6 +16,7 @@ impl Top {
             Top::CommentBlock(_) => "comment_block",
             Top::PromptText(_) => "prompt_text",
             Top::CodeBlock(_) => "code_block",
+            Top::WhiteSpace(..) => "white_space",
         }
     }
 
@@ -61,6 +63,7 @@ impl WithSpan for Top {
             Top::CommentBlock(en) => en.span(),
             Top::PromptText(en) => en.span(),
             Top::CodeBlock(en) => en.span(),
+            Top::WhiteSpace(_, span) => span,
         }
     }
 }

@@ -16,3 +16,4 @@ enum Foo2 {
 
   OTHERWISE
 }
+

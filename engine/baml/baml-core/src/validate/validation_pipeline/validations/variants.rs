@@ -75,17 +75,107 @@ fn validate_prompt(
             ctx.diagnostics.push(d);
 
             process_ast(ctx, walker, ast.clone(), span);
+            let mut prev_white_space: Option<String> = None;
+            let mut post_white_space: Option<String> = None;
+            let mut is_comment = false;
             let mut full_prompt_text = String::new();
-            for (top_id, top) in ast.iter_tops() {
+
+            let handle_comment = |prev_white_space: &mut Option<String>,
+                                  post_white_space: &mut Option<String>|
+             -> Option<String> {
+                // Determine if post_white_space or prev_white_space should be used
+                // based on whichever one is longer.
+                let ws = match (&prev_white_space, &post_white_space) {
+                    (Some(prev), Some(post)) => {
+                        let prev_score: u32 = prev
+                            .chars()
+                            .map(|c| match c.to_string().as_str() {
+                                " " => 1,
+                                "\t" => 10,
+                                "\n" | "\r" | "\r\n" => 100,
+                                _ => 1000,
+                            })
+                            .sum();
+                        let post_score = post
+                            .chars()
+                            .map(|c| match c.to_string().as_str() {
+                                " " => 1,
+                                "\t" => 10,
+                                "\n" | "\r" | "\r\n" => 100,
+                                _ => 1000,
+                            })
+                            .sum();
+                        if prev_score > post_score {
+                            prev.clone()
+                        } else {
+                            post.clone()
+                        }
+                    }
+                    (Some(prev), None) => prev.clone(),
+                    (None, Some(post)) => post.clone(),
+                    (None, None) => return None,
+                };
+                *prev_white_space = None;
+                *post_white_space = None;
+
+                Some(ws.clone())
+            };
+
+            for (top_id, top) in ast.iter_tops().peekable() {
                 match (top_id, top) {
-                    (TopId::PromptText(_), Top::PromptText(prompt)) => {
+                    (_, Top::PromptText(prompt)) => {
+                        is_comment = false;
+                        match handle_comment(&mut prev_white_space, &mut post_white_space) {
+                            Some(ws) => full_prompt_text.push_str(&ws),
+                            None => (),
+                        }
                         full_prompt_text.push_str(&prompt.text);
                     }
-                    (TopId::CodeBlock(_), Top::CodeBlock(code_block)) => {
+                    (_, Top::CodeBlock(code_block)) => {
+                        is_comment = false;
+                        match handle_comment(&mut prev_white_space, &mut post_white_space) {
+                            Some(ws) => full_prompt_text.push_str(&ws),
+                            None => (),
+                        }
                         full_prompt_text.push_str(&format!("{{{}}}", code_block.block.as_str()));
                     }
-                    _ => (),
+                    (_, Top::WhiteSpace(ws, _)) => {
+                        if is_comment {
+                            post_white_space = match post_white_space {
+                                Some(existing_ws) => {
+                                    Some(format!("{}{}", existing_ws, ws.to_string()))
+                                }
+                                None => Some(ws.to_string()),
+                            };
+                        } else {
+                            prev_white_space = match prev_white_space {
+                                Some(existing_ws) => {
+                                    Some(format!("{}{}", existing_ws, ws.to_string()))
+                                }
+                                None => Some(ws.to_string()),
+                            };
+                        }
+                    }
+                    (_, Top::CommentBlock(_)) => {
+                        if is_comment {
+                            // Already in a comment and finding another comment block
+                            // subsequently.
+                            // This resets the after comment white space.
+                            match handle_comment(&mut prev_white_space, &mut post_white_space) {
+                                Some(ws) => prev_white_space = Some(ws),
+                                None => (),
+                            }
+                        } else {
+                            is_comment = true;
+                        }
+                    }
                 }
+            }
+
+            // Whitespace at the end is kept.
+            match handle_comment(&mut prev_white_space, &mut post_white_space) {
+                Some(ws) => full_prompt_text.push_str(&ws),
+                None => (),
             }
 
             Some(textwrap::dedent(&full_prompt_text).trim().to_string())
@@ -155,7 +245,7 @@ fn process_input(
     if variable.path[0] != "input" {
         return Err(DatamodelError::new_validation_error(
             "Must start with `input`",
-            span.clone(),
+            variable.span.clone(),
         ));
     }
 

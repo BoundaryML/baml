@@ -1,4 +1,4 @@
-use std::{path::PathBuf};
+use std::{fmt::format, path::PathBuf};
 
 use crate::{assert_correct_parser, ast::*, unreachable_rule};
 use internal_baml_diagnostics::{DatamodelError, Diagnostics, SourceFile, Span};
@@ -16,8 +16,8 @@ fn pretty_print<'a>(pair: pest::iterators::Pair<'a, Rule>, indent_level: usize) 
     println!("{}{:?} -> {:?}", indent, pair.as_rule(), pair.as_str());
 
     // Recursively print inner pairs with increased indentation
-    for inner_pair in pair.into_inner() {
-        pretty_print(inner_pair, indent_level + 1);
+    for innerpair in pair.into_inner() {
+        pretty_print(innerpair, indent_level + 1);
     }
 }
 
@@ -33,41 +33,25 @@ fn max_leading_whitespace_to_remove(input: &str) -> usize {
 pub fn parse_prompt(
     root_path: &PathBuf,
     source: &SourceFile,
-    prompt_tuple: (String, Span),
+    (prompt, prompt_span): (String, Span),
 ) -> Result<(PromptAst, Diagnostics), Diagnostics> {
     let mut diagnostics = Diagnostics::new(root_path.clone());
     diagnostics.set_source(source);
 
-    // remove the first \n that is the first character if it exists
-    // also remove the last \n if it exists
-    let mut span_offset = 0;
-    let prompt = prompt_tuple.0;
-    if prompt.starts_with('\n') {
-        span_offset = 1;
-    }
-
-    // let prompt = prompt.trim_matches('\n');
-    span_offset += max_leading_whitespace_to_remove(&prompt);
-
-    span_offset += prompt_tuple.1.start;
-    // add 2 more for now to account for the 2 characters in the prompt raw string "\"#". TODO: fix this.
-    span_offset += 2;
-    diagnostics.set_span_offset(span_offset);
-    // now dedent the prompt
-    let prompt = prompt.clone(); //textwrap::dedent(prompt);
-
     let parse_result = BAMLPromptParser::parse(Rule::entry, &prompt);
-
     let mut top_level_definitions = Vec::new();
 
     match parse_result {
         Ok(mut parsed_rules) => {
-            for pair in parsed_rules.next().unwrap().into_inner() {
-                pretty_print(pair.clone(), 0);
+            // The offset for diagnostics is based on where the prompt starts.
+            // The prompt itself also includes the leading characters for a raw_string "\"#"
+            // TODO (aaronv): pass in the right number here based on the number of prompt.
+            diagnostics.set_span_offset(prompt_span.start + 2);
 
+            for pair in parsed_rules.next().unwrap().into_inner() {
                 match pair.as_rule() {
-                    Rule::WHITESPACE => {
-                        handle_prompt_text(pair, &mut top_level_definitions, &diagnostics)
+                    Rule::whitespaces | Rule::WHITESPACE => {
+                        handle_whitespace(pair, &mut top_level_definitions, &diagnostics)
                     }
                     Rule::segment => {
                         for inner in pair.into_inner() {
@@ -82,16 +66,23 @@ pub fn parse_prompt(
                                     &mut top_level_definitions,
                                     &diagnostics,
                                 ),
-                                Rule::empty_lines => handle_empty_lines(
-                                    inner,
-                                    &mut top_level_definitions,
-                                    &diagnostics,
-                                ),
                                 Rule::prompt_text => handle_prompt_text(
                                     inner,
                                     &mut top_level_definitions,
                                     &diagnostics,
                                 ),
+                                Rule::dangling_code_block => {
+                                    diagnostics.push_error(DatamodelError::new_parser_error(
+                                        "{#input..} or {#print_enum(..)} or {#print_type(..)} or {// some comment //}".to_string(),
+                                        diagnostics.span(inner.as_span().clone()),
+                                    ));
+                                }
+                                Rule::dangling_comment_block => {
+                                    diagnostics.push_error(DatamodelError::new_parser_error(
+                                        "Unterminated comment".to_string(),
+                                        diagnostics.span(inner.as_span().clone()),
+                                    ));
+                                }
                                 _ => unreachable_rule!(inner, Rule::segment),
                             }
                         }
@@ -109,28 +100,13 @@ pub fn parse_prompt(
             ))
         }
         Err(err) => {
-            let location: Span = match err.location {
-                pest::error::InputLocation::Pos(pos) => Span {
-                    file: source.clone(),
-                    start: pos + span_offset,
-                    end: pos + span_offset,
-                },
-                pest::error::InputLocation::Span((from, to)) => Span {
-                    file: source.clone(),
-                    start: from + span_offset,
-                    end: to + span_offset,
-                },
-            };
-
-            let expected = match err.variant {
-                pest::error::ErrorVariant::ParsingError { positives, .. } => {
-                    get_expected_from_error(&positives)
-                }
-                _ => panic!("Could not construct parsing error. This should never happend."),
-            };
-
-            diagnostics.push_error(DatamodelError::new_parser_error(expected, location));
-
+            diagnostics.push_error(DatamodelError::new_parser_error(
+                format!(
+                    "Unabled to parse this raw string. Please file a bug.\n{}",
+                    err
+                ),
+                prompt_span.clone(),
+            ));
             Err(diagnostics)
         }
     }
@@ -267,27 +243,68 @@ fn handle_comment_block(
 }
 
 fn handle_empty_lines(
-    _pair: pest::iterators::Pair<'_, Rule>,
+    pair: pest::iterators::Pair<'_, Rule>,
     top_level_definitions: &mut Vec<Top>,
     diagnostics: &Diagnostics,
 ) {
     // handle empty lines
-    top_level_definitions.push(Top::PromptText(PromptText {
-        text: _pair.as_str().to_string(),
-        span: diagnostics.span(_pair.as_span().clone()),
-    }))
+    top_level_definitions.push(Top::WhiteSpace(
+        pair.as_str().to_string(),
+        diagnostics.span(pair.as_span().clone()),
+    ));
 }
 
 fn handle_prompt_text(
-    _pair: pest::iterators::Pair<'_, Rule>,
+    pair: pest::iterators::Pair<'_, Rule>,
     top_level_definitions: &mut Vec<Top>,
     diagnostics: &Diagnostics,
 ) {
-    // handle prompt text
-    top_level_definitions.push(Top::PromptText(PromptText {
-        span: diagnostics.span(_pair.as_span().clone()),
-        text: _pair.as_str().to_string(),
-    }));
+    let content = pair.as_str();
+    let trailing_whitespace = content
+        .chars()
+        .rev()
+        .take_while(|c| c.is_whitespace())
+        .count();
+
+    if trailing_whitespace > 0 && content.len() > trailing_whitespace {
+        let span = diagnostics.span(pair.as_span().clone());
+        let start = span.start;
+        let end = span.end - trailing_whitespace;
+        top_level_definitions.push(Top::PromptText(PromptText {
+            span: Span::new(span.file.clone(), start, end),
+            text: content[..content.len() - trailing_whitespace].to_string(),
+        }));
+        top_level_definitions.push(Top::WhiteSpace(
+            content[content.len() - trailing_whitespace..].to_string(),
+            Span::new(span.file, end, span.end),
+        ));
+    } else if trailing_whitespace > 0 {
+        // handle empty lines
+        top_level_definitions.push(Top::WhiteSpace(
+            content.to_string(),
+            diagnostics.span(pair.as_span().clone()),
+        ));
+    } else {
+        // handle prompt text
+        top_level_definitions.push(Top::PromptText(PromptText {
+            span: diagnostics.span(pair.as_span()),
+            text: content.to_string(),
+        }));
+    }
+}
+
+fn handle_whitespace(
+    pair: pest::iterators::Pair<'_, Rule>,
+    top_level_definitions: &mut Vec<Top>,
+    diagnostics: &Diagnostics,
+) {
+    assert_correct_parser!(pair, Rule::WHITESPACE);
+
+    // handle whitespace
+    top_level_definitions.push(Top::WhiteSpace(
+        pair.as_str().to_string(),
+        diagnostics.span(pair.as_span()),
+    ));
 }
 
 fn get_expected_from_error(positives: &[Rule]) -> String {

@@ -14,9 +14,7 @@ use crate::{
 };
 
 pub(super) fn resolve_attributes(ctx: &mut Context<'_>) {
-    info!("Resolving attributes for");
     for top in ctx.ast.iter_tops() {
-        info!("Resolving attributes for {:?}", top.0);
         match top {
             (TopId::Class(class_id), Top::Class(ast_class)) => {
                 resolve_class_attributes(class_id, ast_class, ctx)

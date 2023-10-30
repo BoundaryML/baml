@@ -4,6 +4,7 @@ mod prompt_text;
 mod top;
 mod traits;
 mod variable;
+mod white_space_text;
 
 pub use code_block::{CodeBlock, CodeBlockId, CodeType};
 pub use comment_block::{CommentBlock, CommentBlockId};
@@ -11,6 +12,7 @@ pub use internal_baml_diagnostics::Span;
 pub use prompt_text::{PromptText, PromptTextId};
 pub use top::Top;
 pub use variable::{Variable, VariableId};
+pub use white_space_text::{WhiteSpace, WhiteSpaceId};
 
 pub use traits::{WithDocumentation, WithName, WithSpan};
 
@@ -44,7 +46,7 @@ pub enum TopId {
     // A class declaration
     CodeBlock(CodeBlockId),
     // EmptyLine(EmptyLineId),
-
+    WhiteSpace(WhiteSpaceId),
     // PromptText(PromptTextId),
 }
 
@@ -69,6 +71,13 @@ impl TopId {
             _ => None,
         }
     }
+
+    pub fn as_white_space_id(self) -> Option<WhiteSpaceId> {
+        match self {
+            TopId::WhiteSpace(id) => Some(id),
+            _ => None,
+        }
+    }
 }
 
 impl std::ops::Index<TopId> for PromptAst {
@@ -79,6 +88,7 @@ impl std::ops::Index<TopId> for PromptAst {
             TopId::CommentBlock(CommentBlockId(idx)) => idx,
             TopId::PromptText(PromptTextId(idx)) => idx,
             TopId::CodeBlock(CodeBlockId(idx)) => idx,
+            TopId::WhiteSpace(WhiteSpaceId(idx)) => idx,
         };
 
         &self.tops[idx as usize]
@@ -90,5 +100,6 @@ fn top_idx_to_top_id(top_idx: usize, top: &Top) -> TopId {
         Top::CommentBlock(_) => TopId::CommentBlock(CommentBlockId(top_idx as u32)),
         Top::PromptText(_) => TopId::PromptText(PromptTextId(top_idx as u32)),
         Top::CodeBlock(_) => TopId::CodeBlock(CodeBlockId(top_idx as u32)),
+        Top::WhiteSpace(_, _) => TopId::WhiteSpace(WhiteSpaceId(top_idx as u32)),
     }
 }
