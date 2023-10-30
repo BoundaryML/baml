@@ -4,5 +4,4 @@
 {{this.name}}: {{this.description}}
 {{else}}
 {{this.name}}
-{{/if}}
-{{/each}}
+{{/if}}{{/each}}
