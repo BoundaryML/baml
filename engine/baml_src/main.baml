@@ -75,12 +75,12 @@ function FooBar2 {
   output string
 }
 
-impl<llm, FooBar2> SomeName {
+impl<llm, FooBar1> SomeName {
   client MyClient
   prompt #"
     does something
     asdf {// This is a comment //} goes here
-    a ;asdf;kljla
+    a ;asdf;kljla 
     asflk;jasdf
     {#input}
 

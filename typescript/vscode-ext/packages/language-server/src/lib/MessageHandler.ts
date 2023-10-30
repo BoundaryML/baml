@@ -66,6 +66,7 @@ export function handleDiagnosticsRequest(
       onError(errorMessage)
     }
   })
+  // console.log("res " + JSON.stringify(res, null, 2));
 
   let allDiagnostics: Map<string, Diagnostic[]> = new Map()
 

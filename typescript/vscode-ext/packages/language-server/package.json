@@ -39,6 +39,7 @@
     "js-levenshtein": "1.1.6",
     "klona": "2.0.6",
     "nyc": "15.1.0",
+    "ts-debounce": "^4.0.0",
     "vscode-languageserver": "8.1.0",
     "vscode-languageserver-textdocument": "1.0.11",
     "vscode-uri": "^3.0.8"

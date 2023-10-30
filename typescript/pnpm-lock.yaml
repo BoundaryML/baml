@@ -95,6 +95,9 @@ importers:
       nyc:
         specifier: 15.1.0
         version: 15.1.0
+      ts-debounce:
+        specifier: ^4.0.0
+        version: 4.0.0
       vscode-languageserver:
         specifier: 8.1.0
         version: 8.1.0
@@ -3706,6 +3709,10 @@ packages:
     dependencies:
       is-number: 7.0.0
     dev: true
+
+  /ts-debounce@4.0.0:
+    resolution: {integrity: sha512-+1iDGY6NmOGidq7i7xZGA4cm8DAa6fqdYcvO5Z6yBevH++Bdo9Qt/mN0TzHUgcCcKv1gmh9+W5dHqz8pMWbCbg==}
+    dev: false
 
   /ts-dedent@2.2.0:
     resolution: {integrity: sha512-q5W7tVM71e2xjHZTlgfTDoPF/SmqKG5hddq9SzR49CH2hayqRKJtQ4mtRlSxKaJlR/+9rEM+mnBHf7I2/BQcpQ==}

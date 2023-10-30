@@ -16,6 +16,7 @@ import {
   DocumentSymbolParams,
   TextDocumentSyncKind,
 } from 'vscode-languageserver'
+import { debounce } from "ts-debounce";
 import { createConnection, IPCMessageReader, IPCMessageWriter } from 'vscode-languageserver/node'
 import { TextDocument } from 'vscode-languageserver-textdocument'
 
@@ -218,11 +219,14 @@ export function startServer(options?: LSOptions): void {
     }
   }
 
-  documents.onDidChangeContent((change: { document: TextDocument }) => {
-    validateTextDocument(change.document)
+  const debouncedValidateTextDocument = debounce(validateTextDocument, 200, {
+    isImmediate: true,
+    maxWait: 2000,
   })
 
-
+  documents.onDidChangeContent((change: { document: TextDocument }) => {
+    debouncedValidateTextDocument(change.document);
+  })
 
   function getDocument(uri: string): TextDocument | undefined {
     return documents.get(uri)
