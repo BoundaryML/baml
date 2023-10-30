@@ -4,14 +4,14 @@ enum Sentiment {
   HAPPY    
 } 
  
-enu Sentiment2 {  
+enu Sentiment2 {   
   // comment
-  ANGRY @alias("angry", {
-    key "value"
-  })
-}
-
-client<llm> GPT35 {
+  ANGRY @alias("angry", { 
+    key "value" 
+  })  
+}      
+ 
+client<llm> GPT35 { 
   provider hello
   thingy yes
   

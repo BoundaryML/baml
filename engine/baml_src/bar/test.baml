@@ -4,19 +4,19 @@ class Foo {
 }
 
 function FooB {
-  input InputType
+  input InputType 
   output OutputType
-}
+} 
 
 class InputType {
   a InputType2
-  b bool
-}
+  b bool  
+}   
 
 class OtherInput {
   d string
 }
-
+ 
 class InputType2 {
   c string
 }

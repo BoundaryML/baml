@@ -1,4 +1,4 @@
-import { ExtensionContext } from 'vscode';
+import { ExtensionContext, OutputChannel } from 'vscode';
 
 export interface BamlVSCodePlugin {
   name: string
@@ -6,6 +6,6 @@ export interface BamlVSCodePlugin {
   enabled: () => Promise<boolean> | boolean
 
   /** Called when the extension is activated and if enabled returns true */
-  activate?: (context: ExtensionContext) => Promise<void> | void
+  activate?: (context: ExtensionContext, outputChannel: OutputChannel) => Promise<void> | void
   deactivate?: () => Promise<void> | void
 }

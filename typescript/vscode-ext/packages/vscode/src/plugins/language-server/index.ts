@@ -1,6 +1,6 @@
 import * as path from 'path'
 
-import { commands, ExtensionContext, window, workspace } from 'vscode'
+import { commands, ExtensionContext, OutputChannel, window, workspace } from 'vscode'
 import { LanguageClientOptions } from 'vscode-languageclient'
 import { LanguageClient, ServerOptions, TransportKind } from 'vscode-languageclient/node'
 import TelemetryReporter from '../../telemetryReporter'
@@ -16,6 +16,7 @@ let telemetry: TelemetryReporter
 const isDebugMode = () => process.env.VSCODE_DEBUG_MODE === 'true'
 const isE2ETestOnPullRequest = () => process.env.PRISMA_USE_LOCAL_LS === 'true'
 
+let bamlOutputChannel: OutputChannel | null = null;
 const activateClient = (
   context: ExtensionContext,
   serverOptions: ServerOptions,
@@ -24,8 +25,14 @@ const activateClient = (
   // Create the language client
   client = createLanguageServer(serverOptions, clientOptions)
 
-  const disposable = client.start()
+  client.onReady().then(() => {
+    client.onNotification('baml/showLanguageServerOutput', () => {
+      client.outputChannel.show(true);
+    });
+  });
 
+
+  const disposable = client.start()
 
   // Start the client. This will also launch the server
   context.subscriptions.push(disposable)
@@ -39,8 +46,9 @@ const onFileChange = (filepath: string) => {
 const plugin: BamlVSCodePlugin = {
   name: 'baml-language-server',
   enabled: () => true,
-  activate: async (context) => {
+  activate: async (context, outputChannel) => {
     const isDebugOrTest = isDebugOrTestSession()
+    bamlOutputChannel = outputChannel
 
     // setGenerateWatcher(!!workspace.getConfiguration('baml').get('fileWatcher'))
 
@@ -89,6 +97,7 @@ const plugin: BamlVSCodePlugin = {
     const clientOptions: LanguageClientOptions = {
       // Register the server for prisma documents
       documentSelector: [{ scheme: 'file', language: 'baml' }],
+
 
       /* This middleware is part of the workaround for https://github.com/prisma/language-tools/issues/311 */
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -139,7 +148,6 @@ const plugin: BamlVSCodePlugin = {
       //   },
       // } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
     }
-    console.log('clientOptions', clientOptions)
 
     context.subscriptions.push(
       // when the file watcher settings change, we need to ensure they are applied
@@ -172,7 +180,7 @@ const plugin: BamlVSCodePlugin = {
 
       await telemetry.sendTelemetryEvent()
 
-      if (extensionId === 'baml.baml-insider') {
+      if (extensionId === 'Gloo.baml-insider') {
         // checkForOtherPrismaExtension()
       }
     }

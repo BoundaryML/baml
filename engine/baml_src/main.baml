@@ -38,18 +38,18 @@ function FunctionOne {
 function FunctionTwo {
   input Type1
   output string
-}
-
-
-
-
+}   
+     
+   
+  
+ 
 enum FAAAAA {
   POSITIVE
   NEGATIVE
   HEALTHY
 }
 
-// This is preferred
+// This is preferred 
 client<llm> MyClient {
   provider openai
   options {

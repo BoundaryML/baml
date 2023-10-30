@@ -25,6 +25,7 @@ import type { LSOptions, LSSettings } from './lib/types'
 import { getVersion, getEnginesVersion, getCliVersion } from './lib/wasm/internals'
 import { BamlDirCache } from './file/fileCache'
 import { LinterInput } from './lib/wasm/lint'
+import { cliBuild } from './baml-cli';
 
 const packageJson = require('../../package.json') // eslint-disable-line
 console.log('Server-side -- packageJson', packageJson)
@@ -39,7 +40,15 @@ function getConnection(options?: LSOptions): Connection {
 }
 
 let hasCodeActionLiteralsCapability = false
-let hasConfigurationCapability = false
+let hasConfigurationCapability = true
+
+type BamlConfig = {
+  path?: string;
+  trace: {
+    server: string;
+  }
+}
+let config: BamlConfig | null = null;
 
 /**
  * Starts the language server.
@@ -53,6 +62,7 @@ export function startServer(options?: LSOptions): void {
 
   console.log = connection.console.log.bind(connection.console)
   console.error = connection.console.error.bind(connection.console)
+
 
   console.log('Starting Baml Language Server...')
 
@@ -107,7 +117,8 @@ export function startServer(options?: LSOptions): void {
     if (hasConfigurationCapability) {
       // Register for all configuration changes.
       // eslint-disable-next-line @typescript-eslint/no-floating-promises
-      connection.client.register(DidChangeConfigurationNotification.type, undefined)
+      connection.client.register(DidChangeConfigurationNotification.type)
+      getConfig();
     }
   })
 
@@ -119,8 +130,15 @@ export function startServer(options?: LSOptions): void {
   // Cache the settings of all open documents
   const documentSettings: Map<string, Thenable<LSSettings>> = new Map<string, Thenable<LSSettings>>()
 
+  const getConfig = async () => {
+    const configResponse = await connection.workspace.getConfiguration();
+    config = configResponse["baml"] as BamlConfig;
+    console.log("config " + JSON.stringify(config, null, 2));
+  }
+
   connection.onDidChangeConfiguration((_change) => {
-    connection.console.info('Configuration changed.')
+    connection.console.info('Configuration changed.' + JSON.stringify(_change, null, 2));
+    getConfig();
     if (hasConfigurationCapability) {
       // Reset all cached document settings
       documentSettings.clear()
@@ -185,7 +203,13 @@ export function startServer(options?: LSOptions): void {
 
   // Note: VS Code strips newline characters from the message
   function showErrorToast(errorMessage: string): void {
-    connection.window.showErrorMessage(errorMessage)
+    connection.window.showErrorMessage(errorMessage, {
+      title: 'Show Details',
+    }).then((item) => {
+      if (item?.title === 'Show Details') {
+        connection.sendNotification('baml/showLanguageServerOutput');
+      }
+    });
   }
 
 
@@ -226,6 +250,11 @@ export function startServer(options?: LSOptions): void {
 
   documents.onDidChangeContent((change: { document: TextDocument }) => {
     debouncedValidateTextDocument(change.document);
+  })
+
+  documents.onDidSave((change: { document: TextDocument }) => {
+    console.log("onDidSave " + change.document.uri);
+    cliBuild(config?.path || "baml", bamlCache.getBamlDir(change.document), showErrorToast);
   })
 
   function getDocument(uri: string): TextDocument | undefined {
