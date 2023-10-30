@@ -864,6 +864,7 @@ dependencies = [
  "indoc",
  "log",
  "pest",
+ "strsim 0.10.0",
 ]
 
 [[package]]
@@ -875,9 +876,11 @@ dependencies = [
  "enumflags2",
  "indexmap 1.9.3",
  "internal-baml-diagnostics",
+ "internal-baml-prompt-parser",
  "internal-baml-schema-ast",
  "log",
  "rustc-hash",
+ "textwrap 0.16.0",
 ]
 
 [[package]]

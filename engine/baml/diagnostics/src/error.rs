@@ -328,9 +328,26 @@ impl DatamodelError {
 
     pub fn new_type_not_found_error(
         type_name: &str,
-        close_names: Vec<&str>,
+        names: Vec<&str>,
         span: Span,
     ) -> DatamodelError {
+        // Calculate OSA distances and sort names by distance
+        let mut distances: Vec<(usize, &str)> = names
+            .iter()
+            .map(|n| (strsim::osa_distance(n, type_name), *n))
+            .collect();
+        distances.sort_by_key(|k| k.0);
+
+        // Set a threshold for "closeness"
+        let threshold = 2; // for example, you can adjust this based on your needs
+
+        // Filter names that are within the threshold
+        let close_names: Vec<&str> = distances
+            .iter()
+            .filter(|&&(dist, _)| dist <= threshold)
+            .map(|&(_, name)| name)
+            .collect();
+
         let msg = if close_names.is_empty() {
             // If no names are close enough, suggest nothing or provide a generic message
             format!("Type `{}` does not exist.", type_name)

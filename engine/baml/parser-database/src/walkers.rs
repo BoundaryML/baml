@@ -54,6 +54,7 @@ impl crate::ParserDatabase {
             _ => None,
         })
     }
+
     /// Find a type by name.
     pub fn find_type_by_str<'db>(
         &'db self,
@@ -118,6 +119,16 @@ impl crate::ParserDatabase {
         // Add primitive types
         names.extend(vec!["string", "int", "float", "bool"]);
         names
+    }
+
+    /// Get all the types that are valid in the schema. (including primitives)
+    pub fn valid_function_names(&self) -> Vec<&str> {
+        self.walk_functions().map(|c| c.name()).collect()
+    }
+
+    /// Get all the types that are valid in the schema. (including primitives)
+    pub fn valid_client_names(&self) -> Vec<&str> {
+        self.walk_clients().map(|c| c.name()).collect()
     }
 
     /// Walk all enums in the schema.

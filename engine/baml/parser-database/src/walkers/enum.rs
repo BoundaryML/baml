@@ -2,7 +2,7 @@ use internal_baml_schema_ast::ast::{IndentationType, NewlineType, WithDocumentat
 
 use crate::{
     ast,
-    types::{EnumAttributes, ToStringAttributes},
+    types::{EnumAttributes, StaticStringAttributes, ToStringAttributes},
     walkers::Walker,
 };
 
@@ -47,10 +47,27 @@ impl<'db> EnumWalker<'db> {
         NewlineType::Unix
     }
 
+    /// Gets the enum attributes.
+    pub fn alias(self) -> &'db str {
+        match self.attributes() {
+            Some(a) => {
+                if let Some(alias) = a.alias() {
+                    &self.db[*alias]
+                } else {
+                    self.name()
+                }
+            }
+            None => self.name(),
+        }
+    }
+
     /// The parsed attributes.
     #[track_caller]
-    pub(crate) fn attributes(self) -> &'db EnumAttributes {
-        &self.db.types.enum_attributes[&self.id]
+    fn attributes(self) -> Option<&'db StaticStringAttributes> {
+        match &self.db.types.enum_attributes[&self.id].serilizer {
+            Some(ToStringAttributes::Static(refs)) => Some(refs),
+            _ => None,
+        }
     }
 }
 
@@ -69,9 +86,26 @@ impl<'db> EnumValueWalker<'db> {
         &self.r#enum().ast_enum()[self.id.1].name()
     }
 
+    /// Gets the enum attributes.
+    pub fn alias(self) -> &'db str {
+        match self.attributes() {
+            Some(a) => {
+                if let Some(alias) = a.alias() {
+                    &self.db[*alias]
+                } else {
+                    self.name()
+                }
+            }
+            None => self.name(),
+        }
+    }
+
     /// The parsed attributes.
     #[track_caller]
-    pub(crate) fn attributes(self) -> &'db ToStringAttributes {
-        &self.db.types.enum_attributes[&self.id.0].value_serilizers[&self.id.1]
+    fn attributes(self) -> Option<&'db StaticStringAttributes> {
+        match &self.db.types.enum_attributes[&self.id.0].value_serilizers[&self.id.1] {
+            ToStringAttributes::Static(refs) => Some(refs),
+            _ => None,
+        }
     }
 }

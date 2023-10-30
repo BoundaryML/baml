@@ -6,8 +6,21 @@ use crate::generate::generate_python_client::file::clean_file_name;
 use super::{
     file::{File, FileCollector},
     template::render_template,
-    traits::{JsonHelper, WithWritePythonString},
+    traits::{JsonHelper, SerializerHelper, WithWritePythonString},
 };
+
+impl SerializerHelper for EnumWalker<'_> {
+    fn serialize(&self, f: &mut File) -> serde_json::Value {
+        json!({
+            "type": "enum",
+            "name": self.alias(),
+            "values": self.values().map(|v| json!({
+                "name": v.alias(),
+                // Add other meta attributes.
+            })).collect::<Vec<_>>(),
+        })
+    }
+}
 
 impl JsonHelper for EnumWalker<'_> {
     fn json(&self, _f: &mut File) -> serde_json::Value {

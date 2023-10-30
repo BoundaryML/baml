@@ -7,7 +7,7 @@ use crate::generate::generate_python_client::file::clean_file_name;
 use super::{
     file::{File, FileCollector},
     template::render_template,
-    traits::{JsonHelper, WithToCode, WithWritePythonString},
+    traits::{JsonHelper, SerializerHelper, WithToCode, WithWritePythonString},
 };
 
 impl WithWritePythonString for Walker<'_, ClassId> {
@@ -39,6 +39,20 @@ impl JsonHelper for Walker<'_, ClassId> {
                 "name": field.name(),
                 "type": field.r#type().to_py_string(f),
                 "optional": field.r#type().is_nullable(),
+            })).collect::<Vec<_>>(),
+        })
+    }
+}
+
+impl SerializerHelper for Walker<'_, ClassId> {
+    fn serialize(&self, f: &mut File) -> serde_json::Value {
+        json!({
+            "name": self.name(),
+            "fields": self.static_fields().map(|field|
+                json!({
+                "name": field.name(),
+                "type": field.r#type().to_py_string(f),
+                // Add other meta attributes.
             })).collect::<Vec<_>>(),
         })
     }

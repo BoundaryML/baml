@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 
 use internal_baml_parser_database::walkers::{ClientWalker, Walker};
-use internal_baml_schema_ast::ast::{ClientId, Expression, WithDocumentation};
+use internal_baml_schema_ast::ast::{
+    ClientId, Expression, Identifier, WithDocumentation, WithName,
+};
 
 use serde_json::{json, Value};
 
@@ -14,56 +16,74 @@ use super::{
     FileCollector,
 };
 
-pub fn expression_to_json(exp: &Expression) -> Value {
-    match exp {
-        Expression::NumericValue(val, _) => val
-            .parse()
-            .ok()
-            .map(Value::Number)
-            .unwrap_or_else(|| unreachable!("Error parsing numeric value")),
-        Expression::StringValue(val, _) => Value::String(val.clone()),
-        Expression::RawStringValue(val, _) => Value::String(val.clone()),
-        Expression::Identifier(idn) => match idn {
-            internal_baml_schema_ast::ast::Identifier::String(s, _) => Value::String(s.clone()),
-            internal_baml_schema_ast::ast::Identifier::Invalid(s, _) => Value::String(s.clone()),
-            internal_baml_schema_ast::ast::Identifier::Local(s, _) => Value::String(s.clone()),
-            _ => Value::Null,
-        },
-        Expression::Array(arr, _) => {
-            let json_arr: Vec<Value> = arr.iter().map(|x| expression_to_json(x)).collect();
-            Value::Array(json_arr)
-        }
-        Expression::Map(map, _) => {
-            let mut json_map = serde_json::Map::new();
-            for (k, v) in map {
-                let key = match expression_to_json(k) {
-                    Value::String(s) => s,
-                    _ => continue, // Skip if the key is not a string
-                };
-                let value = expression_to_json(v);
-                json_map.insert(key, value);
+fn escaped_string(s: &str, quotes: (&'static str, &'static str)) -> String {
+    s.replace("\\", "\\\\").replace(quotes.0, quotes.1)
+}
+
+impl JsonHelper for Identifier {
+    fn json(&self, f: &mut File) -> serde_json::Value {
+        match self {
+            Identifier::ENV(s, _) => {
+                f.add_import("os", "environ");
+                Value::String(format!("environ['{}']", s.clone()))
             }
-            Value::Object(json_map)
+            _ => Value::String(format!(
+                "\"{}\"",
+                escaped_string(self.name(), ("\"", "\\\""))
+            )),
         }
     }
 }
 
-pub fn compute_map(expressions: &HashMap<String, Expression>) -> HashMap<String, Value> {
-    let mut json_map = HashMap::new();
-    for (key, value) in expressions {
-        let computed_value = expression_to_json(value);
-        json_map.insert(key.clone(), computed_value);
+impl JsonHelper for Expression {
+    fn json(&self, f: &mut File) -> serde_json::Value {
+        match self {
+            Expression::NumericValue(val, _) => val
+                .parse()
+                .ok()
+                .map(Value::Number)
+                .unwrap_or_else(|| unreachable!("Error parsing numeric value")),
+            Expression::StringValue(val, _) => {
+                Value::String(format!("\"{}\"", escaped_string(val, ("\"", "\\\""))))
+            }
+            Expression::RawStringValue(val, _) => Value::String(format!(
+                "\"\"\"\\\n{}\\\n\"\"\"",
+                escaped_string(val, ("\"\"\"", "\\\"\\\"\\\""))
+            )),
+            Expression::Identifier(idn) => idn.json(f),
+            Expression::Array(arr, _) => {
+                let json_arr: Vec<Value> = arr.iter().map(|x| x.json(f)).collect();
+                Value::Array(json_arr)
+            }
+            Expression::Map(map, _) => {
+                let mut json_map = serde_json::Map::new();
+                for (k, v) in map {
+                    let key = match k.json(f) {
+                        Value::String(s) => s,
+                        _ => continue, // Skip if the key is not a string
+                    };
+                    let value = v.json(f);
+                    json_map.insert(key, value);
+                }
+                Value::Object(json_map)
+            }
+        }
     }
-    json_map
 }
 
 impl JsonHelper for ClientWalker<'_> {
-    fn json(&self, _f: &mut File) -> serde_json::Value {
-        let opts = compute_map(&self.properties().options);
+    fn json(&self, f: &mut File) -> serde_json::Value {
+        let opts: HashMap<String, Value> = HashMap::from_iter(
+            self.properties()
+                .options
+                .iter()
+                .map(|(k, v)| (k.clone(), v.json(f))),
+        );
+
         json!({
             "name": self.name(),
             "kwargs": {
-                "provider": self.properties().provider
+                "provider": serde_json::to_string(&self.properties().provider).unwrap(),
             },
             "options": opts,
             "doc_string": self.ast_client().documentation(),

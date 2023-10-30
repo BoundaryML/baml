@@ -1,25 +1,28 @@
+use std::collections::HashMap;
 use std::hash::Hash;
 
 use crate::coerce;
 use crate::{context::Context, DatamodelError};
 
 use internal_baml_diagnostics::Span;
+use internal_baml_prompt_parser::ast::Variable;
 use internal_baml_schema_ast::ast::{
-    self, ClassId, ClientId, EnumId, EnumValueId, Expression, FieldId, SerializerFieldId,
+    self, ClassId, ClientId, EnumId, EnumValueId, Expression, FieldId, SerializerFieldId, TopId,
     VariantConfigId, VariantSerializerId, WithName, WithSpan,
 };
 
-use std::collections::HashMap;
-
+pub(crate) mod post_prompt;
+mod prompt;
 mod to_string_attributes;
 mod types;
+
+use prompt::validate_prompt;
 
 pub(crate) use to_string_attributes::{
     DynamicStringAttributes, StaticStringAttributes, ToStringAttributes,
 };
 pub(crate) use types::EnumAttributes;
 pub(crate) use types::*;
-
 pub(super) fn resolve_types(ctx: &mut Context<'_>) {
     for (top_id, top) in ctx.ast.iter_tops() {
         match (top_id, top) {
@@ -40,10 +43,60 @@ pub(super) fn resolve_types(ctx: &mut Context<'_>) {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+/// Variables used inside of raw strings.
+pub enum PromptVariable {
+    /// Input variable.
+    Input(Variable),
+    /// Output variable.
+    Enum(Variable),
+    /// Output variable.
+    Type(Variable),
+}
+
+impl Hash for PromptVariable {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            PromptVariable::Input(var) => {
+                "input".hash(state);
+                var.text.hash(state);
+            }
+            PromptVariable::Enum(var) => {
+                "enum".hash(state);
+                var.text.hash(state);
+            }
+            PromptVariable::Type(var) => {
+                "type".hash(state);
+                var.text.hash(state);
+            }
+        }
+    }
+}
+
+impl<'a> PromptVariable {
+    fn text(&'a self) -> &'a String {
+        match self {
+            PromptVariable::Input(var) => &var.text,
+            PromptVariable::Enum(var) => &var.text,
+            PromptVariable::Type(var) => &var.text,
+        }
+    }
+
+    /// Unique Key
+    pub fn key(&self) -> String {
+        format!("{{//BAML_CLIENT_REPLACE_ME_MAGIC_{}//}}", self.text())
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct VariantProperties {
     pub client: String,
     pub prompt: (String, Span),
+    pub prompt_replacements: Vec<PromptVariable>,
+    pub replacers: (
+        HashMap<PromptVariable, String>,
+        HashMap<PromptVariable, TopId>,
+    ),
 }
 
 #[derive(Debug, Clone)]
@@ -261,13 +314,20 @@ fn visit_variant<'db>(idx: VariantConfigId, variant: &'db ast::Variant, ctx: &mu
             coerce::string_with_span(prompt, &mut ctx.diagnostics),
         ) {
             (Some(client), Some((prompt_string, prompt_span))) => {
-                ctx.types.variant_properties.insert(
-                    idx,
-                    VariantProperties {
-                        client: client.to_string(),
-                        prompt: (prompt_string.to_string(), prompt_span.clone()),
-                    },
-                );
+                match validate_prompt(ctx, (prompt_string, prompt_span.clone()), &prompt_span) {
+                    Some((prompt, replacer)) => {
+                        ctx.types.variant_properties.insert(
+                            idx,
+                            VariantProperties {
+                                client: client.to_string(),
+                                prompt: (prompt, prompt_span.clone()),
+                                prompt_replacements: replacer,
+                                replacers: Default::default(),
+                            },
+                        );
+                    }
+                    None => {}
+                }
             }
             _ => {
                 // Errors are handled by coerce.

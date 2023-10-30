@@ -7,6 +7,17 @@ __prompt_template = """\
 {{prompt}}\
 """
 
+__output_replacer = {
+    {{#each output_replacers}}
+    "{{key}}": {{#if (eq value.type "enum")}}
+    """\
+{{> print_enum name=value.name values=value.values}}\
+""",
+    {{else}}
+    {{value.type}},
+    {{/if}}
+    {{/each}}
+}
 
 # We ignore the type here because baml does some type magic to make this work
 # for inline SpecialForms like Optional, Union, List.

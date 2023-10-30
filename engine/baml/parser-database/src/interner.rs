@@ -6,9 +6,8 @@
 
 use indexmap::IndexSet;
 
-
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
-pub(crate) struct StringId(usize);
+pub struct StringId(usize);
 
 #[derive(Default)]
 pub(crate) struct StringInterner {

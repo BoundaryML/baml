@@ -3,18 +3,18 @@ use std::collections::HashMap;
 use crate::interner::StringId;
 
 #[derive(Debug)]
-pub(crate) enum ToStringAttributes {
+pub enum ToStringAttributes {
     Static(StaticStringAttributes),
     Dynamic(DynamicStringAttributes),
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct DynamicStringAttributes {
+pub struct DynamicStringAttributes {
     template: Option<StringId>,
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct StaticStringAttributes {
+pub struct StaticStringAttributes {
     skip: Option<bool>,
     alias: Option<StringId>,
     meta: HashMap<StringId, StringId>,

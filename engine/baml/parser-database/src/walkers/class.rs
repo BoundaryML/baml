@@ -28,7 +28,7 @@ impl<'db> ClassWalker<'db> {
 
     /// The parsed attributes.
     #[track_caller]
-    pub(crate) fn attributes(self) -> &'db ClassAttributes {
+    pub fn attributes(self) -> &'db ClassAttributes {
         &self.db.types.class_attributes[&self.id]
     }
 

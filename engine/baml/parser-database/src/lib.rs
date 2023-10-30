@@ -35,10 +35,13 @@ mod interner;
 mod names;
 mod types;
 
+use std::collections::HashMap;
+
 pub use coerce_expression::{coerce, coerce_array, coerce_opt};
+use either::Either;
 pub use internal_baml_schema_ast::ast;
-use internal_baml_schema_ast::ast::SchemaAst;
-pub use types::StaticType;
+use internal_baml_schema_ast::ast::{SchemaAst, WithName, WithSpan};
+pub use types::{PromptVariable, StaticType};
 
 use self::{context::Context, interner::StringId, types::Types};
 use internal_baml_diagnostics::{DatamodelError, Diagnostics};
@@ -111,7 +114,70 @@ impl ParserDatabase {
         ctx.diagnostics.to_result()?;
 
         attributes::resolve_attributes(&mut ctx);
-        ctx.diagnostics.to_result()
+        ctx.diagnostics.to_result()?;
+
+        // Third pass: validate attributes.
+        self.finalize_prompt_validation(&mut diag)
+    }
+
+    fn finalize_prompt_validation(&mut self, diag: &mut Diagnostics) -> Result<(), Diagnostics> {
+        let mut vars: HashMap<_, _> = Default::default();
+
+        for variant in self.walk_variants() {
+            let mut input_replacers = HashMap::new();
+            let mut output_replacers = HashMap::new();
+            if let Some(fn_walker) = variant.walk_function() {
+                // Now lets validate the prompt is what we expect.
+                let prompt_variables = &variant.properties().prompt_replacements;
+
+                prompt_variables.iter().for_each(|f| match f {
+                    PromptVariable::Input(variable) => {
+                        // Ensure the prompt has an input path that works.
+                        match types::post_prompt::process_input(self, fn_walker, variable) {
+                            Ok(replacer) => {
+                                input_replacers.insert(f.clone(), replacer);
+                            }
+                            Err(e) => diag.push_error(e),
+                        }
+                    }
+                    PromptVariable::Enum(variable) => {
+                        // Ensure the prompt has an enum path that works.
+                        match types::post_prompt::process_print_enum(self, fn_walker, variable) {
+                            Ok(replacer) => {
+                                output_replacers.insert(f.clone(), ast::TopId::Enum(replacer));
+                            }
+                            Err(e) => diag.push_error(e),
+                        }
+                    }
+                    PromptVariable::Type(variable) => {
+                        // Ensure the prompt has an enum path that works.
+                        match types::post_prompt::process_print_type(self, fn_walker, variable) {
+                            Ok(Either::Left(l)) => {
+                                output_replacers.insert(f.clone(), ast::TopId::Function(l));
+                            }
+                            Ok(Either::Right(r)) => {
+                                output_replacers.insert(f.clone(), ast::TopId::Class(r));
+                            }
+                            Err(e) => diag.push_error(e),
+                        }
+                    }
+                });
+            } else {
+                diag.push_error(DatamodelError::new_type_not_found_error(
+                    variant.function_identifier().name(),
+                    self.valid_function_names(),
+                    variant.function_identifier().span().clone(),
+                ));
+            }
+
+            vars.insert(variant.id, (input_replacers, output_replacers));
+        }
+
+        vars.into_iter().for_each(|(k, v)| {
+            self.types.variant_properties.get_mut(&k).unwrap().replacers = v;
+        });
+
+        diag.to_result()
     }
 
     /// The parsed AST.

@@ -34,6 +34,10 @@ impl DatamodelWarning {
         Self::new(msg, span)
     }
 
+    pub fn prompt_variable_unused(message: &str, span: Span) -> DatamodelWarning {
+        Self::new(message.to_string(), span)
+    }
+
     /// The user-facing warning message.
     pub fn message(&self) -> &str {
         &self.message

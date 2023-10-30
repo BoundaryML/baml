@@ -1,3 +1,5 @@
+use std::borrow::BorrowMut;
+
 use internal_baml_schema_ast::ast::Identifier;
 
 use crate::{

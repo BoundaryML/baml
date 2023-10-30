@@ -1,4 +1,4 @@
-use crate::types::{ToStringAttributes};
+use crate::types::ToStringAttributes;
 
 use super::{ClassWalker, Walker};
 use internal_baml_schema_ast::ast::{self, FieldType};

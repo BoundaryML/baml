@@ -33,7 +33,7 @@ fn max_leading_whitespace_to_remove(input: &str) -> usize {
 pub fn parse_prompt(
     root_path: &PathBuf,
     source: &SourceFile,
-    (prompt, prompt_span): (String, Span),
+    (prompt, prompt_span): (&str, Span),
 ) -> Result<(PromptAst, Diagnostics), Diagnostics> {
     let mut diagnostics = Diagnostics::new(root_path.clone());
     diagnostics.set_source(source);

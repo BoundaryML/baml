@@ -54,6 +54,7 @@ fn use_partial(
             register_partial_file!(reg, "functions", "arg_list");
             register_partial_file!(reg, "functions", "arg_values");
             register_partial_file!(reg, "functions", "func_def");
+            register_partial_file!(reg, "prompt", "print_enum");
             f.add_import("..._impl.deserializer", "Deserializer");
 
             register_partial_file!(reg, "functions", "variant");

@@ -10,7 +10,7 @@ impl VariableId {
     pub const MAX: VariableId = VariableId(u32::MAX);
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Variable {
     /// Entire unparsed text of the variable.  (input.something.bar)
     pub text: String,
