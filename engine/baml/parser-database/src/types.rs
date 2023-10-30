@@ -3,8 +3,8 @@ use crate::{context::Context, DatamodelError};
 
 use internal_baml_diagnostics::Span;
 use internal_baml_schema_ast::ast::{
-    self, ClassId, EnumId, EnumValueId, FieldId, SerializerFieldId, VariantConfigId,
-    VariantSerializerId, WithName, WithSpan,
+    self, ClassId, ClientId, EnumId, EnumValueId, Expression, FieldId, SerializerFieldId,
+    VariantConfigId, VariantSerializerId, WithName, WithSpan,
 };
 
 use rustc_hash::FxHashMap as HashMap;
@@ -29,7 +29,9 @@ pub(super) fn resolve_types(ctx: &mut Context<'_>) {
             (ast::TopId::Variant(idx), ast::Top::Variant(variant)) => {
                 visit_variant(idx, variant, ctx)
             }
-            (ast::TopId::Client(_), ast::Top::Client(_client)) => {}
+            (ast::TopId::Client(idx), ast::Top::Client(client)) => {
+                visit_client(idx, client, ctx);
+            }
             (ast::TopId::Generator(_), ast::Top::Generator(_generator)) => {}
             _ => unreachable!(),
         }
@@ -42,12 +44,19 @@ pub struct VariantProperties {
     pub prompt: (String, Span),
 }
 
+#[derive(Debug, Clone)]
+pub struct ClientProperties {
+    pub provider: String,
+    pub options: HashMap<String, Expression>,
+}
+
 #[derive(Debug, Default)]
 pub(super) struct Types {
     pub(super) enum_attributes: HashMap<ast::EnumId, EnumAttributes>,
     pub(super) class_attributes: HashMap<ast::ClassId, ClassAttributes>,
     pub(super) variant_attributes: HashMap<ast::VariantConfigId, VariantAttributes>,
     pub(super) variant_properties: HashMap<ast::VariantConfigId, VariantProperties>,
+    pub(super) client_properties: HashMap<ast::ClientId, ClientProperties>,
 }
 
 impl Types {
@@ -120,6 +129,10 @@ fn visit_class<'db>(class: &'db ast::Class, ctx: &mut Context<'db>) {
 }
 
 fn visit_function<'db>(_function: &'db ast::Function, _ctx: &mut Context<'db>) {}
+
+fn visit_client<'db>(idx: ClientId, client: &'db ast::Client, ctx: &mut Context<'db>) {
+    //
+}
 
 fn visit_variant<'db>(idx: VariantConfigId, variant: &'db ast::Variant, ctx: &mut Context<'db>) {
     if !variant.is_llm() {
