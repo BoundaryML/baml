@@ -1,3 +1,5 @@
+use std::hash::Hash;
+
 use crate::coerce;
 use crate::{context::Context, DatamodelError};
 
@@ -132,6 +134,86 @@ fn visit_function<'db>(_function: &'db ast::Function, _ctx: &mut Context<'db>) {
 
 fn visit_client<'db>(idx: ClientId, client: &'db ast::Client, ctx: &mut Context<'db>) {
     //
+    let mut provider = None;
+    let mut options: HashMap<String, Expression> = HashMap::default();
+    client
+        .iter_fields()
+        .for_each(|(_idx, field)| match field.name() {
+            "provider" => {
+                if field.template_args.is_some() {
+                    ctx.push_error(DatamodelError::new_validation_error(
+                        "Did you mean `provider` instead of `provider<...>`?",
+                        field.span().clone(),
+                    ));
+                }
+                provider = field.value.as_ref()
+            }
+            "retry" => {
+                if field.template_args.is_some() {
+                    ctx.push_error(DatamodelError::new_validation_error(
+                        "Did you mean `retry` instead of `retry<...>`?",
+                        field.span().clone(),
+                    ));
+                }
+            }
+            "options" => {
+                if field.template_args.is_some() {
+                    ctx.push_error(DatamodelError::new_validation_error(
+                        "Did you mean `options` instead of `options<...>`?",
+                        field.span().clone(),
+                    ));
+                }
+
+                match field.value.as_ref() {
+                    Some(ast::Expression::Map(map, span)) => {
+                        map.iter().for_each(|(key, value)| {
+                            if let Some(key) = coerce::string(key, &mut ctx.diagnostics) {
+                                options.insert(key.to_string(), value.clone());
+                            } else {
+                                ctx.push_error(DatamodelError::new_validation_error(
+                                    "Expected a string key.",
+                                    span.clone(),
+                                ));
+                            }
+                        });
+                    }
+                    Some(_) => {
+                        ctx.push_error(DatamodelError::new_validation_error(
+                            "Expected a map.",
+                            field.span().clone(),
+                        ));
+                    }
+                    _ => {}
+                };
+            }
+            config => ctx.push_error(DatamodelError::new_validation_error(
+                &format!("Unknown field `{}` in client", config),
+                field.span().clone(),
+            )),
+        });
+
+    match (provider, options) {
+        (Some(provider), options) => {
+            match (coerce::string(provider, &mut ctx.diagnostics), options) {
+                (Some(provider), options) => {
+                    ctx.types.client_properties.insert(
+                        idx,
+                        ClientProperties {
+                            provider: provider.to_string(),
+                            options,
+                        },
+                    );
+                }
+                _ => {
+                    // Errors are handled by coerce.
+                }
+            }
+        }
+        (None, _) => ctx.push_error(DatamodelError::new_validation_error(
+            "Missing `provider` field in client. e.g. `provider openai`",
+            client.span().clone(),
+        )),
+    }
 }
 
 fn visit_variant<'db>(idx: VariantConfigId, variant: &'db ast::Variant, ctx: &mut Context<'db>) {

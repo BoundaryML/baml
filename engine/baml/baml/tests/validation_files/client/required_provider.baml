@@ -4,7 +4,9 @@ client<llm> MyClient {
   }
 }
 
-// error: The required property "provider" on "MyClient" is missing.
+
+
+// error: Error validating: Missing `provider` field in client. e.g. `provider openai`
 //   -->  /Users/aaronvillalpando/Projects/gloo-lang/engine/baml/baml/tests/validation_files/client/required_provider.baml:1
 //    | 
 //    | 
