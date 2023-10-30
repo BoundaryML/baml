@@ -9,7 +9,7 @@ use internal_baml_schema_ast::ast::{
     VariantConfigId, VariantSerializerId, WithName, WithSpan,
 };
 
-use rustc_hash::FxHashMap as HashMap;
+use std::collections::HashMap;
 
 mod to_string_attributes;
 mod types;
@@ -135,7 +135,7 @@ fn visit_function<'db>(_function: &'db ast::Function, _ctx: &mut Context<'db>) {
 fn visit_client<'db>(idx: ClientId, client: &'db ast::Client, ctx: &mut Context<'db>) {
     //
     let mut provider = None;
-    let mut options: HashMap<String, Expression> = HashMap::default();
+    let mut options: HashMap<String, Expression> = HashMap::new();
     client
         .iter_fields()
         .for_each(|(_idx, field)| match field.name() {

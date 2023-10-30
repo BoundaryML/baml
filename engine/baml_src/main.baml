@@ -52,9 +52,12 @@ enum FAAAAA {
 // This is preferred
 client<llm> MyClient {
   provider openai
-  model gpt-35-turbo
-  my_custom_var "some string with spaces"
- 
+  options {
+    model gpt-35-turbo
+    my_custom_var "some string with spaces"
+    temperature 0.3
+    api_key env.OPENAI_API_KEY
+  }
 }
 
 //switch<client<llm>> MyClient {
