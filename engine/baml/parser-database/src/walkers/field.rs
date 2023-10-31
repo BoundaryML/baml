@@ -119,6 +119,10 @@ impl<'db> WithStaticRenames for FieldWalker<'db> {
 
     /// The parsed attributes.
     fn attributes(&self) -> Option<&ToStringAttributes> {
-        Some(&self.db.types.class_attributes[&self.id.0].field_serilizers[&self.id.1])
+        self.db
+            .types
+            .class_attributes
+            .get(&self.id.0)
+            .and_then(|f| f.field_serilizers.get(&self.id.1))
     }
 }

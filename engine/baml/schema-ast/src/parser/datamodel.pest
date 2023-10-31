@@ -259,4 +259,4 @@ template_args = { empty_template_args | ("<" ~ expression ~ ("," ~ expression)* 
 CLIENT_KEYWORD = { "client" }
 GENERATOR_KEYWORD = { "generator" }
 VARIANT_KEYWORD = { "impl" }
-SERIALIZER_KEYWORD = { "serializer" }
+SERIALIZER_KEYWORD = { "override" }

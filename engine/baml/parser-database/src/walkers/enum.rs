@@ -81,7 +81,11 @@ impl<'db> WithStaticRenames for EnumWalker<'db> {
     }
 
     fn attributes(&self) -> Option<&ToStringAttributes> {
-        self.db.types.enum_attributes[&self.id].serilizer.as_ref()
+        self.db
+            .types
+            .enum_attributes
+            .get(&self.id)
+            .and_then(|f| f.serilizer.as_ref())
     }
 }
 
@@ -154,6 +158,10 @@ impl<'db> WithStaticRenames for EnumValueWalker<'db> {
     }
 
     fn attributes(&self) -> Option<&ToStringAttributes> {
-        Some(&self.db.types.enum_attributes[&self.id.0].value_serilizers[&self.id.1])
+        self.db
+            .types
+            .enum_attributes
+            .get(&self.id.0)
+            .and_then(|f| f.value_serilizers.get(&self.id.1))
     }
 }

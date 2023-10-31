@@ -121,7 +121,11 @@ impl<'db> WithStaticRenames for ClassWalker<'db> {
     }
 
     fn attributes(&self) -> Option<&ToStringAttributes> {
-        self.db.types.class_attributes[&self.id].serilizer.as_ref()
+        self.db
+            .types
+            .class_attributes
+            .get(&self.id)
+            .and_then(|f| f.serilizer.as_ref())
     }
 }
 
