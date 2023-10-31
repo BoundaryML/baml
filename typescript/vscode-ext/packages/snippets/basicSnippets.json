@@ -15,9 +15,9 @@
     "body": ["@alias($0)"],
     "description": "Snippet for @alias"
   },
-  "@describe": {
+  "@description (Baml)": {
     "prefix": "@description",
-    "body": ["@description($0)"],
+    "body": ["@description(#\"\n\t$0\n\"#)"],
     "description": "Snippet for @description"
   },
   "enum": {

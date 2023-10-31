@@ -24,11 +24,8 @@ export function cliBuild(cliPath: string, workspacePath: string | null, onError?
         console.info(stderr);
       }
 
-
       if (error) {
         console.error(`Error running the build script: ${JSON.stringify(error, null, 2)}`);
-
-
         onError?.(`Baml build error`)
         return;
       }

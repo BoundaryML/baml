@@ -7,6 +7,7 @@ use crate::{
 
 use internal_baml_schema_ast::ast::{ConfigBlockProperty, WithIdentifier};
 
+use log::info;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use validate_reserved_names::*;
 
@@ -115,7 +116,6 @@ pub(super) fn resolve_names(ctx: &mut Context<'_>) {
 
     let _ = std::mem::replace(ctx.names, names);
 }
-
 fn insert_name(
     top_id: TopId,
     top: &ast::Top,
@@ -123,8 +123,27 @@ fn insert_name(
     ctx: &mut Context<'_>,
 ) {
     let name = ctx.interner.intern(top.name());
+
     if let Some(existing) = namespace.insert(name, top_id) {
-        ctx.push_error(duplicate_top_error(&ctx.ast[existing], top));
+        if let (Some(existing_variant), Some(current_variant)) =
+            (ctx.ast[existing].as_variant(), top.as_variant())
+        {
+            let existing_function_name = existing_variant.function_name().name();
+            let current_function_name = current_variant.function_name().name();
+
+            let existing_type = ctx.ast[existing].get_type();
+            let current_type = top.get_type();
+
+            if existing_type == current_type && existing_function_name == current_function_name {
+                ctx.push_error(duplicate_top_error(&ctx.ast[existing], top));
+                return;
+            }
+        }
+
+        let current_type = top.get_type();
+        if current_type != "impl<llm>" && current_type != "impl<?>" {
+            ctx.push_error(duplicate_top_error(&ctx.ast[existing], top));
+        }
     }
 }
 

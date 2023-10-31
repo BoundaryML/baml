@@ -35,6 +35,10 @@ export function gatherFiles(dir: string, fileList: string[] = []): string[] {
     if (fileStat.isDirectory()) {
       gatherFiles(filePath, fileList);
     } else {
+      // check if it has .baml extension
+      if (!filePath.endsWith('.baml')) {
+        return;
+      }
       fileList.push(filePath);
     }
   });
