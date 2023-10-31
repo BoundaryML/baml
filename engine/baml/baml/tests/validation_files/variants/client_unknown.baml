@@ -4,16 +4,18 @@ function Foo {
 }
 
 impl<llm, Foo> FooImpl {
-  prompt "hello world"
   client MadeUpClient
+  prompt #"
+  hello world {#input}
+  {#print_type(output)}
+  "#
 }
 
+
+
 // error: Error validating: Unknown client `MadeUpClient`
-//   -->  /Users/vbv/repos/gloo-lang/engine/baml/baml/tests/validation_files/variants/client_unknown.baml:6
+//   -->  /Users/vbv/repos/gloo-lang/engine/baml/baml/tests/validation_files/variants/client_unknown.baml:7
 //    | 
-//  5 | 
 //  6 | impl<llm, Foo> FooImpl {
-//  7 |   prompt "hello world"
-//  8 |   client MadeUpClient
-//  9 | }
+//  7 |   client MadeUpClient
 //    | 

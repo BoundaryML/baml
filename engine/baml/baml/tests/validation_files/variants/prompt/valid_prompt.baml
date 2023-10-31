@@ -17,7 +17,7 @@ class InputType2 {
 }
 
 class OutputType {
-  x string
+  x Sentiment
   y bool
 }
 
@@ -50,3 +50,5 @@ impl<llm, Foo> FooImpl{
     {#print_type(output)}
   "#
 }
+
+
