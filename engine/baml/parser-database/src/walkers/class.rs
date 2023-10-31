@@ -1,8 +1,15 @@
+use std::collections::HashMap;
+
 use either::Either;
+use internal_baml_diagnostics::DatamodelError;
+use internal_baml_prompt_parser::ast::WithSpan;
+use serde_json::json;
 
 use crate::{
     ast::{self, WithName},
-    types::ClassAttributes,
+    template::{serialize_with_template, WithSerializeableContent, WithStaticRenames},
+    types::{StaticStringAttributes, ToStringAttributes},
+    WithSerialize,
 };
 
 use super::{field::FieldWalker, EnumWalker};
@@ -11,11 +18,6 @@ use super::{field::FieldWalker, EnumWalker};
 pub type ClassWalker<'db> = super::Walker<'db, ast::ClassId>;
 
 impl<'db> ClassWalker<'db> {
-    /// The name of the class.
-    pub fn name(self) -> &'db str {
-        self.ast_class().name()
-    }
-
     /// The ID of the class in the db
     pub fn class_id(self) -> ast::ClassId {
         self.id
@@ -24,12 +26,6 @@ impl<'db> ClassWalker<'db> {
     /// The AST node.
     pub fn ast_class(self) -> &'db ast::Class {
         &self.db.ast[self.id]
-    }
-
-    /// The parsed attributes.
-    #[track_caller]
-    pub fn attributes(self) -> &'db ClassAttributes {
-        &self.db.types.class_attributes[&self.id]
     }
 
     /// Iterate all the scalar fields in a given class in the order they were defined.
@@ -86,5 +82,72 @@ impl<'db> ClassWalker<'db> {
                 Some(Either::Right(_)) => vec![],
                 None => vec![],
             })
+    }
+}
+
+impl<'db> WithName for ClassWalker<'db> {
+    fn name(&self) -> &'db str {
+        self.ast_class().name()
+    }
+}
+
+impl<'db> WithSerializeableContent for ClassWalker<'db> {
+    fn serialize_data(&self) -> serde_json::Value {
+        json!({
+            "type": "class",
+            "name": self.alias(),
+            "meta": self.meta(),
+            "fields": self.static_fields().map(|f| f.serialize_data()).collect::<Vec<_>>(),
+        })
+    }
+}
+
+impl<'db> WithStaticRenames for ClassWalker<'db> {
+    fn alias(&self) -> String {
+        match self.alias_raw() {
+            Some(id) => self.db[*id].to_string(),
+            None => self.name().to_string(),
+        }
+    }
+
+    fn meta(&self) -> HashMap<String, String> {
+        match self.meta_raw() {
+            Some(map) => map
+                .iter()
+                .map(|(k, v)| (self.db[*k].to_string(), self.db[*v].to_string()))
+                .collect::<HashMap<_, _>>(),
+            None => HashMap::new(),
+        }
+    }
+
+    fn attributes(&self) -> Option<&ToStringAttributes> {
+        self.db.types.class_attributes[&self.id].serilizer.as_ref()
+    }
+}
+
+impl<'db> WithSerialize for ClassWalker<'db> {
+    fn serialize(
+        &self,
+        block: &internal_baml_prompt_parser::ast::PrinterBlock,
+    ) -> Result<String, internal_baml_diagnostics::DatamodelError> {
+        if let Some(template) = self.db.get_class_template(&block.printer.0) {
+            // Eventually we should validate what parameters are in meta.
+            match serialize_with_template("print_type", template, self.serialize_data()) {
+                Ok(val) => Ok(val),
+                Err(e) => Err(DatamodelError::new_validation_error(
+                    &format!("Error serializing class: {}\n{}", self.name(), e),
+                    block.span().clone(),
+                )),
+            }
+        } else {
+            let span = match block.printer.1 {
+                Some(ref span) => span,
+                None => block.span(),
+            };
+            Err(DatamodelError::new_validation_error(
+                &format!("No such serializer template: {}", block.printer.0),
+                span.clone(),
+            ))
+        }
     }
 }

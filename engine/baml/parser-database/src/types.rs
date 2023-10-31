@@ -5,10 +5,10 @@ use crate::coerce;
 use crate::{context::Context, DatamodelError};
 
 use internal_baml_diagnostics::Span;
-use internal_baml_prompt_parser::ast::Variable;
+use internal_baml_prompt_parser::ast::{PrinterBlock, Variable};
 use internal_baml_schema_ast::ast::{
     self, ClassId, ClientId, EnumId, EnumValueId, Expression, FieldId, SerializerFieldId, TopId,
-    VariantConfigId, VariantSerializerId, WithName, WithSpan,
+    VariantConfigId, VariantSerializerId, WithIdentifier, WithName, WithSpan,
 };
 
 pub(crate) mod post_prompt;
@@ -43,15 +43,15 @@ pub(super) fn resolve_types(ctx: &mut Context<'_>) {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 /// Variables used inside of raw strings.
 pub enum PromptVariable {
     /// Input variable.
     Input(Variable),
     /// Output variable.
-    Enum(Variable),
+    Enum(PrinterBlock),
     /// Output variable.
-    Type(Variable),
+    Type(PrinterBlock),
 }
 
 impl Hash for PromptVariable {
@@ -61,42 +61,44 @@ impl Hash for PromptVariable {
                 "input".hash(state);
                 var.text.hash(state);
             }
-            PromptVariable::Enum(var) => {
+            PromptVariable::Enum(blk) => {
                 "enum".hash(state);
-                var.text.hash(state);
+                blk.printer.0.hash(state);
+                blk.target.text.hash(state);
             }
-            PromptVariable::Type(var) => {
+            PromptVariable::Type(blk) => {
                 "type".hash(state);
-                var.text.hash(state);
+                blk.printer.0.hash(state);
+                blk.target.text.hash(state);
             }
         }
     }
 }
 
 impl<'a> PromptVariable {
-    fn text(&'a self) -> &'a String {
-        match self {
-            PromptVariable::Input(var) => &var.text,
-            PromptVariable::Enum(var) => &var.text,
-            PromptVariable::Type(var) => &var.text,
-        }
-    }
-
     /// Unique Key
     pub fn key(&self) -> String {
-        format!("{{//BAML_CLIENT_REPLACE_ME_MAGIC_{}//}}", self.text())
+        match self {
+            PromptVariable::Input(var) => var.key(),
+            PromptVariable::Enum(blk) => blk.key(),
+            PromptVariable::Type(blk) => blk.key(),
+        }
     }
 }
 
 #[derive(Debug, Clone)]
+pub struct StringValue {
+    pub value: String,
+    pub span: Span,
+    pub key_span: Span,
+}
+
+#[derive(Debug, Clone)]
 pub struct VariantProperties {
-    pub client: String,
-    pub prompt: (String, Span),
+    pub client: StringValue,
+    pub prompt: StringValue,
     pub prompt_replacements: Vec<PromptVariable>,
-    pub replacers: (
-        HashMap<PromptVariable, String>,
-        HashMap<PromptVariable, TopId>,
-    ),
+    pub replacers: (HashMap<Variable, String>, HashMap<PrinterBlock, String>),
 }
 
 #[derive(Debug, Clone)]
@@ -291,7 +293,10 @@ fn visit_variant<'db>(idx: VariantConfigId, variant: &'db ast::Variant, ctx: &mu
                         field.span().clone(),
                     ));
                 }
-                client = field.value.as_ref()
+                match field.value.as_ref() {
+                    Some(item) => client = Some((item, field.identifier().span().clone())),
+                    _ => {}
+                }
             }
             "prompt" => {
                 if field.template_args.is_some() {
@@ -300,7 +305,10 @@ fn visit_variant<'db>(idx: VariantConfigId, variant: &'db ast::Variant, ctx: &mu
                         field.span().clone(),
                     ));
                 }
-                prompt = field.value.as_ref()
+                match field.value.as_ref() {
+                    Some(item) => prompt = Some((item, field.identifier().span().clone())),
+                    _ => {}
+                }
             }
             config => ctx.push_error(DatamodelError::new_validation_error(
                 &format!("Unknown field `{}` in impl<llm>", config),
@@ -309,18 +317,26 @@ fn visit_variant<'db>(idx: VariantConfigId, variant: &'db ast::Variant, ctx: &mu
         });
 
     match (client, prompt) {
-        (Some(client), Some(prompt)) => match (
-            coerce::string(client, &mut ctx.diagnostics),
+        (Some((client, client_key_span)), Some((prompt, prompt_key_span))) => match (
+            coerce::string_with_span(client, &mut ctx.diagnostics),
             coerce::string_with_span(prompt, &mut ctx.diagnostics),
         ) {
-            (Some(client), Some((prompt_string, prompt_span))) => {
+            (Some((client, client_span)), Some((prompt_string, prompt_span))) => {
                 match validate_prompt(ctx, (prompt_string, prompt_span.clone()), &prompt_span) {
                     Some((prompt, replacer)) => {
                         ctx.types.variant_properties.insert(
                             idx,
                             VariantProperties {
-                                client: client.to_string(),
-                                prompt: (prompt, prompt_span.clone()),
+                                client: StringValue {
+                                    value: client.to_string(),
+                                    span: client_span.clone(),
+                                    key_span: client_key_span,
+                                },
+                                prompt: StringValue {
+                                    value: prompt.to_string(),
+                                    span: prompt_span.clone(),
+                                    key_span: prompt_key_span,
+                                },
                                 prompt_replacements: replacer,
                                 replacers: Default::default(),
                             },

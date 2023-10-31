@@ -874,12 +874,15 @@ dependencies = [
  "colored",
  "either",
  "enumflags2",
+ "handlebars",
  "indexmap 1.9.3",
  "internal-baml-diagnostics",
  "internal-baml-prompt-parser",
  "internal-baml-schema-ast",
  "log",
  "rustc-hash",
+ "serde",
+ "serde_json",
  "textwrap 0.16.0",
 ]
 

@@ -33,12 +33,14 @@ mod coerce_expression;
 mod context;
 mod interner;
 mod names;
+mod template;
 mod types;
 
 use std::collections::HashMap;
 
 pub use coerce_expression::{coerce, coerce_array, coerce_opt};
 use either::Either;
+use internal_baml_prompt_parser::ast::WithSpan as WithPromptSpan;
 pub use internal_baml_schema_ast::ast;
 use internal_baml_schema_ast::ast::{SchemaAst, WithName, WithSpan};
 pub use types::{PromptVariable, StaticType};
@@ -46,6 +48,7 @@ pub use types::{PromptVariable, StaticType};
 use self::{context::Context, interner::StringId, types::Types};
 use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 use names::Names;
+pub use template::WithSerialize;
 
 /// ParserDatabase is a container for a Schema AST, together with information
 /// gathered during schema validation. Each validation step enriches the
@@ -135,28 +138,25 @@ impl ParserDatabase {
                         // Ensure the prompt has an input path that works.
                         match types::post_prompt::process_input(self, fn_walker, variable) {
                             Ok(replacer) => {
-                                input_replacers.insert(f.clone(), replacer);
+                                input_replacers.insert(variable.to_owned(), replacer);
                             }
                             Err(e) => diag.push_error(e),
                         }
                     }
-                    PromptVariable::Enum(variable) => {
+                    PromptVariable::Enum(blk) => {
                         // Ensure the prompt has an enum path that works.
-                        match types::post_prompt::process_print_enum(self, fn_walker, variable) {
-                            Ok(replacer) => {
-                                output_replacers.insert(f.clone(), ast::TopId::Enum(replacer));
+                        match types::post_prompt::process_print_enum(self, fn_walker, &blk) {
+                            Ok(result) => {
+                                output_replacers.insert(blk.to_owned(), result);
                             }
                             Err(e) => diag.push_error(e),
                         }
                     }
-                    PromptVariable::Type(variable) => {
+                    PromptVariable::Type(blk) => {
                         // Ensure the prompt has an enum path that works.
-                        match types::post_prompt::process_print_type(self, fn_walker, variable) {
-                            Ok(Either::Left(l)) => {
-                                output_replacers.insert(f.clone(), ast::TopId::Function(l));
-                            }
-                            Ok(Either::Right(r)) => {
-                                output_replacers.insert(f.clone(), ast::TopId::Class(r));
+                        match types::post_prompt::process_print_type(self, fn_walker, &blk) {
+                            Ok(result) => {
+                                output_replacers.insert(blk.to_owned(), result);
                             }
                             Err(e) => diag.push_error(e),
                         }
@@ -170,6 +170,7 @@ impl ParserDatabase {
                 ));
             }
 
+            // Only in this case update the prompt.
             vars.insert(variant.id, (input_replacers, output_replacers));
         }
 

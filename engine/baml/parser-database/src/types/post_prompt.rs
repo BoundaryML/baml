@@ -1,9 +1,9 @@
 use either::Either;
 use internal_baml_diagnostics::DatamodelError;
-use internal_baml_prompt_parser::ast::Variable;
+use internal_baml_prompt_parser::ast::{PrinterBlock, Variable};
 use internal_baml_schema_ast::ast::{self, WithName};
 
-use crate::{walkers::FunctionWalker, ParserDatabase};
+use crate::{walkers::FunctionWalker, ParserDatabase, WithSerialize};
 
 pub(crate) fn process_input(
     db: &ParserDatabase,
@@ -59,8 +59,9 @@ pub(crate) fn process_input(
 pub(crate) fn process_print_enum(
     db: &ParserDatabase,
     walker: FunctionWalker<'_>,
-    variable: &Variable,
-) -> Result<ast::EnumId, DatamodelError> {
+    blk: &PrinterBlock,
+) -> Result<String, DatamodelError> {
+    let variable = &blk.target;
     if variable.text == "output" {
         return Err(DatamodelError::new_validation_error(
             "output can only be used with print_type()",
@@ -78,7 +79,7 @@ pub(crate) fn process_print_enum(
                 })
                 .any(|f| f)
             {
-                true => Ok(enum_walker.id),
+                true => enum_walker.serialize(blk),
                 false => Err(DatamodelError::new_validation_error(
                     &format!(
                         "Enum `{}` is not used in in the output of function `{}`.{}",
@@ -116,10 +117,11 @@ pub(crate) fn process_print_enum(
 pub(crate) fn process_print_type(
     db: &ParserDatabase,
     walker: FunctionWalker<'_>,
-    variable: &Variable,
-) -> Result<Either<ast::FunctionId, ast::ClassId>, DatamodelError> {
+    blk: &PrinterBlock,
+) -> Result<String, DatamodelError> {
+    let variable = &blk.target;
     if variable.text == "output" {
-        return Ok(Either::Left(walker.id));
+        return walker.serialize(blk);
     }
 
     match db.find_type_by_str(&variable.text) {
@@ -129,7 +131,7 @@ pub(crate) fn process_print_type(
                 f.required_classes()
                     .any(|idn| idn.name() == cls_walker.name())
             }) {
-                true => Ok(Either::Right(cls_walker.id)),
+                true => cls_walker.serialize(blk),
                 false => Err(DatamodelError::new_validation_error(
                     &format!(
                         "Class `{}` is not used in in the output of function `{}`",

@@ -1,4 +1,5 @@
 use internal_baml_parser_database::ParserDatabase;
+use internal_baml_schema_ast::ast::WithName;
 use log::info;
 use serde_json::json;
 

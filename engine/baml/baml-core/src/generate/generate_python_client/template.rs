@@ -2,9 +2,6 @@ use handlebars::handlebars_helper;
 
 use super::file::File;
 
-handlebars_helper!(BLOCK_OPEN: |*_args| "{");
-handlebars_helper!(BLOCK_CLOSE: |*_args| "}");
-
 #[derive(Debug)]
 pub(super) enum HSTemplate {
     Function,
@@ -17,6 +14,8 @@ pub(super) enum HSTemplate {
     Variant,
 }
 
+handlebars_helper!(BLOCK_OPEN: |*_args| "{");
+handlebars_helper!(BLOCK_CLOSE: |*_args| "}");
 fn init_hs() -> handlebars::Handlebars<'static> {
     let mut reg = handlebars::Handlebars::new();
     reg.register_helper("BLOCK_OPEN", Box::new(BLOCK_OPEN));
@@ -54,7 +53,6 @@ fn use_partial(
             register_partial_file!(reg, "functions", "arg_list");
             register_partial_file!(reg, "functions", "arg_values");
             register_partial_file!(reg, "functions", "func_def");
-            register_partial_file!(reg, "prompt", "print_enum");
             f.add_import("..._impl.deserializer", "Deserializer");
 
             register_partial_file!(reg, "functions", "variant");

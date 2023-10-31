@@ -1,7 +1,14 @@
 use either::Either;
+use internal_baml_diagnostics::DatamodelError;
+use internal_baml_prompt_parser::ast::WithSpan;
 use internal_baml_schema_ast::ast::{FuncArguementId, Identifier};
+use serde_json::json;
 
-use crate::ast::{self, WithName};
+use crate::{
+    ast::{self, WithName},
+    template::{serialize_with_template, WithSerializeableContent},
+    WithSerialize,
+};
 
 use super::{ClassWalker, EnumWalker, VariantWalker, Walker};
 
@@ -151,5 +158,54 @@ impl<'db> ArgWalker<'db> {
                 None => vec![],
             })
             .into_iter()
+    }
+}
+
+impl<'db> WithSerializeableContent for ArgWalker<'db> {
+    fn serialize_data(&self) -> serde_json::Value {
+        json!({
+            "type": "inline",
+            "value": (self.db, &self.ast_arg().1.field_type).serialize_data()
+        })
+    }
+}
+
+impl<'db> WithSerializeableContent for FunctionWalker<'db> {
+    fn serialize_data(&self) -> serde_json::Value {
+        // TODO: We should handle the case of multiple output args
+        json!({
+            "type": "output",
+            "type_meta": self.walk_output_args()
+            .map(|f| f.serialize_data())
+            .next()
+            .unwrap_or(serde_json::Value::Null)
+        })
+    }
+}
+
+impl<'db> WithSerialize for FunctionWalker<'db> {
+    fn serialize(
+        &self,
+        block: &internal_baml_prompt_parser::ast::PrinterBlock,
+    ) -> Result<String, internal_baml_diagnostics::DatamodelError> {
+        if let Some(template) = self.db.get_class_template(&block.printer.0) {
+            // Eventually we should validate what parameters are in meta.
+            match serialize_with_template("print_type", template, self.serialize_data()) {
+                Ok(val) => Ok(val),
+                Err(e) => Err(DatamodelError::new_validation_error(
+                    &format!("Error serializing output for {}\n{}", self.name(), e),
+                    block.span().clone(),
+                )),
+            }
+        } else {
+            let span = match block.printer.1 {
+                Some(ref span) => span,
+                None => block.span(),
+            };
+            Err(DatamodelError::new_validation_error(
+                &format!("No such serializer template: {}", block.printer.0),
+                span.clone(),
+            ))
+        }
     }
 }

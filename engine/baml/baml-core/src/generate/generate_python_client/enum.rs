@@ -1,4 +1,5 @@
 use internal_baml_parser_database::walkers::EnumWalker;
+use internal_baml_schema_ast::ast::WithName;
 use serde_json::json;
 
 use crate::generate::generate_python_client::file::clean_file_name;
@@ -6,27 +7,14 @@ use crate::generate::generate_python_client::file::clean_file_name;
 use super::{
     file::{File, FileCollector},
     template::render_template,
-    traits::{JsonHelper, SerializerHelper, WithWritePythonString},
+    traits::{JsonHelper, WithWritePythonString},
 };
-
-impl SerializerHelper for EnumWalker<'_> {
-    fn serialize(&self, f: &mut File) -> serde_json::Value {
-        json!({
-            "type": "enum",
-            "name": self.alias(),
-            "values": self.values().map(|v| json!({
-                "name": v.alias(),
-                // Add other meta attributes.
-            })).collect::<Vec<_>>(),
-        })
-    }
-}
 
 impl JsonHelper for EnumWalker<'_> {
     fn json(&self, _f: &mut File) -> serde_json::Value {
         json!({
             "name": self.name(),
-            "values": self.values().map(|v| v.name()).collect::<Vec<_>>(),
+            "values": self.values().map(|v| v.name().to_string()).collect::<Vec<_>>(),
         })
     }
 }

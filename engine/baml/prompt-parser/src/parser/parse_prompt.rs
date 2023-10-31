@@ -151,17 +151,11 @@ fn handle_variable(
         })
         .collect::<Vec<_>>();
 
-    let variable = Variable {
+    top_level_definitions.push(Top::CodeBlock(CodeBlock::Variable(Variable {
         path: type_path,
-        text: raw_text.clone(),
-        span: span.clone(),
-    };
-    top_level_definitions.push(Top::CodeBlock(CodeBlock {
-        code_type: CodeType::Variable,
-        block: raw_text,
-        arguments: vec![variable],
+        text: raw_text,
         span,
-    }));
+    })));
 }
 
 fn handle_print_block(
@@ -171,30 +165,47 @@ fn handle_print_block(
 ) {
     assert_correct_parser!(current, Rule::print_block);
 
-    let code = &current.as_str().to_string();
     let block_span = &diagnostics.span(current.as_span().clone());
-    let mut printer_type: Option<CodeType> = None;
-    let mut argument: Option<String> = None;
+    let mut printer_type = None;
+    let mut argument = vec![];
+    let mut template_span = None;
+    let mut template_args = vec![];
 
     for current in current.clone().into_inner() {
         match current.as_rule() {
             Rule::identifier => match current.as_str() {
                 "_enum" => {
-                    printer_type = Some(CodeType::PrintEnum);
+                    printer_type = Some(true);
                 }
                 "_type" => {
-                    printer_type = Some(CodeType::PrintType);
+                    printer_type = Some(false);
                 }
-                _ => {}
+                other => {
+                    diagnostics.push_error(DatamodelError::new_parser_error(
+                        format!("unknown printer function name `print{}`. Did you mean print_type or print_enum?", other),
+                        diagnostics.span(current.clone().as_span()),
+                    ));
+                }
             },
             Rule::template_args => {
-                // TODO: actually read this.
+                template_span = Some(diagnostics.span(current.as_span().clone()));
+                for current in current.into_inner() {
+                    match current.as_rule() {
+                        Rule::identifier => {
+                            template_args.push(current.as_str().to_string());
+                        }
+                        _ => unreachable_rule!(current, Rule::template_args),
+                    }
+                }
             }
             Rule::variable => {
                 for current in current.into_inner() {
                     match current.as_rule() {
                         Rule::identifier => {
-                            argument = Some(current.as_str().to_string());
+                            argument.push((
+                                current.as_str().to_string(),
+                                diagnostics.span(current.as_span().clone()),
+                            ));
                         }
                         _ => diagnostics.push_error(DatamodelError::new_parser_error(
                             "missing argument".to_string(),
@@ -207,24 +218,78 @@ fn handle_print_block(
         }
     }
 
-    if printer_type.is_some() && argument.is_some() {
-        let variable = Variable {
-            path: vec![argument.clone().unwrap()],
-            text: argument.clone().unwrap(),
-            span: block_span.clone(),
-        };
-        let new_code_block = CodeBlock {
-            code_type: printer_type.unwrap(),
-            block: code.to_string(),
-            arguments: vec![variable],
-            span: block_span.clone(),
-        };
-        top_level_definitions.push(Top::CodeBlock(new_code_block));
-    } else {
-        diagnostics.push_error(DatamodelError::new_parser_error(
-            "unknown printer function name. Did you mean print_type or print_enum?".to_string(),
-            diagnostics.span(current.clone().as_span()),
-        ));
+    let mut printer = "json";
+    if let Some(template_span) = &template_span {
+        match template_args.len() {
+            0 => {
+                printer = "json";
+            }
+            1 => {
+                printer = template_args[0].as_str();
+            }
+            _ => {
+                diagnostics.push_error(DatamodelError::new_validation_error(
+                    "May only use 0 or 1 template args.",
+                    template_span.clone(),
+                ));
+                return;
+            }
+        }
+    }
+
+    let argument = match argument.len() {
+        1 => Some(&argument[0]),
+        _ => None,
+    };
+
+    let block = match (printer_type, argument) {
+        (Some(true), Some((argument, arg_span))) => Some(CodeBlock::PrintEnum(PrinterBlock {
+            printer: (printer.into(), template_span),
+            target: Variable {
+                path: vec![argument.clone()],
+                text: argument.clone(),
+                span: arg_span.clone(),
+            },
+        })),
+        (Some(false), Some((argument, arg_span))) => Some(CodeBlock::PrintType(PrinterBlock {
+            printer: (printer.into(), template_span),
+            target: Variable {
+                path: vec![argument.clone()],
+                text: argument.clone(),
+                span: arg_span.clone(),
+            },
+        })),
+        (None, Some(arg)) => {
+            diagnostics.push_error(DatamodelError::new_parser_error(
+                format!("Did you mean print_type({0}) or print_enum({0})?", arg.0),
+                diagnostics.span(current.as_span().clone()),
+            ));
+            None
+        }
+        (Some(printer_type), None) => {
+            diagnostics.push_error(DatamodelError::new_parser_error(
+                format!(
+                    "Missing argument. Did you mean print_{}(SomeType)?",
+                    match printer_type {
+                        true => "enum",
+                        false => "type",
+                    }
+                ),
+                diagnostics.span(current.as_span().clone()),
+            ));
+            None
+        }
+        (None, None) => {
+            diagnostics.push_error(DatamodelError::new_parser_error(
+                "Missing argument. Did you mean print_type(SomeType)?".into(),
+                diagnostics.span(current.as_span().clone()),
+            ));
+            None
+        }
+    };
+
+    if let Some(block) = block {
+        top_level_definitions.push(Top::CodeBlock(block));
     }
 }
 

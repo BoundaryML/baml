@@ -1,3 +1,5 @@
+use std::hash::Hash;
+
 use crate::ast::{Span, WithSpan};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -17,6 +19,19 @@ pub struct Variable {
     /// [input, something, bar]
     pub path: Vec<String>,
     pub span: Span,
+}
+
+impl Variable {
+    /// Unique Key
+    pub fn key(&self) -> String {
+        format!("{{//BAML_CLIENT_REPLACE_ME_MAGIC_{}//}}", self.text)
+    }
+}
+
+impl Hash for Variable {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.text.hash(state);
+    }
 }
 
 impl WithSpan for Variable {

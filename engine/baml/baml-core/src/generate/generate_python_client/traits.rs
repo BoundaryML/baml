@@ -13,7 +13,3 @@ pub(super) trait WithToCode {
 pub(super) trait JsonHelper {
     fn json(&self, f: &mut File) -> serde_json::Value;
 }
-
-pub(super) trait SerializerHelper {
-    fn serialize(&self, f: &mut File) -> serde_json::Value;
-}

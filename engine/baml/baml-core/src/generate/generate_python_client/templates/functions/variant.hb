@@ -9,12 +9,10 @@ __prompt_template = """\
 
 __output_replacer = {
     {{#each output_replacers}}
-    "{{key}}": {{#if (eq value.type "enum")}} """\
-{{> print_enum name=value.name values=value.values}}\
-""",
-    {{else}}
-    {{value.type}},
-    {{/if}}
+    "{{key}}": """\
+{{{value}}}\
+"""
+{{#unless @last}},{{/unless}}
     {{/each}}
 }
 

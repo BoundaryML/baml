@@ -2,7 +2,7 @@ use internal_baml_schema_ast::ast::ArguementId;
 
 use crate::{
     ast, ast::WithName, interner::StringInterner, names::Names, types::Types, DatamodelError,
-    Diagnostics, ParserDatabase, StringId,
+    Diagnostics, StringId,
 };
 
 use self::attributes::AttributesValidationState;

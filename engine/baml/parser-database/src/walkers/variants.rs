@@ -1,5 +1,6 @@
 use std::borrow::BorrowMut;
 
+use internal_baml_prompt_parser::ast::PrinterBlock;
 use internal_baml_schema_ast::ast::Identifier;
 
 use crate::{
@@ -34,7 +35,7 @@ impl<'db> VariantWalker<'db> {
             .types
             .variant_properties
             .get(&self.id)
-            .and_then(|f| self.db.find_client(&f.client))
+            .and_then(|f| self.db.find_client(&f.client.value))
     }
 
     /// The function node.

@@ -112,18 +112,40 @@ impl crate::ParserDatabase {
         Walker { db: self, id }
     }
 
+    /// Get the template for a given printer.
+    pub fn get_enum_template(&self, name: &str) -> Option<&str> {
+        match name {
+            "json" => Some(include_str!("./templates/print_enum_json.hb")),
+            _ => None,
+        }
+    }
+
+    /// Get the template for a given printer.
+    pub fn get_class_template(&self, name: &str) -> Option<&str> {
+        match name {
+            "json" => Some(include_str!("./templates/print_class_json.hb")),
+            _ => None,
+        }
+    }
+
     /// Get all the types that are valid in the schema. (including primitives)
-    pub fn valid_type_names(&self) -> Vec<&str> {
-        let mut names: Vec<_> = self.walk_classes().map(|c| c.name()).collect();
-        names.extend(self.walk_enums().map(|e| e.name()));
+    pub fn valid_type_names<'db>(&'db self) -> Vec<String> {
+        let mut names: Vec<String> = self.walk_classes().map(|c| c.name().to_string()).collect();
+        names.extend(self.walk_enums().map(|e| e.name().to_string()));
         // Add primitive types
-        names.extend(vec!["string", "int", "float", "bool"]);
+        names.extend(
+            vec!["string", "int", "float", "bool"]
+                .into_iter()
+                .map(String::from),
+        );
         names
     }
 
     /// Get all the types that are valid in the schema. (including primitives)
-    pub fn valid_function_names(&self) -> Vec<&str> {
-        self.walk_functions().map(|c| c.name()).collect()
+    pub fn valid_function_names(&self) -> Vec<String> {
+        self.walk_functions()
+            .map(|c| c.name().to_string())
+            .collect()
     }
 
     /// Get all the types that are valid in the schema. (including primitives)

@@ -1,8 +1,16 @@
-use internal_baml_schema_ast::ast::{IndentationType, NewlineType, WithDocumentation, WithName};
+use std::collections::HashMap;
+
+use internal_baml_diagnostics::{DatamodelError, Span};
+use internal_baml_prompt_parser::ast::{PrinterBlock, WithSpan};
+use internal_baml_schema_ast::ast::{WithDocumentation, WithName};
+use serde_json::json;
 
 use crate::{
     ast,
-    types::{EnumAttributes, StaticStringAttributes, ToStringAttributes},
+    template::{
+        serialize_with_template, WithSerialize, WithSerializeableContent, WithStaticRenames,
+    },
+    types::{StaticStringAttributes, ToStringAttributes},
     walkers::Walker,
 };
 
@@ -36,37 +44,67 @@ impl<'db> EnumWalker<'db> {
             .collect::<Vec<_>>()
             .into_iter()
     }
+}
 
-    /// How fields are indented in the enum.
-    pub fn indentation(self) -> IndentationType {
-        IndentationType::default()
+impl<'db> WithName for EnumWalker<'db> {
+    fn name(&self) -> &str {
+        self.ast_enum().name()
     }
+}
 
-    /// What kind of newlines the enum uses.
-    pub fn newline(self) -> NewlineType {
-        NewlineType::Unix
+impl<'db> WithSerializeableContent for EnumWalker<'db> {
+    fn serialize_data(&self) -> serde_json::Value {
+        json!({
+            "name": self.alias(),
+            "meta": self.meta(),
+            "values": self.values().map(|f| f.serialize_data()).collect::<Vec<_>>(),
+        })
     }
+}
 
-    /// Gets the enum attributes.
-    pub fn alias(self) -> &'db str {
-        match self.attributes() {
-            Some(a) => {
-                if let Some(alias) = a.alias() {
-                    &self.db[*alias]
-                } else {
-                    self.name()
-                }
-            }
-            None => self.name(),
+impl<'db> WithStaticRenames for EnumWalker<'db> {
+    fn alias(&self) -> String {
+        match self.alias_raw() {
+            Some(id) => self.db[*id].to_string(),
+            None => self.name().to_string(),
         }
     }
 
-    /// The parsed attributes.
-    #[track_caller]
-    fn attributes(self) -> Option<&'db StaticStringAttributes> {
-        match &self.db.types.enum_attributes[&self.id].serilizer {
-            Some(ToStringAttributes::Static(refs)) => Some(refs),
-            _ => None,
+    fn meta(&self) -> HashMap<String, String> {
+        match self.meta_raw() {
+            Some(map) => map
+                .iter()
+                .map(|(k, v)| (self.db[*k].to_string(), self.db[*v].to_string()))
+                .collect::<HashMap<_, _>>(),
+            None => HashMap::new(),
+        }
+    }
+
+    fn attributes(&self) -> Option<&ToStringAttributes> {
+        self.db.types.enum_attributes[&self.id].serilizer.as_ref()
+    }
+}
+
+impl<'db> WithSerialize for EnumWalker<'db> {
+    fn serialize(&self, block: &PrinterBlock) -> Result<String, DatamodelError> {
+        if let Some(template) = self.db.get_enum_template(&block.printer.0) {
+            // Eventually we should validate what parameters are in meta.
+            match serialize_with_template("print_enum", template, self.serialize_data()) {
+                Ok(val) => Ok(val),
+                Err(e) => Err(DatamodelError::new_validation_error(
+                    &format!("Error serializing enum: {}\n{}", self.name(), e),
+                    block.span().clone(),
+                )),
+            }
+        } else {
+            let span = match block.printer.1 {
+                Some(ref span) => span,
+                None => block.span(),
+            };
+            Err(DatamodelError::new_validation_error(
+                &format!("No such serializer template: {}", block.printer.0),
+                span.clone(),
+            ))
         }
     }
 }
@@ -80,32 +118,42 @@ impl<'db> EnumValueWalker<'db> {
     pub fn documentation(self) -> Option<&'db str> {
         self.r#enum().ast_enum()[self.id.1].documentation()
     }
+}
 
-    /// The name of the value.
-    pub fn name(self) -> &'db str {
+impl<'db> WithName for EnumValueWalker<'db> {
+    fn name(&self) -> &str {
         &self.r#enum().ast_enum()[self.id.1].name()
     }
+}
 
-    /// Gets the enum attributes.
-    pub fn alias(self) -> &'db str {
-        match self.attributes() {
-            Some(a) => {
-                if let Some(alias) = a.alias() {
-                    &self.db[*alias]
-                } else {
-                    self.name()
-                }
-            }
-            None => self.name(),
+impl<'db> WithSerializeableContent for EnumValueWalker<'db> {
+    fn serialize_data(&self) -> serde_json::Value {
+        json!({
+            "name": self.alias(),
+            "meta": self.meta(),
+        })
+    }
+}
+
+impl<'db> WithStaticRenames for EnumValueWalker<'db> {
+    fn alias(&self) -> String {
+        match self.alias_raw() {
+            Some(id) => self.db[*id].to_string(),
+            None => self.name().to_string(),
         }
     }
 
-    /// The parsed attributes.
-    #[track_caller]
-    fn attributes(self) -> Option<&'db StaticStringAttributes> {
-        match &self.db.types.enum_attributes[&self.id.0].value_serilizers[&self.id.1] {
-            ToStringAttributes::Static(refs) => Some(refs),
-            _ => None,
+    fn meta(&self) -> HashMap<String, String> {
+        match self.meta_raw() {
+            Some(map) => map
+                .iter()
+                .map(|(k, v)| (self.db[*k].to_string(), self.db[*v].to_string()))
+                .collect::<HashMap<_, _>>(),
+            None => HashMap::new(),
         }
+    }
+
+    fn attributes(&self) -> Option<&ToStringAttributes> {
+        Some(&self.db.types.enum_attributes[&self.id.0].value_serilizers[&self.id.1])
     }
 }

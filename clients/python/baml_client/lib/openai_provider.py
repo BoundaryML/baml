@@ -4,7 +4,7 @@ import typing
 from .._impl.provider import LLMProvider, LLMResponse, register_llm_provider
 
 
-@register_llm_provider("openi")
+@register_llm_provider("openai", "azure")
 @typing.final
 class OpenAIProvider(LLMProvider):
     __kwargs: typing.Dict[str, typing.Any]

@@ -6,7 +6,7 @@ mod traits;
 mod variable;
 mod white_space_text;
 
-pub use code_block::{CodeBlock, CodeBlockId, CodeType};
+pub use code_block::{CodeBlock, CodeBlockId, PrinterBlock};
 pub use comment_block::{CommentBlock, CommentBlockId};
 pub use internal_baml_diagnostics::Span;
 pub use prompt_text::{PromptText, PromptTextId};

@@ -1,5 +1,5 @@
 use internal_baml_parser_database::walkers::Walker;
-use internal_baml_schema_ast::ast::ClassId;
+use internal_baml_schema_ast::ast::{ClassId, WithName};
 use serde_json::json;
 
 use crate::generate::generate_python_client::file::clean_file_name;
@@ -7,7 +7,7 @@ use crate::generate::generate_python_client::file::clean_file_name;
 use super::{
     file::{File, FileCollector},
     template::render_template,
-    traits::{JsonHelper, SerializerHelper, WithToCode, WithWritePythonString},
+    traits::{JsonHelper, WithToCode, WithWritePythonString},
 };
 
 impl WithWritePythonString for Walker<'_, ClassId> {
@@ -24,6 +24,15 @@ impl WithWritePythonString for Walker<'_, ClassId> {
         fc.complete_file();
 
         fc.start_py_file("types/classes", self.file_name());
+
+        self.required_classes().for_each(|f| {
+            fc.last_file()
+                .add_import(&format!(".{}", f.file_name()), f.name());
+        });
+        self.required_enums().for_each(|f| {
+            fc.last_file()
+                .add_import(&format!("..enums.{}", f.file_name()), f.name());
+        });
         let json = self.json(fc.last_file());
         render_template(super::template::HSTemplate::Class, fc.last_file(), json);
         fc.complete_file();
@@ -39,20 +48,6 @@ impl JsonHelper for Walker<'_, ClassId> {
                 "name": field.name(),
                 "type": field.r#type().to_py_string(f),
                 "optional": field.r#type().is_nullable(),
-            })).collect::<Vec<_>>(),
-        })
-    }
-}
-
-impl SerializerHelper for Walker<'_, ClassId> {
-    fn serialize(&self, f: &mut File) -> serde_json::Value {
-        json!({
-            "name": self.name(),
-            "fields": self.static_fields().map(|field|
-                json!({
-                "name": field.name(),
-                "type": field.r#type().to_py_string(f),
-                // Add other meta attributes.
             })).collect::<Vec<_>>(),
         })
     }

@@ -8,23 +8,9 @@ use crate::generate::generate_python_client::file::clean_file_name;
 use super::{
     file::File,
     template::render_template,
-    traits::{JsonHelper, SerializerHelper, WithToCode, WithWritePythonString},
+    traits::{JsonHelper, WithToCode, WithWritePythonString},
     FileCollector,
 };
-
-impl SerializerHelper for ArgWalker<'_> {
-    fn serialize(&self, f: &mut File) -> serde_json::Value {
-        match self.ast_arg() {
-            (Some(idn), arg) => json!({
-                "name": idn.to_py_string(f),
-                "type": arg.to_py_string(f),
-            }),
-            (None, arg) => json!({
-                "type": arg.to_py_string(f),
-            }),
-        }
-    }
-}
 
 impl JsonHelper for ArgWalker<'_> {
     fn json(&self, f: &mut File) -> serde_json::Value {

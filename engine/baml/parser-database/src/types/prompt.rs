@@ -1,5 +1,5 @@
 use internal_baml_diagnostics::{DatamodelError, Span};
-use internal_baml_prompt_parser::ast::{CodeBlock, CodeType, PromptAst, Top, Variable};
+use internal_baml_prompt_parser::ast::{CodeBlock, PromptAst, Top, Variable};
 
 use crate::context::Context;
 
@@ -127,15 +127,15 @@ fn process_prompt_ast(ctx: &mut Context<'_>, ast: PromptAst) -> (String, Vec<Pro
                     Some(ws) => full_prompt_text.push_str(&ws),
                     None => (),
                 }
-                let replacement = process_code_block(ctx, code_block);
+
+                let raw_string = code_block.as_str();
+                let replacement = process_code_block(ctx, code_block.to_owned());
                 match replacement {
                     Some(replacement) => {
                         full_prompt_text.push_str(&format!("{}", replacement.key()));
                         replacers.push(replacement);
                     }
-                    None => {
-                        full_prompt_text.push_str(&format!("{{{}}}", code_block.block.as_str()))
-                    }
+                    None => full_prompt_text.push_str(&format!("{{{}}}", raw_string)),
                 }
             }
         }
@@ -144,64 +144,47 @@ fn process_prompt_ast(ctx: &mut Context<'_>, ast: PromptAst) -> (String, Vec<Pro
     (full_prompt_text, replacers)
 }
 
-fn process_code_block(ctx: &mut Context<'_>, code_block: &CodeBlock) -> Option<PromptVariable> {
-    if code_block.arguments.len() != 1 {
-        ctx.push_error(DatamodelError::new_validation_error(
-            "Must specify exactly one argument",
-            code_block.span.clone(),
-        ));
-        return None;
-    }
-    let variable = code_block.arguments.first().unwrap();
-
-    if variable.text.is_empty() || variable.path.is_empty() {
-        ctx.push_error(DatamodelError::new_validation_error(
-            "Variable path cannot be empty",
-            variable.span.clone(),
-        ));
-        return None;
-    }
-
-    match code_block.code_type {
-        CodeType::Variable => match process_input(ctx, variable) {
-            Some(p) => Some(PromptVariable::Input(p)),
-            None => None,
+fn process_code_block(ctx: &mut Context<'_>, code_block: CodeBlock) -> Option<PromptVariable> {
+    match code_block {
+        CodeBlock::Variable(var) => match process_input(ctx, &var) {
+            true => Some(PromptVariable::Input(var)),
+            false => None,
         },
-        CodeType::PrintEnum => match process_print_enum(ctx, variable) {
-            Some(p) => Some(PromptVariable::Enum(p)),
-            None => None,
+        CodeBlock::PrintEnum(blk) => match process_print_enum(ctx, &blk.target) {
+            true => Some(PromptVariable::Enum(blk)),
+            false => None,
         },
-        CodeType::PrintType => match process_print_type(ctx, variable) {
-            Some(p) => Some(PromptVariable::Type(p)),
-            None => None,
+        CodeBlock::PrintType(blk) => match process_print_type(ctx, &blk.target) {
+            true => Some(PromptVariable::Type(blk)),
+            false => None,
         },
     }
 }
 
-fn process_print_enum(ctx: &mut Context<'_>, variable: &Variable) -> Option<Variable> {
+fn process_print_enum(ctx: &mut Context<'_>, variable: &Variable) -> bool {
     if variable.text == "output" {
         ctx.push_error(DatamodelError::new_validation_error(
             "output can only be used with print_type()",
             variable.span.clone(),
         ));
-        return None;
+        false
+    } else {
+        true
     }
-
-    return Some(variable.clone());
 }
 
-fn process_print_type(ctx: &mut Context<'_>, variable: &Variable) -> Option<Variable> {
-    return Some(variable.clone());
+fn process_print_type(ctx: &mut Context<'_>, variable: &Variable) -> bool {
+    return true;
 }
 
-fn process_input(ctx: &mut Context<'_>, variable: &Variable) -> Option<Variable> {
+fn process_input(ctx: &mut Context<'_>, variable: &Variable) -> bool {
     if variable.path[0] != "input" {
         ctx.push_error(DatamodelError::new_validation_error(
             "Must start with `input`",
             variable.span.clone(),
         ));
-        None
+        false
     } else {
-        Some(variable.clone())
+        true
     }
 }
