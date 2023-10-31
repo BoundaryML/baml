@@ -188,7 +188,6 @@ fn visit_class<'db>(class: &'db ast::Class, ctx: &mut Context<'db>) {
 fn visit_function<'db>(_function: &'db ast::Function, _ctx: &mut Context<'db>) {}
 
 fn visit_client<'db>(idx: ClientId, client: &'db ast::Client, ctx: &mut Context<'db>) {
-    //
     let mut provider = None;
     let mut options: HashMap<String, Expression> = HashMap::new();
     client

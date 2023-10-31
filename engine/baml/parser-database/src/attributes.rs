@@ -94,6 +94,7 @@ fn resolve_llm_variant_attributes<'db>(
             }
             ctx.validate_visited_attributes();
         }
+
         if variant_attributes
             .serializers
             .insert(serializer_idx, serializer_attr)
