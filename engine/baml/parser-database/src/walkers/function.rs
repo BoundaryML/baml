@@ -162,21 +162,21 @@ impl<'db> ArgWalker<'db> {
 }
 
 impl<'db> WithSerializeableContent for ArgWalker<'db> {
-    fn serialize_data(&self) -> serde_json::Value {
+    fn serialize_data(&self, variant: &VariantWalker<'_>) -> serde_json::Value {
         json!({
             "type": "inline",
-            "value": (self.db, &self.ast_arg().1.field_type).serialize_data()
+            "value": (self.db, &self.ast_arg().1.field_type).serialize_data(variant)
         })
     }
 }
 
 impl<'db> WithSerializeableContent for FunctionWalker<'db> {
-    fn serialize_data(&self) -> serde_json::Value {
+    fn serialize_data(&self, variant: &VariantWalker<'_>) -> serde_json::Value {
         // TODO: We should handle the case of multiple output args
         json!({
             "type": "output",
             "type_meta": self.walk_output_args()
-            .map(|f| f.serialize_data())
+            .map(|f| f.serialize_data(variant))
             .next()
             .unwrap_or(serde_json::Value::Null)
         })
@@ -186,11 +186,12 @@ impl<'db> WithSerializeableContent for FunctionWalker<'db> {
 impl<'db> WithSerialize for FunctionWalker<'db> {
     fn serialize(
         &self,
+        variant: &VariantWalker<'_>,
         block: &internal_baml_prompt_parser::ast::PrinterBlock,
     ) -> Result<String, internal_baml_diagnostics::DatamodelError> {
         if let Some(template) = self.db.get_class_template(&block.printer.0) {
             // Eventually we should validate what parameters are in meta.
-            match serialize_with_template("print_type", template, self.serialize_data()) {
+            match serialize_with_template("print_type", template, self.serialize_data(variant)) {
                 Ok(val) => Ok(val),
                 Err(e) => Err(DatamodelError::new_validation_error(
                     &format!("Error serializing output for {}\n{}", self.name(), e),

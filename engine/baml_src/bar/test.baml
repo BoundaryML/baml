@@ -22,8 +22,9 @@ class InputType2 {
 }
 
 class OutputType {
-  x Sentiment
-  y bool
+  x Sentiment @alias("sentiment")
+  y bool @alias("is_positive")
+  @description("this is a description")
 }
 
 

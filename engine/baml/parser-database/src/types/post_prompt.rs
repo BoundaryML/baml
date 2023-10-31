@@ -3,7 +3,10 @@ use internal_baml_diagnostics::DatamodelError;
 use internal_baml_prompt_parser::ast::{PrinterBlock, Variable};
 use internal_baml_schema_ast::ast::{self, WithName};
 
-use crate::{walkers::FunctionWalker, ParserDatabase, WithSerialize};
+use crate::{
+    walkers::{FunctionWalker, VariantWalker},
+    ParserDatabase, WithSerialize,
+};
 
 pub(crate) fn process_input(
     db: &ParserDatabase,
@@ -58,7 +61,8 @@ pub(crate) fn process_input(
 
 pub(crate) fn process_print_enum(
     db: &ParserDatabase,
-    walker: FunctionWalker<'_>,
+    walker: VariantWalker<'_>,
+    fn_walker: FunctionWalker<'_>,
     blk: &PrinterBlock,
 ) -> Result<String, DatamodelError> {
     let variable = &blk.target;
@@ -71,7 +75,7 @@ pub(crate) fn process_print_enum(
 
     match db.find_type_by_str(&variable.text) {
         Some(Either::Right(enum_walker)) => {
-            match walker
+            match fn_walker
                 .walk_output_args()
                 .map(|f| {
                     f.required_enums()
@@ -79,26 +83,17 @@ pub(crate) fn process_print_enum(
                 })
                 .any(|f| f)
             {
-                true => enum_walker.serialize(blk),
-                false => Err(DatamodelError::new_validation_error(
-                    &format!(
-                        "Enum `{}` is not used in in the output of function `{}`.{}",
-                        variable.text,
-                        walker.name(),
-                        {
-                            let enum_options = walker
-                                .walk_output_args()
-                                .map(|f| f.required_enums())
-                                .flatten()
-                                .map(|idn| idn.name())
-                                .collect::<Vec<_>>();
-                            if enum_options.is_empty() {
-                                "".to_string()
-                            } else {
-                                format!("Options are: {}", enum_options.join(", "))
-                            }
-                        }
-                    ),
+                true => enum_walker.serialize(&walker, blk),
+                false => Err(DatamodelError::type_not_used_in_prompt_error(
+                    true,
+                    fn_walker.name(),
+                    &variable.text,
+                    fn_walker
+                        .walk_output_args()
+                        .map(|f| f.required_enums())
+                        .flatten()
+                        .map(|f| f.name().to_string())
+                        .collect::<Vec<_>>(),
                     variable.span.clone(),
                 )),
             }
@@ -116,27 +111,28 @@ pub(crate) fn process_print_enum(
 
 pub(crate) fn process_print_type(
     db: &ParserDatabase,
-    walker: FunctionWalker<'_>,
+    walker: VariantWalker<'_>,
+    fn_walker: FunctionWalker<'_>,
     blk: &PrinterBlock,
 ) -> Result<String, DatamodelError> {
     let variable = &blk.target;
     if variable.text == "output" {
-        return walker.serialize(blk);
+        return fn_walker.serialize(&walker, blk);
     }
 
     match db.find_type_by_str(&variable.text) {
         Some(Either::Left(cls_walker)) => {
             // Also validate the function uses the enum.
-            match walker.walk_output_args().any(|f| {
+            match fn_walker.walk_output_args().any(|f| {
                 f.required_classes()
                     .any(|idn| idn.name() == cls_walker.name())
             }) {
-                true => cls_walker.serialize(blk),
+                true => cls_walker.serialize(&walker, blk),
                 false => Err(DatamodelError::new_validation_error(
                     &format!(
                         "Class `{}` is not used in in the output of function `{}`",
                         variable.text,
-                        walker.name()
+                        fn_walker.name()
                     ),
                     variable.span.clone(),
                 )),
@@ -146,10 +142,22 @@ pub(crate) fn process_print_type(
             "Expected class, found enum",
             variable.span.clone(),
         )),
-        None => Err(DatamodelError::new_validation_error(
-            &format!("Unknown enum `{}`", variable.text),
-            variable.span.clone(),
-        )),
+        None => {
+            let mut candidates = fn_walker
+                .walk_output_args()
+                .map(|f| f.required_enums())
+                .flatten()
+                .map(|f| f.name().to_string())
+                .collect::<Vec<_>>();
+            candidates.push("output".to_string());
+            Err(DatamodelError::type_not_used_in_prompt_error(
+                true,
+                fn_walker.name(),
+                &variable.text,
+                candidates,
+                variable.span.clone(),
+            ))
+        }
     }
 }
 

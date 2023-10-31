@@ -6,8 +6,9 @@ use crate::{
     ParserDatabase,
 };
 
-use super::{ClassWalker, Walker};
+use super::{ClassWalker, VariantWalker, Walker};
 use internal_baml_schema_ast::ast::{self, FieldType, Identifier, WithName};
+use log::info;
 use serde_json::json;
 
 /// A model field, scalar or relation.
@@ -38,7 +39,7 @@ impl<'db> WithName for FieldWalker<'db> {
 }
 
 impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
-    fn serialize_data(&self) -> serde_json::Value {
+    fn serialize_data(&self, variant: &VariantWalker<'_>) -> serde_json::Value {
         match self.1 {
             FieldType::Tuple(..) | FieldType::Dictionary(..) => json!({
                 "type": "unsupported",
@@ -47,12 +48,12 @@ impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
             FieldType::Union(airty, fts, _) => json!({
                 "type": "union",
                 "optional": airty.is_optional(),
-                "options": fts.iter().map(|ft| (self.0, ft).serialize_data()).collect::<Vec<_>>(),
+                "options": fts.iter().map(|ft| (self.0, ft).serialize_data(variant)).collect::<Vec<_>>(),
             }),
             FieldType::List(ft, dims, _) => json!({
                 "type": "list",
                 "dims": dims,
-                "inner": (self.0, ft.deref()).serialize_data(),
+                "inner": (self.0, ft.deref()).serialize_data(variant),
             }),
             FieldType::Identifier(arity, Identifier::Primitive(name, ..)) => {
                 json!({
@@ -70,7 +71,7 @@ impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
             }
             FieldType::Identifier(arity, Identifier::Local(name, ..)) => {
                 match self.0.find_type_by_str(name) {
-                    Some(either::Either::Left(cls)) => cls.serialize_data(),
+                    Some(either::Either::Left(cls)) => cls.serialize_data(variant),
                     Some(either::Either::Right(enm)) => {
                         json!({
                             "type": "enum",
@@ -90,11 +91,11 @@ impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
 }
 
 impl<'db> WithSerializeableContent for FieldWalker<'db> {
-    fn serialize_data(&self) -> serde_json::Value {
+    fn serialize_data(&self, variant: &VariantWalker<'_>) -> serde_json::Value {
         json!({
             "name": self.alias(),
             "meta": self.meta(),
-            "type_meta": (self.db, self.r#type()).serialize_data(),
+            "type_meta": (self.db, self.r#type()).serialize_data(variant),
         })
     }
 }

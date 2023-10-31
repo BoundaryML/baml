@@ -12,7 +12,7 @@ use crate::{
     WithSerialize,
 };
 
-use super::{field::FieldWalker, EnumWalker};
+use super::{field::FieldWalker, EnumWalker, VariantWalker};
 
 /// A `class` declaration in the Prisma schema.
 pub type ClassWalker<'db> = super::Walker<'db, ast::ClassId>;
@@ -92,12 +92,12 @@ impl<'db> WithName for ClassWalker<'db> {
 }
 
 impl<'db> WithSerializeableContent for ClassWalker<'db> {
-    fn serialize_data(&self) -> serde_json::Value {
+    fn serialize_data(&self, variant: &VariantWalker<'_>) -> serde_json::Value {
         json!({
             "type": "class",
             "name": self.alias(),
             "meta": self.meta(),
-            "fields": self.static_fields().map(|f| f.serialize_data()).collect::<Vec<_>>(),
+            "fields": self.static_fields().map(|f| f.serialize_data(variant)).collect::<Vec<_>>(),
         })
     }
 }
@@ -132,11 +132,12 @@ impl<'db> WithStaticRenames for ClassWalker<'db> {
 impl<'db> WithSerialize for ClassWalker<'db> {
     fn serialize(
         &self,
+        variant: &VariantWalker<'_>,
         block: &internal_baml_prompt_parser::ast::PrinterBlock,
     ) -> Result<String, internal_baml_diagnostics::DatamodelError> {
         if let Some(template) = self.db.get_class_template(&block.printer.0) {
             // Eventually we should validate what parameters are in meta.
-            match serialize_with_template("print_type", template, self.serialize_data()) {
+            match serialize_with_template("print_type", template, self.serialize_data(variant)) {
                 Ok(val) => Ok(val),
                 Err(e) => Err(DatamodelError::new_validation_error(
                     &format!("Error serializing class: {}\n{}", self.name(), e),

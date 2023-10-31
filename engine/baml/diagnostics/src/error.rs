@@ -326,6 +326,51 @@ impl DatamodelError {
         Self::new(message.into(), span)
     }
 
+    pub fn type_not_used_in_prompt_error(
+        is_enum: bool,
+        function_name: &str,
+        type_name: &str,
+        names: Vec<String>,
+        span: Span,
+    ) -> DatamodelError {
+        // Calculate OSA distances and sort names by distance
+        let mut distances = names
+            .iter()
+            .map(|n| (strsim::osa_distance(n, type_name), n.to_owned()))
+            .collect::<Vec<_>>();
+        distances.sort_by_key(|k| k.0);
+
+        // Set a threshold for "closeness"
+        let threshold = 2; // for example, you can adjust this based on your needs
+
+        // Filter names that are within the threshold
+        let close_names = distances
+            .iter()
+            .filter(|&&(dist, _)| dist <= threshold)
+            .map(|(_, name)| name.to_owned())
+            .collect::<Vec<_>>();
+
+        let prefix = format!(
+            "{} `{}` is not used in in the output of function `{}`.",
+            is_enum.then(|| "Enum").unwrap_or("Type"),
+            type_name,
+            function_name
+        );
+
+        let suggestions = if close_names.is_empty() {
+            // If no names are close enough, suggest nothing or provide a generic message
+            "".to_string()
+        } else if close_names.len() == 1 {
+            // If there's only one close name, suggest it
+            format!("Did you mean `{}`?", close_names[0])
+        } else {
+            // If there are multiple close names, suggest them all
+            format!("Did you mean one of these: `{}`?", close_names.join("`, `"))
+        };
+
+        Self::new(format!("{}{}", prefix, suggestions), span)
+    }
+
     pub fn new_type_not_found_error(
         type_name: &str,
         names: Vec<String>,

@@ -9,12 +9,13 @@ use log::info;
 use crate::{
     interner::StringId,
     types::{StaticStringAttributes, ToStringAttributes},
+    walkers::VariantWalker,
 };
 
 /// Trait
 pub trait WithSerializeableContent {
     /// Trait to render an object.
-    fn serialize_data(&self) -> serde_json::Value;
+    fn serialize_data(&self, variant: &VariantWalker<'_>) -> serde_json::Value;
 }
 pub trait WithStaticRenames: WithName {
     fn alias(&self) -> String;
@@ -49,7 +50,11 @@ pub trait WithStaticRenames: WithName {
 /// Trait
 pub trait WithSerialize: WithSerializeableContent {
     /// Trait to render an object.
-    fn serialize(&self, block: &PrinterBlock) -> Result<String, DatamodelError>;
+    fn serialize(
+        &self,
+        variant: &VariantWalker<'_>,
+        block: &PrinterBlock,
+    ) -> Result<String, DatamodelError>;
 }
 
 handlebars_helper!(BLOCK_OPEN: |*_args| "{");
@@ -69,6 +74,12 @@ pub fn serialize_with_template(
 ) -> Result<String, handlebars::RenderError> {
     let mut handlebars = init_hs();
     handlebars.register_partial(helper_name, template)?;
+
+    #[cfg(debug_assertions)]
+    {
+        info!("Rendering template: {}", helper_name);
+        info!("---\n{}\n", serde_json::to_string_pretty(&json).unwrap());
+    }
 
     handlebars.render_template(&format!("{{{{> {} item=this}}}}", helper_name), &json)
 }

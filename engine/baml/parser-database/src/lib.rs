@@ -145,7 +145,8 @@ impl ParserDatabase {
                     }
                     PromptVariable::Enum(blk) => {
                         // Ensure the prompt has an enum path that works.
-                        match types::post_prompt::process_print_enum(self, fn_walker, &blk) {
+                        match types::post_prompt::process_print_enum(self, variant, fn_walker, &blk)
+                        {
                             Ok(result) => {
                                 output_replacers.insert(blk.to_owned(), result);
                             }
@@ -154,7 +155,8 @@ impl ParserDatabase {
                     }
                     PromptVariable::Type(blk) => {
                         // Ensure the prompt has an enum path that works.
-                        match types::post_prompt::process_print_type(self, fn_walker, &blk) {
+                        match types::post_prompt::process_print_type(self, variant, fn_walker, &blk)
+                        {
                             Ok(result) => {
                                 output_replacers.insert(blk.to_owned(), result);
                             }

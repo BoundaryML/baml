@@ -56,8 +56,6 @@ impl WithWritePythonString for VariantWalker<'_> {
     fn write_py_file(&self, fc: &mut FileCollector) {
         fc.start_py_file("functions", self.file_name());
         let json = self.json(fc.last_file());
-        info!("Writing variant: {}", self.identifier().name());
-        info!("JSON: {}", &json);
         render_template(super::template::HSTemplate::Variant, fc.last_file(), json);
         fc.complete_file();
     }

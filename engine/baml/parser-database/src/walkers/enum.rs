@@ -14,6 +14,8 @@ use crate::{
     walkers::Walker,
 };
 
+use super::VariantWalker;
+
 /// An `enum` declaration in the schema.
 pub type EnumWalker<'db> = Walker<'db, ast::EnumId>;
 /// One value in an `enum` declaration in the schema.
@@ -53,11 +55,11 @@ impl<'db> WithName for EnumWalker<'db> {
 }
 
 impl<'db> WithSerializeableContent for EnumWalker<'db> {
-    fn serialize_data(&self) -> serde_json::Value {
+    fn serialize_data(&self, variant: &VariantWalker<'_>) -> serde_json::Value {
         json!({
             "name": self.alias(),
             "meta": self.meta(),
-            "values": self.values().map(|f| f.serialize_data()).collect::<Vec<_>>(),
+            "values": self.values().map(|f| f.serialize_data(variant)).collect::<Vec<_>>(),
         })
     }
 }
@@ -90,10 +92,14 @@ impl<'db> WithStaticRenames for EnumWalker<'db> {
 }
 
 impl<'db> WithSerialize for EnumWalker<'db> {
-    fn serialize(&self, block: &PrinterBlock) -> Result<String, DatamodelError> {
+    fn serialize(
+        &self,
+        variant: &VariantWalker<'_>,
+        block: &PrinterBlock,
+    ) -> Result<String, DatamodelError> {
         if let Some(template) = self.db.get_enum_template(&block.printer.0) {
             // Eventually we should validate what parameters are in meta.
-            match serialize_with_template("print_enum", template, self.serialize_data()) {
+            match serialize_with_template("print_enum", template, self.serialize_data(variant)) {
                 Ok(val) => Ok(val),
                 Err(e) => Err(DatamodelError::new_validation_error(
                     &format!("Error serializing enum: {}\n{}", self.name(), e),
@@ -131,7 +137,7 @@ impl<'db> WithName for EnumValueWalker<'db> {
 }
 
 impl<'db> WithSerializeableContent for EnumValueWalker<'db> {
-    fn serialize_data(&self) -> serde_json::Value {
+    fn serialize_data(&self, variant: &VariantWalker<'_>) -> serde_json::Value {
         json!({
             "name": self.alias(),
             "meta": self.meta(),

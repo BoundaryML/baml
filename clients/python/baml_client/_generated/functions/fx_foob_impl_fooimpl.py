@@ -47,8 +47,8 @@ Sentiment:
 ,
     "{//BAML_CLIENT_REPLACE_ME_MAGIC_output//}": """\
 {	
-    "x": "Sentiment as string",	
-    "y": bool
+    "sentiment": "Sentiment as string",	// this is a description
+    "is_positive": bool
 }\
 """
 
