@@ -3,12 +3,15 @@ This module provides the implementation for BAML functions.
 It includes classes and helper functions to register, run and test BAML functions.
 """
 
+import functools
 import inspect
 import types
 import typing
 
 import pytest
 from _pytest.fixtures import FixtureRequest
+
+from ..otel import trace, create_event
 
 
 T = typing.TypeVar("T")
@@ -64,7 +67,7 @@ class BAMLImpl(typing.Generic[RET]):
         Args:
             cb: The callable object to use for the implementation.
         """
-        self.__cb = cb
+        self.__cb = trace(cb)
 
     async def run(self, **kwargs: typing.Any) -> RET:
         """
@@ -136,7 +139,15 @@ class BaseBAMLFunction(typing.Generic[RET]):
             assert (
                 sig == expected_sig
             ), f"{self._name} {sig} does not match expected signature {expected_sig}"
-            self.__impls[name] = BAMLImpl(cb)
+
+            @functools.wraps(cb)
+            def wrapper(*args: typing.Any, **kwargs: typing.Any) -> typing.Any:
+                create_event("variant", {"name": name})
+                return cb(*args, **kwargs)
+
+            wrapper.__name__ = self.__name
+
+            self.__impls[name] = BAMLImpl(wrapper)
 
         return decorator
 

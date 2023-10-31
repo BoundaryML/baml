@@ -2,6 +2,7 @@ use crate::types::{DynamicStringAttributes, StaticStringAttributes};
 use crate::{context::Context, types::ToStringAttributes};
 
 use super::alias::visit_alias_attribute;
+use super::description::visit_description_attribute;
 use super::meta::visit_meta_attribute;
 
 pub(super) fn visit(ctx: &mut Context<'_>, as_block: bool) -> Option<ToStringAttributes> {
@@ -27,6 +28,12 @@ pub(super) fn visit(ctx: &mut Context<'_>, as_block: bool) -> Option<ToStringAtt
             // @meta
             while ctx.visit_repeated_attr("meta") {
                 visit_meta_attribute(&mut attributes, ctx, as_block);
+                modified = false;
+                ctx.validate_visited_arguments();
+            }
+
+            if ctx.visit_optional_single_attr("description") {
+                visit_description_attribute(&mut attributes, ctx);
                 modified = false;
                 ctx.validate_visited_arguments();
             }

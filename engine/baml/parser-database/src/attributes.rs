@@ -5,6 +5,7 @@ use internal_baml_schema_ast::ast::{
 use log::info;
 
 mod alias;
+mod description;
 mod meta;
 mod to_string_attribute;
 

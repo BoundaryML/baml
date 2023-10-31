@@ -2,7 +2,7 @@ use super::{helpers::Pair, Rule};
 use crate::{
     assert_correct_parser, ast::*, parser::parse_identifier::parse_identifier, unreachable_rule,
 };
-use internal_baml_diagnostics::{Diagnostics};
+use internal_baml_diagnostics::Diagnostics;
 
 pub fn parse_field_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
     assert_correct_parser!(pair, Rule::field_type);

@@ -1,14 +1,28 @@
 import abc
+from enum import Enum
+import json
 import typing
 import aiohttp
 from pydantic import BaseModel
 from typeguard import typechecked
+
+from baml_client.otel.provider import try_serialize
+from ...otel import create_event
 
 
 class LLMResponse(BaseModel):
     generated: str
     model_name: str
     meta: typing.Any
+
+
+class ProviderErrorCode(int):
+    INTERNAL_ERROR = 500
+    BAD_REQUEST = 400
+    UNAUTHORIZED = 401
+    FORBIDDEN = 403
+    NOT_FOUND = 404
+    RATE_LIMITED = 429
 
 
 class LLMException(BaseException):
@@ -28,14 +42,24 @@ class LLMException(BaseException):
 
 
 class BaseProvider(abc.ABC):
-    def _to_error_code(self, e: BaseException) -> typing.Optional[int]:
+    def _to_error_code(
+        self, e: BaseException
+    ) -> typing.Optional[typing.Union[ProviderErrorCode, int]]:
         if isinstance(e, aiohttp.ClientError):
-            return 500
+            return ProviderErrorCode.INTERNAL_ERROR
         if isinstance(e, aiohttp.ClientResponseError):
             return e.status
         return None
 
     def _raise_error(self, e: BaseException) -> typing.NoReturn:
+        create_event(
+            "llm_request_error",
+            {
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "error_code": self._to_error_code(e) or -1,
+            },
+        )
         if isinstance(e, LLMException):
             raise e
         code = self._to_error_code(e)
@@ -73,6 +97,38 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
     ) -> LLMResponse:
         pass
 
+    @typing.final
+    def _start_run(
+        self, prompt: typing.Union[str, typing.List[LLMChatMessage]]
+    ) -> None:
+        if isinstance(prompt, str):
+            create_event(
+                "llm_request_start",
+                {"prompt": prompt},
+            )
+        else:
+            create_event(
+                "llm_request_start",
+                {"chat_prompt": list(map(lambda x: json.dumps(x), prompt))},
+            )
+
+    @typing.final
+    def _end_run(self, response: LLMResponse) -> None:
+        create_event(
+            "llm_request_end",
+            {
+                "generated": response.generated,
+                "model_name": response.model_name,
+                "meta": json.dumps(response.meta),
+            },
+        )
+
+    @typing.final
+    def _log_args(self, **kwargs: typing.Any) -> None:
+        create_event(
+            "llm_request_args", {k: try_serialize(v)[0] for k, v in kwargs.items()}
+        )
+
 
 def default_chat_to_prompt(messages: typing.List[LLMChatMessage]) -> str:
     return "\n".join(
@@ -101,7 +157,7 @@ class LLMProvider(AbstractLLMProvider):
     @typechecked
     async def run_prompt(self, prompt: str) -> LLMResponse:
         try:
-            return await self._run(prompt)
+            return await self.__run(prompt)
         except BaseException as e:
             self._raise_error(e)
 
@@ -115,6 +171,13 @@ class LLMProvider(AbstractLLMProvider):
         else:
             chats = typing.cast(typing.List[LLMChatMessage], messages)
         return await self.run_prompt(self.__chat_to_prompt(chats))
+
+    @typing.final
+    async def __run(self, prompt: str) -> LLMResponse:
+        self._start_run(prompt)
+        response = await self._run(prompt)
+        self._end_run(response)
+        return response
 
     @abc.abstractmethod
     async def _run(self, prompt: str) -> LLMResponse:
@@ -142,13 +205,21 @@ class LLMChatProvider(AbstractLLMProvider):
     ) -> LLMResponse:
         try:
             if len(messages) == 1 and isinstance(messages[0], list):
-                return await self._run_chat(messages[0])
+                chat_message = messages[0]
+                return await self.__run_chat(chat_message)
             else:
-                return await self._run_chat(
+                return await self.__run_chat(
                     typing.cast(typing.List[LLMChatMessage], messages)
                 )
         except BaseException as e:
             self._raise_error(e)
+
+    @typing.final
+    async def __run_chat(self, messages: typing.List[LLMChatMessage]) -> LLMResponse:
+        self._start_run(messages)
+        response = await self._run_chat(messages)
+        self._end_run(response)
+        return response
 
     @abc.abstractmethod
     async def _run_chat(self, messages: typing.List[LLMChatMessage]) -> LLMResponse:

@@ -67,9 +67,11 @@ class AnthropicProvider(LLMProvider):
             client_kwargs["max_retries"] = 0
 
         self.__client = anthropic.AsyncAnthropic(**client_kwargs)
+        self.__client_kwargs = client_kwargs
         self.__caller_kwargs = options
 
     async def _run(self, prompt: str) -> LLMResponse:
+        self._log_args(**self.__caller_kwargs, **self.__client_kwargs)
         prompt_tokens = await self.__client.count_tokens(prompt)
         response = typing.cast(
             anthropic.types.Completion,

@@ -16,6 +16,7 @@ class OpenAIProvider(LLMProvider):
         self.__kwargs = options
 
     async def _run(self, prompt: str) -> LLMResponse:
+        self._log_args(**self.__kwargs)
         response = await openai.Completion.acreate(prompt=prompt, **self.__kwargs)  # type: ignore
         text = response["choices"][0]["text"]
         usage = response["usage"]
