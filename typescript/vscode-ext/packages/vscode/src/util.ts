@@ -20,14 +20,14 @@ export function isDebugOrTestSession(): boolean {
 export function checkForOtherPrismaExtension(): void {
   const files = readdirSync(path.join(homedir(), '.vscode/extensions')).filter(
     (file) =>
-      file.toLowerCase().startsWith('prisma.prisma-') && !file.toLowerCase().startsWith('prisma.prisma-insider-'),
+      file.toLowerCase().startsWith('Gloo.baml-') && !file.toLowerCase().startsWith('Gloo.baml-insider-'),
   )
   if (files.length !== 0) {
     // eslint-disable-next-line @typescript-eslint/no-floating-promises
     window.showInformationMessage(
-      `You have both both versions (Insider and Stable) of the Prisma VS Code extension enabled in your workspace. Please uninstall or disable one of them for a better experience.`,
+      `You have both both versions (Insider and Stable) of the Baml VS Code extension enabled in your workspace. Please uninstall or disable one of them for a better experience.`,
     )
-    console.log('Both versions (Insider and Stable) of the Prisma VS Code extension are enabled.')
+    console.log('Both versions (Insider and Stable) of the Baml VS Code extension are enabled.')
   }
 }
 

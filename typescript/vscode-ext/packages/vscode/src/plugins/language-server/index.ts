@@ -27,7 +27,10 @@ const activateClient = (
 
   client.onReady().then(() => {
     client.onNotification('baml/showLanguageServerOutput', () => {
-      client.outputChannel.show(true);
+      // need to append line for the show to work for some reason.
+      // dont delete this.
+      client.outputChannel.appendLine('baml/showLanguageServerOutput');
+      client.outputChannel.show();
     });
   });
 

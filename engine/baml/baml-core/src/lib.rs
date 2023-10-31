@@ -6,9 +6,9 @@ pub use internal_baml_diagnostics;
 use internal_baml_parser_database::ParserDatabase;
 pub use internal_baml_parser_database::{self};
 
-
 pub use internal_baml_schema_ast::{self, ast};
 
+use log::{info, warn};
 use rayon::prelude::*;
 use std::{path::PathBuf, sync::Mutex};
 
@@ -37,6 +37,9 @@ impl std::fmt::Debug for ValidatedSchema {
 }
 
 pub fn generate(db: &ParserDatabase, configuration: &Configuration) -> std::io::Result<()> {
+    if configuration.generators.is_empty() {
+        warn!("No generators specified in configuration");
+    }
     for gen in configuration.generators.iter() {
         generate::generate_pipeline(db, gen)?;
     }

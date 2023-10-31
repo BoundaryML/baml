@@ -16,6 +16,8 @@ import {
   DocumentSymbolParams,
   TextDocumentSyncKind,
 } from 'vscode-languageserver'
+import { URI } from 'vscode-uri';
+
 import { debounce } from "ts-debounce";
 import { createConnection, IPCMessageReader, IPCMessageWriter } from 'vscode-languageserver/node'
 import { TextDocument } from 'vscode-languageserver-textdocument'
@@ -253,8 +255,17 @@ export function startServer(options?: LSOptions): void {
   })
 
   documents.onDidSave((change: { document: TextDocument }) => {
-    console.log("onDidSave " + change.document.uri);
-    cliBuild(config?.path || "baml", bamlCache.getBamlDir(change.document), showErrorToast);
+    const cliPath = config?.path || "baml";
+    console.log("cliPath " + cliPath);
+    let bamlDir = bamlCache.getBamlDir(change.document);
+    if (!bamlDir) {
+      console.error("Could not find root path for " + change.document.uri);
+      return;
+    }
+    bamlDir = URI.parse(bamlDir).fsPath;
+    console.log("bamlDir " + bamlDir);
+
+    cliBuild(cliPath, bamlDir, showErrorToast);
   })
 
   function getDocument(uri: string): TextDocument | undefined {

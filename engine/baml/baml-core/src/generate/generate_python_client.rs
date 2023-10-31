@@ -1,12 +1,10 @@
 use internal_baml_parser_database::ParserDatabase;
+use log::info;
 use serde_json::json;
 
 use crate::configuration::Generator;
 
-use self::{
-    file::{FileCollector},
-    traits::WithWritePythonString,
-};
+use self::{file::FileCollector, traits::WithWritePythonString};
 
 mod r#class;
 mod client;
@@ -36,6 +34,10 @@ pub(crate) fn generate_py(db: &ParserDatabase, gen: &Generator) -> std::io::Resu
     db.walk_clients()
         .for_each(|f| generate_py_file(&f, &mut fc));
     generate_py_file(db, &mut fc);
+    info!(
+        "Writing files to {}",
+        &gen.output.as_ref().unwrap().to_string()
+    );
     fc.write(&gen.output)
 }
 

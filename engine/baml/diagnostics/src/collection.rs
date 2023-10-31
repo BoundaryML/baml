@@ -103,11 +103,6 @@ impl Diagnostics {
     }
 
     pub fn push(&mut self, mut other: Diagnostics) {
-        info!(
-            "Pushing {} errors and {} warnings",
-            other.errors.len(),
-            other.warnings.len()
-        );
         self.errors.append(&mut other.errors);
         self.warnings.append(&mut other.warnings);
     }

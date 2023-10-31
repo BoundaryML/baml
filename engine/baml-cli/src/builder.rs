@@ -2,7 +2,7 @@ mod dir_utils;
 
 use baml::{generate_schema, parse_and_validate_schema, SourceFile};
 use colored::*;
-use log::{info};
+use log::info;
 use std::path::PathBuf;
 
 use crate::{

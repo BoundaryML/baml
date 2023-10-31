@@ -19,9 +19,17 @@ export function cliBuild(cliPath: string, workspacePath: string | null, onError?
         // outputChannel.appendLine(stdout);
       }
 
-      if (error || stderr) {
+      if (stderr) {
+        // our CLI is by default logging everything to stderr
+        console.info(stderr);
+      }
+
+
+      if (error) {
         console.error(`Error running the build script: ${JSON.stringify(error, null, 2)}`);
-        onError?.(`Error running the build script: ${error}`)
+
+
+        onError?.(`Baml build error`)
         return;
       }
     }
