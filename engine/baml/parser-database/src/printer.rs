@@ -96,5 +96,5 @@ pub fn serialize_with_printer(
     template: Option<&str>,
     json: serde_json::Value,
 ) -> Result<String, String> {
-    "PLACEHOLDER FOR WASM".to_string()
+    Ok("PLACEHOLDER FOR WASM".to_string())
 }
