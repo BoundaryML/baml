@@ -1,7 +1,6 @@
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning};
 use internal_baml_parser_database::WithSerialize;
-use internal_baml_prompt_parser::ast::WithSpan;
-use internal_baml_schema_ast::ast::TopId;
+use internal_baml_schema_ast::ast::{TopId, WithIdentifier, WithName, WithSpan};
 
 use crate::validate::validation_pipeline::context::Context;
 
@@ -16,22 +15,24 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
             ));
         }
 
-        let span = &variant.properties().prompt.key_span;
-        let (input, output) = &variant.properties().replacers;
-        // Validation already done that the prompt is valid.
-        // We should just ensure that atleast one of the input or output replacers is used.
-        if input.is_empty() {
-            ctx.push_warning(DatamodelWarning::prompt_variable_unused(
-                "Never uses {#input}",
-                span.clone(),
-            ));
-        }
-
-        // TODO: We should ensure every enum is used here.
-        if output.is_empty() {
-            ctx.push_warning(DatamodelWarning::prompt_variable_unused(
-                "Never uses {#print_type(..)} or {#print_enum(..)}",
-                span.clone(),
+        if let Some(function) = variant.walk_function() {
+            // Ensure that every serializer is valid.
+            variant.ast_variant().iter_serializers().for_each(|(_, f)| {
+                match ctx.db.find_type(f.identifier()) {
+                    Some(_) => {}
+                    None => {
+                        ctx.push_error(DatamodelError::new_validation_error(
+                            &format!("Unknown serializer `{}`", f.identifier().name()),
+                            f.identifier().span().clone(),
+                        ));
+                    }
+                }
+            });
+        } else {
+            ctx.push_error(DatamodelError::new_type_not_found_error(
+                variant.function_identifier().name(),
+                ctx.db.valid_function_names(),
+                variant.function_identifier().span().clone(),
             ));
         }
     }

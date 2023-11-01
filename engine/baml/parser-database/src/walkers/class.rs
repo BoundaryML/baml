@@ -1,14 +1,14 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use either::Either;
 use internal_baml_diagnostics::DatamodelError;
-use internal_baml_prompt_parser::ast::WithSpan;
+use internal_baml_prompt_parser::ast::WithSpan as WithPromptSpan;
 use serde_json::json;
 
 use crate::{
-    ast::{self, WithName},
+    ast::{self, WithName, WithSpan},
     template::{serialize_with_template, WithSerializeableContent, WithStaticRenames},
-    types::{StaticStringAttributes, ToStringAttributes},
+    types::ToStringAttributes,
     WithSerialize,
 };
 
@@ -58,29 +58,30 @@ impl<'db> ClassWalker<'db> {
             .into_iter()
     }
 
+    /// Iterate all the scalar fields in a given class in the order they were defined.
+    pub fn dependencies(self) -> &'db HashSet<String> {
+        &self.db.types.class_dependencies[&self.id]
+    }
+
     /// Find all enums used by this class and any of its fields.
     pub fn required_enums(self) -> impl Iterator<Item = EnumWalker<'db>> {
-        self.static_fields()
-            .flat_map(|f| f.r#type().flat_idns())
-            .flat_map(|idn| match self.db.find_type(idn) {
-                Some(Either::Right(walker)) => vec![walker],
-                Some(Either::Left(walker)) => walker.required_enums().collect(),
-                None => vec![],
+        self.db.types.class_dependencies[&self.class_id()]
+            .iter()
+            .filter_map(|f| match self.db.find_type_by_str(f) {
+                Some(Either::Left(_cls)) => None,
+                Some(Either::Right(walker)) => Some(walker),
+                None => None,
             })
     }
 
     /// Find all classes used by this class and any of its fields.
     pub fn required_classes(self) -> impl Iterator<Item = ClassWalker<'db>> {
-        self.static_fields()
-            .flat_map(|f| f.r#type().flat_idns())
-            .flat_map(|idn| match self.db.find_type(idn) {
-                Some(Either::Left(walker)) => {
-                    let mut classes = walker.required_classes().collect::<Vec<_>>();
-                    classes.push(walker);
-                    classes
-                }
-                Some(Either::Right(_)) => vec![],
-                None => vec![],
+        self.db.types.class_dependencies[&self.class_id()]
+            .iter()
+            .filter_map(|f| match self.db.find_type_by_str(f) {
+                Some(Either::Left(walker)) => Some(walker),
+                Some(Either::Right(_enm)) => None,
+                None => None,
             })
     }
 }
@@ -88,6 +89,12 @@ impl<'db> ClassWalker<'db> {
 impl<'db> WithName for ClassWalker<'db> {
     fn name(&self) -> &'db str {
         self.ast_class().name()
+    }
+}
+
+impl<'db> WithSpan for ClassWalker<'db> {
+    fn span(&self) -> &internal_baml_diagnostics::Span {
+        self.ast_class().span()
     }
 }
 

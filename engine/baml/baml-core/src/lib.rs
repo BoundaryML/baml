@@ -89,6 +89,13 @@ pub fn validate(root_path: &PathBuf, files: Vec<SourceFile>) -> ValidatedSchema 
     // actually run the validation pipeline
     validate::validate(&db, configuration.preview_features(), &mut diagnostics);
 
+    if diagnostics.has_errors() {
+        return ValidatedSchema { db, diagnostics };
+    }
+
+    // Some last linker stuff can only happen post validation.
+    db.finalize(&mut diagnostics);
+
     ValidatedSchema { db, diagnostics }
 }
 

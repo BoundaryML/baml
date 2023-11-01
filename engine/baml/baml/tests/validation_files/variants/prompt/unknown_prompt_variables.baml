@@ -32,6 +32,18 @@ impl<llm, Foo> FooImpl{
   "#
 }
 
+enum Enumarg {
+  A
+  B
+  C
+}
+
+
+
+
+
+
+
 
 
 // error: Error validating: Unknown field `e` in class `InputType`
@@ -52,13 +64,13 @@ impl<llm, Foo> FooImpl{
 // 24 |     {#input.e}
 // 25 |     {#input.e.y}
 //    | 
-// error: Error validating: Unknown enum `enumarg`
+// error: Enum `enumarg` does not exist. No Enums are used in the output of this function.
 //   -->  /Users/vbv/repos/gloo-lang/engine/baml/baml/tests/validation_files/variants/prompt/unknown_prompt_variables.baml:30
 //    | 
 // 29 |     JSON:
 // 30 |     {#print_enum(enumarg)}
 //    | 
-// error: Error validating: Unknown enum `typearg`
+// error: Type `typearg` does not exist. Did you mean one of these: `output`, `OutputType`?
 //   -->  /Users/vbv/repos/gloo-lang/engine/baml/baml/tests/validation_files/variants/prompt/unknown_prompt_variables.baml:31
 //    | 
 // 30 |     {#print_enum(enumarg)}

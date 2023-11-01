@@ -19,7 +19,7 @@ class Type1 {
   prop string
   prop2 int
   propArray string[]
-  boolean bool
+  boolean Type2
 }
 
 class Type2 {

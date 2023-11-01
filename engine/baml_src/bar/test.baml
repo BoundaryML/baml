@@ -28,8 +28,13 @@ class OutputType {
 }
 
 
-impl<llm, FooB> FooImpl{
+impl<llm, FooB> FooImpl {
   client MyClient
+
+  override Sentiment {
+    SAD @alias("sadness")
+  }
+
   prompt #"
     A {#input.a}!!    
     

@@ -130,34 +130,26 @@ impl<'db> ArgWalker<'db> {
 
     /// The name of the function.
     pub fn required_enums(self) -> impl Iterator<Item = EnumWalker<'db>> {
-        let (_, arg) = self.ast_arg();
-        arg.field_type
-            .flat_idns()
-            .into_iter()
-            .flat_map(|idn| match self.db.find_type(idn) {
-                Some(Either::Right(walker)) => vec![walker],
-                Some(Either::Left(walker)) => walker.required_enums().collect(),
-                None => vec![],
+        let (input, output) = &self.db.types.function_dependencies[&self.function_id()];
+        if self.id.1 { input } else { output }
+            .iter()
+            .filter_map(|f| match self.db.find_type_by_str(f) {
+                Some(Either::Left(_cls)) => None,
+                Some(Either::Right(walker)) => Some(walker),
+                None => None,
             })
-            .into_iter()
     }
 
     /// The name of the function.
     pub fn required_classes(self) -> impl Iterator<Item = ClassWalker<'db>> {
-        let (_, arg) = self.ast_arg();
-        arg.field_type
-            .flat_idns()
-            .into_iter()
-            .flat_map(|idn| match self.db.find_type(idn) {
-                Some(Either::Left(walker)) => {
-                    let mut classes = walker.required_classes().collect::<Vec<_>>();
-                    classes.push(walker);
-                    classes
-                }
-                Some(Either::Right(_)) => vec![],
-                None => vec![],
+        let (input, output) = &self.db.types.function_dependencies[&self.function_id()];
+        if self.id.1 { input } else { output }
+            .iter()
+            .filter_map(|f| match self.db.find_type_by_str(f) {
+                Some(Either::Left(walker)) => Some(walker),
+                Some(Either::Right(_enm)) => None,
+                None => None,
             })
-            .into_iter()
     }
 }
 

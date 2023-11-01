@@ -1,11 +1,11 @@
 use std::borrow::BorrowMut;
 
 use internal_baml_prompt_parser::ast::PrinterBlock;
-use internal_baml_schema_ast::ast::Identifier;
+use internal_baml_schema_ast::ast::{Identifier, WithName};
 
 use crate::{
     ast::{self, WithIdentifier},
-    types::VariantProperties,
+    types::{SerializerAttributes, VariantProperties},
 };
 
 use super::{ClientWalker, FunctionWalker, Walker};
@@ -46,6 +46,18 @@ impl<'db> VariantWalker<'db> {
     /// The AST node.
     pub fn ast_variant(self) -> &'db ast::Variant {
         &self.db.ast[self.id]
+    }
+
+    /// Finds a serializer by name
+    pub fn find_serializer(self, name: &str) -> Option<&'db SerializerAttributes> {
+        self.ast_variant()
+            .iter_serializers()
+            .find(|(_, s)| s.name() == name)
+            .and_then(|(idx, s)| {
+                self.db.types.variant_attributes[&self.id]
+                    .serializers
+                    .get(&idx)
+            })
     }
 
     /// The properties of the variant.

@@ -68,11 +68,23 @@ pub enum FunctionArgs {
 impl FunctionArgs {
     pub fn flat_idns(&self) -> Vec<&Identifier> {
         match self {
-            FunctionArgs::Unnamed(arg) => arg.field_type.flat_idns(),
+            FunctionArgs::Unnamed(arg) => arg
+                .field_type
+                .flat_idns()
+                .iter()
+                .filter_map(|f| match f {
+                    Identifier::Primitive(..) => None,
+                    _ => Some(*f),
+                })
+                .collect(),
             FunctionArgs::Named(named) => named
                 .args
                 .iter()
-                .flat_map(|(idn, arg)| std::iter::once(idn).chain(arg.field_type.flat_idns()))
+                .flat_map(|(_, arg)| arg.field_type.flat_idns())
+                .filter_map(|f| match f {
+                    Identifier::Primitive(..) => None,
+                    _ => Some(f),
+                })
                 .collect(),
         }
     }

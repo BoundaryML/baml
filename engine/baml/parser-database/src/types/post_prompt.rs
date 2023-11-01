@@ -73,6 +73,13 @@ pub(crate) fn process_print_enum(
         ));
     }
 
+    let candidates = fn_walker
+        .walk_output_args()
+        .map(|f| f.required_enums())
+        .flatten()
+        .map(|f| f.name().to_string())
+        .collect::<Vec<_>>();
+
     match db.find_type_by_str(&variable.text) {
         Some(Either::Right(enum_walker)) => {
             match fn_walker
@@ -86,14 +93,10 @@ pub(crate) fn process_print_enum(
                 true => enum_walker.serialize(&walker, blk),
                 false => Err(DatamodelError::type_not_used_in_prompt_error(
                     true,
+                    true,
                     fn_walker.name(),
                     &variable.text,
-                    fn_walker
-                        .walk_output_args()
-                        .map(|f| f.required_enums())
-                        .flatten()
-                        .map(|f| f.name().to_string())
-                        .collect::<Vec<_>>(),
+                    candidates,
                     variable.span.clone(),
                 )),
             }
@@ -102,8 +105,12 @@ pub(crate) fn process_print_enum(
             "Expected enum, found class",
             variable.span.clone(),
         )),
-        None => Err(DatamodelError::new_validation_error(
-            &format!("Unknown enum `{}`", variable.text),
+        None => Err(DatamodelError::type_not_used_in_prompt_error(
+            true,
+            false,
+            fn_walker.name(),
+            &variable.text,
+            candidates,
             variable.span.clone(),
         )),
     }
@@ -120,6 +127,13 @@ pub(crate) fn process_print_type(
         return fn_walker.serialize(&walker, blk);
     }
 
+    let candidates = fn_walker
+        .walk_output_args()
+        .map(|f| f.required_classes())
+        .flatten()
+        .map(|f| f.name().to_string())
+        .collect::<Vec<_>>();
+
     match db.find_type_by_str(&variable.text) {
         Some(Either::Left(cls_walker)) => {
             // Also validate the function uses the enum.
@@ -128,12 +142,12 @@ pub(crate) fn process_print_type(
                     .any(|idn| idn.name() == cls_walker.name())
             }) {
                 true => cls_walker.serialize(&walker, blk),
-                false => Err(DatamodelError::new_validation_error(
-                    &format!(
-                        "Class `{}` is not used in in the output of function `{}`",
-                        variable.text,
-                        fn_walker.name()
-                    ),
+                false => Err(DatamodelError::type_not_used_in_prompt_error(
+                    false,
+                    true,
+                    fn_walker.name(),
+                    &variable.text,
+                    candidates,
                     variable.span.clone(),
                 )),
             }
@@ -142,22 +156,14 @@ pub(crate) fn process_print_type(
             "Expected class, found enum",
             variable.span.clone(),
         )),
-        None => {
-            let mut candidates = fn_walker
-                .walk_output_args()
-                .map(|f| f.required_enums())
-                .flatten()
-                .map(|f| f.name().to_string())
-                .collect::<Vec<_>>();
-            candidates.push("output".to_string());
-            Err(DatamodelError::type_not_used_in_prompt_error(
-                true,
-                fn_walker.name(),
-                &variable.text,
-                candidates,
-                variable.span.clone(),
-            ))
-        }
+        None => Err(DatamodelError::type_not_used_in_prompt_error(
+            false,
+            false,
+            fn_walker.name(),
+            &variable.text,
+            candidates,
+            variable.span.clone(),
+        )),
     }
 }
 

@@ -38,18 +38,18 @@ JSON:
 """
 
 __output_replacer = {
-    "{//BAML_CLIENT_REPLACE_ME_MAGIC_Sentiment//}": """\
-Sentiment:
-
-
-\
-"""
-,
     "{//BAML_CLIENT_REPLACE_ME_MAGIC_output//}": """\
 {	
     "sentiment": "Sentiment as string",	// this is a description
     "is_positive": bool
 }\
+"""
+,
+    "{//BAML_CLIENT_REPLACE_ME_MAGIC_Sentiment//}": """\
+Sentiment:
+
+
+\
 """
 
 }

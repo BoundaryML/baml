@@ -36,17 +36,18 @@ mod names;
 mod template;
 mod types;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub use coerce_expression::{coerce, coerce_array, coerce_opt};
 use either::Either;
 use internal_baml_prompt_parser::ast::WithSpan as WithPromptSpan;
 pub use internal_baml_schema_ast::ast;
 use internal_baml_schema_ast::ast::{SchemaAst, WithName, WithSpan};
+use log::info;
 pub use types::{PromptVariable, StaticType};
 
 use self::{context::Context, interner::StringId, types::Types};
-use internal_baml_diagnostics::{DatamodelError, Diagnostics};
+use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Diagnostics};
 use names::Names;
 pub use template::WithSerialize;
 
@@ -117,53 +118,183 @@ impl ParserDatabase {
         ctx.diagnostics.to_result()?;
 
         attributes::resolve_attributes(&mut ctx);
-        ctx.diagnostics.to_result()?;
-
-        // Third pass: validate attributes.
-        self.finalize_prompt_validation(&mut diag)
+        ctx.diagnostics.to_result()
     }
 
-    fn finalize_prompt_validation(&mut self, diag: &mut Diagnostics) -> Result<(), Diagnostics> {
+    /// Updates the prompt
+    pub fn finalize(&mut self, diag: &mut Diagnostics) {
+        self.finalize_dependencies();
+        self.finalize_prompt_validation(diag);
+    }
+
+    fn finalize_dependencies(&mut self) {
+        let mut deps = self
+            .types
+            .class_dependencies
+            .iter()
+            .map(|f| {
+                (
+                    *f.0,
+                    f.1.iter()
+                        .filter(|i| match self.find_type_by_str(i) {
+                            Some(Either::Left(_)) => true,
+                            _ => false,
+                        })
+                        .count(),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        deps.sort_by(|a, b| a.1.cmp(&b.1));
+
+        for (cls, _) in deps {
+            let child_deps = self
+                .types
+                .class_dependencies
+                .get(&cls)
+                // These must exist by definition so safe to unwrap.
+                .unwrap()
+                .iter()
+                .filter_map(|f| match self.find_type_by_str(f) {
+                    Some(Either::Left(walker)) => {
+                        Some(walker.dependencies().iter().map(|f| f.clone()))
+                    }
+                    Some(Either::Right(_)) => None,
+                    _ => panic!("Unknown class `{}`", f),
+                })
+                .flatten()
+                .collect::<HashSet<_>>();
+
+            // Get the dependencies of all my dependencies.
+            self.types
+                .class_dependencies
+                .get_mut(&cls)
+                .unwrap()
+                .extend(child_deps);
+        }
+
+        // Additionally ensure the same thing for functions, but since we've already handled classes,
+        // this should be trivial.
+        let extends = self
+            .types
+            .function_dependencies
+            .iter()
+            .map(|(&k, (input, output))| {
+                let input_deps = input
+                    .iter()
+                    .filter_map(|f| match self.find_type_by_str(f) {
+                        Some(Either::Left(walker)) => {
+                            Some(walker.dependencies().iter().map(|f| f.clone()))
+                        }
+                        Some(Either::Right(_)) => None,
+                        _ => panic!("Unknown class `{}`", f),
+                    })
+                    .flatten()
+                    .collect::<HashSet<_>>();
+
+                let output_deps = output
+                    .iter()
+                    .filter_map(|f| match self.find_type_by_str(f) {
+                        Some(Either::Left(walker)) => {
+                            Some(walker.dependencies().iter().map(|f| f.clone()))
+                        }
+                        Some(Either::Right(_)) => None,
+                        _ => panic!("Unknown class `{}`", f),
+                    })
+                    .flatten()
+                    .collect::<HashSet<_>>();
+
+                (k, (input_deps, output_deps))
+            })
+            .collect::<Vec<_>>();
+
+        for (id, (input, output)) in extends {
+            let val = self.types.function_dependencies.get_mut(&id).unwrap();
+            val.0.extend(input);
+            val.1.extend(output);
+        }
+    }
+
+    fn finalize_prompt_validation(&mut self, diag: &mut Diagnostics) {
         let mut vars: HashMap<_, _> = Default::default();
 
-        for variant in self.walk_variants() {
+        self.walk_variants().for_each(|variant| {
             let mut input_replacers = HashMap::new();
             let mut output_replacers = HashMap::new();
             if let Some(fn_walker) = variant.walk_function() {
                 // Now lets validate the prompt is what we expect.
                 let prompt_variables = &variant.properties().prompt_replacements;
 
-                prompt_variables.iter().for_each(|f| match f {
-                    PromptVariable::Input(variable) => {
-                        // Ensure the prompt has an input path that works.
-                        match types::post_prompt::process_input(self, fn_walker, variable) {
-                            Ok(replacer) => {
-                                input_replacers.insert(variable.to_owned(), replacer);
+                let num_errors = prompt_variables
+                    .iter()
+                    .map(|f| match f {
+                        PromptVariable::Input(variable) => {
+                            // Ensure the prompt has an input path that works.
+                            match types::post_prompt::process_input(self, fn_walker, variable) {
+                                Ok(replacer) => {
+                                    input_replacers.insert(variable.to_owned(), replacer);
+                                    Ok(())
+                                }
+                                Err(e) => Err(e),
                             }
-                            Err(e) => diag.push_error(e),
                         }
-                    }
-                    PromptVariable::Enum(blk) => {
-                        // Ensure the prompt has an enum path that works.
-                        match types::post_prompt::process_print_enum(self, variant, fn_walker, &blk)
-                        {
-                            Ok(result) => {
-                                output_replacers.insert(blk.to_owned(), result);
+                        PromptVariable::Enum(blk) => {
+                            // Ensure the prompt has an enum path that works.
+                            match types::post_prompt::process_print_enum(
+                                self, variant, fn_walker, &blk,
+                            ) {
+                                Ok(result) => {
+                                    output_replacers.insert(blk.to_owned(), result);
+                                    Ok(())
+                                }
+                                Err(e) => Err(e),
                             }
-                            Err(e) => diag.push_error(e),
                         }
-                    }
-                    PromptVariable::Type(blk) => {
-                        // Ensure the prompt has an enum path that works.
-                        match types::post_prompt::process_print_type(self, variant, fn_walker, &blk)
-                        {
-                            Ok(result) => {
-                                output_replacers.insert(blk.to_owned(), result);
+                        PromptVariable::Type(blk) => {
+                            // Ensure the prompt has an enum path that works.
+                            match types::post_prompt::process_print_type(
+                                self, variant, fn_walker, &blk,
+                            ) {
+                                Ok(result) => {
+                                    output_replacers.insert(blk.to_owned(), result);
+                                    Ok(())
+                                }
+                                Err(e) => Err(e),
                             }
-                            Err(e) => diag.push_error(e),
                         }
+                    })
+                    .filter_map(|f| match f.err() {
+                        Some(e) => {
+                            diag.push_error(e);
+                            Some(())
+                        }
+                        None => None,
+                    })
+                    .count();
+
+                if num_errors == 0 {
+                    // Some simple error checking.
+                    let span = &variant.properties().prompt.key_span;
+                    // Validation already done that the prompt is valid.
+                    // We should just ensure that atleast one of the input or output replacers is used.
+                    if input_replacers.is_empty() {
+                        diag.push_warning(DatamodelWarning::prompt_variable_unused(
+                            "Never uses {#input}",
+                            span.clone(),
+                        ));
                     }
-                });
+
+                    // TODO: We should ensure every enum the class uses is used here.
+                    if output_replacers.is_empty() {
+                        diag.push_warning(DatamodelWarning::prompt_variable_unused(
+                            "Never uses {#print_type(..)} or {#print_enum(..)}",
+                            span.clone(),
+                        ));
+                    }
+
+                    // Only in this case update the prompt.
+                    vars.insert(variant.id, (input_replacers, output_replacers));
+                }
             } else {
                 diag.push_error(DatamodelError::new_type_not_found_error(
                     variant.function_identifier().name(),
@@ -171,16 +302,13 @@ impl ParserDatabase {
                     variant.function_identifier().span().clone(),
                 ));
             }
-
-            // Only in this case update the prompt.
-            vars.insert(variant.id, (input_replacers, output_replacers));
-        }
-
-        vars.into_iter().for_each(|(k, v)| {
-            self.types.variant_properties.get_mut(&k).unwrap().replacers = v;
         });
 
-        diag.to_result()
+        if !diag.has_errors() {
+            vars.into_iter().for_each(|(k, v)| {
+                self.types.variant_properties.get_mut(&k).unwrap().replacers = v;
+            });
+        }
     }
 
     /// The parsed AST.

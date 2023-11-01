@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 
 use crate::coerce;
@@ -7,8 +7,9 @@ use crate::{context::Context, DatamodelError};
 use internal_baml_diagnostics::Span;
 use internal_baml_prompt_parser::ast::{PrinterBlock, Variable};
 use internal_baml_schema_ast::ast::{
-    self, ClassId, ClientId, EnumId, EnumValueId, Expression, FieldId, SerializerFieldId, TopId,
-    VariantConfigId, VariantSerializerId, WithIdentifier, WithName, WithSpan,
+    self, ClassId, ClientId, EnumId, EnumValueId, Expression, FieldId, FunctionId,
+    SerializerFieldId, TopId, VariantConfigId, VariantSerializerId, WithIdentifier, WithName,
+    WithSpan,
 };
 
 pub(crate) mod post_prompt;
@@ -27,9 +28,9 @@ pub(super) fn resolve_types(ctx: &mut Context<'_>) {
     for (top_id, top) in ctx.ast.iter_tops() {
         match (top_id, top) {
             (ast::TopId::Enum(_), ast::Top::Enum(enm)) => visit_enum(enm, ctx),
-            (ast::TopId::Class(_), ast::Top::Class(model)) => visit_class(model, ctx),
-            (ast::TopId::Function(_), ast::Top::Function(function)) => {
-                visit_function(function, ctx)
+            (ast::TopId::Class(idx), ast::Top::Class(model)) => visit_class(idx, model, ctx),
+            (ast::TopId::Function(idx), ast::Top::Function(function)) => {
+                visit_function(idx, function, ctx)
             }
             (ast::TopId::Variant(idx), ast::Top::Variant(variant)) => {
                 visit_variant(idx, variant, ctx)
@@ -93,7 +94,7 @@ pub struct StringValue {
     pub key_span: Span,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct VariantProperties {
     pub client: StringValue,
     pub prompt: StringValue,
@@ -111,6 +112,8 @@ pub struct ClientProperties {
 pub(super) struct Types {
     pub(super) enum_attributes: HashMap<ast::EnumId, EnumAttributes>,
     pub(super) class_attributes: HashMap<ast::ClassId, ClassAttributes>,
+    pub(super) class_dependencies: HashMap<ast::ClassId, HashSet<String>>,
+    pub(super) function_dependencies: HashMap<ast::FunctionId, (HashSet<String>, HashSet<String>)>,
     pub(super) variant_attributes: HashMap<ast::VariantConfigId, VariantAttributes>,
     pub(super) variant_properties: HashMap<ast::VariantConfigId, VariantProperties>,
     pub(super) client_properties: HashMap<ast::ClientId, ClientProperties>,
@@ -175,17 +178,49 @@ fn visit_enum<'db>(enm: &'db ast::Enum, ctx: &mut Context<'db>) {
     }
 }
 
-fn visit_class<'db>(class: &'db ast::Class, ctx: &mut Context<'db>) {
+fn visit_class<'db>(class_id: ast::ClassId, class: &'db ast::Class, ctx: &mut Context<'db>) {
     if class.fields().is_empty() {
         let msg = "A class must have at least one field.";
         ctx.push_error(DatamodelError::new_validation_error(
             msg,
             class.span().clone(),
         ))
+    } else {
+        let used_types = class
+            .iter_fields()
+            .flat_map(|(_, f)| f.field_type.flat_idns())
+            .filter(|id| {
+                id.is_valid_type()
+                    && match id {
+                        ast::Identifier::Primitive(..) => false,
+                        _ => true,
+                    }
+            })
+            .map(|f| f.name().to_string())
+            .collect::<HashSet<_>>();
+        ctx.types.class_dependencies.insert(class_id, used_types);
     }
 }
 
-fn visit_function<'db>(_function: &'db ast::Function, _ctx: &mut Context<'db>) {}
+fn visit_function<'db>(idx: FunctionId, function: &'db ast::Function, ctx: &mut Context<'db>) {
+    let input_deps = function
+        .input()
+        .flat_idns()
+        .iter()
+        .map(|f| f.name().to_string())
+        .collect::<HashSet<_>>();
+
+    let output_deps = function
+        .output()
+        .flat_idns()
+        .iter()
+        .map(|f| f.name().to_string())
+        .collect::<HashSet<_>>();
+
+    ctx.types
+        .function_dependencies
+        .insert(idx, (input_deps, output_deps));
+}
 
 fn visit_client<'db>(idx: ClientId, client: &'db ast::Client, ctx: &mut Context<'db>) {
     let mut provider = None;
