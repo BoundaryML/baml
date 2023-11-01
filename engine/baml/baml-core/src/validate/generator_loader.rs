@@ -83,7 +83,8 @@ fn lift_generator(
         .get(OUTPUT_KEY)
         .and_then(|v| coerce::path(v, diagnostics))
         .and_then(|v| Some(PathBuf::from(v)))
-        .unwrap_or(PathBuf::from("../baml_gen"));
+        .unwrap_or(PathBuf::from("../"))
+        .join("baml_client");
 
     let mut properties = HashMap::new();
 
