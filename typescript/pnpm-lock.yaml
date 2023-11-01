@@ -92,12 +92,12 @@ importers:
       klona:
         specifier: 2.0.6
         version: 2.0.6
+      lodash:
+        specifier: ^4.17.21
+        version: 4.17.21
       nyc:
         specifier: 15.1.0
         version: 15.1.0
-      ts-debounce:
-        specifier: ^4.0.0
-        version: 4.0.0
       vscode-languageserver:
         specifier: 8.1.0
         version: 8.1.0
@@ -108,6 +108,9 @@ importers:
         specifier: ^3.0.8
         version: 3.0.8
     devDependencies:
+      '@types/lodash':
+        specifier: ^4.14.200
+        version: 4.14.200
       '@types/mocha':
         specifier: 10.0.3
         version: 10.0.3
@@ -1002,6 +1005,10 @@ packages:
 
   /@types/json-schema@7.0.14:
     resolution: {integrity: sha512-U3PUjAudAdJBeC2pgN8uTIKgxrb4nlDF3SF0++EldXQvQBGkpFZMSnwQiIoDU77tv45VgNkl/L4ouD+rEomujw==}
+    dev: true
+
+  /@types/lodash@4.14.200:
+    resolution: {integrity: sha512-YI/M/4HRImtNf3pJgbF+W6FrXovqj+T+/HpENLTooK9PnkacBsDpeP3IpHab40CClUfhNmdM2WTNP2sa2dni5Q==}
     dev: true
 
   /@types/minimatch@5.1.2:
@@ -2848,6 +2855,10 @@ packages:
     resolution: {integrity: sha512-0KpjqXRVvrYyCsX1swR/XTK0va6VQkQM6MNo7PqW77ByjAhoARA8EfrP1N4+KlKj8YS0ZUCtRT/YUuhyYDujIQ==}
     dev: true
 
+  /lodash@4.17.21:
+    resolution: {integrity: sha512-v2kDEe57lecTulaDIuNTPy3Ry4gLGJ6Z1O3vE1krgXZNrsQ+LFTGHVxVjcXPs17LhbZVGedAJv8XZ1tvj5FvSg==}
+    dev: false
+
   /log-symbols@4.1.0:
     resolution: {integrity: sha512-8XPvpAA8uyhfteu8pIvQxpJZ7SYYdpUivZpGy6sFsBuKRY/7rQGavedeB8aK+Zkyq6upMFVL/9AW6vOYzfRyLg==}
     engines: {node: '>=10'}
@@ -3709,10 +3720,6 @@ packages:
     dependencies:
       is-number: 7.0.0
     dev: true
-
-  /ts-debounce@4.0.0:
-    resolution: {integrity: sha512-+1iDGY6NmOGidq7i7xZGA4cm8DAa6fqdYcvO5Z6yBevH++Bdo9Qt/mN0TzHUgcCcKv1gmh9+W5dHqz8pMWbCbg==}
-    dev: false
 
   /ts-dedent@2.2.0:
     resolution: {integrity: sha512-q5W7tVM71e2xjHZTlgfTDoPF/SmqKG5hddq9SzR49CH2hayqRKJtQ4mtRlSxKaJlR/+9rEM+mnBHf7I2/BQcpQ==}

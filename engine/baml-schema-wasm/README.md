@@ -19,16 +19,18 @@ node -e "const prismaSchema = require('@prisma/prisma-schema-wasm'); console.log
 ## Components
 
 - The GitHub Actions workflow that publishes the NPM package: https://github.com/prisma/prisma-engines/blob/main/.github/workflows/publish-prisma-schema-wasm.yml
-    - It is triggered from the https://github.com/prisma/engines-wrapper publish action.
+  - It is triggered from the https://github.com/prisma/engines-wrapper publish action.
 - The [Rust source code](https://github.com/prisma/prisma-engines/tree/main/prisma-schema-wasm/src) for the wasm module
 - The [nix build definition](https://github.com/prisma/prisma-engines/blob/main/prisma-schema-wasm/default.nix)
-    - It gives us a fully reproducible, thoroughly described build process and environment. The alternative would be a bash script with installs through `rustup`, `cargo install` and `apt`, with underspecified system dependencies and best-effort version pinning.
-    - You can read more about nix on [nix.dev](https://nix.dev/) and the [official website](https://nixos.org/).
+  - It gives us a fully reproducible, thoroughly described build process and environment. The alternative would be a bash script with installs through `rustup`, `cargo install` and `apt`, with underspecified system dependencies and best-effort version pinning.
+  - You can read more about nix on [nix.dev](https://nix.dev/) and the [official website](https://nixos.org/).
 
 ## Local Dev with Language-Tools
+
 When implementing features for `language-tools` in `prisma-engines`, to sync with your local dev environment for the `language-server`, one can do the following:
 
 ### On first setup
+
 ```
 # Install the latest Rust version with `rustup`
 # or update the latest Rust version with `rustup`
@@ -36,7 +38,7 @@ rustup update
 rustup target add wasm32-unknown-unknown
 cargo update -p wasm-bindgen
 # Check the version defined in `prisma-schema-wasm/cargo.toml` for `wasm-bindgen` and replace `version` below:
-cargo install -f wasm-bindgen-cli@version
+cargo install -f wasm-bindgen-cli@0.2.87
 ```
 
 ### On Changes
@@ -46,6 +48,7 @@ cargo install -f wasm-bindgen-cli@version
 ```
 
 This script has the following expectations:
+
 - `language-tools` is in the same dir as `prisma-engines`
   - i.e. `dir/{prisma-engines,language-tools}`
 - it's run in the `prisma-engines` root folder

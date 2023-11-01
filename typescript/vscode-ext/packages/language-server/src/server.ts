@@ -18,7 +18,7 @@ import {
 } from 'vscode-languageserver'
 import { URI } from 'vscode-uri';
 
-import { debounce } from "ts-debounce";
+import debounce from "lodash/debounce";
 import { createConnection, IPCMessageReader, IPCMessageWriter } from 'vscode-languageserver/node'
 import { TextDocument } from 'vscode-languageserver-textdocument'
 
@@ -246,13 +246,19 @@ export function startServer(options?: LSOptions): void {
   }
 
   const debouncedValidateTextDocument = debounce(validateTextDocument, 200, {
-    isImmediate: true,
-    maxWait: 2000,
-  })
+    maxWait: 4000,
+    leading: true,
+    trailing: true,
+  });
 
   documents.onDidChangeContent((change: { document: TextDocument }) => {
     debouncedValidateTextDocument(change.document);
   })
+
+  const debouncedCLIBuild = debounce(cliBuild, 200, {
+    leading: true,
+    trailing: true,
+  });
 
   documents.onDidSave((change: { document: TextDocument }) => {
     const cliPath = config?.path || "baml";
@@ -265,7 +271,7 @@ export function startServer(options?: LSOptions): void {
     bamlDir = URI.parse(bamlDir).fsPath;
     console.log("bamlDir " + bamlDir);
 
-    cliBuild(cliPath, bamlDir, showErrorToast);
+    debouncedCLIBuild(cliPath, bamlDir, showErrorToast);
   })
 
   function getDocument(uri: string): TextDocument | undefined {
