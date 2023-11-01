@@ -2,12 +2,9 @@ mod asserts;
 
 use std::path::PathBuf;
 
+use pretty_assertions::assert_eq;
 
-
-
-use pretty_assertions::{assert_eq};
-
-use baml::{Configuration, SourceFile};
+use baml::{Configuration, Diagnostics, SourceFile};
 
 pub(crate) fn parse_unwrap_err(schema: &str) -> String {
     let path = PathBuf::from("./unknown");
@@ -27,13 +24,16 @@ pub(crate) fn parse_and_validate_schema(datamodel_string: &str) -> baml::Validat
     .unwrap()
 }
 
-pub(crate) fn parse_config(_path: PathBuf, schema: &str) -> Result<Configuration, String> {
+pub(crate) fn parse_config(
+    _path: PathBuf,
+    schema: &str,
+) -> Result<(Configuration, Diagnostics), String> {
     let path = PathBuf::from("./unknown");
     baml::parse_configuration(&path, path.clone(), schema).map_err(|err| err.to_pretty_string())
 }
 
 #[track_caller]
-pub(crate) fn parse_configuration(datamodel_string: &str) -> Configuration {
+pub(crate) fn parse_configuration(datamodel_string: &str) -> (Configuration, Diagnostics) {
     let path = PathBuf::from("./unknown");
     match baml::parse_configuration(&path, path.clone(), datamodel_string) {
         Ok(c) => c,

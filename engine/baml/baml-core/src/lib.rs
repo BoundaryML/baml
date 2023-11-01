@@ -11,7 +11,7 @@ pub use internal_baml_schema_ast::{self, ast};
 use rayon::prelude::*;
 use std::{path::PathBuf, sync::Mutex};
 
-use internal_baml_diagnostics::{DatamodelWarning, Diagnostics, SourceFile, Span};
+use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Diagnostics, SourceFile, Span};
 
 mod common;
 mod configuration;
@@ -106,7 +106,7 @@ pub fn parse_configuration(
     diagnostics.push(diag);
 
     if out.generators.is_empty() {
-        diagnostics.push_warning(DatamodelWarning::new(
+        diagnostics.push_error(DatamodelError::new_validation_error(
             "No generator specified".into(),
             Span {
                 file: main_schema.clone(),
