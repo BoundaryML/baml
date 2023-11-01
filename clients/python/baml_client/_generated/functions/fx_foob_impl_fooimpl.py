@@ -31,7 +31,19 @@ no-tab
   tab1
     tab2
 morespaces here
-{arg.a.c} {arg.b} hi there\
+{arg.a.c} {arg.b} hi there
+Sentiment
+---
+sadness
+HAPPY
+
+Expected JSON format:
+{
+  "sentiment": "Sentiment as string",
+  // this is a description
+  "is_positive": bool
+}
+JSON:\
 """
 
 

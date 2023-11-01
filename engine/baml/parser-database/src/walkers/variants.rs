@@ -5,7 +5,7 @@ use internal_baml_schema_ast::ast::{Identifier, WithName};
 
 use crate::{
     ast::{self, WithIdentifier},
-    types::{SerializerAttributes, VariantProperties},
+    types::{SerializerAttributes, ToStringAttributes, VariantProperties},
 };
 
 use super::{ClientWalker, FunctionWalker, Walker};
@@ -49,7 +49,7 @@ impl<'db> VariantWalker<'db> {
     }
 
     /// Finds a serializer by name
-    pub fn find_serializer(self, name: &str) -> Option<&'db SerializerAttributes> {
+    pub fn find_serializer_attributes(self, name: &str) -> Option<&'db ToStringAttributes> {
         self.ast_variant()
             .iter_serializers()
             .find(|(_, s)| s.name() == name)
@@ -57,6 +57,30 @@ impl<'db> VariantWalker<'db> {
                 self.db.types.variant_attributes[&self.id]
                     .serializers
                     .get(&idx)
+                    .and_then(|f| f.serilizer.as_ref())
+            })
+    }
+
+    /// Finds a serializer for a field by name
+    pub fn find_serializer_field_attributes(
+        self,
+        name: &str,
+        field_name: &str,
+    ) -> Option<&'db ToStringAttributes> {
+        self.ast_variant()
+            .iter_serializers()
+            .find(|(_, s)| s.name() == name)
+            .and_then(|(idx, s)| {
+                let fid = s.field_id_for(field_name);
+
+                if let Some(fid) = fid {
+                    self.db.types.variant_attributes[&self.id]
+                        .serializers
+                        .get(&idx)
+                        .and_then(|s| s.field_serilizers.get(&fid))
+                } else {
+                    None
+                }
             })
     }
 

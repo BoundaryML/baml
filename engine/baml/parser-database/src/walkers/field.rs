@@ -75,7 +75,7 @@ impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
                         json!({
                             "rtype": "enum",
                             "optional": arity.is_optional(),
-                            "name": enm.alias(),
+                            "name": enm.alias(variant),
                         })
                     }
                     None => json!({
@@ -92,33 +92,19 @@ impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
 impl<'db> WithSerializeableContent for FieldWalker<'db> {
     fn serialize_data(&self, variant: &VariantWalker<'_>) -> serde_json::Value {
         json!({
-            "name": self.alias(),
-            "meta": self.meta(),
+            "name": self.alias(variant),
+            "meta": self.meta(variant),
             "type_meta": (self.db, self.r#type()).serialize_data(variant),
         })
     }
 }
 
-impl<'db> WithStaticRenames for FieldWalker<'db> {
-    fn alias(&self) -> String {
-        match self.alias_raw() {
-            Some(id) => self.db[*id].to_string(),
-            None => self.name().to_string(),
-        }
+impl<'db> WithStaticRenames<'db> for FieldWalker<'db> {
+    fn get_override(&self, variant: &VariantWalker<'db>) -> Option<&'db ToStringAttributes> {
+        variant.find_serializer_field_attributes(self.model().name(), self.name())
     }
 
-    fn meta(&self) -> std::collections::HashMap<String, String> {
-        match self.meta_raw() {
-            Some(map) => map
-                .iter()
-                .map(|(k, v)| (self.db[*k].to_string(), self.db[*v].to_string()))
-                .collect(),
-            None => std::collections::HashMap::new(),
-        }
-    }
-
-    /// The parsed attributes.
-    fn attributes(&self) -> Option<&ToStringAttributes> {
+    fn get_default_attributes(&self) -> Option<&'db ToStringAttributes> {
         self.db
             .types
             .class_attributes

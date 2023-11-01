@@ -49,8 +49,8 @@ impl<llm, FooB> FooImpl {
         tab2
     morespaces here
     {#input.a.c} {#input.b} hi there
-    {// {#print_enum(Sentiment)} //}
+    {#print_enum(Sentiment)}
     
-    {// {#print_type(output)} //}
+    {#print_type(output)}
   "#
 }

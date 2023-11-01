@@ -103,32 +103,19 @@ impl<'db> WithSerializeableContent for ClassWalker<'db> {
         json!({
             "rtype": "class",
             "optional": false,
-            "name": self.alias(),
-            "meta": self.meta(),
+            "name": self.alias(variant),
+            "meta": self.meta(variant),
             "fields": self.static_fields().map(|f| f.serialize_data(variant)).collect::<Vec<_>>(),
         })
     }
 }
 
-impl<'db> WithStaticRenames for ClassWalker<'db> {
-    fn alias(&self) -> String {
-        match self.alias_raw() {
-            Some(id) => self.db[*id].to_string(),
-            None => self.name().to_string(),
-        }
+impl<'db> WithStaticRenames<'db> for ClassWalker<'db> {
+    fn get_override(&self, variant: &VariantWalker<'db>) -> Option<&'db ToStringAttributes> {
+        variant.find_serializer_attributes(self.name())
     }
 
-    fn meta(&self) -> HashMap<String, String> {
-        match self.meta_raw() {
-            Some(map) => map
-                .iter()
-                .map(|(k, v)| (self.db[*k].to_string(), self.db[*v].to_string()))
-                .collect::<HashMap<_, _>>(),
-            None => HashMap::new(),
-        }
-    }
-
-    fn attributes(&self) -> Option<&ToStringAttributes> {
+    fn get_default_attributes(&self) -> Option<&'db ToStringAttributes> {
         self.db
             .types
             .class_attributes

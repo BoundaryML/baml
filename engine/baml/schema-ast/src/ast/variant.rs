@@ -1,6 +1,6 @@
 use super::{
-    traits::WithAttributes, Attribute, Comment, ConfigBlockProperty, Identifier, Serializer, Span,
-    WithDocumentation, WithIdentifier, WithSpan,
+    traits::WithAttributes, Attribute, Comment, ConfigBlockProperty, Identifier, Serializer,
+    SerializerFieldId, Span, WithDocumentation, WithIdentifier, WithSpan,
 };
 
 /// An opaque identifier for a field in an AST model. Use the

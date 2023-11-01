@@ -55,32 +55,19 @@ impl<'db> WithName for EnumWalker<'db> {
 impl<'db> WithSerializeableContent for EnumWalker<'db> {
     fn serialize_data(&self, variant: &VariantWalker<'_>) -> serde_json::Value {
         json!({
-            "name": self.alias(),
-            "meta": self.meta(),
+            "name": self.alias(variant),
+            "meta": self.meta(variant),
             "values": self.values().map(|f| f.serialize_data(variant)).collect::<Vec<_>>(),
         })
     }
 }
 
-impl<'db> WithStaticRenames for EnumWalker<'db> {
-    fn alias(&self) -> String {
-        match self.alias_raw() {
-            Some(id) => self.db[*id].to_string(),
-            None => self.name().to_string(),
-        }
+impl<'db> WithStaticRenames<'db> for EnumWalker<'db> {
+    fn get_override(&self, variant: &VariantWalker<'db>) -> Option<&'db ToStringAttributes> {
+        variant.find_serializer_attributes(self.name())
     }
 
-    fn meta(&self) -> HashMap<String, String> {
-        match self.meta_raw() {
-            Some(map) => map
-                .iter()
-                .map(|(k, v)| (self.db[*k].to_string(), self.db[*v].to_string()))
-                .collect::<HashMap<_, _>>(),
-            None => HashMap::new(),
-        }
-    }
-
-    fn attributes(&self) -> Option<&ToStringAttributes> {
+    fn get_default_attributes(&self) -> Option<&'db ToStringAttributes> {
         self.db
             .types
             .enum_attributes
@@ -130,31 +117,18 @@ impl<'db> WithName for EnumValueWalker<'db> {
 impl<'db> WithSerializeableContent for EnumValueWalker<'db> {
     fn serialize_data(&self, variant: &VariantWalker<'_>) -> serde_json::Value {
         json!({
-            "name": self.alias(),
-            "meta": self.meta(),
+            "name": self.alias(variant),
+            "meta": self.meta(variant),
         })
     }
 }
 
-impl<'db> WithStaticRenames for EnumValueWalker<'db> {
-    fn alias(&self) -> String {
-        match self.alias_raw() {
-            Some(id) => self.db[*id].to_string(),
-            None => self.name().to_string(),
-        }
+impl<'db> WithStaticRenames<'db> for EnumValueWalker<'db> {
+    fn get_override(&self, variant: &VariantWalker<'db>) -> Option<&'db ToStringAttributes> {
+        variant.find_serializer_field_attributes(self.r#enum().name(), self.name())
     }
 
-    fn meta(&self) -> HashMap<String, String> {
-        match self.meta_raw() {
-            Some(map) => map
-                .iter()
-                .map(|(k, v)| (self.db[*k].to_string(), self.db[*v].to_string()))
-                .collect::<HashMap<_, _>>(),
-            None => HashMap::new(),
-        }
-    }
-
-    fn attributes(&self) -> Option<&ToStringAttributes> {
+    fn get_default_attributes(&self) -> Option<&'db ToStringAttributes> {
         self.db
             .types
             .enum_attributes

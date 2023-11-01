@@ -1,6 +1,6 @@
 use super::{
     traits::WithAttributes, Attribute, Comment, Identifier, Span, WithDocumentation,
-    WithIdentifier, WithSpan,
+    WithIdentifier, WithName, WithSpan,
 };
 
 /// An opaque identifier for a value in an AST enum. Use the
@@ -48,6 +48,14 @@ impl Serializer {
             .iter()
             .enumerate()
             .map(|(idx, field)| (SerializerFieldId(idx as u32), field))
+    }
+
+    pub fn field_id_for(&self, name: &str) -> Option<SerializerFieldId> {
+        self.fields
+            .iter()
+            .enumerate()
+            .find(|(_, field)| field.name() == name)
+            .map(|(idx, _)| SerializerFieldId(idx as u32))
     }
 }
 

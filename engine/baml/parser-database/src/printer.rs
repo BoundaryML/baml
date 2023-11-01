@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::Deref};
 
 use internal_baml_diagnostics::DatamodelError;
 use internal_baml_prompt_parser::ast::PrinterBlock;
@@ -29,34 +29,60 @@ pub trait WithSerializeableContent {
     /// Trait to render an object.
     fn serialize_data(&self, variant: &VariantWalker<'_>) -> serde_json::Value;
 }
-pub trait WithStaticRenames: WithName {
-    fn alias(&self) -> String;
+pub trait WithStaticRenames<'db>: WithName {
+    fn get_override(&self, variant: &VariantWalker<'db>) -> Option<&'_ ToStringAttributes>;
+    fn get_default_attributes(&self) -> Option<&'db ToStringAttributes>;
 
-    fn meta(&self) -> HashMap<String, String>;
+    fn alias(&'db self, variant: &VariantWalker<'db>) -> String {
+        let (overrides, defaults) = self.get_attributes(variant);
 
-    fn alias_raw(&self) -> Option<&StringId> {
-        match self.static_string_attributes() {
-            Some(a) => match a.alias() {
-                Some(id) => Some(id),
-                None => None,
-            },
-            None => None,
+        let override_alias = overrides.and_then(|o| *o.alias());
+        let base_alias = defaults.and_then(|a| *a.alias());
+        match (override_alias, base_alias) {
+            (Some(id), _) => variant.db[id].to_string(),
+            (None, Some(id)) => variant.db[id].to_string(),
+            (None, None) => self.name().to_string(),
         }
     }
-    fn meta_raw(&self) -> Option<&HashMap<StringId, StringId>> {
-        match self.static_string_attributes() {
-            Some(a) => Some(a.meta()),
-            None => None,
+
+    fn meta(&'db self, variant: &VariantWalker<'db>) -> HashMap<String, String> {
+        let (overrides, defaults) = self.get_attributes(variant);
+
+        let mut meta: HashMap<StringId, StringId> = Default::default();
+        match defaults {
+            Some(a) => {
+                meta.extend(a.meta());
+            }
+            None => {}
+        };
+
+        if let Some(o) = overrides {
+            meta.extend(o.meta());
         }
+
+        meta.iter()
+            .map(|(&k, &v)| (variant.db[k].to_string(), variant.db[v].to_string()))
+            .collect::<HashMap<_, _>>()
     }
-    fn static_string_attributes(&self) -> Option<&StaticStringAttributes> {
-        match self.attributes() {
+
+    fn get_attributes(
+        &'db self,
+        variant: &VariantWalker<'db>,
+    ) -> (
+        Option<&'db StaticStringAttributes>,
+        Option<&'db StaticStringAttributes>,
+    ) {
+        let defaults = match self.get_default_attributes() {
             Some(ToStringAttributes::Static(refs)) => Some(refs),
             _ => None,
-        }
-    }
+        };
+        let overrides = match self.get_override(variant) {
+            Some(ToStringAttributes::Static(refs)) => Some(refs),
+            _ => None,
+        };
 
-    fn attributes(&self) -> Option<&ToStringAttributes>;
+        (overrides, defaults)
+    }
 }
 
 /// Trait
