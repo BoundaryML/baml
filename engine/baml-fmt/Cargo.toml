@@ -33,7 +33,7 @@ structopt = "0.3"
 [features]
 # sigh please don't ask :(
 vendored-openssl = []
-pyo3 = ["baml/use-pyo3"]
+use-pyo3 = ["baml/use-pyo3"]
 
 [target.'cfg(feature = "use-pyo3")'.dependencies]
 baml = { path = "../baml/baml", version = "^0.0.1", features = ["use-pyo3"] }

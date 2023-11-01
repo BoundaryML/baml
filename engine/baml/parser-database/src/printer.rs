@@ -96,5 +96,5 @@ pub fn serialize_with_printer(
     template: Option<&str>,
     json: serde_json::Value,
 ) -> Result<String, String> {
-    Err("Serializers aren't supported here".to_string())
+    "PLACEHOLDER FOR WASM".to_string()
 }
