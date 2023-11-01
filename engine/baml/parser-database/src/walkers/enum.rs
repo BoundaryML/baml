@@ -7,9 +7,7 @@ use serde_json::json;
 
 use crate::{
     ast,
-    template::{
-        serialize_with_template, WithSerialize, WithSerializeableContent, WithStaticRenames,
-    },
+    printer::{serialize_with_printer, WithSerialize, WithSerializeableContent, WithStaticRenames},
     types::{StaticStringAttributes, ToStringAttributes},
     walkers::Walker,
 };
@@ -97,24 +95,17 @@ impl<'db> WithSerialize for EnumWalker<'db> {
         variant: &VariantWalker<'_>,
         block: &PrinterBlock,
     ) -> Result<String, DatamodelError> {
-        if let Some(template) = self.db.get_enum_template(&block.printer.0) {
-            // Eventually we should validate what parameters are in meta.
-            match serialize_with_template("print_enum", template, self.serialize_data(variant)) {
-                Ok(val) => Ok(val),
-                Err(e) => Err(DatamodelError::new_validation_error(
-                    &format!("Error serializing enum: {}\n{}", self.name(), e),
-                    block.span().clone(),
-                )),
-            }
-        } else {
-            let span = match block.printer.1 {
-                Some(ref span) => span,
-                None => block.span(),
-            };
-            Err(DatamodelError::new_validation_error(
-                &format!("No such serializer template: {}", block.printer.0),
-                span.clone(),
-            ))
+        // Eventually we should validate what parameters are in meta.
+        match serialize_with_printer(
+            true,
+            self.db.find_printer(&block.printer),
+            self.serialize_data(variant),
+        ) {
+            Ok(val) => Ok(val),
+            Err(e) => Err(DatamodelError::new_validation_error(
+                &format!("Error serializing enum: {}\n{}", self.name(), e),
+                block.span().clone(),
+            )),
         }
     }
 }

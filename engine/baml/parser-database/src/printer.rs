@@ -1,10 +1,16 @@
 use std::collections::HashMap;
 
-use handlebars::handlebars_helper;
 use internal_baml_diagnostics::DatamodelError;
 use internal_baml_prompt_parser::ast::PrinterBlock;
 use internal_baml_schema_ast::ast::WithName;
-use log::info;
+use pyo3::Python;
+
+mod enum_printer;
+mod printer;
+mod type_printer;
+
+use enum_printer::setup_printer as setup_enum_printer;
+use type_printer::setup_printer as setup_type_printer;
 
 use crate::{
     interner::StringId,
@@ -57,29 +63,22 @@ pub trait WithSerialize: WithSerializeableContent {
     ) -> Result<String, DatamodelError>;
 }
 
-handlebars_helper!(BLOCK_OPEN: |*_args| "{");
-handlebars_helper!(BLOCK_CLOSE: |*_args| "}");
-fn init_hs() -> handlebars::Handlebars<'static> {
-    let mut reg = handlebars::Handlebars::new();
-    reg.register_helper("BLOCK_OPEN", Box::new(BLOCK_OPEN));
-    reg.register_helper("BLOCK_CLOSE", Box::new(BLOCK_CLOSE));
-
-    reg
-}
-
-pub fn serialize_with_template(
-    helper_name: &'static str,
-    template: &str,
+pub fn serialize_with_printer(
+    is_enum: bool,
+    template: Option<&str>,
     json: serde_json::Value,
-) -> Result<String, handlebars::RenderError> {
-    let mut handlebars = init_hs();
-    handlebars.register_partial(helper_name, template)?;
+) -> Result<String, String> {
+    pyo3::prepare_freethreaded_python();
 
-    #[cfg(debug_assertions)]
-    {
-        info!("Rendering template: {}", helper_name);
-        info!("---\n{}\n", serde_json::to_string_pretty(&json).unwrap());
-    }
+    Python::with_gil(|py| {
+        let printer = if is_enum {
+            setup_enum_printer(py, template)
+                .map_err(|e| format!("Failed to create enum printer: {}", e))?
+        } else {
+            setup_type_printer(py, template)
+                .map_err(|e| format!("Failed to create type printer: {}", e))?
+        };
 
-    handlebars.render_template(&format!("{{{{> {} item=this}}}}", helper_name), &json)
+        printer.print(py, json)
+    })
 }

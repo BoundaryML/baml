@@ -1,14 +1,13 @@
 use std::ops::Deref;
 
 use crate::{
-    template::{WithSerializeableContent, WithStaticRenames},
+    printer::{WithSerializeableContent, WithStaticRenames},
     types::ToStringAttributes,
     ParserDatabase,
 };
 
 use super::{ClassWalker, VariantWalker, Walker};
 use internal_baml_schema_ast::ast::{self, FieldType, Identifier, WithName};
-use log::info;
 use serde_json::json;
 
 /// A model field, scalar or relation.
@@ -42,22 +41,22 @@ impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
     fn serialize_data(&self, variant: &VariantWalker<'_>) -> serde_json::Value {
         match self.1 {
             FieldType::Tuple(..) | FieldType::Dictionary(..) => json!({
-                "type": "unsupported",
+                "rtype": "unsupported",
                 "optional": false,
             }),
             FieldType::Union(airty, fts, _) => json!({
-                "type": "union",
+                "rtype": "union",
                 "optional": airty.is_optional(),
                 "options": fts.iter().map(|ft| (self.0, ft).serialize_data(variant)).collect::<Vec<_>>(),
             }),
             FieldType::List(ft, dims, _) => json!({
-                "type": "list",
+                "rtype": "list",
                 "dims": dims,
                 "inner": (self.0, ft.deref()).serialize_data(variant),
             }),
             FieldType::Identifier(arity, Identifier::Primitive(name, ..)) => {
                 json!({
-                    "type": "primitive",
+                    "rtype": "primitive",
                     "optional": arity.is_optional(),
                     "value": match name {
                         ast::TypeValue::Bool => "bool",
@@ -74,13 +73,13 @@ impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
                     Some(either::Either::Left(cls)) => cls.serialize_data(variant),
                     Some(either::Either::Right(enm)) => {
                         json!({
-                            "type": "enum",
+                            "rtype": "enum",
                             "optional": arity.is_optional(),
                             "name": enm.alias(),
                         })
                     }
                     None => json!({
-                        "type": "unsupported",
+                        "rtype": "unsupported",
                         "optional": false,
                     }),
                 }

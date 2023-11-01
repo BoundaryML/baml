@@ -4,17 +4,9 @@
 
 
 __prompt_template = """\
-{{prompt}}\
+{{{prompt}}}\
 """
 
-__output_replacer = {
-    {{#each output_replacers}}
-    "{{key}}": """\
-{{{value}}}\
-"""
-{{#unless @last}},{{/unless}}
-    {{/each}}
-}
 
 # We ignore the type here because baml does some type magic to make this work
 # for inline SpecialForms like Optional, Union, List.

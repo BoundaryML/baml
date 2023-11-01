@@ -64,13 +64,11 @@ impl Hash for PromptVariable {
             }
             PromptVariable::Enum(blk) => {
                 "enum".hash(state);
-                blk.printer.0.hash(state);
-                blk.target.text.hash(state);
+                blk.hash(state);
             }
             PromptVariable::Type(blk) => {
                 "type".hash(state);
-                blk.printer.0.hash(state);
-                blk.target.text.hash(state);
+                blk.hash(state);
             }
         }
     }

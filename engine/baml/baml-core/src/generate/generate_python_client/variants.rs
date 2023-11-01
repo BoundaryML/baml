@@ -30,16 +30,15 @@ impl<'db> JsonHelper for VariantWalker<'db> {
         input.iter().for_each(|(k, val)| {
             prompt = prompt.replace(&k.key(), &format!("{{{}}}", val));
         });
+        output.iter().for_each(|(k, val)| {
+            prompt = prompt.replace(&k.key(), &format!("{}", val));
+        });
 
         json!({
             "name": self.identifier().name(),
             "function": func.json(f),
             "prompt": prompt,
             "client": client.name(),
-            "output_replacers": output.iter().map(|(var, replacement)| json!({
-                "key": var.key(),
-                "value": replacement
-            })).collect::<Vec<_>>(),
         })
     }
 }

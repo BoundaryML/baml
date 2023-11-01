@@ -1,7 +1,7 @@
-generator Default {
-  language python
-  output /Users/vbv/repos/gloo-lang/clients/python/baml_client/_generated
-}
+// generator Default {
+//   language python
+//   output /Users/vbv/repos/gloo-lang/clients/python/baml_client/_generated
+// }
 
 // Enum 
 enum Sentiment {
@@ -23,7 +23,7 @@ class Type1 {
 }
 
 class Type2 {
-  interface1 Type1
+  interface1 string
 
   // comment
   prop2 string

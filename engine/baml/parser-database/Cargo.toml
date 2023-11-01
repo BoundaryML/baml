@@ -22,3 +22,5 @@ textwrap = "0.16.0"
 handlebars = "4.4.0"
 serde.workspace = true
 serde_json.workspace = true
+pyo3 = "0.20.0"
+regex = "1.10.2"

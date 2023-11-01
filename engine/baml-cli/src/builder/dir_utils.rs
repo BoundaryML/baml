@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
-use baml::{parse_configuration, Configuration};
-
+use baml::{parse_configuration, Configuration, Diagnostics};
 
 use crate::errors::CliError;
 
@@ -20,7 +19,9 @@ fn default_baml_dir() -> Result<PathBuf, CliError> {
     Err("Failed to find a directory named: baml_src".into())
 }
 
-pub(crate) fn get_src_dir(baml_dir: &Option<String>) -> Result<(PathBuf, Configuration), CliError> {
+pub(crate) fn get_src_dir(
+    baml_dir: &Option<String>,
+) -> Result<(PathBuf, (Configuration, Diagnostics)), CliError> {
     let src_dir = match baml_dir {
         Some(dir) => PathBuf::from(dir),
         None => match default_baml_dir() {

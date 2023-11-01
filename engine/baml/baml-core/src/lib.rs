@@ -8,11 +8,10 @@ pub use internal_baml_parser_database::{self};
 
 pub use internal_baml_schema_ast::{self, ast};
 
-use log::{info, warn};
 use rayon::prelude::*;
 use std::{path::PathBuf, sync::Mutex};
 
-use internal_baml_diagnostics::{Diagnostics, SourceFile};
+use internal_baml_diagnostics::{DatamodelWarning, Diagnostics, SourceFile, Span};
 
 mod common;
 mod configuration;
@@ -37,9 +36,6 @@ impl std::fmt::Debug for ValidatedSchema {
 }
 
 pub fn generate(db: &ParserDatabase, configuration: &Configuration) -> std::io::Result<()> {
-    if configuration.generators.is_empty() {
-        warn!("No generators specified in configuration");
-    }
     for gen in configuration.generators.iter() {
         generate::generate_pipeline(db, gen)?;
     }
@@ -103,12 +99,28 @@ pub fn validate(root_path: &PathBuf, files: Vec<SourceFile>) -> ValidatedSchema 
 pub fn parse_configuration(
     root_path: &PathBuf,
     main_schema: &SourceFile,
-) -> Result<Configuration, Diagnostics> {
+) -> Result<(Configuration, Diagnostics), Diagnostics> {
     let (ast, mut diagnostics) = internal_baml_schema_ast::parse_schema(root_path, main_schema)?;
 
     let (out, diag) = validate_configuration(root_path, &ast);
     diagnostics.push(diag);
-    diagnostics.to_result().map(|_| out)
+
+    if out.generators.is_empty() {
+        diagnostics.push_warning(DatamodelWarning::new(
+            "No generator specified".into(),
+            Span {
+                file: main_schema.clone(),
+                start: 0,
+                end: 0,
+            },
+        ));
+    }
+
+    if diagnostics.has_errors() {
+        return Err(diagnostics);
+    }
+
+    Ok((out, diagnostics))
 }
 
 fn validate_configuration(

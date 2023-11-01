@@ -31,28 +31,9 @@ no-tab
   tab1
     tab2
 morespaces here
-{arg.a.c} {arg.b} hi there
-JSON:
-{//BAML_CLIENT_REPLACE_ME_MAGIC_Sentiment//}
-{//BAML_CLIENT_REPLACE_ME_MAGIC_output//}\
+{arg.a.c} {arg.b} hi there\
 """
 
-__output_replacer = {
-    "{//BAML_CLIENT_REPLACE_ME_MAGIC_output//}": """\
-{	
-    "sentiment": "Sentiment as string",	// this is a description
-    "is_positive": bool
-}\
-"""
-,
-    "{//BAML_CLIENT_REPLACE_ME_MAGIC_Sentiment//}": """\
-Sentiment:
-
-
-\
-"""
-
-}
 
 # We ignore the type here because baml does some type magic to make this work
 # for inline SpecialForms like Optional, Union, List.

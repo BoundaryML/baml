@@ -49,8 +49,8 @@ impl<llm, FooB> FooImpl {
         tab2
     morespaces here
     {#input.a.c} {#input.b} hi there
-    JSON:
-    {#print_enum(Sentiment)}
-    {#print_type(output)}
+    {// {#print_enum(Sentiment)} //}
+    
+    {// {#print_type(output)} //}
   "#
 }

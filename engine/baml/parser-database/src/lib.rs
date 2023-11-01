@@ -33,7 +33,7 @@ mod coerce_expression;
 mod context;
 mod interner;
 mod names;
-mod template;
+mod printer;
 mod types;
 
 use std::collections::{HashMap, HashSet};
@@ -43,13 +43,12 @@ use either::Either;
 use internal_baml_prompt_parser::ast::WithSpan as WithPromptSpan;
 pub use internal_baml_schema_ast::ast;
 use internal_baml_schema_ast::ast::{SchemaAst, WithName, WithSpan};
-use log::info;
 pub use types::{PromptVariable, StaticType};
 
 use self::{context::Context, interner::StringId, types::Types};
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Diagnostics};
 use names::Names;
-pub use template::WithSerialize;
+pub use printer::WithSerialize;
 
 /// ParserDatabase is a container for a Schema AST, together with information
 /// gathered during schema validation. Each validation step enriches the

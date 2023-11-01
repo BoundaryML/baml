@@ -23,16 +23,11 @@ a ;asdf;kljla
 asflk;jasdf
 {arg}
 
-{//BAML_CLIENT_REPLACE_ME_MAGIC_output//}\
-"""
-
-__output_replacer = {
-    "{//BAML_CLIENT_REPLACE_ME_MAGIC_output//}": """\
+Expected JSON format:
 string
-\
+JSON:\
 """
 
-}
 
 # We ignore the type here because baml does some type magic to make this work
 # for inline SpecialForms like Optional, Union, List.

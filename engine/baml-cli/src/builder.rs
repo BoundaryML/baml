@@ -10,23 +10,8 @@ use crate::{
     errors::CliError,
 };
 
-// Walk up a directory until you find a directory named: baml_src
-fn default_baml_dir() -> Result<PathBuf, &'static str> {
-    let mut current_dir = std::env::current_dir().unwrap();
-    loop {
-        let baml_dir = current_dir.join("baml_src");
-        if baml_dir.exists() {
-            return Ok(baml_dir);
-        }
-        if !current_dir.pop() {
-            break;
-        }
-    }
-    Err("Failed to find a directory named: baml_src")
-}
-
 pub fn build(baml_dir: &Option<String>) -> Result<(), CliError> {
-    let (baml_dir, config) = get_src_dir(baml_dir)?;
+    let (baml_dir, (config, diagnostics)) = get_src_dir(baml_dir)?;
     let src_files = get_src_files(&baml_dir)?;
 
     info!(
@@ -45,8 +30,16 @@ pub fn build(baml_dir: &Option<String>) -> Result<(), CliError> {
 
     parsed.diagnostics.to_result()?;
 
-    if let Err(err) = generate_schema(&parsed, &config) {
-        return Err(err.to_string().into());
+    if parsed.diagnostics.has_warnings() {
+        log::warn!("{}", parsed.diagnostics.warnings_to_pretty_string());
     }
-    Ok(())
+
+    if diagnostics.has_warnings() {
+        log::warn!("{}", diagnostics.warnings_to_pretty_string());
+    }
+
+    match generate_schema(&parsed, &config) {
+        Ok(_) => Ok(()),
+        Err(err) => Err(err.to_string().into()),
+    }
 }

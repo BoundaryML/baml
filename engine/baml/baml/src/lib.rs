@@ -16,7 +16,7 @@ pub fn parse_configuration(
     root_path: &PathBuf,
     path: impl Into<PathBuf>,
     schema: &str,
-) -> Result<Configuration, Diagnostics> {
+) -> Result<(Configuration, Diagnostics), Diagnostics> {
     let source = SourceFile::from((path.into(), schema));
     internal_baml_core::parse_configuration(root_path, &source)
 }

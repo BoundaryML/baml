@@ -33,7 +33,7 @@ impl CodeBlock {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct PrinterBlock {
-    pub printer: (String, Option<Span>),
+    pub printer: Option<(String, Span)>,
     pub target: Variable,
 }
 
@@ -46,7 +46,9 @@ impl PrinterBlock {
 
 impl Hash for PrinterBlock {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.printer.0.hash(state);
+        if let Some(printer) = &self.printer {
+            printer.0.hash(state);
+        }
         self.target.text.hash(state);
     }
 }

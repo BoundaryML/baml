@@ -8,6 +8,7 @@
 
 from ..._impl.functions import BaseBAMLFunction
 from ..types.classes.cls_type1 import Type1
+from ..types.classes.cls_type2 import Type2
 from typing import Protocol, runtime_checkable
 
 

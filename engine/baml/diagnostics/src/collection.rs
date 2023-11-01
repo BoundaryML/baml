@@ -72,6 +72,10 @@ impl Diagnostics {
         !self.errors.is_empty()
     }
 
+    pub fn has_warnings(&self) -> bool {
+        !self.warnings.is_empty()
+    }
+
     pub fn to_result(&mut self) -> Result<(), Diagnostics> {
         if self.has_errors() {
             Err(std::mem::take(self))

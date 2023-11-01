@@ -218,24 +218,21 @@ fn handle_print_block(
         }
     }
 
-    let mut printer = "json";
-    if let Some(template_span) = &template_span {
+    let printer = if let Some(template_span) = template_span {
         match template_args.len() {
-            0 => {
-                printer = "json";
-            }
-            1 => {
-                printer = template_args[0].as_str();
-            }
+            0 => None,
+            1 => Some((template_args[0].as_str().to_string(), template_span)),
             _ => {
                 diagnostics.push_error(DatamodelError::new_validation_error(
                     "May only use 0 or 1 template args.",
                     template_span.clone(),
                 ));
-                return;
+                None
             }
         }
-    }
+    } else {
+        None
+    };
 
     let argument = match argument.len() {
         1 => Some(&argument[0]),
@@ -244,7 +241,7 @@ fn handle_print_block(
 
     let block = match (printer_type, argument) {
         (Some(true), Some((argument, arg_span))) => Some(CodeBlock::PrintEnum(PrinterBlock {
-            printer: (printer.into(), template_span),
+            printer,
             target: Variable {
                 path: vec![argument.clone()],
                 text: argument.clone(),
@@ -252,7 +249,7 @@ fn handle_print_block(
             },
         })),
         (Some(false), Some((argument, arg_span))) => Some(CodeBlock::PrintType(PrinterBlock {
-            printer: (printer.into(), template_span),
+            printer,
             target: Variable {
                 path: vec![argument.clone()],
                 text: argument.clone(),

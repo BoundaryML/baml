@@ -16,6 +16,7 @@ mod variants;
 pub use client::*;
 use either::Either;
 pub use function::*;
+use internal_baml_diagnostics::Span;
 use internal_baml_schema_ast::ast::{Identifier, TopId, WithName};
 pub use r#class::*;
 pub use r#enum::*;
@@ -70,6 +71,14 @@ impl crate::ParserDatabase {
             })
     }
 
+    /// Find the correct printer.
+    pub fn find_printer<'db>(&'db self, printer: &Option<(String, Span)>) -> Option<&str> {
+        match printer {
+            Some((..)) => None,
+            None => None,
+        }
+    }
+
     /// Find a type by name.
     pub fn find_type<'db>(
         &'db self,
@@ -110,22 +119,6 @@ impl crate::ParserDatabase {
     /// Traverse a schema element by id.
     pub fn walk<I>(&self, id: I) -> Walker<'_, I> {
         Walker { db: self, id }
-    }
-
-    /// Get the template for a given printer.
-    pub fn get_enum_template(&self, name: &str) -> Option<&str> {
-        match name {
-            "json" => Some(include_str!("./templates/print_enum_json.hb")),
-            _ => None,
-        }
-    }
-
-    /// Get the template for a given printer.
-    pub fn get_class_template(&self, name: &str) -> Option<&str> {
-        match name {
-            "json" => Some(include_str!("./templates/print_class_json.hb")),
-            _ => None,
-        }
     }
 
     /// Get all the types that are valid in the schema. (including primitives)
