@@ -7,7 +7,10 @@ use internal_baml_parser_database::{
     ast::{self, Expression, WithDocumentation, WithName},
     coerce,
 };
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 const LANGUAGE_KEY: &str = "language";
 const OUTPUT_KEY: &str = "output";
@@ -78,8 +81,9 @@ fn lift_generator(
 
     let output = args
         .get(OUTPUT_KEY)
-        .and_then(|v| coerce::string(v, diagnostics))
-        .and_then(|v| Some(v.to_string()));
+        .and_then(|v| coerce::path(v, diagnostics))
+        .and_then(|v| Some(PathBuf::from(v)))
+        .unwrap_or(PathBuf::from("../baml_gen"));
 
     let mut properties = HashMap::new();
 
@@ -109,7 +113,10 @@ fn lift_generator(
         name: String::from(ast_generator.name()),
         language: String::from(language),
         source_path: diagnostics.root_path.clone(),
-        output,
+        output: match output.is_absolute() {
+            true => output,
+            false => diagnostics.root_path.join(output),
+        },
         config: properties,
         documentation: ast_generator.documentation().map(String::from),
     })

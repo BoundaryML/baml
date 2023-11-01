@@ -57,6 +57,20 @@ impl Expression {
         }
     }
 
+    pub fn as_path_value(&self) -> Option<(&str, &Span)> {
+        match self {
+            Expression::StringValue(s, span) => Some((s, span)),
+            Expression::RawStringValue(s, span) if !(s == "true" || s == "false") => {
+                Some((s, span))
+            }
+            Expression::Identifier(Identifier::String(id, span)) => Some((id, span)),
+            Expression::Identifier(Identifier::Invalid(id, span)) => Some((id, span)),
+            Expression::Identifier(Identifier::Local(id, span)) => Some((id, span)),
+            Expression::Identifier(Identifier::Ref(id, span)) => Some((&id.full_name, span)),
+            _ => None,
+        }
+    }
+
     pub fn as_string_value(&self) -> Option<(&str, &Span)> {
         match self {
             Expression::StringValue(s, span) => Some((s, span)),

@@ -1,7 +1,7 @@
-// generator Default {
-//   language python
-//   output /Users/vbv/repos/gloo-lang/clients/python/baml_client/_generated
-// }
+generator Default {
+  language python
+  output ../../clients/python/baml_client/_generated
+}
 
 // Enum 
 enum Sentiment {

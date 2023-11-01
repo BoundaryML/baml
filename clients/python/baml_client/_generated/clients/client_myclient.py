@@ -13,9 +13,9 @@ from os import environ
 MyClient = llm_provider_factory(
     provider="openai",
     options=dict(
-        my_custom_var="some string with spaces",
         temperature=0.3,
-        model="gpt-35-turbo",
+        my_custom_var="some string with spaces",
         api_key=environ['OPENAI_API_KEY'],
+        model="gpt-35-turbo",
     ),
 )

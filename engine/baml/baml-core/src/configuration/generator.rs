@@ -43,7 +43,7 @@ pub struct Generator {
     pub name: String,
     pub language: String,
     pub source_path: PathBuf,
-    pub output: Option<String>,
+    pub output: PathBuf,
     pub config: HashMap<String, GeneratorConfigValue>,
 
     #[serde(skip_serializing_if = "Option::is_none")]

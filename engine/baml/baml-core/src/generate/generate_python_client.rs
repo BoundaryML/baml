@@ -1,3 +1,8 @@
+use std::{
+    fs::canonicalize,
+    path::{self, PathBuf},
+};
+
 use internal_baml_parser_database::ParserDatabase;
 use internal_baml_schema_ast::ast::WithName;
 use log::info;
@@ -35,11 +40,18 @@ pub(crate) fn generate_py(db: &ParserDatabase, gen: &Generator) -> std::io::Resu
     db.walk_clients()
         .for_each(|f| generate_py_file(&f, &mut fc));
     generate_py_file(db, &mut fc);
-    info!(
-        "Writing files to {}",
-        &gen.output.as_ref().unwrap().to_string()
-    );
-    fc.write(&gen.output)
+    info!("Writing files to {}", gen.output.to_string_lossy());
+    let temp_path = PathBuf::from(format!("{}.tmp", &gen.output.to_string_lossy().to_string()));
+    match fc.write(&temp_path) {
+        Ok(_) => {
+            let _ = std::fs::remove_dir_all(&gen.output);
+            std::fs::rename(&temp_path, &gen.output)
+        }
+        Err(e) => {
+            let _ = std::fs::remove_file(&temp_path);
+            Err(e)
+        }
+    }
 }
 
 impl WithWritePythonString for ParserDatabase {

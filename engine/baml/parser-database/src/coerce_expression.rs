@@ -22,6 +22,7 @@ impl_coercions! {
     'a;
     constant : "constant" => &'a str;
     string : "string" => &'a str;
+    path: "path" => &'a str;
     string_with_span : "string" => (&'a str, &'a ast::Span);
     constant_with_span : "constant" => (&'a str, &'a ast::Span);
     boolean : "boolean" => bool;
@@ -37,6 +38,10 @@ pub mod coerce_opt {
 
     pub fn constant<'a>(expr: &'a ast::Expression) -> Option<&'a str> {
         expr.as_constant_value().map(|(s, _)| s)
+    }
+
+    pub fn path<'a>(expr: &'a ast::Expression) -> Option<&'a str> {
+        expr.as_path_value().map(|(s, _)| s)
     }
 
     pub fn string<'a>(expr: &'a ast::Expression) -> Option<&'a str> {
