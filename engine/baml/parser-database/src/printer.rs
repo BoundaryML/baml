@@ -3,13 +3,19 @@ use std::collections::HashMap;
 use internal_baml_diagnostics::DatamodelError;
 use internal_baml_prompt_parser::ast::PrinterBlock;
 use internal_baml_schema_ast::ast::WithName;
-use pyo3::Python;
 
+#[cfg(feature = "use-pyo3")]
+use pyo3::Python;
+#[cfg(feature = "use-pyo3")]
 mod enum_printer;
+#[cfg(feature = "use-pyo3")]
 mod printer;
+#[cfg(feature = "use-pyo3")]
 mod type_printer;
 
+#[cfg(feature = "use-pyo3")]
 use enum_printer::setup_printer as setup_enum_printer;
+#[cfg(feature = "use-pyo3")]
 use type_printer::setup_printer as setup_type_printer;
 
 use crate::{
@@ -63,6 +69,7 @@ pub trait WithSerialize: WithSerializeableContent {
     ) -> Result<String, DatamodelError>;
 }
 
+#[cfg(feature = "use-pyo3")]
 pub fn serialize_with_printer(
     is_enum: bool,
     template: Option<&str>,
@@ -81,4 +88,13 @@ pub fn serialize_with_printer(
 
         printer.print(py, json)
     })
+}
+
+#[cfg(not(feature = "use-pyo3"))]
+pub fn serialize_with_printer(
+    is_enum: bool,
+    template: Option<&str>,
+    json: serde_json::Value,
+) -> Result<String, String> {
+    Err("Serializers aren't supported here".to_string())
 }

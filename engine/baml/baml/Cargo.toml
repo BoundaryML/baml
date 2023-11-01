@@ -20,3 +20,8 @@ indoc.workspace = true
 either = "1.8.1"
 strip-ansi-escapes = "0.2.0"
 
+[target.'cfg(feature = "use-pyo3")'.dependencies]
+internal-baml-core = { path = "../baml-core", version = "^0.0.1", features = ["use-pyo3"] }
+
+[features]
+use-pyo3 = ["internal-baml-core/use-pyo3"]

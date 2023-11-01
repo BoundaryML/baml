@@ -166,7 +166,6 @@ dependencies = [
  "glob",
  "indoc",
  "log",
- "pyo3",
  "semver",
 ]
 

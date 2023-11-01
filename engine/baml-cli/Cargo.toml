@@ -8,14 +8,13 @@ licence = "Apache-2.0"
 licence-file.workspace = true
 
 [dependencies]
-baml = { path = "../baml/baml", version = "^0.0.1" }
+baml = { path = "../baml/baml", version = "^0.0.1", features = ["use-pyo3"]}
 check-latest = "1.0.2"
 clap = { version = "4.4.6", features = ["derive"] }
 colored = "2.0.4"
 env_logger = "0.10.0"
 glob = "0.3.1"
 log = "0.4.20"
-pyo3 = "0.20.0"
 semver = "1.0.20"
 
 [dev-dependencies]
