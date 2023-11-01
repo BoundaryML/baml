@@ -66,6 +66,10 @@ impl WithWritePythonString for ParserDatabase {
             fc.last_file().add_import(
                 &format!(".functions.{}", f.file_name()),
                 &format!("I{}", f.name()),
+            );
+            fc.last_file().add_import(
+                &format!(".functions.{}", f.file_name()),
+                &format!("I{}Output", f.name()),
             )
         });
 

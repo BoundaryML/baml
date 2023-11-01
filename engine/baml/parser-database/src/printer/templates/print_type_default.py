@@ -115,7 +115,7 @@ def print_type(item: DataType) -> str:
         return printer(item)
 
     if item["rtype"] == "output":
-        return f'Expected JSON format:\n{print_type(item["value"])}\nJSON:'
+        return f'{print_type(item["value"])}'
 
     if item["rtype"] == "inline":
         return print_type(item["value"])

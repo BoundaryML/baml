@@ -1,3 +1,5 @@
+I{{name}}Output = {{this.return.0.type}}
+
 @runtime_checkable
 class I{{name}}(Protocol):
     """
