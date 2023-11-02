@@ -108,6 +108,8 @@ class ObjectDeserializer(BaseDeserializer[T]):
             return Result.from_value(parsed_item)
         except Exception as e:
             diagnostics.push_error(
-                DeserializerError.create_error(f"Failed to parse object: {e}")
+                DeserializerError.create_error(
+                    f"Failed to parse into {self.__model.__name__}: {e}"
+                )
             )
             return Result.failed()

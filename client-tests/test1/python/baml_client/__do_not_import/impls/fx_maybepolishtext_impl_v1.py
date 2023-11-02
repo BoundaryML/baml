@@ -48,9 +48,7 @@ Output JSON:
 JSON:\
 """
 
-__input_replacers = {
-    "arg.thread.thread"
-}
+__input_replacers = {"arg.thread.thread"}
 
 
 # We ignore the type here because baml does some type magic to make this work

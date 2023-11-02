@@ -75,7 +75,7 @@ def type_to_definition(t: typing.Type[typing.Any]) -> ITypeDefinition:
             # Special case for Optional types (Union[X, NoneType])
             if len(t.__args__) == 2 and type(None) in t.__args__:
                 # union_args.remove(None)
-                return __get_optional_type(t.__args__[0])
+                return __get_optional_type(type_to_definition(t.__args__[0]))
             else:
                 union_args = [type_to_definition(sub_t) for sub_t in t.__args__]
             return __get_union_type(union_args)

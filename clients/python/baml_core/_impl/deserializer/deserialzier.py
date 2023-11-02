@@ -45,15 +45,17 @@ class Deserializer(typing.Generic[T]):
                 False
             ), f"Cannot overload {name} with aliases for {type(default_serializer)}"
 
-    def __from_lut(self, dfn: ITypeDefinition) -> BaseDeserializer[typing.Any]:
+    def __from_lut(self, dfn: ITypeDefinition) -> BaseDeserializer[T]:
         if dfn["type"] == "List":
-            return ListDeserializer(item=dfn["item"])
+            return typing.cast(BaseDeserializer[T], ListDeserializer(item=dfn["item"]))
         if dfn["type"] == "Union":
             return UnionDeserializer(
                 *dfn["choices"],
             )
         if dfn["type"] == "Optional":
-            return OptionalDeserializer(item=dfn["item"])
+            return typing.cast(
+                BaseDeserializer[T], OptionalDeserializer(item=dfn["item"])
+            )
         if dfn["type"] == "Ref":
             key = dfn["ref"]
             if key.__name__ in self.__lut:
@@ -71,4 +73,4 @@ class Deserializer(typing.Generic[T]):
         deserializer = self.__from_lut(self.__target)
         result = deserializer.coerce(raw, diagnostics, self.__from_lut)
         diagnostics.to_exception(s)
-        return typing.cast(T, result.as_value)
+        return result.as_value

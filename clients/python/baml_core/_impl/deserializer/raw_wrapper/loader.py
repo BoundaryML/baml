@@ -39,7 +39,7 @@ def __from_value(val: typing.Any) -> RawWrapper:
                 return RawBaseWrapper(float(str_val))
             return RawBaseWrapper(int(str_val))
 
-        is_list = re.match(r"^\[.*\]$", str_val)
+        is_list = str_val.startswith("[") and str_val.endswith("]")
         if is_list:
             try:
                 parsed_list = typing.cast(typing.List[typing.Any], json.loads(str_val))
@@ -47,7 +47,7 @@ def __from_value(val: typing.Any) -> RawWrapper:
                 parsed_list = None
             if parsed_list:
                 return ListRawWrapper([__from_value(item) for item in parsed_list])
-        is_dict = re.match(r"^\{.*\}$", str_val)
+        is_dict = str_val.startswith("{") and str_val.endswith("}")
         if is_dict:
             try:
                 parsed_obj = typing.cast(
