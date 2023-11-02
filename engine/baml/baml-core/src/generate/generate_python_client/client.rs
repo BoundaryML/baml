@@ -73,12 +73,17 @@ impl JsonHelper for Expression {
 
 impl JsonHelper for ClientWalker<'_> {
     fn json(&self, f: &mut File) -> serde_json::Value {
-        let opts: HashMap<String, Value> = HashMap::from_iter(
-            self.properties()
-                .options
-                .iter()
-                .map(|(k, v)| (k.clone(), v.json(f))),
-        );
+        let opts = self
+            .properties()
+            .options
+            .iter()
+            .map(|(k, v)| {
+                json!({
+                            "key": k.clone(),
+                            "value": v.json(f)
+                })
+            })
+            .collect::<Vec<_>>();
 
         json!({
             "name": self.name(),

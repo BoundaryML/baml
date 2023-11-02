@@ -103,7 +103,7 @@ pub struct VariantProperties {
 #[derive(Debug, Clone)]
 pub struct ClientProperties {
     pub provider: String,
-    pub options: HashMap<String, Expression>,
+    pub options: Vec<(String, Expression)>,
 }
 
 #[derive(Debug, Default)]
@@ -222,7 +222,7 @@ fn visit_function<'db>(idx: FunctionId, function: &'db ast::Function, ctx: &mut 
 
 fn visit_client<'db>(idx: ClientId, client: &'db ast::Client, ctx: &mut Context<'db>) {
     let mut provider = None;
-    let mut options: HashMap<String, Expression> = HashMap::new();
+    let mut options: Vec<(String, Expression)> = Vec::new();
     client
         .iter_fields()
         .for_each(|(_idx, field)| match field.name() {
@@ -255,7 +255,7 @@ fn visit_client<'db>(idx: ClientId, client: &'db ast::Client, ctx: &mut Context<
                     Some(ast::Expression::Map(map, span)) => {
                         map.iter().for_each(|(key, value)| {
                             if let Some(key) = coerce::string(key, &mut ctx.diagnostics) {
-                                options.insert(key.to_string(), value.clone());
+                                options.push((key.to_string(), value.clone()));
                             } else {
                                 ctx.push_error(DatamodelError::new_validation_error(
                                     "Expected a string key.",

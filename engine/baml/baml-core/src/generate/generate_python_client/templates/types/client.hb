@@ -3,7 +3,7 @@
     {{key}}={{{value}}},
     {{/each}}
     options=dict(
-        {{#each options as |value key|}}
+        {{#each options}}
         {{key}}={{{value}}},
         {{/each}}
     ),
