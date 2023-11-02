@@ -1,7 +1,11 @@
 use std::collections::HashSet;
 
-use internal_baml_parser_database::walkers::{EnumWalker, FunctionWalker, VariantWalker};
-use internal_baml_schema_ast::ast::{FunctionId, TopId, WithName};
+use either::Either;
+use internal_baml_parser_database::{
+    walkers::{EnumWalker, FunctionWalker, VariantWalker},
+    WithStaticRenames,
+};
+use internal_baml_schema_ast::ast::{FunctionId, TopId, WithAttributes, WithName};
 
 use log::info;
 use serde_json::json;
@@ -46,6 +50,55 @@ impl<'db> JsonHelper for VariantWalker<'db> {
             "prompt": prompt,
             "client": client.name(),
             "inputs": inputs,
+            "overrides": self.ast_variant().iter_serializers().filter_map(|(k, v)| {
+                let matches = match self.db.find_type_by_str(v.name()) {
+                    Some(Either::Left(cls)) => {
+                        cls.static_fields().filter_map(|f| {
+                            let (overrides, _) = f.get_attributes(self);
+                            match overrides.and_then(|o| Some(o.alias())) {
+                                Some(Some(id)) => {
+                                    Some(json!({
+                                        "alias": self.db[*id].to_string(),
+                                        "value": f.name(),
+                                    }))
+                                },
+                                _ => {
+                                    None
+                                }
+                            }
+                        }).collect::<Vec<_>>()
+                    },
+                    Some(Either::Right(enm)) => {
+                        info!("Skipping variant {}", v.name());
+                        enm.values().filter_map(|f| {
+                            let (overrides, _) = f.get_attributes(self);
+                            match overrides.and_then(|o| Some(o.alias())) {
+                                Some(Some(id)) => {
+                                    Some(json!({
+                                        "alias": self.db[*id].to_string(),
+                                        "value": f.name(),
+                                    }))
+                                },
+                                _ => {
+                                    None
+                                }
+                            }
+                        }).collect::<Vec<_>>()
+                    },
+                    None => {
+                        Vec::new()
+                    }
+                };
+
+                if matches.is_empty() {
+                    None
+                } else {
+                    Some(json!({
+                        "name": v.name(),
+                        "aliases": matches,
+                    }))
+                }
+            }).collect::<Vec<_>>(),
         })
     }
 }

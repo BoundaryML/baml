@@ -23,7 +23,7 @@ impl<llm, MaybePolishText> v1 {
     client AZURE_GPT4
 
     override ImprovedResponse {
-        should_improve @description(false if the response is already contextual and pleasant)
+        should_improve @description(false if the response is already contextual and pleasant) @alias("ShouldImprove")
         improved_response @description(string if should_improve else null)
     }
 

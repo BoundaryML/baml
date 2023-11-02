@@ -49,6 +49,7 @@ class ObjectDeserializer(BaseDeserializer[T]):
         super().__init__(rank=5)
         self.__model = model
         self.__fields = _generate_type_definitions_for_model(model)
+        # This field is alias to value.
         self.__alias_to_field = alias_to_field
 
     def copy_with_aliases(

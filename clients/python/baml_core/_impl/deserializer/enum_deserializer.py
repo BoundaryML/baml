@@ -30,6 +30,7 @@ class EnumDeserializer(BaseDeserializer[T]):
     ):
         super().__init__(rank=5)
         self.__enm = enm
+        # This field is alias to value.
         self.__value_aliases = aliases
 
     def copy_with_aliases(

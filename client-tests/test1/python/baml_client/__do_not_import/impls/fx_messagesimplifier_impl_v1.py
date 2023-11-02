@@ -45,7 +45,6 @@ __input_replacers = {
 # for inline SpecialForms like Optional, Union, List.
 __deserializer = Deserializer[str](str)  # type: ignore
 
-
 @BAMLMessageSimplifier.register_impl("v1")
 async def v1(arg: Conversation, /) -> str:
     updates = {k: k.format(arg=arg) for k in __input_replacers}

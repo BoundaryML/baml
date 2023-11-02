@@ -39,7 +39,7 @@ Previous Response: {arg.thread.thread}
 Output JSON:
 {
   // false if the response is already contextual and pleasant
-  "should_improve": bool,
+  "ShouldImprove": bool,
   // string if should_improve else null
   "improved_response": string | null
 }
@@ -55,7 +55,7 @@ __input_replacers = {
 # We ignore the type here because baml does some type magic to make this work
 # for inline SpecialForms like Optional, Union, List.
 __deserializer = Deserializer[ImprovedResponse](ImprovedResponse)  # type: ignore
-
+__deserializer.overload(ImprovedResponse, {"ShouldImprove": "should_improve"})
 
 @BAMLMaybePolishText.register_impl("v1")
 async def v1(arg: ProposedMessage, /) -> ImprovedResponse:
