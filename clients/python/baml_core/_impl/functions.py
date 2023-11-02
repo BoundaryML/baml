@@ -3,6 +3,7 @@ This module provides the implementation for BAML functions.
 It includes classes and helper functions to register, run and test BAML functions.
 """
 
+import asyncio
 import functools
 import inspect
 import types
@@ -145,10 +146,21 @@ class BaseBAMLFunction(typing.Generic[RET]):
                 sig_params == expected_sig_params
             ), f"{self._name} {sig} does not match expected signature {expected_sig}"
 
-            @functools.wraps(cb)
-            def wrapper(*args: typing.Any, **kwargs: typing.Any) -> typing.Any:
-                create_event("variant", {"name": name})
-                return cb(*args, **kwargs)
+            if asyncio.iscoroutinefunction(cb):
+
+                @functools.wraps(cb)
+                async def wrapper(
+                    *args: typing.Any, **kwargs: typing.Any
+                ) -> typing.Any:
+                    create_event("variant", {"name": name})
+                    return await cb(*args, **kwargs)
+
+            else:
+
+                @functools.wraps(cb)
+                def wrapper(*args: typing.Any, **kwargs: typing.Any) -> typing.Any:
+                    create_event("variant", {"name": name})
+                    return cb(*args, **kwargs)
 
             wrapper.__name__ = self.__name
 
