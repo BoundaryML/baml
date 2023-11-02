@@ -17,6 +17,6 @@ from pydantic import BaseModel
 from typing import List
 
 
-@register_deserializer()
+@register_deserializer({  })
 class Conversation(BaseModel):
     thread: List[Message]

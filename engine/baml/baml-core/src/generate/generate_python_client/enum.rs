@@ -1,4 +1,7 @@
-use internal_baml_parser_database::walkers::EnumWalker;
+use internal_baml_parser_database::{
+    walkers::{EnumValueWalker, EnumWalker},
+    WithStaticRenames,
+};
 use internal_baml_schema_ast::ast::WithName;
 use serde_json::json;
 
@@ -14,7 +17,16 @@ impl JsonHelper for EnumWalker<'_> {
     fn json(&self, _f: &mut File) -> serde_json::Value {
         json!({
             "name": self.name(),
-            "values": self.values().map(|v| v.name().to_string()).collect::<Vec<_>>(),
+            "values": self.values().map(|v| v.json(_f)).collect::<Vec<_>>(),
+        })
+    }
+}
+
+impl JsonHelper for EnumValueWalker<'_> {
+    fn json(&self, _f: &mut File) -> serde_json::Value {
+        json!({
+            "name": self.name(),
+            "alias": self.maybe_alias(self.db),
         })
     }
 }

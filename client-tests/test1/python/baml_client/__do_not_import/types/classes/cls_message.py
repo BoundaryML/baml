@@ -15,7 +15,7 @@ from baml_core._impl.deserializer import register_deserializer
 from pydantic import BaseModel
 
 
-@register_deserializer()
+@register_deserializer({ "sender1": "sender","body1": "body", })
 class Message(BaseModel):
     sender: MessageSender
     body: str

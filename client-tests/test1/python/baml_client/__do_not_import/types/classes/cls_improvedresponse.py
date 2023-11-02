@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 
-@register_deserializer()
+@register_deserializer({  })
 class ImprovedResponse(BaseModel):
     should_improve: bool
     improved_response: Optional[str] = None

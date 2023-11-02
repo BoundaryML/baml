@@ -22,6 +22,7 @@ use crate::{
     interner::StringId,
     types::{StaticStringAttributes, ToStringAttributes},
     walkers::VariantWalker,
+    ParserDatabase,
 };
 
 /// Trait
@@ -29,10 +30,15 @@ pub trait WithSerializeableContent {
     /// Trait to render an object.
     fn serialize_data(&self, variant: &VariantWalker<'_>) -> serde_json::Value;
 }
+
+/// Trait
 pub trait WithStaticRenames<'db>: WithName {
+    /// Overrides for local names.
     fn get_override(&self, variant: &VariantWalker<'db>) -> Option<&'_ ToStringAttributes>;
+    /// Overrides for local names.
     fn get_default_attributes(&self) -> Option<&'db ToStringAttributes>;
 
+    /// Overrides for local names.
     fn alias(&'db self, variant: &VariantWalker<'db>) -> String {
         let (overrides, defaults) = self.get_attributes(variant);
 
@@ -45,6 +51,17 @@ pub trait WithStaticRenames<'db>: WithName {
         }
     }
 
+    /// Overrides for local names.
+    fn maybe_alias(&'db self, db: &'db ParserDatabase) -> Option<String> {
+        let defaults = match self.get_default_attributes() {
+            Some(ToStringAttributes::Static(refs)) => Some(refs),
+            _ => None,
+        };
+        let base_alias = defaults.and_then(|a| *a.alias());
+        base_alias.and_then(|id| Some(db[id].to_string()))
+    }
+
+    /// Overrides for local names.
     fn meta(&'db self, variant: &VariantWalker<'db>) -> HashMap<String, String> {
         let (overrides, defaults) = self.get_attributes(variant);
 
@@ -65,6 +82,7 @@ pub trait WithStaticRenames<'db>: WithName {
             .collect::<HashMap<_, _>>()
     }
 
+    /// Overrides for local names.
     fn get_attributes(
         &'db self,
         variant: &VariantWalker<'db>,

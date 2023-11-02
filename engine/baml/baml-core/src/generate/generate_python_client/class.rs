@@ -1,5 +1,8 @@
-use internal_baml_parser_database::walkers::Walker;
-use internal_baml_schema_ast::ast::{ClassId, WithName};
+use internal_baml_parser_database::{
+    walkers::{ClassWalker, FieldWalker},
+    WithStaticRenames,
+};
+use internal_baml_schema_ast::ast::WithName;
 use serde_json::json;
 
 use crate::generate::generate_python_client::file::clean_file_name;
@@ -10,7 +13,7 @@ use super::{
     traits::{JsonHelper, WithToCode, WithWritePythonString},
 };
 
-impl WithWritePythonString for Walker<'_, ClassId> {
+impl WithWritePythonString for ClassWalker<'_> {
     fn file_name(&self) -> String {
         format!("cls_{}", clean_file_name(self.name()))
     }
@@ -39,16 +42,24 @@ impl WithWritePythonString for Walker<'_, ClassId> {
     }
 }
 
-impl JsonHelper for Walker<'_, ClassId> {
+impl JsonHelper for ClassWalker<'_> {
     fn json(&self, f: &mut File) -> serde_json::Value {
         json!({
             "name": self.name(),
             "fields": self.static_fields().map(|field|
-                json!({
-                "name": field.name(),
-                "type": field.r#type().to_py_string(f),
-                "optional": field.r#type().is_nullable(),
-            })).collect::<Vec<_>>(),
+                field.json(f)
+                ).collect::<Vec<_>>(),
+        })
+    }
+}
+
+impl JsonHelper for FieldWalker<'_> {
+    fn json(&self, f: &mut File) -> serde_json::Value {
+        json!({
+            "name": self.name(),
+            "type": self.r#type().to_py_string(f),
+            "optional": self.r#type().is_nullable(),
+            "alias": self.maybe_alias(self.db),
         })
     }
 }

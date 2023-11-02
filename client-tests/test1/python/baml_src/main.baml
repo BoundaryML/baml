@@ -3,13 +3,13 @@ generator Default {
 }
 
 enum MessageSender {
-    AI
-    RESIDENT
+    AI @alias("ai")
+    RESIDENT @alias("resident")
 }
 
 class Message {
-    sender MessageSender
-    body   string
+    sender MessageSender @alias("sender1")
+    body   string @alias("body1")
 }
 
 class Conversation {

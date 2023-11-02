@@ -16,7 +16,7 @@ from baml_core._impl.deserializer import register_deserializer
 from pydantic import BaseModel
 
 
-@register_deserializer()
+@register_deserializer({  })
 class ProposedMessage(BaseModel):
     thread: Conversation
     generated_response: str

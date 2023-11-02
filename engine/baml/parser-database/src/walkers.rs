@@ -15,6 +15,7 @@ mod variants;
 
 pub use client::*;
 use either::Either;
+pub use field::*;
 pub use function::*;
 use internal_baml_diagnostics::Span;
 use internal_baml_schema_ast::ast::{Identifier, TopId, WithName};
