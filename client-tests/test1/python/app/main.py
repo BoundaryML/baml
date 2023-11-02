@@ -1,11 +1,14 @@
+from baml_core.otel import init_baml_tracing
 import asyncio
-from baml_core.otel import trace, init_baml_tracing
+
+from baml_core.otel import trace, set_tags
 from baml_client import baml
 from baml_client.baml_types import ProposedMessage, Conversation
 
 
 @trace
 async def test_azure_default():
+    set_tags(a="bar", b="car")
     response = await baml.AZURE_DEFAULT.run_chat(
         [
             {

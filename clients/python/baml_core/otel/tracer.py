@@ -19,7 +19,7 @@ def trace(func: F) -> F:
             params.update(kwargs)
 
             parent_id = get_current_span().get_span_context().span_id
-            with use_span(baml_tracer.start_span(func.__name__)) as span:
+            with baml_tracer.start_as_current_span(func.__name__) as span:
                 with BamlSpanContextManager(parent_id, span, params) as ctx:
                     response = await func(*args, **kwargs)
                     ctx.complete(response)

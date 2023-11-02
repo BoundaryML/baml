@@ -19,7 +19,6 @@ from ..__version__ import __version__
 @typing.final
 class CustomBackendExporter(SpanExporter):
     def __init__(self) -> None:
-        print("init custom backend exporter")
         super().__init__()
 
     def export(self, spans: typing.Sequence[ReadableSpan]) -> SpanExportResult:
@@ -40,9 +39,6 @@ class CustomBackendExporter(SpanExporter):
     def shutdown(self) -> None:
         # Any cleanup logic for your exporter goes here
         pass
-
-
-from opentelemetry.sdk.trace import Tracer
 
 
 attributes_context: contextvars.ContextVar[
@@ -195,15 +191,10 @@ provider = TracerProvider(
         }
     )
 )
-provider.add_span_processor(
-    BatchSpanProcessor(CustomBackendExporter(), max_export_batch_size=1)
-)
 baml_tracer = provider.get_tracer("BAML_TRACING")
 
 
 def use_tracing() -> None:
-    # global provider
-    # provider.add_span_processor(
-    #     BatchSpanProcessor(CustomBackendExporter(), max_export_batch_size=1)
-    # )
-    None
+    provider.add_span_processor(
+        BatchSpanProcessor(CustomBackendExporter(), max_export_batch_size=10)
+    )
