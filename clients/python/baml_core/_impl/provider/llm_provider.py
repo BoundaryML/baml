@@ -3,7 +3,7 @@ from enum import Enum
 import json
 import typing
 import aiohttp
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typeguard import typechecked
 
 from ...otel.provider import try_serialize
@@ -12,7 +12,7 @@ from ...otel import create_event
 
 class LLMResponse(BaseModel):
     generated: str
-    model_name: str
+    mdl_name: str = Field(alias="model_name")
     meta: typing.Any
 
 
@@ -118,7 +118,7 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
             "llm_request_end",
             {
                 "generated": response.generated,
-                "model_name": response.model_name,
+                "model_name": response.mdl_name,
                 "meta": json.dumps(response.meta),
             },
         )

@@ -13,6 +13,8 @@ from opentelemetry.trace import get_current_span
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.resources import Resource
 from pydantic import BaseModel
+
+from .helper import event_to_log
 from ..__version__ import __version__
 
 
@@ -27,9 +29,7 @@ class CustomBackendExporter(SpanExporter):
         # prints the span names. You should replace this with
         # the logic to send the spans to your backend.
         for span in spans:
-            parent = span.parent
-            print(span.name, span.context.span_id, parent.span_id if parent else None)
-            print(span.attributes)
+            event_to_log(span)
 
         # If the export was successful, return
         # SpanExportResult.SUCCESS, otherwise, return
