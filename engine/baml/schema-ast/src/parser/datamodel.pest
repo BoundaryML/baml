@@ -229,10 +229,12 @@ string_literal = { raw_string_literal | quoted_string_literal | unquoted_string_
 // ######################################
 // Comments and Documentation Comments
 // ######################################
-comment_block = ${ ((doc_comment | comment) ~ NEWLINE?)+ }
+comment_block = ${ ((block_comment | doc_comment | comment) ~ NEWLINE?)+ }
 trailing_comment = ${ doc_comment | comment }
 doc_comment = { WHITESPACE* ~ "///" ~ doc_content }
 comment = { WHITESPACE* ~ (!"///") ~ "//" ~ doc_content }
+block_content = @{ (!"//}" ~ ANY)* }
+block_comment = { WHITESPACE* ~ "{//" ~ block_content ~ "//}" }
 doc_content = @{ (!NEWLINE ~ ANY)* }
 
 // ######################################
