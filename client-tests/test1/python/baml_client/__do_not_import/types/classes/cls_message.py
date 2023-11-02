@@ -10,12 +10,12 @@
 # flake8: noqa: E501,F401
 # pylint: disable=unused-import,line-too-long
 
+from ..enums.enm_messagesender import MessageSender
 from baml_core._impl.deserializer import register_deserializer
-from enum import Enum
+from pydantic import BaseModel
 
 
 @register_deserializer()
-class FAAAAA(str, Enum):
-    POSITIVE = "POSITIVE"
-    NEGATIVE = "NEGATIVE"
-    HEALTHY = "HEALTHY"
+class Message(BaseModel):
+    sender: MessageSender
+    body: str

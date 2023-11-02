@@ -13,7 +13,7 @@ from opentelemetry.trace import get_current_span
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.resources import Resource
 from pydantic import BaseModel
-from .. import __version__
+from ..__version__ import __version__
 
 
 @typing.final

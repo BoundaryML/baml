@@ -10,11 +10,16 @@
 # flake8: noqa: E501,F401
 # pylint: disable=unused-import,line-too-long
 
-from baml_core._impl.deserializer import register_deserializer
-from pydantic import BaseModel
+from baml_core._impl.provider import llm_provider_factory
+from os import environ
 
 
-@register_deserializer()
-class Name(BaseModel):
-    first: str
-    last: str
+LARGE_RESPONSE = llm_provider_factory(
+    provider="openai",
+    options=dict(
+        request_timeout=45,
+        max_tokes=400,
+        api_key=environ['OPENAI_API_KEY'],
+        model="gpt-3.5-turbo",
+    ),
+)

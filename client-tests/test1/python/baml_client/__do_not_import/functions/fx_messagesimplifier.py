@@ -10,38 +10,39 @@
 # flake8: noqa: E501,F401
 # pylint: disable=unused-import,line-too-long
 
-from ..types.classes.cls_foo import Foo
-from ..types.enums.enm_foo2 import Foo2
+from ..types.classes.cls_conversation import Conversation
+from ..types.classes.cls_message import Message
+from ..types.enums.enm_messagesender import MessageSender
 from baml_core._impl.functions import BaseBAMLFunction
 from typing import Protocol, runtime_checkable
 
 
-IFooBarOutput = Foo
+IMessageSimplifierOutput = str
 
 @runtime_checkable
-class IFooBar(Protocol):
+class IMessageSimplifier(Protocol):
     """
     This is the interface for a function.
 
     Args:
-        arg: Foo2
+        arg: Conversation
 
     Returns:
-        Foo
+        str
     """
 
-    async def __call__(self, arg: Foo2, /) -> Foo:
+    async def __call__(self, arg: Conversation, /) -> str:
         ...
 
 
-class IBAMLFooBar(BaseBAMLFunction[Foo]):
+class IBAMLMessageSimplifier(BaseBAMLFunction[str]):
     def __init__(self) -> None:
         super().__init__(
-            "FooBar",
-            IFooBar,
-            [],
+            "MessageSimplifier",
+            IMessageSimplifier,
+            ["v1"],
         )
 
-BAMLFooBar = IBAMLFooBar()
+BAMLMessageSimplifier = IBAMLMessageSimplifier()
 
-__all__ = [ "BAMLFooBar" ]
+__all__ = [ "BAMLMessageSimplifier" ]

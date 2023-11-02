@@ -10,55 +10,28 @@
 # flake8: noqa: E501,F401
 # pylint: disable=unused-import,line-too-long
 
-from .__do_not_import.functions.fx_foob import IFooB, IFooBOutput
-from .__do_not_import.functions.fx_foobar import IFooBar, IFooBarOutput
-from .__do_not_import.functions.fx_foobar2 import IFooBar2, IFooBar2Output
-from .__do_not_import.functions.fx_functionone import IFunctionOne, IFunctionOneOutput
-from .__do_not_import.functions.fx_functiontwo import IFunctionTwo, IFunctionTwoOutput
-from .__do_not_import.functions.fx_prompttest import IPromptTest, IPromptTestOutput
-from .__do_not_import.types.classes.cls_foo import Foo
-from .__do_not_import.types.classes.cls_inputtype import InputType
-from .__do_not_import.types.classes.cls_inputtype2 import InputType2
-from .__do_not_import.types.classes.cls_name import Name
-from .__do_not_import.types.classes.cls_otherinput import OtherInput
-from .__do_not_import.types.classes.cls_outputtype import OutputType
-from .__do_not_import.types.classes.cls_person import Person
-from .__do_not_import.types.classes.cls_type1 import Type1
-from .__do_not_import.types.classes.cls_type2 import Type2
-from .__do_not_import.types.enums.enm_faaaaa import FAAAAA
-from .__do_not_import.types.enums.enm_foo2 import Foo2
-from .__do_not_import.types.enums.enm_persontype import PersonType
-from .__do_not_import.types.enums.enm_sentiment import Sentiment
-from .__do_not_import.types.enums.enm_sentiment2 import Sentiment2
+from .__do_not_import.functions.fx_maybepolishtext import IMaybePolishText, IMaybePolishTextOutput
+from .__do_not_import.functions.fx_messagesimplifier import IMessageSimplifier, IMessageSimplifierOutput
+from .__do_not_import.functions.fx_textpolisher import ITextPolisher, ITextPolisherOutput
+from .__do_not_import.types.classes.cls_conversation import Conversation
+from .__do_not_import.types.classes.cls_improvedresponse import ImprovedResponse
+from .__do_not_import.types.classes.cls_message import Message
+from .__do_not_import.types.classes.cls_proposedmessage import ProposedMessage
+from .__do_not_import.types.enums.enm_messagesender import MessageSender
 
 
 
 
 __all__ = [
-    'IFooB',
-    'IFooBOutput',
-    'IFooBar',
-    'IFooBarOutput',
-    'IFooBar2',
-    'IFooBar2Output',
-    'IFunctionOne',
-    'IFunctionOneOutput',
-    'IFunctionTwo',
-    'IFunctionTwoOutput',
-    'IPromptTest',
-    'IPromptTestOutput',
-    'Foo',
-    'InputType',
-    'InputType2',
-    'Name',
-    'OtherInput',
-    'OutputType',
-    'Person',
-    'Type1',
-    'Type2',
-    'FAAAAA',
-    'Foo2',
-    'PersonType',
-    'Sentiment',
-    'Sentiment2'
+    'IMaybePolishText',
+    'IMaybePolishTextOutput',
+    'IMessageSimplifier',
+    'IMessageSimplifierOutput',
+    'ITextPolisher',
+    'ITextPolisherOutput',
+    'Conversation',
+    'ImprovedResponse',
+    'Message',
+    'ProposedMessage',
+    'MessageSender'
 ]

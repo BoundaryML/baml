@@ -31,7 +31,9 @@ class LLMProviderFactory:
         provider: str,
         **kwargs: typing.Any,
     ) -> AbstractLLMProvider:
-        assert provider in cls._registry, f"LLMProvider not registered: '{provider}'"
+        assert (
+            provider in cls._registry
+        ), f"LLMProvider not registered: '{provider}'. Use one of: {list(cls._registry.keys())}"
         client_cls = cls._registry[provider]
         return client_cls(provider=provider, **kwargs)
 

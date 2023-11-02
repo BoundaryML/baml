@@ -11,9 +11,10 @@
 # pylint: disable=unused-import,line-too-long
 
 from baml_core._impl.deserializer import register_deserializer
-from pydantic import BaseModel
+from enum import Enum
 
 
 @register_deserializer()
-class OtherInput(BaseModel):
-    d: str
+class MessageSender(str, Enum):
+    AI = "AI"
+    RESIDENT = "RESIDENT"

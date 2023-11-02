@@ -1,20 +1,21 @@
-function FooBar {
-  input Foo2
-  output Foo
+function MessageSimplifier {
+    input Conversation
+    output string
 }
 
-enum Foo2 {
-  VALUE
-  @alias(foo)
-  @meta(description, #"
-  This is the description
-  "#)
-  @meta(foo, #"car, bar, start"#)
+impl<llm, MessageSimplifier> v1 {
+  client AZURE_DEFAULT
 
-  FIELD
-  @meta(foo, #"f"#)
+  prompt #"
+        Given a chat conversation between a human and ai
+        simplify the most recent message from the human into a single sentence that includes all prior relevant context. Don't include any previously answered questions. 
 
-  OTHERWISE
+        {#input}
+
+        Most Recent Message:
+        {#input}
+
+        Simplified message:
+        Human:
+  "#
 }
-
- 

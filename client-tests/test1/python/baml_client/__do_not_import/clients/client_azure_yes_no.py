@@ -14,12 +14,12 @@ from baml_core._impl.provider import llm_provider_factory
 from os import environ
 
 
-MyClient = llm_provider_factory(
+AZURE_YES_NO = llm_provider_factory(
     provider="openai",
     options=dict(
-        model="gpt-35-turbo",
+        request_timeout=45,
+        model="gpt-3.5-turbo",
+        max_tokes=400,
         api_key=environ['OPENAI_API_KEY'],
-        my_custom_var="some string with spaces",
-        temperature=0.3,
     ),
 )

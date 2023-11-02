@@ -15,7 +15,7 @@
         }
     }
 }
-  
+
 @class Conversation {
     thread Message[]
 

@@ -10,12 +10,16 @@
 # flake8: noqa: E501,F401
 # pylint: disable=unused-import,line-too-long
 
-from baml_core._impl.deserializer import register_deserializer
-from enum import Enum
+from baml_core._impl.provider import llm_provider_factory
+from os import environ
 
 
-@register_deserializer()
-class Foo2(str, Enum):
-    VALUE = "VALUE"
-    FIELD = "FIELD"
-    OTHERWISE = "OTHERWISE"
+AZURE_DEFAULT = llm_provider_factory(
+    provider="openai",
+    options=dict(
+        request_timeout=45,
+        model="gpt-3.5-turbo",
+        max_tokes=400,
+        api_key=environ['OPENAI_API_KEY'],
+    ),
+)

@@ -10,20 +10,22 @@
 # flake8: noqa: E501,F401
 # pylint: disable=unused-import,line-too-long
 
-from .functions.fx_foob import BAMLFooB
-from .functions.fx_foobar import BAMLFooBar
-from .functions.fx_foobar2 import BAMLFooBar2
-from .functions.fx_functionone import BAMLFunctionOne
-from .functions.fx_functiontwo import BAMLFunctionTwo
-from .functions.fx_prompttest import BAMLPromptTest
+from .clients.client_azure_default import AZURE_DEFAULT
+from .clients.client_azure_gpt4 import AZURE_GPT4
+from .clients.client_azure_yes_no import AZURE_YES_NO
+from .clients.client_large_response import LARGE_RESPONSE
+from .functions.fx_maybepolishtext import BAMLMaybePolishText
+from .functions.fx_messagesimplifier import BAMLMessageSimplifier
+from .functions.fx_textpolisher import BAMLTextPolisher
 
 
 class BAMLClient:
-    FooBar = BAMLFooBar
-    PromptTest = BAMLPromptTest
-    FooB = BAMLFooB
-    FunctionOne = BAMLFunctionOne
-    FunctionTwo = BAMLFunctionTwo
-    FooBar2 = BAMLFooBar2
+    MaybePolishText = BAMLMaybePolishText
+    MessageSimplifier = BAMLMessageSimplifier
+    TextPolisher = BAMLTextPolisher
+    AZURE_DEFAULT = AZURE_DEFAULT
+    AZURE_GPT4 = AZURE_GPT4
+    AZURE_YES_NO = AZURE_YES_NO
+    LARGE_RESPONSE = LARGE_RESPONSE
 
 baml = BAMLClient()

@@ -10,38 +10,39 @@
 # flake8: noqa: E501,F401
 # pylint: disable=unused-import,line-too-long
 
-from ..types.classes.cls_type1 import Type1
-from ..types.classes.cls_type2 import Type2
+from ..types.classes.cls_conversation import Conversation
+from ..types.classes.cls_message import Message
+from ..types.classes.cls_proposedmessage import ProposedMessage
 from baml_core._impl.functions import BaseBAMLFunction
 from typing import Protocol, runtime_checkable
 
 
-IFunctionTwoOutput = str
+ITextPolisherOutput = str
 
 @runtime_checkable
-class IFunctionTwo(Protocol):
+class ITextPolisher(Protocol):
     """
     This is the interface for a function.
 
     Args:
-        arg: Type1
+        arg: ProposedMessage
 
     Returns:
         str
     """
 
-    async def __call__(self, arg: Type1, /) -> str:
+    async def __call__(self, arg: ProposedMessage, /) -> str:
         ...
 
 
-class IBAMLFunctionTwo(BaseBAMLFunction[str]):
+class IBAMLTextPolisher(BaseBAMLFunction[str]):
     def __init__(self) -> None:
         super().__init__(
-            "FunctionTwo",
-            IFunctionTwo,
+            "TextPolisher",
+            ITextPolisher,
             [],
         )
 
-BAMLFunctionTwo = IBAMLFunctionTwo()
+BAMLTextPolisher = IBAMLTextPolisher()
 
-__all__ = [ "BAMLFunctionTwo" ]
+__all__ = [ "BAMLTextPolisher" ]

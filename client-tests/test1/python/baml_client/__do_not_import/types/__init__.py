@@ -10,37 +10,19 @@
 # flake8: noqa: E501,F401
 # pylint: disable=unused-import,line-too-long
 
-from .classes.cls_foo import Foo
-from .classes.cls_inputtype import InputType
-from .classes.cls_inputtype2 import InputType2
-from .classes.cls_name import Name
-from .classes.cls_otherinput import OtherInput
-from .classes.cls_outputtype import OutputType
-from .classes.cls_person import Person
-from .classes.cls_type1 import Type1
-from .classes.cls_type2 import Type2
-from .enums.enm_faaaaa import FAAAAA
-from .enums.enm_foo2 import Foo2
-from .enums.enm_persontype import PersonType
-from .enums.enm_sentiment import Sentiment
-from .enums.enm_sentiment2 import Sentiment2
+from .classes.cls_conversation import Conversation
+from .classes.cls_improvedresponse import ImprovedResponse
+from .classes.cls_message import Message
+from .classes.cls_proposedmessage import ProposedMessage
+from .enums.enm_messagesender import MessageSender
 
 
 
 
 __all__ = [
-    'Foo',
-    'InputType',
-    'InputType2',
-    'Name',
-    'OtherInput',
-    'OutputType',
-    'Person',
-    'Type1',
-    'Type2',
-    'FAAAAA',
-    'Foo2',
-    'PersonType',
-    'Sentiment',
-    'Sentiment2'
+    'Conversation',
+    'ImprovedResponse',
+    'Message',
+    'ProposedMessage',
+    'MessageSender'
 ]

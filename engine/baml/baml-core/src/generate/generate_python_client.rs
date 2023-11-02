@@ -92,7 +92,7 @@ impl WithWritePythonString for ParserDatabase {
         fc.complete_file();
 
         fc.start_py_file(".", "generated_baml_client");
-        let fxs = self
+        let mut fxs = self
             .walk_functions()
             .map(|f| {
                 fc.last_file().add_import(
@@ -102,10 +102,24 @@ impl WithWritePythonString for ParserDatabase {
                 f.name()
             })
             .collect::<Vec<_>>();
+        fxs.sort();
+
+        let mut clients = self
+            .walk_clients()
+            .map(|f| {
+                fc.last_file().add_import(
+                    &format!(".clients.{}", f.file_name()),
+                    &format!("{}", f.name()),
+                );
+                f.name()
+            })
+            .collect::<Vec<_>>();
+        clients.sort();
+
         template::render_template(
             template::HSTemplate::BAMLClient,
             fc.last_file(),
-            json!({ "functions": fxs }),
+            json!({ "functions": fxs, "clients": clients }),
         );
         fc.complete_file();
     }

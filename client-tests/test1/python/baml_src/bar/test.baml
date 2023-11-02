@@ -1,56 +1,47 @@
-class Foo {
-  a int
-  b string
+class ProposedMessage {
+    thread Conversation
+    generated_response string 
 }
 
-function FooB {
-  input InputType 
-  output OutputType
-} 
-
-class InputType {
-  a InputType2
-  b bool  
-}   
-
-class OtherInput {
-  d string
-}
- 
-class InputType2 {
-  c string
+class ImprovedResponse {
+    should_improve bool
+    improved_response string?
 }
 
-class OutputType {
-  x Sentiment @alias("sentiment")
-  y bool @alias("is_positive")
-  @description("this is a description")
+function MaybePolishText {
+    input ProposedMessage
+    output ImprovedResponse
+}
+
+function TextPolisher {
+    input ProposedMessage
+    output string
 }
 
 
-impl<llm, FooB> FooImpl {
-  client MyClient
+impl<llm, MaybePolishText> v1 {
+    client AZURE_GPT4
 
-  override Sentiment {
-    SAD @alias("sadness")
-  }
+    override ImprovedResponse {
+        should_improve @description(false if the response is already contextual and pleasant)
+        improved_response @description(string if should_improve else null)
+    }
 
-  prompt #"
-    A {#input.a}!!    
-    
-    {// comment //}
-    
-    
-    {#input.a.c}
-    
-    the rest of the prompt
-    no-tab
-      tab1
-        tab2
-    morespaces here
-    {#input.a.c} {#input.b} hi there
-    {#print_enum(Sentiment)}
-    
-    {#print_type(output)}
-  "#
+    prompt #"
+        Given a conversation with a resident, consider improving the response previously shown.
+
+        Good responses are amiable and direct.
+
+        Do not use affirmative or negative unless the question is a yes or no question.
+
+        Thread until now:
+        {@input.conversation.as_str}
+
+        Previous Response: {@input.generated_response}
+
+        Output JSON:
+        {@ImprovedResponse.json}
+
+        JSON:
+    "#
 }

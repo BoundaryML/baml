@@ -10,10 +10,9 @@
 # flake8: noqa: E501,F401
 # pylint: disable=unused-import,line-too-long
 
-from ..types.classes.cls_inputtype import InputType
-from ..types.classes.cls_inputtype2 import InputType2
-from ..types.classes.cls_outputtype import OutputType
-from ..types.enums.enm_sentiment import Sentiment
+from ..types.classes.cls_conversation import Conversation
+from ..types.classes.cls_message import Message
+from ..types.classes.cls_proposedmessage import ProposedMessage
 from typing import Protocol, runtime_checkable
 
 
@@ -21,48 +20,48 @@ import typing
 
 import pytest
 
-ImplName = typing.Literal["FooImpl"]
+ImplName = type(None)
 
 T = typing.TypeVar("T", bound=typing.Callable[..., typing.Any])
 CLS = typing.TypeVar("CLS", bound=type)
 
 
-IFooBOutput = OutputType
+ITextPolisherOutput = str
 
 @runtime_checkable
-class IFooB(Protocol):
+class ITextPolisher(Protocol):
     """
     This is the interface for a function.
 
     Args:
-        arg: InputType
+        arg: ProposedMessage
 
     Returns:
-        OutputType
+        str
     """
 
-    async def __call__(self, arg: InputType, /) -> OutputType:
+    async def __call__(self, arg: ProposedMessage, /) -> str:
         ...
 
 
-class BAMLFooBImpl:
-    async def run(self, arg: InputType, /) -> OutputType:
+class BAMLTextPolisherImpl:
+    async def run(self, arg: ProposedMessage, /) -> str:
         ...
 
-class IBAMLFooB:
+class IBAMLTextPolisher:
     def register_impl(
         self, name: ImplName
-    ) -> typing.Callable[[IFooB], IFooB]:
+    ) -> typing.Callable[[ITextPolisher], ITextPolisher]:
         ...
 
-    def get_impl(self, name: ImplName) -> BAMLFooBImpl:
+    def get_impl(self, name: ImplName) -> BAMLTextPolisherImpl:
         ...
 
     @typing.overload
     def test(self, test_function: T) -> T:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the FooBInterface.
+        the TextPolisherInterface.
 
         Args:
             test_function : T
@@ -72,9 +71,9 @@ class IBAMLFooB:
             ```python
             # All implementations will be tested.
 
-            @baml.FooB.test
-            def test_logic(FooBImpl: IFooB) -> None:
-                result = await FooBImpl(...)
+            @baml.TextPolisher.test
+            def test_logic(TextPolisherImpl: ITextPolisher) -> None:
+                result = await TextPolisherImpl(...)
             ```
         """
         ...
@@ -83,7 +82,7 @@ class IBAMLFooB:
     def test(self, *, exclude_impl: typing.Iterable[ImplName]) -> pytest.MarkDecorator:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the FooBInterface.
+        the TextPolisherInterface.
 
         Args:
             exclude_impl : Iterable[ImplName]
@@ -91,11 +90,11 @@ class IBAMLFooB:
 
         Usage:
             ```python
-            # All implementations except "FooImpl" will be tested.
+            # All implementations except "" will be tested.
 
-            @baml.FooB.test(exclude_impl=["FooImpl"])
-            def test_logic(FooBImpl: IFooB) -> None:
-                result = await FooBImpl(...)
+            @baml.TextPolisher.test(exclude_impl=[""])
+            def test_logic(TextPolisherImpl: ITextPolisher) -> None:
+                result = await TextPolisherImpl(...)
             ```
         """
         ...
@@ -104,7 +103,7 @@ class IBAMLFooB:
     def test(self, test_class: typing.Type[CLS]) -> typing.Type[CLS]:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the FooBInterface.
+        the TextPolisherInterface.
 
         Args:
             test_class : Type[CLS]
@@ -114,14 +113,14 @@ class IBAMLFooB:
         ```python
         # All implementations will be tested in every test method.
 
-        @baml.FooB.test
+        @baml.TextPolisher.test
         class TestClass:
-            def test_a(self, FooBImpl: IFooB) -> None:
+            def test_a(self, TextPolisherImpl: ITextPolisher) -> None:
                 ...
-            def test_b(self, FooBImpl: IFooB) -> None:
+            def test_b(self, TextPolisherImpl: ITextPolisher) -> None:
                 ...
         ```
         """
         ...
 
-BAMLFooB: IBAMLFooB
+BAMLTextPolisher: IBAMLTextPolisher

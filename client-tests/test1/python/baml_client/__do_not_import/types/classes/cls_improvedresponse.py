@@ -11,11 +11,11 @@
 # pylint: disable=unused-import,line-too-long
 
 from baml_core._impl.deserializer import register_deserializer
-from enum import Enum
+from pydantic import BaseModel
+from typing import Optional
 
 
 @register_deserializer()
-class PersonType(str, Enum):
-    BAD = "BAD"
-    GOOD = "GOOD"
-    NEUTRAL = "NEUTRAL"
+class ImprovedResponse(BaseModel):
+    should_improve: bool
+    improved_response: Optional[str] = None

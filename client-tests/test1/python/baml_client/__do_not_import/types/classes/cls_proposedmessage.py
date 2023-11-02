@@ -10,10 +10,13 @@
 # flake8: noqa: E501,F401
 # pylint: disable=unused-import,line-too-long
 
+from .cls_conversation import Conversation
+from .cls_message import Message
 from baml_core._impl.deserializer import register_deserializer
 from pydantic import BaseModel
 
 
 @register_deserializer()
-class InputType2(BaseModel):
-    c: str
+class ProposedMessage(BaseModel):
+    thread: Conversation
+    generated_response: str

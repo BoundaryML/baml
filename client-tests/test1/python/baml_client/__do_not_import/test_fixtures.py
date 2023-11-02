@@ -10,128 +10,68 @@
 # flake8: noqa: E501,F401
 # pylint: disable=unused-import,line-too-long
 
-from ..baml_types import IFooB, IFooBar, IFooBar2, IFunctionOne, IFunctionTwo, IPromptTest
+from ..baml_types import IMaybePolishText, IMessageSimplifier, ITextPolisher
 from .generated_baml_client import baml
 from _pytest.fixtures import FixtureRequest
 
 
-def FooBarImpl(request: FixtureRequest) -> IFooBar:
+def MessageSimplifierImpl(request: FixtureRequest) -> IMessageSimplifier:
     """
     To use this fixture, add this to your test.
     Note the parameter name must match the name of this fixture.
 
     ```python
-    @baml.FooBar.test
-    async def test_logic(FooBarImpl: IFooBar) -> None:
-        result = await FooBarImpl(args_here)
+    @baml.MessageSimplifier.test
+    async def test_logic(MessageSimplifierImpl: IMessageSimplifier) -> None:
+        result = await MessageSimplifierImpl(args_here)
         ...
     ```
 
-    See the docstring for baml.FooBar.test for more information.
+    See the docstring for baml.MessageSimplifier.test for more information.
 
 
     See pytest documentation for more information on fixtures:
     https://docs.pytest.org/en/latest/fixture.html
     """
-    return baml.FooBar.get_impl(request.param).run
+    return baml.MessageSimplifier.get_impl(request.param).run
 
-def PromptTestImpl(request: FixtureRequest) -> IPromptTest:
+def MaybePolishTextImpl(request: FixtureRequest) -> IMaybePolishText:
     """
     To use this fixture, add this to your test.
     Note the parameter name must match the name of this fixture.
 
     ```python
-    @baml.PromptTest.test
-    async def test_logic(PromptTestImpl: IPromptTest) -> None:
-        result = await PromptTestImpl(args_here)
+    @baml.MaybePolishText.test
+    async def test_logic(MaybePolishTextImpl: IMaybePolishText) -> None:
+        result = await MaybePolishTextImpl(args_here)
         ...
     ```
 
-    See the docstring for baml.PromptTest.test for more information.
+    See the docstring for baml.MaybePolishText.test for more information.
 
 
     See pytest documentation for more information on fixtures:
     https://docs.pytest.org/en/latest/fixture.html
     """
-    return baml.PromptTest.get_impl(request.param).run
+    return baml.MaybePolishText.get_impl(request.param).run
 
-def FooBImpl(request: FixtureRequest) -> IFooB:
+def TextPolisherImpl(request: FixtureRequest) -> ITextPolisher:
     """
     To use this fixture, add this to your test.
     Note the parameter name must match the name of this fixture.
 
     ```python
-    @baml.FooB.test
-    async def test_logic(FooBImpl: IFooB) -> None:
-        result = await FooBImpl(args_here)
+    @baml.TextPolisher.test
+    async def test_logic(TextPolisherImpl: ITextPolisher) -> None:
+        result = await TextPolisherImpl(args_here)
         ...
     ```
 
-    See the docstring for baml.FooB.test for more information.
+    See the docstring for baml.TextPolisher.test for more information.
 
 
     See pytest documentation for more information on fixtures:
     https://docs.pytest.org/en/latest/fixture.html
     """
-    return baml.FooB.get_impl(request.param).run
-
-def FunctionOneImpl(request: FixtureRequest) -> IFunctionOne:
-    """
-    To use this fixture, add this to your test.
-    Note the parameter name must match the name of this fixture.
-
-    ```python
-    @baml.FunctionOne.test
-    async def test_logic(FunctionOneImpl: IFunctionOne) -> None:
-        result = await FunctionOneImpl(args_here)
-        ...
-    ```
-
-    See the docstring for baml.FunctionOne.test for more information.
-
-
-    See pytest documentation for more information on fixtures:
-    https://docs.pytest.org/en/latest/fixture.html
-    """
-    return baml.FunctionOne.get_impl(request.param).run
-
-def FunctionTwoImpl(request: FixtureRequest) -> IFunctionTwo:
-    """
-    To use this fixture, add this to your test.
-    Note the parameter name must match the name of this fixture.
-
-    ```python
-    @baml.FunctionTwo.test
-    async def test_logic(FunctionTwoImpl: IFunctionTwo) -> None:
-        result = await FunctionTwoImpl(args_here)
-        ...
-    ```
-
-    See the docstring for baml.FunctionTwo.test for more information.
-
-
-    See pytest documentation for more information on fixtures:
-    https://docs.pytest.org/en/latest/fixture.html
-    """
-    return baml.FunctionTwo.get_impl(request.param).run
-
-def FooBar2Impl(request: FixtureRequest) -> IFooBar2:
-    """
-    To use this fixture, add this to your test.
-    Note the parameter name must match the name of this fixture.
-
-    ```python
-    @baml.FooBar2.test
-    async def test_logic(FooBar2Impl: IFooBar2) -> None:
-        result = await FooBar2Impl(args_here)
-        ...
-    ```
-
-    See the docstring for baml.FooBar2.test for more information.
-
-
-    See pytest documentation for more information on fixtures:
-    https://docs.pytest.org/en/latest/fixture.html
-    """
-    return baml.FooBar2.get_impl(request.param).run
+    return baml.TextPolisher.get_impl(request.param).run
 

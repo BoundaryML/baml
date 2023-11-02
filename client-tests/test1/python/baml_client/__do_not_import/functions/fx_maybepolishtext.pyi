@@ -10,6 +10,10 @@
 # flake8: noqa: E501,F401
 # pylint: disable=unused-import,line-too-long
 
+from ..types.classes.cls_conversation import Conversation
+from ..types.classes.cls_improvedresponse import ImprovedResponse
+from ..types.classes.cls_message import Message
+from ..types.classes.cls_proposedmessage import ProposedMessage
 from typing import Protocol, runtime_checkable
 
 
@@ -17,48 +21,48 @@ import typing
 
 import pytest
 
-ImplName = typing.Literal["SomeName"]
+ImplName = typing.Literal["v1"]
 
 T = typing.TypeVar("T", bound=typing.Callable[..., typing.Any])
 CLS = typing.TypeVar("CLS", bound=type)
 
 
-IFooBar2Output = str
+IMaybePolishTextOutput = ImprovedResponse
 
 @runtime_checkable
-class IFooBar2(Protocol):
+class IMaybePolishText(Protocol):
     """
     This is the interface for a function.
 
     Args:
-        arg: str
+        arg: ProposedMessage
 
     Returns:
-        str
+        ImprovedResponse
     """
 
-    async def __call__(self, arg: str, /) -> str:
+    async def __call__(self, arg: ProposedMessage, /) -> ImprovedResponse:
         ...
 
 
-class BAMLFooBar2Impl:
-    async def run(self, arg: str, /) -> str:
+class BAMLMaybePolishTextImpl:
+    async def run(self, arg: ProposedMessage, /) -> ImprovedResponse:
         ...
 
-class IBAMLFooBar2:
+class IBAMLMaybePolishText:
     def register_impl(
         self, name: ImplName
-    ) -> typing.Callable[[IFooBar2], IFooBar2]:
+    ) -> typing.Callable[[IMaybePolishText], IMaybePolishText]:
         ...
 
-    def get_impl(self, name: ImplName) -> BAMLFooBar2Impl:
+    def get_impl(self, name: ImplName) -> BAMLMaybePolishTextImpl:
         ...
 
     @typing.overload
     def test(self, test_function: T) -> T:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the FooBar2Interface.
+        the MaybePolishTextInterface.
 
         Args:
             test_function : T
@@ -68,9 +72,9 @@ class IBAMLFooBar2:
             ```python
             # All implementations will be tested.
 
-            @baml.FooBar2.test
-            def test_logic(FooBar2Impl: IFooBar2) -> None:
-                result = await FooBar2Impl(...)
+            @baml.MaybePolishText.test
+            def test_logic(MaybePolishTextImpl: IMaybePolishText) -> None:
+                result = await MaybePolishTextImpl(...)
             ```
         """
         ...
@@ -79,7 +83,7 @@ class IBAMLFooBar2:
     def test(self, *, exclude_impl: typing.Iterable[ImplName]) -> pytest.MarkDecorator:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the FooBar2Interface.
+        the MaybePolishTextInterface.
 
         Args:
             exclude_impl : Iterable[ImplName]
@@ -87,11 +91,11 @@ class IBAMLFooBar2:
 
         Usage:
             ```python
-            # All implementations except "SomeName" will be tested.
+            # All implementations except "v1" will be tested.
 
-            @baml.FooBar2.test(exclude_impl=["SomeName"])
-            def test_logic(FooBar2Impl: IFooBar2) -> None:
-                result = await FooBar2Impl(...)
+            @baml.MaybePolishText.test(exclude_impl=["v1"])
+            def test_logic(MaybePolishTextImpl: IMaybePolishText) -> None:
+                result = await MaybePolishTextImpl(...)
             ```
         """
         ...
@@ -100,7 +104,7 @@ class IBAMLFooBar2:
     def test(self, test_class: typing.Type[CLS]) -> typing.Type[CLS]:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the FooBar2Interface.
+        the MaybePolishTextInterface.
 
         Args:
             test_class : Type[CLS]
@@ -110,14 +114,14 @@ class IBAMLFooBar2:
         ```python
         # All implementations will be tested in every test method.
 
-        @baml.FooBar2.test
+        @baml.MaybePolishText.test
         class TestClass:
-            def test_a(self, FooBar2Impl: IFooBar2) -> None:
+            def test_a(self, MaybePolishTextImpl: IMaybePolishText) -> None:
                 ...
-            def test_b(self, FooBar2Impl: IFooBar2) -> None:
+            def test_b(self, MaybePolishTextImpl: IMaybePolishText) -> None:
                 ...
         ```
         """
         ...
 
-BAMLFooBar2: IBAMLFooBar2
+BAMLMaybePolishText: IBAMLMaybePolishText
