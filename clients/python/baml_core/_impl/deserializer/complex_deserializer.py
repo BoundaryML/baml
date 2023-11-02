@@ -8,6 +8,7 @@ from .base_deserialzier import (
     Diagnostics,
     ITypeDefinition,
 )
+from .raw_wrapper.primitive_wrapper import RawNoneWrapper
 
 T = typing.TypeVar("T")
 
@@ -52,7 +53,12 @@ class OptionalDeserializer(BaseDeserializer[typing.Optional[T]]):
         from_lut: CheckLutFn[typing.Optional[T]],
     ) -> Result[typing.Optional[T]]:
         item_deserializer = from_lut(self.__item_deserializer)
-        item = item_deserializer.coerce(raw, diagnostics, from_lut)
+        if isinstance(raw, RawNoneWrapper):
+            return Result.from_value(None)
+        # TODO: Merge child errors as warnings into the parent diagnostics object.
+        # The point is that if the child fails, this is optional, so we're just gonna return None
+        diagnostics_child = Diagnostics("")
+        item = item_deserializer.coerce(raw, diagnostics_child, from_lut)
         if item.has_value:
             return Result.from_value(item.as_value)
         return Result.from_value(None)
