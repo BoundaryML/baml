@@ -68,10 +68,9 @@ class Deserializer(typing.Generic[T]):
         return found
 
     def from_string(self, s: str) -> T:
-        print(f"Deserializing {s}")
         diagnostics = Diagnostics(s)
         raw = from_string(s, diagnostics)
-        
+
         deserializer = self.__from_lut(self.__target)
         result = deserializer.coerce(raw, diagnostics, self.__from_lut)
         diagnostics.to_exception()

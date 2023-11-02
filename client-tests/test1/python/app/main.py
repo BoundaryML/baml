@@ -1,5 +1,5 @@
 import asyncio
-from baml_core.otel import trace
+from baml_core.otel import trace, init_baml_tracing
 from baml_client import baml
 from baml_client.baml_types import ProposedMessage, Conversation
 
@@ -32,4 +32,5 @@ async def main():
 
 
 if __name__ == "__main__":
+    init_baml_tracing()
     asyncio.run(main())

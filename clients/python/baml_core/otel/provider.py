@@ -19,7 +19,8 @@ from ..__version__ import __version__
 @typing.final
 class CustomBackendExporter(SpanExporter):
     def __init__(self) -> None:
-        pass
+        print("init custom backend exporter")
+        super().__init__()
 
     def export(self, spans: typing.Sequence[ReadableSpan]) -> SpanExportResult:
         # Convert spans to your backend's desired format
@@ -194,11 +195,15 @@ provider = TracerProvider(
         }
     )
 )
+provider.add_span_processor(
+    BatchSpanProcessor(CustomBackendExporter(), max_export_batch_size=1)
+)
 baml_tracer = provider.get_tracer("BAML_TRACING")
 
 
 def use_tracing() -> None:
-    global provider
-    provider.add_span_processor(
-        BatchSpanProcessor(CustomBackendExporter(), max_export_batch_size=10)
-    )
+    # global provider
+    # provider.add_span_processor(
+    #     BatchSpanProcessor(CustomBackendExporter(), max_export_batch_size=1)
+    # )
+    None

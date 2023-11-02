@@ -7,6 +7,7 @@ from .wrappers import (
     RawBaseWrapper,
     RawStringWrapper,
 )
+from ..diagnostics import Diagnostics
 
 
 import pytest
@@ -27,7 +28,9 @@ def serializer(request: FixtureRequest) -> Serializer:
 def test_from_string_dict(
     test_case: typing.Mapping[typing.Any, typing.Any], serializer: Serializer
 ) -> None:
-    parsed = from_string(serializer(test_case))
+    item = serializer(test_case)
+    d = Diagnostics(item)
+    parsed = from_string(item, d)
     assert isinstance(parsed, DictRawWrapper), parsed
 
 
@@ -35,14 +38,19 @@ def test_from_string_dict(
 def test_from_string_list(
     test_case: typing.List[typing.Any], serializer: Serializer
 ) -> None:
-    assert isinstance(from_string(serializer(test_case)), ListRawWrapper)
+    item = serializer(test_case)
+    d = Diagnostics(item)
+    assert isinstance(from_string(item, d), ListRawWrapper)
 
 
 @pytest.mark.parametrize("test_case", ["string", "another string"])
 def test_from_string_raw_string(test_case: str) -> None:
-    assert isinstance(from_string(test_case), RawStringWrapper)
+    d = Diagnostics(test_case)
+    assert isinstance(from_string(test_case, d), RawStringWrapper)
 
 
 @pytest.mark.parametrize("test_case", [123, True, False, 1.0, 0.0])
 def test_from_string_raw_base(test_case: typing.Any, serializer: Serializer) -> None:
-    assert isinstance(from_string(serializer(test_case)), RawBaseWrapper)
+    item = serializer(test_case)
+    d = Diagnostics(item)
+    assert isinstance(from_string(item, d), RawBaseWrapper)
