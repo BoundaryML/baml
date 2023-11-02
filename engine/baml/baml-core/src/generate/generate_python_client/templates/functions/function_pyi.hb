@@ -2,7 +2,11 @@ import typing
 
 import pytest
 
+{{#if has_impls}}
 ImplName = typing.Literal[{{#each impls}}"{{this}}"{{#unless @last}}, {{/unless}}{{/each}}]
+{{else}}
+ImplName = type(None)
+{{/if}}
 
 T = typing.TypeVar("T", bound=typing.Callable[..., typing.Any])
 CLS = typing.TypeVar("CLS", bound=type)

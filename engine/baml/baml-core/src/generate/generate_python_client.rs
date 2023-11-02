@@ -57,32 +57,38 @@ pub(crate) fn generate_py(db: &ParserDatabase, gen: &Generator) -> std::io::Resu
 impl WithWritePythonString for ParserDatabase {
     fn write_py_file<'a>(&'a self, fc: &'a mut FileCollector) {
         fc.start_py_file(".", "__init__");
-        fc.last_file().add_import(".generated_baml_client", "baml");
-        fc.last_file().add_import(".", "baml_types");
         fc.complete_file();
 
         fc.start_export_file(".", "baml_types");
         self.walk_functions().for_each(|f| {
             fc.last_file().add_import(
-                &format!(".functions.{}", f.file_name()),
+                &format!(".__do_not_import.functions.{}", f.file_name()),
                 &format!("I{}", f.name()),
             );
             fc.last_file().add_import(
-                &format!(".functions.{}", f.file_name()),
+                &format!(".__do_not_import.functions.{}", f.file_name()),
                 &format!("I{}Output", f.name()),
             )
         });
 
         self.walk_enums().for_each(|e| {
-            fc.last_file()
-                .add_import(&format!(".types.enums.{}", e.file_name()), e.name())
+            fc.last_file().add_import(
+                &format!(".__do_not_import.types.enums.{}", e.file_name()),
+                e.name(),
+            )
         });
 
         self.walk_classes().for_each(|c| {
-            fc.last_file()
-                .add_import(&format!(".types.classes.{}", c.file_name()), c.name())
+            fc.last_file().add_import(
+                &format!(".__do_not_import.types.classes.{}", c.file_name()),
+                c.name(),
+            )
         });
+        fc.complete_file();
 
+        fc.start_export_file(".", "__init__.py");
+        fc.last_file()
+            .add_import(".__do_not_import.generated_baml_client", "baml");
         fc.complete_file();
 
         fc.start_py_file(".", "generated_baml_client");

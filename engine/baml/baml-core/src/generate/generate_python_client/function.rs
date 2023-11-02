@@ -37,13 +37,18 @@ impl JsonHelper for ArgWalker<'_> {
 
 impl JsonHelper for Walker<'_, FunctionId> {
     fn json(&self, f: &mut File) -> serde_json::Value {
+        let impls = self
+            .walk_variants()
+            .map(|v| v.identifier().name())
+            .collect::<Vec<_>>();
         json!({
             "name": self.ast_function().name(),
             "unnamed_args": self.is_positional_args(),
             "args": self.walk_input_args().map(|a| a.json(f)).collect::<Vec<_>>(),
             "return": self.walk_output_args().map(|a| a.json(f)).collect::<Vec<_>>(),
             "doc_string": self.ast_function().documentation(),
-            "impls": self.walk_variants().map(|v| v.identifier().name()).collect::<Vec<_>>(),
+            "impls": impls,
+            "has_impls": impls.len() > 0,
         })
     }
 }
@@ -73,7 +78,7 @@ impl WithWritePythonString for Walker<'_, FunctionId> {
 
         fc.start_py_file(".", "test_fixtures");
         fc.last_file()
-            .add_import(".baml_types", &format!("I{}", self.name()));
+            .add_import("..baml_types", &format!("I{}", self.name()));
         render_template(
             super::template::HSTemplate::FunctionTestFixture,
             fc.last_file(),
