@@ -9,7 +9,7 @@ __prompt_template = """\
 
 __input_replacers = {
     {{#each inputs}}
-    "{{{this}}}"{{#unless @last}},{{/unless}}
+    "{{BLOCK_OPEN}}{{{this}}}{{BLOCK_CLOSE}}"{{#unless @last}},{{/unless}}
     {{/each}}
 }
 
