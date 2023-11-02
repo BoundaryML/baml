@@ -69,17 +69,18 @@ class BAMLImpl(typing.Generic[RET]):
         """
         self.__cb = trace(cb)
 
-    async def run(self, **kwargs: typing.Any) -> RET:
+    async def run(self, *args: typing.Any, **kwargs: typing.Any) -> RET:
         """
         Runs the BAML implementation.
 
         Args:
+            *args: The arguments to pass to the callable object.
             **kwargs: The arguments to pass to the callable object.
 
         Returns:
             The result of the callable object.
         """
-        return await self.__cb(**kwargs)
+        return await self.__cb(*args, **kwargs)
 
 
 class BaseBAMLFunction(typing.Generic[RET]):
@@ -136,8 +137,12 @@ class BaseBAMLFunction(typing.Generic[RET]):
             # Runtime check
             sig = inspect.signature(cb)
             expected_sig = inspect.signature(self.__interface.__call__)
+            sig_params = list(sig.parameters.values())
+            expected_sig_params = list(expected_sig.parameters.values())
+            if expected_sig_params and expected_sig_params[0].name == "self":
+                expected_sig_params = expected_sig_params[1:]
             assert (
-                sig == expected_sig
+                sig_params == expected_sig_params
             ), f"{self._name} {sig} does not match expected signature {expected_sig}"
 
             @functools.wraps(cb)
