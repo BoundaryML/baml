@@ -2,16 +2,18 @@ import json5 as json  # type: ignore
 import re
 import typing
 from .raw_wrapper import RawWrapper
-from .primitive_wrapper import RawBaseWrapper, RawStringWrapper
+from .primitive_wrapper import RawBaseWrapper, RawStringWrapper, RawNoneWrapper
 from .list_wrapper import ListRawWrapper
 from .dict_wrapper import DictRawWrapper
+from ..diagnostics import Diagnostics, DeserializerError
+
+def from_string(val: str, diagnostics: Diagnostics) -> RawWrapper:
+    return __from_value(val, diagnostics)
 
 
-def from_string(val: str) -> RawWrapper:
-    return __from_value(val)
-
-
-def __from_value(val: typing.Any) -> RawWrapper:
+def __from_value(val: typing.Any, diagnostics: Diagnostics) -> RawWrapper:
+    if val is None:
+        return RawNoneWrapper()
     if isinstance(val, bool):
         return RawBaseWrapper(val)
     if isinstance(val, int):
@@ -46,7 +48,7 @@ def __from_value(val: typing.Any) -> RawWrapper:
             except:
                 parsed_list = None
             if parsed_list:
-                return ListRawWrapper([__from_value(item) for item in parsed_list])
+                return ListRawWrapper([__from_value(item, diagnostics=diagnostics) for item in parsed_list])
         is_dict = str_val.startswith("{") and str_val.endswith("}")
         if is_dict:
             try:
@@ -57,14 +59,18 @@ def __from_value(val: typing.Any) -> RawWrapper:
                 parsed_obj = None
             if parsed_obj:
                 return DictRawWrapper(
-                    {__from_value(k): __from_value(v) for k, v in parsed_obj.items()}
+                    {__from_value(k, diagnostics=diagnostics): __from_value(v, diagnostics=diagnostics) for k, v in parsed_obj.items()}
                 )
 
         return RawStringWrapper(str_val)
     if isinstance(val, (list, tuple)):
-        return ListRawWrapper([__from_value(item) for item in val])
+        return ListRawWrapper([__from_value(item, diagnostics=diagnostics) for item in val])
     if isinstance(val, dict):
         return DictRawWrapper(
-            {__from_value(key): __from_value(value) for key, value in val.items()}
+            {__from_value(key, diagnostics=diagnostics): __from_value(value, diagnostics=diagnostics) for key, value in val.items()}
         )
-    raise Exception("Unsupported type: {}".format(type(val)))
+    
+    diagnostics.push_error(DeserializerError("Unrecognized type: {} in value {}".format(type(val), val)))
+    diagnostics.to_exception()
+
+    raise Exception("[unreachable] Unsupported type: {}".format(type(val))) 

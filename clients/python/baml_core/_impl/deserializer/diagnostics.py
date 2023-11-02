@@ -24,9 +24,10 @@ class Diagnostics:
     __errors: typing.List["DeserializerError"]
     __warnings: typing.List["DeserializerWarning"]
 
-    def __init__(self) -> None:
+    def __init__(self, raw_string: str) -> None:
         self.__errors = []
         self.__warnings = []
+        self.__raw_string = raw_string
 
     def push_error(self, error: "DeserializerError") -> None:
         self.__errors.append(error)
@@ -34,12 +35,12 @@ class Diagnostics:
     def push_warning(self, warning: "DeserializerWarning") -> None:
         self.__warnings.append(warning)
 
-    def to_exception(self, raw_string: str) -> None:
+    def to_exception(self) -> None:
         """
         This method raises a DeserializerException if there are any errors in the diagnostics.
         """
         if len(self.__errors) > 0:
-            raise DeserializerException(self.__errors, raw_string)
+            raise DeserializerException(self.__errors, self.__raw_string)
 
 
 class DeserializerError:

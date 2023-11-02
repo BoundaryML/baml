@@ -4,7 +4,7 @@ import typing
 from .._impl.provider import LLMProvider, register_llm_provider, LLMResponse
 
 
-def __hydrate_anthropic_tokenizer() -> None:
+def _hydrate_anthropic_tokenizer() -> None:
     # Anthropic's tokenizer is a bit slow to load, so we do it here
     # to avoid the first call to run_prompt being slow.
     # Calling this multiple times is fine, as it's a no-op if the
@@ -25,7 +25,7 @@ class AnthropicProvider(LLMProvider):
     def __init__(
         self, *, options: typing.Dict[str, typing.Any], **kwargs: typing.Any
     ) -> None:
-        __hydrate_anthropic_tokenizer()
+        _hydrate_anthropic_tokenizer()
 
         if "max_retries" in options and "retry" in kwargs:
             assert (

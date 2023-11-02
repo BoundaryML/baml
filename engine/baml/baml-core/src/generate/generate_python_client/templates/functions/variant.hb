@@ -29,5 +29,5 @@ __deserializer.overload("{{{name}}}", {{BLOCK_OPEN}}{{#each aliases}}"{{{alias}}
     for k, v in updates.items():
         prompt = prompt.replace(k, v)
 
-    response = await AZURE_GPT4.run_prompt(prompt)
+    response = await {{client}}.run_prompt(prompt)
     return __deserializer.from_string(response.generated)
