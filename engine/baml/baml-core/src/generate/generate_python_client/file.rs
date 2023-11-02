@@ -99,7 +99,7 @@ impl FileCollector {
             whoami::username()
         );
         for file in self.files.values() {
-            let path = output.join(file.path());
+            let path = output.join("__do_not_import").join(file.path());
             std::fs::create_dir_all(path.parent().unwrap())?;
             std::fs::write(&path, &comment_prefix)?;
             std::fs::OpenOptions::new()
@@ -107,6 +107,41 @@ impl FileCollector {
                 .open(&path)?
                 .write_all(file.content().as_bytes())?;
         }
+
+        // Write the root __init__.py file
+        {
+            let path = output.join("__init__.py");
+            std::fs::write(&path, &comment_prefix)?;
+            std::fs::OpenOptions::new()
+                .append(true)
+                .open(&path)?
+                .write_all(
+                    r#"
+from .__do_not_import import baml
+
+__all__ = [
+    "baml",
+]
+"#
+                    .as_bytes(),
+                )?;
+        }
+
+        // Directly also import baml_types modules
+        {
+            let path = output.join("baml_types.py");
+            std::fs::write(&path, &comment_prefix)?;
+            std::fs::OpenOptions::new()
+                .append(true)
+                .open(&path)?
+                .write_all(
+                    r#"
+from .__do_not_import.baml_types import *
+"#
+                    .as_bytes(),
+                )?;
+        }
+
         Ok(())
     }
 }

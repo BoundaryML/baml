@@ -53,7 +53,7 @@ fn use_partial(
             register_partial_file!(reg, "functions", "arg_list");
             register_partial_file!(reg, "functions", "arg_values");
             register_partial_file!(reg, "functions", "func_def");
-            f.add_import("..._impl.deserializer", "Deserializer");
+            f.add_import("baml_core._impl.deserializer", "Deserializer");
 
             register_partial_file!(reg, "functions", "variant");
             String::from("variant")
@@ -64,20 +64,20 @@ fn use_partial(
         }
         HSTemplate::Client => {
             register_partial_file!(reg, "types", "client");
-            f.add_import("..._impl.provider", "llm_provider_factory");
+            f.add_import("baml_core._impl.provider", "llm_provider_factory");
             String::from("client")
         }
         HSTemplate::Class => {
             register_partial_file!(reg, "types", "class");
             f.add_import("pydantic", "BaseModel");
-            f.add_import("...._impl.deserializer", "register_deserializer");
+            f.add_import("baml_core._impl.deserializer", "register_deserializer");
             String::from("class")
         }
         HSTemplate::Enum => {
             register_partial!(reg, "enum_value", r#"{{name}} = "{{name}}""#);
             register_partial_file!(reg, "types", "enum");
             f.add_import("enum", "Enum");
-            f.add_import("...._impl.deserializer", "register_deserializer");
+            f.add_import("baml_core._impl.deserializer", "register_deserializer");
             String::from("enum")
         }
         HSTemplate::Function => {
@@ -89,7 +89,7 @@ fn use_partial(
             f.add_import("typing", "Protocol");
 
             register_partial_file!(reg, "functions", "function_py");
-            f.add_import("..._impl.functions", "BaseBAMLFunction");
+            f.add_import("baml_core._impl.functions", "BaseBAMLFunction");
             String::from("function_py")
         }
         HSTemplate::FunctionTestFixture => {

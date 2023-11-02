@@ -7,7 +7,7 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.8"
-gloo-lib = { path = "../py-gen", develop = true }
+gloo-lib = { path = "../../../clients/python", develop = true }
 mypy = "^1.5.1"
 
 [build-system]
