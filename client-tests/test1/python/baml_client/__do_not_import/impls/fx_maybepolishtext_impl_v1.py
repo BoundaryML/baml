@@ -16,6 +16,7 @@ from ..types.classes.cls_conversation import Conversation
 from ..types.classes.cls_improvedresponse import ImprovedResponse
 from ..types.classes.cls_message import Message
 from ..types.classes.cls_proposedmessage import ProposedMessage
+from ..types.enums.enm_messagesender import MessageSender
 from baml_core._impl.deserializer import Deserializer
 
 
@@ -32,15 +33,24 @@ Good responses are amiable and direct.
 Do not use affirmative or negative unless the question is a yes or no question.
 
 Thread until now:
-{@input.conversation.as_str}
+{arg.thread.thread}
 
-Previous Response: {@input.generated_response}
+Previous Response: {arg.thread.thread}
 
 Output JSON:
-{@ImprovedResponse.json}
+{
+  // false if the response is already contextual and pleasant
+  "should_improve": bool,
+  // string if should_improve else null
+  "improved_response": string | null
+}
 
 JSON:\
 """
+
+__input_replacers = {
+    "arg.thread.thread"
+}
 
 
 # We ignore the type here because baml does some type magic to make this work
@@ -50,6 +60,11 @@ __deserializer = Deserializer[ImprovedResponse](ImprovedResponse)  # type: ignor
 
 @BAMLMaybePolishText.register_impl("v1")
 async def v1(arg: ProposedMessage, /) -> ImprovedResponse:
-    prompt = __prompt_template.format(arg=arg)
+    updates = {k: k.format(arg=arg) for k in __input_replacers}
+
+    prompt = str(__prompt_template)
+    for k, v in updates.items():
+        prompt = prompt.replace(k, v)
+
     response = await AZURE_GPT4.run_prompt(prompt)
     return __deserializer.from_string(response.generated)

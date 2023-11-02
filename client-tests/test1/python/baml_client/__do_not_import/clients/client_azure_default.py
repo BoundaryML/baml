@@ -15,11 +15,11 @@ from os import environ
 
 
 AZURE_DEFAULT = llm_provider_factory(
-    provider="openai",
+    provider="openai-chat",
     options=dict(
-        model="gpt-3.5-turbo",
         api_key=environ['OPENAI_API_KEY'],
-        max_tokes=400,
+        max_tokens=400,
         request_timeout=45,
+        model="gpt-3.5-turbo",
     ),
 )

@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use internal_baml_parser_database::walkers::{EnumWalker, FunctionWalker, VariantWalker};
 use internal_baml_schema_ast::ast::{FunctionId, TopId, WithName};
 
@@ -27,9 +29,13 @@ impl<'db> JsonHelper for VariantWalker<'db> {
 
         let (input, output) = &self.properties().replacers;
 
-        input.iter().for_each(|(k, val)| {
-            prompt = prompt.replace(&k.key(), &format!("{{{}}}", val));
-        });
+        let inputs = input
+            .iter()
+            .map(|(k, val)| {
+                prompt = prompt.replace(&k.key(), &format!("{{{}}}", val));
+                val
+            })
+            .collect::<HashSet<_>>();
         output.iter().for_each(|(k, val)| {
             prompt = prompt.replace(&k.key(), &format!("{}", val));
         });
@@ -39,6 +45,7 @@ impl<'db> JsonHelper for VariantWalker<'db> {
             "function": func.json(f),
             "prompt": prompt,
             "client": client.name(),
+            "inputs": inputs,
         })
     }
 }

@@ -35,12 +35,12 @@ impl<llm, MaybePolishText> v1 {
         Do not use affirmative or negative unless the question is a yes or no question.
 
         Thread until now:
-        {@input.conversation.as_str}
+        {#input.thread.thread}
 
-        Previous Response: {@input.generated_response}
+        Previous Response: {#input.thread.thread}
 
         Output JSON:
-        {@ImprovedResponse.json}
+        {#print_type(output)}
 
         JSON:
     "#

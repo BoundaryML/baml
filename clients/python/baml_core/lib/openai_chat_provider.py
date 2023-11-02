@@ -9,7 +9,7 @@ from .._impl.provider import (
 )
 
 
-@register_llm_provider("openi-chat", "azure-chat")
+@register_llm_provider("openai-chat", "azure-chat")
 @typing.final
 class OpenAIChatProvider(LLMChatProvider):
     __kwargs: typing.Dict[str, typing.Any]
@@ -18,7 +18,9 @@ class OpenAIChatProvider(LLMChatProvider):
         self, *, options: typing.Dict[str, typing.Any], **kwargs: typing.Any
     ) -> None:
         default_chat_role = kwargs.pop("default_chat_role", "user")
-        assert default_chat_role is str, "default_chat_role must be a string"
+        assert (
+            type(default_chat_role) is str
+        ), f"default_chat_role must be a string: {type(default_chat_role)}. {default_chat_role}"
 
         super().__init__(
             prompt_to_chat=lambda prompt: LLMChatMessage(
@@ -31,14 +33,14 @@ class OpenAIChatProvider(LLMChatProvider):
     async def _run_chat(self, messages: typing.List[LLMChatMessage]) -> LLMResponse:
         self._log_args(**self.__kwargs)
         response = await openai.ChatCompletion.acreate(messages=messages, **self.__kwargs)  # type: ignore
-        text = response["choices"][0]["text"]
+        text = response["choices"][0]["message"]["content"]
         usage = response["usage"]
         model = response["model"]
         return LLMResponse(
             generated=text,
             model_name=model,
             meta=dict(
-                logprobs=response["choices"][0]["logprobs"],
+                logprobs=None,
                 prompt_tokens=usage.get("prompt_tokens", None),
                 output_tokens=usage.get("completion_tokens", None),
                 total_tokens=usage.get("total_tokens", None),

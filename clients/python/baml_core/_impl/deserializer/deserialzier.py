@@ -70,5 +70,5 @@ class Deserializer(typing.Generic[T]):
         diagnostics = Diagnostics()
         deserializer = self.__from_lut(self.__target)
         result = deserializer.coerce(raw, diagnostics, self.__from_lut)
-        diagnostics.to_exception()
+        diagnostics.to_exception(s)
         return typing.cast(T, result.as_value)
