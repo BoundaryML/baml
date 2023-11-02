@@ -18,7 +18,7 @@ impl<'db> JsonHelper for VariantWalker<'db> {
         let func = self.walk_function().unwrap();
         let client = self.client().unwrap();
         f.add_import(
-            &format!(".{}", func.file_name()),
+            &format!("..functions.{}", func.file_name()),
             &format!("BAML{}", func.name()),
         );
         f.add_import(&format!("..clients.{}", client.file_name()), client.name());
@@ -53,7 +53,12 @@ impl WithWritePythonString for VariantWalker<'_> {
     }
 
     fn write_py_file(&self, fc: &mut FileCollector) {
-        fc.start_py_file("functions", self.file_name());
+        fc.start_py_file("impls", "__init__.py");
+        fc.last_file()
+            .add_import(&format!(".{}", self.file_name()), "*");
+        fc.complete_file();
+
+        fc.start_py_file("impls", self.file_name());
         let json = self.json(fc.last_file());
         render_template(super::template::HSTemplate::Variant, fc.last_file(), json);
         fc.complete_file();

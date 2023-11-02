@@ -17,9 +17,9 @@ from os import environ
 AZURE_DEFAULT = llm_provider_factory(
     provider="openai",
     options=dict(
-        request_timeout=45,
         model="gpt-3.5-turbo",
-        max_tokes=400,
         api_key=environ['OPENAI_API_KEY'],
+        max_tokes=400,
+        request_timeout=45,
     ),
 )

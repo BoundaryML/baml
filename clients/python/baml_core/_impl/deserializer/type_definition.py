@@ -29,12 +29,17 @@ class NamedTypeDefinition(typing.TypedDict):
     ref: typing.Union[typing.Type[BaseModel], typing.Type[Enum]]
 
 
+class NoneTypeDefinition(typing.TypedDict):
+    type: typing.Literal["None"]
+
+
 ITypeDefinition = typing.Union[
     ListTypeDefinition,
     UnionTypeDefinition,
     OptionalTypeDefinition,
     PrimitiveTypeDefinition,
     NamedTypeDefinition,
+    NoneTypeDefinition,
 ]
 
 
@@ -63,19 +68,23 @@ def __get_named_type(
 def type_to_definition(t: typing.Type[typing.Any]) -> ITypeDefinition:
     if t in [str, bool, int, float]:
         return __get_primitive_type(t)
+
     if hasattr(t, "__origin__"):
         origin = t.__origin__
         if origin == typing.Union:
-            union_args = [type_to_definition(sub_t) for sub_t in t.__args__]
             # Special case for Optional types (Union[X, NoneType])
-            if len(union_args) == 2 and None in union_args:
+            if len(t.__args__) == 2 and type(None) in t.__args__:
                 # union_args.remove(None)
-                return __get_optional_type(union_args[0])
+                return __get_optional_type(t.__args__[0])
+            else:
+                union_args = [type_to_definition(sub_t) for sub_t in t.__args__]
             return __get_union_type(union_args)
-        if origin == typing.List:
+        if origin == list:
             list_arg = type_to_definition(t.__args__[0])
             return __get_list_type(list_arg)
-    # Assuming everything else is a named type
-    if issubclass(t, (Enum, BaseModel)):
+    elif type(t) == type(BaseModel) or type(t) == type(Enum):
+        # Assuming everything else is a named type
         return __get_named_type(t)
-    raise NotImplementedError(f"Cannot convert {t} to type definition.")
+
+    # Print all attributes of t
+    raise NotImplementedError(f"Cannot convert {t} to type definition: {type(t)}")

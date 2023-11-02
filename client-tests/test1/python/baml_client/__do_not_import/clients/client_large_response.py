@@ -19,7 +19,7 @@ LARGE_RESPONSE = llm_provider_factory(
     options=dict(
         request_timeout=45,
         max_tokes=400,
-        api_key=environ['OPENAI_API_KEY'],
         model="gpt-3.5-turbo",
+        api_key=environ['OPENAI_API_KEY'],
     ),
 )

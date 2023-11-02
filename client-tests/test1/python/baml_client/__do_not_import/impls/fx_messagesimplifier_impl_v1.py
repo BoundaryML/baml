@@ -11,10 +11,10 @@
 # pylint: disable=unused-import,line-too-long
 
 from ..clients.client_azure_default import AZURE_DEFAULT
+from ..functions.fx_messagesimplifier import BAMLMessageSimplifier
 from ..types.classes.cls_conversation import Conversation
 from ..types.classes.cls_message import Message
 from ..types.enums.enm_messagesender import MessageSender
-from .fx_messagesimplifier import BAMLMessageSimplifier
 from baml_core._impl.deserializer import Deserializer
 
 

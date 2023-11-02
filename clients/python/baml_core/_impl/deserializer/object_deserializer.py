@@ -19,7 +19,7 @@ from .type_definition import type_to_definition
 T = typing.TypeVar("T", bound=BaseModel)
 
 
-def __generate_type_definitions_for_model(
+def _generate_type_definitions_for_model(
     model: typing.Type[T],
 ) -> typing.Dict[str, ITypeDefinition]:
     schema = model.model_json_schema()
@@ -48,7 +48,7 @@ class ObjectDeserializer(BaseDeserializer[T]):
     ):
         super().__init__(rank=5)
         self.__model = model
-        self.__fields = __generate_type_definitions_for_model(model)
+        self.__fields = _generate_type_definitions_for_model(model)
         self.__alias_to_field = alias_to_field
 
     def copy_with_aliases(

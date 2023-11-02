@@ -57,6 +57,7 @@ pub(crate) fn generate_py(db: &ParserDatabase, gen: &Generator) -> std::io::Resu
 impl WithWritePythonString for ParserDatabase {
     fn write_py_file<'a>(&'a self, fc: &'a mut FileCollector) {
         fc.start_py_file(".", "__init__");
+        fc.last_file().add_line("from . import impls");
         fc.complete_file();
 
         fc.start_export_file(".", "baml_types");

@@ -62,7 +62,7 @@ class BaseDeserializer(typing.Generic[T], metaclass=abc.ABCMeta):
         raise NotImplemented
 
 
-CheckLutFn = typing.Callable[[ITypeDefinition], "BaseDeserializer[T]"]
+CheckLutFn = typing.Callable[[ITypeDefinition], BaseDeserializer[T]]
 
 
 __all__ = [
