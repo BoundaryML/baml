@@ -163,7 +163,8 @@ class BamlSpanContextManager:
 
     def complete(self, result: typing.Any) -> None:
         if result is not None:
-            self.span.add_event("output", {"result": result})
+            result, type_name = try_serialize(result)
+            self.span.add_event("output", {"result": result, "type": type_name})
         self.span.set_status(trace.Status(trace.StatusCode.OK))
 
     def __exit__(

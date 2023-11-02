@@ -15,7 +15,7 @@ class DeserializerException(BaseException):
             output.append("------")
             output.append(str(e))
         output.append("------")
-        output.append("Raw output:")
+        output.append("Raw LLM output:")
         output.append(self.__raw_string)
         return "\n".join(output)
 
