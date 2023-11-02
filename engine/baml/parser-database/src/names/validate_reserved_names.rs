@@ -19,7 +19,7 @@ pub(crate) fn validate_client_name(ast_client: &ast::Client, diagnostics: &mut D
 }
 
 pub(crate) fn validate_variant_name(ast_variant: &ast::Variant, diagnostics: &mut Diagnostics) {
-    validate_name("impl", ast_variant.identifier(), diagnostics, true);
+    validate_name("impl", ast_variant.identifier(), diagnostics, false);
 }
 
 pub(crate) fn validate_class_name(ast_class: &ast::Class, diagnostics: &mut Diagnostics) {
