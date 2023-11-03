@@ -10,7 +10,6 @@
 # flake8: noqa: E501,F401
 # pylint: disable=unused-import,line-too-long
 
-from ..enums.enm_messagesender import MessageSender
 from .cls_conversation import Conversation
 from .cls_message import Message
 from baml_core._impl.deserializer import register_deserializer

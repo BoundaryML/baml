@@ -1,5 +1,5 @@
 import typing
-from .base_cache import AbstractCacheProvider
+from .abstract_cache_provider import AbstractCacheProvider
 
 T = typing.TypeVar("T", bound=AbstractCacheProvider)
 

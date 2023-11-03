@@ -16,7 +16,6 @@ from ..types.classes.cls_conversation import Conversation
 from ..types.classes.cls_improvedresponse import ImprovedResponse
 from ..types.classes.cls_message import Message
 from ..types.classes.cls_proposedmessage import ProposedMessage
-from ..types.enums.enm_messagesender import MessageSender
 from baml_core._impl.deserializer import Deserializer
 
 

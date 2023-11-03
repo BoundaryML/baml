@@ -14,10 +14,10 @@ from ..types.classes.cls_conversation import Conversation
 from ..types.classes.cls_message import Message
 from ..types.enums.enm_messagesender import MessageSender
 from baml_core._impl.functions import BaseBAMLFunction
-from typing import Protocol, runtime_checkable
+from typing import Optional, Protocol, runtime_checkable
 
 
-IMessageSimplifierOutput = str
+IMessageSimplifierOutput = Optional[int]
 
 @runtime_checkable
 class IMessageSimplifier(Protocol):
@@ -28,14 +28,14 @@ class IMessageSimplifier(Protocol):
         arg: Conversation
 
     Returns:
-        str
+        Optional[int]
     """
 
-    async def __call__(self, arg: Conversation, /) -> str:
+    async def __call__(self, arg: Conversation, /) -> Optional[int]:
         ...
 
 
-class IBAMLMessageSimplifier(BaseBAMLFunction[str]):
+class IBAMLMessageSimplifier(BaseBAMLFunction[Optional[int]]):
     def __init__(self) -> None:
         super().__init__(
             "MessageSimplifier",

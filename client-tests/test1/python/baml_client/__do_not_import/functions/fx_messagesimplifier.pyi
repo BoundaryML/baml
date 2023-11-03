@@ -13,7 +13,7 @@
 from ..types.classes.cls_conversation import Conversation
 from ..types.classes.cls_message import Message
 from ..types.enums.enm_messagesender import MessageSender
-from typing import Protocol, runtime_checkable
+from typing import Optional, Protocol, runtime_checkable
 
 
 import typing
@@ -26,7 +26,7 @@ T = typing.TypeVar("T", bound=typing.Callable[..., typing.Any])
 CLS = typing.TypeVar("CLS", bound=type)
 
 
-IMessageSimplifierOutput = str
+IMessageSimplifierOutput = Optional[int]
 
 @runtime_checkable
 class IMessageSimplifier(Protocol):
@@ -37,15 +37,15 @@ class IMessageSimplifier(Protocol):
         arg: Conversation
 
     Returns:
-        str
+        Optional[int]
     """
 
-    async def __call__(self, arg: Conversation, /) -> str:
+    async def __call__(self, arg: Conversation, /) -> Optional[int]:
         ...
 
 
 class BAMLMessageSimplifierImpl:
-    async def run(self, arg: Conversation, /) -> str:
+    async def run(self, arg: Conversation, /) -> Optional[int]:
         ...
 
 class IBAMLMessageSimplifier:

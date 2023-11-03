@@ -16,6 +16,7 @@ from ..types.classes.cls_conversation import Conversation
 from ..types.classes.cls_message import Message
 from ..types.enums.enm_messagesender import MessageSender
 from baml_core._impl.deserializer import Deserializer
+from typing import Optional
 
 
 # Impl: v1
@@ -43,9 +44,9 @@ __input_replacers = {
 
 # We ignore the type here because baml does some type magic to make this work
 # for inline SpecialForms like Optional, Union, List.
-__deserializer = Deserializer[str](str)  # type: ignore
+__deserializer = Deserializer[Optional[int]](Optional[int])  # type: ignore
 
 @BAMLMessageSimplifier.register_impl("v1")
-async def v1(arg: Conversation, /) -> str:
+async def v1(arg: Conversation, /) -> Optional[int]:
     response = await AZURE_DEFAULT.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
     return __deserializer.from_string(response.generated)
