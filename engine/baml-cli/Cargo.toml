@@ -6,7 +6,7 @@ authors.workspace = true
 description.workspace = true
 licence = "Apache-2.0"
 licence-file.workspace = true
-# a
+# aa
 [dependencies]
 baml = { path = "../baml/baml", version = "^0.0.1", features = ["use-pyo3"]}
 check-latest = "1.0.2"
