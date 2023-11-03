@@ -19,9 +19,10 @@ function TextPolisher {
 }
 
 
+
 impl<llm, MaybePolishText> v1 {
     client AZURE_GPT4
-
+ 
     override ImprovedResponse {
         should_improve @alias("ShouldImprove")
         @description(false if the response is already contextual and pleasant)
