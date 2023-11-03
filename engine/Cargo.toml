@@ -12,7 +12,7 @@ serde_json = { version = "1", features = ["float_roundtrip", "preserve_order"] }
 serde = { version = "1", features = ["derive"] }
 indoc = "2.0.1"
 
-# 
+# a
 [workspace.package]
 version = "0.0.1"
 authors = ["Gloo <contact@trygloo.com>"]
