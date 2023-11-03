@@ -47,6 +47,11 @@
           ],
           "default": "off",
           "description": "Setting for logging between the VS Code extension and the language server."
+        },
+        "baml.playgroundPanelOpen": {
+          "type": "boolean",
+          "default": false,
+          "description": "Indicates whether the Baml playground panel is open or closed."
         }
       }
     },
@@ -96,7 +101,7 @@
       "editor/title": [
         {
           "title": "Open Playground",
-          "when": "resourceLangId == baml",
+          "when": "resourceLangId == baml && !baml.playgroundPanelOpen",
           "command": "baml.openPlayground",
           "group": "navigation"
         }

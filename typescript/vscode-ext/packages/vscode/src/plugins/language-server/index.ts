@@ -1,6 +1,7 @@
 import * as path from 'path'
 
-import { commands, ExtensionContext, OutputChannel, ViewColumn, window, workspace } from 'vscode'
+import fs from "fs"
+import { commands, ExtensionContext, OutputChannel, ViewColumn, Uri, window, workspace } from 'vscode'
 import { LanguageClientOptions } from 'vscode-languageclient'
 import { LanguageClient, ServerOptions, TransportKind } from 'vscode-languageclient/node'
 import TelemetryReporter from '../../telemetryReporter'
@@ -237,13 +238,27 @@ const plugin: BamlVSCodePlugin = {
 
 
       commands.registerCommand('baml.openPlayground', () => {
+        const config = workspace.getConfiguration()
+        config.update('baml.playgroundPanelOpen', true, true)
         const panel = window.createWebviewPanel(
           'bamlPlayrgound',
           'Playground',
           ViewColumn.Beside,
-          {},
+          {
+            // Enable scripts in the webview
+            enableScripts: true,
+            // And restrict the webview to only loading content from our extension's `media` directory.
+            localResourceRoots: [Uri.file(path.join(context.extensionPath, 'path-to-react-build-directory'))]
+          },
         )
-        panel.webview.html = '<html><body><h1>Hello World</h1></body></html>'
+        panel.onDidDispose(() => {
+          config.update('baml.playgroundPanelOpen', false, true);
+        })
+
+        const reactAppPath = Uri.file(path.join(context.extensionPath, 'path-to-react-build-directory', 'index.html'));
+        panel.webview.html = fs.readFileSync(reactAppPath.fsPath, 'utf8');
+
+        panel.webview.html = '<html><body><h1>Playground</h1></body></html>'
       }),
     )
 
