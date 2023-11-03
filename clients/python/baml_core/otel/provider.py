@@ -1,10 +1,11 @@
 import contextvars
+from itertools import chain
 import json
 import os
 import platform
 import typing
 import uuid
-from opentelemetry import trace, context
+from opentelemetry import trace
 from opentelemetry.trace.span import Span
 from opentelemetry.util import types
 from opentelemetry.sdk.trace.export import (
@@ -17,28 +18,40 @@ from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.resources import Resource
 from pydantic import BaseModel
 
+from baml_core._impl.cache.base_cache import CacheManager
+
+from baml_core.services.api_types import CacheRequest
+
 from .helper import event_to_log
 from ..__version__ import __version__
-from .api import APIWrapper
+from ..services.api import APIWrapper
 
 
 @typing.final
 class CustomBackendExporter(SpanExporter):
     def __init__(self) -> None:
         super().__init__()
-        self.api_wrapper = APIWrapper()
+        self.__api_wrapper: typing.Optional[APIWrapper] = None
+
+    def set_gloo_api(self, api_wrapper: APIWrapper) -> None:
+        self.__api_wrapper = api_wrapper
 
     def export(self, spans: typing.Sequence[ReadableSpan]) -> SpanExportResult:
         # Convert spans to your backend's desired format
         # and send them. This is a simple example that just
         # prints the span names. You should replace this with
         # the logic to send the spans to your backend.
-        for span in spans:
-            items = event_to_log(span)
-            for item in items:
-                # send them to the backend
-                item.print()
-                self.api_wrapper.log_sync(payload=item)
+        items = chain.from_iterable(event_to_log(span) for span in spans)
+
+        for item in items:
+            item.print()
+            CacheManager.save_llm_request(item)
+
+            if self.__api_wrapper:
+                # TODO: Send a single large payload.
+                # send them to the backend.
+                # This function can't fail.
+                self.__api_wrapper.log_sync(payload=item)
 
         # If the export was successful, return
         # SpanExportResult.SUCCESS, otherwise, return
@@ -192,26 +205,27 @@ class BamlSpanContextManager:
 # Initialize to the default No-op tracer.
 
 # Set up your TracerProvider with the custom settings
-provider = TracerProvider(
+
+process_id = str(uuid.uuid4())
+__provider = TracerProvider(
     resource=Resource.create(
         {
             "baml": "baml",
             "baml.version": __version__,
-            "process_id": str(uuid.uuid4()),
             "hostname": platform.node(),
         }
     )
 )
-baml_tracer = provider.get_tracer("BAML_TRACING")
+baml_tracer = __provider.get_tracer("BAML_TRACING")
 __exporter = CustomBackendExporter()
 __processor = BatchSpanProcessor(__exporter, max_export_batch_size=10)
+__provider.add_span_processor(__processor)
 
 
-def use_tracing(project_id: typing.Optional[str] = None) -> None:
-    update_resource = Resource.create()
-    if project_id is not None:
-        update_resource.attributes["baml.project_id"] = project_id
-    elif os.environ.get("BAML_PROJECT_ID"):
-        update_resource.attributes["baml.project_id"] = os.environ["BAML_PROJECT_ID"]
-    provider.resource.merge(update_resource)
-    provider.add_span_processor(__processor)
+def use_tracing(api: typing.Optional[APIWrapper] = None) -> None:
+    if api:
+        update_resource = Resource.create()
+        update_resource.attributes["baml.project_id"] = api.project_id
+        update_resource.attributes["process_id"] = api.session_id
+        __provider.resource.merge(update_resource)
+        __exporter.set_gloo_api(api)

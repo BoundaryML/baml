@@ -7,14 +7,26 @@ from opentelemetry.util.types import AttributeValue
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
 from .logger import logger
-import colorama
 from datetime import datetime, timezone
+from ..services.api_types import (
+    IO,
+    EventChain,
+    IOValue,
+    LLMChat,
+    LLMEventInput,
+    LLMEventInputPrompt,
+    LLMEventSchema,
+    LLMOutputModel,
+    LLMOutputModelMetadata,
+    LogSchema,
+    LogSchemaContext,
+    MetadataType,
+    TypeSchema,
+    Error,
+)
 
 
-colorama.init()
-
-
-def epoch_to_iso8601(epoch_nanos):
+def epoch_to_iso8601(epoch_nanos: int) -> str:
     # Convert nanoseconds to seconds
     epoch_seconds = epoch_nanos / 1e9
     # Create a datetime object from the epoch time
@@ -24,165 +36,6 @@ def epoch_to_iso8601(epoch_nanos):
         dt_object.isoformat(timespec="milliseconds").replace("+00:00", "") + "Z"
     )
     return iso8601_timestamp
-
-
-class Error(BaseModel):
-    code: int
-    message: str
-    traceback: Optional[str]
-
-
-class EventChain(BaseModel):
-    function_name: str
-    variant_name: Optional[str]
-
-
-class LLMOutputModelMetadata(BaseModel):
-    logprobs: Optional[Any]
-    prompt_tokens: Optional[int]
-    output_tokens: Optional[int]
-    total_tokens: Optional[int]
-
-
-class LLMOutputModel(BaseModel):
-    raw_text: str
-    metadata: LLMOutputModelMetadata
-
-
-class LLMChat(TypedDict):
-    role: Union[Literal["assistant", "user", "system"], str]
-    content: str
-
-
-class LLMEventInputPrompt(BaseModel):
-    template: Union[str, List[LLMChat]]
-    template_args: Dict[str, str]
-
-
-class LLMEventInput(BaseModel):
-    prompt: LLMEventInputPrompt
-    invocation_params: Dict[str, Any]
-
-
-class LLMEventSchema(BaseModel):
-    mdl_name: str = Field(alias="model_name")
-    provider: str
-    input: LLMEventInput
-    output: Optional[LLMOutputModel]
-
-
-MetadataType = LLMEventSchema
-
-
-class LogSchemaContext(BaseModel):
-    hostname: str
-    process_id: str
-    stage: Optional[str]
-    latency_ms: Optional[int]
-    start_time: str
-    tags: Dict[str, str]
-    event_chain: List[EventChain]
-
-
-class TypeSchema(BaseModel):
-    name: str
-    fields: Any
-
-
-class IOValue(BaseModel):
-    value: Any
-    type: TypeSchema
-
-
-class IO(BaseModel):
-    input: Optional[IOValue]
-    output: Optional[IOValue]
-
-
-class LogSchema(BaseModel):
-    project_id: str
-    event_type: Literal["log", "func_llm", "func_prob", "func_code"]
-    root_event_id: str
-    event_id: str
-    parent_event_id: Optional[str]
-    context: LogSchemaContext
-    io: IO
-    error: Optional[Error]
-    metadata: Optional[MetadataType]
-
-    def to_pretty_string(self) -> str:
-        separator = "-------------------"
-        pp = []
-        if metadata := self.metadata:
-            if isinstance(metadata.input.prompt.template, list):
-                prompt = "\n".join(
-                    f"{colorama.Fore.YELLOW}Role: {c['role']}\n{colorama.Fore.LIGHTMAGENTA_EX}{c['content']}{colorama.Fore.RESET}"
-                    for c in metadata.input.prompt.template
-                )
-            else:
-                prompt = metadata.input.prompt.template
-            for k, v in metadata.input.prompt.template_args.items():
-                prompt = prompt.replace(
-                    k, colorama.Back.LIGHTBLUE_EX + v + colorama.Back.RESET
-                )
-            pp.extend(
-                [
-                    colorama.Style.DIM + "Prompt" + colorama.Style.NORMAL,
-                    prompt,
-                    separator,
-                ]
-            )
-
-            # This is an LLM Event
-            if llm_output := metadata.output:
-                prompt_tokens = llm_output.metadata.prompt_tokens
-                output_tokens = llm_output.metadata.output_tokens
-                total_tokens = llm_output.metadata.total_tokens
-                pp.append(
-                    colorama.Style.DIM
-                    + f"Raw LLM Output (Tokens: prompt={prompt_tokens} output={output_tokens})"
-                    + colorama.Style.NORMAL
-                )
-                pp.append(
-                    colorama.Style.DIM + llm_output.raw_text + colorama.Style.NORMAL
-                )
-                pp.append(separator)
-            if output := self.io.output:
-                pp.append(
-                    colorama.Style.DIM
-                    + "Deserialized Output "
-                    + f"({colorama.Fore.LIGHTBLUE_EX}{output.type}{colorama.Fore.RESET}):"
-                    + colorama.Style.NORMAL
-                )
-                try:
-                    pretty = json.dumps(json.loads(output.value), indent=2)
-                except:
-                    pretty = output.value
-
-                pp.append(colorama.Fore.LIGHTBLUE_EX + pretty + colorama.Fore.RESET)
-                pp.append(separator)
-        if error := self.error:
-            pp.append("Error")
-            pp.append(
-                colorama.Style.BRIGHT + str(error.message) + colorama.Style.NORMAL
-            )
-            pp.append(separator)
-        if len(pp) == 0:
-            return ""
-        pp.insert(
-            0,
-            f"\n{colorama.Style.DIM}Event: {colorama.Style.NORMAL}{self.context.event_chain[-1].function_name}\n{separator}",
-        )
-        if pp[-1] == separator:
-            pp[-1] = "-" * 80
-        return "\n".join(pp)
-
-    def print(self) -> None:
-        if log := self.to_pretty_string():
-            if self.error:
-                logger.error(log)
-            else:
-                logger.info(log)
 
 
 class PartialMetadataType(BaseModel):
