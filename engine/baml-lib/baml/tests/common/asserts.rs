@@ -1,5 +1,5 @@
-use baml::internal_baml_diagnostics::DatamodelWarning;
-use baml::internal_baml_schema_ast::ast::{self};
+use baml_lib::internal_baml_diagnostics::DatamodelWarning;
+use baml_lib::internal_baml_schema_ast::ast::{self};
 
 pub(crate) trait DatamodelAssert<'a> {
     // fn assert_has_model(&'a self, name: &str) -> walkers::ModelWalker<'a>;

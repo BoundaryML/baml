@@ -137,24 +137,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "baml"
-version = "0.0.1"
-dependencies = [
- "base64 0.13.1",
- "dissimilar",
- "either",
- "expect-test",
- "indoc",
- "internal-baml-core",
- "pretty_assertions",
- "strip-ansi-escapes",
-]
-
-[[package]]
 name = "baml-cli"
 version = "0.0.1"
 dependencies = [
- "baml",
+ "baml-lib",
  "base64 0.13.1",
  "check-latest",
  "clap 4.4.6",
@@ -173,7 +159,7 @@ dependencies = [
 name = "baml-fmt"
 version = "0.0.1"
 dependencies = [
- "baml",
+ "baml-lib",
  "base64 0.13.1",
  "colored",
  "dissimilar",
@@ -187,6 +173,20 @@ dependencies = [
  "serde",
  "serde_json",
  "structopt",
+]
+
+[[package]]
+name = "baml-lib"
+version = "0.0.1"
+dependencies = [
+ "base64 0.13.1",
+ "dissimilar",
+ "either",
+ "expect-test",
+ "indoc",
+ "internal-baml-core",
+ "pretty_assertions",
+ "strip-ansi-escapes",
 ]
 
 [[package]]

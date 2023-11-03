@@ -1,6 +1,6 @@
 mod panic_with_diff;
 
-use baml::{SourceFile, ValidatedSchema};
+use baml_lib::{SourceFile, ValidatedSchema};
 
 use std::{
     fs,
@@ -18,7 +18,7 @@ fn parse_schema_fail_on_diagnostics(
 ) -> Result<ValidatedSchema, String> {
     let path = PathBuf::from("./unknown");
     let file = file.into();
-    let schema = baml::validate(&path, vec![file]);
+    let schema = baml_lib::validate(&path, vec![file]);
 
     match (schema.diagnostics.warnings(), schema.diagnostics.errors()) {
         ([], []) => Ok(schema),

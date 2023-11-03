@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-  "baml/*",
+  "baml-lib/*",
   "baml-cli",
   "baml-fmt",
   "baml-schema-wasm",
