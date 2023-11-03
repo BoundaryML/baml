@@ -21,6 +21,7 @@ class OpenAIProvider(LLMProvider):
         text = response["choices"][0]["text"]
         usage = response["usage"]
         model = response["model"]
+
         return LLMResponse(
             generated=text,
             model_name=model,

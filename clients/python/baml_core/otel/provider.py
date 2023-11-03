@@ -19,12 +19,14 @@ from pydantic import BaseModel
 
 from .helper import event_to_log
 from ..__version__ import __version__
+from .api import APIWrapper
 
 
 @typing.final
 class CustomBackendExporter(SpanExporter):
     def __init__(self) -> None:
         super().__init__()
+        self.api_wrapper = APIWrapper()
 
     def export(self, spans: typing.Sequence[ReadableSpan]) -> SpanExportResult:
         # Convert spans to your backend's desired format
@@ -34,7 +36,9 @@ class CustomBackendExporter(SpanExporter):
         for span in spans:
             items = event_to_log(span)
             for item in items:
+                # send them to the backend
                 item.print()
+                self.api_wrapper.log_sync(payload=item)
 
         # If the export was successful, return
         # SpanExportResult.SUCCESS, otherwise, return
@@ -199,6 +203,8 @@ provider = TracerProvider(
     )
 )
 baml_tracer = provider.get_tracer("BAML_TRACING")
+__exporter = CustomBackendExporter()
+__processor = BatchSpanProcessor(__exporter, max_export_batch_size=10)
 
 
 def use_tracing(project_id: typing.Optional[str] = None) -> None:
@@ -208,6 +214,4 @@ def use_tracing(project_id: typing.Optional[str] = None) -> None:
     elif os.environ.get("BAML_PROJECT_ID"):
         update_resource.attributes["baml.project_id"] = os.environ["BAML_PROJECT_ID"]
     provider.resource.merge(update_resource)
-    provider.add_span_processor(
-        BatchSpanProcessor(CustomBackendExporter(), max_export_batch_size=10)
-    )
+    provider.add_span_processor(__processor)

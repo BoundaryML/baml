@@ -8,8 +8,22 @@ from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
 from .logger import logger
 import colorama
+from datetime import datetime, timezone
+
 
 colorama.init()
+
+
+def epoch_to_iso8601(epoch_nanos):
+    # Convert nanoseconds to seconds
+    epoch_seconds = epoch_nanos / 1e9
+    # Create a datetime object from the epoch time
+    dt_object = datetime.fromtimestamp(epoch_seconds, tz=timezone.utc)
+    # Convert the datetime object to an ISO 8601 formatted string
+    iso8601_timestamp = (
+        dt_object.isoformat(timespec="milliseconds").replace("+00:00", "") + "Z"
+    )
+    return iso8601_timestamp
 
 
 class Error(BaseModel):
@@ -454,8 +468,7 @@ def event_to_log(span: ReadableSpan) -> List[LogSchema]:
             process_id=str(process_id),
             stage=as_str(span.resource.attributes.get("baml.stage", None)),
             latency_ms=(span.end_time or 0) - (span.start_time or 0),
-            # TODO: Convert to ISO8601
-            start_time=str(span.start_time),
+            start_time=epoch_to_iso8601(span.start_time or 0),
             tags={
                 "baml.version": baml_version,
             },

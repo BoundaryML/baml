@@ -5,7 +5,7 @@ import typing
 
 from . import api_types
 from .tracer import trace, update_trace_tags
-from .api import API
+from api import API
 
 from mock import patch, AsyncMock
 

@@ -36,6 +36,7 @@ class OpenAIChatProvider(LLMChatProvider):
         text = response["choices"][0]["message"]["content"]
         usage = response["usage"]
         model = response["model"]
+
         return LLMResponse(
             generated=text,
             model_name=model,
@@ -44,5 +45,6 @@ class OpenAIChatProvider(LLMChatProvider):
                 prompt_tokens=usage.get("prompt_tokens", None),
                 output_tokens=usage.get("completion_tokens", None),
                 total_tokens=usage.get("total_tokens", None),
+                finish_reason=response["choices"][0]["finish_reason"],
             ),
         )
