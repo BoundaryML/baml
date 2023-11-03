@@ -2,8 +2,8 @@ name: Gloo CLI
 
 on:
   pull_request:
-    # paths:
-    #   - "engine/baml-cli/**"
+    paths:
+      - "engine/baml-cli/**"
     branches:
       - vscode-baml-release
   push:
