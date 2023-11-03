@@ -3,16 +3,16 @@ name: Gloo CLI
 on:
   pull_request:
     paths:
-      - "cli/**"
+      - "engine/baml-cli/**"
     branches:
-      - canary
+      - vscode-baml-release
   push:
     paths:
-      - "cli/.bumpversion.cfg"
+      - "engine/.bumpversion.cfg"
     branches:
-      - canary
+      - vscode-baml-release
     tags:
-      - "release/cli/v*.*.*"
+      - "release/baml-cli/v*.*.*"
 
 jobs:
   build:
@@ -24,25 +24,25 @@ jobs:
         platform:
           - os: ubuntu-20.04
             target: x86_64-unknown-linux-gnu
-            bin: gloo
-            name: gloo-linux-x86_64
+            bin: baml
+            name: baml-linux-x86_64
             command: build
 
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            bin: gloo.exe
-            name: gloo-Windows-x86_64
+            bin: baml.exe
+            name: baml-Windows-x86_64
             command: both
 
           - os: macOS-latest
             target: x86_64-apple-darwin
-            bin: gloo
-            name: gloo-Darwin-x86_64
+            bin: baml
+            name: baml-Darwin-x86_64
             command: both
           - os: macOS-latest
             target: aarch64-apple-darwin
-            bin: gloo
-            name: gloo-Darwin-apple-silicon
+            bin: baml
+            name: baml-Darwin-apple-silicon
             command: build # Can't test on macOS-latest because it's Intel
 
     runs-on: ${{ matrix.platform.os }}
@@ -52,7 +52,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
-            cli
+            engine/baml-cli
 
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v0
@@ -61,20 +61,20 @@ jobs:
           target: ${{ matrix.platform.target }}
           args: "--locked --release"
           strip: ${{ github.event_name != 'pull_request' }}
-          working-directory: cli
+          working-directory: engine/baml-cli
 
       - name: Add artifact
         uses: actions/upload-artifact@v3
         with:
           name: ${{ matrix.platform.name }}
-          path: cli/target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }}
+          path: engine/baml-cli/target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }}
 
   pre-release:
     permissions:
       contents: write
     runs-on: ubuntu-latest
     needs: build
-    if: github.ref == 'refs/heads/canary'
+    if: github.ref == 'refs/heads/vscode-baml-release'
     environment: nightly
 
     steps:
@@ -84,37 +84,38 @@ jobs:
       - name: Get artifact [Darwin-Intel]
         uses: actions/download-artifact@v3
         with:
-          name: gloo-Darwin-x86_64
-          path: cli/target/x86_64-apple-darwin/release/
+          name: baml-Darwin-x86_64
+          path: engine/baml-cli/target/x86_64-apple-darwin/release/
       - name: Get artifact [Darwin-Silicon]
         uses: actions/download-artifact@v3
         with:
-          name: gloo-Darwin-apple-silicon
-          path: cli/target/aarch64-apple-darwin/release/
+          name: baml-Darwin-apple-silicon
+          path: engine/baml-cli/target/aarch64-apple-darwin/release/
       - name: Get artifact [Linux]
         uses: actions/download-artifact@v3
         with:
-          name: gloo-linux-x86_64
-          path: cli/target/x86_64-unknown-linux-gnu/release/
+          name: baml-linux-x86_64
+          path: engine/baml-cli/target/x86_64-unknown-linux-gnu/release/
       - name: Get artifact [Windows]
         uses: actions/download-artifact@v3
         with:
-          name: gloo-Windows-x86_64
-          path: cli/target/x86_64-pc-windows-msvc/release/
+          name: baml-Windows-x86_64
+          path: engine/baml-cli/target/x86_64-pc-windows-msvc/release/
       - id: hash
         run: |
-          VERSION=$(cat cli/.bumpversion.cfg | grep current_version | cut -d '=' -f 2 | sed 's/[", ]//g')
+          VERSION=$(cat engine/.bumpversion.cfg | grep current_version | cut -d '=' -f 2 | sed 's/[", ]//g')
+
           if [[ ! $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+-canary\.[0-9]+$ ]]; then
             echo "Version ($VERSION) is not a pre-release build"
             exit 1
           fi
-          tar -czvf gloo-linux-x86_64.tar.gz cli/target/x86_64-unknown-linux-gnu/release/gloo
-          tar -czvf gloo-apple-intel.tar.gz cli/target/x86_64-apple-darwin/release/gloo
-          tar -czvf gloo-apple-arm.tar.gz cli/target/aarch64-apple-darwin/release/gloo
-          echo "linux_hash=$(shasum -a 256 gloo-linux-x86_64.tar.gz | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
-          echo "darwin_intel_hash=$(shasum -a 256 gloo-apple-intel.tar.gz | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
-          echo "darwin_arm_hash=$(shasum -a 256 gloo-apple-arm.tar.gz | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
-          echo "windows_hash=$(shasum -a 256 cli/target/x86_64-pc-windows-msvc/release/gloo.exe | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
+          tar -czvf baml-linux-x86_64.tar.gz engine/baml-cli/target/x86_64-unknown-linux-gnu/release/baml
+          tar -czvf baml-apple-intel.tar.gz engine/baml-cli/target/x86_64-apple-darwin/release/baml
+          tar -czvf baml-apple-arm.tar.gz engine/baml-cli/target/aarch64-apple-darwin/release/baml
+          echo "linux_hash=$(shasum -a 256 baml-linux-x86_64.tar.gz | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
+          echo "darwin_intel_hash=$(shasum -a 256 baml-apple-intel.tar.gz | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
+          echo "darwin_arm_hash=$(shasum -a 256 baml-apple-arm.tar.gz | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
+          echo "windows_hash=$(shasum -a 256 engine/baml-cli/target/x86_64-pc-windows-msvc/release/baml.exe | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
           echo "version=$(echo $VERSION | cut -d '-' -f 1)" >> $GITHUB_OUTPUT
           echo "full_version=$VERSION" >> $GITHUB_OUTPUT
 
@@ -123,10 +124,10 @@ jobs:
         with:
           tag_name: "unstable/cli/v${{ steps.hash.outputs.version }}"
           files: |
-            gloo-linux-x86_64.tar.gz
-            gloo-apple-intel.tar.gz
-            gloo-apple-arm.tar.gz
-            cli/target/x86_64-pc-windows-msvc/release/gloo.exe
+            baml-linux-x86_64.tar.gz
+            baml-apple-intel.tar.gz
+            baml-apple-arm.tar.gz
+            engine/baml-cli/target/x86_64-pc-windows-msvc/release/baml.exe
           prerelease: true # Must manually upgrade to release once homebrew is updated.
           body: |
             ## Hashes
@@ -151,37 +152,37 @@ jobs:
       - name: Get artifact [Darwin-Intel]
         uses: actions/download-artifact@v3
         with:
-          name: gloo-Darwin-x86_64
-          path: cli/target/x86_64-apple-darwin/release/
+          name: baml-Darwin-x86_64
+          path: engine/baml-cli/target/x86_64-apple-darwin/release/
       - name: Get artifact [Darwin-Silicon]
         uses: actions/download-artifact@v3
         with:
-          name: gloo-Darwin-apple-silicon
-          path: cli/target/aarch64-apple-darwin/release/
+          name: baml-Darwin-apple-silicon
+          path: engine/baml-cli/target/aarch64-apple-darwin/release/
       - name: Get artifact [Linux]
         uses: actions/download-artifact@v3
         with:
-          name: gloo-linux-x86_64
-          path: cli/target/x86_64-unknown-linux-gnu/release/
+          name: baml-linux-x86_64
+          path: engine/baml-cli/target/x86_64-unknown-linux-gnu/release/
       - name: Get artifact [Windows]
         uses: actions/download-artifact@v3
         with:
-          name: gloo-Windows-x86_64
-          path: cli/target/x86_64-pc-windows-msvc/release/
+          name: baml-Windows-x86_64
+          path: engine/baml-cli/target/x86_64-pc-windows-msvc/release/
       - id: hash
         run: |
-          VERSION=$(cat cli/.bumpversion.cfg | grep current_version | cut -d '=' -f 2 | sed 's/[", ]//g')
+          VERSION=$(cat engine/.bumpversion.cfg | grep current_version | cut -d '=' -f 2 | sed 's/[", ]//g')
           if [[ ! $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Version ($VERSION) is not a release build"
             exit 1
           fi
-          tar -czvf gloo-linux-x86_64.tar.gz cli/target/x86_64-unknown-linux-gnu/release/gloo
-          tar -czvf gloo-apple-intel.tar.gz cli/target/x86_64-apple-darwin/release/gloo
-          tar -czvf gloo-apple-arm.tar.gz cli/target/aarch64-apple-darwin/release/gloo
-          echo "linux_hash=$(shasum -a 256 gloo-linux-x86_64.tar.gz | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
-          echo "darwin_intel_hash=$(shasum -a 256 gloo-apple-intel.tar.gz | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
-          echo "darwin_arm_hash=$(shasum -a 256 gloo-apple-arm.tar.gz | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
-          echo "windows_hash=$(shasum -a 256 cli/target/x86_64-pc-windows-msvc/release/gloo.exe | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
+          tar -czvf baml-linux-x86_64.tar.gz engine/baml-cli/target/x86_64-unknown-linux-gnu/release/baml
+          tar -czvf baml-apple-intel.tar.gz engine/baml-cli/target/x86_64-apple-darwin/release/baml
+          tar -czvf baml-apple-arm.tar.gz engine/baml-cli/target/aarch64-apple-darwin/release/baml
+          echo "linux_hash=$(shasum -a 256 baml-linux-x86_64.tar.gz | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
+          echo "darwin_intel_hash=$(shasum -a 256 baml-apple-intel.tar.gz | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
+          echo "darwin_arm_hash=$(shasum -a 256 baml-apple-arm.tar.gz | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
+          echo "windows_hash=$(shasum -a 256 engine/baml-cli/target/x86_64-pc-windows-msvc/release/baml.exe | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Release
@@ -190,10 +191,10 @@ jobs:
           name: "Cli: ${{ steps.hash.outputs.version }}"
           tag_name: "releases/cli/v${{ steps.hash.outputs.version }}"
           files: |
-            gloo-linux-x86_64.tar.gz
-            gloo-apple-intel.tar.gz
-            gloo-apple-arm.tar.gz
-            cli/target/x86_64-pc-windows-msvc/release/gloo.exe
+            baml-linux-x86_64.tar.gz
+            baml-apple-intel.tar.gz
+            baml-apple-arm.tar.gz
+            engine/baml-cli/target/x86_64-pc-windows-msvc/release/baml.exe
           prerelease: true # Must manually upgrade to release once homebrew is updated.
           body: |
             ## Hashes
@@ -202,5 +203,5 @@ jobs:
             Mac: Apple Silicon: `${{ steps.hash.outputs.darwin_arm_hash }}`
             Windows: `${{ steps.hash.outputs.windows_hash }}`
 
-      # TODO: Create a pull request on GlooHQ/homebrew-gloo to update the version by running
+      # TODO: Create a pull request on GlooHQ/homebrew-baml to update the version by running
       # release/patch-homebrew.sh

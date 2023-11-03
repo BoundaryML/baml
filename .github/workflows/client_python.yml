@@ -5,12 +5,12 @@ on:
     paths:
       - "clients/python/**"
     branches:
-      - canary
+      - vscode-baml-release
   push:
     paths:
       - "clients/python/.bumpversion.cfg"
     branches:
-      - canary
+      - vscode-baml-release
     tags:
       - "release/py_client/v*.*.*"
 
@@ -104,12 +104,11 @@ jobs:
             Full Build: ${{ steps.hash.outputs.full_version }}
             Tarball: ${{ steps.hash.outputs.tarball_hash }}
             Wheel: ${{ steps.hash.outputs.whl_hash }}
-     
 
       - name: Mint token
         id: mint
         uses: tschm/token-mint-action@v1.0.2
-      
+
       - name: Install Poetry
         run: |
           pipx install poetry
@@ -165,11 +164,11 @@ jobs:
       - name: Mint token
         id: mint
         uses: tschm/token-mint-action@v1.0.2
-      
+
       - name: Install Poetry
         run: |
           pipx install poetry
-  
+
       - name: Publish the package with poetry
         run: |
           poetry publish -u __token__ -p '${{ steps.mint.outputs.api-token }}'

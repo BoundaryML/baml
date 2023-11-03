@@ -71,16 +71,16 @@ jobs:
         if: github.event.inputs.VSCODE_EXT != 'none'
         run: |
           VERSION=$(bumpversion --allow-dirty ${{ github.event.inputs.VSCODE_EXT }} --list | grep new_version | cut -d '=' -f 2)
-          echo "::notice file=vscode-ext/package.json::Upgrading to version ${VERSION}"
+          echo "::notice file=typescript/vscode-ext/packages/package.json::Upgrading to version ${VERSION}"
           echo "COMMIT_MSG=${COMMIT_MSG} [BUMP:vscode_ext:${VERSION}]" >> $GITHUB_ENV
-        working-directory: ./vscode-ext
+        working-directory: ./typescript/vscode-ext/packages
 
       - name: Bump version - cli
         id: cli
         if: github.event.inputs.CLI != 'none'
         run: |
           VERSION=$(bumpversion --allow-dirty ${{ github.event.inputs.CLI }} --list | grep new_version | cut -d '=' -f 2)
-          echo "::notice file=cli/Cargo.toml::Upgrading to version ${VERSION}"
+          echo "::notice file=engine/baml-cli/Cargo.toml::Upgrading to version ${VERSION}"
           echo "COMMIT_MSG=${COMMIT_MSG} [BUMP:cli:${VERSION}]" >> $GITHUB_ENV
         working-directory: ./cli
 
@@ -92,7 +92,7 @@ jobs:
           echo "::notice file=clients/python/pyproject.toml::Upgrading to version ${VERSION}"
           echo "COMMIT_MSG=${COMMIT_MSG} [BUMP:py_client:${VERSION}]" >> $GITHUB_ENV
         working-directory: ./clients/python
-      
+
       - id: commit
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
