@@ -3,6 +3,7 @@ name: Gloo CLI
 env:
   CLI_PATH: engine/baml-cli
 
+# boo
 on:
   pull_request:
     paths:
