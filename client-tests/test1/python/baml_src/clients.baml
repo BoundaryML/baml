@@ -1,7 +1,6 @@
 // test
 client<llm> AZURE_DEFAULT {
     provider openai-chat
-    {// fallback AZURE_YES_NO //}
     options {
       model gpt-3.5-turbo
       api_key env.OPENAI_API_KEY
@@ -39,4 +38,3 @@ client<llm> LARGE_RESPONSE {
       max_tokens 400
     }
 }
-

@@ -1,6 +1,9 @@
 import contextvars
 import json
+import os
+import platform
 import typing
+import uuid
 from opentelemetry import trace, context
 from opentelemetry.trace.span import Span
 from opentelemetry.util import types
@@ -29,7 +32,9 @@ class CustomBackendExporter(SpanExporter):
         # prints the span names. You should replace this with
         # the logic to send the spans to your backend.
         for span in spans:
-            event_to_log(span)
+            items = event_to_log(span)
+            for item in items:
+                item.print()
 
         # If the export was successful, return
         # SpanExportResult.SUCCESS, otherwise, return
@@ -161,7 +166,7 @@ class BamlSpanContextManager:
     def complete(self, result: typing.Any) -> None:
         if result is not None:
             result, type_name = try_serialize(result)
-            self.span.add_event("output", {"result": result, "type": type_name})
+            self.span.add_event("output", {"result": result, "result.type": type_name})
         self.span.set_status(trace.Status(trace.StatusCode.OK))
 
     def __exit__(
@@ -186,15 +191,23 @@ class BamlSpanContextManager:
 provider = TracerProvider(
     resource=Resource.create(
         {
-            "service.name": "baml",
-            "service.version": __version__,
+            "baml": "baml",
+            "baml.version": __version__,
+            "process_id": str(uuid.uuid4()),
+            "hostname": platform.node(),
         }
     )
 )
 baml_tracer = provider.get_tracer("BAML_TRACING")
 
 
-def use_tracing() -> None:
+def use_tracing(project_id: typing.Optional[str] = None) -> None:
+    update_resource = Resource.create()
+    if project_id is not None:
+        update_resource.attributes["baml.project_id"] = project_id
+    elif os.environ.get("BAML_PROJECT_ID"):
+        update_resource.attributes["baml.project_id"] = os.environ["BAML_PROJECT_ID"]
+    provider.resource.merge(update_resource)
     provider.add_span_processor(
         BatchSpanProcessor(CustomBackendExporter(), max_export_batch_size=10)
     )

@@ -16,6 +16,7 @@ from ..types.classes.cls_conversation import Conversation
 from ..types.classes.cls_improvedresponse import ImprovedResponse
 from ..types.classes.cls_message import Message
 from ..types.classes.cls_proposedmessage import ProposedMessage
+from ..types.enums.enm_messagesender import MessageSender
 from baml_core._impl.deserializer import Deserializer
 
 
@@ -29,14 +30,15 @@ Given a conversation with a resident, consider improving the response previously
 
 Good responses are amiable and direct.
 
-Do not use affirmative or negative unless the question is a yes or no question.
+Do not use or negative unless the question is a yes or no question.
 
 Thread until now:
 {arg.thread.thread}
 
 Previous Response: {arg.thread.thread}
 
-Output JSON:
+
+Output JSON Format:
 {
   // false if the response is already contextual and pleasant
   "ShouldImprove": bool,
@@ -47,9 +49,7 @@ Output JSON:
 JSON:\
 """
 
-__input_replacers = {
-    "arg.thread.thread"
-}
+__input_replacers = {"{arg.thread.thread}"}
 
 
 # We ignore the type here because baml does some type magic to make this work
@@ -57,13 +57,10 @@ __input_replacers = {
 __deserializer = Deserializer[ImprovedResponse](ImprovedResponse)  # type: ignore
 __deserializer.overload("ImprovedResponse", {"ShouldImprove": "should_improve"})
 
+
 @BAMLMaybePolishText.register_impl("v1")
 async def v1(arg: ProposedMessage, /) -> ImprovedResponse:
-    updates = {k: k.format(arg=arg) for k in __input_replacers}
-
-    prompt = str(__prompt_template)
-    for k, v in updates.items():
-        prompt = prompt.replace(k, v)
-
-    response = await AZURE_GPT4.run_prompt(prompt)
+    response = await AZURE_GPT4.run_prompt_template(
+        template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg)
+    )
     return __deserializer.from_string(response.generated)

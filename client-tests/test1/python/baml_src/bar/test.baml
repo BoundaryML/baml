@@ -23,7 +23,10 @@ impl<llm, MaybePolishText> v1 {
     client AZURE_GPT4
 
     override ImprovedResponse {
-        should_improve @description(false if the response is already contextual and pleasant) @alias("ShouldImprove")
+        should_improve @alias("ShouldImprove")
+        @description(false if the response is already contextual and pleasant)
+        @meta(fooz, "foo, bar, baz")
+
         improved_response @description(string if should_improve else null)
     }
 
@@ -32,14 +35,15 @@ impl<llm, MaybePolishText> v1 {
 
         Good responses are amiable and direct.
 
-        Do not use affirmative or negative unless the question is a yes or no question.
+        Do not use {// affirmative //} or negative unless the question is a yes or no question.
 
         Thread until now:
         {#input.thread.thread}
 
         Previous Response: {#input.thread.thread}
 
-        Output JSON:
+        {// The word format is required. don't remove it //}
+        Output JSON Format:
         {#print_type(output)}
 
         JSON:

@@ -1502,6 +1502,17 @@ doc = ["Sphinx (>=7)", "packaging", "sphinx-autodoc-typehints (>=1.2.0)"]
 test = ["coverage[toml] (>=7)", "mypy (>=1.2.0)", "pytest (>=7)"]
 
 [[package]]
+name = "types-colorama"
+version = "0.4.15.12"
+description = "Typing stubs for colorama"
+optional = false
+python-versions = "*"
+files = [
+    {file = "types-colorama-0.4.15.12.tar.gz", hash = "sha256:fbdfc5d9d24d85c33bd054fbe33adc6cec44eedb19cfbbabfbbb57dc257ae4b8"},
+    {file = "types_colorama-0.4.15.12-py3-none-any.whl", hash = "sha256:23c9d4a00961227f7ef018d5a1c190c4bbc282119c3ee76a17677a793f13bb82"},
+]
+
+[[package]]
 name = "types-decorator"
 version = "5.1.8.4"
 description = "Typing stubs for decorator"
@@ -1754,4 +1765,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8"
-content-hash = "c939a12fe63c757245a3fb3ada35618dfbf401cb1ef8f0c3c38842201de477b2"
+content-hash = "cc67ab4fdf813f3cc23229024614f406a8430842cd65343760f11b199dcbb862"

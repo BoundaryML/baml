@@ -23,11 +23,5 @@ __deserializer.overload("{{{name}}}", {{BLOCK_OPEN}}{{#each aliases}}"{{{alias}}
 
 @BAML{{function.name}}.register_impl("{{name}}")
 {{> func_def func_name=name unnamed_args=function.unnamed_args args=function.args return=function.return}}
-    updates = {k: k.format({{> arg_values unnamed_args=function.unnamed_args args=function.args}}) for k in __input_replacers}
-
-    prompt = str(__prompt_template)
-    for k, v in updates.items():
-        prompt = prompt.replace(k, v)
-
-    response = await {{client}}.run_prompt(prompt)
+    response = await {{client}}.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict({{> arg_values unnamed_args=function.unnamed_args args=function.args}}))
     return __deserializer.from_string(response.generated)

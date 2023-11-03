@@ -36,22 +36,17 @@ Simplified message:
 Human:\
 """
 
-__input_replacers = {
-    "arg"
-}
+__input_replacers = {"{arg}"}
 
 
 # We ignore the type here because baml does some type magic to make this work
 # for inline SpecialForms like Optional, Union, List.
 __deserializer = Deserializer[str](str)  # type: ignore
 
+
 @BAMLMessageSimplifier.register_impl("v1")
 async def v1(arg: Conversation, /) -> str:
-    updates = {k: k.format(arg=arg) for k in __input_replacers}
-
-    prompt = str(__prompt_template)
-    for k, v in updates.items():
-        prompt = prompt.replace(k, v)
-
-    response = await AZURE_GPT4.run_prompt(prompt)
+    response = await AZURE_DEFAULT.run_prompt_template(
+        template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg)
+    )
     return __deserializer.from_string(response.generated)
