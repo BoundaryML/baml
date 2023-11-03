@@ -206,6 +206,36 @@ tests = ["attrs[tests-no-zope]", "zope-interface"]
 tests-no-zope = ["cloudpickle", "hypothesis", "mypy (>=1.1.1)", "pympler", "pytest (>=4.3.0)", "pytest-mypy-plugins", "pytest-xdist[psutil]"]
 
 [[package]]
+name = "baml"
+version = "0.1.0"
+description = ""
+optional = false
+python-versions = "^3.8"
+files = []
+develop = true
+
+[package.dependencies]
+aiohttp = "^3.8.5"
+anthropic = "^0.3.11"
+colorama = "^0.4.6"
+coloredlogs = "^15.0.1"
+json5 = "^0.9.14"
+openai = ">=0.27.9"
+opentelemetry-api = "^1.20.0"
+opentelemetry-instrumentation = "^0.41b0"
+opentelemetry-sdk = "^1.20.0"
+pydantic = "^2.3.0"
+pytest = "^7.4.2"
+pytest-asyncio = "^0.21.1"
+python-dotenv = "^1.0.0"
+typeguard = "^4.1.5"
+types-requests = "^2.31.0.2"
+
+[package.source]
+type = "directory"
+url = "../../../clients/python"
+
+[[package]]
 name = "certifi"
 version = "2023.7.22"
 description = "Python package for providing Mozilla's CA Bundle."
@@ -505,36 +535,6 @@ sftp = ["paramiko"]
 smb = ["smbprotocol"]
 ssh = ["paramiko"]
 tqdm = ["tqdm"]
-
-[[package]]
-name = "gloo-lib"
-version = "1.3.0.dev4"
-description = ""
-optional = false
-python-versions = "^3.8"
-files = []
-develop = true
-
-[package.dependencies]
-aiohttp = "^3.8.5"
-anthropic = "^0.3.11"
-colorama = "^0.4.6"
-coloredlogs = "^15.0.1"
-json5 = "^0.9.14"
-openai = ">=0.27.9"
-opentelemetry-api = "^1.20.0"
-opentelemetry-instrumentation = "^0.41b0"
-opentelemetry-sdk = "^1.20.0"
-pydantic = "^2.3.0"
-pytest = "^7.4.2"
-pytest-asyncio = "^0.21.1"
-python-dotenv = "^1.0.0"
-typeguard = "^4.1.5"
-types-requests = "^2.31.0.2"
-
-[package.source]
-type = "directory"
-url = "../../../clients/python"
 
 [[package]]
 name = "h11"
@@ -1634,4 +1634,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8"
-content-hash = "6861a9b34fb54167975f6b844903ca81de25c544f55878a9a8fc7367ba7823ca"
+content-hash = "54a4186ea3b275dd5c32d31411573bb1246ceb5bcb784bf64fc641ebd79d005f"
