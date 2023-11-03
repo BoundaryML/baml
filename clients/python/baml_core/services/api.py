@@ -128,6 +128,10 @@ class TestingAPIWrapper(__APIBase):
         self._call_api_sync("tests/update", payload=payload)
 
 
+class CacheRequestWithProjectId(api_types.CacheRequest):
+    project_id: str
+
+
 class APIWrapper(__APIBase):
     def __init__(
         self, *, base_url: str, api_key: str, project_id: str, session_id: str
@@ -146,8 +150,13 @@ class APIWrapper(__APIBase):
         self, *, payload: api_types.CacheRequest
     ) -> api_types.CacheResponse | None:
         try:
-            return self._call_api_sync("cache", payload, api_types.CacheResponse)
-        except Exception:
+            request = CacheRequestWithProjectId(
+                project_id=self.project_id,
+                **payload.model_dump(by_alias=True),
+            )
+            return self._call_api_sync("cache", request, api_types.CacheResponse)
+        except Exception as e:
+            logger.warning(f"Cache failure: {e}")
             return None
 
     def log_sync(
