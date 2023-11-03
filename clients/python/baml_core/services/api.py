@@ -25,7 +25,7 @@ class _APIWrapper:
         self.__base_url = base_url
         self.__headers: typing.Dict[str, str] = {
             "Content-Type": "application/json",
-            "Authrization": f"Bearer {api_key}",
+            "Authorization": f"Bearer {api_key}",
         }
 
     @property

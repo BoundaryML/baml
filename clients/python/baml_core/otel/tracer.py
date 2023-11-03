@@ -20,7 +20,9 @@ def trace(func: F) -> F:
 
             parent_id = get_current_span().get_span_context().span_id
             with baml_tracer.start_as_current_span(func.__name__) as span:
-                with BamlSpanContextManager(parent_id, span, params) as ctx:
+                with BamlSpanContextManager(
+                    func.__name__, parent_id, span, params
+                ) as ctx:
                     response = await func(*args, **kwargs)
                     ctx.complete(response)
                     return response
@@ -35,7 +37,9 @@ def trace(func: F) -> F:
 
             parent_id = get_current_span().get_span_context().span_id
             with baml_tracer.start_as_current_span(func.__name__) as span:
-                with BamlSpanContextManager(parent_id, span, params) as ctx:
+                with BamlSpanContextManager(
+                    func.__name__, parent_id, span, params
+                ) as ctx:
                     response = func(*args, **kwargs)
                     ctx.complete(response)
                     return response

@@ -75,8 +75,11 @@ class CustomBackendExporter(SpanExporter):
 attributes_context: contextvars.ContextVar[
     typing.Dict[int, typing.Dict[str, types.AttributeValue]]
 ] = contextvars.ContextVar("attributes", default={})
+
 # Context variable to store the root span
-root_span = contextvars.ContextVar[typing.Optional[int]]("root_span", default=None)
+parent_history = contextvars.ContextVar[
+    typing.Dict[int, typing.List[typing.Tuple[int, str]]]
+]("parent_history", default={})
 
 
 # We can't use events for tags because we need to do some magic for child
@@ -114,10 +117,15 @@ def create_event(name: str, attributes: typing.Dict[str, types.AttributeValue]) 
 
 class BamlSpanContextManager:
     def __init__(
-        self, parent_id: int, span: Span, kwargs: typing.Dict[str, typing.Any]
+        self,
+        name: str,
+        parent_id: int,
+        span: Span,
+        kwargs: typing.Dict[str, typing.Any],
     ):
         self.parent_id = parent_id
         self.span = span
+        self.name = name
 
         if "self" in kwargs:
             kwargs.pop("self")
@@ -131,9 +139,19 @@ class BamlSpanContextManager:
         span.add_event("input", attributes)
 
     def __enter__(self) -> "BamlSpanContextManager":
-        if self.parent_id == 0:
-            root_span.set(self.span.get_span_context().span_id)
         span_id = self.span.get_span_context().span_id
+
+        if self.parent_id == 0:
+            current_history = parent_history.get()
+            current_history[span_id] = [(span_id, self.name)]
+            parent_history.set(current_history)
+        else:
+            current_history = parent_history.get()
+            current_history[span_id] = current_history.get(self.parent_id, []) + [
+                (span_id, self.name)
+            ]
+            parent_history.set(current_history)
+
         current_attributes = attributes_context.get()
         span_attributes = current_attributes.get(
             self.parent_id, {"__BAML_ID__": span_id}
@@ -157,11 +175,18 @@ class BamlSpanContextManager:
         attributes_context.set(current_attributes)
         if attributes:
             self.span.add_event("set_tags", attributes)
-        root_span_id = root_span.get()
-        if root_span_id is not None:
-            self.span.set_attribute("root_span", root_span_id)
-        if self.parent_id == 0:
-            root_span.set(None)
+
+        current_history = parent_history.get()
+        span_history = current_history.pop(span_id, None)
+        parent_history.set(current_history)
+
+        if span_history is not None:
+            self.span.set_attribute(
+                "root_span_ids", list(map(lambda m: m[0], span_history))
+            )
+            self.span.set_attribute(
+                "root_span_names", list(map(lambda m: m[1], span_history))
+            )
 
 
 # Initialize to the default No-op tracer.

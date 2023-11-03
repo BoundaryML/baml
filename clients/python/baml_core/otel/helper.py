@@ -193,15 +193,6 @@ def as_str(value: Optional[AttributeValue]) -> str:
 __uuid_lut: Dict[int, Dict[int, str]] = {}
 
 
-def as_uuid(root_id: Optional[AttributeValue], value: Optional[AttributeValue]) -> str:
-    assert root_id is not None
-    assert type(root_id) == int, f"Expected int, got {type(root_id)}"
-
-    assert value is not None
-    assert type(value) == int, f"Expected int, got {type(value)}"
-    return get_uuid(root_id, value)
-
-
 def get_uuid(root_id: int, value: int) -> str:
     if root_id not in __uuid_lut:
         __uuid_lut[root_id] = {}
@@ -217,6 +208,15 @@ def as_list(value: Optional[AttributeValue]) -> List[str]:
     ), f"Expected list or tuple, got {type(value)}"
 
     return [str(v) for v in value]
+
+
+def as_int_list(value: Optional[AttributeValue]) -> List[int]:
+    assert value is not None
+    assert isinstance(
+        value, (list, tuple)
+    ), f"Expected list or tuple, got {type(value)}"
+
+    return [int(v) for v in value]
 
 
 def as_int(value: Optional[AttributeValue]) -> int:
@@ -283,6 +283,9 @@ def fill_partial(event: Event, partial: PartialLogSchema) -> None:
                 ),
             )
         )
+    elif event.name == "llm_request_cache_hit":
+        latency_ms = as_int(attrs["latency_ms"])
+        print(f"Cache hit latency: {latency_ms}ms")
     elif event.name == "llm_request_start":
         partial.event_type = "func_llm"
 
@@ -360,24 +363,45 @@ def event_to_log(
 
     baml_version = as_str(span.resource.attributes["baml.version"])
 
-    root_span = None
+    parent_history = None
+    parent_names = None
 
-    if span.attributes and "root_span" in span.attributes:
-        root_span = as_int(span.attributes["root_span"])
-    if root_span is None:
+    if span.attributes:
+        if "root_span_ids" in span.attributes:
+            parent_history = as_int_list(span.attributes["root_span_ids"])
+        if "root_span_names" in span.attributes:
+            parent_names = as_list(span.attributes["root_span_names"])
+
+    if (
+        parent_history is None
+        or len(parent_history) == 0
+        or parent_names is None
+        or len(parent_names) == 0
+        or len(parent_history) != len(parent_names)
+    ):
         return []
+
+    assert span.name == parent_names[-1]
+    assert span.context.span_id == parent_history[-1]
 
     partial = PartialLogSchema(
         project_id=project_id or "BAML_PLACEHOLDER_PROJECT_ID",
-        root_event_id=get_uuid(root_span, root_span),
-        event_id=get_uuid(root_span, span.context.span_id),
+        root_event_id=get_uuid(parent_history[0], parent_history[0]),
+        event_id=get_uuid(parent_history[0], span.context.span_id),
+        parent_event_id=get_uuid(parent_history[0], parent_history[-2])
+        if len(parent_history) > 1
+        else None,
         event_type="func_code",
         context=LogSchemaContext(
-            event_chain=[EventChain(function_name=span.name, variant_name=None)],
+            event_chain=[
+                EventChain(function_name=chain, variant_name=None)
+                for chain in parent_names
+            ],
             hostname=str(span.resource.attributes["hostname"]),
             process_id=process_id,
             stage=as_str(span.resource.attributes.get("baml.stage", None)),
-            latency_ms=(span.end_time or 0) - (span.start_time or 0),
+            # open telemetry returns nanoseconds so we convert to milliseconds
+            latency_ms=int(((span.end_time or 0) - (span.start_time or 0)) / 1e6),
             start_time=epoch_to_iso8601(span.start_time or 0),
             tags={
                 "baml.version": baml_version,
