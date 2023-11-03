@@ -84,8 +84,23 @@
         "command": "baml.restartLanguageServer",
         "title": "Restart Language Server",
         "category": "Baml"
+      },
+      {
+        "command": "baml.openPlayground",
+        "title": "Open Playground",
+        "category": "Baml"
       }
-    ]
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "title": "Open Playground",
+          "when": "resourceLangId == baml",
+          "command": "baml.openPlayground",
+          "group": "navigation"
+        }
+      ]
+    }
   },
   "scripts": {
     "lint": "eslint \"src/**/*.ts\""

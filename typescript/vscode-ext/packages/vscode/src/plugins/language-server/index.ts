@@ -1,6 +1,6 @@
 import * as path from 'path'
 
-import { commands, ExtensionContext, OutputChannel, window, workspace } from 'vscode'
+import { commands, ExtensionContext, OutputChannel, ViewColumn, window, workspace } from 'vscode'
 import { LanguageClientOptions } from 'vscode-languageclient'
 import { LanguageClient, ServerOptions, TransportKind } from 'vscode-languageclient/node'
 import TelemetryReporter from '../../telemetryReporter'
@@ -73,7 +73,7 @@ const plugin: BamlVSCodePlugin = {
 
     serverModule = context.asAbsolutePath(
       path.join('language-server', 'out', 'bin')
-    );
+      );
 
 
     console.log(`serverModules: ${serverModule}`)
@@ -166,6 +166,15 @@ const plugin: BamlVSCodePlugin = {
       }),
 
 
+      commands.registerCommand('baml.openPlayground', () => {
+        const panel = window.createWebviewPanel(
+          'bamlPlayrgound',
+          'Playground',
+          ViewColumn.Beside,
+          {},
+        )
+        panel.webview.html = '<html><body><h1>Hello World</h1></body></html>'
+      }),
     )
 
     activateClient(context, serverOptions, clientOptions)
