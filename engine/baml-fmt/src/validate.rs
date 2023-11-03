@@ -25,9 +25,12 @@ pub(crate) fn validate(params: &str) -> Result<(), String> {
 }
 
 pub fn run(input_schema: &str, no_color: bool) -> Result<(), String> {
-    let single_elem_vec = vec![baml::SourceFile::from(("<unknown>".into(), input_schema))];
+    let single_elem_vec = vec![baml_lib::SourceFile::from((
+        "<unknown>".into(),
+        input_schema,
+    ))];
     let path = PathBuf::from("./unknown");
-    let validate_schema = baml::validate(&path, single_elem_vec);
+    let validate_schema = baml_lib::validate(&path, single_elem_vec);
     let diagnostics = &validate_schema.diagnostics;
 
     if !diagnostics.has_errors() {

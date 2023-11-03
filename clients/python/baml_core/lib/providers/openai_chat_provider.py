@@ -1,7 +1,7 @@
 import openai
 import typing
 
-from .._impl.provider import (
+from ..._impl.provider import (
     LLMChatMessage,
     LLMChatProvider,
     LLMResponse,
@@ -29,22 +29,24 @@ class OpenAIChatProvider(LLMChatProvider):
             **kwargs,
         )
         self.__kwargs = options
+        self._set_args(**self.__kwargs)
 
     async def _run_chat(self, messages: typing.List[LLMChatMessage]) -> LLMResponse:
-        self._log_args(**self.__kwargs)
         response = await openai.ChatCompletion.acreate(messages=messages, **self.__kwargs)  # type: ignore
         text = response["choices"][0]["message"]["content"]
         usage = response["usage"]
         model = response["model"]
+        finish_reason = response["choices"][0]["finish_reason"]
 
         return LLMResponse(
             generated=text,
             model_name=model,
             meta=dict(
+                baml_is_complete=finish_reason == "stop",
                 logprobs=None,
                 prompt_tokens=usage.get("prompt_tokens", None),
                 output_tokens=usage.get("completion_tokens", None),
                 total_tokens=usage.get("total_tokens", None),
-                finish_reason=response["choices"][0]["finish_reason"],
+                finish_reason=finish_reason,
             ),
         )

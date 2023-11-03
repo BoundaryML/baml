@@ -1,6 +1,6 @@
 use std::{fmt, path::PathBuf};
 
-use baml::Diagnostics;
+use baml_lib::Diagnostics;
 use colored::Colorize;
 
 #[derive(Debug)]

@@ -1,10 +1,11 @@
 import contextvars
+from itertools import chain
 import json
 import os
 import platform
 import typing
 import uuid
-from opentelemetry import trace, context
+from opentelemetry import trace
 from opentelemetry.trace.span import Span
 from opentelemetry.util import types
 from opentelemetry.sdk.trace.export import (
@@ -17,28 +18,49 @@ from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.resources import Resource
 from pydantic import BaseModel
 
-from .helper import event_to_log
+from baml_core._impl.cache.base_cache import CacheManager
+
+from baml_core.services.api_types import CacheRequest
+
+from .helper import event_to_log, try_serialize
 from ..__version__ import __version__
-from .api import APIWrapper
+from ..services.api import APIWrapper
 
 
 @typing.final
 class CustomBackendExporter(SpanExporter):
     def __init__(self) -> None:
         super().__init__()
-        self.api_wrapper = APIWrapper()
+        self.__api_wrapper: typing.Optional[APIWrapper] = None
+        self.__process_id = str(uuid.uuid4())
+        self.__project_id = os.environ.get("GLOO_APP_ID")
+
+    def set_gloo_api(self, api_wrapper: APIWrapper) -> None:
+        self.__api_wrapper = api_wrapper
+        self.__process_id = api_wrapper.session_id
+        self.__project_id = api_wrapper.project_id
 
     def export(self, spans: typing.Sequence[ReadableSpan]) -> SpanExportResult:
         # Convert spans to your backend's desired format
         # and send them. This is a simple example that just
         # prints the span names. You should replace this with
         # the logic to send the spans to your backend.
-        for span in spans:
-            items = event_to_log(span)
-            for item in items:
-                # send them to the backend
-                item.print()
-                self.api_wrapper.log_sync(payload=item)
+        items = chain.from_iterable(
+            event_to_log(
+                span, project_id=self.__project_id, process_id=self.__process_id
+            )
+            for span in spans
+        )
+
+        for item in items:
+            item.print()
+            CacheManager.save_llm_request(item)
+
+            if self.__api_wrapper:
+                # TODO: Send a single large payload.
+                # send them to the backend.
+                # This function can't fail.
+                self.__api_wrapper.log_sync(payload=item)
 
         # If the export was successful, return
         # SpanExportResult.SUCCESS, otherwise, return
@@ -88,53 +110,6 @@ def create_event(name: str, attributes: typing.Dict[str, types.AttributeValue]) 
     span: typing.Optional[Span] = get_current_span()
     if span:
         span.add_event(name, attributes)
-
-
-def try_serialize_inner(
-    value: typing.Any,
-) -> typing.Union[str, int, float, bool]:
-    if value is None:
-        return ""
-    if isinstance(value, (str, int, float, bool)):
-        return value
-    if isinstance(value, BaseModel):
-        return value.model_dump_json()
-    try:
-        return json.dumps(value, default=str)
-    except BaseException:
-        return "<unserializable value>"
-
-
-def try_serialize(value: typing.Any) -> typing.Tuple[types.AttributeValue, str]:
-    if value is None:
-        return "", "None"
-    if isinstance(value, (str, int, float, bool)):
-        return value, type(value).__name__
-    if isinstance(value, list):
-        if len(value) == 0:
-            return value, "List[]"
-        same_type = list(set(type(item) for item in value))
-        if len(same_type) == 1:
-            type_name = same_type[0].__name__
-            if type(value[0]) in (str, int, float, bool):
-                return (value, f"List[{type_name}]")
-            return (
-                typing.cast(
-                    types.AttributeValue, [try_serialize_inner(v) for v in value]
-                ),
-                f"List[{type_name}]",
-            )
-
-    if isinstance(value, tuple) and all(
-        isinstance(item, (str, int, float, bool)) for item in value
-    ):
-        return (value, f"Tuple[{type(value[0]).__name__}]")
-    if isinstance(value, BaseModel):
-        return value.model_dump_json(), type(value).__name__
-    try:
-        return json.dumps(value, default=str), type(value).__name__
-    except BaseException:
-        return "<unserializable value>", type(value).__name__
 
 
 class BamlSpanContextManager:
@@ -192,26 +167,23 @@ class BamlSpanContextManager:
 # Initialize to the default No-op tracer.
 
 # Set up your TracerProvider with the custom settings
-provider = TracerProvider(
+
+process_id = str(uuid.uuid4())
+__provider = TracerProvider(
     resource=Resource.create(
         {
             "baml": "baml",
             "baml.version": __version__,
-            "process_id": str(uuid.uuid4()),
             "hostname": platform.node(),
         }
     )
 )
-baml_tracer = provider.get_tracer("BAML_TRACING")
+baml_tracer = __provider.get_tracer("BAML_TRACING")
 __exporter = CustomBackendExporter()
 __processor = BatchSpanProcessor(__exporter, max_export_batch_size=10)
+__provider.add_span_processor(__processor)
 
 
-def use_tracing(project_id: typing.Optional[str] = None) -> None:
-    update_resource = Resource.create()
-    if project_id is not None:
-        update_resource.attributes["baml.project_id"] = project_id
-    elif os.environ.get("BAML_PROJECT_ID"):
-        update_resource.attributes["baml.project_id"] = os.environ["BAML_PROJECT_ID"]
-    provider.resource.merge(update_resource)
-    provider.add_span_processor(__processor)
+def use_tracing(process_id: str, api: typing.Optional[APIWrapper] = None) -> None:
+    if api:
+        __exporter.set_gloo_api(api)

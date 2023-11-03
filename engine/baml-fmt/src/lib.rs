@@ -8,7 +8,7 @@ mod lint;
 // mod text_document_completion;
 mod validate;
 
-use baml::{internal_baml_parser_database::ast, SourceFile};
+use baml_lib::{internal_baml_parser_database::ast, SourceFile};
 
 use lsp_types::{Position, Range};
 
