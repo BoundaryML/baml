@@ -1,6 +1,5 @@
 import typing
 
-from enum import Enum
 from pydantic import BaseModel
 
 from .base_deserialzier import (
@@ -22,7 +21,6 @@ T = typing.TypeVar("T", bound=BaseModel)
 def _generate_type_definitions_for_model(
     model: typing.Type[T],
 ) -> typing.Dict[str, ITypeDefinition]:
-    schema = model.model_json_schema()
     field_definitions = {}
 
     for field_name, field_info in model.model_fields.items():

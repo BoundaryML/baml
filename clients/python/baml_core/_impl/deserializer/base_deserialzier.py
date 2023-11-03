@@ -59,7 +59,7 @@ class BaseDeserializer(typing.Generic[T], metaclass=abc.ABCMeta):
         diagnostics: Diagnostics,
         from_lut: typing.Callable[[ITypeDefinition], "BaseDeserializer[typing.Any]"],
     ) -> Result[T]:
-        raise NotImplemented
+        raise NotImplementedError
 
 
 CheckLutFn = typing.Callable[[ITypeDefinition], BaseDeserializer[T]]

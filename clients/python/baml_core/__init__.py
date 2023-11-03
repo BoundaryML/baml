@@ -1,3 +1,5 @@
+# ruff: noqa: E402
+
 import dotenv
 
 dotenv.load_dotenv(dotenv_path=dotenv.find_dotenv(usecwd=True))

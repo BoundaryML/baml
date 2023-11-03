@@ -10,7 +10,6 @@ from .base_deserialzier import (
     Result,
     Diagnostics,
     DeserializerError,
-    DeserializerWarning,
 )
 
 
@@ -67,7 +66,7 @@ class EnumDeserializer(BaseDeserializer[T]):
         try:
             parsed_item = self.__enm(parsed)
             return Result.from_value(parsed_item)
-        except Exception as e:
+        except Exception:
             diagnostics.push_error(
                 DeserializerError.create_error(f"Invalid enum {parsed}")
             )

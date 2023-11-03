@@ -1,5 +1,4 @@
 import abc
-from enum import Enum
 import json
 import traceback
 import typing
@@ -8,7 +7,7 @@ from pydantic import BaseModel, Field
 from typeguard import typechecked
 
 from ..._impl.cache.base_cache import CacheManager
-from ...services.api_types import CacheRequest, CacheResponse, LLMChat, LLMOutputModel
+from ...services.api_types import CacheRequest, LLMChat
 from ...otel.helper import try_serialize
 from ...otel.provider import create_event
 

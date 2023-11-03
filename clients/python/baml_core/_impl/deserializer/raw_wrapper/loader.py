@@ -7,6 +7,7 @@ from .list_wrapper import ListRawWrapper
 from .dict_wrapper import DictRawWrapper
 from ..diagnostics import Diagnostics, DeserializerError
 
+
 def from_string(val: str, diagnostics: Diagnostics) -> RawWrapper:
     return __from_value(val, diagnostics)
 
@@ -45,32 +46,51 @@ def __from_value(val: typing.Any, diagnostics: Diagnostics) -> RawWrapper:
         if is_list:
             try:
                 parsed_list = typing.cast(typing.List[typing.Any], json.loads(str_val))
-            except:
+            except ValueError:
                 parsed_list = None
             if parsed_list:
-                return ListRawWrapper([__from_value(item, diagnostics=diagnostics) for item in parsed_list])
+                return ListRawWrapper(
+                    [
+                        __from_value(item, diagnostics=diagnostics)
+                        for item in parsed_list
+                    ]
+                )
         is_dict = str_val.startswith("{") and str_val.endswith("}")
         if is_dict:
             try:
                 parsed_obj = typing.cast(
                     typing.Mapping[typing.Any, typing.Any], json.loads(str_val)
                 )
-            except:
+            except ValueError:
                 parsed_obj = None
             if parsed_obj:
                 return DictRawWrapper(
-                    {__from_value(k, diagnostics=diagnostics): __from_value(v, diagnostics=diagnostics) for k, v in parsed_obj.items()}
+                    {
+                        __from_value(k, diagnostics=diagnostics): __from_value(
+                            v, diagnostics=diagnostics
+                        )
+                        for k, v in parsed_obj.items()
+                    }
                 )
 
         return RawStringWrapper(str_val)
     if isinstance(val, (list, tuple)):
-        return ListRawWrapper([__from_value(item, diagnostics=diagnostics) for item in val])
+        return ListRawWrapper(
+            [__from_value(item, diagnostics=diagnostics) for item in val]
+        )
     if isinstance(val, dict):
         return DictRawWrapper(
-            {__from_value(key, diagnostics=diagnostics): __from_value(value, diagnostics=diagnostics) for key, value in val.items()}
+            {
+                __from_value(key, diagnostics=diagnostics): __from_value(
+                    value, diagnostics=diagnostics
+                )
+                for key, value in val.items()
+            }
         )
-    
-    diagnostics.push_error(DeserializerError("Unrecognized type: {} in value {}".format(type(val), val)))
+
+    diagnostics.push_error(
+        DeserializerError("Unrecognized type: {} in value {}".format(type(val), val))
+    )
     diagnostics.to_exception()
 
-    raise Exception("[unreachable] Unsupported type: {}".format(type(val))) 
+    raise Exception("[unreachable] Unsupported type: {}".format(type(val)))

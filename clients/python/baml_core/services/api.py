@@ -1,10 +1,8 @@
 from __future__ import annotations
-import datetime
 
 import http
 import typing
 
-import aiohttp
 import pydantic
 import requests
 

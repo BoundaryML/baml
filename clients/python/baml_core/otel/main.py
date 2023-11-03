@@ -1,5 +1,5 @@
 from .tracer import trace
-from .provider import set_tags, use_tracing
+from .provider import set_tags
 
 # use_tracing()
 

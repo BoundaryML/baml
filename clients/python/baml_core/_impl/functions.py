@@ -10,7 +10,6 @@ import types
 import typing
 
 import pytest
-from _pytest.fixtures import FixtureRequest
 
 from ..otel import trace, create_event
 

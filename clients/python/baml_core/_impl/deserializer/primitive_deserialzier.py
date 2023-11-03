@@ -3,7 +3,6 @@ import typing
 from .base_deserialzier import (
     BaseDeserializer,
     CheckLutFn,
-    CoerceFn,
     RawWrapper,
     Result,
     Diagnostics,

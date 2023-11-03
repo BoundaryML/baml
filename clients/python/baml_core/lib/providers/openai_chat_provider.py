@@ -18,8 +18,8 @@ class OpenAIChatProvider(LLMChatProvider):
         self, *, options: typing.Dict[str, typing.Any], **kwargs: typing.Any
     ) -> None:
         default_chat_role = kwargs.pop("default_chat_role", "user")
-        assert (
-            type(default_chat_role) is str
+        assert isinstance(
+            default_chat_role, str
         ), f"default_chat_role must be a string: {type(default_chat_role)}. {default_chat_role}"
 
         super().__init__(
@@ -32,7 +32,9 @@ class OpenAIChatProvider(LLMChatProvider):
         self._set_args(**self.__kwargs)
 
     async def _run_chat(self, messages: typing.List[LLMChatMessage]) -> LLMResponse:
-        response = await openai.ChatCompletion.acreate(messages=messages, **self.__kwargs)  # type: ignore
+        response = await openai.ChatCompletion.acreate(
+            messages=messages, **self.__kwargs
+        )  # type: ignore
         text = response["choices"][0]["message"]["content"]
         usage = response["usage"]
         model = response["model"]

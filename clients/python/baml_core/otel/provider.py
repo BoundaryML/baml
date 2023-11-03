@@ -1,6 +1,5 @@
 import contextvars
 from itertools import chain
-import json
 import os
 import platform
 import typing
@@ -16,11 +15,9 @@ from opentelemetry.sdk.trace.export import (
 from opentelemetry.trace import get_current_span
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.resources import Resource
-from pydantic import BaseModel
 
 from baml_core._impl.cache.base_cache import CacheManager
 
-from baml_core.services.api_types import CacheRequest
 
 from .helper import event_to_log, try_serialize
 from ..__version__ import __version__

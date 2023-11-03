@@ -1,4 +1,3 @@
-from textwrap import indent
 import typing
 
 from .raw_wrapper import RawWrapper
@@ -87,6 +86,7 @@ class RawStringWrapper(RawWrapper):
     def __repr__(self) -> str:
         return f"RawStringWrapper\n---\n{self.__val}\n---"
 
+
 @typing.final
 class RawNoneWrapper(RawWrapper):
     def __init__(self) -> None:
@@ -94,23 +94,23 @@ class RawNoneWrapper(RawWrapper):
 
     def as_str(self) -> typing.Optional[str]:
         return None
-    
+
     def as_int(self) -> typing.Optional[int]:
         return None
-    
+
     def as_float(self) -> typing.Optional[float]:
         return None
-    
+
     def as_bool(self) -> typing.Optional[bool]:
         return None
-    
+
     def as_list(self) -> typing.Iterable[RawWrapper]:
         return []
-    
+
     def as_dict(
         self,
     ) -> typing.ItemsView[typing.Optional[RawWrapper], RawWrapper]:
         return {}.items()
-    
+
     def __repr__(self) -> str:
-        return f"RawNoneWrapper\n---\nNone\n---"
+        return "RawNoneWrapper\n---\nNone\n---"

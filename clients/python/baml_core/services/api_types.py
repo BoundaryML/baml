@@ -9,7 +9,7 @@ from enum import Enum
 
 
 try:
-    import colorama  # type: ignore
+    import colorama
 
     colorama.init()
 except ImportError:
@@ -159,7 +159,7 @@ class LogSchema(BaseModel):
             if llm_output := metadata.output:
                 prompt_tokens = llm_output.metadata.prompt_tokens
                 output_tokens = llm_output.metadata.output_tokens
-                total_tokens = llm_output.metadata.total_tokens
+                _total_tokens = llm_output.metadata.total_tokens
                 pp.append(
                     colorama.Style.DIM
                     + f"Raw LLM Output (Tokens: prompt={prompt_tokens} output={output_tokens})"
@@ -178,7 +178,7 @@ class LogSchema(BaseModel):
                 )
                 try:
                     pretty = json.dumps(json.loads(output.value), indent=2)
-                except:
+                except ValueError:
                     pretty = output.value
 
                 pp.append(colorama.Fore.LIGHTBLUE_EX + pretty + colorama.Fore.RESET)

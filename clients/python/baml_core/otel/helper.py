@@ -1,14 +1,11 @@
 import json
-from textwrap import indent
-from typing import Any, Dict, List, Literal, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 import typing
 import uuid
 from opentelemetry.sdk.trace import ReadableSpan, Event
 from opentelemetry.util import types
 from opentelemetry.util.types import AttributeValue
 from pydantic import BaseModel, Field
-from typing_extensions import TypedDict
-from .logger import logger
 from datetime import datetime, timezone
 from ..services.api_types import (
     IO,
@@ -221,7 +218,7 @@ def as_int_list(value: Optional[AttributeValue]) -> List[int]:
 
 def as_int(value: Optional[AttributeValue]) -> int:
     assert value is not None
-    assert type(value) == int, f"Expected int, got {type(value)}"
+    assert isinstance(value, int), f"Expected int, got {type(value)}"
 
     return value
 

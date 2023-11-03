@@ -2,7 +2,7 @@ import functools
 import asyncio
 import inspect
 from typing import Any, Callable, TypeVar
-from opentelemetry.trace import get_current_span, use_span
+from opentelemetry.trace import get_current_span
 from .provider import BamlSpanContextManager, baml_tracer
 
 F = TypeVar("F", bound=Callable[..., Any])  # Function type
