@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use std::{path::PathBuf, sync::Arc};
 
-use baml::{
+use baml_lib::{
     internal_baml_diagnostics::{DatamodelError, DatamodelWarning},
     SourceFile,
 };
@@ -37,7 +37,7 @@ pub(crate) fn run(input: &str) -> String {
         .collect();
 
     let path = PathBuf::from(input.root_path);
-    let schema = baml::validate(&path, files);
+    let schema = baml_lib::validate(&path, files);
     let diagnostics = &schema.diagnostics;
 
     let mut mini_errors: Vec<MiniError> = diagnostics

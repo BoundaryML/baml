@@ -1,4 +1,4 @@
-from baml_core.otel import init_baml_tracing
+from baml_core import baml_init
 import asyncio
 
 from baml_core.otel import trace, set_tags
@@ -35,5 +35,5 @@ async def main():
 
 
 if __name__ == "__main__":
-    init_baml_tracing()
+    baml_init()
     asyncio.run(main())

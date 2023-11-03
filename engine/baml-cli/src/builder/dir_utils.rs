@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use baml::{parse_configuration, Configuration, Diagnostics};
+use baml_lib::{parse_configuration, Configuration, Diagnostics};
 
 use crate::errors::CliError;
 

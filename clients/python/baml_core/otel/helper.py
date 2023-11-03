@@ -1,20 +1,81 @@
 import json
 from textwrap import indent
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
+import typing
 import uuid
 from opentelemetry.sdk.trace import ReadableSpan, Event
+from opentelemetry.util import types
 from opentelemetry.util.types import AttributeValue
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
 from .logger import logger
-import colorama
 from datetime import datetime, timezone
+from ..services.api_types import (
+    IO,
+    EventChain,
+    IOValue,
+    LLMChat,
+    LLMEventInput,
+    LLMEventInputPrompt,
+    LLMEventSchema,
+    LLMOutputModel,
+    LLMOutputModelMetadata,
+    LogSchema,
+    LogSchemaContext,
+    MetadataType,
+    TypeSchema,
+    Error,
+)
 
 
-colorama.init()
+def try_serialize_inner(
+    value: typing.Any,
+) -> typing.Union[str, int, float, bool]:
+    if value is None:
+        return ""
+    if isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, BaseModel):
+        return value.model_dump_json()
+    try:
+        return json.dumps(value, default=str)
+    except BaseException:
+        return "<unserializable value>"
 
 
-def epoch_to_iso8601(epoch_nanos):
+def try_serialize(value: typing.Any) -> typing.Tuple[types.AttributeValue, str]:
+    if value is None:
+        return "", "None"
+    if isinstance(value, (str, int, float, bool)):
+        return value, type(value).__name__
+    if isinstance(value, list):
+        if len(value) == 0:
+            return value, "List[]"
+        same_type = list(set(type(item) for item in value))
+        if len(same_type) == 1:
+            type_name = same_type[0].__name__
+            if type(value[0]) in (str, int, float, bool):
+                return (value, f"List[{type_name}]")
+            return (
+                typing.cast(
+                    types.AttributeValue, [try_serialize_inner(v) for v in value]
+                ),
+                f"List[{type_name}]",
+            )
+
+    if isinstance(value, tuple) and all(
+        isinstance(item, (str, int, float, bool)) for item in value
+    ):
+        return (value, f"Tuple[{type(value[0]).__name__}]")
+    if isinstance(value, BaseModel):
+        return value.model_dump_json(), type(value).__name__
+    try:
+        return json.dumps(value, default=str), type(value).__name__
+    except BaseException:
+        return "<unserializable value>", type(value).__name__
+
+
+def epoch_to_iso8601(epoch_nanos: int) -> str:
     # Convert nanoseconds to seconds
     epoch_seconds = epoch_nanos / 1e9
     # Create a datetime object from the epoch time
@@ -24,165 +85,6 @@ def epoch_to_iso8601(epoch_nanos):
         dt_object.isoformat(timespec="milliseconds").replace("+00:00", "") + "Z"
     )
     return iso8601_timestamp
-
-
-class Error(BaseModel):
-    code: int
-    message: str
-    traceback: Optional[str]
-
-
-class EventChain(BaseModel):
-    function_name: str
-    variant_name: Optional[str]
-
-
-class LLMOutputModelMetadata(BaseModel):
-    logprobs: Optional[Any]
-    prompt_tokens: Optional[int]
-    output_tokens: Optional[int]
-    total_tokens: Optional[int]
-
-
-class LLMOutputModel(BaseModel):
-    raw_text: str
-    metadata: LLMOutputModelMetadata
-
-
-class LLMChat(TypedDict):
-    role: Union[Literal["assistant", "user", "system"], str]
-    content: str
-
-
-class LLMEventInputPrompt(BaseModel):
-    template: Union[str, List[LLMChat]]
-    template_args: Dict[str, str]
-
-
-class LLMEventInput(BaseModel):
-    prompt: LLMEventInputPrompt
-    invocation_params: Dict[str, Any]
-
-
-class LLMEventSchema(BaseModel):
-    mdl_name: str = Field(alias="model_name")
-    provider: str
-    input: LLMEventInput
-    output: Optional[LLMOutputModel]
-
-
-MetadataType = LLMEventSchema
-
-
-class LogSchemaContext(BaseModel):
-    hostname: str
-    process_id: str
-    stage: Optional[str]
-    latency_ms: Optional[int]
-    start_time: str
-    tags: Dict[str, str]
-    event_chain: List[EventChain]
-
-
-class TypeSchema(BaseModel):
-    name: str
-    fields: Any
-
-
-class IOValue(BaseModel):
-    value: Any
-    type: TypeSchema
-
-
-class IO(BaseModel):
-    input: Optional[IOValue]
-    output: Optional[IOValue]
-
-
-class LogSchema(BaseModel):
-    project_id: str
-    event_type: Literal["log", "func_llm", "func_prob", "func_code"]
-    root_event_id: str
-    event_id: str
-    parent_event_id: Optional[str]
-    context: LogSchemaContext
-    io: IO
-    error: Optional[Error]
-    metadata: Optional[MetadataType]
-
-    def to_pretty_string(self) -> str:
-        separator = "-------------------"
-        pp = []
-        if metadata := self.metadata:
-            if isinstance(metadata.input.prompt.template, list):
-                prompt = "\n".join(
-                    f"{colorama.Fore.YELLOW}Role: {c['role']}\n{colorama.Fore.LIGHTMAGENTA_EX}{c['content']}{colorama.Fore.RESET}"
-                    for c in metadata.input.prompt.template
-                )
-            else:
-                prompt = metadata.input.prompt.template
-            for k, v in metadata.input.prompt.template_args.items():
-                prompt = prompt.replace(
-                    k, colorama.Back.LIGHTBLUE_EX + v + colorama.Back.RESET
-                )
-            pp.extend(
-                [
-                    colorama.Style.DIM + "Prompt" + colorama.Style.NORMAL,
-                    prompt,
-                    separator,
-                ]
-            )
-
-            # This is an LLM Event
-            if llm_output := metadata.output:
-                prompt_tokens = llm_output.metadata.prompt_tokens
-                output_tokens = llm_output.metadata.output_tokens
-                total_tokens = llm_output.metadata.total_tokens
-                pp.append(
-                    colorama.Style.DIM
-                    + f"Raw LLM Output (Tokens: prompt={prompt_tokens} output={output_tokens})"
-                    + colorama.Style.NORMAL
-                )
-                pp.append(
-                    colorama.Style.DIM + llm_output.raw_text + colorama.Style.NORMAL
-                )
-                pp.append(separator)
-            if output := self.io.output:
-                pp.append(
-                    colorama.Style.DIM
-                    + "Deserialized Output "
-                    + f"({colorama.Fore.LIGHTBLUE_EX}{output.type}{colorama.Fore.RESET}):"
-                    + colorama.Style.NORMAL
-                )
-                try:
-                    pretty = json.dumps(json.loads(output.value), indent=2)
-                except:
-                    pretty = output.value
-
-                pp.append(colorama.Fore.LIGHTBLUE_EX + pretty + colorama.Fore.RESET)
-                pp.append(separator)
-        if error := self.error:
-            pp.append("Error")
-            pp.append(
-                colorama.Style.BRIGHT + str(error.message) + colorama.Style.NORMAL
-            )
-            pp.append(separator)
-        if len(pp) == 0:
-            return ""
-        pp.insert(
-            0,
-            f"\n{colorama.Style.DIM}Event: {colorama.Style.NORMAL}{self.context.event_chain[-1].function_name}\n{separator}",
-        )
-        if pp[-1] == separator:
-            pp[-1] = "-" * 80
-        return "\n".join(pp)
-
-    def print(self) -> None:
-        if log := self.to_pretty_string():
-            if self.error:
-                logger.error(log)
-            else:
-                logger.info(log)
 
 
 class PartialMetadataType(BaseModel):
@@ -437,18 +339,26 @@ def fill_partial(event: Event, partial: PartialLogSchema) -> None:
         last_partial.mdl_name = as_str(attrs["model_name"])
     elif event.name == "variant":
         partial.context.event_chain[-1].variant_name = as_str(attrs["name"])
+    elif event.name == "exception":
+        partial.error = Error(
+            code=-1,  # Some unknown error code
+            message=as_str(attrs["exception.type"])
+            + ": "
+            + as_str(attrs["exception.message"]),
+            traceback=as_str(attrs["exception.stacktrace"]),
+        )
     else:
         print("Event skipped", event.name)
 
 
-def event_to_log(span: ReadableSpan) -> List[LogSchema]:
+def event_to_log(
+    span: ReadableSpan, *, project_id: typing.Optional[str], process_id: str
+) -> List[LogSchema]:
     # Validate that this is a BAML span
     if "baml" not in span.resource.attributes:
         return []
 
-    process_id = as_str(span.resource.attributes["process_id"])
     baml_version = as_str(span.resource.attributes["baml.version"])
-    project_id = as_str(span.resource.attributes.get("baml.project_id", None))
 
     root_span = None
 
@@ -458,14 +368,14 @@ def event_to_log(span: ReadableSpan) -> List[LogSchema]:
         return []
 
     partial = PartialLogSchema(
-        project_id=project_id,
+        project_id=project_id or "BAML_PLACEHOLDER_PROJECT_ID",
         root_event_id=get_uuid(root_span, root_span),
         event_id=get_uuid(root_span, span.context.span_id),
         event_type="func_code",
         context=LogSchemaContext(
             event_chain=[EventChain(function_name=span.name, variant_name=None)],
             hostname=str(span.resource.attributes["hostname"]),
-            process_id=str(process_id),
+            process_id=process_id,
             stage=as_str(span.resource.attributes.get("baml.stage", None)),
             latency_ms=(span.end_time or 0) - (span.start_time or 0),
             start_time=epoch_to_iso8601(span.start_time or 0),

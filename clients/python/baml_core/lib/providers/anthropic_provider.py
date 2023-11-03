@@ -1,7 +1,7 @@
 import anthropic
 import typing
 
-from .._impl.provider import LLMProvider, register_llm_provider, LLMResponse
+from ..._impl.provider import LLMProvider, register_llm_provider, LLMResponse
 
 
 def _hydrate_anthropic_tokenizer() -> None:
@@ -69,9 +69,9 @@ class AnthropicProvider(LLMProvider):
         self.__client = anthropic.AsyncAnthropic(**client_kwargs)
         self.__client_kwargs = client_kwargs
         self.__caller_kwargs = options
+        self._set_args(**self.__caller_kwargs, **self.__client_kwargs)
 
     async def _run(self, prompt: str) -> LLMResponse:
-        self._log_args(**self.__caller_kwargs, **self.__client_kwargs)
         prompt_tokens = await self.__client.count_tokens(prompt)
         response = typing.cast(
             anthropic.types.Completion,
@@ -85,8 +85,10 @@ class AnthropicProvider(LLMProvider):
             generated=response.completion,
             model_name=response.model,
             meta=dict(
+                baml_is_complete=response.stop_reason == "stop_sequence",
                 prompt_tokens=prompt_tokens,
                 output_tokens=output_tokens,
                 total_tokens=prompt_tokens + output_tokens,
+                finish_reason=response.stop_reason,
             ),
         )

@@ -9,7 +9,7 @@ licence-file.workspace = true
 
 [dependencies]
 colored = "2"
-baml = { path = "../baml/baml" }
+baml-lib = { path = "../baml-lib/baml" }
 serde_json.workspace = true
 serde.workspace = true
 indoc.workspace = true
@@ -33,7 +33,7 @@ structopt = "0.3"
 [features]
 # sigh please don't ask :(
 vendored-openssl = []
-use-pyo3 = ["baml/use-pyo3"]
+use-pyo3 = ["baml-lib/use-pyo3"]
 
 [target.'cfg(feature = "use-pyo3")'.dependencies]
-baml = { path = "../baml/baml", version = "^0.0.1", features = ["use-pyo3"] }
+baml-lib = { path = "../baml-lib/baml", version = "^0.0.1", features = ["use-pyo3"] }
