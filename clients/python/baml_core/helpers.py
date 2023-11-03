@@ -40,7 +40,7 @@ def baml_init(
         )
     else:
         api = None
-    otel.init_baml_tracing(api)
+    otel.init_baml_tracing(process_id, api)
 
     if enable_cache:
         if api:

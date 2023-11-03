@@ -9,8 +9,8 @@ from typeguard import typechecked
 
 from ..._impl.cache.base_cache import CacheManager
 from ...services.api_types import CacheRequest, CacheResponse, LLMChat, LLMOutputModel
-from ...otel.provider import try_serialize
-from ...otel import create_event
+from ...otel.helper import try_serialize
+from ...otel.provider import create_event
 
 
 class LLMResponse(BaseModel):
@@ -85,7 +85,7 @@ class LLMChatMessage(typing.TypedDict):
     content: str
 
 
-def __update_template_with_vars(
+def _update_template_with_vars(
     *, template: str, updates: typing.Mapping[str, str]
 ) -> str:
     prompt = str(template)
@@ -246,8 +246,7 @@ class LLMProvider(AbstractLLMProvider):
         )
         if cached := self._check_cache(prompt=template, prompt_vars=updates):
             return cached
-
-        prompt = __update_template_with_vars(template=template, updates=updates)
+        prompt = _update_template_with_vars(template=template, updates=updates)
         try:
             return await self.__run(prompt)
         except BaseException as e:
@@ -361,7 +360,7 @@ class LLMChatProvider(AbstractLLMProvider):
         messages: typing.List[LLMChatMessage] = [
             {
                 "role": msg["role"],
-                "content": __update_template_with_vars(
+                "content": _update_template_with_vars(
                     template=msg["content"], updates=updates
                 ),
             }

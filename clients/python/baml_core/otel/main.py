@@ -1,7 +1,7 @@
 from .tracer import trace
 from .provider import set_tags, use_tracing
 
-use_tracing()
+# use_tracing()
 
 
 @trace

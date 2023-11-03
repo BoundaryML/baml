@@ -1,8 +1,10 @@
 import json
 from textwrap import indent
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
+import typing
 import uuid
 from opentelemetry.sdk.trace import ReadableSpan, Event
+from opentelemetry.util import types
 from opentelemetry.util.types import AttributeValue
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
@@ -24,6 +26,53 @@ from ..services.api_types import (
     TypeSchema,
     Error,
 )
+
+
+def try_serialize_inner(
+    value: typing.Any,
+) -> typing.Union[str, int, float, bool]:
+    if value is None:
+        return ""
+    if isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, BaseModel):
+        return value.model_dump_json()
+    try:
+        return json.dumps(value, default=str)
+    except BaseException:
+        return "<unserializable value>"
+
+
+def try_serialize(value: typing.Any) -> typing.Tuple[types.AttributeValue, str]:
+    if value is None:
+        return "", "None"
+    if isinstance(value, (str, int, float, bool)):
+        return value, type(value).__name__
+    if isinstance(value, list):
+        if len(value) == 0:
+            return value, "List[]"
+        same_type = list(set(type(item) for item in value))
+        if len(same_type) == 1:
+            type_name = same_type[0].__name__
+            if type(value[0]) in (str, int, float, bool):
+                return (value, f"List[{type_name}]")
+            return (
+                typing.cast(
+                    types.AttributeValue, [try_serialize_inner(v) for v in value]
+                ),
+                f"List[{type_name}]",
+            )
+
+    if isinstance(value, tuple) and all(
+        isinstance(item, (str, int, float, bool)) for item in value
+    ):
+        return (value, f"Tuple[{type(value[0]).__name__}]")
+    if isinstance(value, BaseModel):
+        return value.model_dump_json(), type(value).__name__
+    try:
+        return json.dumps(value, default=str), type(value).__name__
+    except BaseException:
+        return "<unserializable value>", type(value).__name__
 
 
 def epoch_to_iso8601(epoch_nanos: int) -> str:
@@ -290,18 +339,26 @@ def fill_partial(event: Event, partial: PartialLogSchema) -> None:
         last_partial.mdl_name = as_str(attrs["model_name"])
     elif event.name == "variant":
         partial.context.event_chain[-1].variant_name = as_str(attrs["name"])
+    elif event.name == "exception":
+        partial.error = Error(
+            code=-1,  # Some unknown error code
+            message=as_str(attrs["exception.type"])
+            + ": "
+            + as_str(attrs["exception.message"]),
+            traceback=as_str(attrs["exception.stacktrace"]),
+        )
     else:
         print("Event skipped", event.name)
 
 
-def event_to_log(span: ReadableSpan) -> List[LogSchema]:
+def event_to_log(
+    span: ReadableSpan, *, project_id: typing.Optional[str], process_id: str
+) -> List[LogSchema]:
     # Validate that this is a BAML span
     if "baml" not in span.resource.attributes:
         return []
 
-    process_id = as_str(span.resource.attributes["process_id"])
     baml_version = as_str(span.resource.attributes["baml.version"])
-    project_id = as_str(span.resource.attributes.get("baml.project_id", None))
 
     root_span = None
 
@@ -311,14 +368,14 @@ def event_to_log(span: ReadableSpan) -> List[LogSchema]:
         return []
 
     partial = PartialLogSchema(
-        project_id=project_id,
+        project_id=project_id or "BAML_PLACEHOLDER_PROJECT_ID",
         root_event_id=get_uuid(root_span, root_span),
         event_id=get_uuid(root_span, span.context.span_id),
         event_type="func_code",
         context=LogSchemaContext(
             event_chain=[EventChain(function_name=span.name, variant_name=None)],
             hostname=str(span.resource.attributes["hostname"]),
-            process_id=str(process_id),
+            process_id=process_id,
             stage=as_str(span.resource.attributes.get("baml.stage", None)),
             latency_ms=(span.end_time or 0) - (span.start_time or 0),
             start_time=epoch_to_iso8601(span.start_time or 0),
