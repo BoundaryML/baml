@@ -2,9 +2,10 @@ import abc
 import typing
 
 from ...services.api_types import CacheRequest, CacheResponse, LogSchema
+from .cache_factory import cache_provider_factory
 
 
-class ICache:
+class AbstractCacheProvider:
     def __init__(self) -> None:
         self.__name = self.__class__.__name__
 
@@ -26,12 +27,13 @@ class ICache:
 
 
 class _CacheManager:
-    __caches: typing.List[ICache]
+    __caches: typing.List[AbstractCacheProvider]
 
     def __init__(self) -> None:
         self.__caches = []
 
-    def add_cache(self, cache: ICache) -> None:
+    def add_cache(self, provider: str, **kwargs: typing.Any) -> None:
+        cache = cache_provider_factory(provider=provider, **kwargs)
         self.__caches.append(cache)
 
     def get_llm_request(

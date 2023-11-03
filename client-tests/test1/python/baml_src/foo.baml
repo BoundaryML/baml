@@ -1,6 +1,6 @@
 function MessageSimplifier {
     input Conversation
-    output string
+    output int?
 }
 
 impl<llm, MessageSimplifier> v1 {
@@ -19,4 +19,3 @@ impl<llm, MessageSimplifier> v1 {
         Human:
   "#
 }
- 

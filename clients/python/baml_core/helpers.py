@@ -6,7 +6,6 @@ import uuid
 from . import otel
 from .services.api import APIWrapper
 from ._impl.cache.base_cache import CacheManager
-from .lib.caches.gloo_cache import GlooCache
 from .otel.logger import logger
 
 
@@ -45,7 +44,7 @@ def baml_init(
     if enable_cache:
         if api:
             logger.warn("Using GlooCache")
-            CacheManager.add_cache(GlooCache(api=api))
+            CacheManager.add_cache("gloo", api=api)
         else:
             logger.warn(
                 "Wanted to use GlooCache but no API key was provided. Did you set GLOO_APP_ID and GLOO_APP_SECRET?"
