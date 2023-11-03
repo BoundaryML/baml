@@ -5,8 +5,8 @@ env:
 
 on:
   pull_request:
-    paths:
-      - "${{ env.CLI_PATH }}/**"
+    # paths:
+    #   - "${{ env.CLI_PATH }}/**"
     branches:
       - vscode-baml-release
   push:
