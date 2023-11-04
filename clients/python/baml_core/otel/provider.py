@@ -49,8 +49,6 @@ class CustomBackendExporter(SpanExporter):
             for span in spans
         )
 
-        print(f"Exporting {len(spans)} spans with {len(list(items))} items")
-
         for item in items:
             item.print()
             CacheManager.save_llm_request(item)
