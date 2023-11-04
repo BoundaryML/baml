@@ -3,13 +3,13 @@ from .llm_provider import (
     LLMChatProvider,
     LLMProvider,
     LLMResponse,
-    LLMException,
 )
-from .llm_provider_factory import register_llm_provider, llm_provider_factory
+from .llm_provider_factory import register_llm_provider
+from .llm_manager import LLMManager
 
 __all__ = [
     "register_llm_provider",
-    "llm_provider_factory",
+    "LLMManager",
     "LLMException",
     "LLMChatMessage",
     "LLMChatProvider",

@@ -20,7 +20,7 @@ class AnthropicProvider(LLMProvider):
     def _to_error_code(self, e: BaseException) -> typing.Optional[int]:
         if isinstance(e, anthropic.APIStatusError):
             return e.status_code
-        return None
+        return super()._to_error_code(e)
 
     def __init__(
         self, *, options: typing.Dict[str, typing.Any], **kwargs: typing.Any
@@ -74,6 +74,9 @@ class AnthropicProvider(LLMProvider):
         self.__client_kwargs = client_kwargs
         self.__caller_kwargs = options
         self._set_args(**self.__caller_kwargs, **self.__client_kwargs)
+
+    def _validate(self) -> None:
+        pass
 
     async def _run(self, prompt: str) -> LLMResponse:
         prompt_tokens = await self.__client.count_tokens(prompt)

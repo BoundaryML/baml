@@ -12,6 +12,7 @@ pub(super) enum HSTemplate {
     Client,
     BAMLClient,
     Variant,
+    RetryPolicy,
 }
 
 handlebars_helper!(BLOCK_OPEN: |*_args| "{");
@@ -64,8 +65,12 @@ fn use_partial(
         }
         HSTemplate::Client => {
             register_partial_file!(reg, "types", "client");
-            f.add_import("baml_core._impl.provider", "llm_provider_factory");
+            f.add_import("baml_core._impl.provider", "LLMManager");
             String::from("client")
+        }
+        HSTemplate::RetryPolicy => {
+            register_partial_file!(reg, "configs", "retry_policy");
+            String::from("retry_policy")
         }
         HSTemplate::Class => {
             register_partial_file!(reg, "types", "class");

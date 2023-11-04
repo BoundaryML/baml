@@ -7,7 +7,7 @@ import pydantic
 import requests
 
 from . import api_types
-from ..otel.logger import logger
+from .logger import logger
 from .api_types import LogSchema
 
 T = typing.TypeVar("T", bound=pydantic.BaseModel)
@@ -153,8 +153,8 @@ class APIWrapper(__APIBase):
                 **payload.model_dump(by_alias=True),
             )
             return self._call_api_sync("cache", request, api_types.CacheResponse)
-        except Exception as e:
-            logger.warning(f"Cache failure: {e}")
+        except Exception as _:
+            # Swallow exceptions as we don't want to fail if cache is down.
             return None
 
     def log_sync(

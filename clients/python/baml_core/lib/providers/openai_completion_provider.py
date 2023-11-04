@@ -2,11 +2,12 @@ import openai
 import typing
 
 from ..._impl.provider import LLMProvider, LLMResponse, register_llm_provider
+from .openai_helper import to_error_code
 
 
 @register_llm_provider("baml-openai-completion", "baml-azure-completion")
 @typing.final
-class OpenAIProvider(LLMProvider):
+class OpenAICompletionProvider(LLMProvider):
     __kwargs: typing.Dict[str, typing.Any]
 
     def __init__(
@@ -17,6 +18,12 @@ class OpenAIProvider(LLMProvider):
             options["temperature"] = 0
         self.__kwargs = options
         self._set_args(**self.__kwargs)
+
+    def _to_error_code(self, e: BaseException) -> typing.Optional[int]:
+        return to_error_code(e)
+
+    def _validate(self) -> None:
+        pass
 
     async def _run(self, prompt: str) -> LLMResponse:
         response = await openai.Completion.acreate(prompt=prompt, **self.__kwargs)  # type: ignore

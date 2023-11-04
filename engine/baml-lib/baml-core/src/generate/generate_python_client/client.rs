@@ -73,8 +73,8 @@ impl JsonHelper for Expression {
 
 impl JsonHelper for ClientWalker<'_> {
     fn json(&self, f: &mut File) -> serde_json::Value {
-        let opts = self
-            .properties()
+        let props = self.properties();
+        let opts = props
             .options
             .iter()
             .map(|(k, v)| {
@@ -85,10 +85,20 @@ impl JsonHelper for ClientWalker<'_> {
             })
             .collect::<Vec<_>>();
 
+        let retry_policy = props
+            .retry_policy
+            .as_ref()
+            .map(|(policy, _)| {
+                f.add_import(" ..configs.retry_policy", &policy);
+                policy.as_str()
+            })
+            .unwrap_or("None");
+
         json!({
             "name": self.name(),
             "kwargs": {
-                "provider": serde_json::to_string(&self.properties().provider).unwrap(),
+                "provider": serde_json::to_string(&props.provider.0).unwrap(),
+                "retry_policy": retry_policy,
             },
             "options": opts,
             "doc_string": self.ast_client().documentation(),

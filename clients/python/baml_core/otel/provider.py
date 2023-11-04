@@ -16,7 +16,7 @@ from opentelemetry.trace import get_current_span
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.resources import Resource
 
-from baml_core._impl.cache.base_cache import CacheManager
+from baml_core._impl.cache.cache_manager import CacheManager
 
 
 from .helper import event_to_log, try_serialize
@@ -48,6 +48,8 @@ class CustomBackendExporter(SpanExporter):
             )
             for span in spans
         )
+
+        print(f"Exporting {len(spans)} spans with {len(list(items))} items")
 
         for item in items:
             item.print()

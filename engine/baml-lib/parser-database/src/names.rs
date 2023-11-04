@@ -84,15 +84,21 @@ pub(super) fn resolve_names(ctx: &mut Context<'_>) {
 
                 &mut names.tops
             }
+            (_, ast::Top::Class(_)) => {
+                unreachable!("Encountered impossible class declaration during parsing")
+            }
             (ast::TopId::Function(_function_id), ast::Top::Function(ast_function)) => {
                 validate_function_name(ast_function, ctx.diagnostics);
                 validate_attribute_identifiers(ast_function, ctx);
 
                 &mut names.tops
             }
+            (_, ast::Top::Function(_)) => {
+                unreachable!("Encountered impossible function declaration during parsing")
+            }
             (_, ast::Top::Generator(generator)) => {
                 validate_generator_name(generator, ctx.diagnostics);
-                check_for_duplicate_properties(top, &generator.fields, &mut tmp_names, ctx);
+                check_for_duplicate_properties(top, generator.fields(), &mut tmp_names, ctx);
                 &mut names.generators
             }
             (_, ast::Top::Variant(variant)) => {
@@ -102,13 +108,14 @@ pub(super) fn resolve_names(ctx: &mut Context<'_>) {
             }
             (_, ast::Top::Client(client)) => {
                 validate_client_name(client, ctx.diagnostics);
-                check_for_duplicate_properties(top, &client.fields, &mut tmp_names, ctx);
+                check_for_duplicate_properties(top, client.fields(), &mut tmp_names, ctx);
                 &mut names.tops
             }
-            _ => unreachable!(
-                "Encountered impossible top during name resolution: {:?}",
-                top_id
-            ),
+            (_, ast::Top::Config(config)) => {
+                validate_config_name(config, ctx.diagnostics);
+                check_for_duplicate_properties(top, config.fields(), &mut tmp_names, ctx);
+                &mut names.tops
+            }
         };
 
         insert_name(top_id, top, namespace, ctx)
@@ -116,6 +123,7 @@ pub(super) fn resolve_names(ctx: &mut Context<'_>) {
 
     let _ = std::mem::replace(ctx.names, names);
 }
+
 fn insert_name(
     top_id: TopId,
     top: &ast::Top,

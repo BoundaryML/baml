@@ -114,8 +114,11 @@ impl WithWritePythonString for VariantWalker<'_> {
 
     fn write_py_file(&self, fc: &mut FileCollector) {
         fc.start_py_file("impls", "__init__.py");
-        fc.last_file()
-            .add_import(&format!(".{}", self.file_name()), "*");
+        fc.last_file().add_line(format!(
+            "from .{0} import {1} as unused_{0}",
+            self.file_name(),
+            self.identifier().name(),
+        ));
         fc.complete_file();
 
         fc.start_py_file("impls", self.file_name());

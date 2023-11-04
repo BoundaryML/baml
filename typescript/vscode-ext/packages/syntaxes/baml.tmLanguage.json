@@ -99,7 +99,7 @@
       "name": "variable.other.readwrite"
     },
     "config_block": {
-      "begin": "(client|generator)\\s*(<([^>]+)>)?\\s+(\\w+)\\s*\\{",
+      "begin": "(client|generator|retry_policy)\\s*(<([^>]+)>)?\\s+(\\w+)\\s*\\{",
       "beginCaptures": {
         "1": { "name": "storage.type.declaration" },
         "3": { "name": "support.type" },

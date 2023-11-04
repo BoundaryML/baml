@@ -6,7 +6,11 @@ import aiohttp
 from pydantic import BaseModel, Field
 from typeguard import typechecked
 
-from ..._impl.cache.base_cache import CacheManager
+from baml_core._impl.configs.retry_policy import WrappedFn
+
+from baml_core._impl.errors.llm_exc import LLMException, ProviderErrorCode
+
+from ..cache.cache_manager import CacheManager
 from ...services.api_types import CacheRequest, LLMChat
 from ...otel.helper import try_serialize
 from ...otel.provider import create_event
@@ -20,44 +24,31 @@ class LLMResponse(BaseModel):
     @property
     def ok(self) -> bool:
         if isinstance(self.meta, dict):
-            return self.meta.get("baml_is_complete", True)
+            return bool(self.meta.get("baml_is_complete", True))
         return True
 
 
-class ProviderErrorCode(int):
-    INTERNAL_ERROR = 500
-    BAD_REQUEST = 400
-    UNAUTHORIZED = 401
-    FORBIDDEN = 403
-    NOT_FOUND = 404
-    RATE_LIMITED = 429
-
-
-class LLMException(BaseException):
-    code: typing.Optional[int]
-    message: str
-
-    def __init__(self, *, code: typing.Optional[int] = None, message: str) -> None:
-        self.code = code
-        self.message = message
-        super().__init__(message)
-
-    def __str__(self) -> str:
-        return f"LLM Failed: Code {self.code}: {self.message}"
-
-    def __repr__(self) -> str:
-        return f"LLMException(code={self.code!r}, message={self.message!r})"
-
-
 class BaseProvider(abc.ABC):
-    def _to_error_code(
+    def __to_error_code(
         self, e: BaseException
     ) -> typing.Optional[typing.Union[ProviderErrorCode, int]]:
+        if isinstance(e, LLMException):
+            return e.code
+        code = self._to_error_code(e)
+        if code is not None:
+            return code
+
         if isinstance(e, aiohttp.ClientError):
             return ProviderErrorCode.INTERNAL_ERROR
         if isinstance(e, aiohttp.ClientResponseError):
             return e.status
         return None
+
+    @abc.abstractmethod
+    def _to_error_code(
+        self, e: BaseException
+    ) -> typing.Optional[typing.Union[ProviderErrorCode, int]]:
+        raise NotImplementedError
 
     def _raise_error(self, e: BaseException) -> typing.NoReturn:
         formatted_traceback = "".join(
@@ -68,12 +59,12 @@ class BaseProvider(abc.ABC):
             {
                 "traceback": formatted_traceback,
                 "message": f"{type(e).__name__}: {e}",
-                "code": self._to_error_code(e) or -1,
+                "code": self.__to_error_code(e) or -2,
             },
         )
         if isinstance(e, LLMException):
             raise e
-        code = self._to_error_code(e)
+        code = self.__to_error_code(e)
         if code is not None:
             raise LLMException(code=code, message=str(e))
         raise e
@@ -101,9 +92,16 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
 
     __client_args: typing.Dict[str, typing.Any]
 
-    def __init__(self, provider: str, **kwargs: typing.Any) -> None:
+    @typechecked
+    def __init__(
+        self,
+        provider: str,
+        retry_policy: typing.Optional[typing.Callable[[WrappedFn], WrappedFn]],
+        **kwargs: typing.Any,
+    ) -> None:
         self.__provider = provider
         self.__client_args = {}
+        self.__retry_policy = retry_policy
         assert not kwargs, f"Unhandled provider settings: {', '.join(kwargs.keys())}"
 
     @property
@@ -137,6 +135,29 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
         replacers: typing.Iterable[str],
         params: typing.Dict[str, typing.Any],
     ) -> LLMResponse:
+        pass
+
+    @typing.final
+    def validate(self) -> None:
+        if self.__retry_policy:
+            # Decorate the run_prompt and run_chat methods with the retry policy
+            self.__dict__["run_prompt"] = self.__retry_policy(self.run_prompt)  # type: ignore
+            self.__dict__["run_prompt_template"] = self.__retry_policy(
+                self.run_prompt_template  # type: ignore
+            )
+            self.__dict__["run_chat"] = self.__retry_policy(self.run_chat)  # type: ignore
+            self.__dict__["run_chat_template"] = self.__retry_policy(
+                self.run_chat_template  # type: ignore
+            )
+        self._validate()
+
+    @abc.abstractmethod
+    def _validate(self) -> None:
+        """
+        Run any validation checks on the provider. This is called via
+        baml_init() and should raise an exception if the provider is
+        not configured correctly.
+        """
         pass
 
     @typing.final

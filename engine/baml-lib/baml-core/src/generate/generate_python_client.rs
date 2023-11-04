@@ -14,6 +14,7 @@ use self::{file::FileCollector, traits::WithWritePythonString};
 
 mod r#class;
 mod client;
+mod configuration;
 mod r#enum;
 mod field;
 mod r#file;
@@ -38,6 +39,8 @@ pub(crate) fn generate_py(db: &ParserDatabase, gen: &Generator) -> std::io::Resu
             .for_each(|v| generate_py_file(&v, &mut fc));
     });
     db.walk_clients()
+        .for_each(|f| generate_py_file(&f, &mut fc));
+    db.walk_retry_policies()
         .for_each(|f| generate_py_file(&f, &mut fc));
     generate_py_file(db, &mut fc);
     info!("Writing files to {}", gen.output.to_string_lossy());

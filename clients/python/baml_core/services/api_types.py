@@ -2,7 +2,7 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, List, Mapping, Optional, Union
 from typing_extensions import TypedDict, Literal
-from ..otel.logger import logger
+from .logger import logger
 
 from pydantic import BaseModel, Field
 from enum import Enum
@@ -44,7 +44,7 @@ except ImportError:
         Back = MockAnsi()
         Style = MockStyle()
 
-    colorama = MockColorama()
+    colorama = MockColorama()  # type: ignore
 
 
 class Error(BaseModel):

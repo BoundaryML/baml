@@ -53,7 +53,9 @@ pub(crate) fn parse_config_block(
                 }
             }
             Rule::identifier => name = Some(parse_identifier(current.into(), diagnostics)),
-            Rule::GENERATOR_KEYWORD | Rule::CLIENT_KEYWORD => kw = Some(current.as_str()),
+            Rule::RETRY_POLICY_KEYWORD | Rule::GENERATOR_KEYWORD | Rule::CLIENT_KEYWORD => {
+                kw = Some(current.as_str())
+            }
             _ => parsing_catch_all(&current, "client"),
         }
     }
@@ -77,6 +79,19 @@ pub(crate) fn parse_config_block(
                 diagnostics.span(pair_span),
             )),
         },
+        (Some("retry_policy"), _, Some(_)) => Err(DatamodelError::new_validation_error(
+            "Template arguments are not allowed for retry_policy.",
+            diagnostics.span(pair_span),
+        )),
+        (Some("retry_policy"), Some(name), None) => {
+            Ok(Top::Config(Configuration::RetryPolicy(RetryPolicyConfig {
+                name,
+                fields,
+                attributes,
+                documentation: doc_comment.and_then(parse_comment_block),
+                span: diagnostics.span(pair_span),
+            })))
+        }
         (Some("generator"), _, Some(_)) => Err(DatamodelError::new_validation_error(
             "Template arguments are not allowed for generators.",
             diagnostics.span(pair_span),

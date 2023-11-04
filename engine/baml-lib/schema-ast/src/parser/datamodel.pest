@@ -121,7 +121,7 @@ variant_contents = {
 // The value of each key is an expression.
 // ######################################
 config_block = {
-    (CLIENT_KEYWORD | GENERATOR_KEYWORD)
+    (CLIENT_KEYWORD | GENERATOR_KEYWORD | RETRY_POLICY_KEYWORD)
     ~ template_args?
     ~ identifier
     ~ BLOCK_OPEN
@@ -258,6 +258,7 @@ FUNCTION_KEYWORD = { "function" }
 
 empty_template_args = ${ "<" ~ ">" }
 template_args = { empty_template_args | ("<" ~ expression ~ ("," ~ expression)* ~ ">") }
+RETRY_POLICY_KEYWORD = { "retry_policy" }
 CLIENT_KEYWORD = { "client" }
 GENERATOR_KEYWORD = { "generator" }
 VARIANT_KEYWORD = { "impl" }

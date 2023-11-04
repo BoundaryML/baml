@@ -1,4 +1,5 @@
-{{name}} = llm_provider_factory(
+{{name}} = LLMManager.add_llm(
+    name="{{{name}}}",
     {{#each kwargs as |value key|}}
     {{key}}={{{value}}},
     {{/each}}

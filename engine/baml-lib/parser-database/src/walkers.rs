@@ -8,12 +8,14 @@
 
 mod r#class;
 mod client;
+mod configuration;
 mod r#enum;
 mod field;
 mod function;
 mod variants;
 
 pub use client::*;
+pub use configuration::*;
 use either::Either;
 pub use field::*;
 pub use function::*;
@@ -117,6 +119,15 @@ impl crate::ParserDatabase {
             .map(|model_id| self.walk(model_id))
     }
 
+    /// Find a function by name.
+    pub fn find_retry_policy<'db>(&'db self, name: &str) -> Option<RetryPolicyWalker<'db>> {
+        self.interner
+            .lookup(name)
+            .and_then(|name_id| self.names.tops.get(&name_id))
+            .and_then(|top_id| top_id.as_retry_policy_id())
+            .map(|model_id| self.walk(model_id))
+    }
+
     /// Traverse a schema element by id.
     pub fn walk<I>(&self, id: I) -> Walker<'_, I> {
         Walker { db: self, id }
@@ -138,6 +149,13 @@ impl crate::ParserDatabase {
     /// Get all the types that are valid in the schema. (including primitives)
     pub fn valid_function_names(&self) -> Vec<String> {
         self.walk_functions()
+            .map(|c| c.name().to_string())
+            .collect()
+    }
+
+    /// Get all the types that are valid in the schema. (including primitives)
+    pub fn valid_retry_policy_names(&self) -> Vec<String> {
+        self.walk_retry_policies()
             .map(|c| c.name().to_string())
             .collect()
     }
@@ -196,6 +214,17 @@ impl crate::ParserDatabase {
         self.ast()
             .iter_tops()
             .filter_map(|(top_id, _)| top_id.as_variant_id())
+            .map(move |top_id| Walker {
+                db: self,
+                id: top_id,
+            })
+    }
+
+    /// Walk all classes in the schema.
+    pub fn walk_retry_policies(&self) -> impl Iterator<Item = RetryPolicyWalker<'_>> {
+        self.ast()
+            .iter_tops()
+            .filter_map(|(top_id, _)| top_id.as_retry_policy_id())
             .map(move |top_id| Walker {
                 db: self,
                 id: top_id,

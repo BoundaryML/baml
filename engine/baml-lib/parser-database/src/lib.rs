@@ -44,7 +44,10 @@ use internal_baml_prompt_parser::ast::WithSpan as WithPromptSpan;
 pub use internal_baml_schema_ast::ast;
 use internal_baml_schema_ast::ast::{SchemaAst, WithName, WithSpan};
 pub use printer::WithStaticRenames;
-pub use types::{PromptVariable, StaticType};
+pub use types::{
+    ContantDelayStrategy, ExponentialBackoffStrategy, PromptVariable, RetryPolicy,
+    RetryPolicyStrategy, StaticType,
+};
 
 use self::{context::Context, interner::StringId, types::Types};
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Diagnostics};

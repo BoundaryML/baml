@@ -2,11 +2,13 @@ import os
 import typing
 import uuid
 
+from baml_core._impl.provider.llm_manager import LLMManager
+
 
 from . import otel
 from .services.api import APIWrapper
-from ._impl.cache.base_cache import CacheManager
-from .otel.logger import logger
+from ._impl.cache.cache_manager import CacheManager
+from .services.logger import logger
 
 
 def baml_init(
@@ -49,3 +51,5 @@ def baml_init(
             logger.warn(
                 "Wanted to use GlooCache but no API key was provided. Did you set GLOO_APP_ID and GLOO_APP_SECRET?"
             )
+
+    LLMManager.validate()

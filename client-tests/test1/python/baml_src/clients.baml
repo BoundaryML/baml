@@ -1,10 +1,38 @@
+retry_policy DefaultRetryPolicy {
+  max_retries 2
+  strategy {
+    type constant_delay
+    delay_ms 1
+  }
+  options {
+  }
+}
+
+retry_policy DelayRetryPolicy {
+  max_retries 2
+  strategy {
+    type exponential_backoff
+    delay_ms 1
+  }
+  options {
+  }
+}
+
+// client<llm> ResilientGPT4 {
+//   provider baml-fallback
+//   options {
+//     strategy [
+//     ]
+//   }
+// }
+
 // test
 client<llm> AZURE_DEFAULT {
     provider baml-openai-chat
     options {
       model gpt-3.5-turbo
       api_key env.OPENAI_API_KEY
-      request_timeout 45
+      requet_timeout 45
       max_tokens 400
     }
 }
@@ -21,7 +49,7 @@ client<llm> AZURE_GPT4 {
 
 client<llm> AZURE_YES_NO {
     provider baml-openai-chat
-    retry DefaultRetryPolicy
+    retry_policy DefaultRetryPolicy
     options {
       model gpt-3.5-turbo
       api_key env.OPENAI_API_KEY

@@ -113,3 +113,32 @@ pub fn coerce_array<'a, T>(
 
     is_valid.then_some(out)
 }
+
+/// Coerce an expression to an array. The coercion function is used to coerce the array elements.
+pub fn coerce_map<'a, T>(
+    expr: &'a ast::Expression,
+    key_coercion: &dyn (Fn(&'a ast::Expression, &mut Diagnostics) -> Option<T>),
+    diagnostics: &mut Diagnostics,
+) -> Option<Vec<(T, &'a ast::Expression)>> {
+    let mut out = Vec::new();
+    let mut is_valid = true; // we keep track of validity to avoid early returns
+
+    match expr {
+        ast::Expression::Map(vals, _) => {
+            for (key, val) in vals {
+                match key_coercion(key, diagnostics) {
+                    Some(key) => out.push((key, val)),
+                    None => is_valid = false,
+                }
+            }
+        }
+        _ => diagnostics.push_error(DatamodelError::new_type_mismatch_error(
+            "map",
+            expr.describe_value_type(),
+            &expr.to_string(),
+            expr.span().clone(),
+        )),
+    }
+
+    is_valid.then_some(out)
+}

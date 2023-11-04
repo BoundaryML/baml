@@ -1,6 +1,8 @@
 import openai
 import typing
 
+from .openai_helper import to_error_code
+
 from ..._impl.provider import (
     LLMChatMessage,
     LLMChatProvider,
@@ -31,6 +33,12 @@ class OpenAIChatProvider(LLMChatProvider):
         )
         self.__kwargs = options
         self._set_args(**self.__kwargs)
+
+    def _to_error_code(self, e: BaseException) -> typing.Optional[int]:
+        return to_error_code(e)
+
+    def _validate(self) -> None:
+        pass
 
     async def _run_chat(self, messages: typing.List[LLMChatMessage]) -> LLMResponse:
         response = await openai.ChatCompletion.acreate(

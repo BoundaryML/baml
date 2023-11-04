@@ -18,6 +18,15 @@ pub(crate) fn validate_client_name(ast_client: &ast::Client, diagnostics: &mut D
     validate_name("client", ast_client.identifier(), diagnostics, true);
 }
 
+pub(crate) fn validate_config_name(ast_config: &ast::Configuration, diagnostics: &mut Diagnostics) {
+    validate_name(
+        ast_config.get_type(),
+        ast_config.identifier(),
+        diagnostics,
+        true,
+    );
+}
+
 pub(crate) fn validate_variant_name(ast_variant: &ast::Variant, diagnostics: &mut Diagnostics) {
     validate_name("impl", ast_variant.identifier(), diagnostics, false);
 }

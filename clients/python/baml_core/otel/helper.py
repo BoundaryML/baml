@@ -91,15 +91,15 @@ class PartialMetadataType(BaseModel):
     output: Optional[LLMOutputModel] = None
     error: Optional[Error] = None
 
-    def to_full(self) -> Optional[Tuple[MetadataType, Optional[Error]]]:
+    def to_full(self) -> Tuple[typing.Optional[MetadataType], Optional[Error]]:
         if self.mdl_name is None:
-            return None
+            return None, self.error
         if self.provider is None:
-            return None
+            return None, self.error
         if self.input is None:
-            return None
+            return None, self.error
         if self.output is None and self.error is None:
-            return None
+            return None, self.error
         return (
             LLMEventSchema(
                 model_name=self.mdl_name,
@@ -124,19 +124,14 @@ class PartialLogSchema(BaseModel):
 
     def to_final(self) -> List[LogSchema]:
         if self.project_id is None:
-            print("Missing project_id")
             return []
         if self.event_type is None:
-            print("Missing event_type")
             return []
         if self.root_event_id is None:
-            print("Missing root_event_id")
             return []
         if self.event_id is None:
-            print("Missing event_id")
             return []
         if self.event_type not in ["log", "func_llm", "func_prob", "func_code"]:
-            print("Invalid event_type")
             return []
 
         if self.event_type == "func_llm":
@@ -145,11 +140,9 @@ class PartialLogSchema(BaseModel):
             if len(self.metadata) > 1:
                 # Simulate extra events
                 # For now not supported
+                print("Multiple metadata entries not supported")
                 return []
-            result = self.metadata[0].to_full()
-            if result is None:
-                return []
-            full_meta, err = result
+            full_meta, err = self.metadata[0].to_full()
             return [
                 LogSchema(
                     project_id=self.project_id,

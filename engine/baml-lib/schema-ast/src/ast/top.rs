@@ -1,8 +1,7 @@
-use crate::ast::{
-    traits::WithSpan, Class, Client, Enum, Function, GeneratorConfig, Identifier, Span, WithName,
+use super::{
+    traits::WithSpan, Class, Client, Configuration, Enum, Function, GeneratorConfig, Identifier,
+    Span, Variant, WithIdentifier,
 };
-
-use super::Variant;
 
 /// Enum for distinguishing between top-level entries
 #[derive(Debug, Clone)]
@@ -19,6 +18,9 @@ pub enum Top {
 
     // Variant to run
     Variant(Variant),
+
+    // Abritrary config (things with names and key-value pairs where keys are known)
+    Config(Configuration),
 
     // Generator
     Generator(GeneratorConfig),
@@ -37,25 +39,8 @@ impl Top {
             Top::Variant(v) if v.is_llm() => "impl<llm>",
             Top::Variant(_) => "impl<?>",
             Top::Generator(_) => "generator",
+            Top::Config(c) => c.get_type(),
         }
-    }
-
-    /// The name of the item.
-    pub fn identifier(&self) -> &Identifier {
-        match self {
-            // Top::CompositeType(ct) => &ct.name,
-            Top::Enum(x) => &x.name,
-            Top::Class(x) => &x.name,
-            Top::Function(x) => &x.name,
-            Top::Client(x) => &x.name,
-            Top::Variant(x) => &x.name,
-            Top::Generator(x) => &x.name,
-        }
-    }
-
-    /// The name of the item.
-    pub fn name(&self) -> &str {
-        &self.identifier().name()
     }
 
     /// Try to interpret the item as an enum declaration.
@@ -100,6 +85,29 @@ impl Top {
             _ => None,
         }
     }
+
+    pub fn as_configurations(&self) -> Option<&Configuration> {
+        match self {
+            Top::Config(config) => Some(config),
+            _ => None,
+        }
+    }
+}
+
+impl WithIdentifier for Top {
+    /// The name of the item.
+    fn identifier(&self) -> &Identifier {
+        match self {
+            // Top::CompositeType(ct) => &ct.name,
+            Top::Enum(x) => x.identifier(),
+            Top::Class(x) => x.identifier(),
+            Top::Function(x) => x.identifier(),
+            Top::Client(x) => x.identifier(),
+            Top::Variant(x) => x.identifier(),
+            Top::Generator(x) => x.identifier(),
+            Top::Config(x) => x.identifier(),
+        }
+    }
 }
 
 impl WithSpan for Top {
@@ -111,6 +119,7 @@ impl WithSpan for Top {
             Top::Client(client) => client.span(),
             Top::Variant(variant) => variant.span(),
             Top::Generator(gen) => gen.span(),
+            Top::Config(config) => config.span(),
         }
     }
 }

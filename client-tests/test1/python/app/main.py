@@ -31,7 +31,9 @@ async def call_topic_router():
 
 @trace
 async def main():
-    await asyncio.gather(test_azure_default())
+    results = await asyncio.gather(test_azure_default())
+    for r in results:
+        print(r)
 
 
 if __name__ == "__main__":

@@ -7,11 +7,12 @@ use crate::{context::Context, DatamodelError};
 use internal_baml_diagnostics::Span;
 use internal_baml_prompt_parser::ast::{PrinterBlock, Variable};
 use internal_baml_schema_ast::ast::{
-    self, ClassId, ClientId, EnumId, EnumValueId, Expression, FieldId, FunctionId,
+    self, ClassId, ClientId, ConfigurationId, EnumId, EnumValueId, Expression, FieldId, FunctionId,
     SerializerFieldId, TopId, VariantConfigId, VariantSerializerId, WithIdentifier, WithName,
     WithSpan,
 };
 
+mod configurations;
 pub(crate) mod post_prompt;
 mod prompt;
 mod to_string_attributes;
@@ -24,22 +25,30 @@ pub(crate) use to_string_attributes::{
 };
 pub(crate) use types::EnumAttributes;
 pub(crate) use types::*;
+
 pub(super) fn resolve_types(ctx: &mut Context<'_>) {
     for (top_id, top) in ctx.ast.iter_tops() {
         match (top_id, top) {
-            (ast::TopId::Enum(_), ast::Top::Enum(enm)) => visit_enum(enm, ctx),
+            (_, ast::Top::Enum(enm)) => visit_enum(enm, ctx),
             (ast::TopId::Class(idx), ast::Top::Class(model)) => visit_class(idx, model, ctx),
+            (_, ast::Top::Class(_)) => unreachable!("Class misconfigured"),
             (ast::TopId::Function(idx), ast::Top::Function(function)) => {
                 visit_function(idx, function, ctx)
             }
+            (_, ast::Top::Function(_)) => unreachable!("Function misconfigured"),
             (ast::TopId::Variant(idx), ast::Top::Variant(variant)) => {
                 visit_variant(idx, variant, ctx)
             }
+            (_, ast::Top::Variant(_)) => unreachable!("Variant misconfigured"),
             (ast::TopId::Client(idx), ast::Top::Client(client)) => {
                 visit_client(idx, client, ctx);
             }
-            (ast::TopId::Generator(_), ast::Top::Generator(_generator)) => {}
-            _ => unreachable!(),
+            (_, ast::Top::Client(_)) => unreachable!("Client misconfigured"),
+            (_, ast::Top::Generator(_generator)) => {}
+            (ast::TopId::Config((idx, _)), ast::Top::Config(cfg)) => {
+                visit_config(idx, cfg, ctx);
+            }
+            (_, ast::Top::Config(_)) => unreachable!("Config misconfigured"),
         }
     }
 }
@@ -102,8 +111,47 @@ pub struct VariantProperties {
 
 #[derive(Debug, Clone)]
 pub struct ClientProperties {
-    pub provider: String,
+    pub provider: (String, Span),
+    pub retry_policy: Option<(String, Span)>,
     pub options: Vec<(String, Expression)>,
+}
+
+/// How to retry a request.
+#[derive(Debug, Clone)]
+pub struct RetryPolicy {
+    /// The maximum number of retries.
+    pub max_retries: u32,
+    /// The strategy to use.
+    pub strategy: RetryPolicyStrategy,
+    /// Any additional options.
+    pub options: Option<Vec<((String, Span), Expression)>>,
+}
+
+#[derive(Debug, Clone)]
+/// The strategy to use for retrying a request.
+pub enum RetryPolicyStrategy {
+    /// Constant delay.
+    ConstantDelay(ContantDelayStrategy),
+    /// Exponential backoff.
+    ExponentialBackoff(ExponentialBackoffStrategy),
+}
+
+#[derive(Debug, Clone)]
+/// The strategy to use for retrying a request.
+pub struct ContantDelayStrategy {
+    /// The delay in milliseconds.
+    pub delay_ms: u32,
+}
+
+#[derive(Debug, Clone)]
+/// The strategy to use for retrying a request.
+pub struct ExponentialBackoffStrategy {
+    /// The delay in milliseconds.
+    pub delay_ms: u32,
+    /// The multiplier.
+    pub multiplier: f32,
+    /// The maximum delay in milliseconds.
+    pub max_delay_ms: u32,
 }
 
 #[derive(Debug, Default)]
@@ -115,6 +163,7 @@ pub(super) struct Types {
     pub(super) variant_attributes: HashMap<ast::VariantConfigId, VariantAttributes>,
     pub(super) variant_properties: HashMap<ast::VariantConfigId, VariantProperties>,
     pub(super) client_properties: HashMap<ast::ClientId, ClientProperties>,
+    pub(super) retry_policies: HashMap<ast::ConfigurationId, RetryPolicy>,
 }
 
 impl Types {
@@ -222,6 +271,7 @@ fn visit_function<'db>(idx: FunctionId, function: &'db ast::Function, ctx: &mut 
 
 fn visit_client<'db>(idx: ClientId, client: &'db ast::Client, ctx: &mut Context<'db>) {
     let mut provider = None;
+    let mut retry_policy = None;
     let mut options: Vec<(String, Expression)> = Vec::new();
     client
         .iter_fields()
@@ -235,13 +285,14 @@ fn visit_client<'db>(idx: ClientId, client: &'db ast::Client, ctx: &mut Context<
                 }
                 provider = field.value.as_ref()
             }
-            "retry" => {
+            "retry_policy" => {
                 if field.template_args.is_some() {
                     ctx.push_error(DatamodelError::new_validation_error(
-                        "Did you mean `retry` instead of `retry<...>`?",
+                        "Did you mean `retry_policy` instead of `retry_policy<...>`?",
                         field.span().clone(),
                     ));
                 }
+                retry_policy = field.value.as_ref()
             }
             "options" => {
                 if field.template_args.is_some() {
@@ -279,14 +330,29 @@ fn visit_client<'db>(idx: ClientId, client: &'db ast::Client, ctx: &mut Context<
             )),
         });
 
+    let retry_policy = match retry_policy {
+        Some(retry_policy) => match coerce::string_with_span(retry_policy, &mut ctx.diagnostics) {
+            Some((retry_policy, span)) => Some((retry_policy.to_string(), span.clone())),
+            _ => {
+                // Errors are handled by coerce.
+                None
+            }
+        },
+        None => None,
+    };
+
     match (provider, options) {
         (Some(provider), options) => {
-            match (coerce::string(provider, &mut ctx.diagnostics), options) {
+            match (
+                coerce::string_with_span(provider, &mut ctx.diagnostics),
+                options,
+            ) {
                 (Some(provider), options) => {
                     ctx.types.client_properties.insert(
                         idx,
                         ClientProperties {
-                            provider: provider.to_string(),
+                            provider: (provider.0.to_string(), provider.1.clone()),
+                            retry_policy,
                             options,
                         },
                     );
@@ -297,7 +363,7 @@ fn visit_client<'db>(idx: ClientId, client: &'db ast::Client, ctx: &mut Context<
             }
         }
         (None, _) => ctx.push_error(DatamodelError::new_validation_error(
-            "Missing `provider` field in client. e.g. `provider openai`",
+            "Missing `provider` field in client. e.g. `provider baml-openai-chat`",
             client.span().clone(),
         )),
     }
@@ -393,6 +459,18 @@ fn visit_variant<'db>(idx: VariantConfigId, variant: &'db ast::Variant, ctx: &mu
             "Missing `client` and `prompt` fields in variant<llm>",
             variant.span().clone(),
         )),
+    }
+}
+
+fn visit_config<'db>(
+    idx: ConfigurationId,
+    config: &'db ast::Configuration,
+    ctx: &mut Context<'db>,
+) {
+    match config {
+        ast::Configuration::RetryPolicy(retry) => {
+            configurations::visit_retry_policy(idx, retry, ctx);
+        }
     }
 }
 
