@@ -12,7 +12,7 @@ def _hydrate_anthropic_tokenizer() -> None:
     anthropic.Client().get_tokenizer()
 
 
-@register_llm_provider("anthropic")
+@register_llm_provider("baml-anthropic")
 @typing.final
 class AnthropicProvider(LLMProvider):
     __kwargs: typing.Dict[str, typing.Any]
@@ -28,7 +28,9 @@ class AnthropicProvider(LLMProvider):
         _hydrate_anthropic_tokenizer()
 
         if "max_retries" in options and "retry" in kwargs:
-            assert False, "Either use max_retries with Anthropic via options or retry via BAML, not both"
+            assert (
+                False
+            ), "Either use max_retries with Anthropic via options or retry via BAML, not both"
 
         super().__init__(
             chat_to_prompt=lambda chat: "".join(
@@ -59,7 +61,11 @@ class AnthropicProvider(LLMProvider):
             "_strict_response_validation",
             "max_retries",
         ]
+        # add temperature 0 to options if not present
+        if "temperature" not in options:
+            options["temperature"] = 0
         client_kwargs = {k: options.pop(k) for k in client_arg_names if k in options}
+
         # Default to 0 retries if not specified.
         if "max_retries" not in client_kwargs:
             client_kwargs["max_retries"] = 0

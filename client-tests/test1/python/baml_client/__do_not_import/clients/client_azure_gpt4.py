@@ -15,7 +15,7 @@ from os import environ
 
 
 AZURE_GPT4 = llm_provider_factory(
-    provider="openai-chat",
+    provider="baml-openai-chat",
     options=dict(
         model="gpt-3.5-turbo",
         api_key=environ['OPENAI_API_KEY'],

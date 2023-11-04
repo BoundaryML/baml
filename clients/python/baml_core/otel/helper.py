@@ -281,8 +281,8 @@ def fill_partial(event: Event, partial: PartialLogSchema) -> None:
             )
         )
     elif event.name == "llm_request_cache_hit":
-        latency_ms = as_int(attrs["latency_ms"])
-        print(f"Cache hit latency: {latency_ms}ms")
+        partial.context.tags["__cached"] = "1"
+        partial.context.tags["__cached_latency_ms"] = str(as_int(attrs["latency_ms"]))
     elif event.name == "llm_request_start":
         partial.event_type = "func_llm"
 

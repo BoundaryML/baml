@@ -63,7 +63,7 @@ class LLMOutputModelMetadata(BaseModel):
     prompt_tokens: Optional[int]
     output_tokens: Optional[int]
     total_tokens: Optional[int]
-    finish_reason: Optional[str]
+    finish_reason: Optional[str] = None
 
 
 class LLMOutputModel(BaseModel):
@@ -135,6 +135,7 @@ class LogSchema(BaseModel):
     def to_pretty_string(self) -> str:
         separator = "-------------------"
         pp = []
+
         if metadata := self.metadata:
             if isinstance(metadata.input.prompt.template, list):
                 prompt = "\n".join(
@@ -191,9 +192,13 @@ class LogSchema(BaseModel):
             pp.append(separator)
         if len(pp) == 0:
             return ""
+        cached_string = ""
+        if "__cached" in self.context.tags:
+            cached_string = f"{colorama.Back.LIGHTYELLOW_EX} Cache Hit! Saved {self.context.tags['__cached_latency_ms']}ms {colorama.Back.RESET} "
+
         pp.insert(
             0,
-            f"\n{colorama.Style.DIM}Event: {colorama.Style.NORMAL}{self.context.event_chain[-1].function_name}\n{separator}",
+            f"\n{cached_string}{colorama.Style.DIM}Event: {colorama.Style.NORMAL}{self.context.event_chain[-1].function_name}\n{separator}",
         )
         if pp[-1] == separator:
             pp[-1] = "-" * 80

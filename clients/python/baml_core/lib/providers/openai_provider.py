@@ -4,7 +4,7 @@ import typing
 from ..._impl.provider import LLMProvider, LLMResponse, register_llm_provider
 
 
-@register_llm_provider("openai", "azure")
+@register_llm_provider("baml-openai-completion", "baml-azure-completion")
 @typing.final
 class OpenAIProvider(LLMProvider):
     __kwargs: typing.Dict[str, typing.Any]
@@ -13,6 +13,8 @@ class OpenAIProvider(LLMProvider):
         self, *, options: typing.Dict[str, typing.Any], **kwargs: typing.Any
     ) -> None:
         super().__init__(**kwargs)
+        if "temperature" not in options:
+            options["temperature"] = 0
         self.__kwargs = options
         self._set_args(**self.__kwargs)
 

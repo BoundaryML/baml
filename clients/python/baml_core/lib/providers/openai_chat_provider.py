@@ -9,7 +9,7 @@ from ..._impl.provider import (
 )
 
 
-@register_llm_provider("openai-chat", "azure-chat")
+@register_llm_provider("baml-openai-chat", "baml-azure-chat")
 @typing.final
 class OpenAIChatProvider(LLMChatProvider):
     __kwargs: typing.Dict[str, typing.Any]
@@ -21,7 +21,8 @@ class OpenAIChatProvider(LLMChatProvider):
         assert isinstance(
             default_chat_role, str
         ), f"default_chat_role must be a string: {type(default_chat_role)}. {default_chat_role}"
-
+        if "temperature" not in options:
+            options["temperature"] = 0
         super().__init__(
             prompt_to_chat=lambda prompt: LLMChatMessage(
                 role=default_chat_role, content=prompt

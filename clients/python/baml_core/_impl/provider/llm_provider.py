@@ -168,7 +168,7 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
             {
                 "generated": response.generated,
                 "model_name": response.mdl_name,
-                "meta": json.dumps(response.meta),
+                "meta": json.dumps(response.meta, default=lambda x: x.dict()),
             },
         )
 
@@ -191,7 +191,7 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
             )
         ):
             self._start_run(prompt)
-            create_event("llm_request_cache_hit", {"latency": cached.latency_ms})
+            create_event("llm_request_cache_hit", {"latency_ms": cached.latency_ms})
             reply = LLMResponse(
                 generated=cached.llm_output.raw_text,
                 model_name=cached.mdl_name,

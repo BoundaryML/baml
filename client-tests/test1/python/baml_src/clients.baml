@@ -1,6 +1,6 @@
 // test
 client<llm> AZURE_DEFAULT {
-    provider openai-chat
+    provider baml-openai-chat
     options {
       model gpt-3.5-turbo
       api_key env.OPENAI_API_KEY
@@ -10,7 +10,7 @@ client<llm> AZURE_DEFAULT {
 }
 
 client<llm> AZURE_GPT4 {
-    provider openai-chat
+    provider baml-openai-chat
     options {
       model gpt-3.5-turbo
       api_key env.OPENAI_API_KEY
@@ -20,7 +20,7 @@ client<llm> AZURE_GPT4 {
 }
 
 client<llm> AZURE_YES_NO {
-    provider openai-chat
+    provider baml-openai-chat
     retry DefaultRetryPolicy
     options {
       model gpt-3.5-turbo
@@ -31,7 +31,7 @@ client<llm> AZURE_YES_NO {
 }
 
 client<llm> LARGE_RESPONSE {
-    provider openai-chat
+    provider baml-openai-chat
     options {
       model gpt-3.5-turbo
       api_key env.OPENAI_API_KEY
