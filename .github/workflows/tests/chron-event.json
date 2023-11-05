@@ -4,7 +4,7 @@
       "cron": "0 0 * * *"
     }
   ],
-  "ref": "refs/heads/vscode-baml",
+  "ref": "refs/heads/canary",
   "head_commit": {
     "modified": ["vscode-ext/somefile"],
     "author": "foo@example.com",

@@ -2,15 +2,15 @@ name: Gloo CLI
 
 on:
   pull_request:
-    paths:
-      - "engine/baml-cli/**"
+    # paths:
+    #   - "engine/baml-cli/**"
     branches:
-      - vscode-baml
+      - canary
   push:
     paths:
       - "engine/.bumpversion.cfg"
     branches:
-      - vscode-baml
+      - canary
     tags:
       - "release/baml-cli/v*.*.*"
 

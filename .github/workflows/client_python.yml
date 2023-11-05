@@ -2,15 +2,15 @@ name: Python Client
 
 on:
   pull_request:
-    paths:
-      - "clients/python/**"
+    # paths:
+    #   - "clients/python/**"
     branches:
-      - vscode-baml
+      - canary
   push:
     paths:
       - "clients/python/.bumpversion.cfg"
     branches:
-      - vscode-baml
+      - canary
     tags:
       - "release/py_client/v*.*.*"
 

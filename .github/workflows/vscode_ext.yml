@@ -5,12 +5,12 @@
 #     paths:
 #       - "vscode-ext/**"
 #     branches:
-#       - vscode-baml-release
+#       - canary
 #   push:
 #     paths:
 #       - "vscode-ext/.bumpversion.cfg"
 #     branches:
-#       - vscode-baml-release
+#       - canary
 #     tags:
 #       - "release/vscode_ext/v*.*.*"
 
