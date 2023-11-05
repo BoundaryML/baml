@@ -75,17 +75,5 @@ impl WithWritePythonString for Walker<'_, FunctionId> {
             json,
         );
         fc.complete_file();
-
-        fc.start_py_file(".", "test_fixtures");
-        fc.last_file()
-            .add_import("..baml_types", &format!("I{}", self.name()));
-        render_template(
-            super::template::HSTemplate::FunctionTestFixture,
-            fc.last_file(),
-            json!({
-                "name": self.name(),
-            }),
-        );
-        fc.complete_file();
     }
 }

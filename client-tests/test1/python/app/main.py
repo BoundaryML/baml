@@ -1,4 +1,4 @@
-from baml_core import baml_init
+from baml_lib import baml_init
 import asyncio
 
 from baml_core.otel import trace, set_tags

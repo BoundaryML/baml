@@ -9,7 +9,7 @@ from baml_client.baml_types import (
 
 @baml.MaybePolishText.test  # parameterizes on impls of MaybePolishText
 async def test_logic(MaybePolishTextImpl: IMaybePolishText) -> None:
-    result = await MaybePolishTextImpl.run(
+    result = await MaybePolishTextImpl(
         ProposedMessage(thread=Conversation(thread=[]), generated_response="test")
     )
     print(result)

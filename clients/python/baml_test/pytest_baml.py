@@ -77,7 +77,7 @@ class BamlPytestPlugin:
             if marker.kwargs["impls"]:
                 metafunc.parametrize(
                     f"{owner._name}Impl",
-                    list(map(owner.get_impl, marker.kwargs["impls"])),
+                    list(map(lambda x: owner.get_impl(x).run, marker.kwargs["impls"])),
                     ids=map(lambda x: f"{owner._name}-{x}", marker.kwargs["impls"]),
                 )
             else:
