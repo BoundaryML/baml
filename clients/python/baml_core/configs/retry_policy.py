@@ -7,7 +7,7 @@ from tenacity import (
     wait_exponential_jitter,
     wait_exponential,
 )
-from ..._impl.errors.llm_exc import LLMException, TerminalErrorCode
+from ..errors.llm_exc import LLMException, TerminalErrorCode
 
 WrappedFn = typing.TypeVar("WrappedFn", bound=typing.Callable[..., typing.Any])
 

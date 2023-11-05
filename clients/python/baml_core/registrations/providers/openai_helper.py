@@ -1,7 +1,7 @@
 import typing
 from openai import error as o_error
 
-from ..._impl.errors.llm_exc import ProviderErrorCode
+from baml_core.errors.llm_exc import ProviderErrorCode
 
 
 def to_error_code(e: BaseException) -> typing.Optional[int]:

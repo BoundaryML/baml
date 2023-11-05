@@ -2,13 +2,11 @@ import os
 import typing
 import uuid
 
-from baml_core._impl.provider.llm_manager import LLMManager
-
-
-from . import otel
-from .services.api import APIWrapper
-from ._impl.cache.cache_manager import CacheManager
-from .services.logger import logger
+from baml_core.provider_manager import LLMManager
+from baml_core.cache_manager import CacheManager
+from baml_core import otel
+from baml_core.services.api import APIWrapper
+from baml_core.logger import logger
 
 
 class __InternalBAMLConfig:
@@ -22,8 +20,8 @@ def baml_init(
     secret_key: typing.Optional[str] = None,
     base_url: typing.Optional[str] = None,
     enable_cache: typing.Optional[bool] = None,
-    stage: typing.Optional[str] = "prod",
-) -> typing.Optional[__InternalBAMLConfig]:
+    stage: typing.Optional[str] = None,
+) -> __InternalBAMLConfig:
     process_id = str(uuid.uuid4())
 
     if base_url is None:
@@ -35,8 +33,8 @@ def baml_init(
     if secret_key is None:
         secret_key = os.environ.get("GLOO_APP_SECRET")
 
-    if enable_cache is None:
-        enable_cache = os.environ.get("GLOO_CACHE", "1") == "1"
+    if stage is None:
+        stage = os.environ.get("GLOO_STAGE", "prod")
 
     if (
         project_id is not None
@@ -54,6 +52,9 @@ def baml_init(
     else:
         api = None
     otel.init_baml_tracing(process_id, api)
+
+    if enable_cache is None:
+        enable_cache = os.environ.get("GLOO_CACHE", "1" if api else "0") == "1"
 
     if enable_cache:
         if api:

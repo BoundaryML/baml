@@ -1,7 +1,8 @@
 import anthropic
 import typing
 
-from ..._impl.provider import LLMProvider, register_llm_provider, LLMResponse
+
+from baml_core.provider_manager import LLMProvider, register_llm_provider, LLMResponse
 
 
 def _hydrate_anthropic_tokenizer() -> None:

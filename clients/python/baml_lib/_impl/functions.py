@@ -11,7 +11,9 @@ import typing
 
 import pytest
 
-from ..otel import trace, create_event
+from baml_core.otel import trace, create_event
+
+from baml_test.exports import baml_test
 
 
 T = typing.TypeVar("T")
@@ -246,7 +248,12 @@ class BaseBAMLFunction(typing.Generic[RET]):
         Returns:
             A pytest.mark.parametrize decorator.
         """
-        return pytest.mark.parametrize(f"{self._name}TestHandler", impls, indirect=True)
+        from baml_client.__do_not_import import test_fixtures
+
+        attr = getattr(test_fixtures, f"{self._name}Impl")
+        print(attr)
+
+        return baml_test(pytest.mark.parametrize(attr, impls, indirect=True))
 
     def test(self, *args: typing.Any, **kwargs: typing.Any) -> typing.Any:
         """

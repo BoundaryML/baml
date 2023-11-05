@@ -38,7 +38,7 @@ impl JsonHelper for RetryPolicyWalker<'_> {
         let strategy = match &self.config().strategy {
             RetryPolicyStrategy::ConstantDelay(strategy) => {
                 f.add_import(
-                    "baml_core._impl.configs.retry_policy",
+                    "baml_core.configs.retry_policy",
                     "create_retry_policy_constant_delay",
                 );
                 json!({
@@ -50,7 +50,7 @@ impl JsonHelper for RetryPolicyWalker<'_> {
             }
             RetryPolicyStrategy::ExponentialBackoff(strategy) => {
                 f.add_import(
-                    "baml_core._impl.configs.retry_policy",
+                    "baml_core.configs.retry_policy",
                     "create_retry_policy_exponential_backoff",
                 );
                 json!({

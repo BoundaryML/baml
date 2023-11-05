@@ -11,7 +11,7 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from baml_core._impl.deserializer import register_deserializer
+from baml_lib._impl.deserializer import register_deserializer
 from enum import Enum
 
 

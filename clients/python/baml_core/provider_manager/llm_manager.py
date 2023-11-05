@@ -2,7 +2,7 @@ import typing
 
 from .llm_provider_factory import llm_provider_factory
 from .llm_provider import AbstractLLMProvider
-from ...services.logger import logger
+from ..logger import logger
 
 
 class _LLMManager:

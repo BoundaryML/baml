@@ -14,8 +14,9 @@
 from ..baml_types import IMaybePolishText, IMessageSimplifier, ITextPolisher
 from .generated_baml_client import baml
 from _pytest.fixtures import FixtureRequest
+import pytest
 
-
+@pytest.fixture
 def MessageSimplifierImpl(request: FixtureRequest) -> IMessageSimplifier:
     """
     To use this fixture, add this to your test.
@@ -36,6 +37,7 @@ def MessageSimplifierImpl(request: FixtureRequest) -> IMessageSimplifier:
     """
     return baml.MessageSimplifier.get_impl(request.param).run
 
+@pytest.fixture
 def MaybePolishTextImpl(request: FixtureRequest) -> IMaybePolishText:
     """
     To use this fixture, add this to your test.
@@ -56,6 +58,7 @@ def MaybePolishTextImpl(request: FixtureRequest) -> IMaybePolishText:
     """
     return baml.MaybePolishText.get_impl(request.param).run
 
+@pytest.fixture
 def TextPolisherImpl(request: FixtureRequest) -> ITextPolisher:
     """
     To use this fixture, add this to your test.
@@ -74,5 +77,5 @@ def TextPolisherImpl(request: FixtureRequest) -> ITextPolisher:
     See pytest documentation for more information on fixtures:
     https://docs.pytest.org/en/latest/fixture.html
     """
+    assert hasattr(request, "param"), f"TextPolisherImpl fixture must be parametrized, {request}"
     return baml.TextPolisher.get_impl(request.param).run
-

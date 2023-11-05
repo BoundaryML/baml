@@ -14,7 +14,7 @@
 from ..types.classes.cls_conversation import Conversation
 from ..types.classes.cls_message import Message
 from ..types.enums.enm_messagesender import MessageSender
-from baml_core._impl.functions import BaseBAMLFunction
+from baml_lib._impl.functions import BaseBAMLFunction
 from typing import Optional, Protocol, runtime_checkable
 
 

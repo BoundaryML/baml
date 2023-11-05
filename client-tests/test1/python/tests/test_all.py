@@ -6,6 +6,8 @@ from baml_client.baml_types import (
     ITextPolisher,
 )
 
+from baml_client.__do_not_import.test_fixtures import *
+
 
 @baml.MaybePolishText.test  # parameterizes on impls of MaybePolishText
 async def test_logic(MaybePolishTextImpl: IMaybePolishText) -> None:

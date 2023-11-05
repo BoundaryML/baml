@@ -6,14 +6,14 @@ import aiohttp
 from pydantic import BaseModel, Field
 from typeguard import typechecked
 
-from baml_core._impl.configs.retry_policy import WrappedFn
+from ..configs.retry_policy import WrappedFn
 
-from baml_core._impl.errors.llm_exc import LLMException, ProviderErrorCode
+from ..errors.llm_exc import LLMException, ProviderErrorCode
 
-from ..cache.cache_manager import CacheManager
-from ...services.api_types import CacheRequest, LLMChat
-from ...otel.helper import try_serialize
-from ...otel.provider import create_event
+from ..cache_manager import CacheManager
+from ..services.api_types import CacheRequest, LLMChat
+from ..otel.helper import try_serialize
+from ..otel.provider import create_event
 
 
 class LLMResponse(BaseModel):

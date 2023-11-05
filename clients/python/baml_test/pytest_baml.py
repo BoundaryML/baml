@@ -1,29 +1,13 @@
-import asyncio
 import typing
 import pytest
 
-# from gloo_internal.api import API
-# from gloo_internal.tracer import trace
-# from gloo_internal.api_types import (
-#     TestCaseStatus,
-# )
-# from gloo_internal.env import ENV
-# from gloo_internal.logging import logger
-from baml_core.otel import trace
+from baml_core.otel.tracer import _trace_internal
 from baml_core.services.api import APIWrapper
-import os
+from baml_core.services import api_types
 import re
 
-# TODO import from baml_core logger
-import logging
-from baml_core.services.logger import logger
-
-# from gloo_internal import api_types
-from baml_core.services import api_types
-from baml_core import baml_init
-
-logger.setLevel(logging.DEBUG)
-baml_test = pytest.mark.baml_test
+from baml_core.logger import logger
+from baml_lib import baml_init
 
 
 class GlooTestCaseBase(typing.TypedDict):
@@ -31,25 +15,6 @@ class GlooTestCaseBase(typing.TypedDict):
 
 
 T = typing.TypeVar("T", bound=GlooTestCaseBase)
-
-
-def pytest_configure(config: pytest.Config) -> None:
-    logger.debug("Registering pytest_gloo plugin.")
-    config.addinivalue_line(
-        "markers",
-        "baml_test: mark test as a BAML test to upload data to the BAML dashboard",
-    )
-    # BAML INIT here
-    # Add optional stage parameter to baml_init
-    # baml_init(), returns api wrapper we can use
-    baml_conf = baml_init(stage="test")
-    if baml_conf is None or baml_conf.api is None:
-        logger.warn(
-            "BAML plugin disabled due to missing environment variables. Did you set GLOO_APP_ID and GLOO_APP_SECRET?"
-        )
-        return
-
-    config.pluginmanager.register(BamlPytestPlugin(api=baml_conf.api), "pytest_baml")
 
 
 class TestCaseMetadata:
@@ -101,12 +66,8 @@ class BamlPytestPlugin:
     def __init__(self, api: APIWrapper) -> None:
         self.__gloo_tests: typing.Dict[str, TestCaseMetadata] = {}
         self.__completed_tests: typing.Set[str] = set()
-        self.api = api
-
-    # On register, we want to set the STAGE env variable
-    # to "test" so that the tracer knows to send the logs
-    # def pytest_sessionstart(self, session: pytest.Session) -> None:
-    #     os.environ["GLOO_STAGE"] = "test"
+        self.__api = api
+        self.__dashboard_url: typing.Optional[str] = None
 
     @pytest.hookimpl(tryfirst=True)
     def pytest_collection_finish(self, session: pytest.Session) -> None:
@@ -121,9 +82,6 @@ class BamlPytestPlugin:
         for item in session.items:
             if any(map(lambda mark: mark.name == "baml_test", item.iter_markers())):
                 self.__gloo_tests[item.nodeid] = TestCaseMetadata(item)
-                # logger.info(
-                #     f"Found baml test: {item.nodeid}: {self.__gloo_tests[item.nodeid]}"
-                # )
 
     def maybe_start_logging(self, session: pytest.Session) -> None:
         logger.debug(
@@ -157,12 +115,11 @@ class BamlPytestPlugin:
                         f"Duplicate test cases found in dataset {dataset_name} test {test_name}: {duplicate_cases}"
                     )
 
-        # replace w/ new api wrapper created in Baml INit
-        # await API.test.create_session()
+        self.__dashboard_url = self.__api.test.create_session()
 
         for dataset_name, test_cases in dataset_cases.items():
             for test_name, case_names in test_cases.items():
-                self.api.test.create_cases(
+                self.__api.test.create_cases(
                     payload=api_types.CreateTestCase(
                         test_dataset_name=dataset_name,
                         test_name=test_name,
@@ -185,8 +142,10 @@ class BamlPytestPlugin:
         if session.config.option.collectonly:
             return True
 
-        # asyncio.run(self.maybe_start_logging(session))
         self.maybe_start_logging(session)
+        if self.__dashboard_url:
+            logger.info(f"View test results at {self.__dashboard_url}")
+
         return None
 
     @pytest.hookimpl(tryfirst=True)
@@ -203,7 +162,7 @@ class BamlPytestPlugin:
         if nodeid in self.__gloo_tests:
             item = self.__gloo_tests[nodeid]
             # Log the start of the test
-            self.api.test.update_case_sync(
+            self.__api.test.update_case_sync(
                 payload=api_types.UpdateTestCase(
                     test_dataset_name=item.dataset_name,
                     test_case_definition_name=item.test_name,
@@ -226,12 +185,11 @@ class BamlPytestPlugin:
         tags = dict(
             test_case_arg_name=meta.case_name,
             test_case_name=meta.test_name,
-            # TODO: do a test var
-            test_cycle_id=self.api.test.session_id,
+            test_cycle_id=self.__api.test.session_id,
             test_dataset_name=meta.dataset_name,
         )
 
-        item.obj = trace(_tags=tags)(item.obj)  # type: ignore
+        item.obj = _trace_internal(item.obj, __tags__=tags)  # type: ignore
 
     @pytest.hookimpl(tryfirst=True)
     def pytest_runtest_makereport(
@@ -248,7 +206,7 @@ class BamlPytestPlugin:
             )
 
             meta = self.__gloo_tests[item.nodeid]
-            self.api.test.update_case_sync(
+            self.__api.test.update_case_sync(
                 payload=api_types.UpdateTestCase(
                     test_dataset_name=meta.dataset_name,
                     test_case_definition_name=meta.test_name,
@@ -279,7 +237,7 @@ class BamlPytestPlugin:
         try:
             for nodeid, meta in self.__gloo_tests.items():
                 if nodeid not in self.__completed_tests:
-                    self.api.test.update_case_sync(
+                    self.__api.test.update_case_sync(
                         payload=api_types.UpdateTestCase(
                             test_dataset_name=meta.dataset_name,
                             test_case_definition_name=meta.test_name,
@@ -291,3 +249,6 @@ class BamlPytestPlugin:
         except Exception as e:
             # If we don't catch this the user is not able to see any other underlying test errors.
             logger.error(f"Failed to update test case status: {e}")
+
+        if self.__dashboard_url:
+            logger.info(f"View test results at {self.__dashboard_url}")

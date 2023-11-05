@@ -7,7 +7,7 @@ import pydantic
 import requests
 import datetime
 from . import api_types
-from .logger import logger
+from ..logger import logger
 from .api_types import LogSchema
 import platform
 
@@ -107,7 +107,7 @@ class TestingAPIWrapper(__APIBase):
     def __init__(self, base: _APIWrapper) -> None:
         super().__init__(base=base)
 
-    def create_session(self) -> None:
+    def create_session(self) -> str:
         response = self._call_api_sync(
             "tests/create-cycle",
             api_types.CreateCycleRequest(
@@ -115,8 +115,9 @@ class TestingAPIWrapper(__APIBase):
             ),
             api_types.CreateCycleResponse,
         )
-        if response:
-            logger.info(f"\033[94mSee test results at: {response.dashboard_url}\033[0m")
+        if not response:
+            raise Exception("Failed to create Gloo session")
+        return response.dashboard_url
 
     def create_cases(self, *, payload: api_types.CreateTestCase) -> None:
         payload.project_id = self.project_id

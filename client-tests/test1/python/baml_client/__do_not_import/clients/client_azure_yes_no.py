@@ -12,7 +12,7 @@
 # fmt: off
 
 from  ..configs.retry_policy import DefaultRetryPolicy
-from baml_core._impl.provider import LLMManager
+from baml_core.provider_manager import LLMManager
 from os import environ
 
 

@@ -11,7 +11,7 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from baml_core._impl.provider import LLMManager
+from baml_core.provider_manager import LLMManager
 from os import environ
 
 

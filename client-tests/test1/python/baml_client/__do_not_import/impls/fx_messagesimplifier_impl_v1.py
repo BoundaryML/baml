@@ -16,7 +16,7 @@ from ..functions.fx_messagesimplifier import BAMLMessageSimplifier
 from ..types.classes.cls_conversation import Conversation
 from ..types.classes.cls_message import Message
 from ..types.enums.enm_messagesender import MessageSender
-from baml_core._impl.deserializer import Deserializer
+from baml_lib._impl.deserializer import Deserializer
 from typing import Optional
 
 

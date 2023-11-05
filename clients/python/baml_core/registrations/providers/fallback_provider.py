@@ -1,10 +1,12 @@
 import typing
 
-from baml_core._impl.provider.llm_provider import LLMChatMessage
-from baml_core._impl.provider.llm_manager import LLMManager
-
-from ..._impl.provider import register_llm_provider, LLMResponse
-from ..._impl.provider.llm_provider import AbstractLLMProvider
+from baml_core.provider_manager import (
+    register_llm_provider,
+    LLMResponse,
+    LLMManager,
+    LLMChatMessage,
+)
+from baml_core.provider_manager.llm_provider import AbstractLLMProvider
 
 
 class ChainItem(typing.TypedDict):

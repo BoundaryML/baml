@@ -1,8 +1,8 @@
 import typing
 
-from ...services.api import APIWrapper
-from ...services.api_types import CacheRequest, CacheResponse
-from ..._impl.cache import register_cache_provider, AbstractCacheProvider
+from baml_core.services.api import APIWrapper
+from baml_core.services.api_types import CacheRequest, CacheResponse
+from baml_core.cache_manager import register_cache_provider, AbstractCacheProvider
 
 
 @register_cache_provider("gloo")

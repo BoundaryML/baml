@@ -1,5 +1,5 @@
 import abc
-from ...services.api_types import CacheRequest, CacheResponse
+from ..services.api_types import CacheRequest, CacheResponse
 import typing
 
 

@@ -16,7 +16,8 @@ from opentelemetry.trace import get_current_span
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.resources import Resource
 
-from baml_core._impl.cache.cache_manager import CacheManager
+from ..cache_manager import CacheManager
+import typeguard
 
 
 from .helper import event_to_log, try_serialize
@@ -82,6 +83,8 @@ parent_history = contextvars.ContextVar[
 # We can't use events for tags because we need to do some magic for child
 # spans. Instead, we use a contextvar to store the tags for the current span.
 # We set the tags on the span when it's complete.
+# This is exposed publicly, so we typecheck it.
+@typeguard.typechecked
 def set_tags(**attributes: typing.Optional[types.AttributeValue]) -> None:
     span: typing.Optional[Span] = get_current_span()
     if span:

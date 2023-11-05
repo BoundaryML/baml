@@ -2,7 +2,7 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, List, Mapping, Optional, Union
 from typing_extensions import TypedDict, Literal
-from .logger import logger
+from ..logger import logger
 
 from pydantic import BaseModel, Field
 from enum import Enum

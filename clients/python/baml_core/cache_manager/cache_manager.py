@@ -1,6 +1,6 @@
 import typing
 
-from ...services.api_types import CacheRequest, CacheResponse, LogSchema
+from ..services.api_types import CacheRequest, CacheResponse, LogSchema
 from .cache_factory import cache_provider_factory
 from .abstract_cache_provider import AbstractCacheProvider
 
