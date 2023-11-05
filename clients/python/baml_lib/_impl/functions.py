@@ -12,7 +12,6 @@ import typing
 import pytest
 
 from baml_core.otel import trace, create_event
-from baml_core.logger import logger
 
 from baml_test.exports import baml_function_test
 

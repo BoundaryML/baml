@@ -76,7 +76,7 @@ class FallbackProvider(AbstractLLMProvider):
     ]:
         if self.__strategy is None:
             raise ValueError(
-                f"FallbackProvider not initialized. Did you call baml_init()?"
+                "FallbackProvider not initialized. Did you call baml_init()?"
             )
         return self.__strategy
 
