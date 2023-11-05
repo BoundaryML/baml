@@ -127,6 +127,10 @@ class BamlPytestPlugin:
                     )
                 )
 
+    def pytest_generate_tests(self, metafunc: pytest.Metafunc) -> None:
+        if metafunc.fixturenames == ["MaybePolishTextImpl"]:
+            return
+
     @pytest.hookimpl(tryfirst=True)
     def pytest_runtestloop(
         self, session: pytest.Session

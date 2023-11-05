@@ -12,6 +12,7 @@ import typing
 import pytest
 
 from baml_core.otel import trace, create_event
+from baml_core.logger import logger
 
 from baml_test.exports import baml_test
 
@@ -248,12 +249,16 @@ class BaseBAMLFunction(typing.Generic[RET]):
         Returns:
             A pytest.mark.parametrize decorator.
         """
-        from baml_client.__do_not_import import test_fixtures
 
-        attr = getattr(test_fixtures, f"{self._name}Impl")
-        print(attr)
+        logger.warn(f"Creating test wrapper for {self._name} with impls {impls}")
 
-        return baml_test(pytest.mark.parametrize(attr, impls, indirect=True))
+        return baml_test(
+            pytest.mark.parametrize(
+                f"impl_name",
+                impls,
+                indirect=True,
+            )
+        )
 
     def test(self, *args: typing.Any, **kwargs: typing.Any) -> typing.Any:
         """

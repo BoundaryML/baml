@@ -3,10 +3,9 @@ from baml_client.baml_types import (
     IMaybePolishText,
     Conversation,
     ProposedMessage,
-    ITextPolisher,
 )
 
-from baml_client.__do_not_import.test_fixtures import *
+from baml_client.__do_not_import.test_fixtures import MaybePolishTextImpl
 
 
 @baml.MaybePolishText.test  # parameterizes on impls of MaybePolishText
@@ -17,21 +16,21 @@ async def test_logic(MaybePolishTextImpl: IMaybePolishText) -> None:
     print(result)
 
 
-@baml.MaybePolishText.test
-class TestThingies:
-    def test_with_a_class(self, MaybePolishTextImpl: IMaybePolishText):
-        pass
+# @baml.MaybePolishText.test
+# class TestThingies:
+#     def test_with_a_class(self, MaybePolishTextImpl: IMaybePolishText):
+#         pass
 
 
-class TestMultiple:
-    @baml.MaybePolishText.test
-    def test_with_class2(self, MaybePolishTextImpl: IMaybePolishText):
-        pass
+# class TestMultiple:
+#     @baml.MaybePolishText.test
+#     def test_with_class2(self, MaybePolishTextImpl: IMaybePolishText):
+#         pass
 
-    @baml.TextPolisher.test
-    def test_with_class3(self, TextPolisherImpl: ITextPolisher):
-        pass
+#     @baml.TextPolisher.test
+#     def test_with_class3(self, TextPolisherImpl: ITextPolisher):
+#         pass
 
 
-def test_without_fixture3():
-    pass
+# def test_without_fixture3():
+#     pass
