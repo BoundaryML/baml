@@ -189,7 +189,12 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
             {
                 "generated": response.generated,
                 "model_name": response.mdl_name,
-                "meta": json.dumps(response.meta, default=lambda x: x.dict()),
+                "meta": json.dumps(
+                    response.meta,
+                    default=lambda x: x.model_dump()
+                    if isinstance(x, BaseModel)
+                    else str(x),
+                ),
             },
         )
 

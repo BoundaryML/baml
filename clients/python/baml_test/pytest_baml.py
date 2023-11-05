@@ -1,4 +1,6 @@
+import asyncio
 import typing
+import colorama
 import pytest
 
 from baml_core.otel.tracer import _trace_internal
@@ -7,7 +9,6 @@ from baml_core.services import api_types
 import re
 
 from baml_core.logger import logger
-from baml_lib import baml_init
 
 
 class GlooTestCaseBase(typing.TypedDict):
@@ -68,6 +69,44 @@ class BamlPytestPlugin:
         self.__completed_tests: typing.Set[str] = set()
         self.__api = api
         self.__dashboard_url: typing.Optional[str] = None
+
+    @pytest.hookimpl(tryfirst=True)
+    def pytest_generate_tests(self, metafunc: pytest.Metafunc) -> None:
+        for marker in metafunc.definition.iter_markers("baml_function_test"):
+            owner = marker.kwargs["owner"]
+            if marker.kwargs["impls"]:
+                metafunc.parametrize(
+                    f"{owner._name}Impl",
+                    list(map(lambda x: owner.get_impl(x).run, marker.kwargs["impls"])),
+                    ids=map(lambda x: f"{owner._name}-{x}", marker.kwargs["impls"]),
+                )
+            else:
+                # Remove the test if no impls are specified
+                metafunc.parametrize(
+                    f"{owner._name}Impl",
+                    [None],
+                    ids=[f"{owner._name}-SKIPPED"],
+                )
+
+    @pytest.hookimpl(tryfirst=True)
+    def pytest_collection_modifyitems(
+        self, config: pytest.Config, items: typing.List[pytest.Item]
+    ) -> None:
+        for item in items:
+            if "baml_function_test" in item.keywords:
+                item.add_marker("baml_test")
+                # Add more keywords here:
+                kwargs = item.keywords["baml_function_test"].kwargs
+                impls = kwargs.get("impls", [])
+                if not impls:
+                    item.add_marker(pytest.mark.skip(reason="No impls specified"))
+
+            if "baml_test" in item.keywords:
+                if hasattr(item, "function") and asyncio.iscoroutinefunction(
+                    item.function
+                ):
+                    print(f"Adding asyncio marker to {item.nodeid}")
+                    item.add_marker(pytest.mark.asyncio)
 
     @pytest.hookimpl(tryfirst=True)
     def pytest_collection_finish(self, session: pytest.Session) -> None:
@@ -144,7 +183,9 @@ class BamlPytestPlugin:
 
         self.maybe_start_logging(session)
         if self.__dashboard_url:
-            logger.info(f"View test results at {self.__dashboard_url}")
+            logger.info(
+                f"View test results at {colorama.Fore.CYAN}{self.__dashboard_url}{colorama.Fore.RESET}"
+            )
 
         return None
 
@@ -251,4 +292,6 @@ class BamlPytestPlugin:
             logger.error(f"Failed to update test case status: {e}")
 
         if self.__dashboard_url:
-            logger.info(f"View test results at {self.__dashboard_url}")
+            logger.info(
+                f"View test results at {colorama.Fore.CYAN}{self.__dashboard_url}{colorama.Fore.RESET}"
+            )

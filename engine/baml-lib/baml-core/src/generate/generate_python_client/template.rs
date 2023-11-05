@@ -5,7 +5,6 @@ use super::file::File;
 #[derive(Debug)]
 pub(super) enum HSTemplate {
     Function,
-    FunctionTestFixture,
     FunctionPYI,
     Enum,
     Class,
@@ -96,12 +95,6 @@ fn use_partial(
             register_partial_file!(reg, "functions", "function_py");
             f.add_import("baml_lib._impl.functions", "BaseBAMLFunction");
             String::from("function_py")
-        }
-        HSTemplate::FunctionTestFixture => {
-            register_partial_file!(reg, "functions", "fixture");
-            f.add_import("_pytest.fixtures", "FixtureRequest");
-            f.add_import(".generated_baml_client", "baml");
-            String::from("fixture")
         }
         HSTemplate::FunctionPYI => {
             register_partial_file!(reg, "functions", "arg_list");

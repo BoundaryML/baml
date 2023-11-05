@@ -46,7 +46,7 @@ tenacity = "^8.2.3"
 ignore_missing_imports = true
 
 [tool.poetry.plugins.pytest11]
-pytest-baml = "baml_test"
+pytest-baml = "baml_test.exports"
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.5.1"
