@@ -133,7 +133,7 @@ dependencies = [
 
 [[package]]
 name = "gloo"
-version = "0.4.0-canary.3"
+version = "0.5.0-canary.0"
 dependencies = [
  "cc",
  "clap",
