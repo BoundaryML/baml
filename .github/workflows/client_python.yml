@@ -5,12 +5,12 @@ on:
     paths:
       - "clients/python/**"
     branches:
-      - vscode-baml-release
+      - vscode-baml
   push:
     paths:
       - "clients/python/.bumpversion.cfg"
     branches:
-      - vscode-baml-release
+      - vscode-baml
     tags:
       - "release/py_client/v*.*.*"
 

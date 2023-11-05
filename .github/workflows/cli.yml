@@ -5,12 +5,12 @@ on:
     paths:
       - "engine/baml-cli/**"
     branches:
-      - vscode-baml-release
+      - vscode-baml
   push:
     paths:
       - "engine/.bumpversion.cfg"
     branches:
-      - vscode-baml-release
+      - vscode-baml
     tags:
       - "release/baml-cli/v*.*.*"
 
