@@ -1,184 +1,201 @@
-# name: VSCode Extension
+name: VSCode Extension
 
-# on:
-#   pull_request:
-#     paths:
-#       - "vscode-ext/**"
-#     branches:
-#       - canary
-#   push:
-#     paths:
-#       - "vscode-ext/.bumpversion.cfg"
-#     branches:
-#       - canary
-#     tags:
-#       - "release/vscode_ext/v*.*.*"
+on:
+  pull_request:
+    paths:
+      - "vscode-ext/**"
+    branches:
+      - canary
+  push:
+    paths:
+      - "vscode-ext/.bumpversion.cfg"
+    branches:
+      - canary
+    tags:
+      - "release/vscode_ext/v*.*.*"
 
-# jobs:
-#   build:
-#     runs-on: ubuntu-latest
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-#     steps:
-#       - name: Checkout code
-#         uses: actions/checkout@v4
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            engine/baml-cli
 
-#       - uses: pnpm/action-setup@v2
-#         with:
-#           version: 8
-#           package_json_file: vscode-ext/package.json
-#           run_install: false
+      - name: Build binary
+        uses: houseabsolute/actions-rust-cross@v0
+        with:
+          command: build
+          target: wasm32-unknown-unknown
+          args: "--locked --release"
+          strip: ${{ github.event_name != 'pull_request' }}
+          working-directory: engine/baml-fmt
 
-#       # Set up Node.js
-#       - name: Setup Node.js
-#         uses: actions/setup-node@v3
-#         with:
-#           cache: "pnpm"
-#           node-version: 18
-#           cache-dependency-path: vscode-ext/pnpm-lock.yaml
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+          package_json_file: typescript/package.json
+          run_install: false
 
-#       - name: Install Dependencies
-#         run: pnpm install --frozen-lockfile
-#         working-directory: vscode-ext/
+      # Set up Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          cache: "pnpm"
+          node-version: 18
+          cache-dependency-path: typescript/pnpm-lock.yaml
 
-#       # Build the VSCode Extension
-#       - name: Build VSCode Extension
-#         id: build
-#         run: |
-#           pnpm run vscode:package
-#           VERSION=$(cat package.json| grep version | cut -d ' ' -f 4 | sed 's/[",]//g')
-#           echo "version=$VERSION" >> $GITHUB_OUTPUT
-#         working-directory: vscode-ext/
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: typescript/
 
-#       # Upload the artifact (helpful for debugging and manual downloads)
-#       - name: Upload VSCode Extension Artifact
-#         uses: actions/upload-artifact@v3
-#         with:
-#           name: gloo-vscode.vsix
-#           path: vscode-ext/gloo-${{ steps.build.outputs.version }}.vsix
+      - name: Build Deps
+        run: pnpm run build
+        working-directory: typescript/
 
-#   pre-release:
-#     runs-on: ubuntu-latest
-#     needs: build
-#     if: github.ref == 'refs/heads/canary'
-#     environment: nightly
-#     permissions:
-#       contents: write
+      # Build the VSCode Extension
+      - name: Build VSCode Extension
+        id: build
+        run: |
+          pnpm run vscode:package
+          VERSION=$(cat package.json| grep version | cut -d ' ' -f 4 | sed 's/[",]//g')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+        working-directory: typescript/vscode-ext/packages
 
-#     steps:
-#       - name: Checkout code
-#         uses: actions/checkout@v4
+      # Upload the artifact (helpful for debugging and manual downloads)
+      - name: Upload VSCode Extension Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: gloo-vscode.vsix
+          path: vscode-ext/gloo-${{ steps.build.outputs.version }}.vsix
 
-#       - name: Get artifact
-#         uses: actions/download-artifact@v3
-#         with:
-#           name: gloo-vscode.vsix
-#           path: vscode-ext/
+  pre-release:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/canary'
+    environment: nightly
+    permissions:
+      contents: write
 
-#       - id: hash
-#         run: |
-#           VERSION=$(cat vscode-ext/.bumpversion.cfg | grep current_version | cut -d '=' -f 2 | sed 's/[", ]//g')
-#           if [[ ! $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+-canary\.[0-9]+$ ]]; then
-#             echo "Version ($VERSION) is not a pre-release build"
-#             exit 1
-#           fi
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-#           echo "version=$(echo $VERSION | cut -d '-' -f 1)" >> $GITHUB_OUTPUT
-#           echo "full_version=$VERSION" >> $GITHUB_OUTPUT
-#           echo "vsix_hash=$(shasum -a 256 vscode-ext/gloo-${echo $VERSION | cut -d '-' -f 1}.vsix | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
+      - name: Get artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: gloo-vscode.vsix
+          path: vscode-ext/
 
-#       - name: Pre-release
-#         uses: softprops/action-gh-release@v1
-#         with:
-#           tag_name: "unstable/vscode_ext/v${{ steps.hash.outputs.version }}"
-#           files: |
-#             vscode-ext/gloo-${{ steps.hash.outputs.version }}.vsix
-#           prerelease: true
-#           body: |
-#             ## Hashes
-#             Full Version: ${{ steps.hash.outputs.full_version }}
-#             VSIX: ${{ steps.hash.outputs.vsix_hash }}
+      - id: hash
+        run: |
+          VERSION=$(cat vscode-ext/.bumpversion.cfg | grep current_version | cut -d '=' -f 2 | sed 's/[", ]//g')
+          if [[ ! $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+-canary\.[0-9]+$ ]]; then
+            echo "Version ($VERSION) is not a pre-release build"
+            exit 1
+          fi
 
-#       - uses: pnpm/action-setup@v2
-#         with:
-#           version: 8
-#           package_json_file: vscode-ext/package.json
-#           run_install: false
+          echo "version=$(echo $VERSION | cut -d '-' -f 1)" >> $GITHUB_OUTPUT
+          echo "full_version=$VERSION" >> $GITHUB_OUTPUT
+          echo "vsix_hash=$(shasum -a 256 vscode-ext/gloo-${echo $VERSION | cut -d '-' -f 1}.vsix | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
 
-#       # Set up Node.js
-#       - name: Setup Node.js
-#         uses: actions/setup-node@v3
-#         with:
-#           cache: "pnpm"
-#           node-version: 18
-#           cache-dependency-path: vscode-ext/pnpm-lock.yaml
+      - name: Pre-release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: "unstable/vscode_ext/v${{ steps.hash.outputs.version }}"
+          files: |
+            vscode-ext/gloo-${{ steps.hash.outputs.version }}.vsix
+          prerelease: true
+          body: |
+            ## Hashes
+            Full Version: ${{ steps.hash.outputs.full_version }}
+            VSIX: ${{ steps.hash.outputs.vsix_hash }}
 
-#       - name: Install Dependencies
-#         run: pnpm install --frozen-lockfile
-#         working-directory: vscode-ext/
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+          package_json_file: vscode-ext/package.json
+          run_install: false
 
-#       - name: Publish
-#         run: |
-#           pnpm run vscode:publish --pre-release --no-git-tag-version -p ${{ secrets.VSCODE_PAT }}
-#         working-directory: vscode-ext/
+      # Set up Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          cache: "pnpm"
+          node-version: 18
+          cache-dependency-path: vscode-ext/pnpm-lock.yaml
 
-#   release:
-#     permissions:
-#       contents: write
-#     runs-on: ubuntu-latest
-#     needs: build
-#     if: startsWith(github.ref, 'refs/tags/release/')
-#     environment: release
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: vscode-ext/
 
-#     steps:
-#       - name: Checkout code
-#         uses: actions/checkout@v4
+      - name: Publish
+        run: |
+          pnpm run vscode:publish --pre-release --no-git-tag-version -p ${{ secrets.VSCODE_PAT }}
+        working-directory: vscode-ext/
 
-#       - name: Get artifact
-#         uses: actions/download-artifact@v3
-#         with:
-#           name: gloo-vscode
-#           path: vscode-ext/
+  release:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/release/')
+    environment: release
 
-#       - id: hash
-#         run: |
-#           VERSION=$(cat vscode-ext/.bumpversion.cfg | grep current_version | cut -d '=' -f 2 | sed 's/[", ]//g')
-#           if [[ ! $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-#             echo "Version ($VERSION) is not a release build"
-#             exit 1
-#           fi
-#           echo "version=$VERSION" >> $GITHUB_OUTPUT
-#           echo "vsix_hash=$(shasum -a 256 vscode-ext/gloo-${VERSION}.vsix | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-#       - name: Release
-#         uses: softprops/action-gh-release@v1
-#         with:
-#           tag_name: "release/vscode_ext/v${{ steps.hash.outputs.version }}"
-#           files: |
-#             vscode-ext/gloo-${{ steps.hash.outputs.version }}.vsix
-#           prerelease: true
-#           body: |
-#             ## Hashes
-#             VSIX: ${{ steps.hash.outputs.vsix_hash }}
+      - name: Get artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: gloo-vscode
+          path: vscode-ext/
 
-#       - uses: pnpm/action-setup@v2
-#         with:
-#           version: 8
-#           package_json_file: vscode-ext/package.json
-#           run_install: false
+      - id: hash
+        run: |
+          VERSION=$(cat vscode-ext/.bumpversion.cfg | grep current_version | cut -d '=' -f 2 | sed 's/[", ]//g')
+          if [[ ! $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Version ($VERSION) is not a release build"
+            exit 1
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "vsix_hash=$(shasum -a 256 vscode-ext/gloo-${VERSION}.vsix | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
 
-#       # Set up Node.js
-#       - name: Setup Node.js
-#         uses: actions/setup-node@v3
-#         with:
-#           cache: "pnpm"
-#           node-version: 18
-#           cache-dependency-path: vscode-ext/pnpm-lock.yaml
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: "release/vscode_ext/v${{ steps.hash.outputs.version }}"
+          files: |
+            vscode-ext/gloo-${{ steps.hash.outputs.version }}.vsix
+          prerelease: true
+          body: |
+            ## Hashes
+            VSIX: ${{ steps.hash.outputs.vsix_hash }}
 
-#       - name: Install Dependencies
-#         run: pnpm install --frozen-lockfile
-#         working-directory: vscode-ext/
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+          package_json_file: vscode-ext/package.json
+          run_install: false
 
-#       - name: Publish
-#         run: |
-#           pnpm run vscode:publish --no-git-tag-version -p ${{ secrets.VSCODE_PAT }}
-#         working-directory: vscode-ext/
+      # Set up Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          cache: "pnpm"
+          node-version: 18
+          cache-dependency-path: vscode-ext/pnpm-lock.yaml
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: vscode-ext/
+
+      - name: Publish
+        run: |
+          pnpm run vscode:publish --no-git-tag-version -p ${{ secrets.VSCODE_PAT }}
+        working-directory: vscode-ext/

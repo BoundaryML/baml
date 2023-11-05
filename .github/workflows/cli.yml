@@ -39,6 +39,7 @@ jobs:
             bin: baml
             name: baml-Darwin-x86_64
             command: both
+
           - os: macOS-latest
             target: aarch64-apple-darwin
             bin: baml
