@@ -61,7 +61,7 @@ then
   
   if [ "$VSCODE_EXT" != "none" ]
   then
-    pushd vscode-ext
+    pushd typescript
     VERSION=$(bumpversion --allow-dirty $VSCODE_EXT --list | grep new_version | cut -d '=' -f 2) || exit 1
     COMMIT_MSG="${COMMIT_MSG} [BUMP:vscode_ext:${VERSION}]"
     popd
