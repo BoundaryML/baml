@@ -9,6 +9,7 @@
 # ruff: noqa: E501,F401
 # flake8: noqa: E501,F401
 # pylint: disable=unused-import,line-too-long
+# fmt: off
 
 from ..clients.client_azure_gpt4 import AZURE_GPT4
 from ..functions.fx_maybepolishtext import BAMLMaybePolishText
@@ -16,6 +17,7 @@ from ..types.classes.cls_conversation import Conversation
 from ..types.classes.cls_improvedresponse import ImprovedResponse
 from ..types.classes.cls_message import Message
 from ..types.classes.cls_proposedmessage import ProposedMessage
+from ..types.enums.enm_messagesender import MessageSender
 from baml_core._impl.deserializer import Deserializer
 
 
@@ -49,8 +51,8 @@ JSON:\
 """
 
 __input_replacers = {
-    "{arg.generated_response}",
-    "{arg.thread.thread}"
+    "{arg.thread.thread}",
+    "{arg.generated_response}"
 }
 
 

@@ -9,6 +9,7 @@
 # ruff: noqa: E501,F401
 # flake8: noqa: E501,F401
 # pylint: disable=unused-import,line-too-long
+# fmt: off
 
 from baml_core._impl.provider import LLMManager
 from os import environ

@@ -9,11 +9,13 @@
 # ruff: noqa: E501,F401
 # flake8: noqa: E501,F401
 # pylint: disable=unused-import,line-too-long
+# fmt: off
 
 from ..types.classes.cls_conversation import Conversation
 from ..types.classes.cls_improvedresponse import ImprovedResponse
 from ..types.classes.cls_message import Message
 from ..types.classes.cls_proposedmessage import ProposedMessage
+from ..types.enums.enm_messagesender import MessageSender
 from baml_core._impl.functions import BaseBAMLFunction
 from typing import Protocol, runtime_checkable
 

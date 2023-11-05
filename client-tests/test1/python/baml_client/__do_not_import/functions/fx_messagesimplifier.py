@@ -9,6 +9,7 @@
 # ruff: noqa: E501,F401
 # flake8: noqa: E501,F401
 # pylint: disable=unused-import,line-too-long
+# fmt: off
 
 from ..types.classes.cls_conversation import Conversation
 from ..types.classes.cls_message import Message

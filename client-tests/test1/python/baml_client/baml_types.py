@@ -9,6 +9,7 @@
 # ruff: noqa: E501,F401
 # flake8: noqa: E501,F401
 # pylint: disable=unused-import,line-too-long
+# fmt: off
 
 from .__do_not_import.functions.fx_maybepolishtext import IMaybePolishText, IMaybePolishTextOutput
 from .__do_not_import.functions.fx_messagesimplifier import IMessageSimplifier, IMessageSimplifierOutput

@@ -9,6 +9,7 @@
 # ruff: noqa: E501,F401
 # flake8: noqa: E501,F401
 # pylint: disable=unused-import,line-too-long
+# fmt: off
 
 from  ..configs.retry_policy import DefaultRetryPolicy
 from baml_core._impl.provider import LLMManager

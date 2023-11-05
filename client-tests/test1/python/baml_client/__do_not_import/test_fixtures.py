@@ -9,11 +9,32 @@
 # ruff: noqa: E501,F401
 # flake8: noqa: E501,F401
 # pylint: disable=unused-import,line-too-long
+# fmt: off
 
 from ..baml_types import IMaybePolishText, IMessageSimplifier, ITextPolisher
 from .generated_baml_client import baml
 from _pytest.fixtures import FixtureRequest
 
+
+def MessageSimplifierImpl(request: FixtureRequest) -> IMessageSimplifier:
+    """
+    To use this fixture, add this to your test.
+    Note the parameter name must match the name of this fixture.
+
+    ```python
+    @baml.MessageSimplifier.test
+    async def test_logic(MessageSimplifierImpl: IMessageSimplifier) -> None:
+        result = await MessageSimplifierImpl(args_here)
+        ...
+    ```
+
+    See the docstring for baml.MessageSimplifier.test for more information.
+
+
+    See pytest documentation for more information on fixtures:
+    https://docs.pytest.org/en/latest/fixture.html
+    """
+    return baml.MessageSimplifier.get_impl(request.param).run
 
 def MaybePolishTextImpl(request: FixtureRequest) -> IMaybePolishText:
     """
@@ -54,24 +75,4 @@ def TextPolisherImpl(request: FixtureRequest) -> ITextPolisher:
     https://docs.pytest.org/en/latest/fixture.html
     """
     return baml.TextPolisher.get_impl(request.param).run
-
-def MessageSimplifierImpl(request: FixtureRequest) -> IMessageSimplifier:
-    """
-    To use this fixture, add this to your test.
-    Note the parameter name must match the name of this fixture.
-
-    ```python
-    @baml.MessageSimplifier.test
-    async def test_logic(MessageSimplifierImpl: IMessageSimplifier) -> None:
-        result = await MessageSimplifierImpl(args_here)
-        ...
-    ```
-
-    See the docstring for baml.MessageSimplifier.test for more information.
-
-
-    See pytest documentation for more information on fixtures:
-    https://docs.pytest.org/en/latest/fixture.html
-    """
-    return baml.MessageSimplifier.get_impl(request.param).run
 
