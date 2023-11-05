@@ -9,6 +9,7 @@ readme = "README.md"
 python = "^3.8"
 baml = { path = "../../../clients/python", develop = true }
 mypy = "^1.5.1"
+pytest-asyncio = "^0.21.1"
 
 [build-system]
 requires = ["poetry-core"]

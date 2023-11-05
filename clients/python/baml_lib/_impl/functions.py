@@ -14,7 +14,7 @@ import pytest
 from baml_core.otel import trace, create_event
 from baml_core.logger import logger
 
-from baml_test.exports import baml_test
+from baml_test.exports import baml_function_test
 
 
 T = typing.TypeVar("T")
@@ -250,15 +250,7 @@ class BaseBAMLFunction(typing.Generic[RET]):
             A pytest.mark.parametrize decorator.
         """
 
-        logger.warn(f"Creating test wrapper for {self._name} with impls {impls}")
-
-        return baml_test(
-            pytest.mark.parametrize(
-                f"impl_name",
-                impls,
-                indirect=True,
-            )
-        )
+        return baml_function_test(impls=list(impls), owner=self)
 
     def test(self, *args: typing.Any, **kwargs: typing.Any) -> typing.Any:
         """
