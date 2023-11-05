@@ -1,4 +1,5 @@
 {
   "mypy.enabled": true,
-  "mypy.runUsingActiveInterpreter": true
+  "mypy.runUsingActiveInterpreter": true,
+  "baml.path": "ethingy"
 }

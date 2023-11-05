@@ -1,12 +1,12 @@
 {
-  "name": "baml-insider",
-  "displayName": "Baml - Insider",
-  "description": "This is the Insider Build of the Baml VS Code extension (only use it if you are also using the dev version of the CLI).",
+  "name": "baml",
+  "displayName": "Baml",
+  "description": "BAML is a DSL for AI applications.",
   "version": "0.1.1",
   "publisher": "Gloo",
   "repository": "https://github.com/GlooHQ/gloo-lang",
   "homepage": "https://trygloo.com",
-  "icon": "logo.png",
+  "icon": "baml-logo.png",
   "engines": {
     "vscode": "^1.56.0"
   },
@@ -28,12 +28,13 @@
         "baml.path": {
           "type": "string",
           "default": "baml",
-          "description": "Override the baml CLI path"
+          "description": "Override the baml CLI path",
+          "scope": "resource"
         },
         "baml.fileWatcher": {
           "scope": "window",
           "type": "boolean",
-          "default": true,
+          "default": false,
           "description": "Enable, when checked, the File Watcher functionality for Baml Client."
         },
         "baml.trace.server": {
@@ -44,7 +45,7 @@
             "messages",
             "verbose"
           ],
-          "default": "on",
+          "default": "off",
           "description": "Setting for logging between the VS Code extension and the language server."
         }
       }
@@ -61,8 +62,8 @@
         ],
         "configuration": "./language-configuration.json",
         "icon": {
-          "light": "./logo.png",
-          "dark": "./logo.png"
+          "light": "./baml-logo.png",
+          "dark": "./baml-logo.png"
         }
       }
     ],
