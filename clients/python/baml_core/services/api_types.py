@@ -256,16 +256,16 @@ class TestCaseStatus(str, Enum):
 
 
 class CreateTestCase(BaseModel):
-    project_id: str
-    test_cycle_id: str
+    project_id: str = ""
+    test_cycle_id: str = ""
     test_dataset_name: str
     test_name: str
     test_case_args: List[Dict[str, str]]
 
 
 class UpdateTestCase(BaseModel):
-    project_id: str
-    test_cycle_id: str
+    project_id: str = ""
+    test_cycle_id: str = ""
     test_dataset_name: str
     test_case_definition_name: str
     test_case_arg_name: str

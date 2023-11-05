@@ -228,13 +228,18 @@ def get_io_value(event: Event) -> Optional[IOValue]:
     elif len(params) == 1:
         return IOValue(
             value=attrs[params[0]],
-            type=TypeSchema(name=params[0], fields=attrs[f"{params[0]}.type"]),
+            type=TypeSchema(
+                name="single",
+                fields={
+                    param_name: attrs[f"{param_name}.type"] for param_name in params
+                },
+            ),
         )
     else:
         return IOValue(
             value=[attrs[p] for p in params],
             type=TypeSchema(
-                name="Tuple",
+                name="multi",
                 fields={p: attrs[f"{p}.type"] for p in params},
             ),
         )

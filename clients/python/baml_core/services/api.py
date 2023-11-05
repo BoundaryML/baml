@@ -5,10 +5,11 @@ import typing
 
 import pydantic
 import requests
-
+import datetime
 from . import api_types
 from .logger import logger
 from .api_types import LogSchema
+import platform
 
 T = typing.TypeVar("T", bound=pydantic.BaseModel)
 U = typing.TypeVar("U", bound=pydantic.BaseModel)
@@ -16,7 +17,13 @@ U = typing.TypeVar("U", bound=pydantic.BaseModel)
 
 class _APIWrapper:
     def __init__(
-        self, *, base_url: str, api_key: str, project_id: str, session_id: str
+        self,
+        *,
+        base_url: str,
+        api_key: str,
+        project_id: str,
+        session_id: str,
+        stage: str,
     ) -> None:
         self.__project_id = project_id
         self.__session_id = session_id
@@ -25,6 +32,7 @@ class _APIWrapper:
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}",
         }
+        self.stage = stage
 
     @property
     def project_id(self) -> str:
@@ -80,6 +88,10 @@ class __APIBase:
     def session_id(self) -> str:
         return self.__base.session_id
 
+    @property
+    def stage(self) -> str:
+        return self.__base.stage
+
     def _call_api_sync(
         self, endpoint: str, payload: T, parser: typing.Type[U] | None = None
     ) -> U | None:
@@ -126,23 +138,71 @@ class TestingAPIWrapper(__APIBase):
         self._call_api_sync("tests/update", payload=payload)
 
 
+class ProcessAPIWrapper(__APIBase):
+    def __init__(self, base: _APIWrapper) -> None:
+        super().__init__(base=base)
+
+    def start(self) -> None:
+        if not self.project_id:
+            logger.warning("GLOO_APP_ID not set, dropping log.")
+            return
+
+        response = self._call_api_sync(
+            "process/start",
+            api_types.StartProcessRequest(
+                project_id=self.project_id,
+                session_id=self.session_id,
+                stage=self.stage,
+                hostname=platform.node(),
+                start_time=datetime.datetime.utcnow().isoformat() + "Z",
+                tags={
+                    # TODO: Get git information (e.g. what branch we're on)
+                },
+            ),
+            api_types.CreateCycleResponse,
+        )
+        if response:
+            logger.info(f"\033[94mSee test results at: {response.dashboard_url}\033[0m")
+
+    def end(self) -> None:
+        if not self.project_id:
+            logger.warning("GLOO_APP_ID not set, dropping log.")
+            return
+
+        self._call_api_sync(
+            "process/end",
+            api_types.EndProcessRequest(
+                project_id=self.project_id,
+                session_id=self.session_id,
+                end_time=datetime.datetime.utcnow().isoformat() + "Z",
+            ),
+        )
+
+
 class CacheRequestWithProjectId(api_types.CacheRequest):
     project_id: str
 
 
 class APIWrapper(__APIBase):
     def __init__(
-        self, *, base_url: str, api_key: str, project_id: str, session_id: str
+        self,
+        *,
+        base_url: str,
+        api_key: str,
+        project_id: str,
+        session_id: str,
+        stage: str,
     ) -> None:
         wrapper = _APIWrapper(
             base_url=base_url,
             api_key=api_key,
             project_id=project_id,
             session_id=session_id,
+            stage=stage,
         )
         super().__init__(base=wrapper)
         self.test = TestingAPIWrapper(base=wrapper)
-        # self.process = ProcessAPIWrapper(base=wrapper)
+        self.process = ProcessAPIWrapper(base=wrapper)
 
     def check_cache(
         self, *, payload: api_types.CacheRequest

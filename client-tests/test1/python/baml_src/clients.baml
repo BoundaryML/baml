@@ -7,7 +7,7 @@ retry_policy DefaultRetryPolicy {
   options {
   }
 }
-
+ 
 retry_policy DelayRetryPolicy {
   max_retries 2
   strategy {
@@ -32,7 +32,7 @@ client<llm> AZURE_DEFAULT {
     options {
       model gpt-3.5-turbo
       api_key env.OPENAI_API_KEY
-      requet_timeout 45
+      request_timeout 45
       max_tokens 400
     }
 }

@@ -1,5 +1,5 @@
 class ProviderErrorCode(int):
-    UNKNOWN = -1
+    UNKNOWN = 1
     SERVICE_UNAVAILABLE = 503
     INTERNAL_ERROR = 500
     BAD_REQUEST = 400

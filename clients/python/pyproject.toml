@@ -12,6 +12,10 @@ authors = [ "Gloo <contact@trygloo.com>",]
 include = "baml_core"
 from = "."
 
+[[tool.poetry.packages]]
+include = "baml_core_testing"
+from = "."
+
 [tool.mypy]
 strict = true
 
@@ -38,7 +42,7 @@ tenacity = "^8.2.3"
 ignore_missing_imports = true
 
 [tool.poetry.plugins.pytest11]
-pytest-gloo = "gloo_testing.pytest_gloo"
+pytest-gloo = "baml_core_testing.pytest_baml"
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.5.1"

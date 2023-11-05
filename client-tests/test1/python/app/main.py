@@ -15,7 +15,7 @@ async def test_azure_default():
                 "role": "system",
                 "content": "Address the users questions to the bset of your abilities.",
             },
-            {"role": "user", "content": "I'm having trouble with my computer."},
+            {"role": "user", "content": "I need a lawnmower"},
         ]
     )
     return response
@@ -24,16 +24,14 @@ async def test_azure_default():
 @trace
 async def call_topic_router():
     response = await baml.MaybePolishText.get_impl("v1").run(
-        ProposedMessage(thread=Conversation(thread=[]), generated_response="test")
+        ProposedMessage(thread=Conversation(thread=[]), generated_response="boooooo")
     )
     return response
 
 
 @trace
 async def main():
-    results = await asyncio.gather(test_azure_default())
-    for r in results:
-        print(r)
+    await asyncio.gather(test_azure_default(), call_topic_router())
 
 
 if __name__ == "__main__":

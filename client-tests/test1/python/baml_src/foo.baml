@@ -1,7 +1,7 @@
 function MessageSimplifier {
     input Conversation
     output int?
-}
+} 
 
 impl<llm, MessageSimplifier> v1 {
   client AZURE_DEFAULT

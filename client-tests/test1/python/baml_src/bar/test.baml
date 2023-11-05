@@ -41,7 +41,7 @@ impl<llm, MaybePolishText> v1 {
         Thread until now:
         {#input.thread.thread}
 
-        Previous Response: {#input.thread.thread}
+        Previous Response: {#input.generated_response}
 
         {// The word format is required. don't remove it //}
         Output JSON Format:

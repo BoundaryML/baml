@@ -34,7 +34,7 @@ Do not use or negative unless the question is a yes or no question.
 Thread until now:
 {arg.thread.thread}
 
-Previous Response: {arg.thread.thread}
+Previous Response: {arg.generated_response}
 
 
 Output JSON Format:
@@ -49,6 +49,7 @@ JSON:\
 """
 
 __input_replacers = {
+    "{arg.generated_response}",
     "{arg.thread.thread}"
 }
 

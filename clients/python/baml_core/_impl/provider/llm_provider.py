@@ -59,7 +59,7 @@ class BaseProvider(abc.ABC):
             {
                 "traceback": formatted_traceback,
                 "message": f"{type(e).__name__}: {e}",
-                "code": self.__to_error_code(e) or -2,
+                "code": self.__to_error_code(e) or 2,
             },
         )
         if isinstance(e, LLMException):

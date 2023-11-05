@@ -21,7 +21,7 @@ AZURE_DEFAULT = LLMManager.add_llm(
     options=dict(
         model="gpt-3.5-turbo",
         api_key=environ['OPENAI_API_KEY'],
-        requet_timeout=45,
+        request_timeout=45,
         max_tokens=400,
     ),
 )
