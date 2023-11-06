@@ -24,7 +24,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
-            engine/baml-schema-wasm
+            engine
+
       - name: Setup
         run: rustup target add wasm32-unknown-unknown
 
@@ -140,7 +141,6 @@ jobs:
       - name: Install Rust
         run: cargo build --release --all-features
         working-directory: engine/baml-schema-wasm
-  
 
       # Set up Node.js
       - name: Setup Node.js
@@ -221,7 +221,6 @@ jobs:
       - name: Install Rust
         run: cargo build --release --all-features
         working-directory: engine/baml-schema-wasm
-  
 
       # Set up Node.js
       - name: Setup Node.js

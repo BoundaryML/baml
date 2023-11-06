@@ -53,7 +53,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
-            engine/baml-cli
+            engine
 
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v0
