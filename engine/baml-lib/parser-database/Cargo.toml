@@ -8,9 +8,9 @@ licence = "Apache-2.0"
 licence-file.workspace = true
 
 [dependencies]
-internal-baml-diagnostics = { path = "../diagnostics", version = "^0.0.1" }
-internal-baml-schema-ast = { path = "../schema-ast", version = "^0.0.1" }
-internal-baml-prompt-parser = { path = "../prompt-parser", version = "^0.0.1" }
+internal-baml-diagnostics = { path = "../diagnostics", version = "0.1.1-canary.1" }
+internal-baml-schema-ast = { path = "../schema-ast", version = "0.1.1-canary.1" }
+internal-baml-prompt-parser = { path = "../prompt-parser", version = "0.1.1-canary.1" }
 
 either = "1.6.1"
 enumflags2 = "0.7"

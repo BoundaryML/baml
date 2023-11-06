@@ -8,7 +8,7 @@ licence = "Apache-2.0"
 licence-file.workspace = true
 
 [dependencies]
-baml-lib = { path = "../baml-lib/baml", version = "^0.0.1", features = ["use-pyo3"]}
+baml-lib = { path = "../baml-lib/baml", version = "0.1.1-canary.1", features = ["use-pyo3"]}
 check-latest = "1.0.2"
 clap = { version = "4.4.6", features = ["derive"] }
 colored = "2.0.4"
