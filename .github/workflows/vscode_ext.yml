@@ -127,21 +127,6 @@ jobs:
           package_json_file: typescript/package.json
           run_install: false
 
-      - name: Setup
-        run: rustup target add wasm32-unknown-unknown
-
-      - name: Bindgen
-        run: cargo update -p wasm-bindgen
-        working-directory: engine/baml-schema-wasm
-
-      - name: Install Bindgen
-        run: cargo install -f wasm-bindgen-cli@0.2.87
-        working-directory: engine/baml-schema-wasm
-
-      - name: Install Rust
-        run: cargo build --release --all-features
-        working-directory: engine/baml-schema-wasm
-
       # Set up Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v3
@@ -150,8 +135,8 @@ jobs:
           node-version: 18
           cache-dependency-path: typescript/pnpm-lock.yaml
 
-      - name: Build Deps
-        run: pnpm run build
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
         working-directory: typescript/
 
       - name: Publish
@@ -207,21 +192,6 @@ jobs:
           package_json_file: typescript/package.json
           run_install: false
 
-      - name: Setup
-        run: rustup target add wasm32-unknown-unknown
-
-      - name: Bindgen
-        run: cargo update -p wasm-bindgen
-        working-directory: engine/baml-schema-wasm
-
-      - name: Install Bindgen
-        run: cargo install -f wasm-bindgen-cli@0.2.87
-        working-directory: engine/baml-schema-wasm
-
-      - name: Install Rust
-        run: cargo build --release --all-features
-        working-directory: engine/baml-schema-wasm
-
       # Set up Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v3
@@ -230,8 +200,8 @@ jobs:
           node-version: 18
           cache-dependency-path: typescript/pnpm-lock.yaml
 
-      - name: Build Deps
-        run: pnpm run build
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
         working-directory: typescript/
 
       - name: Publish
