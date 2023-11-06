@@ -8,7 +8,7 @@ description.workspace = true
 license-file.workspace = true
 
 [dependencies]
-baml-lib = { path = "../baml-lib/baml", features = ["use-pyo3"]}
+baml-lib = { path = "../baml-lib/baml"}
 check-latest = "1.0.2"
 clap = { version = "4.4.6", features = ["derive"] }
 colored = "2.0.4"

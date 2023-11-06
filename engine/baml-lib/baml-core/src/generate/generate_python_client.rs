@@ -44,15 +44,11 @@ pub(crate) fn generate_py(db: &ParserDatabase, gen: &Generator) -> std::io::Resu
     let temp_path = PathBuf::from(format!("{}.tmp", &gen.output.to_string_lossy().to_string()));
     match fc.write(&temp_path) {
         Ok(_) => {
-            info!("Removing dir!!");
             let _ = std::fs::remove_dir_all(&gen.output);
-            info!("Removing dir 2!!");
             std::fs::rename(&temp_path, &gen.output)
         }
         Err(e) => {
-            info!("Removing dir A!!");
             let _ = std::fs::remove_file(&temp_path);
-            info!("Removing dir B!!");
             Err(e)
         }
     }

@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 use baml_lib::{parse_configuration, Configuration, Diagnostics};
-use log::info;
 
 use crate::errors::CliError;
 
@@ -59,7 +58,6 @@ pub(crate) fn get_src_files(baml_dir: &PathBuf) -> Result<Vec<PathBuf>, CliError
     } else {
         &glob_pattern
     };
-    info!("GLOB IS: {}", glob_pattern);
     let entries = glob::glob(&glob_pattern)?;
     let mut paths = Vec::new();
     for entry in entries {
