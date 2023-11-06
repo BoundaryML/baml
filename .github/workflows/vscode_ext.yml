@@ -116,7 +116,7 @@ jobs:
         with:
           name: baml-out
           path: typescript/vscode-ext/packages/vscode/out
-
+      
       - name: Get artifact
         uses: actions/download-artifact@v3
         with:
@@ -161,10 +161,10 @@ jobs:
         run: pnpm install --frozen-lockfile
         working-directory: typescript/
 
-      # - name: Publish
-      #   run: |
-      #     pnpm run vscode:publish --pre-release --no-git-tag-version -p ${{ secrets.VSCODE_PAT }}
-      #   working-directory: typescript/vscode-ext/packages
+      - name: Publish
+        run: |
+          pnpm run vscode:publish --pre-release --no-git-tag-version -p ${{ secrets.VSCODE_PAT }}
+        working-directory: typescript/vscode-ext/packages
 
   release:
     permissions:
@@ -234,7 +234,7 @@ jobs:
         run: pnpm install --frozen-lockfile
         working-directory: typescript/
 
-      # - name: Publish
-      #   run: |
-      #     pnpm run vscode:publish --no-git-tag-version -p ${{ secrets.VSCODE_PAT }}
-      #   working-directory: typescript/vscode-ext/packages
+      - name: Publish
+        run: |
+          pnpm run vscode:publish --no-git-tag-version -p ${{ secrets.VSCODE_PAT }}
+        working-directory: typescript/vscode-ext/packages
