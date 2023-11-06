@@ -104,7 +104,9 @@
     }
   },
   "scripts": {
-    "lint": "eslint \"src/**/*.ts\""
+    "lint": "eslint \"src/**/*.ts\"",
+    "vscode:package": "vsce package --no-dependencies",
+    "vscode:publish": "vsce publish --no-dependencies"
   },
   "dependencies": {
     "env-paths": "2.2.1",

@@ -70,14 +70,21 @@ jobs:
           pnpm run vscode:package
           VERSION=$(cat package.json| grep version | cut -d ' ' -f 4 | sed 's/[",]//g')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-        working-directory: typescript/vscode-ext/packages/vscode
+        working-directory: typescript/vscode-ext/packages
 
       # Upload the artifact (helpful for debugging and manual downloads)
       - name: Upload VSCode Extension Artifact
         uses: actions/upload-artifact@v3
         with:
           name: baml-vscode.vsix
-          path: typescript/vscode-ext/packages/vscode/baml-${{ steps.build.outputs.version }}.vsix
+          path: typescript/vscode-ext/packages/baml-${{ steps.build.outputs.version }}.vsix
+      
+      # Upload the artifact (helpful for debugging and manual downloads)
+      - name: Upload VSCode Extension Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: baml-out
+          path: typescript/vscode-ext/packages/vscode/out
 
   pre-release:
     runs-on: ubuntu-latest
@@ -95,7 +102,13 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: baml-vscode.vsix
-          path: typescript/vscode-ext/packages/vscode
+          path: typescript/vscode-ext/packages
+      
+      - name: Get artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: baml-out
+          path: typescript/vscode-ext/packages/vscode/out
 
       - id: hash
         run: |
@@ -142,7 +155,7 @@ jobs:
       - name: Publish
         run: |
           pnpm run vscode:publish --pre-release --no-git-tag-version -p ${{ secrets.VSCODE_PAT }}
-        working-directory: typescript/vscode-ext/packages/vscode
+        working-directory: typescript/vscode-ext/packages
 
   release:
     permissions:
@@ -160,8 +173,14 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: baml-vscode.vsix
-          path: typescript/vscode-ext/packages/vscode
+          path: typescript/vscode-ext/packages/
 
+      - name: Get artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: baml-out
+          path: typescript/vscode-ext/packages/vscode/out
+          
       - id: hash
         run: |
           VERSION=$(cat typescript/.bumpversion.cfg | grep current_version | cut -d '=' -f 2 | sed 's/[", ]//g')
@@ -207,4 +226,4 @@ jobs:
       - name: Publish
         run: |
           pnpm run vscode:publish --no-git-tag-version -p ${{ secrets.VSCODE_PAT }}
-        working-directory: typescript/vscode-ext/packages/vscode
+        working-directory: typescript/vscode-ext/packages
