@@ -70,7 +70,7 @@ jobs:
           pnpm run vscode:package
           VERSION=$(cat package.json| grep version | cut -d ' ' -f 4 | sed 's/[",]//g')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-        working-directory: typescript/vscode-ext/packages
+        working-directory: typescript/vscode-ext/packages/vscode
 
       # Upload the artifact (helpful for debugging and manual downloads)
       - name: Upload VSCode Extension Artifact
@@ -142,7 +142,7 @@ jobs:
       - name: Publish
         run: |
           pnpm run vscode:publish --pre-release --no-git-tag-version -p ${{ secrets.VSCODE_PAT }}
-        working-directory: typescript/vscode-ext/packages
+        working-directory: typescript/vscode-ext/packages/vscode
 
   release:
     permissions:
@@ -207,4 +207,4 @@ jobs:
       - name: Publish
         run: |
           pnpm run vscode:publish --no-git-tag-version -p ${{ secrets.VSCODE_PAT }}
-        working-directory: typescript/vscode-ext/packages
+        working-directory: typescript/vscode-ext/packages/vscode
