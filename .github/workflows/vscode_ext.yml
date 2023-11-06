@@ -78,7 +78,7 @@ jobs:
         with:
           name: baml-vscode.vsix
           path: typescript/vscode-ext/packages/baml-${{ steps.build.outputs.version }}.vsix
-      
+
       # Upload the artifact (helpful for debugging and manual downloads)
       - name: Upload VSCode Extension Artifact
         uses: actions/upload-artifact@v3
@@ -103,7 +103,7 @@ jobs:
         with:
           name: baml-vscode.vsix
           path: typescript/vscode-ext/packages
-      
+
       - name: Get artifact
         uses: actions/download-artifact@v3
         with:
@@ -113,10 +113,6 @@ jobs:
       - id: hash
         run: |
           VERSION=$(cat typescript/.bumpversion.cfg | grep current_version | cut -d '=' -f 2 | sed 's/[", ]//g')
-          if [[ ! $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+-canary\.[0-9]+$ ]]; then
-            echo "Version ($VERSION) is not a pre-release build"
-            exit 1
-          fi
 
           echo "version=$(echo $VERSION | cut -d '-' -f 1)" >> $GITHUB_OUTPUT
           echo "full_version=$VERSION" >> $GITHUB_OUTPUT
@@ -180,14 +176,10 @@ jobs:
         with:
           name: baml-out
           path: typescript/vscode-ext/packages/vscode/out
-          
+
       - id: hash
         run: |
           VERSION=$(cat typescript/.bumpversion.cfg | grep current_version | cut -d '=' -f 2 | sed 's/[", ]//g')
-          if [[ ! $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+-canary\.[0-9]+$ ]]; then
-            echo "Version ($VERSION) is not a pre-release build"
-            exit 1
-          fi
 
           echo "version=$(echo $VERSION | cut -d '-' -f 1)" >> $GITHUB_OUTPUT
           echo "full_version=$VERSION" >> $GITHUB_OUTPUT
