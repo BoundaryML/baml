@@ -33,7 +33,7 @@ jobs:
         working-directory: engine/baml-schema-wasm
       
       - name: Install Bindgen
-        run: cargo install -f wasm-bindgen@0.2.87
+        run: cargo install -f wasm-bindgen-cli@0.2.87
         working-directory: engine/baml-schema-wasm
 
       - name: Install Rust
