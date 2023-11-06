@@ -14,6 +14,7 @@ mod generator_config;
 mod identifier;
 mod indentation_type;
 mod newline_type;
+mod printer_config;
 mod retry_policy_config;
 mod serializer;
 mod top;
@@ -36,6 +37,7 @@ pub use identifier::{Identifier, RefIdentifier, TypeValue};
 pub use indentation_type::IndentationType;
 pub use internal_baml_diagnostics::Span;
 pub use newline_type::NewlineType;
+pub use printer_config::PrinterConfig;
 pub use r#class::{Class, FieldId};
 pub use r#enum::{Enum, EnumValue, EnumValueId};
 pub use retry_policy_config::RetryPolicyConfig;
@@ -229,6 +231,13 @@ impl TopId {
     pub fn as_retry_policy_id(self) -> Option<ConfigurationId> {
         match self {
             TopId::Config((id, "retry_policy")) => Some(id),
+            _ => None,
+        }
+    }
+
+    pub fn as_printer_id(self) -> Option<ConfigurationId> {
+        match self {
+            TopId::Config((id, "printer")) => Some(id),
             _ => None,
         }
     }

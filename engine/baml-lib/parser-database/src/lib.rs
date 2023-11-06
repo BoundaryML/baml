@@ -44,7 +44,7 @@ pub use internal_baml_schema_ast::ast;
 use internal_baml_schema_ast::ast::{SchemaAst, WithName, WithSpan};
 pub use printer::WithStaticRenames;
 pub use types::{
-    ContantDelayStrategy, ExponentialBackoffStrategy, PromptVariable, RetryPolicy,
+    ContantDelayStrategy, ExponentialBackoffStrategy, PrinterType, PromptVariable, RetryPolicy,
     RetryPolicyStrategy, StaticType,
 };
 

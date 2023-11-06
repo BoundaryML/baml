@@ -19,7 +19,6 @@ pub use configuration::*;
 use either::Either;
 pub use field::*;
 pub use function::*;
-use internal_baml_diagnostics::Span;
 use internal_baml_schema_ast::ast::{Identifier, TopId, WithName};
 pub use r#class::*;
 pub use r#enum::*;
@@ -74,14 +73,6 @@ impl crate::ParserDatabase {
             })
     }
 
-    /// Find the correct printer.
-    pub fn find_printer<'db>(&'db self, printer: &Option<(String, Span)>) -> Option<&str> {
-        match printer {
-            Some((..)) => None,
-            None => None,
-        }
-    }
-
     /// Find a type by name.
     pub fn find_type<'db>(
         &'db self,
@@ -120,12 +111,21 @@ impl crate::ParserDatabase {
     }
 
     /// Find a function by name.
-    pub fn find_retry_policy<'db>(&'db self, name: &str) -> Option<RetryPolicyWalker<'db>> {
+    pub fn find_retry_policy<'db>(&'db self, name: &str) -> Option<ConfigurationWalker<'db>> {
         self.interner
             .lookup(name)
             .and_then(|name_id| self.names.tops.get(&name_id))
             .and_then(|top_id| top_id.as_retry_policy_id())
-            .map(|model_id| self.walk(model_id))
+            .map(|model_id| self.walk((model_id, "retry_policy")))
+    }
+
+    /// Find printer by name.
+    pub fn find_printer<'db>(&'db self, name: &str) -> Option<ConfigurationWalker<'db>> {
+        self.interner
+            .lookup(name)
+            .and_then(|name_id| self.names.tops.get(&name_id))
+            .and_then(|top_id| top_id.as_printer_id())
+            .map(|model_id| self.walk((model_id, "printer")))
     }
 
     /// Traverse a schema element by id.
@@ -158,6 +158,11 @@ impl crate::ParserDatabase {
         self.walk_retry_policies()
             .map(|c| c.name().to_string())
             .collect()
+    }
+
+    /// Get all the types that are valid in the schema. (including primitives)
+    pub fn valid_printer_names(&self) -> Vec<String> {
+        self.walk_printers().map(|c| c.name().to_string()).collect()
     }
 
     /// Get all the types that are valid in the schema. (including primitives)
@@ -221,13 +226,24 @@ impl crate::ParserDatabase {
     }
 
     /// Walk all classes in the schema.
-    pub fn walk_retry_policies(&self) -> impl Iterator<Item = RetryPolicyWalker<'_>> {
+    pub fn walk_retry_policies(&self) -> impl Iterator<Item = ConfigurationWalker<'_>> {
         self.ast()
             .iter_tops()
             .filter_map(|(top_id, _)| top_id.as_retry_policy_id())
             .map(move |top_id| Walker {
                 db: self,
-                id: top_id,
+                id: (top_id, "retry_policy"),
+            })
+    }
+
+    /// Walk all classes in the schema.
+    pub fn walk_printers(&self) -> impl Iterator<Item = ConfigurationWalker<'_>> {
+        self.ast()
+            .iter_tops()
+            .filter_map(|(top_id, _)| top_id.as_printer_id())
+            .map(move |top_id| Walker {
+                db: self,
+                id: (top_id, "printer"),
             })
     }
 }

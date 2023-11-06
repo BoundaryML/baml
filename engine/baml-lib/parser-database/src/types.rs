@@ -115,6 +115,30 @@ pub struct ClientProperties {
     pub options: Vec<(String, Expression)>,
 }
 
+#[derive(Debug, Clone)]
+pub struct Printer {
+    pub template: (String, Span),
+}
+
+#[derive(Debug, Clone)]
+/// The type of printer.
+pub enum PrinterType {
+    /// For types
+    Type(Printer),
+    /// For enums
+    Enum(Printer),
+}
+
+impl PrinterType {
+    /// The code template.
+    pub fn template(&self) -> &str {
+        match self {
+            PrinterType::Type(printer) => &printer.template.0,
+            PrinterType::Enum(printer) => &printer.template.0,
+        }
+    }
+}
+
 /// How to retry a request.
 #[derive(Debug, Clone)]
 pub struct RetryPolicy {
@@ -163,6 +187,7 @@ pub(super) struct Types {
     pub(super) variant_properties: HashMap<ast::VariantConfigId, VariantProperties>,
     pub(super) client_properties: HashMap<ast::ClientId, ClientProperties>,
     pub(super) retry_policies: HashMap<ast::ConfigurationId, RetryPolicy>,
+    pub(super) printers: HashMap<ast::ConfigurationId, PrinterType>,
 }
 
 impl Types {
@@ -470,6 +495,9 @@ fn visit_config<'db>(
     match config {
         ast::Configuration::RetryPolicy(retry) => {
             configurations::visit_retry_policy(idx, retry, ctx);
+        }
+        ast::Configuration::Printer(printer) => {
+            configurations::visit_printer(idx, printer, ctx);
         }
     }
 }

@@ -3,9 +3,16 @@ class ProposedMessage {
     generated_response string 
 }
 
+enum  Sentiment {
+    Positive
+    Negative
+    Neutral
+}
+
 class ImprovedResponse {
     should_improve bool
     improved_response string?
+    field Sentiment
 }
 
 function MaybePolishText {
@@ -42,6 +49,8 @@ impl<llm, MaybePolishText> v1 {
         {#input.thread.thread}
 
         Previous Response: {#input.generated_response}
+
+        {#print_enum<CustomPrinter>(Sentiment)}
 
         {// The word format is required. don't remove it //}
         Output JSON Format:

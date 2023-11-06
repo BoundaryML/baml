@@ -20,6 +20,17 @@
       "cache": false
     },
     "lint": {},
-    "clean": {}
+    "clean": {},
+    "baml-client#build": {
+      "dependsOn": ["@gloo-ai/baml-language-server#build"],
+      "outputs": ["out/**"]
+    },
+    "baml#vscode:package": {
+      "dependsOn": ["baml-client#build"],
+      "outputs": ["baml-*.vsix"]
+    },
+    "package": {
+      "dependsOn": ["baml#vscode:package"]
+    }
   }
 }

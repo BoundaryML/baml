@@ -47,12 +47,11 @@ fn parse_string_literal(
     diagnostics: &mut Diagnostics,
 ) -> Either<(String, Span), Identifier> {
     assert_correct_parser!(token, Rule::string_literal);
-
     let contents = token.clone().into_inner().next().unwrap();
     let span = diagnostics.span(contents.as_span());
     match contents.as_rule() {
         Rule::raw_string_literal => {
-            let contents = contents.into_inner().next().unwrap();
+            let contents = contents.into_inner().next_back().unwrap();
             Either::Left((contents.as_str().to_string(), span))
         }
         Rule::quoted_string_literal => {

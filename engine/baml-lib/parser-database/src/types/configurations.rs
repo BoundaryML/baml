@@ -1,11 +1,98 @@
 use internal_baml_diagnostics::{DatamodelError, Span};
 use internal_baml_schema_ast::ast::{
-    ConfigurationId, RetryPolicyConfig, WithIdentifier, WithName, WithSpan,
+    ConfigurationId, PrinterConfig, RetryPolicyConfig, WithIdentifier, WithName, WithSpan,
 };
+use regex::Regex;
 
 use crate::{coerce, coerce_expression::coerce_map, context::Context};
 
-use super::{ContantDelayStrategy, ExponentialBackoffStrategy, RetryPolicy, RetryPolicyStrategy};
+use super::{
+    ContantDelayStrategy, ExponentialBackoffStrategy, Printer, PrinterType, RetryPolicy,
+    RetryPolicyStrategy,
+};
+
+fn dedent(s: &str) -> String {
+    // Find the shortest indentation in the string (that's not an empty line).
+    let shortest_indent = Regex::new(r"^(?m)\s*\S")
+        .unwrap()
+        .captures_iter(s.trim())
+        .map(|cap| cap.get(0).unwrap().start())
+        .min()
+        .unwrap_or(0);
+
+    if shortest_indent == 0 {
+        return s.trim().to_string();
+    }
+
+    // Remove that amount of indentation from each line.
+    let dedent_pattern = format!(r"(?m)^\s{{1,{}}}", shortest_indent);
+    Regex::new(&dedent_pattern)
+        .unwrap()
+        .replace_all(s, "")
+        .trim()
+        .to_string()
+}
+
+pub(crate) fn visit_printer<'db>(
+    idx: ConfigurationId,
+    config: &'db PrinterConfig,
+    ctx: &mut Context<'db>,
+) {
+    let mut template = None;
+
+    config
+        .iter_fields()
+        .for_each(|(_idx, f)| match (f.name(), &f.value) {
+            (name, None) => {
+                ctx.push_error(DatamodelError::new_config_property_missing_value_error(
+                    name,
+                    config.name(),
+                    "printer",
+                    f.identifier().span().clone(),
+                ))
+            }
+            ("template", Some(val)) => match coerce::string_with_span(&val, ctx.diagnostics) {
+                Some((t, span)) => template = Some((dedent(t), span.clone())),
+                None => {}
+            },
+            (name, Some(_)) => ctx.push_error(DatamodelError::new_property_not_known_error(
+                name,
+                f.identifier().span().clone(),
+            )),
+        });
+
+    match (
+        template,
+        coerce::string_with_span(&config.printer_type, ctx.diagnostics),
+    ) {
+        (None, _) => ctx.push_error(DatamodelError::new_validation_error(
+            "Missing `template` property",
+            config.identifier().span().clone(),
+        )),
+        (Some(template), Some(("enum", _))) => {
+            ctx.types
+                .printers
+                .insert(idx, PrinterType::Enum(Printer { template }));
+        }
+        (Some(template), Some(("type", _))) => {
+            ctx.types
+                .printers
+                .insert(idx, PrinterType::Type(Printer { template }));
+        }
+        (Some(_), Some((name, span))) => {
+            ctx.push_error(DatamodelError::new_validation_error(
+                &format!(
+                    "Unknown printer type: {}. Options are `type` or `enum`",
+                    name
+                ),
+                span.clone(),
+            ));
+        }
+        (Some(_), None) => {
+            // errors are handled by coerce::string_with_span
+        }
+    }
+}
 
 pub(crate) fn visit_retry_policy<'db>(
     idx: ConfigurationId,

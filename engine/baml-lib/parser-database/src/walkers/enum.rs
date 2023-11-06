@@ -1,6 +1,4 @@
-
-
-use internal_baml_diagnostics::{DatamodelError};
+use internal_baml_diagnostics::DatamodelError;
 use internal_baml_prompt_parser::ast::{PrinterBlock, WithSpan};
 use internal_baml_schema_ast::ast::{WithDocumentation, WithName};
 use serde_json::json;
@@ -8,7 +6,7 @@ use serde_json::json;
 use crate::{
     ast,
     printer::{serialize_with_printer, WithSerialize, WithSerializeableContent, WithStaticRenames},
-    types::{ToStringAttributes},
+    types::ToStringAttributes,
     walkers::Walker,
 };
 
@@ -82,12 +80,16 @@ impl<'db> WithSerialize for EnumWalker<'db> {
         variant: &VariantWalker<'_>,
         block: &PrinterBlock,
     ) -> Result<String, DatamodelError> {
+        let printer_template = match &block.printer {
+            Some((p, _)) => self
+                .db
+                .find_printer(p)
+                .map(|w| w.printer().template().to_string()),
+            _ => None,
+        };
+        // let printer = self.db.find_printer(&block.printer);
         // Eventually we should validate what parameters are in meta.
-        match serialize_with_printer(
-            true,
-            self.db.find_printer(&block.printer),
-            self.serialize_data(variant),
-        ) {
+        match serialize_with_printer(true, printer_template, self.serialize_data(variant)) {
             Ok(val) => Ok(val),
             Err(e) => Err(DatamodelError::new_validation_error(
                 &format!("Error serializing enum: {}\n{}", self.name(), e),

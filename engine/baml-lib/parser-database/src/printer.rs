@@ -1,4 +1,4 @@
-use std::{collections::HashMap};
+use std::collections::HashMap;
 
 use internal_baml_diagnostics::DatamodelError;
 use internal_baml_prompt_parser::ast::PrinterBlock;
@@ -116,17 +116,17 @@ pub trait WithSerialize: WithSerializeableContent {
 #[cfg(feature = "use-pyo3")]
 pub fn serialize_with_printer(
     is_enum: bool,
-    template: Option<&str>,
+    printer: Option<String>,
     json: serde_json::Value,
 ) -> Result<String, String> {
     pyo3::prepare_freethreaded_python();
 
     Python::with_gil(|py| {
         let printer = if is_enum {
-            setup_enum_printer(py, template)
+            setup_enum_printer(py, printer.as_deref())
                 .map_err(|e| format!("Failed to create enum printer: {}", e))?
         } else {
-            setup_type_printer(py, template)
+            setup_type_printer(py, printer.as_deref())
                 .map_err(|e| format!("Failed to create type printer: {}", e))?
         };
 
@@ -136,9 +136,9 @@ pub fn serialize_with_printer(
 
 #[cfg(not(feature = "use-pyo3"))]
 pub fn serialize_with_printer(
-    is_enum: bool,
-    template: Option<&str>,
-    json: serde_json::Value,
+    _is_enum: bool,
+    _template: Option<String>,
+    _json: serde_json::Value,
 ) -> Result<String, String> {
     Ok("PLACEHOLDER FOR WASM".to_string())
 }

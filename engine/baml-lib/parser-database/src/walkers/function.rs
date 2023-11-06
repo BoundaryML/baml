@@ -181,12 +181,15 @@ impl<'db> WithSerialize for FunctionWalker<'db> {
         variant: &VariantWalker<'_>,
         block: &internal_baml_prompt_parser::ast::PrinterBlock,
     ) -> Result<String, internal_baml_diagnostics::DatamodelError> {
+        let printer_template = match &block.printer {
+            Some((p, _)) => self
+                .db
+                .find_printer(p)
+                .map(|w| w.printer().template().to_string()),
+            _ => None,
+        };
         // Eventually we should validate what parameters are in meta.
-        match serialize_with_printer(
-            false,
-            self.db.find_printer(&block.printer),
-            self.serialize_data(variant),
-        ) {
+        match serialize_with_printer(false, printer_template, self.serialize_data(variant)) {
             Ok(val) => Ok(val),
             Err(e) => Err(DatamodelError::new_validation_error(
                 &format!("Error serializing output for {}\n{}", self.name(), e),

@@ -121,7 +121,7 @@ variant_contents = {
 // The value of each key is an expression.
 // ######################################
 config_block = {
-    (CLIENT_KEYWORD | GENERATOR_KEYWORD | RETRY_POLICY_KEYWORD)
+    (CLIENT_KEYWORD | GENERATOR_KEYWORD | RETRY_POLICY_KEYWORD | PRINTER_KEYWORD)
     ~ template_args?
     ~ identifier
     ~ BLOCK_OPEN
@@ -207,19 +207,25 @@ raw_string_literal_content_3 = @{ (!"\"###" ~ ANY)* }
 raw_string_literal_content_4 = @{ (!"\"####" ~ ANY)* }
 raw_string_literal_content_5 = @{ (!"\"#####" ~ ANY)* }
 
+raw_string_start_5 = @{ (single_word)? ~ "#####\"" }
+raw_string_start_4 = @{ (single_word)? ~ "####\"" }
+raw_string_start_3 = @{ (single_word)? ~ "###\"" }
+raw_string_start_2 = @{ (single_word)? ~ "##\"" }
+raw_string_start_1 = @{ (single_word)? ~ "#\"" }
+
 raw_string_literal = { 
-    ("#####\"" ~ raw_string_literal_content_5 ~ "\"#####")
-    | ("####\"" ~ raw_string_literal_content_4 ~ "\"####") 
-    | ("###\"" ~ raw_string_literal_content_3 ~ "\"###") 
-    | ("##\"" ~ raw_string_literal_content_2 ~ "\"##") 
-    | ("#\"" ~ raw_string_literal_content_1 ~ "\"#") 
+    (raw_string_start_5 ~ raw_string_literal_content_5 ~ "\"#####")
+    | (raw_string_start_4 ~ raw_string_literal_content_4 ~ "\"####") 
+    | (raw_string_start_3 ~ raw_string_literal_content_3 ~ "\"###") 
+    | (raw_string_start_2 ~ raw_string_literal_content_2 ~ "\"##") 
+    | (raw_string_start_1 ~ raw_string_literal_content_1 ~ "\"#") 
 }
 unterminated_raw_string_literal = ${ 
-    ("#####\"" ~ raw_string_literal_content_5)
-    | ("####\"" ~ raw_string_literal_content_4)
-    | ("###\"" ~ raw_string_literal_content_3)
-    | ("##\"" ~ raw_string_literal_content_2)
-    | ("#\"" ~ raw_string_literal_content_1)
+    (raw_string_start_5 ~ raw_string_literal_content_5)
+    | (raw_string_start_4 ~ raw_string_literal_content_4)
+    | (raw_string_start_3 ~ raw_string_literal_content_3)
+    | (raw_string_start_2 ~ raw_string_literal_content_2)
+    | (raw_string_start_1 ~ raw_string_literal_content_1)
 }
 unterminated_quoted_string_literal = ${ "\"" ~ quoted_string_content }
 unterminated_string_literal = ${ unterminated_raw_string_literal | unterminated_quoted_string_literal }
@@ -263,3 +269,4 @@ CLIENT_KEYWORD = { "client" }
 GENERATOR_KEYWORD = { "generator" }
 VARIANT_KEYWORD = { "impl" }
 SERIALIZER_KEYWORD = { "override" }
+PRINTER_KEYWORD = { "printer" }

@@ -11,12 +11,12 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..enums.enm_messagesender import MessageSender
 from baml_lib._impl.deserializer import register_deserializer
-from pydantic import BaseModel
+from enum import Enum
 
 
-@register_deserializer({ "sender1": "sender","body1": "body", })
-class Message(BaseModel):
-    sender: MessageSender
-    body: str
+@register_deserializer({  })
+class Sentiment(str, Enum):
+    Positive = "Positive"
+    Negative = "Negative"
+    Neutral = "Neutral"
