@@ -176,7 +176,7 @@ importers:
         specifier: 3.0.1
         version: 3.0.1
       mocha:
-        specifier: 10.2.0
+        specifier: ^10.2.0
         version: 10.2.0
       ovsx:
         specifier: 0.8.3

@@ -41,7 +41,7 @@
     "@vscode/vsce": "2.21.1",
     "esbuild": "^0.19.4",
     "is-ci": "3.0.1",
-    "mocha": "10.2.0",
+    "mocha": "^10.2.0",
     "ovsx": "0.8.3",
     "rimraf": "^5.0.5",
     "typescript": "5.2.2"
