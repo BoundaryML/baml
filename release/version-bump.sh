@@ -2,7 +2,6 @@
 
 set -e
 
-VALID_VERSIONS=("none" "prerelease" "pre" "patch" "minor" "major")
 
 CURRENT_BRANCH=$(git branch --show-current)
 git fetch origin > /dev/null 2>&1
@@ -17,13 +16,19 @@ fi
 
 for COMPONENT in "CLI" "Python Client" "VSCode Extension"; do
   while true; do
-    echo "Enter the version type for ${COMPONENT} [none, prerelease, pre, patch, minor, major] (none):"
+    if [[ "${COMPONENT}" == "VSCode Extension" ]]; then
+      echo "Enter the version type for ${COMPONENT} [none, patch, minor, major] (none):"
+      VALID_COMPONENT_VERSIONS=("none" "patch" "minor" "major")
+    else
+      echo "Enter the version type for ${COMPONENT} [none, prerelease, pre, patch, minor, major] (none):"
+      VALID_COMPONENT_VERSIONS=("none" "prerelease" "pre" "patch" "minor" "major")
+    fi
     read VERSION_TYPE
     if [[ -z "${VERSION_TYPE}" ]]; then
       VERSION_TYPE="none"
     fi
     
-    if [[ " ${VALID_VERSIONS[@]} " =~ " ${VERSION_TYPE} " ]]; then
+    if [[ " ${VALID_COMPONENT_VERSIONS[@]} " =~ " ${VERSION_TYPE} " ]]; then
       if [[ "${COMPONENT}" == "CLI" ]]; then
         CLI=${VERSION_TYPE}
       elif [[ "${COMPONENT}" == "Python Client" ]]; then
