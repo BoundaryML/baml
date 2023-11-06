@@ -2,7 +2,7 @@
   "name": "baml",
   "displayName": "Baml",
   "description": "BAML is a DSL for AI applications.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "Gloo",
   "repository": "https://github.com/GlooHQ/gloo-lang",
   "homepage": "https://trygloo.com",
@@ -122,7 +122,7 @@
     "@vscode/test-electron": "2.3.5",
     "esbuild": "^0.19.4",
     "is-ci": "3.0.1",
-    "mocha": "^10.2.0",
+    "mocha": "^10.2.1",
     "ovsx": "0.8.3",
     "typescript": "5.2.2",
     "@vscode/vsce": "2.21.1"
