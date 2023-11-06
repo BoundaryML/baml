@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 // Define Rust structs corresponding to the TypedDicts
 

@@ -50,7 +50,7 @@ impl<llm, MaybePolishText> v1 {
 
         Previous Response: {#input.generated_response}
 
-        {#print_enum<CustomPrinter>(Sentiment)}
+        {#print_enum(Sentiment)}
 
         {// The word format is required. don't remove it //}
         Output JSON Format:

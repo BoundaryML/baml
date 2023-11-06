@@ -1,6 +1,5 @@
-use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
-use std::collections::HashMap;
+use serde::{de::Error, Deserialize, Serialize};
+use serde_json::Value;
 
 // Define Rust structs to represent the TypedDicts
 #[derive(Serialize, Deserialize, Debug)]
@@ -12,61 +11,61 @@ struct Meta {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct PrimitiveType {
-    rtype: String, // In Rust, Literal types are not supported, so we'll use String
+    // In Rust, Literal types are not supported, so we'll use String
     optional: bool,
     value: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct EnumType {
-    rtype: String,
     name: String,
     optional: bool,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct FieldType {
     name: String,
     meta: Option<Meta>,
-    #[serde(rename = "type")]
+
     type_meta: Box<DataType>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct ClassType {
-    rtype: String,
     fields: Vec<FieldType>,
     optional: Option<bool>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct ListType {
-    rtype: String,
     dims: i32,
     inner: Box<DataType>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct InlineType {
-    rtype: String,
-    #[serde(rename = "type")]
     type_meta: Box<DataType>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct OutputType {
+    value: Box<DataType>,
+}
+
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct UnionType {
-    rtype: String,
     members: Vec<DataType>,
 }
 
 // Use an enum to represent the union of types
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase", untagged)]
 enum DataType {
     Primitive(PrimitiveType),
@@ -74,6 +73,8 @@ enum DataType {
     List(ListType),
     Inline(InlineType),
     Union(UnionType),
+    Output(OutputType),
+    Enum(EnumType),
 }
 
 // Utility functions similar to the Python version
@@ -111,6 +112,8 @@ fn print_type(item: &DataType) -> String {
         DataType::List(l) => print_list(l),
         DataType::Inline(i) => print_type(&*i.type_meta),
         DataType::Union(u) => print_union(u),
+        DataType::Output(o) => print_type(&*o.value),
+        DataType::Enum(e) => print_enum(e),
     }
 }
 
@@ -161,8 +164,80 @@ fn print_union(item: &UnionType) -> String {
     member_types.join(" | ")
 }
 
+fn parse_field_type(json_input: &Value) -> Result<FieldType, serde_json::Error> {
+    let name = json_input["name"].as_str().unwrap().to_string();
+    let meta: Option<Meta> = serde_json::from_value(json_input["meta"].clone())?;
+    let type_meta = parse_data_type(&json_input["type_meta"])?;
+    Ok(FieldType {
+        name,
+        meta,
+        type_meta: Box::new(type_meta),
+    })
+}
+
+fn parse_data_type(json_input: &Value) -> Result<DataType, serde_json::Error> {
+    let json_input = json_input.as_object().unwrap();
+
+    match json_input["rtype"].as_str() {
+        Some("primitive") => Ok(DataType::Primitive(PrimitiveType {
+            optional: json_input["optional"].as_bool().unwrap_or(false),
+            value: json_input["value"].as_str().unwrap().to_string(),
+        })),
+        Some("class") => {
+            let fields: Vec<FieldType> = json_input["fields"]
+                .as_array()
+                .ok_or_else(|| Error::custom("Expected 'fields' to be an array"))?
+                .iter()
+                .map(parse_field_type)
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(DataType::Class(ClassType {
+                fields,
+                optional: json_input["optional"].as_bool(),
+            }))
+        }
+        Some("enum") => {
+            let name = json_input["name"].as_str().unwrap().to_string();
+            let optional = json_input["optional"].as_bool().unwrap_or(false);
+            Ok(DataType::Enum(EnumType { name, optional }))
+        }
+        Some("list") => {
+            let inner = parse_data_type(&json_input["inner"])?;
+            Ok(DataType::List(ListType {
+                dims: json_input["dims"].as_i64().unwrap() as i32,
+                inner: Box::new(inner),
+            }))
+        }
+        Some("inline") => {
+            let inner = parse_data_type(&json_input["value"])?;
+            Ok(DataType::Inline(InlineType {
+                type_meta: Box::new(inner),
+            }))
+        }
+        Some("output") => {
+            let inner = parse_data_type(&json_input["value"])?;
+            Ok(DataType::Output(OutputType {
+                value: Box::new(inner),
+            }))
+        }
+        Some("union") => {
+            let members: Vec<DataType> = json_input["members"]
+                .as_array()
+                .ok_or_else(|| Error::custom("Expected 'members' to be an array"))?
+                .iter()
+                .map(parse_data_type)
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(DataType::Union(UnionType { members }))
+        }
+        other => Err(Error::custom(format!(
+            "unknown type {:?} {:?}",
+            other, json_input
+        ))),
+    }
+}
+
 pub(crate) fn print_entry(json_input: serde_json::Value) -> String {
-    let parsed: DataType = serde_json::from_value(json_input).expect("Invalid JSON input");
+    // Print the type of the input
+    let parsed: DataType = parse_data_type(&json_input).expect("Invalid JSON input");
 
     print_type(&parsed)
 }
