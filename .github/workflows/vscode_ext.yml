@@ -75,7 +75,7 @@ jobs:
       - name: Upload VSCode Extension Artifact
         uses: actions/upload-artifact@v3
         with:
-          name: gloo-vscode.vsix
+          name: baml-vscode.vsix
           path: typescript/vscode-ext/packages/baml-${{ steps.build.outputs.version }}.vsix
 
   pre-release:
@@ -93,12 +93,12 @@ jobs:
       - name: Get artifact
         uses: actions/download-artifact@v3
         with:
-          name: gloo-vscode.vsix
-          path: vscode-ext/
+          name: baml-vscode.vsix
+          path: typescript/vscode-ext/packages
 
       - id: hash
         run: |
-          VERSION=$(cat vscode-ext/.bumpversion.cfg | grep current_version | cut -d '=' -f 2 | sed 's/[", ]//g')
+          VERSION=$(cat typescript/.bumpversion.cfg | grep current_version | cut -d '=' -f 2 | sed 's/[", ]//g')
           if [[ ! $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+-canary\.[0-9]+$ ]]; then
             echo "Version ($VERSION) is not a pre-release build"
             exit 1
@@ -106,14 +106,14 @@ jobs:
 
           echo "version=$(echo $VERSION | cut -d '-' -f 1)" >> $GITHUB_OUTPUT
           echo "full_version=$VERSION" >> $GITHUB_OUTPUT
-          echo "vsix_hash=$(shasum -a 256 vscode-ext/gloo-${echo $VERSION | cut -d '-' -f 1}.vsix | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
+          echo "vsix_hash=$(shasum -a 256 typescript/vscode-ext/packages/baml-${echo $VERSION | cut -d '-' -f 1}.vsix | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
 
       - name: Pre-release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: "unstable/vscode_ext/v${{ steps.hash.outputs.version }}"
           files: |
-            vscode-ext/gloo-${{ steps.hash.outputs.version }}.vsix
+            typescript/vscode-ext/packages/baml-${{ steps.hash.outputs.version }}.vsix
           prerelease: true
           body: |
             ## Hashes
@@ -123,8 +123,24 @@ jobs:
       - uses: pnpm/action-setup@v2
         with:
           version: 8
-          package_json_file: vscode-ext/package.json
+          package_json_file: typescript/package.json
           run_install: false
+
+      - name: Setup
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Bindgen
+        run: cargo update -p wasm-bindgen
+        working-directory: engine/baml-schema-wasm
+
+      - name: Install Bindgen
+        run: cargo install -f wasm-bindgen-cli@0.2.87
+        working-directory: engine/baml-schema-wasm
+
+      - name: Install Rust
+        run: cargo build --release --all-features
+        working-directory: engine/baml-schema-wasm
+  
 
       # Set up Node.js
       - name: Setup Node.js
@@ -132,16 +148,16 @@ jobs:
         with:
           cache: "pnpm"
           node-version: 18
-          cache-dependency-path: vscode-ext/pnpm-lock.yaml
+          cache-dependency-path: typescript/pnpm-lock.yaml
 
-      - name: Install Dependencies
-        run: pnpm install --frozen-lockfile
-        working-directory: vscode-ext/
+      - name: Build Deps
+        run: pnpm run build
+        working-directory: typescript/
 
       - name: Publish
         run: |
           pnpm run vscode:publish --pre-release --no-git-tag-version -p ${{ secrets.VSCODE_PAT }}
-        working-directory: vscode-ext/
+        working-directory: typescript/vscode-ext/packages
 
   release:
     permissions:
@@ -158,35 +174,54 @@ jobs:
       - name: Get artifact
         uses: actions/download-artifact@v3
         with:
-          name: gloo-vscode
-          path: vscode-ext/
+          name: baml-vscode.vsix
+          path: typescript/vscode-ext/packages
 
       - id: hash
         run: |
-          VERSION=$(cat vscode-ext/.bumpversion.cfg | grep current_version | cut -d '=' -f 2 | sed 's/[", ]//g')
-          if [[ ! $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Version ($VERSION) is not a release build"
+          VERSION=$(cat typescript/.bumpversion.cfg | grep current_version | cut -d '=' -f 2 | sed 's/[", ]//g')
+          if [[ ! $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+-canary\.[0-9]+$ ]]; then
+            echo "Version ($VERSION) is not a pre-release build"
             exit 1
           fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "vsix_hash=$(shasum -a 256 vscode-ext/gloo-${VERSION}.vsix | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
 
-      - name: Release
+          echo "version=$(echo $VERSION | cut -d '-' -f 1)" >> $GITHUB_OUTPUT
+          echo "full_version=$VERSION" >> $GITHUB_OUTPUT
+          echo "vsix_hash=$(shasum -a 256 typescript/vscode-ext/packages/baml-${echo $VERSION | cut -d '-' -f 1}.vsix | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
+
+      - name: Pre-release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: "release/vscode_ext/v${{ steps.hash.outputs.version }}"
+          tag_name: "unstable/vscode_ext/v${{ steps.hash.outputs.version }}"
           files: |
-            vscode-ext/gloo-${{ steps.hash.outputs.version }}.vsix
+            typescript/vscode-ext/packages/baml-${{ steps.hash.outputs.version }}.vsix
           prerelease: true
           body: |
             ## Hashes
+            Full Version: ${{ steps.hash.outputs.full_version }}
             VSIX: ${{ steps.hash.outputs.vsix_hash }}
 
       - uses: pnpm/action-setup@v2
         with:
           version: 8
-          package_json_file: vscode-ext/package.json
+          package_json_file: typescript/package.json
           run_install: false
+
+      - name: Setup
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Bindgen
+        run: cargo update -p wasm-bindgen
+        working-directory: engine/baml-schema-wasm
+
+      - name: Install Bindgen
+        run: cargo install -f wasm-bindgen-cli@0.2.87
+        working-directory: engine/baml-schema-wasm
+
+      - name: Install Rust
+        run: cargo build --release --all-features
+        working-directory: engine/baml-schema-wasm
+  
 
       # Set up Node.js
       - name: Setup Node.js
@@ -194,13 +229,13 @@ jobs:
         with:
           cache: "pnpm"
           node-version: 18
-          cache-dependency-path: vscode-ext/pnpm-lock.yaml
+          cache-dependency-path: typescript/pnpm-lock.yaml
 
-      - name: Install Dependencies
-        run: pnpm install --frozen-lockfile
-        working-directory: vscode-ext/
+      - name: Build Deps
+        run: pnpm run build
+        working-directory: typescript/
 
       - name: Publish
         run: |
           pnpm run vscode:publish --no-git-tag-version -p ${{ secrets.VSCODE_PAT }}
-        working-directory: vscode-ext/
+        working-directory: typescript/vscode-ext/packages
