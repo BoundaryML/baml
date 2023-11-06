@@ -27,11 +27,11 @@ jobs:
             engine/baml-schema-wasm
       - name: Setup
         run: rustup target add wasm32-unknown-unknown
-      
+
       - name: Bindgen
         run: cargo update -p wasm-bindgen
         working-directory: engine/baml-schema-wasm
-      
+
       - name: Install Bindgen
         run: cargo install -f wasm-bindgen-cli@0.2.87
         working-directory: engine/baml-schema-wasm
@@ -76,7 +76,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: gloo-vscode.vsix
-          path: vscode-ext/gloo-${{ steps.build.outputs.version }}.vsix
+          path: typescript/vscode-ext/packages/baml-${{ steps.build.outputs.version }}.vsix
 
   pre-release:
     runs-on: ubuntu-latest
