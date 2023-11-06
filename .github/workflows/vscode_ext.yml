@@ -30,9 +30,11 @@ jobs:
       
       - name: Bindgen
         run: cargo update -p wasm-bindgen
+        working-directory: engine/baml-schema-wasm
       
       - name: Install Bindgen
         run: cargo install -f wasm-bindgen@0.2.87
+        working-directory: engine/baml-schema-wasm
 
       - name: Install Rust
         run: cargo build --release --all-features
