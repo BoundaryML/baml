@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "example"
-version = "0.1.1-canary.0"
+version = "0.1.1"
 description = ""
 authors = ["Vaibhav Gupta <vbv@gloo.chat>"]
 readme = "README.md"

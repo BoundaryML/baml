@@ -68,7 +68,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: ${{ matrix.platform.name }}
-          path: engine/baml-cli/target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }}
+          path: engine/target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }}
 
   pre-release:
     permissions:
