@@ -2,8 +2,6 @@ name: Gloo CLI
 
 on:
   pull_request:
-    # paths:
-    #   - "engine/baml-cli/**"
     branches:
       - canary
   push:
@@ -190,7 +188,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           name: "Cli: ${{ steps.hash.outputs.version }}"
-          tag_name: "releases/cli/v${{ steps.hash.outputs.version }}"
+          tag_name: "releases/baml-cli/v${{ steps.hash.outputs.version }}"
           files: |
             baml-linux-x86_64.tar.gz
             baml-apple-intel.tar.gz
