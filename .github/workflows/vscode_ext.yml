@@ -3,12 +3,12 @@ name: VSCode Extension
 on:
   pull_request:
     paths:
-      - "vscode-ext/**"
+      - "typescript/**"
     branches:
       - canary
   push:
     paths:
-      - "vscode-ext/.bumpversion.cfg"
+      - "typescript/.bumpversion.cfg"
     branches:
       - canary
     tags:
