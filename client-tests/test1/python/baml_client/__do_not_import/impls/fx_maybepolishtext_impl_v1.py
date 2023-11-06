@@ -59,8 +59,8 @@ JSON:\
 """
 
 __input_replacers = {
-    "{arg.generated_response}",
-    "{arg.thread.thread}"
+    "{arg.thread.thread}",
+    "{arg.generated_response}"
 }
 
 

@@ -42,7 +42,7 @@ fn as_indented_string(content: &str, level: usize) -> String {
 
 fn print_enum_value(value: &EnumValue) -> String {
     match &value.meta.description {
-        Some(description) => format!("{} // {}", value.name, description),
+        Some(description) => format!("{}: {}", value.name, description),
         None => value.name.clone(),
     }
 }
