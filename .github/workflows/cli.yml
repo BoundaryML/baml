@@ -61,7 +61,7 @@ jobs:
           command: ${{ matrix.platform.command }}
           target: ${{ matrix.platform.target }}
           args: "--locked --release"
-          strip: ${{ github.event_name != 'pull_request' }}
+          strip: false # Don't strip debug symbols
           working-directory: engine/baml-cli
 
       - name: Add artifact
