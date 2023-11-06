@@ -6,8 +6,9 @@ client<llm> MyClient {
 
 
 
-// error: Error validating: Missing `provider` field in client. e.g. `provider openai`
-//   -->  /Users/aaronvillalpando/Projects/gloo-lang/engine/baml/baml/tests/validation_files/client/required_provider.baml:1
+
+// error: Error validating: Missing `provider` field in client. e.g. `provider baml-openai-chat`
+//   -->  /Users/vbv/repos/gloo-lang/engine/baml-lib/baml/tests/validation_files/client/required_provider.baml:1
 //    | 
 //    | 
 //  1 | client<llm> MyClient {

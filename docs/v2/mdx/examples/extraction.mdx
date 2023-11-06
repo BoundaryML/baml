@@ -77,7 +77,7 @@ impl<llm, ExtractMeetingDetails> V1 {
 ````
 ```baml clients.baml
 client<llm> GPT35Client {
-    provider openai
+    provider baml-openai-chat
     options {
         model gpt-3.5-turbo
         temperature 0
@@ -254,7 +254,7 @@ However this still may not be enough. What if we want to get the start time and 
 
 ```diff meeting.baml
 class MeetingDetails {
-    title string 
+    title string
 +    start_time string  @description(ISO date string)
 +    end_time string    @description(ISO date string)
     attendees Attendee[]
@@ -391,7 +391,7 @@ impl<llm, ExtractMeetingDetails> V1 {
 
 ```baml clients.baml
 client<llm> GPT35Client {
-    provider openai
+    provider baml-openai-chat
     options {
         model gpt-3.5-turbo
         temperature 0

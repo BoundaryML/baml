@@ -1,5 +1,5 @@
 client<llm> MyClient {
-  provider openai
+  provider baml-openai-chat
   // dictionary test
   options {
     // no commas

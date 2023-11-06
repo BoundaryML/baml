@@ -59,7 +59,7 @@ An LLM variant has three things
 
 ```gloo main.gloo
 @client[llm] GPT35Client {
-    @provider openai
+    @provider baml-openai-chat
     model gpt-3.5-turbo
     temperature 0
     api_key @ENV.OPENAI_API_KEY
@@ -229,7 +229,7 @@ When the user wants to book a meeting on our internal system.
 
 ```gloo clients.gloo
 @client[llm] GPT35Client {
-    @provider openai
+    @provider baml-openai-chat
     model gpt-3.5-turbo
     temperature 0
     api_key @ENV.OPENAI_API_KEY

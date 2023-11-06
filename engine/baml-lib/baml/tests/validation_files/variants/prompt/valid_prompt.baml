@@ -22,7 +22,7 @@ class OutputType {
 }
 
 client<llm> MyClient {
-  provider openai
+  provider baml-openai-chat
 }
 
 enum Sentiment {
