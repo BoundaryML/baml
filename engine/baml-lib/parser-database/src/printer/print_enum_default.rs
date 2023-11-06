@@ -59,10 +59,8 @@ pub(crate) fn print_enum(val: serde_json::Value) -> String {
     block.push("---".to_string());
 
     for value in &enm.values {
-        block.push(as_indented_string(&print_enum_value(value), 1));
+        block.push(print_enum_value(value));
     }
-
-    block.push("}".to_string());
 
     block.join("\n")
 }
