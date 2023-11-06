@@ -38,7 +38,7 @@ Thread until now:
 
 Previous Response: {arg.generated_response}
 
-enum Sentiment {
+Sentiment
 ---
     Positive
     Negative
@@ -59,8 +59,8 @@ JSON:\
 """
 
 __input_replacers = {
-    "{arg.generated_response}",
-    "{arg.thread.thread}"
+    "{arg.thread.thread}",
+    "{arg.generated_response}"
 }
 
 
