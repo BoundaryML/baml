@@ -77,7 +77,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: baml-vscode.vsix
-          path: typescript/vscode-ext/packages/baml-${{ steps.build.outputs.version }}.vsix
+          path: typescript/vscode-ext/packages/vscode/baml-${{ steps.build.outputs.version }}.vsix
 
   pre-release:
     runs-on: ubuntu-latest
@@ -95,7 +95,7 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: baml-vscode.vsix
-          path: typescript/vscode-ext/packages
+          path: typescript/vscode-ext/packages/vscode
 
       - id: hash
         run: |
@@ -160,7 +160,7 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: baml-vscode.vsix
-          path: typescript/vscode-ext/packages
+          path: typescript/vscode-ext/packages/vscode
 
       - id: hash
         run: |
