@@ -72,7 +72,7 @@ importers:
         specifier: 3.0.1
         version: 3.0.1
       mocha:
-        specifier: 10.2.0
+        specifier: ^10.2.0
         version: 10.2.0
       ovsx:
         specifier: 0.8.3
@@ -127,7 +127,7 @@ importers:
         specifier: ^2.1.1
         version: 2.1.1(esbuild@0.19.4)
       mocha:
-        specifier: 10.2.0
+        specifier: ^10.2.0
         version: 10.2.0
       rimraf:
         specifier: ^5.0.5
