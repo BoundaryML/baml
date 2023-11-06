@@ -1,5 +1,5 @@
 client<llm> MyClient {
-  provider openai
+  provider baml-openai-chat
   myExtraProp "hello"
   options {
     max_tokens 100
@@ -9,6 +9,6 @@ client<llm> MyClient {
 // error: Error validating: Unknown field `myExtraProp` in client
 //   -->  /Users/aaronvillalpando/Projects/gloo-lang/engine/baml/baml/tests/validation_files/client/unknown_prop.baml:3
 //    | 
-//  2 |   provider openai
+//  2 |   provider baml-openai-chat
 //  3 |   myExtraProp "hello"
 //    | 

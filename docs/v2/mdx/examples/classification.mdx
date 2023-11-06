@@ -39,9 +39,9 @@ function ClassifyMessage {
 }
 
 enum Category {
-  BOOK_MEETING
-  AVALABILITY_QUERY
-  SET_REMINDER
+BOOK_MEETING
+AVALABILITY_QUERY
+SET_REMINDER
 }
 
 ````
@@ -59,7 +59,7 @@ An LLM variant has three things
 
 ```baml main.baml
 client<llm> GPT35Client {
-    provider openai
+    provider baml-openai-chat
     options {
       model gpt-3.5-turbo
       temperature 0
@@ -126,8 +126,8 @@ enum Category {
 +  )
 
    // This format also works
-   SET_REMINDER 
-+  @alias(k3) 
+   SET_REMINDER
++  @alias(k3)
 +  @description(
 +    When the user wants to set a calendar reminder.
    )
@@ -140,6 +140,7 @@ enum Category {
 +      {#print_enum(Category)}
    "#
 ```
+
 **Resulting prompt**
 
 ```
@@ -149,8 +150,8 @@ k2: When the user is asking for their calendar availability.
 k3: When the user wants to set a calendar reminder.
 ```
 
-
 ### Advanced overrides
+
 You can also override a particular field in your enum for a specific **impl** of your function.
 These overrides will take precedence over the other ones defined in the enum definition.
 
@@ -213,33 +214,37 @@ function ClassifyMessage {
 }
 
 enum Category {
-  BOOK_MEETING @alias(k1) @description(
-    When the user wants to book a meeting on our internal system.
-  )
-  AVALABILITY_QUERY @alias(k2) @description(
-    When the user is asking for their calendar availability.
-  )
+BOOK_MEETING @alias(k1) @description(
+When the user wants to book a meeting on our internal system.
+)
+AVALABILITY_QUERY @alias(k2) @description(
+When the user is asking for their calendar availability.
+)
 
-  // This format also works
-  SET_REMINDER 
-  @alias(k3) 
-  @description(
-    When the user wants to set a calendar reminder.
-  )
+// This format also works
+SET_REMINDER
+@alias(k3)
+@description(
+When the user wants to set a calendar reminder.
+)
 }
 
 impl<llm, ClassifyMessage> V1 {
-   client GPT35Client
-  prompt {
-    Given a message, classify it into one of the following categories:
-+   {#print_enum(Category)}
+client GPT35Client
+prompt {
+Given a message, classify it into one of the following categories:
 
-    Message:
-    ---
-    {#input}
-    ---
+- {#print_enum(Category)}
 
-    Classification:
+  Message:
+
+  ***
+
+  {#input}
+
+  ***
+
+  Classification:
   }
 
 }
@@ -248,7 +253,7 @@ impl<llm, ClassifyMessage> V1 {
 
 ```baml clients.baml
 client<llm> GPT35Client {
-    provider openai
+    provider baml-openai-chat
     options {
       model gpt-3.5-turbo
       temperature 0

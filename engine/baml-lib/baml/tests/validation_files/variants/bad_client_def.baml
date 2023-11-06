@@ -5,7 +5,7 @@ function Foo {
 }
 
 client<llm> MyClient {
-  provider openai
+  provider baml-openai-chat
 }
 
 impl<llm, Foo> V1 {

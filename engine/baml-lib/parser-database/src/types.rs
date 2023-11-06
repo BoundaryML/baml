@@ -295,6 +295,14 @@ fn visit_function<'db>(idx: FunctionId, function: &'db ast::Function, ctx: &mut 
 }
 
 fn visit_client<'db>(idx: ClientId, client: &'db ast::Client, ctx: &mut Context<'db>) {
+    if !client.is_llm() {
+        ctx.push_error(DatamodelError::new_validation_error(
+            "Only LLM clients are supported. Use: client<llm>",
+            client.span().clone(),
+        ));
+        return;
+    }
+
     let mut provider = None;
     let mut retry_policy = None;
     let mut options: Vec<(String, Expression)> = Vec::new();
