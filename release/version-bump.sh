@@ -45,7 +45,7 @@ then
 
   if [ "$CLI" != "none" ]
   then
-    pushd cli
+    pushd engine
     VERSION=$(bumpversion --allow-dirty $CLI --list | grep new_version | cut -d '=' -f 2) || exit 1
     COMMIT_MSG="${COMMIT_MSG} [BUMP:cli:${VERSION}]"
     popd
