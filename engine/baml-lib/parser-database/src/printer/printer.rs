@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
-use log::info;
+
 use pyo3::{
-    types::{IntoPyDict, PyDict, PyFunction, PyTuple},
+    types::{PyDict, PyFunction},
     PyAny, PyErr, PyResult, Python,
 };
 use regex::Regex;

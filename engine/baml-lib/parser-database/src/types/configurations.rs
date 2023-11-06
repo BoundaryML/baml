@@ -21,7 +21,7 @@ pub(crate) fn visit_retry_policy<'db>(
 
     config
         .iter_fields()
-        .for_each(|(idx, f)| match (f.name(), &f.value) {
+        .for_each(|(_idx, f)| match (f.name(), &f.value) {
             (name, None) => {
                 ctx.push_error(DatamodelError::new_config_property_missing_value_error(
                     name,

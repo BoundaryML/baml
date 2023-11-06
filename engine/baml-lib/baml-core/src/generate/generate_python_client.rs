@@ -1,6 +1,5 @@
 use std::{
-    fs::canonicalize,
-    path::{self, PathBuf},
+    path::{PathBuf},
 };
 
 use internal_baml_parser_database::ParserDatabase;

@@ -1,5 +1,5 @@
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning};
-use internal_baml_schema_ast::ast::WithName;
+
 
 use crate::validate::validation_pipeline::context::Context;
 

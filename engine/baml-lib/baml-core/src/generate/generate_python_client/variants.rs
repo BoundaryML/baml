@@ -2,10 +2,10 @@ use std::collections::HashSet;
 
 use either::Either;
 use internal_baml_parser_database::{
-    walkers::{EnumWalker, FunctionWalker, VariantWalker},
+    walkers::{VariantWalker},
     WithStaticRenames,
 };
-use internal_baml_schema_ast::ast::{FunctionId, TopId, WithAttributes, WithName};
+use internal_baml_schema_ast::ast::{WithName};
 
 use log::info;
 use serde_json::json;
@@ -50,7 +50,7 @@ impl<'db> JsonHelper for VariantWalker<'db> {
             "prompt": prompt,
             "client": client.name(),
             "inputs": inputs,
-            "overrides": self.ast_variant().iter_serializers().filter_map(|(k, v)| {
+            "overrides": self.ast_variant().iter_serializers().filter_map(|(_k, v)| {
                 let matches = match self.db.find_type_by_str(v.name()) {
                     Some(Either::Left(cls)) => {
                         cls.static_fields().filter_map(|f| {

@@ -2,7 +2,7 @@ use internal_baml_diagnostics::Diagnostics;
 
 use crate::{
     assert_correct_parser,
-    ast::{Identifier, RefIdentifier, TypeValue},
+    ast::{Identifier, RefIdentifier},
     parser::Rule,
     unreachable_rule,
 };

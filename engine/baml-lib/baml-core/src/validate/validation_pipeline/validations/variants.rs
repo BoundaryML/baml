@@ -1,6 +1,6 @@
-use internal_baml_diagnostics::{DatamodelError, DatamodelWarning};
-use internal_baml_parser_database::WithSerialize;
-use internal_baml_schema_ast::ast::{TopId, WithIdentifier, WithName, WithSpan};
+use internal_baml_diagnostics::{DatamodelError};
+
+use internal_baml_schema_ast::ast::{WithIdentifier, WithName, WithSpan};
 
 use crate::validate::validation_pipeline::context::Context;
 
@@ -15,7 +15,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
             ));
         }
 
-        if let Some(function) = variant.walk_function() {
+        if let Some(_function) = variant.walk_function() {
             // Ensure that every serializer is valid.
             variant.ast_variant().iter_serializers().for_each(|(_, f)| {
                 match ctx.db.find_type(f.identifier()) {

@@ -7,7 +7,7 @@ use crate::{
 
 use internal_baml_schema_ast::ast::{ConfigBlockProperty, WithIdentifier};
 
-use log::info;
+
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use validate_reserved_names::*;
 

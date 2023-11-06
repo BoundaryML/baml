@@ -3,7 +3,7 @@ mod dir_utils;
 use baml_lib::{generate_schema, parse_and_validate_schema, SourceFile};
 use colored::*;
 use log::info;
-use std::path::PathBuf;
+
 
 use crate::{
     builder::dir_utils::{get_src_dir, get_src_files},

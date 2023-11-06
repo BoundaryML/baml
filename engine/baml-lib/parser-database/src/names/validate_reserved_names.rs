@@ -82,7 +82,7 @@ fn validate_name(
             "Namespace imports (using '.') are not yet supported.",
             span.clone(),
         )),
-        ast::Identifier::Primitive(t, span) => Err(DatamodelError::new_name_error(
+        ast::Identifier::Primitive(_t, span) => Err(DatamodelError::new_name_error(
             _type,
             &format!("{} is a primitive type.", idn.name()),
             span.clone(),

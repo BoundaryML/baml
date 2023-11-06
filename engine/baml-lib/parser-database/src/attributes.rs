@@ -2,7 +2,7 @@ use internal_baml_diagnostics::DatamodelError;
 use internal_baml_schema_ast::ast::{
     Class, ClassId, Enum, EnumId, Top, TopId, Variant, VariantConfigId, WithSpan,
 };
-use log::info;
+
 
 mod alias;
 mod description;

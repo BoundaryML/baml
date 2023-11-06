@@ -173,7 +173,7 @@ fn process_print_enum(ctx: &mut Context<'_>, variable: &Variable) -> bool {
     }
 }
 
-fn process_print_type(ctx: &mut Context<'_>, variable: &Variable) -> bool {
+fn process_print_type(_ctx: &mut Context<'_>, _variable: &Variable) -> bool {
     return true;
 }
 

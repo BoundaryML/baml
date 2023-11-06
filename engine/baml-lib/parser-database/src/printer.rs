@@ -1,4 +1,4 @@
-use std::{collections::HashMap, ops::Deref};
+use std::{collections::HashMap};
 
 use internal_baml_diagnostics::DatamodelError;
 use internal_baml_prompt_parser::ast::PrinterBlock;

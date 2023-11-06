@@ -1,6 +1,6 @@
-use std::collections::HashMap;
 
-use internal_baml_diagnostics::{DatamodelError, Span};
+
+use internal_baml_diagnostics::{DatamodelError};
 use internal_baml_prompt_parser::ast::{PrinterBlock, WithSpan};
 use internal_baml_schema_ast::ast::{WithDocumentation, WithName};
 use serde_json::json;
@@ -8,7 +8,7 @@ use serde_json::json;
 use crate::{
     ast,
     printer::{serialize_with_printer, WithSerialize, WithSerializeableContent, WithStaticRenames},
-    types::{StaticStringAttributes, ToStringAttributes},
+    types::{ToStringAttributes},
     walkers::Walker,
 };
 

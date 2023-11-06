@@ -1,4 +1,4 @@
-use std::{fmt::format, path::PathBuf};
+use std::{path::PathBuf};
 
 use crate::{assert_correct_parser, ast::*, unreachable_rule};
 use internal_baml_diagnostics::{DatamodelError, Diagnostics, SourceFile, Span};
@@ -165,7 +165,7 @@ fn handle_print_block(
 ) {
     assert_correct_parser!(current, Rule::print_block);
 
-    let block_span = &diagnostics.span(current.as_span().clone());
+    let _block_span = &diagnostics.span(current.as_span().clone());
     let mut printer_type = None;
     let mut argument = vec![];
     let mut template_span = None;

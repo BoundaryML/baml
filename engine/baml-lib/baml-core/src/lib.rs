@@ -11,7 +11,7 @@ pub use internal_baml_schema_ast::{self, ast};
 use rayon::prelude::*;
 use std::{path::PathBuf, sync::Mutex};
 
-use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Diagnostics, SourceFile, Span};
+use internal_baml_diagnostics::{DatamodelError, Diagnostics, SourceFile, Span};
 
 mod common;
 mod configuration;

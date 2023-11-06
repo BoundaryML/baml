@@ -9,7 +9,7 @@ use internal_baml_parser_database::{
 };
 use std::{
     collections::HashMap,
-    path::{Path, PathBuf},
+    path::{PathBuf},
 };
 
 const LANGUAGE_KEY: &str = "language";

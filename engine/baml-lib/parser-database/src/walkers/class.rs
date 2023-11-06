@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashSet};
 
 use either::Either;
 use internal_baml_diagnostics::DatamodelError;
