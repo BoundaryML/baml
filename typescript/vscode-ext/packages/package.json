@@ -122,7 +122,6 @@
     "@vscode/test-electron": "2.3.5",
     "esbuild": "^0.19.4",
     "is-ci": "3.0.1",
-    "mocha": "^10.2.0",
     "ovsx": "0.8.3",
     "typescript": "5.2.2",
     "@vscode/vsce": "2.21.1"
