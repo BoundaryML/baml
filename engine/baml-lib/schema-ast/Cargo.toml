@@ -7,7 +7,7 @@ description.workspace = true
 license-file.workspace = true
 
 [dependencies]
-internal-baml-diagnostics = { path = "../diagnostics", version = "0.1.1-canary.2" }
+internal-baml-diagnostics = { path = "../diagnostics"}
 log = "0.4.20"
 
 pest = "2.1.3"

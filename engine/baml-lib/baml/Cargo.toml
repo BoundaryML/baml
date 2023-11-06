@@ -8,7 +8,7 @@ description.workspace = true
 license-file.workspace = true
 
 [dependencies]
-internal-baml-core = { path = "../baml-core", version = "0.1.1-canary.0" }
+internal-baml-core = { path = "../baml-core" }
 
 
 [dev-dependencies]
