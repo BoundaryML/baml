@@ -15,9 +15,9 @@ indoc = "2.0.1"
 # 
 [workspace.package]
 version = "0.1.1-canary.5"
-authors = ["Gloo <contact@trygloo.com>"]
+authors = ["Gloo <cntac@trygloo.com>"]
 
-description = "BAiML Toolchain"
+description = "BAML Toolchain"
 license-file = "LICENSE"
 
 [workspace.metadata.workspaces]

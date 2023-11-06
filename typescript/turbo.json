@@ -11,13 +11,12 @@
     },
     "@gloo-ai/baml-schema-wasm#build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**"],
-      "cache": false
+      "inputs": ["../../engine/**/*.rs", "../../engine/**/*.toml"],
+      "outputs": ["dist/**"]
     },
     "@gloo-ai/baml-language-server#build": {
       "dependsOn": ["@gloo-ai/baml-schema-wasm#build"],
-      "outputs": ["dist/**"],
-      "cache": false
+      "outputs": ["out/**"]
     },
     "lint": {},
     "clean": {},

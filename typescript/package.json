@@ -1,8 +1,9 @@
 {
   "private": true,
   "scripts": {
-    "clean": "rm -rf node_modules",
+    "clean": "rimraf -rf node_modules",
     "build": "turbo run build",
+    "cache": "turbo cache list",
     "dev": "turbo run dev",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "generate": "turbo run generate",
@@ -17,7 +18,7 @@
     "prettier": "^2.5.1",
     "rimraf": "^3.0.2",
     "tsx": "^3.7.1",
-    "turbo": "1.2.5"
+    "turbo": "^1.10.16"
   },
   "packageManager": "pnpm@8.6.1"
 }

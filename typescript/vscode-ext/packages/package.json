@@ -107,7 +107,7 @@
     "lint": "eslint \"src/**/*.ts\"",
     "vscode:package": "vsce package --no-dependencies",
     "vscode:publish": "vsce publish --no-dependencies",
-    "clean": "rm baml-*.vsix"
+    "clean": "rimraf baml-*.vsix"
   },
   "dependencies": {
     "env-paths": "2.2.1",
