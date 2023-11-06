@@ -24,16 +24,19 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
-            engine/baml-cli
+            engine/baml-schema-wasm
+      - name: Setup
+        run: rustup target add wasm32-unknown-unknown
+      
+      - name: Bindgen
+        run: cargo update -p wasm-bindgen
+      
+      - name: Install Bindgen
+        run: cargo install -f wasm-bindgen@0.2.87
 
-      - name: Build binary
-        uses: houseabsolute/actions-rust-cross@v0
-        with:
-          command: build
-          target: wasm32-unknown-unknown
-          args: "--locked --release"
-          strip: ${{ github.event_name != 'pull_request' }}
-          working-directory: engine/baml-fmt
+      - name: Install Rust
+        run: cargo build --release --all-features
+        working-directory: engine/baml-schema-wasm
 
       - uses: pnpm/action-setup@v2
         with:
