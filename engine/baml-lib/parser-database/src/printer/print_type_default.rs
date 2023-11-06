@@ -137,22 +137,23 @@ fn print_class(item: &ClassType) -> String {
                 "".to_string()
             };
             let field_value = print_type(&field.type_meta);
-            format!("{}pub {}: {}", comment, field.name, field_value)
+            format!("{}\"{}\": {}", comment, field.name, field_value)
         })
         .collect();
 
     let class_content = as_indented_string(&fields.join(",\n"), 1);
     let optional = item.optional.unwrap_or(false);
-    print_optional(&format!("struct {{\n{}\n}}", class_content), optional)
+    print_optional(&format!("{{\n{}\n}}", class_content), optional)
 }
 
 fn print_list(item: &ListType) -> String {
     let inner_type = print_type(&*item.inner);
-    format!("Vec<{}>", inner_type)
+    let dims_str = (0..item.dims).map(|_| "[]").collect::<String>();
+    format!("{}{}", inner_type, dims_str)
 }
 
 fn print_enum(item: &EnumType) -> String {
-    print_optional(&format!("enum {}", item.name), item.optional)
+    print_optional(&format!("\"{} as string\"", item.name), item.optional)
 }
 
 fn print_union(item: &UnionType) -> String {
