@@ -880,6 +880,7 @@ dependencies = [
  "internal-baml-schema-ast",
  "log",
  "pyo3",
+ "pyo3-build-config 0.20.0 (git+https://github.com/pyo3/pyo3)",
  "regex",
  "rustc-hash",
  "serde",
@@ -1203,7 +1204,7 @@ dependencies = [
  "libc",
  "memoffset",
  "parking_lot",
- "pyo3-build-config",
+ "pyo3-build-config 0.20.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "pyo3-ffi",
  "pyo3-macros",
  "unindent",
@@ -1220,13 +1221,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "pyo3-build-config"
+version = "0.20.0"
+source = "git+https://github.com/pyo3/pyo3#c8fdb806300ff82747f58bcb9ca08abd3da480b4"
+dependencies = [
+ "once_cell",
+ "target-lexicon",
+]
+
+[[package]]
 name = "pyo3-ffi"
 version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "214929900fd25e6604661ed9cf349727c8920d47deff196c4e28165a6ef2a96b"
 dependencies = [
  "libc",
- "pyo3-build-config",
+ "pyo3-build-config 0.20.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

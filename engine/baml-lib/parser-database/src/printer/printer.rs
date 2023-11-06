@@ -1,14 +1,11 @@
 use std::collections::{HashMap, HashSet};
 
-use pyo3::{
-    types::{PyDict, PyFunction},
-    PyAny, PyErr, PyResult, Python,
-};
+use pyo3::{types::PyDict, PyAny, PyErr, PyResult, Python};
 use regex::Regex;
 
 pub(crate) struct Printer<'a> {
-    printer_fn: &'a PyFunction,
-    json_dumps: &'a PyFunction,
+    printer_fn: &'a PyAny,
+    json_dumps: &'a PyAny,
 }
 
 impl Printer<'_> {
@@ -50,8 +47,8 @@ impl Printer<'_> {
                 missing.push(func_name);
             } else {
                 let func = func.unwrap();
-                match func.map(|f| f.downcast::<pyo3::types::PyFunction>()) {
-                    Some(Ok(a)) => {
+                match func.and_then(|a| if a.is_callable() { Some(a) } else { None }) {
+                    Some(a) => {
                         if &func_name == required_funcs.first().unwrap() {
                             first_func = Some(a);
                         }
@@ -67,11 +64,7 @@ impl Printer<'_> {
 
         let sys = py.import("json").map_err(|e| e.to_string())?;
 
-        let json_dumps = sys
-            .getattr("loads")
-            .map_err(|e| e.to_string())?
-            .downcast::<pyo3::types::PyFunction>()
-            .map_err(|e| e.to_string())?;
+        let json_dumps = sys.getattr("loads").map_err(|e| e.to_string())?;
 
         Ok(Printer {
             printer_fn: first_func.unwrap(),
