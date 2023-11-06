@@ -15,7 +15,7 @@ libc = "=0.2.149" # Temporarily pin this to 0.2.149 until 0.2.150 is patched
 
 # 
 [workspace.package]
-version = "0.1.1-canary.3"
+version = "0.1.1-canary.4"
 authors = ["Gloo <contact@trygloo.com>"]
 
 description = "BAiML Toolchain"
