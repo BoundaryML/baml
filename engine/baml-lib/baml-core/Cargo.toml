@@ -4,8 +4,7 @@ name = "internal-baml-core"
 version.workspace = true
 authors.workspace = true
 description.workspace = true
-licence = "Apache-2.0"
-licence-file.workspace = true
+license-file.workspace = true
 
 [dependencies]
 internal-baml-diagnostics = { path = "../diagnostics", version = "0.1.1-canary.2" }
@@ -34,6 +33,3 @@ either = "1.8.1"
 
 [features]
 use-pyo3 = ["internal-baml-parser-database/use-pyo3"]
-
-[target.'cfg(feature = "use-pyo3")'.dependencies]
-internal-baml-parser-database = { path = "../parser-database", version = "0.1.1-canary.2", features = ["use-pyo3"] }

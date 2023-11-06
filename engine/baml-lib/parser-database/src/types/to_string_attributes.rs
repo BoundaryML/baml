@@ -10,6 +10,7 @@ pub enum ToStringAttributes {
 
 #[derive(Debug, Default)]
 pub struct DynamicStringAttributes {
+    #[allow(dead_code)]
     template: Option<StringId>,
 }
 

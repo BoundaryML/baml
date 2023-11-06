@@ -4,8 +4,8 @@ name = "baml-fmt"
 version.workspace = true
 authors.workspace = true
 description.workspace = true
-licence = "Apache-2.0"
-licence-file.workspace = true
+
+license-file.workspace = true
 
 [dependencies]
 colored = "2"
@@ -34,6 +34,3 @@ structopt = "0.3"
 # sigh please don't ask :(
 vendored-openssl = []
 use-pyo3 = ["baml-lib/use-pyo3"]
-
-[target.'cfg(feature = "use-pyo3")'.dependencies]
-baml-lib = { path = "../baml-lib/baml", version = "0.1.1-canary.2", features = ["use-pyo3"] }

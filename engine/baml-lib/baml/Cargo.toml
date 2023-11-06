@@ -4,8 +4,8 @@ name = "baml-lib"
 version.workspace = true
 authors.workspace = true
 description.workspace = true
-licence = "Apache-2.0"
-licence-file.workspace = true
+
+license-file.workspace = true
 
 [dependencies]
 internal-baml-core = { path = "../baml-core", version = "0.1.1-canary.0" }
@@ -19,9 +19,6 @@ expect-test = "1.1.0"
 indoc.workspace = true
 either = "1.8.1"
 strip-ansi-escapes = "0.2.0"
-
-[target.'cfg(feature = "use-pyo3")'.dependencies]
-internal-baml-core = { path = "../baml-core", version = "0.1.1-canary.0", features = ["use-pyo3"] }
 
 [features]
 use-pyo3 = ["internal-baml-core/use-pyo3"]

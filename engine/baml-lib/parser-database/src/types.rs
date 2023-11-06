@@ -8,8 +8,7 @@ use internal_baml_diagnostics::Span;
 use internal_baml_prompt_parser::ast::{PrinterBlock, Variable};
 use internal_baml_schema_ast::ast::{
     self, ClassId, ClientId, ConfigurationId, EnumId, EnumValueId, Expression, FieldId, FunctionId,
-    SerializerFieldId, VariantConfigId, VariantSerializerId, WithIdentifier, WithName,
-    WithSpan,
+    SerializerFieldId, VariantConfigId, VariantSerializerId, WithIdentifier, WithName, WithSpan,
 };
 
 mod configurations;
@@ -193,6 +192,7 @@ impl Types {
         }
     }
 
+    #[allow(dead_code)]
     pub(super) fn refine_serializer_field(
         &self,
         (variant_id, serializer_id, value_id): (

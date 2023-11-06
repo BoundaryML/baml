@@ -4,8 +4,8 @@ name = "baml"
 version.workspace = true
 authors.workspace = true
 description.workspace = true
-licence = "Apache-2.0"
-licence-file.workspace = true
+
+license-file.workspace = true
 
 [dependencies]
 baml-lib = { path = "../baml-lib/baml", version = "0.1.1-canary.2", features = ["use-pyo3"]}

@@ -50,6 +50,7 @@ pub struct FeatureMap {
     active: PreviewFeatures,
 
     /// Deprecated features.
+    #[allow(dead_code)]
     deprecated: PreviewFeatures,
 
     /// Hidden preview features are valid features, but are not propagated into the tooling
@@ -66,10 +67,12 @@ impl FeatureMap {
         self.hidden
     }
 
+    #[allow(dead_code)]
     pub(crate) fn is_valid(&self, flag: PreviewFeature) -> bool {
         (self.active | self.hidden).contains(flag)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn is_deprecated(&self, flag: PreviewFeature) -> bool {
         self.deprecated.contains(flag)
     }

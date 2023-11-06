@@ -1,4 +1,4 @@
-use std::{path::PathBuf};
+use std::path::PathBuf;
 
 use crate::{assert_correct_parser, ast::*, unreachable_rule};
 use internal_baml_diagnostics::{DatamodelError, Diagnostics, SourceFile, Span};
@@ -19,15 +19,6 @@ fn pretty_print<'a>(pair: pest::iterators::Pair<'a, Rule>, indent_level: usize) 
     for innerpair in pair.into_inner() {
         pretty_print(innerpair, indent_level + 1);
     }
-}
-
-fn max_leading_whitespace_to_remove(input: &str) -> usize {
-    input
-        .lines()
-        .filter(|line| !line.trim().is_empty()) // Filter out empty lines
-        .map(|line| line.chars().take_while(|c| c.is_whitespace()).count()) // Count leading whitespaces for each line
-        .min()
-        .unwrap_or(0) // Return the minimum count or 0 if there are no lines
 }
 
 pub fn parse_prompt(
@@ -304,18 +295,6 @@ fn handle_comment_block(
     }));
 }
 
-fn handle_empty_lines(
-    pair: pest::iterators::Pair<'_, Rule>,
-    top_level_definitions: &mut Vec<Top>,
-    diagnostics: &Diagnostics,
-) {
-    // handle empty lines
-    top_level_definitions.push(Top::WhiteSpace(
-        pair.as_str().to_string(),
-        diagnostics.span(pair.as_span().clone()),
-    ));
-}
-
 fn handle_prompt_text(
     pair: pest::iterators::Pair<'_, Rule>,
     top_level_definitions: &mut Vec<Top>,
@@ -369,6 +348,7 @@ fn handle_whitespace(
     ));
 }
 
+#[allow(dead_code)]
 fn get_expected_from_error(positives: &[Rule]) -> String {
     use std::fmt::Write as _;
     let mut out = String::with_capacity(positives.len() * 6);

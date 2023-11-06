@@ -7,6 +7,7 @@ use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Diagnostics};
 /// for the duration of validations.
 pub(crate) struct Context<'a> {
     pub(super) db: &'a internal_baml_parser_database::ParserDatabase,
+    #[allow(dead_code)]
     pub(super) preview_features: BitFlags<PreviewFeature>,
     pub(super) diagnostics: &'a mut Diagnostics,
 }

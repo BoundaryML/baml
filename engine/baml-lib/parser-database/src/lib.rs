@@ -40,7 +40,6 @@ use std::collections::{HashMap, HashSet};
 
 pub use coerce_expression::{coerce, coerce_array, coerce_opt};
 use either::Either;
-use internal_baml_prompt_parser::ast::WithSpan as WithPromptSpan;
 pub use internal_baml_schema_ast::ast;
 use internal_baml_schema_ast::ast::{SchemaAst, WithName, WithSpan};
 pub use printer::WithStaticRenames;

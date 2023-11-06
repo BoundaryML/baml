@@ -16,9 +16,9 @@ indoc = "2.0.1"
 [workspace.package]
 version = "0.1.1-canary.2"
 authors = ["Gloo <contact@trygloo.com>"]
-license = "Apache-2.0"
+
 description = "BAiML Toolchain"
-licence-file = "LICENSE"
+license-file = "LICENSE"
 
 [workspace.metadata.workspaces]
 allow_branch = "canary"

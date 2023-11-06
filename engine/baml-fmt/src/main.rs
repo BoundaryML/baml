@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 mod lint;
 
 use std::{
@@ -7,6 +9,7 @@ use std::{
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt, Clone)]
+#[allow(dead_code)]
 pub struct FormatOpts {
     /// Specifies the input file to use. If none is given, the input is read
     /// from STDIN

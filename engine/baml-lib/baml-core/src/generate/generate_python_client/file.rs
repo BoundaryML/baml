@@ -203,6 +203,7 @@ impl File {
         }
     }
 
+    #[allow(dead_code)]
     pub(super) fn add_empty_indent(&mut self, indent: usize) {
         const TAB_SIZE: usize = 4;
         const TAB: &str = "                                                                  ";

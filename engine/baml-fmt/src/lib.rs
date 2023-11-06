@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 // mod actions;
 // mod code_actions;
 // mod get_config;
