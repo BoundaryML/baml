@@ -57,8 +57,8 @@ importers:
         specifier: 10.0.3
         version: 10.0.3
       '@types/vscode':
-        specifier: 1.56.0
-        version: 1.56.0
+        specifier: 1.63.0
+        version: 1.63.0
       '@vscode/test-electron':
         specifier: 2.3.5
         version: 2.3.5
@@ -161,8 +161,8 @@ importers:
         specifier: 10.0.3
         version: 10.0.3
       '@types/vscode':
-        specifier: 1.56.0
-        version: 1.56.0
+        specifier: 1.63.0
+        version: 1.63.0
       '@vscode/test-electron':
         specifier: 2.3.5
         version: 2.3.5
@@ -1030,8 +1030,8 @@ packages:
     resolution: {integrity: sha512-MMzuxN3GdFwskAnb6fz0orFvhfqi752yjaXylr0Rp4oDg5H0Zn1IuyRhDVvYOwAXoJirx2xuS16I3WjxnAIHiQ==}
     dev: true
 
-  /@types/vscode@1.56.0:
-    resolution: {integrity: sha512-Q5VmQxOx+L1Y6lIJiGcJzwcyV3pQo/eiW8P+7sNLhFI16tJCwtua2DLjHRcpjbCLNVYpQM73kzfFo1Z0HyP9eQ==}
+  /@types/vscode@1.63.0:
+    resolution: {integrity: sha512-iePu1axOi5WSThV6l2TYcciBIpAlMarjBC8H0y8L8ocsZLxh7MttzwFU3pjoItF5fRVGxHS0Hsvje9jO3yJsfw==}
     dev: true
 
   /@typescript-eslint/eslint-plugin@5.59.6(@typescript-eslint/parser@5.59.6)(eslint@8.40.0)(typescript@5.2.2):
