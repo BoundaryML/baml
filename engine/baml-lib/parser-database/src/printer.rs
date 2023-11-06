@@ -4,6 +4,9 @@ use internal_baml_diagnostics::DatamodelError;
 use internal_baml_prompt_parser::ast::PrinterBlock;
 use internal_baml_schema_ast::ast::WithName;
 
+mod print_enum_default;
+mod print_type_default;
+
 #[cfg(feature = "use-pyo3")]
 use pyo3::Python;
 #[cfg(feature = "use-pyo3")]
@@ -136,9 +139,16 @@ pub fn serialize_with_printer(
 
 #[cfg(not(feature = "use-pyo3"))]
 pub fn serialize_with_printer(
-    _is_enum: bool,
-    _template: Option<String>,
-    _json: serde_json::Value,
+    is_enum: bool,
+    template: Option<String>,
+    json: serde_json::Value,
 ) -> Result<String, String> {
-    Ok("PLACEHOLDER FOR WASM".to_string())
+    if template.is_some() {
+        return Err("printer keyword is not yet supported".to_string());
+    }
+    if is_enum {
+        Ok(print_enum_default::print_enum(json))
+    } else {
+        Ok(print_type_default::print_entry(json))
+    }
 }

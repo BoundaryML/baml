@@ -27,10 +27,7 @@ regex = "1.10.2"
 [dependencies.pyo3]
 version = "0.20.0"
 optional = true
-features = ["auto-initialize", "abi3-py38", "generate-import-lib"]
-
-[build-dependencies]
-pyo3-build-config = { git = "https://github.com/pyo3/pyo3", features = ["resolve-config", "abi3-py38"] }
+features = []
 
 
 [features]

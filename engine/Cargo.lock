@@ -880,7 +880,6 @@ dependencies = [
  "internal-baml-schema-ast",
  "log",
  "pyo3",
- "pyo3-build-config 0.20.0 (git+https://github.com/pyo3/pyo3)",
  "regex",
  "rustc-hash",
  "serde",
@@ -1204,7 +1203,7 @@ dependencies = [
  "libc",
  "memoffset",
  "parking_lot",
- "pyo3-build-config 0.20.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pyo3-build-config",
  "pyo3-ffi",
  "pyo3-macros",
  "unindent",
@@ -1217,16 +1216,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a96fe70b176a89cff78f2fa7b3c930081e163d5379b4dcdf993e3ae29ca662e5"
 dependencies = [
  "once_cell",
- "python3-dll-a",
- "target-lexicon",
-]
-
-[[package]]
-name = "pyo3-build-config"
-version = "0.20.0"
-source = "git+https://github.com/pyo3/pyo3#c8fdb806300ff82747f58bcb9ca08abd3da480b4"
-dependencies = [
- "once_cell",
  "target-lexicon",
 ]
 
@@ -1237,7 +1226,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "214929900fd25e6604661ed9cf349727c8920d47deff196c4e28165a6ef2a96b"
 dependencies = [
  "libc",
- "pyo3-build-config 0.20.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pyo3-build-config",
 ]
 
 [[package]]
@@ -1262,15 +1251,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.39",
-]
-
-[[package]]
-name = "python3-dll-a"
-version = "0.2.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5f07cd4412be8fa09a721d40007c483981bbe072cd6a21f2e83e04ec8f8343f"
-dependencies = [
- "cc",
 ]
 
 [[package]]
