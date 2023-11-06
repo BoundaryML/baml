@@ -2,8 +2,8 @@ name: Python Client
 
 on:
   pull_request:
-    # paths:
-    #   - "clients/python/**"
+    paths:
+      - "clients/python/**"
     branches:
       - canary
   push:
