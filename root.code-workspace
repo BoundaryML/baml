@@ -4,10 +4,6 @@
       "path": "engine"
     },
     {
-      "name": "Rust CLI",
-      "path": "cli"
-    },
-    {
       "name": "typescript",
       "path": "typescript"
     },
