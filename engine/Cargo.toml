@@ -14,7 +14,7 @@ indoc = "2.0.1"
 
 # 
 [workspace.package]
-version = "0.1.1-canary.4"
+version = "0.1.1-canary.5"
 authors = ["Gloo <contact@trygloo.com>"]
 
 description = "BAiML Toolchain"
