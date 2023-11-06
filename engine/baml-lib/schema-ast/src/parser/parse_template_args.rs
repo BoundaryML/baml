@@ -4,7 +4,6 @@ use super::{
 };
 use crate::{assert_correct_parser, ast::*, parser::parse_expression::parse_expression};
 
-
 pub(crate) fn parse_template_args(
     token: Pair<'_>,
     diagnostics: &mut internal_baml_diagnostics::Diagnostics,

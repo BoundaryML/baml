@@ -8,7 +8,6 @@ use super::{
 use crate::{assert_correct_parser, ast::*, parser::parse_types::parse_field_type};
 use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
-
 pub(crate) fn parse_function(
     pair: Pair<'_>,
     doc_comment: Option<Pair<'_>>,

@@ -1,6 +1,6 @@
 use super::{
-    Attribute, Comment, ConfigBlockProperty, Identifier, Span, WithDocumentation,
-    WithIdentifier, WithSpan,
+    Attribute, Comment, ConfigBlockProperty, Identifier, Span, WithDocumentation, WithIdentifier,
+    WithSpan,
 };
 
 /// An opaque identifier for a field in an AST model. Use the

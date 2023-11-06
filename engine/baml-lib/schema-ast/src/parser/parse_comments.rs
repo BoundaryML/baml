@@ -18,7 +18,9 @@ pub(crate) fn parse_comment_block(token: Pair<'_>) -> Option<Comment> {
     if lines.is_empty() {
         None
     } else {
-        Some(Comment { text: lines.join("\n") })
+        Some(Comment {
+            text: lines.join("\n"),
+        })
     }
 }
 
@@ -36,7 +38,9 @@ pub(crate) fn parse_trailing_comment(pair: Pair<'_>) -> Option<Comment> {
     if lines.is_empty() {
         None
     } else {
-        Some(Comment { text: lines.join("\n") })
+        Some(Comment {
+            text: lines.join("\n"),
+        })
     }
 }
 

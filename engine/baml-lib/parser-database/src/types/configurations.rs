@@ -5,7 +5,7 @@ use internal_baml_schema_ast::ast::{
 
 use crate::{coerce, coerce_expression::coerce_map, context::Context};
 
-use super::{ContantDelayStrategy, ExponentialBackoffStrategy, RetryPolicyStrategy, RetryPolicy};
+use super::{ContantDelayStrategy, ExponentialBackoffStrategy, RetryPolicy, RetryPolicyStrategy};
 
 pub(crate) fn visit_retry_policy<'db>(
     idx: ConfigurationId,
@@ -15,9 +15,7 @@ pub(crate) fn visit_retry_policy<'db>(
     let mut max_reties = None;
 
     let mut strategy = Some(RetryPolicyStrategy::ConstantDelay(
-        super::ContantDelayStrategy {
-            delay_ms: 200,
-        },
+        super::ContantDelayStrategy { delay_ms: 200 },
     ));
     let mut options = None;
 
@@ -41,14 +39,18 @@ pub(crate) fn visit_retry_policy<'db>(
                     Some(val) => match visit_strategy(f.span(), val, ctx.diagnostics) {
                         Some(val) => strategy = Some(val),
                         None => {}
-                    }
+                    },
                     None => {}
                 }
             }
             ("options", Some(val)) => {
                 match coerce_map(val, &coerce::string_with_span, ctx.diagnostics) {
                     Some(val) => {
-                      options = Some(val.iter().map(|(k, v)| ((k.0.to_string(), k.1.clone()), (*v).clone())).collect::<Vec<_>>());
+                        options = Some(
+                            val.iter()
+                                .map(|(k, v)| ((k.0.to_string(), k.1.clone()), (*v).clone()))
+                                .collect::<Vec<_>>(),
+                        );
                     }
                     None => {}
                 }
@@ -60,25 +62,26 @@ pub(crate) fn visit_retry_policy<'db>(
         });
     match (max_reties, strategy) {
         (Some(max_retries), Some(strategy)) => {
-            ctx.types
-                .retry_policies
-                .insert(idx, RetryPolicy { max_retries, strategy, options } );
+            ctx.types.retry_policies.insert(
+                idx,
+                RetryPolicy {
+                    max_retries,
+                    strategy,
+                    options,
+                },
+            );
         }
         (Some(_), None) => {
             unreachable!("max_retries is set but strategy is not");
         }
-        (None, Some(_)) => {
-          ctx.push_error(DatamodelError::new_validation_error(
+        (None, Some(_)) => ctx.push_error(DatamodelError::new_validation_error(
             "Missing `max_reties` property",
             config.identifier().span().clone(),
-          ))
-        }
-        (None, None) => {
-          ctx.push_error(DatamodelError::new_validation_error(
+        )),
+        (None, None) => ctx.push_error(DatamodelError::new_validation_error(
             "Missing `strategy` property",
             config.identifier().span().clone(),
-          ))
-        }
+        )),
     }
 }
 
@@ -128,9 +131,8 @@ fn visit_strategy(
 
     match r#type {
         Some(("constant_delay", _)) => {
-        
             match multiplier {
-              Some((_, span)) => 
+              Some((_, span)) =>
                 diagnostics.push_error(
                     internal_baml_diagnostics::DatamodelError::new_validation_error(
                         "The `multiplier` option is not supported for the `constant_delay` strategy",
@@ -140,7 +142,7 @@ fn visit_strategy(
                 None => {}
             }
             match max_delay_ms {
-                Some((_, span)) => 
+                Some((_, span)) =>
                   diagnostics.push_error(
                       internal_baml_diagnostics::DatamodelError::new_validation_error(
                           "The `max_delay_ms` option is not supported for the `constant_delay` strategy",

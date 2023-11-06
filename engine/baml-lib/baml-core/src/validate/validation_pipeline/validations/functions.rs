@@ -1,7 +1,5 @@
 use crate::validate::validation_pipeline::context::Context;
 
-
-
 use super::common::validate_type_exists;
 
 pub(super) fn validate(ctx: &mut Context<'_>) {

@@ -35,9 +35,7 @@ macro_rules! features {
 }
 
 // (Usually) Append-only list of features.
-features!(
-    ScalarJson,
-);
+features!(ScalarJson,);
 
 /// Generator preview features
 pub const ALL_PREVIEW_FEATURES: FeatureMap = FeatureMap {

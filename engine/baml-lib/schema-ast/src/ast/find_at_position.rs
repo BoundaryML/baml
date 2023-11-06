@@ -5,7 +5,9 @@ impl ast::SchemaAst {
     pub fn find_at_position(&self, position: usize) -> SchemaPosition<'_> {
         self.find_top_at_position(position)
             .map(|top_id| match top_id {
-                ast::TopId::Enum(enum_id) => SchemaPosition::Enum(enum_id, EnumPosition::new(&self[enum_id], position)),
+                ast::TopId::Enum(enum_id) => {
+                    SchemaPosition::Enum(enum_id, EnumPosition::new(&self[enum_id], position))
+                }
                 // Falling back to TopLevel as "not implemented"
                 _ => SchemaPosition::TopLevel,
             })
@@ -29,7 +31,9 @@ impl ast::SchemaAst {
             }
         });
 
-        top_idx.map(|idx| top_idx_to_top_id(idx, &self.tops[idx])).ok()
+        top_idx
+            .map(|idx| top_idx_to_top_id(idx, &self.tops[idx]))
+            .ok()
     }
 }
 
@@ -41,7 +45,6 @@ pub enum SchemaPosition<'ast> {
     /// In an enum
     Enum(ast::EnumId, EnumPosition<'ast>),
 }
-
 
 /// A cursor position in a context.
 #[derive(Debug)]
