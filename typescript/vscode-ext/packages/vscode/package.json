@@ -8,7 +8,7 @@
   "homepage": "https://trygloo.com",
   "icon": "baml-logo.png",
   "engines": {
-    "vscode": "^1.56.0"
+    "vscode": "^1.63.0"
   },
   "categories": [
     "Other"
@@ -38,7 +38,7 @@
   "devDependencies": {
     "@types/glob": "8.1.0",
     "@types/mocha": "10.0.3",
-    "@types/vscode": "1.56.0",
+    "@types/vscode": "1.63.0",
     "@vscode/test-electron": "2.3.5",
     "@vscode/vsce": "2.21.1",
     "esbuild": "^0.19.4",
