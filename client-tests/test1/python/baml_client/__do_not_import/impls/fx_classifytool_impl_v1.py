@@ -35,10 +35,9 @@ UserContext:
 
 Tool
 ---
-CodeInterpreter
-DrawImage
-GenerateText
-
+k1: Use this tool if the user is asking to compute something
+k2: Use this tool if the user is asking to draw something
+k3: Use this if the tool is just asking for a simple answer
 
 Use this output format:
 {
@@ -50,15 +49,15 @@ JSON:\
 """
 
 __input_replacers = {
-    "{arg.query}",
-    "{arg.context}"
+    "{arg.context}",
+    "{arg.query}"
 }
 
 
 # We ignore the type here because baml does some type magic to make this work
 # for inline SpecialForms like Optional, Union, List.
 __deserializer = Deserializer[ClassifyResponse](ClassifyResponse)  # type: ignore
-__deserializer.overload("ImprovedResponse", {"ShouldImprove": "should_improve"})
+__deserializer.overload("Tool", {"k1": "CodeInterpreter", "k2": "DrawImage", "k3": "GenerateText"})
 
 @BAMLClassifyTool.register_impl("v1")
 async def v1(arg: UserInfo, /) -> ClassifyResponse:

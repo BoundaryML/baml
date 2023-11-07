@@ -42,7 +42,7 @@ async def call_topic_router():
 
 @trace
 async def main():
-    await asyncio.gather(call_topic_router())
+    await call_topic_router()
 
 
 if __name__ == "__main__":

@@ -10,8 +10,16 @@ class ClassifyResponse {
 
 enum Tool {
   CodeInterpreter
+  @alias(k1) 
+  @description(Use this tool if the user is asking to compute something)
+
   DrawImage
-  GenerateText
+  @alias(k2) 
+  @description(Use this tool if the user is asking to draw something)
+
+  GenerateText 
+  @alias(k3) 
+  @description(Use this if the tool is just asking for a simple answer)
 }
 
 class UserInfo {
@@ -21,14 +29,22 @@ class UserInfo {
 
 impl<llm, ClassifyTool> v1 {
     client AZURE_GPT4
- 
-    override ImprovedResponse {
-        should_improve @alias("ShouldImprove")
-        @description(false if the response is already contextual and pleasant)
-        @meta(fooz, "foo, bar, baz")
 
-        improved_response @description(string if should_improve else null)
+
+    override Tool {
+        CodeInterpreter
+        @alias(k1) 
+        @description(Use this tool if the user is asking to compute something)
+
+        DrawImage
+        @alias(k2) 
+        @description(Use this tool if the user is asking to draw something)
+
+        GenerateText 
+        @alias(k3) 
+        @description(Use this if the tool is just asking for a simple answer)
     }
+
 
     prompt #"
         Given a conversation with a user, classify the user's intent and generate a response.
@@ -40,7 +56,6 @@ impl<llm, ClassifyTool> v1 {
         {#input.context}
 
         {#print_enum(Tool)}
-
 
         Use this output format:
         {#print_type(output)}
