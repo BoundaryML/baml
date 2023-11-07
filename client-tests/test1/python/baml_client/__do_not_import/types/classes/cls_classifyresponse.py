@@ -11,12 +11,12 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
+from ..enums.enm_tool import Tool
 from baml_lib._impl.deserializer import register_deserializer
-from enum import Enum
+from pydantic import BaseModel
 
 
 @register_deserializer({  })
-class Sentiment(str, Enum):
-    Positive = "Positive"
-    Negative = "Negative"
-    Neutral = "Neutral"
+class ClassifyResponse(BaseModel):
+    tool: Tool
+    assistant_response: str

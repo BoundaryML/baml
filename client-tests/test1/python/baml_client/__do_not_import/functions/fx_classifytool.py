@@ -11,39 +11,39 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..types.classes.cls_conversation import Conversation
-from ..types.classes.cls_message import Message
-from ..types.classes.cls_proposedmessage import ProposedMessage
+from ..types.classes.cls_classifyresponse import ClassifyResponse
+from ..types.classes.cls_userinfo import UserInfo
+from ..types.enums.enm_tool import Tool
 from baml_lib._impl.functions import BaseBAMLFunction
 from typing import Protocol, runtime_checkable
 
 
-ITextPolisherOutput = str
+IClassifyToolOutput = ClassifyResponse
 
 @runtime_checkable
-class ITextPolisher(Protocol):
+class IClassifyTool(Protocol):
     """
     This is the interface for a function.
 
     Args:
-        arg: ProposedMessage
+        arg: UserInfo
 
     Returns:
-        str
+        ClassifyResponse
     """
 
-    async def __call__(self, arg: ProposedMessage, /) -> str:
+    async def __call__(self, arg: UserInfo, /) -> ClassifyResponse:
         ...
 
 
-class IBAMLTextPolisher(BaseBAMLFunction[str]):
+class IBAMLClassifyTool(BaseBAMLFunction[ClassifyResponse]):
     def __init__(self) -> None:
         super().__init__(
-            "TextPolisher",
-            ITextPolisher,
-            [],
+            "ClassifyTool",
+            IClassifyTool,
+            ["v1"],
         )
 
-BAMLTextPolisher = IBAMLTextPolisher()
+BAMLClassifyTool = IBAMLClassifyTool()
 
-__all__ = [ "BAMLTextPolisher" ]
+__all__ = [ "BAMLClassifyTool" ]

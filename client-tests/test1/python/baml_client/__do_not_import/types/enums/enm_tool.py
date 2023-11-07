@@ -16,7 +16,7 @@ from enum import Enum
 
 
 @register_deserializer({  })
-class Sentiment(str, Enum):
-    Positive = "Positive"
-    Negative = "Negative"
-    Neutral = "Neutral"
+class Tool(str, Enum):
+    CodeInterpreter = "CodeInterpreter"
+    DrawImage = "DrawImage"
+    GenerateText = "GenerateText"

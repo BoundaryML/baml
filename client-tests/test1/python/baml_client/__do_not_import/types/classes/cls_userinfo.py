@@ -12,11 +12,10 @@
 # fmt: off
 
 from baml_lib._impl.deserializer import register_deserializer
-from enum import Enum
+from pydantic import BaseModel
 
 
 @register_deserializer({  })
-class Sentiment(str, Enum):
-    Positive = "Positive"
-    Negative = "Negative"
-    Neutral = "Neutral"
+class UserInfo(BaseModel):
+    query: str
+    context: str

@@ -1,7 +1,7 @@
 import typing
 
 
-class DeserializerException(BaseException):
+class DeserializerException(Exception):
     def __init__(
         self, errors: typing.List["DeserializerError"], raw_string: str
     ) -> None:
