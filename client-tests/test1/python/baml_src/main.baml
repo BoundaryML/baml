@@ -13,6 +13,6 @@ class Message {
 } 
 
 class Conversation {
-    thread Message[]
+    thread Message
 }
   

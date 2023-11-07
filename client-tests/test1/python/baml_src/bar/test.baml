@@ -46,7 +46,7 @@ impl<llm, MaybePolishText> v1 {
         Do not use {// affirmative //} or negative unless the question is a yes or no question.
 
         Thread until now:
-        {#input.thread.thread}
+        {#input.thread}
 
         Previous Response: {#input.generated_response}
 

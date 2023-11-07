@@ -11,12 +11,9 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..types.classes.cls_conversation import Conversation
-from ..types.classes.cls_improvedresponse import ImprovedResponse
-from ..types.classes.cls_message import Message
-from ..types.classes.cls_proposedmessage import ProposedMessage
-from ..types.enums.enm_messagesender import MessageSender
-from ..types.enums.enm_sentiment import Sentiment
+from ..types.classes.cls_classifyresponse import ClassifyResponse
+from ..types.classes.cls_userinfo import UserInfo
+from ..types.enums.enm_tool import Tool
 from typing import Protocol, runtime_checkable
 
 
@@ -30,42 +27,42 @@ T = typing.TypeVar("T", bound=typing.Callable[..., typing.Any])
 CLS = typing.TypeVar("CLS", bound=type)
 
 
-IMaybePolishTextOutput = ImprovedResponse
+IClassifyToolOutput = ClassifyResponse
 
 @runtime_checkable
-class IMaybePolishText(Protocol):
+class IClassifyTool(Protocol):
     """
     This is the interface for a function.
 
     Args:
-        arg: ProposedMessage
+        arg: UserInfo
 
     Returns:
-        ImprovedResponse
+        ClassifyResponse
     """
 
-    async def __call__(self, arg: ProposedMessage, /) -> ImprovedResponse:
+    async def __call__(self, arg: UserInfo, /) -> ClassifyResponse:
         ...
 
 
-class BAMLMaybePolishTextImpl:
-    async def run(self, arg: ProposedMessage, /) -> ImprovedResponse:
+class BAMLClassifyToolImpl:
+    async def run(self, arg: UserInfo, /) -> ClassifyResponse:
         ...
 
-class IBAMLMaybePolishText:
+class IBAMLClassifyTool:
     def register_impl(
         self, name: ImplName
-    ) -> typing.Callable[[IMaybePolishText], IMaybePolishText]:
+    ) -> typing.Callable[[IClassifyTool], IClassifyTool]:
         ...
 
-    def get_impl(self, name: ImplName) -> BAMLMaybePolishTextImpl:
+    def get_impl(self, name: ImplName) -> BAMLClassifyToolImpl:
         ...
 
     @typing.overload
     def test(self, test_function: T) -> T:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the MaybePolishTextInterface.
+        the ClassifyToolInterface.
 
         Args:
             test_function : T
@@ -75,9 +72,9 @@ class IBAMLMaybePolishText:
             ```python
             # All implementations will be tested.
 
-            @baml.MaybePolishText.test
-            def test_logic(MaybePolishTextImpl: IMaybePolishText) -> None:
-                result = await MaybePolishTextImpl(...)
+            @baml.ClassifyTool.test
+            def test_logic(ClassifyToolImpl: IClassifyTool) -> None:
+                result = await ClassifyToolImpl(...)
             ```
         """
         ...
@@ -86,7 +83,7 @@ class IBAMLMaybePolishText:
     def test(self, *, exclude_impl: typing.Iterable[ImplName]) -> pytest.MarkDecorator:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the MaybePolishTextInterface.
+        the ClassifyToolInterface.
 
         Args:
             exclude_impl : Iterable[ImplName]
@@ -96,9 +93,9 @@ class IBAMLMaybePolishText:
             ```python
             # All implementations except "v1" will be tested.
 
-            @baml.MaybePolishText.test(exclude_impl=["v1"])
-            def test_logic(MaybePolishTextImpl: IMaybePolishText) -> None:
-                result = await MaybePolishTextImpl(...)
+            @baml.ClassifyTool.test(exclude_impl=["v1"])
+            def test_logic(ClassifyToolImpl: IClassifyTool) -> None:
+                result = await ClassifyToolImpl(...)
             ```
         """
         ...
@@ -107,7 +104,7 @@ class IBAMLMaybePolishText:
     def test(self, test_class: typing.Type[CLS]) -> typing.Type[CLS]:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the MaybePolishTextInterface.
+        the ClassifyToolInterface.
 
         Args:
             test_class : Type[CLS]
@@ -117,14 +114,14 @@ class IBAMLMaybePolishText:
         ```python
         # All implementations will be tested in every test method.
 
-        @baml.MaybePolishText.test
+        @baml.ClassifyTool.test
         class TestClass:
-            def test_a(self, MaybePolishTextImpl: IMaybePolishText) -> None:
+            def test_a(self, ClassifyToolImpl: IClassifyTool) -> None:
                 ...
-            def test_b(self, MaybePolishTextImpl: IMaybePolishText) -> None:
+            def test_b(self, ClassifyToolImpl: IClassifyTool) -> None:
                 ...
         ```
         """
         ...
 
-BAMLMaybePolishText: IBAMLMaybePolishText
+BAMLClassifyTool: IBAMLClassifyTool
