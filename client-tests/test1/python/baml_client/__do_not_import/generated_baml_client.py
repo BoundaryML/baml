@@ -23,6 +23,7 @@ from .functions.fx_messagesimplifier import BAMLMessageSimplifier
 from .functions.fx_textpolisher import BAMLTextPolisher
 
 
+from baml_lib import baml_init 
 class BAMLClient:
     Blah = BAMLBlah
     ClassifyTool = BAMLClassifyTool
@@ -34,5 +35,8 @@ class BAMLClient:
     AZURE_YES_NO = AZURE_YES_NO
     LARGE_RESPONSE = LARGE_RESPONSE
     ResilientGPT4 = ResilientGPT4
+
+    def __init__(self):
+        baml_init()
 
 baml = BAMLClient()

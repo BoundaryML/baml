@@ -43,7 +43,7 @@ class AnthropicLLMClient(LLMClient):
         # Try some well known keys
         return typing.cast(str, self.kwargs["model"])
 
-    def _exception_to_code(self, e: BaseException) -> int | None:
+    def _exception_to_code(self, e: Exception) -> int | None:
         if isinstance(e, anthropic.APIStatusError):
             return e.status_code
         return None

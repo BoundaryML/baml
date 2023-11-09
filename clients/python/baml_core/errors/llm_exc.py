@@ -17,7 +17,7 @@ TerminalErrorCode = (
 )
 
 
-class LLMException(BaseException):
+class LLMException(Exception):
     code: int
     message: str
 

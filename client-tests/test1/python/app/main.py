@@ -20,7 +20,7 @@ async def test_azure_default():
             {"role": "user", "content": "I need a lawnmower"},
         ]
     )
-    # await baml.Blah.get_impl("v1").run("blah")
+    await baml.Blah.get_impl("v1").run("blah")
     return response
 
 
@@ -48,5 +48,7 @@ async def main():
 
 
 if __name__ == "__main__":
-    baml_init()
+    baml_init(
+        base_url="https://beta.app.trygloo.com/api",
+    )
     asyncio.run(test_azure_default())

@@ -30,7 +30,7 @@ class LLMResponse(BaseModel):
 
 class BaseProvider(abc.ABC):
     def __to_error_code(
-        self, e: BaseException
+        self, e: Exception
     ) -> typing.Optional[typing.Union[ProviderErrorCode, int]]:
         if isinstance(e, LLMException):
             return e.code
@@ -46,11 +46,11 @@ class BaseProvider(abc.ABC):
 
     @abc.abstractmethod
     def _to_error_code(
-        self, e: BaseException
+        self, e: Exception
     ) -> typing.Optional[typing.Union[ProviderErrorCode, int]]:
         raise NotImplementedError
 
-    def _raise_error(self, e: BaseException) -> typing.NoReturn:
+    def _raise_error(self, e: Exception) -> typing.NoReturn:
         formatted_traceback = "".join(
             traceback.format_exception(type(e), e, e.__traceback__)
         )
@@ -274,7 +274,7 @@ class LLMProvider(AbstractLLMProvider):
         prompt = _update_template_with_vars(template=template, updates=updates)
         try:
             return await self.__run(prompt)
-        except BaseException as e:
+        except Exception as e:
             self._raise_error(e)
 
     @typing.final
@@ -303,7 +303,7 @@ class LLMProvider(AbstractLLMProvider):
 
         try:
             return await self.__run(prompt)
-        except BaseException as e:
+        except Exception as e:
             self._raise_error(e)
 
     @typing.final
@@ -394,7 +394,7 @@ class LLMChatProvider(AbstractLLMProvider):
 
         try:
             return await self.__run_chat(messages)
-        except BaseException as e:
+        except Exception as e:
             self._raise_error(e)
 
     @typechecked
@@ -415,7 +415,7 @@ class LLMChatProvider(AbstractLLMProvider):
 
         try:
             return await self.__run_chat(chat_message)
-        except BaseException as e:
+        except Exception as e:
             self._raise_error(e)
 
     @typing.final

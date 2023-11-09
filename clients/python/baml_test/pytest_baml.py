@@ -105,7 +105,6 @@ class BamlPytestPlugin:
                 if hasattr(item, "function") and asyncio.iscoroutinefunction(
                     item.function
                 ):
-                    print(f"Adding asyncio marker to {item.nodeid}")
                     item.add_marker(pytest.mark.asyncio)
 
     @pytest.hookimpl(tryfirst=True)

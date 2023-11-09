@@ -173,8 +173,8 @@ class TraceContext:
 
     async def __aexit__(
         self,
-        exc_type: typing.Optional[typing.Type[BaseException]],
-        exc_value: typing.Optional[BaseException],
+        exc_type: typing.Optional[typing.Type[Exception]],
+        exc_value: typing.Optional[Exception],
         tb: typing.Optional[TracebackType],
     ) -> None:
         ctx, chain, error = self._exit(exc_type, exc_value, tb)
@@ -190,8 +190,8 @@ class TraceContext:
 
     def __exit__(
         self,
-        exc_type: typing.Optional[typing.Type[BaseException]],
-        exc_value: typing.Optional[BaseException],
+        exc_type: typing.Optional[typing.Type[Exception]],
+        exc_value: typing.Optional[Exception],
         tb: typing.Optional[TracebackType],
     ) -> None:
         ctx, chain, error = self._exit(exc_type, exc_value, tb)
@@ -240,8 +240,8 @@ class TraceContext:
 
     def _exit(
         self,
-        exc_type: typing.Optional[typing.Type[BaseException]],
-        exc_value: typing.Optional[BaseException],
+        exc_type: typing.Optional[typing.Type[Exception]],
+        exc_value: typing.Optional[Exception],
         tb: typing.Optional[TracebackType],
     ) -> typing.Tuple[
         ContextVarStorage, typing.List[TraceStackItem], typing.Optional[api_types.Error]

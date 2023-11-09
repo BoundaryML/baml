@@ -156,7 +156,7 @@ class LLMClient:
         assert max_tries > 0, "max_tries must be positive"
         try:
             return await self._run_impl(prompt_template, vars)
-        except BaseException as e:
+        except Exception as e:
             formatted_traceback = "".join(
                 traceback.format_exception(e.__class__, e, e.__traceback__)
             )
@@ -183,7 +183,7 @@ class LLMClient:
             raise e
 
     def _handle_exception(
-        self, max_tries: int, e: BaseException
+        self, max_tries: int, e: Exception
     ) -> typing.Optional[typing.Tuple["LLMClient", str]]:
         status_code = self._exception_to_code(e)
         if self._allow_retry(status_code):
@@ -206,7 +206,7 @@ class LLMClient:
         return code not in [400, 401, 403, 404, 422]
 
     @abc.abstractmethod
-    def _exception_to_code(self, e: BaseException) -> typing.Optional[int]:
+    def _exception_to_code(self, e: Exception) -> typing.Optional[int]:
         if isinstance(e, aiohttp.ClientError):
             return 500
         if isinstance(e, aiohttp.ClientResponseError):

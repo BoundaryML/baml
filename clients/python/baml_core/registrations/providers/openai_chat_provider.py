@@ -34,7 +34,7 @@ class OpenAIChatProvider(LLMChatProvider):
         self.__kwargs = options
         self._set_args(**self.__kwargs)
 
-    def _to_error_code(self, e: BaseException) -> typing.Optional[int]:
+    def _to_error_code(self, e: Exception) -> typing.Optional[int]:
         return to_error_code(e)
 
     def _validate(self) -> None:

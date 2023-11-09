@@ -18,7 +18,7 @@ def _hydrate_anthropic_tokenizer() -> None:
 class AnthropicProvider(LLMProvider):
     __kwargs: typing.Dict[str, typing.Any]
 
-    def _to_error_code(self, e: BaseException) -> typing.Optional[int]:
+    def _to_error_code(self, e: Exception) -> typing.Optional[int]:
         if isinstance(e, anthropic.APIStatusError):
             return e.status_code
         return super()._to_error_code(e)

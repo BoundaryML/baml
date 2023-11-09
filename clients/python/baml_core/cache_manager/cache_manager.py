@@ -23,7 +23,7 @@ class _CacheManager:
                 response = cache.get_llm_request(cache_request)
                 if response:
                     return response
-            except BaseException:
+            except Exception:
                 # Silently fail.
                 pass
         return None
@@ -46,7 +46,7 @@ class _CacheManager:
         for cache in self.__caches:
             try:
                 cache.save_llm_request(request, response)
-            except BaseException:
+            except Exception:
                 # Silently fail.
                 pass
 

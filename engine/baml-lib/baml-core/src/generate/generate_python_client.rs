@@ -114,6 +114,7 @@ impl WithWritePythonString for ParserDatabase {
         fc.complete_file();
 
         fc.start_py_file(".", "generated_baml_client");
+        fc.last_file().add_line("from baml_lib import baml_init ");
         let mut fxs = self
             .walk_functions()
             .map(|f| {

@@ -4,7 +4,7 @@ from openai import error as o_error
 from baml_core.errors.llm_exc import ProviderErrorCode
 
 
-def to_error_code(e: BaseException) -> typing.Optional[int]:
+def to_error_code(e: Exception) -> typing.Optional[int]:
     if isinstance(e, (o_error.RateLimitError, o_error.TryAgain)):
         return ProviderErrorCode.RATE_LIMITED
     if isinstance(e, o_error.APIConnectionError):

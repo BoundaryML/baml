@@ -36,7 +36,7 @@ def try_serialize_inner(
         return value.model_dump_json()
     try:
         return json.dumps(value, default=str)
-    except BaseException:
+    except Exception:
         return "<unserializable value>"
 
 
@@ -68,7 +68,7 @@ def try_serialize(value: typing.Any) -> typing.Tuple[types.AttributeValue, str]:
         return value.model_dump_json(), type(value).__name__
     try:
         return json.dumps(value, default=str), type(value).__name__
-    except BaseException:
+    except Exception:
         return "<unserializable value>", type(value).__name__
 
 
@@ -92,8 +92,6 @@ class PartialMetadataType(BaseModel):
     error: Optional[Error] = None
 
     def to_full(self) -> Tuple[typing.Optional[MetadataType], Optional[Error]]:
-        if self.mdl_name is None:
-            return None, self.error
         if self.provider is None:
             return None, self.error
         if self.input is None:
@@ -102,7 +100,7 @@ class PartialMetadataType(BaseModel):
             return None, self.error
         return (
             LLMEventSchema(
-                model_name=self.mdl_name,
+                model_name=self.mdl_name or "<unknown>",
                 provider=self.provider,
                 input=self.input,
                 output=self.output,
@@ -143,21 +141,27 @@ class PartialLogSchema(BaseModel):
                 # Generate a new event id for each metadata entry, with the current Event
                 # as the parent
                 event_list: typing.List[LogSchema] = []
-                for m in self.metadata:
+                for i, m in enumerate(self.metadata):
                     full_meta, err = m.to_full()
-                    event_list.append(
-                        LogSchema(
-                            project_id=self.project_id,
-                            event_type=self.event_type,  # type: ignore
-                            root_event_id=self.root_event_id,
-                            event_id=str(uuid.uuid4()),
-                            parent_event_id=self.event_id,
-                            context=self.context,
-                            io=self.io,
-                            error=err,
-                            metadata=full_meta,
+                    event = LogSchema(
+                        project_id=self.project_id,
+                        event_type=self.event_type,  # type: ignore
+                        root_event_id=self.root_event_id,
+                        event_id=str(uuid.uuid4()),
+                        parent_event_id=self.event_id,
+                        context=self.context,
+                        io=self.io,
+                        error=err,
+                        metadata=full_meta,
+                    )
+                    event.context.event_chain.append(
+                        EventChain(
+                            function_name=self.context.event_chain[-1].function_name,
+                            variant_name=f"Attempt[{i + 1}]",
                         )
                     )
+
+                    event_list.append(event)
 
                 if self.error and not event_list[-1].error:
                     event_list[-1].error = self.error

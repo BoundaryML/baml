@@ -12,7 +12,7 @@ from ..errors.llm_exc import LLMException, TerminalErrorCode
 WrappedFn = typing.TypeVar("WrappedFn", bound=typing.Callable[..., typing.Any])
 
 
-def should_retry_on_exception(exception: BaseException) -> bool:
+def should_retry_on_exception(exception: Exception) -> bool:
     if not isinstance(exception, LLMException):
         return False
     return exception.code not in TerminalErrorCode

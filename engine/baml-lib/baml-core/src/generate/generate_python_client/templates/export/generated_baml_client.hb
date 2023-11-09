@@ -6,4 +6,7 @@ class BAMLClient:
     {{this}} = {{this}}
     {{/each}}
 
+    def __init__(self):
+        baml_init()
+
 baml = BAMLClient()
