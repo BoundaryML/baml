@@ -140,7 +140,7 @@ class FallbackProvider(AbstractLLMProvider):
         params: typing.Dict[str, typing.Any],
     ) -> LLMResponse:
         return await self._run_strategy(
-            "run_prompt_template", template, replacers=replacers, params=params
+            "run_prompt_template", template=template, replacers=replacers, params=params
         )
 
     async def run_chat(

@@ -38,7 +38,7 @@ client<llm> ResilientGPT4 {
 // test
 client<llm> AZURE_DEFAULT {
     provider baml-openai-chat
-    retry_policy DefaultRetryPolicy
+    // retry_policy DefaultRetryPolicy
     options {
       model gpt-3.5-turbo
       api_key env.OPENAI_API_KEY
