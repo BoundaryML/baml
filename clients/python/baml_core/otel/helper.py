@@ -158,10 +158,15 @@ class PartialLogSchema(BaseModel):
                             metadata=full_meta,
                         )
                     )
-                # The very last event_list should have the same event_id as the current event
-                event_list[-1].event_id = self.event_id
-                event_list[-1].parent_event_id = self.parent_event_id
+
+                if self.error and not event_list[-1].error:
+                    event_list[-1].error = self.error
+
+                # The first event remains as the parent
+                event_list[0].parent_event_id = self.parent_event_id
+                event_list[0].event_id = self.event_id
                 return event_list
+
             full_meta, err = self.metadata[0].to_full()
             return [
                 LogSchema(

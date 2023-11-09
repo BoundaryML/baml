@@ -25,5 +25,6 @@ AZURE_DEFAULT = LLMManager.add_llm(
         api_key=environ['OPENAI_API_KEY'],
         request_timeout=45,
         max_tokens=400,
+        foo=100,
     ),
 )

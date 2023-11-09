@@ -121,8 +121,6 @@ impl WithWritePythonString for VariantWalker<'_> {
 
         fc.start_py_file("impls", self.file_name());
         let json = self.json(fc.last_file());
-        info!("Writing variant: {}", self.identifier().name());
-        info!("JSON: {}", serde_json::to_string_pretty(&json).unwrap());
         render_template(super::template::HSTemplate::Variant, fc.last_file(), json);
         fc.complete_file();
     }

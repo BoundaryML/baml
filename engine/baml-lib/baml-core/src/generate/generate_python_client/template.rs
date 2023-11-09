@@ -115,10 +115,7 @@ pub(super) fn render_template(template: HSTemplate, f: &mut File, json: serde_js
     let template = use_partial(template, &mut reg, f);
 
     match reg.render_template(&format!("{{{{> {}}}}}", template), &json) {
-        Ok(s) => {
-            // info!("Rendered template:\n{}\n------\n", &s);
-            f.add_string(&s)
-        }
+        Ok(s) => f.add_string(&s),
         Err(e) => panic!("Failed to render template: {}", e),
     }
 }

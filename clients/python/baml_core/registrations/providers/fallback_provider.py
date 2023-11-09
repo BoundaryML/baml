@@ -123,7 +123,7 @@ class FallbackProvider(AbstractLLMProvider):
                 return typing.cast(
                     LLMResponse, await getattr(llm, method_name)(*args, **kwargs)
                 )
-            except Exception as e:
+            except BaseException as e:
                 error_code = self._to_error_code(e)
                 last_exception = e
         assert last_exception is not None, "Should have caught an exception"

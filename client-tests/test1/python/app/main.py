@@ -11,7 +11,7 @@ from baml_client.baml_types import Message, MessageSender, ClassifyRequest
 @trace
 async def test_azure_default():
     set_tags(a="bar", b="car")
-    response = await baml.AZURE_DEFAULT.run_chat(
+    response = await baml.ResilientGPT4.run_chat(
         [
             {
                 "role": "system",
@@ -20,7 +20,7 @@ async def test_azure_default():
             {"role": "user", "content": "I need a lawnmower"},
         ]
     )
-    await baml.Blah.get_impl("v1").run("blah")
+    # await baml.Blah.get_impl("v1").run("blah")
     return response
 
 
@@ -49,4 +49,4 @@ async def main():
 
 if __name__ == "__main__":
     baml_init()
-    asyncio.run(main())
+    asyncio.run(test_azure_default())
