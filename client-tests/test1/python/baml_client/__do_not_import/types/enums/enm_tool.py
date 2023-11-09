@@ -15,7 +15,7 @@ from baml_lib._impl.deserializer import register_deserializer
 from enum import Enum
 
 
-@register_deserializer({  })
+@register_deserializer({ "k1": "CodeInterpreter","k2": "DrawImage","k3": "GenerateText", })
 class Tool(str, Enum):
     CodeInterpreter = "CodeInterpreter"
     DrawImage = "DrawImage"

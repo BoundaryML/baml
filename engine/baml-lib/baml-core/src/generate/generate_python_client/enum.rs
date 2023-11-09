@@ -3,6 +3,7 @@ use internal_baml_parser_database::{
     WithStaticRenames,
 };
 use internal_baml_schema_ast::ast::WithName;
+use log::info;
 use serde_json::json;
 
 use crate::generate::generate_python_client::file::clean_file_name;
@@ -46,6 +47,8 @@ impl WithWritePythonString for EnumWalker<'_> {
 
         fc.start_py_file("types/enums", self.file_name());
         let json = self.json(fc.last_file());
+        info!("Writing enum: {}", self.name());
+        info!("JSON: {}", serde_json::to_string_pretty(&json).unwrap());
         render_template(super::template::HSTemplate::Enum, fc.last_file(), json);
         fc.complete_file();
     }
