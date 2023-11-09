@@ -140,8 +140,28 @@ class PartialLogSchema(BaseModel):
             if len(self.metadata) > 1:
                 # Simulate extra events
                 # For now not supported
-                print("Multiple metadata entries not supported")
-                return []
+                # Generate a new event id for each metadata entry, with the current Event
+                # as the parent
+                event_list: typing.List[LogSchema] = []
+                for m in self.metadata:
+                    full_meta, err = m.to_full()
+                    event_list.append(
+                        LogSchema(
+                            project_id=self.project_id,
+                            event_type=self.event_type,  # type: ignore
+                            root_event_id=self.root_event_id,
+                            event_id=str(uuid.uuid4()),
+                            parent_event_id=self.event_id,
+                            context=self.context,
+                            io=self.io,
+                            error=err,
+                            metadata=full_meta,
+                        )
+                    )
+                # The very last event_list should have the same event_id as the current event
+                event_list[-1].event_id = self.event_id
+                event_list[-1].parent_event_id = self.parent_event_id
+                return event_list
             full_meta, err = self.metadata[0].to_full()
             return [
                 LogSchema(
