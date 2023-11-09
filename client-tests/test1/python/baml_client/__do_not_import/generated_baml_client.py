@@ -15,6 +15,7 @@ from .clients.client_azure_default import AZURE_DEFAULT
 from .clients.client_azure_gpt4 import AZURE_GPT4
 from .clients.client_azure_yes_no import AZURE_YES_NO
 from .clients.client_large_response import LARGE_RESPONSE
+from .clients.client_resilientgpt4 import ResilientGPT4
 from .functions.fx_classifytool import BAMLClassifyTool
 from .functions.fx_maybepolishtext import BAMLMaybePolishText
 from .functions.fx_messagesimplifier import BAMLMessageSimplifier
@@ -30,5 +31,6 @@ class BAMLClient:
     AZURE_GPT4 = AZURE_GPT4
     AZURE_YES_NO = AZURE_YES_NO
     LARGE_RESPONSE = LARGE_RESPONSE
+    ResilientGPT4 = ResilientGPT4
 
 baml = BAMLClient()

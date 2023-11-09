@@ -5,6 +5,18 @@ description = ""
 authors = ["Vaibhav Gupta <vbv@gloo.chat>"]
 readme = "README.md"
 
+[[tool.poetry.packages]]
+include = "app"
+from = "."
+
+[[tool.poetry.packages]]
+include = "baml_client"
+from = "."
+
+[[tool.poetry.packages]]
+include = "tests"
+from = "."
+
 [tool.poetry.dependencies]
 python = "^3.8"
 baml = { path = "../../../clients/python", develop = true }

@@ -18,17 +18,27 @@ retry_policy DelayRetryPolicy {
   }
 }
 
-// client<llm> ResilientGPT4 {
-//   provider baml-fallback
-//   options {
-//     strategy [
-//     ]
-//   }
-// }
+client<llm> ResilientGPT4 {
+  provider baml-fallback
+  options {
+    strategy [
+      {
+        client AZURE_DEFAULT
+      },
+      {
+        client AZURE_GPT4
+      },
+      {
+        client LARGE_RESPONSE
+      }
+    ]
+  }
+}
 
 // test
 client<llm> AZURE_DEFAULT {
     provider baml-openai-chat
+    retry_policy DefaultRetryPolicy
     options {
       model gpt-3.5-turbo
       api_key env.OPENAI_API_KEY

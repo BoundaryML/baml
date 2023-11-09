@@ -1,11 +1,8 @@
 use std::collections::HashSet;
 
 use either::Either;
-use internal_baml_parser_database::{
-    walkers::{VariantWalker},
-    WithStaticRenames,
-};
-use internal_baml_schema_ast::ast::{WithName};
+use internal_baml_parser_database::{walkers::VariantWalker, WithStaticRenames};
+use internal_baml_schema_ast::ast::WithName;
 
 use log::info;
 use serde_json::json;
@@ -69,7 +66,6 @@ impl<'db> JsonHelper for VariantWalker<'db> {
                         }).collect::<Vec<_>>()
                     },
                     Some(Either::Right(enm)) => {
-                        info!("Skipping variant {}", v.name());
                         enm.values().filter_map(|f| {
                             let (overrides, _) = f.get_attributes(self);
                             match overrides.and_then(|o| Some(o.alias())) {

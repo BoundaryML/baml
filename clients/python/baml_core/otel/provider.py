@@ -193,7 +193,6 @@ class BamlSpanContextManager:
 
 # Set up your TracerProvider with the custom settings
 
-process_id = str(uuid.uuid4())
 __provider = TracerProvider(
     resource=Resource.create(
         {
@@ -209,6 +208,6 @@ __processor = BatchSpanProcessor(__exporter, max_export_batch_size=10)
 __provider.add_span_processor(__processor)
 
 
-def use_tracing(process_id: str, api: typing.Optional[APIWrapper] = None) -> None:
+def use_tracing(api: typing.Optional[APIWrapper] = None) -> None:
     if api:
         __exporter.set_gloo_api(api)

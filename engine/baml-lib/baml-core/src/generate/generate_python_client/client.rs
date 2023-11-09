@@ -1,10 +1,11 @@
-
+use std::fmt::format;
 
 use internal_baml_parser_database::walkers::{ClientWalker, Walker};
 use internal_baml_schema_ast::ast::{
     ClientId, Expression, Identifier, WithDocumentation, WithName,
 };
 
+use log::info;
 use serde_json::{json, Value};
 
 use crate::generate::generate_python_client::file::clean_file_name;
@@ -20,52 +21,46 @@ fn escaped_string(s: &str, quotes: (&'static str, &'static str)) -> String {
     s.replace("\\", "\\\\").replace(quotes.0, quotes.1)
 }
 
-impl JsonHelper for Identifier {
-    fn json(&self, f: &mut File) -> serde_json::Value {
+impl ToPyObject for Identifier {
+    fn to_py_object(&self, f: &mut File) -> String {
         match self {
             Identifier::ENV(s, _) => {
                 f.add_import("os", "environ");
-                Value::String(format!("environ['{}']", s.clone()))
+                format!("environ['{}']", s.clone())
             }
-            _ => Value::String(format!(
-                "\"{}\"",
-                escaped_string(self.name(), ("\"", "\\\""))
-            )),
+            _ => format!("\"{}\"", escaped_string(self.name(), ("\"", "\\\""))),
         }
     }
 }
 
-impl JsonHelper for Expression {
-    fn json(&self, f: &mut File) -> serde_json::Value {
+impl ToPyObject for Expression {
+    fn to_py_object(&self, f: &mut File) -> String {
         match self {
-            Expression::NumericValue(val, _) => val
-                .parse()
-                .ok()
-                .map(Value::Number)
-                .unwrap_or_else(|| unreachable!("Error parsing numeric value")),
+            Expression::NumericValue(val, _) => val.clone(),
             Expression::StringValue(val, _) => {
-                Value::String(format!("\"{}\"", escaped_string(val, ("\"", "\\\""))))
+                format!("\"{}\"", escaped_string(val, ("\"", "\\\"")))
             }
-            Expression::RawStringValue(val, _) => Value::String(format!(
+            Expression::RawStringValue(val, _) => format!(
                 "\"\"\"\\\n{}\\\n\"\"\"",
                 escaped_string(val, ("\"\"\"", "\\\"\\\"\\\""))
-            )),
-            Expression::Identifier(idn) => idn.json(f),
+            ),
+            Expression::Identifier(idn) => idn.to_py_object(f),
             Expression::Array(arr, _) => {
-                let json_arr: Vec<Value> = arr.iter().map(|x| x.json(f)).collect();
-                Value::Array(json_arr)
+                let json_arr: Vec<_> = arr.iter().map(|x| x.to_py_object(f)).collect();
+                format!("[{}]", json_arr.join(", "))
             }
             Expression::Map(map, _) => {
-                let mut json_map = serde_json::Map::new();
-                for (k, v) in map {
-                    let key = match k.json(f) {
-                        Value::String(s) => s,
-                        _ => continue, // Skip if the key is not a string
-                    };
-                    let value = v.json(f);
-                    json_map.insert(key, value);
-                }
-                Value::Object(json_map)
+                let kvs = map
+                    .iter()
+                    .map(|(k, v)| {
+                        let key = k.to_py_object(f);
+                        let value = v.to_py_object(f);
+                        (key, value)
+                    })
+                    .map(|(k, v)| format!("{}: {}", k, v))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("{{{}}}", kvs)
             }
         }
     }
@@ -80,7 +75,7 @@ impl JsonHelper for ClientWalker<'_> {
             .map(|(k, v)| {
                 json!({
                             "key": k.clone(),
-                            "value": v.json(f)
+                            "value": v.to_py_object(f),
                 })
             })
             .collect::<Vec<_>>();
@@ -120,4 +115,8 @@ impl WithWritePythonString for Walker<'_, ClientId> {
         render_template(super::template::HSTemplate::Client, fc.last_file(), json);
         fc.complete_file();
     }
+}
+
+trait ToPyObject {
+    fn to_py_object(&self, f: &mut File) -> String;
 }

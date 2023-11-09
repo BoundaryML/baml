@@ -57,7 +57,6 @@ __input_replacers = {
 # We ignore the type here because baml does some type magic to make this work
 # for inline SpecialForms like Optional, Union, List.
 __deserializer = Deserializer[ClassifyResponse](ClassifyResponse)  # type: ignore
-__deserializer.overload("Tool", {"k1": "CodeInterpreter", "k2": "DrawImage", "k3": "GenerateText"})
 
 @BAMLClassifyTool.register_impl("v1")
 async def v1(arg: UserInfo, /) -> ClassifyResponse:

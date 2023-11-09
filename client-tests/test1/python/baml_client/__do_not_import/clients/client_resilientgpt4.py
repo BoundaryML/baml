@@ -11,13 +11,14 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..enums.enm_messagesender import MessageSender
-from .cls_message import Message
-from baml_lib._impl.deserializer import register_deserializer
-from pydantic import BaseModel
-from typing import List
+from baml_core.provider_manager import LLMManager
 
 
-@register_deserializer({  })
-class Conversation(BaseModel):
-    thread: List[Message]
+ResilientGPT4 = LLMManager.add_llm(
+    name="ResilientGPT4",
+    provider="baml-fallback",
+    retry_policy=None,
+    options=dict(
+        strategy=[{"client": "AZURE_DEFAULT"}, {"client": "AZURE_GPT4"}, {"client": "LARGE_RESPONSE"}],
+    ),
+)

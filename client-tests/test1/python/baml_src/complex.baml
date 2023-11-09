@@ -31,23 +31,8 @@ impl<llm, ClassifyTool> v1 {
     client AZURE_GPT4
 
 
-    override Tool {
-        CodeInterpreter
-        @alias(k1) 
-        @description(Use this tool if the user is asking to compute something)
-
-        DrawImage
-        @alias(k2) 
-        @description(Use this tool if the user is asking to draw something)
-
-        GenerateText 
-        @alias(k3) 
-        @description(Use this if the tool is just asking for a simple answer)
-    }
-
-
     prompt #"
-        Given a conversation with a user, classify the user's intent and generate a response.
+        Given a conversation with a user, classify the user's intent {// the word intent works better than goal //} and generate a response.
 
         Userinfo:
         {#input.query}
