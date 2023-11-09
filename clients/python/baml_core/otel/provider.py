@@ -1,6 +1,5 @@
 import contextvars
 from itertools import chain
-import os
 import platform
 import typing
 import uuid
