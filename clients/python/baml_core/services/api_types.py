@@ -178,9 +178,12 @@ class LogSchema(BaseModel):
                     + colorama.Style.NORMAL
                 )
                 try:
+                    # TODO: Figure out why we get a tuple here sometimes
+                    if isinstance(output.value, tuple) and len(output.value) == 1:
+                        pretty = json.dumps(json.loads(output.value[0]), indent=2)
                     pretty = json.dumps(json.loads(output.value), indent=2)
-                except ValueError:
-                    pretty = output.value
+                except Exception:
+                    pretty = str(output.value)
 
                 pp.append(colorama.Fore.LIGHTBLUE_EX + pretty + colorama.Fore.RESET)
                 pp.append(separator)
