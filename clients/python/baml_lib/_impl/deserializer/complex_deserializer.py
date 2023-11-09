@@ -30,8 +30,10 @@ class ListDeserializer(BaseDeserializer[typing.List[T]]):
     ) -> Result[typing.List[T]]:
         items: typing.List[T] = []
         item_deserializer = from_lut(self.__item_deserializer)
-        for item in raw.as_list():
+        for i, item in enumerate(raw.as_list()):
+            diagnostics.push_scope(str(i))
             parsed = item_deserializer.coerce(item, diagnostics, from_lut)
+            diagnostics.pop_scope(errors_as_warnings=True)
             if parsed.has_value:
                 items.append(parsed.as_value)
         return Result.from_value(items)
@@ -57,8 +59,9 @@ class OptionalDeserializer(BaseDeserializer[typing.Optional[T]]):
             return Result.from_value(None)
         # TODO: Merge child errors as warnings into the parent diagnostics object.
         # The point is that if the child fails, this is optional, so we're just gonna return None
-        diagnostics_child = Diagnostics("")
-        item = item_deserializer.coerce(raw, diagnostics_child, from_lut)
+        diagnostics.push_scope("[optional]")
+        item = item_deserializer.coerce(raw, diagnostics, from_lut)
+        diagnostics.pop_scope(errors_as_warnings=True)
         if item.has_value:
             return Result.from_value(item.as_value)
         return Result.from_value(None)

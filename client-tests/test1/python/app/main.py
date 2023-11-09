@@ -5,7 +5,7 @@ from baml_client.tracing import trace, set_tags
 from baml_lib import baml_init
 from baml_client import baml
 from baml_client.baml_types import ProposedMessage, Conversation
-from baml_client.baml_types import Message, MessageSender, UserInfo
+from baml_client.baml_types import Message, MessageSender, ClassifyRequest
 
 
 @trace
@@ -35,7 +35,7 @@ async def call_topic_router():
     #     )
     # )
     response = await baml.ClassifyTool.get_impl("v1").run(
-        UserInfo(
+        ClassifyRequest(
             context="The user is a software engineer", query="Can you explain TDD?"
         )
     )

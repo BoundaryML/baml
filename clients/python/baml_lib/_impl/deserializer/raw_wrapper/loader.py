@@ -88,9 +88,7 @@ def __from_value(val: typing.Any, diagnostics: Diagnostics) -> RawWrapper:
             }
         )
 
-    diagnostics.push_error(
-        DeserializerError("Unrecognized type: {} in value {}".format(type(val), val))
-    )
+    diagnostics.push_unknown_error("Unrecognized type: {} in value {}".format(type(val), val))
     diagnostics.to_exception()
 
     raise Exception("[unreachable] Unsupported type: {}".format(type(val)))

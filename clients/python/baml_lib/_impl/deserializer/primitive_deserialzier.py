@@ -35,7 +35,7 @@ class PrimitiveDeserializer(BaseDeserializer[T]):
     ) -> Result[T]:
         parsed = self.__as_type(raw)
         if parsed is None:
-            diagnostics.push_error(DeserializerError.create_error(self.__error_message))
+            diagnostics.push_unknown_error(self.__error_message)
             return Result.failed()
         return Result.from_value(parsed)
 

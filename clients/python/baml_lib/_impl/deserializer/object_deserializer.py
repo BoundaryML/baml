@@ -74,6 +74,7 @@ class ObjectDeserializer(BaseDeserializer[T]):
         diagnostics: Diagnostics,
         from_lut: CheckLutFn[typing.Any],
     ) -> Result[T]:
+        diagnostics.push_scope(self.__model.__name__)
         items: typing.Dict[str, typing.Any] = {}
         for raw_key, item in raw.as_dict():
             if raw_key is None:
@@ -86,19 +87,17 @@ class ObjectDeserializer(BaseDeserializer[T]):
                 key = self.__alias_to_field[key]
             meta = self.__fields.get(key)
             if meta is None:
-                diagnostics.push_warning(
-                    DeserializerWarning.create_warning(f"Unknown key {key}")
-                )
+                diagnostics.push_unkown_warning(f"Unknown key {key}")
                 continue
 
             value_deserializer = from_lut(meta)
 
             if value_deserializer is None:
-                diagnostics.push_warning(
-                    DeserializerWarning.create_warning(f"Unknown key {key}")
-                )
+                diagnostics.push_unkown_warning(f"Unknown key {key}")
                 continue
+            diagnostics.push_scope(key)
             parsed = value_deserializer.coerce(item, diagnostics, from_lut)
+            diagnostics.pop_scope(errors_as_warnings=False)
             if parsed.has_value:
                 items[key] = parsed.as_value
 
@@ -106,9 +105,9 @@ class ObjectDeserializer(BaseDeserializer[T]):
             parsed_item = self.__model(**items)
             return Result.from_value(parsed_item)
         except Exception as e:
-            diagnostics.push_error(
-                DeserializerError.create_error(
-                    f"Failed to parse into {self.__model.__name__}: {e}"
-                )
+            diagnostics.push_unknown_error(
+                f"Failed to parse into {self.__model.__name__}: {e}"
             )
             return Result.failed()
+        finally:
+            diagnostics.pop_scope(errors_as_warnings=False)
