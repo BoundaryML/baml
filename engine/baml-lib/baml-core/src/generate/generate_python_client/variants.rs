@@ -30,13 +30,15 @@ impl<'db> JsonHelper for VariantWalker<'db> {
 
         let (input, output) = &self.properties().replacers;
 
-        let inputs = input
+        let mut inputs: HashSet<_> = input
             .iter()
             .map(|(k, val)| {
                 prompt = prompt.replace(&k.key(), &format!("{{{}}}", val));
                 val
             })
-            .collect::<HashSet<_>>();
+            .collect();
+        let mut inputs: Vec<_> = inputs.into_iter().collect();
+        inputs.sort();
         output.iter().for_each(|(k, val)| {
             prompt = prompt.replace(&k.key(), &format!("{}", val));
         });

@@ -130,6 +130,7 @@ pub(super) struct File {
     name: String,
     content: String,
     imports: HashMap<String, HashSet<String>>,
+    explicit_exports: Vec<String>,
     is_export: bool,
 }
 
@@ -154,6 +155,7 @@ impl File {
             name: name.as_ref().into(),
             content: String::new(),
             imports: HashMap::new(),
+            explicit_exports: vec![],
             is_export,
         }
     }
@@ -163,6 +165,15 @@ impl File {
             .entry(module.to_string())
             .or_default()
             .insert(name.to_string());
+    }
+
+    pub(super) fn add_import_and_reexport(&mut self, module: &str, name: &str) {
+        self.add_import(module, name);
+        self.add_explicit_export(name);
+    }
+
+    pub(super) fn add_explicit_export(&mut self, name: &str) {
+        self.explicit_exports.push(name.to_string());
     }
 
     pub(super) fn add_line(&mut self, line: impl AsRef<str>) {
@@ -233,7 +244,7 @@ impl File {
         let mut modules = self.imports.keys().collect::<Vec<_>>();
         modules.sort();
 
-        let mut exports = vec![];
+        let mut exports = self.explicit_exports.clone();
 
         let mut buffer = modules.iter().fold(String::new(), |mut buffer, module| {
             buffer.push_str(&format!("from {} import ", module));
@@ -256,7 +267,7 @@ impl File {
             );
 
             if module.starts_with(".") && self.is_export {
-                exports.extend(imports);
+                exports.extend(imports.iter().map(|s| (*s).clone()));
             }
 
             buffer.push('\n');

@@ -17,6 +17,7 @@ mod prompt;
 mod to_string_attributes;
 mod types;
 
+use log::info;
 use prompt::validate_prompt;
 
 pub(crate) use to_string_attributes::{

@@ -11,11 +11,11 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
+
+
+from baml_lib import baml_init 
 from .__do_not_import.generated_baml_client import baml
-
-
-
-
 __all__ = [
-    'baml'
+    'baml',
+    'baml_init'
 ]

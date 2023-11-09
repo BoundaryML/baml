@@ -7,6 +7,10 @@ from baml_client.baml_types import (
 )
 
 
+async def some_traced_fn():
+    pass
+
+
 @baml.MaybePolishText.test  # parameterizes on impls of MaybePolishText
 async def test_logic(MaybePolishTextImpl: IMaybePolishText) -> None:
     result = await MaybePolishTextImpl(
