@@ -165,7 +165,10 @@ class PartialLogSchema(BaseModel):
                     if i > 0:
                         last_name = event.context.event_chain[-1].function_name
                         event.context.event_chain.append(
-                            EventChain(function_name=f"{last_name}: Attempt[{i + 1}]", variant_name=None)
+                            EventChain(
+                                function_name=f"{last_name}: Attempt[{i + 1}]",
+                                variant_name=None,
+                            )
                         )
 
                     event_list.append(event)

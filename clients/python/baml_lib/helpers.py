@@ -52,7 +52,6 @@ def baml_init(
     else:
         api = None
     otel.use_tracing(api)
-        
 
     if enable_cache is None:
         enable_cache = os.environ.get("GLOO_CACHE", "1" if api else "0") == "1"

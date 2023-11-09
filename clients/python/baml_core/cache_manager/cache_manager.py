@@ -13,9 +13,7 @@ class _CacheManager:
 
     def add_cache(self, provider: str, **kwargs: typing.Any) -> None:
         cache = cache_provider_factory(provider=provider, **kwargs)
-        self.__caches = [
-            c for c in self.__caches if c.name != cache.name
-        ]
+        self.__caches = [c for c in self.__caches if c.name != cache.name]
         self.__caches.append(cache)
 
     def get_llm_request(
