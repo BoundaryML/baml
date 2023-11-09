@@ -16,5 +16,6 @@
 from baml_lib import baml_init 
 from .__do_not_import.generated_baml_client import baml
 __all__ = [
-   'baml_init',
+    'baml',
+    'baml_init'
 ]

@@ -20,8 +20,3 @@ class Sentiment(str, Enum):
     Positive = "Positive"
     Negative = "Negative"
     Neutral = "Neutral"
-
-
-__all__ = [
-    'register_deserializer'
-]

@@ -20,8 +20,3 @@ from pydantic import BaseModel
 class ClassifyResponse(BaseModel):
     tool: Tool
     assistant_response: str
-
-
-__all__ = [
-    'register_deserializer'
-]

@@ -47,8 +47,3 @@ class IBAMLClassifyTool(BaseBAMLFunction[ClassifyResponse]):
 BAMLClassifyTool = IBAMLClassifyTool()
 
 __all__ = [ "BAMLClassifyTool" ]
-
-
-__all__ = [
-    'BaseBAMLFunction'
-]

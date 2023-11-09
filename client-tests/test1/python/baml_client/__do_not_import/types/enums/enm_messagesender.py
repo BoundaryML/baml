@@ -19,8 +19,3 @@ from enum import Enum
 class MessageSender(str, Enum):
     AI = "AI"
     RESIDENT = "RESIDENT"
-
-
-__all__ = [
-    'register_deserializer'
-]

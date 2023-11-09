@@ -63,14 +63,17 @@ impl WithWritePythonString for ParserDatabase {
 
         // Add final aliased imports so users just need to import from baml_client and not baml_core, baml_lib and baml_test
         fc.start_export_file("./testing", "__init__");
-        fc.last_file().add_import("baml_test", "baml_test");
+        fc.last_file()
+            .add_import_and_reexport("baml_test", "baml_test");
 
         fc.complete_file();
 
         // tracing imports
         fc.start_export_file("./tracing", "__init__");
-        fc.last_file().add_import("baml_core.otel", "trace");
-        fc.last_file().add_import("baml_core.otel", "set_tags");
+        fc.last_file()
+            .add_import_and_reexport("baml_core.otel", "trace");
+        fc.last_file()
+            .add_import_and_reexport("baml_core.otel", "set_tags");
         fc.complete_file();
 
         fc.start_export_file(".", "baml_types");
@@ -100,12 +103,14 @@ impl WithWritePythonString for ParserDatabase {
         });
         fc.complete_file();
 
-        // manually write each line since we want imports to appear in a certain order to load dotenv vars (which happens when importing baml_init)
+        // manually write each import line since we want imports to appear in a certain order to load dotenv vars (which happens when importing baml_init)
         fc.start_export_file(".", "__init__.py");
         fc.last_file().add_line("from baml_lib import baml_init ");
         fc.last_file()
             .add_line("from .__do_not_import.generated_baml_client import baml");
-        fc.last_file().add_line("__all__ = [\n   'baml_init',\n]");
+        fc.last_file()
+            .add_line("__all__ = [\n    'baml',\n    'baml_init'\n]");
+
         fc.complete_file();
 
         fc.start_py_file(".", "generated_baml_client");

@@ -47,8 +47,3 @@ class IBAMLMessageSimplifier(BaseBAMLFunction[Optional[int]]):
 BAMLMessageSimplifier = IBAMLMessageSimplifier()
 
 __all__ = [ "BAMLMessageSimplifier" ]
-
-
-__all__ = [
-    'BaseBAMLFunction'
-]

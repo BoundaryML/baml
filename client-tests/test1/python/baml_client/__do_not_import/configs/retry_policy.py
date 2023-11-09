@@ -24,9 +24,3 @@ DelayRetryPolicy = create_retry_policy_exponential_backoff(
   max_delay_ms=10000,
   multiplier=1.5
 )
-
-
-__all__ = [
-    'create_retry_policy_constant_delay',
-    'create_retry_policy_exponential_backoff'
-]

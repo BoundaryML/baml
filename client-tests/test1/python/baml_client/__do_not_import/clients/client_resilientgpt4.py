@@ -22,8 +22,3 @@ ResilientGPT4 = LLMManager.add_llm(
         strategy=[{"client": "AZURE_DEFAULT"}, {"client": "AZURE_GPT4"}, {"client": "LARGE_RESPONSE"}],
     ),
 )
-
-
-__all__ = [
-    'LLMManager'
-]
