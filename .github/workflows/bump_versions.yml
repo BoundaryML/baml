@@ -36,9 +36,6 @@ on:
         required: false
         type: choice
         options:
-          - none
-          - prerelease
-          - pre
           - patch
           - minor
           - major
@@ -82,7 +79,7 @@ jobs:
           VERSION=$(bumpversion --allow-dirty ${{ github.event.inputs.CLI }} --list | grep new_version | cut -d '=' -f 2)
           echo "::notice file=engine/baml-cli/Cargo.toml::Upgrading to version ${VERSION}"
           echo "COMMIT_MSG=${COMMIT_MSG} [BUMP:cli:${VERSION}]" >> $GITHUB_ENV
-        working-directory: ./cli
+        working-directory: ./engine
 
       - name: Bump version - client_python
         id: py_client
