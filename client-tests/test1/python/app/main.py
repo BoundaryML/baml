@@ -20,6 +20,7 @@ async def test_azure_default():
             {"role": "user", "content": "I need a lawnmower"},
         ]
     )
+    await baml.Blah.get_impl("v1").run("blah")
     return response
 
 

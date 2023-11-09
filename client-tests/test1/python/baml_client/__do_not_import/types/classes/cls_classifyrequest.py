@@ -16,6 +16,6 @@ from pydantic import BaseModel
 
 
 @register_deserializer({  })
-class UserInfo(BaseModel):
+class ClassifyRequest(BaseModel):
     query: str
     context: str

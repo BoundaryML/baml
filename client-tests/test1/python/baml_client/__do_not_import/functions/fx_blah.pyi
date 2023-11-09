@@ -11,9 +11,6 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..types.classes.cls_classifyrequest import ClassifyRequest
-from ..types.classes.cls_classifyresponse import ClassifyResponse
-from ..types.enums.enm_tool import Tool
 from typing import Protocol, runtime_checkable
 
 
@@ -27,42 +24,42 @@ T = typing.TypeVar("T", bound=typing.Callable[..., typing.Any])
 CLS = typing.TypeVar("CLS", bound=type)
 
 
-IClassifyToolOutput = ClassifyResponse
+IBlahOutput = str
 
 @runtime_checkable
-class IClassifyTool(Protocol):
+class IBlah(Protocol):
     """
     This is the interface for a function.
 
     Args:
-        arg: ClassifyRequest
+        arg: str
 
     Returns:
-        ClassifyResponse
+        str
     """
 
-    async def __call__(self, arg: ClassifyRequest, /) -> ClassifyResponse:
+    async def __call__(self, arg: str, /) -> str:
         ...
 
 
-class BAMLClassifyToolImpl:
-    async def run(self, arg: ClassifyRequest, /) -> ClassifyResponse:
+class BAMLBlahImpl:
+    async def run(self, arg: str, /) -> str:
         ...
 
-class IBAMLClassifyTool:
+class IBAMLBlah:
     def register_impl(
         self, name: ImplName
-    ) -> typing.Callable[[IClassifyTool], IClassifyTool]:
+    ) -> typing.Callable[[IBlah], IBlah]:
         ...
 
-    def get_impl(self, name: ImplName) -> BAMLClassifyToolImpl:
+    def get_impl(self, name: ImplName) -> BAMLBlahImpl:
         ...
 
     @typing.overload
     def test(self, test_function: T) -> T:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the ClassifyToolInterface.
+        the BlahInterface.
 
         Args:
             test_function : T
@@ -72,9 +69,9 @@ class IBAMLClassifyTool:
             ```python
             # All implementations will be tested.
 
-            @baml.ClassifyTool.test
-            def test_logic(ClassifyToolImpl: IClassifyTool) -> None:
-                result = await ClassifyToolImpl(...)
+            @baml.Blah.test
+            def test_logic(BlahImpl: IBlah) -> None:
+                result = await BlahImpl(...)
             ```
         """
         ...
@@ -83,7 +80,7 @@ class IBAMLClassifyTool:
     def test(self, *, exclude_impl: typing.Iterable[ImplName]) -> pytest.MarkDecorator:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the ClassifyToolInterface.
+        the BlahInterface.
 
         Args:
             exclude_impl : Iterable[ImplName]
@@ -93,9 +90,9 @@ class IBAMLClassifyTool:
             ```python
             # All implementations except "v1" will be tested.
 
-            @baml.ClassifyTool.test(exclude_impl=["v1"])
-            def test_logic(ClassifyToolImpl: IClassifyTool) -> None:
-                result = await ClassifyToolImpl(...)
+            @baml.Blah.test(exclude_impl=["v1"])
+            def test_logic(BlahImpl: IBlah) -> None:
+                result = await BlahImpl(...)
             ```
         """
         ...
@@ -104,7 +101,7 @@ class IBAMLClassifyTool:
     def test(self, test_class: typing.Type[CLS]) -> typing.Type[CLS]:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the ClassifyToolInterface.
+        the BlahInterface.
 
         Args:
             test_class : Type[CLS]
@@ -114,14 +111,14 @@ class IBAMLClassifyTool:
         ```python
         # All implementations will be tested in every test method.
 
-        @baml.ClassifyTool.test
+        @baml.Blah.test
         class TestClass:
-            def test_a(self, ClassifyToolImpl: IClassifyTool) -> None:
+            def test_a(self, BlahImpl: IBlah) -> None:
                 ...
-            def test_b(self, ClassifyToolImpl: IClassifyTool) -> None:
+            def test_b(self, BlahImpl: IBlah) -> None:
                 ...
         ```
         """
         ...
 
-BAMLClassifyTool: IBAMLClassifyTool
+BAMLBlah: IBAMLBlah

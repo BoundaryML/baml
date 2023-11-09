@@ -11,9 +11,10 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
+from baml_lib._impl.deserializer import register_deserializer
+from pydantic import BaseModel
 
 
-from .fx_blah_impl_v1 import v1 as unused_fx_blah_impl_v1
-from .fx_maybepolishtext_impl_v1 import v1 as unused_fx_maybepolishtext_impl_v1
-from .fx_classifytool_impl_v1 import v1 as unused_fx_classifytool_impl_v1
-from .fx_messagesimplifier_impl_v1 import v1 as unused_fx_messagesimplifier_impl_v1
+@register_deserializer({  })
+class Hi(BaseModel):
+    thing: bool

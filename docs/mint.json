@@ -35,6 +35,7 @@
       "group": "Get Started",
       "pages": [
         "v1/mdx/overview",
+
         "v1/mdx/installation",
         "v1/mdx/running-tests"
       ],
@@ -44,6 +45,7 @@
       "group": "Get Started",
       "pages": [
         "v2/mdx/overview",
+        "v2/mdx/baml-by-example",
         "v2/mdx/installation",
         "v2/mdx/running-tests"
       ],
@@ -101,10 +103,7 @@
                 }
               ]
             },
-            {
-              "group": "clients",
-              "pages": ["v1/mdx/ref/client-llm", "v1/mdx/ref/client-code"]
-            },
+
             "v1/mdx/ref/method"
           ]
         }
@@ -134,10 +133,6 @@
                   "pages": ["v2/mdx/ref/variant-llm"]
                 }
               ]
-            },
-            {
-              "group": "clients",
-              "pages": ["v2/mdx/ref/client-llm", "v2/mdx/ref/client-code"]
             }
           ]
         }

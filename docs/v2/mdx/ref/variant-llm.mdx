@@ -11,7 +11,7 @@ An **impl\<llm, FunctionName\>** is an implementation of a `function` which uses
 5. **Observability** -- All events are published via OpenTelemetry, and can be tracked in the Gloo Dashboard
 
 <CodeGroup>
-```baml Baml
+```llvm Baml
 variant<llm, GetSentiment> v1 {
     client GPT35Client
     prompt #"
@@ -28,22 +28,22 @@ variant<llm, GetSentiment> v1 {
 }
 
 function GetSentiment {
-input string
-output Sentiment
+    input string
+    output Sentiment
 }
 
 enum Sentiment {
-Positive
-Negative
-Neutral
+    Positive
+    Negative
+    Neutral
 }
 
 client<llm> GPT35Client {
-provider baml-openai-chat
-options {
-model gpt-3.5-turbo
-temperature 0
-}
+    provider baml-openai-chat
+    options {
+        model gpt-3.5-turbo
+        temperature 0
+    }
 }
 
 ````
@@ -156,7 +156,7 @@ function GetDuration {
 class Duration {
     duration int
 +    @alias(duration_in_minutes)
-+    @description(The duration in minutes, as an integer)
++    @description("The duration in minutes, as an integer")
 }
 
 impl<llm, GetDuration> V1 {
@@ -184,16 +184,16 @@ impl<llm, GetDuration> V1 {
 To modify the description of each value, see the examples below.
 
 <CodeGroup>
-```baml Ex 1: describe
+```llvm Ex 1: describe
 enum Sentiment {
-    Positive @description(When the sentence is about good things that happened recently)
-    Negative @description(When the sentence is about bad things that happened recently)
-    Neutral @description(Sentences that are neutral or happend too long ago to be relevant)
+    Positive @description("When the sentence is about good things that happened recently")
+    Negative @description("When the sentence is about bad things that happened recently")
+    Neutral @description("Sentences that are neutral or happend too long ago to be relevant")
 }
 
 impl<llm, GetSentiment> V1 {
-prompt #"
-Given a sentence, return the sentiment of the sentence.
+    prompt #"
+        Given a sentence, return the sentiment of the sentence.
 
         {#input}
 
@@ -207,7 +207,7 @@ Given a sentence, return the sentiment of the sentence.
 
 ````
 
-```baml Ex 1: Prompt
+```llvm Ex 1: Prompt
 Given a sentence, return the sentiment of the sentence.
 
 {#input}
@@ -220,20 +220,20 @@ Neutral: Sentences that are neutral or happend too long ago to be relevant
 Sentiment:
 ````
 
-```baml Ex 2: Rename
+```llvm Ex 2: Rename
 # In this example, we rename what we call each `Sentiment` value, but still
 # guarantee the `Sentiment` enum as an output (thanks to Baml's parser).
 class Sentiment {
-    Positive @alias(Good) @description(When the sentence is about good things that happened recently)
-    Negative @alias(Bad) @description(When the sentence is about bad things that happened recently)
-    Neutral @description(Sentences that are neutral or happend too long ago to be relevant)
+    Positive @alias(Good) @description("When the sentence is about good things that happened recently")
+    Negative @alias(Bad) @description("When the sentence is about bad things that happened recently")
+    Neutral @description("Sentences that are neutral or happend too long ago to be relevant")
 }
 
 ...
 
 ```
 
-```baml Ex 2: Prompt
+```llvm Ex 2: Prompt
 Given a sentence, return the sentiment of the sentence.
 
 {#input}
@@ -250,14 +250,14 @@ Sentiment:
 # You can also skip any values you don't want to parse.
 
 class Sentiment {
-    Positive @alias(Good) @description(When the sentence is about good things that happened recently)
-    Negative @alias(Bad) @description(When the sentence is about bad things that happened recently)
-+    Neutral @alias(Neither) @skip @description(Sentences that are neutral or happend too long ago to be relevant)
+    Positive @alias(Good) @description("When the sentence is about good things that happened recently")
+    Negative @alias(Bad) @description("When the sentence is about bad things that happened recently")
++    Neutral @alias(Neither) @skip @description("Sentences that are neutral or happend too long ago to be relevant")
 }
 
 ```
 
-```baml Ex 3: Prompt
+```llvm Ex 3: Prompt
 Given a sentence, return the sentiment of the sentence.
 
 {#input}

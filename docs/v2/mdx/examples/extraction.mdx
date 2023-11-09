@@ -31,7 +31,7 @@ To do that, we'll first define our function:
 
 The function is named `ExtractMeetingDetails` and takes in a string and outputs a `MeetingDetails` object.
 
-```baml meetings.baml
+```llvm meetings.baml
 function ExtractMeetingDetails {
     input string
     output MeetingDetails
@@ -40,7 +40,7 @@ function ExtractMeetingDetails {
 
 Next we'll define our `MeetingDetails` type:
 
-```baml meetings.baml
+```llvm meetings.baml
 class MeetingDetails {
     title string
     start_time string
@@ -58,7 +58,7 @@ We'll need to define a `@variant` of `ExtractMeetingDetails` that uses the `GPT3
 We'll add the variant directly to our `meetings.baml` file and define the `GPT35Client` in `clients.baml`.
 
 <CodeGroup>
-```baml meetings.baml
+```llvm meetings.baml
 impl<llm, ExtractMeetingDetails> V1 {
     client GPT35Client
     prompt #"
@@ -75,7 +75,7 @@ impl<llm, ExtractMeetingDetails> V1 {
 }
 
 ````
-```baml clients.baml
+```llvm clients.baml
 client<llm> GPT35Client {
     provider baml-openai-chat
     options {
@@ -135,7 +135,7 @@ When it comes to adding more complex types, you can use nested objects. For exam
 All we'd have to do is update our `MeetingDetails` class to include a nested `Attendee` class. However, we should ensure that the `email` field is optional
 as the user may not always provide an email.
 
-```baml meetings.baml
+```llvm meetings.baml
 
 class MeetingDetails {
     title string
@@ -179,7 +179,7 @@ We'll do this in two different ways:
 
 We can simply change the input type of our function to be a `MeetingRequest` object.
 
-```baml meetings.baml
+```llvm meetings.baml
 class MeetingRequest {
     message string
     today string
@@ -193,7 +193,7 @@ function ExtractMeetingDetails {
 
 Then we'd update the variant to use the `message` and `today` fields.
 
-```baml meetings.baml
+```llvm meetings.baml
 impl<llm, ExtractMeetingDetails> V1 {
     client GPT35Client
     prompt #"
@@ -255,8 +255,8 @@ However this still may not be enough. What if we want to get the start time and 
 ```diff meeting.baml
 class MeetingDetails {
     title string
-+    start_time string  @description(ISO date string)
-+    end_time string    @description(ISO date string)
++    start_time string  @description("ISO date string")
++    end_time string    @description("ISO date string")
     attendees Attendee[]
 }
 ...
@@ -345,7 +345,7 @@ if __name__ == '__main__':
     asyncio.run(main())
 ```
 
-```baml meetings.baml
+```llvm meetings.baml
 function ExtractMeetingDetails {
     input MeetingRequest
     output MeetingDetails
@@ -389,7 +389,7 @@ impl<llm, ExtractMeetingDetails> V1 {
 }
 ```
 
-```baml clients.baml
+```llvm clients.baml
 client<llm> GPT35Client {
     provider baml-openai-chat
     options {

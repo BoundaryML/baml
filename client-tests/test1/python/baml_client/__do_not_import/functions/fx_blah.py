@@ -11,39 +11,36 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..types.classes.cls_classifyrequest import ClassifyRequest
-from ..types.classes.cls_classifyresponse import ClassifyResponse
-from ..types.enums.enm_tool import Tool
 from baml_lib._impl.functions import BaseBAMLFunction
 from typing import Protocol, runtime_checkable
 
 
-IClassifyToolOutput = ClassifyResponse
+IBlahOutput = str
 
 @runtime_checkable
-class IClassifyTool(Protocol):
+class IBlah(Protocol):
     """
     This is the interface for a function.
 
     Args:
-        arg: ClassifyRequest
+        arg: str
 
     Returns:
-        ClassifyResponse
+        str
     """
 
-    async def __call__(self, arg: ClassifyRequest, /) -> ClassifyResponse:
+    async def __call__(self, arg: str, /) -> str:
         ...
 
 
-class IBAMLClassifyTool(BaseBAMLFunction[ClassifyResponse]):
+class IBAMLBlah(BaseBAMLFunction[str]):
     def __init__(self) -> None:
         super().__init__(
-            "ClassifyTool",
-            IClassifyTool,
+            "Blah",
+            IBlah,
             ["v1"],
         )
 
-BAMLClassifyTool = IBAMLClassifyTool()
+BAMLBlah = IBAMLBlah()
 
-__all__ = [ "BAMLClassifyTool" ]
+__all__ = [ "BAMLBlah" ]
