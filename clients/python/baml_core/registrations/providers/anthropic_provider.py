@@ -29,7 +29,9 @@ class AnthropicProvider(LLMProvider):
         _hydrate_anthropic_tokenizer()
 
         if "max_retries" in options and "retry" in kwargs:
-            assert False, "Either use max_retries with Anthropic via options or retry via BAML, not both"
+            assert (
+                False
+            ), "Either use max_retries with Anthropic via options or retry via BAML, not both"
 
         super().__init__(
             chat_to_prompt=lambda chat: "".join(
