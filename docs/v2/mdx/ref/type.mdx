@@ -6,22 +6,22 @@ title: "Supported Types"
 
 | Type   | Since         |     |
 | ------ | ------------- | --- |
-| null   | `baml>=0.1.0` |     |
-| bool   | `baml>=0.1.0` |     |
-| int    | `baml>=0.1.0` |     |
-| float  | `baml>=0.1.0` |     |
-| string | `baml>=0.1.0` |     |
-| char   | `baml>=0.1.0` |     |
+| null   | `llvm>=0.1.0` |     |
+| bool   | `llvm>=0.1.0` |     |
+| int    | `llvm>=0.1.0` |     |
+| float  | `llvm>=0.1.0` |     |
+| string | `llvm>=0.1.0` |     |
+| char   | `llvm>=0.1.0` |     |
 
 ## Constructed Types
 
 | Type           | Since         | Syntax                  | Usage            |
 | -------------- | ------------- | ----------------------- | ---------------- |
-| Enum           | `baml>=0.1.0` | See [enum](enum) Docs   |
-| Custom Classes | `baml>=0.1.0` | See [class](class) Docs |
-| Optional       | `baml>=0.1.0` | `type?`                 | `int?`           |
-| Union          | `baml>=0.1.0` | `type\|type\|`          | `int\|MyClass\|` |
-| List           | `baml>=0.1.0` | `type[]`                | `string[]`       |
+| Enum           | `llvm>=0.1.0` | See [enum](enum) Docs   |
+| Custom Classes | `llvm>=0.1.0` | See [class](class) Docs |
+| Optional       | `llvm>=0.1.0` | `type?`                 | `int?`           |
+| Union          | `llvm>=0.1.0` | `type\|type\|`          | `int\|MyClass\|` |
+| List           | `llvm>=0.1.0` | `type[]`                | `string[]`       |
 | Dictionary     |               |                         |
 | Set            |               |                         |
 | Tuple          |               |                         |
@@ -35,7 +35,7 @@ Here are some examples and what their equivalents are in different languages.
 ### Example 1
 
 <CodeGroup>
-```baml Baml
+```llvm Baml
 int?|string[]|MyClass|
 ```
 
@@ -52,7 +52,7 @@ Union[Optional[int], List[str], MyClass]
 ### Example 2
 
 <CodeGroup>
-```baml Baml
+```llvm Baml
 char[]
 ```
 
@@ -69,7 +69,7 @@ string[]
 ### Example 3
 
 <CodeGroup>
-```baml Baml
+```llvm Baml
 int|float|[]
 ```
 ```python Python Equivalent
@@ -85,7 +85,7 @@ number[]
 ### Example 4
 
 <CodeGroup>
-```baml Baml
+```llvm Baml
 (int?|string[]|MyClass)[]
 ```
 

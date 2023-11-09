@@ -1,9 +1,14 @@
 function ClassifyTool {
-  input UserInfo
+  input ClassifyRequest
   output ClassifyResponse
 }
 
-class ClassifyResponse {
+class ClassifyRequest {
+  query string
+  context string
+} 
+
+class ClassifyResponse { 
   tool Tool
   assistant_response string
 }
@@ -22,10 +27,7 @@ enum Tool {
   @description(Use this if the tool is just asking for a simple answer)
 }
 
-class UserInfo {
-  query string
-  context string
-} 
+
 
 impl<llm, ClassifyTool> v1 {
     client AZURE_GPT4

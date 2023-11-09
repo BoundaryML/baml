@@ -3,6 +3,10 @@ function MessageSimplifier {
     output int?
 } 
 
+class Hi {
+  thing bool
+}
+
 impl<llm, MessageSimplifier> v1 {
   client AZURE_DEFAULT
 

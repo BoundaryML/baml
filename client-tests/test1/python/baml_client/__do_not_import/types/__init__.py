@@ -11,12 +11,13 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
+from .classes.cls_classifyrequest import ClassifyRequest
 from .classes.cls_classifyresponse import ClassifyResponse
 from .classes.cls_conversation import Conversation
+from .classes.cls_hi import Hi
 from .classes.cls_improvedresponse import ImprovedResponse
 from .classes.cls_message import Message
 from .classes.cls_proposedmessage import ProposedMessage
-from .classes.cls_userinfo import UserInfo
 from .enums.enm_messagesender import MessageSender
 from .enums.enm_sentiment import Sentiment
 from .enums.enm_tool import Tool
@@ -25,12 +26,13 @@ from .enums.enm_tool import Tool
 
 
 __all__ = [
+    'ClassifyRequest',
     'ClassifyResponse',
     'Conversation',
+    'Hi',
     'ImprovedResponse',
     'Message',
     'ProposedMessage',
-    'UserInfo',
     'MessageSender',
     'Sentiment',
     'Tool'

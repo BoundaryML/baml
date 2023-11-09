@@ -13,8 +13,8 @@
 
 from ..clients.client_azure_gpt4 import AZURE_GPT4
 from ..functions.fx_classifytool import BAMLClassifyTool
+from ..types.classes.cls_classifyrequest import ClassifyRequest
 from ..types.classes.cls_classifyresponse import ClassifyResponse
-from ..types.classes.cls_userinfo import UserInfo
 from ..types.enums.enm_tool import Tool
 from baml_lib._impl.deserializer import Deserializer
 
@@ -59,6 +59,6 @@ __input_replacers = {
 __deserializer = Deserializer[ClassifyResponse](ClassifyResponse)  # type: ignore
 
 @BAMLClassifyTool.register_impl("v1")
-async def v1(arg: UserInfo, /) -> ClassifyResponse:
+async def v1(arg: ClassifyRequest, /) -> ClassifyResponse:
     response = await AZURE_GPT4.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
     return __deserializer.from_string(response.generated)

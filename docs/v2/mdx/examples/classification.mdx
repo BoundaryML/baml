@@ -31,17 +31,17 @@ User message -> Classify message -> Use tool, or respond back
 
 #### Define your classification function in Baml configs
 
-<Info>If you have the [VSCode extension](/mdx/installation#baml-extension), **.baml** files will have syntax highlighting!</Info>
-``` baml main.baml
+<Info>If you have the [VSCode extension](/mdx/installation#baml-extension), **.baml** files will have improved syntax highlighting than you see here</Info>
+```llvm main.baml
 function ClassifyMessage {
   input string
   output Category
 }
 
 enum Category {
-BOOK_MEETING
-AVALABILITY_QUERY
-SET_REMINDER
+  BOOK_MEETING
+  AVALABILITY_QUERY
+  SET_REMINDER
 }
 
 ````
@@ -57,7 +57,7 @@ An LLM variant has three things
 
 <Tip>Feel free to add any of these objects in any .baml file. All objects are imported globally and can be referenced from anywhere.</Tip>
 
-```baml main.baml
+```llvm main.baml
 client<llm> GPT35Client {
     provider baml-openai-chat
     options {
@@ -114,30 +114,30 @@ You probably want to add some descriptions as to what each class actually means,
 
 In our case, we will rename all our classes to symbols, such as "K1, K2, K3" so that the LLM can focus on the class descriptions we provide more than the names of them. This is an interesting technique called "Symbol tuning".
 
-To do this we can add `attributes` to an enum or class, denoted with the **@**, and then leverage the built-in **print_enum** helper function to print out the enum values in our prompt.
+To do this we can add **@describe** and/or **@alias** to an enum or class, denoted with the **@**, and then leverage the built-in **print_enum** helper function to print out the enum values in our prompt, using these descriptions and aliases.
 
-```diff Baml
+```llvm Baml
 enum Category {
-+  BOOK_MEETING @alias(k1) @description(
-+    When the user wants to book a meeting on our internal system.
-+  )
-+  AVALABILITY_QUERY @alias(k2) @description(
-+    When the user is asking for their calendar availability.
-+  )
+   BOOK_MEETING @alias(k1) @description(#"
+     When the user wants to book a meeting on our internal system.
+   "#) 
+   AVALABILITY_QUERY @alias(k2) @description(#"
+     When the user is asking for their calendar availability.
+   "#)
 
    // This format also works
    SET_REMINDER
-+  @alias(k3)
-+  @description(
-+    When the user wants to set a calendar reminder.
-   )
+   @alias(k3)
+   @description(#"
+     When the user wants to set a calendar reminder.
+   "#)
 }
 
 ...
 ...
    prompt #"
       Given a message, classify it into one of the following categories:
-+      {#print_enum(Category)}
+      {#print_enum(Category)}
    "#
 ```
 
@@ -161,9 +161,9 @@ impl<llm, ClassifyMessage> V1 {
 +  override Category {
 +    BOOK_MEETING
 +    @alias(k1)
-+    @description(
++    @description(#"
 +      When the user wants to book a meeting on our internal system.
-+    )
++    "#)
 +  }
 
   prompt {
@@ -207,51 +207,45 @@ Classification:
 ### Final code
 
 <CodeGroup>
-```baml main.baml
+```llvm main.baml
 function ClassifyMessage {
   input string
   output Category
 }
 
 enum Category {
-BOOK_MEETING @alias(k1) @description(
-When the user wants to book a meeting on our internal system.
-)
-AVALABILITY_QUERY @alias(k2) @description(
-When the user is asking for their calendar availability.
-)
+  BOOK_MEETING      @alias(k1) 
+  @description("When the user wants to book a meeting on our internal system.") 
 
-// This format also works
-SET_REMINDER
-@alias(k3)
-@description(
-When the user wants to set a calendar reminder.
-)
+  AVALABILITY_QUERY @alias(k2) 
+  @description("When the user is asking for their calendar availability.")
+
+  SET_REMINDER @alias(k3) @description("When the user wants to set a calendar reminder.")
 }
 
 impl<llm, ClassifyMessage> V1 {
-client GPT35Client
-prompt {
-Given a message, classify it into one of the following categories:
+  client GPT35Client
+  prompt #"
+      Given a message, classify it into one of the following categories:
 
-- {#print_enum(Category)}
+      {#print_enum(Category)}
 
-  Message:
+      Message:
 
-  ***
+      ***
 
-  {#input}
+      {#input}
 
-  ***
+      ***
 
-  Classification:
-  }
+      Classification:
+  "#
 
 }
 
-````
+```
 
-```baml clients.baml
+```llvm clients.baml
 client<llm> GPT35Client {
     provider baml-openai-chat
     options {
@@ -261,7 +255,7 @@ client<llm> GPT35Client {
     }
 }
 
-````
+```
 
 ```python app/pipeline.py
 from generated.functions import ClassifyMessage

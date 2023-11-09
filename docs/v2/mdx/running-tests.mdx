@@ -2,44 +2,265 @@
 title: "Running Tests"
 ---
 
-To run tests on baml, you can run pytest.
+For python, we leverage **pytest** to run tests. All you need is to add a **@baml_test** decorator to your test functions to get your test data visualized on the Gloo dashboard.
 
-You can read more about the `-k` arg of pytest here ([PyTest Docs](https://docs.pytest.org/en/latest/example/markers.html#using-k-expr-to-select-tests-based-on-their-name))
+## Example
+
+```python
+from gloo_py.testing import gloo_test
+# Import your gloo-generated LLM functions
+from generated.functions import ClassifySentiment
+# Import any custom types defined in .gloo files
+from generated.custom_types import Sentiment
+
+
+@gloo_test
+@pytest.mark.asyncio
+async def test_happy_user():
+    response = await ClassifySentiment("I am ecstatic")
+    assert response == Sentiment.POSITIVE
+
+
+## Or use a test class
+@gloo_test
+@pytest.mark.asyncio
+class TestHappyUser:
+    async def test_happy_user(self):
+        response = await ClassifySentiment("I am ecstatic")
+        assert response == Sentiment.POSITIVE
+
+    async def test_happy_user2(self):
+        response = await ClassifySentiment("I am super happy!")
+        assert response == Sentiment.POSITIVE
+```
+
+<Warning>
+  Make sure your test file, the Test class and/or test function is prefixed with
+  `test` or `Test` respectively. Otherwise, pytest will not pick up your tests.
+</Warning>
+
+## Pre-requisites
+
+#### Ensure you have gloo-lib (Gloo SDK) installed
+
+```bash
+pip install gloo-lib
+```
+
+#### Setup environment variables
+
+On the dashboard, click on a project you've created and go to "Keys". Note down the project ID and create a new secret to use as the `GLOO_APP_SECRET` below.
+
+Create a .env file in your project root and add the following:
+
+```bash .env
+GLOO_APP_ID=proj_123...
+GLOO_APP_SECRET=gloo:your-key-from-dashboard
+OPENAI_API_KEY=your-open-ai-key
+
+## If using GlooConfig with Azure LLMs, you'll need to set the following as well:
+OPENAI_API_TYPE=azure
+OPENAI_API_VERSION=2023-03-15-preview # or another version
+AZURE_BASE=https://your-instance.openai.azure.com/
+OPENAI_API_BASE=https://...
+```
+
+You must load these environment variables everytime you run a test command.
+You can install `dotenv` CLI to do this for you.
+
+<CodeGroup>
+```bash pip
+pip install "python-dotenv[cli]"
+```
+
+```bash poetry
+poetry add "python-dotenv[cli]"
+```
+
+</CodeGroup>
+
+Now you can prefix all commands with `dotenv run pytest ...` or `pipenv run pytest ...` to load the environment variables.
+
+### Running tests
+
+<Note>
+  You must have environment variables loaded correctly before running tests. See
+  the previous section.
+</Note>
+<Note>
+  Make sure you are running these commands from your python virtual environment
+  (or **`poetry shell`** if you use poetry)
+</Note>
 
 ```bash
 # From your project root
 # Runs all tests generated from @test_group
 # For every function, for every variant
-pytest -m baml_test
+pytest -m gloo_test
 ```
 
-To run tests for just one function
+To run tests for a subdirectory
 
 ```bash
 # From your project root
 # Note the underscore at the end of the folder name
-pytest -m baml_test ./generated/[function_name]_
+pytest -m gloo_test ./your-tests-folder/
 ```
 
-To run tests for just one test group
+To run tests that have a specific name or group name
 
 ```bash
 # From your project root
-pytest -m baml_test -k [test_group_name]
+pytest -m gloo_test -k test_group_name
 ```
+
+You can read more about the `-k` arg of pytest here ([PyTest Docs](https://docs.pytest.org/en/latest/example/markers.html#using-k-expr-to-select-tests-based-on-their-name))
+
+`-k` will match any tests with that given name.
 
 To run a specific test case in a test group
 
 ```bash
 # From your project root
-pytest -m baml_test -k '[test_group_name] and [test_case_name]'
+pytest -m gloo_test -k '[test_group_name] and [test_case_name]'
 ```
 
-## Coming Soon
+### Parameterized Tests
 
-```bash
-# From anywhere within your project
-baml test --function [function_name]
-baml test --group [test_group_name]
-baml test --group [test_group_name] --case [test_case_name]
+Parameterized tests allow you declare a list of inputs and expected outputs for a test case. Gloo will run the test for each input and compare the output to the expected output.
+
+```python
+from gloo_py.testing import gloo_test
+# Import your gloo-generated LLM functions
+from generated.functions import ClassifySentiment
+# Import any custom types defined in .gloo files
+from generated.custom_types import Sentiment
+
+@gloo_test
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "input, expected_output",
+    [
+        ("I am ecstatic", Sentiment.POSITIVE),
+        ("I am sad", Sentiment.NEGATIVE),
+        ("I am angry", Sentiment.NEGATIVE),
+    ],
+)
+async def test_sentiments(input, expected_output):
+    response = await ClassifySentiment(input)
+    assert response == expected_output
+```
+
+This will generate 3 test_cases on the dashboard, one for each input.
+
+### Using custom names for each test
+
+The parametrize decorator also allows you to specify a custom name for each test case. See below on how we name each test case using the ids parameter.
+
+```python
+from gloo_py.testing import gloo_test
+# Import your gloo-generated LLM functions
+from generated.functions import ClassifySentiment
+# Import any custom types defined in .gloo files
+from generated.custom_types import Sentiment
+
+test_cases = [
+    {"input": "I am ecstatic", "expected_output": Sentiment.POSITIVE, "id": "ecstatic-test"},
+    {"input": "I am sad", "expected_output": Sentiment.NEGATIVE, "id": "sad-test"},
+    {"input": "I am angry", "expected_output": Sentiment.NEGATIVE, "id": "angry-test"},
+]
+
+@gloo_test
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "test_case",
+    test_cases,
+    ids=[case['id'] for case in test_cases]
+)
+# Note the argument name "test_case" is set by the first parameter in the parametrize() decorator
+async def test_sentiments(test_case):
+    response = await ClassifySentiment(test_case["input"])
+    assert response == test_case["expected_output"]
+```
+
+### Grouping Tests by input type
+
+Alternatively, you can group things together logically by defining one test case or test class per input type your testing. In our case, we'll split up all Positive sentiments into their own group.
+
+```python
+from gloo_py.testing import gloo_test
+# Import your gloo-generated LLM functions
+from generated.functions import ClassifySentiment
+# Import any custom types defined in .gloo files
+from generated.custom_types import Sentiment
+
+@gloo_test
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+  # Note we only need to pass in one variable to the test, the "input".
+  "input",
+  [
+      "I am ecstatic",
+      "I am super happy!"
+  ],
+)
+class TestHappySentiments:
+    async def test_sentiments(input, expected_output):
+        response = await ClassifySentiment(input)
+        assert response == Sentiment.POSITIVE
+
+@gloo_test
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+  # Note we only need to pass in one variable to the test, the "input".
+  "input",
+  [
+      "I am sad",
+      "I am angry"
+  ],
+)
+class TestSadSentiments:
+    async def test_sentiments(input, expected_output):
+        response = await ClassifySentiment(input)
+        assert response == Sentiment.NEGATIVE
+```
+
+Alternatively you can just write a test function for each input type.
+
+```python
+from gloo_py.testing import gloo_test
+# Import your gloo-generated LLM functions
+from generated.functions import ClassifySentiment
+# Import any custom types defined in .gloo files
+from generated.custom_types import Sentiment
+
+@gloo_test
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "input",
+    [
+        "I am ecstatic",
+        "I am super happy!",
+        "I am thrilled",
+        "I am overjoyed",
+    ],
+)
+async def test_happy_sentiments(input):
+    response = await ClassifySentiment(input)
+    assert response == Sentiment.POSITIVE
+
+@gloo_test
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "input",
+    [
+        "I am sad",
+        "I am angry",
+        "I am upset",
+        "I am frustrated",
+    ],
+)
+async def test_sad_sentiments(input):
+    response = await ClassifySentiment(input)
+    assert response == Sentiment.NEGATIVE
 ```
