@@ -6,7 +6,6 @@ from .base_deserialzier import (
     RawWrapper,
     Result,
     Diagnostics,
-    DeserializerError,
 )
 
 T = typing.TypeVar("T", str, int, float, bool)

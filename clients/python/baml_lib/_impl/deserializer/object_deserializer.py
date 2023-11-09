@@ -9,8 +9,6 @@ from .base_deserialzier import (
     RawWrapper,
     Result,
     Diagnostics,
-    DeserializerError,
-    DeserializerWarning,
 )
 from .type_definition import type_to_definition
 

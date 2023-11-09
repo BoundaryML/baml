@@ -9,7 +9,6 @@ from .base_deserialzier import (
     RawWrapper,
     Result,
     Diagnostics,
-    DeserializerError,
 )
 
 

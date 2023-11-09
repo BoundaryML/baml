@@ -5,7 +5,7 @@ from .raw_wrapper import RawWrapper
 from .primitive_wrapper import RawBaseWrapper, RawStringWrapper, RawNoneWrapper
 from .list_wrapper import ListRawWrapper
 from .dict_wrapper import DictRawWrapper
-from ..diagnostics import Diagnostics, DeserializerError
+from ..diagnostics import Diagnostics
 
 
 def from_string(val: str, diagnostics: Diagnostics) -> RawWrapper:
