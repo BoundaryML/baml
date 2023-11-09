@@ -58,7 +58,10 @@ class EnumDeserializer(BaseDeserializer[T]):
         parsed = raw.as_str()
         if parsed is None:
             diagnostics.push_enum_error(
-                self.__enm.__name__, parsed, [item.name for item in self.__enm] + [f'{k} ({v})' for k, v in self.__value_aliases.items()]
+                self.__enm.__name__,
+                parsed,
+                [item.name for item in self.__enm]
+                + [f"{k} ({v})" for k, v in self.__value_aliases.items()],
             )
             return Result.failed()
         if parsed in self.__value_aliases:
@@ -69,7 +72,10 @@ class EnumDeserializer(BaseDeserializer[T]):
             return Result.from_value(parsed_item)
         except Exception:
             diagnostics.push_enum_error(
-                self.__enm.__name__, parsed, [item.name for item in self.__enm] + [f'{k} ({v})' for k, v in self.__value_aliases.items()]
+                self.__enm.__name__,
+                parsed,
+                [item.name for item in self.__enm]
+                + [f"{k} ({v})" for k, v in self.__value_aliases.items()],
             )
-            
+
             return Result.failed()

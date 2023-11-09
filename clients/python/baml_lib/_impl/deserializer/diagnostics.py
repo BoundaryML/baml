@@ -3,7 +3,10 @@ import typing
 
 class DeserializerException(Exception):
     def __init__(
-        self, errors: typing.List["DeserializerError"], warnings: typing.List["DeserializerWarning"], raw_string: str
+        self,
+        errors: typing.List["DeserializerError"],
+        warnings: typing.List["DeserializerWarning"],
+        raw_string: str,
     ) -> None:
         super().__init__(errors)
         self.__items = errors + warnings
@@ -13,7 +16,9 @@ class DeserializerException(Exception):
         self.__raw_string = raw_string
 
     def __str__(self) -> str:
-        output = [f"Failed to Deserialize from LLM ({self.__num_errors} errors) ({self.__num_warnings} warnings)"]
+        output = [
+            f"Failed to Deserialize from LLM ({self.__num_errors} errors) ({self.__num_warnings} warnings)"
+        ]
         for i in self.__items:
             output.append("------")
             output.append(str(i))
@@ -50,7 +55,6 @@ class Diagnostics:
             else:
                 self.__push_error(error)
 
-    
     def __push_error(self, error: "DeserializerError") -> None:
         if len(self.__scope) > 0:
             key = ".".join(self.__scope)
@@ -67,16 +71,26 @@ class Diagnostics:
         This method raises a DeserializerException if there are any errors in the diagnostics.
         """
         if len(self.__errors) > 0:
-            raise DeserializerException(self.__errors, self.__warnings, self.__raw_string)
+            raise DeserializerException(
+                self.__errors, self.__warnings, self.__raw_string
+            )
 
     def push_unkown_warning(self, message: str) -> None:
         self.__push_warning(DeserializerWarning(self.__scope, message))
 
-    def push_enum_error(self, enum_name: str, value: typing.Any, expected: typing.List[str]) -> None:
-        self.__push_error(DeserializerError(self.__scope, f'Failed to parse `{value}` as `{enum_name}`. Expected one of: {", ".join(expected)}'))
-    
+    def push_enum_error(
+        self, enum_name: str, value: typing.Any, expected: typing.List[str]
+    ) -> None:
+        self.__push_error(
+            DeserializerError(
+                self.__scope,
+                f'Failed to parse `{value}` as `{enum_name}`. Expected one of: {", ".join(expected)}',
+            )
+        )
+
     def push_unknown_error(self, message: str) -> None:
         self.__push_error(DeserializerError(self.__scope, message))
+
 
 class DeserializerError:
     def __init__(self, scope: typing.List[str], message: str):
@@ -96,7 +110,7 @@ class DeserializerError:
         if len(self.__scope) == 0:
             return f"Error: {self.__message}"
         return f"Error in {'.'.join(self.__scope)}: {self.__message}"
-    
+
     def to_warning(self) -> "DeserializerWarning":
         return DeserializerWarning(self.__scope, self.__message)
 
@@ -110,15 +124,12 @@ class DeserializerWarning:
     def scope(self) -> typing.List[str]:
         return self.__scope
 
-
     def __str__(self) -> str:
         if len(self.__scope) == 0:
             return f"Warning: {self.__message}"
         return f"Warning in {'.'.join(self.__scope)}: {self.__message}"
 
-
     def __repr__(self) -> str:
         if len(self.__scope) == 0:
             return f"Warning: {self.__message}"
         return f"Warning in {'.'.join(self.__scope)}: {self.__message}"
-
