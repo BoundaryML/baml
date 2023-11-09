@@ -27,16 +27,23 @@ from ..services.api import APIWrapper
 
 @typing.final
 class CustomBackendExporter(SpanExporter):
+    __project_id: typing.Optional[str]
+
     def __init__(self) -> None:
         super().__init__()
         self.__api_wrapper: typing.Optional[APIWrapper] = None
         self.__process_id = str(uuid.uuid4())
-        self.__project_id = os.environ.get("GLOO_APP_ID")
+        self.__project_id = None
 
-    def set_gloo_api(self, api_wrapper: APIWrapper) -> None:
-        self.__api_wrapper = api_wrapper
-        self.__process_id = api_wrapper.session_id
-        self.__project_id = api_wrapper.project_id
+    def set_gloo_api(self, api_wrapper: typing.Optional[APIWrapper]) -> None:
+        if api_wrapper:
+            self.__api_wrapper = api_wrapper
+            self.__project_id = api_wrapper.project_id
+            self.__process_id = api_wrapper.session_id
+        else:
+            self.__api_wrapper = None
+            self.__process_id = str(uuid.uuid4())
+            self.__project_id = None
 
     def export(self, spans: typing.Sequence[ReadableSpan]) -> SpanExportResult:
         # Convert spans to your backend's desired format
@@ -209,5 +216,4 @@ __provider.add_span_processor(__processor)
 
 
 def use_tracing(api: typing.Optional[APIWrapper] = None) -> None:
-    if api:
-        __exporter.set_gloo_api(api)
+    __exporter.set_gloo_api(api)

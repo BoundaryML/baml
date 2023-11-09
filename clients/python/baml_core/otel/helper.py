@@ -149,17 +149,24 @@ class PartialLogSchema(BaseModel):
                         root_event_id=self.root_event_id,
                         event_id=str(uuid.uuid4()),
                         parent_event_id=self.event_id,
-                        context=self.context,
+                        context=LogSchemaContext(
+                            hostname=self.context.hostname,
+                            process_id=self.context.process_id,
+                            stage=self.context.stage,
+                            event_chain=list(self.context.event_chain),
+                            latency_ms=self.context.latency_ms,
+                            start_time=self.context.start_time,
+                            tags=self.context.tags,
+                        ),
                         io=self.io,
                         error=err,
                         metadata=full_meta,
                     )
-                    event.context.event_chain.append(
-                        EventChain(
-                            function_name=self.context.event_chain[-1].function_name,
-                            variant_name=f"Attempt[{i + 1}]",
+                    if i > 0:
+                        last_name = event.context.event_chain[-1].function_name
+                        event.context.event_chain.append(
+                            EventChain(function_name=f"{last_name}: Attempt[{i + 1}]", variant_name=None)
                         )
-                    )
 
                     event_list.append(event)
 
