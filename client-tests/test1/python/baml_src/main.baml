@@ -14,5 +14,5 @@ class Message {
 
 class Conversation {
     thread Message[]
-}
+} 
       
