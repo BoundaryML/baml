@@ -110,13 +110,31 @@ jobs:
             echo "Version ($VERSION) is not a pre-release build"
             exit 1
           fi
-          tar -czvf baml-linux-x86_64.tar.gz engine/target/x86_64-unknown-linux-gnu/release/baml
-          tar -czvf baml-apple-intel.tar.gz engine/target/x86_64-apple-darwin/release/baml
-          tar -czvf baml-apple-arm.tar.gz engine/target/aarch64-apple-darwin/release/baml
-          echo "linux_hash=$(shasum -a 256 baml-linux-x86_64.tar.gz | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
-          echo "darwin_intel_hash=$(shasum -a 256 baml-apple-intel.tar.gz | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
-          echo "darwin_arm_hash=$(shasum -a 256 baml-apple-arm.tar.gz | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
-          echo "windows_hash=$(shasum -a 256 engine/target/x86_64-pc-windows-msvc/release/baml.exe | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
+
+          # Function to package binaries for Unix-like systems
+          package_binary() {
+            local platform="$1"
+            local binary="$2"
+            local output_dir="../../../"
+            local archive_name="${binary}-${platform}.tar.gz"
+      
+            pushd "engine/target/$platform/release"
+            tar -czvf "$output_dir$archive_name" "$binary"
+            popd
+      
+            local hash_value=$(shasum -a 256 "$output_dir$archive_name" | cut -d ' ' -f 1)
+            echo "${platform}_hash=$hash_value" >> $GITHUB_OUTPUT
+          }
+      
+          # Package binaries for Unix-like platforms
+          package_binary "x86_64-unknown-linux-gnu" "baml"
+          package_binary "x86_64-apple-darwin" "baml"
+          package_binary "aarch64-apple-darwin" "baml"
+          
+          windows_binary_path="engine/target/x86_64-pc-windows-msvc/release/baml.exe"
+          windows_hash=$(shasum -a 256 "$windows_binary_path" | cut -d ' ' -f 1)
+          echo "windows_hash=$windows_hash" >> $GITHUB_OUTPUT
+      
           echo "version=$(echo $VERSION | cut -d '-' -f 1)" >> $GITHUB_OUTPUT
           echo "full_version=$VERSION" >> $GITHUB_OUTPUT
 
