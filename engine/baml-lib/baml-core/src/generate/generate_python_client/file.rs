@@ -255,7 +255,11 @@ impl File {
                     .trim_end_matches(", "),
             );
 
-            if module.starts_with(".") && self.is_export {
+            if module.starts_with(".") && self.is_export
+                || (module.starts_with("baml_lib")
+                    || module.starts_with("baml_core")
+                    || module.starts_with("baml_test"))
+            {
                 exports.extend(imports);
             }
 

@@ -21,3 +21,8 @@ from typing import List
 @register_deserializer({  })
 class Conversation(BaseModel):
     thread: List[Message]
+
+
+__all__ = [
+    'register_deserializer'
+]

@@ -1,6 +1,7 @@
 import asyncio
+from baml_client.tracing import trace, set_tags
 
-from baml_core.otel import trace, set_tags
+# from baml_core.otel import trace, set_tags
 from baml_lib import baml_init
 from baml_client import baml
 from baml_client.baml_types import ProposedMessage, Conversation

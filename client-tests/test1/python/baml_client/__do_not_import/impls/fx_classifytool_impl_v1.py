@@ -62,3 +62,8 @@ __deserializer = Deserializer[ClassifyResponse](ClassifyResponse)  # type: ignor
 async def v1(arg: UserInfo, /) -> ClassifyResponse:
     response = await AZURE_GPT4.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
     return __deserializer.from_string(response.generated)
+
+
+__all__ = [
+    'Deserializer'
+]

@@ -5,7 +5,6 @@ from baml_client.baml_types import (
     ProposedMessage,
     ITextPolisher,
 )
-from baml_core.otel import trace, set_tags
 
 
 async def some_traced_fn():

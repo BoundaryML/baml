@@ -11,14 +11,10 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
+
+
+from baml_lib import baml_init 
 from .__do_not_import.generated_baml_client import baml
-
-from baml_core.otel import trace, set_tags as set_trace_tags
-from baml_lib import baml_init
-import dotenv
-
-dotenv.load_dotenv(dotenv_path=dotenv.find_dotenv(usecwd=True))
-
 __all__ = [
-    "baml_init"
+   'baml_init',
 ]

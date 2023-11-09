@@ -1,6 +1,7 @@
 use internal_baml_parser_database::walkers::{ArgWalker, Walker};
 use internal_baml_schema_ast::ast::{FunctionId, WithDocumentation, WithName};
 
+use log::info;
 use serde_json::json;
 
 use crate::generate::generate_python_client::file::clean_file_name;

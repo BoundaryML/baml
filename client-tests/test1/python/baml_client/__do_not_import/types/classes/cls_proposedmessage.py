@@ -11,7 +11,6 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..enums.enm_messagesender import MessageSender
 from .cls_conversation import Conversation
 from .cls_message import Message
 from baml_lib._impl.deserializer import register_deserializer
@@ -22,3 +21,8 @@ from pydantic import BaseModel
 class ProposedMessage(BaseModel):
     thread: Conversation
     generated_response: str
+
+
+__all__ = [
+    'register_deserializer'
+]

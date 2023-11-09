@@ -25,7 +25,7 @@ enum Tool {
 class UserInfo {
   query string
   context string
-}
+} 
 
 impl<llm, ClassifyTool> v1 {
     client AZURE_GPT4

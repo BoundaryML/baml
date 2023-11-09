@@ -17,7 +17,6 @@ from ..types.classes.cls_conversation import Conversation
 from ..types.classes.cls_improvedresponse import ImprovedResponse
 from ..types.classes.cls_message import Message
 from ..types.classes.cls_proposedmessage import ProposedMessage
-from ..types.enums.enm_messagesender import MessageSender
 from ..types.enums.enm_sentiment import Sentiment
 from baml_lib._impl.deserializer import Deserializer
 
@@ -73,3 +72,8 @@ __deserializer.overload("ImprovedResponse", {"ShouldImprove": "should_improve"})
 async def v1(arg: ProposedMessage, /) -> ImprovedResponse:
     response = await AZURE_GPT4.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
     return __deserializer.from_string(response.generated)
+
+
+__all__ = [
+    'Deserializer'
+]

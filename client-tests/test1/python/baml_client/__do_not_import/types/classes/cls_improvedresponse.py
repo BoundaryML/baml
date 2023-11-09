@@ -22,3 +22,8 @@ class ImprovedResponse(BaseModel):
     should_improve: bool
     improved_response: Optional[str] = None
     field: Sentiment
+
+
+__all__ = [
+    'register_deserializer'
+]

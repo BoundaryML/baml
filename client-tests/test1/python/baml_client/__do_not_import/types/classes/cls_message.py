@@ -20,3 +20,8 @@ from pydantic import BaseModel
 class Message(BaseModel):
     sender: MessageSender
     body: str
+
+
+__all__ = [
+    'register_deserializer'
+]

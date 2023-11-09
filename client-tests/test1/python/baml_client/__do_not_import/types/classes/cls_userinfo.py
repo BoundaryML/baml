@@ -19,3 +19,8 @@ from pydantic import BaseModel
 class UserInfo(BaseModel):
     query: str
     context: str
+
+
+__all__ = [
+    'register_deserializer'
+]

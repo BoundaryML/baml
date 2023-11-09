@@ -26,3 +26,8 @@ AZURE_GPT4 = LLMManager.add_llm(
         max_tokens=400,
     ),
 )
+
+
+__all__ = [
+    'LLMManager'
+]

@@ -20,3 +20,8 @@ class Tool(str, Enum):
     CodeInterpreter = "CodeInterpreter"
     DrawImage = "DrawImage"
     GenerateText = "GenerateText"
+
+
+__all__ = [
+    'register_deserializer'
+]
