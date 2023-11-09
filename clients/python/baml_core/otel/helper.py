@@ -368,7 +368,7 @@ def fill_partial(event: Event, partial: PartialLogSchema) -> None:
         partial.context.event_chain[-1].variant_name = as_str(attrs["name"])
     elif event.name == "exception":
         partial.error = Error(
-            code=-1,  # Some unknown error code
+            code=2,  # Some unknown error code
             message=as_str(attrs["exception.type"])
             + ": "
             + as_str(attrs["exception.message"]),

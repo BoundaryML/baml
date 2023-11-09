@@ -48,7 +48,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    baml_init(
-        base_url="https://beta.app.trygloo.com/api",
-    )
     asyncio.run(test_azure_default())

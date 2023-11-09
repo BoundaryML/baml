@@ -224,7 +224,6 @@ class APIWrapper(__APIBase):
         payload: LogSchema,
     ) -> None:
         try:
-            print(payload)
             self._call_api_sync("log/v2", payload)
         except Exception as e:
             event_name = payload.context.event_chain[-1].function_name
