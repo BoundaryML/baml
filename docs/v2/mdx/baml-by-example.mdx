@@ -201,13 +201,95 @@ async def call_prompt():
 
 
 ## Injecting variables
-To inject a variable into a prompt, you can use the `@` symbol. This is called a **variable injection**. A prompt's variables are always accessible via \{#input\}. If the input to a prompt is only a string, you can just add **\{#input\}**
-```llvm
+To inject a variable into a prompt, you can use the `#` symbol. A prompt's input variables are always accessible via \{#input\}. If the input to a prompt is only a string, you can just add **\{#input\}**.
+```rust
+// a prompt with a string input
 #"
 You are an assistant talking to: {#input.firstName}.
 "#
 ```
 
-## Injecting code
+## Printers
+BAML has a few helper functions to make it easier to print out lists and complex types, so that your LLM is able to return the proper JSON object back.
+ See this [leaked openai prompt](https://raw.githubusercontent.com/spdustin/ChatGPT-AutoExpert/main/_system-prompts/dall-e.md), where the desired output is printed in a custom way using comments like:
+```rust
+#"
+// Create images for a text-only prompt
+{
+  // the size of the image. IF the user requests a wide image, use xyz....
+  size?: '1792x1024' | '1024x1024' | '1024x1792',
+  // a list of seeds to use for each prompt. If the user modifies a previous image, populate this field with the seed used to generate that image from the dalle metadata.
+  seeds?: number[],
+}
+"#
+```
+A printer in BAML can be invoked for **enums** and **classes**, and they use the **alias()** and **description()** attributes defined for those enums or classes if they are present to inject that extra metadata into the type description.
 
-## Comments
+### print_type(...)
+Prints out the schema of an object in a nicely formatted way (in the openAI format seen above).
+
+In a prompt 99% of the time you just want to use `{#print_type(output)}` since `output` is a special keyword that already maps to your actual function's output type. It's the same as writing `{#print_type(User)}`.
+
+<Note>One of the core philosophies of BAML is to allow you to see the prompt as it will be rendered, so you can debug it. Our VSCode extension will eventually show you what the rendered prompt will look like on-hover, so you know exactly what data will be sent to the LLM.</Note>
+
+```rust
+class User {
+  name string
+  lastName string
+  isPolite bool @alias("is_cool") 
+  @description("If the user says 'please', mark them as true, otherwise false")
+}
+// ... inside an impl<> {...}
+prompt #"
+  Here is a bunch of info about a user in an unstructured format:
+  {#input}
+
+  Please return the user info in this JSON format:
+  {#print_type(output)}
+"#
+```
+The rendered prompt is then:
+```diff
+  Here is a bunch of info about a user in an unstructured format:
+  Hi I am a user named xyz, and im looking for lawnmowers. Do you have any in stock?
+
+  Please return the user info in this JSON format:
++  {
++    "name": string,
++    "lastName": string,
++    // If the user says 'please', mark them as true, otherwise false
++    "is_cool": boolean
++  }
+```
+
+### print_enum(...)
+This prints out an enum's values with their definitions as a list in your prompt. Useful for classification tasks.
+
+```rust
+enum MyEnum {
+    GREEN @alias("orange") @description("If the text sounds nice")
+    RED @alias("red") @description("If the text sounds angry")
+}
+
+// ... inside an impl<> {...}
+prompt #"
+  Here is a bunch of text to classify
+  {#input}
+
+  Please return one of the following classes:
+  {#print_enum(MyEnum)}
+"#
+```
+This renders
+```
+Here is a bunch of text to classify
+Hi I am a user named xyz, and im looking for lawnmowers. Do you have any in stock?
+
+Please return one of the following classes:
+GREEN: If the text sounds nice
+RED: If the text sounds angry
+```
+
+<Tip>
+If your output schema contains enums you can add both print_type(..) and print_enum(..) in your prompt. The LLM will use the enum definitions to output the right enum in the appropriate JSON property.
+</Tip>

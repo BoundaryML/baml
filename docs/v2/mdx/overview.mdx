@@ -46,7 +46,7 @@ The dashboard helps you track requests, label data, and run test suites.
 
 
 ## Why use BAML vs other libraries?
-1. **Comments in prompts** - Umm yes, we did it... you can now add comments to your prompts strings!
+1. **Comments in prompts** - You heard that right... we added support for comments inside your prompts strings!
 1. **Strong type safety** - Query your data with into fully typed pandas dataframes of your input and output objects, rather than raw strings or JSON.
 1. **Smarter deserialization** - BAML parses your inputs and outputs for you, and provides guardrails to ensure your inputs and outputs are valid. Even when the JSON is valid, the types may not be. The BAML deserializer can smartly detect when an LLM may have output a string rather than a number, and still parse things correctly. For enums it even keeps track of hallucinated values.
 1. **Code organization** - Organize your code in statically analyzed BAML files, without having to use plaintext or YAML
