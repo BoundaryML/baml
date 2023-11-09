@@ -137,7 +137,7 @@ jobs:
           tag_name: "unstable/cli/v${{ steps.hash.outputs.version }}"
           files: |
             engine/target/x86_64-unknown-linux-gnu/release/baml-linux-x86_64.tar.gz
-            engine/target/x86_64-apple-darwin/baml-apple-intel.tar.gz
+            engine/target/x86_64-apple-darwin/release/baml-apple-intel.tar.gz
             engine/target/aarch64-apple-darwin/release/baml-apple-arm.tar.gz
             engine/target/x86_64-pc-windows-msvc/release/baml.exe
           prerelease: true # Must manually upgrade to release once homebrew is updated.
@@ -216,7 +216,7 @@ jobs:
           tag_name: "releases/baml-cli/v${{ steps.hash.outputs.version }}"
           files: |
             engine/target/x86_64-unknown-linux-gnu/release/baml-linux-x86_64.tar.gz
-            engine/target/x86_64-apple-darwin/baml-apple-intel.tar.gz
+            engine/target/x86_64-apple-darwin/release/baml-apple-intel.tar.gz
             engine/target/aarch64-apple-darwin/release/baml-apple-arm.tar.gz
             engine/target/x86_64-pc-windows-msvc/release/baml.exe
           prerelease: true # Must manually upgrade to release once homebrew is updated.
