@@ -139,14 +139,14 @@ class LogSchema(BaseModel):
         if metadata := self.metadata:
             if isinstance(metadata.input.prompt.template, list):
                 prompt = "\n".join(
-                    f"{colorama.Fore.YELLOW}Role: {c['role']}\n{colorama.Fore.LIGHTMAGENTA_EX}{c['content']}{colorama.Fore.RESET}"
+                    f"{colorama.Fore.YELLOW}Role: {c['role']}\n{  colorama.Fore.LIGHTMAGENTA_EX}{c['content']}{colorama.Fore.RESET }"
                     for c in metadata.input.prompt.template
                 )
             else:
                 prompt = metadata.input.prompt.template
             for k, v in metadata.input.prompt.template_args.items():
                 prompt = prompt.replace(
-                    k, colorama.Back.LIGHTBLUE_EX + v + colorama.Back.RESET
+                    k, colorama.Style.BRIGHT + v + colorama.Style.NORMAL
                 )
             pp.extend(
                 [
@@ -197,7 +197,7 @@ class LogSchema(BaseModel):
             return ""
         cached_string = ""
         if "__cached" in self.context.tags:
-            cached_string = f"{colorama.Back.LIGHTYELLOW_EX} Cache Hit! Saved {self.context.tags['__cached_latency_ms']}ms {colorama.Back.RESET} "
+            cached_string = f"{colorama.Fore.LIGHTYELLOW_EX} Cache Hit! Saved {self.context.tags['__cached_latency_ms']}ms {colorama.Fore.RESET} "
 
         pp.insert(
             0,
