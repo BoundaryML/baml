@@ -188,7 +188,7 @@ class BaseBAMLFunction(typing.Generic[RET]):
         return self.__impls[name]
 
     @property
-    def _name(self) -> str:
+    def name(self) -> str:
         """
         Gets the name of the BAML function.
 
