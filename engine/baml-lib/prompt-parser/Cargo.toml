@@ -8,6 +8,7 @@ license-file.workspace = true
 
 [dependencies]
 internal-baml-diagnostics = { path = "../diagnostics" }
+internal-baml-schema-ast = { path = "../schema-ast" }
 log = "0.4.20"
 
 pest = "2.1.3"

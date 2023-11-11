@@ -1,9 +1,134 @@
-
+use log::info;
 
 use crate::ast::Span;
 use std::fmt;
 
 use super::{Identifier, WithName, WithSpan};
+
+#[derive(Debug, Clone)]
+pub struct RawString {
+    raw_span: Span,
+    raw_value: String,
+    inner_value: String,
+
+    /// If set indicates the language of the raw string.
+    /// By default it is a text string.
+    pub language: Option<(String, Span)>,
+
+    // This is useful for getting the final offset.
+    indent: usize,
+    inner_span_start: usize,
+}
+
+impl WithSpan for RawString {
+    fn span(&self) -> &Span {
+        &self.raw_span
+    }
+}
+
+pub fn dedent(s: &str) -> (String, usize) {
+    let mut prefix = "";
+    let mut lines = s.lines();
+
+    // We first search for a non-empty line to find a prefix.
+    for line in &mut lines {
+        let mut whitespace_idx = line.len();
+        for (idx, ch) in line.char_indices() {
+            if !ch.is_whitespace() {
+                whitespace_idx = idx;
+                break;
+            }
+        }
+
+        // Check if the line had anything but whitespace
+        if whitespace_idx < line.len() {
+            prefix = &line[..whitespace_idx];
+            break;
+        }
+    }
+
+    // We then continue looking through the remaining lines to
+    // possibly shorten the prefix.
+    for line in &mut lines {
+        let mut whitespace_idx = line.len();
+        for ((idx, a), b) in line.char_indices().zip(prefix.chars()) {
+            if a != b {
+                whitespace_idx = idx;
+                break;
+            }
+        }
+
+        // Check if the line had anything but whitespace and if we
+        // have found a shorter prefix
+        if whitespace_idx < line.len() && whitespace_idx < prefix.len() {
+            prefix = &line[..whitespace_idx];
+        }
+    }
+
+    // We now go over the lines a second time to build the result.
+    let mut result = String::new();
+    for line in s.lines() {
+        if line.starts_with(prefix) && line.chars().any(|c| !c.is_whitespace()) {
+            let (_, tail) = line.split_at(prefix.len());
+            result.push_str(tail);
+        }
+        result.push('\n');
+    }
+
+    if result.ends_with('\n') && !s.ends_with('\n') {
+        let new_len = result.len() - 1;
+        result.truncate(new_len);
+    }
+
+    (result, prefix.len())
+}
+
+impl RawString {
+    pub(crate) fn new(value: String, span: Span, language: Option<(String, Span)>) -> Self {
+        let dedented_value = value.trim_start_matches(|c| c == '\n' || c == '\r');
+        let start_trim_count = value.len() - dedented_value.len();
+        let dedented_value = dedented_value.trim_end();
+        let (dedented_value, indent_size) = dedent(dedented_value);
+        Self {
+            raw_span: span,
+            raw_value: value,
+            inner_value: dedented_value,
+            indent: indent_size,
+            inner_span_start: start_trim_count,
+            language,
+        }
+    }
+
+    pub fn value(&self) -> &str {
+        &self.inner_value
+    }
+
+    pub fn to_raw_span(&self, span: pest::Span<'_>) -> Span {
+        let start_idx = span.start();
+        let end_idx = span.end();
+        // Count number of \n in the raw string before the start of the span.
+        let start_line_count = self.value()[..start_idx]
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .count();
+        let end_line_count = self.value()[..end_idx]
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .count();
+
+        Span {
+            file: self.raw_span.file.clone(),
+            start: self.raw_span.start
+                + self.inner_span_start
+                + self.indent * start_line_count
+                + span.start(),
+            end: self.raw_span.start
+                + self.inner_span_start
+                + self.indent * end_line_count
+                + span.end(),
+        }
+    }
+}
 
 /// Represents arbitrary, even nested, expressions.
 #[derive(Debug, Clone)]
@@ -15,7 +140,7 @@ pub enum Expression {
     /// Any string value.
     StringValue(String, Span),
     /// Any string value.
-    RawStringValue(String, Span),
+    RawStringValue(RawString),
     /// An array of other values.
     Array(Vec<Expression>, Span),
     /// A mapping function.
@@ -28,7 +153,9 @@ impl fmt::Display for Expression {
             Expression::Identifier(id) => fmt::Display::fmt(id.name(), f),
             Expression::NumericValue(val, _) => fmt::Display::fmt(val, f),
             Expression::StringValue(val, _) => write!(f, "{}", crate::string_literal(val)),
-            Expression::RawStringValue(val, _) => write!(f, "{}", crate::string_literal(val)),
+            Expression::RawStringValue(val, ..) => {
+                write!(f, "{}", crate::string_literal(val.value()))
+            }
             Expression::Array(vals, _) => {
                 let vals = vals
                     .iter()
@@ -59,10 +186,8 @@ impl Expression {
 
     pub fn as_path_value(&self) -> Option<(&str, &Span)> {
         match self {
-            Expression::StringValue(s, span) => Some((s, span)),
-            Expression::RawStringValue(s, span) if !(s == "true" || s == "false") => {
-                Some((s, span))
-            }
+            Expression::StringValue(s, span) if !(s == "true" || s == "false") => Some((s, span)),
+            Expression::RawStringValue(s) => Some((s.value(), s.span())),
             Expression::Identifier(Identifier::String(id, span)) => Some((id, span)),
             Expression::Identifier(Identifier::Invalid(id, span)) => Some((id, span)),
             Expression::Identifier(Identifier::Local(id, span)) => Some((id, span)),
@@ -73,13 +198,18 @@ impl Expression {
 
     pub fn as_string_value(&self) -> Option<(&str, &Span)> {
         match self {
-            Expression::StringValue(s, span) => Some((s, span)),
-            Expression::RawStringValue(s, span) if !(s == "true" || s == "false") => {
-                Some((s, span))
-            }
+            Expression::StringValue(s, span) if !(s == "true" || s == "false") => Some((s, span)),
+            Expression::RawStringValue(s) => Some((s.value(), s.span())),
             Expression::Identifier(Identifier::String(id, span)) => Some((id, span)),
             Expression::Identifier(Identifier::Invalid(id, span)) => Some((id, span)),
             Expression::Identifier(Identifier::Local(id, span)) => Some((id, span)),
+            _ => None,
+        }
+    }
+
+    pub fn as_raw_string_value(&self) -> Option<&RawString> {
+        match self {
+            Expression::RawStringValue(s) => Some(s),
             _ => None,
         }
     }
@@ -94,7 +224,7 @@ impl Expression {
     pub fn as_constant_value(&self) -> Option<(&str, &Span)> {
         match self {
             Expression::StringValue(val, span) => Some((val, span)),
-            Expression::RawStringValue(val, span) => Some((val, span)),
+            Expression::RawStringValue(s) => Some((s.value(), s.span())),
             Expression::Identifier(idn) if idn.is_valid_value() => Some((idn.name(), idn.span())),
             _ => None,
         }
@@ -118,7 +248,7 @@ impl Expression {
         match &self {
             Self::NumericValue(_, span) => span,
             Self::StringValue(_, span) => span,
-            Self::RawStringValue(_, span) => span,
+            Self::RawStringValue(r) => r.span(),
             Self::Identifier(id) => id.span(),
             Self::Map(_, span) => span,
             Self::Array(_, span) => span,
@@ -137,7 +267,7 @@ impl Expression {
         match self {
             Expression::NumericValue(_, _) => "numeric",
             Expression::StringValue(_, _) => "string",
-            Expression::RawStringValue(_, _) => "raw_string",
+            Expression::RawStringValue(_) => "raw_string",
             Expression::Identifier(id) => match id {
                 Identifier::String(_, _) => "string",
                 Identifier::Local(_, _) => "local_type",
@@ -163,7 +293,7 @@ impl Expression {
         matches!(
             self,
             Expression::StringValue(_, _)
-                | Expression::RawStringValue(_, _)
+                | Expression::RawStringValue(_)
                 | Expression::Identifier(Identifier::String(_, _))
                 | Expression::Identifier(Identifier::Invalid(_, _))
                 | Expression::Identifier(Identifier::Local(_, _))

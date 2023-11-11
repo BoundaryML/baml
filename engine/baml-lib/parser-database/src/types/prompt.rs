@@ -1,32 +1,28 @@
-use internal_baml_diagnostics::{DatamodelError, Span};
+use internal_baml_diagnostics::DatamodelError;
 use internal_baml_prompt_parser::ast::{CodeBlock, PromptAst, Top, Variable};
+use internal_baml_schema_ast::ast::RawString;
 
 use crate::context::Context;
 
 use super::PromptVariable;
 
-// TODO: add a database of attributes, types, etc to each of the code blocks etc so we can access everything easily. E.g. store the field type of each codeblock variable path, etc.
+/// Function returns the raw_string without any comments.
 pub(super) fn validate_prompt(
     ctx: &mut Context<'_>,
-    prompt: (&str, Span),
-    span: &Span,
+    raw_string: &RawString,
 ) -> Option<(String, Vec<PromptVariable>)> {
-    if prompt.0.is_empty() {
+    if raw_string.value().is_empty() {
         // Return an empty string if the prompt is empty.
-        return Some((String::new(), Default::default()));
+        return Some(Default::default());
     }
 
     let parsed_prompt =
-        internal_baml_prompt_parser::parse_prompt(&ctx.diagnostics.root_path, &span.file, prompt);
+        internal_baml_prompt_parser::parse_prompt(&ctx.diagnostics.root_path, raw_string);
 
     match parsed_prompt {
         Ok((ast, d)) => {
             ctx.diagnostics.push(d);
-            let (processed_prompt, replacers) = process_prompt_ast(ctx, ast);
-            Some((
-                textwrap::dedent(&processed_prompt).trim().to_string(),
-                replacers,
-            ))
+            Some(process_prompt_ast(ctx, ast))
         }
         Err(diagnostics) => {
             ctx.diagnostics.push(diagnostics);

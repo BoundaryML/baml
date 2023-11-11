@@ -28,8 +28,9 @@ impl<llm, Foo> FooImpl{
 }
 
 
+
 // error: Error validating: Must start with `input`
-//   -->  /Users/vbv/repos/gloo-lang/engine/baml/baml/tests/validation_files/variants/prompt/unknown_prompt_var_multi_arg.baml:20
+//   -->  variants/prompt/unknown_prompt_var_multi_arg.baml:20
 //    | 
 // 19 |     A {#input.e}
 // 20 |     {#InputType.e}

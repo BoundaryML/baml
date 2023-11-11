@@ -29,15 +29,6 @@ fn as_comment(text: &str) -> String {
         .join("\n")
 }
 
-fn as_indented_string(content: &str, level: usize) -> String {
-    let indentation = "    ".repeat(level);
-    content
-        .lines()
-        .map(|line| format!("{}{}", indentation, line))
-        .collect::<Vec<String>>()
-        .join("\n")
-}
-
 // Specialized print functions adapted for Rust
 
 fn print_enum_value(value: &EnumValue) -> String {

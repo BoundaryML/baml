@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::Span;
 use colored::{ColoredString, Colorize};
 

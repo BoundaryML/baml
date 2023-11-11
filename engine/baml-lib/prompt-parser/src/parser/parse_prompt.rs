@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
 use crate::{assert_correct_parser, ast::*, unreachable_rule};
-use internal_baml_diagnostics::{DatamodelError, Diagnostics, SourceFile, Span};
-
+use internal_baml_diagnostics::{DatamodelError, Diagnostics, Span};
+use internal_baml_schema_ast::ast::{RawString, WithSpan};
 use pest::Parser;
 
 use super::{BAMLPromptParser, Rule};
@@ -23,27 +23,26 @@ fn pretty_print<'a>(pair: pest::iterators::Pair<'a, Rule>, indent_level: usize) 
 
 pub fn parse_prompt(
     root_path: &PathBuf,
-    source: &SourceFile,
-    (prompt, prompt_span): (&str, Span),
+    raw_string: &RawString,
 ) -> Result<(PromptAst, Diagnostics), Diagnostics> {
     let mut diagnostics = Diagnostics::new(root_path.clone());
-    diagnostics.set_source(source);
 
-    let parse_result = BAMLPromptParser::parse(Rule::entry, &prompt);
+    // Do not set diagnostics source here. Instead we should always use:
+    // raw_string.to_span(...)
+
+    let parse_result = BAMLPromptParser::parse(Rule::entry, raw_string.value());
     let mut top_level_definitions = Vec::new();
 
     match parse_result {
         Ok(mut parsed_rules) => {
-            // The offset for diagnostics is based on where the prompt starts.
-            // The prompt itself also includes the leading characters for a raw_string "\"#"
-            // TODO (aaronv): pass in the right number here based on the number of prompt.
-            diagnostics.set_span_offset(prompt_span.start + 2);
-
             for pair in parsed_rules.next().unwrap().into_inner() {
                 match pair.as_rule() {
-                    Rule::whitespaces | Rule::WHITESPACE => {
-                        handle_whitespace(pair, &mut top_level_definitions, &diagnostics)
-                    }
+                    Rule::whitespaces | Rule::WHITESPACE => handle_whitespace(
+                        pair,
+                        &mut top_level_definitions,
+                        &diagnostics,
+                        raw_string,
+                    ),
                     Rule::segment => {
                         for inner in pair.into_inner() {
                             match inner.as_rule() {
@@ -51,27 +50,30 @@ pub fn parse_prompt(
                                     inner,
                                     &mut top_level_definitions,
                                     &mut diagnostics,
+                                    &raw_string,
                                 ),
                                 Rule::comment_block => handle_comment_block(
                                     inner,
                                     &mut top_level_definitions,
                                     &diagnostics,
+                                    &raw_string,
                                 ),
                                 Rule::prompt_text => handle_prompt_text(
                                     inner,
                                     &mut top_level_definitions,
                                     &diagnostics,
+                                    &raw_string,
                                 ),
                                 Rule::dangling_code_block => {
                                     diagnostics.push_error(DatamodelError::new_parser_error(
                                         "{#input..} or {#print_enum(..)} or {#print_type(..)} or {// some comment //}".to_string(),
-                                        diagnostics.span(inner.as_span().clone()),
+                                        raw_string.to_raw_span(inner.as_span()),
                                     ));
                                 }
                                 Rule::dangling_comment_block => {
                                     diagnostics.push_error(DatamodelError::new_parser_error(
                                         "Unterminated comment".to_string(),
-                                        diagnostics.span(inner.as_span().clone()),
+                                        raw_string.to_raw_span(inner.as_span()),
                                     ));
                                 }
                                 _ => unreachable_rule!(inner, Rule::segment),
@@ -96,7 +98,7 @@ pub fn parse_prompt(
                     "Unabled to parse this raw string. Please file a bug.\n{}",
                     err
                 ),
-                prompt_span.clone(),
+                raw_string.span().clone(),
             ));
             Err(diagnostics)
         }
@@ -106,13 +108,18 @@ fn handle_code_block(
     pair: pest::iterators::Pair<'_, Rule>,
     top_level_definitions: &mut Vec<Top>,
     diagnostics: &mut Diagnostics,
+    raw_string: &RawString,
 ) {
     assert_correct_parser!(pair, Rule::code_block);
 
     for current in pair.into_inner() {
         match current.as_rule() {
-            Rule::variable => handle_variable(current, top_level_definitions, diagnostics),
-            Rule::print_block => handle_print_block(current, top_level_definitions, diagnostics),
+            Rule::variable => {
+                handle_variable(current, top_level_definitions, diagnostics, raw_string)
+            }
+            Rule::print_block => {
+                handle_print_block(current, top_level_definitions, diagnostics, raw_string)
+            }
             _ => unreachable_rule!(current, Rule::code_block),
         }
     }
@@ -122,10 +129,11 @@ fn handle_variable(
     current: pest::iterators::Pair<'_, Rule>,
     top_level_definitions: &mut Vec<Top>,
     diagnostics: &mut Diagnostics,
+    raw_string: &RawString,
 ) {
     assert_correct_parser!(current, Rule::variable);
 
-    let span = diagnostics.span(current.as_span());
+    let span = raw_string.to_raw_span(current.as_span());
     let raw_text = current.as_str().to_string();
     let type_path = current
         .into_inner()
@@ -135,7 +143,7 @@ fn handle_variable(
             } else {
                 diagnostics.push_error(DatamodelError::new_parser_error(
                     format!("Unexpected rule: {:?}", inner.as_rule()),
-                    diagnostics.span(inner.as_span().clone()),
+                    raw_string.to_raw_span(inner.as_span()),
                 ));
                 None
             }
@@ -153,10 +161,11 @@ fn handle_print_block(
     current: pest::iterators::Pair<'_, Rule>,
     top_level_definitions: &mut Vec<Top>,
     diagnostics: &mut Diagnostics,
+    raw_string: &RawString,
 ) {
     assert_correct_parser!(current, Rule::print_block);
 
-    let _block_span = &diagnostics.span(current.as_span().clone());
+    let _block_span = &raw_string.to_raw_span(current.as_span().clone());
     let mut printer_type = None;
     let mut argument = vec![];
     let mut template_span = None;
@@ -174,12 +183,12 @@ fn handle_print_block(
                 other => {
                     diagnostics.push_error(DatamodelError::new_parser_error(
                         format!("unknown printer function name `print{}`. Did you mean print_type or print_enum?", other),
-                        diagnostics.span(current.clone().as_span()),
+                        raw_string.to_raw_span(current.as_span()),
                     ));
                 }
             },
             Rule::template_args => {
-                template_span = Some(diagnostics.span(current.as_span().clone()));
+                template_span = Some(raw_string.to_raw_span(current.as_span().clone()));
                 for current in current.into_inner() {
                     match current.as_rule() {
                         Rule::identifier => {
@@ -195,12 +204,12 @@ fn handle_print_block(
                         Rule::identifier => {
                             argument.push((
                                 current.as_str().to_string(),
-                                diagnostics.span(current.as_span().clone()),
+                                raw_string.to_raw_span(current.as_span().clone()),
                             ));
                         }
                         _ => diagnostics.push_error(DatamodelError::new_parser_error(
                             "missing argument".to_string(),
-                            diagnostics.span(current.as_span().clone()),
+                            raw_string.to_raw_span(current.as_span().clone()),
                         )),
                     }
                 }
@@ -250,7 +259,7 @@ fn handle_print_block(
         (None, Some(arg)) => {
             diagnostics.push_error(DatamodelError::new_parser_error(
                 format!("Did you mean print_type({0}) or print_enum({0})?", arg.0),
-                diagnostics.span(current.as_span().clone()),
+                raw_string.to_raw_span(current.as_span().clone()),
             ));
             None
         }
@@ -263,14 +272,14 @@ fn handle_print_block(
                         false => "type",
                     }
                 ),
-                diagnostics.span(current.as_span().clone()),
+                raw_string.to_raw_span(current.as_span().clone()),
             ));
             None
         }
         (None, None) => {
             diagnostics.push_error(DatamodelError::new_parser_error(
                 "Missing argument. Did you mean print_type(SomeType)?".into(),
-                diagnostics.span(current.as_span().clone()),
+                raw_string.to_raw_span(current.as_span().clone()),
             ));
             None
         }
@@ -284,13 +293,14 @@ fn handle_print_block(
 fn handle_comment_block(
     pair: pest::iterators::Pair<'_, Rule>,
     top_level_definitions: &mut Vec<Top>,
-    diagnostics: &Diagnostics,
+    _diagnostics: &Diagnostics,
+    raw_string: &RawString,
 ) {
     assert_correct_parser!(pair, Rule::comment_block);
 
     // handle comment block
     top_level_definitions.push(Top::CommentBlock(CommentBlock {
-        span: diagnostics.span(pair.as_span().clone()),
+        span: raw_string.to_raw_span(pair.as_span().clone()),
         block: pair.as_str().to_string(),
     }));
 }
@@ -298,7 +308,8 @@ fn handle_comment_block(
 fn handle_prompt_text(
     pair: pest::iterators::Pair<'_, Rule>,
     top_level_definitions: &mut Vec<Top>,
-    diagnostics: &Diagnostics,
+    _diagnostics: &Diagnostics,
+    raw_string: &RawString,
 ) {
     let content = pair.as_str();
     let trailing_whitespace = content
@@ -308,7 +319,7 @@ fn handle_prompt_text(
         .count();
 
     if trailing_whitespace > 0 && content.len() > trailing_whitespace {
-        let span = diagnostics.span(pair.as_span().clone());
+        let span = raw_string.to_raw_span(pair.as_span().clone());
         let start = span.start;
         let end = span.end - trailing_whitespace;
         top_level_definitions.push(Top::PromptText(PromptText {
@@ -323,12 +334,12 @@ fn handle_prompt_text(
         // handle empty lines
         top_level_definitions.push(Top::WhiteSpace(
             content.to_string(),
-            diagnostics.span(pair.as_span().clone()),
+            raw_string.to_raw_span(pair.as_span().clone()),
         ));
     } else {
         // handle prompt text
         top_level_definitions.push(Top::PromptText(PromptText {
-            span: diagnostics.span(pair.as_span()),
+            span: raw_string.to_raw_span(pair.as_span()),
             text: content.to_string(),
         }));
     }
@@ -337,14 +348,15 @@ fn handle_prompt_text(
 fn handle_whitespace(
     pair: pest::iterators::Pair<'_, Rule>,
     top_level_definitions: &mut Vec<Top>,
-    diagnostics: &Diagnostics,
+    _diagnostics: &Diagnostics,
+    raw_string: &RawString,
 ) {
     assert_correct_parser!(pair, Rule::WHITESPACE);
 
     // handle whitespace
     top_level_definitions.push(Top::WhiteSpace(
         pair.as_str().to_string(),
-        diagnostics.span(pair.as_span()),
+        raw_string.to_raw_span(pair.as_span()),
     ));
 }
 

@@ -3,7 +3,6 @@ use std::{collections::HashMap, path::PathBuf};
 use super::DatamodelError;
 use crate::{warning::DatamodelWarning, SourceFile, Span};
 
-
 /// Represents a list of validation or parser errors and warnings.
 ///
 /// This is used to accumulate multiple errors and warnings during validation.
@@ -14,7 +13,6 @@ pub struct Diagnostics {
     current_file: Option<SourceFile>,
     errors: Vec<DatamodelError>,
     warnings: Vec<DatamodelWarning>,
-    current_offset: usize,
 }
 
 impl Diagnostics {
@@ -24,27 +22,18 @@ impl Diagnostics {
             current_file: None,
             errors: Vec::new(),
             warnings: Vec::new(),
-            current_offset: 0,
         }
     }
 
     pub fn span(&self, p: pest::Span<'_>) -> Span {
         match self.current_file {
-            Some(ref file) => Span::new(
-                file.clone(),
-                p.start() + self.current_offset,
-                p.end() + self.current_offset,
-            ),
+            Some(ref file) => Span::new(file.clone(), p.start(), p.end()),
             None => panic!("No current file set."),
         }
     }
 
     pub fn set_source(&mut self, source: &SourceFile) {
         self.current_file = Some(source.clone())
-    }
-
-    pub fn set_span_offset(&mut self, offset: usize) {
-        self.current_offset = offset;
     }
 
     pub fn warnings(&self) -> &[DatamodelWarning] {

@@ -13,8 +13,9 @@ impl<llm, Foo> V1 {
   prompt "Hello there"
 }
 
+
 // error: Error validating: Did you mean `client` instead of `client<...>`?
-//   -->  /Users/vbv/repos/gloo-lang/engine/baml/baml/tests/validation_files/variants/bad_client_def.baml:12
+//   -->  variants/bad_client_def.baml:12
 //    | 
 // 11 | impl<llm, Foo> V1 {
 // 12 |   client<llm> MyClient

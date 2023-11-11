@@ -2,10 +2,9 @@ import asyncio
 from baml_client.tracing import trace, set_tags
 
 # from baml_core.otel import trace, set_tags
-from baml_lib import baml_init
 from baml_client import baml
 from baml_client.baml_types import ProposedMessage, Conversation
-from baml_client.baml_types import Message, MessageSender, ClassifyRequest
+from baml_client.baml_types import Message, MessageSender
 
 
 @trace
@@ -35,9 +34,7 @@ async def call_topic_router():
     #     )
     # )
     response = await baml.ClassifyTool.get_impl("v1").run(
-        ClassifyRequest(
-            context="The user is a software engineer", query="Can you explain TDD?"
-        )
+        context="The user is a software engineer", query="Can you explain TDD?"
     )
     return response
 
@@ -48,5 +45,5 @@ async def main():
 
 
 if __name__ == "__main__":
-    baml_init(base_url="http://localhost:3000/api")
-    asyncio.run(test_azure_default())
+    # baml_init(base_url="http://localhost:3000/api")
+    asyncio.run(main())

@@ -25,6 +25,7 @@ impl_coercions! {
     path: "path" => &'a str;
     string_with_span : "string" => (&'a str, &'a ast::Span);
     constant_with_span : "constant" => (&'a str, &'a ast::Span);
+    raw_string: "raw_string" => &'a ast::RawString;
     boolean : "boolean" => bool;
     integer : "numeric" => i64;
     float : "float" => f64;
@@ -33,6 +34,8 @@ impl_coercions! {
 /// Fallible coercions of PSL expressions to more specific types.
 pub mod coerce_opt {
     #![allow(missing_docs, clippy::needless_lifetimes)] // lifetimes are used by the macro
+
+    use internal_baml_schema_ast::ast::RawString;
 
     use super::*;
 
@@ -46,6 +49,10 @@ pub mod coerce_opt {
 
     pub fn string<'a>(expr: &'a ast::Expression) -> Option<&'a str> {
         expr.as_string_value().map(|(s, _)| s)
+    }
+
+    pub fn raw_string<'a>(expr: &'a ast::Expression) -> Option<&'a RawString> {
+        expr.as_raw_string_value()
     }
 
     pub fn string_with_span<'a>(expr: &'a ast::Expression) -> Option<(&'a str, &ast::Span)> {

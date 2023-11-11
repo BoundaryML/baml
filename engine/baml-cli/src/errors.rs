@@ -56,13 +56,15 @@ impl From<(&'static str, std::io::Error)> for CliError {
 impl fmt::Display for CliError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            CliError::BAMLError(error) => write!(
-                f,
-                "{0} {1} {2} {0}",
-                "Compiler failed".bold(),
-                error.warnings_to_pretty_string(),
-                error.to_pretty_string(),
-            ),
+            CliError::BAMLError(error) => {
+                write!(
+                    f,
+                    "{0} {1} {2} {0}",
+                    "Compiler failed".bold(),
+                    error.warnings_to_pretty_string(),
+                    error.to_pretty_string(),
+                )
+            }
             CliError::StringError(err) => write!(f, "{}", err),
             CliError::GlobError(err) => write!(f, "{}", err),
             CliError::PatternError(err) => write!(f, "{}", err),

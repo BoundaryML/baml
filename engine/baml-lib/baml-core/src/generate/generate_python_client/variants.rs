@@ -4,7 +4,6 @@ use either::Either;
 use internal_baml_parser_database::{walkers::VariantWalker, WithStaticRenames};
 use internal_baml_schema_ast::ast::WithName;
 
-use log::info;
 use serde_json::json;
 
 use crate::generate::generate_python_client::file::clean_file_name;
@@ -30,7 +29,7 @@ impl<'db> JsonHelper for VariantWalker<'db> {
 
         let (input, output) = &self.properties().replacers;
 
-        let mut inputs: HashSet<_> = input
+        let inputs: HashSet<_> = input
             .iter()
             .map(|(k, val)| {
                 prompt = prompt.replace(&k.key(), &format!("{{{}}}", val));

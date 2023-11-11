@@ -17,7 +17,6 @@ mod prompt;
 mod to_string_attributes;
 mod types;
 
-use log::info;
 use prompt::validate_prompt;
 
 pub(crate) use to_string_attributes::{
@@ -448,51 +447,72 @@ fn visit_variant<'db>(idx: VariantConfigId, variant: &'db ast::Variant, ctx: &mu
             )),
         });
 
-    match (client, prompt) {
-        (Some((client, client_key_span)), Some((prompt, prompt_key_span))) => match (
-            coerce::string_with_span(client, &mut ctx.diagnostics),
-            coerce::string_with_span(prompt, &mut ctx.diagnostics),
-        ) {
-            (Some((client, client_span)), Some((prompt_string, prompt_span))) => {
-                match validate_prompt(ctx, (prompt_string, prompt_span.clone()), &prompt_span) {
-                    Some((prompt, replacer)) => {
-                        ctx.types.variant_properties.insert(
-                            idx,
-                            VariantProperties {
-                                client: StringValue {
-                                    value: client.to_string(),
-                                    span: client_span.clone(),
-                                    key_span: client_key_span,
-                                },
-                                prompt: StringValue {
-                                    value: prompt.to_string(),
-                                    span: prompt_span.clone(),
-                                    key_span: prompt_key_span,
-                                },
-                                prompt_replacements: replacer,
-                                replacers: Default::default(),
-                            },
-                        );
-                    }
-                    None => {}
-                }
-            }
-            _ => {
-                // Errors are handled by coerce.
-            }
-        },
-        (None, Some(_)) => ctx.push_error(DatamodelError::new_validation_error(
+    let client = if let Some((client, client_key_span)) = client {
+        if let Some(client) = coerce::string_with_span(client, &mut ctx.diagnostics) {
+            Some((client, client_key_span))
+        } else {
+            // Errors are handled by coerce.
+            None
+        }
+    } else {
+        ctx.push_error(DatamodelError::new_validation_error(
             "Missing `client` field in variant<llm>",
-            variant.span().clone(),
-        )),
-        (Some(_), None) => ctx.push_error(DatamodelError::new_validation_error(
+            variant.identifier().span().clone(),
+        ));
+        None
+    };
+
+    let prompt = if let Some((prompt, prompt_key_span)) = prompt {
+        if let Some(prompt) = prompt.as_raw_string_value() {
+            match validate_prompt(ctx, prompt) {
+                Some((cleaned_prompt, replacer)) => {
+                    Some(((cleaned_prompt, prompt.span(), replacer), prompt_key_span))
+                }
+                None => None,
+            }
+        } else if let Some((prompt, span)) = coerce::string_with_span(prompt, &mut ctx.diagnostics)
+        {
+            // Some((prompt, span.clone()))
+            Some((
+                (prompt.to_string(), span, Default::default()),
+                prompt_key_span,
+            ))
+        } else {
+            // Errors are handled by coerce.
+            None
+        }
+    } else {
+        ctx.push_error(DatamodelError::new_validation_error(
             "Missing `prompt` field in variant<llm>",
-            variant.span().clone(),
-        )),
-        (None, None) => ctx.push_error(DatamodelError::new_validation_error(
-            "Missing `client` and `prompt` fields in variant<llm>",
-            variant.span().clone(),
-        )),
+            variant.identifier().span().clone(),
+        ));
+        None
+    };
+
+    match (client, prompt) {
+        (
+            Some(((client, client_span), client_key_span)),
+            Some(((prompt, prompt_span, replacers), prompt_key_span)),
+        ) => {
+            ctx.types.variant_properties.insert(
+                idx,
+                VariantProperties {
+                    client: StringValue {
+                        value: client.to_string(),
+                        span: client_span.clone(),
+                        key_span: client_key_span,
+                    },
+                    prompt: StringValue {
+                        value: prompt.to_string(),
+                        span: prompt_span.clone(),
+                        key_span: prompt_key_span,
+                    },
+                    prompt_replacements: replacers,
+                    replacers: Default::default(),
+                },
+            );
+        }
+        _ => {}
     }
 }
 

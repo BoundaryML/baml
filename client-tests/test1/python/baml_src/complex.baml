@@ -1,19 +1,18 @@
 function ClassifyTool {
-  input ClassifyRequest
+  input (query: string, context: string)
   output ClassifyResponse
 }
 
-class ClassifyRequest {
-  query string
-  context string
-} 
-
 class ClassifyResponse { 
-  tool Tool
+  tool Tool[] @description(#"
+    Any number of tools the user may want to use
+  "#)
   assistant_response string
 }
 
 enum Tool {
+  @@alias(food)
+  
   CodeInterpreter
   @alias(k1) 
   @description(Use this tool if the user is asking to compute something)
@@ -31,6 +30,10 @@ enum Tool {
 
 impl<llm, ClassifyTool> v1 {
     client AZURE_GPT4
+
+    override Tool {
+      @@alias(tool)
+    }
 
 
     prompt #"

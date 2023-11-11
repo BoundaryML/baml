@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Component, PathBuf};
 
 use baml_lib::{parse_configuration, Configuration, Diagnostics};
 
@@ -47,7 +47,9 @@ pub(crate) fn get_src_dir(
     };
     let config = parse_configuration(&baml_dir, main_baml, &main_baml_contents)?;
 
-    Ok((baml_dir, config))
+    let cwd = std::env::current_dir().unwrap().canonicalize().unwrap();
+
+    Ok((relative_path(cwd, baml_dir), config))
 }
 
 // Function to yield each found path
@@ -67,4 +69,24 @@ pub(crate) fn get_src_files(baml_dir: &PathBuf) -> Result<Vec<PathBuf>, CliError
         }
     }
     Ok(paths)
+}
+
+fn relative_path(from: PathBuf, to: PathBuf) -> PathBuf {
+    let from_iter = from.components();
+    let to_iter = to.components();
+
+    let common_components = from_iter
+        .clone()
+        .zip(to_iter.clone())
+        .take_while(|&(a, b)| a == b)
+        .map(|(a, _)| a)
+        .collect::<Vec<_>>();
+
+    let from_diff = from_iter.count() - common_components.len();
+
+    let mut components = Vec::new();
+    components.extend(std::iter::repeat(Component::ParentDir).take(from_diff));
+    components.extend(to.components().skip(common_components.len()));
+
+    components.into_iter().collect::<PathBuf>()
 }

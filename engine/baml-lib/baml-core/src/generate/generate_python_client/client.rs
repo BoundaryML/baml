@@ -1,12 +1,9 @@
-use std::fmt::format;
-
 use internal_baml_parser_database::walkers::{ClientWalker, Walker};
 use internal_baml_schema_ast::ast::{
     ClientId, Expression, Identifier, WithDocumentation, WithName,
 };
 
-use log::info;
-use serde_json::{json, Value};
+use serde_json::json;
 
 use crate::generate::generate_python_client::file::clean_file_name;
 
@@ -40,9 +37,9 @@ impl ToPyObject for Expression {
             Expression::StringValue(val, _) => {
                 format!("\"{}\"", escaped_string(val, ("\"", "\\\"")))
             }
-            Expression::RawStringValue(val, _) => format!(
+            Expression::RawStringValue(val) => format!(
                 "\"\"\"\\\n{}\\\n\"\"\"",
-                escaped_string(val, ("\"\"\"", "\\\"\\\"\\\""))
+                escaped_string(val.value(), ("\"\"\"", "\\\"\\\"\\\""))
             ),
             Expression::Identifier(idn) => idn.to_py_object(f),
             Expression::Array(arr, _) => {

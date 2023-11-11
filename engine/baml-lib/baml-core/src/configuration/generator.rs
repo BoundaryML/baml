@@ -32,7 +32,7 @@ impl From<&Expression> for GeneratorConfigValue {
                     .collect(),
             ),
             Expression::Identifier(idn) => idn.name().to_string().into(),
-            Expression::RawStringValue(val, _) => val.clone().into(),
+            Expression::RawStringValue(val) => val.value().to_string().into(),
         }
     }
 }

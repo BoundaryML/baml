@@ -75,7 +75,7 @@ fn run_validation_test(test_file_path: &str) {
         .unwrap_or_default();
 
     let source_file =
-        SourceFile::new_allocated(file_path.clone(), Arc::from(text.into_boxed_str()));
+        SourceFile::new_allocated(test_file_path.into(), Arc::from(text.into_boxed_str()));
 
     let validation_result = parse_schema_fail_on_diagnostics(source_file.clone());
 
@@ -84,19 +84,11 @@ fn run_validation_test(test_file_path: &str) {
         (false, Err(diagnostics)) => {
             // remove the span source file location since it depends on whos running the test
             let pruned_last_comment_contents = strip_str(&String::from_utf8_lossy(
-                last_comment_contents
-                    .lines()
-                    .filter(|line| !line.contains("-->"))
-                    .collect::<String>()
-                    .as_bytes(),
+                last_comment_contents.lines().collect::<String>().as_bytes(),
             ));
 
             let pruned_diagnostics = strip_str(&String::from_utf8_lossy(
-                diagnostics
-                    .lines()
-                    .filter(|line| !line.contains("-->"))
-                    .collect::<String>()
-                    .as_bytes(),
+                diagnostics.lines().collect::<String>().as_bytes(),
             ));
 
             if pruned_last_comment_contents == pruned_diagnostics {

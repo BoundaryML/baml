@@ -4,7 +4,6 @@ use super::{
     Rule,
 };
 use crate::{assert_correct_parser, ast::*, unreachable_rule};
-use either::Either;
 use internal_baml_diagnostics::Diagnostics;
 
 pub(crate) fn parse_expression(
@@ -15,13 +14,7 @@ pub(crate) fn parse_expression(
     let span = diagnostics.span(first_child.as_span());
     match first_child.as_rule() {
         Rule::numeric_literal => Expression::NumericValue(first_child.as_str().into(), span),
-        Rule::string_literal => {
-            let string_value = parse_string_literal(first_child, diagnostics);
-            match string_value {
-                Either::Left((string_value, span)) => Expression::StringValue(string_value, span),
-                Either::Right(identifier) => Expression::Identifier(identifier),
-            }
-        }
+        Rule::string_literal => parse_string_literal(first_child, diagnostics),
         Rule::dict_expression => parse_dict(first_child, diagnostics),
         Rule::array_expression => parse_array(first_child, diagnostics),
         _ => unreachable_rule!(first_child, Rule::expression),
@@ -42,32 +35,28 @@ fn parse_array(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
     Expression::Array(elements, diagnostics.span(span))
 }
 
-fn parse_string_literal(
-    token: Pair<'_>,
-    diagnostics: &mut Diagnostics,
-) -> Either<(String, Span), Identifier> {
+fn parse_string_literal(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
     assert_correct_parser!(token, Rule::string_literal);
     let contents = token.clone().into_inner().next().unwrap();
     let span = diagnostics.span(contents.as_span());
     match contents.as_rule() {
         Rule::raw_string_literal => {
-            let contents = contents.into_inner().next_back().unwrap();
-            Either::Left((contents.as_str().to_string(), span))
+            Expression::RawStringValue(parse_raw_string(contents, diagnostics))
         }
         Rule::quoted_string_literal => {
             let contents = contents.into_inner().next().unwrap();
-            Either::Left((contents.as_str().to_string(), span))
+            Expression::StringValue(contents.as_str().to_string(), span)
         }
         Rule::unquoted_string_literal => {
             let content = contents.as_str().to_string();
             if content.contains(" ") {
-                Either::Left((content, span))
+                Expression::StringValue(content, span)
             } else {
                 match Identifier::from((content.as_str(), span.clone())) {
                     Identifier::Invalid(..) | Identifier::String(..) => {
-                        Either::Left((content, span))
+                        Expression::StringValue(content, span)
                     }
-                    identifier => Either::Right(identifier),
+                    identifier => Expression::Identifier(identifier),
                 }
             }
         }
@@ -129,4 +118,40 @@ fn parse_dict_key(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression 
         };
     }
     unreachable!("Encountered impossible dict key during parsing")
+}
+
+fn parse_raw_string(token: Pair<'_>, diagnostics: &mut Diagnostics) -> RawString {
+    assert_correct_parser!(token, Rule::raw_string_literal);
+
+    let mut language = None;
+    let mut content = None;
+
+    for current in token.into_inner() {
+        match current.as_rule() {
+            Rule::single_word => {
+                let contents = current.as_str().to_string();
+                language = Some((contents, diagnostics.span(current.as_span())));
+            }
+            Rule::raw_string_literal_content_1
+            | Rule::raw_string_literal_content_2
+            | Rule::raw_string_literal_content_3
+            | Rule::raw_string_literal_content_4
+            | Rule::raw_string_literal_content_5 => {
+                content = Some((
+                    current.as_str().to_string(),
+                    diagnostics.span(current.as_span()),
+                ));
+            }
+            Rule::raw_string_start_1
+            | Rule::raw_string_start_2
+            | Rule::raw_string_start_3
+            | Rule::raw_string_start_4
+            | Rule::raw_string_start_5 => {}
+            _ => unreachable_rule!(current, Rule::raw_string_literal),
+        };
+    }
+    match content {
+        Some((content, span)) => RawString::new(content, span, language),
+        _ => unreachable!("Encountered impossible raw string during parsing"),
+    }
 }

@@ -28,7 +28,7 @@ pub use attribute::{Attribute, AttributeContainer, AttributeId};
 pub use client::Client;
 pub use config::ConfigBlockProperty;
 pub use configurations::Configuration;
-pub use expression::Expression;
+pub use expression::{Expression, RawString};
 pub use field::{Field, FieldArity, FieldType};
 pub use find_at_position::*;
 pub use function::{FuncArguementId, Function, FunctionArg, FunctionArgs, NamedFunctionArgList};
