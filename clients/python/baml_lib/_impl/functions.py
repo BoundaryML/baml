@@ -145,7 +145,7 @@ class BaseBAMLFunction(typing.Generic[RET]):
                 expected_sig_params = expected_sig_params[1:]
             assert (
                 sig_params == expected_sig_params
-            ), f"{self._name} {sig} does not match expected signature {expected_sig}"
+            ), f"{self.name} {sig} does not match expected signature {expected_sig}"
 
             if asyncio.iscoroutinefunction(cb):
 

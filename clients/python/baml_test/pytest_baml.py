@@ -76,16 +76,16 @@ class BamlPytestPlugin:
             owner = marker.kwargs["owner"]
             if marker.kwargs["impls"]:
                 metafunc.parametrize(
-                    f"{owner._name}Impl",
+                    f"{owner.name}Impl",
                     list(map(lambda x: owner.get_impl(x).run, marker.kwargs["impls"])),
-                    ids=map(lambda x: f"{owner._name}-{x}", marker.kwargs["impls"]),
+                    ids=map(lambda x: f"{owner.name}-{x}", marker.kwargs["impls"]),
                 )
             else:
                 # Remove the test if no impls are specified
                 metafunc.parametrize(
-                    f"{owner._name}Impl",
+                    f"{owner.name}Impl",
                     [None],
-                    ids=[f"{owner._name}-SKIPPED"],
+                    ids=[f"{owner.name}-SKIPPED"],
                 )
 
     @pytest.hookimpl(tryfirst=True)
