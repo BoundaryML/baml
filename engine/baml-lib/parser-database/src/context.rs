@@ -1,3 +1,4 @@
+use internal_baml_diagnostics::DatamodelWarning;
 use internal_baml_schema_ast::ast::ArguementId;
 
 use crate::{
@@ -68,6 +69,10 @@ impl<'db> Context<'db> {
 
     pub(super) fn push_error(&mut self, error: DatamodelError) {
         self.diagnostics.push_error(error)
+    }
+
+    pub(super) fn push_warning(&mut self, warning: DatamodelWarning) {
+        self.diagnostics.push_warning(warning)
     }
 
     /// All attribute validation should go through `visit_attributes()`. It lets

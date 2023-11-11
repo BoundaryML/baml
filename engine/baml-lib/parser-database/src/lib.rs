@@ -41,7 +41,7 @@ use std::collections::{HashMap, HashSet};
 pub use coerce_expression::{coerce, coerce_array, coerce_opt};
 use either::Either;
 pub use internal_baml_schema_ast::ast;
-use internal_baml_schema_ast::ast::{SchemaAst, WithName, WithSpan};
+use internal_baml_schema_ast::ast::{SchemaAst, WithIdentifier, WithName, WithSpan};
 pub use printer::WithStaticRenames;
 pub use types::{
     ContantDelayStrategy, ExponentialBackoffStrategy, PrinterType, PromptVariable, RetryPolicy,
@@ -125,11 +125,11 @@ impl ParserDatabase {
 
     /// Updates the prompt
     pub fn finalize(&mut self, diag: &mut Diagnostics) {
-        self.finalize_dependencies();
+        self.finalize_dependencies(diag);
         self.finalize_prompt_validation(diag);
     }
 
-    fn finalize_dependencies(&mut self) {
+    fn finalize_dependencies(&mut self, diag: &mut Diagnostics) {
         let mut deps = self
             .types
             .class_dependencies
@@ -138,41 +138,80 @@ impl ParserDatabase {
                 (
                     *f.0,
                     f.1.iter()
-                        .filter(|i| match self.find_type_by_str(i) {
-                            Some(Either::Left(_)) => true,
-                            _ => false,
-                        })
-                        .count(),
+                        .fold((0, 0, 0), |prev, i| match self.find_type_by_str(i) {
+                            Some(Either::Left(_)) => (prev.0 + 1, prev.1 + 1, prev.2),
+                            Some(Either::Right(_)) => (prev.0 + 1, prev.1, prev.2 + 1),
+                            _ => prev,
+                        }),
                 )
             })
             .collect::<Vec<_>>();
 
-        deps.sort_by(|a, b| a.1.cmp(&b.1));
-
-        for (cls, _) in deps {
-            let child_deps = self
-                .types
-                .class_dependencies
-                .get(&cls)
-                // These must exist by definition so safe to unwrap.
-                .unwrap()
+        // Can only process deps which have 0 class dependencies.
+        let mut max_loops = 100;
+        while !deps.is_empty() && max_loops > 0 {
+            max_loops -= 1;
+            // Remove all the ones which have 0 class dependencies.
+            let removed = deps
                 .iter()
-                .filter_map(|f| match self.find_type_by_str(f) {
-                    Some(Either::Left(walker)) => {
-                        Some(walker.dependencies().iter().map(|f| f.clone()))
-                    }
-                    Some(Either::Right(_)) => None,
-                    _ => panic!("Unknown class `{}`", f),
-                })
-                .flatten()
-                .collect::<HashSet<_>>();
+                .filter(|(_, v)| v.1 == 0)
+                .map(|(k, _)| k.clone())
+                .collect::<Vec<_>>();
+            deps.retain(|(_, v)| v.1 > 0);
+            for cls in removed {
+                let child_deps = self
+                    .types
+                    .class_dependencies
+                    .get(&cls)
+                    // These must exist by definition so safe to unwrap.
+                    .unwrap()
+                    .iter()
+                    .filter_map(|f| match self.find_type_by_str(f) {
+                        Some(Either::Left(walker)) => Some(
+                            walker
+                                .dependencies()
+                                .iter()
+                                .map(|f| f.clone())
+                                .collect::<Vec<_>>(),
+                        ),
+                        Some(Either::Right(walker)) => Some(vec![walker.name().to_string()]),
+                        _ => panic!("Unknown class `{}`", f),
+                    })
+                    .flatten()
+                    .collect::<HashSet<_>>();
+                let name = self.ast[cls].name();
+                deps.iter_mut()
+                    .filter(|(k, _)| self.types.class_dependencies[k].contains(name))
+                    .for_each(|(_, v)| {
+                        v.1 -= 1;
+                    });
 
-            // Get the dependencies of all my dependencies.
-            self.types
-                .class_dependencies
-                .get_mut(&cls)
-                .unwrap()
-                .extend(child_deps);
+                // Get the dependencies of all my dependencies.
+                self.types
+                    .class_dependencies
+                    .get_mut(&cls)
+                    .unwrap()
+                    .extend(child_deps);
+            }
+        }
+
+        if max_loops == 0 && !deps.is_empty() {
+            let circular_deps = deps
+                .iter()
+                .map(|(k, _)| self.ast[*k].name())
+                .collect::<Vec<_>>()
+                .join(" -> ");
+
+            deps.iter().for_each(|(k, _)| {
+                diag.push_error(DatamodelError::new_validation_error(
+                    &format!(
+                        "Circular dependency detected for class `{}`.\n{}",
+                        self.ast[*k].name(),
+                        circular_deps
+                    ),
+                    self.ast[*k].identifier().span().clone(),
+                ));
+            });
         }
 
         // Additionally ensure the same thing for functions, but since we've already handled classes,

@@ -4,7 +4,7 @@ use std::hash::Hash;
 use crate::coerce;
 use crate::{context::Context, DatamodelError};
 
-use internal_baml_diagnostics::Span;
+use internal_baml_diagnostics::{DatamodelWarning, Span};
 use internal_baml_prompt_parser::ast::{PrinterBlock, Variable};
 use internal_baml_schema_ast::ast::{
     self, ClassId, ClientId, ConfigurationId, EnumId, EnumValueId, Expression, FieldId, FunctionId,
@@ -472,7 +472,11 @@ fn visit_variant<'db>(idx: VariantConfigId, variant: &'db ast::Variant, ctx: &mu
             }
         } else if let Some((prompt, span)) = coerce::string_with_span(prompt, &mut ctx.diagnostics)
         {
-            // Some((prompt, span.clone()))
+            // warn the user that we are using this without validation.
+            ctx.push_warning(DatamodelWarning::new(
+                "To use comments and {#vars} use a block string. #\"...\"# instead.".into(),
+                span.clone(),
+            ));
             Some((
                 (prompt.to_string(), span, Default::default()),
                 prompt_key_span,
