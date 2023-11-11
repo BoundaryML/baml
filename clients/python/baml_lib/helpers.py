@@ -14,6 +14,9 @@ class __InternalBAMLConfig:
         self.api = api
 
 
+__api = None
+
+
 def baml_init(
     *,
     project_id: typing.Optional[str] = None,
@@ -21,7 +24,12 @@ def baml_init(
     base_url: typing.Optional[str] = None,
     enable_cache: typing.Optional[bool] = None,
     stage: typing.Optional[str] = None,
+    idempotent: bool = False,
 ) -> __InternalBAMLConfig:
+    global __api
+    if idempotent and __api is not None:
+        return __InternalBAMLConfig(api=__api)
+
     process_id = str(uuid.uuid4())
 
     if base_url is None:
@@ -35,14 +43,13 @@ def baml_init(
 
     if stage is None:
         stage = os.environ.get("GLOO_STAGE", "prod")
-
     if (
         project_id is not None
         and secret_key is not None
         and stage is not None
         and base_url is not None
     ):
-        api = APIWrapper(
+        __api = APIWrapper(
             base_url=base_url,
             stage=stage,
             api_key=secret_key,
@@ -50,20 +57,20 @@ def baml_init(
             session_id=process_id,
         )
     else:
-        api = None
-    otel.use_tracing(api)
+        __api = None
+    otel.use_tracing(__api)
 
     if enable_cache is None:
-        enable_cache = os.environ.get("GLOO_CACHE", "1" if api else "0") == "1"
+        enable_cache = os.environ.get("GLOO_CACHE", "1" if __api else "0") == "1"
 
     if enable_cache:
-        if api:
+        if __api:
             logger.info("Using GlooCache")
-            CacheManager.add_cache("gloo", api=api)
+            CacheManager.add_cache("gloo", api=__api)
         else:
             logger.warn(
                 "Wanted to use GlooCache but no API key was provided. Did you set GLOO_APP_ID and GLOO_APP_SECRET?"
             )
 
     LLMManager.validate()
-    return __InternalBAMLConfig(api=api)
+    return __InternalBAMLConfig(api=__api)

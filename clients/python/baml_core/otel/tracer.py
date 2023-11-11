@@ -57,9 +57,8 @@ def _trace_internal(func: F, **kwargs: typing.Any) -> F:
 
             parent_id = get_current_span().get_span_context().span_id
             with baml_tracer.start_as_current_span(name) as span:
-                with BamlSpanContextManager(
-                    name, parent_id, span, params
-                ) as ctx:
+                with BamlSpanContextManager(name, parent_id, span, params) as ctx:
+                    ctx.span.get_span_context().span_id
                     if tags:
                         set_tags(**tags)
                     response = await func(*args, **kwargs)
@@ -75,10 +74,9 @@ def _trace_internal(func: F, **kwargs: typing.Any) -> F:
             params.update(kwargs)
 
             parent_id = get_current_span().get_span_context().span_id
+
             with baml_tracer.start_as_current_span(name) as span:
-                with BamlSpanContextManager(
-                    name, parent_id, span, params
-                ) as ctx:
+                with BamlSpanContextManager(name, parent_id, span, params) as ctx:
                     if tags:
                         set_tags(**tags)
                     response = func(*args, **kwargs)

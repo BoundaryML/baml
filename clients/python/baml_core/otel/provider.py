@@ -55,23 +55,9 @@ class CustomBackendExporter(SpanExporter):
             )
             for span in spans
         )
-        print("Exporting {} spans".format(len(spans)))
-        print("Exporting items", len(list(items)))
 
-        for span in spans:
-            print("------")
-            print("Span: {}".format(span.name))
-            print("Span ID: {}".format(span.get_span_context().span_id))
-            print("Span Name:", span.name)
-            print("Attributes:", span.attributes)
-            print("Events:")
-            for event in span.events:
-                print(event.name)
-
-        print("------------------------------")
         for item in items:
-            print("Item: {}".format(item))
-            #  item.print()
+            item.print()
             CacheManager.save_llm_request(item)
 
             if self.__api_wrapper:

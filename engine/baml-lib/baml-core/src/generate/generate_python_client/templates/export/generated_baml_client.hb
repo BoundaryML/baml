@@ -7,6 +7,6 @@ class BAMLClient:
     {{/each}}
 
     def __init__(self):
-        baml_init()
+        baml_init(idempotent=True)
 
 baml = BAMLClient()
