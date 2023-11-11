@@ -2,17 +2,20 @@ import path from "path";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { convertToTextDocument, gatherFiles } from "./fileUtils";
 const BAML_SRC = 'baml_src';
+import { URI } from 'vscode-uri';
 
 export class BamlDirCache {
   private readonly cache: Map<string, FileCache> = new Map();
 
   public getBamlDir(textDocument: TextDocument): string | null {
-    let currentPath = textDocument.uri;
-    while (currentPath !== path.parse(currentPath).root) {
+    let currentPath = URI.parse(textDocument.uri).fsPath;
+    let tries = 0;
+    while (currentPath !== "/" && tries < 10) {
       currentPath = path.dirname(currentPath);
       if (path.basename(currentPath) === BAML_SRC) {
-        return currentPath;
+        return URI.file(currentPath).toString();
       }
+      tries++; // because windows may be weird and not ahve "/" as root
     }
     console.error("No baml dir found");
     return null;
@@ -42,9 +45,11 @@ export class BamlDirCache {
 
   public refreshDirectory(textDocument: TextDocument): void {
     try {
+      console.log("refresh")
       const fileCache = this.createFileCacheIfNotExist(textDocument);
       const parentDir = this.getBamlDir(textDocument);
       if (fileCache && parentDir) {
+        console.log("bamlDir", parentDir)
         const allFiles = gatherFiles(parentDir);
         fileCache.getDocuments().forEach((doc) => {
 
@@ -55,9 +60,13 @@ export class BamlDirCache {
       } else {
         console.error("Could not find parent directory");
       }
+      console.log("end refresh");
     } catch (e: any) {
       if (e instanceof Error) {
         console.log(`Error refreshing directory: ${e.message} ${e.stack}`);
+      } else {
+        console.log(`Error refreshing directory: ${e}`);
+
       }
     }
   }

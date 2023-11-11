@@ -23,9 +23,9 @@ function MaybePolishText {
 function TextPolisher {
     input ProposedMessage
     output string
-}
-
-
+} 
+   
+ 
 
 impl<llm, MaybePolishText> v1 {
     client AZURE_GPT4
