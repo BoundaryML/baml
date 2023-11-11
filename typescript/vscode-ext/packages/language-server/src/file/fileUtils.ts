@@ -36,10 +36,9 @@ export function gatherFiles(dir: string, fileList: string[] = []): string[] {
       gatherFiles(filePath, fileList);
     } else {
       // check if it has .baml extension
-      if (!filePath.endsWith('.baml')) {
-        return;
+      if (filePath.endsWith('.baml')) {
+        fileList.push(filePath);
       }
-      fileList.push(filePath);
     }
   });
 
@@ -51,7 +50,7 @@ export function convertToTextDocument(filePath: string): TextDocument {
   const fileContent = fs.readFileSync(URI.parse(filePath).fsPath, 'utf-8');
   return TextDocument.create(
     filePath.toString(),
-    'plaintext',
+    'baml',
     1,
     fileContent
   );

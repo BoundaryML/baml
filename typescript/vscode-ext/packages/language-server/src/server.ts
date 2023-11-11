@@ -30,7 +30,6 @@ import { LinterInput } from './lib/wasm/lint'
 import { cliBuild } from './baml-cli';
 
 const packageJson = require('../../package.json') // eslint-disable-line
-console.log('Server-side -- packageJson', packageJson)
 function getConnection(options?: LSOptions): Connection {
   let connection = options?.connection
   if (!connection) {
@@ -73,7 +72,7 @@ export function startServer(options?: LSOptions): void {
 
   connection.onInitialize((params: InitializeParams) => {
     // Logging first...
-    connection.console.info(`Default version of Prisma 'prisma-schema-wasm' : ${getVersion()}`)
+    connection.console.info(`Default version of Baml 'baml-schema-wasm' : ${getVersion()}`)
 
     connection.console.info(
       // eslint-disable-next-line
@@ -133,9 +132,20 @@ export function startServer(options?: LSOptions): void {
   const documentSettings: Map<string, Thenable<LSSettings>> = new Map<string, Thenable<LSSettings>>()
 
   const getConfig = async () => {
-    const configResponse = await connection.workspace.getConfiguration();
-    config = configResponse["baml"] as BamlConfig;
-    console.log("config " + JSON.stringify(config, null, 2));
+    console.log("get config");
+    try {
+      const configResponse = await connection.workspace.getConfiguration(
+        "baml",
+      );
+      console.log("configResponse " + JSON.stringify(configResponse, null, 2));
+      config = configResponse["baml"] as BamlConfig;
+    } catch (e: any) {
+      if (e instanceof Error) {
+        console.log("Error getting config" + e.message + " " + e.stack);
+      } else {
+        console.log("Error getting config" + e);
+      }
+    }
   }
 
   connection.onDidChangeConfiguration((_change) => {
@@ -157,6 +167,7 @@ export function startServer(options?: LSOptions): void {
       // TODO: revalidate if something changed
       bamlCache.refreshDirectory(e.document);
       bamlCache.addDocument(e.document);
+      console.log("Added document " + e.document.uri);
     } catch (e: any) {
       if (e instanceof Error) {
         console.log("Error opening doc" + e.message + " " + e.stack);
@@ -172,7 +183,7 @@ export function startServer(options?: LSOptions): void {
       bamlCache.refreshDirectory(e.document);
       // Revalidate all open files since this one may have been deleted.
       // we could be smarter and only do this if the doc was deleted, not just closed.
-      documents.all().forEach(validateTextDocument)
+      documents.all().forEach(debouncedValidateTextDocument)
       documentSettings.delete(e.document.uri)
     } catch (e: any) {
       if (e instanceof Error) {
@@ -183,25 +194,6 @@ export function startServer(options?: LSOptions): void {
     }
   })
 
-
-  // function getDocumentSettings(resource: string): Thenable<LSSettings> {
-  //   if (!hasConfigurationCapability) {
-  //     connection.console.info(
-  //       `hasConfigurationCapability === false. Defaults will be used.`,
-  //     )
-  //     return Promise.resolve(globalSettings)
-  //   }
-
-  //   let result = documentSettings.get(resource)
-  //   if (!result) {
-  //     result = connection.workspace.getConfiguration({
-  //       scopeUri: resource,
-  //       section: 'prisma',
-  //     })
-  //     documentSettings.set(resource, result)
-  //   }
-  //   return result
-  // }
 
   // Note: VS Code strips newline characters from the message
   function showErrorToast(errorMessage: string): void {
@@ -221,6 +213,10 @@ export function startServer(options?: LSOptions): void {
       const rootPath = bamlCache.getBamlDir(textDocument);
       if (!rootPath) {
         console.error("Could not find root path for " + textDocument.uri);
+        connection.sendNotification('baml/message', {
+          type: 'error',
+          message: 'Could not find a baml_src directory for ' + textDocument.uri.toString(),
+        })
         return;
       }
       const linterInput: LinterInput = {
@@ -232,7 +228,14 @@ export function startServer(options?: LSOptions): void {
           }
         }),
       }
-      const diagnostics = MessageHandler.handleDiagnosticsRequest(documents, linterInput, showErrorToast);
+      if (srcDocs.length === 0) {
+        console.log("No BAML files found in the workspace.")
+        connection.sendNotification('baml/message', {
+          type: "warn",
+          message: "Unable to find BAML files. See Output panel -> BAML Language Server for more details.",
+        });
+      }
+      const diagnostics = MessageHandler.handleDiagnosticsRequest(srcDocs, linterInput, showErrorToast);
       for (const [uri, diagnosticList] of diagnostics) {
         void connection.sendDiagnostics({ uri, diagnostics: diagnosticList });
       }
@@ -245,33 +248,48 @@ export function startServer(options?: LSOptions): void {
     }
   }
 
-  const debouncedValidateTextDocument = debounce(validateTextDocument, 200, {
+  const debouncedValidateTextDocument = debounce(validateTextDocument, 400, {
     maxWait: 4000,
     leading: true,
     trailing: true,
   });
 
   documents.onDidChangeContent((change: { document: TextDocument }) => {
+    console.log("onDidChangeContent " + change.document.uri);
     debouncedValidateTextDocument(change.document);
   })
 
-  const debouncedCLIBuild = debounce(cliBuild, 200, {
+  const debouncedCLIBuild = debounce(cliBuild, 1000, {
     leading: true,
     trailing: true,
   });
 
   documents.onDidSave((change: { document: TextDocument }) => {
-    const cliPath = config?.path || "baml";
-    console.log("cliPath " + cliPath);
-    let bamlDir = bamlCache.getBamlDir(change.document);
-    if (!bamlDir) {
-      console.error("Could not find root path for " + change.document.uri);
-      return;
-    }
-    bamlDir = URI.parse(bamlDir).fsPath;
-    console.log("bamlDir " + bamlDir);
+    try {
+      const cliPath = config?.path || "baml";
+      console.log("cliPath " + cliPath);
+      let bamlDir = bamlCache.getBamlDir(change.document);
+      if (!bamlDir) {
+        console.error("Could not find baml_src dir for " + change.document.uri + ". Make sure your baml files are in baml_src dir");
+        return;
+      }
+      bamlDir = URI.parse(bamlDir).fsPath;
+      console.log("bamlDir " + bamlDir);
 
-    debouncedCLIBuild(cliPath, bamlDir, showErrorToast);
+      debouncedCLIBuild(cliPath, bamlDir, showErrorToast, () => {
+        connection.sendNotification('baml/message', {
+          type: "info",
+          message: "Generated BAML client successfully!",
+        });
+      });
+
+    } catch (e: any) {
+      if (e instanceof Error) {
+        console.log("Error saving doc" + e.message + " " + e.stack);
+      } else {
+        console.log("Error saving doc" + e);
+      }
+    }
   })
 
   function getDocument(uri: string): TextDocument | undefined {

@@ -3,7 +3,7 @@ function MessageSimplifier {
     output int?
 } 
 
-class Hi {
+class Hi {  
   thing bool
 }
 
