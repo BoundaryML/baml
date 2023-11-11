@@ -9,7 +9,7 @@ class ClassifyResponse {
   "#)
   assistant_response string
 }
-
+ 
 enum Tool {
   @@alias(food)
   
