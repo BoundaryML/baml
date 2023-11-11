@@ -9,8 +9,22 @@ from .provider import BamlSpanContextManager, baml_tracer, set_tags
 F = TypeVar("F", bound=Callable[..., Any])  # Function type
 
 
-def trace(func: F) -> F:
-    return _trace_internal(func)
+def trace(*args, **kwargs) -> Any:
+    if len(args) == 1:
+        func = args[0]
+        assert callable(func), f"Expected func to be callable, got {func}"
+        return _trace_internal(func)
+    else:
+        assert not args, f"Unexpected args: {args}"
+        assert kwargs, f"Expected kwargs: {kwargs}"
+        name = kwargs.pop("name")
+        assert isinstance(name, str), f"Expected name to be a str, got {name}"
+        assert not kwargs, f"Unexpected kwargs: {kwargs}"
+
+        def wrapper(func: F) -> F:
+            return _trace_internal(func, __name__=name)
+
+        return wrapper
 
 
 def _trace_internal(func: F, **kwargs: typing.Any) -> F:
@@ -44,7 +58,7 @@ def _trace_internal(func: F, **kwargs: typing.Any) -> F:
             parent_id = get_current_span().get_span_context().span_id
             with baml_tracer.start_as_current_span(name) as span:
                 with BamlSpanContextManager(
-                    func.__name__, parent_id, span, params
+                    name, parent_id, span, params
                 ) as ctx:
                     if tags:
                         set_tags(**tags)
@@ -63,7 +77,7 @@ def _trace_internal(func: F, **kwargs: typing.Any) -> F:
             parent_id = get_current_span().get_span_context().span_id
             with baml_tracer.start_as_current_span(name) as span:
                 with BamlSpanContextManager(
-                    func.__name__, parent_id, span, params
+                    name, parent_id, span, params
                 ) as ctx:
                     if tags:
                         set_tags(**tags)
