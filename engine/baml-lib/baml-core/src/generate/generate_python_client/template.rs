@@ -60,6 +60,9 @@ fn use_partial(
         }
         HSTemplate::BAMLClient => {
             register_partial_file!(reg, "export", "generated_baml_client");
+            f.add_import("baml_core.otel", "flush_trace_logs");
+            f.add_import("baml_lib", "baml_init");
+            f.add_import("typing", "Optional");
             String::from("generated_baml_client")
         }
         HSTemplate::Client => {

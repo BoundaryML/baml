@@ -110,16 +110,13 @@ impl WithWritePythonString for ParserDatabase {
 
         // manually write each import line since we want imports to appear in a certain order to load dotenv vars (which happens when importing baml_init)
         fc.start_export_file(".", "__init__.py");
-        fc.last_file().add_line("from baml_lib import baml_init ");
+        fc.last_file().add_line("from baml_lib import baml_init");
         fc.last_file()
             .add_line("from .__do_not_import.generated_baml_client import baml");
-        fc.last_file()
-            .add_line("__all__ = [\n    'baml',\n    'baml_init'\n]");
-
+        fc.last_file().add_line("__all__ = ['baml', 'baml_init']");
         fc.complete_file();
 
         fc.start_py_file(".", "generated_baml_client");
-        fc.last_file().add_line("from baml_lib import baml_init ");
         let mut fxs = self
             .walk_functions()
             .map(|f| {
