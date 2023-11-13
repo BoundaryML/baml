@@ -2,7 +2,7 @@
   "name": "baml",
   "displayName": "Baml",
   "description": "BAML is a DSL for AI applications.",
-  "version": "0.2.8",
+  "version": "0.2.9",
   "publisher": "Gloo",
   "repository": "https://github.com/GlooHQ/gloo-lang",
   "homepage": "https://trygloo.com",
