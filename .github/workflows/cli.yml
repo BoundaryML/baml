@@ -14,6 +14,11 @@ on:
     tags:
       - "release/baml-cli/v*.*.*"
 
+permissions:
+  contents: read
+  pull-requests: read
+  repository-projects: read
+
 jobs:
   build:
     name: Build ${{ matrix.platform.name }}
@@ -149,9 +154,9 @@ jobs:
             Mac: Apple Silicon: `${{ steps.hash.outputs.darwin_arm_hash }}`
             Windows: `${{ steps.hash.outputs.windows_hash }}`
       - name: Trigger homebrew-baml update
-        uses: peter-evans/repository-dispatch@v1
+        uses: peter-evans/repository-dispatch@v2
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.HOMEBREW_BAML_PAT }}
           repository: gloohq/homebrew-baml
           event-type: update-formula
           client-payload: '{"version": "${{ steps.hash.outputs.full_version }}", "hash_linux": "${{ steps.hash.outputs.linux_hash }}", "hash_mac_intel": "${{ steps.hash.outputs.darwin_intel_hash }}", "hash_mac_arm": "${{ steps.hash.outputs.darwin_arm_hash }}", "hash_windows": "${{ steps.hash.outputs.windows_hash }}", "nightly": true}'
@@ -236,9 +241,9 @@ jobs:
             Windows: `${{ steps.hash.outputs.windows_hash }}`
 
       - name: Trigger homebrew-baml update
-        uses: peter-evans/repository-dispatch@v1
+        uses: peter-evans/repository-dispatch@v2
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.HOMEBREW_BAML_PAT }}
           repository: gloohq/homebrew-baml
           event-type: update-formula
           client-payload: '{"version": "${{ steps.hash.outputs.version }}", "hash_linux": "${{ steps.hash.outputs.linux_hash }}", "hash_mac_intel": "${{ steps.hash.outputs.darwin_intel_hash }}", "hash_mac_arm": "${{ steps.hash.outputs.darwin_arm_hash }}", "hash_windows": "${{ steps.hash.outputs.windows_hash }}"}'
