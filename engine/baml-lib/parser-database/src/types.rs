@@ -240,7 +240,7 @@ impl Types {
     }
 }
 
-fn visit_enum<'db>(enm: &'db ast::Enum, ctx: &mut Context<'db>) {}
+fn visit_enum<'db>(_enm: &'db ast::Enum, _ctx: &mut Context<'db>) {}
 
 fn visit_class<'db>(class_id: ast::ClassId, class: &'db ast::Class, ctx: &mut Context<'db>) {
     let used_types = class

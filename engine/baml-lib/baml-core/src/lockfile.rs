@@ -1,12 +1,91 @@
+use crate::configuration::Generator;
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Diagnostics, SourceFile, Span};
+use serde::ser::SerializeMap;
 use serde::{Deserialize, Serialize};
 
-use crate::configuration::Generator;
-
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct LockFile {
     cli_version: Option<semver::Version>,
     client_version: Option<semver::Version>,
+}
+
+impl Serialize for LockFile {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let cli_str = self.cli_version.as_ref().map(|f| f.to_string());
+        let client_str = self.client_version.as_ref().map(|f| f.to_string());
+        let mut map = serializer.serialize_map(None)?;
+        map.serialize_entry("cli_version", &cli_str)?;
+        map.serialize_entry("client_version", &client_str)?;
+        map.end()
+    }
+}
+impl<'de> Deserialize<'de> for LockFile {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct LockFileVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for LockFileVisitor {
+            type Value = LockFile;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct LockFile")
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<LockFile, V::Error>
+            where
+                V: serde::de::MapAccess<'de>,
+            {
+                let mut cli_version: Option<String> = None;
+                let mut client_version: Option<String> = None;
+
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        "cli_version" => {
+                            if cli_version.is_some() {
+                                return Err(serde::de::Error::duplicate_field("cli_version"));
+                            }
+                            cli_version = map.next_value()?;
+                        }
+                        "client_version" => {
+                            if client_version.is_some() {
+                                return Err(serde::de::Error::duplicate_field("client_version"));
+                            }
+                            client_version = map.next_value()?;
+                        }
+                        _ => {}
+                    }
+                }
+
+                let cli_version = cli_version
+                    .map(|f| {
+                        semver::Version::parse(&f).map_err(|e| {
+                            serde::de::Error::custom(format!("{} {}", f, e.to_string()))
+                        })
+                    })
+                    .transpose()?;
+                let client_version = client_version
+                    .map(|f| {
+                        semver::Version::parse(&f).map_err(|e| {
+                            serde::de::Error::custom(format!("{} {}", f, e.to_string()))
+                        })
+                    })
+                    .transpose()?;
+
+                Ok(LockFile {
+                    cli_version,
+                    client_version,
+                })
+            }
+        }
+
+        const FIELDS: &'static [&'static str] = &["cli_version", "client_version"];
+        deserializer.deserialize_struct("LockFile", FIELDS, LockFileVisitor)
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
