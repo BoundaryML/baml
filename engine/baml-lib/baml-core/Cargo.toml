@@ -22,6 +22,7 @@ whoami = "1.4.1"
 textwrap = "0.16.0"
 either = "1.6.1"
 strsim = "0.10.0"
+semver = "1.0.20"
 
 
 [dev-dependencies]

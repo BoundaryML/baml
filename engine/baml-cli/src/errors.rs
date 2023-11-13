@@ -53,13 +53,19 @@ impl From<(&'static str, std::io::Error)> for CliError {
     }
 }
 
+impl From<reqwest::Error> for CliError {
+    fn from(error: reqwest::Error) -> Self {
+        CliError::StringError(error.to_string())
+    }
+}
+
 impl fmt::Display for CliError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             CliError::BAMLError(error) => {
                 write!(
                     f,
-                    "{0} {1} {2} {0}",
+                    "{0}\n{1}\n{2}{0}",
                     "Compiler failed".bold(),
                     error.warnings_to_pretty_string(),
                     error.to_pretty_string(),

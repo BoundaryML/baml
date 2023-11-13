@@ -20,7 +20,7 @@ import typeguard
 
 
 from .helper import event_to_log, try_serialize
-from ..__version__ import __version__
+from baml_version import __version__
 from ..services.api import APIWrapper
 
 
@@ -212,6 +212,10 @@ baml_tracer = __provider.get_tracer("BAML_TRACING")
 __exporter = CustomBackendExporter()
 __processor = BatchSpanProcessor(__exporter, max_export_batch_size=10)
 __provider.add_span_processor(__processor)
+
+
+def flush_trace_logs() -> None:
+    __exporter.force_flush()
 
 
 def use_tracing(api: typing.Optional[APIWrapper] = None) -> None:

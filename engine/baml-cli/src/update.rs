@@ -1,33 +1,46 @@
-use check_latest::{crate_name, crate_version, user_agent, Versions};
+use baml_lib::internal_baml_core::LockFileWrapper;
 use colored::*;
 use log::{info, warn};
 use semver;
+use serde::{Deserialize, Serialize};
 
 use crate::{command::run_command_with_error, errors::CliError};
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Versions {
+    pub cli: semver::Version,
+    pub py_client: Option<semver::Version>,
+}
+
+impl Versions {
+    pub fn from_url() -> Result<Self, CliError> {
+        let url = "https://raw.githubusercontent.com/GlooHQ/homebrew-baml/main/version.json";
+        info!("Checking for updates at {}", url);
+        let response = reqwest::blocking::get(url)?;
+        if !response.status().is_success() {
+            return Err(format!("Failed to get versions: {}", response.status()).into());
+        }
+        let versions: Versions = response.json()?;
+        Ok(versions)
+    }
+
+    pub fn from_lock_file(lockfile: &LockFileWrapper) -> Result<Self, CliError> {
+        Ok(Versions {
+            cli: lockfile
+                .cli_version()
+                .ok_or_else(|| CliError::StringError("No cli version found".into()))?
+                .clone(),
+            py_client: lockfile.client_version().cloned(),
+        })
+    }
+}
+
 fn get_version() -> (semver::Version, Option<semver::Version>) {
-    if let Ok(current_version) = semver::Version::parse(crate_version!()) {
+    if let Ok(current_version) = semver::Version::parse(env!("CARGO_PKG_VERSION")) {
         let mut update_available = None;
-        if let Ok(available_versions) = Versions::new(crate_name!(), user_agent!()) {
-            let is_yanked = available_versions
-                .versions()
-                .iter()
-                .filter(|version| version.yanked)
-                .any(|version| version == crate_version!());
-
-            if is_yanked {
-                warn!(
-                    "Version {} is yanked, please contact us (contact@trygloo.com).",
-                    crate_version!()
-                );
-            }
-
-            if let Some(latest) = available_versions.max_version() {
-                if let Ok(latest_version) = semver::Version::parse(&latest.to_string()) {
-                    if latest_version > current_version {
-                        update_available = Some(latest_version);
-                    }
-                }
+        if let Ok(available_versions) = Versions::from_url() {
+            if available_versions.cli > current_version {
+                update_available = Some(available_versions.cli);
             }
         } else {
             info!("{}", "Failed to check for updates.");
@@ -37,16 +50,37 @@ fn get_version() -> (semver::Version, Option<semver::Version>) {
     panic!("Failed to parse current version.");
 }
 
-pub fn version_check() {
-    let (current_version, update_available) = get_version();
-    if let Some(latest_version) = update_available {
-        warn!(
-            "A new version of {} is available: {} -> {}",
-            crate_name!(),
-            current_version,
-            latest_version
-        );
-        warn!("Run `{} update` to update.", crate_name!());
+pub fn version_check(lockfile: &LockFileWrapper) {
+    let current = Versions::from_lock_file(lockfile);
+    let latest = Versions::from_url();
+    match (current, latest) {
+        (Ok(current), Ok(latest)) => {
+            if latest.cli > current.cli {
+                warn!(
+                    "A new version of {} is available: {} -> {}",
+                    env!("CARGO_PKG_NAME"),
+                    current.cli,
+                    latest.cli
+                );
+                warn!("Run `{} update` to update.", env!("CARGO_PKG_NAME"));
+            }
+
+            match (current.py_client, latest.py_client) {
+                (Some(current), Some(latest)) => {
+                    if latest > current {
+                        warn!(
+                            "A new version of {} is available: {} -> {}",
+                            "Python client".green(),
+                            current,
+                            latest
+                        );
+                        warn!("Run `{} update-client` to update.", env!("CARGO_PKG_NAME"));
+                    }
+                }
+                _ => {}
+            }
+        }
+        _ => {}
     }
 }
 
@@ -66,7 +100,7 @@ pub fn update() -> Result<(), CliError> {
         println!(
             "{} {}:{}",
             "No updates available for".green(),
-            crate_name!(),
+            env!("CARGO_PKG_NAME"),
             current_version
         );
     }
@@ -79,17 +113,30 @@ fn impl_update() -> Result<(), CliError> {
     }
 
     if cfg!(target_os = "macos") {
-        update_macos()
+        if is_installed_from_brew() {
+            update_brew()
+        } else {
+            update_shell_install()
+        }
     } else if cfg!(target_os = "windows") {
         update_windows()
     } else if cfg!(target_os = "linux") {
-        update_linux()
+        update_shell_install()
     } else {
         Err("Unsupported platform".into())
     }
 }
 
-fn update_macos() -> Result<(), CliError> {
+fn is_installed_from_brew() -> bool {
+    std::process::Command::new("brew")
+        .args(&["list", "baml"])
+        .output()
+        .map(|o| o.status.success())
+        .ok()
+        .unwrap_or(false)
+}
+
+fn update_brew() -> Result<(), CliError> {
     run_command_with_error("brew", ["tap", "gloohq/gloo"], "brew tap gloohq/gloo")?;
     run_command_with_error("brew", ["update"], "brew update")?;
     run_command_with_error("brew", ["upgrade", "gloo"], "brew upgrade gloo")
@@ -100,10 +147,10 @@ fn update_windows() -> Result<(), CliError> {
     run_command_with_error("scoop", ["update", "gloo"], "scoop update gloo")
 }
 
-fn update_linux() -> Result<(), CliError> {
-    static LINUX_INSTALL_SCRIPT: &str =
+fn update_shell_install() -> Result<(), CliError> {
+    static INSTALL_SCRIPT: &str =
         "https://raw.githubusercontent.com/GlooHQ/homebrew-gloo/main/install-gloo.sh";
 
-    let command = ["-c", "curl", "-fsS", LINUX_INSTALL_SCRIPT, "|", "bash"];
+    let command = ["-c", "curl", "-fsS", INSTALL_SCRIPT, "|", "sh"];
     run_command_with_error("sh", &command, "install command")
 }

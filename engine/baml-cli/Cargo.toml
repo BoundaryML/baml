@@ -15,7 +15,9 @@ colored = "2.0.4"
 env_logger = "0.10.0"
 glob = "0.3.1"
 log = "0.4.20"
+reqwest = "0.11.22"
 semver = "1.0.20"
+serde.workspace = true
 
 [dev-dependencies]
 base64 = "0.13.0"

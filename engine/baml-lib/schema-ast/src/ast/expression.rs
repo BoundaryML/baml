@@ -1,5 +1,3 @@
-use log::info;
-
 use crate::ast::Span;
 use std::fmt;
 
@@ -8,6 +6,7 @@ use super::{Identifier, WithName, WithSpan};
 #[derive(Debug, Clone)]
 pub struct RawString {
     raw_span: Span,
+    #[allow(dead_code)]
     raw_value: String,
     inner_value: String,
 

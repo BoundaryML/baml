@@ -5,7 +5,7 @@ use internal_baml_schema_ast::ast::WithName;
 use log::info;
 use serde_json::json;
 
-use crate::configuration::Generator;
+use crate::{configuration::Generator, lockfile::LockFileWrapper};
 
 use self::{file::FileCollector, traits::WithWritePythonString};
 
@@ -25,7 +25,11 @@ fn generate_py_file<'a>(obj: &impl WithWritePythonString, fc: &'a mut FileCollec
     obj.write_py_file(fc);
 }
 
-pub(crate) fn generate_py(db: &ParserDatabase, gen: &Generator) -> std::io::Result<()> {
+pub(crate) fn generate_py(
+    db: &ParserDatabase,
+    gen: &Generator,
+    lock: &LockFileWrapper,
+) -> std::io::Result<()> {
     let mut fc = Default::default();
     db.walk_enums().for_each(|e| generate_py_file(&e, &mut fc));
     db.walk_classes()
@@ -43,7 +47,8 @@ pub(crate) fn generate_py(db: &ParserDatabase, gen: &Generator) -> std::io::Resu
     generate_py_file(db, &mut fc);
     info!("Writing files to {}", gen.output.to_string_lossy());
     let temp_path = PathBuf::from(format!("{}.tmp", &gen.output.to_string_lossy().to_string()));
-    match fc.write(&temp_path) {
+
+    match fc.write(&temp_path, gen, lock) {
         Ok(_) => {
             let _ = std::fs::remove_dir_all(&gen.output);
             std::fs::rename(&temp_path, &gen.output)
