@@ -49,17 +49,29 @@ impl JsonHelper for ClassWalker<'_> {
             "fields": self.static_fields().map(|field|
                 field.json(f)
                 ).collect::<Vec<_>>(),
+            "properties": self.dynamic_fields().map(|field|
+                field.json(f)
+            ).collect::<Vec<_>>(),
+            "num_fields": self.ast_class().fields().len(),
         })
     }
 }
 
 impl JsonHelper for FieldWalker<'_> {
     fn json(&self, f: &mut File) -> serde_json::Value {
-        json!({
-            "name": self.name(),
-            "type": self.r#type().to_py_string(f),
-            "optional": self.r#type().is_nullable(),
-            "alias": self.maybe_alias(self.db),
-        })
+        log::info!("FieldWalker::json {} {}", self.name(), self.is_dynamic());
+        match self.is_dynamic() {
+            true => json!({
+                "name": self.name(),
+                "type": self.r#type().to_py_string(f),
+                "code": self.code_for_language("python").unwrap_or("raise NotImplementedError()"),
+            }),
+            false => json!({
+                "name": self.name(),
+                "type": self.r#type().to_py_string(f),
+                "optional": self.r#type().is_nullable(),
+                "alias": self.maybe_alias(self.db),
+            }),
+        }
     }
 }

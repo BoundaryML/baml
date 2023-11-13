@@ -10,8 +10,17 @@ pub enum ToStringAttributes {
 
 #[derive(Debug, Default)]
 pub struct DynamicStringAttributes {
-    #[allow(dead_code)]
-    template: Option<StringId>,
+    pub code: HashMap<StringId, StringId>,
+}
+
+impl DynamicStringAttributes {
+    pub fn add_code(&mut self, language: StringId, code: StringId) -> bool {
+        if self.code.contains_key(&language) {
+            return false;
+        }
+        self.code.insert(language, code);
+        true
+    }
 }
 
 #[derive(Debug, Default)]

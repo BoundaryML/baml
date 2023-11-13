@@ -174,7 +174,7 @@ type_alias = { TYPE_KEYWORD ~ identifier ~ base_type ~ (NEWLINE? ~ field_attribu
 // ######################################
 // Arguments
 // ######################################
-arguments_list = { "(" ~ expression? ~ ("," ~ expression)? ~ ")" }
+arguments_list = { "(" ~ (NEWLINE?) ~ expression? ~ ("," ~(NEWLINE?) ~ expression)? ~ (NEWLINE?) ~ ")" }
 
 // ######################################
 // Expressions & Functions
@@ -207,11 +207,11 @@ raw_string_literal_content_3 = @{ (!"\"###" ~ ANY)* }
 raw_string_literal_content_4 = @{ (!"\"####" ~ ANY)* }
 raw_string_literal_content_5 = @{ (!"\"#####" ~ ANY)* }
 
-raw_string_start_5 = @{ (single_word)? ~ "#####\"" }
-raw_string_start_4 = @{ (single_word)? ~ "####\"" }
-raw_string_start_3 = @{ (single_word)? ~ "###\"" }
-raw_string_start_2 = @{ (single_word)? ~ "##\"" }
-raw_string_start_1 = @{ (single_word)? ~ "#\"" }
+raw_string_start_5 = _{ (single_word)? ~ "#####\"" }
+raw_string_start_4 = _{ (single_word)? ~ "####\"" }
+raw_string_start_3 = _{ (single_word)? ~ "###\"" }
+raw_string_start_2 = _{ (single_word)? ~ "##\"" }
+raw_string_start_1 = _{ (single_word)? ~ "#\"" }
 
 raw_string_literal = { 
     (raw_string_start_5 ~ raw_string_literal_content_5 ~ "\"#####")

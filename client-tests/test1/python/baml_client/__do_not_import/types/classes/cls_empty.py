@@ -14,4 +14,3 @@ from pydantic import BaseModel
 @register_deserializer({  })
 class Empty(BaseModel):
     pass
-    

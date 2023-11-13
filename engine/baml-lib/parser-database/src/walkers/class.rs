@@ -37,7 +37,7 @@ impl<'db> ClassWalker<'db> {
                     .types
                     .refine_class_field((self.id, field_id))
                     .left()
-                    .map(|_id| self.walk((self.id, field_id)))
+                    .map(|_id| self.walk((self.id, field_id, false)))
             })
             .collect::<Vec<_>>()
             .into_iter()
@@ -51,8 +51,8 @@ impl<'db> ClassWalker<'db> {
                 self.db
                     .types
                     .refine_class_field((self.id, field_id))
-                    .left()
-                    .map(|_id| self.walk((self.id, field_id)))
+                    .right()
+                    .map(|_id| self.walk((self.id, field_id, true)))
             })
             .collect::<Vec<_>>()
             .into_iter()
@@ -106,6 +106,7 @@ impl<'db> WithSerializeableContent for ClassWalker<'db> {
             "name": self.alias(variant),
             "meta": self.meta(variant),
             "fields": self.static_fields().map(|f| f.serialize_data(variant)).collect::<Vec<_>>(),
+            // Dynamic fields are not serialized.
         })
     }
 }

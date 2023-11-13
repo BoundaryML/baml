@@ -142,11 +142,6 @@ fn parse_raw_string(token: Pair<'_>, diagnostics: &mut Diagnostics) -> RawString
                     diagnostics.span(current.as_span()),
                 ));
             }
-            Rule::raw_string_start_1
-            | Rule::raw_string_start_2
-            | Rule::raw_string_start_3
-            | Rule::raw_string_start_4
-            | Rule::raw_string_start_5 => {}
             _ => unreachable_rule!(current, Rule::raw_string_literal),
         };
     }

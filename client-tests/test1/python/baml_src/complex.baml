@@ -7,9 +7,34 @@ class ClassifyResponse {
   tool Tool[] @description(#"
     Any number of tools the user may want to use
   "#)
-  assistant_response string
+  assistant_response string 
+  
+  pretty_message string @get(
+    python#"
+      import json
+      from xyz import xyz
+
+      thingy = []
+      # iterate over stuff
+      json.loads()
+      return f'You can use the following tools: {self.tool}'
+    "#
+  )
+
+    
+  pretty_message2 string @get(
+    python#"
+      import json
+      from xyz import xyz
+
+      thingy = []
+      # iterate over stuff
+      json.loads()
+      return f'You can use the following tools: {self.tool}'
+    "#
+  )
 }
- 
+
 enum Tool {
   @@alias(food)
   
