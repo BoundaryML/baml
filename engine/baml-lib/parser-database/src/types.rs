@@ -240,38 +240,22 @@ impl Types {
     }
 }
 
-fn visit_enum<'db>(enm: &'db ast::Enum, ctx: &mut Context<'db>) {
-    if enm.values.is_empty() {
-        let msg = "An enum must have at least one value.";
-        ctx.push_error(DatamodelError::new_validation_error(
-            msg,
-            enm.span().clone(),
-        ))
-    }
-}
+fn visit_enum<'db>(_enm: &'db ast::Enum, _ctx: &mut Context<'db>) {}
 
 fn visit_class<'db>(class_id: ast::ClassId, class: &'db ast::Class, ctx: &mut Context<'db>) {
-    if class.fields().is_empty() {
-        let msg = "A class must have at least one field.";
-        ctx.push_error(DatamodelError::new_validation_error(
-            msg,
-            class.span().clone(),
-        ))
-    } else {
-        let used_types = class
-            .iter_fields()
-            .flat_map(|(_, f)| f.field_type.flat_idns())
-            .filter(|id| {
-                id.is_valid_type()
-                    && match id {
-                        ast::Identifier::Primitive(..) => false,
-                        _ => true,
-                    }
-            })
-            .map(|f| f.name().to_string())
-            .collect::<HashSet<_>>();
-        ctx.types.class_dependencies.insert(class_id, used_types);
-    }
+    let used_types = class
+        .iter_fields()
+        .flat_map(|(_, f)| f.field_type.flat_idns())
+        .filter(|id| {
+            id.is_valid_type()
+                && match id {
+                    ast::Identifier::Primitive(..) => false,
+                    _ => true,
+                }
+        })
+        .map(|f| f.name().to_string())
+        .collect::<HashSet<_>>();
+    ctx.types.class_dependencies.insert(class_id, used_types);
 }
 
 fn visit_function<'db>(idx: FunctionId, function: &'db ast::Function, ctx: &mut Context<'db>) {

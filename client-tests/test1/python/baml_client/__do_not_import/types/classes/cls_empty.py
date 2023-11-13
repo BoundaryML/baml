@@ -12,5 +12,6 @@ from pydantic import BaseModel
 
 
 @register_deserializer({  })
-class Hi(BaseModel):
-    thing: bool
+class Empty(BaseModel):
+    pass
+    

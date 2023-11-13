@@ -8,9 +8,9 @@
 # fmt: off
 
 from baml_lib._impl.deserializer import register_deserializer
-from pydantic import BaseModel
+from enum import Enum
 
 
 @register_deserializer({  })
-class Hi(BaseModel):
-    thing: bool
+class EmptyEnum(str, Enum):
+    pass

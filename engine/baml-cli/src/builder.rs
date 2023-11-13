@@ -4,10 +4,9 @@ use baml_lib::{generate_schema, parse_and_validate_schema, SourceFile};
 use colored::*;
 use log::info;
 
-use crate::{
-    builder::dir_utils::{get_src_dir, get_src_files},
-    errors::CliError,
-};
+use crate::{builder::dir_utils::get_src_files, errors::CliError, update::version_check};
+
+pub(crate) use crate::builder::dir_utils::get_src_dir;
 
 pub fn build(baml_dir: &Option<String>) -> Result<(), CliError> {
     let (baml_dir, (config, diagnostics)) = get_src_dir(baml_dir)?;
@@ -37,8 +36,10 @@ pub fn build(baml_dir: &Option<String>) -> Result<(), CliError> {
         log::warn!("{}", diagnostics.warnings_to_pretty_string());
     }
 
-    match generate_schema(&parsed, &config) {
-        Ok(_) => Ok(()),
-        Err(err) => Err(err.to_string().into()),
-    }
+    generate_schema(&parsed, &config).map_err(|e| e.to_string())?;
+
+    config.generators.iter().for_each(|(_, lockfile)| {
+        version_check(lockfile);
+    });
+    Ok(())
 }

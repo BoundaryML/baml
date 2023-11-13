@@ -127,7 +127,7 @@ jobs:
 
           windows_binary_path="engine/target/x86_64-pc-windows-msvc/release/baml.exe"
           echo "windows_hash=$(shasum -a 256 "$windows_binary_path" | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
-      
+
           echo "version=$(echo $VERSION | cut -d '-' -f 1)" >> $GITHUB_OUTPUT
           echo "full_version=$VERSION" >> $GITHUB_OUTPUT
 
@@ -148,6 +148,14 @@ jobs:
             Mac: Intel: `${{ steps.hash.outputs.darwin_intel_hash }}`
             Mac: Apple Silicon: `${{ steps.hash.outputs.darwin_arm_hash }}`
             Windows: `${{ steps.hash.outputs.windows_hash }}`
+      - name: Trigger homebrew-baml update
+        uses: peter-evans/repository-dispatch@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: gloohq/homebrew-baml
+          event-type: update-formula
+          client-payload: '{"version": "${{ steps.hash.outputs.full_version }}", "hash_linux": "${{ steps.hash.outputs.linux_hash }}", "hash_mac_intel": "${{ steps.hash.outputs.darwin_intel_hash }}", "hash_mac_arm": "${{ steps.hash.outputs.darwin_arm_hash }}", "hash_windows": "${{ steps.hash.outputs.windows_hash }}", "nightly": true}'
+
   release:
     permissions:
       contents: write
@@ -205,7 +213,7 @@ jobs:
 
           windows_binary_path="engine/target/x86_64-pc-windows-msvc/release/baml.exe"
           echo "windows_hash=$(shasum -a 256 "$windows_binary_path" | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
-      
+
           echo "version=$(echo $VERSION | cut -d '-' -f 1)" >> $GITHUB_OUTPUT
           echo "full_version=$VERSION" >> $GITHUB_OUTPUT
 
@@ -219,7 +227,7 @@ jobs:
             engine/target/x86_64-apple-darwin/release/baml-apple-intel.tar.gz
             engine/target/aarch64-apple-darwin/release/baml-apple-arm.tar.gz
             engine/target/x86_64-pc-windows-msvc/release/baml.exe
-          prerelease: true # Must manually upgrade to release once homebrew is updated.
+          prerelease: false
           body: |
             ## Hashes
             Linux: `${{ steps.hash.outputs.linux_hash }}`
@@ -227,5 +235,10 @@ jobs:
             Mac: Apple Silicon: `${{ steps.hash.outputs.darwin_arm_hash }}`
             Windows: `${{ steps.hash.outputs.windows_hash }}`
 
-      # TODO: Create a pull request on GlooHQ/homebrew-baml to update the version by running
-      # release/patch-homebrew.sh
+      - name: Trigger homebrew-baml update
+        uses: peter-evans/repository-dispatch@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: gloohq/homebrew-baml
+          event-type: update-formula
+          client-payload: '{"version": "${{ steps.hash.outputs.version }}", "hash_linux": "${{ steps.hash.outputs.linux_hash }}", "hash_mac_intel": "${{ steps.hash.outputs.darwin_intel_hash }}", "hash_mac_arm": "${{ steps.hash.outputs.darwin_arm_hash }}", "hash_windows": "${{ steps.hash.outputs.windows_hash }}"}'

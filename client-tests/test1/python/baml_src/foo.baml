@@ -3,6 +3,12 @@ function MessageSimplifier {
     output int?
 } 
 
+class Empty {
+}
+
+enum EmptyEnum {
+}
+
 class Hi {  
   thing bool
 }

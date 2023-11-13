@@ -42,10 +42,25 @@ impl From<&Expression> for GeneratorConfigValue {
 pub struct Generator {
     pub name: String,
     pub language: String,
+    pub pkg_manager: Option<String>,
     pub source_path: PathBuf,
     pub output: PathBuf,
     pub config: HashMap<String, GeneratorConfigValue>,
+    pub client_version: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub documentation: Option<String>,
+
+    #[serde(skip)]
+    pub(crate) span: Option<crate::ast::Span>,
+}
+
+impl Generator {
+    pub fn client_version(&self) -> Option<&str> {
+        self.client_version.as_deref()
+    }
+
+    pub fn cli_version(&self) -> &'static str {
+        env!("CARGO_PKG_VERSION")
+    }
 }

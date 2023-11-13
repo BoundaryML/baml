@@ -4,7 +4,7 @@ use crate::{
     pretty_print::{pretty_print, DiagnosticColorer},
     Span,
 };
-use std::{borrow::Cow, path::PathBuf};
+use std::borrow::Cow;
 
 #[derive(Debug, Clone)]
 pub struct DatamodelError {

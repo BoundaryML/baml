@@ -7,15 +7,19 @@ use internal_baml_parser_database::{
     ast::{self, Expression, WithDocumentation, WithName},
     coerce,
 };
-use std::{
-    collections::HashMap,
-    path::{PathBuf},
-};
+use internal_baml_schema_ast::ast::WithIdentifier;
+use std::{collections::HashMap, path::PathBuf};
 
 const LANGUAGE_KEY: &str = "language";
 const OUTPUT_KEY: &str = "output";
+const PKG_MANAGER_KEY: &str = "pkg_manager";
 
-const FIRST_CLASS_PROPERTIES: &[&str] = &[LANGUAGE_KEY, OUTPUT_KEY];
+const FIRST_CLASS_PROPERTIES: &[&str] = &[LANGUAGE_KEY, OUTPUT_KEY, PKG_MANAGER_KEY];
+
+fn convert_python_version_to_rust_semver(py_version: &str) -> String {
+    // Replace '.pre' with '-pre.' for Rust's semver compatibility
+    py_version.replacen(".dev", "-dev.", 1)
+}
 
 /// Load and validate Generators defined in an AST.
 pub(crate) fn load_generators_from_ast<'i>(
@@ -79,6 +83,26 @@ fn lift_generator(
         }
     };
 
+    let pkg_manager = match args.get(PKG_MANAGER_KEY) {
+        Some(val) => Some(coerce::string(val, diagnostics)?),
+        None => match language {
+            "python" => {
+                // Check if there's a pyproject.toml
+                let pyproject_toml = diagnostics.root_path.join("../pyproject.toml");
+                if pyproject_toml.exists() {
+                    Some("poetry")
+                } else {
+                    // check if pip3 command exists
+                    match std::process::Command::new("pip3").arg("--version").output() {
+                        Ok(output) if output.status.success() => Some("pip3"),
+                        _ => Some("pip"),
+                    }
+                }
+            }
+            _ => None,
+        },
+    };
+
     let output = args
         .get(OUTPUT_KEY)
         .and_then(|v| coerce::path(v, diagnostics))
@@ -87,7 +111,6 @@ fn lift_generator(
         .join("baml_client");
 
     let mut properties = HashMap::new();
-
     for prop in ast_generator.fields() {
         let is_first_class_prop = FIRST_CLASS_PROPERTIES.iter().any(|k| *k == prop.name());
         if is_first_class_prop {
@@ -110,9 +133,49 @@ fn lift_generator(
         properties.insert(prop.name().to_string(), value);
     }
 
+    // Call python -m baml_client to get the version
+    let client_version = match (language, pkg_manager) {
+        ("python", Some("poetry")) => std::process::Command::new("poetry")
+            .arg("run")
+            .arg("python")
+            .arg("-m")
+            .arg("baml_version")
+            .output()
+            .ok()
+            .and_then(|output| {
+                if output.status.success() {
+                    match String::from_utf8(output.stdout).ok() {
+                        Some(v) => Some(convert_python_version_to_rust_semver(&v.trim())),
+                        None => None,
+                    }
+                } else {
+                    None
+                }
+            })
+            .map(|v| v.trim().to_string()),
+        ("python", Some("pip") | None) => std::process::Command::new("python")
+            .arg("-m")
+            .arg("baml_version")
+            .output()
+            .ok()
+            .and_then(|output| {
+                if output.status.success() {
+                    match String::from_utf8(output.stdout).ok() {
+                        Some(v) => Some(convert_python_version_to_rust_semver(&v.trim())),
+                        None => None,
+                    }
+                } else {
+                    None
+                }
+            })
+            .map(|v| v.trim().to_string()),
+        _ => None,
+    };
+
     Some(Generator {
         name: String::from(ast_generator.name()),
         language: String::from(language),
+        pkg_manager: pkg_manager.map(String::from),
         source_path: diagnostics.root_path.clone(),
         output: match output.is_absolute() {
             true => output,
@@ -120,5 +183,7 @@ fn lift_generator(
         },
         config: properties,
         documentation: ast_generator.documentation().map(String::from),
+        client_version,
+        span: Some(ast_generator.identifier().span().clone()),
     })
 }

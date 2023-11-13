@@ -6,6 +6,7 @@ mod builder;
 mod command;
 mod errors;
 mod update;
+mod update_client;
 
 use clap::{Args, Parser, Subcommand};
 
@@ -54,22 +55,10 @@ pub(crate) fn main() {
 
     let args = Cli::parse();
 
-    // Before anything else, always run version check
-    // unless we're updating the cli.
-    match &args.command {
-        Commands::Update(_) => {}
-        _ => {
-            update::version_check();
-        }
-    }
-
     let response = match &args.command {
         Commands::Update(_args) => update::update(),
         Commands::Build(args) => builder::build(&args.baml_dir),
-        Commands::UpdateClient(args) => {
-            println!("UpdateClient: {:?}", args);
-            Ok(())
-        }
+        Commands::UpdateClient(args) => update_client::update_client(&args.baml_dir),
     };
 
     if let Err(error) = response {

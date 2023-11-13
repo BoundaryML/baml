@@ -16,6 +16,7 @@ use internal_baml_diagnostics::{DatamodelError, Diagnostics, SourceFile, Span};
 mod common;
 mod configuration;
 mod generate;
+mod lockfile;
 mod validate;
 
 use self::validate::generator_loader;
@@ -23,6 +24,8 @@ pub use crate::{
     common::{PreviewFeature, PreviewFeatures, ALL_PREVIEW_FEATURES},
     configuration::Configuration,
 };
+
+pub use lockfile::LockFileWrapper;
 
 pub struct ValidatedSchema {
     pub db: internal_baml_parser_database::ParserDatabase,
@@ -36,8 +39,8 @@ impl std::fmt::Debug for ValidatedSchema {
 }
 
 pub fn generate(db: &ParserDatabase, configuration: &Configuration) -> std::io::Result<()> {
-    for gen in configuration.generators.iter() {
-        generate::generate_pipeline(db, gen)?;
+    for (gen, lock_file) in configuration.generators.iter() {
+        generate::generate_pipeline(db, gen, lock_file)?;
     }
     Ok(())
 }
@@ -126,9 +129,38 @@ pub fn parse_configuration(
 fn validate_configuration(
     root_path: &PathBuf,
     schema_ast: &ast::SchemaAst,
+    // skip_lock_file_validation: bool,
 ) -> (Configuration, Diagnostics) {
     let mut diagnostics = Diagnostics::new(root_path.clone());
     let generators = generator_loader::load_generators_from_ast(schema_ast, &mut diagnostics);
 
-    (Configuration { generators }, diagnostics)
+    let lock_files = generators
+        .iter()
+        .filter_map(
+            |gen| match lockfile::LockFileWrapper::from_generator(&gen) {
+                Ok(lock_file) => {
+                    if let Ok(prev) =
+                        lockfile::LockFileWrapper::from_path(&gen.output.join("baml.lock"))
+                    {
+                        lock_file.validate(&prev, &mut diagnostics);
+                    }
+                    Some((gen.clone(), lock_file))
+                }
+                Err(err) => {
+                    diagnostics.push_error(DatamodelError::new_validation_error(
+                        &format!("Failed to create lock file: {}", err),
+                        gen.span.clone().unwrap(),
+                    ));
+                    None
+                }
+            },
+        )
+        .collect();
+
+    (
+        Configuration {
+            generators: lock_files,
+        },
+        diagnostics,
+    )
 }

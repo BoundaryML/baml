@@ -1,10 +1,10 @@
 use super::Generator;
-use crate::{internal_baml_diagnostics::Diagnostics, PreviewFeature};
+use crate::{internal_baml_diagnostics::Diagnostics, lockfile::LockFileWrapper, PreviewFeature};
 use enumflags2::BitFlags;
 
 #[derive(Debug)]
 pub struct Configuration {
-    pub generators: Vec<Generator>,
+    pub generators: Vec<(Generator, LockFileWrapper)>,
 }
 
 impl Configuration {
