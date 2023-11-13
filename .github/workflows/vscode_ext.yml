@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - "typescript/**"
+      # Or if any rust code changes
+      - "engine/**"
     branches:
       - canary
   push:
