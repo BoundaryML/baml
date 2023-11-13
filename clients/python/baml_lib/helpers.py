@@ -14,7 +14,7 @@ class __InternalBAMLConfig:
         self.api = api
 
 
-__api = None
+__api: typing.Optional[APIWrapper] = None
 
 
 def baml_init(

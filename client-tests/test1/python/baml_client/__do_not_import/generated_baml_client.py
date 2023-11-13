@@ -17,9 +17,11 @@ from .functions.fx_classifytool import BAMLClassifyTool
 from .functions.fx_maybepolishtext import BAMLMaybePolishText
 from .functions.fx_messagesimplifier import BAMLMessageSimplifier
 from .functions.fx_textpolisher import BAMLTextPolisher
+from baml_core.otel import flush_trace_logs
+from baml_lib import baml_init
+from typing import Optional
 
 
-from baml_lib import baml_init 
 class BAMLClient:
     Blah = BAMLBlah
     ClassifyTool = BAMLClassifyTool
@@ -33,6 +35,26 @@ class BAMLClient:
     ResilientGPT4 = ResilientGPT4
 
     def __init__(self):
-        baml_init()
+        baml_init(idempotent=True)
+
+    def configure(
+        self,
+        project_id: Optional[str] = None,
+        secret_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+        enable_cache: Optional[bool] = None,
+        stage: Optional[str] = None,
+    ):
+        return baml_init(
+            project_id=project_id,
+            secret_key=secret_key,
+            base_url=base_url,
+            enable_cache=enable_cache,
+            stage=stage,
+        )
+
+    def flush(self):
+        flush_trace_logs()
+
 
 baml = BAMLClient()
