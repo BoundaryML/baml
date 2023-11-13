@@ -1,10 +1,10 @@
 from __future__ import annotations
 import json
-from typing import Any, Dict, List, Mapping, Optional, Union
+from typing import Any, Callable, Dict, List, Mapping, Optional, Union
 from typing_extensions import TypedDict, Literal
 from ..logger import logger
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from enum import Enum
 
 
@@ -46,11 +46,18 @@ except ImportError:
 
     colorama = MockColorama()  # type: ignore
 
+JsonValue = Union[
+    str, int, float, bool, None, Dict[str, "JsonValue"], List["JsonValue"]
+]
+
 
 class Error(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     code: int
     message: str
     traceback: Optional[str]
+    override: Optional[Dict[str, JsonValue]] = None
 
 
 class EventChain(BaseModel):
@@ -67,8 +74,11 @@ class LLMOutputModelMetadata(BaseModel):
 
 
 class LLMOutputModel(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     raw_text: str
     metadata: LLMOutputModelMetadata
+    override: Optional[Dict[str, JsonValue]] = None
 
 
 class LLMChat(TypedDict):
@@ -77,8 +87,11 @@ class LLMChat(TypedDict):
 
 
 class LLMEventInputPrompt(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     template: Union[str, List[LLMChat]]
     template_args: Dict[str, str]
+    override: Optional[Dict[str, JsonValue]] = None
 
 
 class LLMEventInput(BaseModel):
@@ -87,8 +100,8 @@ class LLMEventInput(BaseModel):
 
 
 class LLMEventSchema(BaseModel):
-    mdl_name: str = Field(alias="model_name")
-    provider: str
+    mdl_name: str = Field(alias="model_name", frozen=True)
+    provider: str = Field(frozen=True)
     input: LLMEventInput
     output: Optional[LLMOutputModel]
 
@@ -112,8 +125,11 @@ class TypeSchema(BaseModel):
 
 
 class IOValue(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     value: Any
     type: TypeSchema
+    override: Optional[Dict[str, JsonValue]] = None
 
 
 class IO(BaseModel):
@@ -122,15 +138,81 @@ class IO(BaseModel):
 
 
 class LogSchema(BaseModel):
-    project_id: str
-    event_type: Literal["log", "func_llm", "func_prob", "func_code"]
-    root_event_id: str
-    event_id: str
-    parent_event_id: Optional[str]
-    context: LogSchemaContext
-    io: IO
+    project_id: str = Field(frozen=True)
+    event_type: Literal["log", "func_llm", "func_prob", "func_code"] = Field(
+        frozen=True
+    )
+    root_event_id: str = Field(frozen=True)
+    event_id: str = Field(frozen=True)
+    parent_event_id: Optional[str] = Field(frozen=True)
+    context: LogSchemaContext = Field(frozen=True)
+    io: IO = Field(frozen=True)
     error: Optional[Error]
-    metadata: Optional[MetadataType]
+    metadata: Optional[MetadataType] = Field(frozen=True)
+
+    def override_input(
+        self, cb: Callable[[Any], Optional[Dict[str, JsonValue]]]
+    ) -> None:
+        if self.io.input:
+            override = cb(self.io.input.value)
+            if override:
+                self.io.input = IOValue(
+                    value="<override>",
+                    type=self.io.input.type,
+                    override=override,
+                )
+
+    def override_output(
+        self, cb: Callable[[Any], Optional[Dict[str, JsonValue]]]
+    ) -> None:
+        if self.io.output:
+            override = cb(self.io.output.value)
+            if override:
+                self.io.output = IOValue(
+                    value="<override>",
+                    type=self.io.output.type,
+                    override=override,
+                )
+
+    def override_llm_prompt_template_args(
+        self, cb: Callable[[LLMEventInputPrompt], Optional[Dict[str, JsonValue]]]
+    ) -> None:
+        if self.metadata:
+            override = cb(self.metadata.input.prompt)
+            if override:
+                self.metadata.input.prompt = LLMEventInputPrompt(
+                    template=self.metadata.input.prompt.template,
+                    template_args={
+                        k: "<override>"
+                        for k in self.metadata.input.prompt.template_args.keys()
+                    },
+                    override=override,
+                )
+
+    def override_llm_raw_output(
+        self, cb: Callable[[LLMOutputModel], Optional[Dict[str, JsonValue]]]
+    ) -> None:
+        if self.metadata and self.metadata.output:
+            override = cb(self.metadata.output)
+            if override:
+                self.metadata.output = LLMOutputModel(
+                    raw_text="<override>",
+                    metadata=self.metadata.output.metadata,
+                    override=override,
+                )
+
+    def override_error(
+        self, cb: Callable[[Error], Optional[Dict[str, JsonValue]]]
+    ) -> None:
+        if self.error:
+            override = cb(self.error)
+            if override:
+                self.error = Error(
+                    code=self.error.code,
+                    message="<override>",
+                    traceback="<override>",
+                    override=override,
+                )
 
     def to_pretty_string(self) -> str:
         separator = "-------------------"
