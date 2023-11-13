@@ -2,7 +2,7 @@ use std::ops::Deref;
 
 use crate::{
     printer::{WithSerializeableContent, WithStaticRenames},
-    types::ToStringAttributes,
+    types::{DynamicStringAttributes, StaticStringAttributes, ToStringAttributes},
     ParserDatabase,
 };
 
@@ -11,7 +11,7 @@ use internal_baml_schema_ast::ast::{self, FieldType, Identifier, WithName};
 use serde_json::json;
 
 /// A model field, scalar or relation.
-pub type FieldWalker<'db> = Walker<'db, (ast::ClassId, ast::FieldId)>;
+pub type FieldWalker<'db> = Walker<'db, (ast::ClassId, ast::FieldId, bool)>;
 
 impl<'db> FieldWalker<'db> {
     /// The AST node for the field.
@@ -27,6 +27,43 @@ impl<'db> FieldWalker<'db> {
     /// Traverse the field's parent model.
     pub fn model(self) -> ClassWalker<'db> {
         self.walk(self.id.0)
+    }
+
+    fn attributes(self) -> &'db ToStringAttributes {
+        &self.db.types.class_attributes[&self.id.0].field_serilizers[&self.id.1]
+    }
+
+    /// Whether the field is dynamic.
+    pub fn is_dynamic(self) -> bool {
+        self.id.2
+    }
+
+    /// Attributes for the field.
+    pub fn static_attributes(self) -> &'db StaticStringAttributes {
+        match self.attributes() {
+            ToStringAttributes::Static(d) => d,
+            _ => panic!("Expected static attributes"),
+        }
+    }
+
+    /// Attributes for the field.
+    pub fn dynamic_attributes(self) -> &'db DynamicStringAttributes {
+        match self.attributes() {
+            ToStringAttributes::Dynamic(d) => d,
+            _ => panic!("Expected dynamic attributes"),
+        }
+    }
+
+    /// The field's alias.
+    pub fn code_for_language(self, language: &str) -> Option<&'db str> {
+        match self.db.interner.lookup(language) {
+            Some(language) => self
+                .dynamic_attributes()
+                .code
+                .get(&language)
+                .and_then(|&s| self.db.interner.get(s)),
+            None => None,
+        }
     }
 }
 

@@ -3,9 +3,9 @@ use internal_baml_schema_ast::ast::{
     Class, ClassId, Enum, EnumId, Top, TopId, Variant, VariantConfigId, WithSpan,
 };
 
-
 mod alias;
 mod description;
+mod get;
 mod meta;
 mod to_string_attribute;
 

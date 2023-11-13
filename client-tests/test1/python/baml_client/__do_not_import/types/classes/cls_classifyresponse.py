@@ -17,3 +17,21 @@ from typing import List
 class ClassifyResponse(BaseModel):
     tool: List[Tool]
     assistant_response: str
+    @property
+    def pretty_message(self) -> str:
+        import json
+        from xyz import xyz
+        
+        thingy = []
+        # iterate over stuff
+        json.loads()
+        return f'You can use the following tools: {self.tool}'
+    @property
+    def pretty_message2(self) -> str:
+        import json
+        from xyz import xyz
+        
+        thingy = []
+        # iterate over stuff
+        json.loads()
+        return f'You can use the following tools: {self.tool}'
