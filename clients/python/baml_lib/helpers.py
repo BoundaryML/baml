@@ -17,6 +17,67 @@ class __InternalBAMLConfig:
 __api: typing.Optional[APIWrapper] = None
 
 
+class Params:
+    def __init__(self) -> None:
+        self.stage: str = os.environ.get("GLOO_STAGE", "prod")
+        self.base_url: str = os.environ.get(
+            "GLOO_BASE_URL", "https://app.trygloo.com/api"
+        )
+        self.project_id: typing.Optional[str] = os.environ.get("GLOO_APP_ID")
+        self.secret_key: typing.Optional[str] = os.environ.get("GLOO_APP_SECRET")
+        self.cache_enabled: bool = os.environ.get("GLOO_CACHE", "1") == "1"
+
+    def set_base_url(self, base_url: typing.Optional[str]) -> None:
+        if base_url is not None:
+            if base_url == "reset":
+                self.base_url = os.environ.get(
+                    "GLOO_BASE_URL", "https://app.trygloo.com/api"
+                )
+            else:
+                self.base_url = base_url
+
+    def set_project_id(self, project_id: typing.Optional[str]) -> None:
+        if project_id is not None:
+            if project_id == "reset":
+                self.project_id = os.environ.get("GLOO_APP_ID")
+            else:
+                self.project_id = project_id
+
+    def set_secret_key(self, secret_key: typing.Optional[str]) -> None:
+        if secret_key is not None:
+            if secret_key == "reset":
+                self.secret_key = os.environ.get("GLOO_APP_SECRET")
+            else:
+                self.secret_key = secret_key
+
+    def set_stage(self, stage: typing.Optional[str]) -> None:
+        if stage is not None:
+            if stage == "reset":
+                self.stage = os.environ.get("GLOO_STAGE", "prod")
+            else:
+                self.stage = stage
+
+    def set_cache_enabled(self, cache_enabled: typing.Optional[bool]) -> None:
+        if cache_enabled is not None:
+            self.cache_enabled = cache_enabled
+
+    def get_api(self) -> typing.Optional[APIWrapper]:
+        if self.project_id is not None and self.secret_key is not None:
+            process_id = str(uuid.uuid4())
+            return APIWrapper(
+                base_url=self.base_url,
+                stage=self.stage,
+                api_key=self.secret_key,
+                project_id=self.project_id,
+                session_id=process_id,
+            )
+        else:
+            return None
+
+
+__CachedParams = Params()
+
+
 def baml_init(
     *,
     project_id: typing.Optional[str] = None,
@@ -30,38 +91,15 @@ def baml_init(
     if idempotent and __api is not None:
         return __InternalBAMLConfig(api=__api)
 
-    process_id = str(uuid.uuid4())
+    global __CachedParams
+    __CachedParams.set_base_url(base_url)
+    __CachedParams.set_project_id(project_id)
+    __CachedParams.set_secret_key(secret_key)
+    __CachedParams.set_stage(stage)
+    __CachedParams.set_cache_enabled(enable_cache)
 
-    if base_url is None:
-        base_url = os.environ.get("GLOO_BASE_URL", "https://app.trygloo.com/api")
-
-    if project_id is None:
-        project_id = os.environ.get("GLOO_APP_ID")
-
-    if secret_key is None:
-        secret_key = os.environ.get("GLOO_APP_SECRET")
-
-    if stage is None:
-        stage = os.environ.get("GLOO_STAGE", "prod")
-    if (
-        project_id is not None
-        and secret_key is not None
-        and stage is not None
-        and base_url is not None
-    ):
-        __api = APIWrapper(
-            base_url=base_url,
-            stage=stage,
-            api_key=secret_key,
-            project_id=project_id,
-            session_id=process_id,
-        )
-    else:
-        __api = None
+    __api = __CachedParams.get_api()
     otel.use_tracing(__api)
-
-    if enable_cache is None:
-        enable_cache = os.environ.get("GLOO_CACHE", "1" if __api else "0") == "1"
 
     if enable_cache:
         if __api:
