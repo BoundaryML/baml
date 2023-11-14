@@ -85,6 +85,8 @@ class RawStringWrapper(RawWrapper):
     def as_list(self) -> typing.Iterable[RawWrapper]:
         if self.__as_list is not None:
             return self.__as_list.as_list()
+        if self.__as_obj is not None:
+            return [self.__as_obj]
         return [self]
 
     def as_dict(
