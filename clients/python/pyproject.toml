@@ -45,7 +45,7 @@ opentelemetry-instrumentation = "^0.41b0"
 colorama = "^0.4.6"
 tenacity = "^8.2.3"
 regex = "^2023.10.3"
-pydantic = "2.1"
+pydantic = "^2.1"
 typeguard = "^4.1.5"
 
 [tool.mypy."coloredlogs.*"]
