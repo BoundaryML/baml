@@ -1,11 +1,87 @@
 from __future__ import annotations
 import json
-from typing import Any, Dict, List, Mapping, Optional, Union
-from typing_extensions import TypedDict, Literal
+from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Union
+from typing_extensions import TypedDict, Literal, TypeAlias, TypeAliasType, Annotated
 from ..logger import logger
 
-from pydantic import BaseModel, Field, ConfigDict, JsonValue
+from pydantic import BaseModel, Field, ConfigDict
 from enum import Enum
+
+if TYPE_CHECKING:
+    # This seems to only be necessary for mypy
+    JsonValue: TypeAlias = Union[
+        List["JsonValue"],
+        Dict[str, "JsonValue"],
+        str,
+        int,
+        float,
+        bool,
+        None,
+    ]
+    """A `JsonValue` is used to represent a value that can be serialized to JSON.
+
+    It may be one of:
+
+    * `List['JsonValue']`
+    * `Dict[str, 'JsonValue']`
+    * `str`
+    * `int`
+    * `float`
+    * `bool`
+    * `None`
+
+    The following example demonstrates how to use `JsonValue` to validate JSON data,
+    and what kind of errors to expect when input data is not json serializable.
+
+    ```py
+    import json
+
+    from pydantic import BaseModel, JsonValue, ValidationError
+
+    class Model(BaseModel):
+        j: JsonValue
+
+    valid_json_data = {'j': {'a': {'b': {'c': 1, 'd': [2, None]}}}}
+    invalid_json_data = {'j': {'a': {'b': ...}}}
+
+    print(repr(Model.model_validate(valid_json_data)))
+    #> Model(j={'a': {'b': {'c': 1, 'd': [2, None]}}})
+    print(repr(Model.model_validate_json(json.dumps(valid_json_data))))
+    #> Model(j={'a': {'b': {'c': 1, 'd': [2, None]}}})
+
+    try:
+        Model.model_validate(invalid_json_data)
+    except ValidationError as e:
+        print(e)
+        '''
+        1 validation error for Model
+        j.dict.a.dict.b
+          input was not a valid JSON value [type=invalid-json-value, input_value=Ellipsis, input_type=ellipsis]
+        '''
+    ```
+    """
+
+else:
+    JsonValue = TypeAliasType(
+        "JsonValue",
+        Annotated[
+            Union[
+                Annotated[List["JsonValue"], Tag("list")],
+                Annotated[Dict[str, "JsonValue"], Tag("dict")],
+                Annotated[str, Tag("str")],
+                Annotated[int, Tag("int")],
+                Annotated[float, Tag("float")],
+                Annotated[bool, Tag("bool")],
+                Annotated[None, Tag("NoneType")],
+            ],
+            Discriminator(
+                _get_type_name,
+                custom_error_type="invalid-json-value",
+                custom_error_message="input was not a valid JSON value",
+            ),
+            _AllowAnyJson,
+        ],
+    )
 
 
 try:
@@ -53,7 +129,7 @@ class Error(BaseModel):
     code: int
     message: str
     traceback: Optional[str]
-    override: Optional[Dict[str, JsonValue]] = None  # type: ignore
+    override: Optional[Dict[str, JsonValue]] = None
 
 
 class EventChain(BaseModel):
@@ -74,7 +150,7 @@ class LLMOutputModel(BaseModel):
 
     raw_text: str
     metadata: LLMOutputModelMetadata
-    override: Optional[Dict[str, JsonValue]] = None  # type: ignore
+    override: Optional[Dict[str, JsonValue]] = None
 
 
 class LLMChat(TypedDict):
@@ -87,7 +163,7 @@ class LLMEventInputPrompt(BaseModel):
 
     template: Union[str, List[LLMChat]]
     template_args: Dict[str, str]
-    override: Optional[Dict[str, JsonValue]] = None  # type: ignore
+    override: Optional[Dict[str, JsonValue]] = None
 
 
 class LLMEventInput(BaseModel):
@@ -125,7 +201,7 @@ class IOValue(BaseModel):
 
     value: Any
     type: TypeSchema
-    override: Optional[Dict[str, JsonValue]] = None  # type: ignore
+    override: Optional[Dict[str, JsonValue]] = None
 
 
 class IO(BaseModel):
@@ -146,7 +222,7 @@ class LogSchema(BaseModel):
     error: Optional[Error]
     metadata: Optional[MetadataType]
 
-    def override_input(self, override: Optional[Dict[str, JsonValue]]) -> None:  # type: ignore
+    def override_input(self, override: Optional[Dict[str, JsonValue]]) -> None:
         if self.io.input:
             self.io.input = IOValue(
                 value="<override>",
@@ -154,7 +230,7 @@ class LogSchema(BaseModel):
                 override=override,
             )
 
-    def override_output(self, override: Optional[Dict[str, JsonValue]]) -> None:  # type: ignore
+    def override_output(self, override: Optional[Dict[str, JsonValue]]) -> None:
         if self.io.output:
             self.io.output = IOValue(
                 value="<override>",
@@ -163,7 +239,7 @@ class LogSchema(BaseModel):
             )
 
     def override_llm_prompt_template_args(
-        self, override: Optional[Dict[str, JsonValue]]  # type: ignore
+        self, override: Optional[Dict[str, JsonValue]]
     ) -> None:
         if self.metadata:
             print(self.metadata.input.prompt.template)
@@ -175,7 +251,7 @@ class LogSchema(BaseModel):
                 override=override,
             )
 
-    def override_llm_raw_output(self, override: Optional[Dict[str, JsonValue]]) -> None:  # type: ignore
+    def override_llm_raw_output(self, override: Optional[Dict[str, JsonValue]]) -> None:
         if self.metadata and self.metadata.output:
             self.metadata.output = LLMOutputModel(
                 raw_text="<override>",
@@ -183,7 +259,7 @@ class LogSchema(BaseModel):
                 override=override,
             )
 
-    def override_error(self, override: Optional[Dict[str, JsonValue]]) -> None:  # type: ignore
+    def override_error(self, override: Optional[Dict[str, JsonValue]]) -> None:
         if self.error:
             self.error = Error(
                 code=self.error.code,
