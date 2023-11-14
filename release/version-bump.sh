@@ -52,6 +52,7 @@ then
   then
     pushd engine
     VERSION=$(bumpversion --allow-dirty $CLI --list | grep new_version | cut -d '=' -f 2) || exit 1
+    cargo build
     COMMIT_MSG="${COMMIT_MSG} [BUMP:cli:${VERSION}]"
     popd
   fi
