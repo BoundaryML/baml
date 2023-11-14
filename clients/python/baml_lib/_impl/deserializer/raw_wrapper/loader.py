@@ -1,5 +1,5 @@
 import json5 as json  # type: ignore
-import re
+import regex as re
 import typing
 from .raw_wrapper import RawWrapper
 from .primitive_wrapper import RawBaseWrapper, RawStringWrapper, RawNoneWrapper
@@ -48,7 +48,7 @@ def __from_value(val: typing.Any, diagnostics: Diagnostics) -> RawWrapper:
                 parsed_list = typing.cast(typing.List[typing.Any], json.loads(str_val))
             except ValueError:
                 parsed_list = None
-            if parsed_list:
+            if parsed_list is not None:
                 return ListRawWrapper(
                     [
                         __from_value(item, diagnostics=diagnostics)
@@ -63,7 +63,7 @@ def __from_value(val: typing.Any, diagnostics: Diagnostics) -> RawWrapper:
                 )
             except ValueError:
                 parsed_obj = None
-            if parsed_obj:
+            if parsed_obj is not None:
                 return DictRawWrapper(
                     {
                         __from_value(k, diagnostics=diagnostics): __from_value(
@@ -73,7 +73,22 @@ def __from_value(val: typing.Any, diagnostics: Diagnostics) -> RawWrapper:
                     }
                 )
 
-        return RawStringWrapper(str_val)
+        as_obj = None
+        as_list: typing.Optional[RawWrapper] = None
+        if result := re.findall(r"\{(?:[^{}]+|(?R))+\}", str_val):
+            # if multiple matches, we'll just take the first one
+            if len(result) > 1:
+                print("Multi", result)
+                as_list = ListRawWrapper(
+                    [__from_value(item, diagnostics=diagnostics) for item in result]
+                )
+            as_obj = __from_value(result[0], diagnostics=diagnostics)
+        if as_list is None:
+            if result := re.findall(r"\[(?:[^\[\]]*|(?R))+\]", str_val):
+                # if multiple matches, we'll just take the first one
+                as_list = __from_value(result[0], diagnostics=diagnostics)
+
+        return RawStringWrapper(str_val, as_obj=as_obj, as_list=as_list)
     if isinstance(val, (list, tuple)):
         return ListRawWrapper(
             [__from_value(item, diagnostics=diagnostics) for item in val]
