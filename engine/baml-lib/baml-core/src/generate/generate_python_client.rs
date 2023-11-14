@@ -79,6 +79,8 @@ impl WithWritePythonString for ParserDatabase {
             .add_import_and_reexport("baml_core.otel", "trace");
         fc.last_file()
             .add_import_and_reexport("baml_core.otel", "set_tags");
+        fc.last_file()
+            .add_import_and_reexport("baml_core.services.api_types", "LogSchema");
         fc.complete_file();
 
         fc.start_export_file(".", "baml_types");

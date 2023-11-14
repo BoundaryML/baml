@@ -138,7 +138,7 @@ export function startServer(options?: LSOptions): void {
         "baml",
       );
       console.log("configResponse " + JSON.stringify(configResponse, null, 2));
-      config = configResponse["baml"] as BamlConfig;
+      config = configResponse as BamlConfig;
     } catch (e: any) {
       if (e instanceof Error) {
         console.log("Error getting config" + e.message + " " + e.stack);

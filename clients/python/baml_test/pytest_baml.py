@@ -9,6 +9,7 @@ from baml_core.services import api_types
 import re
 
 from baml_core.logger import logger
+from baml_core.otel import flush_trace_logs
 
 
 class GlooTestCaseBase(typing.TypedDict):
@@ -268,10 +269,17 @@ class BamlPytestPlugin:
         if session.config.option.collectonly:
             return
 
+        logger.info("Flushing trace logs..")
+        flush_trace_logs()
+
         if (
             session.testsfailed
             and not session.config.option.continue_on_collection_errors
         ):
+            if self.__dashboard_url:
+                logger.info(
+                    f"View test results at {colorama.Fore.CYAN}{self.__dashboard_url}{colorama.Fore.RESET}"
+                )
             return
 
         try:

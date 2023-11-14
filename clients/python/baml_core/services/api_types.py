@@ -4,7 +4,7 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Union
 from typing_extensions import TypedDict, Literal
 from ..logger import logger
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, Json, ConfigDict
 from enum import Enum
 
 
@@ -46,9 +46,7 @@ except ImportError:
 
     colorama = MockColorama()  # type: ignore
 
-JsonValue = Union[
-    str, int, float, bool, None, Dict[str, "JsonValue"], List["JsonValue"]
-]
+JsonValue = Union[str, int, float, bool, None, Dict[str, Json], List[Json]]
 
 
 class Error(BaseModel):
@@ -143,76 +141,59 @@ class LogSchema(BaseModel):
         frozen=True
     )
     root_event_id: str = Field(frozen=True)
-    event_id: str = Field(frozen=True)
-    parent_event_id: Optional[str] = Field(frozen=True)
+    event_id: str
+    parent_event_id: Optional[str]
     context: LogSchemaContext = Field(frozen=True)
-    io: IO = Field(frozen=True)
+    io: IO
     error: Optional[Error]
-    metadata: Optional[MetadataType] = Field(frozen=True)
+    metadata: Optional[MetadataType]
 
-    def override_input(
-        self, cb: Callable[[Any], Optional[Dict[str, JsonValue]]]
-    ) -> None:
+    def override_input(self, override: Optional[Dict[str, Json]]) -> None:
         if self.io.input:
-            override = cb(self.io.input.value)
-            if override:
-                self.io.input = IOValue(
-                    value="<override>",
-                    type=self.io.input.type,
-                    override=override,
-                )
+            self.io.input = IOValue(
+                value="<override>",
+                type=self.io.input.type,
+                override=override,
+            )
 
-    def override_output(
-        self, cb: Callable[[Any], Optional[Dict[str, JsonValue]]]
-    ) -> None:
+    def override_output(self, override: Optional[Dict[str, Json]]) -> None:
         if self.io.output:
-            override = cb(self.io.output.value)
-            if override:
-                self.io.output = IOValue(
-                    value="<override>",
-                    type=self.io.output.type,
-                    override=override,
-                )
+            self.io.output = IOValue(
+                value="<override>",
+                type=self.io.output.type,
+                override=override,
+            )
 
     def override_llm_prompt_template_args(
-        self, cb: Callable[[LLMEventInputPrompt], Optional[Dict[str, JsonValue]]]
+        self, override: Optional[Dict[str, JsonValue]]
     ) -> None:
         if self.metadata:
-            override = cb(self.metadata.input.prompt)
-            if override:
-                self.metadata.input.prompt = LLMEventInputPrompt(
-                    template=self.metadata.input.prompt.template,
-                    template_args={
-                        k: "<override>"
-                        for k in self.metadata.input.prompt.template_args.keys()
-                    },
-                    override=override,
-                )
+            print(self.metadata.input.prompt.template)
+            self.metadata.input.prompt = LLMEventInputPrompt(
+                template=self.metadata.input.prompt.template,
+                template_args={
+                    k: "<override>" for k in self.metadata.input.prompt.template_args
+                },
+                override=override,
+            )
 
-    def override_llm_raw_output(
-        self, cb: Callable[[LLMOutputModel], Optional[Dict[str, JsonValue]]]
-    ) -> None:
+    def override_llm_raw_output(self, override: Optional[Dict[str, JsonValue]]) -> None:
         if self.metadata and self.metadata.output:
-            override = cb(self.metadata.output)
-            if override:
-                self.metadata.output = LLMOutputModel(
-                    raw_text="<override>",
-                    metadata=self.metadata.output.metadata,
-                    override=override,
-                )
+            self.metadata.output = LLMOutputModel(
+                raw_text="<override>",
+                metadata=self.metadata.output.metadata,
+                override=override,
+            )
 
-    def override_error(
-        self, cb: Callable[[Error], Optional[Dict[str, JsonValue]]]
-    ) -> None:
+    def override_error(self, override: Optional[Dict[str, JsonValue]]) -> None:
         if self.error:
-            override = cb(self.error)
-            if override:
-                self.error = Error(
-                    code=self.error.code,
-                    message="<override>",
-                    traceback="<override>",
-                    override=override,
-                )
+            self.error = Error(
+                code=self.error.code,
+                # only get the first 70 characters of the message
+                message=self.error.message[:70] + "...",
+                traceback="<override>",
+                override=override,
+            )
 
     def to_pretty_string(self) -> str:
         separator = "-------------------"
