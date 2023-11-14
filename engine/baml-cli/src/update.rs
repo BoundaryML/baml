@@ -137,19 +137,19 @@ fn is_installed_from_brew() -> bool {
 }
 
 fn update_brew() -> Result<(), CliError> {
-    run_command_with_error("brew", ["tap", "gloohq/gloo"], "brew tap gloohq/gloo")?;
+    run_command_with_error("brew", ["tap", "gloohq/baml"], "brew tap gloohq/baml")?;
     run_command_with_error("brew", ["update"], "brew update")?;
-    run_command_with_error("brew", ["upgrade", "gloo"], "brew upgrade gloo")
+    run_command_with_error("brew", ["upgrade", "baml"], "brew upgrade gloo")
 }
 
 fn update_windows() -> Result<(), CliError> {
     run_command_with_error("scoop", ["update"], "scoop update")?;
-    run_command_with_error("scoop", ["update", "gloo"], "scoop update gloo")
+    run_command_with_error("scoop", ["update", "baml"], "scoop update gloo")
 }
 
 fn update_shell_install() -> Result<(), CliError> {
     static INSTALL_SCRIPT: &str =
-        "https://raw.githubusercontent.com/GlooHQ/homebrew-gloo/main/install-gloo.sh";
+        "https://raw.githubusercontent.com/GlooHQ/homebrew-baml/main/install-baml.sh";
 
     let command = ["-c", "curl", "-fsS", INSTALL_SCRIPT, "|", "sh"];
     run_command_with_error("sh", &command, "install command")
