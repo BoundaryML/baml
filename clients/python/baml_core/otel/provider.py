@@ -22,11 +22,13 @@ import typeguard
 from .helper import event_to_log, try_serialize
 from baml_version import __version__
 from ..services.api import APIWrapper
-
+from ..services.api_types import LogSchema
 
 @typing.final
 class CustomBackendExporter(SpanExporter):
     __project_id: typing.Optional[str]
+    __message_override_callback: typing.Callable[[LogSchema], None]
+    __before_messages_export_callback: typing.Callable[[typing.Sequence[LogSchema]], None]
 
     def __init__(self) -> None:
         super().__init__()
@@ -44,6 +46,17 @@ class CustomBackendExporter(SpanExporter):
             self.__process_id = str(uuid.uuid4())
             self.__project_id = None
 
+    def set_message_override_callback(
+        self, callback: typing.Callable[[LogSchema], None]
+    ) -> None:
+        self.__message_override_callback = callback
+        
+    # def set_before_messages_export_callback(
+    #     self, callback: typing.Callable[[typing.Sequence[LogSchema]], None]
+    # ) -> None:
+    #     self.__before_messages_export_callback = callback
+    
+
     def export(self, spans: typing.Sequence[ReadableSpan]) -> SpanExportResult:
         # Convert spans to your backend's desired format
         # and send them. This is a simple example that just
@@ -60,7 +73,13 @@ class CustomBackendExporter(SpanExporter):
             item.print()
             CacheManager.save_llm_request(item)
 
+            # note, this may mutate the item
+            # if self.__message_override_callback:
+            #     self.__message_override_callback(item)
+            # print("exporting item", item.model_dump_json())
+
             if self.__api_wrapper:
+
                 # TODO: Send a single large payload.
                 # send them to the backend.
                 # This function can't fail.
@@ -220,3 +239,7 @@ def flush_trace_logs() -> None:
 
 def use_tracing(api: typing.Optional[APIWrapper] = None) -> None:
     __exporter.set_gloo_api(api)
+
+def set_tracing_override(
+        
+)
