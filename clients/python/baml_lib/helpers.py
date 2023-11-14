@@ -110,6 +110,7 @@ def baml_init(
     __api = __CachedParams.get_api()
     otel.use_tracing(__api)
 
+    # TODO: doesnt actually work when we want idempotency
     if enable_cache:
         if __api:
             logger.info("Using GlooCache")
