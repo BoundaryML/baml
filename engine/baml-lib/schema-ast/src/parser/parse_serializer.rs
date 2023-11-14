@@ -42,7 +42,13 @@ pub fn parse_serializer(
                             }
                         }
                         Rule::comment_block => pending_value_comment = Some(item),
-                        _ => parsing_catch_all(&item, "serializer"),
+                        Rule::BLOCK_LEVEL_CATCH_ALL => {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                "This line is not valid.",
+                                diagnostics.span(item.as_span()),
+                            ))
+                        }
+                        _ => parsing_catch_all(&item, "serializer_content"),
                     }
                 }
             }
