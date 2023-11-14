@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "baml"
-version = "0.4.1"
+version = "0.4.2.dev0"
 description = ""
 authors = [ "Gloo <contact@trygloo.com>",]
 
@@ -61,7 +61,7 @@ types-mock = "^5.1.0.2"
 mock = "^5.1.0"
 ruff = "^0.0.291"
 black = "^23.9.1"
-types-colorama = "^0.4.15.12"
+types-colorama = "^0.4.2.dev05.12"
 types-regex = "^2023.10.3.0"
 
 [tool.ruff]
