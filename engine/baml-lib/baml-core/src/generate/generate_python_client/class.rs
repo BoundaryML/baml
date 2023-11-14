@@ -59,7 +59,7 @@ impl JsonHelper for ClassWalker<'_> {
 
 impl JsonHelper for FieldWalker<'_> {
     fn json(&self, f: &mut File) -> serde_json::Value {
-        log::info!("FieldWalker::json {} {}", self.name(), self.is_dynamic());
+        //log::info!("FieldWalker::json {} {}", self.name(), self.is_dynamic());
         match self.is_dynamic() {
             true => json!({
                 "name": self.name(),

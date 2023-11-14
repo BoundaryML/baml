@@ -1,6 +1,6 @@
 const { exec } = require("child_process");
 
-export function cliBuild(cliPath: string, workspacePath: string | null, onError?: (errorMessage: string) => void, onSuccess: () => void) {
+export function cliBuild(cliPath: string, workspacePath: string | null, onError?: (errorMessage: string) => void, onSuccess?: () => void) {
   let buildCommand = `${cliPath} build`;
 
   if (!workspacePath) {
@@ -29,7 +29,9 @@ export function cliBuild(cliPath: string, workspacePath: string | null, onError?
         onError?.(`Baml build error`)
         return;
       } else {
-        onSuccess();
+        if (onSuccess) {
+          onSuccess();
+        }
       }
     }
   );

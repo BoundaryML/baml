@@ -17,22 +17,32 @@ from opentelemetry.sdk.resources import Resource
 
 from ..cache_manager import CacheManager
 import typeguard
+from baml_core.logger import logger
 
 
 from .helper import event_to_log, try_serialize
 from baml_version import __version__
 from ..services.api import APIWrapper
 
+from ..services.api_types import LogSchema
+
 
 @typing.final
 class CustomBackendExporter(SpanExporter):
     __project_id: typing.Optional[str]
+    __message_override_callback: typing.Optional[
+        typing.Callable[[LogSchema], None]
+    ] = None
+    __before_messages_export_callback: typing.Optional[
+        typing.Callable[[typing.List[LogSchema]], None]
+    ] = None
 
     def __init__(self) -> None:
         super().__init__()
         self.__api_wrapper: typing.Optional[APIWrapper] = None
         self.__process_id = str(uuid.uuid4())
         self.__project_id = None
+        self.__message_override_callback = None
 
     def set_gloo_api(self, api_wrapper: typing.Optional[APIWrapper]) -> None:
         if api_wrapper:
@@ -44,17 +54,44 @@ class CustomBackendExporter(SpanExporter):
             self.__process_id = str(uuid.uuid4())
             self.__project_id = None
 
+    def set_message_override_callback(
+        self, callback: typing.Callable[[LogSchema], None]
+    ) -> None:
+        self.__message_override_callback = callback
+
+    def set_before_messages_export_callback(
+        self, callback: typing.Callable[[typing.List[LogSchema]], None]
+    ) -> None:
+        self.__before_messages_export_callback = callback
+
     def export(self, spans: typing.Sequence[ReadableSpan]) -> SpanExportResult:
         # Convert spans to your backend's desired format
         # and send them. This is a simple example that just
         # prints the span names. You should replace this with
         # the logic to send the spans to your backend.
-        items = chain.from_iterable(
-            event_to_log(
-                span, project_id=self.__project_id, process_id=self.__process_id
+        items = list(
+            chain.from_iterable(
+                event_to_log(
+                    span, project_id=self.__project_id, process_id=self.__process_id
+                )
+                for span in spans
             )
-            for span in spans
         )
+
+        try:
+            # if the msg overides fail, export will also fail.
+            if self.__message_override_callback is not None:
+                for item in items:
+                    # note, this may mutate the item
+                    self.__message_override_callback(item)
+
+            if self.__before_messages_export_callback is not None:
+                self.__before_messages_export_callback(items)
+        except Exception:
+            # Dont succeed since we failed to override the messages and we may have wanted
+            # to redact them.
+            logger.error("Failed to override and export messages")
+            return SpanExportResult.FAILURE
 
         for item in items:
             item.print()
@@ -71,9 +108,12 @@ class CustomBackendExporter(SpanExporter):
         # SpanExportResult.FAILURE
         return SpanExportResult.SUCCESS
 
-    def shutdown(self) -> None:
-        # Any cleanup logic for your exporter goes here
-        pass
+    # def shutdown(self) -> None:
+    #     # Any cleanup logic for your exporter goes here
+    #     pass
+
+    # def force_flush(self, timeout_millis: int = 30000) -> bool:
+    #     return self.
 
 
 attributes_context: contextvars.ContextVar[
@@ -210,13 +250,24 @@ __provider = TracerProvider(
 )
 baml_tracer = __provider.get_tracer("BAML_TRACING")
 __exporter = CustomBackendExporter()
-__processor = BatchSpanProcessor(__exporter, max_export_batch_size=10)
+__processor = BatchSpanProcessor(__exporter, max_export_batch_size=5)
 __provider.add_span_processor(__processor)
 
 
 def flush_trace_logs() -> None:
-    __exporter.force_flush()
+    __provider.force_flush(10000)
+    __processor.force_flush(10000)
 
 
 def use_tracing(api: typing.Optional[APIWrapper] = None) -> None:
     __exporter.set_gloo_api(api)
+
+
+def set_message_transformer_hook(callback: typing.Callable[[LogSchema], None]) -> None:
+    __exporter.set_message_override_callback(callback)
+
+
+def set_before_message_export_hook(
+    callback: typing.Callable[[typing.List[LogSchema]], None]
+) -> None:
+    __exporter.set_before_messages_export_callback(callback)

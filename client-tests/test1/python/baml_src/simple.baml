@@ -5,5 +5,5 @@ function Blah {
 
 impl<llm, Blah> v1 {  
   client ResilientGPT4
-  prompt "hello there {#input}"
-}  
+  prompt "hello there {#input}" 
+}    

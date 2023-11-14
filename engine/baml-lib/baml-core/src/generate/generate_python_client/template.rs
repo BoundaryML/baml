@@ -63,6 +63,10 @@ fn use_partial(
             f.add_import("baml_core.otel", "flush_trace_logs");
             f.add_import("baml_lib", "baml_init");
             f.add_import("typing", "Optional");
+            f.add_import("typing", "Callable");
+            f.add_import("typing", "List");
+            f.add_import("baml_core.services.api_types", "LogSchema");
+
             String::from("generated_baml_client")
         }
         HSTemplate::Client => {

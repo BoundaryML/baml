@@ -12,6 +12,17 @@ async def some_traced_fn():
     pass
 
 
+from baml_client import baml_init
+from typing import Sequence
+from baml_client.tracing import LogSchema
+
+
+baml_init(
+    before_message_export_hook=message_export,
+    message_transformer_hook=message_transformer,
+)
+
+
 @baml_test
 @pytest.mark.asyncio
 async def test_logic() -> None:

@@ -6,7 +6,9 @@ from baml_core.provider_manager import LLMManager
 from baml_core.cache_manager import CacheManager
 from baml_core import otel
 from baml_core.services.api import APIWrapper
+from baml_core.services import LogSchema
 from baml_core.logger import logger
+from typing import List, Callable, Optional
 
 
 class __InternalBAMLConfig:
@@ -86,7 +88,14 @@ def baml_init(
     enable_cache: typing.Optional[bool] = None,
     stage: typing.Optional[str] = None,
     idempotent: bool = False,
+    message_transformer_hook: Optional[Callable[[LogSchema], None]] = None,
+    before_message_export_hook: Optional[Callable[[List[LogSchema]], None]] = None,
 ) -> __InternalBAMLConfig:
+    if before_message_export_hook:
+        otel.set_before_message_export_hook(before_message_export_hook)
+    if message_transformer_hook:
+        otel.set_message_transformer_hook(message_transformer_hook)
+
     global __api
     if idempotent and __api is not None:
         return __InternalBAMLConfig(api=__api)
@@ -101,6 +110,7 @@ def baml_init(
     __api = __CachedParams.get_api()
     otel.use_tracing(__api)
 
+    # TODO: doesnt actually work when we want idempotency
     if enable_cache:
         if __api:
             logger.info("Using GlooCache")

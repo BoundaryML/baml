@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Mapping, Optional, Union
 from typing_extensions import TypedDict, Literal
 from ..logger import logger
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict, JsonValue
 from enum import Enum
 
 
@@ -48,9 +48,12 @@ except ImportError:
 
 
 class Error(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     code: int
     message: str
     traceback: Optional[str]
+    override: Optional[Dict[str, JsonValue]] = None  # type: ignore
 
 
 class EventChain(BaseModel):
@@ -67,8 +70,11 @@ class LLMOutputModelMetadata(BaseModel):
 
 
 class LLMOutputModel(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     raw_text: str
     metadata: LLMOutputModelMetadata
+    override: Optional[Dict[str, JsonValue]] = None  # type: ignore
 
 
 class LLMChat(TypedDict):
@@ -77,8 +83,11 @@ class LLMChat(TypedDict):
 
 
 class LLMEventInputPrompt(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     template: Union[str, List[LLMChat]]
     template_args: Dict[str, str]
+    override: Optional[Dict[str, JsonValue]] = None  # type: ignore
 
 
 class LLMEventInput(BaseModel):
@@ -87,8 +96,8 @@ class LLMEventInput(BaseModel):
 
 
 class LLMEventSchema(BaseModel):
-    mdl_name: str = Field(alias="model_name")
-    provider: str
+    mdl_name: str = Field(alias="model_name", frozen=True)
+    provider: str = Field(frozen=True)
     input: LLMEventInput
     output: Optional[LLMOutputModel]
 
@@ -112,8 +121,11 @@ class TypeSchema(BaseModel):
 
 
 class IOValue(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     value: Any
     type: TypeSchema
+    override: Optional[Dict[str, JsonValue]] = None  # type: ignore
 
 
 class IO(BaseModel):
@@ -122,15 +134,64 @@ class IO(BaseModel):
 
 
 class LogSchema(BaseModel):
-    project_id: str
-    event_type: Literal["log", "func_llm", "func_prob", "func_code"]
-    root_event_id: str
+    project_id: str = Field(frozen=True)
+    event_type: Literal["log", "func_llm", "func_prob", "func_code"] = Field(
+        frozen=True
+    )
+    root_event_id: str = Field(frozen=True)
     event_id: str
     parent_event_id: Optional[str]
-    context: LogSchemaContext
+    context: LogSchemaContext = Field(frozen=True)
     io: IO
     error: Optional[Error]
     metadata: Optional[MetadataType]
+
+    def override_input(self, override: Optional[Dict[str, JsonValue]]) -> None:  # type: ignore
+        if self.io.input:
+            self.io.input = IOValue(
+                value="<override>",
+                type=self.io.input.type,
+                override=override,
+            )
+
+    def override_output(self, override: Optional[Dict[str, JsonValue]]) -> None:  # type: ignore
+        if self.io.output:
+            self.io.output = IOValue(
+                value="<override>",
+                type=self.io.output.type,
+                override=override,
+            )
+
+    def override_llm_prompt_template_args(
+        self, override: Optional[Dict[str, JsonValue]]  # type: ignore
+    ) -> None:
+        if self.metadata:
+            print(self.metadata.input.prompt.template)
+            self.metadata.input.prompt = LLMEventInputPrompt(
+                template=self.metadata.input.prompt.template,
+                template_args={
+                    k: "<override>" for k in self.metadata.input.prompt.template_args
+                },
+                override=override,
+            )
+
+    def override_llm_raw_output(self, override: Optional[Dict[str, JsonValue]]) -> None:  # type: ignore
+        if self.metadata and self.metadata.output:
+            self.metadata.output = LLMOutputModel(
+                raw_text="<override>",
+                metadata=self.metadata.output.metadata,
+                override=override,
+            )
+
+    def override_error(self, override: Optional[Dict[str, JsonValue]]) -> None:  # type: ignore
+        if self.error:
+            self.error = Error(
+                code=self.error.code,
+                # only get the first 70 characters of the message
+                message=self.error.message[:70] + "...",
+                traceback="<override>",
+                override=override,
+            )
 
     def to_pretty_string(self) -> str:
         separator = "-------------------"
