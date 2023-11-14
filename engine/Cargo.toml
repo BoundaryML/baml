@@ -14,7 +14,7 @@ indoc = "2.0.1"
 
 # 
 [workspace.package]
-version = "0.2.0-canary.1"
+version = "0.2.0"
 authors = ["Gloo <cntac@trygloo.com>"]
 
 description = "BAML Toolchain"
