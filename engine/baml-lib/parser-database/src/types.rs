@@ -8,7 +8,8 @@ use internal_baml_diagnostics::{DatamodelWarning, Span};
 use internal_baml_prompt_parser::ast::{PrinterBlock, Variable};
 use internal_baml_schema_ast::ast::{
     self, ClassId, ClientId, ConfigurationId, EnumId, EnumValueId, Expression, FieldId, FunctionId,
-    SerializerFieldId, VariantConfigId, VariantSerializerId, WithIdentifier, WithName, WithSpan,
+    RawString, SerializerFieldId, VariantConfigId, VariantSerializerId, WithIdentifier, WithName,
+    WithSpan,
 };
 
 mod configurations;
@@ -106,6 +107,19 @@ pub struct VariantProperties {
     pub prompt: StringValue,
     pub prompt_replacements: Vec<PromptVariable>,
     pub replacers: (HashMap<Variable, String>, HashMap<PrinterBlock, String>),
+    pub pre_deserializer: Option<(Vec<RawString>, Span)>,
+}
+
+impl VariantProperties {
+    pub fn pre_deserializer_for_lang<'db>(&'db self, language: &str) -> Option<&'db str> {
+        match self.pre_deserializer.as_ref() {
+            Some((pre_deserializer, _)) => pre_deserializer
+                .iter()
+                .find(|f| f.language.as_ref().unwrap().0 == language)
+                .map(|f| f.value()),
+            None => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -397,6 +411,7 @@ fn visit_variant<'db>(idx: VariantConfigId, variant: &'db ast::Variant, ctx: &mu
 
     let mut client = None;
     let mut prompt = None;
+    let mut pre_deserializer = None;
 
     variant
         .iter_fields()
@@ -422,6 +437,20 @@ fn visit_variant<'db>(idx: VariantConfigId, variant: &'db ast::Variant, ctx: &mu
                 }
                 match field.value.as_ref() {
                     Some(item) => prompt = Some((item, field.identifier().span().clone())),
+                    _ => {}
+                }
+            }
+            "pre_deserializer" => {
+                if field.template_args.is_some() {
+                    ctx.push_error(DatamodelError::new_validation_error(
+                        "Did you mean `prompt` instead of `prompt<...>`?",
+                        field.span().clone(),
+                    ));
+                }
+                match field.value.as_ref() {
+                    Some(item) => {
+                        pre_deserializer = Some((item, field.identifier().span().clone()))
+                    }
                     _ => {}
                 }
             }
@@ -477,6 +506,27 @@ fn visit_variant<'db>(idx: VariantConfigId, variant: &'db ast::Variant, ctx: &mu
         None
     };
 
+    let pre_deserializer =
+        if let Some((pre_deserializer, pre_deserializer_key_span)) = pre_deserializer {
+            if let Some((pre_deserializer, _)) = pre_deserializer.as_array() {
+                let pre_deserializer = pre_deserializer
+                    .iter()
+                    .filter_map(|f| coerce::raw_string(f, &mut ctx.diagnostics))
+                    .map(|f| f.clone())
+                    .collect::<Vec<_>>();
+                Some((pre_deserializer, pre_deserializer_key_span))
+            } else if let Some(pre_deserializer) =
+                coerce::raw_string(pre_deserializer, &mut ctx.diagnostics)
+            {
+                Some((vec![pre_deserializer.clone()], pre_deserializer_key_span))
+            } else {
+                // Errors are handled by coerce.
+                None
+            }
+        } else {
+            None
+        };
+
     match (client, prompt) {
         (
             Some(((client, client_span), client_key_span)),
@@ -497,6 +547,7 @@ fn visit_variant<'db>(idx: VariantConfigId, variant: &'db ast::Variant, ctx: &mu
                     },
                     prompt_replacements: replacers,
                     replacers: Default::default(),
+                    pre_deserializer,
                 },
             );
         }

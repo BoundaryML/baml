@@ -48,6 +48,7 @@ impl<'db> JsonHelper for VariantWalker<'db> {
             "prompt": prompt,
             "client": client.name(),
             "inputs": inputs,
+            "pre_deserializer": self.properties().pre_deserializer_for_lang("python"),
             "overrides": self.ast_variant().iter_serializers().filter_map(|(_k, v)| {
                 let matches = match self.db.find_type_by_str(v.name()) {
                     Some(Either::Left(cls)) => {
