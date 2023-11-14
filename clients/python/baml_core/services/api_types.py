@@ -1,10 +1,10 @@
 from __future__ import annotations
 import json
-from typing import Any, Callable, Dict, List, Mapping, Optional, Union
+from typing import Any, Dict, List, Mapping, Optional, Union
 from typing_extensions import TypedDict, Literal
 from ..logger import logger
 
-from pydantic import BaseModel, Field, Json, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, JsonValue
 from enum import Enum
 
 
@@ -46,8 +46,6 @@ except ImportError:
 
     colorama = MockColorama()  # type: ignore
 
-JsonValue = Union[str, int, float, bool, None, Dict[str, Json], List[Json]]
-
 
 class Error(BaseModel):
     model_config = ConfigDict(frozen=True)
@@ -55,7 +53,7 @@ class Error(BaseModel):
     code: int
     message: str
     traceback: Optional[str]
-    override: Optional[Dict[str, JsonValue]] = None
+    override: Optional[Dict[str, JsonValue]] = None  # type: ignore
 
 
 class EventChain(BaseModel):
@@ -76,7 +74,7 @@ class LLMOutputModel(BaseModel):
 
     raw_text: str
     metadata: LLMOutputModelMetadata
-    override: Optional[Dict[str, JsonValue]] = None
+    override: Optional[Dict[str, JsonValue]] = None  # type: ignore
 
 
 class LLMChat(TypedDict):
@@ -89,7 +87,7 @@ class LLMEventInputPrompt(BaseModel):
 
     template: Union[str, List[LLMChat]]
     template_args: Dict[str, str]
-    override: Optional[Dict[str, JsonValue]] = None
+    override: Optional[Dict[str, JsonValue]] = None  # type: ignore
 
 
 class LLMEventInput(BaseModel):
@@ -127,7 +125,7 @@ class IOValue(BaseModel):
 
     value: Any
     type: TypeSchema
-    override: Optional[Dict[str, JsonValue]] = None
+    override: Optional[Dict[str, JsonValue]] = None  # type: ignore
 
 
 class IO(BaseModel):
@@ -148,7 +146,7 @@ class LogSchema(BaseModel):
     error: Optional[Error]
     metadata: Optional[MetadataType]
 
-    def override_input(self, override: Optional[Dict[str, Json]]) -> None:
+    def override_input(self, override: Optional[Dict[str, JsonValue]]) -> None:  # type: ignore
         if self.io.input:
             self.io.input = IOValue(
                 value="<override>",
@@ -156,7 +154,7 @@ class LogSchema(BaseModel):
                 override=override,
             )
 
-    def override_output(self, override: Optional[Dict[str, Json]]) -> None:
+    def override_output(self, override: Optional[Dict[str, JsonValue]]) -> None:  # type: ignore
         if self.io.output:
             self.io.output = IOValue(
                 value="<override>",
@@ -165,7 +163,7 @@ class LogSchema(BaseModel):
             )
 
     def override_llm_prompt_template_args(
-        self, override: Optional[Dict[str, JsonValue]]
+        self, override: Optional[Dict[str, JsonValue]]  # type: ignore
     ) -> None:
         if self.metadata:
             print(self.metadata.input.prompt.template)
@@ -177,7 +175,7 @@ class LogSchema(BaseModel):
                 override=override,
             )
 
-    def override_llm_raw_output(self, override: Optional[Dict[str, JsonValue]]) -> None:
+    def override_llm_raw_output(self, override: Optional[Dict[str, JsonValue]]) -> None:  # type: ignore
         if self.metadata and self.metadata.output:
             self.metadata.output = LLMOutputModel(
                 raw_text="<override>",
@@ -185,7 +183,7 @@ class LogSchema(BaseModel):
                 override=override,
             )
 
-    def override_error(self, override: Optional[Dict[str, JsonValue]]) -> None:
+    def override_error(self, override: Optional[Dict[str, JsonValue]]) -> None:  # type: ignore
         if self.error:
             self.error = Error(
                 code=self.error.code,

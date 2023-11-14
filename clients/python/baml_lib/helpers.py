@@ -5,7 +5,8 @@ import uuid
 from baml_core.provider_manager import LLMManager
 from baml_core.cache_manager import CacheManager
 from baml_core import otel
-from baml_core.services.api import APIWrapper, LogSchema
+from baml_core.services.api import APIWrapper
+from baml_core.services import LogSchema
 from baml_core.logger import logger
 from typing import List, Callable, Optional
 

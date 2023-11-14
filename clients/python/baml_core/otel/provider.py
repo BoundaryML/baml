@@ -17,6 +17,7 @@ from opentelemetry.sdk.resources import Resource
 
 from ..cache_manager import CacheManager
 import typeguard
+from baml_core.logger import logger
 
 
 from .helper import event_to_log, try_serialize
@@ -77,17 +78,20 @@ class CustomBackendExporter(SpanExporter):
             )
         )
 
-        if self.__message_override_callback is not None:
-            for item in items:
-                # note, this may mutate the item
-                self.__message_override_callback(item)
+        try:
+            # if the msg overides fail, export will also fail.
+            if self.__message_override_callback is not None:
+                for item in items:
+                    # note, this may mutate the item
+                    self.__message_override_callback(item)
 
-        if self.__before_messages_export_callback is not None:
-            try:
+            if self.__before_messages_export_callback is not None:
                 self.__before_messages_export_callback(items)
-            except Exception as e:
-                # Handle or log the exception e
-                pass
+        except Exception:
+            # Dont succeed since we failed to override the messages and we may have wanted
+            # to redact them.
+            logger.error("Failed to override and export messages")
+            return SpanExportResult.FAILURE
 
         for item in items:
             item.print()
