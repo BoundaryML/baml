@@ -54,3 +54,107 @@ def test_from_string_raw_base(test_case: typing.Any, serializer: Serializer) -> 
     item = serializer(test_case)
     d = Diagnostics(item)
     assert isinstance(from_string(item, d), RawBaseWrapper)
+
+
+def test_hidden_object() -> None:
+    item = """
+    ```json
+    {
+        "test": {
+            "key": "value"
+        },
+        "test2": [
+        ]    
+    }
+    ```
+    """
+
+    d = Diagnostics(item)
+    parsed = from_string(item, d)
+    assert isinstance(parsed, RawStringWrapper)
+    keys = set()
+    for k, v in parsed.as_dict():
+        assert isinstance(k, RawStringWrapper), k
+        key = k.as_str()
+        keys.add(key)
+        if key == "test":
+            assert isinstance(v.as_dict(), typing.ItemsView)
+        elif key == "test2":
+            assert isinstance(v, ListRawWrapper)
+    assert len(keys) == 2, keys
+
+
+def test_hidden_object_multi() -> None:
+    item = """
+    ```json
+    {
+        "test": {
+            "key": "value"
+        },
+        "test2": [
+        ]    
+    }
+    ```
+
+    ```json
+    {
+        "test2": {
+            "key2": "value"
+        },
+        "test21": [
+        ]    
+    }
+    ```
+    """
+
+    d = Diagnostics(item)
+    parsed = from_string(item, d)
+    assert isinstance(parsed, RawStringWrapper)
+    keys = set()
+    for k, v in parsed.as_dict():
+        assert isinstance(k, RawStringWrapper), k
+        key = k.as_str()
+        keys.add(key)
+        if key == "test":
+            assert isinstance(v.as_dict(), typing.ItemsView)
+        elif key == "test2":
+            assert isinstance(v, ListRawWrapper)
+    assert len(keys) == 2, keys
+
+    values = []
+    for i, v in enumerate(parsed.as_list()):
+        values.append(v)
+        if i == 0:
+            assert isinstance(v, DictRawWrapper)
+        elif i == 1:
+            assert isinstance(v, DictRawWrapper)
+    assert len(values) == 2, values
+
+
+def test_hidden_list() -> None:
+    item = """
+    ```json
+    [
+        ["test", {
+            "key": "value"
+        }],
+        "test2", [
+        ]   
+    ]
+    ```
+    """
+
+    d = Diagnostics(item)
+    parsed = from_string(item, d)
+    assert isinstance(parsed, RawStringWrapper)
+    values = []
+    for i, v in enumerate(parsed.as_list()):
+        values.append(v)
+        if i == 0:
+            assert isinstance(v, ListRawWrapper)
+        elif i == 1:
+            assert isinstance(v, RawStringWrapper)
+        elif i == 2:
+            assert isinstance(v, ListRawWrapper)
+
+    assert len(values) == 3, values

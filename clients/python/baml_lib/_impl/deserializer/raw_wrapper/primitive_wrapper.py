@@ -60,8 +60,15 @@ class RawBaseWrapper(RawWrapper, typing.Generic[T]):
 
 @typing.final
 class RawStringWrapper(RawWrapper):
-    def __init__(self, val: str) -> None:
+    def __init__(
+        self,
+        val: str,
+        as_obj: typing.Optional[RawWrapper],
+        as_list: typing.Optional[RawWrapper],
+    ) -> None:
         self.__val = val
+        self.__as_obj = as_obj
+        self.__as_list = as_list
 
     def as_str(self) -> typing.Optional[str]:
         return self.__val
@@ -76,11 +83,15 @@ class RawStringWrapper(RawWrapper):
         return None
 
     def as_list(self) -> typing.Iterable[RawWrapper]:
+        if self.__as_list is not None:
+            return self.__as_list.as_list()
         return [self]
 
     def as_dict(
         self,
     ) -> typing.ItemsView[typing.Optional[RawWrapper], RawWrapper]:
+        if self.__as_obj is not None:
+            return self.__as_obj.as_dict()
         return {None: self}.items()
 
     def __repr__(self) -> str:
