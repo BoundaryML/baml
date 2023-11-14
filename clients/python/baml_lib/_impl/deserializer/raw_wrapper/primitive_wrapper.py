@@ -1,4 +1,3 @@
-import re
 import typing
 
 from .raw_wrapper import RawWrapper
