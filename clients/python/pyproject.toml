@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "baml"
-version = "0.4.2.dev1"
+version = "0.4.2.dev2"
 description = ""
 authors = [ "Gloo <contact@trygloo.com>",]
 
