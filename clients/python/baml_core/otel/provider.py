@@ -78,23 +78,20 @@ class CustomBackendExporter(SpanExporter):
             )
         )
 
-        try:
-            # if the msg overides fail, export will also fail.
-            if self.__message_override_callback is not None:
-                for item in items:
-                    # note, this may mutate the item
-                    self.__message_override_callback(item)
-
-            if self.__before_messages_export_callback is not None:
-                self.__before_messages_export_callback(items)
-        except Exception:
-            # Dont succeed since we failed to override the messages and we may have wanted
-            # to redact them.
-            logger.error("Failed to override and export messages")
-            return SpanExportResult.FAILURE
-
         for item in items:
             item.print()
+            if self.__message_override_callback is not None:
+                try:
+                    # if the msg overides fail, export will also fail.
+                    # note, this may mutate the item
+                    self.__message_override_callback(item)
+                except Exception as e:
+                    # Swallow for now...
+                    logger.error(
+                        "Failed to override and export messages. Will still emit to Dashboard",
+                        e,
+                    )
+
             CacheManager.save_llm_request(item)
 
             if self.__api_wrapper:
