@@ -1,3 +1,4 @@
+from enum import Enum
 import json
 from typing import Dict, List, Optional, Tuple, Union
 import typing
@@ -43,6 +44,8 @@ def try_serialize_inner(
 def try_serialize(value: typing.Any) -> typing.Tuple[types.AttributeValue, str]:
     if value is None:
         return "", "None"
+    if isinstance(value, Enum):
+        return value.value, type(value).__name__
     if isinstance(value, (str, int, float, bool)):
         return value, type(value).__name__
     if isinstance(value, list):
@@ -51,7 +54,12 @@ def try_serialize(value: typing.Any) -> typing.Tuple[types.AttributeValue, str]:
         same_type = list(set(type(item) for item in value))
         if len(same_type) == 1:
             type_name = same_type[0].__name__
-            if type(value[0]) in (str, int, float, bool):
+            if isinstance(value[0], Enum):
+                return (
+                    [item.value for item in value],
+                    f"List[{type_name}]",
+                )
+            elif type(value[0]) in (str, int, float, bool):
                 return (value, f"List[{type_name}]")
             return (
                 typing.cast(
