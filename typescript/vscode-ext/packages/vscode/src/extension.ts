@@ -1,18 +1,37 @@
 /* eslint-disable @typescript-eslint/no-var-requires */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import * as vscode from 'vscode'
-import { ExtensionContext } from 'vscode'
 
+import fs from 'fs'
+import path from 'path'
 import plugins from './plugins'
+import { WebPanelView } from './panels/WebPanelView'
 
-// const { exec } = require('child_process')
 const outputChannel = vscode.window.createOutputChannel('baml')
 
+const getInputSchema = () => {
+  return {
+    thread: [
+      {
+        sender: {},
+        body: '',
+      },
+    ],
+  }
+}
 export function activate(context: vscode.ExtensionContext) {
-  console.log('activating bamll')
   const config = vscode.workspace.getConfiguration('baml')
   const glooPath = config.get<string>('path', 'baml')
 
+  const bamlPlygroundCommand = vscode.commands.registerCommand('baml.openBamlPanel', () => {
+    const config = vscode.workspace.getConfiguration()
+    config.update('baml.bamlPanelOpen', true, vscode.ConfigurationTarget.Global)
+
+    WebPanelView.render(context.extensionUri)
+    WebPanelView.currentPanel?.postMessage('sendInputSchema', getInputSchema())
+  })
+
+  context.subscriptions.push(bamlPlygroundCommand)
 
   plugins.map(async (plugin) => {
     const enabled = await plugin.enabled()
@@ -25,14 +44,11 @@ export function activate(context: vscode.ExtensionContext) {
       console.log(`${plugin.name} is Disabled`)
     }
   })
-
-  // context.subscriptions.push(disposable);
 }
 
 const LANG_NAME = 'Baml'
 
 const diagnosticsCollection = vscode.languages.createDiagnosticCollection('baml')
-
 
 export function deactivate(): void {
   plugins.forEach((plugin) => {

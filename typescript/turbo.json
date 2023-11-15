@@ -14,8 +14,17 @@
       "inputs": ["../../engine/**/*.rs", "../../engine/**/*.toml"],
       "outputs": ["dist/**"]
     },
+    "@gloo-ai/web-panel#build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"]
+    },
     "@gloo-ai/baml-language-server#build": {
       "dependsOn": ["@gloo-ai/baml-schema-wasm#build"],
+      "outputs": ["out/**"],
+      "cache": false
+    },
+    "baml-client": {
+      "dependsOn": ["@gloo-ai/baml-language-server#build", "@gloo-ai/web-panel#build"],
       "outputs": ["out/**"]
     },
     "lint": {},

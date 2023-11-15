@@ -1,13 +1,12 @@
 import * as path from 'path'
 
-import fs from "fs"
 import { commands, ExtensionContext, OutputChannel, ViewColumn, Uri, window, workspace } from 'vscode'
 import { LanguageClientOptions } from 'vscode-languageclient'
 import { LanguageClient, ServerOptions, TransportKind } from 'vscode-languageclient/node'
 import TelemetryReporter from '../../telemetryReporter'
 import { checkForMinimalColorTheme, createLanguageServer, isDebugOrTestSession, restartClient } from '../../util'
 import { BamlVSCodePlugin } from '../types'
-import * as vscode from 'vscode';
+import * as vscode from 'vscode'
 
 const packageJson = require('../../../package.json') // eslint-disable-line
 
@@ -19,21 +18,19 @@ const isDebugMode = () => process.env.VSCODE_DEBUG_MODE === 'true'
 const isE2ETestOnPullRequest = () => process.env.PRISMA_USE_LOCAL_LS === 'true'
 
 interface BAMLMessage {
-  type: "warn" | "info" | "error"
+  type: 'warn' | 'info' | 'error'
   message: string
 }
-
 
 const sleep = (time: number) => {
   return new Promise((resolve) => {
     setTimeout(() => {
-      resolve(true);
-    }, time);
-  });
+      resolve(true)
+    }, time)
+  })
 }
 
-
-let bamlOutputChannel: OutputChannel | null = null;
+let bamlOutputChannel: OutputChannel | null = null
 const activateClient = (
   context: ExtensionContext,
   serverOptions: ServerOptions,
@@ -46,65 +43,63 @@ const activateClient = (
     client.onNotification('baml/showLanguageServerOutput', () => {
       // need to append line for the show to work for some reason.
       // dont delete this.
-      client.outputChannel.appendLine('baml/showLanguageServerOutput');
-      client.outputChannel.show();
-    });
-    client.onNotification("baml/message", (message: BAMLMessage) => {
-      client.outputChannel.appendLine("baml/message" + JSON.stringify(message, null, 2));
-      let msg: Thenable<any>;
+      client.outputChannel.appendLine('baml/showLanguageServerOutput')
+      client.outputChannel.show()
+    })
+    client.onNotification('baml/message', (message: BAMLMessage) => {
+      client.outputChannel.appendLine('baml/message' + JSON.stringify(message, null, 2))
+      let msg: Thenable<any>
       switch (message.type) {
-        case "warn": {
-          msg = window.showWarningMessage(message.message);
-          break;
+        case 'warn': {
+          msg = window.showWarningMessage(message.message)
+          break
         }
-        case "info": {
-
-          window.withProgress({
-            location: vscode.ProgressLocation.Notification,
-            cancellable: false
-          },
+        case 'info': {
+          window.withProgress(
+            {
+              location: vscode.ProgressLocation.Notification,
+              cancellable: false,
+            },
             async (progress, token) => {
-              let customCancellationToken: vscode.CancellationTokenSource | null = null;
-              return new Promise((async (resolve) => {
-                customCancellationToken = new vscode.CancellationTokenSource();
+              let customCancellationToken: vscode.CancellationTokenSource | null = null
+              return new Promise(async (resolve) => {
+                customCancellationToken = new vscode.CancellationTokenSource()
 
                 customCancellationToken.token.onCancellationRequested(() => {
-                  customCancellationToken?.dispose();
-                  customCancellationToken = null;
+                  customCancellationToken?.dispose()
+                  customCancellationToken = null
 
-                  vscode.window.showInformationMessage("Cancelled the progress");
-                  resolve(null);
-                  return;
-                });
+                  vscode.window.showInformationMessage('Cancelled the progress')
+                  resolve(null)
+                  return
+                })
 
-                const sleepTimeMs = 1000;
-                const totalSecs = 10;
-                const iterations = totalSecs * 1000 / sleepTimeMs;
+                const sleepTimeMs = 1000
+                const totalSecs = 10
+                const iterations = (totalSecs * 1000) / sleepTimeMs
                 for (let i = 0; i < iterations; i++) {
-                  const prog = i / iterations * 100;
+                  const prog = (i / iterations) * 100
                   // Increment is summed up with the previous value
                   progress.report({ increment: prog, message: `BAML Client generated!` })
-                  await sleep(100);
+                  await sleep(100)
                 }
 
-                resolve(null);
-              }));
-            }
-          );
-          break;
+                resolve(null)
+              })
+            },
+          )
+          break
         }
-        case "error": {
-          msg = window.showErrorMessage(message.message);
-          break;
+        case 'error': {
+          msg = window.showErrorMessage(message.message)
+          break
         }
         default: {
-          throw new Error("Invalid message type");
+          throw new Error('Invalid message type')
         }
       }
-
-    });
-  });
-
+    })
+  })
 
   const disposable = client.start()
 
@@ -142,10 +137,7 @@ const plugin: BamlVSCodePlugin = {
     console.log('debugmode', isDebugMode())
     // serverModule = context.asAbsolutePath(path.join('../../packages/language-server/dist/src/bin'))
 
-    serverModule = context.asAbsolutePath(
-      path.join('language-server', 'out', 'bin')
-    );
-
+    serverModule = context.asAbsolutePath(path.join('language-server', 'out', 'bin'))
 
     console.log(`serverModules: ${serverModule}`)
 
@@ -171,7 +163,6 @@ const plugin: BamlVSCodePlugin = {
     const clientOptions: LanguageClientOptions = {
       // Register the server for prisma documents
       documentSelector: [{ scheme: 'file', language: 'baml' }],
-
 
       /* This middleware is part of the workaround for https://github.com/prisma/language-tools/issues/311 */
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -234,31 +225,6 @@ const plugin: BamlVSCodePlugin = {
       commands.registerCommand('baml.restartLanguageServer', async () => {
         client = await restartClient(context, client, serverOptions, clientOptions)
         window.showInformationMessage('Baml language server restarted.') // eslint-disable-line @typescript-eslint/no-floating-promises
-      }),
-
-
-      commands.registerCommand('baml.openPlayground', () => {
-        const config = workspace.getConfiguration()
-        config.update('baml.playgroundPanelOpen', true, true)
-        const panel = window.createWebviewPanel(
-          'bamlPlayrgound',
-          'Playground',
-          ViewColumn.Beside,
-          {
-            // Enable scripts in the webview
-            enableScripts: true,
-            // And restrict the webview to only loading content from our extension's `media` directory.
-            localResourceRoots: [Uri.file(path.join(context.extensionPath, 'path-to-react-build-directory'))]
-          },
-        )
-        panel.onDidDispose(() => {
-          config.update('baml.playgroundPanelOpen', false, true);
-        })
-
-        const reactAppPath = Uri.file(path.join(context.extensionPath, 'path-to-react-build-directory', 'index.html'));
-        panel.webview.html = fs.readFileSync(reactAppPath.fsPath, 'utf8');
-
-        panel.webview.html = '<html><body><h1>Playground</h1></body></html>'
       }),
     )
 
