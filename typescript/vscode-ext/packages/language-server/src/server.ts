@@ -16,9 +16,9 @@ import {
   DocumentSymbolParams,
   TextDocumentSyncKind,
 } from 'vscode-languageserver'
-import { URI } from 'vscode-uri';
+import { URI } from 'vscode-uri'
 
-import debounce from "lodash/debounce";
+import debounce from 'lodash/debounce'
 import { createConnection, IPCMessageReader, IPCMessageWriter } from 'vscode-languageserver/node'
 import { TextDocument } from 'vscode-languageserver-textdocument'
 
@@ -27,7 +27,7 @@ import type { LSOptions, LSSettings } from './lib/types'
 import { getVersion, getEnginesVersion, getCliVersion } from './lib/wasm/internals'
 import { BamlDirCache } from './file/fileCache'
 import { LinterInput } from './lib/wasm/lint'
-import { cliBuild } from './baml-cli';
+import { cliBuild } from './baml-cli'
 
 const packageJson = require('../../package.json') // eslint-disable-line
 function getConnection(options?: LSOptions): Connection {
@@ -44,12 +44,12 @@ let hasCodeActionLiteralsCapability = false
 let hasConfigurationCapability = true
 
 type BamlConfig = {
-  path?: string;
+  path?: string
   trace: {
-    server: string;
+    server: string
   }
 }
-let config: BamlConfig | null = null;
+let config: BamlConfig | null = null
 
 /**
  * Starts the language server.
@@ -64,11 +64,10 @@ export function startServer(options?: LSOptions): void {
   console.log = connection.console.log.bind(connection.console)
   console.error = connection.console.error.bind(connection.console)
 
-
   console.log('Starting Baml Language Server...')
 
   const documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument)
-  const bamlCache = new BamlDirCache();
+  const bamlCache = new BamlDirCache()
 
   connection.onInitialize((params: InitializeParams) => {
     // Logging first...
@@ -119,7 +118,7 @@ export function startServer(options?: LSOptions): void {
       // Register for all configuration changes.
       // eslint-disable-next-line @typescript-eslint/no-floating-promises
       connection.client.register(DidChangeConfigurationNotification.type)
-      getConfig();
+      getConfig()
     }
   })
 
@@ -132,25 +131,23 @@ export function startServer(options?: LSOptions): void {
   const documentSettings: Map<string, Thenable<LSSettings>> = new Map<string, Thenable<LSSettings>>()
 
   const getConfig = async () => {
-    console.log("get config");
+    console.log('get config')
     try {
-      const configResponse = await connection.workspace.getConfiguration(
-        "baml",
-      );
-      console.log("configResponse " + JSON.stringify(configResponse, null, 2));
-      config = configResponse as BamlConfig;
+      const configResponse = await connection.workspace.getConfiguration('baml')
+      console.log('configResponse ' + JSON.stringify(configResponse, null, 2))
+      config = configResponse as BamlConfig
     } catch (e: any) {
       if (e instanceof Error) {
-        console.log("Error getting config" + e.message + " " + e.stack);
+        console.log('Error getting config' + e.message + ' ' + e.stack)
       } else {
-        console.log("Error getting config" + e);
+        console.log('Error getting config' + e)
       }
     }
   }
 
   connection.onDidChangeConfiguration((_change) => {
-    connection.console.info('Configuration changed.' + JSON.stringify(_change, null, 2));
-    getConfig();
+    connection.console.info('Configuration changed.' + JSON.stringify(_change, null, 2))
+    getConfig()
     if (hasConfigurationCapability) {
       // Reset all cached document settings
       documentSettings.clear()
@@ -165,59 +162,59 @@ export function startServer(options?: LSOptions): void {
   documents.onDidOpen((e) => {
     try {
       // TODO: revalidate if something changed
-      bamlCache.refreshDirectory(e.document);
-      bamlCache.addDocument(e.document);
-      console.log("Added document " + e.document.uri);
+      bamlCache.refreshDirectory(e.document)
+      bamlCache.addDocument(e.document)
+      console.log('Added document ' + e.document.uri)
     } catch (e: any) {
       if (e instanceof Error) {
-        console.log("Error opening doc" + e.message + " " + e.stack);
+        console.log('Error opening doc' + e.message + ' ' + e.stack)
       } else {
-        console.log("Error opening doc" + e);
+        console.log('Error opening doc' + e)
       }
     }
-  });
+  })
 
   // Only keep settings for open documents
   documents.onDidClose((e) => {
     try {
-      bamlCache.refreshDirectory(e.document);
+      bamlCache.refreshDirectory(e.document)
       // Revalidate all open files since this one may have been deleted.
       // we could be smarter and only do this if the doc was deleted, not just closed.
       documents.all().forEach(debouncedValidateTextDocument)
       documentSettings.delete(e.document.uri)
     } catch (e: any) {
       if (e instanceof Error) {
-        console.log("Error closing doc" + e.message + " " + e.stack);
+        console.log('Error closing doc' + e.message + ' ' + e.stack)
       } else {
-        console.log("Error closing doc" + e);
+        console.log('Error closing doc' + e)
       }
     }
   })
 
-
   // Note: VS Code strips newline characters from the message
   function showErrorToast(errorMessage: string): void {
-    connection.window.showErrorMessage(errorMessage, {
-      title: 'Show Details',
-    }).then((item) => {
-      if (item?.title === 'Show Details') {
-        connection.sendNotification('baml/showLanguageServerOutput');
-      }
-    });
+    connection.window
+      .showErrorMessage(errorMessage, {
+        title: 'Show Details',
+      })
+      .then((item) => {
+        if (item?.title === 'Show Details') {
+          connection.sendNotification('baml/showLanguageServerOutput')
+        }
+      })
   }
-
 
   function validateTextDocument(textDocument: TextDocument) {
     try {
-      const srcDocs = bamlCache.getDocuments(textDocument);
-      const rootPath = bamlCache.getBamlDir(textDocument);
+      const srcDocs = bamlCache.getDocuments(textDocument)
+      const rootPath = bamlCache.getBamlDir(textDocument)
       if (!rootPath) {
-        console.error("Could not find root path for " + textDocument.uri);
+        console.error('Could not find root path for ' + textDocument.uri)
         connection.sendNotification('baml/message', {
           type: 'error',
           message: 'Could not find a baml_src directory for ' + textDocument.uri.toString(),
         })
-        return;
+        return
       }
       const linterInput: LinterInput = {
         root_path: rootPath,
@@ -229,21 +226,23 @@ export function startServer(options?: LSOptions): void {
         }),
       }
       if (srcDocs.length === 0) {
-        console.log("No BAML files found in the workspace.")
+        console.log('No BAML files found in the workspace.')
         connection.sendNotification('baml/message', {
-          type: "warn",
-          message: "Unable to find BAML files. See Output panel -> BAML Language Server for more details.",
-        });
+          type: 'warn',
+          message: 'Unable to find BAML files. See Output panel -> BAML Language Server for more details.',
+        })
       }
-      const diagnostics = MessageHandler.handleDiagnosticsRequest(srcDocs, linterInput, showErrorToast);
-      for (const [uri, diagnosticList] of diagnostics) {
-        void connection.sendDiagnostics({ uri, diagnostics: diagnosticList });
+      const response = MessageHandler.handleDiagnosticsRequest(srcDocs, linterInput, showErrorToast)
+      for (const [uri, diagnosticList] of response.diagnostics) {
+        void connection.sendDiagnostics({ uri, diagnostics: diagnosticList })
       }
+
+      bamlCache.addDatabase(rootPath, response.state)
     } catch (e: any) {
       if (e instanceof Error) {
-        console.log("Error validating doc" + e.message + " " + e.stack);
+        console.log('Error validating doc' + e.message + ' ' + e.stack)
       } else {
-        console.log("Error validating doc" + e);
+        console.log('Error validating doc' + e)
       }
     }
   }
@@ -252,42 +251,43 @@ export function startServer(options?: LSOptions): void {
     maxWait: 4000,
     leading: true,
     trailing: true,
-  });
+  })
 
   documents.onDidChangeContent((change: { document: TextDocument }) => {
-    console.log("onDidChangeContent " + change.document.uri);
-    debouncedValidateTextDocument(change.document);
+    console.log('onDidChangeContent ' + change.document.uri)
+    debouncedValidateTextDocument(change.document)
   })
 
   const debouncedCLIBuild = debounce(cliBuild, 1000, {
     leading: true,
     trailing: true,
-  });
+  })
 
   documents.onDidSave((change: { document: TextDocument }) => {
     try {
-      const cliPath = config?.path || "baml";
-      console.log("cliPath " + cliPath);
-      let bamlDir = bamlCache.getBamlDir(change.document);
+      const cliPath = config?.path || 'baml'
+      console.log('cliPath ' + cliPath)
+      let bamlDir = bamlCache.getBamlDir(change.document)
       if (!bamlDir) {
-        console.error("Could not find baml_src dir for " + change.document.uri + ". Make sure your baml files are in baml_src dir");
-        return;
+        console.error(
+          'Could not find baml_src dir for ' + change.document.uri + '. Make sure your baml files are in baml_src dir',
+        )
+        return
       }
-      bamlDir = URI.parse(bamlDir).fsPath;
-      console.log("bamlDir " + bamlDir);
+      bamlDir = URI.parse(bamlDir).fsPath
+      console.log('bamlDir ' + bamlDir)
 
       debouncedCLIBuild(cliPath, bamlDir, showErrorToast, () => {
         connection.sendNotification('baml/message', {
-          type: "info",
-          message: "Generated BAML client successfully!",
-        });
-      });
-
+          type: 'info',
+          message: 'Generated BAML client successfully!',
+        })
+      })
     } catch (e: any) {
       if (e instanceof Error) {
-        console.log("Error saving doc" + e.message + " " + e.stack);
+        console.log('Error saving doc' + e.message + ' ' + e.stack)
       } else {
-        console.log("Error saving doc" + e);
+        console.log('Error saving doc' + e)
       }
     }
   })
@@ -314,8 +314,6 @@ export function startServer(options?: LSOptions): void {
   // connection.onCompletionResolve((completionItem: CompletionItem) => {
   //   return MessageHandler.handleCompletionResolveRequest(completionItem)
   // })
-
-
 
   // connection.onHover((params: HoverParams) => {
   //   const doc = getDocument(params.textDocument.uri)

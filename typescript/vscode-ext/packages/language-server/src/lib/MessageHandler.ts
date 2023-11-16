@@ -21,7 +21,7 @@ import {
 } from 'vscode-languageserver'
 import type { TextDocument } from 'vscode-languageserver-textdocument'
 import { fullDocumentRange } from './ast/findAtPosition'
-import lint, { LinterInput } from './wasm/lint'
+import lint, { LinterInput, ParserDatabase } from './wasm/lint'
 import { FileCache } from '../file/fileCache'
 
 // import format from './prisma-schema-wasm/format'
@@ -57,7 +57,7 @@ export function handleDiagnosticsRequest(
   documents: TextDocument[],
   linterInput: LinterInput,
   onError?: (errorMessage: string) => void,
-): Map<string, Diagnostic[]> {
+): { diagnostics: Map<string, Diagnostic[]>; state: ParserDatabase | undefined } {
   console.log(`Linting ${documents.length} documents`)
   const res = lint(linterInput, (errorMessage: string) => {
     if (onError) {
@@ -71,20 +71,8 @@ export function handleDiagnosticsRequest(
   documents.forEach((document) => {
     const documentDiagnostics: Diagnostic[] = []
 
-    if (
-      res.some(
-        (diagnostic) =>
-          diagnostic.text === "Field declarations don't require a `:`." ||
-          diagnostic.text === 'Model declarations have to be indicated with the `model` keyword.',
-      )
-    ) {
-      if (onError) {
-        onError('Unexpected error.')
-      }
-    }
-
     try {
-      const filteredDiagnostics = res.filter((diag) => diag.source_file === document.uri)
+      const filteredDiagnostics = res.diagnostics.filter((diag) => diag.source_file === document.uri)
 
       for (const diag of filteredDiagnostics) {
         const diagnostic: Diagnostic = {
@@ -112,8 +100,9 @@ export function handleDiagnosticsRequest(
     allDiagnostics.set(document.uri, documentDiagnostics)
   })
 
-  return allDiagnostics
+  return { diagnostics: allDiagnostics, state: res.ok ? res.response : undefined }
 }
+
 /**
  * This handler provides the modification to the document to be formatted.
  */
