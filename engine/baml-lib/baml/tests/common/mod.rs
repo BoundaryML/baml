@@ -6,6 +6,7 @@ use pretty_assertions::assert_eq;
 
 use baml_lib::{Configuration, Diagnostics, SourceFile};
 
+#[allow(unused)]
 pub(crate) fn parse_unwrap_err(schema: &str) -> String {
     let path = PathBuf::from("./unknown");
     baml_lib::parse_and_validate_schema(&path, vec![SourceFile::from((path.clone(), schema))])
@@ -14,7 +15,7 @@ pub(crate) fn parse_unwrap_err(schema: &str) -> String {
         .to_pretty_string()
 }
 
-#[track_caller]
+#[allow(unused)]
 pub(crate) fn parse_and_validate_schema(datamodel_string: &str) -> baml_lib::ValidatedSchema {
     let path = PathBuf::from("./unknown");
     baml_lib::parse_and_validate_schema(
@@ -24,6 +25,7 @@ pub(crate) fn parse_and_validate_schema(datamodel_string: &str) -> baml_lib::Val
     .unwrap()
 }
 
+#[allow(unused)]
 pub(crate) fn parse_config(
     _path: PathBuf,
     schema: &str,
@@ -32,7 +34,7 @@ pub(crate) fn parse_config(
     baml_lib::parse_configuration(&path, path.clone(), schema).map_err(|err| err.to_pretty_string())
 }
 
-#[track_caller]
+#[allow(unused)]
 pub(crate) fn parse_configuration(datamodel_string: &str) -> (Configuration, Diagnostics) {
     let path = PathBuf::from("./unknown");
     match baml_lib::parse_configuration(&path, path.clone(), datamodel_string) {
@@ -46,7 +48,7 @@ pub(crate) fn parse_configuration(datamodel_string: &str) -> (Configuration, Dia
     }
 }
 
-#[track_caller]
+#[allow(unused)]
 pub(crate) fn expect_error(schema: &str, expectation: &expect_test::Expect) {
     let path = PathBuf::from("./unknown");
     match baml_lib::parse_and_validate_schema(&path, vec![SourceFile::from((path.clone(), schema))])
@@ -56,11 +58,12 @@ pub(crate) fn expect_error(schema: &str, expectation: &expect_test::Expect) {
     }
 }
 
+#[allow(unused)]
 pub(crate) fn parse_and_render_error(schema: &str) -> String {
     parse_unwrap_err(schema)
 }
 
-#[track_caller]
+#[allow(unused)]
 pub(crate) fn assert_valid(schema: &str) {
     let path = PathBuf::from("./unknown");
     match baml_lib::parse_and_validate_schema(&path, vec![SourceFile::from((path.clone(), schema))])

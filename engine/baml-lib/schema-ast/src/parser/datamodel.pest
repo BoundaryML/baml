@@ -112,12 +112,6 @@ variant_block = {
     ~ BLOCK_CLOSE
     }
 
-replacer_field_definition = {
-    "replace_with"
-    ~ function_field_type?
-    ~ trailing_comment?
-    ~ NEWLINE
-}
 
 adapter_block = {
     "adapter"
