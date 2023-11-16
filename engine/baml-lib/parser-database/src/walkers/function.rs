@@ -1,7 +1,7 @@
 use either::Either;
 use internal_baml_diagnostics::DatamodelError;
 use internal_baml_prompt_parser::ast::WithSpan;
-use internal_baml_schema_ast::ast::{FuncArguementId, Identifier};
+use internal_baml_schema_ast::ast::{FuncArguementId, Identifier, WithIdentifier};
 use serde_json::json;
 
 use crate::{
@@ -21,6 +21,11 @@ impl<'db> FunctionWalker<'db> {
     /// The name of the function.
     pub fn name(self) -> &'db str {
         self.ast_function().name()
+    }
+
+    /// The name of the function.
+    pub fn identifier(self) -> &'db Identifier {
+        self.ast_function().identifier()
     }
 
     /// The ID of the function in the db

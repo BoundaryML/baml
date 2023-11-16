@@ -58,8 +58,7 @@ export function handleDiagnosticsRequest(
   linterInput: LinterInput,
   onError?: (errorMessage: string) => void,
 ): Map<string, Diagnostic[]> {
-
-  console.log("linterInput  " + JSON.stringify(linterInput, null, 2));
+  console.log(`Linting ${documents.length} documents`)
   const res = lint(linterInput, (errorMessage: string) => {
     if (onError) {
       onError(errorMessage)
@@ -69,7 +68,7 @@ export function handleDiagnosticsRequest(
 
   let allDiagnostics: Map<string, Diagnostic[]> = new Map()
 
-  documents.forEach(document => {
+  documents.forEach((document) => {
     const documentDiagnostics: Diagnostic[] = []
 
     if (
@@ -80,7 +79,7 @@ export function handleDiagnosticsRequest(
       )
     ) {
       if (onError) {
-        onError("Unexpected error.")
+        onError('Unexpected error.')
       }
     }
 
@@ -105,7 +104,7 @@ export function handleDiagnosticsRequest(
       }
     } catch (e: any) {
       if (e instanceof Error) {
-        console.log("Error handling diagnostics" + e.message + " " + e.stack);
+        console.log('Error handling diagnostics' + e.message + ' ' + e.stack)
       }
       onError?.(e.message)
     }
