@@ -1,4 +1,5 @@
 mod helpers;
+mod parse_adapter;
 mod parse_arguments;
 mod parse_attribute;
 mod parse_class;

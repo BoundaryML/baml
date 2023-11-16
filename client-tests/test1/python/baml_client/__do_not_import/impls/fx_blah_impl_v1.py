@@ -18,10 +18,11 @@ from baml_lib._impl.deserializer import Deserializer
 
 
 __prompt_template = """\
-hello there {#input}\
+hello there {arg}\
 """
 
 __input_replacers = {
+    "{arg}"
 }
 
 

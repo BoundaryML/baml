@@ -14,6 +14,13 @@ impl<llm, Foo> V1 {
 }
 
 
+
+// warning: To use comments and {#vars} use a block string. #"..."# instead.
+//   -->  variants/bad_client_def.baml:13
+//    | 
+// 12 |   client<llm> MyClient
+// 13 |   prompt "Hello there"
+//    | 
 // error: Error validating: Did you mean `client` instead of `client<...>`?
 //   -->  variants/bad_client_def.baml:12
 //    | 
