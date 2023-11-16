@@ -7,8 +7,9 @@ use crate::{context::Context, DatamodelError};
 use internal_baml_diagnostics::{DatamodelWarning, Span};
 use internal_baml_prompt_parser::ast::{PrinterBlock, Variable};
 use internal_baml_schema_ast::ast::{
-    self, ClassId, ClientId, ConfigurationId, EnumId, EnumValueId, Expression, FieldId, FunctionId,
-    SerializerFieldId, VariantConfigId, VariantSerializerId, WithIdentifier, WithName, WithSpan,
+    self, AdapterId, ClassId, ClientId, ConfigurationId, EnumId, EnumValueId, Expression, FieldId,
+    FieldType, FunctionId, RawString, SerializerFieldId, VariantConfigId, VariantSerializerId,
+    WithIdentifier, WithName, WithSpan,
 };
 
 mod configurations;
@@ -106,6 +107,17 @@ pub struct VariantProperties {
     pub prompt: StringValue,
     pub prompt_replacements: Vec<PromptVariable>,
     pub replacers: (HashMap<Variable, String>, HashMap<PrinterBlock, String>),
+    pub output_adapter: Option<(AdapterId, Vec<RawString>)>,
+}
+
+impl VariantProperties {
+    pub fn output_adapter_for_language(&self, language: &str) -> Option<&str> {
+        self.output_adapter.as_ref().and_then(|f| {
+            f.1.iter()
+                .find(|r| r.language.as_ref().map(|(l, _)| l.as_str()) == Some(language))
+                .map(|r| r.value())
+        })
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -477,6 +489,105 @@ fn visit_variant<'db>(idx: VariantConfigId, variant: &'db ast::Variant, ctx: &mu
         None
     };
 
+    // Ensure that the adapters are valid.
+    let (_input_adapter, output_adapter) =
+        variant
+            .iter_adapters()
+            .fold((None, None), |prev, (idx, adapter)| {
+                let is_input = match &adapter.from {
+                    FieldType::Identifier(arity, idn) if idn.name() == "input" => {
+                        if arity.is_optional() {
+                            ctx.push_error(DatamodelError::new_validation_error(
+                                "The `input` adapter cannot be optional.",
+                                idn.span().clone(),
+                            ));
+                            false
+                        } else {
+                            true
+                        }
+                    }
+                    _ => false,
+                };
+
+                let is_output = match &adapter.to {
+                    FieldType::Identifier(arity, idn) if idn.name() == "output" => {
+                        if arity.is_optional() {
+                            ctx.push_error(DatamodelError::new_validation_error(
+                                "The `output` adapter cannot be optional.",
+                                idn.span().clone(),
+                            ));
+                            false
+                        } else {
+                            true
+                        }
+                    }
+                    _ => false,
+                };
+
+                if is_input && is_output {
+                    ctx.push_error(DatamodelError::new_validation_error(
+                        "The `input` and `output` adapters cannot be used together.",
+                        adapter.span().clone(),
+                    ));
+                } else if is_input {
+                    if prev.0.is_some() {
+                        ctx.push_error(DatamodelError::new_validation_error(
+                            "The `input` adapter can only be used once.",
+                            adapter.span().clone(),
+                        ));
+                    } else {
+                        // Ensure the expr is either a string of array of strings.
+                        let impls = if let Some((arr, _)) = adapter.converter.as_array() {
+                            Some(
+                                arr.iter()
+                                    .filter_map(|item| coerce::raw_string(item, ctx.diagnostics))
+                                    .collect::<Vec<_>>(),
+                            )
+                        } else {
+                            coerce::raw_string(&adapter.converter, ctx.diagnostics)
+                                .map(|raw| vec![raw])
+                        };
+
+                        if let Some(impls) = impls {
+                            ctx.push_warning(DatamodelWarning::new(
+                                "The `input` adapter is note yet supported.".into(),
+                                adapter.span().clone(),
+                            ));
+                            return (Some((idx, impls)), prev.1);
+                        }
+                    }
+                } else if is_output {
+                    if prev.1.is_some() {
+                        ctx.push_error(DatamodelError::new_validation_error(
+                            "The `output` adapter can only be used once.",
+                            adapter.span().clone(),
+                        ));
+                    } else {
+                        let impls = if let Some((arr, _)) = adapter.converter.as_array() {
+                            Some(
+                                arr.iter()
+                                    .filter_map(|item| coerce::raw_string(item, ctx.diagnostics))
+                                    .map(|raw| raw.clone())
+                                    .collect::<Vec<_>>(),
+                            )
+                        } else {
+                            coerce::raw_string(&adapter.converter, ctx.diagnostics)
+                                .map(|raw| vec![raw.clone()])
+                        };
+
+                        if let Some(impls) = impls {
+                            return (prev.0, Some((idx, impls)));
+                        }
+                    }
+                } else {
+                    ctx.push_error(DatamodelError::new_validation_error(
+                        "The `input` or `output` adapter must be used.",
+                        adapter.span().clone(),
+                    ));
+                }
+                prev
+            });
+
     match (client, prompt) {
         (
             Some(((client, client_span), client_key_span)),
@@ -497,6 +608,7 @@ fn visit_variant<'db>(idx: VariantConfigId, variant: &'db ast::Variant, ctx: &mu
                     },
                     prompt_replacements: replacers,
                     replacers: Default::default(),
+                    output_adapter,
                 },
             );
         }

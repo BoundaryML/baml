@@ -30,6 +30,26 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
                 }
             });
 
+            if let Some((idx, _)) = variant.properties().output_adapter {
+                // Ensure that all input types exist.
+                let adapter = &variant.ast_variant()[idx];
+
+                adapter
+                    .from
+                    .flat_idns()
+                    .iter()
+                    .for_each(|f| match ctx.db.find_type(f) {
+                        Some(_) => {}
+                        None => {
+                            ctx.push_error(DatamodelError::new_type_not_found_error(
+                                f.name(),
+                                ctx.db.valid_type_names(),
+                                f.span().clone(),
+                            ));
+                        }
+                    });
+            }
+
             // Ensure that all blocks are valid.
             variant
                 .properties()

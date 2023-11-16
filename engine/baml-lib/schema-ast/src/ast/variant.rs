@@ -1,5 +1,6 @@
 use super::{
-    traits::WithAttributes, Attribute, Comment, ConfigBlockProperty, Identifier, Serializer, Span, WithDocumentation, WithIdentifier, WithSpan,
+    traits::WithAttributes, Adapter, Attribute, Comment, ConfigBlockProperty, Identifier,
+    Serializer, Span, WithDocumentation, WithIdentifier, WithSpan,
 };
 
 /// An opaque identifier for a field in an AST model. Use the
@@ -19,6 +20,24 @@ impl std::ops::Index<FieldId> for Variant {
 
     fn index(&self, index: FieldId) -> &Self::Output {
         &self.fields[index.0 as usize]
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct AdapterId(pub(super) u32);
+
+impl AdapterId {
+    /// Used for range bounds when iterating over BTreeMaps.
+    pub const MIN: AdapterId = AdapterId(0);
+    /// Used for range bounds when iterating over BTreeMaps.
+    pub const MAX: AdapterId = AdapterId(u32::MAX);
+}
+
+impl std::ops::Index<AdapterId> for Variant {
+    type Output = Adapter;
+
+    fn index(&self, index: AdapterId) -> &Self::Output {
+        &self.adapters[index.0 as usize]
     }
 }
 
@@ -82,6 +101,8 @@ pub struct Variant {
 
     pub serializers: Vec<Serializer>,
 
+    pub adapters: Vec<Adapter>,
+
     pub(crate) variant_type: String,
 
     pub(crate) function_name: Identifier,
@@ -107,6 +128,13 @@ impl Variant {
             .iter()
             .enumerate()
             .map(|(idx, field)| (SerializerId(idx as u32), field))
+    }
+
+    pub fn iter_adapters(&self) -> impl ExactSizeIterator<Item = (AdapterId, &Adapter)> + Clone {
+        self.adapters
+            .iter()
+            .enumerate()
+            .map(|(idx, field)| (AdapterId(idx as u32), field))
     }
 
     pub fn is_llm(&self) -> bool {

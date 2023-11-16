@@ -266,52 +266,50 @@ impl ParserDatabase {
                 // Now lets validate the prompt is what we expect.
                 let prompt_variables = &variant.properties().prompt_replacements;
 
-                let num_errors = prompt_variables
-                    .iter()
-                    .map(|f| match f {
-                        PromptVariable::Input(variable) => {
-                            // Ensure the prompt has an input path that works.
-                            match types::post_prompt::process_input(self, fn_walker, variable) {
-                                Ok(replacer) => {
-                                    input_replacers.insert(variable.to_owned(), replacer);
-                                    Ok(())
-                                }
-                                Err(e) => Err(e),
+                let num_errors = prompt_variables.iter().fold(0, |count, f| match f {
+                    PromptVariable::Input(variable) => {
+                        // Ensure the prompt has an input path that works.
+                        match types::post_prompt::process_input(self, fn_walker, variable) {
+                            Ok(replacer) => {
+                                input_replacers.insert(variable.to_owned(), replacer);
+                                count
+                            }
+                            Err(e) => {
+                                diag.push_error(e);
+                                count + 1
                             }
                         }
-                        PromptVariable::Enum(blk) => {
-                            // Ensure the prompt has an enum path that works.
-                            match types::post_prompt::process_print_enum(
-                                self, variant, fn_walker, &blk,
-                            ) {
-                                Ok(result) => {
-                                    output_replacers.insert(blk.to_owned(), result);
-                                    Ok(())
-                                }
-                                Err(e) => Err(e),
+                    }
+                    PromptVariable::Enum(blk) => {
+                        // Ensure the prompt has an enum path that works.
+                        match types::post_prompt::process_print_enum(
+                            self, variant, fn_walker, &blk, diag,
+                        ) {
+                            Ok(result) => {
+                                output_replacers.insert(blk.to_owned(), result);
+                                count
+                            }
+                            Err(e) => {
+                                diag.push_error(e);
+                                count + 1
                             }
                         }
-                        PromptVariable::Type(blk) => {
-                            // Ensure the prompt has an enum path that works.
-                            match types::post_prompt::process_print_type(
-                                self, variant, fn_walker, &blk,
-                            ) {
-                                Ok(result) => {
-                                    output_replacers.insert(blk.to_owned(), result);
-                                    Ok(())
-                                }
-                                Err(e) => Err(e),
+                    }
+                    PromptVariable::Type(blk) => {
+                        // Ensure the prompt has an enum path that works.
+                        match types::post_prompt::process_print_type(self, variant, fn_walker, &blk)
+                        {
+                            Ok(result) => {
+                                output_replacers.insert(blk.to_owned(), result);
+                                count
+                            }
+                            Err(e) => {
+                                diag.push_error(e);
+                                count + 1
                             }
                         }
-                    })
-                    .filter_map(|f| match f.err() {
-                        Some(e) => {
-                            diag.push_error(e);
-                            Some(())
-                        }
-                        None => None,
-                    })
-                    .count();
+                    }
+                });
 
                 if num_errors == 0 {
                     // Some simple error checking.

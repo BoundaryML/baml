@@ -48,6 +48,7 @@ fn use_partial(
     reg: &mut handlebars::Handlebars<'static>,
     f: &mut File,
 ) -> String {
+    register_partial!(reg, "print_code", "{{{code}}}");
     match template {
         HSTemplate::Variant => {
             register_partial_file!(reg, "functions", "arg_list");
@@ -80,7 +81,6 @@ fn use_partial(
         }
         HSTemplate::Class => {
             register_partial_file!(reg, "types", "class");
-            register_partial!(reg, "print_code", "{{{code}}}");
             f.add_import("pydantic", "BaseModel");
             f.add_import("baml_lib._impl.deserializer", "register_deserializer");
             String::from("class")

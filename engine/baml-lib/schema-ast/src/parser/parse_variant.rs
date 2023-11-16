@@ -2,6 +2,7 @@ use std::ops::Index;
 
 use super::{
     helpers::{parsing_catch_all, Pair},
+    parse_adapter::parse_adapter,
     parse_attribute::parse_attribute,
     parse_comments::*,
     parse_config::parse_key_value,
@@ -24,6 +25,7 @@ pub(crate) fn parse_variant_block(
     let mut serializers: Vec<Serializer> = Vec::new();
     let mut attributes: Vec<Attribute> = Vec::new();
     let mut fields: Vec<ConfigBlockProperty> = Vec::new();
+    let mut adapters: Vec<Adapter> = Vec::new();
 
     for current in pair.into_inner() {
         match current.as_rule() {
@@ -43,6 +45,9 @@ pub(crate) fn parse_variant_block(
                                 pending_field_comment.take(),
                                 diagnostics,
                             ));
+                        }
+                        Rule::adapter_block => {
+                            parse_adapter(item, None, diagnostics).map(|f| adapters.push(f));
                         }
                         Rule::serializer_block => {
                             serializers.push(parse_serializer(item, None, diagnostics))
@@ -91,6 +96,7 @@ pub(crate) fn parse_variant_block(
                     fields,
                     serializers,
                     attributes,
+                    adapters,
                     documentation: doc_comment.and_then(parse_comment_block),
                     span: diagnostics.span(pair_span),
                     variant_type: variant_type.unwrap().to_string(),
