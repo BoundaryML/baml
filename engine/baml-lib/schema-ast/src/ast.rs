@@ -1,3 +1,4 @@
+mod adapter;
 mod argument;
 mod attribute;
 mod r#class;
@@ -23,6 +24,7 @@ mod variant;
 
 pub(crate) use self::comment::Comment;
 
+pub use adapter::Adapter;
 pub use argument::{ArguementId, Argument, ArgumentsList};
 pub use attribute::{Attribute, AttributeContainer, AttributeId};
 pub use client::Client;
@@ -44,7 +46,9 @@ pub use retry_policy_config::RetryPolicyConfig;
 pub use serializer::{Serializer, SerializerField, SerializerFieldId};
 pub use top::Top;
 pub use traits::{WithAttributes, WithDocumentation, WithIdentifier, WithName, WithSpan};
-pub use variant::{FieldId as VariantFieldId, SerializerId as VariantSerializerId, Variant};
+pub use variant::{
+    AdapterId, FieldId as VariantFieldId, SerializerId as VariantSerializerId, Variant,
+};
 
 /// AST representation of a prisma schema.
 ///

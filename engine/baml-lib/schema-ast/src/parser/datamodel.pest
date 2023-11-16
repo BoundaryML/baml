@@ -112,8 +112,22 @@ variant_block = {
     ~ BLOCK_CLOSE
     }
 
+replacer_field_definition = {
+    "replace_with"
+    ~ function_field_type?
+    ~ trailing_comment?
+    ~ NEWLINE
+}
+
+adapter_block = {
+    "adapter"
+    ~ field_template_args?
+    ~ expression?
+    ~ NEWLINE?
+}
+
 variant_contents = {
-    ( serializer_block | (key_value ~ NEWLINE) | (block_attribute ~ NEWLINE) | comment_block | empty_lines| BLOCK_LEVEL_CATCH_ALL)*
+    ( serializer_block | adapter_block | (key_value ~ NEWLINE) | (block_attribute ~ NEWLINE) | comment_block | empty_lines| BLOCK_LEVEL_CATCH_ALL)*
 }
 
 // ######################################
@@ -264,6 +278,9 @@ FUNCTION_KEYWORD = { "function" }
 
 empty_template_args = ${ "<" ~ ">" }
 template_args = { empty_template_args | ("<" ~ expression ~ ("," ~ expression)* ~ ">") }
+
+field_template_args = { empty_template_args | ("<" ~ field_type ~ ("," ~ field_type)* ~ ">") }
+
 RETRY_POLICY_KEYWORD = { "retry_policy" }
 CLIENT_KEYWORD = { "client" }
 GENERATOR_KEYWORD = { "generator" }

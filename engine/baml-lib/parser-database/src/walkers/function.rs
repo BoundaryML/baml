@@ -164,6 +164,15 @@ impl<'db> WithSerializeableContent for ArgWalker<'db> {
 
 impl<'db> WithSerializeableContent for FunctionWalker<'db> {
     fn serialize_data(&self, variant: &VariantWalker<'_>) -> serde_json::Value {
+        if let Some((idx, _)) = variant.properties().output_adapter {
+            let adapter = &variant.ast_variant()[idx];
+
+            return json!({
+                "rtype": "output",
+                "value": (self.db, &adapter.from).serialize_data(variant)
+            });
+        }
+
         // TODO: We should handle the case of multiple output args
         json!({
             "rtype": "output",

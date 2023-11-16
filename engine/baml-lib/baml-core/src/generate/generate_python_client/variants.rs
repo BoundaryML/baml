@@ -11,7 +11,7 @@ use crate::generate::generate_python_client::file::clean_file_name;
 use super::{
     file::File,
     template::render_template,
-    traits::{JsonHelper, WithWritePythonString},
+    traits::{JsonHelper, WithToCode, WithWritePythonString},
     FileCollector,
 };
 
@@ -42,13 +42,29 @@ impl<'db> JsonHelper for VariantWalker<'db> {
             prompt = prompt.replace(&k.key(), &format!("{}", val));
         });
 
+        let _ = self
+            .output_required_classes()
+            .map(|cls| f.add_import(&format!("..types.classes.{}", cls.file_name()), cls.name()))
+            .collect::<Vec<_>>();
+        let _ = self
+            .output_required_enums()
+            .map(|enm| f.add_import(&format!("..types.enums.{}", enm.file_name()), enm.name()))
+            .collect::<Vec<_>>();
+
         json!({
             "name": self.identifier().name(),
             "function": func.json(f),
             "prompt": prompt,
             "client": client.name(),
             "inputs": inputs,
-            "pre_deserializer": self.properties().pre_deserializer_for_lang("python"),
+            "output_adapter": self.properties().output_adapter.as_ref().map(|(idx, _)| {
+                let adapter = &self.ast_variant()[*idx];
+
+                json!({
+                    "type": adapter.from.to_py_string(f),
+                    "code": self.properties().output_adapter_for_language("python").unwrap_or("raise NotImplementedError()")
+                })
+            }),
             "overrides": self.ast_variant().iter_serializers().filter_map(|(_k, v)| {
                 let matches = match self.db.find_type_by_str(v.name()) {
                     Some(Either::Left(cls)) => {

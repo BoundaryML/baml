@@ -274,21 +274,27 @@ impl ParserDatabase {
                             match types::post_prompt::process_input(self, fn_walker, variable) {
                                 Ok(replacer) => {
                                     input_replacers.insert(variable.to_owned(), replacer);
-                                    Ok(())
+                                    Some(())
                                 }
-                                Err(e) => Err(e),
+                                Err(e) => {
+                                    diag.push_error(e);
+                                    None
+                                }
                             }
                         }
                         PromptVariable::Enum(blk) => {
                             // Ensure the prompt has an enum path that works.
                             match types::post_prompt::process_print_enum(
-                                self, variant, fn_walker, &blk,
+                                self, variant, fn_walker, &blk, diag,
                             ) {
                                 Ok(result) => {
                                     output_replacers.insert(blk.to_owned(), result);
-                                    Ok(())
+                                    Some(())
                                 }
-                                Err(e) => Err(e),
+                                Err(e) => {
+                                    diag.push_error(e);
+                                    None
+                                }
                             }
                         }
                         PromptVariable::Type(blk) => {
@@ -298,18 +304,14 @@ impl ParserDatabase {
                             ) {
                                 Ok(result) => {
                                     output_replacers.insert(blk.to_owned(), result);
-                                    Ok(())
+                                    Some(())
                                 }
-                                Err(e) => Err(e),
+                                Err(e) => {
+                                    diag.push_error(e);
+                                    None
+                                }
                             }
                         }
-                    })
-                    .filter_map(|f| match f.err() {
-                        Some(e) => {
-                            diag.push_error(e);
-                            Some(())
-                        }
-                        None => None,
                     })
                     .count();
 

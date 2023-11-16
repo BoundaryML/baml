@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use internal_baml_diagnostics::DatamodelError;
 
 use internal_baml_parser_database::{PrinterType, PromptVariable};
@@ -32,31 +30,24 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
                 }
             });
 
-            match variant.properties().pre_deserializer.as_ref() {
-                Some((p, key_span)) => {
-                    // Ensure no duplicate languages in pre_deserializer.
-                    if p.len()
-                        != p.iter()
-                            .map(|f| {
-                                if f.language.is_none() {
-                                    ctx.push_error(DatamodelError::new_validation_error(
-                                        "Missing language in pre_deserializer. e.g. python#\"...\"# instead of #\"...\"#",
-                                        f.span().clone(),
-                                    ));
-                                    return "unknown";
-                                }
-                                f.language.as_ref().unwrap().0.as_str()
-                            })
-                            .collect::<HashSet<_>>()
-                            .len()
-                    {
-                        ctx.push_error(DatamodelError::new_validation_error(
-                            "Duplicate languages in pre_deserializer",
-                            key_span.clone(),
-                        ));
-                    }
-                }
-                None => {}
+            if let Some((idx, _)) = variant.properties().output_adapter {
+                // Ensure that all input types exist.
+                let adapter = &variant.ast_variant()[idx];
+
+                adapter
+                    .from
+                    .flat_idns()
+                    .iter()
+                    .for_each(|f| match ctx.db.find_type(f) {
+                        Some(_) => {}
+                        None => {
+                            ctx.push_error(DatamodelError::new_type_not_found_error(
+                                f.name(),
+                                ctx.db.valid_type_names(),
+                                f.span().clone(),
+                            ));
+                        }
+                    });
             }
 
             // Ensure that all blocks are valid.

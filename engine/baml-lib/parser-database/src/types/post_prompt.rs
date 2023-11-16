@@ -1,5 +1,5 @@
 use either::Either;
-use internal_baml_diagnostics::DatamodelError;
+use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Diagnostics};
 use internal_baml_prompt_parser::ast::{PrinterBlock, Variable};
 use internal_baml_schema_ast::ast::{self, WithName};
 
@@ -64,6 +64,7 @@ pub(crate) fn process_print_enum(
     walker: VariantWalker<'_>,
     fn_walker: FunctionWalker<'_>,
     blk: &PrinterBlock,
+    diag: &mut Diagnostics,
 ) -> Result<String, DatamodelError> {
     let variable = &blk.target;
     if variable.text == "output" {
@@ -82,7 +83,7 @@ pub(crate) fn process_print_enum(
 
     match db.find_type_by_str(&variable.text) {
         Some(Either::Right(enum_walker)) => {
-            match fn_walker
+            if !fn_walker
                 .walk_output_args()
                 .map(|f| {
                     f.required_enums()
@@ -90,16 +91,16 @@ pub(crate) fn process_print_enum(
                 })
                 .any(|f| f)
             {
-                true => enum_walker.serialize(&walker, blk),
-                false => Err(DatamodelError::type_not_used_in_prompt_error(
+                diag.push_warning(DatamodelWarning::type_not_used_in_prompt_error(
                     true,
                     true,
                     fn_walker.name(),
                     &variable.text,
                     candidates,
                     variable.span.clone(),
-                )),
+                ));
             }
+            enum_walker.serialize(&walker, blk)
         }
         Some(Either::Left(_)) => Err(DatamodelError::new_validation_error(
             "Expected enum, found class",

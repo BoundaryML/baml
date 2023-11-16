@@ -1,6 +1,3 @@
-
-
-
 use internal_baml_schema_ast::ast::{Identifier, WithName};
 
 use crate::{
@@ -8,7 +5,7 @@ use crate::{
     types::{ToStringAttributes, VariantProperties},
 };
 
-use super::{ClientWalker, FunctionWalker, Walker};
+use super::{ClassWalker, ClientWalker, EnumWalker, FunctionWalker, Walker};
 
 /// A `function` declaration in the Prisma schema.
 pub type VariantWalker<'db> = Walker<'db, ast::VariantConfigId>;
@@ -87,5 +84,56 @@ impl<'db> VariantWalker<'db> {
     /// The properties of the variant.
     pub fn properties(self) -> &'db VariantProperties {
         &self.db.types.variant_properties[&self.id]
+    }
+
+    /// Get the output of a function.
+    pub fn output_type(self) -> impl ExactSizeIterator<Item = super::ArgWalker<'db>> {
+        self.walk_function().unwrap().walk_output_args()
+    }
+
+    /// The name of the function.
+    pub fn output_required_enums(self) -> impl Iterator<Item = EnumWalker<'db>> {
+        if let Some((idx, _)) = self.properties().output_adapter {
+            let adapter = &self.ast_variant()[idx];
+
+            return adapter
+                .from
+                .flat_idns()
+                .iter()
+                .filter_map(|f| self.db.find_enum(f))
+                .collect::<Vec<_>>()
+                .into_iter();
+        }
+
+        self.walk_function()
+            .unwrap()
+            .walk_output_args()
+            .map(|f| f.required_enums())
+            .flatten()
+            .collect::<Vec<_>>()
+            .into_iter()
+    }
+
+    /// The name of the function.
+    pub fn output_required_classes(self) -> impl Iterator<Item = ClassWalker<'db>> {
+        if let Some((idx, _)) = self.properties().output_adapter {
+            let adapter = &self.ast_variant()[idx];
+
+            return adapter
+                .from
+                .flat_idns()
+                .iter()
+                .filter_map(|f| self.db.find_class(f))
+                .collect::<Vec<_>>()
+                .into_iter();
+        }
+
+        self.walk_function()
+            .unwrap()
+            .walk_output_args()
+            .map(|f| f.required_classes())
+            .flatten()
+            .collect::<Vec<_>>()
+            .into_iter()
     }
 }

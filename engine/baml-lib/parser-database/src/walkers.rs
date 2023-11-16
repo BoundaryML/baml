@@ -49,9 +49,9 @@ where
     }
 }
 
-impl crate::ParserDatabase {
+impl<'db> crate::ParserDatabase {
     /// Find an enum by name.
-    pub fn find_enum<'db>(&'db self, idn: &Identifier) -> Option<EnumWalker<'db>> {
+    pub fn find_enum(&'db self, idn: &Identifier) -> Option<EnumWalker<'db>> {
         self.find_type(idn).and_then(|either| match either {
             Either::Right(class) => Some(class),
             _ => None,
@@ -59,7 +59,7 @@ impl crate::ParserDatabase {
     }
 
     /// Find a type by name.
-    pub fn find_type_by_str<'db>(
+    pub fn find_type_by_str(
         &'db self,
         name: &str,
     ) -> Option<Either<ClassWalker<'db>, EnumWalker<'db>>> {
@@ -74,7 +74,7 @@ impl crate::ParserDatabase {
     }
 
     /// Find a type by name.
-    pub fn find_type<'db>(
+    pub fn find_type(
         &'db self,
         idn: &Identifier,
     ) -> Option<Either<ClassWalker<'db>, EnumWalker<'db>>> {
@@ -85,7 +85,7 @@ impl crate::ParserDatabase {
     }
 
     /// Find a model by name.
-    pub fn find_class<'db>(&'db self, idn: &Identifier) -> Option<ClassWalker<'db>> {
+    pub fn find_class(&'db self, idn: &Identifier) -> Option<ClassWalker<'db>> {
         self.find_type(idn).and_then(|either| match either {
             Either::Left(class) => Some(class),
             _ => None,
@@ -93,7 +93,7 @@ impl crate::ParserDatabase {
     }
 
     /// Find a client by name.
-    pub fn find_client<'db>(&'db self, name: &str) -> Option<ClientWalker<'db>> {
+    pub fn find_client(&'db self, name: &str) -> Option<ClientWalker<'db>> {
         self.interner
             .lookup(name)
             .and_then(|name_id| self.names.tops.get(&name_id))
@@ -102,7 +102,7 @@ impl crate::ParserDatabase {
     }
 
     /// Find a function by name.
-    pub fn find_function<'db>(&'db self, idn: &Identifier) -> Option<FunctionWalker<'db>> {
+    pub fn find_function(&'db self, idn: &Identifier) -> Option<FunctionWalker<'db>> {
         self.interner
             .lookup(idn.name())
             .and_then(|name_id| self.names.tops.get(&name_id))
@@ -111,7 +111,7 @@ impl crate::ParserDatabase {
     }
 
     /// Find a function by name.
-    pub fn find_retry_policy<'db>(&'db self, name: &str) -> Option<ConfigurationWalker<'db>> {
+    pub fn find_retry_policy(&'db self, name: &str) -> Option<ConfigurationWalker<'db>> {
         self.interner
             .lookup(name)
             .and_then(|name_id| self.names.tops.get(&name_id))
@@ -120,7 +120,7 @@ impl crate::ParserDatabase {
     }
 
     /// Find printer by name.
-    pub fn find_printer<'db>(&'db self, name: &str) -> Option<ConfigurationWalker<'db>> {
+    pub fn find_printer(&'db self, name: &str) -> Option<ConfigurationWalker<'db>> {
         self.interner
             .lookup(name)
             .and_then(|name_id| self.names.tops.get(&name_id))
@@ -134,7 +134,7 @@ impl crate::ParserDatabase {
     }
 
     /// Get all the types that are valid in the schema. (including primitives)
-    pub fn valid_type_names<'db>(&'db self) -> Vec<String> {
+    pub fn valid_type_names(&'db self) -> Vec<String> {
         let mut names: Vec<String> = self.walk_classes().map(|c| c.name().to_string()).collect();
         names.extend(self.walk_enums().map(|e| e.name().to_string()));
         // Add primitive types
