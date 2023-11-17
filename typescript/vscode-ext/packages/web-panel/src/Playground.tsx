@@ -29,7 +29,7 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
       prompt = prompt.replaceAll(key, value)
     })
     return { func, impl, prompt }
-  }, [selectedId])
+  }, [selectedId, functions])
 
   useEffect(() => {
     if (!impl && selectedId.implName !== undefined && func) {
