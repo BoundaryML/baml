@@ -2,12 +2,15 @@ import pytest
 from baml_core.logger import logger
 from baml_lib import baml_init
 from .pytest_baml import BamlPytestPlugin
-from baml_core.cache_manager import CacheManager
 
-
-baml_test = pytest.mark.baml_test
-baml_function_test = pytest.mark.baml_function_test
-
+def pytest_addoption( parser: pytest.Parser) -> None:
+    parser.addoption(
+        "--pytest-baml-ipc",
+        action="store",
+        dest="baml_ipc",
+        default=None,
+        help="The name of the ipc pipe to communicate on."
+    )
 
 def pytest_configure(config: pytest.Config) -> None:
     logger.debug("Registering pytest_gloo plugin.")
@@ -19,11 +22,4 @@ def pytest_configure(config: pytest.Config) -> None:
     # Add optional stage parameter to baml_init
     # baml_init(), returns api wrapper we can use
     baml_conf = baml_init(stage="test", enable_cache=True)
-    if baml_conf.api is None:
-        logger.warn(
-            "BAML plugin disabled due to missing environment variables. Did you set GLOO_APP_ID and GLOO_APP_SECRET?"
-        )
-        return
-    CacheManager.add_cache("gloo", api=baml_conf.api)
-
-    config.pluginmanager.register(BamlPytestPlugin(api=baml_conf.api), "pytest_baml")
+    config.pluginmanager.register(BamlPytestPlugin(api=baml_conf.api, ipc_channel=config.getoption('baml_ipc')), "pytest_baml")

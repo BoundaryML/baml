@@ -35,7 +35,7 @@ class BAMLClient:
     ResilientGPT4 = ResilientGPT4
 
     def __init__(self):
-        baml_init(idempotent=True)
+        baml_init()
 
     def configure(
         self,

@@ -21,7 +21,7 @@ include = "baml_lib"
 from = "."
 
 [[tool.poetry.packages]]
-include = "baml_test"
+include = "pytest_baml"
 from = "."
 
 [tool.mypy]
@@ -52,7 +52,7 @@ typeguard = "^4.1.5"
 ignore_missing_imports = true
 
 [tool.poetry.plugins.pytest11]
-pytest-baml = "baml_test.exports"
+pytest-baml = "pytest_baml.conftest"
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.5.1"

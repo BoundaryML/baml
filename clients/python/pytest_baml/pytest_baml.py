@@ -2,6 +2,7 @@ import asyncio
 import typing
 import colorama
 import pytest
+from baml_core.logger import logger
 
 from baml_core.otel.tracer import _trace_internal
 from baml_core.services.api import APIWrapper
@@ -10,6 +11,7 @@ import re
 
 from baml_core.logger import logger
 from baml_core.otel import flush_trace_logs
+from .ipc_channel import IPCChannel, NoopIPCChannel
 
 
 class GlooTestCaseBase(typing.TypedDict):
@@ -65,11 +67,12 @@ def sanitize(input_str: str) -> str:
 
 # See https://docs.pytest.org/en/7.1.x/_modules/_pytest/hookspec.html#pytest_runtestloop
 class BamlPytestPlugin:
-    def __init__(self, api: APIWrapper) -> None:
+    def __init__(self, api: typing.Optional[APIWrapper], ipc_channel: typing.Optional[str]) -> None:
         self.__gloo_tests: typing.Dict[str, TestCaseMetadata] = {}
         self.__completed_tests: typing.Set[str] = set()
         self.__api = api
         self.__dashboard_url: typing.Optional[str] = None
+        self.__ipc = NoopIPCChannel() if ipc_channel is None else IPCChannel(ipc_channel)
 
     @pytest.hookimpl(tryfirst=True)
     def pytest_generate_tests(self, metafunc: pytest.Metafunc) -> None:
@@ -123,6 +126,9 @@ class BamlPytestPlugin:
                 self.__gloo_tests[item.nodeid] = TestCaseMetadata(item)
 
     def maybe_start_logging(self, session: pytest.Session) -> None:
+        if self.__api is None:
+            return
+        
         logger.debug(
             f"Starting logging: Num Tests: {len(self.__gloo_tests)}, {len(session.items)}"
         )
@@ -200,18 +206,21 @@ class BamlPytestPlugin:
         :param str nodeid: Full node ID of the item.
         :param location: A tuple of ``(filename, lineno, testname)``.
         """
+        
         if nodeid in self.__gloo_tests:
             item = self.__gloo_tests[nodeid]
-            # Log the start of the test
-            self.__api.test.update_case_sync(
-                payload=api_types.UpdateTestCase(
-                    test_dataset_name=item.dataset_name,
-                    test_case_definition_name=item.test_name,
-                    test_case_arg_name=item.case_name,
-                    status=api_types.TestCaseStatus.RUNNING,
-                    error_data=None,
-                )
+            payload = api_types.UpdateTestCase(
+                test_dataset_name=item.dataset_name,
+                test_case_definition_name=item.test_name,
+                test_case_arg_name=item.case_name,
+                status=api_types.TestCaseStatus.RUNNING,
+                error_data=None,
             )
+
+            # Log the start of the test
+            self.__ipc.send('update_test_case', payload)
+            if self.__api is not None:
+                self.__api.test.update_case_sync(payload=payload)
 
     # wrapper ensures we can yield to other hooks
     # this one just sets the context but doesnt actually run
@@ -220,13 +229,13 @@ class BamlPytestPlugin:
     def pytest_runtest_call(self, item: pytest.Item) -> None:
         if item.nodeid not in self.__gloo_tests:
             return
-
+        
         # Before running the test, make this a traced function.
         meta = self.__gloo_tests[item.nodeid]
         tags = dict(
             test_case_arg_name=meta.case_name,
             test_case_name=meta.test_name,
-            test_cycle_id=self.__api.test.session_id,
+            test_cycle_id=self.__api.test.session_id if self.__api else "local-run",
             test_dataset_name=meta.dataset_name,
         )
 
@@ -238,7 +247,7 @@ class BamlPytestPlugin:
     ) -> None:
         if item.nodeid not in self.__gloo_tests:
             return
-
+        
         if call.when == "call":
             status = (
                 api_types.TestCaseStatus.PASSED
@@ -247,8 +256,7 @@ class BamlPytestPlugin:
             )
 
             meta = self.__gloo_tests[item.nodeid]
-            self.__api.test.update_case_sync(
-                payload=api_types.UpdateTestCase(
+            payload = api_types.UpdateTestCase(
                     test_dataset_name=meta.dataset_name,
                     test_case_definition_name=meta.test_name,
                     test_case_arg_name=meta.case_name,
@@ -257,7 +265,12 @@ class BamlPytestPlugin:
                     if call.excinfo
                     else None,
                 )
-            )
+
+            self.__ipc.send('update_test_case', payload)
+            if self.__api is not None:
+                self.__api.test.update_case_sync(
+                    payload=payload
+                )
             self.__completed_tests.add(item.nodeid)
 
     @pytest.hookimpl(tryfirst=True)
@@ -282,18 +295,20 @@ class BamlPytestPlugin:
                 )
             return
 
+        
         try:
             for nodeid, meta in self.__gloo_tests.items():
                 if nodeid not in self.__completed_tests:
-                    self.__api.test.update_case_sync(
-                        payload=api_types.UpdateTestCase(
-                            test_dataset_name=meta.dataset_name,
-                            test_case_definition_name=meta.test_name,
-                            test_case_arg_name=meta.case_name,
-                            status=api_types.TestCaseStatus.CANCELLED,
-                            error_data=None,
-                        )
-                    )
+                    payload = api_types.UpdateTestCase(
+                                test_dataset_name=meta.dataset_name,
+                                test_case_definition_name=meta.test_name,
+                                test_case_arg_name=meta.case_name,
+                                status=api_types.TestCaseStatus.CANCELLED,
+                                error_data=None,
+                            )
+                    self.__ipc.send('update_test_case', payload)
+                    if self.__api is not None:
+                        self.__api.test.update_case_sync(payload=payload)
         except Exception as e:
             # If we don't catch this the user is not able to see any other underlying test errors.
             logger.error(f"Failed to update test case status: {e}")

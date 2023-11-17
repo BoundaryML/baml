@@ -1,3 +1,4 @@
+import asyncio
 import contextvars
 from itertools import chain
 import platform
@@ -30,19 +31,16 @@ from ..services.api_types import LogSchema
 @typing.final
 class CustomBackendExporter(SpanExporter):
     __project_id: typing.Optional[str]
-    __message_override_callback: typing.Optional[
+    __message_override_callback: typing.Dict[int,
         typing.Callable[[LogSchema], None]
-    ] = None
-    __before_messages_export_callback: typing.Optional[
-        typing.Callable[[typing.List[LogSchema]], None]
-    ] = None
-
+    ]
+    
     def __init__(self) -> None:
         super().__init__()
         self.__api_wrapper: typing.Optional[APIWrapper] = None
         self.__process_id = str(uuid.uuid4())
         self.__project_id = None
-        self.__message_override_callback = None
+        self.__message_override_callback = {}
 
     def set_gloo_api(self, api_wrapper: typing.Optional[APIWrapper]) -> None:
         if api_wrapper:
@@ -54,15 +52,16 @@ class CustomBackendExporter(SpanExporter):
             self.__process_id = str(uuid.uuid4())
             self.__project_id = None
 
-    def set_message_override_callback(
-        self, callback: typing.Callable[[LogSchema], None]
-    ) -> None:
-        self.__message_override_callback = callback
+    def remove_message_override_callback(self, _id: int) -> None:
+        if _id in self.__message_override_callback:
+            self.__message_override_callback.pop(_id)
 
-    def set_before_messages_export_callback(
-        self, callback: typing.Callable[[typing.List[LogSchema]], None]
-    ) -> None:
-        self.__before_messages_export_callback = callback
+    def add_message_override_callback(
+        self, callback: typing.Callable[[LogSchema], None]
+    ) -> int:
+        _id = uuid.uuid4().int
+        self.__message_override_callback[_id] = callback
+        return _id
 
     def export(self, spans: typing.Sequence[ReadableSpan]) -> SpanExportResult:
         # Convert spans to your backend's desired format
@@ -81,16 +80,18 @@ class CustomBackendExporter(SpanExporter):
         for item in items:
             item.print()
             if self.__message_override_callback is not None:
-                try:
-                    # if the msg overides fail, export will also fail.
-                    # note, this may mutate the item
-                    self.__message_override_callback(item)
-                except Exception as e:
-                    # Swallow for now...
-                    logger.error(
-                        "Failed to override and export messages. Will still emit to Dashboard",
-                        e,
-                    )
+                # Run every callback in parallel
+                for cb in self.__message_override_callback.values():
+                    try:
+                        # if the msg overides fail, export will also fail.
+                        # note, this may mutate the item
+                        cb(item)
+                    except Exception as e:
+                        # Swallow for now...
+                        logger.error(
+                            "Failed to override and export messages. Will still emit to Dashboard",
+                            e,
+                        )
 
             CacheManager.save_llm_request(item)
 
@@ -260,11 +261,8 @@ def use_tracing(api: typing.Optional[APIWrapper] = None) -> None:
     __exporter.set_gloo_api(api)
 
 
-def set_message_transformer_hook(callback: typing.Callable[[LogSchema], None]) -> None:
-    __exporter.set_message_override_callback(callback)
+def add_message_transformer_hook(callback: typing.Callable[[LogSchema], None]) -> int:
+    return __exporter.add_message_override_callback(callback)
 
-
-def set_before_message_export_hook(
-    callback: typing.Callable[[typing.List[LogSchema]], None]
-) -> None:
-    __exporter.set_before_messages_export_callback(callback)
+def remove_message_transformer_hook(_id: int) -> None:
+    __exporter.remove_message_override_callback(_id)

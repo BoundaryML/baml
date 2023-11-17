@@ -13,7 +13,7 @@ import pytest
 
 from baml_core.otel import trace, create_event
 
-from baml_test.exports import baml_function_test
+from pytest_baml.exports import baml_function_test
 
 
 T = typing.TypeVar("T")
