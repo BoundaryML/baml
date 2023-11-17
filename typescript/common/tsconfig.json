@@ -1,0 +1,15 @@
+{
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", "tsup.config.ts"],
+  "exclude": ["node_modules", "dist"],
+
+  "compilerOptions": {
+    "allowJs": true,
+    "declaration": true,
+    "outDir": "dist",
+    "emitDeclarationOnly": true
+    // "types": ["node", "jest", "ts-jest", "ts-node"]
+  },
+  "ts-node": {
+    "esm": true
+  }
+}

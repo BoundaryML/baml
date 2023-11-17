@@ -13,7 +13,8 @@
   "dependencies": {
     "@vscode/webview-ui-toolkit": "^1.2.2",
     "allotment": "^1.19.3",
-    "react": "^18.2.0"
+    "react": "^18.2.0",
+    "@baml/common": "workspace:*"
   },
   "devDependencies": {
     "@githubocto/tailwind-vscode": "^1.0.5",

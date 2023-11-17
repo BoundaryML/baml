@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
-const { spawn } = require('child_process');
+const { spawn, exec } = require('child_process');
 /**
  * This class manages the state and behavior of HelloWorld webview panels.
  *
@@ -155,11 +155,11 @@ export class WebPanelView {
             return
           // Add more switch case statements here as more webview message commands
           // are created within the webview context (i.e. inside media/main.js)
+          // todo: MULTI TEST
           case "runTest": {
             runPythonCode()
             return
           }
-
         }
       },
       undefined,
@@ -240,9 +240,17 @@ async function runWithChildProcess(workspaceFolderPath: string, tempFilePath: st
     if (fs.existsSync(path.join(workspaceFolderPath, 'pyproject.toml'))) {
       pythonExecutable = 'poetry run python';
     }
+    const command = `${pythonExecutable} ${tempFilePath}`;
 
     // Run the Python script in a child process
-    const process = spawn(pythonExecutable, [tempFilePath]);
+    // const process = spawn(pythonExecutable, [tempFilePath]);
+    // Run the Python script using exec
+    const execOptions = {
+      cwd: workspaceFolderPath
+    };
+
+    // Run the Python script using exec, with the specified working directory
+    const process = exec(command, execOptions);
 
     // Capture and display the output
     process.stdout.on('data', (data: any) => {

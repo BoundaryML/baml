@@ -10,24 +10,9 @@ import {
 import { Allotment } from 'allotment'
 import { ParserDatabase } from './utils/parser_db'
 import { useEffect, useMemo, useState } from 'react'
+import { vscode } from './utils/vscode'
 
-declare global {
-  interface VsCodeApi {
-    // Define the methods and properties you expect to be available
-    postMessage(message: any): void
-    // Add other methods and properties as needed
-  }
-
-  function acquireVsCodeApi(): VsCodeApi
-
-  const vscode: VsCodeApi
-
-  interface Window {
-    vscode: VsCodeApi
-  }
-}
-
-window.vscode = acquireVsCodeApi()
+// window.vscode = acquireVsCodeApi()
 
 const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { functions } }) => {
   let [selectedId, setSelectedId] = useState<{
@@ -142,7 +127,17 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
               onClick={() => {
                 vscode.postMessage({
                   command: 'runTest',
+                  // data: {
+                  //   function: func.name.value,
+                  //   impl: impl.name.value,
+                  //   input: {},
+                  // },
                 })
+                // const runTestRequest:
+                // vscode.postMessage({
+                //   command: 'runTest',
+                //   data: {},
+                // })
               }}
             >
               Run
