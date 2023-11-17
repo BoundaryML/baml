@@ -1,7 +1,11 @@
 import { Disposable, Webview, WebviewPanel, window, Uri, ViewColumn, workspace } from 'vscode'
 import { getUri } from '../utils/getUri'
 import { getNonce } from '../utils/getNonce'
-
+import * as vscode from 'vscode';
+import * as path from 'path';
+import * as fs from 'fs';
+import * as os from 'os';
+const { spawn } = require('child_process');
 /**
  * This class manages the state and behavior of HelloWorld webview panels.
  *
@@ -151,10 +155,110 @@ export class WebPanelView {
             return
           // Add more switch case statements here as more webview message commands
           // are created within the webview context (i.e. inside media/main.js)
+          case "runTest": {
+            runPythonCode()
+            return
+          }
+
         }
       },
       undefined,
       this._disposables,
     )
+  }
+}
+
+
+function getWorkspaceFolderPath() {
+  // Check if there are any workspace folders open
+  if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
+    // Get the first workspace folder
+    const workspaceFolder = vscode.workspace.workspaceFolders[0];
+
+    // Get the file system path of the workspace folder
+    const workspaceFolderPath = workspaceFolder.uri.fsPath;
+
+    return workspaceFolderPath;
+  } else {
+    // No workspace folder is open
+    vscode.window.showInformationMessage('No workspace folder is open.');
+    return null;
+  }
+}
+
+const pythonCode = `
+import sys
+import time
+import random
+
+print("Hello from Python!")
+
+`
+
+async function runPythonCode() {
+  try {
+    // Create a temporary file path
+    const tempFilePath = path.join(os.tmpdir(), 'tempPythonScript.py');
+
+    // Write the Python code to the temporary file
+    await fs.writeFile(tempFilePath, pythonCode, () => {
+
+    });
+
+    // Get the workspace folder path
+    const workspaceFolderPath = getWorkspaceFolderPath();
+    if (!workspaceFolderPath) {
+      console.log('No workspace folder path');
+      return;
+    }
+
+    runWithChildProcess(workspaceFolderPath, tempFilePath);
+
+    // Create and show the terminal
+    // const terminal = vscode.window.createTerminal('PythonExecution');
+    // terminal.show(true);
+    // // Check if a Poetry environment should be used
+    // if (fs.existsSync(path.join(workspaceFolderPath, 'pyproject.toml'))) {
+    //   // Activate Poetry environment
+    //   terminal.sendText('poetry shell');
+    //   // Give it a moment to activate
+    //   await new Promise(resolve => setTimeout(resolve, 3000));
+    // }
+
+    // // Execute the Python script
+    // terminal.sendText(`python "${tempFilePath}"`);
+  } catch (err) {
+    vscode.window.showErrorMessage('Error creating or executing temporary Python file');
+  }
+}
+
+async function runWithChildProcess(workspaceFolderPath: string, tempFilePath: string) {
+  console.log('runWithChildProcess');
+  // Determine if the environment is Poetry
+  try {
+    let pythonExecutable = 'python';
+    if (fs.existsSync(path.join(workspaceFolderPath, 'pyproject.toml'))) {
+      pythonExecutable = 'poetry run python';
+    }
+
+    // Run the Python script in a child process
+    const process = spawn(pythonExecutable, [tempFilePath]);
+
+    // Capture and display the output
+    process.stdout.on('data', (data: any) => {
+      vscode.window.showInformationMessage(`stdout: ${data}`);
+    });
+
+    // Capture and display any errors
+    process.stderr.on('data', (data: any) => {
+      vscode.window.showErrorMessage(`stderr: ${data}`);
+    });
+
+    // Handle process exit
+    process.on('close', (code: any) => {
+      vscode.window.showInformationMessage(`child process exited with code ${code}`);
+    });
+  } catch (err) {
+    vscode.window.showErrorMessage('Error running Python code');
   }
 }

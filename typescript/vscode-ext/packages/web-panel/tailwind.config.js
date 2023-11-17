@@ -9,16 +9,17 @@ export default {
   },
 
   plugins: [
-    function ({ addUtilities, theme, e }) {
-      const colors = theme('colors')
-      let newUtilities = {}
-      Object.keys(colors).forEach((key) => {
-        const value = colors[key]
-        const name = `.border-${key}`
-        newUtilities[name] = { borderColor: value }
-      })
-      console.log(newUtilities)
-      addUtilities(newUtilities)
-    },
+    require('@githubocto/tailwind-vscode'),
+    // function ({ addUtilities, theme, e }) {
+    //   const colors = theme('colors')
+    //   let newUtilities = {}
+    //   Object.keys(colors).forEach((key) => {
+    //     const value = colors[key]
+    //     const name = `.border-${key}`
+    //     newUtilities[name] = { borderColor: value }
+    //   })
+    //   console.log(newUtilities)
+    //   addUtilities(newUtilities)
+    // },
   ],
 }

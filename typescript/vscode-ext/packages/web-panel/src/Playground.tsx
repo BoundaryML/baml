@@ -11,6 +11,24 @@ import { Allotment } from 'allotment'
 import { ParserDatabase } from './utils/parser_db'
 import { useEffect, useMemo, useState } from 'react'
 
+declare global {
+  interface VsCodeApi {
+    // Define the methods and properties you expect to be available
+    postMessage(message: any): void
+    // Add other methods and properties as needed
+  }
+
+  function acquireVsCodeApi(): VsCodeApi
+
+  const vscode: VsCodeApi
+
+  interface Window {
+    vscode: VsCodeApi
+  }
+}
+
+window.vscode = acquireVsCodeApi()
+
 const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { functions } }) => {
   let [selectedId, setSelectedId] = useState<{
     functionName: string | undefined
@@ -42,7 +60,7 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
   print("Hello, world!")`
 
   return (
-    <main className="h-[500px] w-full py-2">
+    <main className="w-full h-screen py-2">
       <div className="flex flex-row justify-between">
         <div className="justify-start">
           <VSCodeDropdown
@@ -68,7 +86,7 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
         <div className="flex flex-col">
           <span className="font-bold">Test Case</span>
           {func.input.arg_type === 'positional' ? (
-            <div className="flex-col flex gap-1">
+            <div className="flex flex-col gap-1">
               <span className="font-bold">
                 arg: <span className="font-normal">{func.input.type}</span>
               </span>
@@ -77,7 +95,7 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
           ) : (
             <div className="flex flex-col gap-1">
               {func.input.values.map((value, index) => (
-                <div className="flex-col flex gap-1">
+                <div className="flex flex-col gap-1">
                   <span className="font-bold">
                     {value.name}: <span className="font-normal">{value.type}</span>
                   </span>
@@ -107,16 +125,34 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
         </VSCodePanels>
       )}
       {func && impl && (
-        <div className="flex flex-col gap-1">
-          <div className="flex flex-row gap-1">
-            <span className="font-bold">File</span> {impl.name.source_file}
+        <>
+          <div className="flex flex-col gap-1 overflow-y-scroll h-[50%]">
+            <div className="flex flex-row gap-1">
+              <span className="font-bold">File</span> {impl.name.source_file}
+            </div>
+            <div className="flex flex-row gap-1">
+              <span className="font-bold">Client</span> {impl.client.value} ({impl.client.source_file})
+            </div>
+            <b>Prompt</b>
+            <pre className="w-full p-2 whitespace-pre-wrap bg-vscode-input-background">{prompt}</pre>
           </div>
-          <div className="flex flex-row gap-1">
-            <span className="font-bold">Client</span> {impl.client.value} ({impl.client.source_file})
+          <div className="py-3 w-fit">
+            <VSCodeButton
+              className="flex justify-end h-7"
+              onClick={() => {
+                vscode.postMessage({
+                  command: 'runTest',
+                })
+              }}
+            >
+              Run
+            </VSCodeButton>
           </div>
-          <b>Prompt</b>
-          <pre className="w-full p-2 whitespace-pre-wrap">{prompt}</pre>
-        </div>
+          <div className="flex flex-col gap-1 overflow-y-scroll h-[50%]">
+            <b>Output</b>
+            <div className="w-full p-1 bg-vscode-input-background">Hello, world!</div>
+          </div>
+        </>
       )}
     </main>
   )
