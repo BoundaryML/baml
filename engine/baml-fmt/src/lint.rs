@@ -138,11 +138,11 @@ pub(crate) fn run(input: &str) -> String {
                             "prompt": props.prompt.value,
                             "input_replacers": props.replacers.0.iter().map(
                                 |r| json!({
-                                    "key": r.0.text,
+                                    "key": r.0.key(),
                                     "value": r.1,
                                 })
                             ).collect::<Vec<_>>(),
-                            "output_replacers": props.replacers.0.iter().map(
+                            "output_replacers": props.replacers.1.iter().map(
                                 |r| json!({
                                     "key": r.0.key(),
                                     "value": r.1,

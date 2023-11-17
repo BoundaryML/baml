@@ -19,8 +19,7 @@ export function isDebugOrTestSession(): boolean {
 
 export function checkForOtherPrismaExtension(): void {
   const files = readdirSync(path.join(homedir(), '.vscode/extensions')).filter(
-    (file) =>
-      file.toLowerCase().startsWith('Gloo.baml-') && !file.toLowerCase().startsWith('Gloo.baml-insider-'),
+    (file) => file.toLowerCase().startsWith('Gloo.baml-') && !file.toLowerCase().startsWith('Gloo.baml-insider-'),
   )
   if (files.length !== 0) {
     // eslint-disable-next-line @typescript-eslint/no-floating-promises

@@ -2,10 +2,9 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import * as vscode from 'vscode'
 
-import fs from 'fs'
-import path from 'path'
 import plugins from './plugins'
 import { WebPanelView } from './panels/WebPanelView'
+import { BamlDB } from './plugins/language-server'
 
 const outputChannel = vscode.window.createOutputChannel('baml')
 
@@ -21,14 +20,13 @@ const getInputSchema = () => {
 }
 export function activate(context: vscode.ExtensionContext) {
   const config = vscode.workspace.getConfiguration('baml')
-  const glooPath = config.get<string>('path', 'baml')
 
   const bamlPlygroundCommand = vscode.commands.registerCommand('baml.openBamlPanel', () => {
     const config = vscode.workspace.getConfiguration()
     config.update('baml.bamlPanelOpen', true, vscode.ConfigurationTarget.Global)
 
     WebPanelView.render(context.extensionUri)
-    WebPanelView.currentPanel?.postMessage('sendInputSchema', getInputSchema())
+    WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
   })
 
   context.subscriptions.push(bamlPlygroundCommand)

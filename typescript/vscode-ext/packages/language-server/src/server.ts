@@ -225,6 +225,7 @@ export function startServer(options?: LSOptions): void {
           }
         }),
       }
+      console.log(`Searching database for ${rootPath}`)
       if (srcDocs.length === 0) {
         console.log('No BAML files found in the workspace.')
         connection.sendNotification('baml/message', {
@@ -238,6 +239,11 @@ export function startServer(options?: LSOptions): void {
       }
 
       bamlCache.addDatabase(rootPath, response.state)
+      if (response.state) {
+        void connection.sendRequest('set_database', { rootPath, db: response.state })
+      } else {
+        void connection.sendRequest('rm_database', rootPath)
+      }
     } catch (e: any) {
       if (e instanceof Error) {
         console.log('Error validating doc' + e.message + ' ' + e.stack)

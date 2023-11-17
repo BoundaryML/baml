@@ -7,6 +7,7 @@ import TelemetryReporter from '../../telemetryReporter'
 import { checkForMinimalColorTheme, createLanguageServer, isDebugOrTestSession, restartClient } from '../../util'
 import { BamlVSCodePlugin } from '../types'
 import * as vscode from 'vscode'
+import { WebPanelView } from '../../panels/WebPanelView'
 
 const packageJson = require('../../../package.json') // eslint-disable-line
 
@@ -16,6 +17,8 @@ let telemetry: TelemetryReporter
 
 const isDebugMode = () => process.env.VSCODE_DEBUG_MODE === 'true'
 const isE2ETestOnPullRequest = () => process.env.PRISMA_USE_LOCAL_LS === 'true'
+
+export const BamlDB = new Map<string, any>()
 
 interface BAMLMessage {
   type: 'warn' | 'info' | 'error'
@@ -98,6 +101,15 @@ const activateClient = (
           throw new Error('Invalid message type')
         }
       }
+    })
+    client.onRequest('set_database', ({ rootPath, db }) => {
+      console.log('set_database', rootPath, db, WebPanelView.currentPanel)
+      BamlDB.set(rootPath, db)
+      WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
+    })
+    client.onRequest('rm_database', (root_path) => {
+      BamlDB.delete(root_path)
+      WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
     })
   })
 
