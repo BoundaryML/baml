@@ -15,6 +15,10 @@
       "outputs": ["dist/**"]
     },
     "@gloo-ai/web-panel#build": {
+      "dependsOn": ["^build", "@baml/common#build"],
+      "outputs": ["dist/**"]
+    },
+    "@baml/common#build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**"]
     },
@@ -24,7 +28,7 @@
       "cache": false
     },
     "baml-client": {
-      "dependsOn": ["@gloo-ai/baml-language-server#build", "@gloo-ai/web-panel#build"],
+      "dependsOn": ["@gloo-ai/baml-language-server#build", "@gloo-ai/web-panel#build", "@baml/common#build"],
       "outputs": ["out/**"]
     },
     "lint": {},
