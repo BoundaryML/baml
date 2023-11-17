@@ -108,8 +108,9 @@ const activateClient = (
       WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
     })
     client.onRequest('rm_database', (root_path) => {
-      BamlDB.delete(root_path)
-      WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
+      // TODO: Handle errors better. But for now the playground shouldn't break.
+      // BamlDB.delete(root_path)
+      // WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
     })
   })
 
