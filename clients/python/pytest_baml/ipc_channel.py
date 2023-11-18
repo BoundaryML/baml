@@ -21,10 +21,9 @@ class NoopIPCChannel(BaseIPCChannel):
 
 @typing.final
 class IPCChannel(BaseIPCChannel):
-  def __init__(self, path: str) -> None:
-    self._path = path
-    self._socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    self._socket.connect(self._path)
+  def __init__(self, host: str, port: int) -> None:
+    self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    self._socket.connect((host, port))
   
   def send(self, name: str, data: BaseModel) -> None:
     self._socket.send(Message(name=name, data=data).model_dump_json().encode("utf-8"))

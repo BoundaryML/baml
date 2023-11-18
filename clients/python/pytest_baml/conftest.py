@@ -9,6 +9,7 @@ def pytest_addoption( parser: pytest.Parser) -> None:
         action="store",
         dest="baml_ipc",
         default=None,
+        type=int,
         help="The name of the ipc pipe to communicate on."
     )
 

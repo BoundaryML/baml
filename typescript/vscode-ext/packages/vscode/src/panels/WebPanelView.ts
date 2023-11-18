@@ -188,45 +188,29 @@ function getWorkspaceFolderPath() {
   }
 }
 
-const pythonCode = `
-import json
-import socket
-
-def send_json_rpc_request(sock, method, params):
-    request = {
-        "jsonrpc": "2.0",
-        "method": method,
-        "params": params
-    }
-    request_str = json.dumps(request)
-    print(f"Sending JSON-RPC request: {request_str}", flush=True)
-    sock.send(request_str.encode('utf-8'))
-
-def main(server_host, server_port):
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        try:
-            sock.connect((server_host, server_port))
-            print(f"Connected to {server_host}:{server_port}", flush=True)
-            send_json_rpc_request(sock, "customRequest", {"data": "Hello from Python client!"})
-        except Exception as e:
-            print(f"Error: {e}", flush=True)
-
-if __name__ == "__main__":
-    import sys
-    SERVER_HOST = '127.0.0.1'
-    SERVER_PORT = 8080  # Default port, replace with the actual port
-    if len(sys.argv) > 1:
-        SERVER_PORT = int(sys.argv[1])
-    main(SERVER_HOST, SERVER_PORT)
-`
-
 async function runPythonCode() {
   try {
     // Create a temporary file path
-    const tempFilePath = path.join(os.tmpdir(), 'tempPythonScript.py')
+    const tempFilePath = path.join(os.tmpdir(), 'test_temp.py')
 
     // Write the Python code to the temporary file
-    await fs.writeFile(tempFilePath, pythonCode, () => {})
+    fs.writeFile(
+      tempFilePath,
+      `
+from baml_client import baml
+
+@baml.TopicRouter.test
+async def test_some_name(self, TopicRouterImpl: ITopicRouter):
+    output = await TopicRouterImpl("What vehicles do I own?")
+    assert output == Topic.VEHICLE_REGISTRATION
+    return output
+    `,
+      (err) => {
+        if (err) {
+          vscode.window.showErrorMessage('Error writing to temporary Python file')
+        }
+      },
+    )
 
     // Get the workspace folder path
     const workspaceFolderPath = getWorkspaceFolderPath()
@@ -258,46 +242,26 @@ async function runPythonCode() {
 async function runWithChildProcess(workspaceFolderPath: string, tempFilePath: string) {
   console.log('runWithChildProcess')
   // Determine if the environment is Poetry
-  let pythonExecutable = 'python'
+  let pythonExecutable = 'python -m pytest'
   if (fs.existsSync(path.join(workspaceFolderPath, 'pyproject.toml'))) {
-    pythonExecutable = 'poetry run python'
+    pythonExecutable = `poetry run ${pythonExecutable}`
   }
 
-  let _connection: any = null
-
   const server = net.createServer((socket) => {
-    const connection = createMessageConnection(
-      new StreamMessageReader(socket),
-      new StreamMessageWriter(socket),
-      console,
-    )
+    console.log('Python script connected')
 
-    connection.onRequest((message) => {
-      console.log('Received request:', message)
-
-      // Send a response back
-      connection.sendNotification('response', { message: 'Received your message!' })
+    socket.on('data', (data) => {
+      console.log('Received from Python:', data.toString())
     })
 
-    connection.onDispose(() => {
-      console.log('Connection disposed')
+    socket.on('end', () => {
+      console.log('Python script disconnected')
     })
 
-    connection.onClose(() => {
-      console.log('Connection closed')
-    })
-
-    connection.listen()
-
-    _connection = connection
+    // Send a message to the Python script
+    socket.write('Hello from Node.js\n')
   })
 
-  server.on('close', () => {
-    console.log('Server closed')
-    if (_connection) {
-      _connection.dispose()
-    }
-  })
   server.listen(0, '127.0.0.1', () => {
     // Start listening on a random available port
     let addr = server.address()
@@ -306,7 +270,7 @@ async function runWithChildProcess(workspaceFolderPath: string, tempFilePath: st
     vscode.window.showInformationMessage(`Listening on port ${port}`)
 
     // Run the Python script in a child process
-    const command = `${pythonExecutable} ${tempFilePath} ${port}`
+    const command = `${pythonExecutable} ${tempFilePath} --pytest-baml-ipc ${port}`
 
     // Run the Python script in a child process
     // const process = spawn(pythonExecutable, [tempFilePath]);
@@ -316,20 +280,15 @@ async function runWithChildProcess(workspaceFolderPath: string, tempFilePath: st
     }
 
     // Run the Python script using exec, with the specified working directory
-    const cp = exec(command, execOptions, (error, stdout, stderr) => {
-      vscode.window.showInformationMessage(`completed: ${command}`)
-      if (error) {
-        console.log(`error: ${error.message}`)
-        vscode.window.showErrorMessage(`error: ${error.message}`)
-        return
-      }
-      if (stderr) {
-        console.log(`stderr: ${stderr}`)
-        vscode.window.showErrorMessage(`stderr: ${stderr}`)
-        return
-      }
-      console.log(`stdout: ${stdout}`)
-      vscode.window.showInformationMessage(`stdout: ${stdout}`)
+    const cp = exec(command, execOptions)
+    cp.stdout?.on('data', (data) => {
+      console.log(`stream stdout: ${data}`)
+      vscode.window.showInformationMessage(`stream stdout: ${data}`)
+    })
+
+    cp.stderr?.on('data', (data) => {
+      console.log(`stream stderr: ${data}`)
+      vscode.window.showErrorMessage(`stderr: ${data}`)
     })
 
     cp.on('close', (code) => {

@@ -67,12 +67,12 @@ def sanitize(input_str: str) -> str:
 
 # See https://docs.pytest.org/en/7.1.x/_modules/_pytest/hookspec.html#pytest_runtestloop
 class BamlPytestPlugin:
-    def __init__(self, api: typing.Optional[APIWrapper], ipc_channel: typing.Optional[str]) -> None:
+    def __init__(self, api: typing.Optional[APIWrapper], ipc_channel: typing.Optional[int]) -> None:
         self.__gloo_tests: typing.Dict[str, TestCaseMetadata] = {}
         self.__completed_tests: typing.Set[str] = set()
         self.__api = api
         self.__dashboard_url: typing.Optional[str] = None
-        self.__ipc = NoopIPCChannel() if ipc_channel is None else IPCChannel(ipc_channel)
+        self.__ipc = NoopIPCChannel() if ipc_channel is None else IPCChannel(host="127.0.0.1", port=ipc_channel)
 
     @pytest.hookimpl(tryfirst=True)
     def pytest_generate_tests(self, metafunc: pytest.Metafunc) -> None:
