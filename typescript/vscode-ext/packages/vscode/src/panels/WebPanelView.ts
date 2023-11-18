@@ -209,8 +209,8 @@ async function runPythonCode(testRequest: RunTestRequest) {
 from baml_client import baml
 
 @baml.${fnName}.test
-async def test_some_name(self, ${fnName}Impl: I${fnName}Impl}):
-    output = await ${fnName}Impl(${input})
+async def test_some_name(self, ${fnName}Impl: I${fnName}Impl):
+    output = await ${fnName}Impl("${input}")
     # assert output == Topic.VEHICLE_REGISTRATION
     return output
     `,

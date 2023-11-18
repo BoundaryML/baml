@@ -35,6 +35,8 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
     return { func, impl, prompt }
   }, [selectedId, functions])
 
+  const [singleArgValue, setSingleArgValue] = useState<string | undefined>()
+
   useEffect(() => {
     if (!impl && selectedId.implName !== undefined && func) {
       let implName = func.impls.at(0)?.name.value
@@ -76,7 +78,13 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
               <span className="font-bold">
                 arg: <span className="font-normal">{func.input.type}</span>
               </span>
-              <VSCodeTextArea className="w-full" />
+              <VSCodeTextArea
+                className="w-full"
+                value={singleArgValue ?? ''}
+                onInput={(e: any) => {
+                  setSingleArgValue(e?.target?.value ?? undefined)
+                }}
+              />
             </div>
           ) : (
             <div className="flex flex-col gap-1">
@@ -135,7 +143,7 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
                       function_name: func.name.value,
                       input: {
                         argsInfo: func.input,
-                        values: ['fill this in.. properly'],
+                        values: [singleArgValue],
                       },
                     },
                   ],
