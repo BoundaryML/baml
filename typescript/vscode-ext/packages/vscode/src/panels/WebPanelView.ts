@@ -37,6 +37,12 @@ export class WebPanelView {
 
     // Set an event listener to listen for messages passed from the webview context
     this._setWebviewMessageListener(this._panel.webview)
+    testExecutor.setTestStateListener((testResults) => {
+      this._panel.webview.postMessage({
+        command: 'test-results',
+        content: testResults
+      })
+    });
   }
 
   /**
@@ -157,14 +163,7 @@ export class WebPanelView {
           case 'runTest': {
             const testRequest: TestRequest = message.data
             this._panel.webview.postMessage({ command: 'reset-stdout', content: '' })
-            const interval = this.pollForTestResults()
-            testExecutor.runTest(testRequest, getWorkspaceFolderPath()!)
-              .then(() => {
-                setTimeout(() => {
-                  console.log("clear inteval")
-                  clearInterval(interval)
-                }, 20000);
-              })
+            testExecutor.runTest(testRequest, getWorkspaceFolderPath()!);
             return
           }
         }
@@ -172,16 +171,6 @@ export class WebPanelView {
       undefined,
       this._disposables,
     )
-  }
-
-  private pollForTestResults() {
-    return setInterval(() => {
-      console.log("test results", testExecutor.getTestResults());
-      this._panel.webview.postMessage({
-        command: 'test-results',
-        content: testExecutor.getTestResults()
-      })
-    }, 500);
   }
 }
 

@@ -13,8 +13,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { vscode } from './utils/vscode'
 import { TestRequest } from '@baml/common'
 import Ansi from 'ansi-to-react'
+import CustomErrorBoundary from './utils/ErrorFallback'
 
 // window.vscode = acquireVsCodeApi()
+
+interface NamedParams {
+  [key: string]: string
+}
 
 const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { functions } }) => {
   let [selectedId, setSelectedId] = useState<{
@@ -23,20 +28,31 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
   }>({ functionName: functions.at(0)?.name.value, implName: functions.at(0)?.impls.at(0)?.name.value })
 
   let { func, impl, prompt } = useMemo(() => {
-    let func = functions.find((func) => func.name.value === selectedId.functionName)
-    let impl = func?.impls.find((impl) => impl.name.value === selectedId.implName)
+    try {
+      let func = functions.find((func) => func.name.value === selectedId.functionName)
+      let impl = func?.impls.find((impl) => impl.name.value === selectedId.implName)
 
-    let prompt = impl?.prompt ?? ''
-    impl?.input_replacers.forEach(({ key, value }) => {
-      prompt = prompt.replaceAll(key, `{${value}}`)
-    })
-    impl?.output_replacers.forEach(({ key, value }) => {
-      prompt = prompt.replaceAll(key, value)
-    })
-    return { func, impl, prompt }
+      let prompt = impl?.prompt ?? ''
+      impl?.input_replacers.forEach(({ key, value }) => {
+        prompt = prompt.replaceAll(key, `{${value}}`)
+      })
+      impl?.output_replacers.forEach(({ key, value }) => {
+        prompt = prompt.replaceAll(key, value)
+      })
+      return { func, impl, prompt }
+    } catch (error) {
+      console.error('REACT error:' + JSON.stringify(error, null, 2))
+      throw error
+    }
   }, [selectedId, functions])
 
   const [singleArgValue, setSingleArgValue] = useState<string>('')
+  const [multiArgValues, setMultiArgValues] = useState<
+    {
+      name: string
+      value: string
+    }[]
+  >([])
 
   useEffect(() => {
     if (!impl && selectedId.implName !== undefined && func) {
@@ -45,8 +61,7 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
     }
   }, [func, impl, selectedId.implName])
 
-  let text = `def main():
-  print("Hello, world!")`
+  console.log('functions', functions)
 
   return (
     <main className="w-full h-screen py-2">
@@ -92,15 +107,27 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
               {func.input.values.map((value, index) => (
                 <div className="flex flex-col gap-1">
                   <span className="font-bold">
-                    {value.name}: <span className="font-normal">{value.type}</span>
+                    {value.name.value}: <span className="font-normal">{value.type}</span>
                   </span>
-                  <VSCodeTextArea className="w-full" />
+                  <VSCodeTextArea
+                    className="w-full"
+                    value={multiArgValues.find((arg) => arg.name === value.name.value)?.value || ''}
+                    onInput={(e: any) => {
+                      const updatedValue = e.target.value
+                      setMultiArgValues(
+                        multiArgValues.map((arg) =>
+                          arg.name === value.name.value ? { ...arg, value: updatedValue } : arg,
+                        ),
+                      )
+                    }}
+                  />
                 </div>
               ))}
             </div>
           )}
         </div>
       )}
+      {/* variant tabs */}
       {func && (
         <VSCodePanels
           className="w-full"
@@ -119,7 +146,7 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
           ))}
         </VSCodePanels>
       )}
-      {func && impl && (
+      {/* {func && impl && (
         <>
           <div className="flex flex-col gap-1 overflow-y-scroll h-[50%]">
             <div className="flex flex-row gap-1">
@@ -138,33 +165,54 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
                 if (!func || !impl) {
                   return
                 }
-                const runTestRequest: TestRequest = {
-                  functions: [
-                    {
-                      name: func.name.value,
-                      tests: [
-                        {
-                          name: 'random_test_name',
-                          impls: [impl.name.value],
-                          params: {
-                            type: 'positional',
-                            value: singleArgValue,
+                let runTestRequest
+                if (func.input.arg_type === 'positional') {
+                  runTestRequest = {
+                    functions: [
+                      {
+                        name: func.name.value,
+                        tests: [
+                          {
+                            name: 'random_test_name',
+                            impls: [impl.name.value],
+                            params: {
+                              type: 'positional',
+                              value: singleArgValue,
+                            },
                           },
-                        },
-                      ],
-                    },
-                  ],
+                        ],
+                      },
+                    ],
+                  }
+                } else {
+                  // Construct params for named arguments
+                  const namedParams = multiArgValues.reduce((acc, arg) => {
+                    acc[arg.name] = arg.value
+                    return acc
+                  }, {} as NamedParams)
+
+                  runTestRequest = {
+                    functions: [
+                      {
+                        name: func.name.value,
+                        tests: [
+                          {
+                            name: 'random_test_name',
+                            impls: [impl.name.value],
+                            params: {
+                              type: 'named',
+                              value: namedParams,
+                            },
+                          },
+                        ],
+                      },
+                    ],
+                  }
                 }
                 vscode.postMessage({
                   command: 'runTest',
                   data: runTestRequest,
                 })
-
-                // const runTestRequest:
-                // vscode.postMessage({
-                //   command: 'runTest',
-                //   data: {},
-                // })
               }}
             >
               Run
@@ -172,7 +220,7 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
           </div>
           <TestOutputBox />
         </>
-      )}
+      )} */}
     </main>
   )
 }

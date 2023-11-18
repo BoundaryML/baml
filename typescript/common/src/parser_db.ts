@@ -17,7 +17,7 @@ export type ArgType =
   | {
     arg_type: 'named'
     values: {
-      name: string
+      name: StringSpan
       type: string
     }[]
   }

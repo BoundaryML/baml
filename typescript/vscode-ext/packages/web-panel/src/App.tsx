@@ -14,6 +14,7 @@ import './App.css'
 import { TextArea } from '@vscode/webview-ui-toolkit'
 import Playground from './Playground'
 import { ParserDatabase } from '../../../../common/src/parser_db'
+import CustomErrorBoundary from './utils/ErrorFallback'
 
 function App() {
   const [projects, setProjects] = useState<{ root_dir: string; db: ParserDatabase }[]>([])
@@ -32,12 +33,17 @@ function App() {
 
       switch (command) {
         case 'setDb': {
-          setProjects(messageContent.map((p: any) => ({ root_dir: p[0], db: p[1] })))
-          setSelectedProjectId((prev) => (prev ?? messageContent.length > 0 ? messageContent[0][0] : undefined))
+          try {
+            setProjects(messageContent.map((p: any) => ({ root_dir: p[0], db: p[1] })))
+            setSelectedProjectId((prev) => (prev ?? messageContent.length > 0 ? messageContent[0][0] : undefined))
+          } catch (error) {
+            console.error('REACT error:' + JSON.stringify(error, null, 2))
+          }
+
           break
         }
         case 'rmDb': {
-          setProjects((prev) => prev.filter((project) => project.root_dir !== messageContent))
+          // setProjects((prev) => prev.filter((project) => project.root_dir !== messageContent))
           break
         }
       }
@@ -50,18 +56,22 @@ function App() {
     }
   }, [])
 
+  console.log('projects', projects)
+
   if (!selectedProject) {
     return (
       <div>
-        <h1>Projects</h1>
-        <div>
-          {projects.map((project) => (
-            <div key={project.root_dir}>
-              <button onClick={() => setSelectedProjectId(project.root_dir)}>{project.root_dir}</button>
-            </div>
-          ))}
-          {JSON.stringify(projects, null, 2)}
-        </div>
+        <CustomErrorBoundary>
+          <h1>Projects</h1>
+          <div>
+            {projects.map((project) => (
+              <div key={project.root_dir}>
+                <button onClick={() => setSelectedProjectId(project.root_dir)}>{project.root_dir}</button>
+              </div>
+            ))}
+            {JSON.stringify(projects, null, 2)}
+          </div>
+        </CustomErrorBoundary>
       </div>
     )
   }

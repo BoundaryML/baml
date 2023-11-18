@@ -7,9 +7,11 @@ export default defineConfig({
 
   build: {
     minify: false,
+
     outDir: 'dist',
-    sourcemap: true,
+    sourcemap: "inline",
     rollupOptions: {
+
       output: {
         entryFileNames: `assets/[name].js`,
         chunkFileNames: `assets/[name].js`,

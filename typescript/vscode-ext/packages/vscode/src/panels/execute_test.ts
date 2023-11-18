@@ -42,11 +42,16 @@ interface UpdateTestCaseEvent {
 
 class TestState {
   private test_results: TestResult[]
+  private testStateListener: ((testResults: TestResult[]) => void) | undefined = undefined
 
   constructor() {
     this.handleMessage = this.handleMessage.bind(this)
     this.handleLog = this.handleLog.bind(this)
     this.test_results = []
+  }
+
+  public setTestStateListener(listener: (testResults: TestResult[]) => void) {
+    this.testStateListener = listener
   }
 
   public resetTestCases(tests: TestRequest) {
@@ -94,6 +99,7 @@ class TestState {
 
     if (testResult) {
       testResult.status = data.status
+      this.testStateListener?.(this.test_results)
     }
   }
 
@@ -102,6 +108,7 @@ class TestState {
     const testResult = this.test_results.find((test) => test.fullTestName === fullTestName)
     if (testResult && data.event_type === 'func_llm') {
       testResult.output = JSON.stringify(data.io.output?.value)
+      this.testStateListener?.(this.test_results)
     }
   }
 }
@@ -117,6 +124,10 @@ class TestExecutor {
 
   public getTestResults() {
     return this.testState.getTestResults()
+  }
+
+  public setTestStateListener(listener: (testResults: TestResult[]) => void) {
+    this.testState.setTestStateListener(listener)
   }
 
   public start() {
