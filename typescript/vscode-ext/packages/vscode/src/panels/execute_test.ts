@@ -52,7 +52,7 @@ class TestExecutor {
   }
 
   private handleMessage(data: string) {
-    outputChannel.appendLine(data)
+    console.log(data)
   }
 
   public async runTest(tests: TestRequest, cwd: string) {
@@ -70,10 +70,6 @@ class TestExecutor {
       command = `poetry run ${command}`
     }
 
-    this.handleMessage(`Running command: ${command}`)
-    this.handleMessage(`CWD: ${cwd}`)
-    this.handleMessage(`JSON: ${JSON.stringify(tests)}`)
-
     // Run the Python script in a child process
     // const process = spawn(pythonExecutable, [tempFilePath]);
     // Run the Python script using exec
@@ -82,10 +78,10 @@ class TestExecutor {
     })
 
     cp.stdout?.on('data', (data) => {
-      this.handleMessage(data)
+      outputChannel.appendLine(data)
     })
     cp.stderr?.on('data', (data) => {
-      this.handleMessage(data)
+      outputChannel.appendLine(data)
     })
   }
 
