@@ -8,13 +8,13 @@ import { TestRequest } from '@baml/common'
 
 const outputChannel = vscode.window.createOutputChannel('baml-test-runner')
 
-function __initServer(messageHandler: (data: string) => void) {
+function __initServer(messageHandler: (data: Buffer) => void) {
   let server = net.createServer((socket) => {
     console.log('Python script connected')
 
     socket.on('data', messageHandler)
 
-    socket.on('end', () => {})
+    socket.on('end', () => { })
   })
 
   server.listen(0, '127.0.0.1')
@@ -51,8 +51,8 @@ class TestExecutor {
     return ''
   }
 
-  private handleMessage(data: string) {
-    console.log(data)
+  private handleMessage(data: Buffer) {
+    console.log(JSON.stringify(JSON.parse(data.toString()), null, 2))
   }
 
   public async runTest(tests: TestRequest, cwd: string) {
@@ -110,11 +110,11 @@ function generateTestCode(test: TestRequest) {
 from baml_lib._impl.deserializer import Deserializer
 from baml_client import baml
 from baml_client.baml_types import I${fn.name}
-from baml_client.baml_types import ${fn.input_type}
+# from baml_client.baml_types import ${fn.input_type}
 
 @baml.${fn.name}.test
 async def test_${testCase.name}(${fn.name}Impl: I${fn.name}):
-    deserializer = Deserializer[${fn.input_type}](${fn.input_type})
+    deserializer = Deserializer[str](str)
     param = deserializer.from_string("""${testCase.params.value}""")
     await ${fn.name}Impl(param)
     `
