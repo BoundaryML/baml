@@ -34,6 +34,7 @@
     "typescript": "^5.1.6"
   },
   "dependencies": {
-    "uuid": "^9.0.0"
+    "uuid": "^9.0.0",
+    "zod": "^3.22.4"
   }
 }

@@ -3,10 +3,16 @@
   "exclude": ["node_modules", "dist"],
 
   "compilerOptions": {
+    "isolatedModules": true,
+    "moduleResolution": "node",
     "allowJs": true,
+    "declarationMap": true,
+    "target": "ES2021",
+
     "declaration": true,
     "outDir": "dist",
-    "emitDeclarationOnly": true
+    "skipLibCheck": true,
+    "strict": true
     // "types": ["node", "jest", "ts-jest", "ts-node"]
   },
   "ts-node": {

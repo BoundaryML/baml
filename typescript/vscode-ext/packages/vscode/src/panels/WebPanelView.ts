@@ -157,7 +157,14 @@ export class WebPanelView {
           case 'runTest': {
             const testRequest: TestRequest = message.data
             this._panel.webview.postMessage({ command: 'reset-stdout', content: '' })
+            const interval = this.pollForTestResults()
             testExecutor.runTest(testRequest, getWorkspaceFolderPath()!)
+              .then(() => {
+                setTimeout(() => {
+                  console.log("clear inteval")
+                  clearInterval(interval)
+                }, 20000);
+              })
             return
           }
         }
@@ -165,6 +172,16 @@ export class WebPanelView {
       undefined,
       this._disposables,
     )
+  }
+
+  private pollForTestResults() {
+    return setInterval(() => {
+      console.log("test results", testExecutor.getTestResults());
+      this._panel.webview.postMessage({
+        command: 'test-results',
+        content: testExecutor.getTestResults()
+      })
+    }, 500);
   }
 }
 

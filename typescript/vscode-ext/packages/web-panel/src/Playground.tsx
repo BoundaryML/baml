@@ -8,7 +8,7 @@ import {
   VSCodeTextArea,
 } from '@vscode/webview-ui-toolkit/react'
 import { Allotment } from 'allotment'
-import { ParserDatabase } from '@baml/common'
+import { ParserDatabase, TestResult } from '@baml/common'
 import { useEffect, useMemo, useState } from 'react'
 import { vscode } from './utils/vscode'
 import { TestRequest } from '@baml/common'
@@ -192,6 +192,12 @@ export const TestOutputBox = () => {
         case 'reset-stdout': {
           setTestOutput('')
           break
+        }
+        case 'test-results': {
+          console.log('test-results', messageContent)
+          const testResults = messageContent as TestResult[]
+          const testResult = testResults[0]
+          setTestOutput(testResult.output)
         }
       }
     }
