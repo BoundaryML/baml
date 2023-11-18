@@ -1,24 +1,27 @@
+import { ParserDatabase, ArgType } from './parser_db'
 
-import {
-  ParserDatabase,
-  ArgType
-} from "./parser_db";
-export interface RunTestRequest {
-  cases: TestCaseInfo[]
+export interface TestRequest {
+  functions: {
+    name: string
+    // TODO: Remove.
+    input_type: string
+    tests: {
+      name: string
+      impls: string[]
+      params:
+        | {
+            type: 'positional'
+            value: string
+          }
+        | {
+            type: 'named'
+            value: {
+              name: string
+              value: string
+            }[]
+          }
+    }[]
+  }[]
 }
 
-export interface TestCaseInfo {
-  function_name: string
-  input: TestInput
-}
-
-interface TestInput {
-  argsInfo: ArgType
-  // each element is a list of values for a positional argument
-  values: any[]
-}
-
-
-export {
-  ParserDatabase
-}
+export { ParserDatabase }

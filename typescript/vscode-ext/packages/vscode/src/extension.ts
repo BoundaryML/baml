@@ -5,6 +5,7 @@ import * as vscode from 'vscode'
 import plugins from './plugins'
 import { WebPanelView } from './panels/WebPanelView'
 import { BamlDB } from './plugins/language-server'
+import testExecutor from './panels/execute_test'
 
 const outputChannel = vscode.window.createOutputChannel('baml')
 const diagnosticsCollection = vscode.languages.createDiagnosticCollection('baml')
@@ -12,6 +13,7 @@ const LANG_NAME = 'Baml'
 
 export function activate(context: vscode.ExtensionContext) {
   const config = vscode.workspace.getConfiguration('baml')
+  testExecutor.start()
 
   const bamlPlygroundCommand = vscode.commands.registerCommand('baml.openBamlPanel', () => {
     const config = vscode.workspace.getConfiguration()
@@ -37,6 +39,7 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate(): void {
+  testExecutor.close()
   plugins.forEach((plugin) => {
     if (plugin.deactivate) {
       void plugin.deactivate()

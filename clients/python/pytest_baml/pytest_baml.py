@@ -10,7 +10,7 @@ from baml_core.services import api_types
 import re
 
 from baml_core.logger import logger
-from baml_core.otel import flush_trace_logs
+from baml_core.otel import flush_trace_logs, add_message_transformer_hook
 from .ipc_channel import IPCChannel, NoopIPCChannel
 
 
@@ -73,6 +73,9 @@ class BamlPytestPlugin:
         self.__api = api
         self.__dashboard_url: typing.Optional[str] = None
         self.__ipc = NoopIPCChannel() if ipc_channel is None else IPCChannel(host="127.0.0.1", port=ipc_channel)
+
+        if ipc_channel is not None:
+            add_message_transformer_hook(lambda log: self.__ipc.send('log', log))
 
     @pytest.hookimpl(tryfirst=True)
     def pytest_generate_tests(self, metafunc: pytest.Metafunc) -> None:

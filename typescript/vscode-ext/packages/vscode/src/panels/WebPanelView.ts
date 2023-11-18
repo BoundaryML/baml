@@ -2,13 +2,8 @@ import { Disposable, Webview, WebviewPanel, window, Uri, ViewColumn, workspace }
 import { getUri } from '../utils/getUri'
 import { getNonce } from '../utils/getNonce'
 import * as vscode from 'vscode'
-import * as path from 'path'
-import * as fs from 'fs'
-import * as os from 'os'
-import { exec } from 'child_process'
-import net from 'net'
-import { createMessageConnection, StreamMessageReader, StreamMessageWriter } from 'vscode-jsonrpc/node'
-import { RunTestRequest } from "@baml/common"
+import { TestRequest } from '@baml/common'
+import testExecutor from './execute_test'
 /**
  * This class manages the state and behavior of HelloWorld webview panels.
  *
@@ -160,10 +155,9 @@ export class WebPanelView {
           // are created within the webview context (i.e. inside media/main.js)
           // todo: MULTI TEST
           case 'runTest': {
-            const testRequest: RunTestRequest = message.data;
-            runPythonCode(testRequest, (stdout: string) => {
-              this._panel.webview.postMessage({ command: 'testResult', content: stdout })
-            });
+            const testRequest: TestRequest = message.data
+            this._panel.webview.postMessage({ command: 'reset-stdout', content: '' })
+            testExecutor.runTest(testRequest, getWorkspaceFolderPath()!)
             return
           }
         }
@@ -189,126 +183,4 @@ function getWorkspaceFolderPath() {
     vscode.window.showInformationMessage('No workspace folder is open.')
     return null
   }
-}
-
-async function runPythonCode(testRequest: RunTestRequest, stdoutReceiver: (stdout: string) => void) {
-  try {
-    // Create a temporary file path
-    const tempFilePath = path.join(os.tmpdir(), 'test_temp.py')
-
-    // we only send 1 test for now
-    const firstTestCase = testRequest.cases[0];
-
-    const fnName = firstTestCase.function_name;
-    // for now only single-arg
-    const input = firstTestCase.input.values[0];
-    // TODO handle str input vs objects vs multiarg
-
-    // Write the Python code to the temporary file
-    fs.writeFile(
-      tempFilePath,
-      `
-from baml_client import baml
-
-@baml.${fnName}.test
-async def test_some_name(self, ${fnName}Impl: I${fnName}Impl):
-    output = await ${fnName}Impl("${input}")
-    # assert output == Topic.VEHICLE_REGISTRATION
-    return output
-    `,
-      (err) => {
-        if (err) {
-          vscode.window.showErrorMessage('Error writing to temporary Python file')
-        }
-      },
-    )
-
-    // Get the workspace folder path
-    const workspaceFolderPath = getWorkspaceFolderPath()
-    if (!workspaceFolderPath) {
-      console.log('No workspace folder path')
-      return
-    }
-
-    await runWithChildProcess(workspaceFolderPath, tempFilePath, stdoutReceiver)
-
-    // Create and show the terminal
-    // const terminal = vscode.window.createTerminal('PythonExecution');
-    // terminal.show(true);
-    // // Check if a Poetry environment should be used
-    // if (fs.existsSync(path.join(workspaceFolderPath, 'pyproject.toml'))) {
-    //   // Activate Poetry environment
-    //   terminal.sendText('poetry shell');
-    //   // Give it a moment to activate
-    //   await new Promise(resolve => setTimeout(resolve, 3000));
-    // }
-
-    // // Execute the Python script
-    // terminal.sendText(`python "${tempFilePath}"`);
-  } catch (err) {
-    vscode.window.showErrorMessage('Error creating or executing temporary Python file')
-  }
-}
-
-async function runWithChildProcess(workspaceFolderPath: string, tempFilePath: string, stdoutReceiver: (stdout: string) => void) {
-  console.log('runWithChildProcess')
-  // Determine if the environment is Poetry
-  let pythonExecutable = 'python -m pytest'
-  if (fs.existsSync(path.join(workspaceFolderPath, 'pyproject.toml'))) {
-    pythonExecutable = `poetry run ${pythonExecutable}`
-  }
-
-  const server = net.createServer((socket) => {
-    console.log('Python script connected')
-
-    socket.on('data', (data) => {
-      console.log('Received from Python:', data.toString())
-    })
-
-    socket.on('end', () => {
-      console.log('Python script disconnected')
-    })
-
-    // Send a message to the Python script
-    socket.write('Hello from Node.js\n')
-  })
-
-  server.listen(0, '127.0.0.1', () => {
-    // Start listening on a random available port
-    let addr = server.address()
-    let port = typeof addr === 'string' ? parseInt(addr.split(':')[1]) : addr?.port
-
-    vscode.window.showInformationMessage(`Listening on port ${port}`)
-
-    // Run the Python script in a child process
-    const command = `${pythonExecutable} ${tempFilePath} --pytest-baml-ipc ${port}`
-
-    // Run the Python script in a child process
-    // const process = spawn(pythonExecutable, [tempFilePath]);
-    // Run the Python script using exec
-    const execOptions = {
-      cwd: workspaceFolderPath,
-    }
-
-    // Run the Python script using exec, with the specified working directory
-    const cp = exec(command, execOptions)
-    cp.stdout?.on('data', (data) => {
-      console.log(`stream stdout: ${data}`)
-      stdoutReceiver(data.toString());
-      vscode.window.showInformationMessage(`stream stdout: ${data}`)
-    })
-
-    cp.stderr?.on('data', (data) => {
-      console.log(`stream stderr: ${data}`)
-      stdoutReceiver(data.toString());
-      vscode.window.showErrorMessage(`stderr: ${data}`)
-    })
-
-    cp.on('close', (code) => {
-      console.log(`child process exited with code ${code}`)
-      stdoutReceiver(`\nchild process exited with code ${code}`);
-      vscode.window.showInformationMessage(`child process exited with code ${code}`)
-      server.close()
-    })
-  })
 }

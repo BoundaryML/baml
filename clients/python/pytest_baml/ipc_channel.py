@@ -4,19 +4,21 @@ import typing
 
 from pydantic import BaseModel
 
-class Message(BaseModel):
+T = typing.TypeVar("T", bound=BaseModel)
+
+class Message(BaseModel, typing.Generic[T]):
   name: str
-  data: BaseModel
+  data: T
 
 class BaseIPCChannel:
   
   @abc.abstractmethod
-  def send(self, name: str, data: BaseModel) -> None:
+  def send(self, name: str, data: T) -> None:
     raise NotImplementedError()
 
 @typing.final
 class NoopIPCChannel(BaseIPCChannel):
-  def send(self, name: str, data: BaseModel) -> None:
+  def send(self, name: str, data: T) -> None:
     pass
 
 @typing.final
@@ -25,5 +27,5 @@ class IPCChannel(BaseIPCChannel):
     self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     self._socket.connect((host, port))
   
-  def send(self, name: str, data: BaseModel) -> None:
-    self._socket.send(Message(name=name, data=data).model_dump_json().encode("utf-8"))
+  def send(self, name: str, data: T) -> None:
+    self._socket.send(Message(name=name, data=data).model_dump_json(by_alias=True).encode("utf-8"))

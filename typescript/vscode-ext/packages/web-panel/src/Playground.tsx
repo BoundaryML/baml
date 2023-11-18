@@ -11,7 +11,7 @@ import { Allotment } from 'allotment'
 import { ParserDatabase } from '@baml/common'
 import { useEffect, useMemo, useState } from 'react'
 import { vscode } from './utils/vscode'
-import { RunTestRequest } from '@baml/common'
+import { TestRequest } from '@baml/common'
 import Ansi from 'ansi-to-react'
 
 // window.vscode = acquireVsCodeApi()
@@ -36,7 +36,7 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
     return { func, impl, prompt }
   }, [selectedId, functions])
 
-  const [singleArgValue, setSingleArgValue] = useState<string | undefined>()
+  const [singleArgValue, setSingleArgValue] = useState<string>('')
 
   useEffect(() => {
     if (!impl && selectedId.implName !== undefined && func) {
@@ -81,7 +81,7 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
               </span>
               <VSCodeTextArea
                 className="w-full"
-                value={singleArgValue ?? ''}
+                value={singleArgValue}
                 onInput={(e: any) => {
                   setSingleArgValue(e?.target?.value ?? undefined)
                 }}
@@ -135,17 +135,24 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
             <VSCodeButton
               className="flex justify-end h-7"
               onClick={() => {
-                if (!func) {
+                if (!func || !impl) {
                   return
                 }
-                const runTestRequest: RunTestRequest = {
-                  cases: [
+                const runTestRequest: TestRequest = {
+                  functions: [
                     {
-                      function_name: func.name.value,
-                      input: {
-                        argsInfo: func.input,
-                        values: [singleArgValue],
-                      },
+                      name: func.name.value,
+                      input_type: func.input.arg_type == 'positional' ? func.input.type : 'unknown',
+                      tests: [
+                        {
+                          name: 'random_test_name',
+                          impls: [impl.name.value],
+                          params: {
+                            type: 'positional',
+                            value: singleArgValue,
+                          },
+                        },
+                      ],
                     },
                   ],
                 }
@@ -172,16 +179,19 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
 }
 
 export const TestOutputBox = () => {
-  const [testOutput, setTestOutput] = useState<string | undefined>()
+  const [testOutput, setTestOutput] = useState<string>('')
   useEffect(() => {
     const fn = (event: any) => {
       const command = event.data.command
       const messageContent = event.data.content
 
       switch (command) {
-        case 'testResult': {
-          console.log('testResult', messageContent)
-          setTestOutput((prev) => prev ?? '' + messageContent)
+        case 'stdout': {
+          setTestOutput((prev) => (prev ? `${prev}\n${messageContent}` : messageContent))
+          break
+        }
+        case 'reset-stdout': {
+          setTestOutput('')
           break
         }
       }
@@ -198,9 +208,9 @@ export const TestOutputBox = () => {
   return (
     <div className="flex flex-col gap-1 overflow-y-scroll h-[50%]">
       <b>Output</b>
-      <div className="w-full p-1 bg-vscode-input-background">
-        <Ansi>{testOutput}</Ansi>
-      </div>
+      <pre className="w-full p-1 bg-vscode-input-background">
+        <Ansi useClasses>{testOutput}</Ansi>
+      </pre>
     </div>
   )
 }
