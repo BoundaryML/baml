@@ -8,9 +8,10 @@ import {
   VSCodeTextArea,
 } from '@vscode/webview-ui-toolkit/react'
 import { Allotment } from 'allotment'
-import { ParserDatabase } from './utils/parser_db'
+import { ParserDatabase } from '@baml/common'
 import { useEffect, useMemo, useState } from 'react'
 import { vscode } from './utils/vscode'
+import { RunTestRequest } from '@baml/common'
 
 // window.vscode = acquireVsCodeApi()
 
@@ -125,14 +126,25 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
             <VSCodeButton
               className="flex justify-end h-7"
               onClick={() => {
+                if (!func) {
+                  return
+                }
+                const runTestRequest: RunTestRequest = {
+                  cases: [
+                    {
+                      function_name: func.name.value,
+                      input: {
+                        argsInfo: func.input,
+                        values: ['fill this in.. properly'],
+                      },
+                    },
+                  ],
+                }
                 vscode.postMessage({
                   command: 'runTest',
-                  // data: {
-                  //   function: func.name.value,
-                  //   impl: impl.name.value,
-                  //   input: {},
-                  // },
+                  data: runTestRequest,
                 })
+
                 // const runTestRequest:
                 // vscode.postMessage({
                 //   command: 'runTest',

@@ -13,7 +13,7 @@ import 'allotment/dist/style.css'
 import './App.css'
 import { TextArea } from '@vscode/webview-ui-toolkit'
 import Playground from './Playground'
-import { ParserDatabase } from './utils/parser_db'
+import { ParserDatabase } from '../../../../common/src/parser_db'
 
 function App() {
   const [projects, setProjects] = useState<{ root_dir: string; db: ParserDatabase }[]>([])

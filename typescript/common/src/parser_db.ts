@@ -9,18 +9,18 @@ interface StringSpan {
   source_file: string
 }
 
-type ArgType =
+export type ArgType =
   | {
-      arg_type: 'positional'
+    arg_type: 'positional'
+    type: string
+  }
+  | {
+    arg_type: 'named'
+    values: {
+      name: string
       type: string
-    }
-  | {
-      arg_type: 'named'
-      values: {
-        name: string
-        type: string
-      }[]
-    }
+    }[]
+  }
 
 interface Impl {
   type: 'llm'

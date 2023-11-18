@@ -32,7 +32,8 @@
     "minimatch": "6.2.0",
     "vscode-jsonrpc": "^8.2.0",
     "vscode-languageclient": "7.0.0",
-    "watcher": "1.2.0"
+    "watcher": "1.2.0",
+    "@baml/common": "workspace:*"
   },
   "devDependencies": {
     "@types/glob": "8.1.0",

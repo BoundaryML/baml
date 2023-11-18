@@ -8,7 +8,7 @@ import * as os from 'os'
 import { exec } from 'child_process'
 import net from 'net'
 import { createMessageConnection, StreamMessageReader, StreamMessageWriter } from 'vscode-jsonrpc/node'
-
+import { RunTestRequest } from "@baml/common"
 /**
  * This class manages the state and behavior of HelloWorld webview panels.
  *
@@ -60,7 +60,7 @@ export class WebPanelView {
         // Panel view type
         'showHelloWorld',
         // Panel title
-        'Hello World',
+        'BAML Playground',
         // The editor column the panel should be displayed in
         ViewColumn.Beside,
         // Extra panel configurations
@@ -160,7 +160,8 @@ export class WebPanelView {
           // are created within the webview context (i.e. inside media/main.js)
           // todo: MULTI TEST
           case 'runTest': {
-            runPythonCode()
+            const testRequest: RunTestRequest = message.data;
+            runPythonCode(testRequest)
             return
           }
         }
@@ -188,10 +189,18 @@ function getWorkspaceFolderPath() {
   }
 }
 
-async function runPythonCode() {
+async function runPythonCode(testRequest: RunTestRequest) {
   try {
     // Create a temporary file path
     const tempFilePath = path.join(os.tmpdir(), 'test_temp.py')
+
+    // we only send 1 test for now
+    const firstTestCase = testRequest.cases[0];
+
+    const fnName = firstTestCase.function_name;
+    // for now only single-arg
+    const input = firstTestCase.input.values[0];
+    // TODO handle str input vs objects vs multiarg
 
     // Write the Python code to the temporary file
     fs.writeFile(
@@ -199,10 +208,10 @@ async function runPythonCode() {
       `
 from baml_client import baml
 
-@baml.TopicRouter.test
-async def test_some_name(self, TopicRouterImpl: ITopicRouter):
-    output = await TopicRouterImpl("What vehicles do I own?")
-    assert output == Topic.VEHICLE_REGISTRATION
+@baml.${fnName}.test
+async def test_some_name(self, ${fnName}Impl: I${fnName}Impl}):
+    output = await ${fnName}Impl(${input})
+    # assert output == Topic.VEHICLE_REGISTRATION
     return output
     `,
       (err) => {
