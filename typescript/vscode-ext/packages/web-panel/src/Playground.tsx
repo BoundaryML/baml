@@ -163,13 +163,41 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
               Run
             </VSCodeButton>
           </div>
-          <div className="flex flex-col gap-1 overflow-y-scroll h-[50%]">
-            <b>Output</b>
-            <div className="w-full p-1 bg-vscode-input-background">Hello, world!</div>
-          </div>
+          <TestOutputBox />
         </>
       )}
     </main>
+  )
+}
+
+export const TestOutputBox = () => {
+  const [testOutput, setTestOutput] = useState<string | undefined>()
+  useEffect(() => {
+    const fn = (event: any) => {
+      const command = event.data.command
+      const messageContent = event.data.content
+
+      switch (command) {
+        case 'testResult': {
+          console.log('testResult', messageContent)
+          setTestOutput((prev) => prev ?? '' + messageContent)
+          break
+        }
+      }
+    }
+
+    window.addEventListener('message', fn)
+
+    return () => {
+      window.removeEventListener('message', fn)
+    }
+  })
+
+  return (
+    <div className="flex flex-col gap-1 overflow-y-scroll h-[50%]">
+      <b>Output</b>
+      <div className="w-full p-1 bg-vscode-input-background">{testOutput}</div>
+    </div>
   )
 }
 

@@ -161,7 +161,9 @@ export class WebPanelView {
           // todo: MULTI TEST
           case 'runTest': {
             const testRequest: RunTestRequest = message.data;
-            runPythonCode(testRequest)
+            runPythonCode(testRequest, (stdout: string) => {
+              this._panel.webview.postMessage({ command: 'testResult', content: stdout })
+            });
             return
           }
         }
@@ -189,7 +191,7 @@ function getWorkspaceFolderPath() {
   }
 }
 
-async function runPythonCode(testRequest: RunTestRequest) {
+async function runPythonCode(testRequest: RunTestRequest, stdoutReceiver: (stdout: string) => void) {
   try {
     // Create a temporary file path
     const tempFilePath = path.join(os.tmpdir(), 'test_temp.py')
@@ -228,7 +230,7 @@ async def test_some_name(self, ${fnName}Impl: I${fnName}Impl):
       return
     }
 
-    runWithChildProcess(workspaceFolderPath, tempFilePath)
+    await runWithChildProcess(workspaceFolderPath, tempFilePath, stdoutReceiver)
 
     // Create and show the terminal
     // const terminal = vscode.window.createTerminal('PythonExecution');
@@ -248,7 +250,7 @@ async def test_some_name(self, ${fnName}Impl: I${fnName}Impl):
   }
 }
 
-async function runWithChildProcess(workspaceFolderPath: string, tempFilePath: string) {
+async function runWithChildProcess(workspaceFolderPath: string, tempFilePath: string, stdoutReceiver: (stdout: string) => void) {
   console.log('runWithChildProcess')
   // Determine if the environment is Poetry
   let pythonExecutable = 'python -m pytest'
@@ -292,16 +294,19 @@ async function runWithChildProcess(workspaceFolderPath: string, tempFilePath: st
     const cp = exec(command, execOptions)
     cp.stdout?.on('data', (data) => {
       console.log(`stream stdout: ${data}`)
+      stdoutReceiver(data.toString());
       vscode.window.showInformationMessage(`stream stdout: ${data}`)
     })
 
     cp.stderr?.on('data', (data) => {
       console.log(`stream stderr: ${data}`)
+      stdoutReceiver(data.toString());
       vscode.window.showErrorMessage(`stderr: ${data}`)
     })
 
     cp.on('close', (code) => {
       console.log(`child process exited with code ${code}`)
+      stdoutReceiver(`\nchild process exited with code ${code}`);
       vscode.window.showInformationMessage(`child process exited with code ${code}`)
       server.close()
     })
