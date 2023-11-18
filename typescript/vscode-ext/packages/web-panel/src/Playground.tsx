@@ -186,6 +186,7 @@ export const TestOutputBox = () => {
       }
     }
 
+    // TODO: these listeners probably need to go in some seaprate provider, as we are likely losing msgs anytime this component rerenders.
     window.addEventListener('message', fn)
 
     return () => {
