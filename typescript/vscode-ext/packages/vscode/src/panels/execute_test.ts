@@ -4,7 +4,14 @@ import * as path from 'path'
 import * as fs from 'fs'
 import * as os from 'os'
 import { exec } from 'child_process'
-import { ClientEventLog, TestRequest, TestResult, TestStatus, clientEventLogSchema, getFullTestName } from '@baml/common'
+import {
+  ClientEventLog,
+  TestRequest,
+  TestResult,
+  TestStatus,
+  clientEventLogSchema,
+  getFullTestName,
+} from '@baml/common'
 import { generateTestRequest } from '../plugins/language-server'
 
 const outputChannel = vscode.window.createOutputChannel('baml-test-runner')
@@ -15,7 +22,7 @@ function __initServer(messageHandler: (data: Buffer) => void) {
 
     socket.on('data', messageHandler)
 
-    socket.on('end', () => { })
+    socket.on('end', () => {})
   })
 
   server.listen(0, '127.0.0.1')
@@ -23,57 +30,58 @@ function __initServer(messageHandler: (data: Buffer) => void) {
   return server
 }
 
-
-
 interface UpdateTestCaseEvent {
-  project_id: string;
-  test_cycle_id: string;
-  test_dataset_name: string;
-  test_case_definition_name: string;
-  test_case_arg_name: string; // the full test case name we need
-  status: TestStatus;
-  error_data: null | any;
+  project_id: string
+  test_cycle_id: string
+  test_dataset_name: string
+  test_case_definition_name: string
+  test_case_arg_name: string // the full test case name we need
+  status: TestStatus
+  error_data: null | any
 }
-
 
 class TestState {
   private test_results: TestResult[]
 
   constructor() {
-    this.handleMessage = this.handleMessage.bind(this);
-    this.handleLog = this.handleLog.bind(this);
+    this.handleMessage = this.handleMessage.bind(this)
+    this.handleLog = this.handleLog.bind(this)
     this.test_results = []
   }
 
   public resetTestCases(tests: TestRequest) {
-    this.test_results = tests.functions.flatMap((fn) => fn.tests.flatMap((test) => test.impls.map((impl) => ({
-      fullTestName: getFullTestName(test.name, impl, fn.name),
-      functionName: fn.name,
-      testName: test.name,
-      implName: impl,
-      status: TestStatus.Queued,
-      output: '',
-    }))))
+    this.test_results = tests.functions.flatMap((fn) =>
+      fn.tests.flatMap((test) =>
+        test.impls.map((impl) => ({
+          fullTestName: getFullTestName(test.name, impl, fn.name),
+          functionName: fn.name,
+          testName: test.name,
+          implName: impl,
+          status: TestStatus.Queued,
+          output: '',
+        })),
+      ),
+    )
   }
 
   public handleMessage(data: Buffer) {
     try {
       const payload = JSON.parse(data.toString()) as {
-        name: string;
-        data: any;
-      };
+        name: string
+        data: any
+      }
 
       switch (payload.name) {
         case 'update_test_case':
           this.handleUpdateTestCase(payload.data)
-          break;
+          break
         case 'log':
           this.handleLog(clientEventLogSchema.parse(payload.data))
-          break;
+          break
       }
     } catch (e) {
       console.error(e)
-      outputChannel.appendLine(JSON.stringify(e, null, 2));
+      outputChannel.appendLine(JSON.stringify(e, null, 2))
     }
   }
 
@@ -90,20 +98,17 @@ class TestState {
   }
 
   private handleLog(data: ClientEventLog) {
-    const fullTestName = data.context.tags?.['test_case_arg_name'];
+    const fullTestName = data.context.tags?.['test_case_arg_name']
     const testResult = this.test_results.find((test) => test.fullTestName === fullTestName)
-    if (testResult && data.event_type === "func_llm") {
+    if (testResult && data.event_type === 'func_llm') {
       testResult.output = JSON.stringify(data.io.output?.value)
     }
   }
-
-
 }
-
 
 class TestExecutor {
   private server: net.Server | undefined
-  private testState: TestState;
+  private testState: TestState
 
   constructor() {
     this.server = undefined
@@ -136,7 +141,6 @@ class TestExecutor {
     return ''
   }
 
-
   public async runTest(tests: TestRequest, cwd: string) {
     this.testState.resetTestCases(tests)
     const tempFilePath = path.join(os.tmpdir(), 'test_temp.py')
@@ -149,9 +153,9 @@ class TestExecutor {
     fs.writeFileSync(tempFilePath, code)
 
     // Add filters.
-    let test_filter = `-k ${tests.functions
+    let test_filter = `-k '${tests.functions
       .flatMap((fn) => fn.tests.flatMap((test) => test.impls.map((impl) => getFullTestName(test.name, impl, fn.name))))
-      .join(' or ')}`
+      .join(' or ')}'`
 
     // Run the Python script in a child process
     let command = `python -m pytest ${tempFilePath} ${this.port_arg} ${test_filter}`
