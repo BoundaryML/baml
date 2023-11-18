@@ -12,6 +12,7 @@ import { ParserDatabase } from '@baml/common'
 import { useEffect, useMemo, useState } from 'react'
 import { vscode } from './utils/vscode'
 import { RunTestRequest } from '@baml/common'
+import Ansi from 'ansi-to-react'
 
 // window.vscode = acquireVsCodeApi()
 
@@ -197,7 +198,9 @@ export const TestOutputBox = () => {
   return (
     <div className="flex flex-col gap-1 overflow-y-scroll h-[50%]">
       <b>Output</b>
-      <div className="w-full p-1 bg-vscode-input-background">{testOutput}</div>
+      <div className="w-full p-1 bg-vscode-input-background">
+        <Ansi>{testOutput}</Ansi>
+      </div>
     </div>
   )
 }
