@@ -1,11 +1,14 @@
 import { Disposable, Webview, WebviewPanel, window, Uri, ViewColumn, workspace } from 'vscode'
 import { getUri } from '../utils/getUri'
 import { getNonce } from '../utils/getNonce'
-import * as vscode from 'vscode';
-import * as path from 'path';
-import * as fs from 'fs';
-import * as os from 'os';
-const { spawn, exec } = require('child_process');
+import * as vscode from 'vscode'
+import * as path from 'path'
+import * as fs from 'fs'
+import * as os from 'os'
+import { exec } from 'child_process'
+import net from 'net'
+import { createMessageConnection, StreamMessageReader, StreamMessageWriter } from 'vscode-jsonrpc/node'
+
 /**
  * This class manages the state and behavior of HelloWorld webview panels.
  *
@@ -156,7 +159,7 @@ export class WebPanelView {
           // Add more switch case statements here as more webview message commands
           // are created within the webview context (i.e. inside media/main.js)
           // todo: MULTI TEST
-          case "runTest": {
+          case 'runTest': {
             runPythonCode()
             return
           }
@@ -168,51 +171,71 @@ export class WebPanelView {
   }
 }
 
-
 function getWorkspaceFolderPath() {
   // Check if there are any workspace folders open
   if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
     // Get the first workspace folder
-    const workspaceFolder = vscode.workspace.workspaceFolders[0];
+    const workspaceFolder = vscode.workspace.workspaceFolders[0]
 
     // Get the file system path of the workspace folder
-    const workspaceFolderPath = workspaceFolder.uri.fsPath;
+    const workspaceFolderPath = workspaceFolder.uri.fsPath
 
-    return workspaceFolderPath;
+    return workspaceFolderPath
   } else {
     // No workspace folder is open
-    vscode.window.showInformationMessage('No workspace folder is open.');
-    return null;
+    vscode.window.showInformationMessage('No workspace folder is open.')
+    return null
   }
 }
 
 const pythonCode = `
-import sys
-import time
-import random
+import json
+import socket
 
-print("Hello from Python!")
+def send_json_rpc_request(sock, method, params):
+    request = {
+        "jsonrpc": "2.0",
+        "method": method,
+        "params": params
+    }
+    request_str = json.dumps(request)
+    print(f"Sending JSON-RPC request: {request_str}", flush=True)
+    sock.send(request_str.encode('utf-8'))
 
+def main(server_host, server_port):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        try:
+            sock.connect((server_host, server_port))
+            print(f"Connected to {server_host}:{server_port}", flush=True)
+            send_json_rpc_request(sock, "customRequest", {"data": "Hello from Python client!"})
+        except Exception as e:
+            print(f"Error: {e}", flush=True)
+
+if __name__ == "__main__":
+    import sys
+    SERVER_HOST = '127.0.0.1'
+    SERVER_PORT = 8080  # Default port, replace with the actual port
+    if len(sys.argv) > 1:
+        SERVER_PORT = int(sys.argv[1])
+    main(SERVER_HOST, SERVER_PORT)
 `
 
 async function runPythonCode() {
   try {
     // Create a temporary file path
-    const tempFilePath = path.join(os.tmpdir(), 'tempPythonScript.py');
+    const tempFilePath = path.join(os.tmpdir(), 'tempPythonScript.py')
 
     // Write the Python code to the temporary file
-    await fs.writeFile(tempFilePath, pythonCode, () => {
-
-    });
+    await fs.writeFile(tempFilePath, pythonCode, () => {})
 
     // Get the workspace folder path
-    const workspaceFolderPath = getWorkspaceFolderPath();
+    const workspaceFolderPath = getWorkspaceFolderPath()
     if (!workspaceFolderPath) {
-      console.log('No workspace folder path');
-      return;
+      console.log('No workspace folder path')
+      return
     }
 
-    runWithChildProcess(workspaceFolderPath, tempFilePath);
+    runWithChildProcess(workspaceFolderPath, tempFilePath)
 
     // Create and show the terminal
     // const terminal = vscode.window.createTerminal('PythonExecution');
@@ -228,45 +251,91 @@ async function runPythonCode() {
     // // Execute the Python script
     // terminal.sendText(`python "${tempFilePath}"`);
   } catch (err) {
-    vscode.window.showErrorMessage('Error creating or executing temporary Python file');
+    vscode.window.showErrorMessage('Error creating or executing temporary Python file')
   }
 }
 
 async function runWithChildProcess(workspaceFolderPath: string, tempFilePath: string) {
-  console.log('runWithChildProcess');
+  console.log('runWithChildProcess')
   // Determine if the environment is Poetry
-  try {
-    let pythonExecutable = 'python';
-    if (fs.existsSync(path.join(workspaceFolderPath, 'pyproject.toml'))) {
-      pythonExecutable = 'poetry run python';
+  let pythonExecutable = 'python'
+  if (fs.existsSync(path.join(workspaceFolderPath, 'pyproject.toml'))) {
+    pythonExecutable = 'poetry run python'
+  }
+
+  let _connection: any = null
+
+  const server = net.createServer((socket) => {
+    const connection = createMessageConnection(
+      new StreamMessageReader(socket),
+      new StreamMessageWriter(socket),
+      console,
+    )
+
+    connection.onRequest((message) => {
+      console.log('Received request:', message)
+
+      // Send a response back
+      connection.sendNotification('response', { message: 'Received your message!' })
+    })
+
+    connection.onDispose(() => {
+      console.log('Connection disposed')
+    })
+
+    connection.onClose(() => {
+      console.log('Connection closed')
+    })
+
+    connection.listen()
+
+    _connection = connection
+  })
+
+  server.on('close', () => {
+    console.log('Server closed')
+    if (_connection) {
+      _connection.dispose()
     }
-    const command = `${pythonExecutable} ${tempFilePath}`;
+  })
+  server.listen(0, '127.0.0.1', () => {
+    // Start listening on a random available port
+    let addr = server.address()
+    let port = typeof addr === 'string' ? parseInt(addr.split(':')[1]) : addr?.port
+
+    vscode.window.showInformationMessage(`Listening on port ${port}`)
+
+    // Run the Python script in a child process
+    const command = `${pythonExecutable} ${tempFilePath} ${port}`
 
     // Run the Python script in a child process
     // const process = spawn(pythonExecutable, [tempFilePath]);
     // Run the Python script using exec
     const execOptions = {
-      cwd: workspaceFolderPath
-    };
+      cwd: workspaceFolderPath,
+    }
 
     // Run the Python script using exec, with the specified working directory
-    const process = exec(command, execOptions);
+    const cp = exec(command, execOptions, (error, stdout, stderr) => {
+      vscode.window.showInformationMessage(`completed: ${command}`)
+      if (error) {
+        console.log(`error: ${error.message}`)
+        vscode.window.showErrorMessage(`error: ${error.message}`)
+        return
+      }
+      if (stderr) {
+        console.log(`stderr: ${stderr}`)
+        vscode.window.showErrorMessage(`stderr: ${stderr}`)
+        return
+      }
+      console.log(`stdout: ${stdout}`)
+      vscode.window.showInformationMessage(`stdout: ${stdout}`)
+    })
 
-    // Capture and display the output
-    process.stdout.on('data', (data: any) => {
-      vscode.window.showInformationMessage(`stdout: ${data}`);
-    });
-
-    // Capture and display any errors
-    process.stderr.on('data', (data: any) => {
-      vscode.window.showErrorMessage(`stderr: ${data}`);
-    });
-
-    // Handle process exit
-    process.on('close', (code: any) => {
-      vscode.window.showInformationMessage(`child process exited with code ${code}`);
-    });
-  } catch (err) {
-    vscode.window.showErrorMessage('Error running Python code');
-  }
+    cp.on('close', (code) => {
+      console.log(`child process exited with code ${code}`)
+      vscode.window.showInformationMessage(`child process exited with code ${code}`)
+      server.close()
+    })
+  })
 }

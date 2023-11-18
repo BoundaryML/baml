@@ -7,17 +7,9 @@ import { WebPanelView } from './panels/WebPanelView'
 import { BamlDB } from './plugins/language-server'
 
 const outputChannel = vscode.window.createOutputChannel('baml')
+const diagnosticsCollection = vscode.languages.createDiagnosticCollection('baml')
+const LANG_NAME = 'Baml'
 
-const getInputSchema = () => {
-  return {
-    thread: [
-      {
-        sender: {},
-        body: '',
-      },
-    ],
-  }
-}
 export function activate(context: vscode.ExtensionContext) {
   const config = vscode.workspace.getConfiguration('baml')
 
@@ -43,10 +35,6 @@ export function activate(context: vscode.ExtensionContext) {
     }
   })
 }
-
-const LANG_NAME = 'Baml'
-
-const diagnosticsCollection = vscode.languages.createDiagnosticCollection('baml')
 
 export function deactivate(): void {
   plugins.forEach((plugin) => {

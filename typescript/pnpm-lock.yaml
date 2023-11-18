@@ -184,6 +184,9 @@ importers:
       minimatch:
         specifier: 6.2.0
         version: 6.2.0
+      vscode-jsonrpc:
+        specifier: ^8.2.0
+        version: 8.2.0
       vscode-languageclient:
         specifier: 7.0.0
         version: 7.0.0
@@ -6601,6 +6604,11 @@ packages:
 
   /vscode-jsonrpc@8.1.0:
     resolution: {integrity: sha512-6TDy/abTQk+zDGYazgbIPc+4JoXdwC8NHU9Pbn4UJP1fehUyZmM4RHp5IthX7A6L5KS30PRui+j+tbbMMMafdw==}
+    engines: {node: '>=14.0.0'}
+    dev: false
+
+  /vscode-jsonrpc@8.2.0:
+    resolution: {integrity: sha512-C+r0eKJUIfiDIfwJhria30+TYWPtuHJXHtI7J0YlOmKAo7ogxP20T0zxB7HZQIFhIyvoBPwWskjxrvAtfjyZfA==}
     engines: {node: '>=14.0.0'}
     dev: false
 
