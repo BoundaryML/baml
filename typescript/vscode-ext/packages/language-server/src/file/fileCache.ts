@@ -8,6 +8,15 @@ import { ParserDatabase } from '../lib/wasm/lint'
 export class BamlDirCache {
   private readonly cache: Map<string, FileCache> = new Map()
   private readonly parserCache: Map<string, ParserDatabase> = new Map()
+  private __lastBamlDir: string | null = null
+
+  public get lastBamlDir(): { root_path: string | null; cache: FileCache | null } {
+    if (this.__lastBamlDir) {
+      return { root_path: this.__lastBamlDir, cache: this.cache.get(this.__lastBamlDir) ?? null }
+    } else {
+      return { root_path: null, cache: null }
+    }
+  }
 
   public getBamlDir(textDocument: TextDocument): string | null {
     let currentPath = URI.parse(textDocument.uri).fsPath
@@ -25,7 +34,14 @@ export class BamlDirCache {
 
   private getFileCache(textDocument: TextDocument): FileCache | null {
     const key = this.getBamlDir(textDocument)
-    return this.cache.get(key ?? '') ?? null
+    if (!key) {
+      return null
+    }
+    let cache = this.cache.get(key) ?? null
+    if (cache) {
+      this.__lastBamlDir = key
+    }
+    return cache
   }
   private createFileCacheIfNotExist(textDocument: TextDocument): FileCache | null {
     const key = this.getBamlDir(textDocument)

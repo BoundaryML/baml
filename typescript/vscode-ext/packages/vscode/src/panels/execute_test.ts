@@ -5,6 +5,7 @@ import * as fs from 'fs'
 import * as os from 'os'
 import { exec } from 'child_process'
 import { TestRequest } from '@baml/common'
+import { generateTestRequest } from '../plugins/language-server'
 
 const outputChannel = vscode.window.createOutputChannel('baml-test-runner')
 
@@ -14,7 +15,7 @@ function __initServer(messageHandler: (data: Buffer) => void) {
 
     socket.on('data', messageHandler)
 
-    socket.on('end', () => { })
+    socket.on('end', () => {})
   })
 
   server.listen(0, '127.0.0.1')
@@ -57,7 +58,13 @@ class TestExecutor {
 
   public async runTest(tests: TestRequest, cwd: string) {
     const tempFilePath = path.join(os.tmpdir(), 'test_temp.py')
-    fs.writeFileSync(tempFilePath, generateTestCode(tests))
+    const code = await generateTestRequest(tests)
+    if (!code) {
+      vscode.window.showErrorMessage('Could not generate test request')
+      return
+    }
+    console.log(code)
+    fs.writeFileSync(tempFilePath, code)
 
     // Add filters.
     let test_filter = `-k ${tests.functions
@@ -90,34 +97,6 @@ class TestExecutor {
       this.server.close()
     }
   }
-}
-
-function generateTestCode(test: TestRequest) {
-  // For now assume we can only handle 1 function.
-  console.assert(test.functions.length === 1)
-
-  let fn = test.functions[0]
-
-  // For now assume we can only handle 1 test.
-  console.assert(fn.tests.length === 1)
-
-  let testCase = fn.tests[0]
-
-  // For now assume we can only handle positional params.
-  console.assert(testCase.params.type === 'positional')
-
-  return `
-from baml_lib._impl.deserializer import Deserializer
-from baml_client import baml
-from baml_client.baml_types import I${fn.name}
-# from baml_client.baml_types import ${fn.input_type}
-
-@baml.${fn.name}.test
-async def test_${testCase.name}(${fn.name}Impl: I${fn.name}):
-    deserializer = Deserializer[str](str)
-    param = deserializer.from_string("""${testCase.params.value}""")
-    await ${fn.name}Impl(param)
-    `
 }
 
 const testExecutor = new TestExecutor()

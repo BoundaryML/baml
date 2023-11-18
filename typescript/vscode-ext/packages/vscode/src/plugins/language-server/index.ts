@@ -8,6 +8,7 @@ import { checkForMinimalColorTheme, createLanguageServer, isDebugOrTestSession, 
 import { BamlVSCodePlugin } from '../types'
 import * as vscode from 'vscode'
 import { WebPanelView } from '../../panels/WebPanelView'
+import { TestRequest } from '@baml/common'
 
 const packageJson = require('../../../package.json') // eslint-disable-line
 
@@ -19,6 +20,10 @@ const isDebugMode = () => process.env.VSCODE_DEBUG_MODE === 'true'
 const isE2ETestOnPullRequest = () => process.env.PRISMA_USE_LOCAL_LS === 'true'
 
 export const BamlDB = new Map<string, any>()
+
+export const generateTestRequest = async (test_request: TestRequest): Promise<string | undefined> => {
+  return await client.sendRequest('generatePythonTests', test_request)
+}
 
 interface BAMLMessage {
   type: 'warn' | 'info' | 'error'

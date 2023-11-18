@@ -58,19 +58,22 @@ impl<'db> crate::ParserDatabase {
         })
     }
 
+    fn find_top_by_str(&'db self, name: &str) -> Option<&TopId> {
+        self.interner
+            .lookup(name)
+            .and_then(|name_id| self.names.tops.get(&name_id))
+    }
+
     /// Find a type by name.
     pub fn find_type_by_str(
         &'db self,
         name: &str,
     ) -> Option<Either<ClassWalker<'db>, EnumWalker<'db>>> {
-        self.interner
-            .lookup(name)
-            .and_then(|name_id| self.names.tops.get(&name_id))
-            .and_then(|top_id| match top_id {
-                TopId::Class(class_id) => Some(Either::Left(self.walk(*class_id))),
-                TopId::Enum(enum_id) => Some(Either::Right(self.walk(*enum_id))),
-                _ => None,
-            })
+        self.find_top_by_str(name).and_then(|top_id| match top_id {
+            TopId::Class(class_id) => Some(Either::Left(self.walk(*class_id))),
+            TopId::Enum(enum_id) => Some(Either::Right(self.walk(*enum_id))),
+            _ => None,
+        })
     }
 
     /// Find a type by name.
@@ -94,18 +97,19 @@ impl<'db> crate::ParserDatabase {
 
     /// Find a client by name.
     pub fn find_client(&'db self, name: &str) -> Option<ClientWalker<'db>> {
-        self.interner
-            .lookup(name)
-            .and_then(|name_id| self.names.tops.get(&name_id))
+        self.find_top_by_str(name)
             .and_then(|top_id| top_id.as_client_id())
             .map(|model_id| self.walk(model_id))
     }
 
     /// Find a function by name.
     pub fn find_function(&'db self, idn: &Identifier) -> Option<FunctionWalker<'db>> {
-        self.interner
-            .lookup(idn.name())
-            .and_then(|name_id| self.names.tops.get(&name_id))
+        self.find_function_by_name(idn.name())
+    }
+
+    /// Find a function by name.
+    pub fn find_function_by_name(&'db self, name: &str) -> Option<FunctionWalker<'db>> {
+        self.find_top_by_str(name)
             .and_then(|top_id| top_id.as_function_id())
             .map(|model_id| self.walk(model_id))
     }

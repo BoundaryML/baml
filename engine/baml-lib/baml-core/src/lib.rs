@@ -25,6 +25,7 @@ pub use crate::{
     configuration::Configuration,
 };
 
+pub use generate::TestRequest;
 pub use lockfile::LockFileWrapper;
 
 pub struct ValidatedSchema {

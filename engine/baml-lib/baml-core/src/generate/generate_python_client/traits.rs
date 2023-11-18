@@ -6,7 +6,7 @@ pub(super) trait WithWritePythonString {
     fn file_name(&self) -> String;
 }
 
-pub(super) trait WithToCode {
+pub(crate) trait WithToCode {
     fn to_py_string(&self, f: &mut File) -> String;
 }
 

@@ -8,7 +8,7 @@ use crate::configuration::Generator;
 use crate::lockfile::LockFileWrapper;
 
 #[derive(Debug, Default)]
-pub(super) struct FileCollector {
+pub(crate) struct FileCollector {
     last_file: Option<PathBuf>,
     files: HashMap<PathBuf, File>,
 }
@@ -128,7 +128,7 @@ impl FileCollector {
 }
 
 #[derive(Debug, Clone)]
-pub(super) struct File {
+pub(crate) struct File {
     path: PathBuf,
     name: String,
     content: String,
@@ -163,7 +163,7 @@ impl File {
         }
     }
 
-    pub(super) fn add_import(&mut self, module: &str, name: &str) {
+    pub(crate) fn add_import(&mut self, module: &str, name: &str) {
         self.imports
             .entry(module.to_string())
             .or_default()
@@ -235,7 +235,7 @@ impl File {
         self.content.push('\n');
     }
 
-    pub(super) fn add_string(&mut self, string: impl AsRef<str>) {
+    pub(crate) fn add_string(&mut self, string: impl AsRef<str>) {
         self.content.push_str(string.as_ref());
     }
 
@@ -243,7 +243,7 @@ impl File {
         self.path.join(&self.name)
     }
 
-    pub(super) fn content(&self) -> String {
+    pub(crate) fn content(&self) -> String {
         let mut modules = self.imports.keys().collect::<Vec<_>>();
         modules.sort();
 

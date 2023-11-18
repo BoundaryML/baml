@@ -7,7 +7,7 @@ use serde_json::json;
 
 use crate::{configuration::Generator, lockfile::LockFileWrapper};
 
-use self::{file::FileCollector, traits::WithWritePythonString};
+use self::traits::WithWritePythonString;
 
 mod r#class;
 mod client;
@@ -20,6 +20,8 @@ mod template;
 mod traits;
 mod types;
 mod variants;
+pub(super) use r#file::{File, FileCollector};
+pub(super) use traits::WithToCode;
 
 fn generate_py_file<'a>(obj: &impl WithWritePythonString, fc: &'a mut FileCollector) {
     obj.write_py_file(fc);

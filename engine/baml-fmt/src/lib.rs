@@ -4,6 +4,7 @@
 // mod code_actions;
 // mod get_config;
 // mod get_dmmf;
+mod generate_test_file;
 mod lint;
 // mod native;
 // mod preview;
@@ -66,6 +67,10 @@ use lsp_types::{Position, Range};
 
 pub fn lint(schema: String) -> String {
     lint::run(&schema)
+}
+
+pub fn generate_test_file(schema: String) -> String {
+    generate_test_file::run(&schema)
 }
 
 /// Function that throws a human-friendly error message when the schema is invalid, following the JSON formatting

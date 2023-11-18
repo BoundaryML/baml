@@ -123,6 +123,9 @@ importers:
 
   vscode-ext/packages/language-server:
     dependencies:
+      '@baml/common':
+        specifier: workspace:*
+        version: link:../../../common
       '@gloo-ai/baml-schema-wasm':
         specifier: '*'
         version: link:../../../baml-schema-wasm

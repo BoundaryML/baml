@@ -142,7 +142,6 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
                   functions: [
                     {
                       name: func.name.value,
-                      input_type: func.input.arg_type == 'positional' ? func.input.type : 'unknown',
                       tests: [
                         {
                           name: 'random_test_name',

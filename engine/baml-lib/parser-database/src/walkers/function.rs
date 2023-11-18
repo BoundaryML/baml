@@ -46,6 +46,42 @@ impl<'db> FunctionWalker<'db> {
         }
     }
 
+    /// Arguments of the function.
+    pub fn find_input_arg_by_name(self, name: &str) -> Option<ArgWalker<'db>> {
+        match self.ast_function().input() {
+            ast::FunctionArgs::Named(arg_list) => {
+                arg_list.iter_args().find_map(|(idx, (idn, _))| {
+                    if idn.name() == name {
+                        Some(ArgWalker {
+                            db: self.db,
+                            id: (self.id, true, idx),
+                        })
+                    } else {
+                        None
+                    }
+                })
+            }
+            ast::FunctionArgs::Unnamed(_) => None,
+        }
+    }
+
+    /// Arguments of the function.
+    pub fn find_input_arg_by_position(self, position: u32) -> Option<ArgWalker<'db>> {
+        match self.ast_function().input() {
+            ast::FunctionArgs::Named(_) => None,
+            ast::FunctionArgs::Unnamed(_) => {
+                if position == 0 as u32 {
+                    Some(ArgWalker {
+                        db: self.db,
+                        id: (self.id, true, FuncArguementId(position)),
+                    })
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
     /// Iterates over the input arguments of the function.
     pub fn walk_input_args(self) -> impl ExactSizeIterator<Item = ArgWalker<'db>> {
         let range_end = match self.ast_function().input() {

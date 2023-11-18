@@ -28,6 +28,8 @@ import { getVersion, getEnginesVersion, getCliVersion } from './lib/wasm/interna
 import { BamlDirCache } from './file/fileCache'
 import { LinterInput } from './lib/wasm/lint'
 import { cliBuild } from './baml-cli'
+import { TestRequest } from '@baml/common'
+import generate_test_file from './lib/wasm/generate_test_file'
 
 const packageJson = require('../../package.json') // eslint-disable-line
 function getConnection(options?: LSOptions): Connection {
@@ -204,6 +206,50 @@ export function startServer(options?: LSOptions): void {
       })
   }
 
+  function generateTestFile(test_request: TestRequest) {
+    try {
+      const { cache, root_path: rootPath } = bamlCache.lastBamlDir
+      if (!rootPath || !cache) {
+        console.error('Could not find root path')
+        connection.sendNotification('baml/message', {
+          type: 'error',
+          message: 'Could not find a baml_src directory for root path',
+        })
+        return
+      }
+      const srcDocs = cache.getDocuments()
+      const linterInput: LinterInput = {
+        root_path: rootPath,
+        files: srcDocs.map((doc) => {
+          return {
+            path: doc.uri,
+            content: doc.getText(),
+          }
+        }),
+      }
+      console.log(`Searching database for ${rootPath}`)
+      if (srcDocs.length === 0) {
+        console.log('No BAML files found in the workspace.')
+        connection.sendNotification('baml/message', {
+          type: 'warn',
+          message: 'Unable to find BAML files. See Output panel -> BAML Language Server for more details.',
+        })
+      }
+      const response = MessageHandler.handleGenerateTestFile(srcDocs, linterInput, test_request, showErrorToast)
+      if (response.status === 'ok') {
+        return response.content
+      } else {
+        showErrorToast(response.message)
+      }
+    } catch (e: any) {
+      if (e instanceof Error) {
+        console.log('Error generating test file' + e.message + ' ' + e.stack)
+      } else {
+        console.log('Error generating test file' + e)
+      }
+    }
+  }
+
   function validateTextDocument(textDocument: TextDocument) {
     try {
       const srcDocs = bamlCache.getDocuments(textDocument)
@@ -356,6 +402,9 @@ export function startServer(options?: LSOptions): void {
   //   //   return MessageHandler.handleDocumentSymbol(params, doc)
   //   // }
   // })
+  connection.onRequest('generatePythonTests', (params: TestRequest) => {
+    return generateTestFile(params)
+  })
 
   console.log('Server-side -- listening to connection')
   // Make the text document manager listen on the connection

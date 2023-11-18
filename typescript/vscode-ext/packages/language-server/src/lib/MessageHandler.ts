@@ -23,6 +23,8 @@ import type { TextDocument } from 'vscode-languageserver-textdocument'
 import { fullDocumentRange } from './ast/findAtPosition'
 import lint, { LinterInput, ParserDatabase } from './wasm/lint'
 import { FileCache } from '../file/fileCache'
+import generate_test_file, { GenerateResponse } from './wasm/generate_test_file'
+import { TestRequest } from '@baml/common'
 
 // import format from './prisma-schema-wasm/format'
 // import lint from './prisma-schema-wasm/lint'
@@ -53,6 +55,26 @@ import { FileCache } from '../file/fileCache'
 //   getDocumentationForBlock,
 //   getDatamodelBlock,
 // } from './ast'
+export function handleGenerateTestFile(
+  documents: TextDocument[],
+  linterInput: LinterInput,
+  test_request: TestRequest,
+  onError?: (errorMessage: string) => void,
+): GenerateResponse {
+  let result = generate_test_file(
+    {
+      ...linterInput,
+      test_request: test_request,
+    },
+    (errorMessage: string) => {
+      if (onError) {
+        onError(errorMessage)
+      }
+    },
+  )
+
+  return result
+}
 export function handleDiagnosticsRequest(
   documents: TextDocument[],
   linterInput: LinterInput,
