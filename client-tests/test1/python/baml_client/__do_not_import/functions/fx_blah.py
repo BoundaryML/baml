@@ -34,7 +34,7 @@ class IBAMLBlah(BaseBAMLFunction[str]):
         super().__init__(
             "Blah",
             IBlah,
-            ["v1"],
+            ["v1", "v2"],
         )
 
 BAMLBlah = IBAMLBlah()

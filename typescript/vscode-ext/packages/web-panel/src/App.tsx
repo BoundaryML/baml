@@ -39,11 +39,10 @@ function App() {
           } catch (error) {
             console.error('REACT error:' + JSON.stringify(error, null, 2))
           }
-
           break
         }
         case 'rmDb': {
-          // setProjects((prev) => prev.filter((project) => project.root_dir !== messageContent))
+          setProjects((prev) => prev.filter((project) => project.root_dir !== messageContent))
           break
         }
       }
@@ -56,9 +55,15 @@ function App() {
     }
   }, [])
 
-  console.log('projects', projects)
-
   if (!selectedProject) {
+    if (projects.length === 0) {
+      return (
+        <div>
+          <CustomErrorBoundary>Loading...</CustomErrorBoundary>
+        </div>
+      )
+    }
+
     return (
       <div>
         <CustomErrorBoundary>
@@ -69,7 +74,6 @@ function App() {
                 <button onClick={() => setSelectedProjectId(project.root_dir)}>{project.root_dir}</button>
               </div>
             ))}
-            {JSON.stringify(projects, null, 2)}
           </div>
         </CustomErrorBoundary>
       </div>

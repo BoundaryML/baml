@@ -14,7 +14,7 @@ class ImprovedResponse {
     improved_response string?
     field Sentiment
 }
-
+ 
 function MaybePolishText {
     input ProposedMessage
     output ImprovedResponse

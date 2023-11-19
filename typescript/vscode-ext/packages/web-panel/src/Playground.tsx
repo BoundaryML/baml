@@ -1,3 +1,4 @@
+import { ParserDatabase, TestResult, TestStatus } from '@baml/common'
 import {
   VSCodeButton,
   VSCodeDropdown,
@@ -8,15 +9,8 @@ import {
   VSCodePanels,
   VSCodeTextArea,
 } from '@vscode/webview-ui-toolkit/react'
-import { Allotment } from 'allotment'
-import { ParserDatabase, TestResult, TestStatus } from '@baml/common'
 import { useEffect, useMemo, useState } from 'react'
 import { vscode } from './utils/vscode'
-import { TestRequest } from '@baml/common'
-import Ansi from 'ansi-to-react'
-import CustomErrorBoundary from './utils/ErrorFallback'
-
-// window.vscode = acquireVsCodeApi()
 
 interface NamedParams {
   [key: string]: string
@@ -31,6 +25,7 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
   let { func, impl, prompt } = useMemo(() => {
     let func = functions.find((func) => func.name.value === selectedId.functionName)
     let impl = func?.impls.find((impl) => impl.name.value === selectedId.implName)
+    console.log('memo func', func, 'impl', impl, 'selectedId', selectedId)
 
     let prompt = impl?.prompt ?? ''
     impl?.input_replacers.forEach(({ key, value }) => {
@@ -51,11 +46,33 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
   >([])
 
   useEffect(() => {
-    if (!impl && selectedId.implName !== undefined && func) {
-      let implName = func.impls.at(0)?.name.value
-      setSelectedId((prev) => ({ ...prev, implName }))
+    // Check if there's a need to update the implName
+    if (!impl && func) {
+      // Determine the default implementation name
+      // Here, we're using the first implementation of the selected function
+      const defaultImplName = func.impls.at(0)?.name.value
+
+      // Update the selectedId state only if the defaultImplName is different from the current one
+      if (selectedId.implName !== defaultImplName) {
+        setSelectedId((prev) => ({ ...prev, implName: defaultImplName }))
+      }
     }
   }, [func, impl, selectedId.implName])
+
+  // jump to definition when the function and/or impl changes
+  useEffect(() => {
+    if (impl) {
+      vscode.postMessage({
+        command: 'jumpToFile',
+        data: impl.name,
+      })
+    } else if (func) {
+      vscode.postMessage({
+        command: 'jumpToFile',
+        data: func.name,
+      })
+    }
+  }, [func, impl])
 
   return (
     <main className="w-full h-screen py-2">
@@ -153,7 +170,8 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
           className="w-full"
           activeid={impl ? selectedId.implName : undefined}
           onChange={(e) => {
-            setSelectedId((prev) => ({ ...prev, implName: (e.target as any)?.activetab?.id }))
+            const newImplId = (e.target as any)?.activetab?.id
+            setSelectedId((prev) => ({ ...prev, implName: newImplId }))
           }}
         >
           {func.impls.map((impl, index) => (
@@ -179,8 +197,14 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
                 {impl.client.value}
               </VSCodeLink>
             </div>
-            <b>Prompt</b>
-            <pre className="w-full p-2 whitespace-pre-wrap bg-vscode-input-background">{prompt}</pre>
+            <div className="flex flex-row gap-x-2">
+              <b>Prompt</b>
+              <div>(view only)</div>
+            </div>
+
+            <pre className="w-full p-2 overflow-y-scroll whitespace-pre-wrap select-none bg-vscode-input-background">
+              {prompt}
+            </pre>
           </div>
           <div className="py-3 w-fit">
             <VSCodeButton
