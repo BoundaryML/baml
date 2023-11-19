@@ -38,9 +38,12 @@ export interface TestResult {
   output: string;
 }
 
+
+
 function getFullTestName(testName: string, impl: string, fnName: string) {
   return `test_${testName}[${fnName}-${impl}]`
 }
 
 export { type ParserDatabase, getFullTestName }
 export { clientEventLogSchema, type ClientEventLog } from './schemav2'
+export { type StringSpan } from './parser_db'

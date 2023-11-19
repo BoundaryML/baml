@@ -43,7 +43,13 @@ __input_replacers = {
 # for inline SpecialForms like Optional, Union, List.
 __deserializer = Deserializer[Optional[int]](Optional[int])  # type: ignore
 
+
+
+
+
+
 @BAMLMessageSimplifier.register_impl("v1")
 async def v1(arg: Conversation, /) -> Optional[int]:
     response = await AZURE_DEFAULT.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
-    return __deserializer.from_string(response.generated)
+    deserialized = __deserializer.from_string(response.generated)
+    return deserialized

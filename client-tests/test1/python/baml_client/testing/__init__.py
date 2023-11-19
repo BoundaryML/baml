@@ -7,7 +7,7 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from pytest_baml.exports import baml_test
+from baml_test import baml_test
 
 
 

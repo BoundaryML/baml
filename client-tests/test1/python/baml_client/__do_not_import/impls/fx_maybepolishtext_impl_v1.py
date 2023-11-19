@@ -65,7 +65,13 @@ __input_replacers = {
 __deserializer = Deserializer[ImprovedResponse](ImprovedResponse)  # type: ignore
 __deserializer.overload("ImprovedResponse", {"ShouldImprove": "should_improve"})
 
+
+
+
+
+
 @BAMLMaybePolishText.register_impl("v1")
 async def v1(arg: ProposedMessage, /) -> ImprovedResponse:
     response = await AZURE_GPT4.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
-    return __deserializer.from_string(response.generated)
+    deserialized = __deserializer.from_string(response.generated)
+    return deserialized

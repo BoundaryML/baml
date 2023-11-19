@@ -2,7 +2,7 @@ import { Disposable, Webview, WebviewPanel, window, Uri, ViewColumn, workspace }
 import { getUri } from '../utils/getUri'
 import { getNonce } from '../utils/getNonce'
 import * as vscode from 'vscode'
-import { TestRequest } from '@baml/common'
+import { StringSpan, TestRequest } from '@baml/common'
 import testExecutor from './execute_test'
 /**
  * This class manages the state and behavior of HelloWorld webview panels.
@@ -164,6 +164,24 @@ export class WebPanelView {
             const testRequest: TestRequest = message.data
             this._panel.webview.postMessage({ command: 'reset-stdout', content: '' })
             testExecutor.runTest(testRequest, getWorkspaceFolderPath()!);
+            return
+          }
+          case 'jumpToFile': {
+            try {
+              const span = message.data as StringSpan;
+              console.log('jumpToFile ' + JSON.stringify(span));
+              const uri = vscode.Uri.parse(span.source_file);
+              vscode.workspace.openTextDocument(uri).then((doc) => {
+                const range = new vscode.Range(
+                  doc.positionAt(span.start),
+                  doc.positionAt(span.end),
+                )
+                vscode.window.showTextDocument(doc, { selection: range, viewColumn: ViewColumn.One })
+              }
+              )
+            } catch (e: any) {
+              console.log(e)
+            }
             return
           }
         }

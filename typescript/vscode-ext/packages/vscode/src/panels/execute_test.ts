@@ -22,7 +22,7 @@ function __initServer(messageHandler: (data: Buffer) => void) {
 
     socket.on('data', messageHandler)
 
-    socket.on('end', () => {})
+    socket.on('end', () => { })
   })
 
   server.listen(0, '127.0.0.1')
@@ -140,7 +140,7 @@ class TestExecutor {
   private get port_arg() {
     if (this.server !== undefined) {
       let addr = this.server.address()
-      vscode.window.showInformationMessage(`Server address: ${JSON.stringify(addr)}`)
+      // vscode.window.showInformationMessage(`Server address: ${JSON.stringify(addr)}`)
       if (typeof addr === 'string') {
         return `--pytest-baml-ipc ${addr}`
       } else if (addr) {
@@ -153,6 +153,7 @@ class TestExecutor {
   }
 
   public async runTest(tests: TestRequest, cwd: string) {
+    outputChannel.show(true);
     this.testState.resetTestCases(tests)
     const tempFilePath = path.join(os.tmpdir(), 'test_temp.py')
     const code = await generateTestRequest(tests)

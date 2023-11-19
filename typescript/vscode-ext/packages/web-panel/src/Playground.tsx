@@ -1,6 +1,7 @@
 import {
   VSCodeButton,
   VSCodeDropdown,
+  VSCodeLink,
   VSCodeOption,
   VSCodePanelTab,
   VSCodePanelView,
@@ -28,22 +29,17 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
   }>({ functionName: functions.at(0)?.name.value, implName: functions.at(0)?.impls.at(0)?.name.value })
 
   let { func, impl, prompt } = useMemo(() => {
-    try {
-      let func = functions.find((func) => func.name.value === selectedId.functionName)
-      let impl = func?.impls.find((impl) => impl.name.value === selectedId.implName)
+    let func = functions.find((func) => func.name.value === selectedId.functionName)
+    let impl = func?.impls.find((impl) => impl.name.value === selectedId.implName)
 
-      let prompt = impl?.prompt ?? ''
-      impl?.input_replacers.forEach(({ key, value }) => {
-        prompt = prompt.replaceAll(key, `{${value}}`)
-      })
-      impl?.output_replacers.forEach(({ key, value }) => {
-        prompt = prompt.replaceAll(key, value)
-      })
-      return { func, impl, prompt }
-    } catch (error) {
-      console.error('REACT error:' + JSON.stringify(error, null, 2))
-      throw error
-    }
+    let prompt = impl?.prompt ?? ''
+    impl?.input_replacers.forEach(({ key, value }) => {
+      prompt = prompt.replaceAll(key, `{${value}}`)
+    })
+    impl?.output_replacers.forEach(({ key, value }) => {
+      prompt = prompt.replaceAll(key, value)
+    })
+    return { func, impl, prompt }
   }, [selectedId, functions])
 
   const [singleArgValue, setSingleArgValue] = useState<string>('')
@@ -60,8 +56,6 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
       setSelectedId((prev) => ({ ...prev, implName }))
     }
   }, [func, impl, selectedId.implName])
-
-  console.log('functions', functions)
 
   return (
     <main className="w-full h-screen py-2">
@@ -84,7 +78,21 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
             ))}
           </VSCodeDropdown>
         </div>
-        <VSCodeButton className="flex justify-end h-7">Jump to Definition</VSCodeButton>
+        {func && (
+          <VSCodeButton
+            className="flex justify-end h-7"
+            onClick={() => {
+              if (func) {
+                vscode.postMessage({
+                  command: 'jumpToFile',
+                  data: func.name,
+                })
+              }
+            }}
+          >
+            Go to definition
+          </VSCodeButton>
+        )}
       </div>
       {func && (
         <div className="flex flex-col">
@@ -95,6 +103,7 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
                 arg: <span className="font-normal">{func.input.type}</span>
               </span>
               <VSCodeTextArea
+                placeholder='Enter the input as json like { "hello": "world" } or a string'
                 className="w-full"
                 value={singleArgValue}
                 onInput={(e: any) => {
@@ -104,21 +113,32 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
             </div>
           ) : (
             <div className="flex flex-col gap-1">
-              {func.input.values.map((value, index) => (
+              {func.input.values.map((argValue, index) => (
                 <div className="flex flex-col gap-1">
                   <span className="font-bold">
-                    {value.name.value}: <span className="font-normal">{value.type}</span>
+                    {argValue.name.value}: <span className="font-normal">{argValue.type}</span>
                   </span>
                   <VSCodeTextArea
+                    placeholder='Enter the input as json like { "hello": "world" } or a string'
                     className="w-full"
-                    value={multiArgValues.find((arg) => arg.name === value.name.value)?.value || ''}
+                    value={multiArgValues.find((arg) => arg.name === argValue.name.value)?.value || ''}
                     onInput={(e: any) => {
                       const updatedValue = e.target.value
-                      setMultiArgValues(
-                        multiArgValues.map((arg) =>
-                          arg.name === value.name.value ? { ...arg, value: updatedValue } : arg,
-                        ),
-                      )
+                      console.log('updatedValue', updatedValue)
+                      setMultiArgValues((prevValues) => {
+                        const index = prevValues.findIndex((arg) => arg.name === argValue.name.value)
+                        if (index >= 0) {
+                          // If the argument exists, update its value
+                          return [
+                            ...prevValues.slice(0, index),
+                            { ...prevValues[index], value: updatedValue },
+                            ...prevValues.slice(index + 1),
+                          ]
+                        } else {
+                          // If the argument doesn't exist, add it to the array
+                          return [...prevValues, { name: argValue.name.value, value: updatedValue }]
+                        }
+                      })
                     }}
                   />
                 </div>
@@ -146,14 +166,18 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
           ))}
         </VSCodePanels>
       )}
-      {/* {func && impl && (
+      {func && impl && (
         <>
           <div className="flex flex-col gap-1 overflow-y-scroll h-[50%]">
-            <div className="flex flex-row gap-1">
+            {/* <div className="flex flex-row gap-1">
+              <VSCodeLink onClick={() => vscode.postMessage({ command: 'jumpToFile', data: impl.name })}>
               <span className="font-bold">File</span> {impl.name.source_file}
-            </div>
+            </div> */}
             <div className="flex flex-row gap-1">
-              <span className="font-bold">Client</span> {impl.client.value} ({impl.client.source_file})
+              <span className="font-bold">Client</span>{' '}
+              <VSCodeLink onClick={() => vscode.postMessage({ command: 'jumpToFile', data: impl?.client })}>
+                {impl.client.value}
+              </VSCodeLink>
             </div>
             <b>Prompt</b>
             <pre className="w-full p-2 whitespace-pre-wrap bg-vscode-input-background">{prompt}</pre>
@@ -173,7 +197,7 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
                         name: func.name.value,
                         tests: [
                           {
-                            name: 'random_test_name',
+                            name: 'mytest',
                             impls: [impl.name.value],
                             params: {
                               type: 'positional',
@@ -197,7 +221,7 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
                         name: func.name.value,
                         tests: [
                           {
-                            name: 'random_test_name',
+                            name: 'mytest',
                             impls: [impl.name.value],
                             params: {
                               type: 'named',
@@ -220,7 +244,7 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
           </div>
           <TestOutputBox />
         </>
-      )} */}
+      )}
     </main>
   )
 }
@@ -259,9 +283,9 @@ export const TestOutputBox = () => {
   })
 
   return (
-    <div className="flex flex-col gap-1 overflow-y-scroll h-[50%]">
+    <div className="flex flex-col gap-1 overflow-y-scroll h-[20%] pb-8">
       <b>Output</b>
-      <pre className="w-full p-1 bg-vscode-input-background">
+      <pre className="w-full h-full p-1 bg-vscode-input-background">
         <Ansi useClasses>{testOutput}</Ansi>
       </pre>
     </div>

@@ -2,7 +2,7 @@ export interface ParserDatabase {
   functions: SFunction[]
 }
 
-interface StringSpan {
+export interface StringSpan {
   value: string
   start: number
   end: number

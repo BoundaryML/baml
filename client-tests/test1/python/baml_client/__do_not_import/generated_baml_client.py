@@ -18,8 +18,9 @@ from .functions.fx_maybepolishtext import BAMLMaybePolishText
 from .functions.fx_messagesimplifier import BAMLMessageSimplifier
 from .functions.fx_textpolisher import BAMLTextPolisher
 from baml_core.otel import flush_trace_logs
+from baml_core.services.api_types import LogSchema
 from baml_lib import baml_init
-from typing import Optional
+from typing import Callable, List, Optional
 
 
 class BAMLClient:
