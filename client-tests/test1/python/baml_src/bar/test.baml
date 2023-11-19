@@ -23,7 +23,7 @@ function MaybePolishText {
 function TextPolisher {
     input ProposedMessage
     output string
-} 
+}
    
    
 

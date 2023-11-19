@@ -72,7 +72,7 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
         data: func.name,
       })
     }
-  }, [func, impl])
+  }, [func?.name.value, impl?.name.value])
 
   return (
     <main className="w-full h-screen py-2">
