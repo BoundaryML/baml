@@ -12,11 +12,16 @@
   },
   "dependencies": {
     "@baml/common": "workspace:*",
+    "@radix-ui/react-separator": "^1.0.3",
     "@vscode/webview-ui-toolkit": "^1.2.2",
     "allotment": "^1.19.3",
     "ansi-to-react": "^6.1.6",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.0.0",
     "react": "^18.2.0",
-    "react-error-boundary": "^4.0.11"
+    "react-error-boundary": "^4.0.11",
+    "tailwind-merge": "^2.0.0",
+    "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
     "@githubocto/tailwind-vscode": "^1.0.5",

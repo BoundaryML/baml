@@ -1,6 +1,7 @@
 import { ParserDatabase, TestResult, TestStatus } from '@baml/common'
 import {
   VSCodeButton,
+  VSCodeDivider,
   VSCodeDropdown,
   VSCodeLink,
   VSCodeOption,
@@ -11,6 +12,7 @@ import {
 } from '@vscode/webview-ui-toolkit/react'
 import { useEffect, useMemo, useState } from 'react'
 import { vscode } from './utils/vscode'
+import { Separator } from './components/ui/separator'
 
 interface NamedParams {
   [key: string]: string
@@ -122,6 +124,7 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
               <VSCodeTextArea
                 placeholder='Enter the input as json like { "hello": "world" } or a string'
                 className="w-full"
+                resize="vertical"
                 value={singleArgValue}
                 onInput={(e: any) => {
                   setSingleArgValue(e?.target?.value ?? undefined)
@@ -138,6 +141,7 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
                   <VSCodeTextArea
                     placeholder='Enter the input as json like { "hello": "world" } or a string'
                     className="w-full"
+                    resize="vertical"
                     value={multiArgValues.find((arg) => arg.name === argValue.name.value)?.value || ''}
                     onInput={(e: any) => {
                       const updatedValue = e.target.value
@@ -179,11 +183,14 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
               <VSCodePanelTab key={index} id={impl.name.value}>
                 {impl.name.value}
               </VSCodePanelTab>
-              <VSCodePanelView id={impl.name.value}></VSCodePanelView>
+              <VSCodePanelView id={impl.name.value} className="p-0"></VSCodePanelView>
             </>
           ))}
         </VSCodePanels>
       )}
+      <div className="w-full pb-4 px-0.5">
+        <Separator className="bg-vscode-textSeparator-foreground" />
+      </div>
       {func && impl && (
         <>
           <div className="flex flex-col gap-1 overflow-y-scroll h-[50%]">
@@ -330,8 +337,19 @@ export const TestOutputBox = () => {
       </div>
 
       <div className="max-w-full">
-        <pre className="w-full h-full p-1 overflow-y-scroll break-words whitespace-break-spaces bg-vscode-input-background">
-          {testOutput}
+        {/* {testOutput ? (
+
+        ) : (
+
+        )} */}
+        <pre className="w-full h-full min-h-[80px] p-1 overflow-y-scroll break-words whitespace-break-spaces bg-vscode-input-background">
+          {testOutput ? (
+            testOutput
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full text-vscode-descriptionForeground">
+              <div>Nothing here yet...</div>
+            </div>
+          )}
         </pre>
       </div>
     </div>
