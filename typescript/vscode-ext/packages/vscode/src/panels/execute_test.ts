@@ -67,6 +67,7 @@ class TestState {
         })),
       ),
     )
+    this.testStateListener?.(this.test_results);
   }
 
   public handleMessage(data: Buffer) {
@@ -99,6 +100,9 @@ class TestState {
 
     if (testResult) {
       testResult.status = data.status
+      if (data.error_data) {
+        testResult.output = JSON.stringify(data.error_data)
+      }
       this.testStateListener?.(this.test_results)
     }
   }
@@ -108,6 +112,7 @@ class TestState {
     const testResult = this.test_results.find((test) => test.fullTestName === fullTestName)
     if (testResult && data.event_type === 'func_llm') {
       testResult.output = JSON.stringify(data.io.output?.value)
+
       this.testStateListener?.(this.test_results)
     }
   }

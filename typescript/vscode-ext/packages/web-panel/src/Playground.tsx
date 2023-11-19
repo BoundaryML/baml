@@ -9,7 +9,7 @@ import {
   VSCodeTextArea,
 } from '@vscode/webview-ui-toolkit/react'
 import { Allotment } from 'allotment'
-import { ParserDatabase, TestResult } from '@baml/common'
+import { ParserDatabase, TestResult, TestStatus } from '@baml/common'
 import { useEffect, useMemo, useState } from 'react'
 import { vscode } from './utils/vscode'
 import { TestRequest } from '@baml/common'
@@ -251,6 +251,7 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
 
 export const TestOutputBox = () => {
   const [testOutput, setTestOutput] = useState<string>('')
+  const [status, setStatus] = useState<TestStatus | undefined>()
   useEffect(() => {
     const fn = (event: any) => {
       const command = event.data.command
@@ -270,6 +271,7 @@ export const TestOutputBox = () => {
           const testResults = messageContent as TestResult[]
           const testResult = testResults[0]
           setTestOutput(testResult.output)
+          setStatus(testResult.status)
         }
       }
     }
@@ -283,11 +285,31 @@ export const TestOutputBox = () => {
   })
 
   return (
-    <div className="flex flex-col gap-1 overflow-y-scroll h-[20%] pb-8">
-      <b>Output</b>
-      <pre className="w-full h-full p-1 bg-vscode-input-background">
-        <Ansi useClasses>{testOutput}</Ansi>
-      </pre>
+    <div className="flex flex-col gap-1 h-[20%] pb-8">
+      <div className="flex flex-row gap-x-2">
+        <div>
+          <b>Output</b>
+        </div>
+        {/* TODO: Use icons */}
+        {status && (
+          <div className="text-vscode-descriptionForeground">
+            {
+              {
+                [TestStatus.Queued]: 'Queued',
+                [TestStatus.Running]: 'Running',
+                [TestStatus.Passed]: 'Passed',
+                [TestStatus.Failed]: 'Failed',
+              }[status]
+            }
+          </div>
+        )}
+      </div>
+
+      <div className="max-w-full">
+        <pre className="w-full h-full p-1 overflow-y-scroll break-words whitespace-break-spaces bg-vscode-input-background">
+          {testOutput}
+        </pre>
+      </div>
     </div>
   )
 }
