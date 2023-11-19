@@ -98,7 +98,10 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
             ))}
           </VSCodeDropdown>
         </div>
-        {func && (
+        <VSCodeButton className="flex justify-end ml-auto h-7" onClick={() => {}}>
+          Docs
+        </VSCodeButton>
+        {/* {func && (
           <VSCodeButton
             className="flex justify-end h-7"
             onClick={() => {
@@ -112,7 +115,7 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
           >
             Go to definition
           </VSCodeButton>
-        )}
+        )} */}
       </div>
       {func && (
         <div className="flex flex-col">
