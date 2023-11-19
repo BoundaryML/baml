@@ -134,7 +134,6 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
                     value={multiArgValues.find((arg) => arg.name === argValue.name.value)?.value || ''}
                     onInput={(e: any) => {
                       const updatedValue = e.target.value
-                      console.log('updatedValue', updatedValue)
                       setMultiArgValues((prevValues) => {
                         const index = prevValues.findIndex((arg) => arg.name === argValue.name.value)
                         if (index >= 0) {
@@ -155,6 +154,9 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
               ))}
             </div>
           )}
+          <div className="w-fit">
+            <RunButton func={func} impl={impl} singleArgValue={singleArgValue} multiArgValues={multiArgValues} />
+          </div>
         </div>
       )}
       {/* variant tabs */}
@@ -196,66 +198,7 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
                   <div>(view only)</div>
                 </div>
               </div>
-              <div className="py-3 w-fit">
-                <VSCodeButton
-                  className="flex justify-end h-7"
-                  onClick={() => {
-                    if (!func || !impl) {
-                      return
-                    }
-                    let runTestRequest
-                    if (func.input.arg_type === 'positional') {
-                      runTestRequest = {
-                        functions: [
-                          {
-                            name: func.name.value,
-                            tests: [
-                              {
-                                name: 'mytest',
-                                impls: [impl.name.value],
-                                params: {
-                                  type: 'positional',
-                                  value: singleArgValue,
-                                },
-                              },
-                            ],
-                          },
-                        ],
-                      }
-                    } else {
-                      // Construct params for named arguments
-                      const namedParams = multiArgValues.reduce((acc, arg) => {
-                        acc[arg.name] = arg.value
-                        return acc
-                      }, {} as NamedParams)
-
-                      runTestRequest = {
-                        functions: [
-                          {
-                            name: func.name.value,
-                            tests: [
-                              {
-                                name: 'mytest',
-                                impls: [impl.name.value],
-                                params: {
-                                  type: 'named',
-                                  value: namedParams,
-                                },
-                              },
-                            ],
-                          },
-                        ],
-                      }
-                    }
-                    vscode.postMessage({
-                      command: 'runTest',
-                      data: runTestRequest,
-                    })
-                  }}
-                >
-                  Run
-                </VSCodeButton>
-              </div>
+              <div className="py-3 w-fit"></div>
             </div>
 
             <pre className="w-full p-2 overflow-y-scroll whitespace-pre-wrap select-none bg-vscode-input-background">
@@ -267,6 +210,85 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
         </>
       )}
     </main>
+  )
+}
+
+const RunButton = ({
+  func,
+  impl,
+  singleArgValue,
+  multiArgValues,
+}: {
+  func: ParserDatabase['functions'][0]
+  impl?: ParserDatabase['functions'][0]['impls'][0]
+  singleArgValue: string
+  multiArgValues: {
+    name: string
+    value: string
+  }[]
+}) => {
+  if (!impl) {
+    return null
+  }
+  return (
+    <VSCodeButton
+      className="flex justify-end h-7"
+      onClick={() => {
+        if (!func || !impl) {
+          return
+        }
+        let runTestRequest
+        if (func.input.arg_type === 'positional') {
+          runTestRequest = {
+            functions: [
+              {
+                name: func.name.value,
+                tests: [
+                  {
+                    name: 'mytest',
+                    impls: [impl.name.value],
+                    params: {
+                      type: 'positional',
+                      value: singleArgValue,
+                    },
+                  },
+                ],
+              },
+            ],
+          }
+        } else {
+          // Construct params for named arguments
+          const namedParams = multiArgValues.reduce((acc, arg) => {
+            acc[arg.name] = arg.value
+            return acc
+          }, {} as NamedParams)
+
+          runTestRequest = {
+            functions: [
+              {
+                name: func.name.value,
+                tests: [
+                  {
+                    name: 'mytest',
+                    impls: [impl.name.value],
+                    params: {
+                      type: 'named',
+                      value: namedParams,
+                    },
+                  },
+                ],
+              },
+            ],
+          }
+        }
+        vscode.postMessage({
+          command: 'runTest',
+          data: runTestRequest,
+        })
+      }}
+    >
+      Run
+    </VSCodeButton>
   )
 }
 
@@ -288,7 +310,6 @@ export const TestOutputBox = () => {
           break
         }
         case 'test-results': {
-          console.log('test-results', messageContent)
           const testResults = messageContent as TestResult[]
           const testResult = testResults[0]
           setTestOutput(testResult.output)
