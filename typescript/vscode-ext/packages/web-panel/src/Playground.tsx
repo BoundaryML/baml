@@ -8,6 +8,7 @@ import {
   VSCodePanelTab,
   VSCodePanelView,
   VSCodePanels,
+  VSCodeProgressRing,
   VSCodeTextArea,
 } from '@vscode/webview-ui-toolkit/react'
 import { useEffect, useMemo, useState } from 'react'
@@ -317,7 +318,7 @@ export const TestOutputBox = () => {
 
   return (
     <div className="flex flex-col gap-1 h-[20%] pb-8">
-      <div className="flex flex-row gap-x-2">
+      <div className="flex flex-row items-center gap-x-2">
         <div>
           <b>Output</b>
         </div>
@@ -327,9 +328,9 @@ export const TestOutputBox = () => {
             {
               {
                 [TestStatus.Queued]: 'Queued',
-                [TestStatus.Running]: 'Running',
-                [TestStatus.Passed]: 'Passed',
-                [TestStatus.Failed]: 'Failed',
+                [TestStatus.Running]: <VSCodeProgressRing className="h-4" />,
+                [TestStatus.Passed]: <div className="text-vscode-testing-iconPassed">Passed</div>,
+                [TestStatus.Failed]: <div className="text-vscode-testing-iconFailed">Failed</div>,
               }[status]
             }
           </div>
