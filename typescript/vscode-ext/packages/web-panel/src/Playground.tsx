@@ -98,24 +98,9 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
             ))}
           </VSCodeDropdown>
         </div>
-        <VSCodeButton className="flex justify-end ml-auto h-7" onClick={() => {}}>
+        <VSCodeLink className="flex justify-end ml-auto h-7" href="https://docs.trygloo.com">
           Docs
-        </VSCodeButton>
-        {/* {func && (
-          <VSCodeButton
-            className="flex justify-end h-7"
-            onClick={() => {
-              if (func) {
-                vscode.postMessage({
-                  command: 'jumpToFile',
-                  data: func.name,
-                })
-              }
-            }}
-          >
-            Go to definition
-          </VSCodeButton>
-        )} */}
+        </VSCodeLink>
       </div>
       {func && (
         <div className="flex flex-col">
@@ -197,86 +182,87 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
       </div>
       {func && impl && (
         <>
-          <div className="flex flex-col gap-1 overflow-y-scroll h-[50%]">
-            {/* <div className="flex flex-row gap-1">
-              <VSCodeLink onClick={() => vscode.postMessage({ command: 'jumpToFile', data: impl.name })}>
-              <span className="font-bold">File</span> {impl.name.source_file}
-            </div> */}
-            <div className="flex flex-row gap-1">
-              <span className="font-bold">Client</span>{' '}
-              <VSCodeLink onClick={() => vscode.postMessage({ command: 'jumpToFile', data: impl?.client })}>
-                {impl.client.value}
-              </VSCodeLink>
-            </div>
-            <div className="flex flex-row gap-x-2">
-              <b>Prompt</b>
-              <div>(view only)</div>
+          <div className="flex flex-col gap-0 overflow-y-scroll h-[50%] pb-6">
+            <div className="flex flex-row justify-between">
+              <div>
+                <div className="flex flex-row gap-1">
+                  <span className="font-bold">Client</span>{' '}
+                  <VSCodeLink onClick={() => vscode.postMessage({ command: 'jumpToFile', data: impl?.client })}>
+                    {impl.client.value}
+                  </VSCodeLink>
+                </div>
+                <div className="flex flex-row gap-x-2">
+                  <b>Prompt</b>
+                  <div>(view only)</div>
+                </div>
+              </div>
+              <div className="py-3 w-fit">
+                <VSCodeButton
+                  className="flex justify-end h-7"
+                  onClick={() => {
+                    if (!func || !impl) {
+                      return
+                    }
+                    let runTestRequest
+                    if (func.input.arg_type === 'positional') {
+                      runTestRequest = {
+                        functions: [
+                          {
+                            name: func.name.value,
+                            tests: [
+                              {
+                                name: 'mytest',
+                                impls: [impl.name.value],
+                                params: {
+                                  type: 'positional',
+                                  value: singleArgValue,
+                                },
+                              },
+                            ],
+                          },
+                        ],
+                      }
+                    } else {
+                      // Construct params for named arguments
+                      const namedParams = multiArgValues.reduce((acc, arg) => {
+                        acc[arg.name] = arg.value
+                        return acc
+                      }, {} as NamedParams)
+
+                      runTestRequest = {
+                        functions: [
+                          {
+                            name: func.name.value,
+                            tests: [
+                              {
+                                name: 'mytest',
+                                impls: [impl.name.value],
+                                params: {
+                                  type: 'named',
+                                  value: namedParams,
+                                },
+                              },
+                            ],
+                          },
+                        ],
+                      }
+                    }
+                    vscode.postMessage({
+                      command: 'runTest',
+                      data: runTestRequest,
+                    })
+                  }}
+                >
+                  Run
+                </VSCodeButton>
+              </div>
             </div>
 
             <pre className="w-full p-2 overflow-y-scroll whitespace-pre-wrap select-none bg-vscode-input-background">
               {prompt}
             </pre>
           </div>
-          <div className="py-3 w-fit">
-            <VSCodeButton
-              className="flex justify-end h-7"
-              onClick={() => {
-                if (!func || !impl) {
-                  return
-                }
-                let runTestRequest
-                if (func.input.arg_type === 'positional') {
-                  runTestRequest = {
-                    functions: [
-                      {
-                        name: func.name.value,
-                        tests: [
-                          {
-                            name: 'mytest',
-                            impls: [impl.name.value],
-                            params: {
-                              type: 'positional',
-                              value: singleArgValue,
-                            },
-                          },
-                        ],
-                      },
-                    ],
-                  }
-                } else {
-                  // Construct params for named arguments
-                  const namedParams = multiArgValues.reduce((acc, arg) => {
-                    acc[arg.name] = arg.value
-                    return acc
-                  }, {} as NamedParams)
 
-                  runTestRequest = {
-                    functions: [
-                      {
-                        name: func.name.value,
-                        tests: [
-                          {
-                            name: 'mytest',
-                            impls: [impl.name.value],
-                            params: {
-                              type: 'named',
-                              value: namedParams,
-                            },
-                          },
-                        ],
-                      },
-                    ],
-                  }
-                }
-                vscode.postMessage({
-                  command: 'runTest',
-                  data: runTestRequest,
-                })
-              }}
-            >
-              Run
-            </VSCodeButton>
-          </div>
           <TestOutputBox />
         </>
       )}
@@ -341,11 +327,6 @@ export const TestOutputBox = () => {
       </div>
 
       <div className="max-w-full">
-        {/* {testOutput ? (
-
-        ) : (
-
-        )} */}
         <pre className="w-full h-full min-h-[80px] p-1 overflow-y-scroll break-words whitespace-break-spaces bg-vscode-input-background">
           {testOutput ? (
             testOutput
