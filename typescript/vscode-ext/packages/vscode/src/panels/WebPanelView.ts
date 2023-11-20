@@ -164,7 +164,7 @@ export class WebPanelView {
           // todo: MULTI TEST
           case 'runTest': {
             const testRequest: TestRequest = message.data
-            this._panel.webview.postMessage({ command: 'reset-stdout', content: '' })
+
             console.log("rntest", testRequest)
 
             testExecutor.runTest(testRequest, getWorkspaceFolderPath()!);

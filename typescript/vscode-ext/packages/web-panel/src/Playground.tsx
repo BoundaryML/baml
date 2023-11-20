@@ -1,6 +1,8 @@
-import { ParserDatabase, TestRequest, TestResult, TestStatus } from '@baml/common'
+import { ParserDatabase, TestRequest, TestResult, TestStatus, getFullTestName } from '@baml/common'
 import {
+  VSCodeBadge,
   VSCodeButton,
+  VSCodeCheckbox,
   VSCodeDivider,
   VSCodeDropdown,
   VSCodeLink,
@@ -76,6 +78,37 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
       })
     }
   }, [func?.name.value, impl?.name.value])
+
+  const [testResults, setTestResults] = useState<TestResult[]>([])
+
+  useEffect(() => {
+    if (!impl) {
+      return
+    }
+    const fn = (event: any) => {
+      const command = event.data.command
+      const messageContent = event.data.content
+
+      switch (command) {
+        case 'test-results': {
+          const testResults = messageContent as TestResult[]
+          setTestResults(testResults)
+        }
+      }
+    }
+
+    // TODO: these listeners probably need to go in some seaprate provider, as we are likely losing msgs anytime this component rerenders.
+    window.addEventListener('message', fn)
+
+    return () => {
+      window.removeEventListener('message', fn)
+    }
+  }, [])
+
+  const selectedTestResult = testResults.find((testResult) => {
+    const testName = getFullTestName('mytest', impl?.name.value ?? '', func?.name.value ?? '')
+    return testName === testResult.fullTestName
+  })
 
   return (
     <main className="w-full h-screen py-2">
@@ -172,7 +205,12 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
           {func.impls.map((impl, index) => (
             <>
               <VSCodePanelTab key={index} id={impl.name.value}>
-                {impl.name.value}
+                {impl.name.value}{' '}
+                {selectedTestResult?.status && (
+                  <VSCodeBadge>
+                    <TestStatusIcon testStatus={selectedTestResult.status} />
+                  </VSCodeBadge>
+                )}
               </VSCodePanelTab>
               <VSCodePanelView id={impl.name.value} className="p-0"></VSCodePanelView>
             </>
@@ -182,34 +220,66 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
       <div className="w-full pb-4 px-0.5">
         <Separator className="bg-vscode-textSeparator-foreground" />
       </div>
-      {func && impl && (
-        <>
-          <div className="flex flex-col gap-0 overflow-y-scroll h-[50%] pb-6">
-            <div className="flex flex-row justify-between">
-              <div>
-                <div className="flex flex-row gap-1">
-                  <span className="font-bold">Client</span>{' '}
-                  <VSCodeLink onClick={() => vscode.postMessage({ command: 'jumpToFile', data: impl?.client })}>
-                    {impl.client.value}
-                  </VSCodeLink>
-                </div>
-                <div className="flex flex-row gap-x-2">
-                  <b>Prompt</b>
-                  <div>(view only)</div>
-                </div>
-              </div>
-              <div className="py-3 w-fit"></div>
-            </div>
-
-            <pre className="w-full p-2 overflow-y-scroll whitespace-pre-wrap select-none bg-vscode-input-background">
-              {prompt}
-            </pre>
-          </div>
-
-          <TestOutputBox />
-        </>
-      )}
+      <ImplView impl={impl} func={func} testResult={selectedTestResult} prompt={prompt} />
     </main>
+  )
+}
+
+const ImplView = ({
+  impl,
+  func,
+  prompt,
+  testResult,
+}: {
+  impl?: ParserDatabase['functions'][0]['impls'][0]
+  func?: ParserDatabase['functions'][0]
+  prompt: string
+  testResult?: TestResult
+}) => {
+  const [showPrompt, setShowPrompt] = useState<boolean>(false)
+  if (!impl || !func) {
+    return null
+  }
+  return (
+    <div className="flex flex-col">
+      <TestOutputBox key={func.name.value + impl.name.value} testResult={testResult} />
+
+      <div className="flex flex-col gap-0 overflow-y-scroll h-[50%] pb-6">
+        <div className="flex flex-row justify-between">
+          <div>
+            <div className="flex flex-row gap-1">
+              <span className="font-bold">Client</span>{' '}
+              <VSCodeLink onClick={() => vscode.postMessage({ command: 'jumpToFile', data: impl?.client })}>
+                {impl.client.value}
+              </VSCodeLink>
+            </div>
+            {showPrompt && (
+              <div className="flex flex-row gap-x-2">
+                <b>Prompt</b>
+                <VSCodeLink
+                  onClick={() => {
+                    vscode.postMessage({ command: 'jumpToFile', data: impl?.name })
+                  }}
+                >
+                  Edit
+                </VSCodeLink>
+              </div>
+            )}
+          </div>
+          <div>
+            <VSCodeCheckbox checked={showPrompt} onChange={(e) => setShowPrompt((e.currentTarget as any).checked)}>
+              Show Prompt
+            </VSCodeCheckbox>
+          </div>
+        </div>
+
+        {showPrompt && (
+          <pre className="w-full p-2 overflow-y-scroll whitespace-pre-wrap select-none bg-vscode-input-background">
+            {prompt}
+          </pre>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -257,12 +327,6 @@ const RunButton = ({
             ],
           }
         } else {
-          // Construct params for named arguments
-          // const namedParams = multiArgValues.reduce((acc, arg) => {
-          //   acc[arg.name] = arg.value
-          //   return acc
-          // }, {} as NamedParams)
-
           runTestRequest = {
             functions: [
               {
@@ -292,39 +356,24 @@ const RunButton = ({
   )
 }
 
-export const TestOutputBox = () => {
-  const [testOutput, setTestOutput] = useState<string>('')
-  const [status, setStatus] = useState<TestStatus | undefined>()
-  useEffect(() => {
-    const fn = (event: any) => {
-      const command = event.data.command
-      const messageContent = event.data.content
-
-      switch (command) {
-        case 'stdout': {
-          setTestOutput((prev) => (prev ? `${prev}\n${messageContent}` : messageContent))
-          break
-        }
-        case 'reset-stdout': {
-          setTestOutput('')
-          break
-        }
-        case 'test-results': {
-          const testResults = messageContent as TestResult[]
-          const testResult = testResults[0]
-          setTestOutput(testResult.output)
-          setStatus(testResult.status)
-        }
+const TestStatusIcon = ({ testStatus }: { testStatus: TestStatus }) => {
+  return (
+    <div className="text-vscode-descriptionForeground">
+      {
+        {
+          [TestStatus.Queued]: 'Queued',
+          [TestStatus.Running]: <VSCodeProgressRing className="h-4" />,
+          [TestStatus.Passed]: <div className="text-vscode-testing-iconPassed">Passed</div>,
+          [TestStatus.Failed]: <div className="text-vscode-testing-iconFailed">Failed</div>,
+        }[testStatus]
       }
-    }
-
-    // TODO: these listeners probably need to go in some seaprate provider, as we are likely losing msgs anytime this component rerenders.
-    window.addEventListener('message', fn)
-
-    return () => {
-      window.removeEventListener('message', fn)
-    }
-  })
+    </div>
+  )
+}
+export const TestOutputBox = ({ testResult }: { testResult?: TestResult }) => {
+  if (!testResult) {
+    return null
+  }
 
   return (
     <div className="flex flex-col gap-1 h-[20%] pb-8">
@@ -332,25 +381,13 @@ export const TestOutputBox = () => {
         <div>
           <b>Output</b>
         </div>
-        {/* TODO: Use icons */}
-        {status && (
-          <div className="text-vscode-descriptionForeground">
-            {
-              {
-                [TestStatus.Queued]: 'Queued',
-                [TestStatus.Running]: <VSCodeProgressRing className="h-4" />,
-                [TestStatus.Passed]: <div className="text-vscode-testing-iconPassed">Passed</div>,
-                [TestStatus.Failed]: <div className="text-vscode-testing-iconFailed">Failed</div>,
-              }[status]
-            }
-          </div>
-        )}
+        {testResult.status && <TestStatusIcon testStatus={testResult.status} />}
       </div>
 
       <div className="max-w-full">
         <pre className="w-full h-full min-h-[80px] p-1 overflow-y-scroll break-words whitespace-break-spaces bg-vscode-input-background">
-          {testOutput ? (
-            testOutput
+          {testResult.output ? (
+            testResult.output
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-vscode-descriptionForeground">
               <div>Nothing here yet...</div>
