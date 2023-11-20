@@ -17,10 +17,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { vscode } from './utils/vscode'
 import { Separator } from './components/ui/separator'
 
-interface NamedParams {
-  [key: string]: string
-}
-
 const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { functions } }) => {
   let [selectedId, setSelectedId] = useState<{
     functionName: string | undefined
@@ -187,8 +183,15 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
               ))}
             </div>
           )}
-          <div className="w-fit">
-            <RunButton func={func} impl={impl} singleArgValue={singleArgValue} multiArgValues={multiArgValues} />
+          <div className="flex flex-row w-fit gap-x-4">
+            <RunButton
+              func={func}
+              impl={impl}
+              singleArgValue={singleArgValue}
+              multiArgValues={multiArgValues}
+              runAllImpls={false}
+            />
+            <RunButton func={func} singleArgValue={singleArgValue} multiArgValues={multiArgValues} runAllImpls />
           </div>
         </div>
       )}
@@ -295,6 +298,7 @@ const RunButton = ({
   impl,
   singleArgValue,
   multiArgValues,
+  runAllImpls,
 }: {
   func: ParserDatabase['functions'][0]
   impl?: ParserDatabase['functions'][0]['impls'][0]
@@ -303,62 +307,44 @@ const RunButton = ({
     name: string
     value: string
   }[]
+  runAllImpls?: boolean
 }) => {
-  if (!impl) {
+  if (!func || (!impl && !runAllImpls)) {
     return null
   }
+
+  const runTest = () => {
+    const implsToRun = runAllImpls ? func.impls.map((impl) => impl.name.value) : [impl?.name.value]
+
+    const params =
+      func.input.arg_type === 'positional'
+        ? { type: 'positional', value: singleArgValue }
+        : { type: 'named', value: multiArgValues }
+
+    const runTestRequest = {
+      functions: [
+        {
+          name: func.name.value,
+          tests: [
+            {
+              name: 'mytest',
+              impls: implsToRun,
+              params: params,
+            },
+          ],
+        },
+      ],
+    }
+
+    vscode.postMessage({
+      command: 'runTest',
+      data: runTestRequest,
+    })
+  }
+
   return (
-    <VSCodeButton
-      className="flex justify-end h-7"
-      onClick={() => {
-        if (!func || !impl) {
-          return
-        }
-        let runTestRequest: TestRequest
-        if (func.input.arg_type === 'positional') {
-          runTestRequest = {
-            functions: [
-              {
-                name: func.name.value,
-                tests: [
-                  {
-                    name: 'mytest',
-                    impls: [impl.name.value],
-                    params: {
-                      type: 'positional',
-                      value: singleArgValue,
-                    },
-                  },
-                ],
-              },
-            ],
-          }
-        } else {
-          runTestRequest = {
-            functions: [
-              {
-                name: func.name.value,
-                tests: [
-                  {
-                    name: 'mytest',
-                    impls: [impl.name.value],
-                    params: {
-                      type: 'named',
-                      value: multiArgValues,
-                    },
-                  },
-                ],
-              },
-            ],
-          }
-        }
-        vscode.postMessage({
-          command: 'runTest',
-          data: runTestRequest,
-        })
-      }}
-    >
-      Run
+    <VSCodeButton className="flex justify-end h-7" onClick={runTest}>
+      Run {runAllImpls ? 'All Impls' : impl?.name.value ?? ''}
     </VSCodeButton>
   )
 }

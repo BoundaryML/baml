@@ -18,7 +18,7 @@ from baml_lib._impl.deserializer import Deserializer
 
 
 __prompt_template = """\
-hello 2 {arg}\
+whats your name {arg}\
 """
 
 __input_replacers = {
