@@ -246,7 +246,7 @@ const ImplView = ({
   prompt: string
   testResult?: TestResult
 }) => {
-  const [showPrompt, setShowPrompt] = useState<boolean>(false)
+  const [showPrompt, setShowPrompt] = useState<boolean>(true)
   if (!impl || !func) {
     return null
   }

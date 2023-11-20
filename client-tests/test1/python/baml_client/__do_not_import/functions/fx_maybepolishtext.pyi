@@ -13,7 +13,7 @@ from ..types.classes.cls_message import Message
 from ..types.classes.cls_proposedmessage import ProposedMessage
 from ..types.enums.enm_messagesender import MessageSender
 from ..types.enums.enm_sentiment import Sentiment
-from typing import Protocol, runtime_checkable
+from typing import List, Protocol, Union, runtime_checkable
 
 
 import typing
@@ -34,18 +34,18 @@ class IMaybePolishText(Protocol):
     This is the interface for a function.
 
     Args:
-        arg: ProposedMessage
+        arg: List[Union[ProposedMessage, str]]
 
     Returns:
         ImprovedResponse
     """
 
-    async def __call__(self, arg: ProposedMessage, /) -> ImprovedResponse:
+    async def __call__(self, arg: List[Union[ProposedMessage, str]], /) -> ImprovedResponse:
         ...
 
 
 class BAMLMaybePolishTextImpl:
-    async def run(self, arg: ProposedMessage, /) -> ImprovedResponse:
+    async def run(self, arg: List[Union[ProposedMessage, str]], /) -> ImprovedResponse:
         ...
 
 class IBAMLMaybePolishText:

@@ -14,7 +14,7 @@ from ..types.classes.cls_proposedmessage import ProposedMessage
 from ..types.enums.enm_messagesender import MessageSender
 from ..types.enums.enm_sentiment import Sentiment
 from baml_lib._impl.functions import BaseBAMLFunction
-from typing import Protocol, runtime_checkable
+from typing import List, Protocol, Union, runtime_checkable
 
 
 IMaybePolishTextOutput = ImprovedResponse
@@ -25,13 +25,13 @@ class IMaybePolishText(Protocol):
     This is the interface for a function.
 
     Args:
-        arg: ProposedMessage
+        arg: List[Union[ProposedMessage, str]]
 
     Returns:
         ImprovedResponse
     """
 
-    async def __call__(self, arg: ProposedMessage, /) -> ImprovedResponse:
+    async def __call__(self, arg: List[Union[ProposedMessage, str]], /) -> ImprovedResponse:
         ...
 
 

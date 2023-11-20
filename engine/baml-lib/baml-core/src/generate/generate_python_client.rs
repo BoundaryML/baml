@@ -140,7 +140,7 @@ impl WithWritePythonString for ParserDatabase {
                     &format!(".clients.{}", f.file_name()),
                     &format!("{}", f.name()),
                 );
-                f.name()
+                f.name().to_string()
             })
             .collect::<Vec<_>>();
         clients.sort();

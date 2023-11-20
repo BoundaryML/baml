@@ -170,8 +170,8 @@ impl<'db> crate::ParserDatabase {
     }
 
     /// Get all the types that are valid in the schema. (including primitives)
-    pub fn valid_client_names(&self) -> Vec<&str> {
-        self.walk_clients().map(|c| c.name()).collect()
+    pub fn valid_client_names(&self) -> Vec<String> {
+        self.walk_clients().map(|c| c.name().to_string()).collect()
     }
 
     /// Walk all enums in the schema.

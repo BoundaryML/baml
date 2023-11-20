@@ -6,7 +6,7 @@ use std::{path::PathBuf, sync::Arc};
 
 use baml_lib::{
     internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span},
-    internal_baml_schema_ast::ast::{self, WithName, WithSpan},
+    internal_baml_schema_ast::ast::{self, WithIdentifier, WithName, WithSpan},
     SourceFile,
 };
 
@@ -93,6 +93,15 @@ pub(crate) fn run(input: &str) -> String {
     }
 
     let response = json!({
+        "enums": schema.db.walk_enums().map(|e| json!({
+            "name": StringSpan::new(e.name(), &e.identifier().span()),
+        })).collect::<Vec<_>>(),
+        "classes": schema.db.walk_classes().map(|c| json!({
+            "name": StringSpan::new(c.name(), &c.identifier().span()),
+        })).collect::<Vec<_>>(),
+        "clients": schema.db.walk_clients().map(|c| json!({
+            "name": StringSpan::new(c.name(), &c.identifier().span()),
+        })).collect::<Vec<_>>(),
         "functions": schema
         .db
         .walk_functions()
@@ -148,7 +157,8 @@ pub(crate) fn run(input: &str) -> String {
                                     "value": r.1,
                                 })
                             ).collect::<Vec<_>>(),
-                            "client": StringSpan::new(&props.client.value, &props.client.span),
+                            "client": schema.db.find_client(&props.client.value).map(|c| StringSpan::new(c.name(), &c.identifier().span())).unwrap_or_else(|| StringSpan::new(&props.client.value, &props.client.span)),
+
                         })
                     }
                 ).collect::<Vec<_>>(),

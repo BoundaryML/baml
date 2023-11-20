@@ -16,7 +16,7 @@ class ImprovedResponse {
 }
  
 function MaybePolishText {
-    input ProposedMessage
+    input (ProposedMessage | string)[]
     output ImprovedResponse
 }
  
@@ -43,10 +43,7 @@ impl<llm, MaybePolishText> v1 {
 
         Do not use {// affirmative //} or negative unless the question is a yes or no question.
 
-        Thread until now:
-        {#input.thread}
-
-        Previous Response: {#input.generated_response}
+       
 
         {#print_enum(Sentiment)}
 

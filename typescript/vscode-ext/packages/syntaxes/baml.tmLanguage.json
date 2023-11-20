@@ -200,7 +200,7 @@
         "1": { "name": "variable.other.readwrite" },
         "2": { "name": "comment.line" }
       },
-      "end": "(\"){1,3}#",
+      "end": "\\s*(\"){1,3}#",
       "endCaptures": {},
       "contentName": "source.python.embedded",
       "patterns": [

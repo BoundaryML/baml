@@ -230,7 +230,7 @@ impl std::fmt::Display for FieldType {
                 ft.sort();
                 write!(
                     f,
-                    "{}{}",
+                    "({}){}",
                     ft.join(" | "),
                     if arity.is_optional() { "?" } else { "" }
                 )

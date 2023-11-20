@@ -75,7 +75,7 @@ class TestState {
   public handleMessage(data: Buffer) {
     try {
       // Data may be inadvertently concatenated together, but we actually send a \n delimiter between messages to be able to split msgs properly.
-      const delimitedData = data.toString().split('\n');
+      const delimitedData = data.toString().split('<END_MSG>\n');
       delimitedData.forEach((data) => {
         if (data) {
           this.handleMessageLine(data);

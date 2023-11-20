@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use either::Either;
 use internal_baml_diagnostics::DatamodelError;
 use internal_baml_prompt_parser::ast::WithSpan as WithPromptSpan;
+use internal_baml_schema_ast::ast::WithIdentifier;
 use serde_json::json;
 
 use crate::{
@@ -86,9 +87,9 @@ impl<'db> ClassWalker<'db> {
     }
 }
 
-impl<'db> WithName for ClassWalker<'db> {
-    fn name(&self) -> &'db str {
-        self.ast_class().name()
+impl<'db> WithIdentifier for ClassWalker<'db> {
+    fn identifier(&self) -> &ast::Identifier {
+        self.ast_class().identifier()
     }
 }
 
