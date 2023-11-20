@@ -173,7 +173,6 @@ export class WebPanelView {
           case 'jumpToFile': {
             try {
               const span = message.data as StringSpan;
-              console.log('jumpToFile ' + JSON.stringify(span));
               const uri = vscode.Uri.parse(span.source_file);
               vscode.workspace.openTextDocument(uri).then((doc) => {
                 const range = new vscode.Range(

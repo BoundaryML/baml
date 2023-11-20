@@ -71,7 +71,7 @@ impl WithWritePythonString for ParserDatabase {
         // Add final aliased imports so users just need to import from baml_client and not baml_core, baml_lib and baml_test
         fc.start_export_file("./testing", "__init__");
         fc.last_file()
-            .add_import_and_reexport("baml_test", "baml_test");
+            .add_import_and_reexport("pytest_baml", "baml_test");
 
         fc.complete_file();
 

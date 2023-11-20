@@ -13,6 +13,17 @@ from baml_client.testing import baml_test
 async def some_traced_fn():
     pass
 
+from baml_client import baml
+from baml_client.baml_types import IBlah
+from baml_lib._impl.deserializer import Deserializer
+
+
+@baml.Blah.test
+async def test_mytest(BlahImpl: IBlah):
+    deserializer = Deserializer[str](str)
+    param = deserializer.from_string("""asdfasdf""")
+    await BlahImpl(param)
+
 
 @baml_test
 @pytest.mark.asyncio

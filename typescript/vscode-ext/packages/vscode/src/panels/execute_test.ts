@@ -74,25 +74,36 @@ class TestState {
 
   public handleMessage(data: Buffer) {
     try {
-      const payload = JSON.parse(data.toString()) as {
-        name: string
-        data: any
-      }
+      // Data may be inadvertently concatenated together, but we actually send a \n delimiter between messages to be able to split msgs properly.
+      const delimitedData = data.toString().split('\n');
+      delimitedData.forEach((data) => {
+        if (data) {
+          this.handleMessageLine(data);
+        }
+      });
 
-      switch (payload.name) {
-        case 'update_test_case':
-          this.handleUpdateTestCase(payload.data)
-          break
-        case 'log':
-          this.handleLog(clientEventLogSchema.parse(payload.data))
-          break
-      }
     } catch (e) {
       console.error(e)
+
       outputChannel.appendLine(JSON.stringify(e, null, 2))
     }
   }
 
+  private handleMessageLine(data: string) {
+    const payload = JSON.parse(data.toString()) as {
+      name: string
+      data: any
+    }
+
+    switch (payload.name) {
+      case 'update_test_case':
+        this.handleUpdateTestCase(payload.data)
+        break
+      case 'log':
+        this.handleLog(clientEventLogSchema.parse(payload.data))
+        break
+    }
+  }
   public getTestResults() {
     return this.test_results
   }

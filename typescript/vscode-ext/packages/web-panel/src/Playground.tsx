@@ -196,25 +196,32 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
       {func && (
         <VSCodePanels
           className="w-full"
+          key={func.name.value + impl?.name.value}
           activeid={impl ? selectedId.implName : undefined}
           onChange={(e) => {
             const newImplId = (e.target as any)?.activetab?.id
             setSelectedId((prev) => ({ ...prev, implName: newImplId }))
           }}
         >
-          {func.impls.map((impl, index) => (
-            <>
-              <VSCodePanelTab key={index} id={impl.name.value}>
-                {impl.name.value}{' '}
-                {selectedTestResult?.status && (
-                  <VSCodeBadge>
-                    <TestStatusIcon testStatus={selectedTestResult.status} />
-                  </VSCodeBadge>
-                )}
-              </VSCodePanelTab>
-              <VSCodePanelView id={impl.name.value} className="p-0"></VSCodePanelView>
-            </>
-          ))}
+          {func.impls.map((impl, index) => {
+            const testStatus = testResults.find((testResult) => {
+              const testName = getFullTestName('mytest', impl.name.value, func?.name.value ?? '')
+              return testName === testResult.fullTestName
+            })?.status
+            return (
+              <>
+                <VSCodePanelTab key={index} id={impl.name.value}>
+                  {impl.name.value}{' '}
+                  {testStatus && (
+                    <VSCodeBadge>
+                      <TestStatusIcon testStatus={testStatus} />
+                    </VSCodeBadge>
+                  )}
+                </VSCodePanelTab>
+                <VSCodePanelView id={impl.name.value} className="p-0"></VSCodePanelView>
+              </>
+            )
+          })}
         </VSCodePanels>
       )}
       <div className="w-full pb-4 px-0.5">
