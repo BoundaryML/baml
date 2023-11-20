@@ -70,8 +70,10 @@ export class WebPanelView {
           enableScripts: true,
           // Restrict the webview to only load resources from the `out` and `web-panel/dist` directories
           localResourceRoots: [Uri.joinPath(extensionUri, 'out'), Uri.joinPath(extensionUri, 'web-panel/dist')],
+          retainContextWhenHidden: true,
         },
       )
+      console.log("render");
 
       WebPanelView.currentPanel = new WebPanelView(panel, extensionUri)
     }
@@ -163,6 +165,8 @@ export class WebPanelView {
           case 'runTest': {
             const testRequest: TestRequest = message.data
             this._panel.webview.postMessage({ command: 'reset-stdout', content: '' })
+            console.log("rntest", testRequest)
+
             testExecutor.runTest(testRequest, getWorkspaceFolderPath()!);
             return
           }

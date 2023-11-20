@@ -1,4 +1,4 @@
-import { ParserDatabase, TestResult, TestStatus } from '@baml/common'
+import { ParserDatabase, TestRequest, TestResult, TestStatus } from '@baml/common'
 import {
   VSCodeButton,
   VSCodeDivider,
@@ -237,7 +237,7 @@ const RunButton = ({
         if (!func || !impl) {
           return
         }
-        let runTestRequest
+        let runTestRequest: TestRequest
         if (func.input.arg_type === 'positional') {
           runTestRequest = {
             functions: [
@@ -258,10 +258,10 @@ const RunButton = ({
           }
         } else {
           // Construct params for named arguments
-          const namedParams = multiArgValues.reduce((acc, arg) => {
-            acc[arg.name] = arg.value
-            return acc
-          }, {} as NamedParams)
+          // const namedParams = multiArgValues.reduce((acc, arg) => {
+          //   acc[arg.name] = arg.value
+          //   return acc
+          // }, {} as NamedParams)
 
           runTestRequest = {
             functions: [
@@ -273,7 +273,7 @@ const RunButton = ({
                     impls: [impl.name.value],
                     params: {
                       type: 'named',
-                      value: namedParams,
+                      value: multiArgValues,
                     },
                   },
                 ],

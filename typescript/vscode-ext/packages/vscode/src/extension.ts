@@ -18,7 +18,7 @@ export function activate(context: vscode.ExtensionContext) {
   const bamlPlygroundCommand = vscode.commands.registerCommand('baml.openBamlPanel', () => {
     const config = vscode.workspace.getConfiguration()
     config.update('baml.bamlPanelOpen', true, vscode.ConfigurationTarget.Global)
-
+    console.log('Opening BAML Panel')
     WebPanelView.render(context.extensionUri)
     WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
   })
@@ -40,6 +40,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 export function deactivate(): void {
   testExecutor.close()
+  console.log("deactivate");
   plugins.forEach((plugin) => {
     if (plugin.deactivate) {
       void plugin.deactivate()

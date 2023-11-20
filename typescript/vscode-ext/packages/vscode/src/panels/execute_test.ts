@@ -22,7 +22,9 @@ function __initServer(messageHandler: (data: Buffer) => void) {
 
     socket.on('data', messageHandler)
 
-    socket.on('end', () => { })
+    socket.on('end', () => {
+      console.log('Python script disconnected')
+    })
   })
 
   server.listen(0, '127.0.0.1')

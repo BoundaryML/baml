@@ -39,7 +39,7 @@ macro_rules! register_partial_file {
 macro_rules! register_partial {
     ($reg:expr, $name:expr, $template:expr) => {
         $reg.register_partial($name, $template)
-            .unwrap_or_else(|e| panic!("Failed to register template: {}", e));
+            .unwrap_or_else(|e| panic!("Failed to register template: {}, {}", e, $template));
     };
 }
 
