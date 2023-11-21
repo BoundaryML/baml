@@ -8,7 +8,8 @@ import { checkForMinimalColorTheme, createLanguageServer, isDebugOrTestSession, 
 import { BamlVSCodePlugin } from '../types'
 import * as vscode from 'vscode'
 import { WebPanelView } from '../../panels/WebPanelView'
-import { TestRequest } from '@baml/common'
+import { ParserDatabase, TestRequest } from '@baml/common'
+import glooLens from '../../GlooCodeLensProvider'
 
 const packageJson = require('../../../package.json') // eslint-disable-line
 
@@ -107,9 +108,13 @@ const activateClient = (
         }
       }
     })
-    client.onRequest('set_database', ({ rootPath, db }) => {
+    client.onRequest('set_database', ({ rootPath, db }: {
+      rootPath: string,
+      db: ParserDatabase
+    }) => {
       console.log('set_database', rootPath, db, WebPanelView.currentPanel)
       BamlDB.set(rootPath, db)
+      glooLens.setDB(db)
       WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
     })
     client.onRequest('rm_database', (root_path) => {

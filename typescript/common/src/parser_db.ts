@@ -1,5 +1,14 @@
 export interface ParserDatabase {
   functions: SFunction[]
+  enums: {
+    name: StringSpan
+  }[];
+  classes: {
+    name: StringSpan
+  }[];
+  clients: {
+    name: StringSpan
+  }[];
 }
 
 export interface StringSpan {

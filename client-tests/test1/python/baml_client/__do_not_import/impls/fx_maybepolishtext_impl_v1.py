@@ -16,7 +16,6 @@ from ..types.classes.cls_proposedmessage import ProposedMessage
 from ..types.enums.enm_messagesender import MessageSender
 from ..types.enums.enm_sentiment import Sentiment
 from baml_lib._impl.deserializer import Deserializer
-from typing import List, Union
 
 
 # Impl: v1
@@ -67,7 +66,7 @@ __deserializer.overload("ImprovedResponse", {"ShouldImprove": "should_improve"})
 
 
 @BAMLMaybePolishText.register_impl("v1")
-async def v1(arg: List[Union[ProposedMessage, str]], /) -> ImprovedResponse:
+async def v1(arg: ProposedMessage, /) -> ImprovedResponse:
     response = await AZURE_GPT4.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
     deserialized = __deserializer.from_string(response.generated)
     return deserialized

@@ -54,7 +54,7 @@ export class WebPanelView {
   public static render(extensionUri: Uri) {
     if (WebPanelView.currentPanel) {
       // If the webview panel already exists reveal it
-      WebPanelView.currentPanel._panel.reveal(ViewColumn.One)
+      WebPanelView.currentPanel._panel.reveal(ViewColumn.Beside)
     } else {
       // If a webview panel does not already exist create and show a new one
       const panel = window.createWebviewPanel(

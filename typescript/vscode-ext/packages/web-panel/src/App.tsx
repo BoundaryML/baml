@@ -12,7 +12,7 @@ import 'allotment/dist/style.css'
 
 import './App.css'
 import { TextArea } from '@vscode/webview-ui-toolkit'
-import Playground from './Playground'
+import Playground, { SelectedResource } from './Playground'
 import { ParserDatabase } from '../../../../common/src/parser_db'
 import CustomErrorBoundary from './utils/ErrorFallback'
 
@@ -25,6 +25,7 @@ function App() {
       selectedProjectId === undefined ? undefined : projects.find((project) => project.root_dir === selectedProjectId),
     [projects, selectedProjectId],
   )
+  const [selectedResource, setSelectedResource] = useState<SelectedResource | undefined>(undefined)
 
   useEffect(() => {
     const fn = (event: any) => {
@@ -45,12 +46,25 @@ function App() {
           setProjects((prev) => prev.filter((project) => project.root_dir !== messageContent))
           break
         }
+        case 'setSelectedResource': {
+          console.log('setSelectedResource', messageContent)
+          const payloadResource = messageContent as {
+            functionName: string
+            implName: string
+          }
+          setSelectedResource({
+            functionName: payloadResource.functionName,
+            implName: payloadResource.implName,
+          })
+          break
+        }
       }
     }
-
+    console.log('addEventListener')
     window.addEventListener('message', fn)
 
     return () => {
+      console.log('removeEventListener')
       window.removeEventListener('message', fn)
     }
   }, [])
@@ -80,7 +94,7 @@ function App() {
     )
   }
 
-  return <Playground project={selectedProject.db} />
+  return <Playground project={selectedProject.db} selectedResource={selectedResource} />
 }
 
 export default App

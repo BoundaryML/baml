@@ -1,4 +1,4 @@
-import { ParserDatabase, TestRequest, TestResult, TestStatus, getFullTestName } from '@baml/common'
+import { ParserDatabase, StringSpan, TestRequest, TestResult, TestStatus, getFullTestName } from '@baml/common'
 import {
   VSCodeBadge,
   VSCodeButton,
@@ -17,16 +17,33 @@ import { useEffect, useMemo, useState } from 'react'
 import { vscode } from './utils/vscode'
 import { Separator } from './components/ui/separator'
 
-const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { functions } }) => {
-  let [selectedId, setSelectedId] = useState<{
-    functionName: string | undefined
-    implName: string | undefined
-  }>({ functionName: functions.at(0)?.name.value, implName: functions.at(0)?.impls.at(0)?.name.value })
+export interface SelectedResource {
+  functionName: string | undefined
+  implName: string | undefined
+}
+
+const Playground: React.FC<{ project: ParserDatabase; selectedResource?: SelectedResource }> = ({
+  project: { functions, classes },
+  selectedResource,
+}) => {
+  console.log('init playground', selectedResource)
+  let [selectedId, setSelectedId] = useState<SelectedResource>(
+    selectedResource ?? {
+      functionName: functions.at(0)?.name.value,
+      implName: functions.at(0)?.impls.at(0)?.name.value,
+    },
+  )
+  console.log('selectedId', selectedId)
+
+  useEffect(() => {
+    if (selectedResource) {
+      setSelectedId(selectedResource)
+    }
+  }, [selectedResource])
 
   let { func, impl, prompt } = useMemo(() => {
     let func = functions.find((func) => func.name.value === selectedId.functionName)
     let impl = func?.impls.find((impl) => impl.name.value === selectedId.implName)
-    console.log('memo func', func, 'impl', impl, 'selectedId', selectedId)
 
     let prompt = impl?.prompt ?? ''
     impl?.input_replacers.forEach(({ key, value }) => {
@@ -53,8 +70,8 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
       // Here, we're using the first implementation of the selected function
       const defaultImplName = func.impls.at(0)?.name.value
 
-      // Update the selectedId state only if the defaultImplName is different from the current one
-      if (selectedId.implName !== defaultImplName) {
+      // Update the selectedId state only if the defaultImplName is different from the current one, and only if we've already initialized the selected resource
+      if (selectedId.implName !== defaultImplName && selectedResource) {
         setSelectedId((prev) => ({ ...prev, implName: defaultImplName }))
       }
     }
@@ -78,9 +95,6 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
   const [testResults, setTestResults] = useState<TestResult[]>([])
 
   useEffect(() => {
-    if (!impl) {
-      return
-    }
     const fn = (event: any) => {
       const command = event.data.command
       const messageContent = event.data.content
@@ -89,6 +103,7 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
         case 'test-results': {
           const testResults = messageContent as TestResult[]
           setTestResults(testResults)
+          break
         }
       }
     }
@@ -126,6 +141,7 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
               </VSCodeOption>
             ))}
           </VSCodeDropdown>
+          <VSCodeLink onClick={() => vscode.postMessage({ command: 'jumpToFile', data: func?.name })}>Open</VSCodeLink>
         </div>
         <VSCodeLink className="flex justify-end ml-auto h-7" href="https://docs.trygloo.com">
           Docs
@@ -135,20 +151,12 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
         <div className="flex flex-col">
           <span className="font-bold">Test Case</span>
           {func.input.arg_type === 'positional' ? (
-            <div className="flex flex-col gap-1">
-              <span className="font-bold">
-                arg: <span className="font-normal">{func.input.type}</span>
-              </span>
-              <VSCodeTextArea
-                placeholder='Enter the input as json like { "hello": "world" } or a string'
-                className="w-full"
-                resize="vertical"
-                value={singleArgValue}
-                onInput={(e: any) => {
-                  setSingleArgValue(e?.target?.value ?? undefined)
-                }}
-              />
-            </div>
+            <LinkedInputArgs
+              func={func}
+              singleArgValue={singleArgValue}
+              setSingleArgValue={setSingleArgValue}
+              classes={classes}
+            />
           ) : (
             <div className="flex flex-col gap-1">
               {func.input.values.map((argValue, index) => (
@@ -184,14 +192,20 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
             </div>
           )}
           <div className="flex flex-row w-fit gap-x-4">
-            <RunButton
-              func={func}
-              impl={impl}
-              singleArgValue={singleArgValue}
-              multiArgValues={multiArgValues}
-              runAllImpls={false}
-            />
-            <RunButton func={func} singleArgValue={singleArgValue} multiArgValues={multiArgValues} runAllImpls />
+            {func.impls.length >= 1 ? (
+              <>
+                <RunButton
+                  func={func}
+                  impl={impl}
+                  singleArgValue={singleArgValue}
+                  multiArgValues={multiArgValues}
+                  runAllImpls={false}
+                />
+                <RunButton func={func} singleArgValue={singleArgValue} multiArgValues={multiArgValues} runAllImpls />
+              </>
+            ) : (
+              'No impls yet.'
+            )}
           </div>
         </div>
       )}
@@ -232,6 +246,82 @@ const Playground: React.FC<{ project: ParserDatabase }> = ({ project: { function
       </div>
       <ImplView impl={impl} func={func} testResult={selectedTestResult} prompt={prompt} />
     </main>
+  )
+}
+
+const LinkedInputArgs = ({
+  func,
+  classes,
+  singleArgValue,
+  setSingleArgValue,
+}: {
+  func: ParserDatabase['functions'][0]
+  classes: ParserDatabase['classes']
+  singleArgValue: string
+  setSingleArgValue: (value: string) => void
+}) => {
+  if (func?.input.arg_type !== 'positional') {
+    return null
+  }
+
+  const createLink = (classSpan: StringSpan): JSX.Element => (
+    <VSCodeLink
+      onClick={() => {
+        vscode.postMessage({ command: 'jumpToFile', data: classSpan })
+      }}
+    >
+      {classSpan.value}
+    </VSCodeLink>
+  )
+
+  const buildLinkedTypes = (typeString: string): React.ReactNode[] => {
+    const elements: React.ReactNode[] = []
+    const regex = /(\w+)/g
+    let lastIndex = 0
+
+    typeString.replace(regex, (match, className, index) => {
+      // Add text before the match as plain string
+      if (index > lastIndex) {
+        elements.push(typeString.substring(lastIndex, index))
+      }
+
+      // Check if the class name matches any in the classes array
+      const matchedClass = classes.find((cls) => cls.name.value === className)
+      if (matchedClass) {
+        elements.push(createLink(matchedClass.name))
+      } else {
+        elements.push(className)
+      }
+
+      lastIndex = index + match.length
+      return match
+    })
+
+    // Add any remaining text
+    if (lastIndex < typeString.length) {
+      elements.push(typeString.substring(lastIndex))
+    }
+
+    return elements
+  }
+
+  const linkedTypes = buildLinkedTypes(func.input.type)
+
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="font-bold">
+        input: <span className="font-normal">{linkedTypes}</span>
+      </span>
+      <VSCodeTextArea
+        placeholder="Enter the input as json like { 'hello': 'world' } or a string"
+        className="w-full"
+        resize="vertical"
+        value={singleArgValue}
+        onInput={(e: any) => {
+          setSingleArgValue(e.target.value)
+        }}
+      />
+    </div>
   )
 }
 
