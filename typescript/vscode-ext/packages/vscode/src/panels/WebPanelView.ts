@@ -159,7 +159,7 @@ export class WebPanelView {
    */
   private _setWebviewMessageListener(webview: Webview) {
     webview.onDidReceiveMessage(
-      (message: any) => {
+      async (message: any) => {
         const command = message.command
         const text = message.text
 
@@ -173,7 +173,7 @@ export class WebPanelView {
           // todo: MULTI TEST
           case 'runTest': {
             const testRequest: TestRequest = message.data
-            testExecutor.runTest(testRequest, getWorkspaceFolderPath()!)
+            await testExecutor.runTest(testRequest, getWorkspaceFolderPath()!)
             return
           }
           case 'saveTest': {
@@ -183,12 +183,14 @@ export class WebPanelView {
               testCaseName: StringSpan | undefined
               params: TestRequest['functions'][0]['tests'][0]['params']
             } = message.data
-            const uri = vscode.Uri.parse(
-              saveTestRequest.testCaseName?.source_file ??
-                `${saveTestRequest.root_path}/__tests/${saveTestRequest.funcName}/${uniqueNamesGenerator(
-                  customConfig,
-                )}.json`,
-            )
+            const uri = saveTestRequest.testCaseName?.source_file
+              ? vscode.Uri.parse(saveTestRequest.testCaseName?.source_file)
+              : vscode.Uri.joinPath(
+                  vscode.Uri.parse(saveTestRequest.root_path),
+                  '__tests',
+                  saveTestRequest.funcName,
+                  `${uniqueNamesGenerator(customConfig)}.json`,
+                )
             const fileContent =
               saveTestRequest.params.type === 'positional'
                 ? saveTestRequest.params.value
@@ -197,13 +199,19 @@ export class WebPanelView {
                     null,
                     2,
                   )
-            vscode.workspace.fs.writeFile(uri, Buffer.from(fileContent))
+            // console.log(saveTestRequest, uri)
+            try {
+              await vscode.workspace.fs.writeFile(uri, Buffer.from(fileContent))
+              console.log('saved')
+            } catch (e: any) {
+              console.log(e)
+            }
           }
           case 'jumpToFile': {
             try {
               const span = message.data as StringSpan
               const uri = vscode.Uri.parse(span.source_file)
-              vscode.workspace.openTextDocument(uri).then((doc) => {
+              await vscode.workspace.openTextDocument(uri).then((doc) => {
                 const range = new vscode.Range(doc.positionAt(span.start), doc.positionAt(span.end))
                 vscode.window.showTextDocument(doc, { selection: range, viewColumn: ViewColumn.One })
               })
