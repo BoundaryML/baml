@@ -9,7 +9,6 @@ from baml_core.services.api import APIWrapper
 from baml_core.services import api_types
 import re
 
-from baml_core.logger import logger
 from baml_core.otel import flush_trace_logs, add_message_transformer_hook
 from .ipc_channel import IPCChannel, NoopIPCChannel
 

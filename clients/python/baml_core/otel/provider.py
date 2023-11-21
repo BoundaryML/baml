@@ -1,4 +1,3 @@
-import asyncio
 import contextvars
 from itertools import chain
 import platform
@@ -31,10 +30,8 @@ from ..services.api_types import LogSchema
 @typing.final
 class CustomBackendExporter(SpanExporter):
     __project_id: typing.Optional[str]
-    __message_override_callback: typing.Dict[int,
-        typing.Callable[[LogSchema], None]
-    ]
-    
+    __message_override_callback: typing.Dict[int, typing.Callable[[LogSchema], None]]
+
     def __init__(self) -> None:
         super().__init__()
         self.__api_wrapper: typing.Optional[APIWrapper] = None
@@ -263,6 +260,7 @@ def use_tracing(api: typing.Optional[APIWrapper] = None) -> None:
 
 def add_message_transformer_hook(callback: typing.Callable[[LogSchema], None]) -> int:
     return __exporter.add_message_override_callback(callback)
+
 
 def remove_message_transformer_hook(_id: int) -> None:
     __exporter.remove_message_override_callback(_id)

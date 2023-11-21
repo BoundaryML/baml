@@ -47,6 +47,7 @@ tenacity = "^8.2.3"
 regex = "^2023.10.3"
 pydantic = "^2.1"
 typeguard = "^4.1.5"
+types-regex = "^2023.10.3.0"
 
 [tool.mypy."coloredlogs.*"]
 ignore_missing_imports = true
