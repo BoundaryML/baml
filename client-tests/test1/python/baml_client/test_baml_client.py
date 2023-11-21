@@ -14,10 +14,10 @@ from json5 import loads
 
 
 @baml.Blah.test
-async def test_total_amaranth(BlahImpl: IBlah):
+async def test_default(BlahImpl: IBlah):
     deserializer = Deserializer[str](str)
     param = deserializer.from_string("""\
-big fan of this\
+te\
 """)
     await BlahImpl(param)
 
@@ -32,16 +32,7 @@ big fan of this\
 
 
 @baml.Blah.test
-async def test_default(BlahImpl: IBlah):
-    deserializer = Deserializer[str](str)
-    param = deserializer.from_string("""\
-te\
-""")
-    await BlahImpl(param)
-
-
-@baml.Blah.test
-async def test_greasy_white(BlahImpl: IBlah):
+async def test_total_amaranth(BlahImpl: IBlah):
     deserializer = Deserializer[str](str)
     param = deserializer.from_string("""\
 big fan of this\
@@ -65,6 +56,15 @@ async def test_ministerial_tomato(ClassifyToolImpl: IClassifyTool):
         query=query,
         context=context
     )
+
+
+@baml.Blah.test
+async def test_greasy_white(BlahImpl: IBlah):
+    deserializer = Deserializer[str](str)
+    param = deserializer.from_string("""\
+big fan of this\
+""")
+    await BlahImpl(param)
 
 
 @baml.ClassifyTool.test

@@ -63,7 +63,7 @@ impl<llm, ClassifyTool> v1 {
     override ClassifyResponse {
       assistant_response @alias(foo)
       @description(#"
-        This is ait
+        This is the assistance reponse
       "#)
     }
 
