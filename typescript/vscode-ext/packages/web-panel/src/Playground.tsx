@@ -16,10 +16,15 @@ import {
 import { useEffect, useMemo, useState } from 'react'
 import { vscode } from './utils/vscode'
 import { Separator } from './components/ui/separator'
-
 export interface SelectedResource {
   functionName: string | undefined
   implName: string | undefined
+}
+
+interface SelectedTest {
+  span?: StringSpan | undefined // undefined if unsaved
+  name: string
+  content: string
 }
 
 const Playground: React.FC<{ project: ParserDatabase; selectedResource?: SelectedResource }> = ({
@@ -116,13 +121,30 @@ const Playground: React.FC<{ project: ParserDatabase; selectedResource?: Selecte
     }
   }, [])
 
-  const selectedTestResult = testResults.find((testResult) => {
+  const newTestCase: SelectedTest = {
+    name: '<new test>',
+    content: '',
+  }
+  const [selectedTestCase, setSelectedTestCase] = useState<SelectedTest>(newTestCase)
+
+  const testResultforSelectedImpl = testResults.find((testResult) => {
     const testName = getFullTestName('mytest', impl?.name.value ?? '', func?.name.value ?? '')
     return testName === testResult.fullTestName
   })
 
+  const testCasesForFunc: SelectedTest[] = (func?.test_cases ?? []).map((testCase) => {
+    return {
+      ...testCase,
+      name: testCase.name.value,
+      span: func?.name,
+    }
+  })
+
+  testCasesForFunc.push(newTestCase)
+
   return (
     <main className="w-full h-screen py-2">
+      <div>Function</div>
       <div className="flex flex-row justify-between">
         <div className="justify-start">
           <VSCodeDropdown
@@ -150,6 +172,45 @@ const Playground: React.FC<{ project: ParserDatabase; selectedResource?: Selecte
       {func && (
         <div className="flex flex-col">
           <span className="font-bold">Test Case</span>
+          <div className="max-w-[450px]">
+            <VSCodeDropdown
+              className="mr-1"
+              value={selectedTestCase?.name ?? '<new test>'}
+              onChange={(event) => {
+                // setSelected((prev) => ({
+                //   ...prev,
+                //   functionName: (event as React.FormEvent<HTMLSelectElement>).currentTarget.value,
+                // }))
+                const testCase = testCasesForFunc.find(
+                  (testCase) => testCase.name === (event as React.FormEvent<HTMLSelectElement>).currentTarget.value,
+                )
+                if (testCase) {
+                  // parse the testcase content string into json object.
+                  const content = JSON.parse(testCase.content)
+                  // if there are more than 1 keys, then it's a multi-arg test case
+                  if (Object.keys(content).length > 1) {
+                    setMultiArgValues(
+                      Object.entries(content).map(([name, value]) => ({
+                        name,
+                        value: JSON.stringify(value),
+                      })),
+                    )
+                  } else {
+                    // otherwise, it's a single-arg test case
+                    setSingleArgValue(JSON.stringify(content[Object.keys(content)[0]]))
+                  }
+                }
+                setSelectedTestCase(testCase ?? newTestCase)
+              }}
+            >
+              {testCasesForFunc.map((testCase, index) => (
+                <VSCodeOption key={index} value={testCase.name} className="max-w-[300px]">
+                  {testCase.name}
+                </VSCodeOption>
+              ))}
+            </VSCodeDropdown>
+          </div>
+
           {func.input.arg_type === 'positional' ? (
             <LinkedInputArgs
               func={func}
@@ -244,7 +305,7 @@ const Playground: React.FC<{ project: ParserDatabase; selectedResource?: Selecte
       <div className="w-full pb-4 px-0.5">
         <Separator className="bg-vscode-textSeparator-foreground" />
       </div>
-      <ImplView impl={impl} func={func} testResult={selectedTestResult} prompt={prompt} />
+      <ImplView impl={impl} func={func} testResult={testResultforSelectedImpl} prompt={prompt} />
     </main>
   )
 }

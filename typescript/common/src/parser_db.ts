@@ -6,11 +6,6 @@ export interface ParserDatabase {
   classes: {
     name: StringSpan
   }[]
-  test_cases: {
-    name: StringSpan
-    // For now this is json.
-    content: string
-  }[]
   clients: {
     name: StringSpan
   }[]
@@ -25,16 +20,16 @@ export interface StringSpan {
 
 export type ArgType =
   | {
-      arg_type: 'positional'
-      type: string
-    }
+    arg_type: 'positional'
+    type: string
+  }
   | {
-      arg_type: 'named'
-      values: {
-        name: StringSpan
-        type: string
-      }[]
-    }
+    arg_type: 'named'
+    values: {
+      name: StringSpan
+      type: string
+    }[]
+  }
 
 interface Impl {
   type: 'llm'
@@ -50,4 +45,9 @@ interface SFunction {
   input: ArgType
   output: ArgType
   impls: Impl[]
+  test_cases: {
+    name: StringSpan
+    // For now this is json.
+    content: string
+  }[]
 }
