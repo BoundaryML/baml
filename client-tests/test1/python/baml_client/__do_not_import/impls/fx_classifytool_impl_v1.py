@@ -28,17 +28,18 @@ Userinfo:
 UserContext:
 {context}
 
-food
+tools
 ---
 k1: Use this tool if the user is asking to compute something
 k2: Use this tool if the user is asking to draw something
-k3: Use this if the tool is just asking for a simple answer
+k3: Use this tool if the user is asking to generate text
 
 Use this output format:
 {
   // Any number of tools the user may want to use
-  "tool": "food as string"[],
-  "assistant_response": string
+  "tool": "tools as string"[],
+  // This is ait
+  "foo": string
 }
 
 JSON:\
@@ -53,6 +54,7 @@ __input_replacers = {
 # We ignore the type here because baml does some type magic to make this work
 # for inline SpecialForms like Optional, Union, List.
 __deserializer = Deserializer[ClassifyResponse](ClassifyResponse)  # type: ignore
+__deserializer.overload("ClassifyResponse", {"foo": "assistant_response"})
 
 
 

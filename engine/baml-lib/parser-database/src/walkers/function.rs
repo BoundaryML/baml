@@ -130,11 +130,15 @@ impl<'db> FunctionWalker<'db> {
 
     /// All the test cases for this function.
     pub fn walk_tests(self) -> impl ExactSizeIterator<Item = ConfigurationWalker<'db>> {
-        self.db
+        let mut tests = self
+            .db
             .walk_test_cases()
             .filter(|w| w.test_case().function.0 == self.name())
-            .collect::<Vec<_>>()
-            .into_iter()
+            .collect::<Vec<_>>();
+
+        tests.sort_by(|a, b| a.name().cmp(b.name()));
+
+        tests.into_iter()
     }
 }
 

@@ -46,8 +46,10 @@ pub(crate) fn generate_py(
         .for_each(|f| generate_py_file(&f, &mut fc));
     db.walk_retry_policies()
         .for_each(|f| generate_py_file(&f, &mut fc));
-    db.walk_test_cases()
-        .for_each(|f| generate_py_file(&f, &mut fc));
+    let mut test_cases = db.walk_test_cases().collect::<Vec<_>>();
+    test_cases.sort_by(|a, b| a.name().cmp(b.name()));
+    test_cases.iter().for_each(|f| generate_py_file(f, &mut fc));
+
     generate_py_file(db, &mut fc);
     info!("Writing files to {}", gen.output.to_string_lossy());
     let temp_path = PathBuf::from(format!("{}.tmp", &gen.output.to_string_lossy().to_string()));

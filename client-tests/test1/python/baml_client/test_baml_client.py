@@ -13,30 +13,12 @@ from baml_lib._impl.deserializer import Deserializer
 from json5 import loads
 
 
-@baml.Blah.test
-async def test_basic2(BlahImpl: IBlah):
-    deserializer = Deserializer[str](str)
-    param = deserializer.from_string("""\
-big fan of this\
-""")
-    await BlahImpl(param)
-
-
-@baml.MessageSimplifier.test
-async def test_functional_white(MessageSimplifierImpl: IMessageSimplifier):
-    deserializer = Deserializer[Conversation](Conversation)
-    param = deserializer.from_string("""\
-ttt\
-""")
-    await MessageSimplifierImpl(param)
-
-
 @baml.ClassifyTool.test
-async def test_wooden_tomato(ClassifyToolImpl: IClassifyTool):
+async def test_basic(ClassifyToolImpl: IClassifyTool):
     case = loads("""
 {
-  "query": "this example",
-  "context": "is amazing"
+  "query": "some rand",
+  "context": "some random context"
 }
 """)
     deserializer_query = Deserializer[str](str)
@@ -50,12 +32,30 @@ async def test_wooden_tomato(ClassifyToolImpl: IClassifyTool):
 
 
 @baml.Blah.test
+async def test_basic2(BlahImpl: IBlah):
+    deserializer = Deserializer[str](str)
+    param = deserializer.from_string("""\
+big fan of this\
+""")
+    await BlahImpl(param)
+
+
+@baml.Blah.test
 async def test_default(BlahImpl: IBlah):
     deserializer = Deserializer[str](str)
     param = deserializer.from_string("""\
 te\
 """)
     await BlahImpl(param)
+
+
+@baml.MessageSimplifier.test
+async def test_functional_white(MessageSimplifierImpl: IMessageSimplifier):
+    deserializer = Deserializer[Conversation](Conversation)
+    param = deserializer.from_string("""\
+ttt\
+""")
+    await MessageSimplifierImpl(param)
 
 
 @baml.MessageSimplifier.test
@@ -68,11 +68,11 @@ tttttt\
 
 
 @baml.ClassifyTool.test
-async def test_basic(ClassifyToolImpl: IClassifyTool):
+async def test_wooden_tomato(ClassifyToolImpl: IClassifyTool):
     case = loads("""
 {
-  "query": "some rand",
-  "context": "some random context"
+  "query": "this example",
+  "context": "is amazing"
 }
 """)
     deserializer_query = Deserializer[str](str)
