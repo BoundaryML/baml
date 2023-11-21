@@ -14,6 +14,7 @@ ResilientGPT4 = LLMManager.add_llm(
     name="ResilientGPT4",
     provider="baml-fallback",
     retry_policy=None,
+    redactions=[],
     options=dict(
         strategy=[{"client": "AZURE_DEFAULT"}, {"client": "AZURE_GPT4"}, {"client": "LARGE_RESPONSE"}],
     ),

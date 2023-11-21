@@ -86,11 +86,24 @@ impl JsonHelper for ClientWalker<'_> {
             })
             .unwrap_or("None");
 
+        let redactions = props
+            .options
+            .iter()
+            .filter_map(|(k, v)| {
+                if v.is_env_expression() {
+                    return Some(format!("\"{}\"", k));
+                }
+                None
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+
         json!({
             "name": self.name(),
             "kwargs": {
                 "provider": serde_json::to_string(&props.provider.0).unwrap(),
                 "retry_policy": retry_policy,
+                "redactions": format!("[{}]", redactions),
             },
             "options": opts,
             "doc_string": self.ast_client().documentation(),

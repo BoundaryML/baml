@@ -15,6 +15,7 @@ LARGE_RESPONSE = LLMManager.add_llm(
     name="LARGE_RESPONSE",
     provider="baml-openai-chat",
     retry_policy=None,
+    redactions=["api_key"],
     options=dict(
         model="gpt-3.5-turbo",
         api_key=environ['OPENAI_API_KEY'],
