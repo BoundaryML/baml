@@ -8,18 +8,9 @@
 # fmt: off
 
 from .__do_not_import.generated_baml_client import baml
-from .baml_types import ClassifyResponse, IBlah, IClassifyTool, Tool
+from .baml_types import ClassifyResponse, Conversation, IBlah, IClassifyTool, IMessageSimplifier, Message, MessageSender, Tool
 from baml_lib._impl.deserializer import Deserializer
 from json5 import loads
-
-
-@baml.Blah.test
-async def test_default(BlahImpl: IBlah):
-    deserializer = Deserializer[str](str)
-    param = deserializer.from_string("""\
-te\
-""")
-    await BlahImpl(param)
 
 
 @baml.Blah.test
@@ -29,6 +20,15 @@ async def test_basic2(BlahImpl: IBlah):
 big fan of this\
 """)
     await BlahImpl(param)
+
+
+@baml.MessageSimplifier.test
+async def test_functional_white(MessageSimplifierImpl: IMessageSimplifier):
+    deserializer = Deserializer[Conversation](Conversation)
+    param = deserializer.from_string("""\
+ttt\
+""")
+    await MessageSimplifierImpl(param)
 
 
 @baml.ClassifyTool.test
@@ -47,6 +47,24 @@ async def test_wooden_tomato(ClassifyToolImpl: IClassifyTool):
         query=query,
         context=context
     )
+
+
+@baml.Blah.test
+async def test_default(BlahImpl: IBlah):
+    deserializer = Deserializer[str](str)
+    param = deserializer.from_string("""\
+te\
+""")
+    await BlahImpl(param)
+
+
+@baml.MessageSimplifier.test
+async def test_silly_ivory(MessageSimplifierImpl: IMessageSimplifier):
+    deserializer = Deserializer[Conversation](Conversation)
+    param = deserializer.from_string("""\
+tttttt\
+""")
+    await MessageSimplifierImpl(param)
 
 
 @baml.ClassifyTool.test

@@ -199,13 +199,12 @@ export class WebPanelView {
                     null,
                     2,
                   )
-            // console.log(saveTestRequest, uri)
             try {
               await vscode.workspace.fs.writeFile(uri, Buffer.from(fileContent))
-              console.log('saved')
             } catch (e: any) {
               console.log(e)
             }
+            return
           }
           case 'jumpToFile': {
             try {
