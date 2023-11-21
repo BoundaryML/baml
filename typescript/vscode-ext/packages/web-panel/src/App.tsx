@@ -12,14 +12,14 @@ function App() {
   return (
     <CustomErrorBoundary>
       <ASTProvider>
-        <div className="flex flex-col gap-2">
+        <div className="sticky top-2 right-0 z-10 text-end">
+          <VSCodeLink href="https://docs.trygloo.com">Docs</VSCodeLink>
+        </div>
+        <div className="flex flex-col gap-2 relative">
           <div className="flex flex-row justify-between">
             <div className="flex flex-row gap-1 items-center">
               <b>Function</b> <FunctionSelector />
             </div>
-            <VSCodeLink className="flex ml-auto h-7" href="https://docs.trygloo.com">
-              Docs
-            </VSCodeLink>
           </div>
           <FunctionPanel />
         </div>
