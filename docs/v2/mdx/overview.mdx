@@ -1,18 +1,18 @@
 
 (BAML) Basically A Made-up Language
 
-BAML is a domain-specific-language for AI applications building with LLMs or other AI models.
+BAML is a Domain Specific Language (DSL) for building AI applications and interacting with AI models.
 
-BAML helps you define your ML model inputs and outputs, and generates Python / Typescript (soon) code to call your models. Rather than working with raw strings with LLMs, BAML adds a thin but powerful layer between your LLM and your code that translates all strings to your strongly-typed model inputs and outputs. 
+BAML helps you define your ML model inputs and outputs, and generates Python / Typescript (soon) code to call your models. Rather than interacting with LLMs using raw strings, BAML adds a thin but powerful layer between your LLM and your code that translates all strings to your strongly-typed model inputs and outputs. 
 
-Because BAML can track every type sent and received, that means you can query it more powerful ways than you could with raw string inputs and outputs, so you can train other custom models using LLM-generated data.
+Because BAML can track every type sent and received, that means you can query it more powerful ways -- so you can train other custom models using LLM-generated data. This language has also allowed us to build powerful features like an **integrated VSCode BAML playground**.
 
 BAML is inspired by **[Prisma](https://www.prisma.io/)**, a DSL for databases. BAML is designed to be a **DSL for AI model tasks**.
 
 
 
 ## BAML Components
-1. **VSCode Extension** - A VSCode extension that provides syntax highlighting and static analysis for BAML files.
+1. **VSCode Extension** - A VSCode extension that provides a playground, syntax highlighting and static analysis for BAML files.
 2. **BAML CLI** - A CLI that provides code generation for BAML files to python (and soon typescript)
 3. **BAML Python Library** - Utilities that enables generated BAML functions to trace inputs and outputs. We build on top of the **OpenTelemetry** standard.
 4. **Gloo Dashboard** - A dashboard that allows you to view and query your BAML executions, run test suites, label data, and soon train new models.
@@ -40,18 +40,25 @@ async def classify():
 
 Proceed to the [Language Tour](./baml-by-example) to learn more.
 
-**Gloo Dashboard**
+
+### Gloo Dashboard Example
 The dashboard helps you track requests, label data, and run test suites.
 <img src="/images/baml/dashboard-full-baml.png" />
 
 
-## Why use BAML vs other libraries?
-1. **Comments in prompts** - You heard that right... we added support for comments inside your prompts strings!
-1. **Strong type safety** - Query your data with into fully typed pandas dataframes of your input and output objects, rather than raw strings or JSON.
-1. **Smarter deserialization** - BAML parses your inputs and outputs for you, and provides guardrails to ensure your inputs and outputs are valid. Even when the JSON is valid, the types may not be. The BAML deserializer can smartly detect when an LLM may have output a string rather than a number, and still parse things correctly. For enums it even keeps track of hallucinated values.
+### VSCode Playground
+The VSCode playground allows you to test prompts instantly and see the generated prompt.
+<img src="/images/baml/baml-playground.png" />
+
+
+
+## Why use BAML vs other libraries or frameworks?
+1. **Use an integrated VSCode playground** - The playground is co-located with your prompt configurations. No need to context switch out of VSCode for simple tests.
+1. **Comments in prompts** - You heard that right... we added support for [comments inside the actual prompt string](/v2/mdx/baml-by-example#comments).
+1. **Strong type safety** - Query your data with into fully typed pandas dataframes of your input and output objects, rather than raw strings or JSON. (Coming soon)
+1. **Smarter deserialization** - BAML parses your inputs and outputs for you, and provides guardrails to ensure your inputs and outputs are valid. _Even when the JSON is valid, the desired output type may not be what you wanted_. The BAML deserializer can smartly detect when an LLM may have output a string rather than a number, and still parse things correctly. For enums it even keeps track of hallucinated values.
 1. **Code organization** - Organize your code in statically analyzed BAML files, without having to use plaintext or YAML
-1. **Prompt linting** - Get warnings when your prompt isn't following best practices. We are planning on adding custom guidelines!
 1. **Out-of-the-box request tracing and data analytics**
-1. **Test Suites** - Run and visualize test results for all your BAML functions over time.
-1. **Flexibility and cross-compatibility** - Your teammate can easily copy your BAML config and run it themselves, with a fully generated type-safe client to run your tasks.
-1. **Native VSCode Prompt Playground (coming soon)**
+1. **Test Suites** - Run and visualize test results for all your BAML functions over time using the playground or using our dashboard-enabled pytest plugin.
+1. **Flexibility and cross-compatibility** - Running BAML prompts are as easy as copying the BAML files over and pressing "run"
+1. **Prompt linting** - Get warnings when your prompt isn't following best practices. We are planning on adding custom guidelines.

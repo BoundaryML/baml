@@ -28,19 +28,9 @@
     "name": "Schedule call",
     "url": "https://calendly.com/gloo-vai/30min"
   },
-  "versions": ["v2", "v1"],
+  "versions": ["v2"],
   "tabs": [],
   "navigation": [
-    {
-      "group": "Get Started",
-      "pages": [
-        "v1/mdx/overview",
-
-        "v1/mdx/installation",
-        "v1/mdx/running-tests"
-      ],
-      "version": "v1"
-    },
     {
       "group": "Get Started",
       "pages": [
@@ -50,20 +40,6 @@
         "v2/mdx/running-tests"
       ],
       "version": "v2"
-    },
-
-    {
-      "group": "Guides",
-      "pages": [
-        {
-          "group": "Basic",
-          "pages": [
-            "v1/mdx/examples/classification",
-            "v1/mdx/examples/extraction"
-          ]
-        }
-      ],
-      "version": "v1"
     },
     {
       "group": "Guides",
@@ -77,38 +53,6 @@
         }
       ],
       "version": "v2"
-    },
-    {
-      "group": "Reference",
-      "pages": [
-        {
-          "group": "Gloo Config Syntax",
-          "pages": [
-            {
-              "group": "Types",
-              "pages": [
-                "v1/mdx/ref/type",
-                "v1/mdx/ref/enum",
-                "v1/mdx/ref/class"
-              ]
-            },
-            {
-              "group": "Functions",
-              "pages": [
-                "v1/mdx/ref/function",
-                "v1/mdx/ref/test-group",
-                {
-                  "group": "@variant",
-                  "pages": ["v1/mdx/ref/variant-llm", "v1/mdx/ref/variant-code"]
-                }
-              ]
-            },
-
-            "v1/mdx/ref/method"
-          ]
-        }
-      ],
-      "version": "v1"
     },
     {
       "group": "Reference",
