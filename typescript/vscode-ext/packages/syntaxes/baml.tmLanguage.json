@@ -228,7 +228,10 @@
       ]
     },
     "curly_comment": {
-      "match": "\\{//.*?//}",
+      "begin": "\\{//",
+      "beginCaptures": {},
+      "end": "//}",
+      "endCaptures": {},
       "name": "comment.line.double-slash.baml"
     },
     "key_quoted_string_pair": {
