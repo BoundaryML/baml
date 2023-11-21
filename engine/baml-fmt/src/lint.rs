@@ -138,6 +138,15 @@ pub(crate) fn run(input: &str) -> String {
                         "type": format!("{}", arg.field_type),
                     }),
                 },
+                "test_cases": func.walk_tests().map(
+                    |t| {
+                        let props = t.test_case();
+                        json!({
+                            "name": StringSpan::new(t.name(), &t.identifier().span()),
+                            "content": props.content.value(),
+                        })
+                    }
+                ).collect::<Vec<_>>(),
                 "impls": func.walk_variants().map(
                     |i| {
                         let props = i.properties();

@@ -2,13 +2,18 @@ export interface ParserDatabase {
   functions: SFunction[]
   enums: {
     name: StringSpan
-  }[];
+  }[]
   classes: {
     name: StringSpan
-  }[];
+  }[]
+  test_cases: {
+    name: StringSpan
+    // For now this is json.
+    content: string
+  }[]
   clients: {
     name: StringSpan
-  }[];
+  }[]
 }
 
 export interface StringSpan {
@@ -20,16 +25,16 @@ export interface StringSpan {
 
 export type ArgType =
   | {
-    arg_type: 'positional'
-    type: string
-  }
-  | {
-    arg_type: 'named'
-    values: {
-      name: StringSpan
+      arg_type: 'positional'
       type: string
-    }[]
-  }
+    }
+  | {
+      arg_type: 'named'
+      values: {
+        name: StringSpan
+        type: string
+      }[]
+    }
 
 interface Impl {
   type: 'llm'

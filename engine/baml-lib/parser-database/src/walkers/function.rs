@@ -10,7 +10,7 @@ use crate::{
     WithSerialize,
 };
 
-use super::{ClassWalker, EnumWalker, VariantWalker, Walker};
+use super::{ClassWalker, ConfigurationWalker, EnumWalker, VariantWalker, Walker};
 
 use std::iter::ExactSizeIterator;
 
@@ -124,6 +124,15 @@ impl<'db> FunctionWalker<'db> {
                 }
                 _ => None,
             })
+            .collect::<Vec<_>>()
+            .into_iter()
+    }
+
+    /// All the test cases for this function.
+    pub fn walk_tests(self) -> impl ExactSizeIterator<Item = ConfigurationWalker<'db>> {
+        self.db
+            .walk_test_cases()
+            .filter(|w| w.test_case().function.0 == self.name())
             .collect::<Vec<_>>()
             .into_iter()
     }
