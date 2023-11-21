@@ -1,100 +1,31 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react'
-import { vscode } from './utils/vscode'
-import {
-  VSCodeButton,
-  VSCodeTextArea,
-  VSCodeDropdown,
-  VSCodeOption,
-  VSCodeDivider,
-} from '@vscode/webview-ui-toolkit/react'
-import { Allotment } from 'allotment'
-import 'allotment/dist/style.css'
+import { useEffect, useState, useMemo } from 'react'
 
 import './App.css'
-import { TextArea } from '@vscode/webview-ui-toolkit'
-import Playground, { SelectedResource } from './Playground'
-import { ParserDatabase } from '../../../../common/src/parser_db'
+
+import { ASTProvider } from './shared/ASTProvider'
+import FunctionPanel from './shared/FunctionPanel'
+import { FunctionSelector } from './shared/Selectors'
+import { VSCodeLink } from '@vscode/webview-ui-toolkit/react'
 import CustomErrorBoundary from './utils/ErrorFallback'
 
 function App() {
-  const [projects, setProjects] = useState<{ root_dir: string; db: ParserDatabase }[]>([])
-  const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>()
-
-  let selectedProject = useMemo(
-    () =>
-      selectedProjectId === undefined ? undefined : projects.find((project) => project.root_dir === selectedProjectId),
-    [projects, selectedProjectId],
-  )
-  const [selectedResource, setSelectedResource] = useState<SelectedResource | undefined>(undefined)
-
-  useEffect(() => {
-    const fn = (event: any) => {
-      const command = event.data.command
-      const messageContent = event.data.content
-
-      switch (command) {
-        case 'setDb': {
-          try {
-            setProjects(messageContent.map((p: any) => ({ root_dir: p[0], db: p[1] })))
-            setSelectedProjectId((prev) => (prev ?? messageContent.length > 0 ? messageContent[0][0] : undefined))
-          } catch (error) {
-            console.error('REACT error:' + JSON.stringify(error, null, 2))
-          }
-          break
-        }
-        case 'rmDb': {
-          setProjects((prev) => prev.filter((project) => project.root_dir !== messageContent))
-          break
-        }
-        case 'setSelectedResource': {
-          console.log('setSelectedResource', messageContent)
-          const payloadResource = messageContent as {
-            functionName: string
-            implName: string
-          }
-          setSelectedResource({
-            functionName: payloadResource.functionName,
-            implName: payloadResource.implName,
-          })
-          break
-        }
-      }
-    }
-    console.log('addEventListener')
-    window.addEventListener('message', fn)
-
-    return () => {
-      console.log('removeEventListener')
-      window.removeEventListener('message', fn)
-    }
-  }, [])
-
-  if (!selectedProject) {
-    if (projects.length === 0) {
-      return (
-        <div>
-          <CustomErrorBoundary>Loading...</CustomErrorBoundary>
-        </div>
-      )
-    }
-
-    return (
-      <div>
-        <CustomErrorBoundary>
-          <h1>Projects</h1>
-          <div>
-            {projects.map((project) => (
-              <div key={project.root_dir}>
-                <button onClick={() => setSelectedProjectId(project.root_dir)}>{project.root_dir}</button>
-              </div>
-            ))}
+  return (
+    <CustomErrorBoundary>
+      <ASTProvider>
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-row justify-between">
+            <div className="flex flex-row gap-1 items-center">
+              <b>Function</b> <FunctionSelector />
+            </div>
+            <VSCodeLink className="flex ml-auto h-7" href="https://docs.trygloo.com">
+              Docs
+            </VSCodeLink>
           </div>
-        </CustomErrorBoundary>
-      </div>
-    )
-  }
-
-  return <Playground project={selectedProject.db} selectedResource={selectedResource} />
+          <FunctionPanel />
+        </div>
+      </ASTProvider>
+    </CustomErrorBoundary>
+  )
 }
 
 export default App

@@ -25,19 +25,16 @@ export function activate(context: vscode.ExtensionContext) {
     WebPanelView.render(context.extensionUri)
 
     WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
-    console.log("setresource");
     WebPanelView.currentPanel?.postMessage('setSelectedResource', {
       functionName: initialFunctionName,
       implName: initialImplName,
+      testCaseName: undefined,
     })
   })
 
   context.subscriptions.push(bamlPlygroundCommand)
-  context.subscriptions.push(vscode.languages.registerCodeLensProvider(
-    { scheme: 'file', language: "baml" },
-    glooLens
-  ))
-
+  context.subscriptions.push(vscode.languages.registerCodeLensProvider({ scheme: 'file', language: 'baml' }, glooLens))
+  context.subscriptions.push(vscode.languages.registerCodeLensProvider({ scheme: 'file', language: 'json' }, glooLens))
 
   plugins.map(async (plugin) => {
     const enabled = await plugin.enabled()
@@ -54,7 +51,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 export function deactivate(): void {
   testExecutor.close()
-  console.log("deactivate");
+  console.log('deactivate')
   plugins.forEach((plugin) => {
     if (plugin.deactivate) {
       void plugin.deactivate()

@@ -16,36 +16,10 @@ import {
 import { useEffect, useMemo, useState } from 'react'
 import { vscode } from './utils/vscode'
 import { Separator } from './components/ui/separator'
-export interface SelectedResource {
-  functionName: string | undefined
-  implName: string | undefined
-}
+import { FunctionSelector, TestCaseSelector } from './shared/Selectors'
+import { SelectedResource } from './shared/ASTProvider'
 
-interface SelectedTest {
-  span?: StringSpan | undefined // undefined if unsaved
-  name: string
-  content: string
-}
-
-const Playground: React.FC<{ project: ParserDatabase; selectedResource?: SelectedResource }> = ({
-  project: { functions, classes },
-  selectedResource,
-}) => {
-  console.log('init playground', selectedResource)
-  let [selectedId, setSelectedId] = useState<SelectedResource>(
-    selectedResource ?? {
-      functionName: functions.at(0)?.name.value,
-      implName: functions.at(0)?.impls.at(0)?.name.value,
-    },
-  )
-  console.log('selectedId', selectedId)
-
-  useEffect(() => {
-    if (selectedResource) {
-      setSelectedId(selectedResource)
-    }
-  }, [selectedResource])
-
+const Playground: React.FC = () => {
   let { func, impl, prompt } = useMemo(() => {
     let func = functions.find((func) => func.name.value === selectedId.functionName)
     let impl = func?.impls.find((impl) => impl.name.value === selectedId.implName)
@@ -76,94 +50,33 @@ const Playground: React.FC<{ project: ParserDatabase; selectedResource?: Selecte
       const defaultImplName = func.impls.at(0)?.name.value
 
       // Update the selectedId state only if the defaultImplName is different from the current one, and only if we've already initialized the selected resource
-      if (selectedId.implName !== defaultImplName && selectedResource) {
+      if (selectedId.implName !== defaultImplName) {
         setSelectedId((prev) => ({ ...prev, implName: defaultImplName }))
       }
     }
   }, [func, impl, selectedId.implName])
 
+  // Comment this out as it sometimes picks the wrong function (race condition?).
   // jump to definition when the function and/or impl changes
-  useEffect(() => {
-    if (impl) {
-      vscode.postMessage({
-        command: 'jumpToFile',
-        data: impl.name,
-      })
-    } else if (func) {
-      vscode.postMessage({
-        command: 'jumpToFile',
-        data: func.name,
-      })
-    }
-  }, [func?.name.value, impl?.name.value])
-
-  const [testResults, setTestResults] = useState<TestResult[]>([])
-
-  useEffect(() => {
-    const fn = (event: any) => {
-      const command = event.data.command
-      const messageContent = event.data.content
-
-      switch (command) {
-        case 'test-results': {
-          const testResults = messageContent as TestResult[]
-          setTestResults(testResults)
-          break
-        }
-      }
-    }
-
-    // TODO: these listeners probably need to go in some seaprate provider, as we are likely losing msgs anytime this component rerenders.
-    window.addEventListener('message', fn)
-
-    return () => {
-      window.removeEventListener('message', fn)
-    }
-  }, [])
-
-  const newTestCase: SelectedTest = {
-    name: '<new test>',
-    content: '',
-  }
-  const [selectedTestCase, setSelectedTestCase] = useState<SelectedTest>(newTestCase)
-
-  const testResultforSelectedImpl = testResults.find((testResult) => {
-    const testName = getFullTestName('mytest', impl?.name.value ?? '', func?.name.value ?? '')
-    return testName === testResult.fullTestName
-  })
-
-  const testCasesForFunc: SelectedTest[] = (func?.test_cases ?? []).map((testCase) => {
-    return {
-      ...testCase,
-      name: testCase.name.value,
-      span: func?.name,
-    }
-  })
-
-  testCasesForFunc.push(newTestCase)
+  // useEffect(() => {
+  //   if (impl) {
+  //     vscode.postMessage({
+  //       command: 'jumpToFile',
+  //       data: impl.name,
+  //     })
+  //   } else if (func) {
+  //     vscode.postMessage({
+  //       command: 'jumpToFile',
+  //       data: func.name,
+  //     })
+  //   }
+  // }, [func?.name.value, impl?.name.value])
 
   return (
     <main className="w-full h-screen py-2">
-      <div>Function</div>
       <div className="flex flex-row justify-between">
-        <div className="justify-start">
-          <VSCodeDropdown
-            className="mr-1"
-            value={selectedId.functionName ?? '<unset>'}
-            onChange={(event) =>
-              setSelectedId((prev) => ({
-                ...prev,
-                functionName: (event as React.FormEvent<HTMLSelectElement>).currentTarget.value,
-              }))
-            }
-          >
-            {functions.map((func, index) => (
-              <VSCodeOption key={index} value={func.name.value}>
-                {func.name.value}
-              </VSCodeOption>
-            ))}
-          </VSCodeDropdown>
-          <VSCodeLink onClick={() => vscode.postMessage({ command: 'jumpToFile', data: func?.name })}>Open</VSCodeLink>
+        <div className="flex flex-row gap-1">
+          <b>Function</b> <FunctionSelector />
         </div>
         <VSCodeLink className="flex justify-end ml-auto h-7" href="https://docs.trygloo.com">
           Docs
@@ -173,42 +86,7 @@ const Playground: React.FC<{ project: ParserDatabase; selectedResource?: Selecte
         <div className="flex flex-col">
           <span className="font-bold">Test Case</span>
           <div className="max-w-[450px]">
-            <VSCodeDropdown
-              className="mr-1"
-              value={selectedTestCase?.name ?? '<new test>'}
-              onChange={(event) => {
-                // setSelected((prev) => ({
-                //   ...prev,
-                //   functionName: (event as React.FormEvent<HTMLSelectElement>).currentTarget.value,
-                // }))
-                const testCase = testCasesForFunc.find(
-                  (testCase) => testCase.name === (event as React.FormEvent<HTMLSelectElement>).currentTarget.value,
-                )
-                if (testCase) {
-                  // parse the testcase content string into json object.
-                  const content = JSON.parse(testCase.content)
-                  // if there are more than 1 keys, then it's a multi-arg test case
-                  if (Object.keys(content).length > 1) {
-                    setMultiArgValues(
-                      Object.entries(content).map(([name, value]) => ({
-                        name,
-                        value: JSON.stringify(value),
-                      })),
-                    )
-                  } else {
-                    // otherwise, it's a single-arg test case
-                    setSingleArgValue(JSON.stringify(content[Object.keys(content)[0]]))
-                  }
-                }
-                setSelectedTestCase(testCase ?? newTestCase)
-              }}
-            >
-              {testCasesForFunc.map((testCase, index) => (
-                <VSCodeOption key={index} value={testCase.name} className="max-w-[300px]">
-                  {testCase.name}
-                </VSCodeOption>
-              ))}
-            </VSCodeDropdown>
+            <TestCaseSelector />
           </div>
 
           {func.input.arg_type === 'positional' ? (
@@ -557,7 +435,6 @@ export const TestOutputBox = ({
                   return JSON.stringify(parsed, null, 2)
                 }
                 return JSON.stringify(testResult.output, null, 2)
-                // if the output is an object, then return the pretty printed json
               } catch (e) {
                 if (typeof testResult.output === 'string') {
                   return testResult.output
@@ -575,10 +452,6 @@ export const TestOutputBox = ({
       </div>
     </div>
   )
-}
-
-const FunctionPlayground: React.FC<{ func: ParserDatabase['functions'][0] }> = ({ func }) => {
-  return null
 }
 
 export default Playground

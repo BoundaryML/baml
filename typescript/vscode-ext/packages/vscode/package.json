@@ -28,12 +28,13 @@
     "clean": "rimraf out"
   },
   "dependencies": {
+    "@baml/common": "workspace:*",
     "env-paths": "2.2.1",
     "minimatch": "6.2.0",
+    "unique-names-generator": "^4.7.1",
     "vscode-jsonrpc": "^8.2.0",
     "vscode-languageclient": "7.0.0",
-    "watcher": "1.2.0",
-    "@baml/common": "workspace:*"
+    "watcher": "1.2.0"
   },
   "devDependencies": {
     "@types/glob": "8.1.0",

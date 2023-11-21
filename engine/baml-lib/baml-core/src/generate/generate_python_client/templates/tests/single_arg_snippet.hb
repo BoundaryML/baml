@@ -5,3 +5,5 @@ async def test_{{test_case_name}}({{function_name}}Impl: I{{function_name}}):
 {{{test_case_input}}}\
 """)
     await {{function_name}}Impl(param)
+
+

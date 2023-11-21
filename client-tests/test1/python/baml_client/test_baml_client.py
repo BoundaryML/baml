@@ -8,16 +8,52 @@
 # fmt: off
 
 from .__do_not_import.generated_baml_client import baml
-from .baml_types import ClassifyResponse, IClassifyTool, Tool
+from .baml_types import ClassifyResponse, IBlah, IClassifyTool, Tool
 from baml_lib._impl.deserializer import Deserializer
 from json5 import loads
+
+
+@baml.Blah.test
+async def test_default(BlahImpl: IBlah):
+    deserializer = Deserializer[str](str)
+    param = deserializer.from_string("""\
+te\
+""")
+    await BlahImpl(param)
+
+
+@baml.Blah.test
+async def test_basic2(BlahImpl: IBlah):
+    deserializer = Deserializer[str](str)
+    param = deserializer.from_string("""\
+big fan of this\
+""")
+    await BlahImpl(param)
+
+
+@baml.ClassifyTool.test
+async def test_wooden_tomato(ClassifyToolImpl: IClassifyTool):
+    case = loads("""
+{
+  "query": "this example",
+  "context": "is amazing"
+}
+""")
+    deserializer_query = Deserializer[str](str)
+    query = deserializer_query.from_string(case["query"])
+    deserializer_context = Deserializer[str](str)
+    context = deserializer_context.from_string(case["context"])
+    await ClassifyToolImpl(
+        query=query,
+        context=context
+    )
 
 
 @baml.ClassifyTool.test
 async def test_basic(ClassifyToolImpl: IClassifyTool):
     case = loads("""
 {
-  "query": "some random query",
+  "query": "some rand",
   "context": "some random context"
 }
 """)
@@ -29,3 +65,5 @@ async def test_basic(ClassifyToolImpl: IClassifyTool):
         query=query,
         context=context
     )
+
+

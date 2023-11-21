@@ -4,6 +4,15 @@ import { getNonce } from '../utils/getNonce'
 import * as vscode from 'vscode'
 import { StringSpan, TestRequest } from '@baml/common'
 import testExecutor from './execute_test'
+
+import { uniqueNamesGenerator, Config, adjectives, colors, animals } from 'unique-names-generator'
+
+const customConfig: Config = {
+  dictionaries: [adjectives, colors, animals],
+  separator: '_',
+  length: 2,
+}
+
 /**
  * This class manages the state and behavior of HelloWorld webview panels.
  *
@@ -40,9 +49,9 @@ export class WebPanelView {
     testExecutor.setTestStateListener((testResults) => {
       this._panel.webview.postMessage({
         command: 'test-results',
-        content: testResults
+        content: testResults,
       })
-    });
+    })
   }
 
   /**
@@ -73,7 +82,7 @@ export class WebPanelView {
           retainContextWhenHidden: true,
         },
       )
-      console.log("render");
+      console.log('render')
 
       WebPanelView.currentPanel = new WebPanelView(panel, extensionUri)
     }
@@ -164,24 +173,40 @@ export class WebPanelView {
           // todo: MULTI TEST
           case 'runTest': {
             const testRequest: TestRequest = message.data
-
-            console.log("rntest", testRequest)
-
-            testExecutor.runTest(testRequest, getWorkspaceFolderPath()!);
+            testExecutor.runTest(testRequest, getWorkspaceFolderPath()!)
             return
+          }
+          case 'saveTest': {
+            const saveTestRequest: {
+              root_path: string
+              funcName: string
+              testCaseName: StringSpan | undefined
+              params: TestRequest['functions'][0]['tests'][0]['params']
+            } = message.data
+            const uri = vscode.Uri.parse(
+              saveTestRequest.testCaseName?.source_file ??
+                `${saveTestRequest.root_path}/__tests/${saveTestRequest.funcName}/${uniqueNamesGenerator(
+                  customConfig,
+                )}.json`,
+            )
+            const fileContent =
+              saveTestRequest.params.type === 'positional'
+                ? saveTestRequest.params.value
+                : JSON.stringify(
+                    Object.fromEntries(saveTestRequest.params.value.map((kv) => [kv.name, kv.value])),
+                    null,
+                    2,
+                  )
+            vscode.workspace.fs.writeFile(uri, Buffer.from(fileContent))
           }
           case 'jumpToFile': {
             try {
-              const span = message.data as StringSpan;
-              const uri = vscode.Uri.parse(span.source_file);
+              const span = message.data as StringSpan
+              const uri = vscode.Uri.parse(span.source_file)
               vscode.workspace.openTextDocument(uri).then((doc) => {
-                const range = new vscode.Range(
-                  doc.positionAt(span.start),
-                  doc.positionAt(span.end),
-                )
+                const range = new vscode.Range(doc.positionAt(span.start), doc.positionAt(span.end))
                 vscode.window.showTextDocument(doc, { selection: range, viewColumn: ViewColumn.One })
-              }
-              )
+              })
             } catch (e: any) {
               console.log(e)
             }
