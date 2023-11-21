@@ -1,19 +1,25 @@
 use internal_baml_parser_database::walkers::ConfigurationWalker;
 use internal_baml_parser_database::RetryPolicyStrategy;
-use internal_baml_schema_ast::ast::WithName;
+use internal_baml_schema_ast::ast::{Configuration, FunctionArgs, WithName};
 use serde_json::json;
 
 use crate::generate::generate_python_client::file::clean_file_name;
 
 use super::{
     file::FileCollector,
-    template::render_template,
+    template::{render_template, HSTemplate},
     traits::{JsonHelper, WithWritePythonString},
+    WithToCode,
 };
 
 impl WithWritePythonString for ConfigurationWalker<'_> {
     fn file_name(&self) -> String {
-        clean_file_name(self.ast_node().get_type())
+        clean_file_name(match self.id.1 {
+            "retry_policy" => "retry_policy",
+            "test_case" => "test_baml_client",
+            "printer" => "printer",
+            _ => unreachable!("Invalid configuration type"),
+        })
     }
 
     fn write_py_file<'a>(&'a self, fc: &'a mut FileCollector) {
@@ -21,19 +27,74 @@ impl WithWritePythonString for ConfigurationWalker<'_> {
             // Printers aren't generated.
             return;
         }
-        fc.start_py_file("configs", "__init__");
-        fc.last_file()
-            .add_import(&format!(".{}", self.file_name()), self.name());
-        fc.complete_file();
 
-        fc.start_py_file("configs", self.file_name());
-        let json = self.json(fc.last_file());
-        render_template(
-            super::template::HSTemplate::RetryPolicy,
-            fc.last_file(),
-            json,
-        );
-        fc.complete_file();
+        match self.ast_node() {
+            Configuration::RetryPolicy(_) => {
+                fc.start_py_file("configs", "__init__");
+                fc.last_file()
+                    .add_import(&format!(".{}", self.file_name()), self.name());
+                fc.complete_file();
+
+                fc.start_py_file("configs", self.file_name());
+                let json = self.json(fc.last_file());
+                render_template(
+                    super::template::HSTemplate::RetryPolicy,
+                    fc.last_file(),
+                    json,
+                );
+                fc.complete_file();
+            }
+            Configuration::Printer(_) => {}
+            Configuration::TestCase(tc) => {
+                fc.start_export_file(".", "test_baml_client");
+
+                let func = self.walk_function();
+
+                func.walk_input_args().for_each(|arg| {
+                    arg.required_classes().for_each(|class| {
+                        fc.last_file().add_import(".baml_types", class.name());
+                    });
+                    arg.required_enums().for_each(|enum_| {
+                        fc.last_file().add_import(".baml_types", enum_.name());
+                    });
+                });
+                func.walk_output_args().for_each(|arg| {
+                    arg.required_classes().for_each(|class| {
+                        fc.last_file().add_import(".baml_types", class.name());
+                    });
+                    arg.required_enums().for_each(|enum_| {
+                        fc.last_file().add_import(".baml_types", enum_.name());
+                    });
+                });
+                fc.last_file()
+                    .add_import(".baml_types", &format!("I{}", func.name()));
+
+                match func.ast_function().input() {
+                    FunctionArgs::Unnamed(arg) => {
+                        let data = json!({
+                            "function_name": func.name(),
+                            "test_case_name": tc.name(),
+                            "test_case_input": self.test_case().content.value(),
+                            "test_case_type": arg.to_py_string(fc.last_file()),
+                        });
+                        render_template(HSTemplate::SingleArgTestSnippet, fc.last_file(), data);
+                    }
+                    FunctionArgs::Named(args) => {
+                        let data = json!({
+                            "function_name": func.name(),
+                            "test_case_name": tc.name(),
+                            "test_case_input": self.test_case().content.value(),
+                            "test_case_types": args.args.iter().map(|(k, v)| json!({
+                                "name": k.name(),
+                                "type": v.to_py_string(fc.last_file()),
+                             })).collect::<Vec<_>>(),
+                        });
+                        render_template(HSTemplate::MultiArgTestSnippet, fc.last_file(), data);
+                    }
+                }
+                fc.complete_file();
+            }
+        }
     }
 }
 
@@ -74,6 +135,13 @@ impl JsonHelper for ConfigurationWalker<'_> {
                     "name": self.name(),
                     "max_retries": self.retry_policy().max_retries,
                     "strategy": strategy,
+                })
+            }
+            "test_case" => {
+                json!({
+                    "name": self.name(),
+                    "function": self.test_case().function.0,
+                    "test_case": self.test_case().content.value(),
                 })
             }
             "printer" => {

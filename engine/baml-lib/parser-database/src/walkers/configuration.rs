@@ -1,6 +1,6 @@
 use internal_baml_schema_ast::ast::{self, WithIdentifier};
 
-use crate::types::{PrinterType, RetryPolicy};
+use crate::types::{PrinterType, RetryPolicy, TestCase};
 
 /// A `class` declaration in the Prisma schema.
 pub type ConfigurationWalker<'db> = super::Walker<'db, (ast::ConfigurationId, &'static str)>;
@@ -21,6 +21,20 @@ impl ConfigurationWalker<'_> {
     pub fn printer(&self) -> &PrinterType {
         assert!(self.id.1 == "printer");
         &self.db.types.printers[&self.id.0]
+    }
+
+    /// Get as a test case configuration.
+    pub fn test_case(&self) -> &TestCase {
+        assert!(self.id.1 == "test_case");
+        &self.db.types.test_cases[&self.id.0]
+    }
+
+    /// Get the function that this test case is testing.
+    pub fn walk_function(&self) -> super::FunctionWalker<'_> {
+        assert!(self.id.1 == "test_case");
+        self.db
+            .find_function_by_name(&self.test_case().function.0)
+            .unwrap()
     }
 }
 

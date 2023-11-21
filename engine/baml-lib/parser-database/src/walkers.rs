@@ -250,4 +250,15 @@ impl<'db> crate::ParserDatabase {
                 id: (top_id, "printer"),
             })
     }
+
+    /// Walk all classes in the schema.
+    pub fn walk_test_cases(&self) -> impl Iterator<Item = ConfigurationWalker<'_>> {
+        self.ast()
+            .iter_tops()
+            .filter_map(|(top_id, _)| top_id.as_test_case_id())
+            .map(move |top_id| Walker {
+                db: self,
+                id: (top_id, "test_case"),
+            })
+    }
 }

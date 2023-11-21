@@ -5,7 +5,7 @@ use handlebars::handlebars_helper;
 #[derive(Debug)]
 pub(super) enum HSTemplate {
     SingleArgTestSnippet,
-    MultiArgTestSnippet,
+    LiveMultiArgTestSnippet,
 }
 
 handlebars_helper!(BLOCK_OPEN: |*_args| "{");
@@ -56,11 +56,11 @@ fn use_partial(
             f.add_import("baml_lib._impl.deserializer", "Deserializer");
             String::from("single_arg_snippet")
         }
-        HSTemplate::MultiArgTestSnippet => {
-            register_partial_file!(reg, "tests", "multi_arg_snippet");
+        HSTemplate::LiveMultiArgTestSnippet => {
+            register_partial_file!(reg, "tests", "live_multi_arg_snippet");
             f.add_import("baml_client", "baml");
             f.add_import("baml_lib._impl.deserializer", "Deserializer");
-            String::from("multi_arg_snippet")
+            String::from("live_multi_arg_snippet")
         }
     }
 }

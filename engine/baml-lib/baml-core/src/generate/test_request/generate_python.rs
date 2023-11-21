@@ -56,7 +56,7 @@ impl TestRequest {
                                  })).collect::<Vec<_>>(),
                             });
                             render_template(
-                                HSTemplate::MultiArgTestSnippet,
+                                HSTemplate::LiveMultiArgTestSnippet,
                                 content,
                                 data,
                             );

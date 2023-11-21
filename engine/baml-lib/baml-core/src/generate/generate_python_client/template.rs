@@ -12,6 +12,8 @@ pub(super) enum HSTemplate {
     BAMLClient,
     Variant,
     RetryPolicy,
+    SingleArgTestSnippet,
+    MultiArgTestSnippet,
 }
 
 handlebars_helper!(BLOCK_OPEN: |*_args| "{");
@@ -114,6 +116,19 @@ fn use_partial(
 
             register_partial_file!(reg, "functions", "function_pyi");
             String::from("function_pyi")
+        }
+        HSTemplate::SingleArgTestSnippet => {
+            register_partial_file!(reg, "tests", "single_arg_snippet");
+            f.add_import(".__do_not_import.generated_baml_client", "baml");
+            f.add_import("baml_lib._impl.deserializer", "Deserializer");
+            String::from("single_arg_snippet")
+        }
+        HSTemplate::MultiArgTestSnippet => {
+            register_partial_file!(reg, "tests", "multi_arg_snippet");
+            f.add_import("json5", "loads");
+            f.add_import(".__do_not_import.generated_baml_client", "baml");
+            f.add_import("baml_lib._impl.deserializer", "Deserializer");
+            String::from("multi_arg_snippet")
         }
     }
 }

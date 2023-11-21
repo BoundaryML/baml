@@ -7,7 +7,6 @@ use crate::{
 
 use internal_baml_schema_ast::ast::{ConfigBlockProperty, WithIdentifier};
 
-
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use validate_reserved_names::*;
 
@@ -20,6 +19,8 @@ pub(super) struct Names {
     pub(super) tops: HashMap<StringId, TopId>,
     /// Generators have their own namespace.
     pub(super) generators: HashMap<StringId, TopId>,
+    /// Tests have their own namespace.
+    pub(super) tests: HashMap<StringId, TopId>,
     pub(super) model_fields: HashMap<(ast::ClassId, StringId), ast::FieldId>,
     // pub(super) composite_type_fields: HashMap<(ast::CompositeTypeId, StringId), ast::FieldId>,
 }
@@ -114,7 +115,10 @@ pub(super) fn resolve_names(ctx: &mut Context<'_>) {
             (_, ast::Top::Config(config)) => {
                 validate_config_name(config, ctx.diagnostics);
                 check_for_duplicate_properties(top, config.fields(), &mut tmp_names, ctx);
-                &mut names.tops
+                match config {
+                    ast::Configuration::TestCase(_) => &mut names.tests,
+                    _ => &mut names.tops,
+                }
             }
         };
 

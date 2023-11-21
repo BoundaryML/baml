@@ -19,12 +19,23 @@ pub(crate) fn validate_client_name(ast_client: &ast::Client, diagnostics: &mut D
 }
 
 pub(crate) fn validate_config_name(ast_config: &ast::Configuration, diagnostics: &mut Diagnostics) {
-    validate_name(
-        ast_config.get_type(),
-        ast_config.identifier(),
-        diagnostics,
-        true,
-    );
+    match ast_config {
+        ast::Configuration::TestCase(_) => {
+            validate_name(
+                ast_config.get_type(),
+                ast_config.identifier(),
+                diagnostics,
+                false,
+            );
+        }
+        _ => validate_name(
+            ast_config.get_type(),
+            ast_config.identifier(),
+            diagnostics,
+            // Test cases don't need to be upper case.
+            true,
+        ),
+    }
 }
 
 pub(crate) fn validate_variant_name(ast_variant: &ast::Variant, diagnostics: &mut Diagnostics) {
