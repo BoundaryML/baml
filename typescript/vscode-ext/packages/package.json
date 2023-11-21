@@ -96,17 +96,7 @@
         "title": "Open Playground",
         "category": "Baml"
       }
-    ],
-    "menus": {
-      "editor/title": [
-        {
-          "title": "Open Playground",
-          "when": "resourceLangId == baml && !baml.bamlPanelOpen",
-          "command": "baml.openBamlPanel",
-          "group": "navigation"
-        }
-      ]
-    }
+    ]
   },
   "scripts": {
     "lint": "eslint \"src/**/*.ts\"",
