@@ -25,6 +25,9 @@ class BAMLClient:
             stage=stage,
         )
 
+    def add_before_send_message_hook(self, hook: Callable[[LogSchema], None]):
+        add_message_transformer_hook(hook)
+
     def flush(self):
         flush_trace_logs()
 

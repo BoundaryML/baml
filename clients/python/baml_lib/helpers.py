@@ -40,8 +40,6 @@ class Params:
             self.api = self.__create_api(process_id)
             otel.use_tracing(self.api)
 
-
-
     @property
     def stage(self) -> str:
         return self.__stage
@@ -61,9 +59,7 @@ class Params:
     @base_url.setter
     def base_url(self, base_url: str) -> None:
         if base_url == "reset":
-            base_url = os.environ.get(
-                "GLOO_BASE_URL", "https://app.trygloo.com/api"
-            )
+            base_url = os.environ.get("GLOO_BASE_URL", "https://app.trygloo.com/api")
         if base_url != self.__base_url:
             self.__base_url = base_url
             self.process_id = str(uuid.uuid4())
@@ -79,7 +75,7 @@ class Params:
         if project_id != self.__project_id:
             self.__project_id = project_id
             self.process_id = str(uuid.uuid4())
-            
+
     @property
     def secret_key(self) -> typing.Optional[str]:
         return self.__secret_key
@@ -91,7 +87,6 @@ class Params:
         if secret_key != self.__secret_key:
             self.__secret_key = secret_key
             self.process_id = str(uuid.uuid4())
-
 
     def set_base_url(self, base_url: typing.Optional[str]) -> None:
         if base_url is not None:
@@ -136,7 +131,17 @@ def baml_init(
     base_url: typing.Optional[str] = None,
     enable_cache: typing.Optional[bool] = None,
     stage: typing.Optional[str] = None,
+    **kwargs: typing.Any,
 ) -> __InternalBAMLConfig:
+    if kwargs.pop("idempotent") is not None:
+        logger.warning("idempotent is deprecated. Please use enable_cache instead.")
+
+    if on_message_hook := kwargs.pop("message_transformer_hook", None):
+        logger.warning(
+            "message_transformer_hook is deprecated. Please use baml_client.add_before_send_message_hook."
+        )
+        otel.add_message_transformer_hook(on_message_hook)
+
     global __CachedParams
     __CachedParams.set_base_url(base_url)
     __CachedParams.set_project_id(project_id)
