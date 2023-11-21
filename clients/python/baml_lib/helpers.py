@@ -133,7 +133,7 @@ def baml_init(
     stage: typing.Optional[str] = None,
     **kwargs: typing.Any,
 ) -> __InternalBAMLConfig:
-    if kwargs.pop("idempotent") is not None:
+    if kwargs.pop("idempotent", None) is not None:
         logger.warning("idempotent is deprecated. Please use enable_cache instead.")
 
     if on_message_hook := kwargs.pop("message_transformer_hook", None):

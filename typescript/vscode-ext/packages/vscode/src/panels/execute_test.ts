@@ -69,19 +69,18 @@ class TestState {
         })),
       ),
     )
-    this.testStateListener?.(this.test_results);
+    this.testStateListener?.(this.test_results)
   }
 
   public handleMessage(data: Buffer) {
     try {
       // Data may be inadvertently concatenated together, but we actually send a \n delimiter between messages to be able to split msgs properly.
-      const delimitedData = data.toString().split('<END_MSG>\n');
+      const delimitedData = data.toString().split('<END_MSG>\n')
       delimitedData.forEach((data) => {
         if (data) {
-          this.handleMessageLine(data);
+          this.handleMessageLine(data)
         }
-      });
-
+      })
     } catch (e) {
       console.error(e)
 
@@ -124,8 +123,7 @@ class TestState {
     const fullTestName = data.context.tags?.['test_case_arg_name']
     const testResult = this.test_results.find((test) => test.fullTestName === fullTestName)
     if (testResult && data.event_type === 'func_llm') {
-      testResult.output = JSON.stringify(data.io.output?.value)
-
+      testResult.output = data.io.output?.value
       this.testStateListener?.(this.test_results)
     }
   }
@@ -171,7 +169,7 @@ class TestExecutor {
   }
 
   public async runTest(tests: TestRequest, cwd: string) {
-    outputChannel.show(true);
+    outputChannel.show(true)
     this.testState.resetTestCases(tests)
     const tempFilePath = path.join(os.tmpdir(), 'test_temp.py')
     const code = await generateTestRequest(tests)

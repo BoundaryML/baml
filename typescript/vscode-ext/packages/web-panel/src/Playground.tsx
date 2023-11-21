@@ -305,9 +305,50 @@ const Playground: React.FC<{ project: ParserDatabase; selectedResource?: Selecte
       <div className="w-full pb-4 px-0.5">
         <Separator className="bg-vscode-textSeparator-foreground" />
       </div>
-      <ImplView impl={impl} func={func} testResult={testResultforSelectedImpl} prompt={prompt} />
+      <ImplView impl={impl} func={func} testResult={testResultforSelectedImpl} prompt={prompt} classes={classes} />
     </main>
   )
+}
+
+const createLink = (classSpan: StringSpan): JSX.Element => (
+  <VSCodeLink
+    onClick={() => {
+      vscode.postMessage({ command: 'jumpToFile', data: classSpan })
+    }}
+  >
+    {classSpan.value}
+  </VSCodeLink>
+)
+
+const buildLinkedTypes = (typeString: string, classes: ParserDatabase['classes']): React.ReactNode[] => {
+  const elements: React.ReactNode[] = []
+  const regex = /(\w+)/g
+  let lastIndex = 0
+
+  typeString.replace(regex, (match, className, index) => {
+    // Add text before the match as plain string
+    if (index > lastIndex) {
+      elements.push(typeString.substring(lastIndex, index))
+    }
+
+    // Check if the class name matches any in the classes array
+    const matchedClass = classes.find((cls) => cls.name.value === className)
+    if (matchedClass) {
+      elements.push(createLink(matchedClass.name))
+    } else {
+      elements.push(className)
+    }
+
+    lastIndex = index + match.length
+    return match
+  })
+
+  // Add any remaining text
+  if (lastIndex < typeString.length) {
+    elements.push(typeString.substring(lastIndex))
+  }
+
+  return elements
 }
 
 const LinkedInputArgs = ({
@@ -325,48 +366,7 @@ const LinkedInputArgs = ({
     return null
   }
 
-  const createLink = (classSpan: StringSpan): JSX.Element => (
-    <VSCodeLink
-      onClick={() => {
-        vscode.postMessage({ command: 'jumpToFile', data: classSpan })
-      }}
-    >
-      {classSpan.value}
-    </VSCodeLink>
-  )
-
-  const buildLinkedTypes = (typeString: string): React.ReactNode[] => {
-    const elements: React.ReactNode[] = []
-    const regex = /(\w+)/g
-    let lastIndex = 0
-
-    typeString.replace(regex, (match, className, index) => {
-      // Add text before the match as plain string
-      if (index > lastIndex) {
-        elements.push(typeString.substring(lastIndex, index))
-      }
-
-      // Check if the class name matches any in the classes array
-      const matchedClass = classes.find((cls) => cls.name.value === className)
-      if (matchedClass) {
-        elements.push(createLink(matchedClass.name))
-      } else {
-        elements.push(className)
-      }
-
-      lastIndex = index + match.length
-      return match
-    })
-
-    // Add any remaining text
-    if (lastIndex < typeString.length) {
-      elements.push(typeString.substring(lastIndex))
-    }
-
-    return elements
-  }
-
-  const linkedTypes = buildLinkedTypes(func.input.type)
+  const linkedTypes = buildLinkedTypes(func.input.type, classes)
 
   return (
     <div className="flex flex-col gap-1">
@@ -391,9 +391,11 @@ const ImplView = ({
   func,
   prompt,
   testResult,
+  classes,
 }: {
   impl?: ParserDatabase['functions'][0]['impls'][0]
   func?: ParserDatabase['functions'][0]
+  classes?: ParserDatabase['classes']
   prompt: string
   testResult?: TestResult
 }) => {
@@ -403,7 +405,12 @@ const ImplView = ({
   }
   return (
     <div className="flex flex-col">
-      <TestOutputBox key={func.name.value + impl.name.value} testResult={testResult} />
+      <TestOutputBox
+        key={func.name.value + impl.name.value}
+        testResult={testResult}
+        func={func}
+        classes={classes ?? []}
+      />
 
       <div className="flex flex-col gap-0 overflow-y-scroll h-[50%] pb-6">
         <div className="flex flex-row justify-between">
@@ -514,7 +521,15 @@ const TestStatusIcon = ({ testStatus }: { testStatus: TestStatus }) => {
     </div>
   )
 }
-export const TestOutputBox = ({ testResult }: { testResult?: TestResult }) => {
+export const TestOutputBox = ({
+  testResult,
+  func,
+  classes,
+}: {
+  testResult?: TestResult
+  func: ParserDatabase['functions'][0]
+  classes: ParserDatabase['classes']
+}) => {
   if (!testResult) {
     return null
   }
@@ -523,7 +538,7 @@ export const TestOutputBox = ({ testResult }: { testResult?: TestResult }) => {
     <div className="flex flex-col gap-1 h-[20%] pb-8">
       <div className="flex flex-row items-center gap-x-2">
         <div>
-          <b>Output</b>
+          <b>Output ({func.output.arg_type === 'positional' && buildLinkedTypes(func.output.type, classes)})</b>
         </div>
         {testResult.status && <TestStatusIcon testStatus={testResult.status} />}
       </div>
@@ -531,7 +546,26 @@ export const TestOutputBox = ({ testResult }: { testResult?: TestResult }) => {
       <div className="max-w-full">
         <pre className="w-full h-full min-h-[80px] p-1 overflow-y-scroll break-words whitespace-break-spaces bg-vscode-input-background">
           {testResult.output ? (
-            testResult.output
+            (() => {
+              try {
+                if (typeof testResult.output === 'string') {
+                  let parsed = JSON.parse(testResult.output)
+                  // if the output is a string, then just return the string
+                  if (typeof parsed === 'string') {
+                    return parsed
+                  }
+                  return JSON.stringify(parsed, null, 2)
+                }
+                return JSON.stringify(testResult.output, null, 2)
+                // if the output is an object, then return the pretty printed json
+              } catch (e) {
+                if (typeof testResult.output === 'string') {
+                  return testResult.output
+                } else {
+                  return JSON.stringify(testResult.output, null, 2)
+                }
+              }
+            })()
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-vscode-descriptionForeground">
               <div>Nothing here yet...</div>

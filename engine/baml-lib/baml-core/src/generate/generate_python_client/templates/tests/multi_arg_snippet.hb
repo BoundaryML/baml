@@ -1,7 +1,7 @@
 @baml.{{function_name}}.test
 async def test_{{test_case_name}}({{function_name}}Impl: I{{function_name}}):
-    case = loads("""\
-{{{test_case_input}}}\
+    case = loads("""
+{{{test_case_input}}}
 """)
     {{#each test_case_types}}
     deserializer_{{this.name}} = Deserializer[{{this.type}}]({{this.type}})

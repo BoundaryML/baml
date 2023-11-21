@@ -15,11 +15,11 @@ from json5 import loads
 
 @baml.ClassifyTool.test
 async def test_basic(ClassifyToolImpl: IClassifyTool):
-    case = loads("""\
+    case = loads("""
 {
   "query": "some random query",
   "context": "some random context"
-}\
+}
 """)
     deserializer_query = Deserializer[str](str)
     query = deserializer_query.from_string(case["query"])
