@@ -6,6 +6,7 @@ import { StringSpan, TestRequest } from '@baml/common'
 import testExecutor from './execute_test'
 
 import { uniqueNamesGenerator, Config, adjectives, colors, animals } from 'unique-names-generator'
+import { registerFileChange } from '../plugins/language-server'
 
 const customConfig: Config = {
   dictionaries: [adjectives, colors, animals],
@@ -186,21 +187,22 @@ export class WebPanelView {
             const uri = saveTestRequest.testCaseName?.source_file
               ? vscode.Uri.parse(saveTestRequest.testCaseName?.source_file)
               : vscode.Uri.joinPath(
-                  vscode.Uri.parse(saveTestRequest.root_path),
-                  '__tests',
-                  saveTestRequest.funcName,
-                  `${uniqueNamesGenerator(customConfig)}.json`,
-                )
+                vscode.Uri.parse(saveTestRequest.root_path),
+                '__tests',
+                saveTestRequest.funcName,
+                `${uniqueNamesGenerator(customConfig)}.json`,
+              )
             const fileContent =
               saveTestRequest.params.type === 'positional'
                 ? saveTestRequest.params.value
                 : JSON.stringify(
-                    Object.fromEntries(saveTestRequest.params.value.map((kv) => [kv.name, kv.value])),
-                    null,
-                    2,
-                  )
+                  Object.fromEntries(saveTestRequest.params.value.map((kv) => [kv.name, kv.value])),
+                  null,
+                  2,
+                )
             try {
               await vscode.workspace.fs.writeFile(uri, Buffer.from(fileContent))
+              await registerFileChange(uri.toString(), "json");
             } catch (e: any) {
               console.log(e)
             }

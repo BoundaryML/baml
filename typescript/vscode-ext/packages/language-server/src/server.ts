@@ -166,6 +166,7 @@ export function startServer(options?: LSOptions): void {
       // TODO: revalidate if something changed
       bamlCache.refreshDirectory(e.document)
       bamlCache.addDocument(e.document)
+      debouncedValidateTextDocument(e.document)
       console.log('Added document ' + e.document.uri)
     } catch (e: any) {
       if (e instanceof Error) {
@@ -179,6 +180,7 @@ export function startServer(options?: LSOptions): void {
   // Only keep settings for open documents
   documents.onDidClose((e) => {
     try {
+      console.log("Closing documents", e.document.uri);
       bamlCache.refreshDirectory(e.document)
       // Revalidate all open files since this one may have been deleted.
       // we could be smarter and only do this if the doc was deleted, not just closed.
@@ -316,6 +318,7 @@ export function startServer(options?: LSOptions): void {
   })
 
   documents.onDidSave((change: { document: TextDocument }) => {
+    console.log('onDidSave ' + change.document.uri);
     try {
       const cliPath = config?.path || 'baml'
       console.log('cliPath ' + cliPath)
@@ -404,6 +407,22 @@ export function startServer(options?: LSOptions): void {
   // })
   connection.onRequest('generatePythonTests', (params: TestRequest) => {
     return generateTestFile(params)
+  })
+  connection.onRequest("registerFileChange", ({
+    fileUri,
+    language,
+  }: {
+    fileUri: string;
+    language: string;
+  }) => {
+    // TODO: revalidate if something changed
+    // create textdocument from file:
+    console.log("registerFileChange", fileUri, language);
+    const textDocument = TextDocument.create(fileUri, language, 1, '')
+    bamlCache.refreshDirectory(textDocument)
+    bamlCache.getDocuments(textDocument).forEach((doc) => {
+      debouncedValidateTextDocument(doc)
+    });
   })
 
   console.log('Server-side -- listening to connection')

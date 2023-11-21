@@ -26,6 +26,10 @@ export const generateTestRequest = async (test_request: TestRequest): Promise<st
   return await client.sendRequest('generatePythonTests', test_request)
 }
 
+export const registerFileChange = async (fileUri: string, language: string) => {
+  return await client.sendRequest('registerFileChange', { fileUri, language })
+}
+
 interface BAMLMessage {
   type: 'warn' | 'info' | 'error'
   message: string
@@ -185,7 +189,11 @@ const plugin: BamlVSCodePlugin = {
     // Options to control the language client
     const clientOptions: LanguageClientOptions = {
       // Register the server for prisma documents
-      documentSelector: [{ scheme: 'file', language: 'baml' }],
+      documentSelector: [{ scheme: 'file', language: 'baml' },
+      {
+        language: "json",
+        pattern: '**/baml_src/**'
+      }],
 
       /* This middleware is part of the workaround for https://github.com/prisma/language-tools/issues/311 */
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment

@@ -48,9 +48,10 @@ export function gatherFiles(dir: string, fileList: string[] = []): string[] {
 
 export function convertToTextDocument(filePath: string): TextDocument {
   const fileContent = fs.readFileSync(URI.parse(filePath).fsPath, 'utf-8');
+  const fileExtension = path.extname(filePath);
   return TextDocument.create(
     filePath.toString(),
-    'baml',
+    fileExtension === '.baml' ? 'baml' : 'json',
     1,
     fileContent
   );

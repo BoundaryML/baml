@@ -67,11 +67,19 @@ export class BamlDirCache {
       const fileCache = this.createFileCacheIfNotExist(textDocument)
       const parentDir = this.getBamlDir(textDocument)
       if (fileCache && parentDir) {
-        console.log('bamlDir', parentDir)
         const allFiles = gatherFiles(parentDir)
         fileCache.getDocuments().forEach((doc) => {
           if (!allFiles.includes(doc.uri)) {
+            console.log(`removing ${doc.uri}`)
             fileCache.removeFile(doc)
+          }
+        })
+        // add new files
+        allFiles.forEach((filePath) => {
+          if (!fileCache?.getDocument(filePath)) {
+            console.log(`adding ${filePath}`)
+            const doc = convertToTextDocument(filePath)
+            fileCache?.addFile(doc)
           }
         })
       } else {
@@ -119,7 +127,7 @@ export class BamlDirCache {
 export class FileCache {
   // document uri to the text doc
   private readonly cache: Map<string, TextDocument> = new Map()
-  constructor() {}
+  constructor() { }
 
   public addFile(textDocument: TextDocument) {
     this.cache.set(textDocument.uri, textDocument)

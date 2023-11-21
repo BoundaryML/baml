@@ -2,7 +2,7 @@ function ClassifyTool {
   input (query: string, context: string)
   output ClassifyResponse
 }
-
+ 
 class ClassifyResponse { 
   tool Tool[] @description(#"
     Any number of tools the user may want to use
@@ -51,8 +51,8 @@ enum Tool {
   @description(Use this tool if the user is asking to generate text)
 }
 
-
-
+ 
+ 
 impl<llm, ClassifyTool> v1 {
     client AZURE_GPT4
 

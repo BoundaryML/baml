@@ -4,12 +4,12 @@ import { handleFormatPanic, handleWasmError } from './internals'
 type LintResponse = {
   diagnostics: LinterError[]
 } & (
-  | { ok: false }
-  | {
+    | { ok: false }
+    | {
       ok: true
       response: ParserDatabase
     }
-)
+  )
 
 export interface ParserDatabase {
   functions: SFunction[]
@@ -24,16 +24,16 @@ interface StringSpan {
 
 type ArgType =
   | {
-      arg_type: 'positional'
-      type: string
-    }
+    arg_type: 'positional'
+    type: string
+  }
   | {
-      arg_type: 'named'
-      values: {
-        name: string
-        type: string
-      }[]
-    }
+    arg_type: 'named'
+    values: {
+      name: string
+      type: string
+    }[]
+  }
 
 interface Impl {
   type: 'llm'
@@ -81,7 +81,7 @@ export default function lint(input: LinterInput, onError?: (errorMessage: string
 
     const result = languageWasm.lint(JSON.stringify(input))
     const parsed = JSON.parse(result) as LintResponse
-    console.log(`lint result ${JSON.stringify(JSON.parse(result), null, 2)}`)
+    // console.log(`lint result ${JSON.stringify(JSON.parse(result), null, 2)}`)
     return parsed
   } catch (e) {
     const err = e as Error
