@@ -4,6 +4,8 @@ from baml_client import baml
 from baml_client.baml_types import (
     Conversation,
     ProposedMessage,
+    IMaybePolishText,
+    ITextPolisher,
 )
 from baml_client.testing import baml_test
 
@@ -11,16 +13,16 @@ from baml_client.testing import baml_test
 async def some_traced_fn():
     pass
 
+from baml_client import baml
+from baml_client.baml_types import IBlah
+from baml_lib._impl.deserializer import Deserializer
 
-from baml_client import baml_init
-from typing import Sequence
-from baml_client.tracing import LogSchema
 
-
-baml_init(
-    before_message_export_hook=message_export,
-    message_transformer_hook=message_transformer,
-)
+@baml.Blah.test
+async def test_mytest(BlahImpl: IBlah):
+    deserializer = Deserializer[str](str)
+    param = deserializer.from_string("""asdfasdf""")
+    await BlahImpl(param)
 
 
 @baml_test
@@ -32,20 +34,20 @@ async def test_logic() -> None:
     print(result)
 
 
-# @baml.MaybePolishText.test
-# class TestThingies:
-#     def test_with_a_class(self, MaybePolishTextImpl: IMaybePolishText):
-#         pass
+@baml.MaybePolishText.test
+class TestThingies:
+    def test_with_a_class(self, MaybePolishTextImpl: IMaybePolishText):
+        pass
 
 
-# class TestMultiple:
-#     @baml.MaybePolishText.test
-#     def test_with_class2(self, MaybePolishTextImpl: IMaybePolishText):
-#         pass
+class TestMultiple:
+    @baml.MaybePolishText.test
+    def test_with_class2(self, MaybePolishTextImpl: IMaybePolishText):
+        pass
 
-#     @baml.TextPolisher.test
-#     def test_with_class3(self, TextPolisherImpl: ITextPolisher):
-#         pass
+    @baml.TextPolisher.test
+    def test_with_class3(self, TextPolisherImpl: ITextPolisher):
+        pass
 
 
 def test_without_fixture3():

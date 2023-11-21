@@ -7,7 +7,7 @@ use serde_json::json;
 
 use crate::{configuration::Generator, lockfile::LockFileWrapper};
 
-use self::{file::FileCollector, traits::WithWritePythonString};
+use self::traits::WithWritePythonString;
 
 mod r#class;
 mod client;
@@ -20,6 +20,8 @@ mod template;
 mod traits;
 mod types;
 mod variants;
+pub(super) use r#file::{File, FileCollector};
+pub(super) use traits::WithToCode;
 
 fn generate_py_file<'a>(obj: &impl WithWritePythonString, fc: &'a mut FileCollector) {
     obj.write_py_file(fc);
@@ -44,6 +46,10 @@ pub(crate) fn generate_py(
         .for_each(|f| generate_py_file(&f, &mut fc));
     db.walk_retry_policies()
         .for_each(|f| generate_py_file(&f, &mut fc));
+    let mut test_cases = db.walk_test_cases().collect::<Vec<_>>();
+    test_cases.sort_by(|a, b| a.name().cmp(b.name()));
+    test_cases.iter().for_each(|f| generate_py_file(f, &mut fc));
+
     generate_py_file(db, &mut fc);
     info!("Writing files to {}", gen.output.to_string_lossy());
     let temp_path = PathBuf::from(format!("{}.tmp", &gen.output.to_string_lossy().to_string()));
@@ -69,7 +75,7 @@ impl WithWritePythonString for ParserDatabase {
         // Add final aliased imports so users just need to import from baml_client and not baml_core, baml_lib and baml_test
         fc.start_export_file("./testing", "__init__");
         fc.last_file()
-            .add_import_and_reexport("baml_test", "baml_test");
+            .add_import_and_reexport("pytest_baml", "baml_test");
 
         fc.complete_file();
 
@@ -138,7 +144,7 @@ impl WithWritePythonString for ParserDatabase {
                     &format!(".clients.{}", f.file_name()),
                     &format!("{}", f.name()),
                 );
-                f.name()
+                f.name().to_string()
             })
             .collect::<Vec<_>>();
         clients.sort();

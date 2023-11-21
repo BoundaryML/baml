@@ -15,17 +15,16 @@ class ImprovedResponse {
     field Sentiment
 }
 
+ 
 function MaybePolishText {
     input ProposedMessage
     output ImprovedResponse
 }
-
+ 
 function TextPolisher {
     input ProposedMessage
     output string
-} 
-   
- 
+}
 
 impl<llm, MaybePolishText> v1 {
     client AZURE_GPT4
@@ -45,10 +44,7 @@ impl<llm, MaybePolishText> v1 {
 
         Do not use {// affirmative //} or negative unless the question is a yes or no question.
 
-        Thread until now:
-        {#input.thread}
-
-        Previous Response: {#input.generated_response}
+       
 
         {#print_enum(Sentiment)}
 

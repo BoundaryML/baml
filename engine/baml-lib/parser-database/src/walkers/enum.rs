@@ -1,6 +1,6 @@
 use internal_baml_diagnostics::DatamodelError;
 use internal_baml_prompt_parser::ast::{PrinterBlock, WithSpan};
-use internal_baml_schema_ast::ast::{WithDocumentation, WithName};
+use internal_baml_schema_ast::ast::{WithDocumentation, WithIdentifier, WithName};
 use serde_json::json;
 
 use crate::{
@@ -19,9 +19,6 @@ pub type EnumValueWalker<'db> = Walker<'db, (ast::EnumId, ast::EnumValueId)>;
 
 impl<'db> EnumWalker<'db> {
     /// The name of the enum.
-    pub fn name(self) -> &'db str {
-        &self.ast_enum().name()
-    }
 
     /// The AST node.
     pub fn ast_enum(self) -> &'db ast::Enum {
@@ -44,9 +41,9 @@ impl<'db> EnumWalker<'db> {
     }
 }
 
-impl<'db> WithName for EnumWalker<'db> {
-    fn name(&self) -> &str {
-        self.ast_enum().name()
+impl<'db> WithIdentifier for EnumWalker<'db> {
+    fn identifier(&self) -> &ast::Identifier {
+        self.ast_enum().identifier()
     }
 }
 

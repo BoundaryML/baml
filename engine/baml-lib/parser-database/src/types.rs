@@ -128,6 +128,13 @@ pub struct ClientProperties {
 }
 
 #[derive(Debug, Clone)]
+pub struct TestCase {
+    pub function: (String, Span),
+    pub content: RawString,
+    pub group: Option<(String, Span)>,
+}
+
+#[derive(Debug, Clone)]
 pub struct Printer {
     pub template: (String, Span),
 }
@@ -200,6 +207,7 @@ pub(super) struct Types {
     pub(super) client_properties: HashMap<ast::ClientId, ClientProperties>,
     pub(super) retry_policies: HashMap<ast::ConfigurationId, RetryPolicy>,
     pub(super) printers: HashMap<ast::ConfigurationId, PrinterType>,
+    pub(super) test_cases: HashMap<ast::ConfigurationId, TestCase>,
 }
 
 impl Types {
@@ -627,6 +635,9 @@ fn visit_config<'db>(
         }
         ast::Configuration::Printer(printer) => {
             configurations::visit_printer(idx, printer, ctx);
+        }
+        ast::Configuration::TestCase(test_case) => {
+            configurations::visit_test_case(idx, test_case, ctx);
         }
     }
 }

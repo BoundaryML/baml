@@ -54,6 +54,12 @@ pub fn validate(params: String) -> Result<(), JsError> {
     baml_fmt::validate(params).map_err(|e| JsError::new(&e))
 }
 
+#[wasm_bindgen]
+pub fn generate_test_file(params: String) -> String {
+    register_panic_hook();
+    baml_fmt::generate_test_file(params)
+}
+
 // #[wasm_bindgen]
 // pub fn native_types(input: String) -> String {
 //     register_panic_hook();

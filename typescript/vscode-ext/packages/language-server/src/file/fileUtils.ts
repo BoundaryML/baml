@@ -36,7 +36,7 @@ export function gatherFiles(dir: string, fileList: string[] = []): string[] {
       gatherFiles(filePath, fileList);
     } else {
       // check if it has .baml extension
-      if (filePath.endsWith('.baml')) {
+      if (filePath.endsWith('.baml') || filePath.endsWith('.json')) {
         fileList.push(filePath);
       }
     }
@@ -48,9 +48,10 @@ export function gatherFiles(dir: string, fileList: string[] = []): string[] {
 
 export function convertToTextDocument(filePath: string): TextDocument {
   const fileContent = fs.readFileSync(URI.parse(filePath).fsPath, 'utf-8');
+  const fileExtension = path.extname(filePath);
   return TextDocument.create(
     filePath.toString(),
-    'baml',
+    fileExtension === '.baml' ? 'baml' : 'json',
     1,
     fileContent
   );

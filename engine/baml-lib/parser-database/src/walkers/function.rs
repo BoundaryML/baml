@@ -1,7 +1,7 @@
 use either::Either;
 use internal_baml_diagnostics::DatamodelError;
 use internal_baml_prompt_parser::ast::WithSpan;
-use internal_baml_schema_ast::ast::{FuncArguementId, Identifier};
+use internal_baml_schema_ast::ast::{FuncArguementId, Identifier, WithIdentifier};
 use serde_json::json;
 
 use crate::{
@@ -10,7 +10,7 @@ use crate::{
     WithSerialize,
 };
 
-use super::{ClassWalker, EnumWalker, VariantWalker, Walker};
+use super::{ClassWalker, ConfigurationWalker, EnumWalker, VariantWalker, Walker};
 
 use std::iter::ExactSizeIterator;
 
@@ -21,6 +21,11 @@ impl<'db> FunctionWalker<'db> {
     /// The name of the function.
     pub fn name(self) -> &'db str {
         self.ast_function().name()
+    }
+
+    /// The name of the function.
+    pub fn identifier(self) -> &'db Identifier {
+        self.ast_function().identifier()
     }
 
     /// The ID of the function in the db
@@ -38,6 +43,42 @@ impl<'db> FunctionWalker<'db> {
         match self.ast_function().input() {
             ast::FunctionArgs::Named(_) => false,
             ast::FunctionArgs::Unnamed(_) => true,
+        }
+    }
+
+    /// Arguments of the function.
+    pub fn find_input_arg_by_name(self, name: &str) -> Option<ArgWalker<'db>> {
+        match self.ast_function().input() {
+            ast::FunctionArgs::Named(arg_list) => {
+                arg_list.iter_args().find_map(|(idx, (idn, _))| {
+                    if idn.name() == name {
+                        Some(ArgWalker {
+                            db: self.db,
+                            id: (self.id, true, idx),
+                        })
+                    } else {
+                        None
+                    }
+                })
+            }
+            ast::FunctionArgs::Unnamed(_) => None,
+        }
+    }
+
+    /// Arguments of the function.
+    pub fn find_input_arg_by_position(self, position: u32) -> Option<ArgWalker<'db>> {
+        match self.ast_function().input() {
+            ast::FunctionArgs::Named(_) => None,
+            ast::FunctionArgs::Unnamed(_) => {
+                if position == 0 as u32 {
+                    Some(ArgWalker {
+                        db: self.db,
+                        id: (self.id, true, FuncArguementId(position)),
+                    })
+                } else {
+                    None
+                }
+            }
         }
     }
 
@@ -85,6 +126,19 @@ impl<'db> FunctionWalker<'db> {
             })
             .collect::<Vec<_>>()
             .into_iter()
+    }
+
+    /// All the test cases for this function.
+    pub fn walk_tests(self) -> impl ExactSizeIterator<Item = ConfigurationWalker<'db>> {
+        let mut tests = self
+            .db
+            .walk_test_cases()
+            .filter(|w| w.test_case().function.0 == self.name())
+            .collect::<Vec<_>>();
+
+        tests.sort_by(|a, b| a.name().cmp(b.name()));
+
+        tests.into_iter()
     }
 }
 

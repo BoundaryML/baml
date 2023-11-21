@@ -40,6 +40,10 @@ impl SourceFile {
     pub fn path(&self) -> String {
         self.path.to_string_lossy().to_string()
     }
+
+    pub fn path_buf(&self) -> &PathBuf {
+        &self.path
+    }
 }
 
 impl From<(PathBuf, &str)> for SourceFile {

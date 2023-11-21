@@ -177,19 +177,6 @@ fn visit_strategy(
     val: Vec<((&str, &Span), &internal_baml_schema_ast::ast::Expression)>,
     diagnostics: &mut internal_baml_diagnostics::Diagnostics,
 ) -> Option<RetryPolicyStrategy> {
-    // #[derive(Debug, Clone)]
-    // pub struct ContantDelayStrategy {
-    //     pub delay_ms: u32,
-    //     pub initial_delay_ms: Option<u32>,
-    // }
-
-    // #[derive(Debug, Clone)]
-    // pub struct ExponentialBackoffStrategy {
-    //     pub delay_ms: u32,
-    //     pub initial_delay_ms: Option<u32>,
-    //     pub multiplier: Option<f32>,
-    // }
-
     let mut r#type = None;
     let mut delay_ms = None;
     let mut max_delay_ms = None;
@@ -267,6 +254,66 @@ fn visit_strategy(
                 ),
             );
             None
+        }
+    }
+}
+
+pub(crate) fn visit_test_case<'db>(
+    idx: ConfigurationId,
+    config: &'db RetryPolicyConfig,
+    ctx: &mut Context<'db>,
+) {
+    let mut function_name = None;
+    let mut test_case = None;
+    let mut group = None;
+
+    config
+        .iter_fields()
+        .for_each(|(_idx, f)| match (f.name(), &f.value) {
+            (name, None) => {
+                ctx.push_error(DatamodelError::new_config_property_missing_value_error(
+                    name,
+                    config.name(),
+                    "printer",
+                    f.identifier().span().clone(),
+                ))
+            }
+            ("function", Some(val)) => match coerce::string_with_span(&val, ctx.diagnostics) {
+                Some((t, span)) => function_name = Some((t.to_string(), span.clone())),
+                None => {}
+            },
+            ("input", Some(val)) => match coerce::raw_string(&val, ctx.diagnostics) {
+                Some(raw_string) => test_case = Some(raw_string),
+                None => {}
+            },
+            ("group", Some(val)) => match coerce::string_with_span(&val, ctx.diagnostics) {
+                Some((t, span)) => group = Some((t.to_string(), span.clone())),
+                None => {}
+            },
+            (name, Some(_)) => ctx.push_error(DatamodelError::new_property_not_known_error(
+                name,
+                f.identifier().span().clone(),
+            )),
+        });
+
+    match (function_name, test_case) {
+        (None, _) => ctx.push_error(DatamodelError::new_validation_error(
+            "Missing `function_name` property",
+            config.identifier().span().clone(),
+        )),
+        (Some(function_name), None) => ctx.push_error(DatamodelError::new_validation_error(
+            "Missing `test_case` property",
+            function_name.1.clone(),
+        )),
+        (Some(function), Some(test_case)) => {
+            ctx.types.test_cases.insert(
+                idx,
+                super::TestCase {
+                    function,
+                    content: test_case.clone(),
+                    group,
+                },
+            );
         }
     }
 }

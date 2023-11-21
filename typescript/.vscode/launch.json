@@ -7,7 +7,7 @@
       "request": "launch",
       "runtimeExecutable": "${execPath}",
       "sourceMaps": true,
-      "args": ["--extensionDevelopmentPath=${workspaceFolder}/vscode-ext/packages", "--disable-extensions"],
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}/vscode-ext/packages"],
       "outFiles": [
         "${workspaceFolder}/vscode-ext/packages/vscode/out/**",
 

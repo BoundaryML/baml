@@ -3,8 +3,8 @@ from .provider import (
     set_tags,
     create_event,
     flush_trace_logs,
-    set_before_message_export_hook,
-    set_message_transformer_hook,
+    add_message_transformer_hook,
+    remove_message_transformer_hook,
 )
 from .tracer import trace
 
@@ -14,6 +14,6 @@ __all__ = [
     "create_event",
     "use_tracing",
     "flush_trace_logs",
-    "set_before_message_export_hook",
-    "set_message_transformer_hook",
+    "add_message_transformer_hook",
+    "remove_message_transformer_hook",
 ]

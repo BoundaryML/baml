@@ -2,7 +2,7 @@ function ClassifyTool {
   input (query: string, context: string)
   output ClassifyResponse
 }
-
+ 
 class ClassifyResponse { 
   tool Tool[] @description(#"
     Any number of tools the user may want to use
@@ -36,7 +36,7 @@ class ClassifyResponse {
 }
 
 enum Tool {
-  @@alias(food)
+  @@alias(tools)
   
   CodeInterpreter
   @alias(k1) 
@@ -47,17 +47,24 @@ enum Tool {
   @description(Use this tool if the user is asking to draw something)
 
   GenerateText 
-  @alias(k3) 
-  @description(Use this if the tool is just asking for a simple answer)
+  @alias(k3)
+  @description(Use this tool if the user is asking to generate text)
 }
 
-
-
+ 
+ 
 impl<llm, ClassifyTool> v1 {
     client AZURE_GPT4
 
     override Tool {
       @@alias(tool)
+    }
+
+    override ClassifyResponse {
+      assistant_response @alias(foo)
+      @description(#"
+        This is ait
+      "#)
     }
 
 

@@ -245,6 +245,13 @@ impl TopId {
             _ => None,
         }
     }
+
+    pub fn as_test_case_id(self) -> Option<ConfigurationId> {
+        match self {
+            TopId::Config((id, "test_case")) => Some(id),
+            _ => None,
+        }
+    }
 }
 
 impl std::ops::Index<TopId> for SchemaAst {

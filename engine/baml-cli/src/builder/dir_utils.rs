@@ -54,7 +54,7 @@ pub(crate) fn get_src_dir(
 
 // Function to yield each found path
 pub(crate) fn get_src_files(baml_dir: &PathBuf) -> Result<Vec<PathBuf>, CliError> {
-    let glob_pattern = baml_dir.join("**/*.baml").to_string_lossy().to_string();
+    let glob_pattern = baml_dir.join("**/*").to_string_lossy().to_string();
     let glob_pattern = if glob_pattern.starts_with(r"\\?\") {
         &glob_pattern[4..]
     } else {
@@ -62,9 +62,21 @@ pub(crate) fn get_src_files(baml_dir: &PathBuf) -> Result<Vec<PathBuf>, CliError
     };
     let entries = glob::glob(&glob_pattern)?;
     let mut paths = Vec::new();
+
+    let valid_extensions = vec!["baml", "json"];
     for entry in entries {
         match entry {
-            Ok(path) => paths.push(path),
+            Ok(path) => {
+                if !path.is_file() {
+                    continue;
+                }
+                if let Some(ext) = path.extension() {
+                    if !valid_extensions.contains(&ext.to_str().unwrap()) {
+                        continue;
+                    }
+                    paths.push(path)
+                }
+            }
             Err(e) => return Err(e.into()),
         }
     }

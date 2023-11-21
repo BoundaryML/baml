@@ -21,8 +21,10 @@ import {
 } from 'vscode-languageserver'
 import type { TextDocument } from 'vscode-languageserver-textdocument'
 import { fullDocumentRange } from './ast/findAtPosition'
-import lint, { LinterInput } from './wasm/lint'
+import lint, { LinterInput, ParserDatabase } from './wasm/lint'
 import { FileCache } from '../file/fileCache'
+import generate_test_file, { GenerateResponse } from './wasm/generate_test_file'
+import { TestRequest } from '@baml/common'
 
 // import format from './prisma-schema-wasm/format'
 // import lint from './prisma-schema-wasm/lint'
@@ -53,13 +55,32 @@ import { FileCache } from '../file/fileCache'
 //   getDocumentationForBlock,
 //   getDatamodelBlock,
 // } from './ast'
+export function handleGenerateTestFile(
+  documents: TextDocument[],
+  linterInput: LinterInput,
+  test_request: TestRequest,
+  onError?: (errorMessage: string) => void,
+): GenerateResponse {
+  let result = generate_test_file(
+    {
+      ...linterInput,
+      test_request: test_request,
+    },
+    (errorMessage: string) => {
+      if (onError) {
+        onError(errorMessage)
+      }
+    },
+  )
+
+  return result
+}
 export function handleDiagnosticsRequest(
   documents: TextDocument[],
   linterInput: LinterInput,
   onError?: (errorMessage: string) => void,
-): Map<string, Diagnostic[]> {
-
-  console.log("linterInput  " + JSON.stringify(linterInput, null, 2));
+): { diagnostics: Map<string, Diagnostic[]>; state: ParserDatabase | undefined } {
+  console.log(`Linting ${documents.length} documents`)
   const res = lint(linterInput, (errorMessage: string) => {
     if (onError) {
       onError(errorMessage)
@@ -69,23 +90,11 @@ export function handleDiagnosticsRequest(
 
   let allDiagnostics: Map<string, Diagnostic[]> = new Map()
 
-  documents.forEach(document => {
+  documents.forEach((document) => {
     const documentDiagnostics: Diagnostic[] = []
 
-    if (
-      res.some(
-        (diagnostic) =>
-          diagnostic.text === "Field declarations don't require a `:`." ||
-          diagnostic.text === 'Model declarations have to be indicated with the `model` keyword.',
-      )
-    ) {
-      if (onError) {
-        onError("Unexpected error.")
-      }
-    }
-
     try {
-      const filteredDiagnostics = res.filter((diag) => diag.source_file === document.uri)
+      const filteredDiagnostics = res.diagnostics.filter((diag) => diag.source_file === document.uri)
 
       for (const diag of filteredDiagnostics) {
         const diagnostic: Diagnostic = {
@@ -105,7 +114,7 @@ export function handleDiagnosticsRequest(
       }
     } catch (e: any) {
       if (e instanceof Error) {
-        console.log("Error handling diagnostics" + e.message + " " + e.stack);
+        console.log('Error handling diagnostics' + e.message + ' ' + e.stack)
       }
       onError?.(e.message)
     }
@@ -113,8 +122,9 @@ export function handleDiagnosticsRequest(
     allDiagnostics.set(document.uri, documentDiagnostics)
   })
 
-  return allDiagnostics
+  return { diagnostics: allDiagnostics, state: res.ok ? res.response : undefined }
 }
+
 /**
  * This handler provides the modification to the document to be formatted.
  */

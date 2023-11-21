@@ -1,12 +1,33 @@
 #![allow(dead_code)]
 
 use serde::Deserialize;
+use serde_json::{json, Value};
 use std::{path::PathBuf, sync::Arc};
 
 use baml_lib::{
-    internal_baml_diagnostics::{DatamodelError, DatamodelWarning},
+    internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span},
+    internal_baml_schema_ast::ast::{self, WithIdentifier, WithName, WithSpan},
     SourceFile,
 };
+
+#[derive(serde::Serialize)]
+pub struct StringSpan {
+    value: String,
+    start: usize,
+    end: usize,
+    source_file: String,
+}
+
+impl StringSpan {
+    pub fn new(value: &str, span: &Span) -> Self {
+        Self {
+            value: value.to_string(),
+            start: span.start,
+            end: span.end,
+            source_file: span.file.path(),
+        }
+    }
+}
 
 #[derive(serde::Serialize)]
 pub struct MiniError {
@@ -43,18 +64,6 @@ pub(crate) fn run(input: &str) -> String {
     let diagnostics = &schema.diagnostics;
 
     let mut mini_errors: Vec<MiniError> = diagnostics
-        .errors()
-        .iter()
-        .map(|err: &DatamodelError| MiniError {
-            start: err.span().start,
-            end: err.span().end,
-            text: err.message().to_string(),
-            is_warning: false,
-            source_file: err.span().file.path(),
-        })
-        .collect();
-
-    let mut mini_warnings: Vec<MiniError> = diagnostics
         .warnings()
         .iter()
         .map(|warn: &DatamodelWarning| MiniError {
@@ -66,13 +75,117 @@ pub(crate) fn run(input: &str) -> String {
         })
         .collect();
 
-    mini_errors.append(&mut mini_warnings);
+    if diagnostics.has_errors() {
+        mini_errors.extend(
+            diagnostics
+                .errors()
+                .iter()
+                .map(|err: &DatamodelError| MiniError {
+                    start: err.span().start,
+                    end: err.span().end,
+                    text: err.message().to_string(),
+                    is_warning: false,
+                    source_file: err.span().file.path(),
+                }),
+        );
 
-    print_diagnostics(mini_errors)
+        return print_diagnostics(mini_errors, None);
+    }
+
+    let response = json!({
+        "enums": schema.db.walk_enums().map(|e| json!({
+            "name": StringSpan::new(e.name(), &e.identifier().span()),
+        })).collect::<Vec<_>>(),
+        "classes": schema.db.walk_classes().map(|c| json!({
+            "name": StringSpan::new(c.name(), &c.identifier().span()),
+        })).collect::<Vec<_>>(),
+        "clients": schema.db.walk_clients().map(|c| json!({
+            "name": StringSpan::new(c.name(), &c.identifier().span()),
+        })).collect::<Vec<_>>(),
+        "functions": schema
+        .db
+        .walk_functions()
+        .map(|func| {
+            json!({
+                "name": StringSpan::new(func.name(), &func.identifier().span()),
+                "input": match func.ast_function().input() {
+                    ast::FunctionArgs::Named(arg_list) => json!({
+                        "arg_type": "named",
+                        "values": arg_list.args.iter().map(
+                            |(id, arg)| json!({
+                                "name": StringSpan::new(id.name(), &id.span()),
+                                "type": format!("{}", arg.field_type),
+                            })
+                        ).collect::<Vec<_>>(),
+                    }),
+                    ast::FunctionArgs::Unnamed(arg) => json!({
+                        "arg_type": "positional",
+                        "type": format!("{}", arg.field_type),
+                    }),
+                },
+                "output": match func.ast_function().output() {
+                    ast::FunctionArgs::Named(arg_list) => json!({
+                        "arg_type": "named",
+                        "values": arg_list.args.iter().map(
+                            |(id, arg)| json!({
+                                "name": StringSpan::new(id.name(), &id.span()),
+                                "type": format!("{}", arg.field_type),
+                            })
+                        ).collect::<Vec<_>>(),
+                    }),
+                    ast::FunctionArgs::Unnamed(arg) => json!({
+                        "arg_type": "positional",
+                        "type": format!("{}", arg.field_type),
+                    }),
+                },
+                "test_cases": func.walk_tests().map(
+                    |t| {
+                        let props = t.test_case();
+                        json!({
+                            "name": StringSpan::new(t.name(), &t.identifier().span()),
+                            "content": props.content.value(),
+                        })
+                    }
+                ).collect::<Vec<_>>(),
+                "impls": func.walk_variants().map(
+                    |i| {
+                        let props = i.properties();
+                        json!({
+                            "type": "llm",
+                            "name": StringSpan::new(i.ast_variant().name(), &i.identifier().span()),
+                            "prompt": props.prompt.value,
+                            "input_replacers": props.replacers.0.iter().map(
+                                |r| json!({
+                                    "key": r.0.key(),
+                                    "value": r.1,
+                                })
+                            ).collect::<Vec<_>>(),
+                            "output_replacers": props.replacers.1.iter().map(
+                                |r| json!({
+                                    "key": r.0.key(),
+                                    "value": r.1,
+                                })
+                            ).collect::<Vec<_>>(),
+                            "client": schema.db.find_client(&props.client.value).map(|c| StringSpan::new(c.name(), &c.identifier().span())).unwrap_or_else(|| StringSpan::new(&props.client.value, &props.client.span)),
+
+                        })
+                    }
+                ).collect::<Vec<_>>(),
+            })
+        })
+        .collect::<Vec<_>>()
+    });
+
+    print_diagnostics(mini_errors, Some(response))
 }
 
-fn print_diagnostics(diagnostics: Vec<MiniError>) -> String {
-    serde_json::to_string(&diagnostics).expect("Failed to render JSON")
+fn print_diagnostics(diagnostics: Vec<MiniError>, response: Option<Value>) -> String {
+    return json!({
+        "ok": response.is_some(),
+        "diagnostics": diagnostics,
+        "response": response,
+    })
+    .to_string();
 }
 
 #[cfg(test)]

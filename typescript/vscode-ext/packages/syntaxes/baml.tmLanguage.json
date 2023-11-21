@@ -200,7 +200,7 @@
         "1": { "name": "variable.other.readwrite" },
         "2": { "name": "comment.line" }
       },
-      "end": "(\"){1,3}#",
+      "end": "\\s*(\"){1,3}#",
       "endCaptures": {},
       "contentName": "source.python.embedded",
       "patterns": [
@@ -228,7 +228,10 @@
       ]
     },
     "curly_comment": {
-      "match": "\\{//.*?//}",
+      "begin": "\\{//",
+      "beginCaptures": {},
+      "end": "//}",
+      "endCaptures": {},
       "name": "comment.line.double-slash.baml"
     },
     "key_quoted_string_pair": {

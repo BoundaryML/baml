@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+mod generate_test_file;
 mod lint;
 
 use std::{
@@ -30,6 +31,8 @@ pub struct FormatOpts {
 pub enum FmtOpts {
     /// Specifies linter mode
     Lint,
+    /// Specifiers the generate test code mode (this is temporary until baml cli is ready)
+    GenerateTestCode,
     /// Specifies format mode
     // Format(FormatOpts),
     /// Specifies Native Types mode
@@ -46,6 +49,7 @@ fn main() {
     match FmtOpts::from_args() {
         FmtOpts::DebugPanic => panic!("This is the debugPanic artificial panic"),
         FmtOpts::Lint => plug(lint::run),
+        FmtOpts::GenerateTestCode => plug(generate_test_file::run),
         // FmtOpts::Format(opts) => format::run(opts),
         // FmtOpts::NativeTypes => plug(native::run),
         // FmtOpts::ReferentialActions => plug(actions::run),

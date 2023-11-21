@@ -22,6 +22,116 @@ fn pretty_print<'a>(pair: pest::iterators::Pair<'a, Rule>, indent_level: usize) 
     }
 }
 
+fn parse_test_from_json(
+    source: &SourceFile,
+    diagnostics: &mut Diagnostics,
+) -> Result<SchemaAst, Diagnostics> {
+    // Path relative to the root of the project.
+    let source_path = source.path_buf().clone();
+    let root_path = diagnostics.root_path.clone();
+    let relative_path = source_path.strip_prefix(&root_path).unwrap();
+
+    let parts = relative_path.components();
+    // Ensure is of the form `tests/<function_name>/(<group_name>/)/<test_name>.json` using regex
+    // or throw an error.
+    let mut function_name = None;
+    let mut test_name = None;
+    let mut group_name = None;
+    for (idx, part) in parts.enumerate() {
+        let part = part.as_os_str().to_str().unwrap();
+        match idx {
+            0 => {
+                if part != "__tests" {
+                    diagnostics.push_error(DatamodelError::new_validation_error(
+                        "A BAML test file must be in a `__tests` directory.",
+                        Span::empty(source.clone()),
+                    ));
+                }
+            }
+            1 => {
+                function_name = Some(part);
+            }
+            _ => {
+                if part.ends_with(".json") {
+                    test_name = Some(
+                        part.strip_suffix(".json")
+                            .unwrap()
+                            .replace(|c: char| !c.is_alphanumeric() && c != '_', "_"),
+                    );
+                } else {
+                    group_name = match group_name {
+                        None => Some(part.to_string()),
+                        Some(prev) => Some(format!("{}_{}", prev, part)),
+                    }
+                }
+            }
+        }
+    }
+
+    if function_name.is_none() {
+        diagnostics.push_error(DatamodelError::new_validation_error(
+            "Missing a function name in the path.",
+            Span::empty(source.clone()),
+        ));
+    }
+
+    if test_name.is_none() {
+        diagnostics.push_error(DatamodelError::new_validation_error(
+            "Test file must have a name",
+            Span::empty(source.clone()),
+        ));
+    }
+
+    diagnostics.to_result()?;
+
+    let function_name = function_name.unwrap();
+    let test_name = test_name.unwrap();
+
+    let content = source.as_str();
+    let span = Span::new(source.clone(), 0, content.len());
+    let content = Expression::RawStringValue(RawString::new(
+        content.to_string(),
+        Span::new(source.clone(), 0, content.len()),
+        Some(("json".into(), Span::empty(source.clone()))),
+    ));
+    let test_case = ConfigBlockProperty {
+        name: Identifier::Local("input".into(), span.clone()),
+        value: Some(content),
+        template_args: None,
+        attributes: vec![],
+        documentation: None,
+        span: span.clone(),
+    };
+    let function_name = ConfigBlockProperty {
+        name: Identifier::Local("function".into(), span.clone()),
+        value: Some(Expression::StringValue(function_name.into(), span.clone())),
+        template_args: None,
+        attributes: vec![],
+        documentation: None,
+        span: span.clone(),
+    };
+    let mut top = RetryPolicyConfig {
+        name: Identifier::Local(test_name.into(), span.clone()),
+        documentation: None,
+        attributes: vec![],
+        fields: vec![test_case, function_name],
+        span: span.clone(),
+    };
+    if let Some(group_name) = group_name {
+        top.fields.push(ConfigBlockProperty {
+            name: Identifier::Local("group".into(), span.clone()),
+            value: Some(Expression::StringValue(group_name.into(), span.clone())),
+            template_args: None,
+            attributes: vec![],
+            documentation: None,
+            span: span.clone(),
+        });
+    }
+    Ok(SchemaAst {
+        tops: vec![Top::Config(Configuration::TestCase(top))],
+    })
+}
+
 /// Parse a PSL string and return its AST.
 /// It validates some basic things on the AST like name conflicts. Further validation is in baml-core
 pub fn parse_schema(
@@ -30,6 +140,18 @@ pub fn parse_schema(
 ) -> Result<(SchemaAst, Diagnostics), Diagnostics> {
     let mut diagnostics = Diagnostics::new(root_path.clone());
     diagnostics.set_source(source);
+
+    if !source.path().ends_with(".json") && !source.path().ends_with(".baml") {
+        diagnostics.push_error(DatamodelError::new_validation_error(
+            "A BAML file must have the file extension `.baml` or `.json`.",
+            Span::empty(source.clone()),
+        ));
+        return Err(diagnostics);
+    }
+
+    if source.path().ends_with(".json") {
+        return parse_test_from_json(source, &mut diagnostics).map(|ast| (ast, diagnostics));
+    }
 
     let datamodel_result = BAMLParser::parse(Rule::schema, source.as_str());
     match datamodel_result {

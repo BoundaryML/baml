@@ -212,3 +212,41 @@ impl FieldType {
         }
     }
 }
+
+// Impl display for FieldType
+impl std::fmt::Display for FieldType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FieldType::Identifier(arity, idn) => {
+                write!(
+                    f,
+                    "{}{}",
+                    idn.name(),
+                    if arity.is_optional() { "?" } else { "" }
+                )
+            }
+            FieldType::Union(arity, ft, _) => {
+                let mut ft = ft.iter().map(|t| t.to_string()).collect::<Vec<_>>();
+                ft.sort();
+                write!(
+                    f,
+                    "({}){}",
+                    ft.join(" | "),
+                    if arity.is_optional() { "?" } else { "" }
+                )
+            }
+            FieldType::Tuple(arity, ft, _) => {
+                let mut ft = ft.iter().map(|t| t.to_string()).collect::<Vec<_>>();
+                ft.sort();
+                write!(
+                    f,
+                    "({}){}",
+                    ft.join(", "),
+                    if arity.is_optional() { "?" } else { "" }
+                )
+            }
+            FieldType::Dictionary(kv, _) => write!(f, "map<{}, {}>", kv.0, kv.1),
+            FieldType::List(t, _, _) => write!(f, "{}[]", t),
+        }
+    }
+}

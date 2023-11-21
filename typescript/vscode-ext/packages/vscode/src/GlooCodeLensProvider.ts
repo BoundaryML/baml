@@ -1,37 +1,97 @@
+import { ParserDatabase } from '@baml/common'
 import * as vscode from 'vscode'
 
 export class GlooCodeLensProvider implements vscode.CodeLensProvider {
+  private db: ParserDatabase | undefined
+
+  public setDB(db: ParserDatabase) {
+    this.db = db
+  }
+
   provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
     const codeLenses: vscode.CodeLens[] = []
 
-    let insideTestGroupBlock = false
-
-    const braceCount = 0
-    for (let line = 0; line < document.lineCount; line++) {
-      const lineText = document.lineAt(line).text
-
-      // Detect the start of a test group
-      if (lineText.includes('@test_group')) {
-        insideTestGroupBlock = true
-      }
-
-      // If we're inside a test group and we find an @input line, add a code lens
-      if (insideTestGroupBlock && lineText.includes('@input')) {
-        const range = new vscode.Range(line, 0, line, lineText.length)
-        const command: vscode.Command = {
-          title: '▶️ Run Testt',
-          command: 'extension.runGlooTest',
-          arguments: [document.uri],
-        }
-        codeLenses.push(new vscode.CodeLens(range, command))
-      }
-
-      // Detect the end of the test group block
-      if (insideTestGroupBlock && lineText.trim() === '}') {
-        insideTestGroupBlock = false
-      }
+    if (!this.db) {
+      return codeLenses
     }
+
+    const functionNames = this.db.functions
+      .filter((x) => x.name.source_file === document.uri.toString())
+      .map((f) => f.name)
+
+    functionNames.forEach((name) => {
+      const range = new vscode.Range(document.positionAt(name.start), document.positionAt(name.end))
+      const command: vscode.Command = {
+        title: '▶️ Open Playground',
+        command: 'baml.openBamlPanel',
+        arguments: [
+          {
+            functionName: name.value,
+          },
+        ],
+      }
+      codeLenses.push(new vscode.CodeLens(range, command))
+    })
+
+    const implNames = this.db.functions
+      .flatMap((f) =>
+        f.impls.map((i) => {
+          return {
+            value: i.name.value,
+            start: i.name.start,
+            end: i.name.end,
+            source_file: i.name.source_file,
+            function: f.name.value,
+          }
+        }),
+      )
+      .filter((x) => x.source_file === document.uri.toString())
+
+    implNames.forEach((name) => {
+      const range = new vscode.Range(document.positionAt(name.start), document.positionAt(name.end))
+      const command: vscode.Command = {
+        title: '▶️ Open Playground',
+        command: 'baml.openBamlPanel',
+        arguments: [
+          {
+            functionName: name.function,
+            implName: name.value,
+          },
+        ],
+      }
+      codeLenses.push(new vscode.CodeLens(range, command))
+    })
+
+    const testCases = this.db.functions
+      .flatMap((f) =>
+        f.test_cases.map((t) => {
+          return {
+            value: t.name.value,
+            start: t.name.start,
+            end: t.name.end,
+            source_file: t.name.source_file,
+            function: f.name.value,
+          }
+        }),
+      )
+      .filter((x) => x.source_file === document.uri.toString())
+    testCases.forEach((name) => {
+      const range = new vscode.Range(document.positionAt(name.start), document.positionAt(name.end))
+      const command: vscode.Command = {
+        title: '▶️ Open Playground',
+        command: 'baml.openBamlPanel',
+        arguments: [
+          {
+            functionName: name.function,
+            testCaseName: name.value,
+          },
+        ],
+      }
+      codeLenses.push(new vscode.CodeLens(range, command))
+    })
 
     return codeLenses
   }
 }
+
+export default new GlooCodeLensProvider()
