@@ -6,7 +6,7 @@ use log::info;
 
 use crate::{builder::dir_utils::get_src_files, errors::CliError, update::version_check};
 
-pub(crate) use crate::builder::dir_utils::get_src_dir;
+pub(crate) use crate::builder::dir_utils::{get_baml_src, get_src_dir};
 
 pub fn build(baml_dir: &Option<String>) -> Result<(), CliError> {
     let (baml_dir, (config, diagnostics)) = get_src_dir(baml_dir)?;

@@ -5,6 +5,7 @@ use std::io::Write;
 mod builder;
 mod command;
 mod errors;
+mod init_command;
 mod update;
 mod update_client;
 
@@ -27,6 +28,7 @@ enum Commands {
     Update(UpdateArgs),
     // Update client libraries for a BAML project
     UpdateClient(BuildArgs),
+    Init(InitArgs),
 }
 
 #[derive(Args, Debug)]
@@ -34,6 +36,9 @@ struct BuildArgs {
     #[arg(long)]
     baml_dir: Option<String>,
 }
+
+#[derive(Args, Debug)]
+struct InitArgs {}
 
 #[derive(Args, Debug)]
 struct UpdateArgs {}
@@ -59,6 +64,7 @@ pub(crate) fn main() {
         Commands::Update(_args) => update::update(),
         Commands::Build(args) => builder::build(&args.baml_dir),
         Commands::UpdateClient(args) => update_client::update_client(&args.baml_dir),
+        Commands::Init(_args) => init_command::init_command(),
     };
 
     if let Err(error) = response {
