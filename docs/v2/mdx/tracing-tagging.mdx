@@ -1,0 +1,79 @@
+---
+title: "Tracing and tagging functions"
+---
+
+Gloo allows you to trace any function with the **@trace** decorator.
+This will make the function's input and output show up in the dashboard. This works for any python function you define yourself.
+
+### Prerequisites
+Make sure you setup the [BAML dashboard](/installation#setting-up-the-gloo-dashboard) project before you start.
+
+### Example
+
+In the example below, we trace each of the two functions `pre_process_text` and `full_analysis`:
+
+```python
+import pytest
+from baml_client.testing import baml_test
+from baml_client import baml
+from baml_client.baml_types import Book, AuthorInfo
+from baml_client.tracing import trace
+
+# You can also add a custom name with trace(name="my_custom_name")
+# By default, we use the function's name.
+@trace
+async def pre_process_text(text):
+    return text.replace("\n", " ")
+
+
+@trace
+async def full_analysis(book: Book):
+    # sentiment = await ClassifySentiment("v1", args=pre_process_text(book.content))
+    sentiment = await baml.ClassifySentiment.get_impl("v1").run(
+        pre_process_text(book.content)
+    )
+    book_analysis = await baml.AnalyzeBook.get_impl("v1").run(book)
+    return book_analysis
+
+
+@baml_test
+class TestBookAnalysis:
+    async def test_book1(self):
+        content = """Before I could reply that he [Gatsby] was my neighbor...
+        """
+        processed_content = await pre_process_text(content)
+        return await full_analysis(
+            Book(
+                title="The Great Gatsby",
+                author=AuthorInfo(firstName="F. Scott", lastName="Fitzgerald"),
+                content=processed_content,
+            ),
+        )
+```
+
+
+This allows us to see each function invocation, as well as all its children in the dashboard:
+
+<img src="/images/dashboard/dashboard-test-pic.png" width="auto" />
+
+See [running tests](/running-tests) for more information on how to run this test.
+
+### Adding custom tags
+
+The dashboard view allows you to see custom tags for each of the function calls. This is useful for adding metadata to your traces and allow you to query your generated logs more easily.
+
+To add a custom tag, you can import **update_trace_tags(..)** as below:
+
+```python
+from baml_client.tracing import set_tags, trace
+import typing
+
+@trace()
+async def pre_process_text(text):
+    set_tags(userId="1234")
+
+    # You can also create a dictionary and pass it in
+    tags_dict: typing.Dict[str, str] = {"userId": "1234"}
+    set_tags(**tags_dict) # "**" unpacks the dictionary
+    return text.replace("\n", " ")
+```

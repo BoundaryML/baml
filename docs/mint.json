@@ -37,7 +37,8 @@
         "v2/mdx/overview",
         "v2/mdx/baml-by-example",
         "v2/mdx/installation",
-        "v2/mdx/running-tests"
+        "v2/mdx/running-tests",
+        "v2/mdx/tracing-tagging"
       ],
       "version": "v2"
     },
