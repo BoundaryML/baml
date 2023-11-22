@@ -83,6 +83,7 @@ def _update_template_with_vars(
         prompt = prompt.replace(k, v)
     return prompt
 
+
 def _redact(value: typing.Any) -> typing.Any:
     if isinstance(value, str):
         if len(value) > 4:
@@ -93,6 +94,7 @@ def _redact(value: typing.Any) -> typing.Any:
     if isinstance(value, list):
         return [_redact(v) for v in value]
     return _redact(str(value))
+
 
 class AbstractLLMProvider(BaseProvider, abc.ABC):
     """

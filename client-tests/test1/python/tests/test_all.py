@@ -13,6 +13,7 @@ from baml_client.testing import baml_test
 async def some_traced_fn():
     pass
 
+
 from baml_client import baml
 from baml_client.baml_types import IBlah
 from baml_lib._impl.deserializer import Deserializer
