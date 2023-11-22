@@ -28,7 +28,7 @@ pub(crate) fn process_input(
             return Ok(new_path.join("."));
         }
         ast::FunctionArgs::Named(args) => {
-            if args.iter_args().len() <= 1 {
+            if variable.path.len() < 2 {
                 return Err(DatamodelError::new_validation_error(
                     "Named arguments must have at least one argument (input.my_var_name)",
                     variable.span.clone(),
