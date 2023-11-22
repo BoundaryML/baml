@@ -141,6 +141,11 @@ jobs:
         run: |
           VERSION=$(cat typescript/.bumpversion.cfg | grep current_version | cut -d '=' -f 2 | sed 's/[", ]//g')
 
+          if [[ ! $VERSION =~ ^[0-9]+\.[0-9]*[02468]\.[0-9]+$ ]]; then
+            echo "Version ($VERSION) is not a pre-release build (minor must be even)"
+            exit 1
+          fi
+
           echo "version=$(echo $VERSION | cut -d '-' -f 1)" >> $GITHUB_OUTPUT
           echo "full_version=$VERSION" >> $GITHUB_OUTPUT
           echo "vsix_hash=$(shasum -a 256 typescript/vscode-ext/packages/baml-${echo $VERSION | cut -d '-' -f 1}.vsix | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
