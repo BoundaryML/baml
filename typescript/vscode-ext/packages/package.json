@@ -121,5 +121,5 @@
     "typescript": "5.2.2",
     "@vscode/vsce": "2.21.1"
   },
-  "preview": true
+  "preview": false
 }
