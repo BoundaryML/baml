@@ -95,6 +95,12 @@ jobs:
           name: language-server
           path: typescript/vscode-ext/packages/language-server/out
 
+      - name: VSCode Playground Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: vscode-playground
+          path: typescript/vscode-ext/packages/web-panel/dist
+
   pre-release:
     runs-on: ubuntu-latest
     needs: build
@@ -118,12 +124,18 @@ jobs:
         with:
           name: baml-out
           path: typescript/vscode-ext/packages/vscode/out
-      
+
       - name: Get artifact
         uses: actions/download-artifact@v3
         with:
           name: language-server
           path: typescript/vscode-ext/packages/language-server/out
+
+      - name: Get artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: vscode-playground
+          path: typescript/vscode-ext/packages/web-panel/dist
 
       - id: hash
         run: |
@@ -197,6 +209,12 @@ jobs:
         with:
           name: language-server
           path: typescript/vscode-ext/packages/language-server/out
+
+      - name: Get artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: vscode-playground
+          path: typescript/vscode-ext/packages/web-panel/dist
 
       - id: hash
         run: |
