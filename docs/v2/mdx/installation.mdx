@@ -76,3 +76,22 @@ generator Default {
 ```
 
 You're all set! See the [language tour](./baml-by-example) for more details on how to declare your LLM functions.
+
+# Setting up the Gloo Dashboard
+The dashboard can help you analyze requests and trace your functions.
+
+### Create a Gloo Project in the dashboard
+
+Visit [app.trygloo.com](https://beta.app.trygloo.com) and create a new project.
+
+#### Setup environment variables
+
+On the dashboard, click on the project you created and go to "Keys". Note down the project ID and create a new secret to use as the APP SECRET below.
+
+Use these to add to your environment variables, otherwise requests will not be sent to the dashboard.
+
+```bash
+GLOO_APP_ID=proj_123...
+GLOO_APP_SECRET=gloo:your-key-from-dashboard
+OPENAI_API_KEY=your-open-ai-key
+```
