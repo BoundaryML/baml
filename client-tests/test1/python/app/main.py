@@ -45,5 +45,5 @@ async def main():
 
 
 if __name__ == "__main__":
-    # baml_init(base_url="http://localhost:3000/api")
+    # baml.configure(base_url="http://localhost:3000/api")
     asyncio.run(main())
