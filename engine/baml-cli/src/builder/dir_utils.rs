@@ -19,9 +19,7 @@ fn default_baml_dir() -> Result<PathBuf, CliError> {
     Err("Failed to find a directory named: baml_src".into())
 }
 
-pub(crate) fn get_src_dir(
-    baml_dir: &Option<String>,
-) -> Result<(PathBuf, (Configuration, Diagnostics)), CliError> {
+pub(crate) fn get_baml_src(baml_dir: &Option<String>) -> Result<PathBuf, CliError> {
     let src_dir = match baml_dir {
         Some(dir) => PathBuf::from(dir),
         None => match default_baml_dir() {
@@ -36,7 +34,14 @@ pub(crate) fn get_src_dir(
     if let Err(_) = abs_src_dir {
         return Err(format!("Directory not found {}", src_dir.to_string_lossy()).into());
     }
-    let baml_dir = abs_src_dir.unwrap();
+
+    Ok(abs_src_dir.unwrap())
+}
+
+pub(crate) fn get_src_dir(
+    baml_dir: &Option<String>,
+) -> Result<(PathBuf, (Configuration, Diagnostics)), CliError> {
+    let baml_dir = get_baml_src(baml_dir)?;
 
     // Find a main.baml file
     let main_baml = baml_dir.join("main.baml");

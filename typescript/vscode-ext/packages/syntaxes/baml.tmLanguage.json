@@ -182,6 +182,7 @@
       },
       "contentName": "variable.other.readwrite.nested",
       "patterns": [
+        { "include": "#comment" },
         { "include": "#key_value" },
         { "include": "#key_null_pair" },
         { "include": "#key_string_pair" },
