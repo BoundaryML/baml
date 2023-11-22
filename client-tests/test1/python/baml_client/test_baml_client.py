@@ -14,15 +14,6 @@ from json5 import loads
 
 
 @baml.Blah.test
-async def test_default(BlahImpl: IBlah):
-    deserializer = Deserializer[str](str)
-    param = deserializer.from_string("""\
-te\
-""")
-    await BlahImpl(param)
-
-
-@baml.Blah.test
 async def test_basic2(BlahImpl: IBlah):
     deserializer = Deserializer[str](str)
     param = deserializer.from_string("""\
@@ -83,5 +74,14 @@ async def test_present_scarlet(ClassifyToolImpl: IClassifyTool):
         query=query,
         context=context
     )
+
+
+@baml.Blah.test
+async def test_total_amaranth(BlahImpl: IBlah):
+    deserializer = Deserializer[str](str)
+    param = deserializer.from_string("""\
+big fan of this\
+""")
+    await BlahImpl(param)
 
 

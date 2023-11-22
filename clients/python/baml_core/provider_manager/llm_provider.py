@@ -84,6 +84,18 @@ def _update_template_with_vars(
     return prompt
 
 
+def _redact(value: typing.Any) -> typing.Any:
+    if isinstance(value, str):
+        if len(value) > 4:
+            return value[:2] + ("*" * 4)
+        return "****"
+    if isinstance(value, dict):
+        return {k: _redact(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_redact(v) for v in value]
+    return _redact(str(value))
+
+
 class AbstractLLMProvider(BaseProvider, abc.ABC):
     """
     Abstract base class to ensure both LLMProvider and LLMChatProvider
@@ -97,10 +109,12 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
         self,
         provider: str,
         retry_policy: typing.Optional[typing.Callable[[WrappedFn], WrappedFn]],
+        redactions: typing.Optional[typing.List[str]] = None,
         **kwargs: typing.Any,
     ) -> None:
         self.__provider = provider
         self.__client_args = {}
+        self.__redactions = redactions or []
         self.__retry_policy = retry_policy
         assert not kwargs, f"Unhandled provider settings: {', '.join(kwargs.keys())}"
 
@@ -200,7 +214,11 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
 
     @typing.final
     def _set_args(self, **kwargs: typing.Any) -> None:
-        self.__client_args = kwargs
+        # Ensure all redactions should be hidden
+        self.__client_args = {
+            k: v if k not in self.__redactions else _redact(v)
+            for k, v in kwargs.items()
+        }
 
     def _check_cache(
         self,
