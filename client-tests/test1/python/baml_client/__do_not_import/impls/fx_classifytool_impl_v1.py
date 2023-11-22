@@ -38,7 +38,7 @@ Use this output format:
 {
   // Any number of tools the user may want to use
   "tool": "tools as string"[],
-  // This is ait
+  // This is the assistance reponse
   "foo": string
 }
 

@@ -7,20 +7,26 @@ Below is an overview of the syntax of BAML as well as the LLM-specific functiona
 See [why BAML](/v2/mdx/overview#why-use-baml-vs-other-libraries) for a discussion of the motivation behind BAML.
 
 ### Strings
-BAML allows strings as first-class citizens, to support more struggle-free prompt engineering.
+
+BAML treats strings as first-class citizens, to support more struggle-free prompt engineering.
 
 This is a valid **inline string**, which is surrounded by double quotes.
+
 ```llvm
 "Hello World"
 ```
+
 If a string is on multiple lines, it must be surrounded by #" and "#. This is called a **block string**.
-```llvm 
+
+```llvm
 #"
 Hello
 World
 "#
 ```
+
 Block strings are automatically dedented and stripped of the first and last newline. This means that the following will render the same thing as above
+
 ```llvm
 #"
     Hello
@@ -29,27 +35,34 @@ Block strings are automatically dedented and stripped of the first and last newl
 ```
 
 BAML also supports simple **unquoted in-line** strings. The string below is valid!
+
 ```
 Hello World
 ```
+
 Unquoted strings **may not** have any of the following since they are reserved characters (note this may change in the future):
+
 - Quotes "double" or 'single'
-- At-signs    @
-- Curlies     {}
-- hashtags    #
+- At-signs @
+- Curlies {}
+- hashtags #
 - Parentheses ()
-- Brackets    []
-- commas      ,
+- Brackets []
+- commas ,
 - newlines
 
+When in doubt, use a quoted string or a block string, but the VSCode extension will warn you if there is a parsing issue.
 
 ### Comments
+
 This is a commment:
+
 ```rust
 // hello there!
 ```
 
 But you can also have **comments in block strings**! This is useful for adding documentation to your LLM prompts as below.
+
 ```llvm
 #"
 Hello world.
@@ -57,9 +70,11 @@ Hello world.
 Please {// 'please' works best, don't ask.. //} enter your name:
 "#
 ```
+
 BAML trims the whitespace from the side of a comment block with the least amount of empty space.
 
 **Comments can be multiline**
+
 ```rust
 #"
   {//
@@ -69,8 +84,8 @@ BAML trims the whitespace from the side of a comment block with the least amount
 "#
 ```
 
+### Classes
 
-### Classes 
 In BAML a **Class** defines a complex type. In the context of LLMs, classes describe the type of the variables you can inject into prompts. This is sort of equivalent to a Pydantic model in Python.
 
 ```llvm
@@ -78,10 +93,13 @@ class Person {
     firstName String
 }
 ```
+
 Note there are no only spaces between the property and the type. No colons, nor equal signs.
 
 ### Enums
+
 Enums are useful for classification tasks. BAML has helper functions that can help you serialize an enum into your prompt in a neatly formatted list (more on that later).
+
 ```llvm
 enum MyEnum {
     GPT3
@@ -90,16 +108,18 @@ enum MyEnum {
 ```
 
 ### Types
-BAML supports the following types:
-* strings   |   `string`
-* integers  |  `int`
-* booleans  |  `bool`
-* Array     |  `[]`
-* Another class
 
-```llvm
+BAML supports the following types:
+
+- strings | `string`
+- integers | `int`
+- booleans | `bool`
+- Array | `[]`
+- Another class
+
+```rust
 class Person {
-    firstName String
+    firstName string
     age int
     isCool bool
     friends Person[]
@@ -109,11 +129,14 @@ class Person {
 See the [Language Reference](ref/type) for more details on complex types, like optionals.
 
 ### booleans
+
 BAML supports booleans. They are either `true` or `false`. Note that they are not quoted.
 
 ### Dictionaries / configuration
+
 BAML dictionaries have no spaces between elements. Configs are separated by a new line.
-```llvm
+
+```rust
 
   ...
     options {
@@ -130,23 +153,30 @@ BAML dictionaries have no spaces between elements. Configs are separated by a ne
 
 ```
 
+### Imports
+There are no imports currently in BAML. All objects created in .baml configs under the same `baml_src` directory are available to all other files in the same directory.
+
 # ML-Specific Functionality
+
 Below we will dive into how we can use BAML to interact with ML models -- currently focusing on LLMs.
 
 ### Define a task
+
 Before you work with an LLM, as yourself what kind of input or output youre expecting. Is it a true or false, a list of things, or a complex type? Once you know what the inputs and outputs are you can can define a **function**.
 
 A **function** has an **input** and an **output**. The input is the input variables, which can be a simple string like a user's question, or a complex object. The output is the shape of the object the model should return.
 
-A **function** looks kind of like a **class** because it only defines what the inputs and outputs are, not the implementation.
+A **function** looks kind of like a **class** because it only defines what the inputs and outputs are. The actual implementation is defined separately.
 
-```llvm
+```rust
 function ClassifyText {
     input string
     output MyEnum
 }
 ```
+
 This is like declaring a _type_ in python that matches the following function's type signature:
+
 ```python
 def ClassifyText(input: str) -> MyEnum:
     ...
@@ -155,9 +185,11 @@ def ClassifyText(input: str) -> MyEnum:
 BAML allows your team to keep all your ML tasks neatly in one place with these function definitions, and ensures that all type information is transmitted to the Gloo backend at runtime, so you can query data in a strongly typed manner (more on this later, but just imagine being able to get strongly-typed pandas dataframes you can manipulate for training custom models instead of unstructured raw LLM strings).
 
 ### Implement the task
+
 Now that we have defined our function, we need to implement it. Since we're using LLMs, we need to be able to write a prompt somewhere, and ensure that the LLM outputs the correct type we had defined for our function. But first, let's declare what LLM we want to use.
 
 #### Declare a client
+
 ```rust
 client<llm> GPT4 {
     // required
@@ -174,23 +206,27 @@ client<llm> GPT4 {
     }
   }
 ```
+
 Other providers are `baml-azure-chat`, `baml-anthropic` and `baml-azure-completion`.
 You can also use a custom provider. See our [Anthropic Implementation](https://github.com/GlooHQ/baml/blob/canary/clients/python/baml_core/registrations/providers/anthropic_provider.py)
 
 For a full list of providers see [ref/providers](ref/providers).
 
 #### Define your function implementation
+
 ```rust
 impl<llm, ClassifyText> {
   client GPT4
   prompt #"
     Classify this text:
     {// ... fill this out ... //}
-    
+
   "#
 }
 ```
+
 Call your function in python
+
 ```python
 from baml_client import baml
 
@@ -199,9 +235,10 @@ async def call_prompt():
     print(result)
 ```
 
-
 ## Injecting variables
+
 To inject a variable into a prompt, you can use the `#` symbol. A prompt's input variables are always accessible via \{#input\}. If the input to a prompt is only a string, you can just add **\{#input\}**.
+
 ```rust
 // a prompt with a string input
 #"
@@ -210,8 +247,10 @@ You are an assistant talking to: {#input.firstName}.
 ```
 
 ## Printers
+
 BAML has a few helper functions to make it easier to print out lists and complex types, so that your LLM is able to return the proper JSON object back.
- See this [leaked openai prompt](https://raw.githubusercontent.com/spdustin/ChatGPT-AutoExpert/main/_system-prompts/dall-e.md), where the desired output is printed in a custom way using comments like:
+See this [leaked openai prompt](https://raw.githubusercontent.com/spdustin/ChatGPT-AutoExpert/main/_system-prompts/dall-e.md), where the desired output is printed in a custom way using comments like:
+
 ```rust
 #"
 // Create images for a text-only prompt
@@ -223,20 +262,25 @@ BAML has a few helper functions to make it easier to print out lists and complex
 }
 "#
 ```
+
 A printer in BAML can be invoked for **enums** and **classes**, and they use the **alias()** and **description()** attributes defined for those enums or classes if they are present to inject that extra metadata into the type description.
 
 ### print_type(...)
+
 Prints out the schema of an object in a nicely formatted way (in the openAI format seen above).
 
 In a prompt 99% of the time you just want to use `{#print_type(output)}` since `output` is a special keyword that already maps to your actual function's output type. It's the same as writing `{#print_type(User)}`.
 
-<Note>One of the core philosophies of BAML is to allow you to see the prompt as it will be rendered, so you can debug it. Our VSCode extension will eventually show you what the rendered prompt will look like on-hover, so you know exactly what data will be sent to the LLM.</Note>
+<Note>
+  One of the core philosophies of BAML is to allow you to see the prompt as it
+  will be rendered, so you can debug it. Our VSCode extension playground can show you exactly what prompt is rendered before it is sent to the LLM.
+</Note>
 
 ```rust
 class User {
   name string
   lastName string
-  isPolite bool @alias("is_cool") 
+  isPolite bool @alias("is_cool")
   @description("If the user says 'please', mark them as true, otherwise false")
 }
 // ... inside an impl<> {...}
@@ -248,7 +292,9 @@ prompt #"
   {#print_type(output)}
 "#
 ```
+
 The rendered prompt is then:
+
 ```diff
   Here is a bunch of info about a user in an unstructured format:
   Hi I am a user named xyz, and im looking for lawnmowers. Do you have any in stock?
@@ -263,6 +309,7 @@ The rendered prompt is then:
 ```
 
 ### print_enum(...)
+
 This prints out an enum's values with their definitions as a list in your prompt. Useful for classification tasks.
 
 ```rust
@@ -280,7 +327,9 @@ prompt #"
   {#print_enum(MyEnum)}
 "#
 ```
+
 This renders
+
 ```
 Here is a bunch of text to classify
 Hi I am a user named xyz, and im looking for lawnmowers. Do you have any in stock?
@@ -291,5 +340,7 @@ RED: If the text sounds angry
 ```
 
 <Tip>
-If your output schema contains enums you can add both print_type(..) and print_enum(..) in your prompt. The LLM will use the enum definitions to output the right enum in the appropriate JSON property.
+  If your output schema contains enums you can add both print_type(..) and
+  print_enum(..) in your prompt. The LLM will use the enum definitions to output
+  the right enum in the appropriate JSON property.
 </Tip>
