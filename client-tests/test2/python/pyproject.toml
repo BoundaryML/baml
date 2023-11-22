@@ -1,0 +1,30 @@
+[tool.poetry]
+name = "example"
+version = "0.1.1"
+description = ""
+authors = ["Vaibhav Gupta <vbv@gloo.chat>"]
+readme = "README.md"
+
+## This project has 3 main root modules
+[[tool.poetry.packages]]
+include = "app"
+from = "."
+
+# Users must add this if the output dir is not the same as the root dir
+[[tool.poetry.packages]]
+include = "baml_client"
+from = "."
+
+[[tool.poetry.packages]]
+include = "tests"
+from = "."
+
+[tool.poetry.dependencies]
+python = "^3.8"
+mypy = "^1.5.1"
+pytest-asyncio = "^0.21.1"
+baml = {path = "../../../clients/python", develop = true}
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

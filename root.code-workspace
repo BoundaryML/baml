@@ -25,6 +25,9 @@
     },
     {
       "path": ".github"
+    },
+    {
+      "path": "client-tests/test2"
     }
   ],
   "settings": {
