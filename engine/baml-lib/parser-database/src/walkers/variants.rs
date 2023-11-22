@@ -12,11 +12,6 @@ pub type VariantWalker<'db> = Walker<'db, ast::VariantConfigId>;
 
 impl<'db> VariantWalker<'db> {
     /// The name of the function.
-    pub fn identifier(self) -> &'db Identifier {
-        self.ast_variant().identifier()
-    }
-
-    /// The name of the function.
     pub fn function_identifier(self) -> &'db Identifier {
         self.ast_variant().function_name()
     }
@@ -135,5 +130,11 @@ impl<'db> VariantWalker<'db> {
             .flatten()
             .collect::<Vec<_>>()
             .into_iter()
+    }
+}
+
+impl<'db> WithIdentifier for VariantWalker<'db> {
+    fn identifier(&self) -> &'db Identifier {
+        self.ast_variant().identifier()
     }
 }

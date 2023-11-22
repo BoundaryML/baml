@@ -52,7 +52,7 @@ impl<'db> JsonHelper for VariantWalker<'db> {
             .collect::<Vec<_>>();
 
         json!({
-            "name": self.identifier().name(),
+            "name": self.name(),
             "function": func.json(f),
             "prompt": prompt,
             "client": client.name(),
@@ -122,7 +122,7 @@ impl WithWritePythonString for VariantWalker<'_> {
         format!(
             "fx_{}_impl_{}",
             clean_file_name(self.function_identifier().name()),
-            clean_file_name(self.identifier().name())
+            clean_file_name(self.name())
         )
     }
 
@@ -131,7 +131,7 @@ impl WithWritePythonString for VariantWalker<'_> {
         fc.last_file().add_line(format!(
             "from .{0} import {1} as unused_{0}",
             self.file_name(),
-            self.identifier().name(),
+            self.name(),
         ));
         fc.complete_file();
 

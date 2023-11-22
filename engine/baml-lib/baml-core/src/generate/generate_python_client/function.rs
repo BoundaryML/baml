@@ -39,7 +39,7 @@ impl JsonHelper for Walker<'_, FunctionId> {
     fn json(&self, f: &mut File) -> serde_json::Value {
         let impls = self
             .walk_variants()
-            .map(|v| v.identifier().name())
+            .map(|v| v.name().to_string())
             .collect::<Vec<_>>();
         json!({
             "name": self.ast_function().name(),

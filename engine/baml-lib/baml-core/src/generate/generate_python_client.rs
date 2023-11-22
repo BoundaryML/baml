@@ -36,11 +36,20 @@ pub(crate) fn generate_py(
     db.walk_enums().for_each(|e| generate_py_file(&e, &mut fc));
     db.walk_classes()
         .for_each(|c| generate_py_file(&c, &mut fc));
-    db.walk_functions().for_each(|f| {
-        generate_py_file(&f, &mut fc);
-        f.walk_variants()
-            .for_each(|v| generate_py_file(&v, &mut fc));
+    db.walk_functions()
+        .for_each(|f| generate_py_file(&f, &mut fc));
+    let mut variants = db.walk_variants().collect::<Vec<_>>();
+    variants.sort_by(|a, b| {
+        match a
+            .function_identifier()
+            .name()
+            .cmp(b.function_identifier().name())
+        {
+            std::cmp::Ordering::Equal => a.name().cmp(b.name()),
+            x => x,
+        }
     });
+    variants.iter().for_each(|f| generate_py_file(f, &mut fc));
 
     db.walk_clients()
         .for_each(|f| generate_py_file(&f, &mut fc));
