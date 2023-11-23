@@ -75,6 +75,7 @@
       "end": "\\}",
       "patterns": [
         { "include": "#field_declaration_type" },
+        { "include": "#property_assignment_expression" },
         { "include": "#block_attribute" },
         { "include": "#comment" }
       ]
@@ -88,11 +89,23 @@
       ]
     },
     "field_declaration_type": {
-      "match": "\\s*(\\w+)\\s+(\\w+)\\b",
-      "captures": {
-        "1": { "name": "variable.other.field" },
-        "2": { "name": "support.type" }
-      }
+      "begin": "\\s*((input)|(output))\\s+",
+      "end": "(?=$|\\n)",
+      "beginCaptures": {
+        "1": { "name": "keyword.special.input-output" }
+      },
+      "patterns": [
+        {
+          "match": "(\\w+)\\s*:",
+          "captures": {
+            "1": { "name": "variable.other.readwrite" }
+          }
+        },
+        {
+          "match": "\\w+",
+          "name": "support.type"
+        }
+      ]
     },
     "single_variable_no_assignment": {
       "match": "^\\s*\\w+\\b",
