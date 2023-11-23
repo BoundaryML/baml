@@ -1,12 +1,32 @@
 use super::{
-    traits::WithAttributes, Attribute, Comment, FieldType, Identifier, Span, WithDocumentation,
-    WithIdentifier, WithSpan,
+    traits::WithAttributes, Attribute, Comment, ConfigBlockProperty, FieldType, Identifier, Span,
+    WithDocumentation, WithIdentifier, WithSpan,
 };
 
 /// An opaque identifier for a value in an AST enum. Use the
 /// `r#enum[enum_value_id]` syntax to resolve the id to an `ast::EnumValue`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FuncArguementId(pub u32);
+
+/// An opaque identifier for a field in an AST model. Use the
+/// `model[field_id]` syntax to resolve the id to an `ast::Field`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct FieldId(pub u32);
+
+impl FieldId {
+    /// Used for range bounds when iterating over BTreeMaps.
+    pub const MIN: FieldId = FieldId(0);
+    /// Used for range bounds when iterating over BTreeMaps.
+    pub const MAX: FieldId = FieldId(u32::MAX);
+}
+
+impl std::ops::Index<FieldId> for Function {
+    type Output = ConfigBlockProperty;
+
+    fn index(&self, index: FieldId) -> &Self::Output {
+        &self.fields[index.0 as usize]
+    }
+}
 
 impl FuncArguementId {
     /// Used for range bounds when iterating over BTreeMaps.
@@ -139,6 +159,7 @@ pub struct Function {
     pub attributes: Vec<Attribute>,
     /// The location of this model in the text representation.
     pub(crate) span: Span,
+    pub fields: Vec<ConfigBlockProperty>,
 }
 
 impl Function {
@@ -147,6 +168,19 @@ impl Function {
     }
     pub fn output(&self) -> &FunctionArgs {
         &self.output
+    }
+
+    pub fn iter_fields(
+        &self,
+    ) -> impl ExactSizeIterator<Item = (FieldId, &ConfigBlockProperty)> + Clone {
+        self.fields
+            .iter()
+            .enumerate()
+            .map(|(idx, field)| (FieldId(idx as u32), field))
+    }
+
+    pub fn fields(&self) -> &[ConfigBlockProperty] {
+        &self.fields
     }
 }
 

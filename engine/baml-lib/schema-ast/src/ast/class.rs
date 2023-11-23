@@ -84,10 +84,6 @@ impl Class {
     pub fn fields(&self) -> &[Field] {
         &self.fields
     }
-
-    pub fn span(&self) -> &Span {
-        &self.span
-    }
 }
 
 impl WithIdentifier for Class {

@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use internal_baml_diagnostics::DatamodelError;
-use internal_baml_schema_ast::ast::{ClassId, WithName};
+use internal_baml_schema_ast::ast::{ClassId, WithName, WithSpan};
 
 use crate::validate::validation_pipeline::context::Context;
 

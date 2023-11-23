@@ -125,8 +125,28 @@ impl ParserDatabase {
 
     /// Updates the prompt
     pub fn finalize(&mut self, diag: &mut Diagnostics) {
+        self.link_functions(diag);
         self.finalize_dependencies(diag);
         self.finalize_prompt_validation(diag);
+    }
+
+    fn link_functions(&mut self, _diag: &mut Diagnostics) {
+        let default_impl = self
+            .walk_functions()
+            .filter_map(|f| {
+                if f.metadata().default_impl.is_none() {
+                    return f.walk_variants().find_map(|v| {
+                        Some((f.id, v.name().to_string(), f.identifier().span().clone()))
+                    });
+                }
+                None
+            })
+            .collect::<Vec<_>>();
+
+        default_impl.iter().for_each(|(fid, impl_name, span)| {
+            self.types.function.get_mut(&fid).unwrap().default_impl =
+                Some((impl_name.clone(), span.clone()))
+        })
     }
 
     fn finalize_dependencies(&mut self, diag: &mut Diagnostics) {
@@ -218,9 +238,10 @@ impl ParserDatabase {
         // this should be trivial.
         let extends = self
             .types
-            .function_dependencies
+            .function
             .iter()
-            .map(|(&k, (input, output))| {
+            .map(|(&k, func)| {
+                let (input, output) = &func.dependencies;
                 let input_deps = input
                     .iter()
                     .filter_map(|f| match self.find_type_by_str(f) {
@@ -250,9 +271,9 @@ impl ParserDatabase {
             .collect::<Vec<_>>();
 
         for (id, (input, output)) in extends {
-            let val = self.types.function_dependencies.get_mut(&id).unwrap();
-            val.0.extend(input);
-            val.1.extend(output);
+            let val = self.types.function.get_mut(&id).unwrap();
+            val.dependencies.0.extend(input);
+            val.dependencies.1.extend(output);
         }
     }
 

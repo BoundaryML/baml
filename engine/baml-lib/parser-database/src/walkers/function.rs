@@ -7,6 +7,7 @@ use serde_json::json;
 use crate::{
     ast::{self, WithName},
     printer::{serialize_with_printer, WithSerializeableContent},
+    types::FunctionType,
     WithSerialize,
 };
 
@@ -140,6 +141,11 @@ impl<'db> FunctionWalker<'db> {
 
         tests.into_iter()
     }
+
+    /// Get metadata about the function
+    pub fn metadata(self) -> &'db FunctionType {
+        &self.db.types.function[&self.function_id()]
+    }
 }
 
 /// A `function` declaration in the Prisma schema.
@@ -184,7 +190,7 @@ impl<'db> ArgWalker<'db> {
 
     /// The name of the function.
     pub fn required_enums(self) -> impl Iterator<Item = EnumWalker<'db>> {
-        let (input, output) = &self.db.types.function_dependencies[&self.function_id()];
+        let (input, output) = &self.db.types.function[&self.function_id()].dependencies;
         if self.id.1 { input } else { output }
             .iter()
             .filter_map(|f| match self.db.find_type_by_str(f) {
@@ -196,7 +202,7 @@ impl<'db> ArgWalker<'db> {
 
     /// The name of the function.
     pub fn required_classes(self) -> impl Iterator<Item = ClassWalker<'db>> {
-        let (input, output) = &self.db.types.function_dependencies[&self.function_id()];
+        let (input, output) = &self.db.types.function[&self.function_id()].dependencies;
         if self.id.1 { input } else { output }
             .iter()
             .filter_map(|f| match self.db.find_type_by_str(f) {

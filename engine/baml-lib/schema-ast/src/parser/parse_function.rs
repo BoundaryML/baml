@@ -2,6 +2,7 @@ use super::{
     helpers::{parsing_catch_all, Pair},
     parse_attribute::parse_attribute,
     parse_comments::*,
+    parse_config::parse_key_value,
     parse_identifier::parse_identifier,
     Rule,
 };
@@ -18,6 +19,7 @@ pub(crate) fn parse_function(
     let mut attributes: Vec<Attribute> = Vec::new();
     let mut input = None;
     let mut output = None;
+    let mut fields = vec![];
 
     for current in pair.into_inner() {
         match current.as_rule() {
@@ -71,6 +73,13 @@ pub(crate) fn parse_function(
                                 }
                             }
                         }
+                        Rule::key_value => {
+                            fields.push(parse_key_value(
+                                item,
+                                pending_field_comment.take(),
+                                diagnostics,
+                            ));
+                        }
                         Rule::comment_block => pending_field_comment = Some(item),
                         Rule::BLOCK_LEVEL_CATCH_ALL => {
                             diagnostics.push_error(DatamodelError::new_validation_error(
@@ -92,6 +101,7 @@ pub(crate) fn parse_function(
             input,
             output,
             attributes,
+            fields,
             documentation: doc_comment.and_then(parse_comment_block),
             span: diagnostics.span(pair_span),
         }),

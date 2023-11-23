@@ -49,6 +49,7 @@ impl JsonHelper for Walker<'_, FunctionId> {
             "doc_string": self.ast_function().documentation(),
             "impls": impls,
             "has_impls": impls.len() > 0,
+            "default_impl": self.metadata().default_impl.as_ref().map(|f| f.0.clone())
         })
     }
 }
