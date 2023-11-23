@@ -77,7 +77,7 @@ output_field_declaration = {
 
 function_field_type = { field_type | named_argument_list }
 function_contents = {
-    (input_field_declaration | output_field_declaration | (block_attribute ~ NEWLINE) | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
+    (input_field_declaration | output_field_declaration | (key_value ~ NEWLINE) | (block_attribute ~ NEWLINE) | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
 }
 
 named_argument = { identifier ~ ":" ~ field_type? }

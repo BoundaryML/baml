@@ -425,7 +425,7 @@ impl DatamodelError {
         distances.sort_by_key(|k| k.0);
 
         // Set a threshold for "closeness"
-        let threshold = 2; // for example, you can adjust this based on your needs
+        let threshold = 10; // for example, you can adjust this based on your needs
 
         // Filter names that are within the threshold
         let close_names = distances
@@ -449,6 +449,54 @@ impl DatamodelError {
             format!(
                 "Type `{}` does not exist. Did you mean one of these: `{}`?",
                 type_name, suggestions
+            )
+        };
+
+        Self::new(msg, span)
+    }
+
+    pub fn new_impl_not_found_error(
+        impl_name: &str,
+        names: Vec<String>,
+        span: Span,
+    ) -> DatamodelError {
+        // Calculate OSA distances and sort names by distance
+        let mut distances = names
+            .iter()
+            .map(|n| {
+                (
+                    strsim::osa_distance(&n.to_lowercase(), &impl_name.to_lowercase()),
+                    n.to_owned(),
+                )
+            })
+            .collect::<Vec<_>>();
+        distances.sort_by_key(|k| k.0);
+
+        // Set a threshold for "closeness"
+        let threshold = 10; // for example, you can adjust this based on your needs
+
+        // Filter names that are within the threshold
+        let close_names = distances
+            .iter()
+            .filter(|&&(dist, _)| dist <= threshold)
+            .map(|(_, name)| name.to_owned())
+            .collect::<Vec<_>>();
+
+        let msg = if close_names.is_empty() {
+            // If no names are close enough, suggest nothing or provide a generic message
+            format!("impl `{}` does not exist.", impl_name)
+        } else if close_names.len() == 1 {
+            // If there's only one close name, suggest it
+            format!(
+                "impl `{}` does not exist. Did you mean `{}`?",
+                impl_name, close_names[0]
+            )
+        } else {
+            // If there are multiple close names, suggest them all
+            let suggestions = close_names.join("`, `");
+            format!(
+                "impl `{}` does not exist. Did you mean one of these: `{}`?",
+                impl_name, suggestions
             )
         };
 

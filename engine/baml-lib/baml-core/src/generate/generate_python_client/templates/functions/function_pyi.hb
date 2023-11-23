@@ -24,6 +24,9 @@ class IBAML{{name}}:
     ) -> typing.Callable[[I{{name}}], I{{name}}]:
         ...
 
+    {{> method_def func_name="__call__" unnamed_args=this.unnamed_args args=this.args return=this.return}}
+        ...
+
     def get_impl(self, name: ImplName) -> BAML{{name}}Impl:
         ...
 

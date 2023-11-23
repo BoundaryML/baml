@@ -196,12 +196,18 @@ pub struct ExponentialBackoffStrategy {
     pub max_delay_ms: u32,
 }
 
+#[derive(Debug, Clone)]
+pub struct FunctionType {
+    pub default_impl: Option<(String, Span)>,
+    pub dependencies: (HashSet<String>, HashSet<String>),
+}
+
 #[derive(Debug, Default)]
 pub(super) struct Types {
     pub(super) enum_attributes: HashMap<ast::EnumId, EnumAttributes>,
     pub(super) class_attributes: HashMap<ast::ClassId, ClassAttributes>,
     pub(super) class_dependencies: HashMap<ast::ClassId, HashSet<String>>,
-    pub(super) function_dependencies: HashMap<ast::FunctionId, (HashSet<String>, HashSet<String>)>,
+    pub(super) function: HashMap<ast::FunctionId, FunctionType>,
     pub(super) variant_attributes: HashMap<ast::VariantConfigId, VariantAttributes>,
     pub(super) variant_properties: HashMap<ast::VariantConfigId, VariantProperties>,
     pub(super) client_properties: HashMap<ast::ClientId, ClientProperties>,
@@ -293,9 +299,36 @@ fn visit_function<'db>(idx: FunctionId, function: &'db ast::Function, ctx: &mut 
         .map(|f| f.name().to_string())
         .collect::<HashSet<_>>();
 
-    ctx.types
-        .function_dependencies
-        .insert(idx, (input_deps, output_deps));
+    let mut default_impl = None;
+    function
+        .iter_fields()
+        .for_each(|(_idx, field)| match field.name() {
+            "default_impl" => {
+                if field.template_args.is_some() {
+                    ctx.push_error(DatamodelError::new_validation_error(
+                        "Did you mean `impl` instead of `impl<...>`?",
+                        field.span().clone(),
+                    ));
+                }
+                default_impl = match &field.value {
+                    Some(val) => coerce::string_with_span(&val, ctx.diagnostics)
+                        .map(|(v, span)| (v.to_string(), span.clone())),
+                    None => None,
+                }
+            }
+            config => ctx.push_error(DatamodelError::new_validation_error(
+                &format!("Unknown field `{}` in function", config),
+                field.span().clone(),
+            )),
+        });
+
+    ctx.types.function.insert(
+        idx,
+        FunctionType {
+            default_impl,
+            dependencies: (input_deps, output_deps),
+        },
+    );
 }
 
 fn visit_client<'db>(idx: ClientId, client: &'db ast::Client, ctx: &mut Context<'db>) {
