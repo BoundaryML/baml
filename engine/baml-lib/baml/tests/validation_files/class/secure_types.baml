@@ -23,7 +23,8 @@ class ComplexTypes {
 
 
 
-// error: Type `apple_pie` does not exist.
+
+// error: Type `apple_pie` does not exist. Did you mean one of these: `ComplexTypes`, `float`, `bool`, `string`, `int`?
 //   -->  class/secure_types.baml:3
 //    | 
 //  2 | class ComplexTypes {
@@ -41,19 +42,19 @@ class ComplexTypes {
 //  4 |   b (int, {bool: string?}, (char | float)[][] | long_word_123.foobar[])
 //  5 |   c apple123_456_pie | (stringer, bool[], (int | char))[]
 //    | 
-// error: Type `stringer` does not exist. Did you mean `string`?
+// error: Type `stringer` does not exist. Did you mean one of these: `string`, `int`, `float`, `bool`?
 //   -->  class/secure_types.baml:5
 //    | 
 //  4 |   b (int, {bool: string?}, (char | float)[][] | long_word_123.foobar[])
 //  5 |   c apple123_456_pie | (stringer, bool[], (int | char))[]
 //    | 
-// error: Type `double` does not exist.
+// error: Type `double` does not exist. Did you mean one of these: `bool`, `string`, `int`, `float`, `ComplexTypes`?
 //   -->  class/secure_types.baml:7
 //    | 
 //  6 |   d {int[][]: ((int | float) | char[])}
 //  7 |   e ((int, string | char) | ((float, double) | long[], bool)[][][])
 //    | 
-// error: Type `long` does not exist.
+// error: Type `long` does not exist. Did you mean one of these: `int`, `float`, `bool`, `string`?
 //   -->  class/secure_types.baml:7
 //    | 
 //  6 |   d {int[][]: ((int | float) | char[])}
@@ -71,25 +72,25 @@ class ComplexTypes {
 //  8 |   f VeryLongWord_With_123_Numbers[][][][]
 //  9 |   g (int, (float, char, bool), string[]) | tuple_inside_tuple[]
 //    | 
-// error: Type `apple` does not exist.
+// error: Type `apple` does not exist. Did you mean one of these: `bool`, `int`, `float`, `string`, `ComplexTypes`?
 //   -->  class/secure_types.baml:11
 //    | 
 // 10 |   h (((int | string)[]) | {bool[][]: char[]})
 // 11 |   i (apple, banana | cherry | date_fruit | eggplant_vegetable)[]
 //    | 
-// error: Type `banana` does not exist.
+// error: Type `banana` does not exist. Did you mean one of these: `string`, `int`, `float`, `bool`?
 //   -->  class/secure_types.baml:11
 //    | 
 // 10 |   h (((int | string)[]) | {bool[][]: char[]})
 // 11 |   i (apple, banana | cherry | date_fruit | eggplant_vegetable)[]
 //    | 
-// error: Type `cherry` does not exist.
+// error: Type `cherry` does not exist. Did you mean one of these: `string`, `int`, `float`, `bool`, `ComplexTypes`?
 //   -->  class/secure_types.baml:11
 //    | 
 // 10 |   h (((int | string)[]) | {bool[][]: char[]})
 // 11 |   i (apple, banana | cherry | date_fruit | eggplant_vegetable)[]
 //    | 
-// error: Type `date_fruit` does not exist.
+// error: Type `date_fruit` does not exist. Did you mean one of these: `string`, `float`, `int`, `bool`?
 //   -->  class/secure_types.baml:11
 //    | 
 // 10 |   h (((int | string)[]) | {bool[][]: char[]})
@@ -101,19 +102,19 @@ class ComplexTypes {
 // 10 |   h (((int | string)[]) | {bool[][]: char[]})
 // 11 |   i (apple, banana | cherry | date_fruit | eggplant_vegetable)[]
 //    | 
-// error: Type `double` does not exist.
+// error: Type `double` does not exist. Did you mean one of these: `bool`, `string`, `int`, `float`, `ComplexTypes`?
 //   -->  class/secure_types.baml:12
 //    | 
 // 11 |   i (apple, banana | cherry | date_fruit | eggplant_vegetable)[]
 // 12 |   j ((char, int[][], (bool | string[][])) | double[][][][], (float, int)[])
 //    | 
-// error: Type `long` does not exist.
+// error: Type `long` does not exist. Did you mean one of these: `int`, `float`, `bool`, `string`?
 //   -->  class/secure_types.baml:13
 //    | 
 // 12 |   j ((char, int[][], (bool | string[][])) | double[][][][], (float, int)[])
 // 13 |   k {string[]: (int | long[])} | {float[][]: double[][]}
 //    | 
-// error: Type `double` does not exist.
+// error: Type `double` does not exist. Did you mean one of these: `bool`, `string`, `int`, `float`, `ComplexTypes`?
 //   -->  class/secure_types.baml:13
 //    | 
 // 12 |   j ((char, int[][], (bool | string[][])) | double[][][][], (float, int)[])
@@ -125,49 +126,49 @@ class ComplexTypes {
 // 13 |   k {string[]: (int | long[])} | {float[][]: double[][]}
 // 14 |   l AlphaNumeric_123_456_789 | (int, bool?) | char[]
 //    | 
-// error: Type `tuple_1` does not exist.
+// error: Type `tuple_1` does not exist. Did you mean one of these: `float`, `bool`, `string`, `int`, `ComplexTypes`?
 //   -->  class/secure_types.baml:15
 //    | 
 // 14 |   l AlphaNumeric_123_456_789 | (int, bool?) | char[]
 // 15 |   m (tuple_1, tuple_2 | tuple_3, (tuple_4, tuple_5))[]
 //    | 
-// error: Type `tuple_2` does not exist.
+// error: Type `tuple_2` does not exist. Did you mean one of these: `float`, `bool`, `string`, `int`, `ComplexTypes`?
 //   -->  class/secure_types.baml:15
 //    | 
 // 14 |   l AlphaNumeric_123_456_789 | (int, bool?) | char[]
 // 15 |   m (tuple_1, tuple_2 | tuple_3, (tuple_4, tuple_5))[]
 //    | 
-// error: Type `tuple_3` does not exist.
+// error: Type `tuple_3` does not exist. Did you mean one of these: `float`, `bool`, `string`, `int`, `ComplexTypes`?
 //   -->  class/secure_types.baml:15
 //    | 
 // 14 |   l AlphaNumeric_123_456_789 | (int, bool?) | char[]
 // 15 |   m (tuple_1, tuple_2 | tuple_3, (tuple_4, tuple_5))[]
 //    | 
-// error: Type `tuple_4` does not exist.
+// error: Type `tuple_4` does not exist. Did you mean one of these: `float`, `bool`, `string`, `int`, `ComplexTypes`?
 //   -->  class/secure_types.baml:15
 //    | 
 // 14 |   l AlphaNumeric_123_456_789 | (int, bool?) | char[]
 // 15 |   m (tuple_1, tuple_2 | tuple_3, (tuple_4, tuple_5))[]
 //    | 
-// error: Type `tuple_5` does not exist.
+// error: Type `tuple_5` does not exist. Did you mean one of these: `float`, `bool`, `string`, `int`, `ComplexTypes`?
 //   -->  class/secure_types.baml:15
 //    | 
 // 14 |   l AlphaNumeric_123_456_789 | (int, bool?) | char[]
 // 15 |   m (tuple_1, tuple_2 | tuple_3, (tuple_4, tuple_5))[]
 //    | 
-// error: Type `another_key` does not exist.
+// error: Type `another_key` does not exist. Did you mean one of these: `string`, `int`, `ComplexTypes`, `float`, `bool`?
 //   -->  class/secure_types.baml:16
 //    | 
 // 15 |   m (tuple_1, tuple_2 | tuple_3, (tuple_4, tuple_5))[]
 // 16 |   n {complex_key_type[]: {another_key: (int | string[])}}
 //    | 
-// error: Type `complex_key_type` does not exist.
+// error: Type `complex_key_type` does not exist. Did you mean `ComplexTypes`?
 //   -->  class/secure_types.baml:16
 //    | 
 // 15 |   m (tuple_1, tuple_2 | tuple_3, (tuple_4, tuple_5))[]
 // 16 |   n {complex_key_type[]: {another_key: (int | string[])}}
 //    | 
-// error: Type `double` does not exist.
+// error: Type `double` does not exist. Did you mean one of these: `bool`, `string`, `int`, `float`, `ComplexTypes`?
 //   -->  class/secure_types.baml:17
 //    | 
 // 16 |   n {complex_key_type[]: {another_key: (int | string[])}}
