@@ -127,7 +127,7 @@ fn use_partial(
         }
         HSTemplate::MultiArgTestSnippet => {
             register_partial_file!(reg, "tests", "multi_arg_snippet");
-            f.add_import("json5", "loads");
+            f.add_import("json5", "loads # type: ignore");
             f.add_import(".__do_not_import.generated_baml_client", "baml");
             f.add_import("baml_lib._impl.deserializer", "Deserializer");
             String::from("multi_arg_snippet")

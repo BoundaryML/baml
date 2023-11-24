@@ -20,13 +20,13 @@ class IClassifyIntent(Protocol):
     This is the interface for a function.
 
     Args:
-        arg: str
+        query: str
 
     Returns:
         List[Intent]
     """
 
-    async def __call__(self, arg: str, /) -> List[Intent]:
+    async def __call__(self, *, query: str) -> List[Intent]:
         ...
 
 
@@ -35,8 +35,11 @@ class IBAMLClassifyIntent(BaseBAMLFunction[List[Intent]]):
         super().__init__(
             "ClassifyIntent",
             IClassifyIntent,
-            ["v1", "v2"],
+            ["simple", "with_adapter"],
         )
+
+    async def __call__(self, *args, **kwargs) -> List[Intent]:
+        return await self.get_impl("simple").run(*args, **kwargs)
 
 BAMLClassifyIntent = IBAMLClassifyIntent()
 

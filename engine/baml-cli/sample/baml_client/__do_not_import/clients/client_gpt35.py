@@ -15,6 +15,7 @@ GPT35 = LLMManager.add_llm(
     name="GPT35",
     provider="baml-openai-chat",
     retry_policy=None,
+    redactions=["api_key"],
     options=dict(
         model="gpt-3.5-turbo",
         api_key=environ['OPENAI_API_KEY'],

@@ -14,7 +14,7 @@ from baml_lib._impl.deserializer import Deserializer
 from typing import List
 
 
-# Impl: v2
+# Impl: simple
 # Client: Main
 # An implementation of .
 
@@ -24,37 +24,37 @@ Given the question, which of the intents is the user attempting to do?
 
 Question:
 ```
-{arg}
+{query}
 ```
 
 Intent
 ---
-book_a_meeting: When the user wants to book a meeting
-check_availability: When the query is directly asking about availability
+BookMeeting
+AvailabilityQuery
 SetReminder
 
-Output format: "Intent as string"[]
 
-Intent:\
+Output JSON: "Intent as string"[]
+
+JSON:\
 """
 
 __input_replacers = {
-    "{arg}"
+    "{query}"
 }
 
 
 # We ignore the type here because baml does some type magic to make this work
 # for inline SpecialForms like Optional, Union, List.
 __deserializer = Deserializer[List[Intent]](List[Intent])  # type: ignore
-__deserializer.overload("Intent", {"book_a_meeting": "BookMeeting", "check_availability": "AvailabilityQuery"})
 
 
 
 
 
 
-@BAMLClassifyIntent.register_impl("v2")
-async def v2(arg: str, /) -> List[Intent]:
-    response = await Main.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
+@BAMLClassifyIntent.register_impl("simple")
+async def simple(*, query: str) -> List[Intent]:
+    response = await Main.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(query=query))
     deserialized = __deserializer.from_string(response.generated)
     return deserialized

@@ -1,3 +1,4 @@
+# Bug: deserialize for parsing an object with just a single field (should work)
 """
 Run this script to see how the BAML client can be used in Python.
 
@@ -7,35 +8,66 @@ python -m py_baml_example.main
 import asyncio
 from datetime import datetime
 from baml_client import baml
-from baml_client.baml_types import Intent
+from baml_client.baml_types import Intent, Conversation, Message, UserType
+
+
+class End:
+    def __init__(self, msg: str):
+        self.msg = msg
+
+    def __str__(self):
+        return self.msg
+
+    def __repr__(self):
+        return self.msg
+
+
+async def pipeline(convo: Conversation) -> str | End:
+    """
+    This function returns the message that the AI should send to the user.
+    """
+
+    # First we call an intent classifier. 
+    # This is strongly typed! Note that intents is a List[Intent] type.
+    # intents = await baml.IntentClassifier.get_impl('v1').run(convo.messages[-1].content)
+    intents = await baml.ClassifyIntent(query=convo.messages[-1].content)
+
+    if Intent.BookMeeting in intents:
+
+        # If the user wants to book a meeting, we need to extract the meeting details.
+        partial_info = await baml.ExtractMeetingRequestInfoPartial(convo=convo, now=datetime.now().isoformat())
+        check = await baml.GetNextQuestion(partial_info)
+
+        if check.complete:
+            # TODO: actually book the meeting by calling a real API
+            return End(f"""\
+I have scheduled a meeting for you:
+{partial_info.model_dump_json()}\
+            """)
+        elif check.follow_up_question:
+            return check.follow_up_question
+        else:
+            return 'Sorry, I did not understand your request. What do you mean?'
+    else:
+        return End(f'Sorry! I only know how to book meetings. {intents}')
 
 async def main():
-    user_query = input('AI: How can i help you?')
 
-    try:
-        # First we call an intent classifier. 
-        # This is strongly typed! Note that intents is a List[Intent] type.
-        intents = await baml.ClassifyIntent.get_impl('v1').run(user_query)
-
-        if Intent.BookMeeting in intents:
-
-            # If the user wants to book a meeting, we need to extract the meeting details.
-            meeting_request = await baml.ExtractMeetingRequestInfo.get_impl('v2').run(
-                query=user_query, now=datetime.now().isoformat())
-
-            # TODO: We may want a loop here to continue collecting information in
-            # case the user did not provide all the information we need.
-
-            print('AI: I have booked a meeting with the following information:')
-            print(f'AI: Title: {meeting_request.topic}')
-            # TODO: Parse into python datetime
-            print(f'AI: Date: {meeting_request.when}')
-            print(f'AI: Attendees: {meeting_request.attendees}')
+    convo = Conversation(messages=[])
+    while True:
+        user_query = input('User:')
+        try:
+            convo.messages.append(Message(content=user_query, user=UserType.User))
+            next_message = await pipeline(convo)
+            print(f'AI: {next_message}')
+            if isinstance(next_message, End):
+                break
+            else:
+                convo.messages.append(Message(content=next_message, user=UserType.AI))
+        except Exception as e:
+            print(f'Error: {e}')
+            break
             
-        else:
-            print('AI: Sorry, I did not understand your request')
-    except Exception as e:
-        print(f'AI: Sorry, I encountered an error: {e}')
 
 
 if __name__ == '__main__':

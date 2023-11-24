@@ -9,10 +9,16 @@
 
 from .__do_not_import.functions.fx_classifyintent import IClassifyIntent, IClassifyIntentOutput
 from .__do_not_import.functions.fx_extractmeetingrequestinfo import IExtractMeetingRequestInfo, IExtractMeetingRequestInfoOutput
+from .__do_not_import.functions.fx_extractmeetingrequestinfopartial import IExtractMeetingRequestInfoPartial, IExtractMeetingRequestInfoPartialOutput
+from .__do_not_import.functions.fx_getnextquestion import IGetNextQuestion, IGetNextQuestionOutput
 from .__do_not_import.types.classes.cls_attendee import Attendee
+from .__do_not_import.types.classes.cls_conversation import Conversation
 from .__do_not_import.types.classes.cls_meetingrequest import MeetingRequest
-from .__do_not_import.types.classes.cls_meetingrequestparital import MeetingRequestParital
+from .__do_not_import.types.classes.cls_meetingrequestpartial import MeetingRequestPartial
+from .__do_not_import.types.classes.cls_message import Message
+from .__do_not_import.types.classes.cls_validation import Validation
 from .__do_not_import.types.enums.enm_intent import Intent
+from .__do_not_import.types.enums.enm_usertype import UserType
 
 
 
@@ -22,8 +28,16 @@ __all__ = [
     'IClassifyIntentOutput',
     'IExtractMeetingRequestInfo',
     'IExtractMeetingRequestInfoOutput',
+    'IExtractMeetingRequestInfoPartial',
+    'IExtractMeetingRequestInfoPartialOutput',
+    'IGetNextQuestion',
+    'IGetNextQuestionOutput',
     'Attendee',
+    'Conversation',
     'MeetingRequest',
-    'MeetingRequestParital',
-    'Intent'
+    'MeetingRequestPartial',
+    'Message',
+    'Validation',
+    'Intent',
+    'UserType'
 ]

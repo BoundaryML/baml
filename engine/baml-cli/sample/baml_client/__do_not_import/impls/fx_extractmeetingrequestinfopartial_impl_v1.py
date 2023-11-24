@@ -8,9 +8,11 @@
 # fmt: off
 
 from ..clients.client_main import Main
-from ..functions.fx_extractmeetingrequestinfo import BAMLExtractMeetingRequestInfo
-from ..types.classes.cls_attendee import Attendee
-from ..types.classes.cls_meetingrequest import MeetingRequest
+from ..functions.fx_extractmeetingrequestinfopartial import BAMLExtractMeetingRequestInfoPartial
+from ..types.classes.cls_conversation import Conversation
+from ..types.classes.cls_meetingrequestpartial import MeetingRequestPartial
+from ..types.classes.cls_message import Message
+from ..types.enums.enm_usertype import UserType
 from baml_lib._impl.deserializer import Deserializer
 
 
@@ -28,43 +30,42 @@ Context:
 Today is {now}
 ```
 
-Query:
+Conversation:
 ```
-{query}
+{convo.display}
 ```
 
 Output JSON:
 {
   // Either an exact time, or a relative time. Use ISO 8601 Duration Format
   // when specifying a relative time (e.g. P1D for 1 day from now).
-  "when": string,
-  "attendees": {
-    "name": string,
-    "email": string
-  }[],
-  "topic": string
+  "when": string | null,
+  // Names or preferably emails of attendees.
+  "attendees": string[],
+  // What is the topic of the meeting?
+  "topic": string | null
 }
 
 JSON:\
 """
 
 __input_replacers = {
-    "{now}",
-    "{query}"
+    "{convo.display}",
+    "{now}"
 }
 
 
 # We ignore the type here because baml does some type magic to make this work
 # for inline SpecialForms like Optional, Union, List.
-__deserializer = Deserializer[MeetingRequest](MeetingRequest)  # type: ignore
+__deserializer = Deserializer[MeetingRequestPartial](MeetingRequestPartial)  # type: ignore
 
 
 
 
 
 
-@BAMLExtractMeetingRequestInfo.register_impl("v1")
-async def v1(*, query: str, now: str) -> MeetingRequest:
-    response = await Main.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(query=query, now=now))
+@BAMLExtractMeetingRequestInfoPartial.register_impl("v1")
+async def v1(*, convo: Conversation, now: str) -> MeetingRequestPartial:
+    response = await Main.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(convo=convo, now=now))
     deserialized = __deserializer.from_string(response.generated)
     return deserialized

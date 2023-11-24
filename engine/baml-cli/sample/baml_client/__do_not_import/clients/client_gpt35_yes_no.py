@@ -8,14 +8,17 @@
 # fmt: off
 
 from baml_core.provider_manager import LLMManager
+from os import environ
 
 
 GPT35_YES_NO = LLMManager.add_llm(
     name="GPT35_YES_NO",
     provider="baml-openai-chat",
     retry_policy=None,
+    redactions=["api_key"],
     options=dict(
         model="gpt-3.5-turbo",
+        api_key=environ['OPENAI_API_KEY'],
         logit_bias={" yes": 100, " no": 100},
     ),
 )

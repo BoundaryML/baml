@@ -8,12 +8,10 @@
 # fmt: off
 
 from baml_lib._impl.deserializer import register_deserializer
-from pydantic import BaseModel
-from typing import List, Optional
+from enum import Enum
 
 
 @register_deserializer({  })
-class MeetingRequestParital(BaseModel):
-    when: Optional[str] = None
-    attendees: List[str]
-    topic: Optional[str] = None
+class UserType(str, Enum):
+    AI = "AI"
+    User = "User"

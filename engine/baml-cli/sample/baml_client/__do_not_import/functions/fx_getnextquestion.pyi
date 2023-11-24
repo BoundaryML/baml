@@ -7,59 +7,60 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..types.enums.enm_intent import Intent
-from typing import List, Protocol, runtime_checkable
+from ..types.classes.cls_meetingrequestpartial import MeetingRequestPartial
+from ..types.classes.cls_validation import Validation
+from typing import Protocol, runtime_checkable
 
 
 import typing
 
 import pytest
 
-ImplName = typing.Literal["simple", "with_adapter"]
+ImplName = typing.Literal["v1"]
 
 T = typing.TypeVar("T", bound=typing.Callable[..., typing.Any])
 CLS = typing.TypeVar("CLS", bound=type)
 
 
-IClassifyIntentOutput = List[Intent]
+IGetNextQuestionOutput = Validation
 
 @runtime_checkable
-class IClassifyIntent(Protocol):
+class IGetNextQuestion(Protocol):
     """
     This is the interface for a function.
 
     Args:
-        query: str
+        arg: MeetingRequestPartial
 
     Returns:
-        List[Intent]
+        Validation
     """
 
-    async def __call__(self, *, query: str) -> List[Intent]:
+    async def __call__(self, arg: MeetingRequestPartial, /) -> Validation:
         ...
 
 
-class BAMLClassifyIntentImpl:
-    async def run(self, *, query: str) -> List[Intent]:
+class BAMLGetNextQuestionImpl:
+    async def run(self, arg: MeetingRequestPartial, /) -> Validation:
         ...
 
-class IBAMLClassifyIntent:
+class IBAMLGetNextQuestion:
     def register_impl(
         self, name: ImplName
-    ) -> typing.Callable[[IClassifyIntent], IClassifyIntent]:
+    ) -> typing.Callable[[IGetNextQuestion], IGetNextQuestion]:
         ...
 
-    async def __call__(self, *, query: str) -> List[Intent]:
+    async def __call__(self, arg: MeetingRequestPartial, /) -> Validation:
         ...
 
-    def get_impl(self, name: ImplName) -> BAMLClassifyIntentImpl:
+    def get_impl(self, name: ImplName) -> BAMLGetNextQuestionImpl:
         ...
 
     @typing.overload
     def test(self, test_function: T) -> T:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the ClassifyIntentInterface.
+        the GetNextQuestionInterface.
 
         Args:
             test_function : T
@@ -69,9 +70,9 @@ class IBAMLClassifyIntent:
             ```python
             # All implementations will be tested.
 
-            @baml.ClassifyIntent.test
-            def test_logic(ClassifyIntentImpl: IClassifyIntent) -> None:
-                result = await ClassifyIntentImpl(...)
+            @baml.GetNextQuestion.test
+            def test_logic(GetNextQuestionImpl: IGetNextQuestion) -> None:
+                result = await GetNextQuestionImpl(...)
             ```
         """
         ...
@@ -80,7 +81,7 @@ class IBAMLClassifyIntent:
     def test(self, *, exclude_impl: typing.Iterable[ImplName]) -> pytest.MarkDecorator:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the ClassifyIntentInterface.
+        the GetNextQuestionInterface.
 
         Args:
             exclude_impl : Iterable[ImplName]
@@ -88,11 +89,11 @@ class IBAMLClassifyIntent:
 
         Usage:
             ```python
-            # All implementations except "simple" will be tested.
+            # All implementations except "v1" will be tested.
 
-            @baml.ClassifyIntent.test(exclude_impl=["simple"])
-            def test_logic(ClassifyIntentImpl: IClassifyIntent) -> None:
-                result = await ClassifyIntentImpl(...)
+            @baml.GetNextQuestion.test(exclude_impl=["v1"])
+            def test_logic(GetNextQuestionImpl: IGetNextQuestion) -> None:
+                result = await GetNextQuestionImpl(...)
             ```
         """
         ...
@@ -101,7 +102,7 @@ class IBAMLClassifyIntent:
     def test(self, test_class: typing.Type[CLS]) -> typing.Type[CLS]:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the ClassifyIntentInterface.
+        the GetNextQuestionInterface.
 
         Args:
             test_class : Type[CLS]
@@ -111,14 +112,14 @@ class IBAMLClassifyIntent:
         ```python
         # All implementations will be tested in every test method.
 
-        @baml.ClassifyIntent.test
+        @baml.GetNextQuestion.test
         class TestClass:
-            def test_a(self, ClassifyIntentImpl: IClassifyIntent) -> None:
+            def test_a(self, GetNextQuestionImpl: IGetNextQuestion) -> None:
                 ...
-            def test_b(self, ClassifyIntentImpl: IClassifyIntent) -> None:
+            def test_b(self, GetNextQuestionImpl: IGetNextQuestion) -> None:
                 ...
         ```
         """
         ...
 
-BAMLClassifyIntent: IBAMLClassifyIntent
+BAMLGetNextQuestion: IBAMLGetNextQuestion

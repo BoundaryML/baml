@@ -14,6 +14,8 @@ from .clients.client_gptinstruct import GPTInstruct
 from .clients.client_main import Main
 from .functions.fx_classifyintent import BAMLClassifyIntent
 from .functions.fx_extractmeetingrequestinfo import BAMLExtractMeetingRequestInfo
+from .functions.fx_extractmeetingrequestinfopartial import BAMLExtractMeetingRequestInfoPartial
+from .functions.fx_getnextquestion import BAMLGetNextQuestion
 from baml_core.otel import add_message_transformer_hook, flush_trace_logs
 from baml_core.services import LogSchema
 from baml_core.services.api_types import LogSchema
@@ -24,6 +26,8 @@ from typing import Callable, List, Optional
 class BAMLClient:
     ClassifyIntent = BAMLClassifyIntent
     ExtractMeetingRequestInfo = BAMLExtractMeetingRequestInfo
+    ExtractMeetingRequestInfoPartial = BAMLExtractMeetingRequestInfoPartial
+    GetNextQuestion = BAMLGetNextQuestion
     GPT35 = GPT35
     GPT35_YES_NO = GPT35_YES_NO
     GPT4 = GPT4

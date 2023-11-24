@@ -13,6 +13,7 @@ client<llm> GPT4 {
     // Options are directly passed to the OpenAI client.
     // So you can add any of the params like:
     model gpt-4-1106-preview
+    api_key env.OPENAI_API_KEY
 
     // By default, the temperature is 0
     temperature 0.1
@@ -50,6 +51,7 @@ client<llm> GPT35_YES_NO {
   provider baml-openai-chat
   options {
     model gpt-3.5-turbo
+    api_key env.OPENAI_API_KEY
     logit_bias {
       // When using logit bias baml providers can automatically convert the string to a token using the appropriate tokenizer.
       " yes" 100
@@ -64,6 +66,7 @@ client<llm> GPTInstruct {
   provider baml-openai-completion
   options {
     model gpt-3.5-instruct
+    api_key env.OPENAI_API_KEY
   }
 }
 

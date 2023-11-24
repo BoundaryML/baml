@@ -8,10 +8,10 @@
 # fmt: off
 
 from ..clients.client_main import Main
-from ..functions.fx_classifyintent import BAMLClassifyIntent
-from ..types.enums.enm_intent import Intent
+from ..functions.fx_getnextquestion import BAMLGetNextQuestion
+from ..types.classes.cls_meetingrequestpartial import MeetingRequestPartial
+from ..types.classes.cls_validation import Validation
 from baml_lib._impl.deserializer import Deserializer
-from typing import List
 
 
 # Impl: v1
@@ -20,22 +20,22 @@ from typing import List
 
 
 __prompt_template = """\
-Given the question, which of the intents is the user attempting to do?
+Given the partial requirements, are the requirements complete?
 
-Question:
+Input:
 ```
 {arg}
 ```
 
-Intent
----
-BookMeeting
-AvailabilityQuery
-SetReminder
+Output JSON:
+{
+  // True if there is enough information to get started with the service.
+  "complete": bool,
+  // If not complete, what question should be asked next? Try to gather as much information as possible in one question as this is answered in an email.
+  "follow_up_question": string | null
+}
 
-Output format: "Intent as string"[]
-
-Intent:\
+JSON:\
 """
 
 __input_replacers = {
@@ -45,15 +45,16 @@ __input_replacers = {
 
 # We ignore the type here because baml does some type magic to make this work
 # for inline SpecialForms like Optional, Union, List.
-__deserializer = Deserializer[List[Intent]](List[Intent])  # type: ignore
+__deserializer = Deserializer[Validation](Validation)  # type: ignore
+__deserializer.overload("Validation", {"complete": "requirements_complete"})
 
 
 
 
 
 
-@BAMLClassifyIntent.register_impl("v1")
-async def v1(arg: str, /) -> List[Intent]:
+@BAMLGetNextQuestion.register_impl("v1")
+async def v1(arg: MeetingRequestPartial, /) -> Validation:
     response = await Main.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
     deserialized = __deserializer.from_string(response.generated)
     return deserialized

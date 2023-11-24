@@ -7,14 +7,18 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from .cls_attendee import Attendee
+from ..enums.enm_usertype import UserType
 from baml_lib._impl.deserializer import register_deserializer
 from pydantic import BaseModel
-from typing import List
 
 
-@register_deserializer({ "when": "time", })
-class MeetingRequest(BaseModel):
-    time: str
-    attendees: List[Attendee]
-    topic: str
+@register_deserializer({  })
+class Message(BaseModel):
+    user: UserType
+    content: str
+    @property
+    def display(self) -> str:
+        if self.user == UserType.AI:
+            return f"Service Provider: {self.content}"
+        else:
+            return f"User: {self.content}"

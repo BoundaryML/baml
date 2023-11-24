@@ -7,14 +7,12 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from .cls_attendee import Attendee
 from baml_lib._impl.deserializer import register_deserializer
 from pydantic import BaseModel
-from typing import List
+from typing import Optional
 
 
-@register_deserializer({ "when": "time", })
-class MeetingRequest(BaseModel):
-    time: str
-    attendees: List[Attendee]
-    topic: str
+@register_deserializer({  })
+class Validation(BaseModel):
+    requirements_complete: bool
+    follow_up_question: Optional[str] = None

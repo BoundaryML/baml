@@ -1,0 +1,20 @@
+{
+    "messages": [
+        {
+            "sender": "User",
+            "content": "Hey! its urgent that we speak to john@corp.com"
+        },
+        {
+            "sender": "User",
+            "content": "Its about the call with Acme Org later today"
+        },
+        {
+            "sender": "AI",
+            "content": "Sure, when would you like to chat with John?"
+        },
+        {
+            "sender": "User",
+            "content": "3"
+        }
+    ]
+}

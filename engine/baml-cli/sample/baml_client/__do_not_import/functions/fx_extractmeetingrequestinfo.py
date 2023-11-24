@@ -8,7 +8,10 @@
 # fmt: off
 
 from ..types.classes.cls_attendee import Attendee
+from ..types.classes.cls_conversation import Conversation
 from ..types.classes.cls_meetingrequest import MeetingRequest
+from ..types.classes.cls_message import Message
+from ..types.enums.enm_usertype import UserType
 from baml_lib._impl.functions import BaseBAMLFunction
 from typing import Protocol, runtime_checkable
 
@@ -21,14 +24,14 @@ class IExtractMeetingRequestInfo(Protocol):
     This is the interface for a function.
 
     Args:
-        query: str
+        convo: Conversation
         now: str
 
     Returns:
         MeetingRequest
     """
 
-    async def __call__(self, *, query: str, now: str) -> MeetingRequest:
+    async def __call__(self, *, convo: Conversation, now: str) -> MeetingRequest:
         ...
 
 
@@ -37,8 +40,11 @@ class IBAMLExtractMeetingRequestInfo(BaseBAMLFunction[MeetingRequest]):
         super().__init__(
             "ExtractMeetingRequestInfo",
             IExtractMeetingRequestInfo,
-            ["v1", "robust"],
+            ["simple", "robust"],
         )
+
+    async def __call__(self, *args, **kwargs) -> MeetingRequest:
+        return await self.get_impl("simple").run(*args, **kwargs)
 
 BAMLExtractMeetingRequestInfo = IBAMLExtractMeetingRequestInfo()
 

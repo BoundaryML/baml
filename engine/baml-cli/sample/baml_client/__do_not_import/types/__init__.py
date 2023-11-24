@@ -8,16 +8,24 @@
 # fmt: off
 
 from .classes.cls_attendee import Attendee
+from .classes.cls_conversation import Conversation
 from .classes.cls_meetingrequest import MeetingRequest
-from .classes.cls_meetingrequestparital import MeetingRequestParital
+from .classes.cls_meetingrequestpartial import MeetingRequestPartial
+from .classes.cls_message import Message
+from .classes.cls_validation import Validation
 from .enums.enm_intent import Intent
+from .enums.enm_usertype import UserType
 
 
 
 
 __all__ = [
     'Attendee',
+    'Conversation',
     'MeetingRequest',
-    'MeetingRequestParital',
-    'Intent'
+    'MeetingRequestPartial',
+    'Message',
+    'Validation',
+    'Intent',
+    'UserType'
 ]

@@ -14,6 +14,7 @@ Main = LLMManager.add_llm(
     name="Main",
     provider="baml-fallback",
     retry_policy=None,
+    redactions=[],
     options=dict(
         strategy=["GPT4", "GPT35"],
     ),

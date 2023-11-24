@@ -7,9 +7,8 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..types.classes.cls_attendee import Attendee
 from ..types.classes.cls_conversation import Conversation
-from ..types.classes.cls_meetingrequest import MeetingRequest
+from ..types.classes.cls_meetingrequestpartial import MeetingRequestPartial
 from ..types.classes.cls_message import Message
 from ..types.enums.enm_usertype import UserType
 from typing import Protocol, runtime_checkable
@@ -19,16 +18,16 @@ import typing
 
 import pytest
 
-ImplName = typing.Literal["simple", "robust"]
+ImplName = typing.Literal["v1"]
 
 T = typing.TypeVar("T", bound=typing.Callable[..., typing.Any])
 CLS = typing.TypeVar("CLS", bound=type)
 
 
-IExtractMeetingRequestInfoOutput = MeetingRequest
+IExtractMeetingRequestInfoPartialOutput = MeetingRequestPartial
 
 @runtime_checkable
-class IExtractMeetingRequestInfo(Protocol):
+class IExtractMeetingRequestInfoPartial(Protocol):
     """
     This is the interface for a function.
 
@@ -37,34 +36,34 @@ class IExtractMeetingRequestInfo(Protocol):
         now: str
 
     Returns:
-        MeetingRequest
+        MeetingRequestPartial
     """
 
-    async def __call__(self, *, convo: Conversation, now: str) -> MeetingRequest:
+    async def __call__(self, *, convo: Conversation, now: str) -> MeetingRequestPartial:
         ...
 
 
-class BAMLExtractMeetingRequestInfoImpl:
-    async def run(self, *, convo: Conversation, now: str) -> MeetingRequest:
+class BAMLExtractMeetingRequestInfoPartialImpl:
+    async def run(self, *, convo: Conversation, now: str) -> MeetingRequestPartial:
         ...
 
-class IBAMLExtractMeetingRequestInfo:
+class IBAMLExtractMeetingRequestInfoPartial:
     def register_impl(
         self, name: ImplName
-    ) -> typing.Callable[[IExtractMeetingRequestInfo], IExtractMeetingRequestInfo]:
+    ) -> typing.Callable[[IExtractMeetingRequestInfoPartial], IExtractMeetingRequestInfoPartial]:
         ...
 
-    async def __call__(self, *, convo: Conversation, now: str) -> MeetingRequest:
+    async def __call__(self, *, convo: Conversation, now: str) -> MeetingRequestPartial:
         ...
 
-    def get_impl(self, name: ImplName) -> BAMLExtractMeetingRequestInfoImpl:
+    def get_impl(self, name: ImplName) -> BAMLExtractMeetingRequestInfoPartialImpl:
         ...
 
     @typing.overload
     def test(self, test_function: T) -> T:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the ExtractMeetingRequestInfoInterface.
+        the ExtractMeetingRequestInfoPartialInterface.
 
         Args:
             test_function : T
@@ -74,9 +73,9 @@ class IBAMLExtractMeetingRequestInfo:
             ```python
             # All implementations will be tested.
 
-            @baml.ExtractMeetingRequestInfo.test
-            def test_logic(ExtractMeetingRequestInfoImpl: IExtractMeetingRequestInfo) -> None:
-                result = await ExtractMeetingRequestInfoImpl(...)
+            @baml.ExtractMeetingRequestInfoPartial.test
+            def test_logic(ExtractMeetingRequestInfoPartialImpl: IExtractMeetingRequestInfoPartial) -> None:
+                result = await ExtractMeetingRequestInfoPartialImpl(...)
             ```
         """
         ...
@@ -85,7 +84,7 @@ class IBAMLExtractMeetingRequestInfo:
     def test(self, *, exclude_impl: typing.Iterable[ImplName]) -> pytest.MarkDecorator:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the ExtractMeetingRequestInfoInterface.
+        the ExtractMeetingRequestInfoPartialInterface.
 
         Args:
             exclude_impl : Iterable[ImplName]
@@ -93,11 +92,11 @@ class IBAMLExtractMeetingRequestInfo:
 
         Usage:
             ```python
-            # All implementations except "simple" will be tested.
+            # All implementations except "v1" will be tested.
 
-            @baml.ExtractMeetingRequestInfo.test(exclude_impl=["simple"])
-            def test_logic(ExtractMeetingRequestInfoImpl: IExtractMeetingRequestInfo) -> None:
-                result = await ExtractMeetingRequestInfoImpl(...)
+            @baml.ExtractMeetingRequestInfoPartial.test(exclude_impl=["v1"])
+            def test_logic(ExtractMeetingRequestInfoPartialImpl: IExtractMeetingRequestInfoPartial) -> None:
+                result = await ExtractMeetingRequestInfoPartialImpl(...)
             ```
         """
         ...
@@ -106,7 +105,7 @@ class IBAMLExtractMeetingRequestInfo:
     def test(self, test_class: typing.Type[CLS]) -> typing.Type[CLS]:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the ExtractMeetingRequestInfoInterface.
+        the ExtractMeetingRequestInfoPartialInterface.
 
         Args:
             test_class : Type[CLS]
@@ -116,14 +115,14 @@ class IBAMLExtractMeetingRequestInfo:
         ```python
         # All implementations will be tested in every test method.
 
-        @baml.ExtractMeetingRequestInfo.test
+        @baml.ExtractMeetingRequestInfoPartial.test
         class TestClass:
-            def test_a(self, ExtractMeetingRequestInfoImpl: IExtractMeetingRequestInfo) -> None:
+            def test_a(self, ExtractMeetingRequestInfoPartialImpl: IExtractMeetingRequestInfoPartial) -> None:
                 ...
-            def test_b(self, ExtractMeetingRequestInfoImpl: IExtractMeetingRequestInfo) -> None:
+            def test_b(self, ExtractMeetingRequestInfoPartialImpl: IExtractMeetingRequestInfoPartial) -> None:
                 ...
         ```
         """
         ...
 
-BAMLExtractMeetingRequestInfo: IBAMLExtractMeetingRequestInfo
+BAMLExtractMeetingRequestInfoPartial: IBAMLExtractMeetingRequestInfoPartial

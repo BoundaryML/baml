@@ -8,14 +8,17 @@
 # fmt: off
 
 from baml_core.provider_manager import LLMManager
+from os import environ
 
 
 GPT4 = LLMManager.add_llm(
     name="GPT4",
     provider="baml-openai-chat",
     retry_policy=None,
+    redactions=["api_key"],
     options=dict(
         model="gpt-4-1106-preview",
+        api_key=environ['OPENAI_API_KEY'],
         temperature=0.1,
     ),
 )
