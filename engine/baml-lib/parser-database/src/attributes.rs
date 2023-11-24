@@ -95,6 +95,11 @@ fn resolve_llm_variant_attributes<'db>(
             ctx.validate_visited_attributes();
         }
 
+        // Now validate the class attributes.
+        ctx.visit_attributes((variant_id, serializer_idx).into());
+        serializer_attr.serilizer = to_string_attribute::visit(ctx, true);
+        ctx.validate_visited_attributes();
+
         if variant_attributes
             .serializers
             .insert(serializer_idx, serializer_attr)
