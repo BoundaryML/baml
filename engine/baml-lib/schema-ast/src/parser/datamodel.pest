@@ -1,6 +1,6 @@
 schema = {
     SOI
-    ~ (interface_declaration | function_declaration | variant_block | config_block | enum_declaration | type_alias | arbitrary_block | comment_block | empty_lines | CATCH_ALL)*
+    ~ (interface_declaration | function_declaration | variant_block | config_block | enum_declaration | type_alias | arbitrary_block | comment_block | raw_string_literal | empty_lines | CATCH_ALL)*
     ~ EOI
 }
 

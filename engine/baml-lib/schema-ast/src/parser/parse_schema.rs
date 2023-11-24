@@ -222,11 +222,12 @@ pub fn parse_schema(
                             _ => (),
                         }
                     },
-                    // TODO: Add view when we want it to be more visible as a feature.
-                    // Rule::arbitrary_block => diagnostics.push_error(DatamodelError::new_validation_error(
-                    //     "This block is invalid. It does not start with any known Prisma schema keyword. Valid keywords include \'enum\', \'type\', \'datasource\' and \'generator\'.",
-                    //     current.as_span().into(),
-                    // )),
+                    // We do nothing here.
+                    Rule::raw_string_literal => (),
+                    Rule::arbitrary_block => diagnostics.push_error(DatamodelError::new_validation_error(
+                        "This block is invalid. It does not start with any known BAML keyword. Common keywords include 'enum', 'class', 'function', and 'impl'.",
+                        diagnostics.span(current.as_span()),
+                    )),
                     Rule::empty_lines => (),
                     _ => unreachable!(),
                 }

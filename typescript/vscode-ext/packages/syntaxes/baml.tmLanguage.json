@@ -11,7 +11,8 @@
         { "include": "#config_block" },
         { "include": "#type_alias" },
         { "include": "#function" },
-        { "include": "#impl_declaration" }
+        { "include": "#impl_declaration" },
+        { "include": "#language_block_string" }
       ]
     },
     "comment": {
@@ -209,7 +210,7 @@
       ]
     },
     "language_block_string": {
-      "begin": "(\\w+)?\\s*(\\w+)#(\"){1,3}",
+      "begin": "(\\w+)#(\"){1,3}",
       "beginCaptures": {
         "1": { "name": "variable.other.readwrite" },
         "2": { "name": "comment.line" }
@@ -224,7 +225,7 @@
       ]
     },
     "block_string_pair": {
-      "begin": "(\\w+)?\\s*#(\"){1,3}",
+      "begin": "(\\w+)?\\s+#(\"){1,3}",
       "beginCaptures": {
         "1": { "name": "variable.other.readwrite" }
       },
@@ -246,7 +247,12 @@
       "beginCaptures": {},
       "end": "//}",
       "endCaptures": {},
-      "name": "comment.line.double-slash.baml"
+      "name": "comment.line.double-slash.baml",
+      "patterns": [
+        {
+          "include": "#language_block_string"
+        }
+      ]
     },
     "key_quoted_string_pair": {
       "match": "(\"[^\"]+\")\\s+(\"[^\"]+\")",
