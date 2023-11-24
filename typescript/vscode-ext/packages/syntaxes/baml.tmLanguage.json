@@ -210,13 +210,15 @@
       ]
     },
     "language_block_string": {
-      "begin": "(\\w+)#(\"){1,3}",
+      "begin": "(\\w+)(#{1,3}\")",
       "beginCaptures": {
-        "1": { "name": "variable.other.readwrite" },
-        "2": { "name": "comment.line" }
+        "1": { "name": "comment.line" },
+        "2": { "name": "string.quoted" }
       },
-      "end": "\\s*(\"){1,3}#",
-      "endCaptures": {},
+      "end": "\\s*(\"{1,3}#)",
+      "endCaptures": {
+        "1": { "name": "string.quoted" }
+      },
       "contentName": "source.python.embedded",
       "patterns": [
         {

@@ -52,7 +52,7 @@ impl<'db> WithSerializeableContent for EnumWalker<'db> {
         json!({
             "name": self.alias(variant),
             "meta": self.meta(variant),
-            "values": self.values().map(|f| f.serialize_data(variant)).collect::<Vec<_>>(),
+            "values": self.values().filter(|f| !f.skip(variant)).map(|f| f.serialize_data(variant)).collect::<Vec<_>>(),
         })
     }
 }
@@ -118,6 +118,7 @@ impl<'db> WithSerializeableContent for EnumValueWalker<'db> {
         json!({
             "name": self.alias(variant),
             "meta": self.meta(variant),
+            "skip": self.skip(variant),
         })
     }
 }

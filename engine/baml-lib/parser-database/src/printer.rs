@@ -85,6 +85,19 @@ pub trait WithStaticRenames<'db>: WithName {
             .collect::<HashMap<_, _>>()
     }
 
+    /// Overrides for skip.
+    fn skip(&'db self, variant: &VariantWalker<'db>) -> bool {
+        let (overrides, defaults) = self.get_attributes(variant);
+
+        let override_alias = overrides.and_then(|o| o.skip().clone());
+        let base_alias = defaults.and_then(|a| a.skip().clone());
+        match (override_alias, base_alias) {
+            (Some(id), _) => id,
+            (None, Some(id)) => id,
+            (None, None) => false,
+        }
+    }
+
     /// Overrides for local names.
     fn get_attributes(
         &'db self,

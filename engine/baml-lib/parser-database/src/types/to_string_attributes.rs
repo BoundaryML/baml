@@ -31,8 +31,8 @@ pub struct StaticStringAttributes {
 }
 
 impl StaticStringAttributes {
-    pub fn skip(&self) -> bool {
-        self.skip.unwrap_or(false)
+    pub fn skip(&self) -> &Option<bool> {
+        &self.skip
     }
 
     pub fn set_skip(&mut self, skip: bool) {
