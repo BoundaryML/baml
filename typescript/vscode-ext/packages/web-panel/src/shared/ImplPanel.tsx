@@ -5,17 +5,15 @@ import { useImplCtx } from './hooks'
 import {
   VSCodeBadge,
   VSCodeCheckbox,
-  VSCodeLink,
   VSCodePanelTab,
   VSCodePanelView,
+  VSCodePanels,
   VSCodeProgressRing,
 } from '@vscode/webview-ui-toolkit/react'
-import { vscode } from '@/utils/vscode'
-import { PropsWithChildren, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import Link from './Link'
 import TypeComponent from './TypeComponent'
 import { ArgType } from '@baml/common/src/parser_db'
-import clsx from 'clsx'
 
 type Impl = ParserDatabase['functions'][0]['impls'][0]
 
@@ -80,7 +78,7 @@ const CodeLine: React.FC<{ line: string; number: number; showWhitespace: boolean
         return segment
       }
     })
-    return <>{formattedText}</>
+    return showWhitespace ? <div className="flex flex-wrap">{formattedText}</div> : <>{formattedText}</>
   }
 
   return (
@@ -96,13 +94,15 @@ const Snippet: React.FC<{ text: string }> = ({ text }) => {
 
   const lines = text.split('\n')
   return (
-    <div className="relative w-full p-2 bg-vscode-input-background rounded-lg overflow-hidden">
-      <button
-        onClick={() => setShowWhitespace(!showWhitespace)}
-        className="absolute top-2 right-2 text-white bg-blue-500 hover:bg-blue-700 font-bold py-1 px-2 rounded"
-      >
-        {showWhitespace ? 'Hide Whitespace' : 'Show Whitespace'}
-      </button>
+    <div className="w-full p-2 bg-vscode-input-background rounded-lg overflow-hidden">
+      <div className="flex flex-row justify-end">
+        <VSCodeCheckbox
+          checked={showWhitespace}
+          onChange={(e) => setShowWhitespace((e as React.FormEvent<HTMLInputElement>).currentTarget.checked)}
+        >
+          Whitespace
+        </VSCodeCheckbox>
+      </div>
       <pre className="w-full p-2 overflow-y-scroll whitespace-pre-wrap bg-vscode-input-background">
         <code>
           {lines.map((line, index) => (
@@ -116,7 +116,6 @@ const Snippet: React.FC<{ text: string }> = ({ text }) => {
 
 const ImplPanel: React.FC<{ impl: Impl }> = ({ impl }) => {
   const { func, test_result } = useImplCtx(impl.name.value)
-  const [showPrompt, setShowPrompt] = useState(true)
 
   const implPrompt = useMemo(() => {
     let prompt = impl.prompt
@@ -145,11 +144,11 @@ const ImplPanel: React.FC<{ impl: Impl }> = ({ impl }) => {
       </VSCodePanelTab>
       <VSCodePanelView key={`view-${impl.name.value}`} id={`view-${func.name.value}-${impl.name.value}`}>
         <div className="flex flex-col w-full gap-2">
-          {test_result && <TestResultPanel testResult={test_result} output={func.output} />}
           <div className="flex flex-row gap-1">
             <span className="font-bold">Client</span>
             <Link item={impl.client} />
           </div>
+          <TestResultPanel testResult={test_result} output={func.output} />
 
           <div className="flex flex-col gap-1">
             <div className="flex flex-row justify-between items-center">
@@ -157,16 +156,8 @@ const ImplPanel: React.FC<{ impl: Impl }> = ({ impl }) => {
                 <b>Prompt</b>
                 <Link item={impl.name} display="Edit" />
               </span>
-              <div className="flex flex-row gap-1 items-center">
-                <VSCodeCheckbox
-                  checked={showPrompt}
-                  onChange={(e) => setShowPrompt((e as React.FormEvent<HTMLInputElement>).currentTarget.checked)}
-                >
-                  Show Prompt
-                </VSCodeCheckbox>
-              </div>
             </div>
-            {showPrompt && <Snippet text={implPrompt} />}
+            <Snippet text={implPrompt} />
           </div>
         </div>
       </VSCodePanelView>
@@ -174,22 +165,24 @@ const ImplPanel: React.FC<{ impl: Impl }> = ({ impl }) => {
   )
 }
 
-const TestResultPanel: React.FC<{ output: ArgType; testResult: TestResult }> = ({ output, testResult }) => {
-  const output_string = useMemo((): string | null => {
-    if (!testResult.output) return null
+const TestResultPanel: React.FC<{ output: ArgType; testResult?: TestResult }> = ({ output, testResult }) => {
+  const [tab, setTab] = useState<'tab-impl-error' | 'tab-impl-parsed' | 'tab-impl-raw' | undefined>(undefined)
 
-    if (typeof testResult.output === 'string') {
+  const output_string = useMemo((): string | null => {
+    if (!testResult?.output.parsed) return null
+
+    if (typeof testResult.output.parsed === 'string') {
       try {
-        let parsed = JSON.parse(testResult.output)
+        let parsed = JSON.parse(testResult.output.parsed)
         if (typeof parsed === 'object') return JSON.stringify(parsed, null, 2)
         return parsed
       } catch (e) {
-        return testResult.output
+        return testResult.output.parsed
       }
     } else {
-      return JSON.stringify(testResult.output, null, 2)
+      return JSON.stringify(testResult.output.parsed, null, 2)
     }
-  }, [testResult.output])
+  }, [testResult?.output.parsed])
 
   return (
     <div className="flex flex-col gap-1">
@@ -197,16 +190,48 @@ const TestResultPanel: React.FC<{ output: ArgType; testResult: TestResult }> = (
         <span className="flex gap-1">
           <b>output</b> {output.arg_type === 'positional' && <TypeComponent typeString={output.type} />}
         </span>
-        {testResult.status && <TestStatusIcon testStatus={testResult.status} />}
+        {testResult?.status && <TestStatusIcon testStatus={testResult.status} />}
       </div>
       <div className="max-w-full">
-        <pre className="w-full h-full min-h-[80px] p-1 overflow-y-scroll break-words whitespace-break-spaces bg-vscode-input-background">
-          {output_string ?? (
-            <div className="flex flex-col items-center justify-center h-full text-vscode-descriptionForeground">
-              <div>Nothing here yet...</div>
-            </div>
+        <VSCodePanels
+          className="w-full"
+          activeid={tab}
+          onChange={(e) => {
+            const selected: string | undefined = (e.target as any)?.activetab?.id
+            if (selected && selected.startsWith('tab-impl-')) {
+              setTab(selected as any)
+            }
+          }}
+        >
+          {output_string != null && (
+            <>
+              <VSCodePanelTab id="tab-impl-parsed">BAML Parsed</VSCodePanelTab>
+              <VSCodePanelView id="view-impl-parsed">
+                {output_string && (
+                  <pre className="w-full p-2 overflow-y-scroll whitespace-pre-wrap bg-vscode-input-background">
+                    {output_string}
+                  </pre>
+                )}
+              </VSCodePanelView>
+            </>
           )}
-        </pre>
+          {testResult?.output.raw != undefined && (
+            <>
+              <VSCodePanelTab id="tab-impl-raw">Raw LLM</VSCodePanelTab>
+              <VSCodePanelView id="view-impl-raw">
+                {testResult?.output.raw && <Snippet text={testResult.output.raw} />}
+              </VSCodePanelView>
+            </>
+          )}
+          {testResult?.output.error != undefined && (
+            <>
+              <VSCodePanelTab id="tab-impl-error">Error</VSCodePanelTab>
+              <VSCodePanelView id="view-impl-error">
+                {testResult?.output.error && <Snippet text={testResult.output.error} />}
+              </VSCodePanelView>
+            </>
+          )}
+        </VSCodePanels>
       </div>
     </div>
   )

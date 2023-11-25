@@ -41,7 +41,6 @@ function useSelectionSetup() {
 
   const setSelectionFunction = useCallback(
     (functionName: string | undefined, implName: string | undefined, testCaseName: string | undefined) => {
-      console.log('setSelectionFunction', functionName, implName, testCaseName)
       if (functionName) {
         setSelectedFunction(functionName)
         setSelectedImpl(implName)

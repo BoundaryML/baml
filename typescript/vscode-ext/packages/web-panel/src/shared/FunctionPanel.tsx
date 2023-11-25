@@ -28,7 +28,9 @@ const FunctionPanel: React.FC = () => {
           activeid={`tab-${func.name.value}-${impl.name.value}`}
           onChange={(e) => {
             const selected: string | undefined = (e.target as any)?.activetab?.id
-            selected && setSelection(undefined, selected.split('-', 3)[2], undefined)
+            if (selected && selected.startsWith(`tab-${func.name.value}-`)) {
+              setSelection(undefined, selected.split('-', 3)[2], undefined)
+            }
           }}
         >
           {func.impls.map((impl) => (

@@ -65,7 +65,7 @@ class TestState {
           testName: test.name,
           implName: impl,
           status: TestStatus.Queued,
-          output: '',
+          output: {},
         })),
       ),
     )
@@ -113,7 +113,9 @@ class TestState {
     if (testResult) {
       testResult.status = data.status
       if (data.error_data) {
-        testResult.output = JSON.stringify(data.error_data)
+        testResult.output = {
+          error: JSON.stringify(data.error_data),
+        }
       }
       this.testStateListener?.(this.test_results)
     }
@@ -123,7 +125,11 @@ class TestState {
     const fullTestName = data.context.tags?.['test_case_arg_name']
     const testResult = this.test_results.find((test) => test.fullTestName === fullTestName)
     if (testResult && data.event_type === 'func_llm') {
-      testResult.output = data.io.output?.value
+      testResult.output = {
+        error: data.error?.message ?? testResult.output.error,
+        parsed: data.io.output?.value ?? testResult.output.parsed,
+        raw: data.metadata?.output?.raw_text ?? testResult.output.raw,
+      }
       this.testStateListener?.(this.test_results)
     }
   }

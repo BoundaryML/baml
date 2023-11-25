@@ -6,17 +6,17 @@ export interface TestRequest {
       name: string
       impls: string[]
       params:
-      | {
-        type: 'positional'
-        value: string
-      }
-      | {
-        type: 'named'
-        value: {
-          name: string
-          value: string
-        }[]
-      }
+        | {
+            type: 'positional'
+            value: string
+          }
+        | {
+            type: 'named'
+            value: {
+              name: string
+              value: string
+            }[]
+          }
     }[]
   }[]
 }
@@ -28,17 +28,18 @@ export enum TestStatus {
   Failed = 'FAILED',
 }
 
-
 export interface TestResult {
-  fullTestName: string;
-  functionName: string;
-  testName: string;
-  implName: string;
-  status: TestStatus;
-  output: string;
+  fullTestName: string
+  functionName: string
+  testName: string
+  implName: string
+  status: TestStatus
+  output: {
+    error?: string
+    parsed?: string
+    raw?: string
+  }
 }
-
-
 
 function getFullTestName(testName: string, impl: string, fnName: string) {
   return `test_${testName}[${fnName}-${impl}]`

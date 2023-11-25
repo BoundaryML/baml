@@ -68,7 +68,7 @@ const NamedTestCase: React.FC<{ values: { name: StringSpan; type: string }[]; co
       const parsed = JSON.parse(raw_content)
       if (typeof parsed === 'object') {
         // As a key value pair
-        setContent(new Map(Object.entries(parsed)))
+        setContent(new Map(Object.entries(parsed).map(([k, v]) => [k, JSON.stringify(v, null, 2)])))
       }
     } catch (e) {}
   }, [raw_content])
