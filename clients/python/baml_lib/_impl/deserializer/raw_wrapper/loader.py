@@ -80,14 +80,16 @@ def __from_value(val: typing.Any, diagnostics: Diagnostics) -> RawWrapper:
             as_inner = __from_value(result[0], diagnostics=diagnostics)
         as_obj = None
         as_list: typing.Optional[RawWrapper] = None
-        if result := re.findall(r"\{(?:[^{}]+|(?R))+\}", str_val):
-            # if multiple matches, we'll just take the first one
-            if len(result) > 1:
-                as_list = ListRawWrapper(
-                    [__from_value(item, diagnostics=diagnostics) for item in result]
-                )
-            as_obj = __from_value(result[0], diagnostics=diagnostics)
-        if as_list is None:
+        if not is_dict:
+            if result := re.findall(r"\{(?:[^{}]+|(?R))+\}", str_val):
+                # if multiple matches, we'll just take the first one
+                if len(result) > 1:
+                    as_list = ListRawWrapper(
+                        [__from_value(item, diagnostics=diagnostics) for item in result]
+                    )
+                else:
+                    as_obj = __from_value(result[0], diagnostics=diagnostics)
+        if not is_list and as_list is None:
             if result := re.findall(r"\[(?:[^\[\]]*|(?R))+\]", str_val):
                 # if multiple matches, we'll just take the first one
                 as_list = __from_value(result[0], diagnostics=diagnostics)
