@@ -41,7 +41,7 @@ Calling the generated function:
 from baml_client import baml
 
 async def classify():
-  response = await baml.ClassifyTool.get_impl("v1").run(
+  response = await baml.ClassifyTool(
     ClassifyRequest(
       query="What is TDD?",
       context="The user is a software engineer"

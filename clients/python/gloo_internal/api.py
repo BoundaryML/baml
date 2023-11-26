@@ -35,7 +35,7 @@ class _APIWrapper:
     def project_id(self) -> str:
         if self.__project_id is None:
             try:
-                self.__project_id = ENV.GLOO_APP_ID
+                self.__project_id = ENV.BOUNDARY_PROJECT_ID
             except Exception:
                 self.__project_id = ""
         return self.__project_id
@@ -43,7 +43,7 @@ class _APIWrapper:
     @property
     def key(self) -> str | None:
         try:
-            return ENV.GLOO_APP_SECRET
+            return ENV.BOUNDARY_SECRET
         except Exception:
             return None
 
@@ -116,7 +116,7 @@ class TestingAPIWrapper(__APIBase):
 
     async def create_session(self) -> None:
         if not self.project_id:
-            logger.warning("GLOO_APP_ID not set, dropping log.")
+            logger.warning("BOUNDARY_PROJECT_ID not set, dropping log.")
             return
 
         response = await self._call_api(
@@ -131,7 +131,7 @@ class TestingAPIWrapper(__APIBase):
 
     async def create_cases(self, *, payload: api_types.CreateTestCase) -> None:
         if not self.project_id:
-            logger.warning("GLOO_APP_ID not set, dropping log.")
+            logger.warning("BOUNDARY_PROJECT_ID not set, dropping log.")
             return
 
         payload.project_id = self.project_id
@@ -140,7 +140,7 @@ class TestingAPIWrapper(__APIBase):
 
     async def update_case(self, *, payload: api_types.UpdateTestCase) -> None:
         if not self.project_id:
-            logger.warning("GLOO_APP_ID not set, dropping log.")
+            logger.warning("BOUNDARY_PROJECT_ID not set, dropping log.")
             return
 
         payload.project_id = self.project_id
@@ -149,7 +149,7 @@ class TestingAPIWrapper(__APIBase):
 
     def update_case_sync(self, *, payload: api_types.UpdateTestCase) -> None:
         if not self.project_id:
-            logger.warning("GLOO_APP_ID not set, dropping log.")
+            logger.warning("BOUNDARY_PROJECT_ID not set, dropping log.")
             return
 
         payload.project_id = self.project_id
@@ -163,7 +163,7 @@ class ProcessAPIWrapper(__APIBase):
 
     def start(self) -> None:
         if not self.project_id:
-            logger.warning("GLOO_APP_ID not set, dropping log.")
+            logger.warning("BOUNDARY_PROJECT_ID not set, dropping log.")
             return
 
         response = self._call_api_sync(
@@ -185,7 +185,7 @@ class ProcessAPIWrapper(__APIBase):
 
     def end(self) -> None:
         if not self.project_id:
-            logger.warning("GLOO_APP_ID not set, dropping log.")
+            logger.warning("BOUNDARY_PROJECT_ID not set, dropping log.")
             return
 
         self._call_api_sync(
@@ -227,7 +227,7 @@ class APIWrapper(__APIBase):
         payload: api_types.LogSchema,
     ) -> None:
         if not self.project_id:
-            logger.warning("GLOO_APP_ID not set, dropping log.")
+            logger.warning("BOUNDARY_PROJECT_ID not set, dropping log.")
             return
 
         try:

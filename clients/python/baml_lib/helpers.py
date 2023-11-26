@@ -20,8 +20,12 @@ class Params:
         self.__base_url: str = os.environ.get(
             "GLOO_BASE_URL", "https://app.trygloo.com/api"
         )
-        self.__project_id: typing.Optional[str] = os.environ.get("GLOO_APP_ID")
-        self.__secret_key: typing.Optional[str] = os.environ.get("GLOO_APP_SECRET")
+        self.__project_id: typing.Optional[str] = os.environ.get(
+            "BOUNDARY_PROJECT_ID"
+        ) or os.environ.get("GLOO_APP_ID")
+        self.__secret_key: typing.Optional[str] = os.environ.get(
+            "BOUNDARY_SECRET"
+        ) or os.environ.get("GLOO_APP_SECRET")
         self.cache_enabled: bool = os.environ.get("GLOO_CACHE", "1") == "1"
         self.__process_id = str(uuid.uuid4())
         self.api = self.__create_api(self.__process_id)
@@ -69,7 +73,9 @@ class Params:
     @project_id.setter
     def project_id(self, project_id: typing.Optional[str]) -> None:
         if project_id == "reset":
-            project_id = os.environ.get("GLOO_APP_ID")
+            project_id = os.environ.get("BOUNDARY_PROJECT_ID") or os.environ.get(
+                "GLOO_APP_ID"
+            )
         if project_id != self.__project_id:
             self.__project_id = project_id
             self.process_id = str(uuid.uuid4())
@@ -81,7 +87,9 @@ class Params:
     @secret_key.setter
     def secret_key(self, secret_key: typing.Optional[str]) -> None:
         if secret_key == "reset":
-            secret_key = os.environ.get("GLOO_APP_SECRET")
+            secret_key = os.environ.get("BOUNDARY_SECRET") or os.environ.get(
+                "GLOO_APP_SECRET"
+            )
         if secret_key != self.__secret_key:
             self.__secret_key = secret_key
             self.process_id = str(uuid.uuid4())
@@ -154,7 +162,7 @@ def baml_init(
             CacheManager.add_cache("gloo", api=__CachedParams.api)
         else:
             logger.warning(
-                "Wanted to use GlooCache but no API key was provided. Did you set GLOO_APP_ID and GLOO_APP_SECRET?"
+                "Wanted to use GlooCache but no API key was provided. Did you set BOUNDARY_PROJECT_ID and BOUNDARY_SECRET?"
             )
 
     LLMManager.validate()

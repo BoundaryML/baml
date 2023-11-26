@@ -145,7 +145,7 @@ class ProcessAPIWrapper(__APIBase):
 
     def start(self) -> None:
         if not self.project_id:
-            logger.warning("GLOO_APP_ID not set, dropping log.")
+            logger.warning("BOUNDARY_PROJECT_ID not set, dropping log.")
             return
 
         response = self._call_api_sync(
@@ -167,7 +167,7 @@ class ProcessAPIWrapper(__APIBase):
 
     def end(self) -> None:
         if not self.project_id:
-            logger.warning("GLOO_APP_ID not set, dropping log.")
+            logger.warning("BOUNDARY_PROJECT_ID not set, dropping log.")
             return
 
         self._call_api_sync(

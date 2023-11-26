@@ -2,15 +2,21 @@
 title: "Quickstart"
 ---
 
-## Baml Compiler
+
+## Installation
+We will install 3 things:
+1. BAML compiler
+1. BAML Python Library
+1. BAML VSCode Extension
+
+### Install Baml Compiler
 
 You'll need to install the baml compiler -- `baml` -- to your path.
 
 <CodeGroup>
 
 ```bash Mac
-brew tap GlooHQ/baml
-brew install baml
+brew install gloohq/baml/baml
 ```
 
 ```bash Linux (debian)
@@ -24,8 +30,9 @@ scoop install baml
 ```
 
 </CodeGroup>
+You should be able to run `baml --version` and see the version number.
 
-### Update instructions
+#### Update instructions
 
 <CodeGroup>
 
@@ -44,16 +51,26 @@ scoop update baml
 
 </CodeGroup>
 
-## Baml Extension
+### Install Baml Extension
 
 Use our [VSCode Exension](https://marketplace.visualstudio.com/items?itemName=Gloo.baml) for syntax highlighting, auto building `.baml` files, and inline syntax errors.
 
 <Info>It also works with [Cursor](https://cursor.so/)!</Info>
 
 <Warning>
-  If you don't use the VSCode extension, you'll need to run: `baml build` (no
-  args) every time you edit a `.baml` file.
+  If you don't use the VSCode extension, you'll need to run: `baml build` inside the baml_src directory every time you edit a `.baml` file.
 </Warning>
+
+### Add the BAML Python Client
+
+```
+pip install baml
+```
+or if using poetry:
+```
+poetry add baml
+```
+Typescript support is still in the works! Contact us at contact@boundaryml.com
 
 ### Setup BAML in your project
 
@@ -91,7 +108,6 @@ On the dashboard, click on the project you created and go to "Keys". Note down t
 Use these to add to your environment variables, otherwise requests will not be sent to the dashboard.
 
 ```bash
-GLOO_APP_ID=proj_123...
-GLOO_APP_SECRET=gloo:your-key-from-dashboard
-OPENAI_API_KEY=your-open-ai-key
+BOUNDARY_PROJECT_ID=proj_123...
+BOUNDARY_SECRET=gloo:your-key-from-dashboard
 ```
