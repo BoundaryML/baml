@@ -21,7 +21,7 @@ To update the CLI
 1. `brew update`
 2. `brew upgrade baml`
 
-See [the documentation](https://docs.trygloo.com/mdx/installation) for full instructions for all platforms
+See [the documentation](https://docs.boundaryml.com/mdx/installation) for full instructions for all platforms
 
 ## Usage
 
@@ -32,4 +32,4 @@ When you save your `.baml` files (`Ctrl+S`), the build script (`baml build`) wil
 
 ---
 
-For any issues, feature requests, or contributions, please reach out at contact@trygloo.com
+For any issues, feature requests, or contributions, please reach out at contact@boundaryml.com
