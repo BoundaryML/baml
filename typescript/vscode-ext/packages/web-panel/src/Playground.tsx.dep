@@ -78,7 +78,7 @@ const Playground: React.FC = () => {
         <div className="flex flex-row gap-1">
           <b>Function</b> <FunctionSelector />
         </div>
-        <VSCodeLink className="flex justify-end ml-auto h-7" href="https://docs.trygloo.com">
+        <VSCodeLink className="flex justify-end ml-auto h-7" href="https://docs.boundaryml.com">
           Docs
         </VSCodeLink>
       </div>
