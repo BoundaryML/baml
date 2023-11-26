@@ -80,6 +80,9 @@ class MeetingRequestPartial {
         Either an exact time, or a relative time. Use ISO 8601 Duration Format
         when specifying a relative time (e.g. P1D for 1 day from now).
     "#)
+    duration string? @description(#"
+        Use a ISO 8601 Duration Format (e.g. 1h for 1 hour).
+    "#)
     attendees string[] @description(#"
         Names or preferably emails of attendees.
     "#)

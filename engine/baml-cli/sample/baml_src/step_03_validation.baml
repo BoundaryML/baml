@@ -18,7 +18,7 @@ impl<llm, GetNextQuestion> v1 {
 
     override Validation {
         requirements_complete @alias(complete) @description(#"
-            True if there is enough information to get started with the service.
+            True if there is enough information is filled out in the input. I don't need any more fields.
         "#)
         follow_up_question @description(#"
             If not complete, what question should be asked next? Try to gather as much information as possible in one question as this is answered in an email.

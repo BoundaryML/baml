@@ -3,8 +3,8 @@ import logging
 import os
 import coloredlogs
 
-logger = logging.getLogger(__name__)
-logger.setLevel(os.environ.get("BAML_LOG_LEVEL", logging.INFO))
+logger = logging.getLogger('baml')
+logger.setLevel(logging.INFO)
 
 # Custom field styles for coloredlogs
 field_styles = {

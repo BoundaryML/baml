@@ -48,8 +48,7 @@ impl<llm, ClassifyIntent> simple {
 
     {#print_enum(Intent)}{// we use printers to print out each enum value automatically. //}
 
-    {// We found that this output instruction works best, but you can change them here. //}
-    Output JSON: {#print_type(output)}
+    Output JSON: {#print_type(output)}{// we use printers to print out the output type automatically. //}
 
     JSON:
   "#
@@ -74,27 +73,32 @@ async def some_function(input: str):
 
 
 
-impl<llm, ClassifyIntent> with_adapter {
+impl<llm, ClassifyIntent> advanced {
   client Main
   
   // Lets say, we want the LLM to call it "book_a_meeting" instead of "BookMeeting"
   // We can do that by defining a mapping from the enum to the string, but only
   // localize that mapping to this version of the function.
   override Intent {
-    BookMeeting @alias(k1)
+    BookMeeting 
+    @alias(k1)
     @description(#"
       When the user wants to book a meeting
     "#)
+
     AvailabilityQuery @alias(k2)
     @description(#"
-      When the query is directly asking about availability
+      When the user is asking about their calendar availability
     "#)
 
     // You can even skip an enum value, if you don't want to expose it to the LLM
-    SetReminder
+    SetReminder @alias(k3)
+    @description(#"
+      When the user wants to set a reminder
+    "#)
 
     // You can even rename the type of the enum.
-    @@alias(User Intents)
+    @@alias(User Intent)
   }
 
   // Notice the prompt is the same as simple, but the implementation is different
@@ -121,10 +125,10 @@ impl<llm, ClassifyIntent> with_adapter {
 
 
 python#"
-# To use the 'with_adapter' impl instead of 'simple', you have two options:
+# To use the 'advanced' impl instead of 'simple', you have two options:
 
-# Option 1. Change the default_impl to 'with_adapter' in this baml file.
-# See above: ClassifyIntent.default_impl simple -> ClassifyIntent.default_impl with_adapter
+# Option 1. Change the default_impl to 'advanced' in this baml file.
+# See above: ClassifyIntent.default_impl simple -> ClassifyIntent.default_impl advanced
 # No changes required to your python code.
 async def my_function(input: str) -> typing.List[Intent]:
   return await baml.ClassifyIntent(query=input)
@@ -132,5 +136,5 @@ async def my_function(input: str) -> typing.List[Intent]:
 # Option 2. Specify the impl in your python code.
 # This is useful if you want to use different impls in different places.
 async def my_function(input: str) -> typing.List[Intent]:
-  return await baml.ClassifyIntent.get_impl('with_adapter').run(query=input)
+  return await baml.ClassifyIntent.get_impl('advanced').run(query=input)
 "#

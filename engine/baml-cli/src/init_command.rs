@@ -1,8 +1,9 @@
 use std::path::PathBuf;
 
 use include_dir::{include_dir, Dir};
+use log::info;
 
-use crate::{builder::get_baml_src, errors::CliError};
+use crate::{builder::get_baml_src, command::run_command_with_error, errors::CliError};
 
 const SAMPLE_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/sample");
 
@@ -20,7 +21,27 @@ pub fn init_command() -> Result<(), CliError> {
                 let content = file.contents();
                 // Make sure the target directory exists.
                 let _ = std::fs::create_dir_all(target.parent().unwrap());
-                let _ = std::fs::write(&target, content);
+                // If the pyproject.toml file already exists, don't overwrite it.
+                if target.ends_with("pyproject.toml") && target.exists() {
+                    match run_command_with_error("poetry", &["add", "baml"], "poetry add baml") {
+                        Ok(_) => {}
+                        Err(e) => {
+                            info!("{}", e);
+                        }
+                    }
+                    match run_command_with_error(
+                        "poetry",
+                        &["add", "termcolor"],
+                        "poetry add termcolor",
+                    ) {
+                        Ok(_) => {}
+                        Err(e) => {
+                            info!("{}", e);
+                        }
+                    }
+                } else {
+                    let _ = std::fs::write(&target, content);
+                }
             }
             None => {
                 let _ = std::fs::create_dir_all(&target);

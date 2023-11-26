@@ -7,5 +7,5 @@ generator default {
   language python
 
   // Uncomment this line if you use poetry
-  // pkg_manager poetry
+  pkg_manager poetry
 }

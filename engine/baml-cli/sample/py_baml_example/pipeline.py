@@ -1,14 +1,10 @@
-# Bug: deserialize for parsing an object with just a single field (should work)
-"""
-Run this script to see how the BAML client can be used in Python.
 
-python -m py_baml_example.main
-"""
-
-import asyncio
+from termcolor import colored
 from datetime import datetime
 from baml_client import baml
+from baml_client.tracing import trace
 from baml_client.baml_types import Intent, Conversation, Message, UserType
+from .utils import loading_animation
 
 
 class End:
@@ -22,6 +18,9 @@ class End:
         return self.msg
 
 
+
+
+@trace
 async def pipeline(convo: Conversation) -> str | End:
     """
     This function returns the message that the AI should send to the user.
@@ -29,16 +28,18 @@ async def pipeline(convo: Conversation) -> str | End:
 
     # First we call an intent classifier. 
     # This is strongly typed! Note that intents is a List[Intent] type.
-    # intents = await baml.IntentClassifier.get_impl('v1').run(convo.messages[-1].content)
-    intents = await baml.ClassifyIntent(query=convo.messages[-1].content)
+    with loading_animation('> Classifying'):
+        intents = await baml.ClassifyIntent.get_impl('advanced').run(query=convo.display)
 
     if Intent.BookMeeting in intents:
-
         # If the user wants to book a meeting, we need to extract the meeting details.
-        partial_info = await baml.ExtractMeetingRequestInfoPartial(convo=convo, now=datetime.now().isoformat())
-        check = await baml.GetNextQuestion(partial_info)
+        with loading_animation('> Extracting meeting details'):
+            partial_info = await baml.ExtractMeetingRequestInfoPartial(convo=convo, now=datetime.now().isoformat())
 
-        if check.complete:
+        with loading_animation('> Checking if we have all the details'):
+            check = await baml.GetNextQuestion(partial_info)
+
+        if check.requirements_complete:
             # TODO: actually book the meeting by calling a real API
             return End(f"""\
 I have scheduled a meeting for you:
@@ -48,27 +49,26 @@ I have scheduled a meeting for you:
             return check.follow_up_question
         else:
             return 'Sorry, I did not understand your request. What do you mean?'
+    if len(intents) == 0:
+        return "I'm a bot that can book meetings. How can I help you?"
     else:
-        return End(f'Sorry! I only know how to book meetings. {intents}')
+        return End(f'Sorry! I only know how to book meetings. You tried to: {intents}')
 
-async def main():
+@trace
+async def convo_demo():
 
     convo = Conversation(messages=[])
     while True:
-        user_query = input('User:')
+        user_query = input(f'{colored("User", "yellow")}: ')
         try:
             convo.messages.append(Message(content=user_query, user=UserType.User))
             next_message = await pipeline(convo)
-            print(f'AI: {next_message}')
+            print(f'{colored("AI", "yellow")}: {next_message}')
             if isinstance(next_message, End):
                 break
             else:
                 convo.messages.append(Message(content=next_message, user=UserType.AI))
         except Exception as e:
-            print(f'Error: {e}')
+            print(f'{colored("Error", "red")}: {e}')
             break
             
-
-
-if __name__ == '__main__':
-    asyncio.run(main())

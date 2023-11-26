@@ -139,6 +139,9 @@ def baml_init(
     stage: typing.Optional[str] = None,
     **kwargs: typing.Any,
 ) -> __InternalBAMLConfig:
+    if log_level := os.environ.get("BAML_LOG_LEVEL", None):
+        logger.setLevel(log_level)
+
     if kwargs.pop("idempotent", None) is not None:
         logger.warning("idempotent is deprecated. Please use enable_cache instead.")
 
