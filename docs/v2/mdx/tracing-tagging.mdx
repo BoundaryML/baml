@@ -3,11 +3,13 @@ title: "Tracing and tagging functions"
 ---
 
 BAML allows you to trace any function with the **@trace** decorator.
-This will make the function's input and output show up in the dashboard. This works for any python function you define yourself.
+This will make the function's input and output show up in the Gloo dashboard. This works for any python function you define yourself. BAML LLM functions (or any other function declared in a .baml file) are already traced by default. Logs are only sent to the Dashboard if you setup your environment variables correctly.
 
 
 ### Prerequisites
-Make sure you setup the [Gloo dashboard](/installation#setting-up-the-gloo-dashboard) project before you start.
+Make sure you setup the [Gloo dashboard](/quickstart#setting-up-the-gloo-dashboard) project before you start.
+
+Make sure you also CTRl+S a .baml file to generate the `baml_client`
 
 ### Example
 
