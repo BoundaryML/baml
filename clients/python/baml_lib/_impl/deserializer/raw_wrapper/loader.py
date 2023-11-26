@@ -77,7 +77,7 @@ def __from_value(val: typing.Any, diagnostics: Diagnostics) -> RawWrapper:
             # if multiple matches, we'll just take the first one
             if len(result) > 1:
                 pass
-            as_inner = __from_value(result[0], diagnostics=diagnostics)        
+            as_inner = __from_value(result[0], diagnostics=diagnostics)
         as_obj = None
         as_list: typing.Optional[RawWrapper] = None
         if result := re.findall(r"\{(?:[^{}]+|(?R))+\}", str_val):
@@ -92,7 +92,9 @@ def __from_value(val: typing.Any, diagnostics: Diagnostics) -> RawWrapper:
                 # if multiple matches, we'll just take the first one
                 as_list = __from_value(result[0], diagnostics=diagnostics)
 
-        return RawStringWrapper(str_val, as_obj=as_obj, as_list=as_list, as_inner=as_inner)
+        return RawStringWrapper(
+            str_val, as_obj=as_obj, as_list=as_list, as_inner=as_inner
+        )
     if isinstance(val, (list, tuple)):
         return ListRawWrapper(
             [__from_value(item, diagnostics=diagnostics) for item in val]

@@ -2,7 +2,7 @@
 import logging
 import coloredlogs
 
-logger = logging.getLogger('baml')
+logger = logging.getLogger("baml")
 logger.setLevel(logging.INFO)
 
 # Custom field styles for coloredlogs

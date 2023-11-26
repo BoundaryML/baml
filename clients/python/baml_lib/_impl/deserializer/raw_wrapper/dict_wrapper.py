@@ -27,7 +27,9 @@ class DictRawWrapper(RawWrapper):
                 return item
 
         # A dict can always be converted to a string.
-        kvs = filter_empty(map(lambda kv: (kv[0], kv[1].as_str(inner)), self.__val.items()))
+        kvs = filter_empty(
+            map(lambda kv: (kv[0], kv[1].as_str(inner)), self.__val.items())
+        )
         str_rep = f'{{{", ".join(map(lambda kv: f"{kv[0]}: {kv[1]}", kvs))}}}'
         return str_rep
 

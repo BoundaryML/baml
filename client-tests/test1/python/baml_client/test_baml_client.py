@@ -83,5 +83,3 @@ async def test_total_amaranth(BlahImpl: IBlah):
 big fan of this\
 """)
     await BlahImpl(param)
-
-
