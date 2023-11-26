@@ -77,7 +77,7 @@ class ObjectDeserializer(BaseDeserializer[T]):
         for raw_key, item in raw.as_dict():
             if raw_key is None:
                 continue
-            key = raw_key.as_str()
+            key = raw_key.as_str(inner=True)
             if key is None:
                 continue
 

@@ -16,9 +16,9 @@ class ListRawWrapper(RawWrapper):
     def __init__(self, val: typing.List[RawWrapper]) -> None:
         self.__val = val
 
-    def as_str(self) -> typing.Optional[str]:
+    def as_str(self, inner: bool) -> typing.Optional[str]:
         # A list can always be converted to a string.
-        x = filter_empty(map(lambda v: v.as_str(), self.__val))
+        x = filter_empty(map(lambda v: v.as_str(inner), self.__val))
         str_rep = f'[{", ".join(x)}]'
         return str_rep
 

@@ -13,7 +13,7 @@ DefaultDeserializerLUT: typing.Dict[
     BaseDeserializer[typing.Any],
 ] = {
     "None": NoneDeserializer(),
-    str: PrimitiveDeserializer(lambda x: x.as_str(), "Expected str", rank=1),
+    str: PrimitiveDeserializer(lambda x: x.as_str(inner=False), "Expected str", rank=1),
     bool: PrimitiveDeserializer(lambda x: x.as_bool(), "Expected bool", rank=2),
     int: PrimitiveDeserializer(lambda x: x.as_int(), "Expected int", rank=3),
     float: PrimitiveDeserializer(lambda x: x.as_float(), "Expected float", rank=4),

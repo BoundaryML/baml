@@ -19,8 +19,11 @@ const TypeComponent: React.FC<{ typeString: string }> = ({ typeString }) => {
 
     // Check if the class name matches any in the classes array
     const matchedClass = classes.find((cls) => cls.name.value === className)
+    const matchedEnum = enums.find((enm) => enm.name.value === className)
     if (matchedClass) {
       elements.push(Link({ item: matchedClass.name }))
+    } else if (matchedEnum) {
+      elements.push(Link({ item: matchedEnum.name }))
     } else {
       elements.push(className)
     }

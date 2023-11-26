@@ -12,7 +12,7 @@ class RawBaseWrapper(RawWrapper, typing.Generic[T]):
     def __init__(self, val: T) -> None:
         self.__val = val
 
-    def as_str(self) -> typing.Optional[str]:
+    def as_str(self, inner: bool) -> typing.Optional[str]:
         return str(self.__val)
 
     def as_int(self) -> typing.Optional[int]:
@@ -65,24 +65,36 @@ class RawStringWrapper(RawWrapper):
         val: str,
         as_obj: typing.Optional[RawWrapper],
         as_list: typing.Optional[RawWrapper],
+        as_inner: typing.Optional[RawWrapper],
     ) -> None:
         self.__val = val
         self.__as_obj = as_obj
         self.__as_list = as_list
+        self.__as_inner = as_inner
 
-    def as_str(self) -> typing.Optional[str]:
+    def as_str(self, inner: bool) -> typing.Optional[str]:
+        if inner and self.__as_inner is not None:
+            return self.__as_inner.as_str(inner)
         return self.__val
 
     def as_int(self) -> typing.Optional[int]:
+        if self.__as_inner is not None:
+            return self.__as_inner.as_int()
         return None
 
     def as_float(self) -> typing.Optional[float]:
+        if self.__as_inner is not None:
+            return self.__as_inner.as_float()
         return None
 
     def as_bool(self) -> typing.Optional[bool]:
+        if self.__as_inner is not None:
+            return self.__as_inner.as_bool()
         return None
 
     def as_list(self) -> typing.Iterable[RawWrapper]:
+        if self.__as_inner is not None:
+            return self.__as_inner.as_list()
         if self.__as_list is not None:
             return self.__as_list.as_list()
         if self.__as_obj is not None:
@@ -92,6 +104,8 @@ class RawStringWrapper(RawWrapper):
     def as_dict(
         self,
     ) -> typing.ItemsView[typing.Optional[RawWrapper], RawWrapper]:
+        if self.__as_inner is not None:
+            return self.__as_inner.as_dict()
         if self.__as_obj is not None:
             return self.__as_obj.as_dict()
         return {None: self}.items()
@@ -105,7 +119,7 @@ class RawNoneWrapper(RawWrapper):
     def __init__(self) -> None:
         pass
 
-    def as_str(self) -> typing.Optional[str]:
+    def as_str(self, inner: bool) -> typing.Optional[str]:
         return None
 
     def as_int(self) -> typing.Optional[int]:

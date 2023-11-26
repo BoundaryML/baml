@@ -75,7 +75,7 @@ def test_hidden_object() -> None:
     keys = set()
     for k, v in parsed.as_dict():
         assert isinstance(k, RawStringWrapper), k
-        key = k.as_str()
+        key = k.as_str(inner=True)
         keys.add(key)
         if key == "test":
             assert isinstance(v.as_dict(), typing.ItemsView)
@@ -113,7 +113,7 @@ def test_hidden_object_multi() -> None:
     keys = set()
     for k, v in parsed.as_dict():
         assert isinstance(k, RawStringWrapper), k
-        key = k.as_str()
+        key = k.as_str(inner=True)
         keys.add(key)
         if key == "test":
             assert isinstance(v.as_dict(), typing.ItemsView)

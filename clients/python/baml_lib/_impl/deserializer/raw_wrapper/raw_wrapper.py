@@ -4,7 +4,7 @@ import typing
 
 class RawWrapper(metaclass=abc.ABCMeta):
     @abc.abstractmethod
-    def as_str(self) -> typing.Optional[str]:
+    def as_str(self, inner: bool) -> typing.Optional[str]:
         raise NotImplementedError
 
     @abc.abstractmethod
