@@ -1,7 +1,7 @@
 use internal_baml_diagnostics::DatamodelError;
 
 use internal_baml_parser_database::{PrinterType, PromptVariable};
-use internal_baml_schema_ast::ast::{WithIdentifier, WithName, WithSpan};
+use internal_baml_schema_ast::ast::{Identifier, WithIdentifier, WithName, WithSpan};
 
 use crate::validate::validation_pipeline::context::Context;
 
@@ -38,6 +38,11 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
                     .from
                     .flat_idns()
                     .iter()
+                    .filter(|f| match f {
+                        // Primitive types don't need to found.
+                        Identifier::Primitive(..) => false,
+                        _ => true,
+                    })
                     .for_each(|f| match ctx.db.find_type(f) {
                         Some(_) => {}
                         None => {
