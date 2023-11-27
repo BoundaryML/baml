@@ -157,9 +157,9 @@
       },
       "patterns": [
         { "include": "#comment" },
+        { "include": "#language_block_string" },
         { "include": "#key_value" },
         { "include": "#string_unquoted" },
-        { "include": "#language_block_string" },
         { "include": "#block_string_pair" },
         { "include": "#string_literal" }
       ]
