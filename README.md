@@ -13,7 +13,7 @@
   <br /> 
   <a href="https://docs.trygloo.com">Documentation</a>
  • <a href="https://app.trygloo.com">Dashboard</a>
-   <h4>Made by Gloo</h4>
+   <h4>Made by Boundary (formerly Gloo)</h4>
 </div>
 
 BAML (Basically a Made-up Language) is a Domain Specific Language (DSL) for building AI applications and interacting with LLMs and other AI models.
