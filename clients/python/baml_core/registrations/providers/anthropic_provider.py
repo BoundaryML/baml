@@ -2,8 +2,12 @@ import anthropic
 import typing
 
 
-from baml_core.provider_manager import LLMChatProvider, register_llm_provider, LLMResponse, LLMChatMessage
-
+from baml_core.provider_manager import (
+    LLMChatProvider,
+    register_llm_provider,
+    LLMResponse,
+    LLMChatMessage,
+)
 
 
 def _hydrate_anthropic_tokenizer() -> None:
@@ -75,12 +79,15 @@ class AnthropicProvider(LLMChatProvider):
         pass
 
     async def _run_chat(self, messages: typing.List[LLMChatMessage]) -> LLMResponse:
-        prompt = "".join(
+        prompt = (
+            "".join(
                 map(
                     lambda c: f'{anthropic.HUMAN_PROMPT if  c["role"] != "system" else anthropic.AI_PROMPT} {c["content"]}',
                     messages,
                 )
-            ) + anthropic.AI_PROMPT
+            )
+            + anthropic.AI_PROMPT
+        )
         prompt_tokens = await self.__client.count_tokens(prompt)
         response = typing.cast(
             anthropic.types.Completion,
