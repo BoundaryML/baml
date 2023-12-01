@@ -11,6 +11,7 @@ import { ASTContext } from './ASTProvider'
 import TypeComponent from './TypeComponent'
 import { Allotment } from 'allotment'
 import TestResultPanel from './TestResultOutcomes'
+import { ScrollArea } from '@/components/ui/scroll-area'
 
 const FunctionPanel: React.FC = () => {
   const { setSelection } = useContext(ASTContext)
@@ -19,10 +20,10 @@ const FunctionPanel: React.FC = () => {
   if (!func) return <div className="flex flex-col">No function selected</div>
 
   return (
-    <div className="w-full h-screen">
+    <div className="w-full h-screen overflow-auto">
       <Allotment vertical>
         <Allotment.Pane>
-          <Allotment className=" h-full">
+          <Allotment className="h-full ">
             {impl && (
               <Allotment.Pane className="px-2" minSize={200}>
                 <VSCodePanels
@@ -41,10 +42,16 @@ const FunctionPanel: React.FC = () => {
               </Allotment.Pane>
             )}
             <Allotment.Pane className="px-2" minSize={200}>
-              <div className="flex flex-row gap-1">
-                <b>Test Case</b> <TestCaseSelector />
+              <div className="h-full">
+                <ScrollArea type="always" className="flex w-full h-full pr-3">
+                  <>
+                    {/* <div className="flex flex-row gap-1">
+                      <b>Test Case</b> <TestCaseSelector />
+                    </div> */}
+                    <TestCasePanel func={func} />
+                  </>
+                </ScrollArea>
               </div>
-              <TestCasePanel func={func} />
             </Allotment.Pane>
           </Allotment>
         </Allotment.Pane>

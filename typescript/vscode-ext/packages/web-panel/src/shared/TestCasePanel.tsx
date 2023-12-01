@@ -7,20 +7,45 @@ import { VSCodeButton, VSCodeTextArea } from '@vscode/webview-ui-toolkit/react'
 import { useContext, useEffect, useMemo, useState } from 'react'
 import { vscode } from '@/utils/vscode'
 import { ASTContext } from './ASTProvider'
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 
 type Func = ParserDatabase['functions'][0]
 
 const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
-  const { test_case, input_json_schema } = useSelections()
+  const test_cases = func?.test_cases.map((cases) => cases) ?? []
+  // const { test_case } = useSelections()
+  console.log('testcases ', test_cases)
 
   return (
-    <div className="flex flex-col">
-      <pre>{JSON.stringify(input_json_schema, undefined, 2)}</pre>
-      {func.input.arg_type === 'positional' ? (
-        <PositionalTestCase input={func.input.type} content={test_case?.content} />
-      ) : (
-        <NamedTestCase values={func.input.values} content={test_case?.content} />
-      )}
+    <>
+      <Accordion type="single" collapsible className="w-full">
+        {test_cases.map((test_case) => (
+          <AccordionItem key={test_case.name.value} value={test_case.name.value}>
+            <AccordionTrigger>{test_case.name.value}</AccordionTrigger>
+            <AccordionContent>
+              <TestCaseCard content={test_case.content} testCaseName={test_case.name.value} />
+            </AccordionContent>
+          </AccordionItem>
+        ))}
+      </Accordion>
+    </>
+  )
+
+  // return (
+  //   <div className="flex flex-col">
+  //     {func.input.arg_type === 'positional' ? (
+  //       <PositionalTestCase input={func.input.type} content={test_case?.content} />
+  //     ) : (
+  //       <NamedTestCase values={func.input.values} content={test_case?.content} />
+  //     )}
+  //   </div>
+  // )
+}
+
+const TestCaseCard: React.FC<{ testCaseName: string; content: string }> = ({ testCaseName, content }) => {
+  return (
+    <div className="flex flex-col gap-2">
+      <div>{content.substring(0, 100)}</div>
     </div>
   )
 }
@@ -30,9 +55,9 @@ const PositionalTestCase: React.FC<{ input: string; content: string | undefined 
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex flex-row gap-1 items-baseline">
+      <div className="flex flex-row items-baseline gap-1">
         <span>input</span>
-        <div className="italic text-xs">
+        <div className="text-xs italic">
           <TypeComponent typeString={input} />
         </div>
       </div>
@@ -85,9 +110,9 @@ const NamedTestCase: React.FC<{ values: { name: StringSpan; type: string }[]; co
           <>
             {values.map(({ name, type }) => (
               <div key={name.value} className="flex flex-col gap-1">
-                <div className="flex flex-row gap-1 items-baseline">
+                <div className="flex flex-row items-baseline gap-1">
                   <span>{name.value}</span>
-                  <div className="italic text-xs">
+                  <div className="text-xs italic">
                     <TypeComponent typeString={type} />
                   </div>
                 </div>

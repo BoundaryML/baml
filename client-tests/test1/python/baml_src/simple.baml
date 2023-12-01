@@ -3,7 +3,7 @@ function Blah {
   output string
 
   default_impl v1
-}  
+}
 
 impl<llm, Blah> v1 {
   client ResilientGPT4
