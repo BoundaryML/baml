@@ -23,7 +23,14 @@ const TestStatusIcon = ({ testStatus }: { testStatus: TestStatus }) => {
 export const columns: ColumnDef<TestResult>[] = [
   {
     accessorKey: 'testName',
-    header: 'Test Case',
+    header: ({ column }) => {
+      return (
+        <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
+          Test Case
+          <CaretSortIcon className="ml-2 h-4 w-4" />
+        </Button>
+      )
+    },
   },
   {
     header: ({ column }) => {
@@ -47,7 +54,6 @@ export const columns: ColumnDef<TestResult>[] = [
         <div className="flex flex-col">
           <TestStatusIcon testStatus={val.status} />
           <pre>{val.render && pretty_stringify(val.render)}</pre>
-          <pre>{val.raw}</pre>
         </div>
       )
     },
