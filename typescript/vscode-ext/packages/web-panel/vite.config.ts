@@ -7,17 +7,16 @@ export default defineConfig({
   plugins: react(),
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
-    }
+      '@': path.resolve(__dirname, './src'),
+    },
   },
   build: {
     minify: false,
 
-
     outDir: 'dist',
-    sourcemap: "inline",
+    sourcemap: 'inline',
     rollupOptions: {
-
+      // external: ['allotment/dist/index.css'],
       output: {
         entryFileNames: `assets/[name].js`,
         chunkFileNames: `assets/[name].js`,

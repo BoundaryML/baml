@@ -40,6 +40,9 @@ class IBAMLMessageSimplifier(BaseBAMLFunction[Optional[int]]):
             ["v1"],
         )
 
+    async def __call__(self, *args, **kwargs) -> Optional[int]:
+        return await self.get_impl("v1").run(*args, **kwargs)
+
 BAMLMessageSimplifier = IBAMLMessageSimplifier()
 
 __all__ = [ "BAMLMessageSimplifier" ]

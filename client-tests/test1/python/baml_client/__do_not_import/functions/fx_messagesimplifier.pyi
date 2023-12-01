@@ -51,6 +51,9 @@ class IBAMLMessageSimplifier:
     ) -> typing.Callable[[IMessageSimplifier], IMessageSimplifier]:
         ...
 
+    async def __call__(self, arg: Conversation, /) -> Optional[int]:
+        ...
+
     def get_impl(self, name: ImplName) -> BAMLMessageSimplifierImpl:
         ...
 

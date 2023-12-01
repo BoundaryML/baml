@@ -51,6 +51,9 @@ class IBAMLClassifyTool:
     ) -> typing.Callable[[IClassifyTool], IClassifyTool]:
         ...
 
+    async def __call__(self, *, query: str, context: str) -> ClassifyResponse:
+        ...
+
     def get_impl(self, name: ImplName) -> BAMLClassifyToolImpl:
         ...
 

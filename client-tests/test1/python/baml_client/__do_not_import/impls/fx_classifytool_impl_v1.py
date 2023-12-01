@@ -28,7 +28,7 @@ Userinfo:
 UserContext:
 {context}
 
-tools
+tool
 ---
 k1: Use this tool if the user is asking to compute something
 k2: Use this tool if the user is asking to draw something
@@ -37,7 +37,7 @@ k3: Use this tool if the user is asking to generate text
 Use this output format:
 {
   // Any number of tools the user may want to use
-  "tool": "tools as string"[],
+  "tool": "tool as string"[],
   // This is the assistance reponse
   "foo": string
 }

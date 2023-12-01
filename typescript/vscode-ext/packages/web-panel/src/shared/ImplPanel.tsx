@@ -1,7 +1,7 @@
 /// Content once a function has been selected.
 
 import { ParserDatabase, TestResult, TestStatus } from '@baml/common'
-import { useImplCtx } from './hooks'
+import { useImplCtx, useSelections } from './hooks'
 import {
   VSCodeBadge,
   VSCodeCheckbox,
@@ -14,6 +14,7 @@ import { useMemo, useState } from 'react'
 import Link from './Link'
 import TypeComponent from './TypeComponent'
 import { ArgType } from '@baml/common/src/parser_db'
+import { Table, TableHead } from '@/components/ui/table'
 
 type Impl = ParserDatabase['functions'][0]['impls'][0]
 
@@ -115,7 +116,7 @@ const Snippet: React.FC<{ text: string }> = ({ text }) => {
 }
 
 const ImplPanel: React.FC<{ impl: Impl }> = ({ impl }) => {
-  const { func, test_result } = useImplCtx(impl.name.value)
+  const { func } = useImplCtx(impl.name.value)
 
   const implPrompt = useMemo(() => {
     let prompt = impl.prompt
@@ -135,20 +136,14 @@ const ImplPanel: React.FC<{ impl: Impl }> = ({ impl }) => {
       <VSCodePanelTab key={`tab-${impl.name.value}`} id={`tab-${func.name.value}-${impl.name.value}`}>
         <div className="flex flex-row gap-1">
           <span>{impl.name.value}</span>
-          {test_result && (
-            <VSCodeBadge>
-              <TestStatusIcon testStatus={test_result.status} />
-            </VSCodeBadge>
-          )}
         </div>
       </VSCodePanelTab>
       <VSCodePanelView key={`view-${impl.name.value}`} id={`view-${func.name.value}-${impl.name.value}`}>
         <div className="flex flex-col w-full gap-2">
           <div className="flex flex-row gap-1">
-            <span className="font-bold">Client</span>
+            <span className="font-light">Client</span>
             <Link item={impl.client} />
           </div>
-          <TestResultPanel testResult={test_result} output={func.output} />
 
           <div className="flex flex-col gap-1">
             <div className="flex flex-row justify-between items-center">
@@ -162,78 +157,6 @@ const ImplPanel: React.FC<{ impl: Impl }> = ({ impl }) => {
         </div>
       </VSCodePanelView>
     </>
-  )
-}
-
-const TestResultPanel: React.FC<{ output: ArgType; testResult?: TestResult }> = ({ output, testResult }) => {
-  const [tab, setTab] = useState<'tab-impl-error' | 'tab-impl-parsed' | 'tab-impl-raw' | undefined>(undefined)
-
-  const output_string = useMemo((): string | null => {
-    if (!testResult?.output.parsed) return null
-
-    if (typeof testResult.output.parsed === 'string') {
-      try {
-        let parsed = JSON.parse(testResult.output.parsed)
-        if (typeof parsed === 'object') return JSON.stringify(parsed, null, 2)
-        return parsed
-      } catch (e) {
-        return testResult.output.parsed
-      }
-    } else {
-      return JSON.stringify(testResult.output.parsed, null, 2)
-    }
-  }, [testResult?.output.parsed])
-
-  return (
-    <div className="flex flex-col gap-1">
-      <div className="flex flex-row justify-between items-center">
-        <span className="flex gap-1">
-          <b>output</b> {output.arg_type === 'positional' && <TypeComponent typeString={output.type} />}
-        </span>
-        {testResult?.status && <TestStatusIcon testStatus={testResult.status} />}
-      </div>
-      <div className="max-w-full">
-        <VSCodePanels
-          className="w-full"
-          activeid={tab}
-          onChange={(e) => {
-            const selected: string | undefined = (e.target as any)?.activetab?.id
-            if (selected && selected.startsWith('tab-impl-')) {
-              setTab(selected as any)
-            }
-          }}
-        >
-          {output_string != null && (
-            <>
-              <VSCodePanelTab id="tab-impl-parsed">BAML Parsed</VSCodePanelTab>
-              <VSCodePanelView id="view-impl-parsed">
-                {output_string && (
-                  <pre className="w-full p-2 overflow-y-scroll whitespace-pre-wrap bg-vscode-input-background">
-                    {output_string}
-                  </pre>
-                )}
-              </VSCodePanelView>
-            </>
-          )}
-          {testResult?.output.raw != undefined && (
-            <>
-              <VSCodePanelTab id="tab-impl-raw">Raw LLM</VSCodePanelTab>
-              <VSCodePanelView id="view-impl-raw">
-                {testResult?.output.raw && <Snippet text={testResult.output.raw} />}
-              </VSCodePanelView>
-            </>
-          )}
-          {testResult?.output.error != undefined && (
-            <>
-              <VSCodePanelTab id="tab-impl-error">Error</VSCodePanelTab>
-              <VSCodePanelView id="view-impl-error">
-                {testResult?.output.error && <Snippet text={testResult.output.error} />}
-              </VSCodePanelView>
-            </>
-          )}
-        </VSCodePanels>
-      </div>
-    </div>
   )
 }
 

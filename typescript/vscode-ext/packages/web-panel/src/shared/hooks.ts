@@ -47,17 +47,7 @@ export function useSelections() {
 }
 
 export function useImplCtx(name: string) {
-  const { func, test_results, test_case } = useSelections()
+  const { func } = useSelections()
 
-  const impl_test_result = useMemo(
-    () =>
-      test_results.find(
-        (tr) =>
-          tr.implName == name &&
-          (test_case?.name.value ? tr.testName == test_case.name.value : tr.testName == 'playground'),
-      ),
-    [test_results, name],
-  )
-
-  return { func, test_result: impl_test_result }
+  return { func }
 }
