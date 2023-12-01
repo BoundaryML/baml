@@ -3,6 +3,22 @@ import { CaretSortIcon } from '@radix-ui/react-icons'
 import { Button } from '@/components/ui/button'
 import { TestResult, TestStatus } from '@baml/common'
 import { ColumnDef } from '@tanstack/react-table'
+import { VSCodeProgressRing } from '@vscode/webview-ui-toolkit/react'
+
+const TestStatusIcon = ({ testStatus }: { testStatus: TestStatus }) => {
+  return (
+    <div className="text-vscode-descriptionForeground">
+      {
+        {
+          [TestStatus.Queued]: 'Queued',
+          [TestStatus.Running]: <VSCodeProgressRing className="h-4" />,
+          [TestStatus.Passed]: <div className="text-vscode-testing-iconPassed">Passed</div>,
+          [TestStatus.Failed]: <div className="text-vscode-testing-iconFailed">Failed</div>,
+        }[testStatus]
+      }
+    </div>
+  )
+}
 
 export const columns: ColumnDef<TestResult>[] = [
   {
@@ -23,8 +39,26 @@ export const columns: ColumnDef<TestResult>[] = [
   },
   {
     id: 'status',
-    accessorFn: (row) => row.status + ' ' + JSON.stringify(row.output),
-    cell: ({ getValue }) => <div className="lowercase">{getValue()}</div>,
+    accessorFn: (row) => ({ status: row.status, render: row.output.parsed ?? row.output.error, raw: row.output.raw }),
+    cell: ({ getValue }) => {
+      const val = getValue<{ status: TestStatus; render?: string; raw?: string }>()
+
+      return (
+        <div className="flex flex-col">
+          <TestStatusIcon testStatus={val.status} />
+          <pre>{val.render && pretty_stringify(val.render)}</pre>
+          <pre>{val.raw}</pre>
+        </div>
+      )
+    },
     header: 'Status',
   },
 ]
+
+const pretty_stringify = (obj: string) => {
+  try {
+    return JSON.stringify(JSON.parse(obj), null, 2)
+  } catch (e) {
+    return obj
+  }
+}

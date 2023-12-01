@@ -47,6 +47,13 @@ export class WebPanelView {
 
     // Set an event listener to listen for messages passed from the webview context
     this._setWebviewMessageListener(this._panel.webview)
+    testExecutor.setStdoutListener((log) => {
+      this._panel.webview.postMessage({
+        command: 'test-stdout',
+        content: log,
+      })
+    })
+
     testExecutor.setTestStateListener((testResults) => {
       this._panel.webview.postMessage({
         command: 'test-results',
@@ -83,7 +90,6 @@ export class WebPanelView {
           retainContextWhenHidden: true,
         },
       )
-      console.log('render')
 
       WebPanelView.currentPanel = new WebPanelView(panel, extensionUri)
     }
@@ -187,22 +193,22 @@ export class WebPanelView {
             const uri = saveTestRequest.testCaseName?.source_file
               ? vscode.Uri.parse(saveTestRequest.testCaseName?.source_file)
               : vscode.Uri.joinPath(
-                vscode.Uri.parse(saveTestRequest.root_path),
-                '__tests',
-                saveTestRequest.funcName,
-                `${uniqueNamesGenerator(customConfig)}.json`,
-              )
+                  vscode.Uri.parse(saveTestRequest.root_path),
+                  '__tests',
+                  saveTestRequest.funcName,
+                  `${uniqueNamesGenerator(customConfig)}.json`,
+                )
             const fileContent =
               saveTestRequest.params.type === 'positional'
                 ? saveTestRequest.params.value
                 : JSON.stringify(
-                  Object.fromEntries(saveTestRequest.params.value.map((kv) => [kv.name, kv.value])),
-                  null,
-                  2,
-                )
+                    Object.fromEntries(saveTestRequest.params.value.map((kv) => [kv.name, kv.value])),
+                    null,
+                    2,
+                  )
             try {
               await vscode.workspace.fs.writeFile(uri, Buffer.from(fileContent))
-              await registerFileChange(uri.toString(), "json");
+              await registerFileChange(uri.toString(), 'json')
             } catch (e: any) {
               console.log(e)
             }

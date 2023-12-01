@@ -138,6 +138,7 @@ class TestState {
 class TestExecutor {
   private server: net.Server | undefined
   private testState: TestState
+  private stdoutListener: ((data: string) => void) | undefined = undefined
 
   constructor() {
     this.server = undefined
@@ -150,6 +151,10 @@ class TestExecutor {
 
   public setTestStateListener(listener: (testResults: TestResult[]) => void) {
     this.testState.setTestStateListener(listener)
+  }
+
+  public setStdoutListener(listener: (data: string) => void) {
+    this.stdoutListener = listener
   }
 
   public start() {
@@ -175,7 +180,6 @@ class TestExecutor {
   }
 
   public async runTest(tests: TestRequest, cwd: string) {
-    outputChannel.show(true)
     this.testState.resetTestCases(tests)
     const tempFilePath = path.join(os.tmpdir(), 'test_temp.py')
     const code = await generateTestRequest(tests)
@@ -183,7 +187,7 @@ class TestExecutor {
       vscode.window.showErrorMessage('Could not generate test request')
       return
     }
-    console.log(code)
+
     fs.writeFileSync(tempFilePath, code)
 
     // Add filters.
@@ -200,15 +204,18 @@ class TestExecutor {
     // Run the Python script in a child process
     // const process = spawn(pythonExecutable, [tempFilePath]);
     // Run the Python script using exec
+    this.stdoutListener?.('<BAML_RESTART>')
     const cp = exec(command, {
       cwd: cwd,
     })
 
     cp.stdout?.on('data', (data) => {
       outputChannel.appendLine(data)
+      this.stdoutListener?.(data)
     })
     cp.stderr?.on('data', (data) => {
       outputChannel.appendLine(data)
+      this.stdoutListener?.(data)
     })
   }
 

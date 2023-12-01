@@ -9,6 +9,7 @@ export function useSelections() {
   const {
     db,
     test_results: test_results_raw,
+    test_log,
     selections: { selectedFunction, selectedImpl, selectedTestCase },
   } = ctx
 
@@ -43,6 +44,7 @@ export function useSelections() {
     impl,
     test_case,
     test_results,
+    test_log,
   }
 }
 

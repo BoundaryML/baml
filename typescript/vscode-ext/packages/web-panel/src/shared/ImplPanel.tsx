@@ -18,21 +18,6 @@ import { Table, TableHead } from '@/components/ui/table'
 
 type Impl = ParserDatabase['functions'][0]['impls'][0]
 
-const TestStatusIcon = ({ testStatus }: { testStatus: TestStatus }) => {
-  return (
-    <div className="text-vscode-descriptionForeground">
-      {
-        {
-          [TestStatus.Queued]: 'Queued',
-          [TestStatus.Running]: <VSCodeProgressRing className="h-4" />,
-          [TestStatus.Passed]: <div className="text-vscode-testing-iconPassed">Passed</div>,
-          [TestStatus.Failed]: <div className="text-vscode-testing-iconFailed">Failed</div>,
-        }[testStatus]
-      }
-    </div>
-  )
-}
-
 const Whitespace: React.FC<{ char: 'space' | 'tab' }> = ({ char }) => (
   <span className="text-blue-500 opacity-75">{char === 'space' ? <>&middot;</> : <>&rarr;</>}</span>
 )

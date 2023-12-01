@@ -7,6 +7,7 @@ export const ASTContext = createContext<{
   root_path: string
   db: ParserDatabase
   test_results: TestResult[]
+  test_log?: string
   selections: {
     selectedFunction: string | undefined
     selectedImpl: string | undefined
@@ -25,6 +26,7 @@ export const ASTContext = createContext<{
     clients: [],
     enums: [],
   },
+  test_log: undefined,
   test_results: [],
   selections: {
     selectedFunction: undefined,
@@ -70,6 +72,7 @@ export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
   const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>(undefined)
   const [testResults, setTestResults] = useState<TestResult[]>([])
   const { selectedFunction, selectedImpl, selectedTestCase, setSelection } = useSelectionSetup()
+  const [testLog, setTestLog] = useState<string | undefined>(undefined)
 
   const selectedState = useMemo(() => {
     if (selectedProjectId === undefined) return undefined
@@ -79,6 +82,7 @@ export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
         root_path: match.root_dir,
         db: match.db,
         test_results: testResults,
+        test_log: testLog,
         selections: {
           selectedFunction,
           selectedImpl,
@@ -100,6 +104,13 @@ export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
       const messageContent = event.data.content
 
       switch (command) {
+        case 'test-stdout': {
+          if (messageContent === '<BAML_RESTART>') {
+            setTestLog(undefined)
+          } else {
+            setTestLog((prev) => (prev ? prev + messageContent : messageContent))
+          }
+        }
         case 'setDb': {
           setProjects(messageContent.map((p: any) => ({ root_dir: p[0], db: p[1] })))
           break
@@ -118,17 +129,14 @@ export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
           break
         }
         case 'test-results': {
-          console.log('REACT test-results', messageContent)
           setTestResults(messageContent as TestResult[])
           break
         }
       }
     }
-    console.log('REACT adding event listener')
     window.addEventListener('message', fn)
 
     return () => {
-      console.log('REACT removing event listener')
       window.removeEventListener('message', fn)
     }
   }, [])
