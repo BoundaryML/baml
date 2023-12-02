@@ -8,7 +8,7 @@
 # fmt: off
 
 from .__do_not_import.generated_baml_client import baml
-from .baml_types import ClassifyResponse, IBlah, IClassifyTool, Tool
+from .baml_types import ClassifyResponse, Conversation, IBlah, IClassifyTool, IMessageSimplifier, Message, MessageSender, Tool
 from baml_lib._impl.deserializer import Deserializer
 from json5 import loads # type: ignore
 
@@ -74,6 +74,22 @@ async def test_present_scarlet(ClassifyToolImpl: IClassifyTool):
         query=query,
         context=context
     )
+
+
+@baml.MessageSimplifier.test
+async def test_sample_test(MessageSimplifierImpl: IMessageSimplifier):
+    deserializer = Deserializer[Conversation](Conversation)
+    param = deserializer.from_string("""\
+{
+  "thread": [
+    {
+      "sender": "AI",
+      "body": "Hey man hows it going would you please fix my garage door etc etc etc"
+    }
+  ]
+}\
+""")
+    await MessageSimplifierImpl(param)
 
 
 @baml.Blah.test

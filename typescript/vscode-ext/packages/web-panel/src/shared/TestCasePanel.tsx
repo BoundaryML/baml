@@ -3,31 +3,126 @@
 import { ParserDatabase, StringSpan, TestRequest } from '@baml/common'
 import { useSelections } from './hooks'
 import TypeComponent from './TypeComponent'
-import { VSCodeButton, VSCodeTextArea } from '@vscode/webview-ui-toolkit/react'
+import { VSCodeButton, VSCodeTextArea, VSCodeTextField } from '@vscode/webview-ui-toolkit/react'
 import { useContext, useEffect, useMemo, useState } from 'react'
 import { vscode } from '@/utils/vscode'
 import { ASTContext } from './ASTProvider'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
+import { Separator } from '@/components/ui/separator'
+import { Button } from '@/components/ui/button'
+import { Edit, Edit2, Play } from 'lucide-react'
+import { TestRunRequest } from 'vscode'
+import { RJSFSchema, UiSchema } from '@rjsf/utils'
+import validator from '@rjsf/validator-ajv8'
+import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog'
+import Form from '@rjsf/core'
+
+const schema: RJSFSchema = {
+  title: 'Test form',
+  type: 'object',
+  properties: {
+    name: {
+      type: 'string',
+    },
+    age: {
+      type: 'number',
+    },
+  },
+}
+
+const uiSchema: UiSchema = {
+  name: {
+    'ui:classNames': 'custom-class-name',
+  },
+  age: {
+    'ui:classNames': 'custom-class-age',
+  },
+}
 
 type Func = ParserDatabase['functions'][0]
 
 const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
   const test_cases = func?.test_cases.map((cases) => cases) ?? []
-  // const { test_case } = useSelections()
-  console.log('testcases ', test_cases)
+  const { impl } = useSelections()
 
+  const getTestParams = (testCase: Func['test_cases'][0]): TestRequest['functions'][0]['tests'][0]['params'] => {
+    if (func.input.arg_type === 'positional') {
+      return {
+        type: 'positional',
+        value: testCase.content,
+      }
+    } else {
+      let parsed = JSON.parse(testCase.content)
+      let contentMap = new Map<string, string>()
+      if (typeof parsed === 'object') {
+        contentMap = new Map(Object.entries(parsed).map(([k, v]) => [k, JSON.stringify(v, null, 2)]))
+      }
+      return {
+        type: 'named',
+        value: func.input.values.map(({ name }) => ({
+          name: name.value,
+          value: contentMap.get(name.value) ?? '',
+        })),
+      }
+    }
+  }
+  // const { test_case } = useSelections()
   return (
     <>
-      <Accordion type="single" collapsible className="w-full">
+      <div>Test Cases</div>
+      <div className="flex flex-row justify-between">
+        <VSCodeTextField placeholder="Search test cases" />
+        <VSCodeButton
+          onClick={() => {
+            // vscode.postMessage({
+            //   command: 'addTestCase',
+            //   data: {
+            //     funcName: func.name.value,
+            //   },
+            // })
+          }}
+        >
+          Run all tests
+        </VSCodeButton>
+      </div>
+      <div className="flex flex-col py-4 divide-y gap-y-4 divide-vscode-descriptionForeground">
         {test_cases.map((test_case) => (
-          <AccordionItem key={test_case.name.value} value={test_case.name.value}>
-            <AccordionTrigger>{test_case.name.value}</AccordionTrigger>
-            <AccordionContent>
-              <TestCaseCard content={test_case.content} testCaseName={test_case.name.value} />
-            </AccordionContent>
-          </AccordionItem>
+          <div key={test_case.name.value}>
+            <div className="flex flex-row items-center gap-x-1">
+              <Button
+                variant={'ghost'}
+                size={'icon'}
+                className="p-1 w-fit h-fit"
+                onClick={() => {
+                  const runTestRequest: TestRequest = {
+                    functions: [
+                      {
+                        name: func.name.value,
+                        tests: [
+                          {
+                            name: test_case.name.value,
+                            params: getTestParams(test_case),
+                            impls: impl ? [impl.name.value] : [],
+                          },
+                        ],
+                      },
+                    ],
+                  }
+                  vscode.postMessage({
+                    command: 'runTest',
+                    data: runTestRequest,
+                  })
+                }}
+              >
+                <Play size={10} />
+              </Button>
+              <div>{test_case.name.value}</div>
+              <EditTestCaseForm />
+            </div>
+            <TestCaseCard content={test_case.content} testCaseName={test_case.name.value} />
+          </div>
         ))}
-      </Accordion>
+      </div>
     </>
   )
 
@@ -42,10 +137,28 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
   // )
 }
 
+const EditTestCaseForm = ({}: {}) => {
+  return (
+    <Dialog>
+      <DialogTrigger asChild={true}>
+        <Button variant={'ghost'} size="icon" className="p-1 w-fit h-fit">
+          <Edit2 className="w-3 h-3 text-vscode-descriptionForeground" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="bg-vscode-editorWidget-background border-vscode-descriptionForeground">
+        <Form schema={schema} validator={validator} />
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 const TestCaseCard: React.FC<{ testCaseName: string; content: string }> = ({ testCaseName, content }) => {
   return (
-    <div className="flex flex-col gap-2">
-      <div>{content.substring(0, 100)}</div>
+    <div className="flex flex-col gap-2 text-xs text-vscode-descriptionForeground">
+      <div>
+        {content.substring(0, 200)}
+        {content.length > 200 && '...'}
+      </div>
     </div>
   )
 }
