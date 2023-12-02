@@ -43,6 +43,9 @@ class IBAMLMaybePolishText(BaseBAMLFunction[ImprovedResponse]):
             ["v1"],
         )
 
+    async def __call__(self, *args, **kwargs) -> ImprovedResponse:
+        return await self.get_impl("v1").run(*args, **kwargs)
+
 BAMLMaybePolishText = IBAMLMaybePolishText()
 
 __all__ = [ "BAMLMaybePolishText" ]

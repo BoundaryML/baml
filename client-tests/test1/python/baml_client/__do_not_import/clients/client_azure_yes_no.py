@@ -7,7 +7,7 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from  ..configs.retry_policy import DefaultRetryPolicy
+from ..configs.retry_policy import DefaultRetryPolicy
 from baml_core.provider_manager import LLMManager
 from os import environ
 
@@ -16,7 +16,7 @@ AZURE_YES_NO = LLMManager.add_llm(
     name="AZURE_YES_NO",
     provider="baml-openai-chat",
     retry_policy=DefaultRetryPolicy,
-    redactions=["api_key"],
+    redactions=["api_key", ],
     options=dict(
         model="gpt-3.5-turbo",
         api_key=environ['OPENAI_API_KEY'],

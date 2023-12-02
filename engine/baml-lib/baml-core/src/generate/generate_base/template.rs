@@ -1,6 +1,6 @@
 use handlebars::handlebars_helper;
 
-use super::file::File;
+use super::{file::File, traits::TargetLanguage};
 
 #[derive(Debug)]
 pub(super) enum HSTemplate {
@@ -27,14 +27,24 @@ fn init_hs() -> handlebars::Handlebars<'static> {
 }
 
 macro_rules! include_template {
-    ($type:expr, $file:expr) => {
-        include_str!(concat!("templates/", $type, "/", $file, ".hb"))
+    ($lang:expr, $type:expr, $file:expr) => {
+        include_str!(concat!(
+            "../generate_",
+            $lang,
+            "_client",
+            "/",
+            "templates/",
+            $type,
+            "/",
+            $file,
+            ".hb"
+        ))
     };
 }
 
 macro_rules! register_partial_file {
-    ($reg:expr, $type:expr, $file:expr) => {
-        register_partial!($reg, $file, include_template!($type, $file));
+    ($reg:expr, $lang:expr, $type:expr, $file:expr) => {
+        register_partial!($reg, $file, include_template!($lang, $type, $file));
     };
 }
 
@@ -45,7 +55,7 @@ macro_rules! register_partial {
     };
 }
 
-fn use_partial(
+fn use_partial_py(
     template: HSTemplate,
     reg: &mut handlebars::Handlebars<'static>,
     f: &mut File,
@@ -53,16 +63,16 @@ fn use_partial(
     register_partial!(reg, "print_code", "{{{code}}}");
     match template {
         HSTemplate::Variant => {
-            register_partial_file!(reg, "functions", "arg_list");
-            register_partial_file!(reg, "functions", "arg_values");
-            register_partial_file!(reg, "functions", "func_def");
+            register_partial_file!(reg, "python", "functions", "arg_list");
+            register_partial_file!(reg, "python", "functions", "arg_values");
+            register_partial_file!(reg, "python", "functions", "func_def");
             f.add_import("baml_lib._impl.deserializer", "Deserializer");
 
-            register_partial_file!(reg, "functions", "variant");
+            register_partial_file!(reg, "python", "functions", "variant");
             String::from("variant")
         }
         HSTemplate::BAMLClient => {
-            register_partial_file!(reg, "export", "generated_baml_client");
+            register_partial_file!(reg, "python", "export", "generated_baml_client");
             f.add_import("baml_core.services", "LogSchema");
             f.add_import("baml_core.otel", "add_message_transformer_hook");
             f.add_import("baml_core.otel", "flush_trace_logs");
@@ -75,58 +85,58 @@ fn use_partial(
             String::from("generated_baml_client")
         }
         HSTemplate::Client => {
-            register_partial_file!(reg, "types", "client");
+            register_partial_file!(reg, "python", "types", "client");
             f.add_import("baml_core.provider_manager", "LLMManager");
             String::from("client")
         }
         HSTemplate::RetryPolicy => {
-            register_partial_file!(reg, "configs", "retry_policy");
+            register_partial_file!(reg, "python", "configs", "retry_policy");
             String::from("retry_policy")
         }
         HSTemplate::Class => {
-            register_partial_file!(reg, "types", "class");
+            register_partial_file!(reg, "python", "types", "class");
             f.add_import("pydantic", "BaseModel");
             f.add_import("baml_lib._impl.deserializer", "register_deserializer");
             String::from("class")
         }
         HSTemplate::Enum => {
             register_partial!(reg, "enum_value", r#"{{name}} = "{{name}}""#);
-            register_partial_file!(reg, "types", "enum");
+            register_partial_file!(reg, "python", "types", "enum");
             f.add_import("enum", "Enum");
             f.add_import("baml_lib._impl.deserializer", "register_deserializer");
             String::from("enum")
         }
         HSTemplate::Function => {
-            register_partial_file!(reg, "functions", "arg_list");
-            register_partial_file!(reg, "functions", "method_def");
+            register_partial_file!(reg, "python", "functions", "arg_list");
+            register_partial_file!(reg, "python", "functions", "method_def");
 
-            register_partial_file!(reg, "functions", "interface");
+            register_partial_file!(reg, "python", "functions", "interface");
             f.add_import("typing", "runtime_checkable");
             f.add_import("typing", "Protocol");
 
-            register_partial_file!(reg, "functions", "function_py");
+            register_partial_file!(reg, "python", "functions", "function_py");
             f.add_import("baml_lib._impl.functions", "BaseBAMLFunction");
             String::from("function_py")
         }
         HSTemplate::FunctionPYI => {
-            register_partial_file!(reg, "functions", "arg_list");
-            register_partial_file!(reg, "functions", "method_def");
+            register_partial_file!(reg, "python", "functions", "arg_list");
+            register_partial_file!(reg, "python", "functions", "method_def");
 
-            register_partial_file!(reg, "functions", "interface");
+            register_partial_file!(reg, "python", "functions", "interface");
             f.add_import("typing", "runtime_checkable");
             f.add_import("typing", "Protocol");
 
-            register_partial_file!(reg, "functions", "function_pyi");
+            register_partial_file!(reg, "python", "functions", "function_pyi");
             String::from("function_pyi")
         }
         HSTemplate::SingleArgTestSnippet => {
-            register_partial_file!(reg, "tests", "single_arg_snippet");
+            register_partial_file!(reg, "python", "tests", "single_arg_snippet");
             f.add_import(".__do_not_import.generated_baml_client", "baml");
             f.add_import("baml_lib._impl.deserializer", "Deserializer");
             String::from("single_arg_snippet")
         }
         HSTemplate::MultiArgTestSnippet => {
-            register_partial_file!(reg, "tests", "multi_arg_snippet");
+            register_partial_file!(reg, "python", "tests", "multi_arg_snippet");
             f.add_import("json5", "loads # type: ignore");
             f.add_import(".__do_not_import.generated_baml_client", "baml");
             f.add_import("baml_lib._impl.deserializer", "Deserializer");
@@ -135,9 +145,17 @@ fn use_partial(
     }
 }
 
-pub(super) fn render_template(template: HSTemplate, f: &mut File, json: serde_json::Value) {
+pub(super) fn render_template(
+    language: TargetLanguage,
+    template: HSTemplate,
+    f: &mut File,
+    json: serde_json::Value,
+) {
     let mut reg = init_hs();
-    let template = use_partial(template, &mut reg, f);
+    let template = match language {
+        TargetLanguage::Python => use_partial_py(template, &mut reg, f),
+        TargetLanguage::TypeScript => unimplemented!(),
+    };
 
     match reg.render_template(&format!("{{{{> {}}}}}", template), &json) {
         Ok(s) => f.add_string(&s),

@@ -1,5 +1,5 @@
+mod generate_base;
 mod generate_pipeline;
-mod generate_python_client;
 mod test_request;
 
 pub(crate) use generate_pipeline::generate_pipeline;

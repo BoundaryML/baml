@@ -13,6 +13,10 @@ pub(crate) struct FileCollector {
     files: HashMap<PathBuf, File>,
 }
 
+pub(super) fn escaped_string(s: &str, quotes: (&'static str, &'static str)) -> String {
+    s.replace("\\", "\\\\").replace(quotes.0, quotes.1)
+}
+
 impl FileCollector {
     pub fn start_export_file<'a>(&'a mut self, path: impl AsRef<str>, name: impl AsRef<str>) {
         self.start_py_file_impl(path, name, true);

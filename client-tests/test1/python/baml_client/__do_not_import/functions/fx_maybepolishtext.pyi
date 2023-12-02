@@ -54,6 +54,9 @@ class IBAMLMaybePolishText:
     ) -> typing.Callable[[IMaybePolishText], IMaybePolishText]:
         ...
 
+    async def __call__(self, arg: ProposedMessage, /) -> ImprovedResponse:
+        ...
+
     def get_impl(self, name: ImplName) -> BAMLMaybePolishTextImpl:
         ...
 

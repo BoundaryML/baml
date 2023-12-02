@@ -2,21 +2,19 @@ use std::collections::HashSet;
 
 use either::Either;
 use internal_baml_parser_database::{walkers::VariantWalker, WithStaticRenames};
-use internal_baml_schema_ast::ast::WithName;
 
 use serde_json::json;
 
-use crate::generate::generate_python_client::file::clean_file_name;
+use internal_baml_schema_ast::ast::WithName;
 
 use super::{
-    file::File,
+    file::{clean_file_name, File, FileCollector},
     template::render_template,
-    traits::{JsonHelper, WithToCode, WithWritePythonString},
-    FileCollector,
+    traits::{JsonHelper, TargetLanguage, WithFileName, WithToCode},
 };
 
 impl<'db> JsonHelper for VariantWalker<'db> {
-    fn json(&self, f: &mut File) -> serde_json::Value {
+    fn json(&self, f: &mut File, lang: TargetLanguage) -> serde_json::Value {
         let func = self.walk_function().unwrap();
         let client = self.client().unwrap();
         f.add_import(
@@ -53,7 +51,7 @@ impl<'db> JsonHelper for VariantWalker<'db> {
 
         json!({
             "name": self.name(),
-            "function": func.json(f),
+            "function": func.json(f, lang),
             "prompt": prompt,
             "client": client.name(),
             "inputs": inputs,
@@ -117,7 +115,7 @@ impl<'db> JsonHelper for VariantWalker<'db> {
     }
 }
 
-impl WithWritePythonString for VariantWalker<'_> {
+impl WithFileName for VariantWalker<'_> {
     fn file_name(&self) -> String {
         format!(
             "fx_{}_impl_{}",
@@ -126,7 +124,7 @@ impl WithWritePythonString for VariantWalker<'_> {
         )
     }
 
-    fn write_py_file(&self, fc: &mut FileCollector) {
+    fn to_py_file(&self, fc: &mut FileCollector) {
         fc.start_py_file("impls", "__init__.py");
         fc.last_file().add_line(format!(
             "from .{0} import {1} as unused_{0}",
@@ -136,8 +134,17 @@ impl WithWritePythonString for VariantWalker<'_> {
         fc.complete_file();
 
         fc.start_py_file("impls", self.file_name());
-        let json = self.json(fc.last_file());
-        render_template(super::template::HSTemplate::Variant, fc.last_file(), json);
+        let json = self.json(fc.last_file(), TargetLanguage::Python);
+        render_template(
+            TargetLanguage::Python,
+            super::template::HSTemplate::Variant,
+            fc.last_file(),
+            json,
+        );
         fc.complete_file();
+    }
+
+    fn to_ts_file(&self, fc: &mut FileCollector) {
+        todo!()
     }
 }

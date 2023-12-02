@@ -1,53 +1,22 @@
-use internal_baml_schema_ast::ast::{FieldType, FunctionArg, Identifier, TypeValue};
+use internal_baml_schema_ast::ast::{FieldType, FunctionArg};
 
 use super::{file::File, traits::WithToCode};
-
-impl WithToCode for Identifier {
-    fn to_py_string(&self, f: &mut File) -> String {
-        match self {
-            Identifier::ENV(str, _) => {
-                f.add_import("os", "environ");
-                format!("environ['{}']", str)
-            }
-            Identifier::Ref(idn, _) => {
-                f.add_import(&idn.path.join("."), &idn.name);
-                idn.name.clone()
-            }
-            Identifier::Local(idn, _) => idn.into(),
-            Identifier::String(str, _) => str.into(),
-            Identifier::Primitive(p, _) => match p {
-                TypeValue::Bool => "bool",
-                TypeValue::Int => "int",
-                TypeValue::Float => "float",
-                TypeValue::Char => "str",
-                TypeValue::String => "str",
-                TypeValue::Null => "None",
-            }
-            .into(),
-            Identifier::Invalid(inv, _) => panic!("Should never show invalid: {}", inv),
-        }
-    }
-}
-
-impl WithToCode for TypeValue {
-    fn to_py_string(&self, _f: &mut File) -> String {
-        match self {
-            TypeValue::Char | TypeValue::String => "str".to_string(),
-            TypeValue::Int => "int".to_string(),
-            TypeValue::Float => "float".to_string(),
-            TypeValue::Bool => "bool".to_string(),
-            TypeValue::Null => "None".to_string(),
-        }
-    }
-}
 
 impl WithToCode for FunctionArg {
     fn to_py_string(&self, f: &mut File) -> String {
         self.field_type.to_py_string(f)
     }
+
+    fn to_ts_string(&self, f: &mut super::file::File) -> String {
+        self.field_type.to_ts_string(f)
+    }
 }
 
 impl WithToCode for FieldType {
+    fn to_ts_string(&self, f: &mut super::file::File) -> String {
+        todo!()
+    }
+
     fn to_py_string(&self, f: &mut File) -> String {
         match self {
             FieldType::Identifier(arity, idn) => {

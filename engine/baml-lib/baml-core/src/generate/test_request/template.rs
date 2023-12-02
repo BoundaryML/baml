@@ -1,6 +1,6 @@
-use crate::generate::generate_python_client::File;
-
 use handlebars::handlebars_helper;
+
+use crate::generate::generate_base::File;
 
 #[derive(Debug)]
 pub(super) enum HSTemplate {

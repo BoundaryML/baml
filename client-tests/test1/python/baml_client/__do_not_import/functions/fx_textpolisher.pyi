@@ -52,6 +52,9 @@ class IBAMLTextPolisher:
     ) -> typing.Callable[[ITextPolisher], ITextPolisher]:
         ...
 
+    async def __call__(self, arg: ProposedMessage, /) -> str:
+        ...
+
     def get_impl(self, name: ImplName) -> BAMLTextPolisherImpl:
         ...
 

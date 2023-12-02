@@ -1,6 +1,8 @@
 function Blah {
   input string
   output string
+
+  default_impl v1
 }  
 
 impl<llm, Blah> v1 {

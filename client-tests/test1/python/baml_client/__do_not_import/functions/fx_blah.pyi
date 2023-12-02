@@ -48,6 +48,9 @@ class IBAMLBlah:
     ) -> typing.Callable[[IBlah], IBlah]:
         ...
 
+    async def __call__(self, arg: str, /) -> str:
+        ...
+
     def get_impl(self, name: ImplName) -> BAMLBlahImpl:
         ...
 

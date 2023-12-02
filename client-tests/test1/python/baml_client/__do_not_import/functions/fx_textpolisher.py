@@ -41,6 +41,9 @@ class IBAMLTextPolisher(BaseBAMLFunction[str]):
             [],
         )
 
+    async def __call__(self, *args, **kwargs) -> str:
+        raise NotImplemented("No impls defined")
+
 BAMLTextPolisher = IBAMLTextPolisher()
 
 __all__ = [ "BAMLTextPolisher" ]

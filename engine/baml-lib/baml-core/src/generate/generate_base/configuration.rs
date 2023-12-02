@@ -3,16 +3,13 @@ use internal_baml_parser_database::RetryPolicyStrategy;
 use internal_baml_schema_ast::ast::{Configuration, FunctionArgs, WithName};
 use serde_json::json;
 
-use crate::generate::generate_python_client::file::clean_file_name;
-
 use super::{
-    file::FileCollector,
+    file::{clean_file_name, FileCollector},
     template::{render_template, HSTemplate},
-    traits::{JsonHelper, WithWritePythonString},
-    WithToCode,
+    traits::{JsonHelper, TargetLanguage, WithFileName, WithToCode},
 };
 
-impl WithWritePythonString for ConfigurationWalker<'_> {
+impl WithFileName for ConfigurationWalker<'_> {
     fn file_name(&self) -> String {
         clean_file_name(match self.id.1 {
             "retry_policy" => "retry_policy",
@@ -22,7 +19,7 @@ impl WithWritePythonString for ConfigurationWalker<'_> {
         })
     }
 
-    fn write_py_file<'a>(&'a self, fc: &'a mut FileCollector) {
+    fn to_py_file<'a>(&'a self, fc: &'a mut FileCollector) {
         if self.id.1 == "printer" {
             // Printers aren't generated.
             return;
@@ -36,8 +33,9 @@ impl WithWritePythonString for ConfigurationWalker<'_> {
                 fc.complete_file();
 
                 fc.start_py_file("configs", self.file_name());
-                let json = self.json(fc.last_file());
+                let json = self.json(fc.last_file(), TargetLanguage::Python);
                 render_template(
+                    TargetLanguage::Python,
                     super::template::HSTemplate::RetryPolicy,
                     fc.last_file(),
                     json,
@@ -77,7 +75,12 @@ impl WithWritePythonString for ConfigurationWalker<'_> {
                             "test_case_input": self.test_case().content.value(),
                             "test_case_type": arg.to_py_string(fc.last_file()),
                         });
-                        render_template(HSTemplate::SingleArgTestSnippet, fc.last_file(), data);
+                        render_template(
+                            TargetLanguage::Python,
+                            HSTemplate::SingleArgTestSnippet,
+                            fc.last_file(),
+                            data,
+                        );
                     }
                     FunctionArgs::Named(args) => {
                         let data = json!({
@@ -89,17 +92,26 @@ impl WithWritePythonString for ConfigurationWalker<'_> {
                                 "type": v.to_py_string(fc.last_file()),
                              })).collect::<Vec<_>>(),
                         });
-                        render_template(HSTemplate::MultiArgTestSnippet, fc.last_file(), data);
+                        render_template(
+                            TargetLanguage::Python,
+                            HSTemplate::MultiArgTestSnippet,
+                            fc.last_file(),
+                            data,
+                        );
                     }
                 }
                 fc.complete_file();
             }
         }
     }
+
+    fn to_ts_file(&self, fc: &mut FileCollector) {
+        todo!()
+    }
 }
 
 impl JsonHelper for ConfigurationWalker<'_> {
-    fn json(&self, f: &mut super::file::File) -> serde_json::Value {
+    fn json(&self, f: &mut super::file::File, lang: TargetLanguage) -> serde_json::Value {
         match self.id.1 {
             "retry_policy" => {
                 let strategy = match &self.retry_policy().strategy {

@@ -2,7 +2,7 @@ use internal_baml_parser_database::ParserDatabase;
 use internal_baml_schema_ast::ast::WithName;
 use serde_json::json;
 
-use crate::generate::generate_python_client::{FileCollector, WithToCode};
+use crate::generate::generate_base::{FileCollector, TargetLanguage, WithToCode};
 
 use super::{
     template::{render_template, HSTemplate},
@@ -34,7 +34,7 @@ impl TestRequest {
                 f.tests.iter().for_each(|t| {
                      match &t.params {
                         super::TestParam::Positional(p) => {
-                            let input_args = func.find_input_arg_by_position(0).map(|a| a.ast_arg().1.to_py_string(content)).unwrap_or("str".into());
+                            let input_args = func.find_input_arg_by_position(0).map(|a| a.ast_arg().1.to_code(content, TargetLanguage::Python)).unwrap_or("str".into());
                             render_template(
                                 HSTemplate::SingleArgTestSnippet,
                                 content,

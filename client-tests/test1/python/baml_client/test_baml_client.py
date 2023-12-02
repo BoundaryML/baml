@@ -10,7 +10,7 @@
 from .__do_not_import.generated_baml_client import baml
 from .baml_types import ClassifyResponse, IBlah, IClassifyTool, Tool
 from baml_lib._impl.deserializer import Deserializer
-from json5 import loads
+from json5 import loads # type: ignore
 
 
 @baml.Blah.test
@@ -83,3 +83,5 @@ async def test_total_amaranth(BlahImpl: IBlah):
 big fan of this\
 """)
     await BlahImpl(param)
+
+
