@@ -4,7 +4,7 @@ import { ParserDatabase, StringSpan, TestRequest } from '@baml/common'
 import { useSelections } from './hooks'
 import TypeComponent from './TypeComponent'
 import { VSCodeButton, VSCodeTextArea, VSCodeTextField } from '@vscode/webview-ui-toolkit/react'
-import { useContext, useEffect, useMemo, useState } from 'react'
+import { ChangeEvent, useContext, useEffect, useMemo, useState, FocusEvent } from 'react'
 import { vscode } from '@/utils/vscode'
 import { ASTContext } from './ASTProvider'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
@@ -12,12 +12,13 @@ import { Separator } from '@/components/ui/separator'
 import { Button } from '@/components/ui/button'
 import { Edit, Edit2, Play } from 'lucide-react'
 import { TestRunRequest } from 'vscode'
-import { RJSFSchema, UiSchema } from '@rjsf/utils'
+import { BaseInputTemplateProps, RJSFSchema, UiSchema, getInputProps } from '@rjsf/utils'
 import validator from '@rjsf/validator-ajv8'
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog'
 import Form from '@rjsf/core'
+import { getDefaultRegistry } from '@rjsf/core'
 
-const schema: RJSFSchema = {
+const testSchema: RJSFSchema = {
   title: 'Test form',
   type: 'object',
   properties: {
@@ -29,21 +30,33 @@ const schema: RJSFSchema = {
     },
   },
 }
+const {
+  templates: { BaseInputTemplate },
+} = getDefaultRegistry()
+
+function MyBaseInputTemplate(props: BaseInputTemplateProps) {
+  const customProps = {}
+  // get your custom props from where you need to
+  return <BaseInputTemplate {...props} className=" bg-vscode-input-background text-vscode-input-foreground" />
+}
 
 const uiSchema: UiSchema = {
-  name: {
-    'ui:classNames': 'custom-class-name',
+  'ui:submitButtonOptions': {
+    submitText: 'Save',
+    props: {
+      className: 'bg-vscode-button-background px-2',
+    },
   },
-  age: {
-    'ui:classNames': 'custom-class-age',
-  },
+  'ui:BaseInputTemplate': MyBaseInputTemplate,
+
+  'ui:autocomplete': 'on',
 }
 
 type Func = ParserDatabase['functions'][0]
 
 const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
   const test_cases = func?.test_cases.map((cases) => cases) ?? []
-  const { impl } = useSelections()
+  const { impl, input_json_schema } = useSelections()
 
   const getTestParams = (testCase: Func['test_cases'][0]): TestRequest['functions'][0]['tests'][0]['params'] => {
     if (func.input.arg_type === 'positional') {
@@ -117,7 +130,7 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
                 <Play size={10} />
               </Button>
               <div>{test_case.name.value}</div>
-              <EditTestCaseForm />
+              <EditTestCaseForm testCase={test_case} schema={input_json_schema} />
             </div>
             <TestCaseCard content={test_case.content} testCaseName={test_case.name.value} />
           </div>
@@ -137,7 +150,7 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
   // )
 }
 
-const EditTestCaseForm = ({}: {}) => {
+const EditTestCaseForm = ({ testCase, schema }: { testCase: Func['test_cases'][0]; schema: any }) => {
   return (
     <Dialog>
       <DialogTrigger asChild={true}>
@@ -146,7 +159,7 @@ const EditTestCaseForm = ({}: {}) => {
         </Button>
       </DialogTrigger>
       <DialogContent className="bg-vscode-editorWidget-background border-vscode-descriptionForeground">
-        <Form schema={schema} validator={validator} />
+        <Form schema={schema} validator={validator} uiSchema={uiSchema} />
       </DialogContent>
     </Dialog>
   )
