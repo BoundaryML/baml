@@ -9,6 +9,7 @@ export function useSelections() {
   const {
     db,
     test_results: test_results_raw,
+    jsonSchema,
     test_log,
     selections: { selectedFunction, selectedImpl, selectedTestCase },
   } = ctx
@@ -39,12 +40,35 @@ export function useSelections() {
     [test_results_raw, func?.name.value],
   )
 
+  const input_json_schema = useMemo(() => {
+    if (!func) return undefined
+
+    let base_schema = {
+      title: `${func.name.value} Input`,
+      ...jsonSchema,
+    }
+
+    if (func.input.arg_type === 'named') {
+      return {
+        type: 'object',
+        properties: Object.fromEntries(func.input.values.map((v) => [v.name.value, v.jsonSchema])),
+        ...base_schema,
+      }
+    } else {
+      return {
+        ...func.input.jsonSchema,
+        ...base_schema,
+      }
+    }
+  }, [func, jsonSchema])
+
   return {
     func,
     impl,
     test_case,
     test_results,
     test_log,
+    input_json_schema,
   }
 }
 

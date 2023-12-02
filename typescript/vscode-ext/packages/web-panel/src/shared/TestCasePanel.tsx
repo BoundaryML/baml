@@ -11,10 +11,11 @@ import { ASTContext } from './ASTProvider'
 type Func = ParserDatabase['functions'][0]
 
 const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
-  const { test_case } = useSelections()
+  const { test_case, input_json_schema } = useSelections()
 
   return (
     <div className="flex flex-col">
+      <pre>{JSON.stringify(input_json_schema, undefined, 2)}</pre>
       {func.input.arg_type === 'positional' ? (
         <PositionalTestCase input={func.input.type} content={test_case?.content} />
       ) : (

@@ -6,6 +6,9 @@ import React, { PropsWithChildren, createContext, useCallback, useEffect, useMem
 export const ASTContext = createContext<{
   root_path: string
   db: ParserDatabase
+  jsonSchema: {
+    definitions: { [k: string]: any }
+  }
   test_results: TestResult[]
   test_log?: string
   selections: {
@@ -25,6 +28,9 @@ export const ASTContext = createContext<{
     classes: [],
     clients: [],
     enums: [],
+  },
+  jsonSchema: {
+    definitions: {},
   },
   test_log: undefined,
   test_results: [],
@@ -78,9 +84,16 @@ export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
     if (selectedProjectId === undefined) return undefined
     let match = projects.find((project) => project.root_dir === selectedProjectId)
     if (match) {
+      let jsonSchema = {
+        definitions: Object.fromEntries([
+          ...match.db.classes.flatMap((c) => Object.entries(c.jsonSchema)),
+          ...match.db.enums.flatMap((c) => Object.entries(c.jsonSchema)),
+        ]),
+      }
       return {
         root_path: match.root_dir,
         db: match.db,
+        jsonSchema: jsonSchema,
         test_results: testResults,
         test_log: testLog,
         selections: {
