@@ -79,3 +79,19 @@
     /* @apply bg-background text-foreground; */
   }
 }
+
+.form-control {
+  @apply ml-2 bg-vscode-input-background text-vscode-input-foreground;
+}
+
+.array-item {
+  @apply text-xs text-vscode-descriptionForeground py-2;
+}
+
+.array-item-list {
+  @apply divide-y divide-vscode-descriptionForeground;
+}
+
+/* .array-item-remove::after {
+  content: 'Remove';
+} */

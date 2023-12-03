@@ -48,10 +48,10 @@ export default class TelemetryReporter {
     const isTelemetryEnabledWithNewSetting = isTelemetryEnabled && telemetryLevel && telemetryLevel === 'all'
     if (isTelemetryEnabledWithOldSetting || isTelemetryEnabledWithNewSetting) {
       this.userOptIn = true
-      console.info('Telemetry is enabled for Prisma extension')
+      console.info('Telemetry is enabled for BAML extension')
     } else {
       this.userOptIn = false
-      console.info('Telemetry is disabled for Prisma extension')
+      console.info('Telemetry is disabled for BAML extension')
     }
   }
 

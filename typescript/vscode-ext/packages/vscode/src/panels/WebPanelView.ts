@@ -190,22 +190,25 @@ export class WebPanelView {
               testCaseName: StringSpan | undefined
               params: TestRequest['functions'][0]['tests'][0]['params']
             } = message.data
+            console.log("savetestrequest", saveTestRequest);
+
+
             const uri = saveTestRequest.testCaseName?.source_file
               ? vscode.Uri.parse(saveTestRequest.testCaseName?.source_file)
               : vscode.Uri.joinPath(
-                  vscode.Uri.parse(saveTestRequest.root_path),
-                  '__tests',
-                  saveTestRequest.funcName,
-                  `${uniqueNamesGenerator(customConfig)}.json`,
-                )
+                vscode.Uri.parse(saveTestRequest.root_path),
+                '__tests',
+                saveTestRequest.funcName,
+                `${uniqueNamesGenerator(customConfig)}.json`,
+              )
             const fileContent =
               saveTestRequest.params.type === 'positional'
                 ? saveTestRequest.params.value
                 : JSON.stringify(
-                    Object.fromEntries(saveTestRequest.params.value.map((kv) => [kv.name, kv.value])),
-                    null,
-                    2,
-                  )
+                  Object.fromEntries(saveTestRequest.params.value.map((kv) => [kv.name, kv.value])),
+                  null,
+                  2,
+                )
             try {
               await vscode.workspace.fs.writeFile(uri, Buffer.from(fileContent))
               await registerFileChange(uri.toString(), 'json')
