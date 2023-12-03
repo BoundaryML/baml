@@ -2,15 +2,21 @@ import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, Tabl
 import { useSelections } from './hooks'
 import { DataTable } from './TestResults/data-table'
 import { columns } from './TestResults/columns'
-import { VSCodeLink, VSCodePanelTab, VSCodePanelView, VSCodePanels } from '@vscode/webview-ui-toolkit/react'
+import {
+  VSCodeLink,
+  VSCodePanelTab,
+  VSCodePanelView,
+  VSCodePanels,
+  VSCodeProgressRing,
+} from '@vscode/webview-ui-toolkit/react'
 import { useState } from 'react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import Link from './Link'
-import { ExternalLink } from 'lucide-react'
+import { AlertTriangle, ExternalLink, FileWarningIcon } from 'lucide-react'
 
 const TestResultPanel = () => {
-  const { test_results, test_result_url } = useSelections()
+  const { test_results, test_result_url, test_result_exit_status } = useSelections()
 
   const [selected, setSelection] = useState<string>('summary')
 
@@ -52,7 +58,12 @@ const TestResultPanel = () => {
         <VSCodePanelView id={`view-summary`}>
           <DataTable columns={columns} data={test_results} />
         </VSCodePanelView>
-        <VSCodePanelTab id={`test-logs`}>Output</VSCodePanelTab>
+        <VSCodePanelTab id={`test-logs`}>
+          <div className="flex flex-row gap-1">
+            {test_result_exit_status === undefined && <VSCodeProgressRing className="h-4" />}
+            {test_result_exit_status === 'ERROR' && <AlertTriangle className="w-4 h-4" />} Output
+          </div>
+        </VSCodePanelTab>
         <VSCodePanelView id={`view-logs`}>
           <ScrollArea type="always" className="flex w-full h-full pr-3">
             <TestLogPanel />

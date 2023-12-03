@@ -95,6 +95,14 @@ export function useSelections() {
     return func?.test_cases.find((t) => t.name.value === selectedTestCase) ?? func?.test_cases.at(0)
   }, [func, selectedTestCase])
 
+  const test_result_exit_status = useMemo(() => {
+    if (test_results_raw?.exit_code === undefined) return undefined
+    if (test_results_raw.exit_code === 0 || test_results_raw.exit_code === 1) {
+      return 'COMPLETED'
+    } else {
+      return 'ERROR'
+    }
+  }, [test_results_raw, func?.name.value])
   const test_result_url = useMemo(() => {
     if (!test_results_raw) return undefined
     if (test_results_raw.test_url) {
@@ -103,6 +111,7 @@ export function useSelections() {
       return { text: 'Learn how to persist runs', url: 'https://docs.boundaryml.com' }
     }
   }, [test_results_raw, func?.name.value])
+
   const test_results = useMemo(
     () => test_results_raw?.results.filter((tr) => tr.functionName == func?.name.value),
     [test_results_raw, func?.name.value],
@@ -140,6 +149,7 @@ export function useSelections() {
     test_case,
     test_results,
     test_result_url,
+    test_result_exit_status,
     test_log,
     input_json_schema,
   }

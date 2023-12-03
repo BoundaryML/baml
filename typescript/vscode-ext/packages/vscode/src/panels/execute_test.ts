@@ -118,6 +118,12 @@ class TestState {
         break
     }
   }
+
+  public setExitCode(code: number | null) {
+    this.test_results.exit_code = code ?? 5
+    this.testStateListener?.(this.test_results)
+  }
+
   public getTestResults() {
     return this.test_results
   }
@@ -242,6 +248,10 @@ class TestExecutor {
     cp.stderr?.on('data', (data) => {
       outputChannel.appendLine(data)
       this.stdoutListener?.(data)
+    })
+
+    cp.on('exit', (code, signal) => {
+      this.testState.setExitCode(code ?? (signal ? 3 : 5))
     })
   }
 
