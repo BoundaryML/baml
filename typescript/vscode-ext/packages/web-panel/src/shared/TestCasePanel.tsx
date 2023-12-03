@@ -300,7 +300,7 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
                   tests: test_cases.map((test_case) => ({
                     name: test_case.name.value,
                     params: getTestParams(test_case),
-                    impls: impl ? [impl.name.value] : [],
+                    impls: func.impls.map((i) => i.name.value),
                   })),
                 },
               ],
