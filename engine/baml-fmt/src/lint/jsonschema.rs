@@ -77,7 +77,17 @@ impl WithJsonSchema for FieldType {
                 }
             }),
             FieldType::Union(_, t, _) => json!({
-                "anyOf": t.iter().map(|t| t.json_schema()).collect::<Vec<_>>(),
+                "anyOf": t.iter().map(|t| {
+                    let res = t.json_schema();
+                    // if res is a map, add a "title" field
+                    if let Value::Object(res) = &res {
+                        let mut res = res.clone();
+                        res.insert("title".to_string(), json!(t.to_string()));
+                        return json!(res);
+                    }
+                    res
+                }
+            ).collect::<Vec<_>>(),
             }),
             FieldType::Tuple(_, t, _) => json!({
                 "type": "array",
