@@ -1,5 +1,5 @@
 import CustomErrorBoundary from '@/utils/ErrorFallback'
-import { ParserDatabase, TestResult } from '@baml/common'
+import { ParserDatabase, TestState } from '@baml/common'
 import { VSCodeButton } from '@vscode/webview-ui-toolkit/react'
 import React, { PropsWithChildren, createContext, useCallback, useEffect, useMemo, useState } from 'react'
 
@@ -9,7 +9,7 @@ export const ASTContext = createContext<{
   jsonSchema: {
     definitions: { [k: string]: any }
   }
-  test_results: TestResult[]
+  test_results?: TestState
   test_log?: string
   selections: {
     selectedFunction: string | undefined
@@ -33,7 +33,7 @@ export const ASTContext = createContext<{
     definitions: {},
   },
   test_log: undefined,
-  test_results: [],
+  test_results: undefined,
   selections: {
     selectedFunction: undefined,
     selectedImpl: undefined,
@@ -76,7 +76,7 @@ function useSelectionSetup() {
 export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
   const [projects, setProjects] = useState<{ root_dir: string; db: ParserDatabase }[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>(undefined)
-  const [testResults, setTestResults] = useState<TestResult[]>([])
+  const [testResults, setTestResults] = useState<TestState | undefined>(undefined)
   const { selectedFunction, selectedImpl, selectedTestCase, setSelection } = useSelectionSetup()
   const [testLog, setTestLog] = useState<string | undefined>(undefined)
 
@@ -143,7 +143,7 @@ export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
           break
         }
         case 'test-results': {
-          setTestResults(messageContent as TestResult[])
+          setTestResults(messageContent as TestState)
           break
         }
       }

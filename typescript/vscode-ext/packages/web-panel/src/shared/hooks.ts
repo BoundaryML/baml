@@ -1,17 +1,14 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { ASTContext } from './ASTProvider'
 
-
 type JSONSchema = {
-  [key: string]: any;
-  definitions?: { [key: string]: any };
-};
-
-
+  [key: string]: any
+  definitions?: { [key: string]: any }
+}
 
 function removeUnreferencedDefinitions(schema: JSONSchema): JSONSchema {
   if (!schema || typeof schema !== 'object' || !schema.definitions) {
-    return schema;
+    return schema
   }
 
   // Function to collect references from a given object
@@ -20,48 +17,48 @@ function removeUnreferencedDefinitions(schema: JSONSchema): JSONSchema {
       for (const key of Object.keys(obj)) {
         if (key === '$ref' && typeof obj[key] === 'string') {
           // Extract and store the reference
-          const ref = obj[key].replace('#/definitions/', '');
-          refs.add(ref);
+          const ref = obj[key].replace('#/definitions/', '')
+          refs.add(ref)
         } else {
           // Recursively collect references from nested objects
-          collectRefs(obj[key], refs);
+          collectRefs(obj[key], refs)
         }
       }
     }
   }
 
   // Initialize a set to keep track of all referenced definitions
-  const referencedDefs = new Set<string>();
+  const referencedDefs = new Set<string>()
 
   // Collect references from the entire schema, excluding the definitions object itself
-  collectRefs({ ...schema, definitions: {} }, referencedDefs);
+  collectRefs({ ...schema, definitions: {} }, referencedDefs)
 
   // Iterate over the definitions to find and include indirectly referenced definitions
-  let newlyAdded: boolean;
+  let newlyAdded: boolean
   do {
-    newlyAdded = false;
+    newlyAdded = false
     for (const def of Object.keys(schema.definitions)) {
       if (referencedDefs.has(def)) {
-        const initialSize = referencedDefs.size;
-        collectRefs(schema.definitions[def], referencedDefs);
+        const initialSize = referencedDefs.size
+        collectRefs(schema.definitions[def], referencedDefs)
         if (referencedDefs.size > initialSize) {
-          newlyAdded = true;
+          newlyAdded = true
         }
       }
     }
-  } while (newlyAdded);
+  } while (newlyAdded)
 
   // Filter out definitions that are not referenced
   const newDefinitions = Object.keys(schema.definitions)
-    .filter(def => referencedDefs.has(def))
+    .filter((def) => referencedDefs.has(def))
     .reduce((newDefs, def) => {
       if (schema.definitions) {
-        newDefs[def] = schema.definitions[def];
+        newDefs[def] = schema.definitions[def]
       }
-      return newDefs;
-    }, {} as { [key: string]: any });
+      return newDefs
+    }, {} as { [key: string]: any })
 
-  return { ...schema, definitions: newDefinitions };
+  return { ...schema, definitions: newDefinitions }
 }
 export function useSelections() {
   const ctx = useContext(ASTContext)
@@ -97,8 +94,17 @@ export function useSelections() {
     }
     return func?.test_cases.find((t) => t.name.value === selectedTestCase) ?? func?.test_cases.at(0)
   }, [func, selectedTestCase])
+
+  const test_result_url = useMemo(() => {
+    if (!test_results_raw) return undefined
+    if (test_results_raw.test_url) {
+      return { text: 'Dashboard', url: test_results_raw.test_url }
+    } else {
+      return { text: 'Learn how to persist runs', url: 'https://docs.boundaryml.com' }
+    }
+  }, [test_results_raw, func?.name.value])
   const test_results = useMemo(
-    () => test_results_raw.filter((tr) => tr.functionName == func?.name.value),
+    () => test_results_raw?.results.filter((tr) => tr.functionName == func?.name.value),
     [test_results_raw, func?.name.value],
   )
 
@@ -110,7 +116,7 @@ export function useSelections() {
       ...jsonSchema,
     }
 
-    let merged_schema = {};
+    let merged_schema = {}
 
     if (func.input.arg_type === 'named') {
       merged_schema = {
@@ -125,7 +131,7 @@ export function useSelections() {
       }
     }
 
-    return removeUnreferencedDefinitions(merged_schema);
+    return removeUnreferencedDefinitions(merged_schema)
   }, [func, jsonSchema])
 
   return {
@@ -133,6 +139,7 @@ export function useSelections() {
     impl,
     test_case,
     test_results,
+    test_result_url,
     test_log,
     input_json_schema,
   }

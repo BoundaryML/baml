@@ -2,37 +2,64 @@ import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, Tabl
 import { useSelections } from './hooks'
 import { DataTable } from './TestResults/data-table'
 import { columns } from './TestResults/columns'
-import { VSCodePanelTab, VSCodePanelView, VSCodePanels } from '@vscode/webview-ui-toolkit/react'
+import { VSCodeLink, VSCodePanelTab, VSCodePanelView, VSCodePanels } from '@vscode/webview-ui-toolkit/react'
 import { useState } from 'react'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Button } from '@/components/ui/button'
+import Link from './Link'
+import { ExternalLink } from 'lucide-react'
 
 const TestResultPanel = () => {
-  const { test_results } = useSelections()
+  const { test_results, test_result_url } = useSelections()
 
   const [selected, setSelection] = useState<string>('summary')
 
+  if (!test_results) {
+    return (
+      <>
+        <div className="flex flex-col items-center justify-center">
+          <div className="flex flex-col items-center justify-center space-y-2">
+            <div className="text-2xl font-semibold">No test results for this function</div>
+            <div className="text-sm font-light">Run tests to see results</div>
+          </div>
+        </div>
+      </>
+    )
+  }
+
   return (
-    <VSCodePanels
-      activeid={`test-${selected}`}
-      onChange={(e) => {
-        const selected: string | undefined = (e.target as any)?.activetab?.id
-        if (selected && selected.startsWith(`test-`)) {
-          setSelection(selected.split('-', 2)[1])
-        }
-      }}
-      className="h-full"
-    >
-      <VSCodePanelTab id={`test-summary`}>Summary</VSCodePanelTab>
-      <VSCodePanelView id={`view-summary`}>
-        <DataTable columns={columns} data={test_results} />
-      </VSCodePanelView>
-      <VSCodePanelTab id={`test-logs`}>Output</VSCodePanelTab>
-      <VSCodePanelView id={`view-logs`}>
-        <ScrollArea type="always" className="flex w-full h-full pr-3">
-          <TestLogPanel />
-        </ScrollArea>
-      </VSCodePanelView>
-    </VSCodePanels>
+    <>
+      {test_result_url && (
+        <div className="flex flex-row justify-center bg-vscode-menu-background items-center w-full">
+          <VSCodeLink href={test_result_url.url}>
+            <div className="flex flex-row gap-1 py-1">
+              {test_result_url.text} <ExternalLink className="w-4 h-4" />
+            </div>
+          </VSCodeLink>
+        </div>
+      )}
+      <VSCodePanels
+        activeid={`test-${selected}`}
+        onChange={(e) => {
+          const selected: string | undefined = (e.target as any)?.activetab?.id
+          if (selected && selected.startsWith(`test-`)) {
+            setSelection(selected.split('-', 2)[1])
+          }
+        }}
+        className="h-full"
+      >
+        <VSCodePanelTab id={`test-summary`}>Summary</VSCodePanelTab>
+        <VSCodePanelView id={`view-summary`}>
+          <DataTable columns={columns} data={test_results} />
+        </VSCodePanelView>
+        <VSCodePanelTab id={`test-logs`}>Output</VSCodePanelTab>
+        <VSCodePanelView id={`view-logs`}>
+          <ScrollArea type="always" className="flex w-full h-full pr-3">
+            <TestLogPanel />
+          </ScrollArea>
+        </VSCodePanelView>
+      </VSCodePanels>
+    </>
   )
 }
 
