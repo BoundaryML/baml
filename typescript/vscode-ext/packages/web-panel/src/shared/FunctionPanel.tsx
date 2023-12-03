@@ -26,7 +26,7 @@ const FunctionPanel: React.FC<{ showTests: boolean }> = ({ showTests }) => {
     <div
       className="flex flex-col w-full overflow-auto"
       style={{
-        height: 'calc(100vh - 70px)',
+        height: 'calc(100vh - 80px)',
       }}
     >
       {/* <Allotment vertical> */}

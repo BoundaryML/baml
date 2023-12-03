@@ -114,12 +114,10 @@ const Snippet: React.FC<{ text: string }> = ({ text }) => {
           Whitespace
         </VSCodeCheckbox>
       </div>
-      <pre className="w-full p-1 overflow-y-scroll text-xs bg-vscode-input-background">
-        <code>
-          {lines.map((line, index) => (
-            <CodeLine key={index} line={line} number={index + 1} showWhitespace={showWhitespace} wrapText={wrapText} />
-          ))}
-        </code>
+      <pre className="w-full p-1 text-xs bg-vscode-input-background text-yellow-200">
+        {lines.map((line, index) => (
+          <CodeLine key={index} line={line} number={index + 1} showWhitespace={showWhitespace} wrapText={wrapText} />
+        ))}
       </pre>
     </div>
   )
