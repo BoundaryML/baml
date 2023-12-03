@@ -25,7 +25,7 @@ macro_rules! include_template {
             $type,
             "/",
             $file,
-            ".hb"
+            ".hbs"
         ))
     };
 }

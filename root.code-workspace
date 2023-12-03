@@ -24,6 +24,10 @@
       "path": "client-tests/test1/python"
     },
     {
+      "name": "test1/typescript",
+      "path": "client-tests/test1/typescript"
+    },
+    {
       "path": ".github"
     },
     {
@@ -56,6 +60,8 @@
     ]
   },
   "extensions": {
-    "recommendations": ["xaver.clang-format"]
+    "recommendations": [
+      "xaver.clang-format"
+    ]
   }
 }

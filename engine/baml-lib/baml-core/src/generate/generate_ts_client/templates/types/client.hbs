@@ -1,0 +1,11 @@
+const {{name}} = LLMManager.add_llm({{{ BLOCK_OPEN }}}
+    name: "{{{name}}}",
+    {{#each kwargs as |value key|}}
+    {{key}}: {{{value}}},
+    {{/each}}
+    options: {{{ BLOCK_OPEN }}}
+        {{#each options}}
+        {{key}}: {{{value}}},
+        {{/each}}
+    {{{ BLOCK_CLOSE }}},
+{{{ BLOCK_CLOSE }}})

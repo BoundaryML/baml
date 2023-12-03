@@ -9,7 +9,7 @@ use internal_baml_schema_ast::ast::WithName;
 
 use super::{
     file::{clean_file_name, File, FileCollector},
-    template::render_template,
+    template::{render_template, HSTemplate},
     traits::{JsonHelper, TargetLanguage, WithFileName, WithToCode},
 };
 
@@ -125,6 +125,7 @@ impl WithFileName for VariantWalker<'_> {
     }
 
     fn to_py_file(&self, fc: &mut FileCollector) {
+        let lang = TargetLanguage::Python;
         fc.start_py_file("impls", "__init__.py");
         fc.last_file().add_line(format!(
             "from .{0} import {1} as unused_{0}",
@@ -134,17 +135,16 @@ impl WithFileName for VariantWalker<'_> {
         fc.complete_file();
 
         fc.start_py_file("impls", self.file_name());
-        let json = self.json(fc.last_file(), TargetLanguage::Python);
-        render_template(
-            TargetLanguage::Python,
-            super::template::HSTemplate::Variant,
-            fc.last_file(),
-            json,
-        );
+        let json = self.json(fc.last_file(), lang);
+        render_template(lang, HSTemplate::Variant, fc.last_file(), json);
         fc.complete_file();
     }
 
     fn to_ts_file(&self, fc: &mut FileCollector) {
-        todo!()
+        let lang = TargetLanguage::TypeScript;
+        fc.start_ts_file("impls", self.file_name());
+        let json = self.json(fc.last_file(), lang);
+        render_template(lang, HSTemplate::Variant, fc.last_file(), json);
+        fc.complete_file();
     }
 }

@@ -20,6 +20,7 @@ impl WithFileName for ConfigurationWalker<'_> {
     }
 
     fn to_py_file<'a>(&'a self, fc: &'a mut FileCollector) {
+        let language = TargetLanguage::Python;
         if self.id.1 == "printer" {
             // Printers aren't generated.
             return;
@@ -33,9 +34,9 @@ impl WithFileName for ConfigurationWalker<'_> {
                 fc.complete_file();
 
                 fc.start_py_file("configs", self.file_name());
-                let json = self.json(fc.last_file(), TargetLanguage::Python);
+                let json = self.json(fc.last_file(), language);
                 render_template(
-                    TargetLanguage::Python,
+                    language,
                     super::template::HSTemplate::RetryPolicy,
                     fc.last_file(),
                     json,
@@ -44,7 +45,7 @@ impl WithFileName for ConfigurationWalker<'_> {
             }
             Configuration::Printer(_) => {}
             Configuration::TestCase(tc) => {
-                fc.start_export_file(".", "test_baml_client");
+                fc.start_export_py_file(".", "test_baml_client");
 
                 let func = self.walk_function();
 
@@ -73,10 +74,10 @@ impl WithFileName for ConfigurationWalker<'_> {
                             "function_name": func.name(),
                             "test_case_name": tc.name(),
                             "test_case_input": self.test_case().content.value(),
-                            "test_case_type": arg.to_py_string(fc.last_file()),
+                            "test_case_type": arg.to_code(fc.last_file(), language),
                         });
                         render_template(
-                            TargetLanguage::Python,
+                            language,
                             HSTemplate::SingleArgTestSnippet,
                             fc.last_file(),
                             data,
@@ -89,11 +90,11 @@ impl WithFileName for ConfigurationWalker<'_> {
                             "test_case_input": self.test_case().content.value(),
                             "test_case_types": args.args.iter().map(|(k, v)| json!({
                                 "name": k.name(),
-                                "type": v.to_py_string(fc.last_file()),
+                                "type": v.to_code(fc.last_file(), language),
                              })).collect::<Vec<_>>(),
                         });
                         render_template(
-                            TargetLanguage::Python,
+                            language,
                             HSTemplate::MultiArgTestSnippet,
                             fc.last_file(),
                             data,
@@ -106,7 +107,85 @@ impl WithFileName for ConfigurationWalker<'_> {
     }
 
     fn to_ts_file(&self, fc: &mut FileCollector) {
-        todo!()
+        let language = TargetLanguage::TypeScript;
+        if self.id.1 == "printer" {
+            // Printers aren't generated.
+            return;
+        }
+
+        match self.ast_node() {
+            Configuration::RetryPolicy(_) => {
+                fc.start_ts_file("configs", self.file_name());
+                let json = self.json(fc.last_file(), language);
+                render_template(
+                    language,
+                    super::template::HSTemplate::RetryPolicy,
+                    fc.last_file(),
+                    json,
+                );
+                fc.complete_file();
+            }
+            Configuration::Printer(_) => {}
+            Configuration::TestCase(tc) => {
+                fc.start_export_ts_file(".", "test_baml_client");
+
+                let func = self.walk_function();
+
+                func.walk_input_args().for_each(|arg| {
+                    arg.required_classes().for_each(|class| {
+                        fc.last_file().add_import(".baml_types", class.name());
+                    });
+                    arg.required_enums().for_each(|enum_| {
+                        fc.last_file().add_import(".baml_types", enum_.name());
+                    });
+                });
+                func.walk_output_args().for_each(|arg| {
+                    arg.required_classes().for_each(|class| {
+                        fc.last_file().add_import(".baml_types", class.name());
+                    });
+                    arg.required_enums().for_each(|enum_| {
+                        fc.last_file().add_import(".baml_types", enum_.name());
+                    });
+                });
+                fc.last_file()
+                    .add_import(".baml_types", &format!("I{}", func.name()));
+
+                match func.ast_function().input() {
+                    FunctionArgs::Unnamed(arg) => {
+                        let data = json!({
+                            "function_name": func.name(),
+                            "test_case_name": tc.name(),
+                            "test_case_input": self.test_case().content.value(),
+                            "test_case_type": arg.to_code(fc.last_file(), language),
+                        });
+                        render_template(
+                            language,
+                            HSTemplate::SingleArgTestSnippet,
+                            fc.last_file(),
+                            data,
+                        );
+                    }
+                    FunctionArgs::Named(args) => {
+                        let data = json!({
+                            "function_name": func.name(),
+                            "test_case_name": tc.name(),
+                            "test_case_input": self.test_case().content.value(),
+                            "test_case_types": args.args.iter().map(|(k, v)| json!({
+                                "name": k.name(),
+                                "type": v.to_code(fc.last_file(), language),
+                             })).collect::<Vec<_>>(),
+                        });
+                        render_template(
+                            language,
+                            HSTemplate::MultiArgTestSnippet,
+                            fc.last_file(),
+                            data,
+                        );
+                    }
+                }
+                fc.complete_file();
+            }
+        }
     }
 }
 

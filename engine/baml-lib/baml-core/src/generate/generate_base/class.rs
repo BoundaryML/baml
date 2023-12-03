@@ -7,7 +7,7 @@ use serde_json::json;
 
 use super::{
     file::{clean_file_name, File, FileCollector},
-    template::render_template,
+    template::{render_template, HSTemplate},
     traits::{JsonHelper, TargetLanguage, WithFileName, WithToCode},
 };
 
@@ -17,6 +17,7 @@ impl WithFileName for ClassWalker<'_> {
     }
 
     fn to_py_file(&self, fc: &mut FileCollector) {
+        let language = TargetLanguage::Python;
         fc.start_py_file("types/classes", "__init__");
         fc.complete_file();
         fc.start_py_file("types", "__init__");
@@ -34,18 +35,26 @@ impl WithFileName for ClassWalker<'_> {
             fc.last_file()
                 .add_import(&format!("..enums.{}", f.file_name()), f.name());
         });
-        let json = self.json(fc.last_file(), TargetLanguage::Python);
-        render_template(
-            TargetLanguage::Python,
-            super::template::HSTemplate::Class,
-            fc.last_file(),
-            json,
-        );
+        let json = self.json(fc.last_file(), language);
+        render_template(language, HSTemplate::Class, fc.last_file(), json);
         fc.complete_file();
     }
 
     fn to_ts_file(&self, fc: &mut FileCollector) {
-        todo!()
+        let language = TargetLanguage::TypeScript;
+        fc.start_ts_file("types/classes", self.file_name());
+
+        self.required_classes().for_each(|f| {
+            fc.last_file()
+                .add_import(&format!(".{}", f.file_name()), f.name());
+        });
+        self.required_enums().for_each(|f| {
+            fc.last_file()
+                .add_import(&format!("..enums.{}", f.file_name()), f.name());
+        });
+        let json = self.json(fc.last_file(), language);
+        render_template(language, HSTemplate::Class, fc.last_file(), json);
+        fc.complete_file();
     }
 }
 

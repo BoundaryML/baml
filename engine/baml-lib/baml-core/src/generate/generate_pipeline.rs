@@ -22,7 +22,7 @@ fn generate(
 
     info!("Writing files to {}", gen.output.to_string_lossy());
     let temp_path = PathBuf::from(format!("{}.tmp", &gen.output.to_string_lossy().to_string()));
-    match fc.write(&temp_path, gen, lock) {
+    match fc.write(&temp_path, gen, lock, language) {
         Ok(_) => {
             let _ = std::fs::remove_dir_all(&gen.output);
             std::fs::rename(&temp_path, &gen.output)
@@ -41,6 +41,7 @@ pub(crate) fn generate_pipeline(
 ) -> std::io::Result<()> {
     let lang = match gen.language.as_str() {
         "python" => TargetLanguage::Python,
+        "typescript" => TargetLanguage::TypeScript,
         _ => unreachable!("Unsupported generator language"),
     };
     generate(db, lang, gen, lock)

@@ -8,7 +8,7 @@ use crate::generate::generate_base::traits::WithToObject;
 
 use super::file::clean_file_name;
 
-use super::template::render_template;
+use super::template::{render_template, HSTemplate};
 use super::traits::{TargetLanguage, WithFileName};
 use super::{file::File, traits::JsonHelper};
 
@@ -84,21 +84,21 @@ impl WithFileName for ClientWalker<'_> {
     }
 
     fn to_py_file(&self, fc: &mut super::file::FileCollector) {
+        let language = TargetLanguage::Python;
         fc.start_py_file("clients", "__init__");
         fc.complete_file();
 
         fc.start_py_file("clients", self.file_name());
-        let json = self.json(fc.last_file(), TargetLanguage::Python);
-        render_template(
-            TargetLanguage::Python,
-            super::template::HSTemplate::Client,
-            fc.last_file(),
-            json,
-        );
+        let json = self.json(fc.last_file(), language);
+        render_template(language, HSTemplate::Client, fc.last_file(), json);
         fc.complete_file();
     }
 
     fn to_ts_file(&self, fc: &mut super::file::FileCollector) {
-        todo!()
+        let language = TargetLanguage::TypeScript;
+        fc.start_ts_file("clients", self.file_name());
+        let json = self.json(fc.last_file(), language);
+        render_template(language, HSTemplate::Client, fc.last_file(), json);
+        fc.complete_file();
     }
 }
