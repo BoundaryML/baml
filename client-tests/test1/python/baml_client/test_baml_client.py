@@ -85,6 +85,9 @@ async def test_sample_test(MessageSimplifierImpl: IMessageSimplifier):
     {
       "sender": "AI",
       "body": "Hey man hows it going would you please fix my garage door etc etc etc"
+    },
+    {
+      "sender": "AI"
     }
   ]
 }\

@@ -6,7 +6,7 @@ import { StringSpan, TestRequest } from '@baml/common'
 import testExecutor from './execute_test'
 
 import { uniqueNamesGenerator, Config, adjectives, colors, animals } from 'unique-names-generator'
-import { registerFileChange } from '../plugins/language-server'
+import { BamlDB, registerFileChange } from '../plugins/language-server'
 
 const customConfig: Config = {
   dictionaries: [adjectives, colors, animals],
@@ -190,9 +190,6 @@ export class WebPanelView {
               testCaseName: StringSpan | undefined
               params: TestRequest['functions'][0]['tests'][0]['params']
             } = message.data
-            console.log("savetestrequest", saveTestRequest);
-
-
             const uri = saveTestRequest.testCaseName?.source_file
               ? vscode.Uri.parse(saveTestRequest.testCaseName?.source_file)
               : vscode.Uri.joinPath(
@@ -212,6 +209,9 @@ export class WebPanelView {
             try {
               await vscode.workspace.fs.writeFile(uri, Buffer.from(fileContent))
               await registerFileChange(uri.toString(), 'json')
+              WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
+
+
             } catch (e: any) {
               console.log(e)
             }

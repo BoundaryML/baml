@@ -251,7 +251,6 @@ type Func = ParserDatabase['functions'][0]
 
 const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
   const test_cases = func?.test_cases.map((cases) => cases) ?? []
-  console.log('test_cases', test_cases)
   const { impl, input_json_schema } = useSelections()
 
   const getTestParams = (testCase: Func['test_cases'][0]): TestRequest['functions'][0]['tests'][0]['params'] => {
@@ -283,19 +282,29 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
         <VSCodeTextField placeholder="Search test cases" />
         <VSCodeButton
           onClick={() => {
-            // vscode.postMessage({
-            //   command: 'addTestCase',
-            //   data: {
-            //     funcName: func.name.value,
-            //   },
-            // })
+            const runTestRequest: TestRequest = {
+              functions: [
+                {
+                  name: func.name.value,
+                  tests: test_cases.map((test_case) => ({
+                    name: test_case.name.value,
+                    params: getTestParams(test_case),
+                    impls: impl ? [impl.name.value] : [],
+                  })),
+                },
+              ],
+            }
+            vscode.postMessage({
+              command: 'runTest',
+              data: runTestRequest,
+            })
           }}
         >
           Run all tests
         </VSCodeButton>
       </div>
       <div className="flex flex-col py-4 divide-y gap-y-4 divide-vscode-descriptionForeground">
-        {/* <pre>{JSON.stringify(input_json_schema, null, 2)}</pre> */}
+        <pre>{JSON.stringify(input_json_schema, null, 2)}</pre>
         {test_cases.map((test_case) => (
           <div key={test_case.name.value}>
             <div className="flex flex-row items-center gap-x-1">
@@ -365,6 +374,16 @@ const EditTestCaseForm = ({
 }) => {
   const { root_path } = useContext(ASTContext)
 
+  // TODO, actually fix this for named args
+  const formData = useMemo(() => {
+    try {
+      return JSON.parse(testCase.content)
+    } catch (e) {
+      console.log('Error parsing data\n' + testCase.content, e)
+      return testCase.content
+    }
+  }, [testCase.content])
+
   return (
     <Dialog>
       <DialogTrigger asChild={true}>
@@ -375,7 +394,7 @@ const EditTestCaseForm = ({
       <DialogContent className="max-h-screen overflow-y-scroll bg-vscode-editorWidget-background border-vscode-descriptionForeground">
         <Form
           schema={schema}
-          formData={JSON.parse(testCase.content)}
+          formData={formData}
           validator={validator}
           uiSchema={uiSchema}
           // widgets={widgets}

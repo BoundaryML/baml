@@ -125,6 +125,7 @@ export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
           }
         }
         case 'setDb': {
+          console.log('parser db updated', messageContent)
           setProjects(messageContent.map((p: any) => ({ root_dir: p[0], db: p[1] })))
           break
         }

@@ -35,7 +35,11 @@ const TestResultPanel = () => {
 const TestLogPanel = () => {
   const { test_log } = useSelections()
 
-  return <pre className="w-full">{test_log}</pre>
+  return (
+    <div className="h-full overflow-auto">
+      <pre className="w-full whitespace-break-spaces">{test_log}</pre>
+    </div>
+  )
 }
 
 export default TestResultPanel
