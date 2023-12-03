@@ -1,17 +1,10 @@
 /// Content once a function has been selected.
 
-import { ParserDatabase, StringSpan, TestRequest } from '@baml/common'
-import { useSelections } from './hooks'
-import TypeComponent from './TypeComponent'
-import { VSCodeButton, VSCodeTextArea, VSCodeTextField } from '@vscode/webview-ui-toolkit/react'
-import { ChangeEvent, useContext, useEffect, useMemo, useState, FocusEvent, useCallback } from 'react'
-import { vscode } from '@/utils/vscode'
-import { ASTContext } from './ASTProvider'
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
-import { Separator } from '@/components/ui/separator'
 import { Button } from '@/components/ui/button'
-import { Edit, Edit2, Play, PlusIcon, X } from 'lucide-react'
-import { TestRunRequest } from 'vscode'
+import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog'
+import { vscode } from '@/utils/vscode'
+import { ParserDatabase, StringSpan, TestRequest } from '@baml/common'
+import Form, { getDefaultRegistry } from '@rjsf/core'
 import {
   ArrayFieldTemplateItemType,
   ArrayFieldTitleProps,
@@ -27,9 +20,12 @@ import {
   titleId,
 } from '@rjsf/utils'
 import validator from '@rjsf/validator-ajv8'
-import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog'
-import Form from '@rjsf/core'
-import { getDefaultRegistry } from '@rjsf/core'
+import { VSCodeButton, VSCodeTextArea, VSCodeTextField } from '@vscode/webview-ui-toolkit/react'
+import { Edit2, Play, PlusIcon, X } from 'lucide-react'
+import { ChangeEvent, FocusEvent, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { ASTContext } from './ASTProvider'
+import TypeComponent from './TypeComponent'
+import { useSelections } from './hooks'
 
 const testSchema: RJSFSchema = {
   title: 'Test form',
@@ -45,7 +41,6 @@ const testSchema: RJSFSchema = {
 }
 const {
   templates: { BaseInputTemplate, FieldTemplate, ButtonTemplates },
-  widgets,
 } = getDefaultRegistry()
 
 function MyBaseInputTemplate(props: BaseInputTemplateProps) {
@@ -268,7 +263,12 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
       let parsed = JSON.parse(testCase.content)
       let contentMap = new Map<string, string>()
       if (typeof parsed === 'object') {
-        contentMap = new Map(Object.entries(parsed).map(([k, v]) => [k, JSON.stringify(v, null, 2)]))
+        contentMap = new Map(
+          Object.entries(parsed).map(([k, v]) => {
+            if (typeof v === 'string') return [k, v]
+            return [k, JSON.stringify(v, null, 2)]
+          }),
+        )
       }
       return {
         type: 'named',
@@ -384,8 +384,10 @@ const EditTestCaseForm = ({
     }
   }, [testCase.content])
 
+  const [showForm, setShowForm] = useState(false)
+
   return (
-    <Dialog>
+    <Dialog open={showForm} onOpenChange={setShowForm}>
       <DialogTrigger asChild={true}>
         <Button variant={'ghost'} size="icon" className="p-1 w-fit h-fit">
           <Edit2 className="w-3 h-3 text-vscode-descriptionForeground" />
@@ -397,7 +399,6 @@ const EditTestCaseForm = ({
           formData={formData}
           validator={validator}
           uiSchema={uiSchema}
-          // widgets={widgets}
           templates={{
             BaseInputTemplate: MyBaseInputTemplate,
             FieldTemplate: MyFieldTemplate,
@@ -422,6 +423,7 @@ const EditTestCaseForm = ({
                 }),
               },
             })
+            setShowForm(false)
           }}
         />
       </DialogContent>

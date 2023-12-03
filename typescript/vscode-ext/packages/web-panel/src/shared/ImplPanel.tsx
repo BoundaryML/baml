@@ -20,7 +20,7 @@ import clsx from 'clsx'
 type Impl = ParserDatabase['functions'][0]['impls'][0]
 
 const Whitespace: React.FC<{ char: 'space' | 'tab' }> = ({ char }) => (
-  <span className="text-blue-500 opacity-75">{char === 'space' ? <>&middot;</> : <>&rarr;</>}</span>
+  <span className="opacity-50 text-vscode-descriptionForeground">{char === 'space' ? <>&middot;</> : <>&rarr;</>}</span>
 )
 
 const InvisibleUtf: React.FC<{ text: string }> = ({ text }) => (
@@ -114,7 +114,7 @@ const Snippet: React.FC<{ text: string }> = ({ text }) => {
           Whitespace
         </VSCodeCheckbox>
       </div>
-      <pre className="w-full p-1 text-xs bg-vscode-input-background text-yellow-200">
+      <pre className="w-full p-1 text-xs bg-vscode-input-background text-vscode-textPreformat-foreground">
         {lines.map((line, index) => (
           <CodeLine key={index} line={line} number={index + 1} showWhitespace={showWhitespace} wrapText={wrapText} />
         ))}

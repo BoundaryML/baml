@@ -198,6 +198,7 @@ export class WebPanelView {
                 saveTestRequest.funcName,
                 `${uniqueNamesGenerator(customConfig)}.json`,
               )
+            console.log("paramss", JSON.stringify(saveTestRequest.params, null, 2));
             const fileContent =
               saveTestRequest.params.type === 'positional'
                 ? saveTestRequest.params.value
