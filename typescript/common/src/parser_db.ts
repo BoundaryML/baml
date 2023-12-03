@@ -19,11 +19,14 @@ interface SEnum {
   jsonSchema: Record<string, any>
 }
 
-export interface StringSpan {
-  value: string
+interface Span {
   start: number
   end: number
   source_file: string
+}
+
+export interface StringSpan extends Span {
+  value: string
 }
 
 export type ArgType =
@@ -44,6 +47,7 @@ export type ArgType =
 interface Impl {
   type: 'llm'
   name: StringSpan
+  prompt_key: Span
   prompt: string
   input_replacers: { key: string; value: string }[]
   output_replacers: { key: string; value: string }[]

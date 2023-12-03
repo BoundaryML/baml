@@ -41,6 +41,7 @@ export class GlooCodeLensProvider implements vscode.CodeLensProvider {
             start: i.name.start,
             end: i.name.end,
             source_file: i.name.source_file,
+            prompt_key: i.prompt_key,
             function: f.name.value,
           }
         }),
@@ -48,18 +49,33 @@ export class GlooCodeLensProvider implements vscode.CodeLensProvider {
       .filter((x) => x.source_file === document.uri.toString())
 
     implNames.forEach((name) => {
-      const range = new vscode.Range(document.positionAt(name.start), document.positionAt(name.end))
-      const command: vscode.Command = {
-        title: '▶️ Open Playground',
-        command: 'baml.openBamlPanel',
-        arguments: [
+      codeLenses.push(
+        new vscode.CodeLens(new vscode.Range(document.positionAt(name.start), document.positionAt(name.end)), {
+          title: '▶️ Open Playground',
+          command: 'baml.openBamlPanel',
+          arguments: [
+            {
+              functionName: name.function,
+              implName: name.value,
+            },
+          ],
+        }),
+      )
+      codeLenses.push(
+        new vscode.CodeLens(
+          new vscode.Range(document.positionAt(name.prompt_key.start), document.positionAt(name.prompt_key.end)),
           {
-            functionName: name.function,
-            implName: name.value,
+            title: '▶️ Open Live Preview',
+            command: 'baml.openBamlPanel',
+            arguments: [
+              {
+                functionName: name.function,
+                implName: name.value,
+              },
+            ],
           },
-        ],
-      }
-      codeLenses.push(new vscode.CodeLens(range, command))
+        ),
+      )
     })
 
     const testCases = this.db.functions

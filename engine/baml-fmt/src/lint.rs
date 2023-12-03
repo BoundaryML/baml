@@ -163,6 +163,11 @@ pub(crate) fn run(input: &str) -> String {
                         json!({
                             "type": "llm",
                             "name": StringSpan::new(i.ast_variant().name(), &i.identifier().span()),
+                            "prompt_key": {
+                                "start": props.prompt.key_span.start,
+                                "end": props.prompt.key_span.end,
+                                "source_file": props.prompt.key_span.file.path(),
+                            },
                             "prompt": props.prompt.value,
                             "input_replacers": props.replacers.0.iter().map(
                                 |r| json!({
