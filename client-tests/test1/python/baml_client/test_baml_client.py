@@ -44,8 +44,8 @@ big fan of this\
 async def test_ministerial_tomato(ClassifyToolImpl: IClassifyTool):
     case = loads("""
 {
-  "query": "zzz",
-  "context": "zz"
+  "query": "\"hello there one22324234234234234\"",
+  "context": "\"zz\""
 }
 """)
     deserializer_query = Deserializer[str](str)
@@ -62,8 +62,8 @@ async def test_ministerial_tomato(ClassifyToolImpl: IClassifyTool):
 async def test_present_scarlet(ClassifyToolImpl: IClassifyTool):
     case = loads("""
 {
-  "query": "zzz",
-  "context": "zzzzzz"
+  "query": "\"hey there can you help me do the thingy mabob\"",
+  "context": "\"zzzzzz\""
 }
 """)
     deserializer_query = Deserializer[str](str)

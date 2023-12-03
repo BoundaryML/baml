@@ -67,7 +67,6 @@ impl<llm, ClassifyTool> v1 {
       "#)
     }
 
-
     prompt #"
         
         {#input.query}
