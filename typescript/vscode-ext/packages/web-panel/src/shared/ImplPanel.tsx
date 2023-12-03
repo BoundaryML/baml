@@ -15,6 +15,7 @@ import Link from './Link'
 import TypeComponent from './TypeComponent'
 import { ArgType } from '@baml/common/src/parser_db'
 import { Table, TableHead } from '@/components/ui/table'
+import clsx from 'clsx'
 
 type Impl = ParserDatabase['functions'][0]['impls'][0]
 
@@ -37,10 +38,11 @@ const INVISIBLE_CODES =
   /\u00a0\u00ad\u034f\u061c\u070f\u115f\u1160\u1680\u17b4\u17b5\u180e\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u200b\u200c\u200d\u200e\u200f\u202f\u205f\u2060\u2061\u2062\u2063\u2064\u206a\u206b\u206c\u206d\u206e\u206f\u3000\u2800\u3164\ufeff\uffa0/
 const whitespaceRegexp = new RegExp(`([${VISIBLE_WHITESPACE}]+|[${INVISIBLE_CODES}]+)`, 'g')
 
-const CodeLine: React.FC<{ line: string; number: number; showWhitespace: boolean }> = ({
+const CodeLine: React.FC<{ line: string; number: number; showWhitespace: boolean; wrapText: boolean }> = ({
   line,
   number,
   showWhitespace,
+  wrapText,
 }) => {
   // Function to render whitespace characters and invisible UTF characters with special styling
   const renderLine = (text: string) => {
@@ -64,24 +66,47 @@ const CodeLine: React.FC<{ line: string; number: number; showWhitespace: boolean
         return segment
       }
     })
-    return showWhitespace ? <div className="flex flex-wrap text-xs">{formattedText}</div> : <>{formattedText}</>
+    return showWhitespace ? (
+      <div
+        className={clsx('flex text-xs', {
+          'flex-wrap': wrapText,
+        })}
+      >
+        {formattedText}
+      </div>
+    ) : (
+      <>{formattedText}</>
+    )
   }
 
   return (
     <div className="table-row">
       <span className="table-cell pr-2 font-mono text-xs text-right text-gray-500 select-none">{number}</span>
-      <span className="table-cell font-mono text-xs whitespace-pre-wrap">{renderLine(line)}</span>
+      <span
+        className={clsx('table-cell font-mono text-xs', {
+          'whitespace-pre-wrap': wrapText,
+        })}
+      >
+        {renderLine(line)}
+      </span>
     </div>
   )
 }
 
 const Snippet: React.FC<{ text: string }> = ({ text }) => {
   const [showWhitespace, setShowWhitespace] = useState(true)
+  const [wrapText, setWrapText] = useState(true)
 
   const lines = text.split('\n')
   return (
     <div className="w-full p-1 overflow-hidden rounded-lg bg-vscode-input-background">
-      <div className="flex flex-row justify-end">
+      <div className="flex flex-row justify-end gap-2 text-xs">
+        <VSCodeCheckbox
+          checked={wrapText}
+          onChange={(e) => setWrapText((e as React.FormEvent<HTMLInputElement>).currentTarget.checked)}
+        >
+          Wrap Text
+        </VSCodeCheckbox>
         <VSCodeCheckbox
           checked={showWhitespace}
           onChange={(e) => setShowWhitespace((e as React.FormEvent<HTMLInputElement>).currentTarget.checked)}
@@ -89,10 +114,10 @@ const Snippet: React.FC<{ text: string }> = ({ text }) => {
           Whitespace
         </VSCodeCheckbox>
       </div>
-      <pre className="w-full p-1 overflow-y-scroll text-xs whitespace-pre-wrap bg-vscode-input-background">
+      <pre className="w-full p-1 overflow-y-scroll text-xs bg-vscode-input-background">
         <code>
           {lines.map((line, index) => (
-            <CodeLine key={index} line={line} number={index + 1} showWhitespace={showWhitespace} />
+            <CodeLine key={index} line={line} number={index + 1} showWhitespace={showWhitespace} wrapText={wrapText} />
           ))}
         </code>
       </pre>

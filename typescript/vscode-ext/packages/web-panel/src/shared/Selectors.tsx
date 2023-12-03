@@ -15,7 +15,7 @@ export const FunctionSelector: React.FC = () => {
   const function_names = functions.map((func) => func.name.value)
 
   return (
-    <div className="flex flex-col gap-1 items-center">
+    <div className="flex flex-col gap-1 items-start">
       <div className="flex flex-row gap-1 items-center">
         <span className="font-light">Function</span>
         <VSCodeDropdown
