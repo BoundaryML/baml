@@ -248,8 +248,15 @@ const uiSchema: UiSchema = {
 type Func = ParserDatabase['functions'][0]
 
 const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
-  const test_cases = func?.test_cases.map((cases) => cases) ?? []
   const { impl, input_json_schema } = useSelections()
+
+  const [filter, setFilter] = useState<string>('')
+  const test_cases = useMemo(() => {
+    if (!filter) return func.test_cases
+    return func.test_cases.filter(
+      (test_case) => test_case.name.value.includes(filter) || test_case.content.includes(filter),
+    )
+  }, [filter, func.test_cases])
 
   const getTestParams = (testCase: Func['test_cases'][0]): TestRequest['functions'][0]['tests'][0]['params'] => {
     if (func.input.arg_type === 'positional') {
@@ -275,10 +282,16 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
   // const { test_case } = useSelections()
   return (
     <>
-      <div>Test Cases</div>
       <div className="flex flex-row justify-between">
-        <VSCodeTextField placeholder="Search test cases" />
+        <VSCodeTextField
+          placeholder="Search test cases"
+          value={filter}
+          onInput={(e) => {
+            setFilter((e as React.FormEvent<HTMLInputElement>).currentTarget.value)
+          }}
+        />
         <VSCodeButton
+          disabled={test_cases.length === 0}
           onClick={() => {
             const runTestRequest: TestRequest = {
               functions: [
@@ -298,7 +311,7 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
             })
           }}
         >
-          Run all tests
+          Run {filter ? test_cases.length : 'all'} tests
         </VSCodeButton>
       </div>
       <div className="flex flex-col py-2 divide-y gap-y-4 divide-vscode-textSeparator-foreground">
