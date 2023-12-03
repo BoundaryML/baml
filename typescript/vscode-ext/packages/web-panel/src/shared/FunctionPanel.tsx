@@ -20,45 +20,56 @@ const FunctionPanel: React.FC = () => {
   if (!func) return <div className="flex flex-col">No function selected</div>
 
   return (
-    <div className="w-full h-screen overflow-auto">
-      <Allotment vertical>
-        <Allotment.Pane>
-          <Allotment className="h-full ">
-            {impl && (
-              <Allotment.Pane className="px-2" minSize={200}>
-                <VSCodePanels
-                  activeid={`tab-${func.name.value}-${impl.name.value}`}
-                  onChange={(e) => {
-                    const selected: string | undefined = (e.target as any)?.activetab?.id
-                    if (selected && selected.startsWith(`tab-${func.name.value}-`)) {
-                      setSelection(undefined, selected.split('-', 3)[2], undefined)
-                    }
-                  }}
-                >
-                  {func.impls.map((impl) => (
-                    <ImplPanel impl={impl} key={`${func.name.value}-${impl.name.value}`} />
-                  ))}
-                </VSCodePanels>
-              </Allotment.Pane>
-            )}
+    <div
+      className="flex flex-col w-full overflow-auto"
+      style={{
+        height: 'calc(100vh - 60px)',
+      }}
+    >
+      {/* <Allotment vertical> */}
+      <div className="w-full basis-[60%] flex-shrink-0 flex-grow-0">
+        <Allotment className="h-full ">
+          {impl && (
             <Allotment.Pane className="px-2" minSize={200}>
               <div className="h-full">
                 <ScrollArea type="always" className="flex w-full h-full pr-3">
-                  <>
-                    {/* <div className="flex flex-row gap-1">
-                      <b>Test Case</b> <TestCaseSelector />
-                    </div> */}
-                    <TestCasePanel func={func} />
-                  </>
+                  <VSCodePanels
+                    activeid={`tab-${func.name.value}-${impl.name.value}`}
+                    onChange={(e) => {
+                      const selected: string | undefined = (e.target as any)?.activetab?.id
+                      if (selected && selected.startsWith(`tab-${func.name.value}-`)) {
+                        setSelection(undefined, selected.split('-', 3)[2], undefined)
+                      }
+                    }}
+                  >
+                    {func.impls.map((impl) => (
+                      <ImplPanel impl={impl} key={`${func.name.value}-${impl.name.value}`} />
+                    ))}
+                  </VSCodePanels>
                 </ScrollArea>
               </div>
             </Allotment.Pane>
-          </Allotment>
-        </Allotment.Pane>
-        <Allotment.Pane className="py-2">
+          )}
+          <Allotment.Pane className="px-2" minSize={200}>
+            <div className="h-full">
+              <ScrollArea type="always" className="flex w-full h-full pr-3">
+                <>
+                  {/* <div className="flex flex-row gap-1">
+                      <b>Test Case</b> <TestCaseSelector />
+                    </div> */}
+                  <TestCasePanel func={func} />
+                </>
+              </ScrollArea>
+            </div>
+          </Allotment.Pane>
+        </Allotment>
+      </div>
+      <div className="flex py-2 border-t h-fit border-vscode-textSeparator-foreground">
+        <div className="w-full h-full">
           <TestResultPanel />
-        </Allotment.Pane>
-      </Allotment>
+        </div>
+      </div>
+      {/* </Allotment> */}
     </div>
   )
 }

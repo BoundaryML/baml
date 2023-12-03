@@ -25,9 +25,13 @@ export const columns: ColumnDef<TestResult>[] = [
     accessorKey: 'testName',
     header: ({ column }) => {
       return (
-        <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
+        <Button
+          variant="ghost"
+          className="hover:bg-vscode-list-hoverBackground hover:text-vscode-list-hoverForeground"
+          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+        >
           Test Case
-          <CaretSortIcon className="ml-2 h-4 w-4" />
+          <CaretSortIcon className="w-4 h-4 ml-2" />
         </Button>
       )
     },
@@ -35,9 +39,13 @@ export const columns: ColumnDef<TestResult>[] = [
   {
     header: ({ column }) => {
       return (
-        <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
+        <Button
+          variant="ghost"
+          className="hover:bg-vscode-list-hoverBackground hover:text-vscode-list-hoverForeground"
+          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+        >
           impl
-          <CaretSortIcon className="ml-2 h-4 w-4" />
+          <CaretSortIcon className="w-4 h-4 ml-2" />
         </Button>
       )
     },
@@ -51,9 +59,13 @@ export const columns: ColumnDef<TestResult>[] = [
       const val = getValue<{ status: TestStatus; render?: string; raw?: string }>()
 
       return (
-        <div className="flex flex-col">
+        <div className="flex flex-col p-0 text-xs">
           <TestStatusIcon testStatus={val.status} />
-          <pre>{val.render && pretty_stringify(val.render)}</pre>
+          {val.render && (
+            <pre className="break-words whitespace-pre-wrap max-w-[500px] border-vscode-textSeparator-foreground rounded-md border p-0.5">
+              {pretty_stringify(val.render)}
+            </pre>
+          )}
         </div>
       )
     },

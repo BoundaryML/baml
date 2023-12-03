@@ -23,7 +23,7 @@ const Whitespace: React.FC<{ char: 'space' | 'tab' }> = ({ char }) => (
 )
 
 const InvisibleUtf: React.FC<{ text: string }> = ({ text }) => (
-  <span className="text-red-500 text-xs opacity-75">
+  <span className="text-xs text-red-500 opacity-75">
     {text
       .split('')
       .map((c) => `U+${c.charCodeAt(0).toString(16).padStart(4, '0')}`)
@@ -64,13 +64,13 @@ const CodeLine: React.FC<{ line: string; number: number; showWhitespace: boolean
         return segment
       }
     })
-    return showWhitespace ? <div className="flex flex-wrap">{formattedText}</div> : <>{formattedText}</>
+    return showWhitespace ? <div className="flex flex-wrap text-xs">{formattedText}</div> : <>{formattedText}</>
   }
 
   return (
     <div className="table-row">
-      <span className="table-cell text-right pr-4 font-mono text-sm text-gray-500 select-none">{number}</span>
-      <span className="table-cell font-mono text-sm whitespace-pre-wrap">{renderLine(line)}</span>
+      <span className="table-cell pr-2 font-mono text-xs text-right text-gray-500 select-none">{number}</span>
+      <span className="table-cell font-mono text-xs whitespace-pre-wrap">{renderLine(line)}</span>
     </div>
   )
 }
@@ -80,7 +80,7 @@ const Snippet: React.FC<{ text: string }> = ({ text }) => {
 
   const lines = text.split('\n')
   return (
-    <div className="w-full p-2 bg-vscode-input-background rounded-lg overflow-hidden">
+    <div className="w-full p-1 overflow-hidden rounded-lg bg-vscode-input-background">
       <div className="flex flex-row justify-end">
         <VSCodeCheckbox
           checked={showWhitespace}
@@ -89,7 +89,7 @@ const Snippet: React.FC<{ text: string }> = ({ text }) => {
           Whitespace
         </VSCodeCheckbox>
       </div>
-      <pre className="w-full p-2 overflow-y-scroll whitespace-pre-wrap bg-vscode-input-background">
+      <pre className="w-full p-1 overflow-y-scroll text-xs whitespace-pre-wrap bg-vscode-input-background">
         <code>
           {lines.map((line, index) => (
             <CodeLine key={index} line={line} number={index + 1} showWhitespace={showWhitespace} />
@@ -131,7 +131,7 @@ const ImplPanel: React.FC<{ impl: Impl }> = ({ impl }) => {
           </div>
 
           <div className="flex flex-col gap-1">
-            <div className="flex flex-row justify-between items-center">
+            <div className="flex flex-row items-center justify-between">
               <span className="flex gap-1">
                 <b>Prompt</b>
                 <Link item={impl.name} display="Edit" />

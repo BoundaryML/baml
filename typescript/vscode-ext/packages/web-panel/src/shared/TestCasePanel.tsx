@@ -239,8 +239,6 @@ const uiSchema: UiSchema = {
       className: 'bg-vscode-button-background px-2',
     },
   },
-  // 'ui:widget': 'textarea',
-
   'ui:autocomplete': 'on',
   'ui:options': {
     removable: true,
@@ -303,10 +301,9 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
           Run all tests
         </VSCodeButton>
       </div>
-      <div className="flex flex-col py-4 divide-y gap-y-4 divide-vscode-descriptionForeground">
-        <pre>{JSON.stringify(input_json_schema, null, 2)}</pre>
+      <div className="flex flex-col py-2 divide-y gap-y-4 divide-vscode-textSeparator-foreground">
         {test_cases.map((test_case) => (
-          <div key={test_case.name.value}>
+          <div key={test_case.name.value} className="py-2">
             <div className="flex flex-row items-center gap-x-1">
               <Button
                 variant={'ghost'}
@@ -349,16 +346,6 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
       </div>
     </>
   )
-
-  // return (
-  //   <div className="flex flex-col">
-  //     {func.input.arg_type === 'positional' ? (
-  //       <PositionalTestCase input={func.input.type} content={test_case?.content} />
-  //     ) : (
-  //       <NamedTestCase values={func.input.values} content={test_case?.content} />
-  //     )}
-  //   </div>
-  // )
 }
 
 const EditTestCaseForm = ({

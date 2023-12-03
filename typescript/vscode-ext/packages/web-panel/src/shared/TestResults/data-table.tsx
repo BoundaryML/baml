@@ -32,14 +32,17 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
   })
 
   return (
-    <div className="rounded-md border">
+    <div className="text-xs rounded-md border-vscode-input-border">
       <Table>
-        <TableHeader>
+        <TableHeader className="p-0 border-0 gap-x-1">
           {table.getHeaderGroups().map((headerGroup) => (
-            <TableRow key={headerGroup.id}>
+            <TableRow
+              key={headerGroup.id}
+              className="hover:bg-vscode-list-hoverBackground border-vscode-textSeparator-foreground"
+            >
               {headerGroup.headers.map((header) => {
                 return (
-                  <TableHead key={header.id}>
+                  <TableHead key={header.id} className="pl-2 ">
                     {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                   </TableHead>
                 )
@@ -47,17 +50,23 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
             </TableRow>
           ))}
         </TableHeader>
-        <TableBody>
+        <TableBody className="border-0 divide-0">
           {table.getRowModel().rows?.length ? (
             table.getRowModel().rows.map((row) => (
-              <TableRow key={row.id} data-state={row.getIsSelected() && 'selected'}>
+              <TableRow
+                key={row.id}
+                data-state={row.getIsSelected() && 'selected'}
+                className="py-1 hover:bg-vscode-list-hoverBackground border-vscode-textSeparator-foreground"
+              >
                 {row.getVisibleCells().map((cell) => (
-                  <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+                  <TableCell className="py-1 pl-2" key={cell.id}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </TableCell>
                 ))}
               </TableRow>
             ))
           ) : (
-            <TableRow>
+            <TableRow className="py-1 hover:bg-vscode-list-hoverBackground border-vscode-textSeparator-foreground">
               <TableCell colSpan={columns.length} className="h-24 text-center">
                 No results.
               </TableCell>

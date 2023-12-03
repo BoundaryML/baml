@@ -8,6 +8,7 @@ import FunctionPanel from './shared/FunctionPanel'
 import { FunctionSelector } from './shared/Selectors'
 import { VSCodeLink } from '@vscode/webview-ui-toolkit/react'
 import CustomErrorBoundary from './utils/ErrorFallback'
+import { Separator } from './components/ui/separator'
 
 function App() {
   return (
@@ -16,9 +17,9 @@ function App() {
         <div className="absolute right-0 z-10 top-2 text-end">
           <VSCodeLink href="https://docs.boundaryml.com">Docs</VSCodeLink>
         </div>
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 px-2">
           <FunctionSelector />
-          <hr />
+          <Separator className="bg-vscode-textSeparator-foreground" />
           <FunctionPanel />
         </div>
       </ASTProvider>

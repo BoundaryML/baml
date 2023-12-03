@@ -17,7 +17,7 @@ from json5 import loads # type: ignore
 async def test_basic2(BlahImpl: IBlah):
     deserializer = Deserializer[str](str)
     param = deserializer.from_string("""\
-big fan of this\
+"big fan of this"\
 """)
     await BlahImpl(param)
 

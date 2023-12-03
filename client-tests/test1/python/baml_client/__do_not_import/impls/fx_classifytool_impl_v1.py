@@ -20,9 +20,7 @@ from baml_lib._impl.deserializer import Deserializer
 
 
 __prompt_template = """\
-Given a conversation with a user, classify the user's intent and generate a response.
 
-Userinfo:
 {query}
 
 UserContext:
@@ -32,7 +30,7 @@ tool
 ---
 k1: Use this tool if the user is asking to compute something
 k2: Use this tool if the user is asking to draw something
-k3: Use this tool if the user is asking to generate text
+k3: Use this tool if the user is asking to generate text 
 
 Use this output format:
 {
