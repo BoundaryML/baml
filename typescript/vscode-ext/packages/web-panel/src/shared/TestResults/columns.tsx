@@ -73,12 +73,13 @@ export const columns: ColumnDef<TestResult>[] = [
     id: 'status',
     accessorFn: (row) => ({
       status: row.status,
-      render: row.output.parsed ?? row.output.error,
+      error: row.output.error,
+      render: row.output.parsed,
       raw: row.output.raw,
       url: row.url,
     }),
     cell: ({ getValue }) => {
-      const val = getValue<{ status: TestStatus; render?: string; raw?: string; url?: string }>()
+      const val = getValue<{ status: TestStatus; render?: string; error?: string; raw?: string; url?: string }>()
 
       return (
         <div className="flex flex-col p-0 text-xs">
@@ -89,6 +90,11 @@ export const columns: ColumnDef<TestResult>[] = [
               </VSCodeLink>
             )}
           </TestStatusIcon>
+          {val.error && (
+            <pre className="break-words whitespace-pre-wrap max-w-[500px] border-vscode-textSeparator-foreground rounded-md border p-0.5">
+              {pretty_error(val.error)}
+            </pre>
+          )}
           {val.render && (
             <pre className="break-words whitespace-pre-wrap max-w-[500px] border-vscode-textSeparator-foreground rounded-md border p-0.5">
               {pretty_stringify(val.render)}
@@ -100,6 +106,15 @@ export const columns: ColumnDef<TestResult>[] = [
     header: 'Status',
   },
 ]
+
+const pretty_error = (obj: string) => {
+  try {
+    let err: { error: string } = JSON.parse(obj)
+    return err.error
+  } catch (e) {
+    return obj
+  }
+}
 
 const pretty_stringify = (obj: string) => {
   try {
