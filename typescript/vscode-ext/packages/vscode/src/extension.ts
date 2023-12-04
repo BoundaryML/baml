@@ -18,9 +18,10 @@ export function activate(context: vscode.ExtensionContext) {
 
   const bamlPlygroundCommand = vscode.commands.registerCommand(
     'baml.openBamlPanel',
-    (args?: { functionName?: string; implName?: string }) => {
+    (args?: { functionName?: string; implName?: string; showTests?: boolean }) => {
       const initialFunctionName = args?.functionName
       const initialImplName = args?.implName
+      const showTests = args?.showTests
       const config = vscode.workspace.getConfiguration()
       config.update('baml.bamlPanelOpen', true, vscode.ConfigurationTarget.Global)
       WebPanelView.render(context.extensionUri)
@@ -30,6 +31,7 @@ export function activate(context: vscode.ExtensionContext) {
         functionName: initialFunctionName,
         implName: initialImplName,
         testCaseName: undefined,
+        showTests: showTests,
       })
     },
   )

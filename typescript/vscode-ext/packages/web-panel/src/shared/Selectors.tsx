@@ -21,7 +21,12 @@ export const FunctionSelector: React.FC = () => {
         <VSCodeDropdown
           value={func?.name.value ?? '<not-picked>'}
           onChange={(event) =>
-            setSelection((event as React.FormEvent<HTMLSelectElement>).currentTarget.value, undefined, undefined)
+            setSelection(
+              (event as React.FormEvent<HTMLSelectElement>).currentTarget.value,
+              undefined,
+              undefined,
+              undefined,
+            )
           }
         >
           {function_names.map((func) => (
@@ -68,7 +73,7 @@ export const TestCaseSelector: React.FC = () => {
         value={name?.value ?? PLACEHOLDER}
         onChange={(event) => {
           let value = (event as React.FormEvent<HTMLSelectElement>).currentTarget.value
-          setSelection(undefined, undefined, value)
+          setSelection(undefined, undefined, value, undefined)
         }}
       >
         {test_cases.map((cases, index) => (

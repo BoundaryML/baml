@@ -27,6 +27,7 @@ export class GlooCodeLensProvider implements vscode.CodeLensProvider {
         arguments: [
           {
             functionName: name.value,
+            showTests: true,
           },
         ],
       }
@@ -57,6 +58,7 @@ export class GlooCodeLensProvider implements vscode.CodeLensProvider {
             {
               functionName: name.function,
               implName: name.value,
+              showTests: true,
             },
           ],
         }),
@@ -71,6 +73,7 @@ export class GlooCodeLensProvider implements vscode.CodeLensProvider {
               {
                 functionName: name.function,
                 implName: name.value,
+                showTests: false,
               },
             ],
           },
@@ -100,6 +103,7 @@ export class GlooCodeLensProvider implements vscode.CodeLensProvider {
           {
             functionName: name.function,
             testCaseName: name.value,
+            showTests: true,
           },
         ],
       }

@@ -16,8 +16,11 @@ import { Button } from '@/components/ui/button'
 import { FlaskConical } from 'lucide-react'
 import clsx from 'clsx'
 
-const FunctionPanel: React.FC<{ showTests: boolean }> = ({ showTests }) => {
-  const { setSelection } = useContext(ASTContext)
+const FunctionPanel: React.FC = () => {
+  const {
+    selections: { showTests },
+    setSelection,
+  } = useContext(ASTContext)
   const { func, impl } = useSelections()
 
   if (!func) return <div className="flex flex-col">No function selected</div>
@@ -46,7 +49,7 @@ const FunctionPanel: React.FC<{ showTests: boolean }> = ({ showTests }) => {
                     onChange={(e) => {
                       const selected: string | undefined = (e.target as any)?.activetab?.id
                       if (selected && selected.startsWith(`tab-${func.name.value}-`)) {
-                        setSelection(undefined, selected.split('-', 3)[2], undefined)
+                        setSelection(undefined, selected.split('-', 3)[2], undefined, undefined)
                       }
                     }}
                   >

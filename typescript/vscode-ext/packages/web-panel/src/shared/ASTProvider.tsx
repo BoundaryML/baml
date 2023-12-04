@@ -15,11 +15,13 @@ export const ASTContext = createContext<{
     selectedFunction: string | undefined
     selectedImpl: string | undefined
     selectedTestCase: string | undefined
+    showTests: boolean
   }
   setSelection: (
     functionName: string | undefined,
     implName: string | undefined,
     testCaseName: string | undefined,
+    showTests: boolean | undefined,
   ) => void
 }>({
   root_path: '',
@@ -38,6 +40,7 @@ export const ASTContext = createContext<{
     selectedFunction: undefined,
     selectedImpl: undefined,
     selectedTestCase: undefined,
+    showTests: true,
   },
   setSelection: () => {},
 })
@@ -46,9 +49,15 @@ function useSelectionSetup() {
   const [selectedFunction, setSelectedFunction] = useState<string | undefined>(undefined)
   const [selectedImpl, setSelectedImpl] = useState<string | undefined>(undefined)
   const [selectedTestCase, setSelectedTestCase] = useState<string | undefined>(undefined)
+  const [showTests, setShowTests] = useState<boolean>(true)
 
   const setSelectionFunction = useCallback(
-    (functionName: string | undefined, implName: string | undefined, testCaseName: string | undefined) => {
+    (
+      functionName: string | undefined,
+      implName: string | undefined,
+      testCaseName: string | undefined,
+      showTests: boolean | undefined,
+    ) => {
       if (functionName) {
         setSelectedFunction(functionName)
         setSelectedImpl(implName)
@@ -61,6 +70,11 @@ function useSelectionSetup() {
           setSelectedTestCase(testCaseName)
         }
       }
+      if (showTests !== undefined) {
+        setShowTests(showTests)
+      } else if (testCaseName !== undefined) {
+        setShowTests(true)
+      }
     },
     [],
   )
@@ -69,6 +83,7 @@ function useSelectionSetup() {
     selectedFunction,
     selectedImpl,
     selectedTestCase,
+    showTests,
     setSelection: setSelectionFunction,
   }
 }
@@ -77,7 +92,7 @@ export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
   const [projects, setProjects] = useState<{ root_dir: string; db: ParserDatabase }[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>(undefined)
   const [testResults, setTestResults] = useState<TestState | undefined>(undefined)
-  const { selectedFunction, selectedImpl, selectedTestCase, setSelection } = useSelectionSetup()
+  const { selectedFunction, selectedImpl, selectedTestCase, showTests, setSelection } = useSelectionSetup()
   const [testLog, setTestLog] = useState<string | undefined>(undefined)
 
   const selectedState = useMemo(() => {
@@ -100,12 +115,22 @@ export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
           selectedFunction,
           selectedImpl,
           selectedTestCase,
+          showTests,
         },
         setSelection,
       }
     }
     return undefined
-  }, [projects, selectedProjectId, testResults, selectedFunction, selectedImpl, selectedTestCase, setSelection])
+  }, [
+    projects,
+    selectedProjectId,
+    testResults,
+    selectedFunction,
+    selectedImpl,
+    selectedTestCase,
+    showTests,
+    setSelection,
+  ])
 
   useEffect(() => {
     setSelectedProjectId((prev) => prev ?? projects[0]?.root_dir)
@@ -138,8 +163,9 @@ export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
             functionName: string | undefined
             implName?: string
             testCaseName?: string
+            showTests?: boolean
           }
-          setSelection(content.functionName, content.implName, content.testCaseName)
+          setSelection(content.functionName, content.implName, content.testCaseName, content.showTests)
           break
         }
         case 'test-results': {

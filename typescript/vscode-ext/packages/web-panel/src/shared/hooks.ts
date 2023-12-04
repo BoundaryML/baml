@@ -70,7 +70,7 @@ export function useSelections() {
     test_results: test_results_raw,
     jsonSchema,
     test_log,
-    selections: { selectedFunction, selectedImpl, selectedTestCase },
+    selections: { selectedFunction, selectedImpl, selectedTestCase, showTests },
   } = ctx
 
   const func = useMemo(() => {
@@ -108,7 +108,10 @@ export function useSelections() {
     if (test_results_raw.test_url) {
       return { text: 'Dashboard', url: test_results_raw.test_url }
     } else {
-      return { text: 'Learn how to persist runs', url: 'https://docs.boundaryml.com/v2/mdx/quickstart#setting-up-the-boundary-dashboard' }
+      return {
+        text: 'Learn how to persist runs',
+        url: 'https://docs.boundaryml.com/v2/mdx/quickstart#setting-up-the-boundary-dashboard',
+      }
     }
   }, [test_results_raw, func?.name.value])
 
@@ -146,6 +149,7 @@ export function useSelections() {
   return {
     func,
     impl,
+    showTests,
     test_case,
     test_results,
     test_result_url,
