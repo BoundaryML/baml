@@ -198,7 +198,6 @@ export class WebPanelView {
                 saveTestRequest.funcName,
                 `${uniqueNamesGenerator(customConfig)}.json`,
               )
-            console.log("paramss", JSON.stringify(saveTestRequest.params, null, 2));
             const fileContent =
               saveTestRequest.params.type === 'positional'
                 ? saveTestRequest.params.value
@@ -213,6 +212,22 @@ export class WebPanelView {
               WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
 
 
+            } catch (e: any) {
+              console.log(e)
+            }
+            return
+          }
+          case 'removeTest': {
+            const removeTestRequest: {
+              root_path: string
+              funcName: string
+              testCaseName: StringSpan
+            } = message.data
+            const uri = vscode.Uri.parse(removeTestRequest.testCaseName.source_file)
+            try {
+              await vscode.workspace.fs.delete(uri)
+              await registerFileChange(uri.toString(), 'json')
+              WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
             } catch (e: any) {
               console.log(e)
             }

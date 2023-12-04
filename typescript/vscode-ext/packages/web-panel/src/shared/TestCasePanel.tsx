@@ -26,7 +26,7 @@ import { ChangeEvent, FocusEvent, useCallback, useContext, useEffect, useMemo, u
 import { ASTContext } from './ASTProvider'
 import TypeComponent from './TypeComponent'
 import { useSelections } from './hooks'
-
+import empty from 'json-schema-empty'
 const testSchema: RJSFSchema = {
   title: 'Test form',
   type: 'object',
@@ -279,7 +279,8 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
       }
     }
   }
-  // const { test_case } = useSelections()
+  const { root_path } = useContext(ASTContext)
+
   return (
     <>
       <div className="flex flex-row justify-between">
@@ -315,43 +316,87 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
         </VSCodeButton>
       </div>
       <div className="flex flex-col py-2 divide-y gap-y-4 divide-vscode-textSeparator-foreground">
+        <Button
+          className="flex flex-row text-sm gap-x-2 bg-vscode-dropdown-background text-vscode-dropdown-foreground hover:opacity-90 hover:bg-vscode-dropdown-background"
+          onClick={() => {
+            vscode.postMessage({
+              command: 'saveTest',
+              data: {
+                root_path,
+                funcName: func.name.value,
+                testCaseName: undefined,
+                params: getTestParams({
+                  name: {
+                    value: 'new',
+                    source_file: '',
+                    start: 0,
+                    end: 0,
+                  },
+                  content: JSON.stringify(empty(input_json_schema), null, 2),
+                }),
+              },
+            })
+          }}
+        >
+          <PlusIcon size={16} />
+          <div>Add test case</div>
+        </Button>
         {test_cases.map((test_case) => (
           <div key={test_case.name.value} className="py-2">
-            <div className="flex flex-row items-center gap-x-1">
+            <div className="flex flex-row items-center justify-between">
+              <div className="flex flex-row items-center gap-x-1">
+                <Button
+                  variant={'ghost'}
+                  size={'icon'}
+                  className="p-1 w-fit h-fit"
+                  onClick={() => {
+                    const runTestRequest: TestRequest = {
+                      functions: [
+                        {
+                          name: func.name.value,
+                          tests: [
+                            {
+                              name: test_case.name.value,
+                              params: getTestParams(test_case),
+                              impls: impl ? [impl.name.value] : [],
+                            },
+                          ],
+                        },
+                      ],
+                    }
+                    vscode.postMessage({
+                      command: 'runTest',
+                      data: runTestRequest,
+                    })
+                  }}
+                >
+                  <Play size={10} />
+                </Button>
+                <div>{test_case.name.value}</div>
+                <EditTestCaseForm
+                  testCase={test_case}
+                  schema={input_json_schema}
+                  func={func}
+                  getTestParams={getTestParams}
+                />
+              </div>
               <Button
                 variant={'ghost'}
                 size={'icon'}
-                className="p-1 w-fit h-fit"
+                className="p-1 w-fit h-fit text-vscode-input-foreground"
                 onClick={() => {
-                  const runTestRequest: TestRequest = {
-                    functions: [
-                      {
-                        name: func.name.value,
-                        tests: [
-                          {
-                            name: test_case.name.value,
-                            params: getTestParams(test_case),
-                            impls: impl ? [impl.name.value] : [],
-                          },
-                        ],
-                      },
-                    ],
-                  }
                   vscode.postMessage({
-                    command: 'runTest',
-                    data: runTestRequest,
+                    command: 'removeTest',
+                    data: {
+                      root_path,
+                      funcName: func.name.value,
+                      testCaseName: test_case.name,
+                    },
                   })
                 }}
               >
-                <Play size={10} />
+                <X size={10} />
               </Button>
-              <div>{test_case.name.value}</div>
-              <EditTestCaseForm
-                testCase={test_case}
-                schema={input_json_schema}
-                func={func}
-                getTestParams={getTestParams}
-              />
             </div>
             <TestCaseCard content={test_case.content} testCaseName={test_case.name.value} />
           </div>
