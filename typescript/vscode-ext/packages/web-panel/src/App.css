@@ -75,16 +75,25 @@
   }
 }
 
+/* controls dropdown styling on rsjf */
 .form-control {
-  @apply ml-2 bg-vscode-input-background text-vscode-input-foreground;
+  @apply bg-vscode-input-background text-vscode-input-foreground rounded-sm;
 }
 
 .array-item {
-  @apply text-xs text-vscode-descriptionForeground py-2;
+  @apply text-xs text-vscode-descriptionForeground w-full;
 }
 
+.field-array {
+  @apply w-full;
+}
+
+/* .checkbox {
+  @apply bg-vscode-checkbox-background text-vscode-checkbox-foreground flex flex-row items-center gap-x-1;
+} */
+
 .array-item-list {
-  @apply divide-y divide-vscode-descriptionForeground;
+  @apply divide-y divide-vscode-textSeparator-foreground w-full;
 }
 
 /* .array-item-remove::after {

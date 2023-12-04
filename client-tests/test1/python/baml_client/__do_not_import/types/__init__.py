@@ -9,6 +9,7 @@
 
 from .classes.cls_classifyresponse import ClassifyResponse
 from .classes.cls_conversation import Conversation
+from .classes.cls_dummyobj import DummyObj
 from .classes.cls_empty import Empty
 from .classes.cls_hi import Hi
 from .classes.cls_improvedresponse import ImprovedResponse
@@ -25,6 +26,7 @@ from .enums.enm_tool import Tool
 __all__ = [
     'ClassifyResponse',
     'Conversation',
+    'DummyObj',
     'Empty',
     'Hi',
     'ImprovedResponse',

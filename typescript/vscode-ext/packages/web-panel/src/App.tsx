@@ -18,10 +18,10 @@ function App() {
   return (
     <CustomErrorBoundary>
       <ASTProvider>
-        <div className="absolute right-0 z-10 top-2 text-end flex flex-col gap-1">
+        <div className="absolute right-0 z-10 flex flex-col gap-1 top-2 text-end">
           <VSCodeLink href="https://docs.boundaryml.com">Docs</VSCodeLink>
-          <Button variant="ghost" className="p-0" onClick={() => setSelected((p) => !p)}>
-            {selected ? <FlaskConical className="w-4 h-4" /> : <FlaskConicalOff className="w-4 h-4" />}
+          <Button variant="ghost" className="p-0 px-1 py-1 w-fit h-fit" onClick={() => setSelected((p) => !p)}>
+            {selected ? <FlaskConical className="w-5 h-5" /> : <FlaskConicalOff className="w-5 h-5" />}
           </Button>
         </div>
         <div className="flex flex-col gap-2 px-2">

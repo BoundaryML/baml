@@ -108,7 +108,7 @@ export function useSelections() {
     if (test_results_raw.test_url) {
       return { text: 'Dashboard', url: test_results_raw.test_url }
     } else {
-      return { text: 'Learn how to persist runs', url: 'https://docs.boundaryml.com' }
+      return { text: 'Learn how to persist runs', url: 'https://docs.boundaryml.com/v2/mdx/quickstart#setting-up-the-boundary-dashboard' }
     }
   }, [test_results_raw, func?.name.value])
 

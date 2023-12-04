@@ -8,7 +8,7 @@
 # fmt: off
 
 from .__do_not_import.generated_baml_client import baml
-from .baml_types import ClassifyResponse, Conversation, IBlah, IClassifyTool, IMessageSimplifier, Message, MessageSender, Tool
+from .baml_types import ClassifyResponse, Conversation, DummyObj, IBlah, IClassifyTool, IMaybePolishText, IMessageSimplifier, ITextPolisher, ImprovedResponse, Message, MessageSender, ProposedMessage, Sentiment, Tool
 from baml_lib._impl.deserializer import Deserializer
 from json5 import loads # type: ignore
 
@@ -31,6 +31,15 @@ te\
     await BlahImpl(param)
 
 
+@baml.MaybePolishText.test
+async def test_foolish_rose(MaybePolishTextImpl: IMaybePolishText):
+    deserializer = Deserializer[ProposedMessage](ProposedMessage)
+    param = deserializer.from_string("""\
+{}\
+""")
+    await MaybePolishTextImpl(param)
+
+
 @baml.Blah.test
 async def test_greasy_white(BlahImpl: IBlah):
     deserializer = Deserializer[str](str)
@@ -41,11 +50,11 @@ big fan of this\
 
 
 @baml.ClassifyTool.test
-async def test_ministerial_tomato(ClassifyToolImpl: IClassifyTool):
+async def test_international_scarlet(ClassifyToolImpl: IClassifyTool):
     case = loads("""
 {
-  "query": "\"hello there one22324234234234234\"",
-  "context": "\"zz\""
+  "query": "",
+  "context": ""
 }
 """)
     deserializer_query = Deserializer[str](str)
@@ -58,22 +67,13 @@ async def test_ministerial_tomato(ClassifyToolImpl: IClassifyTool):
     )
 
 
-@baml.ClassifyTool.test
-async def test_present_scarlet(ClassifyToolImpl: IClassifyTool):
-    case = loads("""
-{
-  "query": "\"hey there can you help me do the thingy mabob\"",
-  "context": "\"zzzzzz\""
-}
+@baml.TextPolisher.test
+async def test_potential_lavender(TextPolisherImpl: ITextPolisher):
+    deserializer = Deserializer[ProposedMessage](ProposedMessage)
+    param = deserializer.from_string("""\
+{}\
 """)
-    deserializer_query = Deserializer[str](str)
-    query = deserializer_query.from_string(case["query"])
-    deserializer_context = Deserializer[str](str)
-    context = deserializer_context.from_string(case["context"])
-    await ClassifyToolImpl(
-        query=query,
-        context=context
-    )
+    await TextPolisherImpl(param)
 
 
 @baml.MessageSimplifier.test
@@ -87,7 +87,8 @@ async def test_sample_test(MessageSimplifierImpl: IMessageSimplifier):
       "body": "Hey man hows it going would you please fix my garage door etc etc etc"
     },
     {
-      "sender": "AI"
+      "sender": "AI",
+      "body": "eeeeeee"
     }
   ]
 }\

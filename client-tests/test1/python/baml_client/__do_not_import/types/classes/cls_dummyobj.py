@@ -7,17 +7,12 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..enums.enm_messagesender import MessageSender
-from .cls_conversation import Conversation
-from .cls_dummyobj import DummyObj
-from .cls_message import Message
 from baml_lib._impl.deserializer import register_deserializer
 from pydantic import BaseModel
-from typing import Optional
 
 
 @register_deserializer({  })
-class ProposedMessage(BaseModel):
-    thread: Conversation
-    generated_response: str
-    dummy: Optional[DummyObj] = None
+class DummyObj(BaseModel):
+    prop1: str
+    prop2: int
+    prop3: bool

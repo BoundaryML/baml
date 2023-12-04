@@ -26,7 +26,7 @@ import { ChangeEvent, FocusEvent, useCallback, useContext, useEffect, useMemo, u
 import { ASTContext } from './ASTProvider'
 import TypeComponent from './TypeComponent'
 import { useSelections } from './hooks'
-import empty from 'json-schema-empty'
+
 const testSchema: RJSFSchema = {
   title: 'Test form',
   type: 'object',
@@ -44,7 +44,6 @@ const {
 } = getDefaultRegistry()
 
 function MyBaseInputTemplate(props: BaseInputTemplateProps) {
-  const customProps = {}
   const {
     id,
     name, // remove this from ...rest
@@ -101,7 +100,7 @@ function MyBaseInputTemplate(props: BaseInputTemplateProps) {
       <input
         id={id}
         name={id}
-        className="form-control"
+        className="max-w-[100px] rounded-sm bg-vscode-input-background text-vscode-input-foreground"
         readOnly={readonly}
         disabled={disabled}
         autoFocus={autofocus}
@@ -118,7 +117,7 @@ function MyBaseInputTemplate(props: BaseInputTemplateProps) {
         id={id}
         name={id}
         rows={3}
-        className="min-w-[400px] form-control px-1"
+        className="w-[90%] px-1 rounded-sm bg-vscode-input-background text-vscode-input-foreground"
         readOnly={readonly}
         disabled={disabled}
         autoFocus={autofocus}
@@ -133,7 +132,7 @@ function MyBaseInputTemplate(props: BaseInputTemplateProps) {
     )
 
   return (
-    <>
+    <div className="flex flex-col w-full gap-y-1">
       {input}
       {Array.isArray(schema.examples) && (
         <datalist key={`datalist_${id}`} id={examplesId(id)}>
@@ -144,22 +143,51 @@ function MyBaseInputTemplate(props: BaseInputTemplateProps) {
             })}
         </datalist>
       )}
-    </>
+    </div>
   )
 }
 
+// function MyFieldTemplate(props: FieldTemplateProps) {
+//   return <FieldTemplate {...props} classNames="  gap-x-2" />
+// }
+
 function MyFieldTemplate(props: FieldTemplateProps) {
-  return <FieldTemplate {...props} classNames="  gap-x-2" />
+  const { id, classNames, style, label, displayLabel, help, required, hidden, description, errors, children } = props
+
+  if (hidden) {
+    return <div className="hidden">{children}</div>
+  }
+
+  return (
+    <div className={classNames + ' ml-2 w-full'} style={style}>
+      <>
+        {props.schema.type === 'boolean' || props.schema.type === 'array' ? null : (
+          <label htmlFor={id} className="flex flex-row items-center gap-x-3">
+            <div className={props.schema.type === 'object' ? ' font-bold text-sm' : ' text-xs'}>{label}</div>
+            <div className={'text-vscode-textSeparator-foreground'}>
+              {props.schema.type}
+              {required ? '*' : null}
+            </div>
+          </label>
+        )}
+      </>
+
+      {description}
+      <div className="flex flex-row items-center w-full">{children}</div>
+      {errors}
+      {help}
+    </div>
+  )
 }
 
 function MyObjectTemplate(props: ObjectFieldTemplateProps) {
   return (
-    <div>
-      <div className="py-2">{props.title}</div>
+    <div className="w-full">
+      {/* <div className="py-2">{props.title}</div> */}
       {props.description}
-      <div className="flex flex-col items-start justify-start gap-y-1">
+      <div className="flex flex-col w-full py-1 gap-y-2">
         {props.properties.map((element) => (
-          <div className="ml-4 property-wrapper text-vscode-input-foreground">{element.content}</div>
+          <div className="w-full property-wrapper text-vscode-input-foreground">{element.content}</div>
         ))}
       </div>
     </div>
@@ -169,8 +197,13 @@ function MyObjectTemplate(props: ObjectFieldTemplateProps) {
 function AddButton(props: IconButtonProps) {
   const { icon, iconType, ...btnProps } = props
   return (
-    <Button variant="ghost" size="icon" {...btnProps} className="p-1 w-fit h-fit">
-      <PlusIcon size={16} />
+    <Button
+      variant="ghost"
+      size="icon"
+      {...btnProps}
+      className="flex flex-row items-center p-1 text-xs w-fit h-fit gap-x-2 hover:bg-vscode-descriptionForeground"
+    >
+      <PlusIcon size={16} /> <div>Add item</div>
     </Button>
   )
 }
@@ -193,18 +226,35 @@ function RemoveButton(props: IconButtonProps) {
   )
 }
 
+function SubmitButton(props: IconButtonProps) {
+  const { icon, iconType, ...btnProps } = props
+  return (
+    <div className="flex items-end justify-end w-full ml-auto h-fit">
+      <Button
+        {...btnProps}
+        className="px-3 py-2 rounded-none bg-vscode-button-background text-vscode-button-foreground w-fit h-fit hover:bg-vscode-button-background hover:opacity-75"
+        style={{
+          flex: 'none',
+        }}
+      >
+        Submit
+      </Button>
+    </div>
+  )
+}
+
 function ArrayFieldItemTemplate(props: ArrayFieldTemplateItemType) {
   const { children, className } = props
   return (
-    <div>
-      <div className={`${className} ml-2 text-xs text-vscode-descriptionForeground`}>{children}</div>
+    <div className="relative ">
+      <div className={`${className} ml-0 py-1 text-xs text-vscode-descriptionForeground`}>{children}</div>
       {props.hasRemove && (
-        <div className="flex ml-auto w-fit h-fit">
+        <div className="absolute top-0 flex ml-auto right-4 w-fit h-fit">
           <Button
             onClick={props.onDropIndexClick(props.index)}
             disabled={props.disabled || props.readonly}
             size={'icon'}
-            className="p-1 bg-red-700 w-fit h-fit"
+            className="p-1 bg-transparent w-fit h-fit hover:bg-red-700"
             style={{
               flex: 'none',
             }}
@@ -220,11 +270,12 @@ function ArrayFieldItemTemplate(props: ArrayFieldTemplateItemType) {
 function ArrayFieldTitleTemplate(props: ArrayFieldTitleProps) {
   const { title, idSchema } = props
   const id = titleId(idSchema)
-  return (
-    <div id={id} className="text-xs">
-      {title}
-    </div>
-  )
+  return null
+  // return (
+  //   <div id={id} className="text-xs">
+  //     {title}
+  //   </div>
+  // )
 }
 
 const uiSchema: UiSchema = {
@@ -316,6 +367,7 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
         </VSCodeButton>
       </div>
       <div className="flex flex-col py-2 divide-y gap-y-4 divide-vscode-textSeparator-foreground">
+        {/* <pre>{JSON.stringify(input_json_schema, null, 2)}</pre> */}
         <Button
           className="flex flex-row text-sm gap-x-2 bg-vscode-dropdown-background text-vscode-dropdown-foreground hover:opacity-90 hover:bg-vscode-dropdown-background"
           onClick={() => {
@@ -332,7 +384,7 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
                     start: 0,
                     end: 0,
                   },
-                  content: JSON.stringify(empty(input_json_schema), null, 2),
+                  content: '{}',
                 }),
               },
             })
@@ -348,7 +400,7 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
                 <Button
                   variant={'ghost'}
                   size={'icon'}
-                  className="p-1 w-fit h-fit"
+                  className="p-1 w-fit h-fit text-vscode-icon-foreground"
                   onClick={() => {
                     const runTestRequest: TestRequest = {
                       functions: [
@@ -438,7 +490,7 @@ const EditTestCaseForm = ({
           <Edit2 className="w-3 h-3 text-vscode-descriptionForeground" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-screen overflow-y-scroll bg-vscode-editorWidget-background border-vscode-descriptionForeground">
+      <DialogContent className="max-h-screen overflow-y-scroll bg-vscode-editorWidget-background border-vscode-textSeparator-foreground overflow-x-clip">
         <Form
           schema={schema}
           formData={formData}
@@ -450,7 +502,8 @@ const EditTestCaseForm = ({
             ObjectFieldTemplate: MyObjectTemplate,
             ButtonTemplates: {
               AddButton,
-              RemoveButton,
+              // RemoveButton,
+              SubmitButton,
             },
             ArrayFieldTitleTemplate: ArrayFieldTitleTemplate,
             ArrayFieldItemTemplate: ArrayFieldItemTemplate,
@@ -484,232 +537,6 @@ const TestCaseCard: React.FC<{ testCaseName: string; content: string }> = ({ tes
         {content.length > 200 && '...'}
       </div>
     </div>
-  )
-}
-
-const PositionalTestCase: React.FC<{ input: string; content: string | undefined }> = ({ input, content }) => {
-  const [singleArgValue, setSingleArgValue] = useState(content ?? '')
-
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="flex flex-row items-baseline gap-1">
-        <span>input</span>
-        <div className="text-xs italic">
-          <TypeComponent typeString={input} />
-        </div>
-      </div>
-
-      <VSCodeTextArea
-        placeholder="Enter the input as json like { 'hello': 'world' } or a string"
-        className="w-full"
-        resize="vertical"
-        value={singleArgValue}
-        onInput={(e: any) => {
-          setSingleArgValue(e.target.value)
-        }}
-      />
-      <TestButtons
-        data={() => ({
-          type: 'positional',
-          value: singleArgValue,
-        })}
-      />
-    </div>
-  )
-}
-
-const NamedTestCase: React.FC<{ values: { name: StringSpan; type: string }[]; content: string | any | undefined }> = ({
-  values,
-  content: raw_content,
-}) => {
-  const [content, setContent] = useState(new Map<string, string>())
-
-  useEffect(() => {
-    if (!raw_content) setContent(new Map<string, string>())
-
-    try {
-      const parsed = JSON.parse(raw_content)
-      if (typeof parsed === 'object') {
-        // As a key value pair
-        setContent(new Map(Object.entries(parsed).map(([k, v]) => [k, JSON.stringify(v, null, 2)])))
-      }
-    } catch (e) {}
-  }, [raw_content])
-
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="flex flex-col gap-1">
-        {typeof content === 'string' ? (
-          <div className="text-red-500">
-            Something went wrong. Expect a json, but got invalid content. Open the file and fix it manually.
-          </div>
-        ) : (
-          <>
-            {values.map(({ name, type }) => (
-              <div key={name.value} className="flex flex-col gap-1">
-                <div className="flex flex-row items-baseline gap-1">
-                  <span>{name.value}</span>
-                  <div className="text-xs italic">
-                    <TypeComponent typeString={type} />
-                  </div>
-                </div>
-                <VSCodeTextArea
-                  placeholder="Enter the input as json like { 'hello': 'world' } or a string"
-                  className="w-full"
-                  resize="vertical"
-                  value={content.get(name.value) ?? ''}
-                  onInput={(e: any) => {
-                    setContent((c) => {
-                      c.set(name.value, e.target.value)
-                      return c
-                    })
-                  }}
-                />
-              </div>
-            ))}
-            <TestButtons
-              data={() => ({
-                type: 'named',
-                value: values.map(({ name }) => ({
-                  name: name.value,
-                  value: content.get(name.value) ?? '',
-                })),
-              })}
-            />
-          </>
-        )}
-      </div>
-    </div>
-  )
-}
-
-const TestButtons: React.FC<{ data: () => TestRequest['functions'][0]['tests'][0]['params'] }> = ({ data }) => {
-  const {
-    func: { name: func_name, impls } = {},
-    impl: { name } = {},
-    test_case: { name: testCaseName } = {},
-  } = useSelections()
-
-  if (!name || !impls || !func_name) return <i>No impls for this function</i>
-
-  return (
-    <div className="flex flex-row justify-between">
-      <div className="flex flex-row gap-2">
-        <RunImplButton
-          funcName={func_name.value}
-          testCaseName={testCaseName?.value ?? 'playground'}
-          implName={name.value}
-          data={data}
-        />
-        {impls.length > 1 && (
-          <RunAllImplsButton
-            funcName={func_name.value}
-            testCaseName={testCaseName?.value ?? 'playground'}
-            impls={impls.map((i) => i.name.value)}
-            data={data}
-          />
-        )}
-      </div>
-      <div>
-        <SaveButton funcName={func_name.value} testCaseName={testCaseName} data={data} />
-      </div>
-    </div>
-  )
-}
-
-const SaveButton: React.FC<{
-  funcName: string
-  testCaseName: StringSpan | undefined
-  data: () => TestRequest['functions'][0]['tests'][0]['params']
-}> = ({ funcName, testCaseName, data }) => {
-  const { root_path } = useContext(ASTContext)
-  return (
-    <VSCodeButton
-      className="flex justify-end"
-      onClick={() => {
-        vscode.postMessage({
-          command: 'saveTest',
-          data: {
-            root_path,
-            funcName,
-            testCaseName,
-            params: data(),
-          },
-        })
-      }}
-    >
-      Save
-    </VSCodeButton>
-  )
-}
-
-const RunAllImplsButton: React.FC<{
-  funcName: string
-  testCaseName: string
-  impls: string[]
-  data: () => TestRequest['functions'][0]['tests'][0]['params']
-}> = ({ funcName, testCaseName, impls, data }) => {
-  return (
-    <VSCodeButton
-      className="flex justify-end"
-      onClick={() => {
-        const runTestRequest: TestRequest = {
-          functions: [
-            {
-              name: funcName,
-              tests: [
-                {
-                  name: testCaseName,
-                  params: data(),
-                  impls,
-                },
-              ],
-            },
-          ],
-        }
-        vscode.postMessage({
-          command: 'runTest',
-          data: runTestRequest,
-        })
-      }}
-    >
-      Run all impls
-    </VSCodeButton>
-  )
-}
-
-const RunImplButton: React.FC<{
-  funcName: string
-  testCaseName: string
-  implName: string
-  data: () => TestRequest['functions'][0]['tests'][0]['params']
-}> = ({ funcName, testCaseName, implName, data }) => {
-  return (
-    <VSCodeButton
-      className="flex justify-end"
-      onClick={() => {
-        const runTestRequest: TestRequest = {
-          functions: [
-            {
-              name: funcName,
-              tests: [
-                {
-                  name: testCaseName,
-                  params: data(),
-                  impls: [implName],
-                },
-              ],
-            },
-          ],
-        }
-        vscode.postMessage({
-          command: 'runTest',
-          data: runTestRequest,
-        })
-      }}
-    >
-      Run impl: {implName}
-    </VSCodeButton>
   )
 }
 

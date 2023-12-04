@@ -1,6 +1,13 @@
 class ProposedMessage {
     thread Conversation
     generated_response string 
+    dummy DummyObj?
+}
+
+class DummyObj {
+    prop1 string
+    prop2 int
+    prop3 bool
 }
 
 enum  Sentiment {
