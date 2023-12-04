@@ -24,6 +24,7 @@ T = typing.TypeVar("T", bound=GlooTestCaseBase)
 class TestRunMeta(BaseModel):
     dashboard_url: str
 
+
 class TestCaseMetadata:
     node_id: str
     dataset_name: str
