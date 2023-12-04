@@ -16,21 +16,25 @@ export function activate(context: vscode.ExtensionContext) {
   const config = vscode.workspace.getConfiguration('baml')
   testExecutor.start()
 
-  const bamlPlygroundCommand = vscode.commands.registerCommand('baml.openBamlPanel', (args) => {
-    const initialFunctionName = args.functionName
-    const initialImplName = args.implName
-    const config = vscode.workspace.getConfiguration()
-    config.update('baml.bamlPanelOpen', true, vscode.ConfigurationTarget.Global)
-    console.log('Opening BAML Panel', initialFunctionName, initialImplName)
-    WebPanelView.render(context.extensionUri)
+  const bamlPlygroundCommand = vscode.commands.registerCommand(
+    'baml.openBamlPanel',
+    (args?: { functionName?: string; implName?: string; showTests?: boolean }) => {
+      const initialFunctionName = args?.functionName
+      const initialImplName = args?.implName
+      const showTests = args?.showTests
+      const config = vscode.workspace.getConfiguration()
+      config.update('baml.bamlPanelOpen', true, vscode.ConfigurationTarget.Global)
+      WebPanelView.render(context.extensionUri)
 
-    WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
-    WebPanelView.currentPanel?.postMessage('setSelectedResource', {
-      functionName: initialFunctionName,
-      implName: initialImplName,
-      testCaseName: undefined,
-    })
-  })
+      WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
+      WebPanelView.currentPanel?.postMessage('setSelectedResource', {
+        functionName: initialFunctionName,
+        implName: initialImplName,
+        testCaseName: undefined,
+        showTests: showTests,
+      })
+    },
+  )
 
   context.subscriptions.push(bamlPlygroundCommand)
   context.subscriptions.push(vscode.languages.registerCodeLensProvider({ scheme: 'file', language: 'baml' }, glooLens))

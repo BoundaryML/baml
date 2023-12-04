@@ -8,6 +8,7 @@
 # fmt: off
 
 from ..types.classes.cls_conversation import Conversation
+from ..types.classes.cls_dummyobj import DummyObj
 from ..types.classes.cls_message import Message
 from ..types.classes.cls_proposedmessage import ProposedMessage
 from ..types.enums.enm_messagesender import MessageSender
@@ -50,6 +51,9 @@ class IBAMLTextPolisher:
     def register_impl(
         self, name: ImplName
     ) -> typing.Callable[[ITextPolisher], ITextPolisher]:
+        ...
+
+    async def __call__(self, arg: ProposedMessage, /) -> str:
         ...
 
     def get_impl(self, name: ImplName) -> BAMLTextPolisherImpl:

@@ -37,6 +37,9 @@ class IBAMLBlah(BaseBAMLFunction[str]):
             ["v1", "v2"],
         )
 
+    async def __call__(self, *args, **kwargs) -> str:
+        return await self.get_impl("v1").run(*args, **kwargs)
+
 BAMLBlah = IBAMLBlah()
 
 __all__ = [ "BAMLBlah" ]

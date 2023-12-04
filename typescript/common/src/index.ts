@@ -22,6 +22,7 @@ export interface TestRequest {
 }
 
 export enum TestStatus {
+  Compiling = 'COMPILING',
   Queued = 'QUEUED',
   Running = 'RUNNING',
   Passed = 'PASSED',
@@ -34,11 +35,18 @@ export interface TestResult {
   testName: string
   implName: string
   status: TestStatus
+  url?: string
   output: {
     error?: string
     parsed?: string
     raw?: string
   }
+}
+
+export interface TestState {
+  exit_code?: number
+  results: TestResult[]
+  test_url: string | null
 }
 
 function getFullTestName(testName: string, impl: string, fnName: string) {

@@ -1,21 +1,27 @@
 import CustomErrorBoundary from '@/utils/ErrorFallback'
-import { ParserDatabase, TestResult } from '@baml/common'
+import { ParserDatabase, TestState } from '@baml/common'
 import { VSCodeButton } from '@vscode/webview-ui-toolkit/react'
 import React, { PropsWithChildren, createContext, useCallback, useEffect, useMemo, useState } from 'react'
 
 export const ASTContext = createContext<{
   root_path: string
   db: ParserDatabase
-  test_results: TestResult[]
+  jsonSchema: {
+    definitions: { [k: string]: any }
+  }
+  test_results?: TestState
+  test_log?: string
   selections: {
     selectedFunction: string | undefined
     selectedImpl: string | undefined
     selectedTestCase: string | undefined
+    showTests: boolean
   }
   setSelection: (
     functionName: string | undefined,
     implName: string | undefined,
     testCaseName: string | undefined,
+    showTests: boolean | undefined,
   ) => void
 }>({
   root_path: '',
@@ -25,11 +31,16 @@ export const ASTContext = createContext<{
     clients: [],
     enums: [],
   },
-  test_results: [],
+  jsonSchema: {
+    definitions: {},
+  },
+  test_log: undefined,
+  test_results: undefined,
   selections: {
     selectedFunction: undefined,
     selectedImpl: undefined,
     selectedTestCase: undefined,
+    showTests: true,
   },
   setSelection: () => {},
 })
@@ -38,9 +49,15 @@ function useSelectionSetup() {
   const [selectedFunction, setSelectedFunction] = useState<string | undefined>(undefined)
   const [selectedImpl, setSelectedImpl] = useState<string | undefined>(undefined)
   const [selectedTestCase, setSelectedTestCase] = useState<string | undefined>(undefined)
+  const [showTests, setShowTests] = useState<boolean>(true)
 
   const setSelectionFunction = useCallback(
-    (functionName: string | undefined, implName: string | undefined, testCaseName: string | undefined) => {
+    (
+      functionName: string | undefined,
+      implName: string | undefined,
+      testCaseName: string | undefined,
+      showTests: boolean | undefined,
+    ) => {
       if (functionName) {
         setSelectedFunction(functionName)
         setSelectedImpl(implName)
@@ -53,6 +70,11 @@ function useSelectionSetup() {
           setSelectedTestCase(testCaseName)
         }
       }
+      if (showTests !== undefined) {
+        setShowTests(showTests)
+      } else if (testCaseName !== undefined) {
+        setShowTests(true)
+      }
     },
     [],
   )
@@ -61,6 +83,7 @@ function useSelectionSetup() {
     selectedFunction,
     selectedImpl,
     selectedTestCase,
+    showTests,
     setSelection: setSelectionFunction,
   }
 }
@@ -68,27 +91,46 @@ function useSelectionSetup() {
 export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
   const [projects, setProjects] = useState<{ root_dir: string; db: ParserDatabase }[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>(undefined)
-  const [testResults, setTestResults] = useState<TestResult[]>([])
-  const { selectedFunction, selectedImpl, selectedTestCase, setSelection } = useSelectionSetup()
+  const [testResults, setTestResults] = useState<TestState | undefined>(undefined)
+  const { selectedFunction, selectedImpl, selectedTestCase, showTests, setSelection } = useSelectionSetup()
+  const [testLog, setTestLog] = useState<string | undefined>(undefined)
 
   const selectedState = useMemo(() => {
     if (selectedProjectId === undefined) return undefined
     let match = projects.find((project) => project.root_dir === selectedProjectId)
     if (match) {
+      let jsonSchema = {
+        definitions: Object.fromEntries([
+          ...match.db.classes.flatMap((c) => Object.entries(c.jsonSchema)),
+          ...match.db.enums.flatMap((c) => Object.entries(c.jsonSchema)),
+        ]),
+      }
       return {
         root_path: match.root_dir,
         db: match.db,
+        jsonSchema: jsonSchema,
         test_results: testResults,
+        test_log: testLog,
         selections: {
           selectedFunction,
           selectedImpl,
           selectedTestCase,
+          showTests,
         },
         setSelection,
       }
     }
     return undefined
-  }, [projects, selectedProjectId, testResults, selectedFunction, selectedImpl, selectedTestCase, setSelection])
+  }, [
+    projects,
+    selectedProjectId,
+    testResults,
+    selectedFunction,
+    selectedImpl,
+    selectedTestCase,
+    showTests,
+    setSelection,
+  ])
 
   useEffect(() => {
     setSelectedProjectId((prev) => prev ?? projects[0]?.root_dir)
@@ -100,7 +142,15 @@ export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
       const messageContent = event.data.content
 
       switch (command) {
+        case 'test-stdout': {
+          if (messageContent === '<BAML_RESTART>') {
+            setTestLog(undefined)
+          } else {
+            setTestLog((prev) => (prev ? prev + messageContent : messageContent))
+          }
+        }
         case 'setDb': {
+          console.log('parser db updated', messageContent)
           setProjects(messageContent.map((p: any) => ({ root_dir: p[0], db: p[1] })))
           break
         }
@@ -113,28 +163,26 @@ export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
             functionName: string | undefined
             implName?: string
             testCaseName?: string
+            showTests?: boolean
           }
-          setSelection(content.functionName, content.implName, content.testCaseName)
+          setSelection(content.functionName, content.implName, content.testCaseName, content.showTests)
           break
         }
         case 'test-results': {
-          console.log('REACT test-results', messageContent)
-          setTestResults(messageContent as TestResult[])
+          setTestResults(messageContent as TestState)
           break
         }
       }
     }
-    console.log('REACT adding event listener')
     window.addEventListener('message', fn)
 
     return () => {
-      console.log('REACT removing event listener')
       window.removeEventListener('message', fn)
     }
   }, [])
 
   return (
-    <main className="w-full h-screen py-2">
+    <main className="w-full h-screen px-0 py-2">
       {selectedState === undefined ? (
         projects.length === 0 ? (
           <div>Loading...</div>

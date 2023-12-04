@@ -8,6 +8,7 @@
 # fmt: off
 
 from ..types.classes.cls_conversation import Conversation
+from ..types.classes.cls_dummyobj import DummyObj
 from ..types.classes.cls_improvedresponse import ImprovedResponse
 from ..types.classes.cls_message import Message
 from ..types.classes.cls_proposedmessage import ProposedMessage
@@ -52,6 +53,9 @@ class IBAMLMaybePolishText:
     def register_impl(
         self, name: ImplName
     ) -> typing.Callable[[IMaybePolishText], IMaybePolishText]:
+        ...
+
+    async def __call__(self, arg: ProposedMessage, /) -> ImprovedResponse:
         ...
 
     def get_impl(self, name: ImplName) -> BAMLMaybePolishTextImpl:

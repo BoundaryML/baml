@@ -14,6 +14,7 @@ from .__do_not_import.functions.fx_messagesimplifier import IMessageSimplifier, 
 from .__do_not_import.functions.fx_textpolisher import ITextPolisher, ITextPolisherOutput
 from .__do_not_import.types.classes.cls_classifyresponse import ClassifyResponse
 from .__do_not_import.types.classes.cls_conversation import Conversation
+from .__do_not_import.types.classes.cls_dummyobj import DummyObj
 from .__do_not_import.types.classes.cls_empty import Empty
 from .__do_not_import.types.classes.cls_hi import Hi
 from .__do_not_import.types.classes.cls_improvedresponse import ImprovedResponse
@@ -40,6 +41,7 @@ __all__ = [
     'ITextPolisherOutput',
     'ClassifyResponse',
     'Conversation',
+    'DummyObj',
     'Empty',
     'Hi',
     'ImprovedResponse',

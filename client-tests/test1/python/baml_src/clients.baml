@@ -44,7 +44,6 @@ client<llm> AZURE_DEFAULT {
       api_key env.OPENAI_API_KEY
       request_timeout 45
       max_tokens 400
-      foo 100
     }
 }
 

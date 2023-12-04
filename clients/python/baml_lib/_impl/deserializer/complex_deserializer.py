@@ -91,7 +91,9 @@ class UnionDeserializer(BaseDeserializer[T]):
         )
 
         for deserializer in deserializers:
+            diagnostics.push_scope("[union]")
             item = deserializer.coerce(raw, diagnostics, from_lut)
+            diagnostics.pop_scope(errors_as_warnings=True)
             if item.has_value:
                 return Result.from_value(item.as_value)
         return Result.failed()

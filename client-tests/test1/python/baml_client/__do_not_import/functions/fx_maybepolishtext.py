@@ -8,6 +8,7 @@
 # fmt: off
 
 from ..types.classes.cls_conversation import Conversation
+from ..types.classes.cls_dummyobj import DummyObj
 from ..types.classes.cls_improvedresponse import ImprovedResponse
 from ..types.classes.cls_message import Message
 from ..types.classes.cls_proposedmessage import ProposedMessage
@@ -42,6 +43,9 @@ class IBAMLMaybePolishText(BaseBAMLFunction[ImprovedResponse]):
             IMaybePolishText,
             ["v1"],
         )
+
+    async def __call__(self, *args, **kwargs) -> ImprovedResponse:
+        return await self.get_impl("v1").run(*args, **kwargs)
 
 BAMLMaybePolishText = IBAMLMaybePolishText()
 

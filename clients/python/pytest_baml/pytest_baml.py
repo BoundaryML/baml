@@ -1,6 +1,7 @@
 import asyncio
 import typing
 import colorama
+from pydantic import BaseModel
 import pytest
 from baml_core.logger import logger
 
@@ -18,6 +19,10 @@ class GlooTestCaseBase(typing.TypedDict):
 
 
 T = typing.TypeVar("T", bound=GlooTestCaseBase)
+
+
+class TestRunMeta(BaseModel):
+    dashboard_url: str
 
 
 class TestCaseMetadata:
@@ -197,6 +202,7 @@ class BamlPytestPlugin:
 
         self.maybe_start_logging(session)
         if self.__dashboard_url:
+            self.__ipc.send("test_url", TestRunMeta(dashboard_url=self.__dashboard_url))
             logger.info(
                 f"View test results at {colorama.Fore.CYAN}{self.__dashboard_url}{colorama.Fore.RESET}"
             )

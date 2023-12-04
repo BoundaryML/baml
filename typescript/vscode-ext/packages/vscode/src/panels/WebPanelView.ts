@@ -6,7 +6,7 @@ import { StringSpan, TestRequest } from '@baml/common'
 import testExecutor from './execute_test'
 
 import { uniqueNamesGenerator, Config, adjectives, colors, animals } from 'unique-names-generator'
-import { registerFileChange } from '../plugins/language-server'
+import { BamlDB, registerFileChange } from '../plugins/language-server'
 
 const customConfig: Config = {
   dictionaries: [adjectives, colors, animals],
@@ -47,6 +47,13 @@ export class WebPanelView {
 
     // Set an event listener to listen for messages passed from the webview context
     this._setWebviewMessageListener(this._panel.webview)
+    testExecutor.setStdoutListener((log) => {
+      this._panel.webview.postMessage({
+        command: 'test-stdout',
+        content: log,
+      })
+    })
+
     testExecutor.setTestStateListener((testResults) => {
       this._panel.webview.postMessage({
         command: 'test-results',
@@ -83,7 +90,6 @@ export class WebPanelView {
           retainContextWhenHidden: true,
         },
       )
-      console.log('render')
 
       WebPanelView.currentPanel = new WebPanelView(panel, extensionUri)
     }
@@ -202,7 +208,26 @@ export class WebPanelView {
                 )
             try {
               await vscode.workspace.fs.writeFile(uri, Buffer.from(fileContent))
-              await registerFileChange(uri.toString(), "json");
+              await registerFileChange(uri.toString(), 'json')
+              WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
+
+
+            } catch (e: any) {
+              console.log(e)
+            }
+            return
+          }
+          case 'removeTest': {
+            const removeTestRequest: {
+              root_path: string
+              funcName: string
+              testCaseName: StringSpan
+            } = message.data
+            const uri = vscode.Uri.parse(removeTestRequest.testCaseName.source_file)
+            try {
+              await vscode.workspace.fs.delete(uri)
+              await registerFileChange(uri.toString(), 'json')
+              WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
             } catch (e: any) {
               console.log(e)
             }

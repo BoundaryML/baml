@@ -3,6 +3,9 @@
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::{path::PathBuf, sync::Arc};
+mod jsonschema;
+
+use jsonschema::WithJsonSchema;
 
 use baml_lib::{
     internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span},
@@ -95,9 +98,11 @@ pub(crate) fn run(input: &str) -> String {
     let response = json!({
         "enums": schema.db.walk_enums().map(|e| json!({
             "name": StringSpan::new(e.name(), &e.identifier().span()),
+            "jsonSchema": e.json_schema(),
         })).collect::<Vec<_>>(),
         "classes": schema.db.walk_classes().map(|c| json!({
             "name": StringSpan::new(c.name(), &c.identifier().span()),
+            "jsonSchema": c.json_schema(),
         })).collect::<Vec<_>>(),
         "clients": schema.db.walk_clients().map(|c| json!({
             "name": StringSpan::new(c.name(), &c.identifier().span()),
@@ -115,12 +120,15 @@ pub(crate) fn run(input: &str) -> String {
                             |(id, arg)| json!({
                                 "name": StringSpan::new(id.name(), &id.span()),
                                 "type": format!("{}", arg.field_type),
+                                "jsonSchema": arg.field_type.json_schema()
+
                             })
                         ).collect::<Vec<_>>(),
                     }),
                     ast::FunctionArgs::Unnamed(arg) => json!({
                         "arg_type": "positional",
                         "type": format!("{}", arg.field_type),
+                        "jsonSchema": arg.field_type.json_schema()
                     }),
                 },
                 "output": match func.ast_function().output() {
@@ -130,12 +138,14 @@ pub(crate) fn run(input: &str) -> String {
                             |(id, arg)| json!({
                                 "name": StringSpan::new(id.name(), &id.span()),
                                 "type": format!("{}", arg.field_type),
+                                "jsonSchema": arg.field_type.json_schema()
                             })
                         ).collect::<Vec<_>>(),
                     }),
                     ast::FunctionArgs::Unnamed(arg) => json!({
                         "arg_type": "positional",
                         "type": format!("{}", arg.field_type),
+                        "jsonSchema": arg.field_type.json_schema()
                     }),
                 },
                 "test_cases": func.walk_tests().map(
@@ -153,6 +163,11 @@ pub(crate) fn run(input: &str) -> String {
                         json!({
                             "type": "llm",
                             "name": StringSpan::new(i.ast_variant().name(), &i.identifier().span()),
+                            "prompt_key": {
+                                "start": props.prompt.key_span.start,
+                                "end": props.prompt.key_span.end,
+                                "source_file": props.prompt.key_span.file.path(),
+                            },
                             "prompt": props.prompt.value,
                             "input_replacers": props.replacers.0.iter().map(
                                 |r| json!({

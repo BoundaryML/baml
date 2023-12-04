@@ -11,6 +11,7 @@ import {
   TestStatus,
   clientEventLogSchema,
   getFullTestName,
+  TestState as TestStateType,
 } from '@baml/common'
 import { generateTestRequest } from '../plugins/language-server'
 
@@ -43,32 +44,38 @@ interface UpdateTestCaseEvent {
 }
 
 class TestState {
-  private test_results: TestResult[]
-  private testStateListener: ((testResults: TestResult[]) => void) | undefined = undefined
+  private test_results: TestStateType
+  private testStateListener: ((testResults: TestStateType) => void) | undefined = undefined
 
   constructor() {
     this.handleMessage = this.handleMessage.bind(this)
     this.handleLog = this.handleLog.bind(this)
-    this.test_results = []
+    this.test_results = {
+      results: [],
+      test_url: null,
+    }
   }
 
-  public setTestStateListener(listener: (testResults: TestResult[]) => void) {
+  public setTestStateListener(listener: (testResults: TestStateType) => void) {
     this.testStateListener = listener
   }
 
   public resetTestCases(tests: TestRequest) {
-    this.test_results = tests.functions.flatMap((fn) =>
-      fn.tests.flatMap((test) =>
-        test.impls.map((impl) => ({
-          fullTestName: getFullTestName(test.name, impl, fn.name),
-          functionName: fn.name,
-          testName: test.name,
-          implName: impl,
-          status: TestStatus.Queued,
-          output: {},
-        })),
+    this.test_results = {
+      results: tests.functions.flatMap((fn) =>
+        fn.tests.flatMap((test) =>
+          test.impls.map((impl) => ({
+            fullTestName: getFullTestName(test.name, impl, fn.name),
+            functionName: fn.name,
+            testName: test.name,
+            implName: impl,
+            status: TestStatus.Compiling,
+            output: {},
+          })),
+        ),
       ),
-    )
+      test_url: null,
+    }
     this.testStateListener?.(this.test_results)
   }
 
@@ -95,22 +102,44 @@ class TestState {
     }
 
     switch (payload.name) {
+      case 'test_url':
+        this.setTestUrl(payload.data)
+        break
       case 'update_test_case':
         this.handleUpdateTestCase(payload.data)
         break
       case 'log':
-        this.handleLog(clientEventLogSchema.parse(payload.data))
+        let res = clientEventLogSchema.safeParse(payload.data)
+        if (!res.success) {
+          // console.error(res.error)
+        } else {
+          this.handleLog(payload.data)
+        }
         break
     }
   }
+
+  public setExitCode(code: number | null) {
+    this.test_results.exit_code = code ?? 5
+    this.testStateListener?.(this.test_results)
+  }
+
   public getTestResults() {
     return this.test_results
   }
 
-  private handleUpdateTestCase(data: UpdateTestCaseEvent) {
-    const testResult = this.test_results.find((test) => test.fullTestName === data.test_case_arg_name)
+  private setTestUrl(testUrl: { dashboard_url: string }) {
+    this.test_results.test_url = testUrl.dashboard_url
+    this.test_results.results.forEach((test) => {
+      test.status = TestStatus.Queued
+    })
+    this.testStateListener?.(this.test_results)
+  }
 
-    if (testResult) {
+  private handleUpdateTestCase(data: UpdateTestCaseEvent) {
+    const testResult = this.test_results.results.find((test) => test.fullTestName === data.test_case_arg_name)
+
+    http: if (testResult) {
       testResult.status = data.status
       if (data.error_data) {
         testResult.output = {
@@ -123,8 +152,11 @@ class TestState {
 
   private handleLog(data: ClientEventLog) {
     const fullTestName = data.context.tags?.['test_case_arg_name']
-    const testResult = this.test_results.find((test) => test.fullTestName === fullTestName)
+    const testResult = this.test_results.results.find((test) => test.fullTestName === fullTestName)
     if (testResult && data.event_type === 'func_llm') {
+      if (this.test_results.test_url) {
+        http: testResult.url = `${this.test_results.test_url}&s_eid=${data.event_id}&eid=${data.root_event_id}`
+      }
       testResult.output = {
         error: data.error?.message ?? testResult.output.error,
         parsed: data.io.output?.value ?? testResult.output.parsed,
@@ -138,6 +170,7 @@ class TestState {
 class TestExecutor {
   private server: net.Server | undefined
   private testState: TestState
+  private stdoutListener: ((data: string) => void) | undefined = undefined
 
   constructor() {
     this.server = undefined
@@ -148,8 +181,12 @@ class TestExecutor {
     return this.testState.getTestResults()
   }
 
-  public setTestStateListener(listener: (testResults: TestResult[]) => void) {
+  public setTestStateListener(listener: (testResults: TestStateType) => void) {
     this.testState.setTestStateListener(listener)
+  }
+
+  public setStdoutListener(listener: (data: string) => void) {
+    this.stdoutListener = listener
   }
 
   public start() {
@@ -175,7 +212,6 @@ class TestExecutor {
   }
 
   public async runTest(tests: TestRequest, cwd: string) {
-    outputChannel.show(true)
     this.testState.resetTestCases(tests)
     const tempFilePath = path.join(os.tmpdir(), 'test_temp.py')
     const code = await generateTestRequest(tests)
@@ -183,7 +219,7 @@ class TestExecutor {
       vscode.window.showErrorMessage('Could not generate test request')
       return
     }
-    console.log(code)
+
     fs.writeFileSync(tempFilePath, code)
 
     // Add filters.
@@ -200,15 +236,22 @@ class TestExecutor {
     // Run the Python script in a child process
     // const process = spawn(pythonExecutable, [tempFilePath]);
     // Run the Python script using exec
+    this.stdoutListener?.('<BAML_RESTART>')
     const cp = exec(command, {
       cwd: cwd,
     })
 
     cp.stdout?.on('data', (data) => {
       outputChannel.appendLine(data)
+      this.stdoutListener?.(data)
     })
     cp.stderr?.on('data', (data) => {
       outputChannel.appendLine(data)
+      this.stdoutListener?.(data)
+    })
+
+    cp.on('exit', (code, signal) => {
+      this.testState.setExitCode(code ?? (signal ? 3 : 5))
     })
   }
 

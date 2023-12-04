@@ -1,6 +1,65 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { ASTContext } from './ASTProvider'
 
+type JSONSchema = {
+  [key: string]: any
+  definitions?: { [key: string]: any }
+}
+
+function removeUnreferencedDefinitions(schema: JSONSchema): JSONSchema {
+  if (!schema || typeof schema !== 'object' || !schema.definitions) {
+    return schema
+  }
+
+  // Function to collect references from a given object
+  function collectRefs(obj: any, refs: Set<string>) {
+    if (obj && typeof obj === 'object') {
+      for (const key of Object.keys(obj)) {
+        if (key === '$ref' && typeof obj[key] === 'string') {
+          // Extract and store the reference
+          const ref = obj[key].replace('#/definitions/', '')
+          refs.add(ref)
+        } else {
+          // Recursively collect references from nested objects
+          collectRefs(obj[key], refs)
+        }
+      }
+    }
+  }
+
+  // Initialize a set to keep track of all referenced definitions
+  const referencedDefs = new Set<string>()
+
+  // Collect references from the entire schema, excluding the definitions object itself
+  collectRefs({ ...schema, definitions: {} }, referencedDefs)
+
+  // Iterate over the definitions to find and include indirectly referenced definitions
+  let newlyAdded: boolean
+  do {
+    newlyAdded = false
+    for (const def of Object.keys(schema.definitions)) {
+      if (referencedDefs.has(def)) {
+        const initialSize = referencedDefs.size
+        collectRefs(schema.definitions[def], referencedDefs)
+        if (referencedDefs.size > initialSize) {
+          newlyAdded = true
+        }
+      }
+    }
+  } while (newlyAdded)
+
+  // Filter out definitions that are not referenced
+  const newDefinitions = Object.keys(schema.definitions)
+    .filter((def) => referencedDefs.has(def))
+    .reduce((newDefs, def) => {
+      if (schema.definitions) {
+        newDefs[def] = schema.definitions[def]
+      }
+      return newDefs
+    }, {} as { [key: string]: any })
+
+  return { ...schema, definitions: newDefinitions }
+}
 export function useSelections() {
   const ctx = useContext(ASTContext)
   if (!ctx) {
@@ -9,7 +68,9 @@ export function useSelections() {
   const {
     db,
     test_results: test_results_raw,
-    selections: { selectedFunction, selectedImpl, selectedTestCase },
+    jsonSchema,
+    test_log,
+    selections: { selectedFunction, selectedImpl, selectedTestCase, showTests },
   } = ctx
 
   const func = useMemo(() => {
@@ -33,31 +94,73 @@ export function useSelections() {
     }
     return func?.test_cases.find((t) => t.name.value === selectedTestCase) ?? func?.test_cases.at(0)
   }, [func, selectedTestCase])
+
+  const test_result_exit_status = useMemo(() => {
+    if (test_results_raw?.exit_code === undefined) return undefined
+    if (test_results_raw.exit_code === 0 || test_results_raw.exit_code === 1) {
+      return 'COMPLETED'
+    } else {
+      return 'ERROR'
+    }
+  }, [test_results_raw, func?.name.value])
+  const test_result_url = useMemo(() => {
+    if (!test_results_raw) return undefined
+    if (test_results_raw.test_url) {
+      return { text: 'Dashboard', url: test_results_raw.test_url }
+    } else {
+      return {
+        text: 'Learn how to persist runs',
+        url: 'https://docs.boundaryml.com/v2/mdx/quickstart#setting-up-the-boundary-dashboard',
+      }
+    }
+  }, [test_results_raw, func?.name.value])
+
   const test_results = useMemo(
-    () => test_results_raw.filter((tr) => tr.functionName == func?.name.value),
+    () => test_results_raw?.results.filter((tr) => tr.functionName == func?.name.value),
     [test_results_raw, func?.name.value],
   )
+
+  const input_json_schema = useMemo(() => {
+    if (!func) return undefined
+
+    let base_schema = {
+      title: `${func.name.value} Input`,
+      ...jsonSchema,
+    }
+
+    let merged_schema = {}
+
+    if (func.input.arg_type === 'named') {
+      merged_schema = {
+        type: 'object',
+        properties: Object.fromEntries(func.input.values.map((v) => [v.name.value, v.jsonSchema])),
+        ...base_schema,
+      }
+    } else {
+      merged_schema = {
+        ...func.input.jsonSchema,
+        ...base_schema,
+      }
+    }
+
+    return removeUnreferencedDefinitions(merged_schema)
+  }, [func, jsonSchema])
 
   return {
     func,
     impl,
+    showTests,
     test_case,
     test_results,
+    test_result_url,
+    test_result_exit_status,
+    test_log,
+    input_json_schema,
   }
 }
 
 export function useImplCtx(name: string) {
-  const { func, test_results, test_case } = useSelections()
+  const { func } = useSelections()
 
-  const impl_test_result = useMemo(
-    () =>
-      test_results.find(
-        (tr) =>
-          tr.implName == name &&
-          (test_case?.name.value ? tr.testName == test_case.name.value : tr.testName == 'playground'),
-      ),
-    [test_results, name],
-  )
-
-  return { func, test_result: impl_test_result }
+  return { func }
 }

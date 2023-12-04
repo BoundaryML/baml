@@ -32,6 +32,8 @@ class IPCChannel(BaseIPCChannel):
 
     def send(self, name: str, data: T) -> None:
         self._socket.sendall(
-            Message(name=name, data=data).model_dump_json(by_alias=True).encode("utf-8")
+            (
+                Message(name=name, data=data).model_dump_json(by_alias=True)
+                + "<END_MSG>\n"
+            ).encode("utf-8")
         )
-        self._socket.sendall(b"<END_MSG>\n")
