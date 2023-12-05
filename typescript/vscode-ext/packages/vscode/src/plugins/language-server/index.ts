@@ -10,6 +10,8 @@ import * as vscode from 'vscode'
 import { WebPanelView } from '../../panels/WebPanelView'
 import { ParserDatabase, TestRequest } from '@baml/common'
 import glooLens from '../../GlooCodeLensProvider'
+import fetch from 'node-fetch'
+import semver from 'semver'
 
 const packageJson = require('../../../package.json') // eslint-disable-line
 
@@ -24,6 +26,94 @@ export const BamlDB = new Map<string, any>()
 
 export const generateTestRequest = async (test_request: TestRequest): Promise<string | undefined> => {
   return await client.sendRequest('generatePythonTests', test_request)
+}
+
+const getLatestVersion = async () => {
+  const url = 'https://raw.githubusercontent.com/GlooHQ/homebrew-baml/main/version.json'
+  console.info('Checking for updates at', url)
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`Failed to get versions: ${response.status}`)
+  }
+  const versions = (await response.json()) as { cli: string; py_client: string }
+
+  // Parse as semver
+  const cli = semver.parse(versions.cli)
+  const py_client = semver.parse(versions.py_client)
+
+  if (!cli || !py_client) {
+    throw new Error('Failed to parse versions')
+  }
+
+  return { cli, py_client }
+}
+
+const getCheckForUpdates = async (showIfNoUpdates: boolean) => {
+  const [versions, localVersion] = await Promise.allSettled([getLatestVersion(), cliVersion()])
+
+  if (versions.status === 'rejected') {
+    vscode.window.showErrorMessage(`Failed to check for updates ${versions.reason}`)
+    return
+  }
+
+  if (localVersion.status === 'rejected') {
+    vscode.window
+      .showErrorMessage(`Have you installed BAML? ${localVersion.reason}`, {
+        title: 'Install BAML',
+      })
+      .then((selection) => {
+        if (selection?.title === 'Install BAML') {
+          // Open a url to: docs.boundaryml.com
+          vscode.commands.executeCommand(
+            'vscode.open',
+            Uri.parse('https://docs.boundaryml.com/v2/mdx/quickstart#install-baml-compiler'),
+          )
+        }
+      })
+    return
+  }
+
+  let { cli } = versions.value
+  let localCli = localVersion.value
+
+  if (semver.gt(cli, localCli)) {
+    vscode.window
+      .showInformationMessage(
+        `A new version of BAML is available. Please update to ${cli} by running "baml update" in the terminal.`,
+        {
+          title: 'Update now',
+        },
+      )
+      .then((selection) => {
+        if (selection?.title === 'Update now') {
+          // Open a new terminal
+          vscode.commands.executeCommand('workbench.action.terminal.new').then(() => {
+            // Run the update command
+            vscode.commands.executeCommand('workbench.action.terminal.sendSequence', {
+              text: 'baml update\n',
+            })
+          })
+        }
+      })
+  } else {
+    if (showIfNoUpdates) {
+      vscode.window.showInformationMessage(`BAML ${cli} is up to date!`)
+    } else {
+      console.info(`BAML is up to date! ${cli} <= ${localCli}`)
+    }
+  }
+}
+
+const cliVersion = async (): Promise<semver.SemVer> => {
+  const res = await client.sendRequest<string | undefined>('cliVersion')
+  if (res) {
+    let parsed = semver.parse(res.split(' ').at(-1))
+    if (!parsed) {
+      throw new Error(`Failed to parse version: ${res}`)
+    }
+    return parsed
+  }
+  throw new Error('Failed to get CLI version')
 }
 
 export const registerFileChange = async (fileUri: string, language: string) => {
@@ -112,10 +202,7 @@ const activateClient = (
         }
       }
     })
-    client.onRequest('set_database', ({ rootPath, db }: {
-      rootPath: string,
-      db: ParserDatabase
-    }) => {
+    client.onRequest('set_database', ({ rootPath, db }: { rootPath: string; db: ParserDatabase }) => {
       console.log('set_database', rootPath, db, WebPanelView.currentPanel)
       BamlDB.set(rootPath, db)
       glooLens.setDB(db)
@@ -125,6 +212,10 @@ const activateClient = (
       // TODO: Handle errors better. But for now the playground shouldn't break.
       // BamlDB.delete(root_path)
       // WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
+    })
+
+    getCheckForUpdates(false).catch((e) => {
+      console.error('Failed to check for updates', e)
     })
   })
 
@@ -189,11 +280,13 @@ const plugin: BamlVSCodePlugin = {
     // Options to control the language client
     const clientOptions: LanguageClientOptions = {
       // Register the server for prisma documents
-      documentSelector: [{ scheme: 'file', language: 'baml' },
-      {
-        language: "json",
-        pattern: '**/baml_src/**'
-      }],
+      documentSelector: [
+        { scheme: 'file', language: 'baml' },
+        {
+          language: 'json',
+          pattern: '**/baml_src/**',
+        },
+      ],
 
       /* This middleware is part of the workaround for https://github.com/prisma/language-tools/issues/311 */
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -256,6 +349,12 @@ const plugin: BamlVSCodePlugin = {
       commands.registerCommand('baml.restartLanguageServer', async () => {
         client = await restartClient(context, client, serverOptions, clientOptions)
         window.showInformationMessage('Baml language server restarted.') // eslint-disable-line @typescript-eslint/no-floating-promises
+      }),
+
+      commands.registerCommand('baml.checkForUpdates', async () => {
+        getCheckForUpdates(true).catch((e) => {
+          console.error('Failed to check for updates', e)
+        })
       }),
     )
 

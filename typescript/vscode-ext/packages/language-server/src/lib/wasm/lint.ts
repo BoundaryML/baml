@@ -31,7 +31,6 @@ export interface LinterInput {
 }
 
 export default function lint(input: LinterInput, onError?: (errorMessage: string) => void): LintResponse {
-  console.log('running lint() from baml-schema-wasm')
   try {
     if (process.env.FORCE_PANIC_baml_SCHEMA) {
       handleFormatPanic(() => {

@@ -27,7 +27,7 @@ import type { LSOptions, LSSettings } from './lib/types'
 import { getVersion, getEnginesVersion, getCliVersion } from './lib/wasm/internals'
 import { BamlDirCache } from './file/fileCache'
 import { LinterInput } from './lib/wasm/lint'
-import { cliBuild } from './baml-cli'
+import { cliBuild, cliVersion } from './baml-cli'
 import { TestRequest } from '@baml/common'
 import generate_test_file from './lib/wasm/generate_test_file'
 
@@ -167,7 +167,6 @@ export function startServer(options?: LSOptions): void {
       bamlCache.refreshDirectory(e.document)
       bamlCache.addDocument(e.document)
       debouncedValidateTextDocument(e.document)
-      console.log('Added document ' + e.document.uri)
     } catch (e: any) {
       if (e instanceof Error) {
         console.log('Error opening doc' + e.message + ' ' + e.stack)
@@ -180,7 +179,6 @@ export function startServer(options?: LSOptions): void {
   // Only keep settings for open documents
   documents.onDidClose((e) => {
     try {
-      console.log("Closing documents", e.document.uri);
       bamlCache.refreshDirectory(e.document)
       // Revalidate all open files since this one may have been deleted.
       // we could be smarter and only do this if the doc was deleted, not just closed.
@@ -273,24 +271,24 @@ export function startServer(options?: LSOptions): void {
           }
         }),
       }
-      console.log(`Searching database for ${rootPath}`)
       if (srcDocs.length === 0) {
-        console.log('No BAML files found in the workspace.')
+        console.log(`No BAML files found in the workspace. ${rootPath}`)
         connection.sendNotification('baml/message', {
           type: 'warn',
           message: 'Unable to find BAML files. See Output panel -> BAML Language Server for more details.',
         })
-      }
-      const response = MessageHandler.handleDiagnosticsRequest(srcDocs, linterInput, showErrorToast)
-      for (const [uri, diagnosticList] of response.diagnostics) {
-        void connection.sendDiagnostics({ uri, diagnostics: diagnosticList })
-      }
-
-      bamlCache.addDatabase(rootPath, response.state)
-      if (response.state) {
-        void connection.sendRequest('set_database', { rootPath, db: response.state })
       } else {
-        void connection.sendRequest('rm_database', rootPath)
+        const response = MessageHandler.handleDiagnosticsRequest(srcDocs, linterInput, showErrorToast)
+        for (const [uri, diagnosticList] of response.diagnostics) {
+          void connection.sendDiagnostics({ uri, diagnostics: diagnosticList })
+        }
+
+        bamlCache.addDatabase(rootPath, response.state)
+        if (response.state) {
+          void connection.sendRequest('set_database', { rootPath, db: response.state })
+        } else {
+          void connection.sendRequest('rm_database', rootPath)
+        }
       }
     } catch (e: any) {
       if (e instanceof Error) {
@@ -308,7 +306,6 @@ export function startServer(options?: LSOptions): void {
   })
 
   documents.onDidChangeContent((change: { document: TextDocument }) => {
-    console.log('onDidChangeContent ' + change.document.uri)
     debouncedValidateTextDocument(change.document)
   })
 
@@ -318,10 +315,8 @@ export function startServer(options?: LSOptions): void {
   })
 
   documents.onDidSave((change: { document: TextDocument }) => {
-    console.log('onDidSave ' + change.document.uri);
     try {
       const cliPath = config?.path || 'baml'
-      console.log('cliPath ' + cliPath)
       let bamlDir = bamlCache.getBamlDir(change.document)
       if (!bamlDir) {
         console.error(
@@ -405,24 +400,31 @@ export function startServer(options?: LSOptions): void {
   //   //   return MessageHandler.handleDocumentSymbol(params, doc)
   //   // }
   // })
+  connection.onRequest('cliVersion', async () => {
+    try {
+      const res = await new Promise<string>((resolve, reject) => {
+        cliVersion(config?.path || 'baml', reject, (ver) => {
+          resolve(ver)
+        })
+      })
+
+      return res
+    } catch (e: any) {
+      return undefined
+    }
+  })
+
   connection.onRequest('generatePythonTests', (params: TestRequest) => {
     return generateTestFile(params)
   })
-  connection.onRequest("registerFileChange", ({
-    fileUri,
-    language,
-  }: {
-    fileUri: string;
-    language: string;
-  }) => {
+  connection.onRequest('registerFileChange', ({ fileUri, language }: { fileUri: string; language: string }) => {
     // TODO: revalidate if something changed
     // create textdocument from file:
-    console.log("registerFileChange", fileUri, language);
     const textDocument = TextDocument.create(fileUri, language, 1, '')
     bamlCache.refreshDirectory(textDocument)
     bamlCache.getDocuments(textDocument).forEach((doc) => {
       debouncedValidateTextDocument(doc)
-    });
+    })
   })
 
   console.log('Server-side -- listening to connection')
