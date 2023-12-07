@@ -203,7 +203,7 @@ const activateClient = (
       }
     })
     client.onRequest('set_database', ({ rootPath, db }: { rootPath: string; db: ParserDatabase }) => {
-      console.log('set_database', rootPath, db, WebPanelView.currentPanel)
+      // console.log('set_database', rootPath, db, WebPanelView.currentPanel)
       BamlDB.set(rootPath, db)
       glooLens.setDB(db)
       WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
