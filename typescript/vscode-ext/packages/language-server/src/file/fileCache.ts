@@ -68,20 +68,21 @@ export class BamlDirCache {
       const parentDir = this.getBamlDir(textDocument)
       if (fileCache && parentDir) {
         const allFiles = gatherFiles(parentDir)
+        if (allFiles.length === 0) {
+          console.error('No files found')
+          // try again with debug to find issues (temporary hack..)
+          gatherFiles(parentDir, true)
+        }
         fileCache.getDocuments().forEach((doc) => {
           if (!allFiles.includes(doc.uri)) {
             console.log(`removing ${doc.uri}`)
             fileCache.removeFile(doc)
           }
         })
-        // add and update
+        // add new files
         allFiles.forEach((filePath) => {
           if (!fileCache?.getDocument(filePath)) {
             console.log(`adding ${filePath}`)
-            const doc = convertToTextDocument(filePath)
-            fileCache?.addFile(doc)
-          } else {
-            // update the cache
             const doc = convertToTextDocument(filePath)
             fileCache?.addFile(doc)
           }
@@ -89,6 +90,7 @@ export class BamlDirCache {
       } else {
         console.error('Could not find parent directory')
       }
+      console.log('end refresh')
     } catch (e: any) {
       if (e instanceof Error) {
         console.log(`Error refreshing directory: ${e.message} ${e.stack}`)

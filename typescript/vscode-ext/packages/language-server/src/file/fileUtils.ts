@@ -23,17 +23,25 @@ import { URI } from 'vscode-uri';
 // }
 
 
-export function gatherFiles(dir: string, fileList: string[] = []): string[] {
+export function gatherFiles(dir: string, debug: boolean = false, fileList: string[] = []): string[] {
   let uri = URI.parse(dir);
   let dirPath = uri.fsPath;
   const files = fs.readdirSync(dirPath);
+  if (debug) {
+    console.log(`Gathering files from ${dirPath}. uri: ${uri.toString()}`);
+    console.log("files " + JSON.stringify(files, null, 2));
+  }
 
   files.forEach((file) => {
     const filePath = path.join(dirPath, file);
     const fileStat = fs.statSync(filePath);
+    if (debug) {
+      console.log(`Checking ${filePath}`);
+      console.log(`isDirectory: ${fileStat.isDirectory()}`);
+    }
 
     if (fileStat.isDirectory()) {
-      gatherFiles(filePath, fileList);
+      gatherFiles(filePath, debug, fileList);
     } else {
       // check if it has .baml extension
       if (filePath.endsWith('.baml') || filePath.endsWith('.json')) {
