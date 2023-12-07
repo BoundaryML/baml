@@ -68,6 +68,11 @@ export class BamlDirCache {
       const parentDir = this.getBamlDir(textDocument)
       if (fileCache && parentDir) {
         const allFiles = gatherFiles(parentDir)
+        if (allFiles.length === 0) {
+          console.error('No files found')
+          // try again with debug to find issues (temporary hack..)
+          gatherFiles(parentDir, true)
+        }
         fileCache.getDocuments().forEach((doc) => {
           if (!allFiles.includes(doc.uri)) {
             console.log(`removing ${doc.uri}`)
