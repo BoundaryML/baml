@@ -21,10 +21,10 @@ import {
 } from 'vscode-languageserver'
 import type { TextDocument } from 'vscode-languageserver-textdocument'
 import { fullDocumentRange } from './ast/findAtPosition'
-import lint, { LinterInput, ParserDatabase } from './wasm/lint'
+import lint, { LinterInput } from './wasm/lint'
 import { FileCache } from '../file/fileCache'
 import generate_test_file, { GenerateResponse } from './wasm/generate_test_file'
-import { TestRequest } from '@baml/common'
+import { ParserDatabase, TestRequest } from '@baml/common'
 
 // import format from './prisma-schema-wasm/format'
 // import lint from './prisma-schema-wasm/lint'
@@ -80,7 +80,7 @@ export function handleDiagnosticsRequest(
   linterInput: LinterInput,
   onError?: (errorMessage: string) => void,
 ): { diagnostics: Map<string, Diagnostic[]>; state: ParserDatabase | undefined } {
-  console.log(`Linting ${documents.length} documents`)
+  // console.debug(`Linting ${documents.length} documents`)
   const res = lint(linterInput, (errorMessage: string) => {
     if (onError) {
       onError(errorMessage)

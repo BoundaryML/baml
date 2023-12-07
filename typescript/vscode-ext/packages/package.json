@@ -95,6 +95,11 @@
         "command": "baml.openBamlPanel",
         "title": "Open Playground",
         "category": "Baml"
+      },
+      {
+        "command": "baml.checkForUpdates",
+        "title": "Check Updates",
+        "category": "Baml"
       }
     ]
   },
