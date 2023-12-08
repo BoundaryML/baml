@@ -147,6 +147,8 @@ class BaseBAMLFunction(typing.Generic[RET]):
                 sig_params == expected_sig_params
             ), f"{self.name} {sig} does not match expected signature {expected_sig}"
 
+            cb.__name__ = f'{self.__name}:{cb.__name__}' # type: ignore
+
             if asyncio.iscoroutinefunction(cb):
 
                 @functools.wraps(cb)
