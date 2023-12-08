@@ -4,6 +4,7 @@ import inspect
 from typing import Any, Callable, TypeVar
 import typing
 from opentelemetry.trace import get_current_span
+import typeguard
 from .provider import BamlSpanContextManager, baml_tracer, set_tags
 
 F = TypeVar("F", bound=Callable[..., Any])  # Function type
@@ -36,7 +37,8 @@ def _trace_internal(func: F, **kwargs: typing.Any) -> F:
     __tags__: dict[str, str]
     __name__: str
     """
-    param_names = list(inspect.signature(func).parameters.keys())
+    signature = inspect.signature(func).parameters
+    param_names = list(signature.keys())
     tags = kwargs.pop("__tags__", {})
     name = kwargs.pop("__name__", func.__name__)
     # Validate that the user is passing in the correct kwargs types
@@ -52,7 +54,7 @@ def _trace_internal(func: F, **kwargs: typing.Any) -> F:
 
         @functools.wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
-            params = {param_names[i]: arg for i, arg in enumerate(args)}
+            params = {param_names[i] if i < len(param_names) else f"<arg:{i}>": arg for i, arg in enumerate(args)}
             params.update(kwargs)
 
             parent_id = get_current_span().get_span_context().span_id
@@ -70,7 +72,7 @@ def _trace_internal(func: F, **kwargs: typing.Any) -> F:
 
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            params = {param_names[i]: arg for i, arg in enumerate(args)}
+            params = {param_names[i] if i < len(param_names) else f"<arg:{i}>": arg for i, arg in enumerate(args)}
             params.update(kwargs)
 
             parent_id = get_current_span().get_span_context().span_id
