@@ -4,7 +4,6 @@ import inspect
 from typing import Any, Callable, TypeVar
 import typing
 from opentelemetry.trace import get_current_span
-import typeguard
 from .provider import BamlSpanContextManager, baml_tracer, set_tags
 
 F = TypeVar("F", bound=Callable[..., Any])  # Function type
