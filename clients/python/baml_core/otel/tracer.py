@@ -53,7 +53,10 @@ def _trace_internal(func: F, **kwargs: typing.Any) -> F:
 
         @functools.wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
-            params = {param_names[i] if i < len(param_names) else f"<arg:{i}>": arg for i, arg in enumerate(args)}
+            params = {
+                param_names[i] if i < len(param_names) else f"<arg:{i}>": arg
+                for i, arg in enumerate(args)
+            }
             params.update(kwargs)
 
             parent_id = get_current_span().get_span_context().span_id
@@ -71,7 +74,10 @@ def _trace_internal(func: F, **kwargs: typing.Any) -> F:
 
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            params = {param_names[i] if i < len(param_names) else f"<arg:{i}>": arg for i, arg in enumerate(args)}
+            params = {
+                param_names[i] if i < len(param_names) else f"<arg:{i}>": arg
+                for i, arg in enumerate(args)
+            }
             params.update(kwargs)
 
             parent_id = get_current_span().get_span_context().span_id
