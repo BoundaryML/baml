@@ -9,6 +9,4 @@ client MyClient {
 //    | 
 //    | 
 //  1 | client MyClient {
-//  2 |   provider baml-openai-chat
-//  3 | }
 //    | 

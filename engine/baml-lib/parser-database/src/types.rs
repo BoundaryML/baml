@@ -335,7 +335,7 @@ fn visit_client<'db>(idx: ClientId, client: &'db ast::Client, ctx: &mut Context<
     if !client.is_llm() {
         ctx.push_error(DatamodelError::new_validation_error(
             "Only LLM clients are supported. Use: client<llm>",
-            client.span().clone(),
+            client.identifier().span().clone(),
         ));
         return;
     }
@@ -442,7 +442,7 @@ fn visit_client<'db>(idx: ClientId, client: &'db ast::Client, ctx: &mut Context<
 fn visit_variant<'db>(idx: VariantConfigId, variant: &'db ast::Variant, ctx: &mut Context<'db>) {
     if !variant.is_llm() {
         ctx.push_error(DatamodelError::new_validation_error(
-            "Only LLM variants are supported. Use: variant<llm>",
+            "Only LLM variants are supported. Use: impl<llm>",
             variant.span().clone(),
         ));
         return;
@@ -493,7 +493,7 @@ fn visit_variant<'db>(idx: VariantConfigId, variant: &'db ast::Variant, ctx: &mu
         }
     } else {
         ctx.push_error(DatamodelError::new_validation_error(
-            "Missing `client` field in variant<llm>",
+            "Missing `client` field in impl<llm>",
             variant.identifier().span().clone(),
         ));
         None
@@ -524,7 +524,7 @@ fn visit_variant<'db>(idx: VariantConfigId, variant: &'db ast::Variant, ctx: &mu
         }
     } else {
         ctx.push_error(DatamodelError::new_validation_error(
-            "Missing `prompt` field in variant<llm>",
+            "Missing `prompt` field in impl<llm>",
             variant.identifier().span().clone(),
         ));
         None

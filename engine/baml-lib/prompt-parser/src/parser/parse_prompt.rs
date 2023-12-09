@@ -120,6 +120,7 @@ fn handle_code_block(
             Rule::print_block => {
                 handle_print_block(current, top_level_definitions, diagnostics, raw_string)
             }
+            Rule::WHITESPACE => {}
             _ => unreachable_rule!(current, Rule::code_block),
         }
     }
@@ -134,12 +135,13 @@ fn handle_variable(
     assert_correct_parser!(current, Rule::variable);
 
     let span = raw_string.to_raw_span(current.as_span());
-    let raw_text = current.as_str().to_string();
+    let raw_text = current.as_str().trim_end().to_string();
+
     let type_path = current
         .into_inner()
         .filter_map(|inner| {
             if let Rule::identifier = inner.as_rule() {
-                Some(inner.as_str().to_string())
+                Some(inner.as_str().trim_end().to_string())
             } else {
                 diagnostics.push_error(DatamodelError::new_parser_error(
                     format!("Unexpected rule: {:?}", inner.as_rule()),
@@ -149,6 +151,14 @@ fn handle_variable(
             }
         })
         .collect::<Vec<_>>();
+
+    if type_path.is_empty() {
+        diagnostics.push_error(DatamodelError::new_parser_error(
+            "Missing type name".to_string(),
+            span.clone(),
+        ));
+        return;
+    }
 
     top_level_definitions.push(Top::CodeBlock(CodeBlock::Variable(Variable {
         path: type_path,
@@ -207,13 +217,12 @@ fn handle_print_block(
                                 raw_string.to_raw_span(current.as_span().clone()),
                             ));
                         }
-                        _ => diagnostics.push_error(DatamodelError::new_parser_error(
-                            "missing argument".to_string(),
-                            raw_string.to_raw_span(current.as_span().clone()),
-                        )),
+                        Rule::WHITESPACE => {}
+                        _ => unreachable_rule!(current, Rule::variable),
                     }
                 }
             }
+            Rule::WHITESPACE => {}
             _ => unreachable_rule!(current, Rule::print_block),
         }
     }

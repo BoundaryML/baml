@@ -72,7 +72,7 @@ pub(crate) fn parse_variant_block(
     match (name, template_args) {
         (_, None) => Err(DatamodelError::new_validation_error(
             "Missing template for impl. (did you forget <llm, FunctionName>)",
-            diagnostics.span(pair_span),
+            diagnostics.span(pair_span.get(0..4).unwrap()),
         )),
         (Some(name), Some(args)) => match args.len() {
             2 => {
@@ -105,7 +105,7 @@ pub(crate) fn parse_variant_block(
             }
             _ => Err(DatamodelError::new_validation_error(
                 "impl requires 2 template args. (did you forget <llm, FunctionName>)",
-                diagnostics.span(pair_span),
+                diagnostics.span(pair_span.get(0..("impl".len())).unwrap()),
             )),
         },
         _ => unreachable!("Encountered impossible impl declaration during parsing",),
