@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use internal_baml_diagnostics::DatamodelError;
-use internal_baml_schema_ast::ast::{ClassId, WithName, WithSpan};
+use internal_baml_schema_ast::ast::{ClassId, WithIdentifier, WithName, WithSpan};
 
 use crate::validate::validation_pipeline::context::Context;
 
@@ -81,7 +81,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
                 let cls = &ctx.db.ast()[*id];
                 ctx.push_error(DatamodelError::new_validation_error(
                     &format!("These classes form a dependency cycle: {}", cls.name()),
-                    cls.span().clone(),
+                    cls.identifier().span().clone(),
                 ));
             }
         }

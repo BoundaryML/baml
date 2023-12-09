@@ -61,10 +61,15 @@ pub(crate) fn parse_config_block(
         }
     }
 
+    let span = match kw {
+        Some(name) => diagnostics.span(pair_span.get(0..(name.len())).unwrap()),
+        _ => unreachable!("Encountered impossible model declaration during parsing"),
+    };
+
     match (kw, name, template_args) {
         (Some("printer"), _, None) => Err(DatamodelError::new_validation_error(
             "Missing template for printer. (did you forget <type> or <enum>)",
-            diagnostics.span(pair_span),
+            span,
         )),
         (Some("printer"), Some(name), Some(args)) => match args.len() {
             1 => Ok(Top::Config(Configuration::Printer(PrinterConfig {
@@ -72,17 +77,17 @@ pub(crate) fn parse_config_block(
                 fields,
                 attributes,
                 documentation: doc_comment.and_then(parse_comment_block),
-                span: diagnostics.span(pair_span),
+                span,
                 printer_type: args.first().unwrap().to_owned(),
             }))),
             _ => Err(DatamodelError::new_validation_error(
                 "printer requires 1 template args. (did you forget <type> or <enum>)",
-                diagnostics.span(pair_span),
+                span,
             )),
         },
         (Some("client"), _, None) => Err(DatamodelError::new_validation_error(
             "Missing template for client. (did you forget <llm>)",
-            diagnostics.span(pair_span),
+            span,
         )),
         (Some("client"), Some(name), Some(args)) => match args.len() {
             1 => Ok(Top::Client(Client {
@@ -90,17 +95,17 @@ pub(crate) fn parse_config_block(
                 fields,
                 attributes,
                 documentation: doc_comment.and_then(parse_comment_block),
-                span: diagnostics.span(pair_span),
+                span,
                 client_type: args.first().unwrap().to_string(),
             })),
             _ => Err(DatamodelError::new_validation_error(
                 "client requires 1 template args. (did you forget <llm>)",
-                diagnostics.span(pair_span),
+                span,
             )),
         },
         (Some("retry_policy"), _, Some(_)) => Err(DatamodelError::new_validation_error(
             "Template arguments are not allowed for retry_policy.",
-            diagnostics.span(pair_span),
+            span,
         )),
         (Some("retry_policy"), Some(name), None) => {
             Ok(Top::Config(Configuration::RetryPolicy(RetryPolicyConfig {
@@ -108,19 +113,19 @@ pub(crate) fn parse_config_block(
                 fields,
                 attributes,
                 documentation: doc_comment.and_then(parse_comment_block),
-                span: diagnostics.span(pair_span),
+                span,
             })))
         }
         (Some("generator"), _, Some(_)) => Err(DatamodelError::new_validation_error(
             "Template arguments are not allowed for generators.",
-            diagnostics.span(pair_span),
+            span,
         )),
         (Some("generator"), Some(name), None) => Ok(Top::Generator(GeneratorConfig {
             name,
             fields,
             attributes,
             documentation: doc_comment.and_then(parse_comment_block),
-            span: diagnostics.span(pair_span),
+            span,
         })),
         _ => unreachable!("Encountered impossible model declaration during parsing",),
     }

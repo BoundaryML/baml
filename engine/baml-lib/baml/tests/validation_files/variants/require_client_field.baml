@@ -16,7 +16,7 @@ impl<llm, Foo> FooImpl{
 //  6 | impl<llm, Foo> FooImpl{
 //  7 |   prompt "hello world"
 //    | 
-// error: Error validating: Missing `client` field in variant<llm>
+// error: Error validating: Missing `client` field in impl<llm>
 //   -->  variants/require_client_field.baml:6
 //    | 
 //  5 | 

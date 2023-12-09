@@ -13,8 +13,4 @@ client<llm> MyClient {
 //    | 
 //    | 
 //  1 | client<llm> MyClient {
-//  2 |   options {
-//  3 |     max_tokens 100
-//  4 |   }
-//  5 | }
 //    | 

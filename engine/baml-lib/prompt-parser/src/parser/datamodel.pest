@@ -4,15 +4,15 @@ entry = {
 
 segment = {  code_block | comment_block | dangling_code_block | dangling_comment_block | prompt_text | whitespaces }
 whitespaces = { WHITESPACE+ }
-code_block    = { BLOCK_OPEN ~ (print_block | variable) ~ BLOCK_CLOSE }
+code_block    = { BLOCK_OPEN ~ WHITESPACE* ~ (print_block | variable) ~ WHITESPACE* ~ BLOCK_CLOSE }
 // input_block   = { input_keyword ~ ("." ~ identifier)* }
-print_block   = { print_keyword ~ template_args? ~ arg_list }
+print_block   = { print_keyword ~ template_args? ~ arg_list? }
 template_args = { "<" ~ identifier ~ ">" }
 print_keyword = _{ "print" ~ identifier }
-arg_list      = _{ "(" ~ (variable ~ ("," ~ variable)*)? ~ ")" }
+arg_list      = _{ "(" ~ WHITESPACE* ~ (variable ~ ("," ~ WHITESPACE* ~ variable)*)? ~ WHITESPACE* ~ ")" }
 variable    = { identifier ~ ("." ~ identifier)* }
 
-identifier    = { (ASCII_ALPHA | "_")+ }
+identifier = {(ASCII_ALPHA | "_")+}
 
 comment_text_2 = { (!"///}" ~ ANY)* }
 comment_text_1 = { (!"//}" ~ ANY)* }
