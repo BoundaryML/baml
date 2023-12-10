@@ -221,9 +221,9 @@ fn parse_data_type(json_input: &Value) -> Result<DataType, serde_json::Error> {
             }))
         }
         Some("union") => {
-            let members: Vec<DataType> = json_input["members"]
+            let members: Vec<DataType> = json_input["options"]
                 .as_array()
-                .ok_or_else(|| Error::custom("Expected 'members' to be an array"))?
+                .ok_or_else(|| Error::custom("Expected 'options' to be an array"))?
                 .iter()
                 .map(parse_data_type)
                 .collect::<Result<Vec<_>, _>>()?;
