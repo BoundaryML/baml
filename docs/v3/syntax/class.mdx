@@ -1,0 +1,63 @@
+---
+title: "class"
+---
+
+Classes consist of a name, and a list of properties and their [types](type).
+
+<CodeGroup>
+```llvm Baml
+class Foo {
+  property1 string
+  property2 int?
+  property3 Bar[]
+  property4 MyEnum
+}
+```
+
+```python Python Equivalent
+from pydantic import BaseModel
+from path.to.bar import Bar
+from path.to.my_enum import MyEnum
+
+class Foo(BaseModel):
+  property1: str
+  property2: Optional[int]= None
+  property3: List[Bar]
+  property4: MyEnum
+```
+
+```Typescript Typescript Equivalent
+import z from 'zod';
+import { BarZod } from './path/to/bar';
+import { MyEnumZod } from './path/to/my_enum';
+
+const FooZod = z.object({
+  property1: z.string(),
+  property2: z.number().int().nullable().optional(),
+  property3: z.array(BarZod),
+  property4: MyEnumZod,
+});
+
+type Foo = z.infer<typeof FooZod>;
+```
+
+</CodeGroup>
+
+## Inheritance
+
+<Info>Not supported yet</Info>
+
+## Properties
+
+Classes may have any number of properties.
+Property names must follow:
+
+1. Must start with a letter
+2. Must contain only letters, numbers, and underscores
+3. Must be unique within the class
+
+The type of a property can be any [supported type](/type)
+
+### Default values
+
+Properties don't yet support default values. Let us know if you'd like to see this feature.

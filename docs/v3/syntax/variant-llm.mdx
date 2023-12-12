@@ -1,0 +1,272 @@
+---
+title: "impl"
+---
+
+An **impl\<llm, FunctionName\>** is an implementation of a `function` which uses an LLM. BAML automatically provides:
+
+1. **A type-safe API for your LLM** -- LLMs can sometimes forget a comma, or may add a comment inside a JSON. BAML handles all this for you.
+2. **Stable type definitions** -- You can alias your type property names dynamically in prompts, and BAML will map those changes to your original type definitions so your code stays the same.
+3. **Compile time checks for prompt variables**
+4. **Organization** -- everything (configs, variables, renames) related to each prompt are defined and visible in one place
+5. **Observability** -- All events are published via OpenTelemetry, and can be tracked in the Gloo Dashboard
+
+<CodeGroup>
+```llvm Baml
+variant<llm, GetSentiment> v1 {
+    client GPT35Client
+    prompt #"
+        Given a sentence, return the sentiment of the sentence.
+
+        {#input}
+
+        Sentiments:
+        {#print_enum(Sentiment)}
+
+        Sentiment:
+    "#
+
+}
+
+function GetSentiment {
+    input string
+    output Sentiment
+}
+
+enum Sentiment {
+    Positive
+    Negative
+    Neutral
+}
+
+client<llm> GPT35Client {
+    provider baml-openai-chat
+    options {
+        model gpt-3.5-turbo
+        temperature 0
+    }
+}
+
+````
+
+```python Python Equivalent
+from pydantic import BaseModel
+from enum import Enum
+import openai
+from textwrap import dedent
+
+class Sentiment(str, Enum):
+    Positive = "Positive"
+    Negative = "Negative"
+    Neutral = "Neutral"
+
+# The baml generated version additionally includes
+# logging and error handling for when the LLM hallucinates
+def GetSentiment(arg: str) -> Sentiment:
+    response = openai.Completion.create(
+        engine="gpt-3.5-turbo",
+        prompt=dedent(f"""\
+        Given a sentence, return the sentiment of the sentence.
+
+        {arg}
+
+        Sentiments:
+        Positive
+        Negative
+        Neutral
+
+        Sentiment:
+        """).strip(),
+        temperature=0,
+    )
+
+    sentiment = response.choices[0].text.strip()
+
+    # This might crash if sentiment is not a valid Sentiment
+    return Sentiment(sentiment)
+````
+
+</CodeGroup>
+
+## Type Safety (error handling)
+
+Baml uses our `Forgiving Parser` to help extract data as much as possible.
+
+Instead of directly passing the results of the LLM to pydantic or zod, we do a first
+pass to help massage the data. We'll outline some examples where this is useful.
+
+| LLM Output                 | Desired Type | Baml Output            | How                                                                                        |
+| -------------------------- | ------------ | ---------------------- | ------------------------------------------------------------------------------------------ |
+| positive                   | Sentiment    | `Sentiment.Positive`   | We handle case insensitivity                                                               |
+| \{ "feeling": "positive"\} | Sentiment    | `Sentiment.Positive`   | When looking for a singular value, we can parse dictionaries of 1 keys as singular objects |
+| positive                   | Sentiment[]  | `[Sentiment.Positive]` | None array types are automatically converted                                               |
+
+This applies not just to `enum` types, but all types ([See types](./type)).
+
+## Injecting inputs into the prompt
+
+### #input
+
+`#input` allows you to pass in the function's input text (or object) to the LLM prompt
+
+#### How #input behaves if it's a string or enum
+
+Using \{#input\} in your prompt is the equivalent of `str(arg)`.
+
+#### How #input behaves if it's a custom type
+
+If you add **\{#input\}** directly to your prompt when the input is a custom `class`, we serialize the object to JSON into your prompt. To prevent this you can inject each field individually like `{#input.field}`.
+
+### Formatting the #output
+
+The #output is the function's return type.
+
+`#print_type(output)` in the prompt is used to print out the JSON schema of the output type in your prompt.
+Baml automatically generates a JSON schema for you, but you can customize them with schema attributes.
+
+#### Add a custom output schema description
+
+In LLMs it is often useful to rename or provide descriptions about the task you are attempting to do. For example, you may want to rename a property from `duration` to `duration_in_minutes` so the LLM can understand what value it should output better.
+
+For example we may want to change the **print_type(output)** from
+
+```
+{
+  "duration": "integer"
+}
+```
+
+to
+
+```json
+{
+  "duration_in_minutes": "The duration in minutes, as an integer"
+}
+```
+
+without having to change your code or prompt.
+
+To do this you can just add **@alias** and **@description** attributes to the `class` definition.
+
+```diff
+function GetDuration {
+    input string
+    output Duration
+}
+
+class Duration {
+    duration int
++    @alias(duration_in_minutes)
++    @description("The duration in minutes, as an integer")
+}
+
+impl<llm, GetDuration> V1 {
+    prompt #"
+        Given a sentence, return the duration of the sentence.
+
+        {#input}
+
+        Duration:
+        {#print_type(output)}
+
+        Duration:
+    "#
+}
+
+
+```
+
+`{#print_type(output)}` will automatically parse all your field attributes and replace the default JSON schema with your own custom aliases and descriptions of each field.
+
+#### print_enum
+
+`{#print_enum(enum)}` is used to print out the values of an enum in your prompt.
+
+To modify the description of each value, see the examples below.
+
+<CodeGroup>
+```llvm Ex 1: describe
+enum Sentiment {
+    Positive @description("When the sentence is about good things that happened recently")
+    Negative @description("When the sentence is about bad things that happened recently")
+    Neutral @description("Sentences that are neutral or happend too long ago to be relevant")
+}
+
+impl<llm, GetSentiment> V1 {
+    prompt #"
+        Given a sentence, return the sentiment of the sentence.
+
+        {#input}
+
+        Sentiments:
+        {#print_enum(Sentiment)}
+
+        Sentiment:
+    "#
+
+}
+
+````
+
+```llvm Ex 1: Prompt
+Given a sentence, return the sentiment of the sentence.
+
+{#input}
+
+Sentiments:
+Positive: When the sentence is about good things that happened recently
+Negative: When the sentence is about bad things that happened recently
+Neutral: Sentences that are neutral or happend too long ago to be relevant
+
+Sentiment:
+````
+
+```llvm Ex 2: Rename
+# In this example, we rename what we call each `Sentiment` value, but still
+# guarantee the `Sentiment` enum as an output (thanks to Baml's parser).
+class Sentiment {
+    Positive @alias(Good) @description("When the sentence is about good things that happened recently")
+    Negative @alias(Bad) @description("When the sentence is about bad things that happened recently")
+    Neutral @description("Sentences that are neutral or happend too long ago to be relevant")
+}
+
+...
+
+```
+
+```llvm Ex 2: Prompt
+Given a sentence, return the sentiment of the sentence.
+
+{#input}
+
+Sentiments:
+Good: When the sentence is about good things that happened recently
+Bad: When the sentence is about bad things that happened recently
+Neutral: Sentences that are neutral or happend too long ago to be relevant
+
+Sentiment:
+```
+
+```diff Ex 3: Skip
+# You can also skip any values you don't want to parse.
+
+class Sentiment {
+    Positive @alias(Good) @description("When the sentence is about good things that happened recently")
+    Negative @alias(Bad) @description("When the sentence is about bad things that happened recently")
++    Neutral @alias(Neither) @skip @description("Sentences that are neutral or happend too long ago to be relevant")
+}
+
+```
+
+```llvm Ex 3: Prompt
+Given a sentence, return the sentiment of the sentence.
+
+{#input}
+
+Sentiments:
+Good: When the sentence is about good things that happened recently
+Bad: When the sentence is about bad things that happened recently
+
+Sentiment:
+```
+
+</CodeGroup>

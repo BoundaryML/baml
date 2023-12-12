@@ -22,67 +22,67 @@
     {
       "name": "Support",
       "url": "mailto:contact@boundaryml.com"
+    },
+    {
+      "name": "Discord",
+      "url": "mailto:contact@boundaryml.com"
     }
   ],
   "topbarCtaButton": {
     "name": "Schedule call",
     "url": "https://calendly.com/gloo-vai/30min"
   },
-  "versions": ["v2"],
-  "tabs": [],
+  "primaryTab": {
+    "name": "Home"
+  },
+  "tabs": [
+    {
+      "name": "BAML by example",
+      "url": "v3/guides"
+    },
+    {
+      "name": "BAML Syntax Reference",
+      "url": "v3/syntax"
+    }
+  ],
   "navigation": [
+    {
+      "group": "Overview",
+      "pages": [
+        "v3/home/overview",
+        "v3/home/boundary-for-product-teams",
+        "v3/home/boundary-for-full-stack-devs",
+        "v3/home/boundary-for-AI-engineers",
+        "v3/home/faq"
+      ]
+    },
+    {
+      "group": "Quickstart",
+      "pages": [
+        "v3/home/installation",
+        "v3/home/running-tests",
+        "v2/mdx/tracing-tagging"
+      ]
+    },
     {
       "group": "Get Started",
       "pages": [
         "v2/mdx/overview",
         "v2/mdx/baml-by-example",
-        "v2/mdx/quickstart",
-        "v2/mdx/running-tests",
-        "v2/mdx/tracing-tagging"
-      ],
-      "version": "v2"
+        "v2/mdx/quickstart"
+      ]
     },
     {
-      "group": "Guides",
-      "pages": [
-        {
-          "group": "Basic",
-          "pages": [
-            "v2/mdx/examples/classification",
-            "v2/mdx/examples/extraction"
-          ]
-        }
-      ],
-      "version": "v2"
+      "group": "Basic",
+      "pages": ["v3/guides/classification", "v3/guides/extraction"]
     },
     {
-      "group": "Reference",
-      "pages": [
-        {
-          "group": "BAML Syntax Reference",
-          "pages": [
-            {
-              "group": "Types",
-              "pages": [
-                "v2/mdx/ref/type",
-                "v2/mdx/ref/enum",
-                "v2/mdx/ref/class"
-              ]
-            },
-            {
-              "group": "Functions",
-              "pages": [
-                "v2/mdx/ref/function",
-                {
-                  "group": "impl",
-                  "pages": ["v2/mdx/ref/variant-llm"]
-                }
-              ]
-            }
-          ]
-        }
-      ],
-      "version": "v2"
+      "group": "Types",
+      "pages": ["v3/syntax/type", "v3/syntax/enum", "v3/syntax/class"]
+    },
+    {
+      "group": "Functions",
+      "pages": ["v3/syntax/function", "v3/syntax/variant-llm"]
     }
   ],
   "footerSocials": {

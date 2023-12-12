@@ -1,0 +1,63 @@
+---
+title: Installation
+---
+
+<Steps>
+  <Step title="Install BAML VSCode Extension">
+    [https://marketplace.visualstudio.com/items?itemName=gloo.BAML](https://marketplace.visualstudio.com/items?itemName=gloo.BAML)
+  </Step>
+  <Step title="Install BAML compiler">
+<CodeGroup>
+
+```bash Mac
+brew install gloohq/baml/baml
+```
+
+```bash Linux (debian)
+curl -fsSL https://raw.githubusercontent.com/BamlHQ/homebrew-baml/main/install-baml.sh | bash
+```
+
+```bash Windows (via scoop)
+# You can install scoop at https://scoop.sh/
+scoop bucket add baml-bucket https://github.com/bamlhq/homebrew-baml
+scoop install baml
+```
+
+</CodeGroup>
+You should be able to run `baml --version` and see the version number. The VSCode Extension will keep the compiler up to date for you.
+
+  </Step>
+  <Step title="Add BAML to a project">
+
+    [What is poetry?](https://python-poetry.org/docs/)
+
+    ```bash
+    # Assuming my_project is an existing python project managed by poetry
+    cd /path/to/my_project
+
+    # Add BAML to the project (similar to git init)
+    baml init
+
+    # copy .env.example to .env and fill in the values
+    # cp .env.example .env
+
+    # Run the demo.
+    poetry run python -m py_baml_example
+
+    # All the baml files are available in the ./baml_src directory
+    ```
+
+  </Step>
+  <Step title="Set up Boundary Studio (optional)">
+    Create an account at [https://app.trygloo.com](https://app.trygloo.com) (In the process of rebranding 🙂).
+    
+    Set up a project and generate a secret.
+
+    In your `.env` file, set the following values generated from the web app:
+    ```bash
+    BOUNDARY_PROJECT_ID=proj_...
+    BOUNDARY_SECRET=gloo:...
+    ```
+
+  </Step>
+</Steps>

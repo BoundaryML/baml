@@ -1,0 +1,19 @@
+---
+title: "🔨 As an AI Engineer"
+---
+
+To reduce context switching AI engineers need to make when building AI pipelines, Boundary provides the following tools:
+
+**Special String Syntax**: comments in prompts, prompt linting, realtime preview of the full prompt (no abstraction layers) and [more](https://docs.boundaryml.com/v2/mdx/overview#why-use-baml-vs-other-libraries-or-frameworks)
+
+![Left is a baml file, right is the VSCode Playground.](https://prod-files-secure.s3.us-west-2.amazonaws.com/bfebc62c-55b5-46d2-9c18-8e5d5f1613dd/93ed7243-4756-4ed4-a2d5-c56c5f4fd28e/Screenshot_2023-12-07_at_5.38.42_PM.png)
+
+Left is a baml file, right is the VSCode Playground.
+
+**VSCode BAML Playground** - LLM options like model, retry, caching, etc. are configurable. Test using the UI, or programmatically via our pytest plugin. As you edit .baml files, the playground autoupdates. Here's a demo video of the VSCode Playground in action:
+
+[Screen Recording 2023-12-05 at 3.25.45 PM.mov](https://prod-files-secure.s3.us-west-2.amazonaws.com/bfebc62c-55b5-46d2-9c18-8e5d5f1613dd/4ae81514-070f-4a67-aa9e-959c999a1cbf/Screen_Recording_2023-12-05_at_3.25.45_PM.mov)
+
+**A super-powered deserializer**: Our generated SDK converts LLM output strings into your desired output type (significantly more powerful than json.parse, pydantic, zod, or Marvin). It supports complex models (see [Supported Types](https://docs.boundaryml.com/v2/mdx/ref/type)) like custom data models or even Unions in case your LLM has to choose between outputting two different schemas. Focus on the prompt instead of how to the parse the right output. We do this without any LLM API calls - no retries, no latency.
+
+![Screenshot 2023-12-05 at 10.08.45 AM.png](https://prod-files-secure.s3.us-west-2.amazonaws.com/bfebc62c-55b5-46d2-9c18-8e5d5f1613dd/1f3817cf-e023-48ab-8347-2958d87b2cfe/Screenshot_2023-12-05_at_10.08.45_AM.png)
