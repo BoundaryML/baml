@@ -1,0 +1,18 @@
+{
+  "input": {
+    "thread": {
+      "thread": [
+        {
+          "sender": "AI",
+          "body": "the website is broken"
+        }
+      ]
+    },
+    "generated_response": "asdfasdf",
+    "dummy": {
+      "prop1": "eeee",
+      "prop2": 1,
+      "prop3": false
+    }
+  }
+}

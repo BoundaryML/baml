@@ -13,36 +13,18 @@ from baml_lib._impl.deserializer import Deserializer
 from json5 import loads # type: ignore
 
 
-@baml.Blah.test
-async def test_basic2(BlahImpl: IBlah):
-    deserializer = Deserializer[str](str)
-    param = deserializer.from_string("""\
-"big fan of this"\
-""")
-    await BlahImpl(param)
-
-
-@baml.Blah.test
-async def test_default(BlahImpl: IBlah):
-    deserializer = Deserializer[str](str)
-    param = deserializer.from_string("""\
-te\
-""")
-    await BlahImpl(param)
-
-
 @baml.MaybePolishText.test
-async def test_foolish_rose(MaybePolishTextImpl: IMaybePolishText):
-    deserializer = Deserializer[ProposedMessage](ProposedMessage)
+async def test_busy_coral(MaybePolishTextImpl: IMaybePolishText):
+    deserializer = Deserializer[ProposedMessage](ProposedMessage) # type: ignore
     param = deserializer.from_string("""\
-{}\
+{"thread":{"thread":[{"sender":"AI","body":"the website is broken"}]},"generated_response":"asdfasdf","dummy":{"prop1":"eeee","prop2":1,"prop3":false}}\
 """)
     await MaybePolishTextImpl(param)
 
 
 @baml.Blah.test
 async def test_greasy_white(BlahImpl: IBlah):
-    deserializer = Deserializer[str](str)
+    deserializer = Deserializer[str](str) # type: ignore
     param = deserializer.from_string("""\
 big fan of this\
 """)
@@ -52,14 +34,11 @@ big fan of this\
 @baml.ClassifyTool.test
 async def test_international_scarlet(ClassifyToolImpl: IClassifyTool):
     case = loads("""
-{
-  "query": "",
-  "context": ""
-}
+{"query":"hey my toaster is broken","context":"the user is an sde"}
 """)
-    deserializer_query = Deserializer[str](str)
+    deserializer_query = Deserializer[str](str) # type: ignore
     query = deserializer_query.from_string(case["query"])
-    deserializer_context = Deserializer[str](str)
+    deserializer_context = Deserializer[str](str) # type: ignore
     context = deserializer_context.from_string(case["context"])
     await ClassifyToolImpl(
         query=query,
@@ -67,41 +46,21 @@ async def test_international_scarlet(ClassifyToolImpl: IClassifyTool):
     )
 
 
-@baml.TextPolisher.test
-async def test_potential_lavender(TextPolisherImpl: ITextPolisher):
-    deserializer = Deserializer[ProposedMessage](ProposedMessage)
-    param = deserializer.from_string("""\
-{}\
-""")
-    await TextPolisherImpl(param)
-
-
 @baml.MessageSimplifier.test
-async def test_sample_test(MessageSimplifierImpl: IMessageSimplifier):
-    deserializer = Deserializer[Conversation](Conversation)
+async def test_obnoxious_maroon(MessageSimplifierImpl: IMessageSimplifier):
+    deserializer = Deserializer[Conversation](Conversation) # type: ignore
     param = deserializer.from_string("""\
-{
-  "thread": [
-    {
-      "sender": "AI",
-      "body": "Hey man hows it going would you please fix my garage door etc etc etc"
-    },
-    {
-      "sender": "AI",
-      "body": "eeeeeee"
-    }
-  ]
-}\
+{"thread":[{"sender":"AI","body":"asfasefaes"}]}\
 """)
     await MessageSimplifierImpl(param)
 
 
-@baml.Blah.test
-async def test_total_amaranth(BlahImpl: IBlah):
-    deserializer = Deserializer[str](str)
+@baml.TextPolisher.test
+async def test_potential_lavender(TextPolisherImpl: ITextPolisher):
+    deserializer = Deserializer[ProposedMessage](ProposedMessage) # type: ignore
     param = deserializer.from_string("""\
-big fan of this\
+{}\
 """)
-    await BlahImpl(param)
+    await TextPolisherImpl(param)
 
 

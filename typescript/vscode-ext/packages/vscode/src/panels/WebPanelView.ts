@@ -2,7 +2,7 @@ import { Disposable, Webview, WebviewPanel, window, Uri, ViewColumn, workspace }
 import { getUri } from '../utils/getUri'
 import { getNonce } from '../utils/getNonce'
 import * as vscode from 'vscode'
-import { StringSpan, TestRequest } from '@baml/common'
+import { StringSpan, TestFileContent, TestRequest } from '@baml/common'
 import testExecutor from './execute_test'
 
 import { uniqueNamesGenerator, Config, adjectives, colors, animals } from 'unique-names-generator'
@@ -198,16 +198,29 @@ export class WebPanelView {
                 saveTestRequest.funcName,
                 `${uniqueNamesGenerator(customConfig)}.json`,
               )
-            const fileContent =
-              saveTestRequest.params.type === 'positional'
-                ? saveTestRequest.params.value
-                : JSON.stringify(
-                  Object.fromEntries(saveTestRequest.params.value.map((kv) => [kv.name, kv.value])),
-                  null,
-                  2,
-                )
+            let testInputContent: any;
+
+            if (saveTestRequest.params.type === 'positional') {
+              // Directly use the value if the type is 'positional'
+              try {
+                testInputContent = JSON.parse(saveTestRequest.params.value);
+              }
+              catch (e) {
+                testInputContent = saveTestRequest.params.value;
+              }
+            } else {
+              // Create an object from the entries if the type is not 'positional'
+              testInputContent = Object.fromEntries(
+                saveTestRequest.params.value.map((kv: { name: any; value: any }) => [kv.name, kv.value])
+              );
+            }
+
+            const testFileContent: TestFileContent = {
+              input: testInputContent,
+            };
+            console.log("testfilecontent" + JSON.stringify(testFileContent));
             try {
-              await vscode.workspace.fs.writeFile(uri, Buffer.from(fileContent))
+              await vscode.workspace.fs.writeFile(uri, Buffer.from(JSON.stringify(testFileContent, null, 2)))
               await registerFileChange(uri.toString(), 'json')
               WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
 
