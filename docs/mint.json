@@ -37,12 +37,12 @@
   },
   "tabs": [
     {
-      "name": "BAML by example",
-      "url": "v3/guides"
+      "name": "BAML Syntax",
+      "url": "v3/syntax"
     },
     {
-      "name": "BAML Syntax Reference",
-      "url": "v3/syntax"
+      "name": "BAML Tutorials",
+      "url": "v3/guides"
     }
   ],
   "navigation": [
@@ -61,7 +61,7 @@
       "pages": [
         "v3/home/installation",
         "v3/home/running-tests",
-        "v2/mdx/tracing-tagging"
+        "v3/home/tracing-tagging"
       ]
     },
     {
@@ -77,12 +77,24 @@
       "pages": ["v3/guides/classification", "v3/guides/extraction"]
     },
     {
+      "group": "Overview",
+      "pages": ["v3/syntax/overview", "v3/syntax/comments", "v3/syntax/strings"]
+    },
+    {
       "group": "Types",
       "pages": ["v3/syntax/type", "v3/syntax/enum", "v3/syntax/class"]
     },
     {
-      "group": "Functions",
-      "pages": ["v3/syntax/function", "v3/syntax/variant-llm"]
+      "group": "function",
+      "pages": ["v3/syntax/function", "v3/syntax/impl"]
+    },
+    {
+      "group": "client",
+      "pages": ["v3/syntax/client", "v3/syntax/retry", "v3/syntax/redudancy"]
+    },
+    {
+      "group": "Prompt Engineering (impl<llm>)",
+      "pages": ["v3/syntax/overview", "v3/syntax/class", "v3/syntax/enum"]
     }
   ],
   "footerSocials": {

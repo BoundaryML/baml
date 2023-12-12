@@ -1,11 +1,13 @@
 ---
-title: "enum"
+title: "Deep Dive - enum"
 ---
+
+Enums are useful for classification tasks. BAML has helper functions that can help you serialize an enum into your prompt in a neatly formatted list (more on that later).
 
 To define your own custom enum in Baml:
 
 <CodeGroup>
-```llvm Baml
+```rust Baml
 enum MyEnum {
   Value1
   Value2
@@ -29,6 +31,9 @@ enum MyEnum {
   Value3 = "Value3",
 }
 ```
+
 </CodeGroup>
 
-You may have as many values as you'd like. Values may not be duplicated or empty. Values may not contain spaces or special characters and must not start with a number.
+- You may have as many values as you'd like.
+- Values may not be duplicated or empty.
+- Values may not contain spaces or special characters and must not start with a number.

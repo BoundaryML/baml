@@ -2,38 +2,77 @@
 title: "function"
 ---
 
-A function is a definition of an input and output.
-
-The implementation of the function is described in a [variant](variant-llm).
+A function is the contract between the application and the AI model. It defines the input and output.
 
 We specifically seprate out functions and their defintions because in machine learnings,
 its often common to swap out model parameters, what model architecture is used, or even
 if you're using an LLM vs a Heuristic vs a combination of both to get the answer.
 
-With baml, you can swap out the function definition and keep the rest of the code that uses the
-function the same.
+The actual implementation (prompt or other settings) of the function is described in an [impl](/v3/syntax/impl).
+
+With baml, you can modify the implementation of a function and keep the application logic that uses the
+function unchanged.
+
+## Properties
+
+| Property       | Type                        | Description                                                            | Required                                                                      |
+| -------------- | --------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `input`        | Any [type](/v3/syntax/type) | The input type of the function                                         | YES                                                                           |
+| `output`       | Any [type](/v3/syntax/type) | The output type of the function                                        | YES                                                                           |
+| `default_impl` | string                      | The name of the impl to use when the application logic doesn't specify | Only if you define multiple impls for a function. See [impl](/v3/syntax/impl) |
+
+## Examples
+
+### Single Argument
 
 <CodeGroup>
-```llvm Baml
+```rust Baml
 function GetSentiment {
+    // In the case of a single argument, you can specify the
+    // type directly.
     input   string
     output  string
 }
 ```
 
-```python Python Equivalent
-from typing import Callable
+```python Using Generated Python Code
+from baml_client import baml as b
 
-GetSentiment = Callable[[str], str]
+# GetSentiment is a function defined in the baml file
+# response is a string
+response = await b.GetSentiment("I love this movie")
 ```
 
-```typescript Typescript Equivalent
-type GetSentiment = (str: string) => string;
-```
 </CodeGroup>
 
-## Properties
-| Property | Type | Description | Required |
-| -------- | ---- | ----------- | -------- |
-| `input` | Any [type](/docs/types) | The input type of the function | YES |
-| `output` | Any [type](/docs/types) | The output type of the function | YES|
+### Named-arguments (multiple arguments)
+
+<CodeGroup>
+
+```rust Baml
+enum Color {
+    Red
+    Green
+    Blue
+}
+
+function GetSentiment {
+    // You can have as many arguments (1+) as you want, but
+    // they must be named if specified between parentheses.
+    input   (query: string, millis: int)
+    output  Color[]
+}
+```
+
+```python Using Generated Python Code
+from baml_client import baml as b
+
+# Since GetSentiment has multiple arguments, each
+# argument is passed in as a named argument.
+# response is List[Color]
+response = await b.GetSentiment(
+    query="I love this movie", millis=1000)
+
+```
+
+</CodeGroup>
