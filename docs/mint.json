@@ -78,11 +78,21 @@
     },
     {
       "group": "Overview",
-      "pages": ["v3/syntax/overview", "v3/syntax/comments", "v3/syntax/strings"]
+      "pages": [
+        "v3/syntax/overview",
+        "v3/syntax/generator",
+        "v3/syntax/comments",
+        "v3/syntax/strings"
+      ]
     },
     {
       "group": "Types",
-      "pages": ["v3/syntax/type", "v3/syntax/enum", "v3/syntax/class"]
+      "pages": [
+        "v3/syntax/type",
+        "v3/syntax/enum",
+        "v3/syntax/class",
+        "v3/syntax/type-deserializer"
+      ]
     },
     {
       "group": "function",
@@ -90,7 +100,11 @@
     },
     {
       "group": "client",
-      "pages": ["v3/syntax/client", "v3/syntax/retry", "v3/syntax/redudancy"]
+      "pages": [
+        "v3/syntax/client",
+        "v3/syntax/client-retry",
+        "v3/syntax/client-redundancy"
+      ]
     },
     {
       "group": "Prompt Engineering (impl<llm>)",

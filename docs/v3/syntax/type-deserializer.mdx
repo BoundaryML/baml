@@ -1,0 +1,73 @@
+---
+title: Deserialization
+---
+
+Baml uses a custom `Deserializer` to parse a string into the desired type.
+
+Instead of doing the following:
+
+```python
+
+import json
+
+openai_response_text = await openai.completions.create(
+  ...
+)
+response = SomePydanticModel(**json.loads(openai_response_text))
+
+```
+
+Instead of directly passing the results of the LLM to pydantic or zod, we do a first pass to help massage the data. We'll outline some examples where this is useful.
+
+<img src="/images/v3/BAML_deserializer_1.png" />
+
+<img src="/images/v3/BAML_deserializer_2.png" />
+
+## Error handling
+
+All parsing errors are handled by the `Deserializer` and will raise a `DeserializationError`.
+
+```python
+
+from baml_client import baml as b
+from baml_client import DeserializationError
+
+try:
+  response = await b.SomeAIFunction(query="I want to buy a car")
+except DeserializationError as e:
+  # The parser was not able read the response as the expected type
+  print(e)
+
+```
+
+## Primitive Types
+
+### bool
+
+A bool is values that can be either `true` or `false`.
+
+### int
+
+### float
+
+### string
+
+### char
+
+### null
+
+## Composite/Structured Types
+
+### enum
+
+**See:** [Prompt engineering > Enum](/v3/syntax/enum)
+
+### class
+
+**See:** [Prompt engineering > Class](/v3/syntax/class)
+
+### Optional (?)
+
+### Union (|)
+
+### List/Array ([])

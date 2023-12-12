@@ -5,14 +5,15 @@ title: "impl"
 An **impl\<llm, FunctionName\>** is an implementation of a `function` which uses an LLM. BAML automatically provides:
 
 1. **A type-safe API for your LLM** -- LLMs can sometimes forget a comma, or may add a comment inside a JSON. BAML handles all this for you.
-2. **Stable type definitions** -- You can alias your type property names dynamically in prompts, and BAML will map those changes to your original type definitions so your code stays the same.
+2. **Scoped serializers** -- You can alias your type property names dynamically in prompts, and BAML will map those changes to your original type definitions so your code stays the same.
 3. **Compile time checks for prompt variables**
 4. **Organization** -- everything (configs, variables, renames) related to each prompt are defined and visible in one place
-5. **Observability** -- All events are published via OpenTelemetry, and can be tracked in the Gloo Dashboard
+5. **Observability** -- All events are published via OpenTelemetry, and can be tracked in Boundary Studio
 
 <CodeGroup>
+
 ```llvm Baml
-variant<llm, GetSentiment> v1 {
+impl<llm, GetSentiment> my_version {
     client GPT35Client
     prompt #"
         Given a sentence, return the sentiment of the sentence.
@@ -42,48 +43,32 @@ client<llm> GPT35Client {
     provider baml-openai-chat
     options {
         model gpt-3.5-turbo
-        temperature 0
     }
 }
 
-````
+```
 
-```python Python Equivalent
-from pydantic import BaseModel
-from enum import Enum
-import openai
-from textwrap import dedent
+```python Python Usage
+from baml_client import baml as b
 
-class Sentiment(str, Enum):
-    Positive = "Positive"
-    Negative = "Negative"
-    Neutral = "Neutral"
+from baml_client.baml_types import Sentiment
 
-# The baml generated version additionally includes
-# logging and error handling for when the LLM hallucinates
-def GetSentiment(arg: str) -> Sentiment:
-    response = openai.Completion.create(
-        engine="gpt-3.5-turbo",
-        prompt=dedent(f"""\
-        Given a sentence, return the sentiment of the sentence.
 
-        {arg}
+async def pipeline(arg: str) -> str:
+    # Use the specific version of the prompt we defined.
+    sentiment = await b.GetSentiment.get_impl(
+        'my_version').run(arg)
 
-        Sentiments:
-        Positive
-        Negative
-        Neutral
+    # Since we only have one impl, we can also use the default version.
+    # sentiment = await b.GetSentiment(arg)
 
-        Sentiment:
-        """).strip(),
-        temperature=0,
-    )
-
-    sentiment = response.choices[0].text.strip()
-
-    # This might crash if sentiment is not a valid Sentiment
-    return Sentiment(sentiment)
-````
+    if sentiment == Sentiment.Positive:
+        return "I'm glad you're having a good day!"
+    elif sentiment == Sentiment.Negative:
+        return "I'm sorry to hear that."
+    else:
+        return "I see its just a normal day for you."
+```
 
 </CodeGroup>
 
@@ -192,8 +177,8 @@ enum Sentiment {
 }
 
 impl<llm, GetSentiment> V1 {
-    prompt #"
-        Given a sentence, return the sentiment of the sentence.
+prompt #"
+Given a sentence, return the sentiment of the sentence.
 
         {#input}
 
