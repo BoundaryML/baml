@@ -31,13 +31,9 @@ Good responses are amiable and direct.
 
 Do not use or negative unless the question is a yes or no question.
 
-
-
-Sentiment
----
-Positive
-Negative
-Neutral
+```input
+{arg}
+```       
 
 
 Output JSON Format:
@@ -53,6 +49,7 @@ JSON:\
 """
 
 __input_replacers = {
+    "{arg}"
 }
 
 
