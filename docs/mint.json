@@ -117,7 +117,8 @@
       "pages": [
         "v3/syntax/function",
         "v3/syntax/impl",
-        "v3/syntax/function-adapters"
+        "v3/syntax/function-adapters",
+        "v3/syntax/function-testing"
       ]
     },
     {
@@ -144,7 +145,7 @@
     "github": "https://github.com/GlooHQ"
   },
   "modeToggle": {
-    "default": "light",
+    "default": "dark",
     "isHidden": false
   }
 }
