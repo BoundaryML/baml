@@ -1,6 +1,6 @@
 ---
 title: Variables in Prompts
-description: Injecting `{#input}` into the prompt
+description: Using `{#input}`, `{#print_type}`, and `{#print_enum}` into the prompt
 ---
 
 The prompt in a `impl<llm>` is a [block string](/v3/syntax/strings#block-strings). This means you can add block comments as well, and it auto dedents and trims whitespace.
@@ -16,15 +16,33 @@ impl<llm, MyFunction> some_name {
 }
 ```
 
+Every prompt has two template paramters that are available to you:
 
-### #input
+- `input`: the input to the function
+- `output`: the output of the function (see [printers](#printers) below)
+
+## input
 
 `#input` allows you to pass in the function's input text (or object) to the LLM prompt
 
-#### How #input behaves if it's a string or enum
+### input for string/enums
 
 Using \{#input\} in your prompt is the equivalent of `str(arg)`.
 
-#### How #input behaves if it's a custom type
+### input for complex types
 
 If you add **\{#input\}** directly to your prompt when the input is a custom `class`, we serialize the object to JSON into your prompt. To prevent this you can inject each field individually like `{#input.field}`.
+
+## Printers
+
+With LLMs you need to write down the output format you want within the prompt to actually get that output type back (e.g. `Please answer in this json format: { "verbs" : string[] }`). Other frameworks may do this behind the scenes, but in BAML we just give you simple functions to print the output format out, so that you always have full control over the whole prompt string.
+
+Instead of needing to change the prompt every time you add/update/remove a new enum value, or change the type of the output, BAML provides you with `printer` functions to help you standardize your prompts.
+
+The available printer functions are:
+- `print_enum`: converts an enum into a pretty string of its values
+- `print_type`: prints a type as a json schema
+
+<Info>
+For now, BAML has built in formatting for `print_enum` and `print_type`, but soon, we'll allow you to specify your own formatting for these functions.
+</Info>
