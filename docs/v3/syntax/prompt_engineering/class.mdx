@@ -1,4 +1,229 @@
 ---
 title: Deep Dive - classes and print_type
-description: Using `{#input}`, `{#print_type}`, and `{#print_enum}` into the prompt
+description: Understanding type serialization and deserialization
 ---
+
+At a very high level, `print_type` is a utility function in baml that takes all the type information about any type and converts it into a string.
+
+## Syntax
+
+```rust
+#"
+  {#print_type(<type>)}
+"#
+```
+
+{/* - `PrinterName` is the name of the printer that will be used to print the type. You can define your own printer or use one of the built-in printers. By default we use the `default` printer. */}
+
+- `<type>` is any type that you want to print. This can be a primitive type like `int` or `str`, or a complex type like `MyCustomClass` or `(MyCustomClass | int[])?`.
+
+<Tip>
+  Most of the time, you can use the special keyword: `output` as a shortcut for
+  the return type of the function for `<type>` like `print_type(output)`.
+</Tip>
+
+<Info>
+  `print_type` can only be used within a [block
+  string](/v3/syntax/strings#block-strings)!
+</Info>
+
+## Block Attributes
+
+You can add some attributes to the entire class by using a double `@@` symbol.
+
+### `@@alias`
+
+This is a block attribute that allows you to alias the name of the class itself.
+
+<Note>
+  The default printer does not use the block attribute, but you can write your
+  own printer that uses the block attribute.
+</Note>
+
+```rust
+class BugIntake {
+  last_seen string?
+  description string
+  repro_steps string?
+
+  severity int
+
+  @@alias(Bug Report)
+}
+```
+
+`print_type(BugIntake)` will now print:
+
+```
+{
+  "last_seen": string | null
+  "description": string
+  "repro_steps": string | null
+  "severity": int
+}
+```
+
+<Tip>
+  Your application code remains unchanged! Its still `BugIntake` in your code.
+  `@@alias` is only used for serialization.
+</Tip>
+
+### `@@reorder`
+
+Not currently implemented.
+
+<Warning>
+  If you want to reorder how properties are rendered, for now you will have to
+  change the order in the class definition itself.
+</Warning>
+
+## Property Attributes
+
+### `@alias`
+
+The alias decorator allows you to temporarily rename a property.
+
+```rust
+class BugIntake {
+  last_seen string?
+  description string @alias(what_happened)
+  repro_steps string? @alias(how_to_reproduce)
+
+  severity int
+}
+```
+
+`print_type(BugIntake)` will now print:
+
+```
+{
+  "last_seen": string | null
+  "what_happened": string
+  "how_to_reproduce": string | null
+  "severity": int
+}
+```
+
+#### Deserialization with `@alias`
+
+The [deserializer](/v3/syntax/prompt_engineering/type-deserializer) automatically maps `@alias` to the actual property!
+
+<Tip>
+  Your application code remains unchanged! Its still `BugIntake.description` and
+  `BugIntake.repro_steps` in your code. `@alias` is only used for serialization
+  and deserialization.
+</Tip>
+
+In the above example, the deserializer will now map the value of `what_happend` to `description` and `how_to_reproduce` to `repro_steps`!
+
+### `@description`
+
+The description decorator allows you to add a description to a property.
+
+```rust
+class BugIntake {
+  last_seen string?
+  description string
+  repro_steps string?
+  severity int @description(#"
+    The severity of the bug. This is a number between 1 and 10.
+    Lower numbers are less severe.
+  "#)
+}
+```
+
+`print_type(BugIntake)` will now print:
+
+```json
+{
+  "last_seen": string | null
+  "description": string
+  "repro_steps": string | null
+  // The severity of the bug. This is a number between 1 and 10.
+  // Lower numbers are less severe.
+  "severity": int
+}
+```
+
+## override
+
+By default, any attributes and block attributes you write will apply to every application of that class. If you want to override the attributes for a specific [impl](/v3/syntax/impl), you can use the `override` keyword.
+
+- `override` can only be used within an `impl` block
+- `print_type` first looks for attributes in the `override` block, then in the type definition. So, attributes defined in the `class` block will be the default value.
+- There is currently no easy way to "reset" an attribute to its default value in an `override` block
+- You cannot add new properties to a class in an `override` block. See [adapters](/v3/syntax/function-adapters) for this capability.
+
+```rust
+
+class BugIntake {
+  last_seen string? @description(#"
+    The last relative time the bug was seen.
+  "#)
+  description string
+  repro_steps string?
+  severity int
+}
+
+impl<llm, MyAiFunction> foo {
+  override BugIntake {
+    repro_steps @alias(how_to_reproduce)
+    @description(#"
+      Any steps taken to reproduce the bug.
+    "#)
+    severity @description(#"
+      The severity of the bug. This is a number between 1 and 10.
+      Lower numbers are less severe.
+    "#)
+  }
+
+  prompt #"
+    Given the following bug report, extract the required data.
+
+    Bug Report
+    ---
+    {#input}
+    ---
+
+    Output JSON:
+    {#print_type(BugIntake)}
+
+    JSON:
+  "#
+
+  client SomeClient
+}
+```
+
+This prompt will now print:
+
+```
+Given the following bug report, extract the required data.
+
+Bug Report
+---
+{#input}
+---
+
+Output JSON:
+{
+  // The last relative time the bug was seen.
+  "last_seen": string | null
+  "description": string
+  // Any steps taken to reproduce the bug.
+  "how_to_reproduce": string | null
+  // The severity of the bug. This is a number between 1 and 10.
+  // Lower numbers are less severe.
+  "severity": int
+}
+```
+
+## Custom Printers
+
+<Warning>
+  This capability is currently hidden behind a feature flag. Reach out to us on
+  discord if you want to enable it. We will be adding more documentation on this
+  soon.
+</Warning>
+
+At a high level, it allows you to write python code that runs when you call `print_type` with all properties of the whats passed into `print_type`.
