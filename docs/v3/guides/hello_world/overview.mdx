@@ -12,7 +12,10 @@ Here's a very simple example of how to write an AI function that extracts verbs 
 
 
 ## 1. Define AI functions and models in BAML files
-Every function has a strictly typed input and output. The input and output can be either a **primitive type** (string, number, boolean) or a [complex type](/v3/syntax/type) (think unions, lists, or even custom pydantic models)
+First we will define a function of the following signature in BAML:
+`ExtractVerbs(title: string, body: string) -> string[]`
+
+Here's the BAML equivalent:
 ```rust
 /// Takes a title and body, and returns a list of verbs
 function ExtractVerbs {
@@ -21,6 +24,7 @@ function ExtractVerbs {
     output string[]
 }
 ```
+Every BAML function has a strictly typed input and output. The input and output can be either a **primitive type** (string, number, boolean) or a [complex type](/v3/syntax/type) (think unions, lists, or even custom pydantic models)
 
 ## 2. Implement the function using an LLM
 
@@ -44,7 +48,7 @@ client<llm> GPT4 {
 Use any parameters available to that model, like temperature etc, by adding them to the options block. You can also use environment variables to store secrets like API keys.
 </Tip>
 </Step>
-<Step title="Defining a prompt">
+<Step title="Define a prompt">
 Next we can create the prompt by **implementing** the function using an LLM.
 In BAML we provide helper utilities to inject the input variables into the prompt, and also get the LLM to return the right output type. You always get full-view of the whole prompt string, without any magic.
 

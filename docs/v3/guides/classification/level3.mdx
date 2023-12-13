@@ -1,5 +1,166 @@
 ---
-title: "Level 3: Clues and reasoning"
+title: "Level 3: Using prompting strategies - Chain of Thought"
 description: Using adapters to extract additional reasoning from the LLM
 ---
 
+### Prerequisites
+**Ensure you have read the previous levels before starting this one!**
+
+
+### Overview
+
+A common prompting strategy to improve results is to use **Self-Generated Chain of Thought**, which uses natural language statements like "Let's think step by step" to encourage the model to generate reasoning steps.
+
+In this section, we will add a "reasoning step" to our AI function so the LLM can generate its chain of thought before classifying the message.
+
+### Adding a reasoning step
+Note how our function signature we declared in BAML is currently:
+`ClassifyIntent(input: string) -> Intent`
+
+If we ask the LLM to "think step by step" before writing the Intent string (like "TechnicalSupport" or "AccountIssue"), we will have a bad time parsing the intent information out, since it will be mixed with the reasoning steps. It will be even harder if we've added @aliases to our intents.
+
+Example LLM output with Chain of Thought:
+```text
+If we think step by step, then we can see that ....
+so that means the likely intent is k1
+
+k1
+```
+
+
+Instead of trying to parse this output with hacks, we can have the LLM produce this JSON structure, so we can parse things out easily. Lets call this type **IntentWithReasoning**.
+```typescript desired LLM JSON output
+{
+  "reasoning_steps": "If we think step by step, then ... so that means the intent is ...",
+  // Note: could be alias used in BAML like "k1"
+  "intent": "TechnicalSupport" 
+}
+```
+
+So we basically want our original function to go from:
+`ClassifyIntent(input: string) -> Intent`
+
+to
+
+`ClassifyIntent(input: string) -> IntentWithReasoning`
+
+But if we change the function's output to be of this type now we have to change our python code... which isn't ideal! Our business logic shouldn't care about the reasoning step -- that should be an AI function implementation detail.
+
+To fix this, we will write an **adapter** that adds a post-LLM-processing step to our AI function that allows us to change the LLM output to `IntentWithReasoning` and provides a way to map from `IntentWithReasoning` -> `Intent`. This way, we can keep our original function signature and python code.
+
+{/* This is what the pseudocode would look like:
+```python
+def transform(overridenOutput: IntentWithReasoning) -> Intent:
+  return intentWithReasoning.intent
+
+intentWithReasoning = ClassifyIntent("I can't login")
+return transform(intentWithReasoning)
+``` */}
+
+## Writing an output adapter for ClassifyIntent
+
+Remember the output adapter will do two things, in this order:
+1. Allow the LLM impl to output `IntentWithReasoning` even though our function signature returns `Intent`
+2. Provide a way to **map from the adapted output type to the original** BAML function output type.
+
+
+<Steps>
+<Step title="Declare IntentWithReasoning">
+Add a BAML [class](/v3/syntax/class) that represents this type
+```rust
+class IntentWithReasoning {
+  reasoning_steps string
+  intent Intent
+}
+```
+</Step>
+<Step title="Adapt the LLM impl's output">
+Declare an **adapter** for our impl that indicates what output we are expecting back from the LLM.
+```rust
+impl<llm, ClassifyIntent> version3 {
+  client GPT4
+
+  adapter<IntentWithReasoning, output> python#"
+    # some python code
+  "#
+
+  prompt #"
+    ...
+  "#
+} 
+```
+Now we must use another BAML utility in our prompt to actually print out the json schema of **IntentWithReasoning**. Here is the new prompt, which now returns a JSON output rather than a single string representing an Intent.
+```rust
+  ...
+  prompt #"
+    Classify the following INPUT into the best Intent.
+
+    {#print_enum(Intent)}
+
+    INPUT: {#input}
+
+    Output in this JSON format:
+    {#print_type(output)}    
+    JSON:
+  "#
+```
+The **output** inside **print_type(..)** is actually the adapter output -- `IntentWithReasoning` now. The BAML compiler is smart enough to know the LLM prompt's `output` has been adapted. 
+
+BAML will now render this prompt (assuming there are no aliases or descriptions on the Intent enum):
+
+```text
+Classify the following INPUT into the best Intent:
+
+Intent
+---
+Refund
+CancelOrder
+TechnicalSupport
+AccountIssue
+Question
+
+INPUT: {arg}
+
+Output in this JSON format:
+{
+  "reasoning_steps": string,
+  "intent": Intent as string
+}
+
+JSON:
+```
+
+</Step>
+
+<Step title="Implement the adapter" >
+Note that the adapter takes a `python` code block. Use this to transform IntentWithReasoning to Intent.
+```rust
+impl<llm, ClassifyIntent> version3 {
+  ...
+
+  adapter<IntentWithReasoning, output> python#"
+    return arg.intent
+  "#
+  ...
+}
+```
+This will get converted into this python function at compile time:
+```python
+def adapter(arg: IntentWithReasoning) -> Intent:
+  return arg.intent
+```
+</Step>
+
+
+</Steps>
+
+At this point you will now be able to do Chain-of-thought reasoning without having to refactor your code.
+
+### Putting it all together
+<img src="/images/v3/adapter_classify.png" />
+
+
+
+Adapters are a powerful way of transforming LLM outputs to try out different prompting strategies without worrying about having to refactor business logic.
+
+If you have any questions contact us on Discord!

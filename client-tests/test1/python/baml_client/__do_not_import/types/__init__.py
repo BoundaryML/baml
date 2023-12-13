@@ -13,9 +13,11 @@ from .classes.cls_dummyobj import DummyObj
 from .classes.cls_empty import Empty
 from .classes.cls_hi import Hi
 from .classes.cls_improvedresponse import ImprovedResponse
+from .classes.cls_intentwithreasoning import IntentWithReasoning
 from .classes.cls_message import Message
 from .classes.cls_proposedmessage import ProposedMessage
 from .enums.enm_emptyenum import EmptyEnum
+from .enums.enm_intent import Intent
 from .enums.enm_messagesender import MessageSender
 from .enums.enm_sentiment import Sentiment
 from .enums.enm_tool import Tool
@@ -30,9 +32,11 @@ __all__ = [
     'Empty',
     'Hi',
     'ImprovedResponse',
+    'IntentWithReasoning',
     'Message',
     'ProposedMessage',
     'EmptyEnum',
+    'Intent',
     'MessageSender',
     'Sentiment',
     'Tool'

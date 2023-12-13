@@ -8,41 +8,41 @@
 # fmt: off
 
 from .__do_not_import.generated_baml_client import baml
-from .baml_types import ClassifyResponse, Conversation, DummyObj, IBlah, IClassifyTool, IMaybePolishText, IMessageSimplifier, ITextPolisher, ImprovedResponse, Message, MessageSender, ProposedMessage, Sentiment, Tool
+from .baml_types import ClassifyResponse, Conversation, DummyObj, IBlah, IClassifyIntent, IClassifyTool, IMessageSimplifier, ITextPolisher, Intent, Message, MessageSender, ProposedMessage, Tool
 from baml_lib._impl.deserializer import Deserializer
 from json5 import loads # type: ignore
 
 
 @baml.Blah.test
 async def test_basic2(BlahImpl: IBlah):
-    deserializer = Deserializer[str](str)
+    deserializer = Deserializer[str](str) # type: ignore
     param = deserializer.from_string("""\
 "big fan of this"\
 """)
     await BlahImpl(param)
 
 
+@baml.ClassifyIntent.test
+async def test_cooing_tan(ClassifyIntentImpl: IClassifyIntent):
+    deserializer = Deserializer[str](str) # type: ignore
+    param = deserializer.from_string("""\
+"I want to cancel my order"\
+""")
+    await ClassifyIntentImpl(param)
+
+
 @baml.Blah.test
 async def test_default(BlahImpl: IBlah):
-    deserializer = Deserializer[str](str)
+    deserializer = Deserializer[str](str) # type: ignore
     param = deserializer.from_string("""\
 te\
 """)
     await BlahImpl(param)
 
 
-@baml.MaybePolishText.test
-async def test_foolish_rose(MaybePolishTextImpl: IMaybePolishText):
-    deserializer = Deserializer[ProposedMessage](ProposedMessage)
-    param = deserializer.from_string("""\
-{}\
-""")
-    await MaybePolishTextImpl(param)
-
-
 @baml.Blah.test
 async def test_greasy_white(BlahImpl: IBlah):
-    deserializer = Deserializer[str](str)
+    deserializer = Deserializer[str](str) # type: ignore
     param = deserializer.from_string("""\
 big fan of this\
 """)
@@ -57,9 +57,9 @@ async def test_international_scarlet(ClassifyToolImpl: IClassifyTool):
   "context": ""
 }
 """)
-    deserializer_query = Deserializer[str](str)
+    deserializer_query = Deserializer[str](str) # type: ignore
     query = deserializer_query.from_string(case["query"])
-    deserializer_context = Deserializer[str](str)
+    deserializer_context = Deserializer[str](str) # type: ignore
     context = deserializer_context.from_string(case["context"])
     await ClassifyToolImpl(
         query=query,
@@ -69,7 +69,7 @@ async def test_international_scarlet(ClassifyToolImpl: IClassifyTool):
 
 @baml.TextPolisher.test
 async def test_potential_lavender(TextPolisherImpl: ITextPolisher):
-    deserializer = Deserializer[ProposedMessage](ProposedMessage)
+    deserializer = Deserializer[ProposedMessage](ProposedMessage) # type: ignore
     param = deserializer.from_string("""\
 {}\
 """)
@@ -78,7 +78,7 @@ async def test_potential_lavender(TextPolisherImpl: ITextPolisher):
 
 @baml.MessageSimplifier.test
 async def test_sample_test(MessageSimplifierImpl: IMessageSimplifier):
-    deserializer = Deserializer[Conversation](Conversation)
+    deserializer = Deserializer[Conversation](Conversation) # type: ignore
     param = deserializer.from_string("""\
 {
   "thread": [
@@ -98,7 +98,7 @@ async def test_sample_test(MessageSimplifierImpl: IMessageSimplifier):
 
 @baml.Blah.test
 async def test_total_amaranth(BlahImpl: IBlah):
-    deserializer = Deserializer[str](str)
+    deserializer = Deserializer[str](str) # type: ignore
     param = deserializer.from_string("""\
 big fan of this\
 """)
