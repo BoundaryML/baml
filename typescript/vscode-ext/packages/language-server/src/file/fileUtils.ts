@@ -1,7 +1,7 @@
-import * as path from 'path';
-import * as fs from 'fs';
-import { TextDocument } from 'vscode-languageserver-textdocument';
-import { URI } from 'vscode-uri';
+import * as path from 'path'
+import * as fs from 'fs'
+import { TextDocument } from 'vscode-languageserver-textdocument'
+import { URI } from 'vscode-uri'
 
 // export function findTopLevelParent(filePath: string) {
 //   let currentPath = filePath;
@@ -26,15 +26,11 @@ import { URI } from 'vscode-uri';
 export function gatherFiles(dir: string, debug: boolean = false, fileList: string[] = []): string[] {
   let uri = URI.parse(dir);
   let dirPath = uri.fsPath;
-  // if (debug) {
-  console.log(`Gathering files from ${dirPath}. uri: ${uri.toString()} ${JSON.stringify(uri.toJSON())}`);
-  // }
-
-  // this line is failing
   const files = fs.readdirSync(dirPath);
-  // if (debug) {
-  console.log(`\tFound ${files.length} files`);
-  // }
+  if (debug) {
+    console.log(`Gathering files from ${dirPath}. uri: ${uri.toString()}`);
+    console.log('files ' + JSON.stringify(files, null, 2));
+  }
 
   files.forEach((file) => {
     const filePath = path.join(dirPath, file);
