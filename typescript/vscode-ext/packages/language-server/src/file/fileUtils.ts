@@ -41,7 +41,7 @@ export function gatherFiles(dir: string, debug: boolean = false, fileList: strin
     }
 
     if (fileStat.isDirectory()) {
-      gatherFiles(filePath, debug, fileList);
+      gatherFiles(`file://${filePath}`, debug, fileList);
     } else {
       // check if it has .baml extension
       if (filePath.endsWith('.baml') || filePath.endsWith('.json')) {
