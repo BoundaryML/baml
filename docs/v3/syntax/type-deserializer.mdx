@@ -4,10 +4,11 @@ title: Deserialization
 
 Baml uses a custom `Deserializer` to parse a string into the desired type.
 
-Instead of doing the following:
+Instead of doing the following, you can rely on baml to do the parsing for you. You don't have to do anything to enable to deserializer, it comes built in.
 
 ```python
-
+# Example parsing code you might be writing today
+# without baml
 import json
 
 openai_response_text = await openai.completions.create(
@@ -17,11 +18,26 @@ response = SomePydanticModel(**json.loads(openai_response_text))
 
 ```
 
-Instead of directly passing the results of the LLM to pydantic or zod, we do a first pass to help massage the data. We'll outline some examples where this is useful.
-
-<img src="/images/v3/BAML_deserializer_1.png" />
+## Examples 
 
 <img src="/images/v3/BAML_deserializer_2.png" />
+
+
+| LLM Output                 | Desired Type | Baml Output            | How                                                                                        |
+| -------------------------- | ------------ | ---------------------- | ------------------------------------------------------------------------------------------ |
+| `great`                   | Style    | `Style.GREAT`   | We handle case insensitivity                                                               |
+| `"great"`                   | Style    | `Style.GREAT`   | We handle extra quotes                                                               |
+| `great`                   | Style[]  | `[Style.GREAT]` | Non-array types are automatically wrapped in an array                                               |
+| `{ "feeling": "great" }` | Style    | `Style.GREAT`   | When looking for a singular value, we can parse dictionaries of 1 keys as singular objects |
+| <div><pre>Some text that goes before...<br/>\```json<br />&lbrace;"feeling": "great"&rbrace;<br />\```<br/>Some text that came after</pre></div> | Style    | `Style.GREAT`   | We can find the inner json object and parse it even when surrounded by lots of text |
+
+<img src="/images/v3/BAML_deserializer_1.png" />
+Note, we can apply the same parsing logic to any type, not just enums. e.g. in the case of numbers, we can remove commas and parse the number. This page outlines all the rules we use to parse each type.
+
+<Warning>
+The deserializer makes 0 external calls and runs fully locally!
+</Warning>
+
 
 ## Error handling
 
@@ -42,19 +58,7 @@ except DeserializationError as e:
 
 ## Primitive Types
 
-### bool
-
-A bool is values that can be either `true` or `false`.
-
-### int
-
-### float
-
-### string
-
-### char
-
-### null
+TODO: Include a section on how each type is parsed and coerced from other types.
 
 ## Composite/Structured Types
 
@@ -68,6 +72,17 @@ A bool is values that can be either `true` or `false`.
 
 ### Optional (?)
 
+If the type is optional, the parser will attempt to parse the value as the type, or return `null` if we failed to parse.
+
 ### Union (|)
 
+Unions are parsed in left to right order. The first type that successfully parses the value will be returned.
+If no types are able to parse the value, a `DeserializationError` will be raised.
+
 ### List/Array ([])
+
+Lists parse each element in the list as the type specified in the list. 
+
+- It will always return a list, even if the list is empty.
+- If an element fails to parse, it is skipped and not included in the final list.
+- If the value is not a list, the parser will attempt to parse the value as the type and return a list with a single element.

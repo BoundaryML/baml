@@ -4,6 +4,14 @@ title: Getting started
 
 This section outlines the syntax of BAML as well as the LLM-specific functionality it enables.
 
+## extra
+
+1. **A type-safe API for your LLM** -- LLMs can sometimes forget a comma, or may add a comment inside a JSON, or just output the wrong format. BAML parses it correctly (See [Deserialization](/v3/type-deserializer) for more info)
+2. **Scoped serializers** -- You can alias your type property names dynamically in prompts (e.g. `duration` -> `duration_in_minutes`) without having to change your code
+3. **Compile time checks for template variables in prompts and configs**
+4. **Organization** -- everything (prompts, configs, variables, renames) related to each impl are defined and visible in one place
+5. **Observability** -- All events are published via OpenTelemetry, and can be tracked in Boundary Studio
+
 ## Why use BAML vs other libraries or frameworks?
 
 1. **Use an integrated VSCode playground** - The playground is co-located with your prompt configurations. No need to context switch out of VSCode for simple tests.
@@ -15,6 +23,7 @@ This section outlines the syntax of BAML as well as the LLM-specific functionali
 1. **Test Suites** - Run and visualize test results for all your BAML functions over time using the playground or using our dashboard-enabled pytest plugin.
 1. **Flexibility and cross-compatibility** - Running BAML prompts are as easy as copying the BAML files over and pressing "run"
 1. **Prompt linting** - Get warnings when your prompt isn't following best practices. We are planning on adding custom guidelines.
+
 
 ## Why did you make this?
 

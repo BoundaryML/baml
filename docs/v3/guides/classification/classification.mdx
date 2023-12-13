@@ -1,5 +1,5 @@
 ---
-title: "Classification"
+title: Overview
 ---
 
 # Use cases
@@ -29,10 +29,15 @@ User message -> Classify message -> Use tool, or respond back
 
 ### Setup
 
-#### Define your classification function in Baml configs
+#### Prerequisites
+Go through the installation steps in the [installation](/v3/home/installation) section.
 
-<Info>If you have the [VSCode extension](/mdx/installation#baml-extension), **.baml** files will have improved syntax highlighting than you see here</Info>
-```llvm main.baml
+#### 1. Define your task in BAML
+Declare an **AI function** in your BAML file with the following signature:
+
+`ClassifyMessage(string) -> Category`
+
+```rust main.baml
 function ClassifyMessage {
   input string
   output Category
@@ -43,10 +48,9 @@ enum Category {
   AVALABILITY_QUERY
   SET_REMINDER
 }
-
 ````
 
-#### Implement your function
+#### 2. Implement the task
 Now we have to define an `LLM variant` for that function, which defines how the function is executed.
 In the future, you could replace this with a different model, instead of an LLM.
 

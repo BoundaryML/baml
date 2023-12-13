@@ -2,25 +2,69 @@
 title: "impl"
 ---
 
-An **impl\<llm, FunctionName\>** is an implementation of a `function` which uses an LLM. BAML automatically provides:
+An **impl** is an implementation of a `function` using an AI model (LLM or otherwise).
 
-1. **A type-safe API for your LLM** -- LLMs can sometimes forget a comma, or may add a comment inside a JSON. BAML handles all this for you.
-2. **Scoped serializers** -- You can alias your type property names dynamically in prompts, and BAML will map those changes to your original type definitions so your code stays the same.
-3. **Compile time checks for prompt variables**
-4. **Organization** -- everything (configs, variables, renames) related to each prompt are defined and visible in one place
-5. **Observability** -- All events are published via OpenTelemetry, and can be tracked in Boundary Studio
+## Syntax
 
-<CodeGroup>
+```llvm
+impl<IMPL_TYPE, FUNCTION_NAME> Name {
+    client SomeClient
+}
+```
 
-```llvm Baml
+- `IMPL_TYPE`: What type of AI model will be used. Currently must be `llm`
+- `FUNCTION_NAME`: The name of the function this is an implementation of
+- `Name`: The name of the impl (can be any [a-zA-Z], numbers or `_`)
+
+
+## Properties
+
+Depending on the `IMPL_TYPE`, additional properties may exist.
+
+| Property       | Type                        | Description                                                            | Required                                                                      |
+| -------------- | --------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `client` | string                            | The name of the client this impl will use. The type of the client must match the type of the impl (both llm). See [Client](/v3/syntax/client) | YES |
+| `adapter` | See [Adapters](/v3/syntax/function-adapters)                     | Modify a type temporarily for the use in the impl without exposing it to the buisness logic. e.g. force an llm to extract extra fields not specified earlier. **This is an advanced tool!** | NO |
+
+
+### impl types
+#### ✅ llm 
+`llm` models are those which take a prompt (string) and return a string. For example, GPT-3, GPT-J, etc.
+They may also return some other metadata (e.g. logprobs, stop_reason, etc.)
+
+| Property       | Type                        | Description                                                            | Required                                                                      |
+| -------------- | --------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `prompt` | string                      | The string passed into the LLM. You can compose this this variables and other template types. See [Prompt Engineering](/v3/syntax/prompt-engineering) | YES |
+
+
+#### ❌ probability
+
+Not supported yet.
+
+`probability` models are those which take in any type, and return `float[]` of a fixed length. For example, BERT, etc.And yes we know technically LLMs do this under the hood, but most practical LLMs outputs are synthesized into a string.
+
+
+## Examples
+
+### Sentiment Analysis
+
+<Steps>
+<Step title="Defining in baml">
+
+<Info>
+`{#input}` and `{#print_enum(Sentiment)}` are template variables injected into the prompt. See [Prompt Engineering](/v3/syntax/prompt-engineering) for more details.
+</Info>
+
+```rust
+// In baml_src/my_file.baml
 impl<llm, GetSentiment> my_version {
     client GPT35Client
     prompt #"
-        Given a sentence, return the sentiment of the sentence.
-
+        Given a sentence, return the sentiment.
+        ---
         {#input}
+        ---
 
-        Sentiments:
         {#print_enum(Sentiment)}
 
         Sentiment:
@@ -28,39 +72,41 @@ impl<llm, GetSentiment> my_version {
 
 }
 
+// Define the function
 function GetSentiment {
     input string
     output Sentiment
 }
 
+// Define the enum for sentiment
 enum Sentiment {
     Positive
     Negative
     Neutral
 }
 
+// Use openai's GPT-3.5 turbo model
 client<llm> GPT35Client {
     provider baml-openai-chat
     options {
         model gpt-3.5-turbo
     }
 }
-
 ```
-
-```python Python Usage
+</Step>
+<Step title="Calling in application logic">
+<Tabs>
+<Tab title="Calling in python">
+```python
+# Import the generated client
 from baml_client import baml as b
-
+# Import the generated Sentiment enum
 from baml_client.baml_types import Sentiment
 
 
 async def pipeline(arg: str) -> str:
-    # Use the specific version of the prompt we defined.
-    sentiment = await b.GetSentiment.get_impl(
-        'my_version').run(arg)
-
-    # Since we only have one impl, we can also use the default version.
-    # sentiment = await b.GetSentiment(arg)
+    # Call the get sentiment function
+    sentiment = await b.GetSentiment(arg)
 
     if sentiment == Sentiment.Positive:
         return "I'm glad you're having a good day!"
@@ -69,23 +115,23 @@ async def pipeline(arg: str) -> str:
     else:
         return "I see its just a normal day for you."
 ```
+</Tab>
+<Tab title="Using a specific impl">
+```python
+# Use the specific version of the prompt we defined.
+sentiment = await b.GetSentiment.get_impl(
+    'my_version').run(arg)
+```
+</Tab>
+</Tabs>
+</Step>
+</Steps>
 
-</CodeGroup>
+
 
 ## Type Safety (error handling)
 
 Baml uses our `Forgiving Parser` to help extract data as much as possible.
-
-Instead of directly passing the results of the LLM to pydantic or zod, we do a first
-pass to help massage the data. We'll outline some examples where this is useful.
-
-| LLM Output                 | Desired Type | Baml Output            | How                                                                                        |
-| -------------------------- | ------------ | ---------------------- | ------------------------------------------------------------------------------------------ |
-| positive                   | Sentiment    | `Sentiment.Positive`   | We handle case insensitivity                                                               |
-| \{ "feeling": "positive"\} | Sentiment    | `Sentiment.Positive`   | When looking for a singular value, we can parse dictionaries of 1 keys as singular objects |
-| positive                   | Sentiment[]  | `[Sentiment.Positive]` | None array types are automatically converted                                               |
-
-This applies not just to `enum` types, but all types ([See types](./type)).
 
 ## Injecting inputs into the prompt
 

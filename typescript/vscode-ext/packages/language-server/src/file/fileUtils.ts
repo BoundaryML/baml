@@ -26,22 +26,27 @@ import { URI } from 'vscode-uri';
 export function gatherFiles(dir: string, debug: boolean = false, fileList: string[] = []): string[] {
   let uri = URI.parse(dir);
   let dirPath = uri.fsPath;
+  // if (debug) {
+  console.log(`Gathering files from ${dirPath}. uri: ${uri.toString()} ${JSON.stringify(uri.toJSON())}`);
+  // }
+
+  // this line is failing
   const files = fs.readdirSync(dirPath);
-  if (debug) {
-    console.log(`Gathering files from ${dirPath}. uri: ${uri.toString()}`);
-    console.log("files " + JSON.stringify(files, null, 2));
-  }
+  // if (debug) {
+  console.log(`\tFound ${files.length} files`);
+  // }
 
   files.forEach((file) => {
     const filePath = path.join(dirPath, file);
     const fileStat = fs.statSync(filePath);
     if (debug) {
-      console.log(`Checking ${filePath}`);
-      console.log(`isDirectory: ${fileStat.isDirectory()}`);
+      console.log(`\tChecking ${filePath}`);
+      console.log(`\tisDirectory: ${fileStat.isDirectory()}`);
     }
 
     if (fileStat.isDirectory()) {
-      gatherFiles(filePath, debug, fileList);
+      // TODO: use the VSCode URI class to create the URI
+      gatherFiles(`file:///${filePath}`, debug, fileList);
     } else {
       // check if it has .baml extension
       if (filePath.endsWith('.baml') || filePath.endsWith('.json')) {

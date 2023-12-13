@@ -53,7 +53,8 @@
       "engine",
       ".github",
       "Rust CLI"
-    ]
+    ],
+    "git.openDiffOnClick": true
   },
   "extensions": {
     "recommendations": ["xaver.clang-format"]

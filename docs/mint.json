@@ -37,12 +37,12 @@
   },
   "tabs": [
     {
-      "name": "BAML Syntax",
-      "url": "v3/syntax"
+      "name": "BAML by example",
+      "url": "v3/guides"
     },
     {
-      "name": "BAML Tutorials",
-      "url": "v3/guides"
+      "name": "BAML Syntax",
+      "url": "v3/syntax"
     }
   ],
   "navigation": [
@@ -73,8 +73,31 @@
       ]
     },
     {
-      "group": "Basic",
-      "pages": ["v3/guides/classification", "v3/guides/extraction"]
+      "group": "Hello World",
+      "pages": ["v3/guides/hello_world/overview"]
+    },
+    {
+      "group": "Classifiers (e.g. using Tools)",
+      "pages": [
+        "v3/guides/classification/level1",
+        "v3/guides/classification/level2",
+        "v3/guides/classification/level3",
+        "v3/guides/classification/level4"
+      ]
+    },
+    {
+      "group": "Extraction (i.e. getting structured data)",
+      "pages": [
+        "v3/guides/entity_extraction/extraction",
+        "v3/guides/entity_extraction/level1",
+        "v3/guides/entity_extraction/level2",
+        "v3/guides/entity_extraction/level3",
+        "v3/guides/entity_extraction/level4"
+      ]
+    },
+    {
+      "group": "Multi-step Apps",
+      "pages": ["v3/guides/multi-step/example1"]
     },
     {
       "group": "Overview",
@@ -96,7 +119,11 @@
     },
     {
       "group": "function",
-      "pages": ["v3/syntax/function", "v3/syntax/impl"]
+      "pages": [
+        "v3/syntax/function",
+        "v3/syntax/impl",
+        "v3/syntax/function-adapters"
+      ]
     },
     {
       "group": "client",
@@ -107,8 +134,12 @@
       ]
     },
     {
-      "group": "Prompt Engineering (impl<llm>)",
-      "pages": ["v3/syntax/overview", "v3/syntax/class", "v3/syntax/enum"]
+      "group": "impl<llm> (Prompt Engineering)",
+      "pages": [
+        "v3/syntax/prompt_engineering/overview",
+        "v3/syntax/class",
+        "v3/syntax/enum"
+      ]
     }
   ],
   "footerSocials": {

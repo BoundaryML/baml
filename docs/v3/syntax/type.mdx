@@ -6,51 +6,37 @@ title: Supported Types
 
 ### ✅ bool
 
-- **Since:** Supported by default
-- **What it is:** A Boolean data type, representing true or false values.
 - **When to use it:** When you need to represent a simple true/false condition.
 - **Syntax:** `bool`
 
 ### ✅ int
 
-- **Since:** Supported by default
-- **What it is:** An integer data type, used for representing whole numbers.
-- **When to use it:** When dealing with numeric values without fractional parts.
+- **When to use it:** When you want numeric values
 - **Syntax:** `int`
 
 ### ✅ float
 
-- **Since:** Supported by default
-- **What it is:** A floating-point number, used for representing numbers with fractional parts.
 - **When to use it:** When dealing with numerical values that require precision (like measurements or monetary values).
 - **Syntax:** `float`
 
 ### ✅ string
 
-- **Since:** Supported by default
-- **What it is:** A sequence of characters, used for representing text.
-- **When to use it:** Whenever you need to work with text data.
 - **Syntax:** `string`
 
 ### ✅ char
 
-- **Since:** Supported by default
-- **What it is:** A single character.
 - **When to use it:** When you need to represent a single letter, digit, or other symbols.
 - **Syntax:** `char`
 
 ### ✅ null
 
-- **Since:** Supported by default
-- **What it is:** A null value, representing the absence of a value.
-- **When to use it:** When you need to indicate that a variable does not have a specific value.
 - **Syntax:** `null`
 
 ### ⚠️ bytes
 
 - Not yet supported. Use a `string[]` or `int[]` instead.
 
-### ⚠️ any
+### ⚠️ any/json
 
 - Not supported.
   <Warning>
@@ -93,12 +79,11 @@ temperature of 32 degrees Fahrenheit or cost of $100.00.
 
 **See also:** [Enum](/v3/syntax/enum)
 
-- **Since:** `baml>=0.1.0`
-- **What it is:** A user-defined type consisting of a set of named constants.
-- **When to use it:** Enums can be useful for classification problems.
+A user-defined type consisting of a set of named constants.
+- **When to use it:** Use it when you need a model to choose from a known set of values, like in classification problems
 - **Syntax:**
 
-```
+```rust
 enum Name {
   Value1
   Value2
@@ -107,7 +92,7 @@ enum Name {
 
 - **Example:**
 
-```
+```rust
 enum Color {
   Red
   Green
@@ -119,12 +104,11 @@ enum Color {
 
 **See also:** [Class](/v3/syntax/class)
 
-- **Since:** `baml>=0.1.0`
 - **What it is:** User-defined complex data structures.
-- **When to use it:** To create complex data structures that represent objects or concepts in your application.
+- **When to use it:** When you need an LLM to call another function (e.g. OpenAI's function calling), you can model the function's parameters as a class. You can also get models to return complex structured data by using a class.
 - **Syntax:**
 
-```
+```rust
 class ClassName {
   ...
 }
@@ -132,7 +116,7 @@ class ClassName {
 
 - **Example:**
 
-```
+```rust
 class Car {
   model string
   year int
@@ -141,7 +125,6 @@ class Car {
 
 ### ✅ Optional (?)
 
-- **Since:** `baml>=0.1.0`
 - **What it is:** A type that represents a value that might or might not be present.
 - **When to use it:** When a variable might not have a value and you want to explicitly handle its absence.
 - **Syntax:** `<type>?`
@@ -149,7 +132,6 @@ class Car {
 
 ### ✅ Union (|)
 
-- **Since:** `baml>=0.1.0`
 - **What it is:** A type that can hold one of several specified types.
 - **When to use it:** When a variable can legitimately be of more than one type. This can be helpful with function calling, where you want to return different types of data depending on which function should be called.
 - **Syntax:** `<type>|<type>`
@@ -163,7 +145,6 @@ class Car {
 
 ### ✅ List/Array ([])
 
-- **Since:** `baml>=0.1.0`
 - **What it is:** A collection of elements of the same type.
 - **When to use it:** When you need to store a list of items of the same type.
 - **Syntax:** `<type>[]`

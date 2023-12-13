@@ -28,24 +28,61 @@ You should be able to run `baml --version` and see the version number. The VSCod
 
   </Step>
   <Step title="Add BAML to a project">
-
-    [What is poetry?](https://python-poetry.org/docs/)
+    <Tabs>
+    <Tab title="poetry">
+    - [What is poetry?](https://python-poetry.org/docs/)
 
     ```bash
-    # Assuming my_project is an existing python project managed by poetry
-    cd /path/to/my_project
+    # Assuming my_project is an existing python project
+    # managed by poetry
+    > cd /path/to/my_project
 
     # Add BAML to the project (similar to git init)
-    baml init
+    > baml init
 
     # copy .env.example to .env and fill in the values
     # cp .env.example .env
 
     # Run the demo.
-    poetry run python -m py_baml_example
-
-    # All the baml files are available in the ./baml_src directory
+    > poetry run python -m py_baml_example
     ```
+
+    <Tip>
+    After running `baml init`, add or modify baml files in the `./baml_src` directory
+    </Tip>
+
+    </Tab>
+    <Tab title="manual (python)">
+      ```bash
+      # Go into your project directory
+      > cd /path/to/my_project
+
+      # Install baml python package
+      > pip install baml
+
+      # Create a baml_src directory
+      > mkdir baml_src
+
+      # Create a main.baml file
+      > touch baml_src/main.baml
+
+      # Edit main.baml
+      > vim baml_src/main.baml
+      ```
+
+      Declare a generator block in `main.baml`
+      ```llvm
+      generator {
+        language python
+      }
+      ```
+
+      <Warning>
+      You should read docs about [generator](/v3/syntax/generator) to handle different python environments (e.g. pipenv, venv, pip3 vs pip etc.)
+      </Warning>
+
+    </Tab>
+    </Tabs>
 
   </Step>
   <Step title="Set up Boundary Studio (optional)">
@@ -60,4 +97,23 @@ You should be able to run `baml --version` and see the version number. The VSCod
     ```
 
   </Step>
+  <Step title="Learn BAML">
+    - [BAML by example](/v3/guides): Learn how to use BAML with examples and how-to-guides. (Recommended)
+    - [BAML Syntax](/v3/syntax): Documentation for BAML syntax.
+  </Step>
 </Steps>
+
+## Ensure baml builds
+
+    <Tabs>
+    <Tab title="VSCode">
+    Save a `.baml` file using VSCode, and you should see a successful generation message pop up!
+    </Tab>
+    <Tab title="terminal">
+    ```bash
+    # Run from any dir/subdir in your project
+    # Requires you have a baml_src directory with a main.baml file
+    > baml build
+    ```
+    </Tab>
+    </Tabs>

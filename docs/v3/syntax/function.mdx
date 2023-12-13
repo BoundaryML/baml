@@ -2,9 +2,11 @@
 title: "function"
 ---
 
-A function is the contract between the application and the AI model. It defines the input and output.
+A **function** is the contract between the application and the AI model. It defines the desired **input** and **output**.
 
-We specifically seprate out functions and their defintions because in machine learnings,
+<img src="/images/v3/BAML_contract.png" />
+
+We specifically separate out functions and their defintions because in machine learning,
 its often common to swap out model parameters, what model architecture is used, or even
 if you're using an LLM vs a Heuristic vs a combination of both to get the answer.
 
@@ -13,24 +15,24 @@ The actual implementation (prompt or other settings) of the function is describe
 With baml, you can modify the implementation of a function and keep the application logic that uses the
 function unchanged.
 
+
 ## Properties
 
 | Property       | Type                        | Description                                                            | Required                                                                      |
 | -------------- | --------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `input`        | Any [type](/v3/syntax/type) | The input type of the function                                         | YES                                                                           |
+| `input`        | Any [type](/v3/syntax/type) or with named args:<br/>`(<name>: <type>, ...)` | The input type of the function                                         | YES                                                                           |
 | `output`       | Any [type](/v3/syntax/type) | The output type of the function                                        | YES                                                                           |
 | `default_impl` | string                      | The name of the impl to use when the application logic doesn't specify | Only if you define multiple impls for a function. See [impl](/v3/syntax/impl) |
 
-## Examples
+## Examples - How to call functions
+See the "generated python code" tab to see how to call the function in python.
+### Single Argument with Primitive Type
 
-### Single Argument
-
-<CodeGroup>
 ```rust Baml
 function GetSentiment {
     // In the case of a single argument, you can specify the
     // type directly.
-    input   string
+    input   string[]
     output  string
 }
 ```
@@ -40,14 +42,40 @@ from baml_client import baml as b
 
 # GetSentiment is a function defined in the baml file
 # response is a string
-response = await b.GetSentiment("I love this movie")
+response = await b.GetSentiment(["I love this movie"])
 ```
 
-</CodeGroup>
+
+### Class argument
+
+```rust Baml
+class CustomerInfo {
+    name: string
+    age: int
+    address: string
+}
+
+function SummarizeCustomerDetails {
+    // In the case of a single argument, you can specify the
+    // type directly.
+    input   CustomerInfo
+    output  string
+}
+```
+
+```python Using Generated Python client
+from baml_client import baml as b
+# Import the CustomerInfo pydantic model we generated
+from baml_client.baml_types import CustomerInfo
+
+response = await b.SummarizeCustomerDetails(
+    CustomerInfo(name="John", age=30, address="123 Main St"))
+```
+
 
 ### Named-arguments (multiple arguments)
 
-<CodeGroup>
+
 
 ```rust Baml
 enum Color {
@@ -72,7 +100,6 @@ from baml_client import baml as b
 # response is List[Color]
 response = await b.GetSentiment(
     query="I love this movie", millis=1000)
-
 ```
 
-</CodeGroup>
+

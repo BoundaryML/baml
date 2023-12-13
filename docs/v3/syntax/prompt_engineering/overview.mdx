@@ -1,0 +1,30 @@
+---
+title: Variables in Prompts
+description: Injecting `{#input}` into the prompt
+---
+
+The prompt in a `impl<llm>` is a [block string](/v3/syntax/strings#block-strings). This means you can add block comments as well, and it auto dedents and trims whitespace.
+
+```rust
+impl<llm, MyFunction> some_name {
+    client GPT4
+    prompt #"
+        Hi GPT! {// Hi works better than Hello //}
+
+        Write me a story.
+    "#
+}
+```
+
+
+### #input
+
+`#input` allows you to pass in the function's input text (or object) to the LLM prompt
+
+#### How #input behaves if it's a string or enum
+
+Using \{#input\} in your prompt is the equivalent of `str(arg)`.
+
+#### How #input behaves if it's a custom type
+
+If you add **\{#input\}** directly to your prompt when the input is a custom `class`, we serialize the object to JSON into your prompt. To prevent this you can inject each field individually like `{#input.field}`.
