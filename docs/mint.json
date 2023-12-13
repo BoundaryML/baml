@@ -110,12 +110,7 @@
     },
     {
       "group": "Types",
-      "pages": [
-        "v3/syntax/type",
-        "v3/syntax/enum",
-        "v3/syntax/class",
-        "v3/syntax/type-deserializer"
-      ]
+      "pages": ["v3/syntax/type", "v3/syntax/enum", "v3/syntax/class"]
     },
     {
       "group": "function",
@@ -128,17 +123,19 @@
     {
       "group": "client",
       "pages": [
-        "v3/syntax/client",
-        "v3/syntax/client-retry",
-        "v3/syntax/client-redundancy"
+        "v3/syntax/client/client",
+        "v3/syntax/client/retry",
+        "v3/syntax/client/redundancy"
       ]
     },
     {
       "group": "impl<llm> (Prompt Engineering)",
       "pages": [
         "v3/syntax/prompt_engineering/overview",
-        "v3/syntax/class",
-        "v3/syntax/enum"
+        "v3/syntax/prompt_engineering/enum",
+        "v3/syntax/prompt_engineering/class",
+        "v3/syntax/prompt_engineering/type",
+        "v3/syntax/prompt_engineering/type-deserializer"
       ]
     }
   ],
