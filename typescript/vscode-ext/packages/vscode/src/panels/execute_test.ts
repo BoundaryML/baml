@@ -223,14 +223,21 @@ class TestExecutor {
     fs.writeFileSync(tempFilePath, code)
 
     // Add filters.
-    let test_filter = `-k '${tests.functions
-      .flatMap((fn) => fn.tests.flatMap((test) => test.impls.map((impl) => getFullTestName(test.name, impl, fn.name))))
-      .join(' or ')}'`
+    let selectedTests = tests.functions.flatMap((fn) =>
+      fn.tests.flatMap((test) => test.impls.map((impl) => getFullTestName(test.name, impl, fn.name))),
+    )
+    let test_filter = selectedTests ? `-k "${selectedTests.join(' or ')}"` : ''
 
     // Run the Python script in a child process
     let command = `python -m pytest ${tempFilePath} ${this.port_arg} ${test_filter}`
     if (fs.existsSync(path.join(cwd, 'pyproject.toml'))) {
       command = `poetry run ${command}`
+    } else {
+      // Check if we should use python3
+      const pythonExecutable = vscode.workspace.getConfiguration('python').get<string>('pythonPath')
+      if (pythonExecutable && pythonExecutable.includes('python3')) {
+        command = `python3 -m pytest ${tempFilePath} ${this.port_arg} ${test_filter}`
+      }
     }
 
     // Run the Python script in a child process
