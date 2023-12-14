@@ -2,6 +2,11 @@
 title: "Level 1: Writing AI functions"
 ---
 
+### Pre-requisites
+- Follow the [installation](/v3/home/installation) instructions to ensure you have a BAML environment set up.
+
+## Overview
+
 Before you call an LLM, ask yourself what kind of input or output youre expecting. If you want the LLM to generate text, then you probably want a string, but if you're trying to get it to collect user details, you may want it to return a complex type like a `UserInfo` object.
 
 Thinking this way can help you decompose large complex prompts into smaller, more measurable functions. 
@@ -25,6 +30,8 @@ function ExtractVerbs {
 }
 ```
 Every BAML function has a strictly typed input and output. The input and output can be either a **primitive type** (string, number, boolean) or a [complex type](/v3/syntax/type) (think unions, lists, or even custom pydantic models)
+
+<Tip>In baml files there are no imports. All BAML entities are available to all other files under the same parent `baml_src` directory. </Tip>
 
 ## 2. Implement the function using an LLM
 
