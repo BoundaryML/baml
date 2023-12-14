@@ -168,6 +168,7 @@ class TestState {
 }
 
 class TestExecutor {
+  private static pythonPath: string | undefined = undefined
   private server: net.Server | undefined
   private testState: TestState
   private stdoutListener: ((data: string) => void) | undefined = undefined
@@ -211,6 +212,29 @@ class TestExecutor {
     return ''
   }
 
+  public async getPythonPath() {
+    if (TestExecutor.pythonPath === undefined) {
+      // Check if we should use python3 by seeing if shell has python3
+      TestExecutor.pythonPath = await new Promise((resolve, reject) => {
+        let res = exec('python3 -s --version')
+        res.stdout?.on('data', (data) => {
+          console.log(`stdout: ${data}`)
+        })
+        res.on('exit', (code, signal) => {
+          console.log(`exit: ${code}`)
+          if (code === 0) {
+            resolve('python3')
+          } else {
+            resolve('python')
+          }
+        })
+      })
+    }
+
+    console.log(`Using python path: ${TestExecutor.pythonPath}`)
+    return TestExecutor.pythonPath!
+  }
+
   public async runTest(tests: TestRequest, cwd: string) {
     this.testState.resetTestCases(tests)
     const tempFilePath = path.join(os.tmpdir(), 'test_temp.py')
@@ -233,17 +257,14 @@ class TestExecutor {
     if (fs.existsSync(path.join(cwd, 'pyproject.toml'))) {
       command = `poetry run ${command}`
     } else {
-      // Check if we should use python3
-      const pythonExecutable = vscode.workspace.getConfiguration('python').get<string>('pythonPath')
-      if (pythonExecutable && pythonExecutable.includes('python3')) {
-        command = `python3 -m pytest ${tempFilePath} ${this.port_arg} ${test_filter}`
-      }
+      command = `${await this.getPythonPath()} -m pytest ${tempFilePath} ${this.port_arg} ${test_filter}`
     }
 
     // Run the Python script in a child process
     // const process = spawn(pythonExecutable, [tempFilePath]);
     // Run the Python script using exec
     this.stdoutListener?.('<BAML_RESTART>')
+    this.stdoutListener?.(`Command: ${command}\n`)
     const cp = exec(command, {
       cwd: cwd,
     })

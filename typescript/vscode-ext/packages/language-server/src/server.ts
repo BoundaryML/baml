@@ -145,7 +145,6 @@ export function startServer(options?: LSOptions): void {
   }
 
   connection.onDidChangeConfiguration((_change) => {
-    connection.console.info('Configuration changed.' + JSON.stringify(_change, null, 2))
     getConfig()
     if (hasConfigurationCapability) {
       // Reset all cached document settings
