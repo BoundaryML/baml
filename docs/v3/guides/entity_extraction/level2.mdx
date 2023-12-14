@@ -99,7 +99,7 @@ The [BAML deserializer](/v3/syntax/prompt_engineering/type-deserializer) is smar
 
 ## Using Optionals
 
-Some emails may not have all available information. To get around this we can easily modify OrderInfo to use optionals. The @alias and @descriptions have been removed for brevity:
+Some emails may not have all available information. To get around this we can easily modify OrderInfo to use [optionals](/v3/syntax/type#optional). The @alias and @descriptions have been removed for brevity:
 
 ```rust
 class OrderInfo {
@@ -136,8 +136,8 @@ print(order_info.id)
 
 ## Conclusion
 In this tutorial we learned:
-1. How to use @alias and @description to modify what `print_type` renders
-1. How to use optionals to handle missing data
+1. How to use [@alias and @description](/v3/syntax/prompt_engineering/class#property-attributes) to modify what `print_type` renders
+1. How to use [optionals](/v3/syntax/type#optional) to handle missing data
 
 We recommend learning more about how to dynamically serialize the input using [computed properties](/v3/syntax/class#computed-properties)
 
