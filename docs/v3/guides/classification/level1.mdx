@@ -1,0 +1,170 @@
+---
+title: "Level 1: Writing a classifier"
+description: Using enums to write a classifier
+---
+
+## Use cases
+
+What types of problems are classification problems?
+
+- Deciding which tools an AI agent should use
+- Sentiment analysis
+- Labeling emails
+- Spam detection
+- Customer Intent detection
+
+In this tutorial we'll write a classifier that can figure out what a customer's intent is when they send us a message. We'll use the following labels:
+
+- `refund`
+- `cancel-order`
+- `technical-support`
+- `account-issue`
+- `question`
+
+## Pre-requisites
+
+**Ensure you have read the first guide: [Level 1: Writing AI functions](/v3/guides/hello_world/overview)**.
+We will re-use the same `client` we declared there.
+
+## 1. Define AI functions and models in BAML files
+
+To solve this problem using LLMs we want a function of this signature:
+`ClassifyIntent(string) -> Intent`
+
+To do this we can use an `enum` to represent all the labels we want to classify.
+
+```rust classifier.baml
+enum Intent {
+    Refund
+    CancelOrder
+    TechnicalSupport
+    AccountIssue
+    Question
+}
+```
+
+Then declare a BAML function signature:
+
+```rust classifier.baml
+function ClassifyIntent {
+  input string
+  output Intent
+}
+```
+This is more like an interface than an actual function. See next step for how to implement it.
+
+## 2. Implement the function using an LLM
+
+<Steps>
+<Step title="Define the LLM client">
+Refer to [Level 1: Writing AI functions](/v3/guides/hello_world/overview)
+</Step>
+<Step title="Define a prompt">
+Create the prompt by **implementing** the function using an LLM.
+In BAML we provide helper utilities to inject the input variables into the prompt, and also get the LLM to return the right output type. You always get full-view of the whole prompt string, without any magic.
+
+```rust
+impl<llm, ClassifyIntent> version1 {
+  client GPT4
+  prompt #"
+    Classify the following INPUT into ONE
+    of the following Intents:
+
+    - Refund
+    - CancelOrder
+    - TechnicalSupport
+    - AccountIssue
+    - Question
+
+    INPUT: {#input}
+
+    Response:
+  "#
+}
+```
+
+</Step>
+</Steps>
+
+### 2.1 Simplify the prompt using the print_enum utility
+
+Rather than writing out the enums painstakingly into the prompt manually, lets automate that process so that if we change the enum names or values the prompt gets updated automatically.
+
+BAML provides a utility function called [print_enum(..)](/v3/syntax/prompt_engineering/variables#printers) that will print an enum's values into your prompt in a neatly formatted way that LLMs should understand.
+
+Here is the updated `impl`:
+
+```rust
+impl<llm, ClassifyIntent> version1 {
+  client GPT4
+  prompt #"
+    Classify the following INPUT into ONE
+    of the following Intents:
+
+    {#print_enum(Intent)}
+
+    INPUT: {#input}
+
+    Response:
+  "#
+}
+```
+
+Our VSCode playground shows you what `print_enum(..)` does to the prompt at compile time. Here is what the playground will show:
+
+```text
+Classify the following INPUT into ONE
+of the following Intents:
+
+Intent
+---
+Refund
+CancelOrder
+TechnicalSupport
+AccountIssue
+Question
+
+INPUT: {arg}
+
+Response:
+```
+
+You can see it adds the enum name "Intent", and then the list of enums below.
+
+If you need to change the formatting, contact us to learn more about your usecase.
+
+<Tip>
+  When using `print_enum` it automatically handles scenarios where you add new
+  enum values, or change the enum name. No need to edit both the prompt and the
+  enum definition.
+</Tip>
+
+## 3. Use the function in your Python / TS code
+
+Our VSCode extension automatically generates a python **baml_client** to access and call your functions.
+
+```python
+from baml_client import baml as b
+# Import your generated python enum
+from baml_client.baml_types import Intent
+
+
+customer_intent = await b.ClassifyIntent("I want to cancel my order")
+if customer_intent == Intent.CancelOrder:
+    print("Customer wants to cancel order")
+else:
+    print("Customer wants to {}".format(customer_intent))
+```
+
+## 4. [Recommended] Write unit tests
+
+As you keep working with BAML, we recommend [setting up a test suite](/v3/home/running-tests) or using our [tracing capabilities](/v3/home/tracing-tagging) to make it easier to dive into issues (and get some nice analytics in Boundary Studio).
+
+## Conclusion
+In this tutorial we've learned:
+1. How to use [enums](/v3/syntax/enum) to represent a classification problem
+2. BAML utility function --  [print_enum(..)](/v3/syntax/prompt_engineering/enum) -- to automatically print the enum values into the prompt
+
+## Next Steps
+
+In the next section you'll learn how to use @alias and @description to dynamically change the name of the enums, while keeping your python code intact.

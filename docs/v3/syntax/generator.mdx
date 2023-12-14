@@ -1,0 +1,15 @@
+---
+title: generator
+---
+
+The `generator` configuration needs to be added anywhere in .baml files to generate the `baml_client` in Python or Typescript.
+
+Here is how you can add a generator block:
+
+```rust
+generator {
+  language python
+    // poetry is the default if this doesn't exist
+  pkg_manager pip
+}
+```

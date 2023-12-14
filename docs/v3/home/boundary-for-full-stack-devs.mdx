@@ -1,0 +1,30 @@
+---
+title: "🏗️ As an Full-Stack Developer"
+---
+
+BAML **enforces a contract** between business logic code and AI models (LLMs and more). Every AI function defined in BAML configuration has a defined input and output type instead of just strings.
+
+<img src="/images/v3/BAML_contract.png" />
+
+`.baml` files contain function interfaces + prompts that compile into a generated, type-safe Python client, that makes building an AI app like putting lego blocks together. Just call `baml.YourAIFunction(...)`.
+
+While composing AI functions may reduce generality, it increases reliability
+and security. **Separation of responsibilities allows teams to more
+efficiently work in parallel.**
+
+<div className="flex flex-row">
+  <img src="/images/v3/BAML_flowchart.png" />
+  With BAML, you can easily convert a flowchart into **clean, readable code** like
+  this, so your AI functions look just like regular functions.
+  <Warning>Click on the image below to zoom and read! Very important!</Warning>
+</div>
+
+<img src="/images/v3/StepByStep.png" />
+
+**Some other benefits include:**
+
+- Configure retry/redundancy/caching policies in `.baml` files so your business logic code stays readable/unchanged. [Learn how]
+- **Everything lives in your codebase, backed by git!**
+- The generated client comes with built-in tracing for every AI function, providing observability in Boundary Studio. Add custom tags (e.g. userId, convoId, or anything else) programmatically for more powerful searching / debugging. [Learn how]
+- If a function contract changes in BAML, get a syntax error in your application code. Retry/Redundancy/Model/Prompt/etc changes never cause you to change application code
+  <img src="/images/v3/BAML_compile_fail.png" />

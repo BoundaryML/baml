@@ -1,0 +1,247 @@
+---
+title: "Level 2: Renaming tools / classes"
+description: "Learn how to use `@alias`, `@description`, and `@skip` to modify how `print_enum` works."
+---
+
+Now that we've built a basic classifier in [Level 1](/v3/guides/classification/level1), we can start to improve our results.
+
+A common problem with LLMs is that they over-index on the name of the actual category names you declare. For example, in our enum we had `TechnicalSupport` and `AccountIssue`, which are closely related. We should likely disambiguate between the two by adding descriptions to each.
+
+### Using descriptions in .baml files
+
+Add a **@description** attribute to each enum value we declared earlier like so:
+
+```rust
+enum Intent {
+    Refund @description("Customer wants to refund a product")
+    CancelOrder @description("Customer wants to cancel an order")
+    TechnicalSupport @description("Customer needs help with a technical issue unrelated to account creation or login")
+    AccountIssue @description("Specifically relates to account-login or account-creation")
+    Question @description("Customer has a question")
+}
+```
+
+<Tip>
+  Since we used `print_enum`, we don't need to change the prompt. As you'll see
+  in the playground, the prompt will automatically update to include the
+  descriptions.
+</Tip>
+
+```text
+Classify the following INPUT into ONE
+of the following Intents:
+
+Intent
+---
+Refund: Customer wants to refund a product
+CancelOrder: Customer wants to cancel an order
+TechnicalSupport: Customer needs help with a technical issue unrelated to account creation or login
+AccountIssue: Specifically relates to account-login or account-creation
+Question: Customer has a question
+
+INPUT: {arg}
+
+Response:
+```
+
+<Info>
+  We don't need to change your actual application logic in the Python code at
+  all.
+</Info>
+
+### Renaming our classes
+
+A common problem with LLMs is that they tend to over-index on the class names you declare. For example, depending on the training data the LLM saw, it may understand "troubleshooting" better than "TechnicalSupport". Even using ALLCAPS may improve results.
+
+In our case, we will actually rename all the classes to "symbols" (k1, k2, k3...) so that the LLM focuses **only** on the actual description. This is a technique developed in [this research paper](https://arxiv.org/abs/2305.08298) called **symbol tuning**.
+
+To do this, we will use the `@alias` attribute. Add the following to your enum:
+
+```rust
+enum Intent {
+    Refund
+    @alias("k1")
+    @description("Customer wants to refund a product")
+
+    CancelOrder
+    @alias("k2")
+    @description("Customer wants to cancel an order")
+
+    TechnicalSupport
+    @alias("k3")
+    @description("Customer needs help with a technical issue unrelated to account creation or login")
+
+    AccountIssue
+    @alias("k4")
+    @description("Specifically relates to account-login or account-creation")
+
+    Question
+    @alias("k5")
+    @description("Customer has a question")
+}
+```
+
+The rendered prompt will now be:
+
+```text
+Classify the following INPUT into ONE
+of the following Intents:
+
+Intent
+---
+k1: Customer wants to refund a product
+k2: Customer wants to cancel an order
+k3: Customer needs help with a technical issue unrelated to account creation or login
+k4: Specifically relates to account-login or account-creation
+k5: Customer has a question
+
+INPUT: {arg}
+
+Response:
+```
+
+At this point, your **python code remains the same**. When the LLM outputs `k1`, the [BAML deserializer](/v3/syntax/prompt_engineering/type-deserializer) will automatically recognize the alias and map it back to `Intent.Refund`.
+
+Here is the same python code as before for reference:
+
+```python
+from baml_client import baml as b
+# Import your generated python enum
+from baml_client.baml_types import Intent
+
+customer_intent = b.ClassifyIntent("I want to cancel my order")
+if customer_intent == Intent.CancelOrder:
+    print("Customer wants to cancel order")
+else:
+    print("Customer wants to {}".format(customer_intent))
+```
+
+### Skipping classes
+
+You can also skip a class entirely by using the `@skip` attribute. For example, if you wanted to remove the `Question` class, you could do so like this:
+
+```rust
+enum Intent {
+    ...
+
+    Question
+    @skip
+    @alias("k5")
+    @description("Customer has a question")
+}
+```
+
+The **@skip** makes **print_enum** remove the class from the prompt entirely, so the LLM is only working on a subset of the classes you declared.
+
+```diff
+  Classify the following INPUT into ONE
+  of the following Intents:
+
+  Intent
+  ---
+  k1: Customer wants to refund a product
+  k2: Customer wants to cancel an order
+  k3: Customer needs help with a technical issue unrelated to account creation or login
+  k4: Specifically relates to account-login or account-creation
+- k5: Customer has a question
+
+
+  INPUT: {arg}
+
+  Response:
+```
+
+### Using impl-level overrides
+
+If you want to have two different versions of a prompt -- each with different descriptions, you can do so by using **impl-level overrides**.
+
+For example, say you don't want TechnicalSupport to be aliased to "k3" and you also want a different description for it, but only in prompt `version2`. You can declare a `version2` impl with the same prompt, but with an override on the `Intent` enum like so:
+
+```rust
+impl<llm, ClassifyIntent> version2 {
+  client GPT4
+
+  override Intent {
+    TechnicalSupport
+    @alias("technical-support")
+    @description("Customer needs help with a technical issue unrelated to account creation")
+
+    AccountIssue
+    @alias("account-issue")
+    @description("Specifically relates to account-creation")
+
+    Question
+    @skip
+  }
+
+  prompt #"
+    Classify the following INPUT into ONE
+    of the following Intents:
+
+    {#print_enum(Intent)}
+
+    INPUT: {#input}
+
+    Response:
+  "#
+}
+```
+
+Once you declare this, the BAML compiler will error with:
+
+```
+error: Error validating: ClassifyIntent has multiple impls(2).
+Add a `default_impl your_impl` field to the function
+```
+
+this happens because in your python code we choose a default version for you to call when you call:
+
+```python
+b.ClassifyIntent("I want to cancel my order")
+```
+
+To fix this, add `default_impl` to the BAML function declaration:
+
+```diff
+  function ClassifyIntent {
+    input string
+    output Intent
++   default_impl version2
+  }
+```
+
+You can always call a specific impl in python using this syntax:
+
+```python
+b.ClassifyIntent.get_impl("version1").run("I want to cancel my order")
+```
+
+The impl version2 will now render this prompt:
+
+```text
+Classify the following INPUT into ONE
+of the following Intents:
+
+Intent
+---
+k1: Customer wants to return a product
+k2: Customer wants to cancel an order
+technical-support: Customer needs help with a technical issue unrelated to account creation
+account-issue: Specifically relates to account-creation
+
+INPUT: {arg}
+
+Response:
+```
+
+### Conclusion
+
+Congrats! Now you should be familiar with
+
+- @description
+- @alias
+- override MyEnum
+- @skip
+- Using multiple versions (impls) of your prompt
+
+In the next level we will implement a different prompting strategy to generate better results, while keeping our business logic the same.

@@ -1,0 +1,105 @@
+---
+title: "function"
+---
+
+A **function** is the contract between the application and the AI model. It defines the desired **input** and **output**.
+
+<img src="/images/v3/BAML_contract.png" />
+
+We specifically separate out functions and their defintions because in machine learning,
+its often common to swap out model parameters, what model architecture is used, or even
+if you're using an LLM vs a Heuristic vs a combination of both to get the answer.
+
+The actual implementation (prompt or other settings) of the function is described in an [impl](/v3/syntax/impl).
+
+With baml, you can modify the implementation of a function and keep the application logic that uses the
+function unchanged.
+
+
+## Properties
+
+| Property       | Type                        | Description                                                            | Required                                                                      |
+| -------------- | --------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `input`        | Any [type](/v3/syntax/type) or with named args:<br/>`(<name>: <type>, ...)` | The input type of the function                                         | YES                                                                           |
+| `output`       | Any [type](/v3/syntax/type) | The output type of the function                                        | YES                                                                           |
+| `default_impl` | string                      | The name of the impl to use when the application logic doesn't specify | Only if you define multiple impls for a function. See [impl](/v3/syntax/impl) |
+
+## Examples - How to call functions
+See the "generated python code" tab to see how to call the function in python.
+### Single Argument with Primitive Type
+
+```rust Baml
+function GetSentiment {
+    // In the case of a single argument, you can specify the
+    // type directly.
+    input   string[]
+    output  string
+}
+```
+
+```python Using Generated Python Code
+from baml_client import baml as b
+
+# GetSentiment is a function defined in the baml file
+# response is a string
+response = await b.GetSentiment(["I love this movie"])
+```
+
+
+### Class argument
+
+```rust Baml
+class CustomerInfo {
+    name: string
+    age: int
+    address: string
+}
+
+function SummarizeCustomerDetails {
+    // In the case of a single argument, you can specify the
+    // type directly.
+    input   CustomerInfo
+    output  string
+}
+```
+
+```python Using Generated Python client
+from baml_client import baml as b
+# Import the CustomerInfo pydantic model we generated
+from baml_client.baml_types import CustomerInfo
+
+response = await b.SummarizeCustomerDetails(
+    CustomerInfo(name="John", age=30, address="123 Main St"))
+```
+
+
+### Named-arguments (multiple arguments)
+
+
+
+```rust Baml
+enum Color {
+    Red
+    Green
+    Blue
+}
+
+function GetSentiment {
+    // You can have as many arguments (1+) as you want, but
+    // they must be named if specified between parentheses.
+    input   (query: string, millis: int)
+    output  Color[]
+}
+```
+
+```python Using Generated Python Code
+from baml_client import baml as b
+
+# Since GetSentiment has multiple arguments, each
+# argument is passed in as a named argument.
+# response is List[Color]
+response = await b.GetSentiment(
+    query="I love this movie", millis=1000)
+```
+
+

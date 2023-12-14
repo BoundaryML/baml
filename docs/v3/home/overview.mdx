@@ -1,0 +1,41 @@
+---
+title: What is Boundary?
+---
+
+Imagine trusting people to run tests instead of running it on CI/CD. It works, until it doesn't. In our eyes, ML systems are the same. Our toolchain is a language called **BAML**, a **VSCode extension** and a **dashboard** to help automate how you build, test, monitor, and continuously improve your AI applications.
+
+We're open source and built in Rust, [would love a star](https://github.com/GlooHQ/baml)!
+
+<Warning>
+  Different parts of the docs page are written for different audiences. The
+  icons below will help you navigate to the right sections.
+  <ul>
+    <li>💼 Product owners (PMs and other non-technical members)</li>
+    <li>🔨 AI Engineers (ML Engineers, Data Scientists, etc.)</li>
+    <li>🏗️ Full stack devs (Frontend, Backend, DevOps, etc.)</li>
+  </ul>
+</Warning>
+<img src="/images/v3/AITeam.png" />
+
+# The Boundary Toolchain
+
+The Boundary Toolchain is a set of tools that make testing, observability, and reliability all linked together, providing a more seamless experience for the entire team.
+
+💼 🔨 🏗️ **Boundary Studio (our SAAS)** - Dashboard for understanding AI pipelines (flow, cost, quality) and sharing information about production data (labeling + comments).
+
+🔨 🏗️ **BAML** - A lightweight config language (think YAML or JSON) designed to help configure AI systems. BAML is short for: **B**asically, **A** **M**ade-up **L**anguage
+
+🔨 🏗️ **Boundary VSCode Extension**: An extension that provides a VSCode playground + testing capabilities right in your codebase + BAML support (auto compile, syntax highlighting, errors, jump to definition, etc.)
+
+<img src="/images/v3/StepByStep.png" />
+<img src="/images/v3/BoundaryToolchain.png" />
+
+# What problem does Boundary solve?
+
+If you're writing an AI application today, there are roughly three main parties in
+your team, all with different sets of problems.
+
+- 💼 Product owners **don't have visibility** into the AI system to associate WHY a customer had a bug. Getting data is often blocked by eng availability.
+- 🔨 AI Engineers are left **context switching** between different tools (testing / playground UIs / multiple wrapper libraries) to implement AI functions. Nevermind the accumulation of Jupyter notebooks that no one understands.
+- 🏗️ Full stack devs have to figure out how to combine AI code with the original business logic (**UX/UI, databases, caching, model reliability and redundancy**, and the rest of the stuff that got forgotten with the excitement of AI) — leading to blocks and blocks of `try: model1(params) catch: try: model2(params) ...`, `if "As an AI model" not in response` checks, `try: json.parse(...)`, etc.
+- Lastly, **Testing is hard** (and therefore usually not done). This applies for most code, but is especially hard for non-deterministic AI systems. Not owning the the model makes this even harder. And when tests/AI configurations live outside of the codebase, CI/CD becomes impossible.

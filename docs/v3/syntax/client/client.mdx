@@ -1,0 +1,123 @@
+---
+title: client
+---
+
+A **client** is the mechanism by which an [impl](/v3/syntax/impl) is executed (can be an LLM or otherwise).
+
+## Syntax
+
+```rust
+client<CLIENT_TYPE> Name {
+    provider ProviderName
+    options {
+      // ...
+    }
+}
+```
+
+- `CLIENT_TYPE`: What type of AI model will be used. Currently must be `llm`
+- `Name`: The name of the client (can be any [a-zA-Z], numbers or `_`). Must start with a letter.
+
+## Properties
+
+| Property       | Type                 | Description                                        | Required |
+| -------------- | -------------------- | -------------------------------------------------- | -------- |
+| `provider`     | name of the provider | The provider to use.                               | Yes      |
+| `options`      | key-value pair       | These are passed through directly to the provider. | No       |
+| `retry_policy` | name of the policy   | [Learn more](/v3/syntax/client/retry)              | No       |
+
+## Providers
+
+BAML libraries ship with some providers, but you can also write your own. There are two primary types of LLMs: chat and completion. BAML Clients abstract away the differences between these two types of LLMs by putting that logic into the provider.
+
+You can call a chat client with a single completion prompt and it will automatically map it to a chat prompt and similarly you can call a completion client with multiple chat prompts and it will automatically map it to a completion prompt.
+
+### OpenAI/Azure
+
+Provider names:
+
+- `baml-openai-chat`
+- `baml-openai-completion`
+- `baml-azure-chat`
+- `baml-azure-completion`
+
+You must pick the right provider for the type of model you are using. For example, if you are using a GPT-3 model, you must use a `chat` provider, but if you're using the instruct model, you must use a `completion` provider.
+
+You can see all models supported by OpenAI [here](https://platform.openai.com/docs/models).
+
+Accepts any options as defined by [OpenAI/Azure SDK](https://github.com/openai/openai-python/blob/9e6e1a284eeb2c20c05a03831e5566a4e9eaba50/src/openai/types/chat/completion_create_params.py#L28)
+
+See [Azure Docs](https://learn.microsoft.com/en-us/azure/ai-services/openai/quickstart?tabs=command-line,python&pivots=programming-language-python#create-a-new-python-application) to learn how to get your Azure API key.
+
+```rust
+// A client that uses the OpenAI chat API.
+client<llm> MyGPT35Client {
+  // Since we're using a GPT-3 model, we must use a chat provider.
+  provider baml-openai-chat
+  options {
+    model gpt-3.5-turbo
+    // Set the api_key parameter to the OPENAI_API_KEY environment variable
+    api_key env.OPENAI_API_KEY
+  }
+}
+
+// A client that uses the OpenAI chat API.
+client<llm> MyAzureClient {
+  // I configured the deployment to use a GPT-3 model,
+  // so I must use a chat provider.
+  provider baml-azure-chat
+  options {
+        api_key env.AZURE_OPENAI_KEY
+        api_base env.AZURE_OPENAI_ENDPOINT
+        // This may change in the future
+        api_version '2023-05-15'
+        api_type azure
+        engine REPLACE_WITH_YOUR_DEPLOYMENT_NAME
+    }
+}
+```
+
+<Warning>
+  BAML uses `openai <= 0.28.1`! We're working on migrating our providers over
+  and ensuring you can use the latest version of openai regardless. The benefit
+  of BAML is that even if openai's SDK changes, you can still use the same BAML
+  code.
+</Warning>
+
+### Anthropic
+
+Provider names:
+
+- `baml-anthropic`
+
+Accepts any options as defined by [Anthropic SDK](https://github.com/anthropics/anthropic-sdk-python/blob/fc90c357176b67cfe3a8152bbbf07df0f12ce27c/src/anthropic/types/completion_create_params.py#L20)
+
+```rust
+client<llm> MyClient {
+  provider baml-anthropic
+  options {
+    model claude-2
+    max_tokens_to_sample 300
+  }
+}
+```
+
+### Fallback
+
+The provider helps with reseliency by allowing you to specify strategies for re-running failed requests. See [Fallbacks/Redundancy](/v3/syntax/client/redundancy) for more information.
+
+### Creating your own (Advanced)
+
+Creating a provider is requires a bit more deeper understanding. You can see our source code for any of our providers here:
+
+- [OpenAI + Azure Chat](https://github.com/GlooHQ/baml/blob/canary/clients/python/baml_core/registrations/providers/openai_chat_provider.py)
+- [OpenAI + Azure Completion](https://github.com/GlooHQ/baml/blob/canary/clients/python/baml_core/registrations/providers/openai_completion_provider.py)
+- [Anthropic](https://github.com/GlooHQ/baml/blob/canary/clients/python/baml_core/registrations/providers/anthropic_provider.py)
+- [Fallback](https://github.com/GlooHQ/baml/blob/canary/clients/python/baml_core/registrations/providers/fallback_provider.py)
+
+You can add your own provider by creating a new file anywhere in your application logic, then setting the provider name in .baml to name you registered it with in your implementation.
+
+<Note>
+  We are actively working on how to make custom providers better / easier. If
+  you have ideas, please reach out to us on discord!
+</Note>

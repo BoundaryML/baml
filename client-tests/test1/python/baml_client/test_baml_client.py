@@ -8,7 +8,7 @@
 # fmt: off
 
 from .__do_not_import.generated_baml_client import baml
-from .baml_types import ClassifyResponse, Conversation, DummyObj, IBlah, IClassifyTool, IMaybePolishText, IMessageSimplifier, ITextPolisher, ImprovedResponse, Message, MessageSender, ProposedMessage, Sentiment, Tool
+from .baml_types import ClassifyResponse, Conversation, DummyObj, Email, IBlah, IClassifyIntent, IClassifyTool, IGetOrderInfo, IMessageSimplifier, ITextPolisher, Intent, Message, MessageSender, OrderInfo, OrderStatus, ProductInfo, ProposedMessage, Tool
 from baml_lib._impl.deserializer import Deserializer
 from json5 import loads # type: ignore
 
@@ -19,8 +19,7 @@ async def test_busy_coral(MaybePolishTextImpl: IMaybePolishText):
     param = deserializer.from_string("""\
 {"thread":{"thread":[{"sender":"AI","body":"the website is broken"}]},"generated_response":"asdfasdf","dummy":{"prop1":"eeee","prop2":1,"prop3":false}}\
 """)
-    await MaybePolishTextImpl(param)
-
+    await BlahImpl(param)
 
 @baml.Blah.test
 async def test_greasy_white(BlahImpl: IBlah):
