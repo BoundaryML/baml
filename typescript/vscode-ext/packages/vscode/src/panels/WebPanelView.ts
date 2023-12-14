@@ -194,7 +194,7 @@ export class WebPanelView {
               ? vscode.Uri.parse(saveTestRequest.testCaseName?.source_file)
               : vscode.Uri.joinPath(
                 vscode.Uri.parse(saveTestRequest.root_path),
-                '__tests',
+                '__tests__',
                 saveTestRequest.funcName,
                 `${uniqueNamesGenerator(customConfig)}.json`,
               )
