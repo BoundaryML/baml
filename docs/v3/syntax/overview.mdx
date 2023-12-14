@@ -4,22 +4,31 @@ title: The BAML Project structure
 
 A BAML project has the following structure:
 
-
 ```bash
 .
 ├── baml_client/
-└── baml_src/
-    ├── __tests__/
-    │   ├── YourAIFunction/
-    │   │   ├── test_name_monkey.json
-    │   │   └── test_name_cricket.json
-    │   └── YourAIFunction2/
-    │       └── test_name_jellyfish.json
-    ├── main.baml
-    └── foo.baml
+├── baml_src/
+│   ├── __tests__/
+│   │   ├── YourAIFunction/
+│   │   │   ├── test_name_monkey.json
+│   │   │   └── test_name_cricket.json
+│   │   └── YourAIFunction2/
+│   │       └── test_name_jellyfish.json
+│   ├── main.baml
+│   ├── any_directory/
+│   │   ├── bar.baml
+│   │   └── baz.baml
+│   └── foo.baml
+# The rest of your project (not generated / used by BAML)
+├── app/
+│  ├── __init__.py
+│  └── main.py
+├── pyproject.toml
+└── poetry.lock
+
 ```
 
-1. **baml_src** is the directory where you write your BAML files with the AI function declarations, prompts, retry policies, etc. It also contains a [generator](/v3/syntax/generator) block that indicates where to generate code to and what language to compile to.
+1. **baml_src** is the directory where you write your BAML files with the AI function declarations, prompts, retry policies, etc. It also contains [generator](/v3/syntax/generator) blocks which configure how and where to transpile your BAML code.
 2. **baml_client** is the directory where the generated python or TS client code lives. This is the code that you import into your python or TS program like this:
 
 ```python
@@ -29,12 +38,21 @@ from baml_client import baml as b
 await b.YourAIFunction()
 ```
 
-3. **baml_src/__tests__/** are where your unit tests live. The .json files store the test inputs that can be loaded, deleted, created, and ran using the BAML VSCode extension. You can also write programmatic python/TS tests anywhere you like. See [here](/v3/syntax/function-testing) for more information.
+3. **baml_src/\_\_tests\_\_/** are where your unit tests live. The `.json` files store the test inputs that can be loaded, deleted, created, and ran using the BAML VSCode extension. You can also write programmatic python/TS tests anywhere you like. See [here](/v3/syntax/function-testing) for more information.
 
+<Warning>
+  **You should never edit any files inside baml_client directory** as the whole
+  directory gets regenerated on every `baml build` (auto runs on save if using
+  the VSCode extension).
+</Warning>
 
-<Warning>**You should never edit any files inside baml_client directory** as the whole directory gets generated automatically everytime you save a `.baml` file if you're using the BAML VSCode extension. </Warning>
-
-<Tip>If you ever run into any issues with the generated code (like merge conflicts), you can always delete the `baml_client` directory and it will get regenerated automatically once you fix any other conflicts in your `.baml` files.</Tip>
+<Tip>
+  If you ever run into any issues with the generated code (like merge
+  conflicts), you can always delete the `baml_client` directory and it will get
+  regenerated automatically once you fix any other conflicts in your `.baml`
+  files.
+</Tip>
 
 ### imports
-BAML has no import logic like other languages. Every entity declared in a `.baml` file is available to all other `.baml` files under the same `baml_src` directory. You **can** can multiple baml_src directories, but we don't currently recommend it.
+
+BAML by default has global imports. Every entity declared in any `.baml` file is available to all other `.baml` files that `baml_src` project. You **can** can multiple `baml_src` directories for different project, but no promises on how the VSCode extension will behave (yet).
