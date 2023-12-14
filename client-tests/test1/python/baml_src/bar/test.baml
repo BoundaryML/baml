@@ -51,9 +51,9 @@ impl<llm, MaybePolishText> v1 {
 
         Do not use {// affirmative //} or negative unless the question is a yes or no question.
 
-       
-
-        {#print_enum(Sentiment)}
+        ```input
+        {#input}
+        ```       
 
         {// The word format is required. don't remove it //}
         Output JSON Format:

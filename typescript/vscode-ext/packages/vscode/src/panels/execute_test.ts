@@ -168,6 +168,7 @@ class TestState {
 }
 
 class TestExecutor {
+  private static pythonPath: string | undefined = undefined
   private server: net.Server | undefined
   private testState: TestState
   private stdoutListener: ((data: string) => void) | undefined = undefined
@@ -211,6 +212,29 @@ class TestExecutor {
     return ''
   }
 
+  public async getPythonPath() {
+    if (TestExecutor.pythonPath === undefined) {
+      // Check if we should use python3 by seeing if shell has python3
+      TestExecutor.pythonPath = await new Promise((resolve, reject) => {
+        let res = exec('python3 -s --version')
+        res.stdout?.on('data', (data) => {
+          console.log(`stdout: ${data}`)
+        })
+        res.on('exit', (code, signal) => {
+          console.log(`exit: ${code}`)
+          if (code === 0) {
+            resolve('python3')
+          } else {
+            resolve('python')
+          }
+        })
+      })
+    }
+
+    console.log(`Using python path: ${TestExecutor.pythonPath}`)
+    return TestExecutor.pythonPath!
+  }
+
   public async runTest(tests: TestRequest, cwd: string) {
     this.testState.resetTestCases(tests)
     const tempFilePath = path.join(os.tmpdir(), 'test_temp.py')
@@ -223,20 +247,24 @@ class TestExecutor {
     fs.writeFileSync(tempFilePath, code)
 
     // Add filters.
-    let test_filter = `-k '${tests.functions
-      .flatMap((fn) => fn.tests.flatMap((test) => test.impls.map((impl) => getFullTestName(test.name, impl, fn.name))))
-      .join(' or ')}'`
+    let selectedTests = tests.functions.flatMap((fn) =>
+      fn.tests.flatMap((test) => test.impls.map((impl) => getFullTestName(test.name, impl, fn.name))),
+    )
+    let test_filter = selectedTests ? `-k "${selectedTests.join(' or ')}"` : ''
 
     // Run the Python script in a child process
     let command = `python -m pytest ${tempFilePath} ${this.port_arg} ${test_filter}`
     if (fs.existsSync(path.join(cwd, 'pyproject.toml'))) {
       command = `poetry run ${command}`
+    } else {
+      command = `${await this.getPythonPath()} -m pytest ${tempFilePath} ${this.port_arg} ${test_filter}`
     }
 
     // Run the Python script in a child process
     // const process = spawn(pythonExecutable, [tempFilePath]);
     // Run the Python script using exec
     this.stdoutListener?.('<BAML_RESTART>')
+    this.stdoutListener?.(`Command: ${command}\n`)
     const cp = exec(command, {
       cwd: cwd,
     })

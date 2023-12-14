@@ -13,32 +13,13 @@ from baml_lib._impl.deserializer import Deserializer
 from json5 import loads # type: ignore
 
 
-@baml.Blah.test
-async def test_basic2(BlahImpl: IBlah):
-    deserializer = Deserializer[str](str) # type: ignore
+@baml.MaybePolishText.test
+async def test_busy_coral(MaybePolishTextImpl: IMaybePolishText):
+    deserializer = Deserializer[ProposedMessage](ProposedMessage) # type: ignore
     param = deserializer.from_string("""\
-"big fan of this"\
+{"thread":{"thread":[{"sender":"AI","body":"the website is broken"}]},"generated_response":"asdfasdf","dummy":{"prop1":"eeee","prop2":1,"prop3":false}}\
 """)
     await BlahImpl(param)
-
-
-@baml.ClassifyIntent.test
-async def test_cooing_tan(ClassifyIntentImpl: IClassifyIntent):
-    deserializer = Deserializer[str](str) # type: ignore
-    param = deserializer.from_string("""\
-"I want to cancel my order"\
-""")
-    await ClassifyIntentImpl(param)
-
-
-@baml.Blah.test
-async def test_default(BlahImpl: IBlah):
-    deserializer = Deserializer[str](str) # type: ignore
-    param = deserializer.from_string("""\
-te\
-""")
-    await BlahImpl(param)
-
 
 @baml.Blah.test
 async def test_greasy_white(BlahImpl: IBlah):
@@ -52,10 +33,7 @@ big fan of this\
 @baml.ClassifyTool.test
 async def test_international_scarlet(ClassifyToolImpl: IClassifyTool):
     case = loads("""
-{
-  "query": "",
-  "context": ""
-}
+{"query":"hey my toaster is broken","context":"the user is an sde"}
 """)
     deserializer_query = Deserializer[str](str) # type: ignore
     query = deserializer_query.from_string(case["query"])
@@ -67,13 +45,13 @@ async def test_international_scarlet(ClassifyToolImpl: IClassifyTool):
     )
 
 
-@baml.GetOrderInfo.test
-async def test_near_plum(GetOrderInfoImpl: IGetOrderInfo):
-    deserializer = Deserializer[Email](Email) # type: ignore
+@baml.MessageSimplifier.test
+async def test_obnoxious_maroon(MessageSimplifierImpl: IMessageSimplifier):
+    deserializer = Deserializer[Conversation](Conversation) # type: ignore
     param = deserializer.from_string("""\
-{ "subject": "hello", "body": "Your order has been shipped. It will arrive on 1st Jan 2022. Product: iPhone 13. Cost: $999.99" }\
+{"thread":[{"sender":"AI","body":"asfasefaes"}]}\
 """)
-    await GetOrderInfoImpl(param)
+    await MessageSimplifierImpl(param)
 
 
 @baml.TextPolisher.test
@@ -83,34 +61,5 @@ async def test_potential_lavender(TextPolisherImpl: ITextPolisher):
 {}\
 """)
     await TextPolisherImpl(param)
-
-
-@baml.MessageSimplifier.test
-async def test_sample_test(MessageSimplifierImpl: IMessageSimplifier):
-    deserializer = Deserializer[Conversation](Conversation) # type: ignore
-    param = deserializer.from_string("""\
-{
-  "thread": [
-    {
-      "sender": "AI",
-      "body": "Hey man hows it going would you please fix my garage door etc etc etc"
-    },
-    {
-      "sender": "AI",
-      "body": "eeeeeee"
-    }
-  ]
-}\
-""")
-    await MessageSimplifierImpl(param)
-
-
-@baml.Blah.test
-async def test_total_amaranth(BlahImpl: IBlah):
-    deserializer = Deserializer[str](str) # type: ignore
-    param = deserializer.from_string("""\
-big fan of this\
-""")
-    await BlahImpl(param)
 
 

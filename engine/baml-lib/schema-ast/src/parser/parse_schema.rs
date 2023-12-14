@@ -7,6 +7,8 @@ use super::{
 use crate::{ast::*, parser::parse_variant};
 use internal_baml_diagnostics::{DatamodelError, Diagnostics, SourceFile};
 use pest::Parser;
+use serde::Deserialize;
+use serde_json::Value;
 
 #[cfg(feature = "debug_parser")]
 fn pretty_print<'a>(pair: pest::iterators::Pair<'a, Rule>, indent_level: usize) {
@@ -22,6 +24,29 @@ fn pretty_print<'a>(pair: pest::iterators::Pair<'a, Rule>, indent_level: usize) 
     }
 }
 
+// Define an enum for the different types of input
+#[derive(Deserialize, Debug)]
+#[serde(untagged)] // This allows for different shapes of JSON
+enum Input {
+    StringInput(String),
+    ObjectInput(Value), // Use serde_json::Value for a generic JSON object
+}
+
+impl Input {
+    // Method to get the string representation of the input
+    fn to_string(&self) -> String {
+        match self {
+            Input::StringInput(s) => s.clone(),
+            Input::ObjectInput(obj) => serde_json::to_string(obj).unwrap_or_default(),
+        }
+    }
+}
+
+#[derive(Deserialize, Debug)]
+struct TestFileContent {
+    input: Input,
+}
+
 fn parse_test_from_json(
     source: &SourceFile,
     diagnostics: &mut Diagnostics,
@@ -29,7 +54,24 @@ fn parse_test_from_json(
     // Path relative to the root of the project.
     let source_path = source.path_buf().clone();
     let root_path = diagnostics.root_path.clone();
-    let relative_path = source_path.strip_prefix(&root_path).unwrap();
+    let relative_path = source_path.strip_prefix(&root_path);
+
+    match relative_path {
+        Err(_) => {
+            diagnostics.push_error(DatamodelError::new_validation_error(
+                &format!(
+                    "The path of the test file must be inside the project root: {} {}",
+                    root_path.display(),
+                    source_path.display()
+                ),
+                Span::empty(source.clone()),
+            ));
+        }
+        _ => (),
+    };
+
+    diagnostics.to_result()?;
+    let relative_path = relative_path.unwrap();
 
     let parts = relative_path.components();
     // Ensure is of the form `tests/<function_name>/(<group_name>/)/<test_name>.json` using regex
@@ -87,11 +129,23 @@ fn parse_test_from_json(
     let function_name = function_name.unwrap();
     let test_name = test_name.unwrap();
 
-    let content = source.as_str();
-    let span = Span::new(source.clone(), 0, content.len());
+    let file_content: TestFileContent = match serde_json::from_str(source.as_str()) {
+        Ok(file_content) => file_content,
+        Err(err) => {
+            diagnostics.push_error(DatamodelError::new_validation_error(
+                &format!("Failed to parse JSON: {}", err),
+                Span::empty(source.clone()),
+            ));
+            diagnostics.to_result()?;
+            unreachable!()
+        }
+    };
+    let test_input = file_content.input.to_string();
+    let end_range = test_input.len();
+    let span = Span::new(source.clone(), 0, end_range);
     let content = Expression::RawStringValue(RawString::new(
-        content.to_string(),
-        Span::new(source.clone(), 0, content.len()),
+        test_input,
+        Span::new(source.clone(), 0, end_range),
         Some(("json".into(), Span::empty(source.clone()))),
     ));
     let test_case = ConfigBlockProperty {

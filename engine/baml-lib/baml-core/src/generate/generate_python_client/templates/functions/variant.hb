@@ -27,7 +27,7 @@ __deserializer.overload("{{{name}}}", {{BLOCK_OPEN}}{{#each aliases}}"{{{alias}}
 
 
 {{#if output_adapter}}
-def output_adapter(output: {{output_adapter.type}}) -> {{function.return.0.type}}:
+def output_adapter(arg: {{output_adapter.type}}) -> {{function.return.0.type}}:
     {{> print_code code=output_adapter.code}}
 {{/if}}
 

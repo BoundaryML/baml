@@ -6,19 +6,23 @@ export interface TestRequest {
       name: string
       impls: string[]
       params:
-        | {
-            type: 'positional'
-            value: string
-          }
-        | {
-            type: 'named'
-            value: {
-              name: string
-              value: string
-            }[]
-          }
+      | {
+        type: 'positional'
+        value: string
+      }
+      | {
+        type: 'named'
+        value: {
+          name: string
+          value: string
+        }[]
+      }
     }[]
   }[]
+}
+
+export interface TestFileContent {
+  input: any
 }
 
 export enum TestStatus {

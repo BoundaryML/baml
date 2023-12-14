@@ -1,4 +1,6 @@
 {
-  "query": "",
-  "context": ""
+  "input": {
+    "query": "hey my toaster is broken",
+    "context": "the user is an sde"
+  }
 }
