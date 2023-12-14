@@ -108,14 +108,14 @@ impl<llm, ExtractMeetingRequestInfo> robust {
         attendees = [
             find_attendee_by_email(detail) if '@' in detail else Attendee(name=detail, email="unknown")
 
-            # output is a special variable that contains the output of the
+            # arg is a special variable that contains a type of the
             # previous step (in this case, the LLM).
-            for detail in output.attendees
+            for detail in arg.attendees
         ]
         return MeetingRequest(
-            time=output.time or "ASAP",
+            time=arg.time or "ASAP",
             attendees=attendees,
-            topic=output.topic or "Meeting"
+            topic=arg.topic or "Meeting"
         )
     "#
 
