@@ -73,15 +73,13 @@ export function startServer(options?: LSOptions): void {
 
   connection.onInitialize((params: InitializeParams) => {
     // Logging first...
-    connection.console.info(`Default version of Baml 'baml-schema-wasm' : ${getVersion()}`)
 
     connection.console.info(
       // eslint-disable-next-line
-      `Extension name ${packageJson?.name} with version ${packageJson?.version}`,
+      `Extension '${packageJson?.name}': ${packageJson?.version}`,
     )
+    connection.console.info(`Using 'baml-wasm': ${getVersion()}`)
     const prismaEnginesVersion = getEnginesVersion()
-    // const prismaCliVersion = getCliVersion()
-    // connection.console.info(`Prisma CLI v ersion: ${prismaCliVersion}`)
 
     // ... and then capabilities of the language server
     const capabilities = params.capabilities
@@ -133,7 +131,6 @@ export function startServer(options?: LSOptions): void {
   const documentSettings: Map<string, Thenable<LSSettings>> = new Map<string, Thenable<LSSettings>>()
 
   const getConfig = async () => {
-    console.log('get config')
     try {
       const configResponse = await connection.workspace.getConfiguration('baml')
       console.log('configResponse ' + JSON.stringify(configResponse, null, 2))
@@ -219,15 +216,15 @@ export function startServer(options?: LSOptions): void {
       }
       const srcDocs = cache.getDocuments()
       const linterInput: LinterInput = {
-        root_path: rootPath,
-        files: srcDocs.map((doc) => {
+        root_path: rootPath.fsPath,
+        files: srcDocs.map(({ path, doc }) => {
           return {
-            path: doc.uri,
+            path,
             content: doc.getText(),
           }
         }),
       }
-      console.log(`Searching database for ${rootPath}`)
+
       if (srcDocs.length === 0) {
         console.log('No BAML files found in the workspace.')
         connection.sendNotification('baml/message', {
@@ -252,7 +249,6 @@ export function startServer(options?: LSOptions): void {
 
   function validateTextDocument(textDocument: TextDocument) {
     try {
-      const srcDocs = bamlCache.getDocuments(textDocument)
       const rootPath = bamlCache.getBamlDir(textDocument)
       if (!rootPath) {
         console.error('Could not find root path for ' + textDocument.uri)
@@ -262,33 +258,26 @@ export function startServer(options?: LSOptions): void {
         })
         return
       }
-      const linterInput: LinterInput = {
-        root_path: rootPath,
-        files: srcDocs.map((doc) => {
-          return {
-            path: doc.uri,
-            content: doc.getText(),
-          }
-        }),
-      }
+      const srcDocs = bamlCache.getDocuments(textDocument)
       if (srcDocs.length === 0) {
         console.log(`No BAML files found in the workspace. ${rootPath}`)
         connection.sendNotification('baml/message', {
           type: 'warn',
-          message: 'Unable to find BAML files. See Output panel -> BAML Language Server for more details.',
+          message: `Empty baml_src directory found: ${rootPath.fsPath}. See Output panel -> BAML Language Server for more details.`,
         })
-      } else {
-        const response = MessageHandler.handleDiagnosticsRequest(srcDocs, linterInput, showErrorToast)
-        for (const [uri, diagnosticList] of response.diagnostics) {
-          void connection.sendDiagnostics({ uri, diagnostics: diagnosticList })
-        }
+        return
+      }
 
-        bamlCache.addDatabase(rootPath, response.state)
-        if (response.state) {
-          void connection.sendRequest('set_database', { rootPath, db: response.state })
-        } else {
-          void connection.sendRequest('rm_database', rootPath)
-        }
+      const response = MessageHandler.handleDiagnosticsRequest(rootPath, srcDocs, showErrorToast)
+      for (const [uri, diagnosticList] of response.diagnostics) {
+        void connection.sendDiagnostics({ uri, diagnostics: diagnosticList })
+      }
+
+      bamlCache.addDatabase(rootPath, response.state)
+      if (response.state) {
+        void connection.sendRequest('set_database', { rootPath: rootPath.fsPath, db: response.state })
+      } else {
+        void connection.sendRequest('rm_database', rootPath)
       }
     } catch (e: any) {
       if (e instanceof Error) {
@@ -324,8 +313,6 @@ export function startServer(options?: LSOptions): void {
         )
         return
       }
-      bamlDir = URI.parse(bamlDir).fsPath
-      console.log('bamlDir ' + bamlDir)
 
       debouncedCLIBuild(cliPath, bamlDir, showErrorToast, () => {
         connection.sendNotification('baml/message', {
@@ -422,7 +409,7 @@ export function startServer(options?: LSOptions): void {
     // create textdocument from file:
     const textDocument = TextDocument.create(fileUri, language, 1, '')
     bamlCache.refreshDirectory(textDocument)
-    bamlCache.getDocuments(textDocument).forEach((doc) => {
+    bamlCache.getDocuments(textDocument).forEach(({ doc }) => {
       debouncedValidateTextDocument(doc)
     })
   })

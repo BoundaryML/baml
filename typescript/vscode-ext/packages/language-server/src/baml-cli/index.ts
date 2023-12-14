@@ -1,8 +1,9 @@
 import { exec } from 'child_process'
+import { URI } from 'vscode-uri'
 
 export function cliBuild(
   cliPath: string,
-  workspacePath: string | null,
+  workspacePath: URI | null,
   onError?: (errorMessage: string) => void,
   onSuccess?: () => void,
 ) {
@@ -11,31 +12,34 @@ export function cliBuild(
   if (!workspacePath) {
     return
   }
-  let options = {
-    cwd: workspacePath,
-  }
 
-  exec(buildCommand, options, (error: Error | null, stdout: string, stderr: string) => {
-    if (stdout) {
-      console.log(stdout)
-      // outputChannel.appendLine(stdout);
-    }
-
-    if (stderr) {
-      // our CLI is by default logging everything to stderr
-      console.info(stderr)
-    }
-
-    if (error) {
-      console.error(`Error running the build script: ${JSON.stringify(error, null, 2)}`)
-      onError?.(`Baml build error`)
-      return
-    } else {
-      if (onSuccess) {
-        onSuccess()
+  exec(
+    buildCommand,
+    {
+      cwd: workspacePath.fsPath,
+    },
+    (error: Error | null, stdout: string, stderr: string) => {
+      if (stdout) {
+        console.log(stdout)
+        // outputChannel.appendLine(stdout);
       }
-    }
-  })
+
+      if (stderr) {
+        // our CLI is by default logging everything to stderr
+        console.info(stderr)
+      }
+
+      if (error) {
+        console.error(`Error running the build script: ${JSON.stringify(error, null, 2)}`)
+        onError?.(`Baml build error`)
+        return
+      } else {
+        if (onSuccess) {
+          onSuccess()
+        }
+      }
+    },
+  )
 }
 
 export function cliVersion(

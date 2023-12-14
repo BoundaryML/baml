@@ -1,4 +1,4 @@
-use std::panic;
+use std::{env, panic};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -58,6 +58,12 @@ pub fn validate(params: String) -> Result<(), JsError> {
 pub fn generate_test_file(params: String) -> String {
     register_panic_hook();
     baml_fmt::generate_test_file(params)
+}
+
+#[wasm_bindgen]
+pub fn version() -> String {
+    register_panic_hook();
+    env!("CARGO_PKG_VERSION").to_string()
 }
 
 // #[wasm_bindgen]

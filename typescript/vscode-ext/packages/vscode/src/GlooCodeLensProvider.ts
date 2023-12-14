@@ -15,9 +15,7 @@ export class GlooCodeLensProvider implements vscode.CodeLensProvider {
       return codeLenses
     }
 
-    const functionNames = this.db.functions
-      .filter((x) => x.name.source_file === document.uri.toString())
-      .map((f) => f.name)
+    const functionNames = this.db.functions.filter((x) => x.name.source_file === document.uri.fsPath).map((f) => f.name)
 
     functionNames.forEach((name) => {
       const range = new vscode.Range(document.positionAt(name.start), document.positionAt(name.end))
@@ -47,7 +45,7 @@ export class GlooCodeLensProvider implements vscode.CodeLensProvider {
           }
         }),
       )
-      .filter((x) => x.source_file === document.uri.toString())
+      .filter((x) => x.source_file === document.uri.fsPath)
 
     implNames.forEach((name) => {
       codeLenses.push(
@@ -93,7 +91,7 @@ export class GlooCodeLensProvider implements vscode.CodeLensProvider {
           }
         }),
       )
-      .filter((x) => x.source_file === document.uri.toString())
+      .filter((x) => x.source_file === document.uri.fsPath)
     testCases.forEach((name) => {
       const range = new vscode.Range(document.positionAt(name.start), document.positionAt(name.end))
       const command: vscode.Command = {

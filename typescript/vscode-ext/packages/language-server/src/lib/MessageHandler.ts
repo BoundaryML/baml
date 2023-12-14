@@ -25,6 +25,7 @@ import lint, { LinterInput } from './wasm/lint'
 import { FileCache } from '../file/fileCache'
 import generate_test_file, { GenerateResponse } from './wasm/generate_test_file'
 import { ParserDatabase, TestRequest } from '@baml/common'
+import { URI } from 'vscode-uri'
 
 // import format from './prisma-schema-wasm/format'
 // import lint from './prisma-schema-wasm/lint'
@@ -56,7 +57,7 @@ import { ParserDatabase, TestRequest } from '@baml/common'
 //   getDatamodelBlock,
 // } from './ast'
 export function handleGenerateTestFile(
-  documents: TextDocument[],
+  documents: { path: string; doc: TextDocument }[],
   linterInput: LinterInput,
   test_request: TestRequest,
   onError?: (errorMessage: string) => void,
@@ -76,41 +77,56 @@ export function handleGenerateTestFile(
   return result
 }
 export function handleDiagnosticsRequest(
-  documents: TextDocument[],
-  linterInput: LinterInput,
+  rootPath: URI,
+  documents: { path: string; doc: TextDocument }[],
   onError?: (errorMessage: string) => void,
 ): { diagnostics: Map<string, Diagnostic[]>; state: ParserDatabase | undefined } {
-  // console.debug(`Linting ${documents.length} documents`)
+  const linterInput: LinterInput = {
+    root_path: rootPath.fsPath,
+    files: documents.map(({ path, doc }) => ({
+      path,
+      content: doc.getText(),
+    })),
+  }
+
+  console.debug(`Linting ${linterInput.files.length} files in ${linterInput.root_path}`)
   const res = lint(linterInput, (errorMessage: string) => {
     if (onError) {
       onError(errorMessage)
     }
   })
-  // console.log("res " + JSON.stringify(res, null, 2));
+  // console.log('res ' + JSON.stringify(res, null, 2))
 
   let allDiagnostics: Map<string, Diagnostic[]> = new Map()
 
-  documents.forEach((document) => {
-    const documentDiagnostics: Diagnostic[] = []
+  res.diagnostics.forEach((diag) => {
+    // Find the best matching document
+    let doc = documents.find(({ path, doc: document }) => diag.source_file === path)
+    if (!doc) {
+      console.log('Could not find document for ' + diag.source_file)
+      return
+    }
+    let { path, doc: document } = doc
 
     try {
-      const filteredDiagnostics = res.diagnostics.filter((diag) => diag.source_file === document.uri)
+      const diagnostic: Diagnostic = {
+        range: {
+          start: document.positionAt(diag.start),
+          end: document.positionAt(diag.end),
+        },
+        message: diag.text,
+        source: 'baml',
+      }
+      if (diag.is_warning) {
+        diagnostic.severity = DiagnosticSeverity.Warning
+      } else {
+        diagnostic.severity = DiagnosticSeverity.Error
+      }
 
-      for (const diag of filteredDiagnostics) {
-        const diagnostic: Diagnostic = {
-          range: {
-            start: document.positionAt(diag.start),
-            end: document.positionAt(diag.end),
-          },
-          message: diag.text,
-          source: 'baml',
-        }
-        if (diag.is_warning) {
-          diagnostic.severity = DiagnosticSeverity.Warning
-        } else {
-          diagnostic.severity = DiagnosticSeverity.Error
-        }
-        documentDiagnostics.push(diagnostic)
+      if (allDiagnostics.has(path)) {
+        allDiagnostics.get(path)?.push(diagnostic)
+      } else {
+        allDiagnostics.set(path, [diagnostic])
       }
     } catch (e: any) {
       if (e instanceof Error) {
@@ -118,8 +134,6 @@ export function handleDiagnosticsRequest(
       }
       onError?.(e.message)
     }
-
-    allDiagnostics.set(document.uri, documentDiagnostics)
   })
 
   return { diagnostics: allDiagnostics, state: res.ok ? res.response : undefined }

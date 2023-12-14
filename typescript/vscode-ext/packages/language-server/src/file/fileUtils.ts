@@ -21,38 +21,66 @@ import { URI } from 'vscode-uri'
 //   return null;
 // }
 
-export function gatherFiles(dir: string, debug: boolean = false, fileList: string[] = []): string[] {
-  let uri = URI.parse(dir)
-  let dirPath = uri.fsPath
-  const files = fs.readdirSync(dirPath)
-  if (debug) {
-    console.log(`Gathering files from ${dirPath}. uri: ${uri.toString()}`)
-    console.log('files ' + JSON.stringify(files, null, 2))
+/**
+ * Non-recursively gathers files with .baml or .json extensions from a given directory,
+ * avoiding processing the same directory more than once.
+ *
+ * @param {vscode.Uri} uri - The URI of the directory to search.
+ * @param {boolean} debug - Flag to enable debug logging.
+ * @returns {string[]} - An array of file URIs.
+ */
+export function gatherFiles(uri: URI, debug: boolean = false): URI[] {
+  let visitedDirs = new Set<string>()
+  let dirStack: URI[] = []
+  const addDir = (dir: URI) => {
+    if (!visitedDirs.has(dir.toString())) {
+      dirStack.push(dir)
+      visitedDirs.add(dir.toString())
+    }
   }
 
-  files.forEach((file) => {
-    const filePath = path.join(dirPath, file)
-    const fileStat = fs.statSync(filePath)
-    if (debug) {
-      console.log(`Checking ${filePath}`)
-      console.log(`isDirectory: ${fileStat.isDirectory()}`)
-    }
+  addDir(uri)
 
-    if (fileStat.isDirectory()) {
-      gatherFiles(`file:///${filePath}`, debug, fileList)
-    } else {
-      // check if it has .baml extension
-      if (filePath.endsWith('.baml') || filePath.endsWith('.json')) {
-        fileList.push(filePath)
-      }
-    }
-  })
+  let fileList: URI[] = []
 
-  return fileList.map((filePath) => URI.file(filePath).toString())
+  const MAX_DIRS = 1000
+  let iterations = 0
+
+  while (dirStack.length > 0) {
+    if (iterations > MAX_DIRS) {
+      console.error(`Max directory limit reached (${MAX_DIRS})`)
+      throw new Error(`Directory failed to load after ${iterations} iterations`)
+    }
+    iterations++
+
+    const currentUri = dirStack.pop()!
+    const dirPath = currentUri.fsPath
+
+    try {
+      const files = fs.readdirSync(dirPath)
+
+      files.forEach((file) => {
+        const filePath = path.join(dirPath, file)
+        const fileUri = URI.file(filePath)
+        const fileStat = fs.statSync(filePath)
+
+        if (fileStat.isDirectory()) {
+          addDir(fileUri)
+        } else if (filePath.endsWith('.baml') || filePath.endsWith('.json')) {
+          fileList.push(fileUri)
+        }
+      })
+    } catch (error) {
+      console.error(`Error reading directory ${dirPath}: ${(error as any).message}`)
+      throw error
+    }
+  }
+
+  return fileList
 }
 
-export function convertToTextDocument(filePath: string): TextDocument {
-  const fileContent = fs.readFileSync(URI.parse(filePath).fsPath, 'utf-8')
-  const fileExtension = path.extname(filePath)
+export function convertToTextDocument(filePath: URI): TextDocument {
+  const fileContent = fs.readFileSync(filePath.fsPath, 'utf-8')
+  const fileExtension = path.extname(filePath.fsPath)
   return TextDocument.create(filePath.toString(), fileExtension === '.baml' ? 'baml' : 'json', 1, fileContent)
 }
