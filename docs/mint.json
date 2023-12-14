@@ -64,14 +64,7 @@
         "v3/home/tracing-tagging"
       ]
     },
-    {
-      "group": "Get Started",
-      "pages": [
-        "v2/mdx/overview",
-        "v2/mdx/baml-by-example",
-        "v2/mdx/quickstart"
-      ]
-    },
+
     {
       "group": "Hello World",
       "pages": ["v3/guides/hello_world/overview"]

@@ -1,32 +1,40 @@
 ---
-title: Getting started
+title: The BAML Project structure
 ---
 
-This section outlines the syntax of BAML as well as the LLM-specific functionality it enables.
-
-## extra
-
-1. **A type-safe API for your LLM** -- LLMs can sometimes forget a comma, or may add a comment inside a JSON, or just output the wrong format. BAML parses it correctly (See [Deserialization](/v3/type-deserializer) for more info)
-2. **Scoped serializers** -- You can alias your type property names dynamically in prompts (e.g. `duration` -> `duration_in_minutes`) without having to change your code
-3. **Compile time checks for template variables in prompts and configs**
-4. **Organization** -- everything (prompts, configs, variables, renames) related to each impl are defined and visible in one place
-5. **Observability** -- All events are published via OpenTelemetry, and can be tracked in Boundary Studio
-
-## Why use BAML vs other libraries or frameworks?
-
-1. **Use an integrated VSCode playground** - The playground is co-located with your prompt configurations. No need to context switch out of VSCode for simple tests.
-1. **Comments in prompts** - You heard that right... we added support for [comments inside the actual prompt string](/v2/mdx/baml-by-example#comments).
-1. **Strong type safety** - Query your data with into fully typed pandas dataframes of your input and output objects, rather than raw strings or JSON. (Coming soon)
-1. **Powerful deserialization** - BAML parses your inputs and outputs for you, and provides guardrails to ensure your inputs and outputs are valid. _Even when the JSON is valid, the desired output type may not be what you wanted_. The BAML deserializer can smartly detect when an LLM may have output a string rather than a number, and still parse things correctly. For enums it even keeps track of hallucinated values.
-1. **Code organization** - Organize your code in statically analyzed BAML files, without having to use plaintext or YAML
-1. **Out-of-the-box request tracing and data analytics**
-1. **Test Suites** - Run and visualize test results for all your BAML functions over time using the playground or using our dashboard-enabled pytest plugin.
-1. **Flexibility and cross-compatibility** - Running BAML prompts are as easy as copying the BAML files over and pressing "run"
-1. **Prompt linting** - Get warnings when your prompt isn't following best practices. We are planning on adding custom guidelines.
+A BAML project has the following structure:
 
 
-## Why did you make this?
+```bash
+.
+├── baml_client/
+└── baml_src/
+    ├── __tests__/
+    │   ├── YourAIFunction/
+    │   │   ├── test_name_monkey.json
+    │   │   └── test_name_cricket.json
+    │   └── YourAIFunction2/
+    │       └── test_name_jellyfish.json
+    ├── main.baml
+    └── foo.baml
+```
 
-We wanted to build a toolchain from the ground up that would allow us to build and deploy LLMs in a way that is easy to understand, test, and debug. Also, this was a great excuse to write a rust compiler.
+1. **baml_src** is the directory where you write your BAML files with the AI function declarations, prompts, retry policies, etc. It also contains a [generator](/v3/syntax/generator) block that indicates where to generate code to and what language to compile to.
+2. **baml_client** is the directory where the generated python or TS client code lives. This is the code that you import into your python or TS program like this:
 
-Our vision is to support any AI model, not just LLMs, so when you fine-tune a model to complete a task an LLM used to do, you can swap it over in one line of code. If you do end up using the Dashboard product, we want you to be able to load it in a pandas dataframe, in a fully typed manner (because BAML stores all type info for you!), to train whatever you want.
+```python
+from baml_client import baml as b
+
+...
+await b.YourAIFunction()
+```
+
+3. **baml_src/__tests__/** are where your unit tests live. The .json files store the test inputs that can be loaded, deleted, created, and ran using the BAML VSCode extension. You can also write programmatic python/TS tests anywhere you like. See [here](/v3/syntax/function-testing) for more information.
+
+
+<Warning>**You should never edit any files inside baml_client directory** as the whole directory gets generated automatically everytime you save a `.baml` file if you're using the BAML VSCode extension. </Warning>
+
+<Tip>If you ever run into any issues with the generated code (like merge conflicts), you can always delete the `baml_client` directory and it will get regenerated automatically once you fix any other conflicts in your `.baml` files.</Tip>
+
+### imports
+BAML has no import logic like other languages. Every entity declared in a `.baml` file is available to all other `.baml` files under the same `baml_src` directory. You **can** can multiple baml_src directories, but we don't currently recommend it.
