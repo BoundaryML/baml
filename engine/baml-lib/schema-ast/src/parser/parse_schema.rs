@@ -54,7 +54,24 @@ fn parse_test_from_json(
     // Path relative to the root of the project.
     let source_path = source.path_buf().clone();
     let root_path = diagnostics.root_path.clone();
-    let relative_path = source_path.strip_prefix(&root_path).unwrap();
+    let relative_path = source_path.strip_prefix(&root_path);
+
+    match relative_path {
+        Err(_) => {
+            diagnostics.push_error(DatamodelError::new_validation_error(
+                &format!(
+                    "The path of the test file must be inside the project root: {} {}",
+                    root_path.display(),
+                    source_path.display()
+                ),
+                Span::empty(source.clone()),
+            ));
+        }
+        _ => (),
+    };
+
+    diagnostics.to_result()?;
+    let relative_path = relative_path.unwrap();
 
     let parts = relative_path.components();
     // Ensure is of the form `tests/<function_name>/(<group_name>/)/<test_name>.json` using regex

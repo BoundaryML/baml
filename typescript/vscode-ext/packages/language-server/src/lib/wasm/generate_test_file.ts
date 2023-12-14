@@ -15,13 +15,13 @@ export interface GenerateInput {
 
 export type GenerateResponse =
   | {
-    status: 'error'
-    message: string
-  }
+      status: 'error'
+      message: string
+    }
   | {
-    status: 'ok'
-    content: string
-  }
+      status: 'ok'
+      content: string
+    }
 
 export default function generate_test_file(
   input: GenerateInput,
@@ -35,11 +35,11 @@ export default function generate_test_file(
         languageWasm.debug_panic()
       })
     }
-    console.log(`generate input ${JSON.stringify(input, null, 2)}`)
+    // console.log(`generate input ${JSON.stringify(input, null, 2)}`)
 
     const result = languageWasm.generate_test_file(JSON.stringify(input))
     const parsed = JSON.parse(result) as GenerateResponse
-    console.log(`generate result ${JSON.stringify(JSON.parse(result), null, 2)}`)
+    // console.log(`generate result ${JSON.stringify(JSON.parse(result), null, 2)}`)
     return parsed
   } catch (e) {
     const err = e as Error
