@@ -52,9 +52,10 @@ Calling the generated function:
 
 ```python
 from baml_client import baml
+from baml_client.baml_types import ClassifyRequest
 
 async def classify():
-  response = await baml.ClassifyTool.get_impl("v1").run(
+  response = await baml.ClassifyTool(
     ClassifyRequest(
       query="What is TDD?",
       context="The user is a software engineer"

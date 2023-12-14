@@ -26,6 +26,10 @@
     {
       "name": "Discord",
       "url": "mailto:contact@boundaryml.com"
+    },
+    {
+      "name": "Github",
+      "url": "https://github.com/gloohq/baml"
     }
   ],
   "topbarCtaButton": {
