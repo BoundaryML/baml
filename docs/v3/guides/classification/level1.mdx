@@ -29,9 +29,9 @@ We will re-use the same `client` we declared there.
 ## 1. Define AI functions and models in BAML files
 
 To solve this problem using LLMs we want a function of this signature:
-`
+`ClassifyIntent(string) -> Intent`
 
-For this problem we can use an `enum` to represent all the labels we want to classify.
+To do this we can use an `enum` to represent all the labels we want to classify.
 
 ```rust classifier.baml
 enum Intent {
@@ -43,7 +43,7 @@ enum Intent {
 }
 ```
 
-Then declare a function signature:
+Then declare a BAML function signature:
 
 ```rust classifier.baml
 function ClassifyIntent {
@@ -51,6 +51,7 @@ function ClassifyIntent {
   output Intent
 }
 ```
+This is more like an interface than an actual function. See next step for how to implement it.
 
 ## 2. Implement the function using an LLM
 
@@ -89,7 +90,7 @@ impl<llm, ClassifyIntent> version1 {
 
 Rather than writing out the enums painstakingly into the prompt manually, lets automate that process so that if we change the enum names or values the prompt gets updated automatically.
 
-BAML provides a utility function called `print_enum(..)` that will print an enum's values into your prompt in a neatly formatted way that LLMs should understand.
+BAML provides a utility function called [print_enum(..)](/v3/syntax/prompt_engineering/variables#printers) that will print an enum's values into your prompt in a neatly formatted way that LLMs should understand.
 
 Here is the updated `impl`:
 
@@ -128,7 +129,7 @@ INPUT: {arg}
 Response:
 ```
 
-You can see it adds the enum name "Intents", and then the list of enums below.
+You can see it adds the enum name "Intent", and then the list of enums below.
 
 If you need to change the formatting, contact us to learn more about your usecase.
 
@@ -147,7 +148,8 @@ from baml_client import baml as b
 # Import your generated python enum
 from baml_client.baml_types import Intent
 
-customer_intent = b.ClassifyIntent("I want to cancel my order")
+
+customer_intent = await b.ClassifyIntent("I want to cancel my order")
 if customer_intent == Intent.CancelOrder:
     print("Customer wants to cancel order")
 else:
@@ -160,8 +162,8 @@ As you keep working with BAML, we recommend [setting up a test suite](/v3/home/r
 
 ## Conclusion
 In this tutorial we've learned:
-1. How to use enums to represent a classification problem
-2. BAML utility function --  `print_enum(..)` -- to automatically print the enum values into the prompt
+1. How to use [enums](/v3/syntax/enum) to represent a classification problem
+2. BAML utility function --  [print_enum(..)](/v3/syntax/prompt_engineering/enum) -- to automatically print the enum values into the prompt
 
 ## Next Steps
 

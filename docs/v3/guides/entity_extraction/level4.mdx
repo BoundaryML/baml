@@ -1,5 +1,76 @@
 ---
-title: "Level 4: Adding reasoning or default values"
+title: "Level 4: Adding chain of thought"
 description: Using adapters to extract additional reasoning from the LLM
 ---
 
+
+### Prerequisites
+
+**Ensure you have read the previous levels before starting this one!**
+
+## Overview
+
+A common prompting strategy to improve results is to use **Self-Generated Chain of Thought** (CoT), which uses natural language statements like "Let's think step by step" to encourage the model to generate reasoning steps. This has shown to significantly improve results in some cases.
+
+In this section, we will add a "reasoning step" to our AI function so the LLM can generate its chain of thought before outputting our desired `OrderInfo`.
+
+## Adding a reasoning step
+There are two ways of doing this:
+#### 1. Have the LLM generate free-form text indicating its thought process before it writes the JSON object.
+Example:
+```text LLM Output with CoT
+If we think step by step, we can see that
+the email mentions 1).... 2)... and also .... 
+therefore the likely output JSON is:
+
+{
+  "id": "123",
+  "date": "2020-01-01T00:00:00.000Z",
+  "products": [{
+    "name": "Toy car",
+    "cost": 10.50,
+    "order_status": DELIVERED
+  }],
+  "total_cost": float
+}
+```
+
+To do this we can simply modify the prompt to add this in:
+```rust
+impl<llm, GetOrderInfo> version1 {
+  client GPT4
+  prompt #"
+    Given the email below:
+
+    Email Subject: {#input.subject}
+    Email Body: {#input.body}
+
+    Extract this info from the email in JSON format:
+    {#print_type(output)}
+
+    Schema definitions:
+    {#print_enum(OrderStatus)}
+    
+    Before you output the JSON, please explain your
+    reasoning step-by-step. Here is an example on how to do this:
+    'If we think step by step we can see that ...
+     therefore the output JSON is:
+    {
+      ... the json schema ...
+    }'
+
+    Output:
+  "#
+}
+```
+Note, depending on the model, this may require more prompt engineering! Let us know if you are running into issues with other models.
+
+#### Why this works
+Unlike the classification tutorial for CoT, adding CoT here is easier because the BAML deserializer can recognize the start and end of a JSON block (as opposed to a free-form string), and can strip out all unecessary free-form text.
+
+### 2. Use an adapter to generate the CoT
+You can still use an adapter if you'd like however. See [the Adapter tutorial](../classification/level3) for how to do this.
+
+
+## Conclusion
+In this tutorial we've learned how to try different prompting strategies. Let us know what other tutorials you'd like to see. More advanced content will be coming soon!

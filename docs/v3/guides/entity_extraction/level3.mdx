@@ -2,3 +2,156 @@
 title: "Level 3: Complex types"
 description: A deep dive into `print_type`
 ---
+
+We've seen how `print_type` helps us build prompts that can return basic models, like `OrderInfo`. Let's see how we can build even more complex AI functions with more complex types
+
+## Adding nested types
+We will add a new class called `ProductInfo` to `OrderInfo`, which will contain product information. For now lets remove all @alias and @description for brevity.
+
+```rust
+class ProductInfo {
+  name string
+  cost float?
+}
+class OrderInfo {
+  id string
+  date string
+  products ProductInfo[]
+  total_cost float
+}
+```
+
+The `print_type(output)` function will now print:
+
+```text
+Given the email below:
+
+Email Subject: {arg.subject}
+Email Body: {arg.body}
+
+Extract this info from the email in JSON format:
+{
+  "id": string,
+  "date": string,
+  "products": {
+    "name": string,
+    "cost": float | null,
+  }[],
+  "total_cost": float
+}
+
+JSON:
+```
+
+### Adding enums in classes
+Lets also track the order status, since a customer may get 2-3 different emails for the same order indicating whether it's been shipped or not. To do this we are going to **add an enum**.
+
+```rust
+enum OrderStatus {
+  ORDERED
+  SHIPPED
+  DELIVERED
+}
+
+class ProductInfo {
+  name string
+  cost float?
+  order_status OrderStatus
+}
+
+class OrderInfo {
+  id string
+  date string
+  products ProductInfo[]
+  total_cost float
+}
+```
+
+Once we do this the prompt becomes:
+```text
+Given the email below:
+
+Email Subject: {arg.subject}
+Email Body: {arg.body}
+
+Extract this info from the email in JSON format:
+{
+  "id": string,
+  "date": string,
+  "products": {
+    "name": string,
+    "cost": float | null,
+    "order_status": "OrderStatus as string"
+  }[],
+  "total_cost": float
+}
+
+JSON:
+```
+
+But hold on... **this prompt doesn't say anything around what the OrderStatuses are**. It just says `OrderStatus as string`. To fix this, we need to print out all enum definitions into the prompt. 
+<Tip>The BAML compiler will actually warn you when it detects you've forgotten to add enum definitions to a prompt.</Tip>
+
+To do this, lets leverage the lessons we learned in the Classifiers Tutorial [level 1](../classification/level1) and use **print_enum** in our prompt:
+
+```rust
+impl<llm, GetOrderInfo> version1 {
+  client GPT4
+  prompt #"
+    Given the email below:
+
+    Email Subject: {#input.subject}
+    Email Body: {#input.body}
+
+    Extract this info from the email in JSON format:
+    {#print_type(output)}
+
+    Schema definitions:
+    {#print_enum(OrderStatus)}
+    
+    JSON:
+  "#
+}
+```
+
+The new prompt is now:
+```text
+Given the email below:
+
+Email Subject: {arg.subject}
+Email Body: {arg.body}
+
+Extract this info from the email in JSON format:
+{
+  "id": string,
+  "date": string,
+  "products": {
+    "name": string,
+    "cost": float | null,
+    "order_status": "OrderStatus as string"
+  }[],
+  "total_cost": float
+}
+Schema definitions:
+OrderStatus
+---
+ORDERED
+SHIPPED
+DELIVERED
+
+JSON:
+```
+
+And that's it! Try running a test and tweaking the prompt to get the best performance by adding aliases and property descriptions back in!
+
+The main point of this is that you just need to add all the available types into your prompt so the LLM is able to give you the desired output type. BAML gives you all the tools to be able to do that, without being too forceful about it. E.g. if you wanted you could write things out manually to test, and then migrate things to print_type and print_enum once you get the hang of things.
+
+## Conclusion
+In this tutorial we learned about
+1. Complex nested types and how print_type works with them
+1. Combining classes and enums together
+
+Note that we do have `Unions` `int` and `bool`, types that aren't mentioned here. Follow our [syntax docs](/v3/syntax/type) for more information.
+
+## Next steps
+We will now learn how to do a chain-of-thought prompting strategy.

@@ -17,6 +17,7 @@ from .functions.fx_blah import BAMLBlah
 from .functions.fx_classifyintent import BAMLClassifyIntent
 from .functions.fx_classifytool import BAMLClassifyTool
 from .functions.fx_extractverbs import BAMLExtractVerbs
+from .functions.fx_getorderinfo import BAMLGetOrderInfo
 from .functions.fx_maybepolishtext import BAMLMaybePolishText
 from .functions.fx_messagesimplifier import BAMLMessageSimplifier
 from .functions.fx_textpolisher import BAMLTextPolisher
@@ -32,6 +33,7 @@ class BAMLClient:
     ClassifyIntent = BAMLClassifyIntent
     ClassifyTool = BAMLClassifyTool
     ExtractVerbs = BAMLExtractVerbs
+    GetOrderInfo = BAMLGetOrderInfo
     MaybePolishText = BAMLMaybePolishText
     MessageSimplifier = BAMLMessageSimplifier
     TextPolisher = BAMLTextPolisher

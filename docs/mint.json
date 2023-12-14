@@ -81,14 +81,12 @@
       "pages": [
         "v3/guides/classification/level1",
         "v3/guides/classification/level2",
-        "v3/guides/classification/level3",
-        "v3/guides/classification/level4"
+        "v3/guides/classification/level3"
       ]
     },
     {
       "group": "Extraction (i.e. getting structured data)",
       "pages": [
-        "v3/guides/entity_extraction/extraction",
         "v3/guides/entity_extraction/level1",
         "v3/guides/entity_extraction/level2",
         "v3/guides/entity_extraction/level3",

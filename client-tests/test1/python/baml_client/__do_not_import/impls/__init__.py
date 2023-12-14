@@ -16,5 +16,6 @@ from .fx_classifyintent_impl_version2 import version2 as unused_fx_classifyinten
 from .fx_classifyintent_impl_version3 import version3 as unused_fx_classifyintent_impl_version3
 from .fx_classifytool_impl_v1 import v1 as unused_fx_classifytool_impl_v1
 from .fx_extractverbs_impl_version1 import version1 as unused_fx_extractverbs_impl_version1
+from .fx_getorderinfo_impl_version1 import version1 as unused_fx_getorderinfo_impl_version1
 from .fx_maybepolishtext_impl_v1 import v1 as unused_fx_maybepolishtext_impl_v1
 from .fx_messagesimplifier_impl_v1 import v1 as unused_fx_messagesimplifier_impl_v1
