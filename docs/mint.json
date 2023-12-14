@@ -1,6 +1,6 @@
 {
   "$schema": "https://mintlify.com/schema.json",
-  "name": "Gloo",
+  "name": "BoundaryML",
   "logo": {
     "light": "/logo/favicon.png",
     "dark": "/logo/favicon.png"
@@ -18,26 +18,26 @@
       "to": "#a5b4fc"
     }
   },
-  "topbarLinks": [
+  "anchors": [
     {
-      "name": "Support",
-      "url": "mailto:contact@boundaryml.com"
+      "name": "Open Boundary Studio",
+      "icon": "sparkles",
+      "url": "https://app.trygloo.com"
     },
     {
-      "name": "Discord",
-      "url": "mailto:contact@boundaryml.com"
+      "name": "Join our Discord",
+      "icon": "discord",
+      "url": "https://discord.gg/BTNBeXGuaS"
     },
     {
-      "name": "Github",
-      "url": "https://github.com/gloohq/baml"
+      "name": "Schedule a call",
+      "icon": "phone",
+      "url": "https://calendly.com/boundaryml/meeting-with-founders"
     }
   ],
   "topbarCtaButton": {
-    "name": "Schedule call",
-    "url": "https://calendly.com/gloo-vai/30min"
-  },
-  "primaryTab": {
-    "name": "Home"
+    "type": "github",
+    "url": "https://github.com/gloohq/baml"
   },
   "tabs": [
     {

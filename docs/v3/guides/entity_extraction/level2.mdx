@@ -1,11 +1,12 @@
 ---
 title: "Level 2: Optionals, aliases, and descriptions"
-description: "Learn how to use @alias and @description to modify how `print_enum` works."
+description: "Learn how to use @alias, @description, and optional types"
 ---
 
 Lets improve the existing example in [level 1](./level1) to get better results.
 
 You may have noticed our current prompt is kind of vague:
+
 ```
 ...
 Extract this info from the email in JSON format:
@@ -28,7 +29,8 @@ The same goes for the date -- we may want ISO8601, but we dont want to rename ou
 To solve this we will add @aliases and @descriptions to rename the properties and make it more understandable to the LLM, without having to change our python code.
 
 ## Prerequisites
-* Level 1 of this tutorial
+
+- Level 1 of this tutorial
 
 ## Adding aliases and descriptions
 
@@ -93,6 +95,7 @@ Extract this info from the email in JSON format:
 }
 JSON:
 ```
+
 This is a similar format [OpenAI uses](https://raw.githubusercontent.com/spdustin/ChatGPT-AutoExpert/main/_system-prompts/all_tools.md) to render schemas.
 
 The [BAML deserializer](/v3/syntax/prompt_engineering/type-deserializer) is smart enough to map each field in your object back to the original property name, so you can still use `order_info.id` in your python code.
@@ -109,7 +112,9 @@ class OrderInfo {
   cost float?
 }
 ```
+
 After the optionals are added, **print_type(output)** will now append `| null` to the type:
+
 ```
 ...
 {
@@ -119,7 +124,9 @@ After the optionals are added, **print_type(output)** will now append `| null` t
 }
 
 ```
+
 ## Calling your function
+
 Nothing has changed here! You can still call your function in Python using the generated BAML client as before:
 
 ```python
@@ -128,18 +135,22 @@ from baml_client.baml_types import Email
 ...
 order_info = await b.GetOrderInfo(Email(
     subject="Order #1234",
-    body="Your order has been shipped. It will arrive on 1st Jan 2022. Product: iPhone 13. Cost: $999.99"
+    body="""
+Your order has been shipped. It will arrive on 1st Jan 2022. Product: iPhone 13. Cost: $999.99
+"""
 ))
 print(order_info.id)
 ```
 
-
 ## Conclusion
+
 In this tutorial we learned:
+
 1. How to use [@alias and @description](/v3/syntax/prompt_engineering/class#property-attributes) to modify what `print_type` renders
 1. How to use [optionals](/v3/syntax/type#optional) to handle missing data
 
 We recommend learning more about how to dynamically serialize the input using [computed properties](/v3/syntax/class#computed-properties)
 
 ## Next steps
+
 In the next tutorials we will learn how to use more complex types like enums, lists, unions.
