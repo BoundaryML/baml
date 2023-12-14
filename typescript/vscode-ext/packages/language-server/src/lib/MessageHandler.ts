@@ -95,38 +95,30 @@ export function handleDiagnosticsRequest(
       onError(errorMessage)
     }
   })
-  // console.log('res ' + JSON.stringify(res, null, 2))
 
   let allDiagnostics: Map<string, Diagnostic[]> = new Map()
 
-  res.diagnostics.forEach((diag) => {
-    // Find the best matching document
-    let doc = documents.find(({ path, doc: document }) => diag.source_file === path)
-    if (!doc) {
-      console.log('Could not find document for ' + diag.source_file)
-      return
-    }
-    let { path, doc: document } = doc
+  documents.forEach((docDetails) => {
+    const documentDiagnostics: Diagnostic[] = []
 
     try {
-      const diagnostic: Diagnostic = {
-        range: {
-          start: document.positionAt(diag.start),
-          end: document.positionAt(diag.end),
-        },
-        message: diag.text,
-        source: 'baml',
-      }
-      if (diag.is_warning) {
-        diagnostic.severity = DiagnosticSeverity.Warning
-      } else {
-        diagnostic.severity = DiagnosticSeverity.Error
-      }
+      const filteredDiagnostics = res.diagnostics.filter((diag) => diag.source_file === docDetails.path)
 
-      if (allDiagnostics.has(path)) {
-        allDiagnostics.get(path)?.push(diagnostic)
-      } else {
-        allDiagnostics.set(path, [diagnostic])
+      for (const diag of filteredDiagnostics) {
+        const diagnostic: Diagnostic = {
+          range: {
+            start: docDetails.doc.positionAt(diag.start),
+            end: docDetails.doc.positionAt(diag.end),
+          },
+          message: diag.text,
+          source: 'baml',
+        }
+        if (diag.is_warning) {
+          diagnostic.severity = DiagnosticSeverity.Warning
+        } else {
+          diagnostic.severity = DiagnosticSeverity.Error
+        }
+        documentDiagnostics.push(diagnostic)
       }
     } catch (e: any) {
       if (e instanceof Error) {
@@ -134,6 +126,7 @@ export function handleDiagnosticsRequest(
       }
       onError?.(e.message)
     }
+    allDiagnostics.set(docDetails.doc.uri, documentDiagnostics)
   })
 
   return { diagnostics: allDiagnostics, state: res.ok ? res.response : undefined }
