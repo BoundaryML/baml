@@ -19,11 +19,11 @@ const TestToggle = () => {
 
   return (
     <Button
-      variant="ghost"
-      className="p-0 px-1 py-1 w-fit h-fit"
+      variant="outline"
+      className="p-1 w-fit h-fit text-xs"
       onClick={() => setSelection(undefined, undefined, undefined, !showTests)}
     >
-      {showTests ? <FlaskConical className="w-5 h-5" /> : <FlaskConicalOff className="w-5 h-5" />}
+      {showTests ? 'Hide tests' : 'Show tests'}
     </Button>
   )
 }
@@ -34,9 +34,9 @@ function App() {
   return (
     <CustomErrorBoundary>
       <ASTProvider>
-        <div className="absolute right-0 z-10 flex flex-col gap-1 top-2 text-end">
-          <VSCodeLink href="https://docs.boundaryml.com">Docs</VSCodeLink>
+        <div className="absolute right-1 z-10 flex flex-col gap-1 top-2 text-end items-end">
           <TestToggle />
+          <VSCodeLink href="https://docs.boundaryml.com">Docs</VSCodeLink>
         </div>
         <div className="flex flex-col gap-2 px-2">
           <FunctionSelector />
