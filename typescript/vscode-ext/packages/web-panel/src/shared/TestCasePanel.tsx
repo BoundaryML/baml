@@ -161,9 +161,11 @@ function MyFieldTemplate(props: FieldTemplateProps) {
   return (
     <div className={classNames + ' ml-2 w-full'} style={style}>
       <>
-        {props.schema.type === 'boolean' || props.schema.type === 'array' ? null : (
+        {props.schema.type === 'boolean' ? null : (
           <label htmlFor={id} className="flex flex-row items-center gap-x-3">
-            <div className={props.schema.type === 'object' ? ' font-bold text-sm' : ' text-xs'}>{label}</div>
+            <div className={props.schema.type === 'object' ? ' font-bold text-sm' : ' text-xs'}>
+              {label.split('-').at(-1)}
+            </div>
             <div className={'text-vscode-textSeparator-foreground'}>
               {props.schema.type}
               {required ? '*' : null}
@@ -384,7 +386,7 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
                     start: 0,
                     end: 0,
                   },
-                  content: '{}',
+                  content: '{"input": null}',
                 }),
               },
             })

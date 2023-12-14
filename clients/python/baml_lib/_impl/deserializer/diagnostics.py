@@ -17,13 +17,13 @@ class DeserializerException(Exception):
 
     def __str__(self) -> str:
         output = [
-            f"Failed to Deserialize from LLM ({self.__num_errors} errors) ({self.__num_warnings} warnings)"
+            f"Failed to Deserialize: ({self.__num_errors} errors) ({self.__num_warnings} warnings)"
         ]
         for i in self.__items:
             output.append("------")
             output.append(str(i))
         output.append("------")
-        output.append("Raw LLM output:")
+        output.append("Raw:")
         output.append(self.__raw_string)
         return "\n".join(output)
 
