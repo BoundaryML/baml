@@ -8,7 +8,7 @@
 # fmt: off
 
 from .__do_not_import.generated_baml_client import baml
-from .baml_types import ClassifyResponse, Conversation, DummyObj, IBlah, IClassifyIntent, IClassifyTool, IMessageSimplifier, ITextPolisher, Intent, Message, MessageSender, ProposedMessage, Tool
+from .baml_types import ClassifyResponse, Conversation, DummyObj, Email, IBlah, IClassifyIntent, IClassifyTool, IGetOrderInfo, IMessageSimplifier, ITextPolisher, Intent, Message, MessageSender, OrderInfo, OrderStatus, ProductInfo, ProposedMessage, Tool
 from baml_lib._impl.deserializer import Deserializer
 from json5 import loads # type: ignore
 
@@ -65,6 +65,15 @@ async def test_international_scarlet(ClassifyToolImpl: IClassifyTool):
         query=query,
         context=context
     )
+
+
+@baml.GetOrderInfo.test
+async def test_near_plum(GetOrderInfoImpl: IGetOrderInfo):
+    deserializer = Deserializer[Email](Email) # type: ignore
+    param = deserializer.from_string("""\
+{ "subject": "hello", "body": "Your order has been shipped. It will arrive on 1st Jan 2022. Product: iPhone 13. Cost: $999.99" }\
+""")
+    await GetOrderInfoImpl(param)
 
 
 @baml.TextPolisher.test

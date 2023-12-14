@@ -39,6 +39,7 @@ Extract this info from the email in JSON format:
   "total_cost": float
 }
 
+
 Schema definitions:
 OrderStatus
 ---
