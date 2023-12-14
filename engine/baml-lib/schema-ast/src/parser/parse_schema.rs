@@ -83,9 +83,9 @@ fn parse_test_from_json(
         let part = part.as_os_str().to_str().unwrap();
         match idx {
             0 => {
-                if part != "__tests" {
+                if part != "__tests__" {
                     diagnostics.push_error(DatamodelError::new_validation_error(
-                        "A BAML test file must be in a `__tests` directory.",
+                        "A BAML test file must be in a `__tests__` directory.",
                         Span::empty(source.clone()),
                     ));
                 }

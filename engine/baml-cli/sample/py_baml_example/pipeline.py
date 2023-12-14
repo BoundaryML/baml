@@ -1,7 +1,7 @@
 
 from termcolor import colored
 from datetime import datetime
-from baml_client import baml
+from baml_client import baml as b
 from baml_client.tracing import trace
 from baml_client.baml_types import Intent, Conversation, Message, UserType
 from .utils import loading_animation
@@ -29,15 +29,15 @@ async def pipeline(convo: Conversation) -> str | End:
     # First we call an intent classifier. 
     # This is strongly typed! Note that intents is a List[Intent] type.
     with loading_animation('> Classifying'):
-        intents = await baml.ClassifyIntent.get_impl('advanced').run(query=convo.display)
+        intents = await b.ClassifyIntent(query=convo.display)
 
     if Intent.BookMeeting in intents:
         # If the user wants to book a meeting, we need to extract the meeting details.
         with loading_animation('> Extracting meeting details'):
-            partial_info = await baml.ExtractMeetingRequestInfoPartial(convo=convo, now=datetime.now().isoformat())
+            partial_info = await b.ExtractMeetingRequestInfoPartial(convo=convo, now=datetime.now().isoformat())
 
         with loading_animation('> Checking if we have all the details'):
-            check = await baml.GetNextQuestion(partial_info)
+            check = await b.GetNextQuestion(partial_info)
 
         if check.requirements_complete:
             # TODO: actually book the meeting by calling a real API
