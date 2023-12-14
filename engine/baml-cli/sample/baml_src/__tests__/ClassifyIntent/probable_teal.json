@@ -1,3 +1,5 @@
 {
-  "query": "I want to schedule time on aaron's calendar?"
+  "input": {
+    "query": "I want to schedule time on aaron's calendar?"
+  }
 }
