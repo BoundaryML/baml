@@ -67,6 +67,7 @@ fn use_partial(
             f.add_import("baml_core.otel", "add_message_transformer_hook");
             f.add_import("baml_core.otel", "flush_trace_logs");
             f.add_import("baml_lib", "baml_init");
+            f.add_import("baml_lib", "DeserializerException");
             f.add_import("typing", "Optional");
             f.add_import("typing", "Callable");
             f.add_import("typing", "List");
