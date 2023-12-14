@@ -17,14 +17,13 @@ from .functions.fx_blah import BAMLBlah
 from .functions.fx_classifyintent import BAMLClassifyIntent
 from .functions.fx_classifytool import BAMLClassifyTool
 from .functions.fx_extractverbs import BAMLExtractVerbs
-from .functions.fx_getorderinfo import BAMLGetOrderInfo
 from .functions.fx_maybepolishtext import BAMLMaybePolishText
 from .functions.fx_messagesimplifier import BAMLMessageSimplifier
 from .functions.fx_textpolisher import BAMLTextPolisher
 from baml_core.otel import add_message_transformer_hook, flush_trace_logs
 from baml_core.services import LogSchema
 from baml_core.services.api_types import LogSchema
-from baml_lib import baml_init
+from baml_lib import DeserializerException, baml_init
 from typing import Callable, List, Optional
 
 
@@ -33,7 +32,6 @@ class BAMLClient:
     ClassifyIntent = BAMLClassifyIntent
     ClassifyTool = BAMLClassifyTool
     ExtractVerbs = BAMLExtractVerbs
-    GetOrderInfo = BAMLGetOrderInfo
     MaybePolishText = BAMLMaybePolishText
     MessageSimplifier = BAMLMessageSimplifier
     TextPolisher = BAMLTextPolisher

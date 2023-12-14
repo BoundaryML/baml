@@ -50,7 +50,7 @@ __input_replacers = {
 __deserializer = Deserializer[IntentWithReasoning](IntentWithReasoning)  # type: ignore
 
 
-def output_adapter(output: IntentWithReasoning) -> Intent:
+def output_adapter(arg: IntentWithReasoning) -> Intent:
     # output is a special variable that contains the output of the LLM that is of type IntentOutputWithCoT. We need to return just the intent to abide by the original function signature.
     return output.intent
 
