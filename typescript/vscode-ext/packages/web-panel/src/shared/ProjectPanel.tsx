@@ -30,11 +30,16 @@ const ProjectPanel: React.FC<{ onClick?: () => void }> = ({ onClick }) => {
 
 export const ProjectToggle = () => {
   const [show, setShow] = useState<boolean>(false)
+  const { projects, selectedProjectId, setSelection } = useContext(ASTContext)
+
+  if (projects.length === 1) {
+    return null
+  }
 
   return (
     <Dialog open={show} onOpenChange={setShow}>
       <DialogTrigger asChild={true}>
-        <Button variant="outline" className="p-1 w-fit h-fit text-xs">
+        <Button variant="outline" className="p-1 text-xs w-fit h-fit border-vscode-textSeparator-foreground">
           Switch Projects
         </Button>
       </DialogTrigger>

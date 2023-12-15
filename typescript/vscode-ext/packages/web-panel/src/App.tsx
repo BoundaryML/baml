@@ -21,7 +21,7 @@ const TestToggle = () => {
   return (
     <Button
       variant="outline"
-      className="p-1 w-fit h-fit text-xs"
+      className="p-1 text-xs w-fit h-fit border-vscode-textSeparator-foreground"
       onClick={() => setSelection(undefined, undefined, undefined, undefined, !showTests)}
     >
       {showTests ? 'Hide tests' : 'Show tests'}
@@ -35,12 +35,15 @@ function App() {
   return (
     <CustomErrorBoundary>
       <ASTProvider>
-        <div className="absolute right-1 z-10 flex flex-col gap-1 top-2 text-end items-end">
-          <ProjectToggle />
-          <TestToggle />
+        <div className="absolute z-10 flex flex-col items-end gap-1 right-1 top-2 text-end">
+          <div className="flex flex-row gap-x-2">
+            <ProjectToggle />
+            <TestToggle />
+          </div>
+
           <VSCodeLink href="https://docs.boundaryml.com">Docs</VSCodeLink>
         </div>
-        <div className="flex flex-col gap-2 px-2">
+        <div className="flex flex-col gap-2 px-2 pb-4">
           <FunctionSelector />
           <Separator className="bg-vscode-textSeparator-foreground" />
           <FunctionPanel />
