@@ -336,7 +336,7 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
 
   return (
     <>
-      <div className="flex flex-row justify-between">
+      <div className="flex flex-row justify-between gap-x-1">
         <VSCodeTextField
           placeholder="Search test cases"
           value={filter}
