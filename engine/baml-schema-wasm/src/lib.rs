@@ -113,7 +113,6 @@ pub fn debug_panic() {
     panic!("This is the panic triggered by `prisma_fmt::debug_panic()`");
 }
 
-#[cfg(feature = "wasm_logger")]
 #[wasm_bindgen]
 pub fn enable_logs() {
     wasm_logger::init(wasm_logger::Config::default());

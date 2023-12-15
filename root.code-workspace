@@ -54,7 +54,12 @@
       ".github",
       "Rust CLI"
     ],
-    "git.openDiffOnClick": true
+    "git.openDiffOnClick": true,
+    "workbench.colorCustomizations": {
+      "activityBar.background": "#630001",
+      "titleBar.activeBackground": "#8B0002",
+      "titleBar.activeForeground": "#FFFBFB"
+    }
   },
   "extensions": {
     "recommendations": ["xaver.clang-format"]

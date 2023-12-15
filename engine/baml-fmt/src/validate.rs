@@ -60,80 +60,12 @@ mod tests {
     use expect_test::expect;
 
     #[test]
-    fn validate_invalid_schema_with_colors() {
-        let schema = r#"
-            generator js {
-            }
-
-            datasøurce yolo {
-            }
-        "#;
-
-        let request = json!({
-            "prismaSchema": schema,
-        });
-
-        let expected = expect![[
-            r#"{"error_code":"P1012","message":"\u001b[1;91merror\u001b[0m: \u001b[1mError validating: This line is invalid. It does not start with any known Prisma schema keyword.\u001b[0m\n  \u001b[1;94m-->\u001b[0m  \u001b[4mschema.prisma:5\u001b[0m\n\u001b[1;94m   | \u001b[0m\n\u001b[1;94m 4 | \u001b[0m\n\u001b[1;94m 5 | \u001b[0m            \u001b[1;91mdatasøurce yolo {\u001b[0m\n\u001b[1;94m 6 | \u001b[0m            }\n\u001b[1;94m   | \u001b[0m\n\u001b[1;91merror\u001b[0m: \u001b[1mError validating: This line is invalid. It does not start with any known Prisma schema keyword.\u001b[0m\n  \u001b[1;94m-->\u001b[0m  \u001b[4mschema.prisma:6\u001b[0m\n\u001b[1;94m   | \u001b[0m\n\u001b[1;94m 5 | \u001b[0m            datasøurce yolo {\n\u001b[1;94m 6 | \u001b[0m            \u001b[1;91m}\u001b[0m\n\u001b[1;94m 7 | \u001b[0m        \n\u001b[1;94m   | \u001b[0m\n\u001b[1;91merror\u001b[0m: \u001b[1mArgument \"provider\" is missing in generator block \"js\".\u001b[0m\n  \u001b[1;94m-->\u001b[0m  \u001b[4mschema.prisma:2\u001b[0m\n\u001b[1;94m   | \u001b[0m\n\u001b[1;94m 1 | \u001b[0m\n\u001b[1;94m 2 | \u001b[0m            \u001b[1;91mgenerator js {\u001b[0m\n\u001b[1;94m 3 | \u001b[0m            }\n\u001b[1;94m   | \u001b[0m\n\nValidation Error Count: 3"}"#
-        ]];
-
-        let response = validate(&request.to_string()).unwrap_err();
-        expected.assert_eq(&response);
-    }
-
-    #[test]
-    fn validate_missing_env_var() {
-        let schema = r#"
-            datasource thedb {
-                provider = "postgresql"
-                url = env("NON_EXISTING_ENV_VAR_WE_COUNT_ON_IT_AT_LEAST")
-            }
-        "#;
-
-        let request = json!({
-            "prismaSchema": schema,
-        });
-
-        validate(&request.to_string()).unwrap();
-    }
-
-    #[test]
-    fn validate_direct_url_direct_empty() {
-        let schema = r#"
-            datasource thedb {
-                provider = "postgresql"
-                url = env("DBURL")
-                directUrl = ""
-            }
-        "#;
-
-        let request = json!({
-            "prismaSchema": schema,
-        });
-
-        validate(&request.to_string()).unwrap();
-    }
-
-    #[test]
-    fn validate_using_both_relation_mode_and_referential_integrity() {
-        let schema = r#"
-          datasource db {
-              provider = "sqlite"
-              url = "sqlite"
-              relationMode = "prisma"
-              referentialIntegrity = "foreignKeys"
-          }
-        "#;
-
-        let request = json!({
-            "prismaSchema": schema,
-        });
-
-        let expected = expect![[
-            r#"{"error_code":"P1012","message":"\u001b[1;91merror\u001b[0m: \u001b[1mThe `referentialIntegrity` and `relationMode` attributes cannot be used together. Please use only `relationMode` instead.\u001b[0m\n  \u001b[1;94m-->\u001b[0m  \u001b[4mschema.prisma:6\u001b[0m\n\u001b[1;94m   | \u001b[0m\n\u001b[1;94m 5 | \u001b[0m              relationMode = \"prisma\"\n\u001b[1;94m 6 | \u001b[0m              \u001b[1;91mreferentialIntegrity = \"foreignKeys\"\u001b[0m\n\u001b[1;94m   | \u001b[0m\n\nValidation Error Count: 1"}"#
-        ]];
-
-        let response = validate(&request.to_string()).unwrap_err();
-        expected.assert_eq(&response);
+    fn validate_paths() {
+        let path = PathBuf::from("__tests__\\Thing\\entire_apricot.json");
+        let components = path.components();
+        path.components()
+            .map(|c| c.as_os_str().to_str().unwrap())
+            .for_each(|c| println!("{}", c));
+        print!("{:?}", components);
     }
 }

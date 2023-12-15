@@ -89,6 +89,7 @@ export function handleDiagnosticsRequest(
     })),
   }
 
+
   console.debug(`Linting ${linterInput.files.length} files in ${linterInput.root_path}`)
   const res = lint(linterInput, (errorMessage: string) => {
     if (onError) {

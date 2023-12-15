@@ -1,4 +1,4 @@
-lockfileVersion: '6.1'
+lockfileVersion: '6.0'
 
 settings:
   autoInstallPeers: true
@@ -217,6 +217,9 @@ importers:
       vscode-languageclient:
         specifier: 7.0.0
         version: 7.0.0
+      vscode-uri:
+        specifier: ^3.0.8
+        version: 3.0.8
       watcher:
         specifier: 1.2.0
         version: 1.2.0
@@ -7458,6 +7461,7 @@ packages:
 
   /safe-buffer@5.2.1:
     resolution: {integrity: sha512-rp3So07KcdmmKbGvgaNxQSJr7bGVSVk5S9Eq1F+ppbRo70+YeaDxkw5Dd8NPN+GD6bjnYm2VuPuCXmpuYvmCXQ==}
+    requiresBuild: true
     dev: true
     optional: true
 
