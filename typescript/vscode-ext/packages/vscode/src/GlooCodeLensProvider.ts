@@ -41,6 +41,7 @@ export class GlooCodeLensProvider implements vscode.CodeLensProvider {
     // baml.function_name() or b.function_name() calls and also get the range
     const functionCalls = [...text.matchAll(/(baml|b)\.[a-zA-Z0-9_]+/g)]
 
+    console.log(functionCalls)
     // For each function call, find the function name and then find the
     // function in the db
     functionCalls.forEach((match) => {
@@ -65,7 +66,7 @@ export class GlooCodeLensProvider implements vscode.CodeLensProvider {
           }
         }
         const command: vscode.Command = {
-          title: `(${fromArgType(functionDef.input)}) -> ${fromArgType(functionDef.output)}`,
+          title: `▶️ (${fromArgType(functionDef.input)}) -> ${fromArgType(functionDef.output)}`,
           tooltip: 'Open in BAML',
           command: 'baml.jumpToDefinition',
           arguments: [
