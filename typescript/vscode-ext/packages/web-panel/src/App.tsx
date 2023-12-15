@@ -36,11 +36,7 @@ function App() {
     <CustomErrorBoundary>
       <ASTProvider>
         <div className="absolute z-10 flex flex-col items-end gap-1 right-1 top-2 text-end">
-          <div className="flex flex-row gap-x-2">
-            <ProjectToggle />
-            <TestToggle />
-          </div>
-
+          <TestToggle />
           <VSCodeLink href="https://docs.boundaryml.com">Docs</VSCodeLink>
         </div>
         <div className="flex flex-col gap-2 px-2 pb-4">

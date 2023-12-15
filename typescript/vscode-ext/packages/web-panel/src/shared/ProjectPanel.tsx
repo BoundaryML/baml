@@ -32,15 +32,15 @@ export const ProjectToggle = () => {
   const [show, setShow] = useState<boolean>(false)
   const { projects, selectedProjectId, setSelection } = useContext(ASTContext)
 
-  if (projects.length === 1) {
+  if (projects.length <= 1) {
     return null
   }
 
   return (
     <Dialog open={show} onOpenChange={setShow}>
       <DialogTrigger asChild={true}>
-        <Button variant="outline" className="p-1 text-xs w-fit h-fit border-vscode-textSeparator-foreground">
-          Switch Projects
+        <Button variant="outline" className="p-1 text-xs w-fit h-fit border-vscode-textSeparator-foreground truncate">
+          {selectedProjectId?.split('/').at(-2) ?? 'Project'}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-screen overflow-y-scroll bg-vscode-editorWidget-background border-vscode-textSeparator-foreground overflow-x-clip">
