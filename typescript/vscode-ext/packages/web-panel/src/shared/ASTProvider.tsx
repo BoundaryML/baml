@@ -4,6 +4,8 @@ import { VSCodeButton } from '@vscode/webview-ui-toolkit/react'
 import React, { PropsWithChildren, createContext, useCallback, useEffect, useMemo, useState } from 'react'
 
 export const ASTContext = createContext<{
+  projects: { root_dir: string; db: ParserDatabase }[]
+  selectedProjectId: string
   root_path: string
   db: ParserDatabase
   jsonSchema: {
@@ -18,12 +20,15 @@ export const ASTContext = createContext<{
     showTests: boolean
   }
   setSelection: (
+    selectedProjectId: string | undefined,
     functionName: string | undefined,
     implName: string | undefined,
     testCaseName: string | undefined,
     showTests: boolean | undefined,
   ) => void
 }>({
+  projects: [],
+  selectedProjectId: '',
   root_path: '',
   db: {
     functions: [],
@@ -46,6 +51,7 @@ export const ASTContext = createContext<{
 })
 
 function useSelectionSetup() {
+  const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>(undefined)
   const [selectedFunction, setSelectedFunction] = useState<string | undefined>(undefined)
   const [selectedImpl, setSelectedImpl] = useState<string | undefined>(undefined)
   const [selectedTestCase, setSelectedTestCase] = useState<string | undefined>(undefined)
@@ -53,11 +59,15 @@ function useSelectionSetup() {
 
   const setSelectionFunction = useCallback(
     (
+      selectedProjectId: string | undefined,
       functionName: string | undefined,
       implName: string | undefined,
       testCaseName: string | undefined,
       showTests: boolean | undefined,
     ) => {
+      if (selectedProjectId) {
+        setSelectedProjectId(selectedProjectId)
+      }
       if (functionName) {
         setSelectedFunction(functionName)
         setSelectedImpl(implName)
@@ -80,6 +90,7 @@ function useSelectionSetup() {
   )
 
   return {
+    selectedProjectId,
     selectedFunction,
     selectedImpl,
     selectedTestCase,
@@ -90,9 +101,9 @@ function useSelectionSetup() {
 
 export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
   const [projects, setProjects] = useState<{ root_dir: string; db: ParserDatabase }[]>([])
-  const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>(undefined)
   const [testResults, setTestResults] = useState<TestState | undefined>(undefined)
-  const { selectedFunction, selectedImpl, selectedTestCase, showTests, setSelection } = useSelectionSetup()
+  const { selectedProjectId, selectedFunction, selectedImpl, selectedTestCase, showTests, setSelection } =
+    useSelectionSetup()
   const [testLog, setTestLog] = useState<string | undefined>(undefined)
 
   const selectedState = useMemo(() => {
@@ -106,6 +117,8 @@ export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
         ]),
       }
       return {
+        projects,
+        selectedProjectId,
         root_path: match.root_dir,
         db: match.db,
         jsonSchema: jsonSchema,
@@ -133,8 +146,11 @@ export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
   ])
 
   useEffect(() => {
-    setSelectedProjectId((prev) => prev ?? projects[0]?.root_dir)
-  }, [projects])
+    if (projects.length === 0) return
+    if (selectedProjectId === undefined) {
+      setSelection(projects[0].root_dir, undefined, undefined, undefined, undefined)
+    }
+  }, [selectedProjectId, projects])
 
   useEffect(() => {
     const fn = (event: any) => {
@@ -160,12 +176,19 @@ export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
         }
         case 'setSelectedResource': {
           let content = messageContent as {
+            projectId: string | undefined
             functionName: string | undefined
             implName?: string
             testCaseName?: string
             showTests?: boolean
           }
-          setSelection(content.functionName, content.implName, content.testCaseName, content.showTests)
+          setSelection(
+            content.projectId,
+            content.functionName,
+            content.implName,
+            content.testCaseName,
+            content.showTests,
+          )
           break
         }
         case 'test-results': {
@@ -185,14 +208,22 @@ export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
     <main className="w-full h-screen px-0 py-2">
       {selectedState === undefined ? (
         projects.length === 0 ? (
-          <div>Loading...</div>
+          <div>
+            No baml projects loaded yet.
+            <br />
+            Open a baml file or wait for the extension to finish loading!
+          </div>
         ) : (
           <div>
             <h1>Projects</h1>
             <div>
               {projects.map((project) => (
                 <div key={project.root_dir}>
-                  <VSCodeButton onClick={() => setSelectedProjectId(project.root_dir)}>{project.root_dir}</VSCodeButton>
+                  <VSCodeButton
+                    onClick={() => setSelection(project.root_dir, undefined, undefined, undefined, undefined)}
+                  >
+                    {project.root_dir}
+                  </VSCodeButton>
                 </div>
               ))}
             </div>

@@ -18,7 +18,8 @@ export function activate(context: vscode.ExtensionContext) {
 
   const bamlPlygroundCommand = vscode.commands.registerCommand(
     'baml.openBamlPanel',
-    (args?: { functionName?: string; implName?: string; showTests?: boolean }) => {
+    (args?: { projectId?: string; functionName?: string; implName?: string; showTests?: boolean }) => {
+      const projectId = args?.projectId
       const initialFunctionName = args?.functionName
       const initialImplName = args?.implName
       const showTests = args?.showTests
@@ -28,6 +29,7 @@ export function activate(context: vscode.ExtensionContext) {
 
       WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
       WebPanelView.currentPanel?.postMessage('setSelectedResource', {
+        projectId: projectId,
         functionName: initialFunctionName,
         implName: initialImplName,
         testCaseName: undefined,

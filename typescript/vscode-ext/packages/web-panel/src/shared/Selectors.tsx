@@ -5,9 +5,12 @@ import { ASTContext } from './ASTProvider'
 import { vscode } from '@/utils/vscode'
 import Link from './Link'
 import TypeComponent from './TypeComponent'
+import { ProjectToggle } from './ProjectPanel'
 
 export const FunctionSelector: React.FC = () => {
   const {
+    projects,
+    selectedProjectId,
     db: { functions },
     setSelection,
   } = useContext(ASTContext)
@@ -17,11 +20,14 @@ export const FunctionSelector: React.FC = () => {
   return (
     <div className="flex flex-col gap-1 items-start">
       <div className="flex flex-row gap-1 items-center">
+        <ProjectToggle />
+
         <span className="font-light">Function</span>
         <VSCodeDropdown
           value={func?.name.value ?? '<not-picked>'}
           onChange={(event) =>
             setSelection(
+              undefined,
               (event as React.FormEvent<HTMLSelectElement>).currentTarget.value,
               undefined,
               undefined,
@@ -73,7 +79,7 @@ export const TestCaseSelector: React.FC = () => {
         value={name?.value ?? PLACEHOLDER}
         onChange={(event) => {
           let value = (event as React.FormEvent<HTMLSelectElement>).currentTarget.value
-          setSelection(undefined, undefined, value, undefined)
+          setSelection(undefined, undefined, undefined, value, undefined)
         }}
       >
         {test_cases.map((cases, index) => (
