@@ -49,7 +49,7 @@ const FunctionPanel: React.FC = () => {
                     onChange={(e) => {
                       const selected: string | undefined = (e.target as any)?.activetab?.id
                       if (selected && selected.startsWith(`tab-${func.name.value}-`)) {
-                        setSelection(undefined, selected.split('-', 3)[2], undefined, undefined)
+                        setSelection(undefined, undefined, selected.split('-', 3)[2], undefined, undefined)
                       }
                     }}
                   >

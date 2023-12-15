@@ -361,7 +361,10 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
             }
             vscode.postMessage({
               command: 'runTest',
-              data: runTestRequest,
+              data: {
+                root_path,
+                tests: runTestRequest,
+              },
             })
           }}
         >
@@ -420,7 +423,10 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
                     }
                     vscode.postMessage({
                       command: 'runTest',
-                      data: runTestRequest,
+                      data: {
+                        root_path,
+                        tests: runTestRequest,
+                      },
                     })
                   }}
                 >

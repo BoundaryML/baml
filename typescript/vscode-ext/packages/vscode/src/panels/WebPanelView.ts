@@ -179,8 +179,8 @@ export class WebPanelView {
           // are created within the webview context (i.e. inside media/main.js)
           // todo: MULTI TEST
           case 'runTest': {
-            const testRequest: TestRequest = message.data
-            await testExecutor.runTest(testRequest, getWorkspaceFolderPath()!)
+            const testRequest: { root_path: string; tests: TestRequest } = message.data
+            await testExecutor.runTest(testRequest)
             return
           }
           case 'saveTest': {
@@ -193,38 +193,35 @@ export class WebPanelView {
             const uri = saveTestRequest.testCaseName?.source_file
               ? vscode.Uri.parse(saveTestRequest.testCaseName?.source_file)
               : vscode.Uri.joinPath(
-                vscode.Uri.parse(saveTestRequest.root_path),
-                '__tests__',
-                saveTestRequest.funcName,
-                `${uniqueNamesGenerator(customConfig)}.json`,
-              )
-            let testInputContent: any;
+                  vscode.Uri.parse(saveTestRequest.root_path),
+                  '__tests__',
+                  saveTestRequest.funcName,
+                  `${uniqueNamesGenerator(customConfig)}.json`,
+                )
+            let testInputContent: any
 
             if (saveTestRequest.params.type === 'positional') {
               // Directly use the value if the type is 'positional'
               try {
-                testInputContent = JSON.parse(saveTestRequest.params.value);
-              }
-              catch (e) {
-                testInputContent = saveTestRequest.params.value;
+                testInputContent = JSON.parse(saveTestRequest.params.value)
+              } catch (e) {
+                testInputContent = saveTestRequest.params.value
               }
             } else {
               // Create an object from the entries if the type is not 'positional'
               testInputContent = Object.fromEntries(
-                saveTestRequest.params.value.map((kv: { name: any; value: any }) => [kv.name, kv.value])
-              );
+                saveTestRequest.params.value.map((kv: { name: any; value: any }) => [kv.name, kv.value]),
+              )
             }
 
             const testFileContent: TestFileContent = {
               input: testInputContent,
-            };
-            console.log("testfilecontent" + JSON.stringify(testFileContent));
+            }
+            console.log('testfilecontent' + JSON.stringify(testFileContent))
             try {
               await vscode.workspace.fs.writeFile(uri, Buffer.from(JSON.stringify(testFileContent, null, 2)))
               await registerFileChange(uri.toString(), 'json')
               WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
-
-
             } catch (e: any) {
               console.log(e)
             }
@@ -267,19 +264,19 @@ export class WebPanelView {
   }
 }
 
-function getWorkspaceFolderPath() {
-  // Check if there are any workspace folders open
-  if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
-    // Get the first workspace folder
-    const workspaceFolder = vscode.workspace.workspaceFolders[0]
+// function getWorkspaceFolderPath() {
+//   // Check if there are any workspace folders open
+//   if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
+//     // Get the first workspace folder
+//     const workspaceFolder = vscode.workspace.workspaceFolders[0]
 
-    // Get the file system path of the workspace folder
-    const workspaceFolderPath = workspaceFolder.uri.fsPath
+//     // Get the file system path of the workspace folder
+//     const workspaceFolderPath = workspaceFolder.uri.fsPath
 
-    return workspaceFolderPath
-  } else {
-    // No workspace folder is open
-    vscode.window.showInformationMessage('No workspace folder is open.')
-    return null
-  }
-}
+//     return workspaceFolderPath
+//   } else {
+//     // No workspace folder is open
+//     vscode.window.showInformationMessage('No workspace folder is open.')
+//     return null
+//   }
+// }

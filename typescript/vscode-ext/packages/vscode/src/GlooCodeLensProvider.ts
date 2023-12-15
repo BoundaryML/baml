@@ -1,17 +1,20 @@
 import { ParserDatabase } from '@baml/common'
 import * as vscode from 'vscode'
+import { URI } from 'vscode-languageclient'
 
 export class GlooCodeLensProvider implements vscode.CodeLensProvider {
   private db: ParserDatabase | undefined
+  private path: string | undefined
 
-  public setDB(db: ParserDatabase) {
+  public setDB(path: string, db: ParserDatabase) {
+    this.path = path
     this.db = db
   }
 
   provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
     const codeLenses: vscode.CodeLens[] = []
 
-    if (!this.db) {
+    if (!this.db || !this.path) {
       return codeLenses
     }
 
@@ -24,6 +27,7 @@ export class GlooCodeLensProvider implements vscode.CodeLensProvider {
         command: 'baml.openBamlPanel',
         arguments: [
           {
+            projectId: this.path,
             functionName: name.value,
             showTests: true,
           },
@@ -54,6 +58,7 @@ export class GlooCodeLensProvider implements vscode.CodeLensProvider {
           command: 'baml.openBamlPanel',
           arguments: [
             {
+              projectId: this.path,
               functionName: name.function,
               implName: name.value,
               showTests: true,
@@ -69,6 +74,7 @@ export class GlooCodeLensProvider implements vscode.CodeLensProvider {
             command: 'baml.openBamlPanel',
             arguments: [
               {
+                projectId: this.path,
                 functionName: name.function,
                 implName: name.value,
                 showTests: false,
@@ -99,6 +105,7 @@ export class GlooCodeLensProvider implements vscode.CodeLensProvider {
         command: 'baml.openBamlPanel',
         arguments: [
           {
+            projectId: this.path,
             functionName: name.function,
             testCaseName: name.value,
             showTests: true,

@@ -8,6 +8,8 @@ import TypeComponent from './TypeComponent'
 
 export const FunctionSelector: React.FC = () => {
   const {
+    projects,
+    selectedProjectId,
     db: { functions },
     setSelection,
   } = useContext(ASTContext)
@@ -22,6 +24,7 @@ export const FunctionSelector: React.FC = () => {
           value={func?.name.value ?? '<not-picked>'}
           onChange={(event) =>
             setSelection(
+              undefined,
               (event as React.FormEvent<HTMLSelectElement>).currentTarget.value,
               undefined,
               undefined,
@@ -73,7 +76,7 @@ export const TestCaseSelector: React.FC = () => {
         value={name?.value ?? PLACEHOLDER}
         onChange={(event) => {
           let value = (event as React.FormEvent<HTMLSelectElement>).currentTarget.value
-          setSelection(undefined, undefined, value, undefined)
+          setSelection(undefined, undefined, undefined, value, undefined)
         }}
       >
         {test_cases.map((cases, index) => (

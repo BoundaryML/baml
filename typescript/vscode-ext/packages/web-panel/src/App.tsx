@@ -12,6 +12,7 @@ import { Separator } from './components/ui/separator'
 import { Button } from './components/ui/button'
 import { FlaskConical, FlaskConicalOff } from 'lucide-react'
 import { useSelections } from './shared/hooks'
+import { ProjectToggle } from './shared/ProjectPanel'
 
 const TestToggle = () => {
   const { setSelection } = useContext(ASTContext)
@@ -21,7 +22,7 @@ const TestToggle = () => {
     <Button
       variant="outline"
       className="p-1 w-fit h-fit text-xs"
-      onClick={() => setSelection(undefined, undefined, undefined, !showTests)}
+      onClick={() => setSelection(undefined, undefined, undefined, undefined, !showTests)}
     >
       {showTests ? 'Hide tests' : 'Show tests'}
     </Button>
@@ -35,6 +36,7 @@ function App() {
     <CustomErrorBoundary>
       <ASTProvider>
         <div className="absolute right-1 z-10 flex flex-col gap-1 top-2 text-end items-end">
+          <ProjectToggle />
           <TestToggle />
           <VSCodeLink href="https://docs.boundaryml.com">Docs</VSCodeLink>
         </div>

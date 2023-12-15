@@ -235,7 +235,9 @@ class TestExecutor {
     return TestExecutor.pythonPath!
   }
 
-  public async runTest(tests: TestRequest, cwd: string) {
+  public async runTest({ root_path, tests }: { root_path: string; tests: TestRequest }) {
+    // root_path is the path to baml_src, so go up one level to get to the root of the project
+    root_path = path.join(root_path, '../')
     this.testState.resetTestCases(tests)
     const tempFilePath = path.join(os.tmpdir(), 'test_temp.py')
     const code = await generateTestRequest(tests)
@@ -254,7 +256,7 @@ class TestExecutor {
 
     // Run the Python script in a child process
     let command = `python -m pytest ${tempFilePath} ${this.port_arg} ${test_filter}`
-    if (fs.existsSync(path.join(cwd, 'pyproject.toml'))) {
+    if (fs.existsSync(path.join(root_path, 'pyproject.toml'))) {
       command = `poetry run ${command}`
     } else {
       command = `${await this.getPythonPath()} -m pytest ${tempFilePath} ${this.port_arg} ${test_filter}`
@@ -266,7 +268,7 @@ class TestExecutor {
     this.stdoutListener?.('<BAML_RESTART>')
     this.stdoutListener?.(`Command: ${command}\n`)
     const cp = exec(command, {
-      cwd: cwd,
+      cwd: root_path,
     })
 
     cp.stdout?.on('data', (data) => {
