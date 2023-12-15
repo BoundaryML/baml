@@ -7,6 +7,7 @@ import testExecutor from './execute_test'
 
 import { uniqueNamesGenerator, Config, adjectives, colors, animals } from 'unique-names-generator'
 import { BamlDB, registerFileChange } from '../plugins/language-server'
+import { URI } from "vscode-uri";
 
 const customConfig: Config = {
   dictionaries: [adjectives, colors, animals],
@@ -190,14 +191,15 @@ export class WebPanelView {
               testCaseName: StringSpan | undefined
               params: TestRequest['functions'][0]['tests'][0]['params']
             } = message.data
+
             const uri = saveTestRequest.testCaseName?.source_file
-              ? vscode.Uri.parse(saveTestRequest.testCaseName?.source_file)
+              ? URI.file(saveTestRequest.testCaseName?.source_file)
               : vscode.Uri.joinPath(
-                  vscode.Uri.parse(saveTestRequest.root_path),
-                  '__tests__',
-                  saveTestRequest.funcName,
-                  `${uniqueNamesGenerator(customConfig)}.json`,
-                )
+                URI.file(saveTestRequest.root_path),
+                '__tests__',
+                saveTestRequest.funcName,
+                `${uniqueNamesGenerator(customConfig)}.json`,
+              )
             let testInputContent: any
 
             if (saveTestRequest.params.type === 'positional') {
@@ -218,6 +220,7 @@ export class WebPanelView {
               input: testInputContent,
             }
             console.log('testfilecontent' + JSON.stringify(testFileContent))
+            console.log("saving uri" + JSON.stringify(uri));
             try {
               await vscode.workspace.fs.writeFile(uri, Buffer.from(JSON.stringify(testFileContent, null, 2)))
               await registerFileChange(uri.toString(), 'json')

@@ -37,6 +37,7 @@
     "unique-names-generator": "^4.7.1",
     "vscode-jsonrpc": "^8.2.0",
     "vscode-languageclient": "7.0.0",
+    "vscode-uri": "^3.0.8",
     "watcher": "1.2.0"
   },
   "devDependencies": {

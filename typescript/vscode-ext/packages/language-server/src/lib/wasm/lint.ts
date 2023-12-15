@@ -5,12 +5,12 @@ import { handleFormatPanic, handleWasmError } from './internals'
 type LintResponse = {
   diagnostics: LinterError[]
 } & (
-  | { ok: false }
-  | {
+    | { ok: false }
+    | {
       ok: true
       response: ParserDatabase
     }
-)
+  )
 
 export interface LinterError {
   start: number

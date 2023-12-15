@@ -13,6 +13,7 @@ mod parse_identifier;
 mod parse_schema;
 mod parse_serializer;
 mod parse_template_args;
+mod parse_test;
 mod parse_types;
 mod parse_variant;
 

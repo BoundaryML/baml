@@ -5,8 +5,9 @@
   "main": "./dist/baml_schema_build.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "clean": "rimraf ./dist",
     "build": "bash ./scripts/build.sh",
-    "clean": "rimraf ./dist"
+    "update-wasm": "bash ./scripts/build.sh"
   },
   "repository": {
     "type": "git",
