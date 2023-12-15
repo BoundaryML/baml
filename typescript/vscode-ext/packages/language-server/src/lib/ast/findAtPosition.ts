@@ -56,3 +56,18 @@ export function getSymbolBeforePosition(document: TextDocument, position: Positi
     end: { line: position.line, character: position.character },
   })
 }
+
+export function getPositionFromIndex(document: TextDocument, index: number): Position {
+  let line = 0
+  let character = 0
+  for (let i = 0; i < index; i++) {
+    if (document.getText()[i] === '\n') {
+      line++
+      character = 0
+    } else {
+      character++
+    }
+  }
+
+  return { line, character }
+}

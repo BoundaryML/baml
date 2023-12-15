@@ -4,6 +4,8 @@ import { convertToTextDocument, gatherFiles } from './fileUtils'
 const BAML_SRC = 'baml_src'
 import { URI } from 'vscode-uri'
 import { ParserDatabase } from '@baml/common'
+import { Position, Range } from 'vscode-languageserver'
+import { getPositionFromIndex } from '../lib/ast'
 
 export class BamlDirCache {
   private readonly cache: Map<string, FileCache> = new Map()
@@ -19,8 +21,12 @@ export class BamlDirCache {
   }
 
   public getBamlDir(textDocument: TextDocument): URI | null {
-    const MAX_TRIES = 10 // configurable maximum depth
     let uri = URI.parse(textDocument.uri)
+    return this.getBamlDirUri(uri)
+  }
+
+  private getBamlDirUri(uri: URI): URI | null {
+    const MAX_TRIES = 10 // configurable maximum depth
 
     // Check if the scheme is 'file', return null for non-file schemes
     if (uri.scheme !== 'file') {
@@ -43,7 +49,7 @@ export class BamlDirCache {
     return null
   }
 
-  private getFileCache(textDocument: TextDocument): FileCache | null {
+  public getFileCache(textDocument: TextDocument): FileCache | null {
     const key = this.getBamlDir(textDocument)
     if (!key) {
       return null
@@ -54,6 +60,28 @@ export class BamlDirCache {
       this.__lastBamlDir = key
     }
     return cache
+  }
+
+  public getCacheForUri(uri: string): FileCache | null {
+    const key = this.getBamlDirUri(URI.parse(uri))
+    if (!key) {
+      return null
+    }
+
+    let cache = this.cache.get(key.toString()) ?? null
+    if (cache) {
+      this.__lastBamlDir = key
+    }
+    return cache
+  }
+
+  public getParserDatabase(textDocument: TextDocument): ParserDatabase | undefined {
+    const key = this.getBamlDir(textDocument)
+    if (!key) {
+      return undefined
+    }
+
+    return this.parserCache.get(key.toString())
   }
 
   private createFileCacheIfNotExist(textDocument: TextDocument): FileCache | null {
@@ -147,10 +175,26 @@ export class BamlDirCache {
 
 let counter = 0
 
+type Definition = {
+  name: string
+  range: Range
+  uri: URI
+} & (
+  | {
+      type: 'class' | 'enum' | 'client'
+    }
+  | {
+      type: 'function'
+      input: string
+      output: string
+    }
+)
+
 export class FileCache {
   // document uri to the text doc
   private cache: Map<string, TextDocument>
   private cacheSummary: { path: string; doc: TextDocument }[]
+  private __definitions: Map<string, Definition> = new Map()
 
   constructor() {
     this.cache = new Map()
@@ -179,5 +223,59 @@ export class FileCache {
 
   public getDocument(uri: URI) {
     return this.cache.get(uri.toString())
+  }
+
+  public define(name: string) {
+    return this.__definitions.get(name)
+  }
+
+  get definitions(): Array<Definition> {
+    return Array.from(this.__definitions.values())
+  }
+
+  public setDB(parser: ParserDatabase) {
+    this.__definitions.clear()
+    ;[
+      { type: 'enum', v: parser.enums },
+      { type: 'class', v: parser.classes },
+      { type: 'client', v: parser.clients },
+      { type: 'functions', v: parser.functions },
+    ].forEach(({ type, v }) => {
+      v.forEach((e) => {
+        let doc = this.getDocument(URI.file(e.name.source_file))
+        if (!doc) {
+          return
+        }
+
+        let start = getPositionFromIndex(doc, e.name.start)
+        let end = getPositionFromIndex(doc, e.name.end)
+
+        if (type === 'functions') {
+          let func = e as ParserDatabase['functions'][0]
+          const fromArgType = (arg: ParserDatabase['functions'][0]['input']) => {
+            if (arg.arg_type === 'positional') {
+              return `${arg.type}`
+            } else {
+              return arg.values.map((v) => `${v.name.value}: ${v.type}`).join(', ')
+            }
+          }
+          this.__definitions.set(e.name.value, {
+            name: e.name.value,
+            range: { start, end },
+            uri: URI.file(e.name.source_file),
+            type: 'function',
+            input: fromArgType(func.input),
+            output: fromArgType(func.output),
+          })
+        } else {
+          this.__definitions.set(e.name.value, {
+            name: e.name.value,
+            range: { start, end },
+            uri: URI.file(e.name.source_file),
+            type: type as 'enum' | 'class' | 'client',
+          })
+        }
+      })
+    })
   }
 }

@@ -89,16 +89,16 @@ export function startServer(options?: LSOptions): void {
 
     const result: InitializeResult = {
       capabilities: {
-        definitionProvider: false,
+        definitionProvider: true,
 
         documentFormattingProvider: false,
         // completionProvider: {
         //   resolveProvider: false,
         //   triggerCharacters: ['@', '"', '.'],
         // },
-        hoverProvider: false,
+        hoverProvider: true,
         renameProvider: false,
-        documentSymbolProvider: false,
+        documentSymbolProvider: true,
       },
     }
 
@@ -274,6 +274,7 @@ export function startServer(options?: LSOptions): void {
 
       bamlCache.addDatabase(rootPath, response.state)
       if (response.state) {
+        bamlCache.getFileCache(textDocument)?.setDB(response.state)
         void connection.sendRequest('set_database', { rootPath: rootPath.fsPath, db: response.state })
       } else {
         void connection.sendRequest('rm_database', rootPath)
@@ -332,12 +333,21 @@ export function startServer(options?: LSOptions): void {
     return documents.get(uri)
   }
 
-  // connection.onDefinition((params: DeclarationParams) => {
-  //   const doc = getDocument(params.textDocument.uri)
-  //   if (doc) {
-  //     return MessageHandler.handleDefinitionRequest(doc, params)
-  //   }
-  // })
+  connection.onDefinition((params: DeclarationParams) => {
+    const doc = getDocument(params.textDocument.uri)
+    if (doc) {
+      const db = bamlCache.getFileCache(doc)
+      if (db) {
+        return MessageHandler.handleDefinitionRequest(db, doc, params)
+      } else if (doc.languageId === 'python') {
+        const db = bamlCache.lastBamlDir?.cache
+        console.log(` python: ${doc.uri} files: ${db?.getDocuments().length}`)
+        if (db) {
+          return MessageHandler.handleDefinitionRequest(db, doc, params)
+        }
+      }
+    }
+  })
 
   // connection.onCompletion((params: CompletionParams) => {
   //   const doc = getDocument(params.textDocument.uri)
@@ -351,12 +361,15 @@ export function startServer(options?: LSOptions): void {
   //   return MessageHandler.handleCompletionResolveRequest(completionItem)
   // })
 
-  // connection.onHover((params: HoverParams) => {
-  //   const doc = getDocument(params.textDocument.uri)
-  //   if (doc) {
-  //     return MessageHandler.handleHoverRequest(doc, params)
-  //   }
-  // })
+  connection.onHover((params: HoverParams) => {
+    const doc = getDocument(params.textDocument.uri)
+    if (doc) {
+      const db = bamlCache.getFileCache(doc)
+      if (db) {
+        return MessageHandler.handleHoverRequest(db, doc, params)
+      }
+    }
+  })
 
   // connection.onDocumentFormatting((params: DocumentFormattingParams) => {
   //   const doc = getDocument(params.textDocument.uri)
@@ -379,13 +392,31 @@ export function startServer(options?: LSOptions): void {
   //   }
   // })
 
-  // connection.onDocumentSymbol((params: DocumentSymbolParams) => {
-  //   return [];
-  //   // const doc = getDocument(params.textDocument.uri)
-  //   // if (doc) {
-  //   //   return MessageHandler.handleDocumentSymbol(params, doc)
-  //   // }
-  // })
+  connection.onDocumentSymbol((params: DocumentSymbolParams) => {
+    const doc = getDocument(params.textDocument.uri)
+    if (doc) {
+      const db = bamlCache.getFileCache(doc)
+      if (db) {
+        let symbols = MessageHandler.handleDocumentSymbol(db, params, doc)
+        return symbols
+      }
+    }
+  })
+
+  connection.onRequest('getDefinition', ({ sourceFile, name }: { sourceFile: string; name: string }) => {
+    const fileCache = bamlCache.getCacheForUri(sourceFile)
+    if (fileCache) {
+      let match = fileCache.define(name)
+      if (match) {
+        return {
+          targetUri: match.uri.toString(),
+          targetRange: match.range,
+          targetSelectionRange: match.range,
+        }
+      }
+    }
+  })
+
   connection.onRequest('cliVersion', async () => {
     try {
       const res = await new Promise<string>((resolve, reject) => {

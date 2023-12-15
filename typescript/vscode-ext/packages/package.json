@@ -5,7 +5,7 @@
   "version": "0.6.7",
   "publisher": "Gloo",
   "repository": "https://github.com/GlooHQ/baml",
-  "homepage": "https://trygloo.com",
+  "homepage": "https://www.boundaryml.com",
   "icon": "baml-logo.png",
   "engines": {
     "vscode": "^1.63.0"
@@ -14,12 +14,16 @@
     "Other"
   ],
   "activationEvents": [
-    "onLanguage:baml"
+    "onLanguage:baml",
+    "onLanguage:python",
+    "onLanguage:json"
   ],
   "main": "./vscode/out/extension.js",
   "contributes": {
     "activationEvents": [
-      "onLanguage:baml"
+      "onLanguage:baml",
+      "onLanguage:json",
+      "onLanguage:python"
     ],
     "configuration": {
       "type": "object",
@@ -100,6 +104,12 @@
         "command": "baml.checkForUpdates",
         "title": "Check Updates",
         "category": "Baml"
+      },
+      {
+        "command": "baml.jumpToDefinition",
+        "title": "Jump to Definition",
+        "category": "Baml",
+        "enablement": "editorLangId == 'python'"
       }
     ]
   },
