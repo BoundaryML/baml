@@ -20,7 +20,7 @@ import {
   TextDocuments,
 } from 'vscode-languageserver'
 import type { TextDocument } from 'vscode-languageserver-textdocument'
-import { fullDocumentRange } from './ast/findAtPosition'
+import { fullDocumentRange } from './ast'
 import lint, { LinterInput } from './wasm/lint'
 import { FileCache } from '../file/fileCache'
 import generate_test_file, { GenerateResponse } from './wasm/generate_test_file'
@@ -30,7 +30,7 @@ import { URI } from 'vscode-uri'
 // import format from './prisma-schema-wasm/format'
 // import lint from './prisma-schema-wasm/lint'
 
-// import { convertDocumentTextToTrimmedLineArray } from './ast'
+import { convertDocumentTextToTrimmedLineArray } from './ast'
 
 // import { quickFix } from './code-actions'
 // import {
@@ -47,15 +47,17 @@ import { URI } from 'vscode-uri'
 //   isRelationField,
 //   isBlockName,
 // } from './code-actions/rename'
-// import {
-//   fullDocumentRange,
-//   getWordAtPosition,
-//   getBlockAtPosition,
-//   Block,
-//   getBlocks,
-//   getDocumentationForBlock,
-//   getDatamodelBlock,
-// } from './ast'
+import {
+  //   fullDocumentRange,
+  getWordAtPosition,
+  //   getBlockAtPosition,
+  //   Block,
+  //   getBlocks,
+  //   getDocumentationForBlock,
+  //   getDatamodelBlock,
+} from './ast'
+import { Range, Uri } from 'vscode'
+
 export function handleGenerateTestFile(
   documents: { path: string; doc: TextDocument }[],
   linterInput: LinterInput,
@@ -146,28 +148,67 @@ export function handleDocumentFormatting(
   return []
 }
 
-export function handleHoverRequest(document: TextDocument, params: HoverParams): Hover | undefined {
+export function handleDefinitionRequest(
+  fileCache: FileCache,
+  document: TextDocument,
+  params: DeclarationParams,
+): LocationLink[] | undefined {
   const position = params.position
 
-  // const lines = convertDocumentTextToTrimmedLineArray(document)
-  // const word = getWordAtPosition(document, position)
+  const lines = convertDocumentTextToTrimmedLineArray(document)
+  const word = getWordAtPosition(document, position)
 
-  // if (word === '') {
-  //   return
-  // }
+  if (word === '') {
+    return
+  }
 
-  // const block = getDatamodelBlock(word, lines)
-  // if (!block) {
-  //   return
-  // }
+  // TODO: Do block level definitions
+  let match = fileCache.define(word)
 
-  // const blockDocumentation = getDocumentationForBlock(document, block)
+  if (match) {
+    return [
+      {
+        targetUri: match.uri.toString(),
+        targetRange: match.range,
+        targetSelectionRange: match.range,
+      },
+    ]
+  }
+  return
+}
 
-  // if (blockDocumentation.length !== 0) {
-  //   return {
-  //     contents: blockDocumentation.join('\n\n'),
-  //   }
-  // }
+export function handleHoverRequest(
+  fileCache: FileCache,
+  document: TextDocument,
+  params: HoverParams,
+): Hover | undefined {
+  const position = params.position
+
+  const lines = convertDocumentTextToTrimmedLineArray(document)
+  const word = getWordAtPosition(document, position)
+
+  if (word === '') {
+    return
+  }
+
+  let match = fileCache.define(word)
+
+  if (match) {
+    if (match.type === 'function') {
+      return {
+        contents: {
+          kind: 'markdown',
+          value: `**${match.name}**\n\n(${match.input}) -> ${match.output}`,
+        },
+      }
+    }
+    return {
+      contents: {
+        kind: 'markdown',
+        value: `**${match.name}**\n\n${match.type}`,
+      },
+    }
+  }
 
   return
 }
@@ -210,20 +251,31 @@ export function handleCodeActions(
   return []
 }
 
-export function handleDocumentSymbol(params: DocumentSymbolParams, document: TextDocument): DocumentSymbol[] {
-  // const lines: string[] = convertDocumentTextToTrimmedLineArray(document)
-  // return Array.from(getBlocks(lines), (block) => ({
-  //   kind: {
-  //     model: SymbolKind.Class,
-  //     enum: SymbolKind.Enum,
-  //     type: SymbolKind.Interface,
-  //     view: SymbolKind.Class,
-  //     datasource: SymbolKind.Struct,
-  //     generator: SymbolKind.Function,
-  //   }[block.type],
-  //   name: block.name,
-  //   range: block.range,
-  //   selectionRange: block.nameRange,
-  // }))
-  return []
+export function handleDocumentSymbol(
+  fileCache: FileCache,
+  params: DocumentSymbolParams,
+  document: TextDocument,
+): DocumentSymbol[] {
+  // Since baml is global scope, we can just return all the definitions
+  return fileCache.definitions
+    .filter((def) => def.uri.toString() === document.uri)
+    .map(({ name, range, uri, type }) => ({
+      kind: {
+        class: SymbolKind.Class,
+        enum: SymbolKind.Enum,
+        function: SymbolKind.Interface,
+        client: SymbolKind.Object,
+      }[type],
+      name: name,
+      range: range,
+      selectionRange: range,
+    }))
+    .sort((a, b) => {
+      // by kind first
+      if (a.kind === b.kind) {
+        return a.name.localeCompare(b.name)
+      }
+      // then by name
+      return a.kind - b.kind
+    })
 }

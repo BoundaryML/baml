@@ -356,6 +356,33 @@ const plugin: BamlVSCodePlugin = {
           console.error('Failed to check for updates', e)
         })
       }),
+
+      vscode.commands.registerCommand('baml.jumpToDefinition', async (args: { sourceFile?: string; name?: string }) => {
+        let { sourceFile, name } = args
+        if (!sourceFile || !name) {
+          return
+        }
+
+        let response = await client.sendRequest('getDefinition', { sourceFile, name })
+        if (response) {
+          let { targetUri, targetRange, targetSelectionRange } = response as {
+            targetUri: string
+            targetRange: {
+              start: { line: number; column: number }
+              end: { line: number; column: number }
+            }
+            targetSelectionRange: {
+              start: { line: number; column: number }
+              end: { line: number; column: number }
+            }
+          }
+          let uri = Uri.parse(targetUri)
+          let doc = await workspace.openTextDocument(uri)
+          // go to line
+          let selection = new vscode.Selection(targetSelectionRange.start.line, 0, targetSelectionRange.end.line, 0)
+          await window.showTextDocument(doc, { selection, viewColumn: ViewColumn.Beside })
+        }
+      }),
     )
 
     activateClient(context, serverOptions, clientOptions)
