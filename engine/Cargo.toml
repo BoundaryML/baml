@@ -14,7 +14,7 @@ indoc = "2.0.1"
 
 # 
 [workspace.package]
-version = "0.4.2"
+version = "0.4.3"
 authors = ["Boundary <cntac@trygloo.com>"]
 
 description = "BAML Toolchain"
