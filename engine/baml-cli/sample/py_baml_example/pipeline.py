@@ -57,7 +57,10 @@ I have scheduled a meeting for you:
 @trace
 async def convo_demo():
 
-    convo = Conversation(messages=[])
+    convo = Conversation(messages=[
+        Message(content="I am a bot that can book meetings. How can I help you?", user=UserType.AI)
+    ])
+    print(f'{colored("AI", "yellow")}: {convo.messages[-1].content}')
     while True:
         user_query = input(f'{colored("User", "yellow")}: ')
         try:
