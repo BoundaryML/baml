@@ -43,7 +43,7 @@ async def pipeline(convo: Conversation) -> str | End:
             # TODO: actually book the meeting by calling a real API
             return End(f"""\
 I have scheduled a meeting for you:
-{partial_info.model_dump_json()}\
+{partial_info.model_dump_json(indent=2)}\
             """)
         elif check.follow_up_question:
             return check.follow_up_question
