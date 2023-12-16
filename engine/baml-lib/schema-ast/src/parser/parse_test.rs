@@ -49,8 +49,6 @@ pub(crate) fn parse_test_from_json(
         .strip_prefix(&root_path.to_string_lossy().to_string())
     {
         Some(path) => {
-            // Remove the leading slash.
-            info!("path: {}", path);
             // Remove the leading slash or backslash.
             let path = match path.chars().next() {
                 Some('/') => &path[1..],
