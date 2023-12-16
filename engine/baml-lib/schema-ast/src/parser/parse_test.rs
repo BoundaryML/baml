@@ -1,13 +1,10 @@
-use std::path::{Component, Path, PathBuf};
-
-use super::{
-    parse_class::parse_class, parse_config, parse_enum::parse_enum, parse_function::parse_function,
-    BAMLParser, Rule,
-};
-use crate::{ast::*, parser::parse_variant};
-use internal_baml_diagnostics::{DatamodelError, Diagnostics, SourceFile};
+#[cfg(target_arch = "wasm32")]
 use log::info;
-use pest::Parser;
+#[cfg(target_arch = "wasm32")]
+use std::path::PathBuf;
+
+use crate::ast::*;
+use internal_baml_diagnostics::{DatamodelError, Diagnostics, SourceFile};
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -52,12 +49,12 @@ pub(crate) fn parse_test_from_json(
         .strip_prefix(&root_path.to_string_lossy().to_string())
     {
         Some(path) => {
-            // Remove the leading slash.
-            let path = path
-                .strip_prefix('/')
-                .unwrap_or(path)
-                .strip_prefix('\\')
-                .unwrap_or(path);
+            // Remove the leading slash or backslash.
+            let path = match path.chars().next() {
+                Some('/') => &path[1..],
+                Some('\\') => &path[1..],
+                _ => path,
+            };
             Ok(PathBuf::from(path))
         }
         None => Err(()),
@@ -103,7 +100,6 @@ pub(crate) fn parse_test_from_json(
     let mut group_name = None;
     for (idx, part) in parts.enumerate() {
         let part = part.as_os_str().to_str().unwrap();
-        info!("part-os-str: {}", part);
         match idx {
             0 => {
                 if part != "__tests__" {
