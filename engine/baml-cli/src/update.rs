@@ -15,7 +15,7 @@ pub struct Versions {
 impl Versions {
     pub fn from_url() -> Result<Self, CliError> {
         let url = "https://raw.githubusercontent.com/GlooHQ/homebrew-baml/main/version.json";
-        info!("Checking for updates at {}", url);
+        // info!("Checking for updates at {}", url);
         let response = reqwest::blocking::get(url)?;
         if !response.status().is_success() {
             return Err(format!("Failed to get versions: {}", response.status()).into());

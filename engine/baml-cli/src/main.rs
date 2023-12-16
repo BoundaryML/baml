@@ -67,7 +67,11 @@ pub(crate) fn main() {
         Commands::Init(_args) => {
             let res = init_command::init_command();
             if res.is_ok() {
-                builder::build(&None)
+                let res = builder::build(&None);
+                if res.is_ok() {
+                    log::info!("Run `python -m py_baml_example` to see the demo in action.")
+                }
+                res
             } else {
                 res
             }
