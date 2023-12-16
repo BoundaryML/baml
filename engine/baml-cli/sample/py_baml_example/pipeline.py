@@ -43,7 +43,7 @@ async def pipeline(convo: Conversation) -> str | End:
             # TODO: actually book the meeting by calling a real API
             return End(f"""\
 I have scheduled a meeting for you:
-{partial_info.model_dump_json()}\
+{partial_info.model_dump_json(indent=2)}\
             """)
         elif check.follow_up_question:
             return check.follow_up_question
@@ -57,7 +57,10 @@ I have scheduled a meeting for you:
 @trace
 async def convo_demo():
 
-    convo = Conversation(messages=[])
+    convo = Conversation(messages=[
+        Message(content="I am a bot that can book meetings. How can I help you?", user=UserType.AI)
+    ])
+    print(f'{colored("AI", "yellow")}: {convo.messages[-1].content}')
     while True:
         user_query = input(f'{colored("User", "yellow")}: ')
         try:
