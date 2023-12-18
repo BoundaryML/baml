@@ -14,51 +14,6 @@ Thinking this way can help you decompose large complex prompts into smaller, mor
 To get us started using BAML, we'll start with writing a simple AI function that extracts verbs from a sentence and start adding more and more complexity in later tutorials.
 
 
-## The BAML Project structure
-At a high level, you will define your AI prompts/interfaces in BAML files, which will then compile into generated Python (soon TS) code that you can import and use in your codebase.
-
-Here is the typical project structure:
-
-```bash
-.
-├── baml_client/ # Generated code
-├── baml_src/ # Prompts live here
-│   ├── __tests__/ # Tests loaded by playground
-│   │   ├── YourAIFunction/
-│   │   │   ├── test_name_monkey.json
-│   │   │   └── test_name_cricket.json
-│   │   └── YourAIFunction2/
-│   │       └── test_name_jellyfish.json
-│   ├── main.baml
-│   ├── any_directory/
-│   │   ├── bar.baml
-│   │   └── baz.baml
-│   └── foo.baml
-# The rest of your project (not generated / used by BAML)
-├── app/
-│  ├── __init__.py
-│  └── main.py
-├── pyproject.toml
-└── poetry.lock
-
-```
-
-1. **baml_src** is the directory where you write your BAML files with the AI function declarations, prompts, retry policies, etc. It also contains [generator](/v3/syntax/generator) blocks which configure how and where to transpile your BAML code.
-2. **baml_client** is the directory where the generated python or TS client code lives. This is the code that you import into your python or TS program (more on this later)
-
-<Warning>
-  **You should never edit any files inside baml_client directory** as the whole
-  directory gets regenerated everytime you save a .baml file in VSCode. VScode runs `baml build` under the hood.
-</Warning>
-
-<Tip>
-  If you ever run into any issues with the generated code (like merge
-  conflicts), you can always delete the `baml_client` directory and it will get
-  regenerated automatically once you fix any other conflicts in your `.baml`
-  files.
-</Tip>
-
-
 # Implementing an AI function
 ## 1. Define AI functions and models in BAML files
 First we will define a function of the following signature in BAML:

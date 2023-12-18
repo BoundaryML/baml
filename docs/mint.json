@@ -41,7 +41,7 @@
   },
   "tabs": [
     {
-      "name": "BAML by example",
+      "name": "BAML by Example",
       "url": "v3/guides"
     },
     {
@@ -71,7 +71,7 @@
 
     {
       "group": "Hello World",
-      "pages": ["v3/guides/hello_world/overview"]
+      "pages": ["v3/guides/hello_world/level0", "v3/guides/hello_world/level1"]
     },
     {
       "group": "Classifiers (e.g. using Tools)",
