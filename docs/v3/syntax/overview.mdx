@@ -4,11 +4,12 @@ title: The BAML Project structure
 
 A BAML project has the following structure:
 
+
 ```bash
 .
-├── baml_client/  # Generated code
-├── baml_src/
-│   ├── __tests__/
+├── baml_client/ # Generated code
+├── baml_src/ # Prompts live here
+│   ├── __tests__/ # Tests loaded by playground
 │   │   ├── YourAIFunction/
 │   │   │   ├── test_name_monkey.json
 │   │   │   └── test_name_cricket.json
@@ -19,7 +20,7 @@ A BAML project has the following structure:
 │   │   ├── bar.baml
 │   │   └── baz.baml
 │   └── foo.baml
-# The rest of your project (not generated / used by BAML)
+# The rest of your project (not generated nor used by BAML)
 ├── app/
 │  ├── __init__.py
 │  └── main.py
@@ -55,4 +56,4 @@ await b.YourAIFunction()
 
 ### imports
 
-BAML by default has global imports. Every entity declared in any `.baml` file is available to all other `.baml` files that `baml_src` project. You **can** can multiple `baml_src` directories for different project, but no promises on how the VSCode extension will behave (yet).
+BAML by default has global imports. Every entity declared in any `.baml` file is available to all other `.baml` files under the same `baml_src` directory. You **can** have multiple `baml_src` directories, but no promises on how the VSCode extension will behave (yet).
