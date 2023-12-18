@@ -53,6 +53,6 @@ If you're writing an AI application today, there are roughly three main parties 
 your team, all with different sets of problems.
 
 - 💼 Product owners **don't have visibility** into the AI system to associate WHY a customer had a bug. Getting data is often blocked by eng availability.
-- 🔨 AI Engineers are left **context switching** between different tools (testing / playground UIs / multiple wrapper libraries) to implement AI functions. Nevermind the accumulation of Jupyter notebooks that no one understands.
+- 🔨 AI Engineers are left **context switching** between different tools (testing / playground UIs / multiple wrapper libraries) to implement AI functions.
 - 🏗️ Full stack devs have to figure out how to combine AI code with the original business logic (**UX/UI, databases, caching, model reliability and redundancy**, and the rest of the stuff that got forgotten with the excitement of AI) — leading to blocks and blocks of `try: model1(params) catch: try: model2(params) ...`, `if "As an AI model" not in response` checks, `try: json.parse(...)`, etc.
-- Lastly, **Testing is hard** (and therefore usually not done). This applies for most code, but is especially hard for non-deterministic AI systems. Not owning the the model makes this even harder. And when tests/AI configurations live outside of the codebase, CI/CD becomes impossible.
+- Lastly, **Testing is hard** (and therefore usually not done). This applies for most code, but is especially hard for non-deterministic AI systems. And when tests/AI configurations live outside of the codebase, CI/CD becomes impossible.
