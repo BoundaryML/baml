@@ -26,7 +26,16 @@ class AnthropicProvider(LLMChatProvider):
     def _to_error_code(self, e: Exception) -> typing.Optional[int]:
         if isinstance(e, anthropic.APIStatusError):
             return e.status_code
-        return super()._to_error_code(e)
+        if isinstance(e, anthropic.APIResponseValidationError):
+            return e.status_code
+        if isinstance(e, anthropic.APIConnectionError):
+            return 500
+        if isinstance(e, anthropic.APITimeoutError):
+            return 503
+        if isinstance(e, anthropic.APIError):
+            return 1
+        # This is a catch-all for any other exception types that
+        return None
 
     def __init__(
         self, *, options: typing.Dict[str, typing.Any], **kwargs: typing.Any
