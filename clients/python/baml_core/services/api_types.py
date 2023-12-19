@@ -119,10 +119,10 @@ class EventChain(BaseModel):
 
 
 class LLMOutputModelMetadata(BaseModel):
-    logprobs: Optional[Any]
-    prompt_tokens: Optional[int]
-    output_tokens: Optional[int]
-    total_tokens: Optional[int]
+    logprobs: Optional[Any] = None
+    prompt_tokens: Optional[int] = None
+    output_tokens: Optional[int] = None
+    total_tokens: Optional[int] = None
     finish_reason: Optional[str] = None
 
 
