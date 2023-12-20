@@ -6,7 +6,7 @@ authors = ["Boundary Team <contact@boundaryml.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = ">=3.9"
 termcolor = "^2.3.0"
 baml = ">=0.6.0"
 
