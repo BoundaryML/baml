@@ -27,8 +27,6 @@ from ..services.api import APIWrapper
 from ..services.api_types import LogSchema
 import logging
 
-baml_client_logger = logging.getLogger("baml_client")
-
 
 @typing.final
 class CustomBackendExporter(SpanExporter):
@@ -69,9 +67,6 @@ class CustomBackendExporter(SpanExporter):
         return _id
 
     def export(self, spans: typing.Sequence[ReadableSpan]) -> SpanExportResult:
-        # Override anything set on logging configurations
-        baml_client_logger.setLevel(self.__print_log_level)
-        # effective level
         # Convert spans to your backend's desired format
         # and send them. This is a simple example that just
         # prints the span names. You should replace this with

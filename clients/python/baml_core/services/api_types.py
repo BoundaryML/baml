@@ -10,8 +10,6 @@ import sys
 from colorama import Fore, Style
 import datetime
 
-baml_client_logger = logging.getLogger("baml_client")
-
 
 if TYPE_CHECKING:
     # This seems to only be necessary for mypy
@@ -334,7 +332,7 @@ class LogSchema(BaseModel):
     def print(self, log_level: int) -> None:
         if self.error and log_level <= logging.ERROR:
             if log := self.to_pretty_string():
-                print_log(log, file=sys.stderr)
+                print_log(log)
         elif log_level <= logging.INFO:
             if log := self.to_pretty_string():
                 print(log)
