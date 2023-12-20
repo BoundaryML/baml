@@ -2,10 +2,16 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Union
 from typing_extensions import TypedDict, Literal, TypeAlias
-from ..logger import logger
 
 from pydantic import BaseModel, Field, ConfigDict
 from enum import Enum
+import logging
+import sys
+from colorama import Fore, Style
+import datetime
+
+baml_client_logger = logging.getLogger("baml_client")
+
 
 if TYPE_CHECKING:
     # This seems to only be necessary for mypy
@@ -325,12 +331,39 @@ class LogSchema(BaseModel):
             pp[-1] = "-" * 80
         return "\n".join(pp)
 
-    def print(self) -> None:
-        if log := self.to_pretty_string():
-            if self.error:
-                logger.error(log)
-            else:
-                logger.info(log)
+    def print(self, log_level: int) -> None:
+        if self.error and log_level <= logging.ERROR:
+            if log := self.to_pretty_string():
+                print_log(log, file=sys.stderr)
+        elif log_level <= logging.INFO:
+            if log := self.to_pretty_string():
+                print(log)
+
+
+def print_log(level, message, logger_name="BAML_CORE"):
+    level_colors = {
+        "DEBUG": Fore.BLUE,
+        "INFO": Fore.GREEN,
+        "WARNING": Fore.YELLOW,
+        "ERROR": Fore.RED,
+        "CRITICAL": Fore.RED,
+    }
+
+    # Formatting the date and time
+    current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[
+        :-3
+    ]  # Truncate microseconds to milliseconds
+    # Formatting the log level
+    colored_level = level_colors.get(level, Fore.WHITE) + level + Style.RESET_ALL
+
+    # Formatting the message
+    formatted_message = f"{current_time} - [{logger_name}] - {colored_level}: {message}"
+
+    # Check if the level is ERROR or CRITICAL, then print to stderr
+    if level in ["ERROR", "CRITICAL"]:
+        print(formatted_message, file=sys.stderr)
+    else:
+        print(formatted_message)
 
 
 ## Process management

@@ -7,6 +7,8 @@ from baml_core.cache_manager import CacheManager
 from baml_core import otel
 from baml_core.services.api import APIWrapper
 from baml_core.logger import logger
+from baml_core.otel.provider import set_print_log_level
+import logging
 
 
 class __InternalBAMLConfig:
@@ -140,7 +142,8 @@ def baml_init(
     **kwargs: typing.Any,
 ) -> __InternalBAMLConfig:
     if log_level := os.environ.get("BAML_LOG_LEVEL", None):
-        logger.setLevel(log_level)
+        int_level = logging._checkLevel(log_level)  # type: ignore
+        set_print_log_level(int_level)
 
     if kwargs.pop("idempotent", None) is not None:
         logger.warning("idempotent is deprecated. Please use enable_cache instead.")

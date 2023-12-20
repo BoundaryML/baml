@@ -25,12 +25,16 @@ from baml_version import __version__
 from ..services.api import APIWrapper
 
 from ..services.api_types import LogSchema
+import logging
+
+baml_client_logger = logging.getLogger("baml_client")
 
 
 @typing.final
 class CustomBackendExporter(SpanExporter):
     __project_id: typing.Optional[str]
     __message_override_callback: typing.Dict[int, typing.Callable[[LogSchema], None]]
+    __print_log_level: int
 
     def __init__(self) -> None:
         super().__init__()
@@ -38,6 +42,10 @@ class CustomBackendExporter(SpanExporter):
         self.__process_id = str(uuid.uuid4())
         self.__project_id = None
         self.__message_override_callback = {}
+        self.__print_log_level = logging.WARNING
+
+    def set_print_log_level(self, level: int) -> None:
+        self.__print_log_level = level
 
     def set_gloo_api(self, api_wrapper: typing.Optional[APIWrapper]) -> None:
         if api_wrapper:
@@ -61,6 +69,9 @@ class CustomBackendExporter(SpanExporter):
         return _id
 
     def export(self, spans: typing.Sequence[ReadableSpan]) -> SpanExportResult:
+        # Override anything set on logging configurations
+        baml_client_logger.setLevel(self.__print_log_level)
+        # effective level
         # Convert spans to your backend's desired format
         # and send them. This is a simple example that just
         # prints the span names. You should replace this with
@@ -75,7 +86,7 @@ class CustomBackendExporter(SpanExporter):
         )
 
         for item in items:
-            item.print()
+            item.print(self.__print_log_level)
             if self.__message_override_callback is not None:
                 # Run every callback in parallel
                 for cb in self.__message_override_callback.values():
@@ -264,3 +275,7 @@ def add_message_transformer_hook(callback: typing.Callable[[LogSchema], None]) -
 
 def remove_message_transformer_hook(_id: int) -> None:
     __exporter.remove_message_override_callback(_id)
+
+
+def set_print_log_level(level: int) -> None:
+    __exporter.set_print_log_level(level)
