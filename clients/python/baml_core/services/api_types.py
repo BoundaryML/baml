@@ -332,36 +332,46 @@ class LogSchema(BaseModel):
     def print(self, log_level: int) -> None:
         if self.error and log_level <= logging.ERROR:
             if log := self.to_pretty_string():
-                print_log(log)
+                print_log(log_level, log)
         elif log_level <= logging.INFO:
             if log := self.to_pretty_string():
-                print(log)
+                print_log(log_level, log)
 
 
-def print_log(level, message, logger_name="BAML_CORE"):
+def print_log(level: int, message: str, logger_name: str = "BAML_CLIENT") -> None:
     level_colors = {
-        "DEBUG": Fore.BLUE,
-        "INFO": Fore.GREEN,
-        "WARNING": Fore.YELLOW,
-        "ERROR": Fore.RED,
-        "CRITICAL": Fore.RED,
+        logging.DEBUG: Fore.BLUE,
+        logging.INFO: Fore.GREEN,
+        logging.WARNING: Fore.YELLOW,
+        logging.ERROR: Fore.RED,
+        logging.CRITICAL: Fore.RED,
     }
+    try:
+        # Formatting the date and time
+        current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[
+            :-3
+        ]  # Truncate microseconds to milliseconds
 
-    # Formatting the date and time
-    current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[
-        :-3
-    ]  # Truncate microseconds to milliseconds
-    # Formatting the log level
-    colored_level = level_colors.get(level, Fore.WHITE) + level + Style.RESET_ALL
+        # Get the string representation of the level
+        level_str = logging.getLevelName(level)
 
-    # Formatting the message
-    formatted_message = f"{current_time} - [{logger_name}] - {colored_level}: {message}"
+        # Formatting the log level with color
+        colored_level = (
+            level_colors.get(level_str, Fore.WHITE) + level_str + Style.RESET_ALL
+        )
 
-    # Check if the level is ERROR or CRITICAL, then print to stderr
-    if level in ["ERROR", "CRITICAL"]:
-        print(formatted_message, file=sys.stderr)
-    else:
-        print(formatted_message)
+        # Formatting the message
+        formatted_message = (
+            f"{current_time} - [{logger_name}] - {colored_level}: {message}"
+        )
+
+        # Check if the level is ERROR or CRITICAL, then print to stderr
+        if level >= logging.ERROR:
+            print(formatted_message, file=sys.stderr)
+        else:
+            print(formatted_message)
+    except Exception as e:
+        print("Error printing log", e)
 
 
 ## Process management
