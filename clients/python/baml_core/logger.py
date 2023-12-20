@@ -1,9 +1,10 @@
 # Set up module-specific logging
 import logging
-import coloredlogs
 
-logger = logging.getLogger("baml")
-logger.setLevel(logging.INFO)
+logger = logging.getLogger("baml_core")
+baml_client_logger = logging.getLogger("baml_client")
+logger.setLevel(logging.WARNING)
+baml_client_logger.setLevel(logging.ERROR)
 
 # Custom field styles for coloredlogs
 field_styles = {
@@ -18,12 +19,3 @@ level_styles = {
     "error": {"color": "red"},
     "critical": {"color": "red", "bold": True},
 }
-
-coloredlogs.install(
-    level="INFO",
-    logger=logger,
-    fmt="%(asctime)s - [BAML] - %(levelname)s: %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-    field_styles=field_styles,
-    level_styles=level_styles,
-)
