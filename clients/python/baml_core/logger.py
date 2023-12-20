@@ -1,6 +1,5 @@
 # Set up module-specific logging
 import logging
-import coloredlogs
 
 logger = logging.getLogger("baml_core")
 baml_client_logger = logging.getLogger("baml_client")
