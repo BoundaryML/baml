@@ -1,6 +1,8 @@
 import typing
 
 import pytest
+from contextlib import contextmanager
+from unittest import mock
 
 {{#if has_impls}}
 ImplName = typing.Literal[{{#each impls}}"{{this}}"{{#unless @last}}, {{/unless}}{{/each}}]
@@ -30,6 +32,24 @@ class IBAML{{name}}:
     def get_impl(self, name: ImplName) -> BAML{{name}}Impl:
         ...
 
+    @contextmanager
+    def mock(self) -> typing.Generator[mock.AsyncMock, None, None]:
+        """
+        Utility for mocking the {{name}}Interface.
+
+        Usage:
+            ```python
+            # All implementations are mocked.
+
+            async def test_logic() -> None:
+                with baml.{{name}}.mock() as mocked:
+                    mocked.return_value = ...
+                    result = await {{name}}Impl(...)
+                    assert mocked.called
+            ```
+        """
+        ...
+
     @typing.overload
     def test(self, test_function: T) -> T:
         """
@@ -45,7 +65,7 @@ class IBAML{{name}}:
             # All implementations will be tested.
 
             @baml.{{name}}.test
-            def test_logic({{name}}Impl: I{{name}}) -> None:
+            async def test_logic({{name}}Impl: I{{name}}) -> None:
                 result = await {{name}}Impl(...)
             ```
         """
@@ -66,7 +86,7 @@ class IBAML{{name}}:
             # All implementations except "{{impls.[0]}}" will be tested.
 
             @baml.{{name}}.test(exclude_impl=["{{impls.[0]}}"])
-            def test_logic({{name}}Impl: I{{name}}) -> None:
+            async def test_logic({{name}}Impl: I{{name}}) -> None:
                 result = await {{name}}Impl(...)
             ```
         """
