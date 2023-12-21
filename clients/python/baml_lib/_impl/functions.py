@@ -254,13 +254,13 @@ class BaseBAMLFunction(typing.Generic[RET]):
         """
 
         return baml_function_test(impls=list(impls), owner=self)
-    
+
     @contextmanager
     def mock(self) -> typing.Generator[mock.AsyncMock, None, None]:
         mocked_impl = mock.AsyncMock()
 
         base_line = {
-            name: mock.patch.object(impl, 'run', new=mocked_impl)
+            name: mock.patch.object(impl, "run", new=mocked_impl)
             for name, impl in self._impls.items()
         }
 
