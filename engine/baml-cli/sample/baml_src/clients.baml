@@ -1,10 +1,8 @@
 // Clients are interfaces to communicate with AI models.
-// They are allowed to be defined in any file (or even multiple), but for organization
-// purposes, we are putting them all in this file.
+// They are allowed to be defined in any file (or even multiple).
 
 // In order to use this, you'll need an env variable called OPENAI_API_KEY
 // This can be set in a .env file in the root of the project, or in your shell.
-
 client<llm> GPT4 {
   provider baml-openai-chat
 
@@ -21,7 +19,6 @@ client<llm> GPT4 {
 }
 
 // We get that OPENAI GPT4 may be unreliable, so you can use fallbacks.
-
 // This will try to use GPT4, and if it fails, it will use GPT35.
 client<llm> Main {
   provider baml-fallback

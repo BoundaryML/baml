@@ -24,6 +24,8 @@ const FunctionPanel: React.FC = () => {
   const { func, impl } = useSelections()
 
   if (!func) return <div className="flex flex-col">No function selected</div>
+  const { test_results } = useSelections()
+  const results = test_results ?? []
 
   return (
     <div
@@ -35,14 +37,15 @@ const FunctionPanel: React.FC = () => {
       {/* <Allotment vertical> */}
       <div
         className={clsx('w-full flex-shrink-0 flex-grow-0', {
-          'basis-[60%]': showTests,
+          'basis-[60%]': showTests && results.length > 0,
           'basis-[100%]': !showTests,
+          'basis-[85%]': showTests && !(results.length > 0),
         })}
       >
         <Allotment className="h-full">
           {impl && (
             <Allotment.Pane className="px-2" minSize={200}>
-              <div className="h-full relative">
+              <div className="relative h-full">
                 <ScrollArea type="always" className="flex w-full h-full pr-3">
                   <VSCodePanels
                     activeid={`tab-${func.name.value}-${impl.name.value}`}

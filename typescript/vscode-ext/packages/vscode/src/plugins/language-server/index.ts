@@ -18,6 +18,7 @@ const packageJson = require('../../../package.json') // eslint-disable-line
 let client: LanguageClient
 let serverModule: string
 let telemetry: TelemetryReporter
+let lastKnownErrorToast: Thenable<any> | undefined
 
 const isDebugMode = () => process.env.VSCODE_DEBUG_MODE === 'true'
 const isE2ETestOnPullRequest = () => process.env.PRISMA_USE_LOCAL_LS === 'true'
@@ -194,7 +195,7 @@ const activateClient = (
           break
         }
         case 'error': {
-          msg = window.showErrorMessage(message.message)
+          window.showErrorMessage(message.message)
           break
         }
         default: {

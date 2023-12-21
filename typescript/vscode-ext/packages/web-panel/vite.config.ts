@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
-
+const isWatchMode = process.argv.includes('--watch');
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: react(),
@@ -11,10 +11,9 @@ export default defineConfig({
     },
   },
   build: {
-    minify: false,
-
+    minify: isWatchMode ? false : true,
     outDir: 'dist',
-    sourcemap: 'inline',
+    sourcemap: isWatchMode ? 'inline' : undefined,
     rollupOptions: {
       // external: ['allotment/dist/index.css'],
       output: {
