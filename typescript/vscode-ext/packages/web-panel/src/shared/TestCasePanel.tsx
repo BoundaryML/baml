@@ -313,6 +313,17 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
         value: testCase.content,
       }
     } else {
+      console.log('testCase', JSON.stringify(testCase, null, 2))
+      // sort of a hack, means the test file was just initialized since input: null is the default
+      if (testCase.content === 'null') {
+        return {
+          type: 'named',
+          value: func.input.values.map(({ name }) => ({
+            name: name.value,
+            value: '',
+          })),
+        }
+      }
       let parsed = JSON.parse(testCase.content)
       let contentMap = new Map<string, string>()
       if (typeof parsed === 'object') {
@@ -389,7 +400,7 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
                     start: 0,
                     end: 0,
                   },
-                  content: '{"input": null}',
+                  content: 'null',
                 }),
               },
             })
@@ -405,7 +416,7 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
                 <Button
                   variant={'ghost'}
                   size={'icon'}
-                  className="p-1 w-fit h-fit text-vscode-icon-foreground"
+                  className="p-1 rounded-md w-fit h-fit bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground"
                   onClick={() => {
                     const runTestRequest: TestRequest = {
                       functions: [

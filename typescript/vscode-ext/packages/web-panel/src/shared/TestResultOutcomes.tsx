@@ -25,7 +25,9 @@ const TestResultPanel = () => {
       <>
         <div className="flex flex-col items-center justify-center">
           <div className="flex flex-col items-center justify-center space-y-2">
-            <div className="text-2xl font-semibold">No test results for this function</div>
+            <div className="text-base font-semibold text-vscode-descriptionForeground">
+              No test results for this function
+            </div>
             <div className="text-sm font-light">Run tests to see results</div>
           </div>
         </div>
@@ -36,7 +38,7 @@ const TestResultPanel = () => {
   return (
     <>
       {test_result_url && (
-        <div className="flex flex-row justify-center bg-vscode-menu-background items-center w-full">
+        <div className="flex flex-row items-center justify-center w-full bg-vscode-menu-background">
           <VSCodeLink href={test_result_url.url}>
             <div className="flex flex-row gap-1 py-1">
               {test_result_url.text} <ExternalLink className="w-4 h-4" />
@@ -44,6 +46,7 @@ const TestResultPanel = () => {
           </VSCodeLink>
         </div>
       )}
+
       <VSCodePanels
         activeid={`test-${selected}`}
         onChange={(e) => {

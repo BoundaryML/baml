@@ -69,7 +69,7 @@ pub(crate) fn main() {
             if res.is_ok() {
                 let res = builder::build(&None);
                 if res.is_ok() {
-                    log::info!("Run `python -m py_baml_example` to see the demo in action.")
+                    log::info!("Run `python -m chatbot_example` to see the demo in action.")
                 }
                 res
             } else {
