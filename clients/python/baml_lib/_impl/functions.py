@@ -8,9 +8,11 @@ import functools
 import inspect
 import types
 import typing
+from unittest import mock
 
 import pytest
 
+from contextlib import contextmanager
 from baml_core.otel import trace, create_event
 
 from pytest_baml.exports import baml_function_test
@@ -252,6 +254,24 @@ class BaseBAMLFunction(typing.Generic[RET]):
         """
 
         return baml_function_test(impls=list(impls), owner=self)
+    
+    @contextmanager
+    def mock(self) -> typing.Generator[mock.AsyncMock, None, None]:
+        mocked_impl = mock.AsyncMock()
+
+        base_line = {
+            name: mock.patch.object(impl, 'run', new=mocked_impl)
+            for name, impl in self._impls.items()
+        }
+
+        for patch in base_line.values():
+            patch.start()
+
+        try:
+            yield mocked_impl
+        finally:
+            for patch in base_line.values():
+                patch.stop()
 
     def test(self, *args: typing.Any, **kwargs: typing.Any) -> typing.Any:
         """
