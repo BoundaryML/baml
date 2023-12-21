@@ -202,8 +202,7 @@ export class WebPanelView {
               )
             let testInputContent: any
 
-            console.log('saveTestRequest.params.type' + saveTestRequest.params.type)
-            console.log('saveTestRequest.params.value ' + JSON.stringify(saveTestRequest.params.value))
+
             if (saveTestRequest.params.type === 'positional') {
               // Directly use the value if the type is 'positional'
               try {
@@ -233,8 +232,6 @@ export class WebPanelView {
             const testFileContent: TestFileContent = {
               input: testInputContent,
             }
-            console.log('testfilecontent' + JSON.stringify(testFileContent))
-            console.log("saving uri" + JSON.stringify(uri));
             try {
               await vscode.workspace.fs.writeFile(uri, Buffer.from(JSON.stringify(testFileContent, null, 2)))
               await registerFileChange(uri.toString(), 'json')
