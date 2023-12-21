@@ -300,7 +300,7 @@ class BamlPytestPlugin:
             and not session.config.option.continue_on_collection_errors
         ):
             if self.__dashboard_url:
-                logger.info(
+                print(
                     f"View test results at {colorama.Fore.CYAN}{self.__dashboard_url}{colorama.Fore.RESET}"
                 )
             return
@@ -323,6 +323,6 @@ class BamlPytestPlugin:
             logger.error(f"Failed to update test case status: {e}")
 
         if self.__dashboard_url:
-            logger.info(
+            print(
                 f"View test results at {colorama.Fore.CYAN}{self.__dashboard_url}{colorama.Fore.RESET}"
             )

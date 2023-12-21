@@ -2,10 +2,10 @@
 """
 Run this script to see how the BAML client can be used in Python.
 
-python -m py_baml_example
+python -m chatbot_example
 """
 import asyncio
 from .pipeline import convo_demo
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     asyncio.run(convo_demo())

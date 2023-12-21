@@ -1,3 +1,6 @@
+
+// Refer to https://docs.boundaryml.com/v3/guides/classification/level1
+// for a step-by-step example
 // Step 1: Classify the users intent as one of:
 // * Book a meeting
 // * Ask about our availability
@@ -22,28 +25,17 @@ function ClassifyIntent {
 
 
 // Now we implement the function, using an llm.
-// If you've downloaded BAML vscode extension, you should see
-// a "Open Playground" button below this comment, check it out
-// to see what this implementation of ClassifyIntent looks like.
 impl<llm, ClassifyIntent> simple {
   // This is the name of the client, which is used to execute this impl.
   // See ./clients.baml file for more details.
   client Main
 
-  // This is the prompt template that is passed to the LLM.
-  // To see the fully rendered prompt, click on the "Open Playground" button
-  // above the name of the impl (after downloading the VSCode BAML extension).
   prompt #"
     Given the question, which of the intents is the user attempting to do?
 
     Question:
     ```
-    {#input.query}{// you can refer to the query value in the prompt here,
-    
-    also
-    yes this is a comment and won't be in the final prompt :)
-    
-    //}
+    {#input.query}{// you can refer to the query value in the prompt here//}
     ```
 
     {#print_enum(Intent)}{// we use printers to print out each enum value automatically. //}
@@ -80,18 +72,17 @@ impl<llm, ClassifyIntent> advanced {
   // We can do that by defining a mapping from the enum to the string, but only
   // localize that mapping to this version of the function.
   override Intent {
-    BookMeeting 
-    @alias(k1)
+    BookMeeting @alias(k1)
     @description(#"
       When the user wants to book a meeting
     "#)
 
-    AvailabilityQuery @alias(k2)
+    AvailabilityQuery 
+    @alias(k2)
     @description(#"
       When the user is asking about their calendar availability
     "#)
 
-    // You can even skip an enum value, if you don't want to expose it to the LLM
     SetReminder @alias(k3)
     @description(#"
       When the user wants to set a reminder
@@ -128,8 +119,7 @@ python#"
 # To use the 'advanced' impl instead of 'simple', you have two options:
 
 # Option 1. Change the default_impl to 'advanced' in this baml file.
-# See above: ClassifyIntent.default_impl simple -> ClassifyIntent.default_impl advanced
-# No changes required to your python code.
+# no need to change python code.
 async def my_function(input: str) -> typing.List[Intent]:
   return await baml.ClassifyIntent(query=input)
 

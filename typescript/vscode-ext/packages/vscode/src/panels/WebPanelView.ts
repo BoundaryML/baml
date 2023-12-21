@@ -202,6 +202,8 @@ export class WebPanelView {
               )
             let testInputContent: any
 
+            console.log('saveTestRequest.params.type' + saveTestRequest.params.type)
+            console.log('saveTestRequest.params.value ' + JSON.stringify(saveTestRequest.params.value))
             if (saveTestRequest.params.type === 'positional') {
               // Directly use the value if the type is 'positional'
               try {
@@ -212,7 +214,19 @@ export class WebPanelView {
             } else {
               // Create an object from the entries if the type is not 'positional'
               testInputContent = Object.fromEntries(
-                saveTestRequest.params.value.map((kv: { name: any; value: any }) => [kv.name, kv.value]),
+                saveTestRequest.params.value.map((kv: { name: any; value: any }) => {
+                  if (kv.value === undefined || kv.value === null || kv.value === '') {
+                    return [kv.name, null]
+                  }
+                  let parsed: any
+                  try {
+                    parsed = JSON.parse(kv.value)
+                  } catch (e) {
+                    parsed = kv.value
+                  }
+                  console.log('parsed k' + kv.name + ' ', JSON.stringify(parsed))
+                  return [kv.name, parsed]
+                }),
               )
             }
 
