@@ -8,7 +8,7 @@
 # fmt: off
 
 from .__do_not_import.generated_baml_client import baml
-from .baml_types import BasicClass, Categories, IBooleanFunc, IEnumFunc, IGenerateUserChatPrompts, IIntFunc, INamedfunc, IStringFunc, ZenfetchBotDocumentBase, ZenfetchBotDocumentBaseList
+from .baml_types import BasicClass, Categories, IBooleanFunc, IEnumFunc, IIntFunc, INamedfunc, IStringFunc
 from baml_lib._impl.deserializer import Deserializer
 from json import dumps, loads
 
@@ -68,15 +68,6 @@ async def test_silent_gold(BooleanFuncImpl: IBooleanFunc):
 true\
 """)
     await BooleanFuncImpl(param)
-
-
-@baml.GenerateUserChatPrompts.test
-async def test_substantial_crimson(GenerateUserChatPromptsImpl: IGenerateUserChatPrompts):
-    deserializer = Deserializer[ZenfetchBotDocumentBaseList](ZenfetchBotDocumentBaseList) # type: ignore
-    param = deserializer.from_string("""\
-{"list_of_documents":[{"title":"hello \"there\"","topic":"[ \"hello\"]"}],"is_empty":true}\
-""")
-    await GenerateUserChatPromptsImpl(param)
 
 
 @baml.StringFunc.test

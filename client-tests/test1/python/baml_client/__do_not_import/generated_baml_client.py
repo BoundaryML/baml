@@ -14,11 +14,14 @@ from .clients.client_large_response import LARGE_RESPONSE
 from .clients.client_resilientgpt4 import ResilientGPT4
 from .functions.fx_booleanfunc import BAMLBooleanFunc
 from .functions.fx_classfunc import BAMLClassFunc
+from .functions.fx_classifytool import BAMLClassifyTool
 from .functions.fx_enumfunc import BAMLEnumFunc
-from .functions.fx_generateuserchatprompts import BAMLGenerateUserChatPrompts
 from .functions.fx_intfunc import BAMLIntFunc
+from .functions.fx_maybepolishtext import BAMLMaybePolishText
+from .functions.fx_messagesimplifier import BAMLMessageSimplifier
 from .functions.fx_namedfunc import BAMLNamedfunc
 from .functions.fx_stringfunc import BAMLStringFunc
+from .functions.fx_textpolisher import BAMLTextPolisher
 from baml_core.otel import add_message_transformer_hook, flush_trace_logs
 from baml_core.services import LogSchema
 from baml_core.services.api_types import LogSchema
@@ -29,11 +32,14 @@ from typing import Callable, List, Optional
 class BAMLClient:
     BooleanFunc = BAMLBooleanFunc
     ClassFunc = BAMLClassFunc
+    ClassifyTool = BAMLClassifyTool
     EnumFunc = BAMLEnumFunc
-    GenerateUserChatPrompts = BAMLGenerateUserChatPrompts
     IntFunc = BAMLIntFunc
+    MaybePolishText = BAMLMaybePolishText
+    MessageSimplifier = BAMLMessageSimplifier
     Namedfunc = BAMLNamedfunc
     StringFunc = BAMLStringFunc
+    TextPolisher = BAMLTextPolisher
     AZURE_DEFAULT = AZURE_DEFAULT
     AZURE_GPT4 = AZURE_GPT4
     AZURE_YES_NO = AZURE_YES_NO

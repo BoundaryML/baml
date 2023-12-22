@@ -23,19 +23,19 @@ class BasicWithList2(BaseModel):
     c: List[BasicClass]
 
 
-def test_string_from_string():
+def test_string_from_string() -> None:
     deserializer = Deserializer[str](str)
     res = deserializer.from_string("hello")
     assert "hello" == res
 
 
-def test_string_from_str_w_quotes():
+def test_string_from_str_w_quotes() -> None:
     deserializer = Deserializer[str](str)
     res = deserializer.from_string('"hello"')
     assert '"hello"' == res
 
 
-def test_string_from_object():
+def test_string_from_object() -> None:
     deserializer = Deserializer[str](str)
     mydict = {"hello": "world"}
     res = deserializer.from_string(json.dumps(mydict))
@@ -43,21 +43,21 @@ def test_string_from_object():
     assert json.dumps(mydict, indent=2) == res
 
 
-def test_string_from_obj_and_string():
+def test_string_from_obj_and_string() -> None:
     deserializer = Deserializer[str](str)
     test_str = 'The output is: {"hello": "world"}'
     res = deserializer.from_string(test_str)
     assert test_str == res
 
 
-def test_string_from_list():
+def test_string_from_list() -> None:
     deserializer = Deserializer[str](str)
     test_list = ["hello", "world"]
     res = deserializer.from_string(json.dumps(test_list))
     assert json.dumps(test_list) == res
 
 
-def test_string_from_int():
+def test_string_from_int() -> None:
     deserializer = Deserializer[str](str)
     res = deserializer.from_string("1")
     assert res == "1"
@@ -69,43 +69,43 @@ class Category(str, Enum):
     TWO = "TWO"
 
 
-def test_enum():
+def test_enum() -> None:
     deserializer = Deserializer[Category](Category)
     res = deserializer.from_string("TWO")
     assert res == Category.TWO
 
 
-def test_enum_with_quotes():
+def test_enum_with_quotes() -> None:
     deserializer = Deserializer[Category](Category)
     res = deserializer.from_string('"TWO"')
     assert res == Category.TWO
 
 
-def test_enum_missing():
+def test_enum_missing() -> None:
     deserializer = Deserializer[Category](Category)
     with pytest.raises(Exception):
         deserializer.from_string("THREE")
 
 
-def test_enum_with_text_before():
+def test_enum_with_text_before() -> None:
     deserializer = Deserializer[Category](Category)
     with pytest.raises(Exception):
         deserializer.from_string("The output is: TWO")
 
 
-def test_enum_from_enum_list_single():
+def test_enum_from_enum_list_single() -> None:
     deserializer = Deserializer[Category](Category)
     res = deserializer.from_string('["TWO"]')
     assert res == Category.TWO
 
 
-def test_enum_from_enum_list_multi():
+def test_enum_from_enum_list_multi() -> None:
     deserializer = Deserializer[Category](Category)
     with pytest.raises(Exception):
         deserializer.from_string('["TWO", "THREE"]')
 
 
-def test_enum_list_from_list():
+def test_enum_list_from_list() -> None:
     deserializer = Deserializer[List[Category]](List[Category])
     res = deserializer.from_string('["TWO"]')
     assert res == [Category.TWO]
@@ -116,32 +116,32 @@ class BasicObj(BaseModel):
     foo: str
 
 
-def test_obj_from_str():
+def test_obj_from_str() -> None:
     deserializer = Deserializer[BasicObj](BasicObj)
     test_obj = {"foo": "bar"}
     res = deserializer.from_string(json.dumps(test_obj))
     assert "bar" == res.foo
 
 
-def test_obj_from_str_with_other_text():
+def test_obj_from_str_with_other_text() -> None:
     deserializer = Deserializer[BasicObj](BasicObj)
     res = deserializer.from_string('The output is: {"foo": "bar"}')
     assert "bar" == res.foo
 
 
-def test_obj_from_str_with_quotes():
+def test_obj_from_str_with_quotes() -> None:
     deserializer = Deserializer[BasicObj](BasicObj)
     res = deserializer.from_string('{"foo": "[\\"bar\\"]"}')
     assert '["bar"]' == res.foo
 
 
-def test_obj_from_str_with_nested_json_string():
+def test_obj_from_str_with_nested_json_string() -> None:
     deserializer = Deserializer[BasicObj](BasicObj)
     res = deserializer.from_string('{"foo": "{\\"foo\\": [\\"bar\\"]}"}')
     assert '{\n  "foo": [\n    "bar"\n  ]\n}' == res.foo
 
 
-def test_obj_from_str_with_nested_complex_string2():
+def test_obj_from_str_with_nested_complex_string2() -> None:
     test_value = """Here is how you can build the API call:
 ```json
 {
@@ -158,7 +158,7 @@ def test_obj_from_str_with_nested_complex_string2():
     assert res == test_value
 
 
-def test_obj_from_str_with_string_foo():
+def test_obj_from_str_with_string_foo() -> None:
     test_value = """Here is how you can build the API call:
 ```json
 {
@@ -178,7 +178,7 @@ def test_obj_from_str_with_string_foo():
     assert res.foo == test_value
 
 
-def test_json_thing():
+def test_json_thing() -> None:
     llm_value = '{\n    "foo": "This is a sample string with **markdown** that includes a JSON blob: `{\\"name\\": \\"John\\", \\"age\\": 30}`. Please note that the JSON blob inside the string is escaped to fit into the string type."\n}'
     expected = json.loads(llm_value)
     deserializer = Deserializer[BasicObj](BasicObj)
@@ -192,7 +192,7 @@ class ObjOptionals(BaseModel):
     foo: Optional[str] = None
 
 
-def test_object_with_empty_input():
+def test_object_with_empty_input() -> None:
     object = {
         "foo": "",
     }
@@ -212,7 +212,7 @@ class BasicClass2(BaseModel):
     two: str
 
 
-def test_object_from_str_with_quotes():
+def test_object_from_str_with_quotes() -> None:
     deserializer = Deserializer[BasicClass2](BasicClass2)
     test_obj = {
         "one": "hello 'world'",

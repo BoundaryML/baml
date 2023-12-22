@@ -7,8 +7,8 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..types.classes.cls_zenfetchbotdocumentbase import ZenfetchBotDocumentBase
-from ..types.classes.cls_zenfetchbotdocumentbaselist import ZenfetchBotDocumentBaseList
+from ..types.classes.cls_classifyresponse import ClassifyResponse
+from ..types.enums.enm_tool import Tool
 from typing import Protocol, runtime_checkable
 
 
@@ -18,59 +18,60 @@ import pytest
 from contextlib import contextmanager
 from unittest import mock
 
-ImplName = typing.Literal["version"]
+ImplName = typing.Literal["v1"]
 
 T = typing.TypeVar("T", bound=typing.Callable[..., typing.Any])
 CLS = typing.TypeVar("CLS", bound=type)
 
 
-IGenerateUserChatPromptsOutput = str
+IClassifyToolOutput = ClassifyResponse
 
 @runtime_checkable
-class IGenerateUserChatPrompts(Protocol):
+class IClassifyTool(Protocol):
     """
     This is the interface for a function.
 
     Args:
-        arg: ZenfetchBotDocumentBaseList
+        query: str
+        context: str
 
     Returns:
-        str
+        ClassifyResponse
     """
 
-    async def __call__(self, arg: ZenfetchBotDocumentBaseList, /) -> str:
+    async def __call__(self, *, query: str, context: str) -> ClassifyResponse:
         ...
 
 
-class BAMLGenerateUserChatPromptsImpl:
-    async def run(self, arg: ZenfetchBotDocumentBaseList, /) -> str:
+class BAMLClassifyToolImpl:
+    async def run(self, *, query: str, context: str) -> ClassifyResponse:
         ...
 
-class IBAMLGenerateUserChatPrompts:
+class IBAMLClassifyTool:
     def register_impl(
         self, name: ImplName
-    ) -> typing.Callable[[IGenerateUserChatPrompts], IGenerateUserChatPrompts]:
+    ) -> typing.Callable[[IClassifyTool], IClassifyTool]:
         ...
 
-    async def __call__(self, arg: ZenfetchBotDocumentBaseList, /) -> str:
+    async def __call__(self, *, query: str, context: str) -> ClassifyResponse:
         ...
 
-    def get_impl(self, name: ImplName) -> BAMLGenerateUserChatPromptsImpl:
+    def get_impl(self, name: ImplName) -> BAMLClassifyToolImpl:
         ...
 
     @contextmanager
     def mock(self) -> typing.Generator[mock.AsyncMock, None, None]:
         """
-        Utility for mocking the GenerateUserChatPromptsInterface.
+        Utility for mocking the ClassifyToolInterface.
 
         Usage:
             ```python
             # All implementations are mocked.
 
             async def test_logic() -> None:
-                with baml.GenerateUserChatPrompts.mock() as mocked:
+                with baml.ClassifyTool.mock() as mocked:
                     mocked.return_value = ...
-                    result = await GenerateUserChatPromptsImpl(...)
+                    result = await ClassifyToolImpl(...)
                     assert mocked.called
             ```
         """
@@ -80,7 +81,7 @@ class IBAMLGenerateUserChatPrompts:
     def test(self, test_function: T) -> T:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the GenerateUserChatPromptsInterface.
+        the ClassifyToolInterface.
 
         Args:
             test_function : T
@@ -90,9 +91,9 @@ class IBAMLGenerateUserChatPrompts:
             ```python
             # All implementations will be tested.
 
-            @baml.GenerateUserChatPrompts.test
-            async def test_logic(GenerateUserChatPromptsImpl: IGenerateUserChatPrompts) -> None:
-                result = await GenerateUserChatPromptsImpl(...)
+            @baml.ClassifyTool.test
+            async def test_logic(ClassifyToolImpl: IClassifyTool) -> None:
+                result = await ClassifyToolImpl(...)
             ```
         """
         ...
@@ -101,7 +102,7 @@ class IBAMLGenerateUserChatPrompts:
     def test(self, *, exclude_impl: typing.Iterable[ImplName]) -> pytest.MarkDecorator:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the GenerateUserChatPromptsInterface.
+        the ClassifyToolInterface.
 
         Args:
             exclude_impl : Iterable[ImplName]
@@ -109,11 +110,11 @@ class IBAMLGenerateUserChatPrompts:
 
         Usage:
             ```python
-            # All implementations except "version" will be tested.
+            # All implementations except "v1" will be tested.
 
-            @baml.GenerateUserChatPrompts.test(exclude_impl=["version"])
-            async def test_logic(GenerateUserChatPromptsImpl: IGenerateUserChatPrompts) -> None:
-                result = await GenerateUserChatPromptsImpl(...)
+            @baml.ClassifyTool.test(exclude_impl=["v1"])
+            async def test_logic(ClassifyToolImpl: IClassifyTool) -> None:
+                result = await ClassifyToolImpl(...)
             ```
         """
         ...
@@ -122,7 +123,7 @@ class IBAMLGenerateUserChatPrompts:
     def test(self, test_class: typing.Type[CLS]) -> typing.Type[CLS]:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the GenerateUserChatPromptsInterface.
+        the ClassifyToolInterface.
 
         Args:
             test_class : Type[CLS]
@@ -132,14 +133,14 @@ class IBAMLGenerateUserChatPrompts:
         ```python
         # All implementations will be tested in every test method.
 
-        @baml.GenerateUserChatPrompts.test
+        @baml.ClassifyTool.test
         class TestClass:
-            def test_a(self, GenerateUserChatPromptsImpl: IGenerateUserChatPrompts) -> None:
+            def test_a(self, ClassifyToolImpl: IClassifyTool) -> None:
                 ...
-            def test_b(self, GenerateUserChatPromptsImpl: IGenerateUserChatPrompts) -> None:
+            def test_b(self, ClassifyToolImpl: IClassifyTool) -> None:
                 ...
         ```
         """
         ...
 
-BAMLGenerateUserChatPrompts: IBAMLGenerateUserChatPrompts
+BAMLClassifyTool: IBAMLClassifyTool
