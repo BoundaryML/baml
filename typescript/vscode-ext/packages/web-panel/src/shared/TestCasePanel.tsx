@@ -313,7 +313,6 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
         value: testCase.content,
       }
     } else {
-      console.log('testCase', JSON.stringify(testCase, null, 2))
       // sort of a hack, means the test file was just initialized since input: null is the default
       if (testCase.content === 'null') {
         return {

@@ -9,12 +9,7 @@
 
 
 
-from .fx_blah_impl_v1 import v1 as unused_fx_blah_impl_v1
-from .fx_blah_impl_v2 import v2 as unused_fx_blah_impl_v2
-from .fx_classifyintent_impl_version1 import version1 as unused_fx_classifyintent_impl_version1
-from .fx_classifyintent_impl_version2 import version2 as unused_fx_classifyintent_impl_version2
-from .fx_classifyintent_impl_version3 import version3 as unused_fx_classifyintent_impl_version3
-from .fx_classifytool_impl_v1 import v1 as unused_fx_classifytool_impl_v1
-from .fx_extractverbs_impl_version1 import version1 as unused_fx_extractverbs_impl_version1
-from .fx_maybepolishtext_impl_v1 import v1 as unused_fx_maybepolishtext_impl_v1
-from .fx_messagesimplifier_impl_v1 import v1 as unused_fx_messagesimplifier_impl_v1
+from .fx_classfunc_impl_version import version as unused_fx_classfunc_impl_version
+from .fx_enumfunc_impl_version import version as unused_fx_enumfunc_impl_version
+from .fx_generateuserchatprompts_impl_version import version as unused_fx_generateuserchatprompts_impl_version
+from .fx_namedfunc_impl_version import version as unused_fx_namedfunc_impl_version

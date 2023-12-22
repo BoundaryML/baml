@@ -10,16 +10,12 @@
 from .clients.client_azure_default import AZURE_DEFAULT
 from .clients.client_azure_gpt4 import AZURE_GPT4
 from .clients.client_azure_yes_no import AZURE_YES_NO
-from .clients.client_gpt4 import GPT4
 from .clients.client_large_response import LARGE_RESPONSE
 from .clients.client_resilientgpt4 import ResilientGPT4
-from .functions.fx_blah import BAMLBlah
-from .functions.fx_classifyintent import BAMLClassifyIntent
-from .functions.fx_classifytool import BAMLClassifyTool
-from .functions.fx_extractverbs import BAMLExtractVerbs
-from .functions.fx_maybepolishtext import BAMLMaybePolishText
-from .functions.fx_messagesimplifier import BAMLMessageSimplifier
-from .functions.fx_textpolisher import BAMLTextPolisher
+from .functions.fx_classfunc import BAMLClassFunc
+from .functions.fx_enumfunc import BAMLEnumFunc
+from .functions.fx_generateuserchatprompts import BAMLGenerateUserChatPrompts
+from .functions.fx_namedfunc import BAMLNamedfunc
 from baml_core.otel import add_message_transformer_hook, flush_trace_logs
 from baml_core.services import LogSchema
 from baml_core.services.api_types import LogSchema
@@ -28,17 +24,13 @@ from typing import Callable, List, Optional
 
 
 class BAMLClient:
-    Blah = BAMLBlah
-    ClassifyIntent = BAMLClassifyIntent
-    ClassifyTool = BAMLClassifyTool
-    ExtractVerbs = BAMLExtractVerbs
-    MaybePolishText = BAMLMaybePolishText
-    MessageSimplifier = BAMLMessageSimplifier
-    TextPolisher = BAMLTextPolisher
+    ClassFunc = BAMLClassFunc
+    EnumFunc = BAMLEnumFunc
+    GenerateUserChatPrompts = BAMLGenerateUserChatPrompts
+    Namedfunc = BAMLNamedfunc
     AZURE_DEFAULT = AZURE_DEFAULT
     AZURE_GPT4 = AZURE_GPT4
     AZURE_YES_NO = AZURE_YES_NO
-    GPT4 = GPT4
     LARGE_RESPONSE = LARGE_RESPONSE
     ResilientGPT4 = ResilientGPT4
 

@@ -12,6 +12,9 @@ class RawBaseWrapper(RawWrapper, typing.Generic[T]):
     def __init__(self, val: T) -> None:
         self.__val = val
 
+    def as_self(self) -> typing.Optional[typing.Any]:
+        return self.__val
+
     def as_str(self, inner: bool) -> typing.Optional[str]:
         return str(self.__val)
 
@@ -74,6 +77,7 @@ class RawStringWrapper(RawWrapper):
 
     def as_str(self, inner: bool) -> typing.Optional[str]:
         if inner and self.__as_inner is not None:
+            print("inner", inner)
             return self.__as_inner.as_str(inner)
         return self.__val
 
@@ -110,6 +114,9 @@ class RawStringWrapper(RawWrapper):
             return self.__as_obj.as_dict()
         return {None: self}.items()
 
+    def as_self(self) -> typing.Optional[typing.Any]:
+        return self.as_str(False)
+
     def __repr__(self) -> str:
         return f"RawStringWrapper\n---\n{self.__val}\n---"
 
@@ -118,6 +125,9 @@ class RawStringWrapper(RawWrapper):
 class RawNoneWrapper(RawWrapper):
     def __init__(self) -> None:
         pass
+
+    def as_self(self) -> typing.Any:
+        return None
 
     def as_str(self, inner: bool) -> typing.Optional[str]:
         return None

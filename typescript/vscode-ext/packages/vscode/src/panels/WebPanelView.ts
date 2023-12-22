@@ -223,7 +223,6 @@ export class WebPanelView {
                   } catch (e) {
                     parsed = kv.value
                   }
-                  console.log('parsed k' + kv.name + ' ', JSON.stringify(parsed))
                   return [kv.name, parsed]
                 }),
               )
