@@ -23,12 +23,6 @@ def __from_value(val: typing.Any, diagnostics: Diagnostics) -> RawWrapper:
         return RawBaseWrapper(val)
     if isinstance(val, str):
         str_val = val
-        # Remove any starting and ending quotes
-        # if str_val.startswith('"') and str_val.endswith('"'):
-        #     str_val = str_val[1:-1]
-        # # Remove any starting and ending quotes
-        # if str_val.startswith("'") and str_val.endswith("'"):
-        #     str_val = str_val[1:-1]
 
         if str_val.lower() == "true":
             return RawBaseWrapper(True)

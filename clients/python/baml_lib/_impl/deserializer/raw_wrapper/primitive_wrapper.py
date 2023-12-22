@@ -79,8 +79,6 @@ class RawStringWrapper(RawWrapper):
         self.__as_inner = as_inner
 
     def as_str(self, inner: bool) -> typing.Optional[str]:
-        # if inner and self.__as_inner is not None:
-        #     return self.__as_inner.as_str(inner)
         return self.__val
 
     def as_smart_str(self, inner: bool) -> typing.Optional[str]:

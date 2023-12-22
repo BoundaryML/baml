@@ -109,9 +109,7 @@ def test_hidden_object_multi() -> None:
 
     d = Diagnostics(item)
     parsed = from_string(item, d)
-    print("parsed stuff", parsed)
     assert isinstance(parsed, RawStringWrapper)
-    print("as_dict ", parsed.as_dict())
     keys = set()
     for k, v in parsed.as_dict():
         print("k", k, "v", v)
