@@ -16,6 +16,7 @@ from typing import List
 @register_deserializer({  })
 class ZenfetchBotDocumentBaseList(BaseModel):
     list_of_documents: List[ZenfetchBotDocumentBase]
+    is_empty: bool
     @property
     def display(self) -> str:
         ret = []

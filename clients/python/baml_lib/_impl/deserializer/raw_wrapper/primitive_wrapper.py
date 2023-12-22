@@ -18,6 +18,9 @@ class RawBaseWrapper(RawWrapper, typing.Generic[T]):
     def as_str(self, inner: bool) -> typing.Optional[str]:
         return str(self.__val)
 
+    def as_smart_str(self, inner: bool) -> typing.Optional[str]:
+        return str(self.__val)
+
     def as_int(self) -> typing.Optional[int]:
         if isinstance(self.__val, int):
             return self.__val
@@ -76,10 +79,23 @@ class RawStringWrapper(RawWrapper):
         self.__as_inner = as_inner
 
     def as_str(self, inner: bool) -> typing.Optional[str]:
-        if inner and self.__as_inner is not None:
-            print("inner", inner)
-            return self.__as_inner.as_str(inner)
+        # if inner and self.__as_inner is not None:
+        #     return self.__as_inner.as_str(inner)
         return self.__val
+
+    def as_smart_str(self, inner: bool) -> typing.Optional[str]:
+        if inner and self.__as_inner is not None:
+            return self.__as_inner.as_smart_str(inner)
+
+        new_str = self.__val.strip()
+        # remove leading and trailing quotes, either single or multi
+        # Remove leading and trailing quotes if they match and are present
+        if (new_str.startswith('"') and new_str.endswith('"')) or (
+            new_str.startswith("'") and new_str.endswith("'")
+        ):
+            new_str = new_str[1:-1]
+
+        return new_str
 
     def as_int(self) -> typing.Optional[int]:
         if self.__as_inner is not None:
@@ -130,6 +146,9 @@ class RawNoneWrapper(RawWrapper):
         return None
 
     def as_str(self, inner: bool) -> typing.Optional[str]:
+        return None
+
+    def as_smart_str(self, inner: bool) -> str | None:
         return None
 
     def as_int(self) -> typing.Optional[int]:

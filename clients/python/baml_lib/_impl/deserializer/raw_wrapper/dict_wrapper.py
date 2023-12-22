@@ -26,6 +26,9 @@ class DictRawWrapper(RawWrapper):
     def as_str(self, inner: bool) -> typing.Optional[str]:
         return json.dumps(self.as_self(), indent=2)
 
+    def as_smart_str(self, inner: bool) -> typing.Optional[str]:
+        return self.as_str(True)
+
     def as_int(self) -> typing.Optional[int]:
         if len(self.__val) == 1:
             for _, item in filter_empty(

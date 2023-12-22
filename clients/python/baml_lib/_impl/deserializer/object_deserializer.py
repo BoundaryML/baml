@@ -74,6 +74,7 @@ class ObjectDeserializer(BaseDeserializer[T]):
     ) -> Result[T]:
         diagnostics.push_scope(self.__model.__name__)
         items: typing.Dict[str, typing.Any] = {}
+
         for raw_key, item in raw.as_dict():
             if raw_key is None:
                 continue

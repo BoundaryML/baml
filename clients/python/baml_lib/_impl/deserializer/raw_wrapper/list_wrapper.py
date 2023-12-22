@@ -20,8 +20,12 @@ class ListRawWrapper(RawWrapper):
         return [item.as_self() for item in self.__val]
 
     def as_str(self, inner: bool) -> typing.Optional[str]:
-        # str_rep = f'[{", ".join(x)}]'
         return json.dumps(self.as_self())
+
+    def as_smart_str(self, inner: bool) -> typing.Optional[str]:
+        if len(self.__val) == 1:
+            return self.__val[0].as_smart_str(inner)
+        return self.as_str(True)
 
     def as_int(self) -> typing.Optional[int]:
         if len(self.__val) == 0:

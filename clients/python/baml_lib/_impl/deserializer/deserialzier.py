@@ -70,7 +70,6 @@ class Deserializer(typing.Generic[T]):
     def from_string(self, s: str) -> T:
         diagnostics = Diagnostics(s)
         raw = from_string(s, diagnostics)
-        print("raw", raw, "output type", self.__target_output_type)
         deserializer = self.__from_lut(self.__target_output_type)
         result = deserializer.coerce(raw, diagnostics, self.__from_lut)
         diagnostics.to_exception()

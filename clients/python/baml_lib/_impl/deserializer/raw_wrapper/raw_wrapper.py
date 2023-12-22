@@ -8,6 +8,10 @@ class RawWrapper(metaclass=abc.ABCMeta):
         raise NotImplementedError
 
     @abc.abstractmethod
+    def as_smart_str(self, inner: bool) -> typing.Optional[str]:
+        raise NotImplementedError
+
+    @abc.abstractmethod
     def as_self(self) -> typing.Any:
         raise NotImplementedError
 

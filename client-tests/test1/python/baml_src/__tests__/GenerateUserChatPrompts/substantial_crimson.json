@@ -5,6 +5,7 @@
         "title": "hello \"there\"",
         "topic": "[ \"hello\"]"
       }
-    ]
+    ],
+    "is_empty": true
   }
 }

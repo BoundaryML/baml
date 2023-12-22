@@ -7,10 +7,13 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
+from .__do_not_import.functions.fx_booleanfunc import IBooleanFunc, IBooleanFuncOutput
 from .__do_not_import.functions.fx_classfunc import IClassFunc, IClassFuncOutput
 from .__do_not_import.functions.fx_enumfunc import IEnumFunc, IEnumFuncOutput
 from .__do_not_import.functions.fx_generateuserchatprompts import IGenerateUserChatPrompts, IGenerateUserChatPromptsOutput
+from .__do_not_import.functions.fx_intfunc import IIntFunc, IIntFuncOutput
 from .__do_not_import.functions.fx_namedfunc import INamedfunc, INamedfuncOutput
+from .__do_not_import.functions.fx_stringfunc import IStringFunc, IStringFuncOutput
 from .__do_not_import.types.classes.cls_basicclass import BasicClass
 from .__do_not_import.types.classes.cls_zenfetchbotdocumentbase import ZenfetchBotDocumentBase
 from .__do_not_import.types.classes.cls_zenfetchbotdocumentbaselist import ZenfetchBotDocumentBaseList
@@ -20,14 +23,20 @@ from .__do_not_import.types.enums.enm_categories import Categories
 
 
 __all__ = [
+    'IBooleanFunc',
+    'IBooleanFuncOutput',
     'IClassFunc',
     'IClassFuncOutput',
     'IEnumFunc',
     'IEnumFuncOutput',
     'IGenerateUserChatPrompts',
     'IGenerateUserChatPromptsOutput',
+    'IIntFunc',
+    'IIntFuncOutput',
     'INamedfunc',
     'INamedfuncOutput',
+    'IStringFunc',
+    'IStringFuncOutput',
     'BasicClass',
     'ZenfetchBotDocumentBase',
     'ZenfetchBotDocumentBaseList',

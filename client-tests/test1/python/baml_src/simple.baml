@@ -3,7 +3,6 @@ class ZenfetchBotDocumentBase {
     title string?
     topic string?
 
-
     display string @get(
         python#"
             return f""" 
@@ -22,6 +21,7 @@ class ZenfetchBotDocumentBase {
 
 class ZenfetchBotDocumentBaseList {
     list_of_documents ZenfetchBotDocumentBase[]
+    is_empty bool
 
     display string @get(
         python#"
@@ -33,8 +33,8 @@ class ZenfetchBotDocumentBaseList {
         "#
     )
 }
-
-
+ 
+ 
 function GenerateUserChatPrompts {
     input ZenfetchBotDocumentBaseList
     output string
@@ -92,13 +92,14 @@ impl<llm, ClassFunc> version {
         JSON:
     "#
 }
+   
 
-
+ 
 function Namedfunc {
     input (name: BasicClass, address: string)
     output string
 }
-
+  
 impl<llm, Namedfunc> version {
     client AZURE_GPT4
  
@@ -109,3 +110,53 @@ impl<llm, Namedfunc> version {
         JSON:
     "#
 } 
+
+function StringFunc {
+    input string
+    output string
+} 
+
+impl<llm, StringFunc> v1 {
+    client AZURE_GPT4
+ 
+    prompt #"
+        Given a userr is trying to schedule a meeting, extract the relevant information
+        {#input}
+        information from the query.
+        JSON:
+    "#
+}
+ 
+function IntFunc {
+    input int
+    output string
+}
+impl<llm, IntFunc> v1 {
+    client AZURE_GPT4
+ 
+    prompt #"
+        Given a userr is trying to schedule a meeting, extract the relevant information
+        {#input}
+        information from the query.
+        JSON:
+    "#
+}
+ 
+// booleanFunc
+function BooleanFunc {
+    input bool
+    output string
+}
+
+impl<llm, BooleanFunc> v1 {
+    client AZURE_GPT4
+ 
+    prompt #"
+        Given a userr is trying to schedule a meeting, extract the relevant information
+        {#input}
+        information from the query.
+        JSON:
+    "#
+}
+
+ 
