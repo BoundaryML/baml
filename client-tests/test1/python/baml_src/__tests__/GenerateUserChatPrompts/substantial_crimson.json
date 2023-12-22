@@ -1,0 +1,10 @@
+{
+  "input": {
+    "list_of_documents": [
+      {
+        "title": "hello \"there\"",
+        "topic": "[ \"hello\"]"
+      }
+    ]
+  }
+}
