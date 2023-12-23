@@ -294,6 +294,20 @@ and this
     assert res.child.hi == "hello"
 
 
+def test_complex_obj_from_json_with_prefix() -> None:
+    deserializer = Deserializer[Parent](Parent)
+    test_str = """Here is how you can build the API call:
+
+{
+    "child": {
+        "hi": "hello"
+    }
+}
+"""
+    res = deserializer.from_string(test_str)
+    assert res.child.hi == "hello"
+
+
 def test_list_from_string() -> None:
     deserializer = Deserializer[List[str]](List[str])
     test_obj = ["hello", "world"]
