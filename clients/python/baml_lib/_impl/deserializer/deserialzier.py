@@ -23,11 +23,11 @@ T = typing.TypeVar("T")
 
 class Deserializer(typing.Generic[T]):
     __lut: typing.Dict[str, BaseDeserializer[typing.Any]]
-    __target: ITypeDefinition
+    __target_output_type: ITypeDefinition
 
     def __init__(self, output_target: typing.Type[T]) -> None:
         self.__lut = {}
-        self.__target = type_to_definition(output_target)
+        self.__target_output_type = type_to_definition(output_target)
 
     def overload(
         self, name: str, aliases: typing.Dict[str, typing.Optional[str]]
@@ -70,8 +70,7 @@ class Deserializer(typing.Generic[T]):
     def from_string(self, s: str) -> T:
         diagnostics = Diagnostics(s)
         raw = from_string(s, diagnostics)
-
-        deserializer = self.__from_lut(self.__target)
+        deserializer = self.__from_lut(self.__target_output_type)
         result = deserializer.coerce(raw, diagnostics, self.__from_lut)
         diagnostics.to_exception()
         return result.as_value

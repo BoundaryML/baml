@@ -7,6 +7,17 @@ class RawWrapper(metaclass=abc.ABCMeta):
     def as_str(self, inner: bool) -> typing.Optional[str]:
         raise NotImplementedError
 
+    # Try to return a proper string representation. For example this would strip quotes
+    # or if turning a list into a str, it may just return the 1st item if there is only one without
+    # the [].
+    @abc.abstractmethod
+    def as_smart_str(self, inner: bool) -> typing.Optional[str]:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def as_self(self) -> typing.Any:
+        raise NotImplementedError
+
     @abc.abstractmethod
     def as_int(self) -> typing.Optional[int]:
         raise NotImplementedError

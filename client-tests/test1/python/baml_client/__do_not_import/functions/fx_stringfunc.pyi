@@ -13,17 +13,19 @@ from typing import Protocol, runtime_checkable
 import typing
 
 import pytest
+from contextlib import contextmanager
+from unittest import mock
 
-ImplName = typing.Literal["v1", "v2"]
+ImplName = typing.Literal["v1"]
 
 T = typing.TypeVar("T", bound=typing.Callable[..., typing.Any])
 CLS = typing.TypeVar("CLS", bound=type)
 
 
-IBlahOutput = str
+IStringFuncOutput = str
 
 @runtime_checkable
-class IBlah(Protocol):
+class IStringFunc(Protocol):
     """
     This is the interface for a function.
 
@@ -38,27 +40,45 @@ class IBlah(Protocol):
         ...
 
 
-class BAMLBlahImpl:
+class BAMLStringFuncImpl:
     async def run(self, arg: str, /) -> str:
         ...
 
-class IBAMLBlah:
+class IBAMLStringFunc:
     def register_impl(
         self, name: ImplName
-    ) -> typing.Callable[[IBlah], IBlah]:
+    ) -> typing.Callable[[IStringFunc], IStringFunc]:
         ...
 
     async def __call__(self, arg: str, /) -> str:
         ...
 
-    def get_impl(self, name: ImplName) -> BAMLBlahImpl:
+    def get_impl(self, name: ImplName) -> BAMLStringFuncImpl:
+        ...
+
+    @contextmanager
+    def mock(self) -> typing.Generator[mock.AsyncMock, None, None]:
+        """
+        Utility for mocking the StringFuncInterface.
+
+        Usage:
+            ```python
+            # All implementations are mocked.
+
+            async def test_logic() -> None:
+                with baml.StringFunc.mock() as mocked:
+                    mocked.return_value = ...
+                    result = await StringFuncImpl(...)
+                    assert mocked.called
+            ```
+        """
         ...
 
     @typing.overload
     def test(self, test_function: T) -> T:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the BlahInterface.
+        the StringFuncInterface.
 
         Args:
             test_function : T
@@ -68,9 +88,9 @@ class IBAMLBlah:
             ```python
             # All implementations will be tested.
 
-            @baml.Blah.test
-            def test_logic(BlahImpl: IBlah) -> None:
-                result = await BlahImpl(...)
+            @baml.StringFunc.test
+            async def test_logic(StringFuncImpl: IStringFunc) -> None:
+                result = await StringFuncImpl(...)
             ```
         """
         ...
@@ -79,7 +99,7 @@ class IBAMLBlah:
     def test(self, *, exclude_impl: typing.Iterable[ImplName]) -> pytest.MarkDecorator:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the BlahInterface.
+        the StringFuncInterface.
 
         Args:
             exclude_impl : Iterable[ImplName]
@@ -89,9 +109,9 @@ class IBAMLBlah:
             ```python
             # All implementations except "v1" will be tested.
 
-            @baml.Blah.test(exclude_impl=["v1"])
-            def test_logic(BlahImpl: IBlah) -> None:
-                result = await BlahImpl(...)
+            @baml.StringFunc.test(exclude_impl=["v1"])
+            async def test_logic(StringFuncImpl: IStringFunc) -> None:
+                result = await StringFuncImpl(...)
             ```
         """
         ...
@@ -100,7 +120,7 @@ class IBAMLBlah:
     def test(self, test_class: typing.Type[CLS]) -> typing.Type[CLS]:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the BlahInterface.
+        the StringFuncInterface.
 
         Args:
             test_class : Type[CLS]
@@ -110,14 +130,14 @@ class IBAMLBlah:
         ```python
         # All implementations will be tested in every test method.
 
-        @baml.Blah.test
+        @baml.StringFunc.test
         class TestClass:
-            def test_a(self, BlahImpl: IBlah) -> None:
+            def test_a(self, StringFuncImpl: IStringFunc) -> None:
                 ...
-            def test_b(self, BlahImpl: IBlah) -> None:
+            def test_b(self, StringFuncImpl: IStringFunc) -> None:
                 ...
         ```
         """
         ...
 
-BAMLBlah: IBAMLBlah
+BAMLStringFunc: IBAMLStringFunc

@@ -7,59 +7,79 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from typing import List, Protocol, runtime_checkable
+from ..types.enums.enm_categories import Categories
+from typing import Protocol, runtime_checkable
 
 
 import typing
 
 import pytest
+from contextlib import contextmanager
+from unittest import mock
 
-ImplName = typing.Literal["version1"]
+ImplName = typing.Literal["version"]
 
 T = typing.TypeVar("T", bound=typing.Callable[..., typing.Any])
 CLS = typing.TypeVar("CLS", bound=type)
 
 
-IExtractVerbsOutput = List[str]
+IEnumFuncOutput = str
 
 @runtime_checkable
-class IExtractVerbs(Protocol):
+class IEnumFunc(Protocol):
     """
     This is the interface for a function.
 
     Args:
-        title: str
-        body: str
+        arg: Categories
 
     Returns:
-        List[str]
+        str
     """
 
-    async def __call__(self, *, title: str, body: str) -> List[str]:
+    async def __call__(self, arg: Categories, /) -> str:
         ...
 
 
-class BAMLExtractVerbsImpl:
-    async def run(self, *, title: str, body: str) -> List[str]:
+class BAMLEnumFuncImpl:
+    async def run(self, arg: Categories, /) -> str:
         ...
 
-class IBAMLExtractVerbs:
+class IBAMLEnumFunc:
     def register_impl(
         self, name: ImplName
-    ) -> typing.Callable[[IExtractVerbs], IExtractVerbs]:
+    ) -> typing.Callable[[IEnumFunc], IEnumFunc]:
         ...
 
-    async def __call__(self, *, title: str, body: str) -> List[str]:
+    async def __call__(self, arg: Categories, /) -> str:
         ...
 
-    def get_impl(self, name: ImplName) -> BAMLExtractVerbsImpl:
+    def get_impl(self, name: ImplName) -> BAMLEnumFuncImpl:
+        ...
+
+    @contextmanager
+    def mock(self) -> typing.Generator[mock.AsyncMock, None, None]:
+        """
+        Utility for mocking the EnumFuncInterface.
+
+        Usage:
+            ```python
+            # All implementations are mocked.
+
+            async def test_logic() -> None:
+                with baml.EnumFunc.mock() as mocked:
+                    mocked.return_value = ...
+                    result = await EnumFuncImpl(...)
+                    assert mocked.called
+            ```
+        """
         ...
 
     @typing.overload
     def test(self, test_function: T) -> T:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the ExtractVerbsInterface.
+        the EnumFuncInterface.
 
         Args:
             test_function : T
@@ -69,9 +89,9 @@ class IBAMLExtractVerbs:
             ```python
             # All implementations will be tested.
 
-            @baml.ExtractVerbs.test
-            def test_logic(ExtractVerbsImpl: IExtractVerbs) -> None:
-                result = await ExtractVerbsImpl(...)
+            @baml.EnumFunc.test
+            async def test_logic(EnumFuncImpl: IEnumFunc) -> None:
+                result = await EnumFuncImpl(...)
             ```
         """
         ...
@@ -80,7 +100,7 @@ class IBAMLExtractVerbs:
     def test(self, *, exclude_impl: typing.Iterable[ImplName]) -> pytest.MarkDecorator:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the ExtractVerbsInterface.
+        the EnumFuncInterface.
 
         Args:
             exclude_impl : Iterable[ImplName]
@@ -88,11 +108,11 @@ class IBAMLExtractVerbs:
 
         Usage:
             ```python
-            # All implementations except "version1" will be tested.
+            # All implementations except "version" will be tested.
 
-            @baml.ExtractVerbs.test(exclude_impl=["version1"])
-            def test_logic(ExtractVerbsImpl: IExtractVerbs) -> None:
-                result = await ExtractVerbsImpl(...)
+            @baml.EnumFunc.test(exclude_impl=["version"])
+            async def test_logic(EnumFuncImpl: IEnumFunc) -> None:
+                result = await EnumFuncImpl(...)
             ```
         """
         ...
@@ -101,7 +121,7 @@ class IBAMLExtractVerbs:
     def test(self, test_class: typing.Type[CLS]) -> typing.Type[CLS]:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the ExtractVerbsInterface.
+        the EnumFuncInterface.
 
         Args:
             test_class : Type[CLS]
@@ -111,14 +131,14 @@ class IBAMLExtractVerbs:
         ```python
         # All implementations will be tested in every test method.
 
-        @baml.ExtractVerbs.test
+        @baml.EnumFunc.test
         class TestClass:
-            def test_a(self, ExtractVerbsImpl: IExtractVerbs) -> None:
+            def test_a(self, EnumFuncImpl: IEnumFunc) -> None:
                 ...
-            def test_b(self, ExtractVerbsImpl: IExtractVerbs) -> None:
+            def test_b(self, EnumFuncImpl: IEnumFunc) -> None:
                 ...
         ```
         """
         ...
 
-BAMLExtractVerbs: IBAMLExtractVerbs
+BAMLEnumFunc: IBAMLEnumFunc

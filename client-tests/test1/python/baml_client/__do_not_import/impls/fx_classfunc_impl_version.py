@@ -7,18 +7,22 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..clients.client_resilientgpt4 import ResilientGPT4
-from ..functions.fx_blah import BAMLBlah
+from ..clients.client_azure_gpt4 import AZURE_GPT4
+from ..functions.fx_classfunc import BAMLClassFunc
+from ..types.classes.cls_basicclass import BasicClass
 from baml_lib._impl.deserializer import Deserializer
 
 
-# Impl: v1
-# Client: ResilientGPT4
+# Impl: version
+# Client: AZURE_GPT4
 # An implementation of .
 
 
 __prompt_template = """\
-hello there {arg}\
+Given a user is trying to schedule a meeting, extract the relevant information
+{arg}
+information from the query.
+JSON:\
 """
 
 __input_replacers = {
@@ -35,8 +39,8 @@ __deserializer = Deserializer[str](str)  # type: ignore
 
 
 
-@BAMLBlah.register_impl("v1")
-async def v1(arg: str, /) -> str:
-    response = await ResilientGPT4.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
+@BAMLClassFunc.register_impl("version")
+async def version(arg: BasicClass, /) -> str:
+    response = await AZURE_GPT4.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
     deserialized = __deserializer.from_string(response.generated)
     return deserialized

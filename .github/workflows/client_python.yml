@@ -50,6 +50,11 @@ jobs:
           poetry run black --check .
         working-directory: clients/python
 
+      - name: Test Python Client
+        run: |
+          poetry run pytest baml_lib/ baml_core/
+        working-directory: clients/python
+
       - name: Build Python Client
         run: poetry build
         working-directory: clients/python

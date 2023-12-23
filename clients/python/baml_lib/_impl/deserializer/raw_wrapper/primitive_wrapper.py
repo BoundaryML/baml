@@ -12,8 +12,14 @@ class RawBaseWrapper(RawWrapper, typing.Generic[T]):
     def __init__(self, val: T) -> None:
         self.__val = val
 
+    def as_self(self) -> typing.Optional[typing.Any]:
+        return self.__val
+
     def as_str(self, inner: bool) -> typing.Optional[str]:
         return str(self.__val)
+
+    def as_smart_str(self, inner: bool) -> typing.Optional[str]:
+        return str(self.__val).strip()
 
     def as_int(self) -> typing.Optional[int]:
         if isinstance(self.__val, int):
@@ -73,9 +79,21 @@ class RawStringWrapper(RawWrapper):
         self.__as_inner = as_inner
 
     def as_str(self, inner: bool) -> typing.Optional[str]:
-        if inner and self.__as_inner is not None:
-            return self.__as_inner.as_str(inner)
         return self.__val
+
+    def as_smart_str(self, inner: bool) -> typing.Optional[str]:
+        if inner and self.__as_inner is not None:
+            return self.__as_inner.as_smart_str(inner)
+
+        new_str = self.__val.strip()
+        # remove leading and trailing quotes, either single or multi
+        # Remove leading and trailing quotes if they match and are present
+        if (new_str.startswith('"') and new_str.endswith('"')) or (
+            new_str.startswith("'") and new_str.endswith("'")
+        ):
+            new_str = new_str[1:-1]
+
+        return new_str
 
     def as_int(self) -> typing.Optional[int]:
         if self.__as_inner is not None:
@@ -110,6 +128,9 @@ class RawStringWrapper(RawWrapper):
             return self.__as_obj.as_dict()
         return {None: self}.items()
 
+    def as_self(self) -> typing.Optional[typing.Any]:
+        return self.as_str(False)
+
     def __repr__(self) -> str:
         return f"RawStringWrapper\n---\n{self.__val}\n---"
 
@@ -119,7 +140,13 @@ class RawNoneWrapper(RawWrapper):
     def __init__(self) -> None:
         pass
 
+    def as_self(self) -> typing.Any:
+        return None
+
     def as_str(self, inner: bool) -> typing.Optional[str]:
+        return None
+
+    def as_smart_str(self, inner: bool) -> str | None:
         return None
 
     def as_int(self) -> typing.Optional[int]:

@@ -7,15 +7,14 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..types.enums.enm_intent import Intent
 from baml_lib._impl.functions import BaseBAMLFunction
 from typing import Protocol, runtime_checkable
 
 
-IClassifyIntentOutput = Intent
+IStringFuncOutput = str
 
 @runtime_checkable
-class IClassifyIntent(Protocol):
+class IStringFunc(Protocol):
     """
     This is the interface for a function.
 
@@ -23,24 +22,24 @@ class IClassifyIntent(Protocol):
         arg: str
 
     Returns:
-        Intent
+        str
     """
 
-    async def __call__(self, arg: str, /) -> Intent:
+    async def __call__(self, arg: str, /) -> str:
         ...
 
 
-class IBAMLClassifyIntent(BaseBAMLFunction[Intent]):
+class IBAMLStringFunc(BaseBAMLFunction[str]):
     def __init__(self) -> None:
         super().__init__(
-            "ClassifyIntent",
-            IClassifyIntent,
-            ["version1", "version2", "version3"],
+            "StringFunc",
+            IStringFunc,
+            ["v1"],
         )
 
-    async def __call__(self, *args, **kwargs) -> Intent:
-        return await self.get_impl("version2").run(*args, **kwargs)
+    async def __call__(self, *args, **kwargs) -> str:
+        return await self.get_impl("v1").run(*args, **kwargs)
 
-BAMLClassifyIntent = IBAMLClassifyIntent()
+BAMLStringFunc = IBAMLStringFunc()
 
-__all__ = [ "BAMLClassifyIntent" ]
+__all__ = [ "BAMLStringFunc" ]

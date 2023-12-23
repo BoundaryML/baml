@@ -7,8 +7,6 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..types.classes.cls_classifyresponse import ClassifyResponse
-from ..types.enums.enm_tool import Tool
 from typing import Protocol, runtime_checkable
 
 
@@ -24,54 +22,53 @@ T = typing.TypeVar("T", bound=typing.Callable[..., typing.Any])
 CLS = typing.TypeVar("CLS", bound=type)
 
 
-IClassifyToolOutput = ClassifyResponse
+IBooleanFuncOutput = str
 
 @runtime_checkable
-class IClassifyTool(Protocol):
+class IBooleanFunc(Protocol):
     """
     This is the interface for a function.
 
     Args:
-        query: str
-        context: str
+        arg: bool
 
     Returns:
-        ClassifyResponse
+        str
     """
 
-    async def __call__(self, *, query: str, context: str) -> ClassifyResponse:
+    async def __call__(self, arg: bool, /) -> str:
         ...
 
 
-class BAMLClassifyToolImpl:
-    async def run(self, *, query: str, context: str) -> ClassifyResponse:
+class BAMLBooleanFuncImpl:
+    async def run(self, arg: bool, /) -> str:
         ...
 
-class IBAMLClassifyTool:
+class IBAMLBooleanFunc:
     def register_impl(
         self, name: ImplName
-    ) -> typing.Callable[[IClassifyTool], IClassifyTool]:
+    ) -> typing.Callable[[IBooleanFunc], IBooleanFunc]:
         ...
 
-    async def __call__(self, *, query: str, context: str) -> ClassifyResponse:
+    async def __call__(self, arg: bool, /) -> str:
         ...
 
-    def get_impl(self, name: ImplName) -> BAMLClassifyToolImpl:
+    def get_impl(self, name: ImplName) -> BAMLBooleanFuncImpl:
         ...
 
     @contextmanager
     def mock(self) -> typing.Generator[mock.AsyncMock, None, None]:
         """
-        Utility for mocking the ClassifyToolInterface.
+        Utility for mocking the BooleanFuncInterface.
 
         Usage:
             ```python
             # All implementations are mocked.
 
             async def test_logic() -> None:
-                with baml.ClassifyTool.mock() as mocked:
+                with baml.BooleanFunc.mock() as mocked:
                     mocked.return_value = ...
-                    result = await ClassifyToolImpl(...)
+                    result = await BooleanFuncImpl(...)
                     assert mocked.called
             ```
         """
@@ -81,7 +78,7 @@ class IBAMLClassifyTool:
     def test(self, test_function: T) -> T:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the ClassifyToolInterface.
+        the BooleanFuncInterface.
 
         Args:
             test_function : T
@@ -91,9 +88,9 @@ class IBAMLClassifyTool:
             ```python
             # All implementations will be tested.
 
-            @baml.ClassifyTool.test
-            async def test_logic(ClassifyToolImpl: IClassifyTool) -> None:
-                result = await ClassifyToolImpl(...)
+            @baml.BooleanFunc.test
+            async def test_logic(BooleanFuncImpl: IBooleanFunc) -> None:
+                result = await BooleanFuncImpl(...)
             ```
         """
         ...
@@ -102,7 +99,7 @@ class IBAMLClassifyTool:
     def test(self, *, exclude_impl: typing.Iterable[ImplName]) -> pytest.MarkDecorator:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the ClassifyToolInterface.
+        the BooleanFuncInterface.
 
         Args:
             exclude_impl : Iterable[ImplName]
@@ -112,9 +109,9 @@ class IBAMLClassifyTool:
             ```python
             # All implementations except "v1" will be tested.
 
-            @baml.ClassifyTool.test(exclude_impl=["v1"])
-            async def test_logic(ClassifyToolImpl: IClassifyTool) -> None:
-                result = await ClassifyToolImpl(...)
+            @baml.BooleanFunc.test(exclude_impl=["v1"])
+            async def test_logic(BooleanFuncImpl: IBooleanFunc) -> None:
+                result = await BooleanFuncImpl(...)
             ```
         """
         ...
@@ -123,7 +120,7 @@ class IBAMLClassifyTool:
     def test(self, test_class: typing.Type[CLS]) -> typing.Type[CLS]:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the ClassifyToolInterface.
+        the BooleanFuncInterface.
 
         Args:
             test_class : Type[CLS]
@@ -133,14 +130,14 @@ class IBAMLClassifyTool:
         ```python
         # All implementations will be tested in every test method.
 
-        @baml.ClassifyTool.test
+        @baml.BooleanFunc.test
         class TestClass:
-            def test_a(self, ClassifyToolImpl: IClassifyTool) -> None:
+            def test_a(self, BooleanFuncImpl: IBooleanFunc) -> None:
                 ...
-            def test_b(self, ClassifyToolImpl: IClassifyTool) -> None:
+            def test_b(self, BooleanFuncImpl: IBooleanFunc) -> None:
                 ...
         ```
         """
         ...
 
-BAMLClassifyTool: IBAMLClassifyTool
+BAMLBooleanFunc: IBAMLBooleanFunc

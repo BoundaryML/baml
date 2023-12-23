@@ -11,10 +11,7 @@ from baml_lib._impl.deserializer import register_deserializer
 from enum import Enum
 
 
-@register_deserializer({ "k1": "Refund","k2": "CancelOrder","k3": "TechnicalSupport","k4": "AccountIssue","k5": "Question", })
-class Intent(str, Enum):
-    Refund = "Refund"
-    CancelOrder = "CancelOrder"
-    TechnicalSupport = "TechnicalSupport"
-    AccountIssue = "AccountIssue"
-    Question = "Question"
+@register_deserializer({  })
+class Categories(str, Enum):
+    ONE = "ONE"
+    TWO = "TWO"

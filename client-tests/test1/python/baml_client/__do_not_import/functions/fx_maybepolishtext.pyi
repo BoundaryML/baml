@@ -20,6 +20,8 @@ from typing import Protocol, runtime_checkable
 import typing
 
 import pytest
+from contextlib import contextmanager
+from unittest import mock
 
 ImplName = typing.Literal["v1"]
 
@@ -61,6 +63,24 @@ class IBAMLMaybePolishText:
     def get_impl(self, name: ImplName) -> BAMLMaybePolishTextImpl:
         ...
 
+    @contextmanager
+    def mock(self) -> typing.Generator[mock.AsyncMock, None, None]:
+        """
+        Utility for mocking the MaybePolishTextInterface.
+
+        Usage:
+            ```python
+            # All implementations are mocked.
+
+            async def test_logic() -> None:
+                with baml.MaybePolishText.mock() as mocked:
+                    mocked.return_value = ...
+                    result = await MaybePolishTextImpl(...)
+                    assert mocked.called
+            ```
+        """
+        ...
+
     @typing.overload
     def test(self, test_function: T) -> T:
         """
@@ -76,7 +96,7 @@ class IBAMLMaybePolishText:
             # All implementations will be tested.
 
             @baml.MaybePolishText.test
-            def test_logic(MaybePolishTextImpl: IMaybePolishText) -> None:
+            async def test_logic(MaybePolishTextImpl: IMaybePolishText) -> None:
                 result = await MaybePolishTextImpl(...)
             ```
         """
@@ -97,7 +117,7 @@ class IBAMLMaybePolishText:
             # All implementations except "v1" will be tested.
 
             @baml.MaybePolishText.test(exclude_impl=["v1"])
-            def test_logic(MaybePolishTextImpl: IMaybePolishText) -> None:
+            async def test_logic(MaybePolishTextImpl: IMaybePolishText) -> None:
                 result = await MaybePolishTextImpl(...)
             ```
         """

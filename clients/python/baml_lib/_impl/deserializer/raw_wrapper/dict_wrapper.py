@@ -1,3 +1,4 @@
+import json
 import typing
 from .raw_wrapper import RawWrapper
 
@@ -19,19 +20,14 @@ class DictRawWrapper(RawWrapper):
     def __init__(self, val: typing.Mapping[RawWrapper, RawWrapper]) -> None:
         self.__val = val
 
-    def as_str(self, inner: bool) -> typing.Optional[str]:
-        if len(self.__val) == 1:
-            for _, item in filter_empty(
-                map(lambda kv: (kv[0], kv[1].as_str(inner)), self.__val.items())
-            ):
-                return item
+    def as_self(self) -> typing.Any:
+        return {key.as_self(): value.as_self() for key, value in self.__val.items()}
 
-        # A dict can always be converted to a string.
-        kvs = filter_empty(
-            map(lambda kv: (kv[0], kv[1].as_str(inner)), self.__val.items())
-        )
-        str_rep = f'{{{", ".join(map(lambda kv: f"{kv[0]}: {kv[1]}", kvs))}}}'
-        return str_rep
+    def as_str(self, inner: bool) -> typing.Optional[str]:
+        return json.dumps(self.as_self(), indent=2)
+
+    def as_smart_str(self, inner: bool) -> typing.Optional[str]:
+        return self.as_str(True)
 
     def as_int(self) -> typing.Optional[int]:
         if len(self.__val) == 1:

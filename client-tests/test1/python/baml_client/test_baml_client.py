@@ -8,68 +8,74 @@
 # fmt: off
 
 from .__do_not_import.generated_baml_client import baml
-from .baml_types import ClassifyResponse, Conversation, DummyObj, IBlah, IClassifyIntent, IClassifyTool, IMaybePolishText, IMessageSimplifier, ITextPolisher, ImprovedResponse, Intent, Message, MessageSender, ProposedMessage, Sentiment, Tool
+from .baml_types import BasicClass, Categories, IBooleanFunc, IEnumFunc, IIntFunc, INamedfunc, IStringFunc
 from baml_lib._impl.deserializer import Deserializer
-from json5 import loads # type: ignore
+from json import dumps, loads
 
 
-@baml.MaybePolishText.test
-async def test_busy_coral(MaybePolishTextImpl: IMaybePolishText):
-    deserializer = Deserializer[ProposedMessage](ProposedMessage) # type: ignore
+@baml.IntFunc.test
+async def test_impressive_lavender(IntFuncImpl: IIntFunc):
+    deserializer = Deserializer[int](int) # type: ignore
     param = deserializer.from_string("""\
-{"thread":{"thread":[{"sender":"AI","body":"the website is broken"}]},"generated_response":"asdfasdf","dummy":{"prop1":"eeee","prop2":1,"prop3":false}}\
+123\
 """)
-    await MaybePolishTextImpl(param)
+    await IntFuncImpl(param)
 
 
-@baml.ClassifyIntent.test
-async def test_cooing_tan(ClassifyIntentImpl: IClassifyIntent):
-    deserializer = Deserializer[str](str) # type: ignore
+@baml.EnumFunc.test
+async def test_incredible_jade(EnumFuncImpl: IEnumFunc):
+    deserializer = Deserializer[Categories](Categories) # type: ignore
     param = deserializer.from_string("""\
-I want to cancel my order\
+TWO\
 """)
-    await ClassifyIntentImpl(param)
+    await EnumFuncImpl(param)
 
 
-@baml.Blah.test
-async def test_greasy_white(BlahImpl: IBlah):
-    deserializer = Deserializer[str](str) # type: ignore
-    param = deserializer.from_string("""\
-big fan of this\
+@baml.Namedfunc.test
+async def test_minor_harlequin(NamedfuncImpl: INamedfunc):
+    case = loads("""\
+{"name":null,"address":null}\
 """)
-    await BlahImpl(param)
-
-
-@baml.ClassifyTool.test
-async def test_international_scarlet(ClassifyToolImpl: IClassifyTool):
-    case = loads("""
-{"query":"hey my toaster is broken","context":"the user is an sde"}
-""")
-    deserializer_query = Deserializer[str](str) # type: ignore
-    query = deserializer_query.from_string(case["query"])
-    deserializer_context = Deserializer[str](str) # type: ignore
-    context = deserializer_context.from_string(case["context"])
-    await ClassifyToolImpl(
-        query=query,
-        context=context
+    deserializer_name = Deserializer[BasicClass](BasicClass) # type: ignore
+    name = deserializer_name.from_string(case["name"])
+    deserializer_address = Deserializer[str](str) # type: ignore
+    address = deserializer_address.from_string(case["address"])
+    await NamedfuncImpl(
+        name=name,
+        address=address
     )
 
 
-@baml.MessageSimplifier.test
-async def test_obnoxious_maroon(MessageSimplifierImpl: IMessageSimplifier):
-    deserializer = Deserializer[Conversation](Conversation) # type: ignore
-    param = deserializer.from_string("""\
-{"thread":[{"sender":"AI","body":"asfasefaes"}]}\
+@baml.Namedfunc.test
+async def test_nearby_silver(NamedfuncImpl: INamedfunc):
+    case = loads("""\
+{"name":{"name":"asesef 'hello'","age":1,"address":"\"herollo\""},"address":"asdfasdf"}\
 """)
-    await MessageSimplifierImpl(param)
+    deserializer_name = Deserializer[BasicClass](BasicClass) # type: ignore
+    name = deserializer_name.from_string(case["name"])
+    deserializer_address = Deserializer[str](str) # type: ignore
+    address = deserializer_address.from_string(case["address"])
+    await NamedfuncImpl(
+        name=name,
+        address=address
+    )
 
 
-@baml.TextPolisher.test
-async def test_potential_lavender(TextPolisherImpl: ITextPolisher):
-    deserializer = Deserializer[ProposedMessage](ProposedMessage) # type: ignore
+@baml.BooleanFunc.test
+async def test_silent_gold(BooleanFuncImpl: IBooleanFunc):
+    deserializer = Deserializer[bool](bool) # type: ignore
     param = deserializer.from_string("""\
-null\
+true\
 """)
-    await TextPolisherImpl(param)
+    await BooleanFuncImpl(param)
+
+
+@baml.StringFunc.test
+async def test_voluminous_emerald(StringFuncImpl: IStringFunc):
+    deserializer = Deserializer[str](str) # type: ignore
+    param = deserializer.from_string("""\
+asdfasdfasdf\
+""")
+    await StringFuncImpl(param)
 
 

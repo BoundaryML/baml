@@ -55,7 +55,7 @@ class EnumDeserializer(BaseDeserializer[T]):
         diagnostics: Diagnostics,
         from_lut: CheckLutFn[T],
     ) -> Result[T]:
-        parsed = raw.as_str(inner=True)
+        parsed = raw.as_smart_str(inner=True)
         if parsed is None:
             diagnostics.push_enum_error(
                 self.__enm.__name__,

@@ -7,12 +7,12 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..enums.enm_intent import Intent
 from baml_lib._impl.deserializer import register_deserializer
 from pydantic import BaseModel
 
 
 @register_deserializer({  })
-class IntentWithReasoning(BaseModel):
-    reasoning_steps: str
-    intent: Intent
+class BasicClass(BaseModel):
+    name: str
+    age: int
+    address: str

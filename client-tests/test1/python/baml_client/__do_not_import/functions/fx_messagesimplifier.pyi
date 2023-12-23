@@ -16,6 +16,8 @@ from typing import Optional, Protocol, runtime_checkable
 import typing
 
 import pytest
+from contextlib import contextmanager
+from unittest import mock
 
 ImplName = typing.Literal["v1"]
 
@@ -57,6 +59,24 @@ class IBAMLMessageSimplifier:
     def get_impl(self, name: ImplName) -> BAMLMessageSimplifierImpl:
         ...
 
+    @contextmanager
+    def mock(self) -> typing.Generator[mock.AsyncMock, None, None]:
+        """
+        Utility for mocking the MessageSimplifierInterface.
+
+        Usage:
+            ```python
+            # All implementations are mocked.
+
+            async def test_logic() -> None:
+                with baml.MessageSimplifier.mock() as mocked:
+                    mocked.return_value = ...
+                    result = await MessageSimplifierImpl(...)
+                    assert mocked.called
+            ```
+        """
+        ...
+
     @typing.overload
     def test(self, test_function: T) -> T:
         """
@@ -72,7 +92,7 @@ class IBAMLMessageSimplifier:
             # All implementations will be tested.
 
             @baml.MessageSimplifier.test
-            def test_logic(MessageSimplifierImpl: IMessageSimplifier) -> None:
+            async def test_logic(MessageSimplifierImpl: IMessageSimplifier) -> None:
                 result = await MessageSimplifierImpl(...)
             ```
         """
@@ -93,7 +113,7 @@ class IBAMLMessageSimplifier:
             # All implementations except "v1" will be tested.
 
             @baml.MessageSimplifier.test(exclude_impl=["v1"])
-            def test_logic(MessageSimplifierImpl: IMessageSimplifier) -> None:
+            async def test_logic(MessageSimplifierImpl: IMessageSimplifier) -> None:
                 result = await MessageSimplifierImpl(...)
             ```
         """

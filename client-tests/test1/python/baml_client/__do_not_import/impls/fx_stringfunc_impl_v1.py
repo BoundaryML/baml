@@ -7,47 +7,39 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..clients.client_gpt4 import GPT4
-from ..functions.fx_extractverbs import BAMLExtractVerbs
+from ..clients.client_azure_gpt4 import AZURE_GPT4
+from ..functions.fx_stringfunc import BAMLStringFunc
 from baml_lib._impl.deserializer import Deserializer
-from typing import List
 
 
-# Impl: version1
-# Client: GPT4
+# Impl: v1
+# Client: AZURE_GPT4
 # An implementation of .
 
 
 __prompt_template = """\
-Extract the verbs from this paragraph:
-
-Title: {title}
----
-{body}
---
-
-Return a string[].
-
-Response:\
+Given a userr is trying to schedule a meeting, extract the relevant information
+{arg}
+information from the query.
+JSON:\
 """
 
 __input_replacers = {
-    "{body}",
-    "{title}"
+    "{arg}"
 }
 
 
 # We ignore the type here because baml does some type magic to make this work
 # for inline SpecialForms like Optional, Union, List.
-__deserializer = Deserializer[List[str]](List[str])  # type: ignore
+__deserializer = Deserializer[str](str)  # type: ignore
 
 
 
 
 
 
-@BAMLExtractVerbs.register_impl("version1")
-async def version1(*, title: str, body: str) -> List[str]:
-    response = await GPT4.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(title=title, body=body))
+@BAMLStringFunc.register_impl("v1")
+async def v1(arg: str, /) -> str:
+    response = await AZURE_GPT4.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
     deserialized = __deserializer.from_string(response.generated)
     return deserialized

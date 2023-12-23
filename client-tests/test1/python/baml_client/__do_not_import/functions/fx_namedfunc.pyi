@@ -7,8 +7,7 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..types.classes.cls_classifyresponse import ClassifyResponse
-from ..types.enums.enm_tool import Tool
+from ..types.classes.cls_basicclass import BasicClass
 from typing import Protocol, runtime_checkable
 
 
@@ -18,60 +17,60 @@ import pytest
 from contextlib import contextmanager
 from unittest import mock
 
-ImplName = typing.Literal["v1"]
+ImplName = typing.Literal["version"]
 
 T = typing.TypeVar("T", bound=typing.Callable[..., typing.Any])
 CLS = typing.TypeVar("CLS", bound=type)
 
 
-IClassifyToolOutput = ClassifyResponse
+INamedfuncOutput = str
 
 @runtime_checkable
-class IClassifyTool(Protocol):
+class INamedfunc(Protocol):
     """
     This is the interface for a function.
 
     Args:
-        query: str
-        context: str
+        name: BasicClass
+        address: str
 
     Returns:
-        ClassifyResponse
+        str
     """
 
-    async def __call__(self, *, query: str, context: str) -> ClassifyResponse:
+    async def __call__(self, *, name: BasicClass, address: str) -> str:
         ...
 
 
-class BAMLClassifyToolImpl:
-    async def run(self, *, query: str, context: str) -> ClassifyResponse:
+class BAMLNamedfuncImpl:
+    async def run(self, *, name: BasicClass, address: str) -> str:
         ...
 
-class IBAMLClassifyTool:
+class IBAMLNamedfunc:
     def register_impl(
         self, name: ImplName
-    ) -> typing.Callable[[IClassifyTool], IClassifyTool]:
+    ) -> typing.Callable[[INamedfunc], INamedfunc]:
         ...
 
-    async def __call__(self, *, query: str, context: str) -> ClassifyResponse:
+    async def __call__(self, *, name: BasicClass, address: str) -> str:
         ...
 
-    def get_impl(self, name: ImplName) -> BAMLClassifyToolImpl:
+    def get_impl(self, name: ImplName) -> BAMLNamedfuncImpl:
         ...
 
     @contextmanager
     def mock(self) -> typing.Generator[mock.AsyncMock, None, None]:
         """
-        Utility for mocking the ClassifyToolInterface.
+        Utility for mocking the NamedfuncInterface.
 
         Usage:
             ```python
             # All implementations are mocked.
 
             async def test_logic() -> None:
-                with baml.ClassifyTool.mock() as mocked:
+                with baml.Namedfunc.mock() as mocked:
                     mocked.return_value = ...
-                    result = await ClassifyToolImpl(...)
+                    result = await NamedfuncImpl(...)
                     assert mocked.called
             ```
         """
@@ -81,7 +80,7 @@ class IBAMLClassifyTool:
     def test(self, test_function: T) -> T:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the ClassifyToolInterface.
+        the NamedfuncInterface.
 
         Args:
             test_function : T
@@ -91,9 +90,9 @@ class IBAMLClassifyTool:
             ```python
             # All implementations will be tested.
 
-            @baml.ClassifyTool.test
-            async def test_logic(ClassifyToolImpl: IClassifyTool) -> None:
-                result = await ClassifyToolImpl(...)
+            @baml.Namedfunc.test
+            async def test_logic(NamedfuncImpl: INamedfunc) -> None:
+                result = await NamedfuncImpl(...)
             ```
         """
         ...
@@ -102,7 +101,7 @@ class IBAMLClassifyTool:
     def test(self, *, exclude_impl: typing.Iterable[ImplName]) -> pytest.MarkDecorator:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the ClassifyToolInterface.
+        the NamedfuncInterface.
 
         Args:
             exclude_impl : Iterable[ImplName]
@@ -110,11 +109,11 @@ class IBAMLClassifyTool:
 
         Usage:
             ```python
-            # All implementations except "v1" will be tested.
+            # All implementations except "version" will be tested.
 
-            @baml.ClassifyTool.test(exclude_impl=["v1"])
-            async def test_logic(ClassifyToolImpl: IClassifyTool) -> None:
-                result = await ClassifyToolImpl(...)
+            @baml.Namedfunc.test(exclude_impl=["version"])
+            async def test_logic(NamedfuncImpl: INamedfunc) -> None:
+                result = await NamedfuncImpl(...)
             ```
         """
         ...
@@ -123,7 +122,7 @@ class IBAMLClassifyTool:
     def test(self, test_class: typing.Type[CLS]) -> typing.Type[CLS]:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the ClassifyToolInterface.
+        the NamedfuncInterface.
 
         Args:
             test_class : Type[CLS]
@@ -133,14 +132,14 @@ class IBAMLClassifyTool:
         ```python
         # All implementations will be tested in every test method.
 
-        @baml.ClassifyTool.test
+        @baml.Namedfunc.test
         class TestClass:
-            def test_a(self, ClassifyToolImpl: IClassifyTool) -> None:
+            def test_a(self, NamedfuncImpl: INamedfunc) -> None:
                 ...
-            def test_b(self, ClassifyToolImpl: IClassifyTool) -> None:
+            def test_b(self, NamedfuncImpl: INamedfunc) -> None:
                 ...
         ```
         """
         ...
 
-BAMLClassifyTool: IBAMLClassifyTool
+BAMLNamedfunc: IBAMLNamedfunc

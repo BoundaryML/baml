@@ -22,14 +22,7 @@ def __from_value(val: typing.Any, diagnostics: Diagnostics) -> RawWrapper:
     if isinstance(val, float):
         return RawBaseWrapper(val)
     if isinstance(val, str):
-        # First remove any whitespace
-        str_val = val.strip()
-        # Remove any starting and ending quotes
-        if str_val.startswith('"') and str_val.endswith('"'):
-            str_val = str_val[1:-1]
-        # Remove any starting and ending quotes
-        if str_val.startswith("'") and str_val.endswith("'"):
-            str_val = str_val[1:-1]
+        str_val = val
 
         if str_val.lower() == "true":
             return RawBaseWrapper(True)
@@ -73,7 +66,7 @@ def __from_value(val: typing.Any, diagnostics: Diagnostics) -> RawWrapper:
                     }
                 )
         as_inner: typing.Optional[RawWrapper] = None
-        if result := re.findall(r"```json\n(.*?)\n```", str_val, re.DOTALL):
+        if result := re.findall(r"```json\s*([^`]*?)\s*```", str_val, re.DOTALL):
             # if multiple matches, we'll just take the first one
             if len(result) > 1:
                 pass

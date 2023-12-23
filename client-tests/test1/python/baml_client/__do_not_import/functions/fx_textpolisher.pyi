@@ -18,6 +18,8 @@ from typing import Protocol, runtime_checkable
 import typing
 
 import pytest
+from contextlib import contextmanager
+from unittest import mock
 
 ImplName = type(None)
 
@@ -59,6 +61,24 @@ class IBAMLTextPolisher:
     def get_impl(self, name: ImplName) -> BAMLTextPolisherImpl:
         ...
 
+    @contextmanager
+    def mock(self) -> typing.Generator[mock.AsyncMock, None, None]:
+        """
+        Utility for mocking the TextPolisherInterface.
+
+        Usage:
+            ```python
+            # All implementations are mocked.
+
+            async def test_logic() -> None:
+                with baml.TextPolisher.mock() as mocked:
+                    mocked.return_value = ...
+                    result = await TextPolisherImpl(...)
+                    assert mocked.called
+            ```
+        """
+        ...
+
     @typing.overload
     def test(self, test_function: T) -> T:
         """
@@ -74,7 +94,7 @@ class IBAMLTextPolisher:
             # All implementations will be tested.
 
             @baml.TextPolisher.test
-            def test_logic(TextPolisherImpl: ITextPolisher) -> None:
+            async def test_logic(TextPolisherImpl: ITextPolisher) -> None:
                 result = await TextPolisherImpl(...)
             ```
         """
@@ -95,7 +115,7 @@ class IBAMLTextPolisher:
             # All implementations except "" will be tested.
 
             @baml.TextPolisher.test(exclude_impl=[""])
-            def test_logic(TextPolisherImpl: ITextPolisher) -> None:
+            async def test_logic(TextPolisherImpl: ITextPolisher) -> None:
                 result = await TextPolisherImpl(...)
             ```
         """

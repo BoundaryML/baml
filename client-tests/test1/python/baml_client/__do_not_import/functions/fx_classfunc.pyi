@@ -7,59 +7,79 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..types.enums.enm_intent import Intent
+from ..types.classes.cls_basicclass import BasicClass
 from typing import Protocol, runtime_checkable
 
 
 import typing
 
 import pytest
+from contextlib import contextmanager
+from unittest import mock
 
-ImplName = typing.Literal["version1", "version2", "version3"]
+ImplName = typing.Literal["version"]
 
 T = typing.TypeVar("T", bound=typing.Callable[..., typing.Any])
 CLS = typing.TypeVar("CLS", bound=type)
 
 
-IClassifyIntentOutput = Intent
+IClassFuncOutput = str
 
 @runtime_checkable
-class IClassifyIntent(Protocol):
+class IClassFunc(Protocol):
     """
     This is the interface for a function.
 
     Args:
-        arg: str
+        arg: BasicClass
 
     Returns:
-        Intent
+        str
     """
 
-    async def __call__(self, arg: str, /) -> Intent:
+    async def __call__(self, arg: BasicClass, /) -> str:
         ...
 
 
-class BAMLClassifyIntentImpl:
-    async def run(self, arg: str, /) -> Intent:
+class BAMLClassFuncImpl:
+    async def run(self, arg: BasicClass, /) -> str:
         ...
 
-class IBAMLClassifyIntent:
+class IBAMLClassFunc:
     def register_impl(
         self, name: ImplName
-    ) -> typing.Callable[[IClassifyIntent], IClassifyIntent]:
+    ) -> typing.Callable[[IClassFunc], IClassFunc]:
         ...
 
-    async def __call__(self, arg: str, /) -> Intent:
+    async def __call__(self, arg: BasicClass, /) -> str:
         ...
 
-    def get_impl(self, name: ImplName) -> BAMLClassifyIntentImpl:
+    def get_impl(self, name: ImplName) -> BAMLClassFuncImpl:
+        ...
+
+    @contextmanager
+    def mock(self) -> typing.Generator[mock.AsyncMock, None, None]:
+        """
+        Utility for mocking the ClassFuncInterface.
+
+        Usage:
+            ```python
+            # All implementations are mocked.
+
+            async def test_logic() -> None:
+                with baml.ClassFunc.mock() as mocked:
+                    mocked.return_value = ...
+                    result = await ClassFuncImpl(...)
+                    assert mocked.called
+            ```
+        """
         ...
 
     @typing.overload
     def test(self, test_function: T) -> T:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the ClassifyIntentInterface.
+        the ClassFuncInterface.
 
         Args:
             test_function : T
@@ -69,9 +89,9 @@ class IBAMLClassifyIntent:
             ```python
             # All implementations will be tested.
 
-            @baml.ClassifyIntent.test
-            def test_logic(ClassifyIntentImpl: IClassifyIntent) -> None:
-                result = await ClassifyIntentImpl(...)
+            @baml.ClassFunc.test
+            async def test_logic(ClassFuncImpl: IClassFunc) -> None:
+                result = await ClassFuncImpl(...)
             ```
         """
         ...
@@ -80,7 +100,7 @@ class IBAMLClassifyIntent:
     def test(self, *, exclude_impl: typing.Iterable[ImplName]) -> pytest.MarkDecorator:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the ClassifyIntentInterface.
+        the ClassFuncInterface.
 
         Args:
             exclude_impl : Iterable[ImplName]
@@ -88,11 +108,11 @@ class IBAMLClassifyIntent:
 
         Usage:
             ```python
-            # All implementations except "version1" will be tested.
+            # All implementations except "version" will be tested.
 
-            @baml.ClassifyIntent.test(exclude_impl=["version1"])
-            def test_logic(ClassifyIntentImpl: IClassifyIntent) -> None:
-                result = await ClassifyIntentImpl(...)
+            @baml.ClassFunc.test(exclude_impl=["version"])
+            async def test_logic(ClassFuncImpl: IClassFunc) -> None:
+                result = await ClassFuncImpl(...)
             ```
         """
         ...
@@ -101,7 +121,7 @@ class IBAMLClassifyIntent:
     def test(self, test_class: typing.Type[CLS]) -> typing.Type[CLS]:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the ClassifyIntentInterface.
+        the ClassFuncInterface.
 
         Args:
             test_class : Type[CLS]
@@ -111,14 +131,14 @@ class IBAMLClassifyIntent:
         ```python
         # All implementations will be tested in every test method.
 
-        @baml.ClassifyIntent.test
+        @baml.ClassFunc.test
         class TestClass:
-            def test_a(self, ClassifyIntentImpl: IClassifyIntent) -> None:
+            def test_a(self, ClassFuncImpl: IClassFunc) -> None:
                 ...
-            def test_b(self, ClassifyIntentImpl: IClassifyIntent) -> None:
+            def test_b(self, ClassFuncImpl: IClassFunc) -> None:
                 ...
         ```
         """
         ...
 
-BAMLClassifyIntent: IBAMLClassifyIntent
+BAMLClassFunc: IBAMLClassFunc

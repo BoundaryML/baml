@@ -1,6 +1,6 @@
 import typing
 from .raw_wrapper import RawWrapper
-
+import json
 
 T = typing.TypeVar("T", bound=typing.Any)
 
@@ -16,11 +16,16 @@ class ListRawWrapper(RawWrapper):
     def __init__(self, val: typing.List[RawWrapper]) -> None:
         self.__val = val
 
+    def as_self(self) -> typing.Optional[typing.Any]:
+        return [item.as_self() for item in self.__val]
+
     def as_str(self, inner: bool) -> typing.Optional[str]:
-        # A list can always be converted to a string.
-        x = filter_empty(map(lambda v: v.as_str(inner), self.__val))
-        str_rep = f'[{", ".join(x)}]'
-        return str_rep
+        return json.dumps(self.as_self())
+
+    def as_smart_str(self, inner: bool) -> typing.Optional[str]:
+        if len(self.__val) == 1:
+            return self.__val[0].as_smart_str(inner)
+        return self.as_str(True)
 
     def as_int(self) -> typing.Optional[int]:
         if len(self.__val) == 0:
