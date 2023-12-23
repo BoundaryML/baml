@@ -44,8 +44,6 @@ export function activate(context: vscode.ExtensionContext) {
   )
 
   context.subscriptions.push(bamlPlygroundCommand)
-  context.subscriptions.push(vscode.languages.registerCodeLensProvider({ scheme: 'file', language: 'baml' }, glooLens))
-  context.subscriptions.push(vscode.languages.registerCodeLensProvider({ scheme: 'file', language: 'json' }, glooLens))
   context.subscriptions.push(
     vscode.languages.registerCodeLensProvider({ scheme: 'file', language: 'python' }, glooLens),
   )

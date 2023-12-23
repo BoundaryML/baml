@@ -21,32 +21,9 @@ logger.debug("This is a debug message")
 logger.info("This is an info message")
 
 
-@trace
-async def test_azure_default():
-    set_tags(a="bar", b="car")
-    response = await baml.ResilientGPT4.run_chat(
-        [
-            {
-                "role": "system",
-                "content": "Address the users questions to the bset of your abilities.",
-            },
-            {"role": "user", "content": "I need a lawnmower"},
-        ]
-    )
-    await baml.Blah.get_impl("v1").run("blah")
-    return response
-
 
 @trace
 async def call_topic_router():
-    # response = await baml.MaybePolishText.get_impl("v1").run(
-    #     ProposedMessage(
-    #         thread=Conversation(
-    #             thread=[Message(sender=MessageSender.RESIDENT, body="are you there")]
-    #         ),
-    #         generated_response="Hello there.",
-    #     )
-    # )
     response = await baml.ClassifyTool.get_impl("v1").run(
         context="The user is a software engineer", query="Can you explain TDD?"
     )

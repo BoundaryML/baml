@@ -15,8 +15,8 @@ from .classes.cls_empty import Empty
 from .classes.cls_hi import Hi
 from .classes.cls_improvedresponse import ImprovedResponse
 from .classes.cls_message import Message
+from .classes.cls_optionalobject import OptionalObject
 from .classes.cls_proposedmessage import ProposedMessage
-from .enums.enm_categories import Categories
 from .enums.enm_emptyenum import EmptyEnum
 from .enums.enm_messagesender import MessageSender
 from .enums.enm_sentiment import Sentiment
@@ -34,8 +34,8 @@ __all__ = [
     'Hi',
     'ImprovedResponse',
     'Message',
+    'OptionalObject',
     'ProposedMessage',
-    'Categories',
     'EmptyEnum',
     'MessageSender',
     'Sentiment',

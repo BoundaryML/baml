@@ -7,6 +7,7 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
+from ..types.classes.cls_optionalobject import OptionalObject
 from typing import Protocol, runtime_checkable
 
 
@@ -16,59 +17,59 @@ import pytest
 from contextlib import contextmanager
 from unittest import mock
 
-ImplName = typing.Literal["v1"]
+ImplName = type(None)
 
 T = typing.TypeVar("T", bound=typing.Callable[..., typing.Any])
 CLS = typing.TypeVar("CLS", bound=type)
 
 
-IStringFuncOutput = str
+IOptionalFuncOutput = str
 
 @runtime_checkable
-class IStringFunc(Protocol):
+class IOptionalFunc(Protocol):
     """
     This is the interface for a function.
 
     Args:
-        arg: str
+        arg: OptionalObject
 
     Returns:
         str
     """
 
-    async def __call__(self, arg: str, /) -> str:
+    async def __call__(self, arg: OptionalObject, /) -> str:
         ...
 
 
-class BAMLStringFuncImpl:
-    async def run(self, arg: str, /) -> str:
+class BAMLOptionalFuncImpl:
+    async def run(self, arg: OptionalObject, /) -> str:
         ...
 
-class IBAMLStringFunc:
+class IBAMLOptionalFunc:
     def register_impl(
         self, name: ImplName
-    ) -> typing.Callable[[IStringFunc], IStringFunc]:
+    ) -> typing.Callable[[IOptionalFunc], IOptionalFunc]:
         ...
 
-    async def __call__(self, arg: str, /) -> str:
+    async def __call__(self, arg: OptionalObject, /) -> str:
         ...
 
-    def get_impl(self, name: ImplName) -> BAMLStringFuncImpl:
+    def get_impl(self, name: ImplName) -> BAMLOptionalFuncImpl:
         ...
 
     @contextmanager
     def mock(self) -> typing.Generator[mock.AsyncMock, None, None]:
         """
-        Utility for mocking the StringFuncInterface.
+        Utility for mocking the OptionalFuncInterface.
 
         Usage:
             ```python
             # All implementations are mocked.
 
             async def test_logic() -> None:
-                with baml.StringFunc.mock() as mocked:
+                with baml.OptionalFunc.mock() as mocked:
                     mocked.return_value = ...
-                    result = await StringFuncImpl(...)
+                    result = await OptionalFuncImpl(...)
                     assert mocked.called
             ```
         """
@@ -78,7 +79,7 @@ class IBAMLStringFunc:
     def test(self, test_function: T) -> T:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the StringFuncInterface.
+        the OptionalFuncInterface.
 
         Args:
             test_function : T
@@ -88,9 +89,9 @@ class IBAMLStringFunc:
             ```python
             # All implementations will be tested.
 
-            @baml.StringFunc.test
-            async def test_logic(StringFuncImpl: IStringFunc) -> None:
-                result = await StringFuncImpl(...)
+            @baml.OptionalFunc.test
+            async def test_logic(OptionalFuncImpl: IOptionalFunc) -> None:
+                result = await OptionalFuncImpl(...)
             ```
         """
         ...
@@ -99,7 +100,7 @@ class IBAMLStringFunc:
     def test(self, *, exclude_impl: typing.Iterable[ImplName]) -> pytest.MarkDecorator:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the StringFuncInterface.
+        the OptionalFuncInterface.
 
         Args:
             exclude_impl : Iterable[ImplName]
@@ -107,11 +108,11 @@ class IBAMLStringFunc:
 
         Usage:
             ```python
-            # All implementations except "v1" will be tested.
+            # All implementations except "" will be tested.
 
-            @baml.StringFunc.test(exclude_impl=["v1"])
-            async def test_logic(StringFuncImpl: IStringFunc) -> None:
-                result = await StringFuncImpl(...)
+            @baml.OptionalFunc.test(exclude_impl=[""])
+            async def test_logic(OptionalFuncImpl: IOptionalFunc) -> None:
+                result = await OptionalFuncImpl(...)
             ```
         """
         ...
@@ -120,7 +121,7 @@ class IBAMLStringFunc:
     def test(self, test_class: typing.Type[CLS]) -> typing.Type[CLS]:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the StringFuncInterface.
+        the OptionalFuncInterface.
 
         Args:
             test_class : Type[CLS]
@@ -130,14 +131,14 @@ class IBAMLStringFunc:
         ```python
         # All implementations will be tested in every test method.
 
-        @baml.StringFunc.test
+        @baml.OptionalFunc.test
         class TestClass:
-            def test_a(self, StringFuncImpl: IStringFunc) -> None:
+            def test_a(self, OptionalFuncImpl: IOptionalFunc) -> None:
                 ...
-            def test_b(self, StringFuncImpl: IStringFunc) -> None:
+            def test_b(self, OptionalFuncImpl: IOptionalFunc) -> None:
                 ...
         ```
         """
         ...
 
-BAMLStringFunc: IBAMLStringFunc
+BAMLOptionalFunc: IBAMLOptionalFunc

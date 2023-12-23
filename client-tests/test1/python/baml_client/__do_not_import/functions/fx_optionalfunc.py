@@ -7,40 +7,40 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..types.classes.cls_basicclass import BasicClass
+from ..types.classes.cls_optionalobject import OptionalObject
 from baml_lib._impl.functions import BaseBAMLFunction
 from typing import Protocol, runtime_checkable
 
 
-IClassFuncOutput = str
+IOptionalFuncOutput = str
 
 @runtime_checkable
-class IClassFunc(Protocol):
+class IOptionalFunc(Protocol):
     """
     This is the interface for a function.
 
     Args:
-        arg: BasicClass
+        arg: OptionalObject
 
     Returns:
         str
     """
 
-    async def __call__(self, arg: BasicClass, /) -> str:
+    async def __call__(self, arg: OptionalObject, /) -> str:
         ...
 
 
-class IBAMLClassFunc(BaseBAMLFunction[str]):
+class IBAMLOptionalFunc(BaseBAMLFunction[str]):
     def __init__(self) -> None:
         super().__init__(
-            "ClassFunc",
-            IClassFunc,
-            ["version"],
+            "OptionalFunc",
+            IOptionalFunc,
+            [],
         )
 
     async def __call__(self, *args, **kwargs) -> str:
-        return await self.get_impl("version").run(*args, **kwargs)
+        raise NotImplemented("No impls defined")
 
-BAMLClassFunc = IBAMLClassFunc()
+BAMLOptionalFunc = IBAMLOptionalFunc()
 
-__all__ = [ "BAMLClassFunc" ]
+__all__ = [ "BAMLOptionalFunc" ]
