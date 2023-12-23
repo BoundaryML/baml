@@ -18,7 +18,7 @@ from baml_lib._impl.deserializer import Deserializer
 
 
 __prompt_template = """\
-Given a userr is trying to schedule a meeting, extract the relevant information
+Given a user is trying to schedule a meeting, extract the relevant information
 {arg}
 information from the query.
 JSON:\
