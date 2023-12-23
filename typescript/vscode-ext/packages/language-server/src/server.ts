@@ -15,6 +15,11 @@ import {
   Connection,
   DocumentSymbolParams,
   TextDocumentSyncKind,
+  CodeLensParams,
+  Command,
+  Position,
+  Range,
+  CodeLens,
 } from 'vscode-languageserver'
 import { URI } from 'vscode-uri'
 
@@ -28,7 +33,7 @@ import { getVersion, getEnginesVersion, getCliVersion } from './lib/wasm/interna
 import { BamlDirCache } from './file/fileCache'
 import { LinterInput } from './lib/wasm/lint'
 import { cliBuild, cliVersion } from './baml-cli'
-import { TestRequest } from '@baml/common'
+import { ParserDatabase, TestRequest } from '@baml/common'
 import generate_test_file from './lib/wasm/generate_test_file'
 
 const packageJson = require('../../package.json') // eslint-disable-line
@@ -99,6 +104,10 @@ export function startServer(options?: LSOptions): void {
         hoverProvider: true,
         renameProvider: false,
         documentSymbolProvider: true,
+        codeLensProvider: {
+          resolveProvider: true,
+        },
+
       },
     }
 
@@ -118,7 +127,6 @@ export function startServer(options?: LSOptions): void {
       // Register for all configuration changes.
       // eslint-disable-next-line @typescript-eslint/no-floating-promises
       connection.client.register(DidChangeConfigurationNotification.type)
-      getConfig()
     }
   })
 
@@ -154,7 +162,7 @@ export function startServer(options?: LSOptions): void {
     }
 
     // Revalidate all open prisma schemas
-    documents.all().forEach(validateTextDocument) // eslint-disable-line @typescript-eslint/no-misused-promises
+    documents.all().forEach(debouncedValidateTextDocument) // eslint-disable-line @typescript-eslint/no-misused-promises
   })
 
   documents.onDidOpen((e) => {
@@ -246,7 +254,16 @@ export function startServer(options?: LSOptions): void {
     }
   }
 
+  const debouncedSetDb = debounce((rootPath: URI, db: ParserDatabase) => {
+    void connection.sendRequest('set_database', { rootPath: rootPath.fsPath, db })
+  }, 2000, {
+    maxWait: 4000,
+    leading: true,
+    trailing: true,
+  });
+
   function validateTextDocument(textDocument: TextDocument) {
+    // console.log('Validating doc ' + textDocument.uri + " " + textDocument.getText())
     try {
       const rootPath = bamlCache.getBamlDir(textDocument)
       if (!rootPath) {
@@ -274,8 +291,15 @@ export function startServer(options?: LSOptions): void {
 
       bamlCache.addDatabase(rootPath, response.state)
       if (response.state) {
-        bamlCache.getFileCache(textDocument)?.setDB(response.state)
-        void connection.sendRequest('set_database', { rootPath: rootPath.fsPath, db: response.state })
+        const filecache = bamlCache.getFileCache(textDocument)
+        if (filecache) {
+          filecache.setDB(response.state)
+        } else {
+          console.error('Could not find file cache for ' + textDocument.uri)
+        }
+
+        // void connection.sendRequest('set_database', { rootPath: rootPath.fsPath, db: response.state })
+        debouncedSetDb(rootPath, response.state)
       } else {
         void connection.sendRequest('rm_database', rootPath)
       }
@@ -293,6 +317,11 @@ export function startServer(options?: LSOptions): void {
     leading: true,
     trailing: true,
   })
+  const debouncedValidateCodelens = debounce(validateTextDocument, 1000, {
+    maxWait: 4000,
+    leading: true,
+    trailing: true,
+  });
 
   documents.onDidChangeContent((change: { document: TextDocument }) => {
     debouncedValidateTextDocument(change.document)
@@ -371,6 +400,137 @@ export function startServer(options?: LSOptions): void {
     }
   })
 
+  connection.onCodeLens((params: CodeLensParams) => {
+    const document = getDocument(params.textDocument.uri)
+    const codeLenses: CodeLens[] = []
+    if (!document) {
+      return codeLenses
+    }
+    // Must be separate from the other validateText since we don't want to get stale in our code lenses.
+    debouncedValidateCodelens(document)
+
+    const db = bamlCache.getParserDatabase(document);
+    const docFsPath = URI.parse(document.uri).fsPath;
+    const baml_dir = bamlCache.getBamlDir(document);
+    if (!db) {
+      console.log('No db for ' + document.uri);
+      return codeLenses
+    }
+
+    const functionNames = db.functions.filter((x) => x.name.source_file === docFsPath).map((f) => f.name)
+    const position: Position = document.positionAt(0);
+    functionNames.forEach((name) => {
+      const range = Range.create(document.positionAt(name.start), document.positionAt(name.end))
+      const command: Command = {
+        title: '▶️ Open Playground',
+        command: 'baml.openBamlPanel',
+        arguments: [
+          {
+            projectId: baml_dir?.fsPath || '',
+            functionName: name.value,
+            showTests: true,
+          },
+        ],
+      }
+      codeLenses.push({
+        range,
+        command
+      });
+    })
+
+    const implNames = db.functions
+      .flatMap((f) =>
+        f.impls.map((i) => {
+          return {
+            value: i.name.value,
+            start: i.name.start,
+            end: i.name.end,
+            source_file: i.name.source_file,
+            prompt_key: i.prompt_key,
+            function: f.name.value,
+          }
+        }),
+      )
+      .filter((x) => x.source_file === docFsPath)
+
+    implNames.forEach((name) => {
+      codeLenses.push(
+        {
+          range: (Range.create(document.positionAt(name.start), document.positionAt(name.end))),
+          command: {
+            title: '▶️ Open Playground',
+            command: 'baml.openBamlPanel',
+            arguments: [
+              {
+                projectId: baml_dir?.fsPath || '',
+                functionName: name.function,
+                implName: name.value,
+                showTests: true,
+              },
+            ],
+          }
+        }
+      )
+      codeLenses.push(
+        {
+          range: Range.create(document.positionAt(name.prompt_key.start), document.positionAt(name.prompt_key.end)),
+          command: {
+            title: '▶️ Open Live Preview',
+            command: 'baml.openBamlPanel',
+            arguments: [
+              {
+                projectId: baml_dir?.fsPath || '',
+                functionName: name.function,
+                implName: name.value,
+                showTests: false,
+              },
+            ],
+          },
+        },
+      )
+
+    })
+
+    const testCases = db.functions
+      .flatMap((f) =>
+        f.test_cases.map((t) => {
+          return {
+            value: t.name.value,
+            start: t.name.start,
+            end: t.name.end,
+            source_file: t.name.source_file,
+            function: f.name.value,
+          }
+        }),
+      )
+      .filter((x) => x.source_file === docFsPath)
+    testCases.forEach((name) => {
+      const range = Range.create(document.positionAt(name.start), document.positionAt(name.end))
+      const command: Command = {
+        title: '▶️ Open Playground',
+        command: 'baml.openBamlPanel',
+        arguments: [
+          {
+            projectId: baml_dir?.fsPath || '',
+            functionName: name.function,
+            testCaseName: name.value,
+            showTests: true,
+          },
+        ],
+      }
+      codeLenses.push({
+        range,
+        command
+      });
+
+    })
+
+    return codeLenses
+
+    // return [];
+  })
+
+
   // connection.onDocumentFormatting((params: DocumentFormattingParams) => {
   //   const doc = getDocument(params.textDocument.uri)
   //   if (doc) {
@@ -418,6 +578,7 @@ export function startServer(options?: LSOptions): void {
   })
 
   connection.onRequest('cliVersion', async () => {
+    console.log('Checking baml version at ' + config?.path)
     try {
       const res = await new Promise<string>((resolve, reject) => {
         cliVersion(config?.path || 'baml', reject, (ver) => {

@@ -3,11 +3,11 @@
 
   "compilerOptions": {
     "module": "commonjs",
-    "target": "es6",
+    "target": "es2020",
     "outDir": "out",
     "rootDir": "src",
     "noUnusedLocals": false,
-    "lib": ["es6"],
+    "lib": ["es2020"],
     "sourceMap": true,
     "esModuleInterop": true,
     "strict": true,

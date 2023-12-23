@@ -8,7 +8,7 @@ enum Categories {
 function EnumFunc {
     input Categories
     output string
-} 
+}  
  
 impl<llm, EnumFunc> version {
     client AZURE_GPT4
@@ -18,7 +18,7 @@ impl<llm, EnumFunc> version {
         {#input}
         information from the query.
         JSON:
-    "#
+    "# 
 }
 
 class BasicClass {

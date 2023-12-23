@@ -1,5 +1,5 @@
 import languageWasm from '@gloo-ai/baml-schema-wasm'
 
-languageWasm.enable_logs();
+// languageWasm.enable_logs();
 
 export { languageWasm }

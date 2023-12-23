@@ -93,12 +93,15 @@ export function handleDiagnosticsRequest(
 
 
   console.debug(`Linting ${linterInput.files.length} files in ${linterInput.root_path}`)
+  // console.log("linterInput " + JSON.stringify(linterInput, null, 2))
+
   const res = lint(linterInput, (errorMessage: string) => {
     if (onError) {
       onError(errorMessage)
     }
   })
 
+  // console.log("res " + JSON.stringify(res, null, 2))
   let allDiagnostics: Map<string, Diagnostic[]> = new Map()
 
   documents.forEach((docDetails) => {

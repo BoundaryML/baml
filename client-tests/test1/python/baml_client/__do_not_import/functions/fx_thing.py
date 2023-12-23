@@ -7,40 +7,39 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..types.classes.cls_basicclass import BasicClass
 from baml_lib._impl.functions import BaseBAMLFunction
 from typing import Protocol, runtime_checkable
 
 
-IClassFuncOutput = str
+IThingOutput = str
 
 @runtime_checkable
-class IClassFunc(Protocol):
+class IThing(Protocol):
     """
     This is the interface for a function.
 
     Args:
-        arg: BasicClass
+        arg: str
 
     Returns:
         str
     """
 
-    async def __call__(self, arg: BasicClass, /) -> str:
+    async def __call__(self, arg: str, /) -> str:
         ...
 
 
-class IBAMLClassFunc(BaseBAMLFunction[str]):
+class IBAMLThing(BaseBAMLFunction[str]):
     def __init__(self) -> None:
         super().__init__(
-            "ClassFunc",
-            IClassFunc,
-            ["version"],
+            "Thing",
+            IThing,
+            ["v1"],
         )
 
     async def __call__(self, *args, **kwargs) -> str:
-        return await self.get_impl("version").run(*args, **kwargs)
+        return await self.get_impl("v1").run(*args, **kwargs)
 
-BAMLClassFunc = IBAMLClassFunc()
+BAMLThing = IBAMLThing()
 
-__all__ = [ "BAMLClassFunc" ]
+__all__ = [ "BAMLThing" ]

@@ -80,7 +80,7 @@ const getCheckForUpdates = async (showIfNoUpdates: boolean) => {
   if (semver.gt(cli, localCli)) {
     vscode.window
       .showInformationMessage(
-        `A new version of BAML is available. Please update to ${cli} by running "baml update" in the terminal.`,
+        `A new version of BAML is available. Please update from ${localCli} -> ${cli} by running "baml update" in the terminal.`,
         {
           title: 'Update now',
         },
@@ -205,6 +205,7 @@ const activateClient = (
     })
     client.onRequest('set_database', ({ rootPath, db }: { rootPath: string; db: ParserDatabase }) => {
       // console.log('set_database', rootPath, db, WebPanelView.currentPanel)
+      console.log('set_database');
       BamlDB.set(rootPath, db)
       glooLens.setDB(rootPath, db)
       WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
@@ -215,9 +216,12 @@ const activateClient = (
       // WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
     })
 
-    getCheckForUpdates(false).catch((e) => {
-      console.error('Failed to check for updates', e)
-    })
+    // this will fail otherwise in dev mode if the config where the baml path is hasnt been picked up yet. TODO: pass the config to the server to avoid this.
+    setTimeout(() => {
+      getCheckForUpdates(false).catch((e) => {
+        console.error('Failed to check for updates', e)
+      })
+    }, 5000)
   })
 
   const disposable = client.start()
@@ -287,6 +291,8 @@ const plugin: BamlVSCodePlugin = {
           language: 'json',
           pattern: '**/baml_src/**',
         },
+
+
       ],
 
       /* This middleware is part of the workaround for https://github.com/prisma/language-tools/issues/311 */

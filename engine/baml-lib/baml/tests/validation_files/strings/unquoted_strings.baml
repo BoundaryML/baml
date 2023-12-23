@@ -9,6 +9,7 @@ client<llm> Hello {
   }
 }
 
+
 // error: Error validating: This line is not a valid field or attribute definition.
 //   -->  strings/unquoted_strings.baml:4
 //    | 
@@ -42,5 +43,5 @@ client<llm> Hello {
 //    | 
 //  9 |   }
 // 10 | }
-// 11 | // error: Error validating: This line is not a valid field or attribute definition.
+// 11 | 
 //    | 

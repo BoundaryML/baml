@@ -106,7 +106,7 @@ pub(crate) fn parse_function(
             span: diagnostics.span(pair_span),
         }),
         (Some(name), _, _) => Err(DatamodelError::new_model_validation_error(
-            "This function declaration is invalid. It is missing an input field.",
+            "This function declaration is invalid. It is missing an input or output field.",
             "function",
             &name.name(),
             diagnostics.span(pair_span),
@@ -207,7 +207,11 @@ fn parse_function_field_type(
             ),
         }
     }
-    panic!("parse_function_field_type: missing function_field_type")
+
+    return Err(DatamodelError::new_validation_error(
+        "Missing function field type",
+        span,
+    ));
 }
 
 fn parse_function_arg(
