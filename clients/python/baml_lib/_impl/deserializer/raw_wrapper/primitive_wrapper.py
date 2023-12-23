@@ -19,7 +19,7 @@ class RawBaseWrapper(RawWrapper, typing.Generic[T]):
         return str(self.__val)
 
     def as_smart_str(self, inner: bool) -> typing.Optional[str]:
-        return str(self.__val)
+        return str(self.__val).strip()
 
     def as_int(self) -> typing.Optional[int]:
         if isinstance(self.__val, int):

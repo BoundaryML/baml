@@ -6,21 +6,10 @@ import pytest
 import json
 
 
+@register_deserializer({})
 class BasicClass(BaseModel):
     a: int
     b: str
-
-
-class BasicWithList(BaseModel):
-    a: int
-    b: str
-    c: List[str]
-
-
-class BasicWithList2(BaseModel):
-    a: int
-    b: str
-    c: List[BasicClass]
 
 
 def test_string_from_string() -> None:
@@ -244,3 +233,76 @@ def test_obj_from_json_markdown() -> None:
     deserializer = Deserializer[BasicClass2](BasicClass2)
     res = deserializer.from_string(test_value)
     assert res.one == "hi"
+
+
+@register_deserializer({})
+class BasicWithList(BaseModel):
+    a: int
+    b: str
+    c: List[str]
+
+
+def test_complex_obj_from_string():
+    deserializer = Deserializer[BasicWithList](BasicWithList)
+    test_obj = {
+        "a": 1,
+        "b": "hello",
+        "c": ["world"],
+    }
+    res = deserializer.from_string(json.dumps(test_obj))
+    assert res.a == 1
+    assert res.b == "hello"
+    assert res.c == ["world"]
+
+
+@register_deserializer({})
+class Child(BaseModel):
+    hi: str
+
+
+@register_deserializer({})
+class Parent(BaseModel):
+    child: Child
+
+
+def test_complex_obj_from_string2():
+    deserializer = Deserializer[Parent](Parent)
+    test_obj = {"child": {"hi": "hello"}}
+    res = deserializer.from_string(json.dumps(test_obj))
+    assert res.child.hi == "hello"
+
+
+def test_complex_obj_from_string_json_markdown():
+    deserializer = Deserializer[Parent](Parent)
+    test_str = """Here is how you can build the API call:
+```json
+{
+    "child": {
+        "hi": "hello"
+    }
+}
+```
+and this
+```json
+{
+    "child": {
+        "hi": "twooo"
+    }
+}
+"""
+    res = deserializer.from_string(test_str)
+    assert res.child.hi == "hello"
+
+
+def test_list_from_string():
+    deserializer = Deserializer[List[str]](List[str])
+    test_obj = ["hello", "world"]
+    res = deserializer.from_string(json.dumps(test_obj))
+    assert res == ["hello", "world"]
+
+
+def test_list_object_from_string():
+    deserializer = Deserializer[List[BasicClass]](List[BasicClass])
+    test_obj = [{"a": 1, "b": "hello"}, {"a": 2, "b": "world"}]
+    res = deserializer.from_string(json.dumps(test_obj))
+    assert res == [BasicClass(a=1, b="hello"), BasicClass(a=2, b="world")]

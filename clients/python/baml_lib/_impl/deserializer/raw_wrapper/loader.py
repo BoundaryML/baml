@@ -54,8 +54,7 @@ def __from_value(val: typing.Any, diagnostics: Diagnostics) -> RawWrapper:
                 parsed_obj = typing.cast(
                     typing.Mapping[typing.Any, typing.Any], json.loads(str_val)
                 )
-            except ValueError as e:
-                print("ValueError", e)
+            except ValueError:
                 parsed_obj = None
             if parsed_obj is not None:
                 return DictRawWrapper(
@@ -67,7 +66,7 @@ def __from_value(val: typing.Any, diagnostics: Diagnostics) -> RawWrapper:
                     }
                 )
         as_inner: typing.Optional[RawWrapper] = None
-        if result := re.findall(r"```json\n(.*?)\n```", str_val, re.DOTALL):
+        if result := re.findall(r"```json\s*([^`]*?)\s*```", str_val, re.DOTALL):
             # if multiple matches, we'll just take the first one
             if len(result) > 1:
                 pass
