@@ -242,7 +242,7 @@ class BasicWithList(BaseModel):
     c: List[str]
 
 
-def test_complex_obj_from_string():
+def test_complex_obj_from_string() -> None:
     deserializer = Deserializer[BasicWithList](BasicWithList)
     test_obj = {
         "a": 1,
@@ -265,14 +265,14 @@ class Parent(BaseModel):
     child: Child
 
 
-def test_complex_obj_from_string2():
+def test_complex_obj_from_string2() -> None:
     deserializer = Deserializer[Parent](Parent)
     test_obj = {"child": {"hi": "hello"}}
     res = deserializer.from_string(json.dumps(test_obj))
     assert res.child.hi == "hello"
 
 
-def test_complex_obj_from_string_json_markdown():
+def test_complex_obj_from_string_json_markdown() -> None:
     deserializer = Deserializer[Parent](Parent)
     test_str = """Here is how you can build the API call:
 ```json
@@ -294,14 +294,14 @@ and this
     assert res.child.hi == "hello"
 
 
-def test_list_from_string():
+def test_list_from_string() -> None:
     deserializer = Deserializer[List[str]](List[str])
     test_obj = ["hello", "world"]
     res = deserializer.from_string(json.dumps(test_obj))
     assert res == ["hello", "world"]
 
 
-def test_list_object_from_string():
+def test_list_object_from_string() -> None:
     deserializer = Deserializer[List[BasicClass]](List[BasicClass])
     test_obj = [{"a": 1, "b": "hello"}, {"a": 2, "b": "world"}]
     res = deserializer.from_string(json.dumps(test_obj))
