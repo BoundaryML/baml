@@ -256,14 +256,13 @@ export function startServer(options?: LSOptions): void {
 
   const debouncedSetDb = debounce((rootPath: URI, db: ParserDatabase) => {
     void connection.sendRequest('set_database', { rootPath: rootPath.fsPath, db })
-  }, 2000, {
+  }, 200, {
     maxWait: 4000,
     leading: true,
     trailing: true,
   });
 
   function validateTextDocument(textDocument: TextDocument) {
-    // console.log('Validating doc ' + textDocument.uri + " " + textDocument.getText())
     try {
       const rootPath = bamlCache.getBamlDir(textDocument)
       if (!rootPath) {
@@ -274,7 +273,16 @@ export function startServer(options?: LSOptions): void {
         })
         return
       }
+      // add the document to the cache
+      // we want to do this since the doc may not be in disk (it's in vscode memory).
+      // If we try to just load docs from disk we will have outdated info.
+      try {
+        bamlCache.addDocument(textDocument)
+      } catch (e) {
+        console.log("Error adding document to cache " + e)
+      }
       const srcDocs = bamlCache.getDocuments(textDocument)
+
       if (srcDocs.length === 0) {
         console.log(`No BAML files found in the workspace. ${rootPath}`)
         connection.sendNotification('baml/message', {

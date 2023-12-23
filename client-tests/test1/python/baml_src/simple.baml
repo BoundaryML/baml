@@ -8,7 +8,7 @@ enum Categories {
 function EnumFunc {
     input Categories
     output string
-}  
+} 
  
 impl<llm, EnumFunc> version {
     client AZURE_GPT4
@@ -18,8 +18,8 @@ impl<llm, EnumFunc> version {
         {#input}
         information from the query.
         JSON:
-    "# 
-}
+    "#
+} 
 
 class BasicClass {
     name string
@@ -100,9 +100,9 @@ function BooleanFunc {
 
 impl<llm, BooleanFunc> v1 {
     client AZURE_GPT4
- 
+
     prompt #"
-        Given a userr is trying to schedule a meeting, extract the relevant information
+        Given a user is trying to schedule a meeting, extract the relevant information
         {#input}
         information from the query.
         JSON:

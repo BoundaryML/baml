@@ -8,17 +8,74 @@
 # fmt: off
 
 from .__do_not_import.generated_baml_client import baml
-from .baml_types import IThing
+from .baml_types import BasicClass, Categories, IBooleanFunc, IEnumFunc, IIntFunc, INamedfunc, IStringFunc
 from baml_lib._impl.deserializer import Deserializer
-from json import dumps
+from json import dumps, loads
 
 
-@baml.Thing.test
-async def test_multiple_beige(ThingImpl: IThing):
+@baml.IntFunc.test
+async def test_impressive_lavender(IntFuncImpl: IIntFunc):
+    deserializer = Deserializer[int](int) # type: ignore
+    param = deserializer.from_string("""\
+123\
+""")
+    await IntFuncImpl(param)
+
+
+@baml.EnumFunc.test
+async def test_incredible_jade(EnumFuncImpl: IEnumFunc):
+    deserializer = Deserializer[Categories](Categories) # type: ignore
+    param = deserializer.from_string("""\
+TWO\
+""")
+    await EnumFuncImpl(param)
+
+
+@baml.Namedfunc.test
+async def test_minor_harlequin(NamedfuncImpl: INamedfunc):
+    case = loads("""\
+{"name":null,"address":null}\
+""")
+    deserializer_name = Deserializer[BasicClass](BasicClass) # type: ignore
+    name = deserializer_name.from_string(case["name"])
+    deserializer_address = Deserializer[str](str) # type: ignore
+    address = deserializer_address.from_string(case["address"])
+    await NamedfuncImpl(
+        name=name,
+        address=address
+    )
+
+
+@baml.Namedfunc.test
+async def test_nearby_silver(NamedfuncImpl: INamedfunc):
+    case = loads("""\
+{"name":{"name":"asesef 'hello'","age":1,"address":"\"herollo\""},"address":"asdfasdf"}\
+""")
+    deserializer_name = Deserializer[BasicClass](BasicClass) # type: ignore
+    name = deserializer_name.from_string(case["name"])
+    deserializer_address = Deserializer[str](str) # type: ignore
+    address = deserializer_address.from_string(case["address"])
+    await NamedfuncImpl(
+        name=name,
+        address=address
+    )
+
+
+@baml.BooleanFunc.test
+async def test_silent_gold(BooleanFuncImpl: IBooleanFunc):
+    deserializer = Deserializer[bool](bool) # type: ignore
+    param = deserializer.from_string("""\
+true\
+""")
+    await BooleanFuncImpl(param)
+
+
+@baml.StringFunc.test
+async def test_voluminous_emerald(StringFuncImpl: IStringFunc):
     deserializer = Deserializer[str](str) # type: ignore
     param = deserializer.from_string("""\
-null\
+asdfasdfasdf\
 """)
-    await ThingImpl(param)
+    await StringFuncImpl(param)
 
 

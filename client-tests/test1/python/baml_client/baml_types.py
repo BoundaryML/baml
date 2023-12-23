@@ -7,12 +7,67 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from .__do_not_import.functions.fx_thing import IThing, IThingOutput
+from .__do_not_import.functions.fx_booleanfunc import IBooleanFunc, IBooleanFuncOutput
+from .__do_not_import.functions.fx_classfunc import IClassFunc, IClassFuncOutput
+from .__do_not_import.functions.fx_classifytool import IClassifyTool, IClassifyToolOutput
+from .__do_not_import.functions.fx_enumfunc import IEnumFunc, IEnumFuncOutput
+from .__do_not_import.functions.fx_intfunc import IIntFunc, IIntFuncOutput
+from .__do_not_import.functions.fx_maybepolishtext import IMaybePolishText, IMaybePolishTextOutput
+from .__do_not_import.functions.fx_messagesimplifier import IMessageSimplifier, IMessageSimplifierOutput
+from .__do_not_import.functions.fx_namedfunc import INamedfunc, INamedfuncOutput
+from .__do_not_import.functions.fx_stringfunc import IStringFunc, IStringFuncOutput
+from .__do_not_import.functions.fx_textpolisher import ITextPolisher, ITextPolisherOutput
+from .__do_not_import.types.classes.cls_basicclass import BasicClass
+from .__do_not_import.types.classes.cls_classifyresponse import ClassifyResponse
+from .__do_not_import.types.classes.cls_conversation import Conversation
+from .__do_not_import.types.classes.cls_dummyobj import DummyObj
+from .__do_not_import.types.classes.cls_empty import Empty
+from .__do_not_import.types.classes.cls_hi import Hi
+from .__do_not_import.types.classes.cls_improvedresponse import ImprovedResponse
+from .__do_not_import.types.classes.cls_message import Message
+from .__do_not_import.types.classes.cls_proposedmessage import ProposedMessage
+from .__do_not_import.types.enums.enm_categories import Categories
+from .__do_not_import.types.enums.enm_emptyenum import EmptyEnum
+from .__do_not_import.types.enums.enm_messagesender import MessageSender
+from .__do_not_import.types.enums.enm_sentiment import Sentiment
+from .__do_not_import.types.enums.enm_tool import Tool
 
 
 
 
 __all__ = [
-    'IThing',
-    'IThingOutput'
+    'IBooleanFunc',
+    'IBooleanFuncOutput',
+    'IClassFunc',
+    'IClassFuncOutput',
+    'IClassifyTool',
+    'IClassifyToolOutput',
+    'IEnumFunc',
+    'IEnumFuncOutput',
+    'IIntFunc',
+    'IIntFuncOutput',
+    'IMaybePolishText',
+    'IMaybePolishTextOutput',
+    'IMessageSimplifier',
+    'IMessageSimplifierOutput',
+    'INamedfunc',
+    'INamedfuncOutput',
+    'IStringFunc',
+    'IStringFuncOutput',
+    'ITextPolisher',
+    'ITextPolisherOutput',
+    'BasicClass',
+    'ClassifyResponse',
+    'Conversation',
+    'DummyObj',
+    'Empty',
+    'Hi',
+    'ImprovedResponse',
+    'Message',
+    'ProposedMessage',
+    'Categories',
+    'EmptyEnum',
+    'MessageSender',
+    'Sentiment',
+    'Tool'
 ]

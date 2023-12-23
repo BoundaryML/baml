@@ -7,6 +7,8 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
+from ..types.classes.cls_classifyresponse import ClassifyResponse
+from ..types.enums.enm_tool import Tool
 from typing import Protocol, runtime_checkable
 
 
@@ -22,53 +24,54 @@ T = typing.TypeVar("T", bound=typing.Callable[..., typing.Any])
 CLS = typing.TypeVar("CLS", bound=type)
 
 
-IThingOutput = str
+IClassifyToolOutput = ClassifyResponse
 
 @runtime_checkable
-class IThing(Protocol):
+class IClassifyTool(Protocol):
     """
     This is the interface for a function.
 
     Args:
-        arg: str
+        query: str
+        context: str
 
     Returns:
-        str
+        ClassifyResponse
     """
 
-    async def __call__(self, arg: str, /) -> str:
+    async def __call__(self, *, query: str, context: str) -> ClassifyResponse:
         ...
 
 
-class BAMLThingImpl:
-    async def run(self, arg: str, /) -> str:
+class BAMLClassifyToolImpl:
+    async def run(self, *, query: str, context: str) -> ClassifyResponse:
         ...
 
-class IBAMLThing:
+class IBAMLClassifyTool:
     def register_impl(
         self, name: ImplName
-    ) -> typing.Callable[[IThing], IThing]:
+    ) -> typing.Callable[[IClassifyTool], IClassifyTool]:
         ...
 
-    async def __call__(self, arg: str, /) -> str:
+    async def __call__(self, *, query: str, context: str) -> ClassifyResponse:
         ...
 
-    def get_impl(self, name: ImplName) -> BAMLThingImpl:
+    def get_impl(self, name: ImplName) -> BAMLClassifyToolImpl:
         ...
 
     @contextmanager
     def mock(self) -> typing.Generator[mock.AsyncMock, None, None]:
         """
-        Utility for mocking the ThingInterface.
+        Utility for mocking the ClassifyToolInterface.
 
         Usage:
             ```python
             # All implementations are mocked.
 
             async def test_logic() -> None:
-                with baml.Thing.mock() as mocked:
+                with baml.ClassifyTool.mock() as mocked:
                     mocked.return_value = ...
-                    result = await ThingImpl(...)
+                    result = await ClassifyToolImpl(...)
                     assert mocked.called
             ```
         """
@@ -78,7 +81,7 @@ class IBAMLThing:
     def test(self, test_function: T) -> T:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the ThingInterface.
+        the ClassifyToolInterface.
 
         Args:
             test_function : T
@@ -88,9 +91,9 @@ class IBAMLThing:
             ```python
             # All implementations will be tested.
 
-            @baml.Thing.test
-            async def test_logic(ThingImpl: IThing) -> None:
-                result = await ThingImpl(...)
+            @baml.ClassifyTool.test
+            async def test_logic(ClassifyToolImpl: IClassifyTool) -> None:
+                result = await ClassifyToolImpl(...)
             ```
         """
         ...
@@ -99,7 +102,7 @@ class IBAMLThing:
     def test(self, *, exclude_impl: typing.Iterable[ImplName]) -> pytest.MarkDecorator:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the ThingInterface.
+        the ClassifyToolInterface.
 
         Args:
             exclude_impl : Iterable[ImplName]
@@ -109,9 +112,9 @@ class IBAMLThing:
             ```python
             # All implementations except "v1" will be tested.
 
-            @baml.Thing.test(exclude_impl=["v1"])
-            async def test_logic(ThingImpl: IThing) -> None:
-                result = await ThingImpl(...)
+            @baml.ClassifyTool.test(exclude_impl=["v1"])
+            async def test_logic(ClassifyToolImpl: IClassifyTool) -> None:
+                result = await ClassifyToolImpl(...)
             ```
         """
         ...
@@ -120,7 +123,7 @@ class IBAMLThing:
     def test(self, test_class: typing.Type[CLS]) -> typing.Type[CLS]:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the ThingInterface.
+        the ClassifyToolInterface.
 
         Args:
             test_class : Type[CLS]
@@ -130,14 +133,14 @@ class IBAMLThing:
         ```python
         # All implementations will be tested in every test method.
 
-        @baml.Thing.test
+        @baml.ClassifyTool.test
         class TestClass:
-            def test_a(self, ThingImpl: IThing) -> None:
+            def test_a(self, ClassifyToolImpl: IClassifyTool) -> None:
                 ...
-            def test_b(self, ThingImpl: IThing) -> None:
+            def test_b(self, ClassifyToolImpl: IClassifyTool) -> None:
                 ...
         ```
         """
         ...
 
-BAMLThing: IBAMLThing
+BAMLClassifyTool: IBAMLClassifyTool
