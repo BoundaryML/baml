@@ -204,11 +204,14 @@ const activateClient = (
       }
     })
     client.onRequest('set_database', ({ rootPath, db }: { rootPath: string; db: ParserDatabase }) => {
-      // console.log('set_database', rootPath, db, WebPanelView.currentPanel)
-      BamlDB.set(rootPath, db)
-      glooLens.setDB(rootPath, db)
-      console.log('set_database');
-      WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
+      try {
+        BamlDB.set(rootPath, db)
+        glooLens.setDB(rootPath, db)
+        console.log('set_database');
+        WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
+      } catch (e) {
+        console.log('Error setting database', e)
+      }
     })
     client.onRequest('rm_database', (root_path) => {
       // TODO: Handle errors better. But for now the playground shouldn't break.

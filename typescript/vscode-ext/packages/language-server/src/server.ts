@@ -254,9 +254,11 @@ export function startServer(options?: LSOptions): void {
     }
   }
 
+  // TODO: dont actually debounce for now or strange out of sync things happen..
+  // so we currently set to 0
   const debouncedSetDb = debounce((rootPath: URI, db: ParserDatabase) => {
     void connection.sendRequest('set_database', { rootPath: rootPath.fsPath, db })
-  }, 200, {
+  }, 0, {
     maxWait: 4000,
     leading: true,
     trailing: true,
@@ -297,6 +299,7 @@ export function startServer(options?: LSOptions): void {
         void connection.sendDiagnostics({ uri, diagnostics: diagnosticList })
       }
 
+      // console.log('Setting database for ' + rootPath.toString() + ' ' + response.state?.functions.length)
       bamlCache.addDatabase(rootPath, response.state)
       if (response.state) {
         const filecache = bamlCache.getFileCache(textDocument)
@@ -309,6 +312,9 @@ export function startServer(options?: LSOptions): void {
         // void connection.sendRequest('set_database', { rootPath: rootPath.fsPath, db: response.state })
         debouncedSetDb(rootPath, response.state)
       } else {
+        // we may have stale files and got no state due to that so lets refresh to be sure.
+        // TODO: use better filewatcher.
+        bamlCache.refreshDirectory(textDocument);
         void connection.sendRequest('rm_database', rootPath)
       }
     } catch (e: any) {
@@ -350,6 +356,7 @@ export function startServer(options?: LSOptions): void {
         )
         return
       }
+
 
       debouncedCLIBuild(cliPath, bamlDir, showErrorToast, () => {
         connection.sendNotification('baml/message', {
@@ -414,6 +421,7 @@ export function startServer(options?: LSOptions): void {
     if (!document) {
       return codeLenses
     }
+    bamlCache.addDocument(document)
     // Must be separate from the other validateText since we don't want to get stale in our code lenses.
     debouncedValidateCodelens(document)
 
@@ -421,7 +429,7 @@ export function startServer(options?: LSOptions): void {
     const docFsPath = URI.parse(document.uri).fsPath;
     const baml_dir = bamlCache.getBamlDir(document);
     if (!db) {
-      console.log('No db for ' + document.uri);
+      console.log('No db for ' + document.uri + ". There may be a linter error or out of sync file");
       return codeLenses
     }
 
@@ -604,6 +612,7 @@ export function startServer(options?: LSOptions): void {
     return generateTestFile(params)
   })
   connection.onRequest('registerFileChange', ({ fileUri, language }: { fileUri: string; language: string }) => {
+    console.log('registerFileChange ' + fileUri)
     // TODO: revalidate if something changed
     // create textdocument from file:
     const textDocument = TextDocument.create(fileUri, language, 1, '')

@@ -8,10 +8,11 @@
 # fmt: off
 
 from baml_lib._impl.deserializer import register_deserializer
-from enum import Enum
+from pydantic import BaseModel
+from typing import Optional
 
 
 @register_deserializer({  })
-class Categories(str, Enum):
-    ONE = "ONE"
-    TWO = "TWO"
+class OptionalObject(BaseModel):
+    a: Optional[str] = None
+    b: Optional[bool] = None
