@@ -54,7 +54,8 @@ def __from_value(val: typing.Any, diagnostics: Diagnostics) -> RawWrapper:
                 parsed_obj = typing.cast(
                     typing.Mapping[typing.Any, typing.Any], json.loads(str_val)
                 )
-            except ValueError:
+            except ValueError as e:
+                print("ValueError", e)
                 parsed_obj = None
             if parsed_obj is not None:
                 return DictRawWrapper(

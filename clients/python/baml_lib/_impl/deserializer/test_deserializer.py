@@ -220,3 +220,27 @@ def test_object_from_str_with_quotes() -> None:
     }
     res = deserializer.from_string(json.dumps(test_obj))
     assert test_obj["one"] == res.one
+
+
+def test_obj_from_json_markdown() -> None:
+    test_value = """Here is how you can build the API call:
+```json
+{
+    "one": "hi",
+    "two": "hello"
+}
+```
+
+```json
+    {
+        "test2": {
+            "key2": "value"
+        },
+        "test21": [
+        ]    
+    }
+```
+"""
+    deserializer = Deserializer[BasicClass2](BasicClass2)
+    res = deserializer.from_string(test_value)
+    assert res.one == "hi"
