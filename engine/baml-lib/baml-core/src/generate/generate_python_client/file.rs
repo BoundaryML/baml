@@ -112,7 +112,7 @@ impl FileCollector {
 "#;
         std::fs::write(
             output.join("baml.lock"),
-            serde_json::to_string(lock).unwrap(),
+            serde_json::to_string_pretty(lock).unwrap(),
         )?;
         for file in self.files.values() {
             let path = output.join(file.path());

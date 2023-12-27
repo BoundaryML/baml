@@ -29,7 +29,8 @@ impl<'db> FieldWalker<'db> {
         self.walk(self.id.0)
     }
 
-    fn attributes(self) -> &'db ToStringAttributes {
+    /// Traverse the field's attributes.
+    pub fn attributes(self) -> &'db ToStringAttributes {
         &self.db.types.class_attributes[&self.id.0].field_serilizers[&self.id.1]
     }
 
