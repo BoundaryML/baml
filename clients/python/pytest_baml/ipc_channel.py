@@ -25,7 +25,9 @@ class NoopIPCChannel(BaseIPCChannel):
         pass
 
 
-def connect_to_server(host: str, port: int, retries: int = 5, delay: float = 1):
+def connect_to_server(
+    host: str, port: int, retries: int = 5, delay: float = 1
+) -> socket.socket:
     attempt = 0
     while attempt < retries:
         try:
