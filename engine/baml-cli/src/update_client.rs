@@ -10,17 +10,17 @@ pub fn update_client(baml_dir: &Option<String>) -> Result<(), CliError> {
         let errs = match (gen.language.as_str(), gen.pkg_manager.as_deref()) {
             ("python", Some("poetry")) => run_command_with_error(
                 "poetry",
-                &["add", "baml@latest", "--no-cache"],
+                &["add", "baml@latest"],
                 "Failed to poetry update baml",
             ),
             ("python", Some("pip3")) => run_command_with_error(
                 "pip3",
-                &["install", "--upgrade", "--no-cache-dir", "baml"],
+                &["install", "--upgrade", "baml"],
                 "Failed to update client",
             ),
             ("python", Some("pip")) => run_command_with_error(
                 "pip",
-                &["install", "--upgrade", "--no-cache-dir", "baml"],
+                &["install", "--upgrade", "baml"],
                 "Failed to update client",
             ),
             ("python", Some(other)) => {

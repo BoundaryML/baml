@@ -9,11 +9,12 @@ import {
   VSCodePanels,
   VSCodeProgressRing,
 } from '@vscode/webview-ui-toolkit/react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import Link from './Link'
 import { AlertTriangle, ExternalLink, FileWarningIcon } from 'lucide-react'
+import AnsiText from '@/utils/AnsiText'
 
 const TestResultPanel = () => {
   const { test_results, test_result_url, test_result_exit_status } = useSelections()
@@ -82,7 +83,11 @@ const TestLogPanel = () => {
 
   return (
     <div className="h-full overflow-auto">
-      <pre className="w-full whitespace-break-spaces">{test_log}</pre>
+      {test_log ? (
+        <AnsiText text={test_log} className="w-full whitespace-break-spaces bg-inherit text-inherit" />
+      ) : (
+        <div className="flex flex-col items-center justify-center w-full h-full space-y-2">Waiting</div>
+      )}
     </div>
   )
 }

@@ -13,7 +13,7 @@ const diagnosticsCollection = vscode.languages.createDiagnosticCollection('baml'
 const LANG_NAME = 'Baml'
 
 export function activate(context: vscode.ExtensionContext) {
-  const config = vscode.workspace.getConfiguration('baml')
+  const baml_config = vscode.workspace.getConfiguration('baml')
   testExecutor.start()
 
   const bamlPlygroundCommand = vscode.commands.registerCommand(

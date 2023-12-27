@@ -1,6 +1,10 @@
 mod dir_utils;
 
-use baml_lib::{generate_schema, parse_and_validate_schema, SourceFile};
+use std::path::PathBuf;
+
+use baml_lib::{
+    generate_schema, parse_and_validate_schema, Configuration, SourceFile, ValidatedSchema,
+};
 use colored::*;
 use log::info;
 
@@ -8,7 +12,9 @@ use crate::{builder::dir_utils::get_src_files, errors::CliError, update::version
 
 pub(crate) use crate::builder::dir_utils::{get_baml_src, get_src_dir};
 
-pub fn build(baml_dir: &Option<String>) -> Result<(), CliError> {
+pub fn build(
+    baml_dir: &Option<String>,
+) -> Result<(PathBuf, Configuration, ValidatedSchema), CliError> {
     let (baml_dir, (config, diagnostics)) = get_src_dir(baml_dir)?;
     let src_files = get_src_files(&baml_dir)?;
 
@@ -41,5 +47,5 @@ pub fn build(baml_dir: &Option<String>) -> Result<(), CliError> {
     config.generators.iter().for_each(|(_, lockfile)| {
         version_check(lockfile);
     });
-    Ok(())
+    Ok((baml_dir, config, parsed))
 }

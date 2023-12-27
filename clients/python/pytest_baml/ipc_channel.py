@@ -1,5 +1,6 @@
 import abc
 import socket
+import time
 import typing
 
 from pydantic import BaseModel
@@ -24,16 +25,31 @@ class NoopIPCChannel(BaseIPCChannel):
         pass
 
 
+def connect_to_server(
+    host: str, port: int, retries: int = 5, delay: float = 1
+) -> socket.socket:
+    attempt = 0
+    while attempt < retries:
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.connect((host, port))
+            return s  # Return the connected socket
+        except socket.error as e:
+            print(f"Connection attempt {attempt + 1} failed: {e}")
+            time.sleep(delay)  # Wait before retrying
+            attempt += 1
+    raise ConnectionError(f"Could not connect to the server after {retries} attempts")
+
+
 @typing.final
 class IPCChannel(BaseIPCChannel):
     def __init__(self, host: str, port: int) -> None:
-        self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._socket.connect((host, port))
+        self._host = host
+        self._port = port
+        self._socket = connect_to_server(host, port)
 
     def send(self, name: str, data: T) -> None:
-        self._socket.sendall(
-            (
-                Message(name=name, data=data).model_dump_json(by_alias=True)
-                + "<END_MSG>\n"
-            ).encode("utf-8")
-        )
+        message = (
+            Message(name=name, data=data).model_dump_json(by_alias=True) + "<END_MSG>\n"
+        ).encode("utf-8")
+        connect_to_server(self._host, self._port).sendall(message)

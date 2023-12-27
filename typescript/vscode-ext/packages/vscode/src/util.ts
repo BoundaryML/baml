@@ -121,3 +121,26 @@ export const restartClient = async (
   await client.onReady()
   return client
 }
+
+type BamlConfig = {
+  path?: string
+  test_shell?: string
+  test_cli_prefix?: string
+  trace: {
+    server: string
+  }
+}
+
+export const bamlPath = ({ for_test = false }: { for_test?: boolean }) => {
+  const config = workspace.getConfiguration().get<BamlConfig>('baml')
+  let path = config?.path ?? 'baml'
+  if (for_test && config?.test_cli_prefix) {
+    path = `${config.test_cli_prefix} ${path}`
+  }
+  return path
+}
+
+export const bamlTestShell = () => {
+  const config = workspace.getConfiguration().get<BamlConfig>('baml')
+  return config?.test_shell
+}

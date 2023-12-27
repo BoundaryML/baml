@@ -13,8 +13,14 @@ use std::{collections::HashMap, path::PathBuf};
 const LANGUAGE_KEY: &str = "language";
 const OUTPUT_KEY: &str = "output";
 const PKG_MANAGER_KEY: &str = "pkg_manager";
+const LANGUAGE_SETUP_PREFIX: &str = "python_setup_prefix";
 
-const FIRST_CLASS_PROPERTIES: &[&str] = &[LANGUAGE_KEY, OUTPUT_KEY, PKG_MANAGER_KEY];
+const FIRST_CLASS_PROPERTIES: &[&str] = &[
+    LANGUAGE_KEY,
+    OUTPUT_KEY,
+    PKG_MANAGER_KEY,
+    LANGUAGE_SETUP_PREFIX,
+];
 
 fn convert_python_version_to_rust_semver(py_version: &str) -> String {
     // Replace '.pre' with '-pre.' for Rust's semver compatibility
@@ -84,7 +90,10 @@ fn lift_generator(
     };
 
     let pkg_manager = match args.get(PKG_MANAGER_KEY) {
-        Some(val) => Some(coerce::string(val, diagnostics)?),
+        Some(val) => match coerce::string(val, diagnostics) {
+            Some(v) => Some(v),
+            None => None,
+        },
         None => match language {
             "python" => {
                 // Check if there's a pyproject.toml
@@ -103,6 +112,17 @@ fn lift_generator(
         },
     };
 
+    let command_prefix = match args.get(LANGUAGE_SETUP_PREFIX) {
+        Some(val) => match coerce::string(val, diagnostics) {
+            Some(v) => Some(v),
+            None => None,
+        },
+        None => match pkg_manager {
+            Some("poetry") => Some("poetry run"),
+            _ => None,
+        },
+    };
+
     let output = args
         .get(OUTPUT_KEY)
         .and_then(|v| coerce::path(v, diagnostics))
@@ -110,65 +130,24 @@ fn lift_generator(
         .unwrap_or(PathBuf::from("../"))
         .join("baml_client");
 
-    let mut properties = HashMap::new();
     for prop in ast_generator.fields() {
         let is_first_class_prop = FIRST_CLASS_PROPERTIES.iter().any(|k| *k == prop.name());
         if is_first_class_prop {
             continue;
+        } else {
+            diagnostics.push_error(DatamodelError::new_property_not_known_error(
+                prop.name(),
+                prop.span.clone(),
+            ));
         }
-
-        let value = match &prop.value {
-            Some(val) => GeneratorConfigValue::from(val),
-            None => {
-                diagnostics.push_error(DatamodelError::new_config_property_missing_value_error(
-                    prop.name(),
-                    generator_name,
-                    "generator",
-                    prop.span.clone(),
-                ));
-                continue;
-            }
-        };
-
-        properties.insert(prop.name().to_string(), value);
     }
 
-    // Call python -m baml_client to get the version
-    let client_version = match (language, pkg_manager) {
-        ("python", Some("poetry")) => std::process::Command::new("poetry")
-            .arg("run")
-            .arg("python")
-            .arg("-m")
-            .arg("baml_version")
-            .output()
-            .ok()
-            .and_then(|output| {
-                if output.status.success() {
-                    match String::from_utf8(output.stdout).ok() {
-                        Some(v) => Some(convert_python_version_to_rust_semver(&v.trim())),
-                        None => None,
-                    }
-                } else {
-                    None
-                }
-            })
-            .map(|v| v.trim().to_string()),
-        ("python", Some("pip") | None) => std::process::Command::new("python")
-            .arg("-m")
-            .arg("baml_version")
-            .output()
-            .ok()
-            .and_then(|output| {
-                if output.status.success() {
-                    match String::from_utf8(output.stdout).ok() {
-                        Some(v) => Some(convert_python_version_to_rust_semver(&v.trim())),
-                        None => None,
-                    }
-                } else {
-                    None
-                }
-            })
-            .map(|v| v.trim().to_string()),
+    if diagnostics.has_errors() {
+        return None;
+    }
+
+    let client_version = match language {
+        "python" => get_python_client_version(command_prefix, diagnostics),
         _ => None,
     };
 
@@ -181,9 +160,37 @@ fn lift_generator(
             true => output,
             false => diagnostics.root_path.join(output),
         },
-        config: properties,
+        config: Default::default(),
         documentation: ast_generator.documentation().map(String::from),
         client_version,
         span: Some(ast_generator.identifier().span().clone()),
+        shell_setup: command_prefix.map(String::from),
     })
+}
+
+fn get_python_client_version(
+    shell_setup: Option<&str>,
+    diagnostics: &mut Diagnostics,
+) -> Option<String> {
+    let cmd = match shell_setup {
+        Some(setup) => format!("{} python -m baml_version", setup),
+        None => String::from("python -m baml_version"),
+    };
+
+    match std::process::Command::new(cmd)
+        .output()
+        .ok()
+        .and_then(|output| {
+            if output.status.success() {
+                match String::from_utf8(output.stdout).ok() {
+                    Some(v) => Some(convert_python_version_to_rust_semver(&v.trim())),
+                    None => None,
+                }
+            } else {
+                None
+            }
+        }) {
+        Some(v) => Some(v),
+        None => None,
+    }
 }
