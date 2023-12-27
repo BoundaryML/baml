@@ -44,14 +44,13 @@ def pytest_configure(config: pytest.Config) -> None:
     baml_conf = baml_init(stage="test", enable_cache=True)
 
     # Get which tests to include/exclude
-    
 
     config.pluginmanager.register(
         BamlPytestPlugin(
             api=baml_conf.api,
-            ipc_channel=config.getoption("baml_ipc"), 
+            ipc_channel=config.getoption("baml_ipc"),
             include_filters=config.getoption("baml_include"),
-            exclude_filters=config.getoption("baml_exclude")
+            exclude_filters=config.getoption("baml_exclude"),
         ),
         "pytest_baml",
     )

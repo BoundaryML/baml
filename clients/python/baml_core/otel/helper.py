@@ -42,8 +42,12 @@ def try_serialize_inner(
 
 
 def try_serialize(value: typing.Any) -> typing.Tuple[types.AttributeValue, str]:
-    as_str = json.dumps(value, default=lambda a: a.model_dump() if isinstance(a, BaseModel) else ( a.value if isinstance(a, Enum) else str(a)))
-
+    as_str = json.dumps(
+        value,
+        default=lambda a: a.model_dump()
+        if isinstance(a, BaseModel)
+        else (a.value if isinstance(a, Enum) else str(a)),
+    )
 
     if value is None:
         return as_str, "None"

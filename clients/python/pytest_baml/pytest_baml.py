@@ -72,7 +72,7 @@ def sanitize(input_str: str) -> str:
 def _to_filters(f: str) -> str:
     # Filters are of the form <FunctionName>:<ImplName>:<TestName>
     # We want to convert this to a regex that matches the test name
-    
+
     if ":" in f:
         parts = f.split(":")
         if len(parts) != 3:
@@ -85,17 +85,20 @@ def _to_filters(f: str) -> str:
         # Any of the parts can match
         return f"*{f}*"
 
+
 def _to_regex_filter(f: str) -> str:
     parsed = _to_filters(f)
     # Replace * with .*
     parsed = parsed.replace("*", ".*")
     return f"(^{parsed}$)"
-    
+
 
 # See https://docs.pytest.org/en/7.1.x/_modules/_pytest/hookspec.html#pytest_runtestloop
 class BamlPytestPlugin:
     def __init__(
-        self, api: typing.Optional[APIWrapper], ipc_channel: typing.Optional[int],
+        self,
+        api: typing.Optional[APIWrapper],
+        ipc_channel: typing.Optional[int],
         include_filters: typing.List[str] = [],
         exclude_filters: typing.List[str] = [],
     ) -> None:
@@ -108,8 +111,12 @@ class BamlPytestPlugin:
             if ipc_channel is None
             else IPCChannel(host="127.0.0.1", port=ipc_channel)
         )
-        self.__include_filters = "|".join(map(_to_regex_filter, include_filters)) or None
-        self.__exclude_filters = "|".join(map(_to_regex_filter, exclude_filters)) or None
+        self.__include_filters = (
+            "|".join(map(_to_regex_filter, include_filters)) or None
+        )
+        self.__exclude_filters = (
+            "|".join(map(_to_regex_filter, exclude_filters)) or None
+        )
 
         if ipc_channel is not None:
             add_message_transformer_hook(lambda log: self.__ipc.send("log", log))
@@ -149,7 +156,9 @@ class BamlPytestPlugin:
     def pytest_collection_modifyitems(
         self, config: pytest.Config, items: typing.List[pytest.Item]
     ) -> None:
-        filtered_items = [item for item in items if self.__test_matches_filter(item.name)]
+        filtered_items = [
+            item for item in items if self.__test_matches_filter(item.name)
+        ]
 
         for item in filtered_items:
             if "baml_function_test" in item.keywords:
@@ -165,7 +174,7 @@ class BamlPytestPlugin:
                     item.function
                 ):
                     item.add_marker(pytest.mark.asyncio)
-            
+
             # if not self.__test_matches_filter(item.name):
             #     item.add_marker(pytest.mark.skip(reason="BAML Filter does not match"))
         items[:] = filtered_items
@@ -182,7 +191,7 @@ class BamlPytestPlugin:
 
         for item in session.items:
             if any(map(lambda mark: mark.name == "baml_test", item.iter_markers())):
-                self.__gloo_tests[item.nodeid] = TestCaseMetadata(item) 
+                self.__gloo_tests[item.nodeid] = TestCaseMetadata(item)
 
     def maybe_start_logging(self, session: pytest.Session) -> None:
         if self.__api is None:

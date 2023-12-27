@@ -24,6 +24,7 @@ class NoopIPCChannel(BaseIPCChannel):
     def send(self, name: str, data: T) -> None:
         pass
 
+
 def connect_to_server(host: str, port: int, retries=5, delay=1):
     attempt = 0
     while attempt < retries:
@@ -38,7 +39,6 @@ def connect_to_server(host: str, port: int, retries=5, delay=1):
     raise ConnectionError(f"Could not connect to the server after {retries} attempts")
 
 
-
 @typing.final
 class IPCChannel(BaseIPCChannel):
     def __init__(self, host: str, port: int) -> None:
@@ -47,9 +47,7 @@ class IPCChannel(BaseIPCChannel):
         self._socket = connect_to_server(host, port)
 
     def send(self, name: str, data: T) -> None:
-        message =(
-                Message(name=name, data=data).model_dump_json(by_alias=True)
-                + "<END_MSG>\n"
-            ).encode("utf-8")
+        message = (
+            Message(name=name, data=data).model_dump_json(by_alias=True) + "<END_MSG>\n"
+        ).encode("utf-8")
         connect_to_server(self._host, self._port).sendall(message)
-        
