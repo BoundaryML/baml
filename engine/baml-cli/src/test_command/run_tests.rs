@@ -69,6 +69,8 @@ pub(crate) fn run_tests(
         }
         None => ("pytest".into(), vec![]),
     };
+    test_command.push("-v".into());
+    test_command.push("-s".into());
     test_command.push("--color".into());
     test_command.push("yes".into());
     // Rootdir

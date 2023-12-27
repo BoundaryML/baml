@@ -1,17 +1,8 @@
-use baml_lib::{internal_baml_parser_database::ParserDatabase, ValidatedSchema};
-use chrono::format;
+use baml_lib::internal_baml_parser_database::ParserDatabase;
 use colored::*;
-use std::{
-    borrow::BorrowMut,
-    collections::HashMap,
-    fmt::format,
-    hash::Hash,
-    ops::Deref,
-    str::FromStr,
-    sync::{Arc, Mutex},
-};
+use std::{collections::HashMap, ops::Deref, str::FromStr};
 
-use super::ipc_comms::{LLMEventInputPrompt, LogSchema, MessageData, Template, TestCaseStatus};
+use super::ipc_comms::{LogSchema, MessageData, Template, TestCaseStatus, ValueType};
 
 #[derive(Debug)]
 enum TestState {
@@ -31,7 +22,9 @@ struct FinishedState {
 enum ExecutorStage {
     Ready,
     Parsed,
+    #[allow(dead_code)]
     Running,
+    #[allow(dead_code)]
     Finished,
 }
 
@@ -379,13 +372,20 @@ impl RunState {
                             });
 
                             let parsed_output = match log.io.output.as_ref().and_then(|output| {
-                                let output = serde_json::Value::from_str(&output.value)
-                                    .map(|v| {
-                                        serde_json::to_string_pretty(&v).unwrap_or_else(|_| {
-                                            format!("Failed to serialize output: {:?}", v)
-                                        })
+                                let output = match &output.value {
+                                    ValueType::String(s) => serde_json::Value::from_str(s),
+                                    ValueType::List(l) => l
+                                        .iter()
+                                        .map(|v| serde_json::Value::from_str(v))
+                                        .collect::<Result<Vec<_>, _>>()
+                                        .map(|v| serde_json::Value::Array(v)),
+                                }
+                                .map(|v| {
+                                    serde_json::to_string_pretty(&v).unwrap_or_else(|_| {
+                                        format!("Failed to serialize output: {:?}", v)
                                     })
-                                    .ok();
+                                })
+                                .ok();
                                 let r#type = self
                                     .schema
                                     .find_function_by_name(&spec.function)
