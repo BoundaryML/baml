@@ -14,11 +14,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import Link from './Link'
 import { AlertTriangle, ExternalLink, FileWarningIcon } from 'lucide-react'
-import Ansi from 'ansi-to-react'
-import Converter from 'ansi-to-html'
 import AnsiText from '@/utils/AnsiText'
-
-const c = new Converter()
 
 const TestResultPanel = () => {
   const { test_results, test_result_url, test_result_exit_status } = useSelections()
