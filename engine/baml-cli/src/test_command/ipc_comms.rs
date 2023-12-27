@@ -64,8 +64,16 @@ pub(crate) struct IO {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub(crate) struct IOValue {
-    pub(crate) value: String,
+    pub(crate) value: ValueType,
     r#override: Option<HashMap<String, Value>>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(untagged)]
+pub(crate) enum ValueType {
+    String(String),
+    // For mutli-args, we use a list of strings
+    List(Vec<String>),
 }
 
 //
