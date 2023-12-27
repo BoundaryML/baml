@@ -42,42 +42,43 @@ def try_serialize_inner(
 
 
 def try_serialize(value: typing.Any) -> typing.Tuple[types.AttributeValue, str]:
+    as_str = json.dumps(value, default=lambda a: a.model_dump() if isinstance(a, BaseModel) else ( a.value if isinstance(a, Enum) else str(a)))
+
+
     if value is None:
-        return "", "None"
+        return as_str, "None"
     if isinstance(value, Enum):
-        return value.value, type(value).__name__
+        return as_str, type(value).__name__
     if isinstance(value, (str, int, float, bool)):
-        return value, type(value).__name__
+        return as_str, type(value).__name__
     if isinstance(value, list):
         if len(value) == 0:
-            return value, "List[]"
+            return as_str, "List[]"
         same_type = list(set(type(item) for item in value))
         if len(same_type) == 1:
             type_name = same_type[0].__name__
             if isinstance(value[0], Enum):
                 return (
-                    [item.value for item in value],
+                    as_str,
                     f"List[{type_name}]",
                 )
             elif type(value[0]) in (str, int, float, bool):
-                return (value, f"List[{type_name}]")
+                return (as_str, f"List[{type_name}]")
             return (
-                typing.cast(
-                    types.AttributeValue, [try_serialize_inner(v) for v in value]
-                ),
+                as_str,
                 f"List[{type_name}]",
             )
 
     if isinstance(value, tuple) and all(
         isinstance(item, (str, int, float, bool)) for item in value
     ):
-        return (value, f"Tuple[{type(value[0]).__name__}]")
+        return (as_str, f"Tuple[{type(value[0]).__name__}]")
     if isinstance(value, BaseModel):
-        return value.model_dump_json(), type(value).__name__
+        return as_str, type(value).__name__
     try:
-        return json.dumps(value, default=str), type(value).__name__
+        return as_str, type(value).__name__
     except Exception:
-        return "<unserializable value>", type(value).__name__
+        return as_str, type(value).__name__
 
 
 def epoch_to_iso8601(epoch_nanos: int) -> str:

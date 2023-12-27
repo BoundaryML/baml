@@ -54,7 +54,7 @@ impl FileCollector {
 
         self.last_file = Some(key.clone());
         let is_export =
-            (is_export && cleaned_name != "test_baml_client.py") || cleaned_name == "__init__.py";
+            (is_export && cleaned_path.starts_with("tests/")) || cleaned_name == "__init__.py";
 
         // Create a new file if its not already present.
         if !self.files.contains_key(&key) {

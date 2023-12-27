@@ -6,10 +6,12 @@ mod builder;
 mod command;
 mod errors;
 mod init_command;
+mod test_command;
 mod update;
 mod update_client;
 
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
+use std::fmt;
 
 /// Simple program to greet a person
 #[derive(Parser, Debug)]
@@ -29,6 +31,7 @@ enum Commands {
     // Update client libraries for a BAML project
     UpdateClient(BuildArgs),
     Init(InitArgs),
+    Test(TestArgs),
 }
 
 #[derive(Args, Debug)]
@@ -42,6 +45,41 @@ struct InitArgs {}
 
 #[derive(Args, Debug)]
 struct UpdateArgs {}
+
+#[derive(Args, Debug)]
+pub struct TestArgs {
+    #[arg(long)]
+    baml_dir: Option<String>,
+
+    #[arg(long, short = 'i')]
+    include: Vec<String>,
+
+    #[arg(long, short = 'x')]
+    exclude: Vec<String>,
+
+    // The `default_value_t` is used to set a default value for the `action` field.
+    // `action` is now an optional positional argument.
+    #[arg(default_value_t = TestAction::List)]
+    action: TestAction,
+
+    #[arg(long, hide = true)]
+    playground_port: Option<u16>,
+}
+
+impl fmt::Display for TestAction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TestAction::Run => write!(f, "run"),
+            TestAction::List => write!(f, "list"),
+        }
+    }
+}
+
+#[derive(ValueEnum, Debug, Clone)]
+enum TestAction {
+    Run,
+    List,
+}
 
 pub(crate) fn main() {
     const NAME: &str = concat!("[", env!("CARGO_PKG_NAME"), "]");
@@ -62,19 +100,15 @@ pub(crate) fn main() {
 
     let response = match &args.command {
         Commands::Update(_args) => update::update(),
-        Commands::Build(args) => builder::build(&args.baml_dir),
+        Commands::Build(args) => builder::build(&args.baml_dir).map(|_| ()),
         Commands::UpdateClient(args) => update_client::update_client(&args.baml_dir),
         Commands::Init(_args) => {
-            let res = init_command::init_command();
-            if res.is_ok() {
-                let res = builder::build(&None);
-                if res.is_ok() {
-                    log::info!("Run `python -m chatbot_example` to see the demo in action.")
-                }
-                res
-            } else {
-                res
-            }
+            init_command::init_command().and_then(|_| builder::build(&None).map(|_| ()))
+        }
+        Commands::Test(args) => {
+            builder::build(&args.baml_dir).and_then(|(baml_dir, config, schema)| {
+                test_command::run(&args, &baml_dir, &config, schema)
+            })
         }
     };
 

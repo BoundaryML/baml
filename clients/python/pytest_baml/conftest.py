@@ -14,6 +14,23 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         help="The name of the ipc pipe to communicate on.",
     )
 
+    # Add --pytest-baml-include and --pytest-baml-exclude options here
+    # Which can be used multiple times
+    parser.addoption(
+        "--pytest-baml-include",
+        action="append",
+        dest="baml_include",
+        default=[],
+        help="Filter for excluding and including tests.",
+    )
+    parser.addoption(
+        "--pytest-baml-exclude",
+        action="append",
+        dest="baml_exclude",
+        default=[],
+        help="Filter for excluding and including tests.",
+    )
+
 
 def pytest_configure(config: pytest.Config) -> None:
     logger.debug("Registering pytest_gloo plugin.")
@@ -25,7 +42,16 @@ def pytest_configure(config: pytest.Config) -> None:
     # Add optional stage parameter to baml_init
     # baml_init(), returns api wrapper we can use
     baml_conf = baml_init(stage="test", enable_cache=True)
+
+    # Get which tests to include/exclude
+    
+
     config.pluginmanager.register(
-        BamlPytestPlugin(api=baml_conf.api, ipc_channel=config.getoption("baml_ipc")),
+        BamlPytestPlugin(
+            api=baml_conf.api,
+            ipc_channel=config.getoption("baml_ipc"), 
+            include_filters=config.getoption("baml_include"),
+            exclude_filters=config.getoption("baml_exclude")
+        ),
         "pytest_baml",
     )

@@ -5,18 +5,6 @@ export interface TestRequest {
     tests: {
       name: string
       impls: string[]
-      params:
-      | {
-        type: 'positional'
-        value: string
-      }
-      | {
-        type: 'named'
-        value: {
-          name: string
-          value: string
-        }[]
-      }
     }[]
   }[]
 }

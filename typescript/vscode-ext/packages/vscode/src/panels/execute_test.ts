@@ -14,6 +14,7 @@ import {
   TestState as TestStateType,
 } from '@baml/common'
 import { generateTestRequest } from '../plugins/language-server'
+import { bamlPath, bamlTestShell } from '../util'
 
 const outputChannel = vscode.window.createOutputChannel('baml-test-runner')
 
@@ -202,9 +203,9 @@ class TestExecutor {
       let addr = this.server.address()
       // vscode.window.showInformationMessage(`Server address: ${JSON.stringify(addr)}`)
       if (typeof addr === 'string') {
-        return `--pytest-baml-ipc ${addr}`
+        return `--playground-port ${addr}`
       } else if (addr) {
-        return `--pytest-baml-ipc ${addr.port}`
+        return `--playground-port ${addr.port}`
       }
     }
 
@@ -239,28 +240,15 @@ class TestExecutor {
     // root_path is the path to baml_src, so go up one level to get to the root of the project
     root_path = path.join(root_path, '../')
     this.testState.resetTestCases(tests)
-    const tempFilePath = path.join(os.tmpdir(), 'test_temp.py')
-    const code = await generateTestRequest(tests)
-    if (!code) {
-      vscode.window.showErrorMessage('Could not generate test request')
-      return
-    }
-
-    fs.writeFileSync(tempFilePath, code)
 
     // Add filters.
-    let selectedTests = tests.functions.flatMap((fn) =>
-      fn.tests.flatMap((test) => test.impls.map((impl) => getFullTestName(test.name, impl, fn.name))),
+    const selectedTests = tests.functions.flatMap((fn) =>
+      fn.tests.flatMap((test) => test.impls.map((impl) => `-i ${fn.name}:${impl}:${test.name}`)),
     )
-    let test_filter = selectedTests ? `-k "${selectedTests.join(' or ')}"` : ''
+    const test_filter = selectedTests.join(' ')
 
     // Run the Python script in a child process
-    let command = `python -m pytest ${tempFilePath} ${this.port_arg} ${test_filter}`
-    if (fs.existsSync(path.join(root_path, 'pyproject.toml'))) {
-      command = `poetry run ${command}`
-    } else {
-      command = `${await this.getPythonPath()} -m pytest ${tempFilePath} ${this.port_arg} ${test_filter}`
-    }
+    const command = `${bamlPath({ for_test: true })} test ${test_filter} run ${this.port_arg}`
 
     // Run the Python script in a child process
     // const process = spawn(pythonExecutable, [tempFilePath]);
@@ -269,6 +257,11 @@ class TestExecutor {
     this.stdoutListener?.(`Command: ${command}\n`)
     const cp = exec(command, {
       cwd: root_path,
+      shell: bamlTestShell(),
+      env: {
+        ...process.env,
+        CLICOLOR_FORCE: '1',
+      },
     })
 
     cp.stdout?.on('data', (data) => {

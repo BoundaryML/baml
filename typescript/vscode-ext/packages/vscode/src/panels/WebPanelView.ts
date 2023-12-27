@@ -7,7 +7,7 @@ import testExecutor from './execute_test'
 
 import { uniqueNamesGenerator, Config, adjectives, colors, animals } from 'unique-names-generator'
 import { BamlDB, registerFileChange } from '../plugins/language-server'
-import { URI } from "vscode-uri";
+import { URI } from 'vscode-uri'
 
 const customConfig: Config = {
   dictionaries: [adjectives, colors, animals],
@@ -189,19 +189,18 @@ export class WebPanelView {
               root_path: string
               funcName: string
               testCaseName: StringSpan | undefined
-              params: TestRequest['functions'][0]['tests'][0]['params']
+              params: any
             } = message.data
 
             const uri = saveTestRequest.testCaseName?.source_file
               ? URI.file(saveTestRequest.testCaseName?.source_file)
               : vscode.Uri.joinPath(
-                URI.file(saveTestRequest.root_path),
-                '__tests__',
-                saveTestRequest.funcName,
-                `${uniqueNamesGenerator(customConfig)}.json`,
-              )
+                  URI.file(saveTestRequest.root_path),
+                  '__tests__',
+                  saveTestRequest.funcName,
+                  `${uniqueNamesGenerator(customConfig)}.json`,
+                )
             let testInputContent: any
-
 
             if (saveTestRequest.params.type === 'positional') {
               // Directly use the value if the type is 'positional'

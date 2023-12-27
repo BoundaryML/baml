@@ -69,10 +69,35 @@ def sanitize(input_str: str) -> str:
     return re.sub(r"[^\w-]", "_", input_str)
 
 
+def _to_filters(f: str) -> str:
+    # Filters are of the form <FunctionName>:<ImplName>:<TestName>
+    # We want to convert this to a regex that matches the test name
+    
+    if ":" in f:
+        parts = f.split(":")
+        if len(parts) != 3:
+            raise Exception(
+                f"Invalid filter: {f}. Filters must be of the form <FunctionName>:<ImplName>:<TestName>."
+            )
+        function_name, impl_name, test_name = parts
+        return f"test_{test_name}\\[{function_name}-{impl_name}\\]"
+    else:
+        # Any of the parts can match
+        return f"*{f}*"
+
+def _to_regex_filter(f: str) -> str:
+    parsed = _to_filters(f)
+    # Replace * with .*
+    parsed = parsed.replace("*", ".*")
+    return f"(^{parsed}$)"
+    
+
 # See https://docs.pytest.org/en/7.1.x/_modules/_pytest/hookspec.html#pytest_runtestloop
 class BamlPytestPlugin:
     def __init__(
-        self, api: typing.Optional[APIWrapper], ipc_channel: typing.Optional[int]
+        self, api: typing.Optional[APIWrapper], ipc_channel: typing.Optional[int],
+        include_filters: typing.List[str] = [],
+        exclude_filters: typing.List[str] = [],
     ) -> None:
         self.__gloo_tests: typing.Dict[str, TestCaseMetadata] = {}
         self.__completed_tests: typing.Set[str] = set()
@@ -83,9 +108,24 @@ class BamlPytestPlugin:
             if ipc_channel is None
             else IPCChannel(host="127.0.0.1", port=ipc_channel)
         )
+        self.__include_filters = "|".join(map(_to_regex_filter, include_filters)) or None
+        self.__exclude_filters = "|".join(map(_to_regex_filter, exclude_filters)) or None
 
         if ipc_channel is not None:
             add_message_transformer_hook(lambda log: self.__ipc.send("log", log))
+
+    def __test_matches_filter(self, test_name: str) -> bool:
+        # Check exclude filters first
+        if self.__exclude_filters is not None:
+            if re.match(self.__exclude_filters, test_name):
+                return False
+        if self.__include_filters is not None:
+            if re.match(self.__include_filters, test_name):
+                return True
+            else:
+                return False
+        # If we get here, we have no include filters, so we should return true
+        return True
 
     @pytest.hookimpl(tryfirst=True)
     def pytest_generate_tests(self, metafunc: pytest.Metafunc) -> None:
@@ -105,11 +145,13 @@ class BamlPytestPlugin:
                     ids=[f"{owner.name}-SKIPPED"],
                 )
 
-    @pytest.hookimpl(tryfirst=True)
+    @pytest.hookimpl(trylast=True)
     def pytest_collection_modifyitems(
         self, config: pytest.Config, items: typing.List[pytest.Item]
     ) -> None:
-        for item in items:
+        filtered_items = [item for item in items if self.__test_matches_filter(item.name)]
+
+        for item in filtered_items:
             if "baml_function_test" in item.keywords:
                 item.add_marker("baml_test")
                 # Add more keywords here:
@@ -123,6 +165,10 @@ class BamlPytestPlugin:
                     item.function
                 ):
                     item.add_marker(pytest.mark.asyncio)
+            
+            # if not self.__test_matches_filter(item.name):
+            #     item.add_marker(pytest.mark.skip(reason="BAML Filter does not match"))
+        items[:] = filtered_items
 
     @pytest.hookimpl(tryfirst=True)
     def pytest_collection_finish(self, session: pytest.Session) -> None:
@@ -136,7 +182,7 @@ class BamlPytestPlugin:
 
         for item in session.items:
             if any(map(lambda mark: mark.name == "baml_test", item.iter_markers())):
-                self.__gloo_tests[item.nodeid] = TestCaseMetadata(item)
+                self.__gloo_tests[item.nodeid] = TestCaseMetadata(item) 
 
     def maybe_start_logging(self, session: pytest.Session) -> None:
         if self.__api is None:

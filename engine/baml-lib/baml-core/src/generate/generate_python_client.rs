@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use internal_baml_parser_database::ParserDatabase;
 use internal_baml_schema_ast::ast::WithName;
-use log::info;
+use log::{debug, info};
 use serde_json::json;
 
 use crate::{configuration::Generator, lockfile::LockFileWrapper};
@@ -60,7 +60,7 @@ pub(crate) fn generate_py(
     test_cases.iter().for_each(|f| generate_py_file(f, &mut fc));
 
     generate_py_file(db, &mut fc);
-    info!("Writing files to {}", gen.output.to_string_lossy());
+    debug!("Writing files to {}", gen.output.to_string_lossy());
     let temp_path = PathBuf::from(format!("{}.tmp", &gen.output.to_string_lossy().to_string()));
 
     match fc.write(&temp_path, gen, lock) {

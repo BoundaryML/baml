@@ -306,7 +306,7 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
     )
   }, [filter, func.test_cases])
 
-  const getTestParams = (testCase: Func['test_cases'][0]): TestRequest['functions'][0]['tests'][0]['params'] => {
+  const getTestParams = (testCase: Func['test_cases'][0]) => {
     if (func.input.arg_type === 'positional') {
       return {
         type: 'positional',
@@ -319,7 +319,7 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
           type: 'named',
           value: func.input.values.map(({ name }) => ({
             name: name.value,
-            value: '',
+            value: null,
           })),
         }
       }
@@ -337,7 +337,7 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
         type: 'named',
         value: func.input.values.map(({ name }) => ({
           name: name.value,
-          value: contentMap.get(name.value) ?? '',
+          value: contentMap.get(name.value) ?? null,
         })),
       }
     }
@@ -363,7 +363,6 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
                   name: func.name.value,
                   tests: test_cases.map((test_case) => ({
                     name: test_case.name.value,
-                    params: getTestParams(test_case),
                     impls: func.impls.map((i) => i.name.value),
                   })),
                 },
@@ -416,6 +415,7 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
                   variant={'ghost'}
                   size={'icon'}
                   className="p-1 rounded-md w-fit h-fit bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground"
+                  disabled={impl === undefined}
                   onClick={() => {
                     const runTestRequest: TestRequest = {
                       functions: [
@@ -424,7 +424,6 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
                           tests: [
                             {
                               name: test_case.name.value,
-                              params: getTestParams(test_case),
                               impls: impl ? [impl.name.value] : [],
                             },
                           ],

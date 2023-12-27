@@ -55,12 +55,6 @@ pub fn validate(params: String) -> Result<(), JsError> {
 }
 
 #[wasm_bindgen]
-pub fn generate_test_file(params: String) -> String {
-    register_panic_hook();
-    baml_fmt::generate_test_file(params)
-}
-
-#[wasm_bindgen]
 pub fn version() -> String {
     register_panic_hook();
     env!("CARGO_PKG_VERSION").to_string()

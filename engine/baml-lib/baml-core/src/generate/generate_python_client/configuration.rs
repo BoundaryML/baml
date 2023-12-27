@@ -46,28 +46,31 @@ impl WithWritePythonString for ConfigurationWalker<'_> {
             }
             Configuration::Printer(_) => {}
             Configuration::TestCase(tc) => {
-                fc.start_export_file(".", "test_baml_client");
-
                 let func = self.walk_function();
+
+                fc.start_export_file("tests", "__init__");
+                fc.complete_file();
+
+                fc.start_export_file("tests", format!("test_{}", func.name()));
 
                 func.walk_input_args().for_each(|arg| {
                     arg.required_classes().for_each(|class| {
-                        fc.last_file().add_import(".baml_types", class.name());
+                        fc.last_file().add_import("..baml_types", class.name());
                     });
                     arg.required_enums().for_each(|enum_| {
-                        fc.last_file().add_import(".baml_types", enum_.name());
+                        fc.last_file().add_import("..baml_types", enum_.name());
                     });
                 });
                 func.walk_output_args().for_each(|arg| {
                     arg.required_classes().for_each(|class| {
-                        fc.last_file().add_import(".baml_types", class.name());
+                        fc.last_file().add_import("..baml_types", class.name());
                     });
                     arg.required_enums().for_each(|enum_| {
-                        fc.last_file().add_import(".baml_types", enum_.name());
+                        fc.last_file().add_import("..baml_types", enum_.name());
                     });
                 });
                 fc.last_file()
-                    .add_import(".baml_types", &format!("I{}", func.name()));
+                    .add_import("..baml_types", &format!("I{}", func.name()));
 
                 match func.ast_function().input() {
                     FunctionArgs::Unnamed(arg) => {
