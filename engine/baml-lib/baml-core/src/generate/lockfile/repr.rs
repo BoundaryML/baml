@@ -1,7 +1,9 @@
+use either::Either;
 use std::collections::HashMap;
 
-use internal_baml_parser_database::walkers::{
-    ClassWalker, ClientWalker, ConfigurationWalker, EnumWalker, FunctionWalker,
+use internal_baml_parser_database::{
+    walkers::{ClassWalker, ClientWalker, ConfigurationWalker, EnumWalker, FunctionWalker},
+    ParserDatabase,
 };
 use internal_baml_schema_ast::ast::{self, WithName};
 use serde_json::{json, Value};
@@ -16,16 +18,30 @@ use serde_json::{json, Value};
 //   [ ]
 
 pub(crate) trait WithRepr<T> {
-    fn repr(&self) -> T;
+    fn repr(&self, db: &ParserDatabase) -> T;
+
+    fn node(&self, db: &ParserDatabase) -> Node<T> {
+        Node {
+            elem: self.repr(db),
+            meta: HashMap::new(),
+        }
+    }
 }
 
 #[derive(serde::Serialize)]
 pub struct AllElements {
-    pub enums: Vec<Enum>,
-    pub classes: Vec<Class>,
-    pub functions: Vec<Function>,
-    pub clients: Vec<Client>,
+    pub enums: Vec<Node<Enum>>,
+    pub classes: Vec<Node<Class>>,
+    pub functions: Vec<Node<Function>>,
+    pub clients: Vec<Node<Client>>,
     //pub configuration: Configuration,
+}
+
+#[derive(serde::Serialize)]
+pub struct Node<T> {
+    // TODO- do not allow hashmaps, always want order in these
+    meta: HashMap<String, String>,
+    elem: T,
 }
 
 #[derive(serde::Serialize)]
@@ -41,17 +57,17 @@ pub enum PrimitiveType {
 #[derive(serde::Serialize)]
 pub enum FieldType {
     PRIMITIVE(PrimitiveType),
-    REF(TypeId),
-    ENUM(TypeId),
-    CLASS(TypeId),
-    KD_LIST(u32, Box<FieldType>),
-    MAP(Box<FieldType>, Box<FieldType>),
-    UNION(Vec<FieldType>),
-    TUPLE(Vec<FieldType>),
+    ENUM(EnumId),
+    CLASS(ClassId),
+    // TODO- make KD_LIST recursive list
+    KD_LIST(u32, Box<Node<FieldType>>),
+    MAP(Box<Node<FieldType>>, Box<Node<FieldType>>),
+    UNION(Vec<Node<FieldType>>),
+    TUPLE(Vec<Node<FieldType>>),
 }
 
 impl WithRepr<FieldType> for ast::FieldType {
-    fn repr(&self) -> FieldType {
+    fn repr(&self, db: &ParserDatabase) -> FieldType {
         match self {
             ast::FieldType::Identifier(_, idn) => match idn {
                 ast::Identifier::Primitive(t, ..) => FieldType::PRIMITIVE(match t {
@@ -63,19 +79,23 @@ impl WithRepr<FieldType> for ast::FieldType {
                     ast::TypeValue::Char => PrimitiveType::CHAR,
                 }),
                 // ast has enough info to resolve whether this is a ref to an enum or a class
-                ast::Identifier::Local(name, _) => FieldType::REF(name.to_string()),
+                ast::Identifier::Local(name, _) => match db.find_type(idn) {
+                    Some(Either::Left(_class_walker)) => FieldType::CLASS(name.clone()),
+                    Some(Either::Right(_enum_walker)) => FieldType::ENUM(name.clone()),
+                    None => panic!("parser DB screwed up, got an invalid identifier"),
+                },
                 _ => panic!("Not implemented"),
             },
-            ast::FieldType::List(ft, dims, _) => FieldType::KD_LIST(*dims, Box::new(ft.repr())),
+            ast::FieldType::List(ft, dims, _) => FieldType::KD_LIST(*dims, Box::new(ft.node(db))),
             ast::FieldType::Dictionary(kv, _) => {
                 // NB: we can't just unpack (*kv) into k, v because that would require a move/copy
-                FieldType::MAP(Box::new((*kv).0.repr()), Box::new((*kv).1.repr()))
+                FieldType::MAP(Box::new((*kv).0.node(db)), Box::new((*kv).1.node(db)))
             }
             ast::FieldType::Union(_, t, _) => {
-                FieldType::UNION(t.iter().map(|ft| ft.repr()).collect())
+                FieldType::UNION(t.iter().map(|ft| ft.node(db)).collect())
             }
             ast::FieldType::Tuple(_, t, _) => {
-                FieldType::TUPLE(t.iter().map(|ft| ft.repr()).collect())
+                FieldType::TUPLE(t.iter().map(|ft| ft.node(db)).collect())
             }
         }
     }
@@ -110,7 +130,7 @@ pub enum Expression {
 }
 
 impl WithRepr<FieldValue> for ast::Expression {
-    fn repr(&self) -> FieldValue {
+    fn repr(&self, db: &ParserDatabase) -> FieldValue {
         match self {
             // DO NOT LAND- this needs to distinguish between "integer" and "float"
             ast::Expression::NumericValue(val, _) => {
@@ -135,14 +155,15 @@ impl WithRepr<FieldValue> for ast::Expression {
     }
 }
 
+type EnumId = String;
 #[derive(serde::Serialize)]
 pub struct Enum {
-    name: TypeId,
+    name: EnumId,
     values: Vec<String>,
 }
 
 impl WithRepr<Enum> for EnumWalker<'_> {
-    fn repr(&self) -> Enum {
+    fn repr(&self, db: &ParserDatabase) -> Enum {
         Enum {
             name: self.name().to_string(),
             values: self.values().map(|v| v.name().to_string()).collect(),
@@ -153,35 +174,38 @@ impl WithRepr<Enum> for EnumWalker<'_> {
 #[derive(serde::Serialize)]
 pub struct Field {
     name: String,
-    r#type: FieldType,
+    r#type: Node<FieldType>,
 }
 
-type TypeId = String;
+type ClassId = String;
 
 #[derive(serde::Serialize)]
 pub struct Class {
-    name: TypeId,
+    name: ClassId,
     // DO NOT LAND- these should not be diff
     static_fields: Vec<Field>,
     dynamic_fields: Vec<Field>,
 }
 
+// block-level attributes on enums, classes
+// field-level attributes on enum values, class fields
+// overrides can only exist in impls
 impl WithRepr<Class> for ClassWalker<'_> {
-    fn repr(&self) -> Class {
+    fn repr(&self, db: &ParserDatabase) -> Class {
         Class {
             name: self.name().to_string(),
             static_fields: self
                 .static_fields()
                 .map(|field| Field {
                     name: field.name().to_string(),
-                    r#type: field.ast_field().field_type.repr(),
+                    r#type: field.ast_field().field_type.node(db),
                 })
                 .collect(),
             dynamic_fields: self
                 .dynamic_fields()
                 .map(|field| Field {
                     name: field.name().to_string(),
-                    r#type: field.ast_field().field_type.repr(),
+                    r#type: field.ast_field().field_type.node(db),
                 })
                 .collect(),
         }
@@ -221,7 +245,7 @@ pub struct NamedArgList {
 /// BAML does not allow UnnamedArgList nor a lone NamedArg
 #[derive(serde::Serialize)]
 pub enum FunctionArgs {
-    UNNAMED_ARG(FieldType),
+    UNNAMED_ARG(Node<FieldType>),
     NAMED_ARG_LIST(NamedArgList),
 }
 
@@ -231,12 +255,12 @@ type FunctionId = String;
 pub struct Function {
     name: FunctionId,
     inputs: FunctionArgs,
-    output: FieldType,
+    output: Node<FieldType>,
     impls: Vec<Implementation>,
 }
 
 impl WithRepr<Function> for FunctionWalker<'_> {
-    fn repr(&self) -> Function {
+    fn repr(&self, db: &ParserDatabase) -> Function {
         Function {
             name: self.name().to_string(),
             inputs: match self.ast_function().input() {
@@ -244,16 +268,18 @@ impl WithRepr<Function> for FunctionWalker<'_> {
                     arg_list: arg_list
                         .args
                         .iter()
-                        .map(|(id, arg)| (id.name().to_string(), arg.field_type.repr()))
+                        .map(|(id, arg)| (id.name().to_string(), arg.field_type.repr(db)))
                         .collect(),
                 }),
-                ast::FunctionArgs::Unnamed(arg) => FunctionArgs::UNNAMED_ARG(arg.field_type.repr()),
+                ast::FunctionArgs::Unnamed(arg) => {
+                    FunctionArgs::UNNAMED_ARG(arg.field_type.node(db))
+                }
             },
             output: match self.ast_function().output() {
                 ast::FunctionArgs::Named(arg_list) => {
                     panic!("Functions may not return named args")
                 }
-                ast::FunctionArgs::Unnamed(arg) => arg.field_type.repr(),
+                ast::FunctionArgs::Unnamed(arg) => arg.field_type.node(db),
             },
             impls: self
                 .walk_variants()
@@ -291,26 +317,9 @@ pub struct Client {
 }
 
 impl WithRepr<Client> for ClientWalker<'_> {
-    fn repr(&self) -> Client {
+    fn repr(&self, db: &ParserDatabase) -> Client {
         Client {
             name: self.name().to_string(),
-        }
-    }
-}
-
-#[derive(serde::Serialize)]
-pub struct Configuration {
-    retry_policies: Vec<RetryPolicy>,
-}
-#[derive(serde::Serialize)]
-pub struct RetryPolicy {
-    // TODO
-}
-
-impl WithRepr<Configuration> for ConfigurationWalker<'_> {
-    fn repr(&self) -> Configuration {
-        Configuration {
-            retry_policies: vec![],
         }
     }
 }
