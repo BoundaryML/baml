@@ -25,27 +25,51 @@ trait WithMetadata {
 }
 
 #[derive(serde::Serialize)]
-pub enum Primitive {
+pub enum PrimitiveType {
+    CHAR,
     STRING,
+    FLOAT,
+    INTEGER,
+    BOOL,
+    NULL,
 }
 
 #[derive(serde::Serialize)]
 pub enum FieldType {
-    PRIMITIVE(Primitive),
-    ENUM(String),
-    CLASS(String),
+    PRIMITIVE(PrimitiveType),
+    REF(TypeId),
+    KD_LIST(u32, Box<FieldType>),
+    MAP(Box<FieldType>, Box<FieldType>),
+    UNION(Vec<Box<FieldType>>),
+    TUPLE(Vec<Box<FieldType>>),
 }
 
 impl WithRepr<FieldType> for ast::FieldType {
     fn repr(&self) -> FieldType {
         match self {
-            ast::FieldType::Identifier(_, idn) => FieldType::CLASS("placeholder-class".to_string()),
-            ast::FieldType::List(item, dims, _) => {
-                FieldType::CLASS("placeholder-class".to_string())
+            ast::FieldType::Identifier(_, idn) => match idn {
+                ast::Identifier::Primitive(t, ..) => FieldType::PRIMITIVE(match t {
+                    ast::TypeValue::String => PrimitiveType::STRING,
+                    ast::TypeValue::Int => PrimitiveType::INTEGER,
+                    ast::TypeValue::Float => PrimitiveType::FLOAT,
+                    ast::TypeValue::Bool => PrimitiveType::BOOL,
+                    ast::TypeValue::Null => PrimitiveType::NULL,
+                    ast::TypeValue::Char => PrimitiveType::CHAR,
+                }),
+                ast::Identifier::Local(name, _) => FieldType::REF(name.to_string()),
+                _ => panic!("Not implemented"),
+            },
+            ast::FieldType::List(item, dims, _) => FieldType::KD_LIST(*dims, Box::new(item.repr())),
+            ast::FieldType::Dictionary(kv, _) => {
+                // NB: can (*kv).N be unpacked with names?
+                FieldType::MAP(Box::new((*kv).0.repr()), Box::new((*kv).1.repr()))
             }
-            ast::FieldType::Dictionary(kv, _) => FieldType::CLASS("placeholder-class".to_string()),
-            ast::FieldType::Union(_, t, _) => FieldType::CLASS("placeholder-class".to_string()),
-            ast::FieldType::Tuple(_, t, _) => FieldType::CLASS("placeholder-class".to_string()),
+            ast::FieldType::Union(_, t, _) => {
+                FieldType::UNION(t.iter().map(|ft| Box::new(ft.repr())).collect())
+            }
+            ast::FieldType::Tuple(_, t, _) => {
+                FieldType::TUPLE(t.iter().map(|ft| Box::new(ft.repr())).collect())
+            }
         }
     }
 }
@@ -53,22 +77,6 @@ impl WithRepr<FieldType> for ast::FieldType {
 // impl WithRepr for FieldType {
 //     fn repr(&self) -> Value {
 //         match self {
-//             FieldType::Identifier(_, idn) => match idn {
-//                 Identifier::Primitive(t, ..) => json!({
-//                     "type": match t {
-//                         TypeValue::String => "string",
-//                         TypeValue::Int => "integer",
-//                         TypeValue::Float => "number",
-//                         TypeValue::Bool => "boolean",
-//                         TypeValue::Null => "undefined",
-//                         TypeValue::Char => "string",
-//                     }
-//                 }),
-//                 Identifier::Local(name, _) => json!({
-//                     "$ref": format!("#/definitions/{}", name),
-//                 }),
-//                 _ => panic!("Not implemented"),
-//             },
 //             FieldType::List(item, dims, _) => {
 //                 let mut inner = json!({
 //                     "type": "array",
@@ -110,10 +118,9 @@ impl WithRepr<FieldType> for ast::FieldType {
 //     }
 // }
 
-type EnumId = String;
 #[derive(serde::Serialize)]
 pub struct Enum {
-    name: EnumId,
+    name: TypeId,
     // DO NOT LAND - need to model attributes
     values: Vec<String>,
 }
@@ -133,11 +140,11 @@ pub struct Field {
     r#type: FieldType,
 }
 
-type ClassId = String;
+type TypeId = String;
 
 #[derive(serde::Serialize)]
 pub struct Class {
-    name: ClassId,
+    name: TypeId,
     fields: Vec<Field>,
 }
 
@@ -149,8 +156,7 @@ impl WithRepr<Class> for ClassWalker<'_> {
                 .static_fields()
                 .map(|field| Field {
                     name: field.name().to_string(),
-                    // DO NOT LAND- needs to recurse
-                    r#type: FieldType::PRIMITIVE(Primitive::STRING),
+                    r#type: field.ast_field().field_type.repr(),
                 })
                 .collect(),
         }
@@ -214,8 +220,8 @@ impl WithRepr<Function> for FunctionWalker<'_> {
                 ast::FunctionArgs::Unnamed(arg) => FunctionArgs::UNNAMED_ARG,
             },
             output: match self.ast_function().output() {
-                ast::FunctionArgs::Named(arg_list) => FieldType::PRIMITIVE(Primitive::STRING),
-                ast::FunctionArgs::Unnamed(arg) => FieldType::PRIMITIVE(Primitive::STRING),
+                ast::FunctionArgs::Named(arg_list) => FieldType::PRIMITIVE(PrimitiveType::STRING),
+                ast::FunctionArgs::Unnamed(arg) => FieldType::PRIMITIVE(PrimitiveType::STRING),
             },
             impls: self
                 .walk_variants()
