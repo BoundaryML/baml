@@ -25,10 +25,10 @@ only thing i need to care about right now is the local part
 
 pub fn generate(db: &ParserDatabase) -> std::io::Result<()> {
     let all_elements = AllElements {
-        enums: db.walk_enums().map(|e| e.repr()).collect(),
-        classes: db.walk_classes().map(|e| e.repr()).collect(),
-        functions: db.walk_functions().map(|e| e.repr()).collect(),
-        clients: db.walk_clients().map(|e| e.repr()).collect(),
+        enums: db.walk_enums().map(|e| e.node(db)).collect(),
+        classes: db.walk_classes().map(|e| e.node(db)).collect(),
+        functions: db.walk_functions().map(|e| e.node(db)).collect(),
+        clients: db.walk_clients().map(|e| e.node(db)).collect(),
         //configuration: db.walk_retry_policies().map(|e| e.repr()).collect(),
     };
 
