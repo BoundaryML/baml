@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use internal_baml_parser_database::walkers::{
     ClassWalker, EnumWalker, FunctionWalker, VariantWalker,
 };
-use internal_baml_schema_ast::ast::{self, FieldType, Identifier, TypeValue, WithName};
+use internal_baml_schema_ast::ast::{self, WithName};
 use serde_json::{json, Value};
 
 pub(crate) trait WithRepr<T> {
@@ -16,19 +16,6 @@ pub struct AllElements {
     pub classes: Vec<Class>,
     pub functions: Vec<Function>,
 }
-
-#[derive(serde::Serialize)]
-pub enum Primitive {
-    STRING,
-}
-
-#[derive(serde::Serialize)]
-pub enum Type {
-    PRIMITIVE(Primitive),
-    ENUM(String),
-    CLASS(String),
-}
-
 trait WithMetadata {
     fn attributes(&self) -> &HashMap<String, String>;
 
@@ -38,128 +25,27 @@ trait WithMetadata {
 }
 
 #[derive(serde::Serialize)]
-pub struct Enum {
-    name: String,
-    // DO NOT LAND - need to model attributes
-    values: Vec<String>,
-}
-
-impl WithRepr<Enum> for EnumWalker<'_> {
-    fn repr(&self) -> Enum {
-        Enum {
-            name: self.name().to_string(),
-            values: self.values().map(|v| v.name().to_string()).collect(),
-        }
-    }
+pub enum Primitive {
+    STRING,
 }
 
 #[derive(serde::Serialize)]
-pub struct Field {
-    name: String,
-    r#type: Type,
+pub enum FieldType {
+    PRIMITIVE(Primitive),
+    ENUM(String),
+    CLASS(String),
 }
 
-#[derive(serde::Serialize)]
-pub struct Class {
-    name: String,
-    fields: Vec<Field>,
-}
-
-impl WithRepr<Class> for ClassWalker<'_> {
-    fn repr(&self) -> Class {
-        Class {
-            name: self.name().to_string(),
-            fields: self
-                .static_fields()
-                .map(|field| Field {
-                    name: field.name().to_string(),
-                    // DO NOT LAND- needs to recurse
-                    r#type: Type::PRIMITIVE(Primitive::STRING),
-                })
-                .collect(),
-        }
-    }
-}
-
-// DO NOT LAND - these are also client types
-#[derive(serde::Serialize)]
-pub enum ImplementationType {
-    LLM,
-}
-
-#[derive(serde::Serialize)]
-pub struct Implementation {
-    // DO NOT LAND - need to capture overrides (currently represented as metadata)
-    r#type: ImplementationType,
-    name: String,
-
-    prompt: String,
-    // input and output replacers are for the AST of the prompt itself
-    // lockfile is doable w/o the prompt AST, but we /could/ do it- Q is if there's any benefit
-    input_replacers: HashMap<String, String>,
-    output_replacers: HashMap<String, String>,
-    client: String,
-}
-
-#[derive(serde::Serialize)]
-pub struct NamedArgList {
-    arg_list: Vec<String>,
-}
-
-/// BAML does not allow UnnamedArgList nor a lone NamedArg
-#[derive(serde::Serialize)]
-pub enum FunctionArgs {
-    UNNAMED_ARG,
-    NAMED_ARG_LIST(NamedArgList),
-}
-
-#[derive(serde::Serialize)]
-pub struct Function {
-    name: String,
-    inputs: FunctionArgs,
-    output: Type,
-    impls: Vec<Implementation>,
-}
-
-impl WithRepr<Function> for FunctionWalker<'_> {
-    fn repr(&self) -> Function {
-        Function {
-            name: self.name().to_string(),
-            inputs: match self.ast_function().input() {
-                ast::FunctionArgs::Named(arg_list) => {
-                    FunctionArgs::NAMED_ARG_LIST(NamedArgList { arg_list: vec![] })
-                }
-                ast::FunctionArgs::Unnamed(arg) => FunctionArgs::UNNAMED_ARG,
-            },
-            output: match self.ast_function().output() {
-                ast::FunctionArgs::Named(arg_list) => Type::PRIMITIVE(Primitive::STRING),
-                ast::FunctionArgs::Unnamed(arg) => Type::PRIMITIVE(Primitive::STRING),
-            },
-            impls: self
-                .walk_variants()
-                .map(|e| Implementation {
-                    r#type: ImplementationType::LLM,
-                    name: e.name().to_string(),
-                    prompt: e.properties().prompt.value.clone(),
-                    input_replacers: e
-                        .properties()
-                        .replacers
-                        // NB: .0 should really be .input
-                        .0
-                        .iter()
-                        .map(|r| (r.0.key(), r.1.clone()))
-                        .collect(),
-                    output_replacers: e
-                        .properties()
-                        .replacers
-                        // NB: .1 should really be .output
-                        .1
-                        .iter()
-                        .map(|r| (r.0.key(), r.1.clone()))
-                        .collect(),
-                    client: e.properties().client.value.clone(),
-                })
-                .collect(),
+impl WithRepr<FieldType> for ast::FieldType {
+    fn repr(&self) -> FieldType {
+        match self {
+            ast::FieldType::Identifier(_, idn) => FieldType::CLASS("placeholder-class".to_string()),
+            ast::FieldType::List(item, dims, _) => {
+                FieldType::CLASS("placeholder-class".to_string())
+            }
+            ast::FieldType::Dictionary(kv, _) => FieldType::CLASS("placeholder-class".to_string()),
+            ast::FieldType::Union(_, t, _) => FieldType::CLASS("placeholder-class".to_string()),
+            ast::FieldType::Tuple(_, t, _) => FieldType::CLASS("placeholder-class".to_string()),
         }
     }
 }
@@ -223,3 +109,130 @@ impl WithRepr<Function> for FunctionWalker<'_> {
 //         }
 //     }
 // }
+
+#[derive(serde::Serialize)]
+pub struct Enum {
+    name: String,
+    // DO NOT LAND - need to model attributes
+    values: Vec<String>,
+}
+
+impl WithRepr<Enum> for EnumWalker<'_> {
+    fn repr(&self) -> Enum {
+        Enum {
+            name: self.name().to_string(),
+            values: self.values().map(|v| v.name().to_string()).collect(),
+        }
+    }
+}
+
+#[derive(serde::Serialize)]
+pub struct Field {
+    name: String,
+    r#type: FieldType,
+}
+
+#[derive(serde::Serialize)]
+pub struct Class {
+    name: String,
+    fields: Vec<Field>,
+}
+
+impl WithRepr<Class> for ClassWalker<'_> {
+    fn repr(&self) -> Class {
+        Class {
+            name: self.name().to_string(),
+            fields: self
+                .static_fields()
+                .map(|field| Field {
+                    name: field.name().to_string(),
+                    // DO NOT LAND- needs to recurse
+                    r#type: FieldType::PRIMITIVE(Primitive::STRING),
+                })
+                .collect(),
+        }
+    }
+}
+
+// DO NOT LAND - these are also client types
+#[derive(serde::Serialize)]
+pub enum ImplementationType {
+    LLM,
+}
+
+#[derive(serde::Serialize)]
+pub struct Implementation {
+    // DO NOT LAND - need to capture overrides (currently represented as metadata)
+    r#type: ImplementationType,
+    name: String,
+
+    prompt: String,
+    // input and output replacers are for the AST of the prompt itself
+    // lockfile is doable w/o the prompt AST, but we /could/ do it- Q is if there's any benefit
+    input_replacers: HashMap<String, String>,
+    output_replacers: HashMap<String, String>,
+    client: String,
+}
+
+#[derive(serde::Serialize)]
+pub struct NamedArgList {
+    arg_list: Vec<String>,
+}
+
+/// BAML does not allow UnnamedArgList nor a lone NamedArg
+#[derive(serde::Serialize)]
+pub enum FunctionArgs {
+    UNNAMED_ARG,
+    NAMED_ARG_LIST(NamedArgList),
+}
+
+#[derive(serde::Serialize)]
+pub struct Function {
+    name: String,
+    inputs: FunctionArgs,
+    output: FieldType,
+    impls: Vec<Implementation>,
+}
+
+impl WithRepr<Function> for FunctionWalker<'_> {
+    fn repr(&self) -> Function {
+        Function {
+            name: self.name().to_string(),
+            inputs: match self.ast_function().input() {
+                ast::FunctionArgs::Named(arg_list) => {
+                    FunctionArgs::NAMED_ARG_LIST(NamedArgList { arg_list: vec![] })
+                }
+                ast::FunctionArgs::Unnamed(arg) => FunctionArgs::UNNAMED_ARG,
+            },
+            output: match self.ast_function().output() {
+                ast::FunctionArgs::Named(arg_list) => FieldType::PRIMITIVE(Primitive::STRING),
+                ast::FunctionArgs::Unnamed(arg) => FieldType::PRIMITIVE(Primitive::STRING),
+            },
+            impls: self
+                .walk_variants()
+                .map(|e| Implementation {
+                    r#type: ImplementationType::LLM,
+                    name: e.name().to_string(),
+                    prompt: e.properties().prompt.value.clone(),
+                    input_replacers: e
+                        .properties()
+                        .replacers
+                        // NB: .0 should really be .input
+                        .0
+                        .iter()
+                        .map(|r| (r.0.key(), r.1.clone()))
+                        .collect(),
+                    output_replacers: e
+                        .properties()
+                        .replacers
+                        // NB: .1 should really be .output
+                        .1
+                        .iter()
+                        .map(|r| (r.0.key(), r.1.clone()))
+                        .collect(),
+                    client: e.properties().client.value.clone(),
+                })
+                .collect(),
+        }
+    }
+}
