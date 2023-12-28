@@ -4,7 +4,7 @@ use internal_baml_schema_ast::ast::{
 };
 use serde_json::{json, Value};
 
-use super::repr::WithRepr;
+use super::repr::{AllElements, WithRepr};
 
 // should have a serde struct with a special serialize/deserialize
 
@@ -23,52 +23,16 @@ only thing i need to care about right now is the local part
 
  */
 
-fn debug1(span: &Span) -> String {
-    return format!("{}:[{},{})", span.file.path(), span.start, span.end);
-}
-
-fn debug2(attributes: &[Attribute]) -> String {
-    return attributes
-        .iter()
-        .map(|attr| format!("{}:{}", attr.name.name(), attr.arguments.arguments.len()))
-        .collect::<Vec<String>>()
-        .join(",");
-}
-
 pub fn generate(db: &ParserDatabase) -> std::io::Result<()> {
-    let mut lockfile_contents: Vec<String> = Vec::new();
-
-    for e in db.walk_enums() {
-        lockfile_contents.push(format!(
-            "enum:{} {} {} {}",
-            e.name(),
-            e.identifier().name(),
-            debug1(e.identifier().span()),
-            serde_json::to_string_pretty(&e.repr())?
-        ));
-    }
-    for e in db.walk_classes() {
-        lockfile_contents.push(format!(
-            "class:{} {}",
-            e.name(),
-            serde_json::to_string_pretty(&e.repr())?
-        ));
-    }
-    for e in db.walk_functions() {
-        lockfile_contents.push(format!(
-            "function2:{} {}",
-            e.name(),
-            serde_json::to_string_pretty(&e.repr())?
-        ));
-    }
+    let all_elements = AllElements {
+        enums: db.walk_enums().map(|e| e.repr()).collect(),
+        classes: db.walk_classes().map(|e| e.repr()).collect(),
+        functions: db.walk_functions().map(|e| e.repr()).collect(),
+    };
 
     std::fs::write(
         "/home/sam/baml-ast.lock",
-        lockfile_contents
-            .iter()
-            .map(|s| format!("{}\n", s))
-            .collect::<Vec<String>>()
-            .join(""),
+        serde_json::to_string_pretty(&all_elements)? + "\n",
     )?;
     Ok(())
 }

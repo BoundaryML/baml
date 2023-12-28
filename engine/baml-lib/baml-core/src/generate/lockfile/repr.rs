@@ -7,17 +7,24 @@ use internal_baml_parser_database::walkers::{
 use internal_baml_schema_ast::ast::{self, FieldType, Identifier, TypeValue, WithName};
 use serde_json::{json, Value};
 
-pub(crate) trait WithRepr {
-    fn repr(&self) -> Value;
+pub(crate) trait WithRepr<T> {
+    fn repr(&self) -> T;
 }
 
 #[derive(serde::Serialize)]
-enum Primitive {
+pub struct AllElements {
+    pub enums: Vec<Enum>,
+    pub classes: Vec<Class>,
+    pub functions: Vec<Function>,
+}
+
+#[derive(serde::Serialize)]
+pub enum Primitive {
     STRING,
 }
 
 #[derive(serde::Serialize)]
-enum Type {
+pub enum Type {
     PRIMITIVE(Primitive),
     ENUM(String),
     CLASS(String),
@@ -32,37 +39,43 @@ trait WithMetadata {
 }
 
 #[derive(serde::Serialize)]
-struct Enum {
+pub struct Enum {
     name: String,
     // DO NOT LAND - need to model attributes
     values: Vec<String>,
 }
 
-impl WithRepr for EnumWalker<'_> {
-    fn repr(&self) -> Value {
-        serde_json::to_value(Enum {
+pub fn enum_repr(w: &EnumWalker<'_>) -> Enum {
+    Enum {
+        name: w.name().to_string(),
+        values: w.values().map(|v| v.name().to_string()).collect(),
+    }
+}
+
+impl WithRepr<Enum> for EnumWalker<'_> {
+    fn repr(&self) -> Enum {
+        Enum {
             name: self.name().to_string(),
             values: self.values().map(|v| v.name().to_string()).collect(),
-        })
-        .unwrap()
+        }
     }
 }
 
 #[derive(serde::Serialize)]
-struct Field {
+pub struct Field {
     name: String,
     r#type: Type,
 }
 
 #[derive(serde::Serialize)]
-struct Class {
+pub struct Class {
     name: String,
     fields: Vec<Field>,
 }
 
-impl WithRepr for ClassWalker<'_> {
-    fn repr(&self) -> Value {
-        serde_json::to_value(Class {
+impl WithRepr<Class> for ClassWalker<'_> {
+    fn repr(&self) -> Class {
+        Class {
             name: self.name().to_string(),
             fields: self
                 .static_fields()
@@ -72,19 +85,18 @@ impl WithRepr for ClassWalker<'_> {
                     r#type: Type::PRIMITIVE(Primitive::STRING),
                 })
                 .collect(),
-        })
-        .unwrap()
+        }
     }
 }
 
 // DO NOT LAND - these are also client types
 #[derive(serde::Serialize)]
-enum ImplementationType {
+pub enum ImplementationType {
     LLM,
 }
 
 #[derive(serde::Serialize)]
-struct Implementation {
+pub struct Implementation {
     // DO NOT LAND - need to capture overrides (currently represented as metadata)
     r#type: ImplementationType,
     name: String,
@@ -98,28 +110,28 @@ struct Implementation {
 }
 
 #[derive(serde::Serialize)]
-struct NamedArgList {
+pub struct NamedArgList {
     arg_list: Vec<String>,
 }
 
 /// BAML does not allow UnnamedArgList nor a lone NamedArg
 #[derive(serde::Serialize)]
-enum FunctionArgs {
+pub enum FunctionArgs {
     UNNAMED_ARG,
     NAMED_ARG_LIST(NamedArgList),
 }
 
 #[derive(serde::Serialize)]
-struct Function {
+pub struct Function {
     name: String,
     inputs: FunctionArgs,
     output: Type,
     impls: Vec<Implementation>,
 }
 
-impl WithRepr for FunctionWalker<'_> {
-    fn repr(&self) -> Value {
-        serde_json::to_value(Function {
+impl WithRepr<Function> for FunctionWalker<'_> {
+    fn repr(&self) -> Function {
+        Function {
             name: self.name().to_string(),
             inputs: match self.ast_function().input() {
                 ast::FunctionArgs::Named(arg_list) => {
@@ -156,89 +168,12 @@ impl WithRepr for FunctionWalker<'_> {
                     client: e.properties().client.value.clone(),
                 })
                 .collect(),
-        })
-        .unwrap()
-        //    json!({
-        //        "name": self.name(),
-        //        "input": match self.ast_function().input() {
-        //            ast::FunctionArgs::Named(arg_list) => json!({
-        //                "arg_type": "named",
-        //                "values": arg_list.args.iter().map(
-        //                    |(id, arg)| json!({
-        //                        "name": id.name(),
-        //                        "type": format!("{}", arg.field_type),
-        //                        "jsonSchema": arg.field_type.json_schema()
-
-        //                    })
-        //                ).collect::<Vec<_>>(),
-        //            }),
-        //            ast::FunctionArgs::Unnamed(arg) => json!({
-        //                "arg_type": "positional",
-        //                "type": format!("{}", arg.field_type),
-        //                "jsonSchema": arg.field_type.json_schema()
-        //            }),
-        //        },
-        //        // "output": match func.ast_function().output() {
-        //        //     ast::FunctionArgs::Named(arg_list) => json!({
-        //        //         "arg_type": "named",
-        //        //         "values": arg_list.args.iter().map(
-        //        //             |(id, arg)| json!({
-        //        //                 "name": StringSpan::new(id.name(), &id.span()),
-        //        //                 "type": format!("{}", arg.field_type),
-        //        //                 "jsonSchema": arg.field_type.json_schema()
-        //        //             })
-        //        //         ).collect::<Vec<_>>(),
-        //        //     }),
-        //        //     ast::FunctionArgs::Unnamed(arg) => json!({
-        //        //         "arg_type": "positional",
-        //        //         "type": format!("{}", arg.field_type),
-        //        //         "jsonSchema": arg.field_type.json_schema()
-        //        //     }),
-        //        // },
-        //        //"test_cases": func.walk_tests().map(
-        //        //    |t| {
-        //        //        let props = t.test_case();
-        //        //        json!({
-        //        //            "name": StringSpan::new(t.name(), &t.identifier().span()),
-        //        //            "content": props.content.value(),
-        //        //        })
-        //        //    }
-        //        //).collect::<Vec<_>>(),
-        //        //"impls": func.walk_variants().map(
-        //        //    |i| {
-        //        //        let props = i.properties();
-        //        //        json!({
-        //        //            "type": "llm",
-        //        //            "name": StringSpan::new(i.ast_variant().name(), &i.identifier().span()),
-        //        //            "prompt_key": {
-        //        //                "start": props.prompt.key_span.start,
-        //        //                "end": props.prompt.key_span.end,
-        //        //                "source_file": props.prompt.key_span.file.path(),
-        //        //            },
-        //        //            "prompt": props.prompt.value,
-        //        //            "input_replacers": props.replacers.0.iter().map(
-        //        //                |r| json!({
-        //        //                    "key": r.0.key(),
-        //        //                    "value": r.1,
-        //        //                })
-        //        //            ).collect::<Vec<_>>(),
-        //        //            "output_replacers": props.replacers.1.iter().map(
-        //        //                |r| json!({
-        //        //                    "key": r.0.key(),
-        //        //                    "value": r.1,
-        //        //                })
-        //        //            ).collect::<Vec<_>>(),
-        //        //            "client": schema.db.find_client(&props.client.value).map(|c| StringSpan::new(c.name(), &c.identifier().span())).unwrap_or_else(|| StringSpan::new(&props.client.value, &props.client.span)),
-
-        //        //        })
-        //        //    }
-        //        //).collect::<Vec<_>>(),
-        //    })
+        }
     }
 }
 
-// impl WithJsonSchema for FieldType {
-//     fn json_schema(&self) -> Value {
+// impl WithRepr for FieldType {
+//     fn repr(&self) -> Value {
 //         match self {
 //             FieldType::Identifier(_, idn) => match idn {
 //                 Identifier::Primitive(t, ..) => json!({
