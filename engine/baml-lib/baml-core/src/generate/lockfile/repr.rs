@@ -85,36 +85,16 @@ enum ImplementationType {
 
 #[derive(serde::Serialize)]
 struct Implementation {
+    // DO NOT LAND - need to capture overrides (currently represented as metadata)
     r#type: ImplementationType,
     name: String,
 
     prompt: String,
     // input and output replacers are for the AST of the prompt itself
     // lockfile is doable w/o the prompt AST, but we /could/ do it- Q is if there's any benefit
-    input_replacers: Vec<String>,
-    output_replacers: Vec<String>,
+    input_replacers: HashMap<String, String>,
+    output_replacers: HashMap<String, String>,
     client: String,
-    //        //            "type": "llm",
-    //        //            "name": StringSpan::new(i.ast_variant().name(), &i.identifier().span()),
-    //        //            "prompt_key": {
-    //        //                "start": props.prompt.key_span.start,
-    //        //                "end": props.prompt.key_span.end,
-    //        //                "source_file": props.prompt.key_span.file.path(),
-    //        //            },
-    //        //            "prompt": props.prompt.value,
-    //        //            "input_replacers": props.replacers.0.iter().map(
-    //        //                |r| json!({
-    //        //                    "key": r.0.key(),
-    //        //                    "value": r.1,
-    //        //                })
-    //        //            ).collect::<Vec<_>>(),
-    //        //            "output_replacers": props.replacers.1.iter().map(
-    //        //                |r| json!({
-    //        //                    "key": r.0.key(),
-    //        //                    "value": r.1,
-    //        //                })
-    //        //            ).collect::<Vec<_>>(),
-    //        //            "client": schema.db.find_client(&props.client.value).map(|c| StringSpan::new(c.name(), &c.identifier().span())).unwrap_or_else(|| StringSpan::new(&props.client.value, &props.client.span)),
 }
 #[derive(serde::Serialize)]
 struct Function {
@@ -152,23 +132,23 @@ impl WithRepr for FunctionWalker<'_> {
                 .map(|e| Implementation {
                     r#type: ImplementationType::LLM,
                     name: e.name().to_string(),
-                    // e.properties().prompt is the post-processed prompt, but to encode
-                    // enough metadata
                     prompt: e.properties().prompt.value.clone(),
                     input_replacers: e
                         .properties()
                         .replacers
+                        // NB: .0 should really be .input
                         .0
                         .iter()
-                        .map(|r| format!("k={} v={}", r.0.key(), r.1))
+                        .map(|r| (r.0.key(), r.1.clone()))
                         .collect(),
-                    //        //            "input_replacers": props.replacers.0.iter().map(
-                    //        //                |r| json!({
-                    //        //                    "key": r.0.key(),
-                    //        //                    "value": r.1,
-                    //        //                })
-                    //        //            ).collect::<Vec<_>>(),
-                    output_replacers: vec![],
+                    output_replacers: e
+                        .properties()
+                        .replacers
+                        // NB: .0 should really be .input
+                        .1
+                        .iter()
+                        .map(|r| (r.0.key(), r.1.clone()))
+                        .collect(),
                     client: e.properties().client.value.clone(),
                 })
                 .collect(),
