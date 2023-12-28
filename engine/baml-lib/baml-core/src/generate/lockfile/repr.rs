@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::thread::ScopedJoinHandle;
+
 use internal_baml_parser_database::walkers::{
     ClassWalker, EnumWalker, FunctionWalker, VariantWalker,
 };
@@ -16,8 +19,16 @@ enum Primitive {
 #[derive(serde::Serialize)]
 enum Type {
     PRIMITIVE(Primitive),
-    ENUM(Enum),
-    CLASS(Class),
+    ENUM(String),
+    CLASS(String),
+}
+
+trait WithMetadata {
+    fn attributes(&self) -> &HashMap<String, String>;
+
+    fn getAttribute(&self, key: &str) -> Option<&String> {
+        self.attributes().get(key)
+    }
 }
 
 #[derive(serde::Serialize)]
@@ -46,14 +57,14 @@ struct Field {
 #[derive(serde::Serialize)]
 struct Class {
     name: String,
-    properties: Vec<Field>,
+    fields: Vec<Field>,
 }
 
 impl WithRepr for ClassWalker<'_> {
     fn repr(&self) -> Value {
         serde_json::to_value(Class {
             name: self.name().to_string(),
-            properties: self
+            fields: self
                 .static_fields()
                 .map(|field| Field {
                     name: field.name().to_string(),
@@ -66,6 +77,7 @@ impl WithRepr for ClassWalker<'_> {
     }
 }
 
+// DO NOT LAND - these are also client types
 #[derive(serde::Serialize)]
 enum ImplementationType {
     LLM,
@@ -77,6 +89,8 @@ struct Implementation {
     name: String,
 
     prompt: String,
+    // input and output replacers are for the AST of the prompt itself
+    // lockfile is doable w/o the prompt AST, but we /could/ do it- Q is if there's any benefit
     input_replacers: Vec<String>,
     output_replacers: Vec<String>,
     client: String,
@@ -138,8 +152,22 @@ impl WithRepr for FunctionWalker<'_> {
                 .map(|e| Implementation {
                     r#type: ImplementationType::LLM,
                     name: e.name().to_string(),
+                    // e.properties().prompt is the post-processed prompt, but to encode
+                    // enough metadata
                     prompt: e.properties().prompt.value.clone(),
-                    input_replacers: vec![],
+                    input_replacers: e
+                        .properties()
+                        .replacers
+                        .0
+                        .iter()
+                        .map(|r| format!("k={} v={}", r.0.key(), r.1))
+                        .collect(),
+                    //        //            "input_replacers": props.replacers.0.iter().map(
+                    //        //                |r| json!({
+                    //        //                    "key": r.0.key(),
+                    //        //                    "value": r.1,
+                    //        //                })
+                    //        //            ).collect::<Vec<_>>(),
                     output_replacers: vec![],
                     client: e.properties().client.value.clone(),
                 })
