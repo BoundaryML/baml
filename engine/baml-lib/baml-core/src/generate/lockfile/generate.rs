@@ -28,6 +28,8 @@ pub fn generate(db: &ParserDatabase) -> std::io::Result<()> {
         enums: db.walk_enums().map(|e| e.repr()).collect(),
         classes: db.walk_classes().map(|e| e.repr()).collect(),
         functions: db.walk_functions().map(|e| e.repr()).collect(),
+        clients: db.walk_clients().map(|e| e.repr()).collect(),
+        //configuration: db.walk_retry_policies().map(|e| e.repr()).collect(),
     };
 
     std::fs::write(

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use internal_baml_parser_database::walkers::{
-    ClassWalker, EnumWalker, FunctionWalker, VariantWalker,
+    ClassWalker, ClientWalker, ConfigurationWalker, EnumWalker, FunctionWalker,
 };
 use internal_baml_schema_ast::ast::{self, WithName};
 use serde_json::{json, Value};
@@ -24,6 +24,8 @@ pub struct AllElements {
     pub enums: Vec<Enum>,
     pub classes: Vec<Class>,
     pub functions: Vec<Function>,
+    pub clients: Vec<Client>,
+    //pub configuration: Configuration,
 }
 
 #[derive(serde::Serialize)]
@@ -44,8 +46,8 @@ pub enum FieldType {
     CLASS(TypeId),
     KD_LIST(u32, Box<FieldType>),
     MAP(Box<FieldType>, Box<FieldType>),
-    UNION(Vec<Box<FieldType>>),
-    TUPLE(Vec<Box<FieldType>>),
+    UNION(Vec<FieldType>),
+    TUPLE(Vec<FieldType>),
 }
 
 impl WithRepr<FieldType> for ast::FieldType {
@@ -70,10 +72,64 @@ impl WithRepr<FieldType> for ast::FieldType {
                 FieldType::MAP(Box::new((*kv).0.repr()), Box::new((*kv).1.repr()))
             }
             ast::FieldType::Union(_, t, _) => {
-                FieldType::UNION(t.iter().map(|ft| Box::new(ft.repr())).collect())
+                FieldType::UNION(t.iter().map(|ft| ft.repr()).collect())
             }
             ast::FieldType::Tuple(_, t, _) => {
-                FieldType::TUPLE(t.iter().map(|ft| Box::new(ft.repr())).collect())
+                FieldType::TUPLE(t.iter().map(|ft| ft.repr()).collect())
+            }
+        }
+    }
+}
+
+pub enum Identifier {
+    /// Starts with env.*
+    ENV(String),
+    /// The path to a Local Identifer + the local identifer. Separated by '.'
+    Ref(String),
+    /// A string without spaces or '.' Always starts with a letter. May contain numbers
+    Local(String),
+    /// Special types (always lowercase).
+    Primitive(String),
+    /// A string without spaces, but contains '-'
+    String(String),
+}
+
+#[derive(serde::Serialize)]
+pub enum FieldValue {
+    PRIMITIVE(PrimitiveType, String),
+}
+
+#[derive(serde::Serialize)]
+pub enum Expression {
+    NUMERIC(String),
+    Identifier(String), // TODO
+    StringValue(String),
+    RawStringValue(String),
+    Array(Vec<Expression>),
+    Map(Vec<(Expression, Expression)>),
+}
+
+impl WithRepr<FieldValue> for ast::Expression {
+    fn repr(&self) -> FieldValue {
+        match self {
+            // DO NOT LAND- this needs to distinguish between "integer" and "float"
+            ast::Expression::NumericValue(val, _) => {
+                FieldValue::PRIMITIVE(PrimitiveType::FLOAT, val.clone())
+            }
+            ast::Expression::StringValue(val, _) => {
+                FieldValue::PRIMITIVE(PrimitiveType::STRING, "placeholder".to_string())
+            }
+            ast::Expression::RawStringValue(val) => {
+                FieldValue::PRIMITIVE(PrimitiveType::STRING, "placeholder".to_string())
+            }
+            ast::Expression::Identifier(idn) => {
+                FieldValue::PRIMITIVE(PrimitiveType::STRING, "placeholder".to_string())
+            }
+            ast::Expression::Array(arr, _) => {
+                FieldValue::PRIMITIVE(PrimitiveType::STRING, "placeholder".to_string())
+            }
+            ast::Expression::Map(arr, _) => {
+                FieldValue::PRIMITIVE(PrimitiveType::STRING, "placeholder".to_string())
             }
         }
     }
@@ -82,7 +138,6 @@ impl WithRepr<FieldType> for ast::FieldType {
 #[derive(serde::Serialize)]
 pub struct Enum {
     name: TypeId,
-    // DO NOT LAND - need to model attributes
     values: Vec<String>,
 }
 
@@ -229,10 +284,33 @@ impl WithRepr<Function> for FunctionWalker<'_> {
     }
 }
 
+#[derive(serde::Serialize)]
+pub struct Client {
+    name: ClientId,
+    // TODO
+}
+
+impl WithRepr<Client> for ClientWalker<'_> {
+    fn repr(&self) -> Client {
+        Client {
+            name: self.name().to_string(),
+        }
+    }
+}
+
+#[derive(serde::Serialize)]
+pub struct Configuration {
+    retry_policies: Vec<RetryPolicy>,
+}
+#[derive(serde::Serialize)]
 pub struct RetryPolicy {
     // TODO
 }
 
-pub struct Client {
-    // TODO
+impl WithRepr<Configuration> for ConfigurationWalker<'_> {
+    fn repr(&self) -> Configuration {
+        Configuration {
+            retry_policies: vec![],
+        }
+    }
 }
