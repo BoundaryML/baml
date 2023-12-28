@@ -8,8 +8,12 @@ use serde_json::{json, Value};
 
 // TODO:
 //
-// [ ] clients
-// [ ] metadata per node (attributes, spans, etc)
+//   [ ] clients
+//   [ ] metadata per node (attributes, spans, etc)
+//   [ ] FieldArity (optional / required) needs to be handled
+//   [ ] other types of identifiers?
+//   [ ] `baml update` needs to update lockfile right now
+//   [ ]
 
 pub(crate) trait WithRepr<T> {
     fn repr(&self) -> T;
@@ -36,6 +40,8 @@ pub enum PrimitiveType {
 pub enum FieldType {
     PRIMITIVE(PrimitiveType),
     REF(TypeId),
+    ENUM(TypeId),
+    CLASS(TypeId),
     KD_LIST(u32, Box<FieldType>),
     MAP(Box<FieldType>, Box<FieldType>),
     UNION(Vec<Box<FieldType>>),
@@ -54,10 +60,11 @@ impl WithRepr<FieldType> for ast::FieldType {
                     ast::TypeValue::Null => PrimitiveType::NULL,
                     ast::TypeValue::Char => PrimitiveType::CHAR,
                 }),
+                // ast has enough info to resolve whether this is a ref to an enum or a class
                 ast::Identifier::Local(name, _) => FieldType::REF(name.to_string()),
                 _ => panic!("Not implemented"),
             },
-            ast::FieldType::List(item, dims, _) => FieldType::KD_LIST(*dims, Box::new(item.repr())),
+            ast::FieldType::List(ft, dims, _) => FieldType::KD_LIST(*dims, Box::new(ft.repr())),
             ast::FieldType::Dictionary(kv, _) => {
                 // NB: we can't just unpack (*kv) into k, v because that would require a move/copy
                 FieldType::MAP(Box::new((*kv).0.repr()), Box::new((*kv).1.repr()))
@@ -220,4 +227,12 @@ impl WithRepr<Function> for FunctionWalker<'_> {
                 .collect(),
         }
     }
+}
+
+pub struct RetryPolicy {
+    // TODO
+}
+
+pub struct Client {
+    // TODO
 }
