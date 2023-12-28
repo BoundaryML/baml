@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::thread::ScopedJoinHandle;
 
 use internal_baml_parser_database::walkers::{
     ClassWalker, EnumWalker, FunctionWalker, VariantWalker,
@@ -43,13 +42,6 @@ pub struct Enum {
     name: String,
     // DO NOT LAND - need to model attributes
     values: Vec<String>,
-}
-
-pub fn enum_repr(w: &EnumWalker<'_>) -> Enum {
-    Enum {
-        name: w.name().to_string(),
-        values: w.values().map(|v| v.name().to_string()).collect(),
-    }
 }
 
 impl WithRepr<Enum> for EnumWalker<'_> {
