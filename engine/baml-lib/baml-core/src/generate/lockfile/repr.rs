@@ -6,6 +6,11 @@ use internal_baml_parser_database::walkers::{
 use internal_baml_schema_ast::ast::{self, WithName};
 use serde_json::{json, Value};
 
+// TODO:
+//
+// [ ] clients
+// [ ] metadata per node (attributes, spans, etc)
+
 pub(crate) trait WithRepr<T> {
     fn repr(&self) -> T;
 }
@@ -15,13 +20,6 @@ pub struct AllElements {
     pub enums: Vec<Enum>,
     pub classes: Vec<Class>,
     pub functions: Vec<Function>,
-}
-trait WithMetadata {
-    fn attributes(&self) -> &HashMap<String, String>;
-
-    fn getAttribute(&self, key: &str) -> Option<&String> {
-        self.attributes().get(key)
-    }
 }
 
 #[derive(serde::Serialize)]
@@ -61,7 +59,7 @@ impl WithRepr<FieldType> for ast::FieldType {
             },
             ast::FieldType::List(item, dims, _) => FieldType::KD_LIST(*dims, Box::new(item.repr())),
             ast::FieldType::Dictionary(kv, _) => {
-                // NB: can (*kv).N be unpacked with names?
+                // NB: we can't just unpack (*kv) into k, v because that would require a move/copy
                 FieldType::MAP(Box::new((*kv).0.repr()), Box::new((*kv).1.repr()))
             }
             ast::FieldType::Union(_, t, _) => {
@@ -73,50 +71,6 @@ impl WithRepr<FieldType> for ast::FieldType {
         }
     }
 }
-
-// impl WithRepr for FieldType {
-//     fn repr(&self) -> Value {
-//         match self {
-//             FieldType::List(item, dims, _) => {
-//                 let mut inner = json!({
-//                     "type": "array",
-//                     "items": (*item).json_schema()
-//                 });
-//                 for _ in 1..*dims {
-//                     inner = json!({
-//                         "type": "array",
-//                         "items": inner
-//                     });
-//                 }
-//
-//                 return inner;
-//             }
-//             FieldType::Dictionary(kv, _) => json!({
-//                 "type": "object",
-//                 "additionalProperties": {
-//                     "type": (*kv).1.json_schema(),
-//                 }
-//             }),
-//             FieldType::Union(_, t, _) => json!({
-//                 "anyOf": t.iter().map(|t| {
-//                     let res = t.json_schema();
-//                     // if res is a map, add a "title" field
-//                     if let Value::Object(res) = &res {
-//                         let mut res = res.clone();
-//                         res.insert("title".to_string(), json!(t.to_string()));
-//                         return json!(res);
-//                     }
-//                     res
-//                 }
-//             ).collect::<Vec<_>>(),
-//             }),
-//             FieldType::Tuple(_, t, _) => json!({
-//                 "type": "array",
-//                 "items": t.iter().map(|t| t.json_schema()).collect::<Vec<_>>(),
-//             }),
-//         }
-//     }
-// }
 
 #[derive(serde::Serialize)]
 pub struct Enum {
@@ -145,15 +99,24 @@ type TypeId = String;
 #[derive(serde::Serialize)]
 pub struct Class {
     name: TypeId,
-    fields: Vec<Field>,
+    // DO NOT LAND- these should not be diff
+    static_fields: Vec<Field>,
+    dynamic_fields: Vec<Field>,
 }
 
 impl WithRepr<Class> for ClassWalker<'_> {
     fn repr(&self) -> Class {
         Class {
             name: self.name().to_string(),
-            fields: self
+            static_fields: self
                 .static_fields()
+                .map(|field| Field {
+                    name: field.name().to_string(),
+                    r#type: field.ast_field().field_type.repr(),
+                })
+                .collect(),
+            dynamic_fields: self
+                .dynamic_fields()
                 .map(|field| Field {
                     name: field.name().to_string(),
                     r#type: field.ast_field().field_type.repr(),
@@ -165,7 +128,7 @@ impl WithRepr<Class> for ClassWalker<'_> {
 
 // DO NOT LAND - these are also client types
 #[derive(serde::Serialize)]
-pub enum ImplementationType {
+pub enum BackendType {
     LLM,
 }
 
@@ -174,12 +137,13 @@ type ImplementationId = String;
 #[derive(serde::Serialize)]
 pub struct Implementation {
     // DO NOT LAND - need to capture overrides (currently represented as metadata)
-    r#type: ImplementationType,
+    r#type: BackendType,
     name: ImplementationId,
 
     prompt: String,
     // input and output replacers are for the AST of the prompt itself
     // lockfile is doable w/o the prompt AST, but we /could/ do it- Q is if there's any benefit
+    // NB: we should avoid maps, b/c we want to preserve insertion order - maybe IndexMap?
     input_replacers: HashMap<String, String>,
     output_replacers: HashMap<String, String>,
     client: ClientId,
@@ -189,13 +153,13 @@ type ClientId = String;
 
 #[derive(serde::Serialize)]
 pub struct NamedArgList {
-    arg_list: Vec<String>,
+    arg_list: Vec<(String, FieldType)>,
 }
 
 /// BAML does not allow UnnamedArgList nor a lone NamedArg
 #[derive(serde::Serialize)]
 pub enum FunctionArgs {
-    UNNAMED_ARG,
+    UNNAMED_ARG(FieldType),
     NAMED_ARG_LIST(NamedArgList),
 }
 
@@ -214,19 +178,25 @@ impl WithRepr<Function> for FunctionWalker<'_> {
         Function {
             name: self.name().to_string(),
             inputs: match self.ast_function().input() {
-                ast::FunctionArgs::Named(arg_list) => {
-                    FunctionArgs::NAMED_ARG_LIST(NamedArgList { arg_list: vec![] })
-                }
-                ast::FunctionArgs::Unnamed(arg) => FunctionArgs::UNNAMED_ARG,
+                ast::FunctionArgs::Named(arg_list) => FunctionArgs::NAMED_ARG_LIST(NamedArgList {
+                    arg_list: arg_list
+                        .args
+                        .iter()
+                        .map(|(id, arg)| (id.name().to_string(), arg.field_type.repr()))
+                        .collect(),
+                }),
+                ast::FunctionArgs::Unnamed(arg) => FunctionArgs::UNNAMED_ARG(arg.field_type.repr()),
             },
             output: match self.ast_function().output() {
-                ast::FunctionArgs::Named(arg_list) => FieldType::PRIMITIVE(PrimitiveType::STRING),
-                ast::FunctionArgs::Unnamed(arg) => FieldType::PRIMITIVE(PrimitiveType::STRING),
+                ast::FunctionArgs::Named(arg_list) => {
+                    panic!("Functions may not return named args")
+                }
+                ast::FunctionArgs::Unnamed(arg) => arg.field_type.repr(),
             },
             impls: self
                 .walk_variants()
                 .map(|e| Implementation {
-                    r#type: ImplementationType::LLM,
+                    r#type: BackendType::LLM,
                     name: e.name().to_string(),
                     prompt: e.properties().prompt.value.clone(),
                     input_replacers: e
