@@ -96,14 +96,23 @@ struct Implementation {
     output_replacers: HashMap<String, String>,
     client: String,
 }
+
+#[derive(serde::Serialize)]
+struct NamedArgList {
+    arg_list: Vec<String>,
+}
+
+/// BAML does not allow UnnamedArgList nor a lone NamedArg
+#[derive(serde::Serialize)]
+enum FunctionArgs {
+    UNNAMED_ARG,
+    NAMED_ARG_LIST(NamedArgList),
+}
+
 #[derive(serde::Serialize)]
 struct Function {
     name: String,
-    // DO NOT LAND - need clarification
-    //  - >1 inputs => ast::FunctionArgs::Named / NamedFunctionArgList
-    //  - =1 input -> ast::FuncitonArgs::Unnamed / FunctionArg
-    named_inputs: Vec<String>,
-    positional_inputs: Vec<String>,
+    inputs: FunctionArgs,
     output: Type,
     impls: Vec<Implementation>,
 }
@@ -112,16 +121,11 @@ impl WithRepr for FunctionWalker<'_> {
     fn repr(&self) -> Value {
         serde_json::to_value(Function {
             name: self.name().to_string(),
-            named_inputs: if let ast::FunctionArgs::Named(arg_list) = self.ast_function().input() {
-                vec![]
-            } else {
-                vec![]
-            },
-            positional_inputs: if let ast::FunctionArgs::Unnamed(arg) = self.ast_function().input()
-            {
-                vec![]
-            } else {
-                vec![]
+            inputs: match self.ast_function().input() {
+                ast::FunctionArgs::Named(arg_list) => {
+                    FunctionArgs::NAMED_ARG_LIST(NamedArgList { arg_list: vec![] })
+                }
+                ast::FunctionArgs::Unnamed(arg) => FunctionArgs::UNNAMED_ARG,
             },
             output: match self.ast_function().output() {
                 ast::FunctionArgs::Named(arg_list) => Type::PRIMITIVE(Primitive::STRING),
@@ -144,7 +148,7 @@ impl WithRepr for FunctionWalker<'_> {
                     output_replacers: e
                         .properties()
                         .replacers
-                        // NB: .0 should really be .input
+                        // NB: .1 should really be .output
                         .1
                         .iter()
                         .map(|r| (r.0.key(), r.1.clone()))
