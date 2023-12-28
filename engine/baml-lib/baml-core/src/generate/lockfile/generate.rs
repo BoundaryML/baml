@@ -4,7 +4,7 @@ use internal_baml_schema_ast::ast::{
 };
 use serde_json::{json, Value};
 
-use super::repr::WithJsonSchema;
+use super::repr::WithRepr;
 
 // should have a serde struct with a special serialize/deserialize
 
@@ -44,21 +44,21 @@ pub fn generate(db: &ParserDatabase) -> std::io::Result<()> {
             e.name(),
             e.identifier().name(),
             debug1(e.identifier().span()),
-            serde_json::to_string_pretty(&e.json_schema())?
+            serde_json::to_string_pretty(&e.repr())?
         ));
     }
     for e in db.walk_classes() {
         lockfile_contents.push(format!(
             "class:{} {}",
             e.name(),
-            serde_json::to_string_pretty(&e.json_schema())?
+            serde_json::to_string_pretty(&e.repr())?
         ));
     }
     for e in db.walk_functions() {
         lockfile_contents.push(format!(
             "function2:{} {}",
             e.name(),
-            serde_json::to_string_pretty(&e.json_schema())?
+            serde_json::to_string_pretty(&e.repr())?
         ));
     }
 
