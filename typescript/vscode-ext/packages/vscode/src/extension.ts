@@ -7,6 +7,7 @@ import { WebPanelView } from './panels/WebPanelView'
 import { BamlDB } from './plugins/language-server'
 import testExecutor from './panels/execute_test'
 import glooLens from './GlooCodeLensProvider'
+import { telemetry } from './plugins/language-server'
 
 const outputChannel = vscode.window.createOutputChannel('baml')
 const diagnosticsCollection = vscode.languages.createDiagnosticCollection('baml')
@@ -15,6 +16,7 @@ const LANG_NAME = 'Baml'
 export function activate(context: vscode.ExtensionContext) {
   const baml_config = vscode.workspace.getConfiguration('baml')
   testExecutor.start()
+
 
   const bamlPlygroundCommand = vscode.commands.registerCommand(
     'baml.openBamlPanel',
@@ -26,6 +28,10 @@ export function activate(context: vscode.ExtensionContext) {
       const config = vscode.workspace.getConfiguration()
       config.update('baml.bamlPanelOpen', true, vscode.ConfigurationTarget.Global)
       WebPanelView.render(context.extensionUri)
+      telemetry.sendTelemetryEvent({
+        event: 'baml.openBamlPanel',
+        properties: {},
+      })
 
       WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
       // send another request for reliability on slower machines
