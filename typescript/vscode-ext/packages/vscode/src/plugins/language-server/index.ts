@@ -406,12 +406,11 @@ const plugin: BamlVSCodePlugin = {
 
       telemetry = new TelemetryReporter(extensionId, extensionVersion)
 
-      // context.subscriptions.push(telemetry)
-
-      await telemetry.sendTelemetryEvent()
+      context.subscriptions.push(telemetry)
+      await telemetry.initialize();
 
       if (extensionId === 'Gloo.baml-insider') {
-        // checkForOtherPrismaExtension()
+        // checkForOtherExtension()
       }
     }
 
@@ -429,4 +428,6 @@ const plugin: BamlVSCodePlugin = {
     return client.stop()
   },
 }
+
+export { telemetry };
 export default plugin

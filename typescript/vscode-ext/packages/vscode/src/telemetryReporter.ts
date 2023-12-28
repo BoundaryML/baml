@@ -1,7 +1,19 @@
 import { Disposable, workspace } from 'vscode'
 import { getProjectHash } from './hashes'
-
+import { PostHog } from 'posthog-node'
+import * as vscode from 'vscode'
+import os from 'os'
 type TelemetryLevel = 'off' | 'crash' | 'error' | 'all' | undefined
+
+
+const client = new PostHog(
+  'phc_732PWG6HFZ75S7h0TK2AuqRVkqZDiD4WePE9gXYJkOu',
+)
+
+export interface TelemetryEvent {
+  event: string
+  properties: any
+}
 
 export default class TelemetryReporter {
   private userOptIn = false
@@ -11,6 +23,7 @@ export default class TelemetryReporter {
   private static TELEMETRY_SETTING_ID = 'telemetryLevel'
   // Deprecated since https://code.visualstudio.com/updates/v1_61#_telemetry-settings
   private static TELEMETRY_OLD_SETTING_ID = 'enableTelemetry'
+  private telemetryProps: any = {}
 
   constructor(
     private extensionId: string,
@@ -20,13 +33,43 @@ export default class TelemetryReporter {
     this.configListener = workspace.onDidChangeConfiguration(() => this.updateUserOptIn())
   }
 
-  public async sendTelemetryEvent(): Promise<void> {
+  public async initialize(): Promise<void> {
     if (this.userOptIn) {
-      // await check({
-      //   product: this.extensionId,
-      //   version: this.extensionVersion,
-      //   project_hash: await getProjectHash(),
-      // })
+      const machine_id = vscode.env.machineId
+      const properties = {
+        extension: this.extensionId,
+        version: this.extensionVersion,
+        project_hash: await getProjectHash(),
+        machine_id: machine_id,
+        session_id: vscode.env.sessionId,
+        vscode_version: vscode.version,
+        os_info: {
+          release: os.release(),
+          platform: os.platform(),
+          arch: os.arch(),
+        }
+      }
+      this.telemetryProps = properties;
+      client.capture({
+        event: "extension_loaded",
+        distinctId: machine_id,
+        properties: properties
+      });
+      client.flush();
+    }
+  }
+
+  public async sendTelemetryEvent(data: TelemetryEvent): Promise<void> {
+    if (this.userOptIn) {
+      client.capture({
+        event: data.event,
+        distinctId: vscode.env.machineId,
+        properties: {
+          ...this.telemetryProps,
+          ...data.properties
+        }
+      });
+      client.flush();
     }
   }
 
@@ -55,7 +98,8 @@ export default class TelemetryReporter {
     }
   }
 
-  public dispose(): void {
+  public async dispose(): Promise<void> {
     this.configListener.dispose()
+    await client.shutdownAsync()
   }
 }
