@@ -6,7 +6,7 @@
     </picture>
   </a>
   <h1>BAML</h1>
-  <h2>A programming language for LLM Guardrails, Type-safey, and Observability <h2>
+  <h2>A programming language for LLM Guardrails, Type-safety, and Observability <h2>
   <a href="https://discord.gg/ENtBB6kkXH"><img src="https://img.shields.io/discord/1119368998161752075.svg?logo=discord" /></a>
   <a href="https://twitter.com/intent/follow?screen_name=tryGloo"><img src="https://img.shields.io/twitter/follow/tryGloo?style=social"></a>
   <!-- <a href="https://docs.boundaryml.com"><img src="https://img.shields.io/badge/documentation-gloo-brightgreen.svg"></a> -->
