@@ -110,9 +110,10 @@ impl WithRepr<FieldType> for ast::FieldType {
 //     }
 // }
 
+type EnumId = String;
 #[derive(serde::Serialize)]
 pub struct Enum {
-    name: String,
+    name: EnumId,
     // DO NOT LAND - need to model attributes
     values: Vec<String>,
 }
@@ -132,9 +133,11 @@ pub struct Field {
     r#type: FieldType,
 }
 
+type ClassId = String;
+
 #[derive(serde::Serialize)]
 pub struct Class {
-    name: String,
+    name: ClassId,
     fields: Vec<Field>,
 }
 
@@ -160,19 +163,23 @@ pub enum ImplementationType {
     LLM,
 }
 
+type ImplementationId = String;
+
 #[derive(serde::Serialize)]
 pub struct Implementation {
     // DO NOT LAND - need to capture overrides (currently represented as metadata)
     r#type: ImplementationType,
-    name: String,
+    name: ImplementationId,
 
     prompt: String,
     // input and output replacers are for the AST of the prompt itself
     // lockfile is doable w/o the prompt AST, but we /could/ do it- Q is if there's any benefit
     input_replacers: HashMap<String, String>,
     output_replacers: HashMap<String, String>,
-    client: String,
+    client: ClientId,
 }
+
+type ClientId = String;
 
 #[derive(serde::Serialize)]
 pub struct NamedArgList {
@@ -186,9 +193,11 @@ pub enum FunctionArgs {
     NAMED_ARG_LIST(NamedArgList),
 }
 
+type FunctionId = String;
+
 #[derive(serde::Serialize)]
 pub struct Function {
-    name: String,
+    name: FunctionId,
     inputs: FunctionArgs,
     output: FieldType,
     impls: Vec<Implementation>,
