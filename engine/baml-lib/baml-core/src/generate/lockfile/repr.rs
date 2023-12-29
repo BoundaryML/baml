@@ -4,7 +4,8 @@ use std::collections::HashMap;
 use indexmap::IndexMap;
 use internal_baml_parser_database::{
     walkers::{
-        ClassWalker, ClientWalker, ConfigurationWalker, EnumValueWalker, EnumWalker, FunctionWalker,
+        ClassWalker, ClientWalker, ConfigurationWalker, EnumValueWalker, EnumWalker,
+        FunctionWalker, VariantWalker,
     },
     DynamicStringAttributes, ParserDatabase, RetryPolicyStrategy, StaticStringAttributes,
     ToStringAttributes, WithStaticRenames,
@@ -325,8 +326,6 @@ pub struct Implementation {
     client: ClientId,
 }
 
-type ClientId = String;
-
 #[derive(serde::Serialize)]
 pub struct NamedArgList {
     arg_list: Vec<(String, FieldType)>,
@@ -347,6 +346,37 @@ pub struct Function {
     inputs: FunctionArgs,
     output: Node<FieldType>,
     impls: Vec<Node<Implementation>>,
+}
+
+impl WithRepr<Implementation> for VariantWalker<'_> {
+    fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
+        NodeAttributes::new()
+    }
+
+    fn repr(&self, db: &ParserDatabase) -> Implementation {
+        Implementation {
+            r#type: BackendType::LLM,
+            name: self.name().to_string(),
+            prompt: self.properties().prompt.value.clone(),
+            input_replacers: self
+                .properties()
+                .replacers
+                // NB: .0 should really be .input
+                .0
+                .iter()
+                .map(|r| (r.0.key(), r.1.clone()))
+                .collect(),
+            output_replacers: self
+                .properties()
+                .replacers
+                // NB: .1 should really be .output
+                .1
+                .iter()
+                .map(|r| (r.0.key(), r.1.clone()))
+                .collect(),
+            client: ClientId(self.properties().client.value.clone()),
+        }
+    }
 }
 
 impl WithRepr<Function> for FunctionWalker<'_> {
@@ -375,37 +405,13 @@ impl WithRepr<Function> for FunctionWalker<'_> {
                 }
                 ast::FunctionArgs::Unnamed(arg) => arg.field_type.node(db),
             },
-            impls: self
-                .walk_variants()
-                .map(|e| Node {
-                    attributes: NodeAttributes::new(),
-                    elem: Implementation {
-                        r#type: BackendType::LLM,
-                        name: e.name().to_string(),
-                        prompt: e.properties().prompt.value.clone(),
-                        input_replacers: e
-                            .properties()
-                            .replacers
-                            // NB: .0 should really be .input
-                            .0
-                            .iter()
-                            .map(|r| (r.0.key(), r.1.clone()))
-                            .collect(),
-                        output_replacers: e
-                            .properties()
-                            .replacers
-                            // NB: .1 should really be .output
-                            .1
-                            .iter()
-                            .map(|r| (r.0.key(), r.1.clone()))
-                            .collect(),
-                        client: e.properties().client.value.clone(),
-                    },
-                })
-                .collect(),
+            impls: self.walk_variants().map(|e| e.node(db)).collect(),
         }
     }
 }
+
+#[derive(serde::Serialize)]
+pub struct ClientId(String);
 
 #[derive(serde::Serialize)]
 pub struct Client {
@@ -421,7 +427,7 @@ impl WithRepr<Client> for ClientWalker<'_> {
 
     fn repr(&self, db: &ParserDatabase) -> Client {
         Client {
-            name: self.name().to_string(),
+            name: ClientId(self.name().to_string()),
             provider: self.properties().provider.0.clone(),
             options: self
                 .properties()
@@ -433,7 +439,8 @@ impl WithRepr<Client> for ClientWalker<'_> {
     }
 }
 
-type RetryPolicyId = String;
+#[derive(serde::Serialize)]
+pub struct RetryPolicyId(String);
 
 #[derive(serde::Serialize)]
 pub struct RetryPolicy {
@@ -452,7 +459,7 @@ impl WithRepr<RetryPolicy> for ConfigurationWalker<'_> {
 
     fn repr(&self, db: &ParserDatabase) -> RetryPolicy {
         RetryPolicy {
-            name: self.name().to_string(),
+            name: RetryPolicyId(self.name().to_string()),
             max_retries: self.retry_policy().max_retries,
             strategy: self.retry_policy().strategy,
             options: match &self.retry_policy().options {
