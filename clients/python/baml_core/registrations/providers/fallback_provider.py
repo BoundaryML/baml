@@ -129,10 +129,10 @@ class FallbackProvider(AbstractLLMProvider):
         assert last_exception is not None, "Should have caught an exception"
         raise last_exception
 
-    async def run_prompt(self, prompt: str) -> LLMResponse:
+    async def _run_prompt_internal(self, prompt: str) -> LLMResponse:
         return await self._run_strategy("run_prompt", prompt)
 
-    async def run_prompt_template(
+    async def _run_prompt_template_internal(
         self,
         *,
         template: str,
@@ -143,12 +143,12 @@ class FallbackProvider(AbstractLLMProvider):
             "run_prompt_template", template=template, replacers=replacers, params=params
         )
 
-    async def run_chat(
+    async def _run_chat_internal(
         self, *messages: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]]
     ) -> LLMResponse:
         return await self._run_strategy("run_chat", *messages)
 
-    async def run_chat_template(
+    async def _run_chat_template_internal(
         self,
         *message_templates: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]],
         replacers: typing.Iterable[str],

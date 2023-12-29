@@ -2,7 +2,6 @@ import os
 import typing
 import uuid
 
-from baml_core.provider_manager import LLMManager
 from baml_core.cache_manager import CacheManager
 from baml_core import otel
 from baml_core.services.api import APIWrapper
@@ -171,5 +170,4 @@ def baml_init(
                 "Wanted to use GlooCache but no API key was provided. Did you set BOUNDARY_PROJECT_ID and BOUNDARY_SECRET?"
             )
 
-    LLMManager.validate()
     return __InternalBAMLConfig(api=__CachedParams.api)
