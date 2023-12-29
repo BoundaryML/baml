@@ -121,7 +121,7 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
     @property
     def provider(self) -> str:
         return self.__provider
-    
+
     #
     # Public API
     #
@@ -139,7 +139,7 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
             replacers=replacers,
             params=params,
         )
-    
+
     @typing.final
     @typechecked
     async def run_chat_template(
@@ -149,16 +149,16 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
         params: typing.Dict[str, typing.Any],
     ) -> LLMResponse:
         return await self._run_chat_template_internal(
-            message_templates=message_templates,
+            *message_templates,
             replacers=replacers,
             params=params,
         )
-    
+
     @typing.final
     @typechecked
     async def run_prompt(self, prompt: str) -> LLMResponse:
         return await self._run_prompt_internal(prompt=prompt)
-    
+
     @typing.final
     @typechecked
     async def run_chat(
