@@ -7,9 +7,56 @@ The `generator` configuration needs to be added anywhere in .baml files to gener
 Here is how you can add a generator block:
 
 ```rust
-generator {
+generator MyGenerator {
   language python
-    // poetry is the default if this doesn't exist
   pkg_manager pip
+}
+```
+
+| Property            | Description                                      | Options                           | Default                                        |
+| ------------------- | ------------------------------------------------ | --------------------------------- | ---------------------------------------------- |
+| language            | The language of the generated client             | python                            |                                                |
+| pkg_manager         | The package manager of the generated client      | pip, pip3, poetry                 | automatically picks the best match (see below) |
+| output              | The output directory of the generated code       | any relative path from `baml_src` | `../`                                          |
+| python_setup_prefix | The prefix for setting up the python environment | string                            | empty unless poetry, then `poetry run`         |
+
+## Example generators
+
+### Python with poetry
+
+```rust
+generator MyGenerator {
+  language python
+  pkg_manager poetry
+}
+```
+
+### Python with venv
+
+```rust
+generator MyGenerator {
+  language python
+  pkg_manager pip
+  python_setup_prefix "source ./.venv/bin/activate &&"
+}
+```
+
+### Using secret ops platforms
+
+If you're using software like [Infisical](https://infisical.com/) or [Doppler](https://www.doppler.com/), do the following:
+
+```rust
+generator MyGenerator {
+  language python
+  pkg_manager poetry
+  python_setup_prefix "doppler run -- poetry run"
+}
+```
+
+```rust
+generator MyGenerator {
+  language python
+  pkg_manager pip
+  python_setup_prefix "source ./.venv/bin/activate && doppler run -- "
 }
 ```

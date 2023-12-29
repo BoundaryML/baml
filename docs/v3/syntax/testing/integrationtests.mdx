@@ -1,0 +1,81 @@
+---
+title: Integration Testing
+---
+
+An integration test allows you to test a pipeline calling multiple functions. You may do things like, set up a mock database, mocking an AI function, calling a real AI function, etc.
+
+## Prerequisites
+
+Read [Tests with evaluators](/v3/syntax/testing/evaluators) first to grast our pytest plugin.
+
+## Writing an Integration Tests
+
+You can write an integration test normally using pytest. However, you can also use the `baml_test` decorator to record your test on the dashboard and do some setup for you.
+
+```python pipeline.py
+from baml_client import baml as b
+
+async def pipeline(message: str) -> str:
+    response = await b.ClassifySentiment(message)
+    if response == Sentiment.POSITIVE:
+        return await b.GetHappyResponse(message)
+    else:
+        return await b.GetSadResponse(message)
+```
+
+```python test_pipeline.py
+# import baml test decorator
+from baml_client.testing import baml_test
+
+from pipeline import pipeline
+
+@baml_test
+async def test_pipeline():
+    message = "I am ecstatic"
+    response = await pipeline(message)
+    assert response == "I am happy"
+```
+
+## Using Mocks
+
+For that same test, we can mock the `ClassifySentiment` function to return a negative sentiment. This allows us to test the `GetSadResponse` function and also not have to worry about the AI function returning a different result each time.
+
+```python test_pipeline.py
+# import baml test decorator
+from baml_client.testing import baml_test
+
+from pipeline import pipeline
+
+@baml_test
+async def test_pipeline():
+    message = "I am ecstatic"
+    # Indicate we are mocking the ClassifySentiment function
+    with b.ClassifySentiment.mock() as classify_sentiment_mock:
+        # Set the return value of the mock
+        classify_sentiment_mock.return_value = Sentiment.NEGATIVE
+        response = await pipeline(message)
+
+        classify_sentiment_mock.assert_called()
+        assert response == "I am sad"
+```
+
+You can also mock both `ClassifySentiment` and `GetSadResponse`.
+
+```python test_pipeline.py
+@baml_test
+async def test_pipeline():
+    message = "I am ecstatic"
+    # Indicate we are mocking the ClassifySentiment function
+    with b.ClassifySentiment.mock() as classify_sentiment_mock, b.GetSadResponse.mock() as get_sad_response_mock, b.GetHappyResponse.mock() as get_happy_response_mock:
+        # Set the return value of the mock
+        classify_sentiment_mock.return_value = Sentiment.NEGATIVE
+        get_sad_response_mock.return_value = "I am sad"
+
+        response = await pipeline(message)
+
+        classify_sentiment_mock.assert_called()
+        get_sad_response_mock.assert_called()
+        get_happy_response_mock.assert_not_called()
+
+        assert response == "I am sad"
+```

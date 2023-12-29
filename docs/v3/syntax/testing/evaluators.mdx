@@ -1,70 +1,15 @@
 ---
-title: "Unit Testing"
+title: Tests with evaluators
 ---
 
-There are two types of tests you may want to run on your AI functions:
+BAML doesn't yet natively support unit testing with custom evaluators, but you can still write custom tests for your functions using pytest.
 
-- Unit Tests: Tests a single AI function
-- Integration Tests: Tests a pipeline of AI functions and potentially buisness logic
+## Running tests
 
-We support both types of tests using BAML.
-
-## Using the playground
-
-Use the playground to run tests against individual function impls.
-
-<iframe
-  src="https://player.cloudinary.com/embed/?public_id=baml-playground&cloud_name=dn7wj4mr5"
-  width="600"
-  height="400"
-  allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-  allowFullScreen
-></iframe>
-
-## Baml CLI
-
-You can run tests defined
-
-## From BAML Studio
-
-<Info>Coming soon</Info>
-You can also create tests from production logs in BAML Studio. Any weird or atypical
-user inputs can be used to create a test case with just 1 click.
-
-## JSON Files (`__tests__` folder)
-
-Unit tests created by the playground are stored in the `__tests__` folder.
-
-The project structure should look like this:
-
-```bash
-.
-├── baml_client/
-└── baml_src/
-    ├── __tests__/
-    │   ├── YourAIFunction/
-    │   │   ├── test_name_monkey.json
-    │   │   └── test_name_cricket.json
-    │   └── YourAIFunction2/
-    │       └── test_name_jellyfish.json
-    ├── main.baml
-    └── foo.baml
-```
-
-You can manually create tests by creating a folder for each function you want to test. Inside each folder, create a json file for each test case you want to run. The json file should be named `test_name.json` where `test_name` is the name of the test case.
-
-To see the structure of the JSON file, you can create a test using the playground and then copy the JSON file into your project.
-
-<Tip>
-  The BAML compiler reads the `__tests__` folder and generates a pytest file for
-  you so you don't have to manually write test boilerplate code.
-</Tip>
-
-## Programmatic Testing (using pytest)
-
-For python, you can leverage **pytest** to run tests. All you need is to add a **@baml_test** decorator to your test functions to get your test data visualized on the baml dashboard.
-
-### Running tests
+<Warning>
+  Since you are writing these tests yourself, you will not be able to use `baml
+  test` to run these tests.
+</Warning>
 
 <Note>
   Make sure you are running these commands from your python virtual environment
@@ -73,7 +18,7 @@ For python, you can leverage **pytest** to run tests. All you need is to add a *
 
 ```bash
 # From your project root
-# Lists all tests
+# Lists all tests with the baml_test marker
 pytest -m baml_test --collect-only
 ```
 
@@ -110,7 +55,55 @@ To run a specific test case in a test group
 pytest -m baml_test -k 'test_group_name and test_case_name'
 ```
 
-### UnitTest an AI Function
+## UnitTest an AI Function
+
+Given this baml snippet:
+
+```rust
+// foo.baml
+enum Sentiment {
+    POSITIVE
+    NEGATIVE
+}
+
+function ClassifySentiment {
+    input string
+    output Sentiment
+}
+
+function MatchSentiment {
+    input (actual: Sentiment, expected: Sentiment)
+    output bool
+}
+
+// impls omitted
+```
+
+You can write a test as follows:
+
+```python
+# Import your baml-generated functions
+from baml_client import baml as b
+# Import any custom types defined in .baml files
+from baml_client.baml_types import Sentiment
+
+async def test_happy_sentiments():
+    # This is testing the default impl of ClassifySentiment
+    response = await b.ClassifySentiment("I am ecstatic")
+    # Add your own assertions here
+    assert response == Sentiment.POSITIVE
+    # You can use another AI function you define in BAML to test your function
+    matches = await b.MatchSentiment(actual=response, expected=Sentiment.POSITIVE)
+    assert matches
+```
+
+## Using helpers to test impls
+
+You can see three different ways to write tests below.
+
+- Test Function: singular tests for testing a function and its impls
+- Test Class: a way of grouping tests for a function and its impls
+- Parameterized Test Function: a more concise way of writing multiple tests for a function and its impls
 
 <CodeGroup>
 
@@ -128,6 +121,8 @@ async def test_happy_user(ClassifySentimentImpl: IClassifySentiment):
     # must match the name of the function you're testing
     response = await ClassifySentimentImpl("I am ecstatic")
     assert response == Sentiment.POSITIVE
+    matches = await b.MatchSentiment(actual=response, expected=Sentiment.POSITIVE)
+    assert matches
 ```
 
 ```python Test Class
@@ -143,69 +138,49 @@ class TestHappyUser:
     async def test_happy_user(self, ClassifySentimentImpl: IClassifySentiment):
         response = await ClassifySentimentImpl("I am ecstatic")
         assert response == Sentiment.POSITIVE
+        matches = await b.MatchSentiment(actual=response, expected=Sentiment.POSITIVE)
+        assert matches
 
     async def test_happy_user2(self, ClassifySentimentImpl: IClassifySentiment):
         response = await ClassifySentimentImpl("I am happy")
         assert response == Sentiment.POSITIVE
+        matches = await b.MatchSentiment(actual=response, expected=Sentiment.POSITIVE)
+        assert matches
 ```
 
-</CodeGroup>
+```python Parameterized Test Function
+import pytest
 
-### Integration Tests (Test a pipeline calling multiple functions)
-
-<CodeGroup>
-
-```python Test Pipeline
-# Import your baml-generated LLM functions
+# Import your baml-generated functions
 from baml_client import baml as b
+# Import any custom types defined in .baml files
+from baml_client.baml_types import Sentiment, IClassifySentiment
 
-# Import testing library
-from baml_client.testing import baml_test
-
-# Mark this as a baml test (recorded on dashboard and does some setup)
-@baml_test
-async def test_pipeline():
-    message = "I am ecstatic"
-    response = await b.ClassifySentiment(message)
-    assert response == Sentiment.POSITIVE
-    response = await b.GetHappyResponse(message)
+# input and expected are the parameters of the test
+@pytest.mark.parametrize("input, expected", [
+    ("I am ecstatic", Sentiment.POSITIVE),
+    ("I am happy", Sentiment.POSITIVE),
+    ("I am sad", Sentiment.NEGATIVE),
+    ("I am angry", Sentiment.NEGATIVE),
+])
+# This automatically generates a test case for each impl
+# of ClassifySentiment.
+@b.ClassifySentiment.test
+async def test_happy_user(
+  input: str, expected: Sentiment,
+  ClassifySentimentImpl: IClassifySentiment
+):
+    response = await ClassifySentimentImpl(input)
+    assert response == expected
+    matches = await b.MatchSentiment(actual=response, expected=expected)
+    assert matches
 ```
 
 </CodeGroup>
 
-<Warning>
-  Make sure your test file, the Test class and/or test function is prefixed with
-  `test` or `Test` respectively. Otherwise, pytest will not pick up your tests.
-</Warning>
+### pytest parameterized (optional)
 
-### Parameterized Tests
-
-Parameterized tests allow you declare a list of inputs and expected outputs for a test case. baml will run the test for each input and compare the output to the expected output.
-
-```python
-from baml_client.testing import baml_test
-# Import your baml-generated LLM functions
-from baml_client import baml
-# Import any custom types defined in .baml files
-from baml_client.baml_types import Sentiment
-
-@baml_test
-@pytest.mark.parametrize(
-    "input, expected_output",
-    [
-        ("I am ecstatic", Sentiment.POSITIVE),
-        ("I am sad", Sentiment.NEGATIVE),
-        ("I am angry", Sentiment.NEGATIVE),
-    ],
-)
-async def test_sentiments(input, expected_output):
-    response = await baml.ClassifySentiment(input)
-    assert response == expected_output
-```
-
-This will generate 3 test_cases on the dashboard, one for each input.
-
-### Using custom names for each test
+#### Custom Test Names
 
 The parametrize decorator also allows you to specify a custom name for each test case. See below on how we name each test case using the ids parameter.
 
@@ -231,19 +206,23 @@ async def test_sentiments(ClassifySentimentImpl: IClassifySentiment, test_case):
     assert response == test_case["expected_output"]
 ```
 
-### Grouping Tests by input type
+#### Grouping Tests
 
 Alternatively, you can group things together logically by defining one test case or test class per input type your testing. In our case, we'll split up all Positive sentiments into their own group.
 
 ```python
 from baml_client.testing import baml_test
 # Import your baml-generated LLM functions
-from baml_client import baml
+from baml_client import baml as b
 # Import any custom types defined in .baml files
 from baml_client.baml_types import Sentiment
 
+@b.ClassifySentiment.test
+class TestSentiment:
+  @pytest.parameterized
+
+
 @baml_test
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
   # Note we only need to pass in one variable to the test, the "input".
   "input",
@@ -252,13 +231,11 @@ from baml_client.baml_types import Sentiment
       "I am super happy!"
   ],
 )
-class TestHappySentiments:
-    async def test_sentiments(input, expected_output):
-        response = await baml.ClassifySentiment(input)
-        assert response == Sentiment.POSITIVE
+async def test_happy_sentiments(input, expected_output):
+    response = await b.ClassifySentiment(input)
+    assert response == Sentiment.POSITIVE
 
 @baml_test
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
   # Note we only need to pass in one variable to the test, the "input".
   "input",
@@ -268,16 +245,17 @@ class TestHappySentiments:
   ],
 )
 class TestSadSentiments:
-    async def test_sentiments(input, expected_output):
-        response = await baml.ClassifySentiment(input)
+    async def test_sad_sentiments(input, expected_output):
+        response = await b.ClassifySentiment(input)
         assert response == Sentiment.NEGATIVE
 ```
 
 Alternatively you can just write a test function for each input type.
 
 ```python
+import pytest
 from baml_client.testing import baml_test
-from baml_client import baml
+from baml_client import baml as b
 from baml_client.baml_types import Sentiment
 
 @baml_test
@@ -292,7 +270,7 @@ from baml_client.baml_types import Sentiment
     ],
 )
 async def test_happy_sentiments(input):
-    response = await baml.ClassifySentiment(input)
+    response = await b.ClassifySentiment(input)
     assert response == Sentiment.POSITIVE
 
 @baml_test
@@ -307,6 +285,6 @@ async def test_happy_sentiments(input):
     ],
 )
 async def test_sad_sentiments(input):
-    response = await baml.ClassifySentiment(input)
+    response = await b.ClassifySentiment(input)
     assert response == Sentiment.NEGATIVE
 ```
