@@ -7,9 +7,11 @@ from ..logger import logger
 
 class _LLMManager:
     __llms: typing.Dict[str, AbstractLLMProvider]
+    __validated: bool
 
     def __init__(self) -> None:
         self.__llms = {}
+        self.__validated = False
 
     def add_llm(
         self, *, name: str, provider: str, **kwargs: typing.Any
@@ -27,7 +29,10 @@ class _LLMManager:
         return self.__llms[name]
 
     def validate(self) -> None:
-        errors = []
+        if self.__validated:
+            assert False, "LLMManager already validated"
+
+        errors: typing.List[typing.Tuple[str, Exception]] = []
         for name, llm in self.__llms.items():
             try:
                 llm.validate()
@@ -38,6 +43,7 @@ class _LLMManager:
             for name, err in errors:
                 logger.error(f"Validating {name} Failed: {err}")
             raise ValueError("LLM validation failed")
+        self.__validated = True
 
 
 LLMManager = _LLMManager()
