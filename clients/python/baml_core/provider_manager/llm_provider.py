@@ -121,13 +121,60 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
     @property
     def provider(self) -> str:
         return self.__provider
-
-    @abc.abstractmethod
+    
+    #
+    # Public API
+    #
+    @typing.final
+    @typechecked
+    async def run_prompt_template(
+        self,
+        *,
+        template: str,
+        replacers: typing.Iterable[str],
+        params: typing.Dict[str, typing.Any],
+    ) -> LLMResponse:
+        return await self._run_prompt_template_internal(
+            template=template,
+            replacers=replacers,
+            params=params,
+        )
+    
+    @typing.final
+    @typechecked
+    async def run_chat_template(
+        self,
+        *message_templates: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]],
+        replacers: typing.Iterable[str],
+        params: typing.Dict[str, typing.Any],
+    ) -> LLMResponse:
+        return await self._run_chat_template_internal(
+            message_templates=message_templates,
+            replacers=replacers,
+            params=params,
+        )
+    
+    @typing.final
+    @typechecked
     async def run_prompt(self, prompt: str) -> LLMResponse:
+        return await self._run_prompt_internal(prompt=prompt)
+    
+    @typing.final
+    @typechecked
+    async def run_chat(
+        self, *messages: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]]
+    ) -> LLMResponse:
+        return await self._run_chat_internal(*messages)
+
+    #
+    # Internal API
+    #
+    @abc.abstractmethod
+    async def _run_prompt_internal(self, prompt: str) -> LLMResponse:
         pass
 
     @abc.abstractmethod
-    async def run_prompt_template(
+    async def _run_prompt_template_internal(
         self,
         *,
         template: str,
@@ -137,13 +184,13 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def run_chat(
+    async def _run_chat_internal(
         self, *messages: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]]
     ) -> LLMResponse:
         pass
 
     @abc.abstractmethod
-    async def run_chat_template(
+    async def _run_chat_template_internal(
         self,
         *message_templates: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]],
         replacers: typing.Iterable[str],
@@ -271,7 +318,7 @@ class LLMProvider(AbstractLLMProvider):
 
     @typing.final
     @typechecked
-    async def run_prompt_template(
+    async def _run_prompt_template_internal(
         self,
         *,
         template: str,
@@ -297,7 +344,7 @@ class LLMProvider(AbstractLLMProvider):
 
     @typing.final
     @typechecked
-    async def run_chat_template(
+    async def _run_chat_template_internal(
         self,
         *message_templates: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]],
         replacers: typing.Iterable[str],
@@ -307,7 +354,7 @@ class LLMProvider(AbstractLLMProvider):
             chats = message_templates[0]
         else:
             chats = typing.cast(typing.List[LLMChatMessage], message_templates)
-        return await self.run_prompt_template(
+        return await self._run_prompt_template_internal(
             template=self.__chat_to_prompt(chats),
             replacers=replacers,
             params=params,
@@ -315,7 +362,7 @@ class LLMProvider(AbstractLLMProvider):
 
     @typing.final
     @typechecked
-    async def run_prompt(self, prompt: str) -> LLMResponse:
+    async def _run_prompt_internal(self, prompt: str) -> LLMResponse:
         if cached := self._check_cache(prompt=prompt, prompt_vars={}):
             return cached
 
@@ -326,14 +373,14 @@ class LLMProvider(AbstractLLMProvider):
 
     @typing.final
     @typechecked
-    async def run_chat(
+    async def _run_chat_internal(
         self, *messages: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]]
     ) -> LLMResponse:
         if len(messages) == 1 and isinstance(messages[0], list):
             chats = messages[0]
         else:
             chats = typing.cast(typing.List[LLMChatMessage], messages)
-        return await self.run_prompt(self.__chat_to_prompt(chats))
+        return await self._run_prompt_internal(self.__chat_to_prompt(chats))
 
     @typing.final
     async def __run(self, prompt: str) -> LLMResponse:
@@ -360,20 +407,20 @@ class LLMChatProvider(AbstractLLMProvider):
 
     @typing.final
     @typechecked
-    async def run_prompt_template(
+    async def _run_prompt_template_internal(
         self,
         *,
         template: str,
         replacers: typing.Iterable[str],
         params: typing.Dict[str, typing.Any],
     ) -> LLMResponse:
-        return await self.run_chat_template(
+        return await self._run_chat_template_internal(
             [self.__prompt_to_chat(template)], replacers=replacers, params=params
         )
 
     @typing.final
     @typechecked
-    async def run_chat_template(
+    async def _run_chat_template_internal(
         self,
         *message_templates: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]],
         replacers: typing.Iterable[str],
@@ -416,11 +463,11 @@ class LLMChatProvider(AbstractLLMProvider):
             self._raise_error(e)
 
     @typechecked
-    async def run_prompt(self, prompt: str) -> LLMResponse:
-        return await self.run_chat([self.__prompt_to_chat(prompt)])
+    async def _run_prompt_internal(self, prompt: str) -> LLMResponse:
+        return await self._run_chat_internal([self.__prompt_to_chat(prompt)])
 
     @typechecked
-    async def run_chat(
+    async def _run_chat_internal(
         self, *messages: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]]
     ) -> LLMResponse:
         if len(messages) == 1 and isinstance(messages[0], list):

@@ -7,6 +7,7 @@ class BAMLClient:
     {{/each}}
 
     def __init__(self):
+        LLMManager.validate()
         baml_init()
 
     def configure(
