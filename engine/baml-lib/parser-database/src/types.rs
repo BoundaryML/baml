@@ -20,7 +20,7 @@ mod types;
 
 use prompt::validate_prompt;
 
-pub(crate) use to_string_attributes::{
+pub use to_string_attributes::{
     DynamicStringAttributes, StaticStringAttributes, ToStringAttributes,
 };
 pub(crate) use types::EnumAttributes;
