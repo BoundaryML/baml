@@ -169,7 +169,7 @@ pub struct RetryPolicy {
     pub options: Option<Vec<((String, Span), Expression)>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, serde::Serialize)]
 /// The strategy to use for retrying a request.
 pub enum RetryPolicyStrategy {
     /// Constant delay.
@@ -178,14 +178,14 @@ pub enum RetryPolicyStrategy {
     ExponentialBackoff(ExponentialBackoffStrategy),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, serde::Serialize)]
 /// The strategy to use for retrying a request.
 pub struct ContantDelayStrategy {
     /// The delay in milliseconds.
     pub delay_ms: u32,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, serde::Serialize)]
 /// The strategy to use for retrying a request.
 pub struct ExponentialBackoffStrategy {
     /// The delay in milliseconds.
