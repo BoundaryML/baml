@@ -16,7 +16,7 @@ use serde_json::{json, Value};
 //           field-level attributes on enum values, class fields
 //           overrides can only exist in impls
 //   [ ] FieldArity (optional / required) needs to be handled
-//   [ ] other types of identifiers?
+//   [x] other types of identifiers?
 //   [ ] `baml update` needs to update lockfile right now
 //          but baml CLI is installed globally
 //   [ ] baml configuration - retry policies, generator, etc
@@ -47,23 +47,12 @@ pub struct AllElements {
     pub classes: Vec<Node<Class>>,
     pub functions: Vec<Node<Function>>,
     pub clients: Vec<Node<Client>>,
-    //pub configuration: Configuration,
     pub retry_policies: Vec<Node<RetryPolicy>>,
 }
 
 #[derive(serde::Serialize)]
-pub enum PrimitiveType {
-    CHAR,
-    STRING,
-    FLOAT,
-    INTEGER,
-    BOOL,
-    NULL,
-}
-
-#[derive(serde::Serialize)]
 pub enum FieldType {
-    PRIMITIVE(PrimitiveType),
+    PRIMITIVE(ast::TypeValue),
     ENUM(EnumId),
     CLASS(ClassId),
     LIST(Box<FieldType>),
@@ -76,14 +65,7 @@ impl WithRepr<FieldType> for ast::FieldType {
     fn repr(&self, db: &ParserDatabase) -> FieldType {
         match self {
             ast::FieldType::Identifier(_, idn) => match idn {
-                ast::Identifier::Primitive(t, ..) => FieldType::PRIMITIVE(match t {
-                    ast::TypeValue::String => PrimitiveType::STRING,
-                    ast::TypeValue::Int => PrimitiveType::INTEGER,
-                    ast::TypeValue::Float => PrimitiveType::FLOAT,
-                    ast::TypeValue::Bool => PrimitiveType::BOOL,
-                    ast::TypeValue::Null => PrimitiveType::NULL,
-                    ast::TypeValue::Char => PrimitiveType::CHAR,
-                }),
+                ast::Identifier::Primitive(t, ..) => FieldType::PRIMITIVE(*t),
                 // ast has enough info to resolve whether this is a ref to an enum or a class
                 ast::Identifier::Local(name, _) => match db.find_type(idn) {
                     Some(Either::Left(_class_walker)) => FieldType::CLASS(name.clone()),
@@ -116,49 +98,49 @@ impl WithRepr<FieldType> for ast::FieldType {
     }
 }
 
+#[derive(serde::Serialize)]
 pub enum Identifier {
     /// Starts with env.*
     ENV(String),
     /// The path to a Local Identifer + the local identifer. Separated by '.'
-    Ref(String),
+    Ref(Vec<String>),
     /// A string without spaces or '.' Always starts with a letter. May contain numbers
     Local(String),
     /// Special types (always lowercase).
-    Primitive(String),
+    Primitive(ast::TypeValue),
     /// A string without spaces, but contains '-'
     String(String),
 }
 
 #[derive(serde::Serialize)]
-pub enum unused {
-    PRIMITIVE(PrimitiveType, String),
-}
-
-#[derive(serde::Serialize)]
 pub enum Expression {
-    IDENTIFIER(String), // TODO
-    NUMERIC(String),
-    STRING(String),
-    RAW_STRING(String),
-    LIST(Vec<Expression>),
-    MAP(Vec<(Expression, Expression)>),
+    Identifier(Identifier),
+    Numeric(String),
+    String(String),
+    RawString(String),
+    List(Vec<Expression>),
+    Map(Vec<(Expression, Expression)>),
 }
 
 impl WithRepr<Expression> for ast::Expression {
     fn repr(&self, db: &ParserDatabase) -> Expression {
         match self {
-            // DO NOT LAND- this needs to distinguish between "integer" and "float"
-            ast::Expression::NumericValue(val, _) => Expression::NUMERIC(val.clone()),
-            ast::Expression::StringValue(val, _) => Expression::STRING(val.clone()),
-            ast::Expression::RawStringValue(val) => Expression::RAW_STRING(val.value().to_string()),
-            ast::Expression::Identifier(idn) => {
-                Expression::IDENTIFIER("placeholder-identifier".to_string())
-            }
+            ast::Expression::NumericValue(val, _) => Expression::Numeric(val.clone()),
+            ast::Expression::StringValue(val, _) => Expression::String(val.clone()),
+            ast::Expression::RawStringValue(val) => Expression::RawString(val.value().to_string()),
+            ast::Expression::Identifier(idn) => Expression::Identifier(match idn {
+                ast::Identifier::ENV(k, _) => Identifier::ENV(k.clone()),
+                ast::Identifier::String(s, _) => Identifier::String(s.clone()),
+                ast::Identifier::Local(l, _) => Identifier::Local(l.clone()),
+                ast::Identifier::Ref(r, _) => Identifier::Ref(r.path.clone()),
+                ast::Identifier::Primitive(p, _) => Identifier::Primitive(*p),
+                ast::Identifier::Invalid(_, _) => panic!("parser db should never hand these out"),
+            }),
             ast::Expression::Array(arr, _) => {
-                Expression::LIST(arr.iter().map(|e| e.repr(db)).collect())
+                Expression::List(arr.iter().map(|e| e.repr(db)).collect())
             }
             ast::Expression::Map(arr, _) => {
-                Expression::MAP(arr.iter().map(|(k, v)| (k.repr(db), v.repr(db))).collect())
+                Expression::Map(arr.iter().map(|(k, v)| (k.repr(db), v.repr(db))).collect())
             }
         }
     }
