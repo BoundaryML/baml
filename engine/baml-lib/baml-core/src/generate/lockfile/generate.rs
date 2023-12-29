@@ -4,7 +4,7 @@ use internal_baml_schema_ast::ast::{
 };
 use serde_json::{json, Value};
 
-use super::repr::{AllElements, WithRepr};
+use super::repr::{AllElements, RetryPolicy, WithRepr};
 
 // should have a serde struct with a special serialize/deserialize
 
@@ -29,7 +29,10 @@ pub fn generate(db: &ParserDatabase) -> std::io::Result<()> {
         classes: db.walk_classes().map(|e| e.node(db)).collect(),
         functions: db.walk_functions().map(|e| e.node(db)).collect(),
         clients: db.walk_clients().map(|e| e.node(db)).collect(),
-        //configuration: db.walk_retry_policies().map(|e| e.repr()).collect(),
+        retry_policies: db
+            .walk_retry_policies()
+            .map(|e| WithRepr::<RetryPolicy>::node(&e, db))
+            .collect(),
     };
 
     std::fs::write(

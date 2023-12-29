@@ -3,14 +3,14 @@ use std::collections::HashMap;
 
 use internal_baml_parser_database::{
     walkers::{ClassWalker, ClientWalker, ConfigurationWalker, EnumWalker, FunctionWalker},
-    ParserDatabase,
+    ParserDatabase, RetryPolicyStrategy,
 };
 use internal_baml_schema_ast::ast::{self, WithName};
 use serde_json::{json, Value};
 
 // TODO:
 //
-//   [ ] clients
+//   [x] clients - need to finish expressions
 //   [ ] metadata per node (attributes, spans, etc)
 //           block-level attributes on enums, classes
 //           field-level attributes on enum values, class fields
@@ -18,9 +18,11 @@ use serde_json::{json, Value};
 //   [ ] FieldArity (optional / required) needs to be handled
 //   [ ] other types of identifiers?
 //   [ ] `baml update` needs to update lockfile right now
-//   [ ]
+//          but baml CLI is installed globally
+//   [ ] baml configuration - retry policies, generator, etc
+//          [x] retry policies
 
-pub(crate) trait WithRepr<T> {
+pub trait WithRepr<T> {
     fn repr(&self, db: &ParserDatabase) -> T;
 
     fn node(&self, db: &ParserDatabase) -> Node<T> {
@@ -31,6 +33,14 @@ pub(crate) trait WithRepr<T> {
     }
 }
 
+/// Nodes allow attaching metadata to a given IR entity: attributes, source location, etc
+#[derive(serde::Serialize)]
+pub struct Node<T> {
+    // TODO- do not allow hashmaps, always want order in these
+    meta: HashMap<String, String>,
+    elem: T,
+}
+
 #[derive(serde::Serialize)]
 pub struct AllElements {
     pub enums: Vec<Node<Enum>>,
@@ -38,13 +48,7 @@ pub struct AllElements {
     pub functions: Vec<Node<Function>>,
     pub clients: Vec<Node<Client>>,
     //pub configuration: Configuration,
-}
-
-#[derive(serde::Serialize)]
-pub struct Node<T> {
-    // TODO- do not allow hashmaps, always want order in these
-    meta: HashMap<String, String>,
-    elem: T,
+    pub retry_policies: Vec<Node<RetryPolicy>>,
 }
 
 #[derive(serde::Serialize)]
@@ -194,7 +198,6 @@ type ClassId = String;
 #[derive(serde::Serialize)]
 pub struct Class {
     name: ClassId,
-    // DO NOT LAND- these should not be diff
     static_fields: Vec<Field>,
     dynamic_fields: Vec<Field>,
 }
@@ -325,13 +328,50 @@ impl WithRepr<Function> for FunctionWalker<'_> {
 #[derive(serde::Serialize)]
 pub struct Client {
     name: ClientId,
-    // TODO
+    provider: String,
+    options: Vec<(String, Expression)>,
 }
 
 impl WithRepr<Client> for ClientWalker<'_> {
     fn repr(&self, db: &ParserDatabase) -> Client {
         Client {
             name: self.name().to_string(),
+            provider: self.properties().provider.0.clone(),
+            options: self
+                .properties()
+                .options
+                .iter()
+                .map(|(k, v)| (k.clone(), v.repr(db)))
+                .collect(),
+        }
+    }
+}
+
+type RetryPolicyId = String;
+
+#[derive(serde::Serialize)]
+pub struct RetryPolicy {
+    name: RetryPolicyId,
+    max_retries: u32,
+    strategy: RetryPolicyStrategy,
+    // NB: the parser DB has a notion of "empty options" vs "no options"; we collapse
+    // those here into an empty vec
+    options: Vec<(String, Expression)>,
+}
+
+impl WithRepr<RetryPolicy> for ConfigurationWalker<'_> {
+    fn repr(&self, db: &ParserDatabase) -> RetryPolicy {
+        RetryPolicy {
+            name: self.name().to_string(),
+            max_retries: self.retry_policy().max_retries,
+            strategy: self.retry_policy().strategy,
+            options: match &self.retry_policy().options {
+                Some(o) => o
+                    .iter()
+                    .map(|((k, _), v)| (k.clone(), v.repr(db)))
+                    .collect(),
+                None => vec![],
+            },
         }
     }
 }
