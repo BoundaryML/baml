@@ -161,17 +161,24 @@ impl WithRepr<Expression> for ast::Expression {
 }
 
 type EnumId = String;
+type EnumValue = String;
 #[derive(serde::Serialize)]
 pub struct Enum {
     name: EnumId,
-    values: Vec<String>,
+    values: Vec<Node<EnumValue>>,
 }
 
 impl WithRepr<Enum> for EnumWalker<'_> {
     fn repr(&self, db: &ParserDatabase) -> Enum {
         Enum {
             name: self.name().to_string(),
-            values: self.values().map(|v| v.name().to_string()).collect(),
+            values: self
+                .values()
+                .map(|v| Node {
+                    meta: HashMap::new(),
+                    elem: v.name().to_string(),
+                })
+                .collect(),
         }
     }
 }
@@ -258,7 +265,7 @@ pub struct Function {
     name: FunctionId,
     inputs: FunctionArgs,
     output: Node<FieldType>,
-    impls: Vec<Implementation>,
+    impls: Vec<Node<Implementation>>,
 }
 
 impl WithRepr<Function> for FunctionWalker<'_> {
@@ -278,34 +285,37 @@ impl WithRepr<Function> for FunctionWalker<'_> {
                 }
             },
             output: match self.ast_function().output() {
-                ast::FunctionArgs::Named(arg_list) => {
+                ast::FunctionArgs::Named(_) => {
                     panic!("Functions may not return named args")
                 }
                 ast::FunctionArgs::Unnamed(arg) => arg.field_type.node(db),
             },
             impls: self
                 .walk_variants()
-                .map(|e| Implementation {
-                    r#type: BackendType::LLM,
-                    name: e.name().to_string(),
-                    prompt: e.properties().prompt.value.clone(),
-                    input_replacers: e
-                        .properties()
-                        .replacers
-                        // NB: .0 should really be .input
-                        .0
-                        .iter()
-                        .map(|r| (r.0.key(), r.1.clone()))
-                        .collect(),
-                    output_replacers: e
-                        .properties()
-                        .replacers
-                        // NB: .1 should really be .output
-                        .1
-                        .iter()
-                        .map(|r| (r.0.key(), r.1.clone()))
-                        .collect(),
-                    client: e.properties().client.value.clone(),
+                .map(|e| Node {
+                    meta: HashMap::new(),
+                    elem: Implementation {
+                        r#type: BackendType::LLM,
+                        name: e.name().to_string(),
+                        prompt: e.properties().prompt.value.clone(),
+                        input_replacers: e
+                            .properties()
+                            .replacers
+                            // NB: .0 should really be .input
+                            .0
+                            .iter()
+                            .map(|r| (r.0.key(), r.1.clone()))
+                            .collect(),
+                        output_replacers: e
+                            .properties()
+                            .replacers
+                            // NB: .1 should really be .output
+                            .1
+                            .iter()
+                            .map(|r| (r.0.key(), r.1.clone()))
+                            .collect(),
+                        client: e.properties().client.value.clone(),
+                    },
                 })
                 .collect(),
         }
