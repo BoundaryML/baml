@@ -1,9 +1,13 @@
 use either::Either;
 use std::collections::HashMap;
 
+use indexmap::IndexMap;
 use internal_baml_parser_database::{
-    walkers::{ClassWalker, ClientWalker, ConfigurationWalker, EnumWalker, FunctionWalker},
-    ParserDatabase, RetryPolicyStrategy,
+    walkers::{
+        ClassWalker, ClientWalker, ConfigurationWalker, EnumValueWalker, EnumWalker, FunctionWalker,
+    },
+    DynamicStringAttributes, ParserDatabase, RetryPolicyStrategy, StaticStringAttributes,
+    ToStringAttributes, WithStaticRenames,
 };
 use internal_baml_schema_ast::ast::{self, FieldArity, WithName};
 use serde_json::{json, Value};
@@ -24,13 +28,23 @@ use serde_json::{json, Value};
 //   [ ] rename lockfile/mod.rs to ir/mod.rs
 //   [ ] wire Result<> type through, need this to be more sane
 
-pub trait WithRepr<T> {
-    fn repr(&self, db: &ParserDatabase) -> T;
+#[derive(serde::Serialize)]
+pub struct NodeAttributes {
+    skip: Option<bool>,
+    alias: Option<String>,
+    #[serde(with = "indexmap::map::serde_seq")]
+    meta: IndexMap<String, String>,
+    #[serde(with = "indexmap::map::serde_seq")]
+    codegen: IndexMap<String, String>,
+}
 
-    fn node(&self, db: &ParserDatabase) -> Node<T> {
-        Node {
-            elem: self.repr(db),
-            meta: HashMap::new(),
+impl NodeAttributes {
+    fn new() -> NodeAttributes {
+        NodeAttributes {
+            skip: None,
+            alias: None,
+            meta: IndexMap::new(),
+            codegen: IndexMap::new(),
         }
     }
 }
@@ -39,8 +53,22 @@ pub trait WithRepr<T> {
 #[derive(serde::Serialize)]
 pub struct Node<T> {
     // TODO- do not allow hashmaps, always want order in these
-    meta: HashMap<String, String>,
+    attributes: NodeAttributes,
+    //overrides: HashMap<String, HashMap<String, Expression>>,
     elem: T,
+}
+
+pub trait WithRepr<T> {
+    fn attributes(&self, db: &ParserDatabase) -> NodeAttributes;
+
+    fn repr(&self, db: &ParserDatabase) -> T;
+
+    fn node(&self, db: &ParserDatabase) -> Node<T> {
+        Node {
+            elem: self.repr(db),
+            attributes: self.attributes(db),
+        }
+    }
 }
 
 #[derive(serde::Serialize)]
@@ -75,6 +103,10 @@ impl FieldType {
 }
 
 impl WithRepr<FieldType> for ast::FieldType {
+    fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
+        NodeAttributes::new()
+    }
+
     fn repr(&self, db: &ParserDatabase) -> FieldType {
         match self {
             ast::FieldType::Identifier(arity, idn) => (match idn {
@@ -144,6 +176,10 @@ pub enum Expression {
 }
 
 impl WithRepr<Expression> for ast::Expression {
+    fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
+        NodeAttributes::new()
+    }
+
     fn repr(&self, db: &ParserDatabase) -> Expression {
         match self {
             ast::Expression::NumericValue(val, _) => Expression::Numeric(val.clone()),
@@ -168,24 +204,58 @@ impl WithRepr<Expression> for ast::Expression {
 }
 
 type EnumId = String;
-type EnumValue = String;
+
+#[derive(serde::Serialize)]
+pub struct EnumValue(String);
+
 #[derive(serde::Serialize)]
 pub struct Enum {
     name: EnumId,
     values: Vec<Node<EnumValue>>,
 }
 
+impl WithRepr<EnumValue> for EnumValueWalker<'_> {
+    fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
+        let mut attributes = NodeAttributes::new();
+
+        if let Some(attr) = self.get_default_attributes() {
+            match attr {
+                ToStringAttributes::Static(s) => {
+                    attributes.skip = *s.skip();
+                    if let Some(v) = s.alias() {
+                        attributes.alias = Some(db[*v].to_string());
+                    }
+                    for (&k, &v) in s.meta().into_iter() {
+                        attributes.meta.insert(db[k].to_string(), db[v].to_string());
+                    }
+                }
+                ToStringAttributes::Dynamic(d) => {
+                    for (&lang, &lang_code) in d.code.iter() {
+                        attributes
+                            .codegen
+                            .insert(db[lang].to_string(), db[lang_code].to_string());
+                    }
+                }
+            };
+        }
+
+        attributes
+    }
+
+    fn repr(&self, db: &ParserDatabase) -> EnumValue {
+        EnumValue(self.name().to_string())
+    }
+}
+
 impl WithRepr<Enum> for EnumWalker<'_> {
+    fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
+        NodeAttributes::new()
+    }
+
     fn repr(&self, db: &ParserDatabase) -> Enum {
         Enum {
             name: self.name().to_string(),
-            values: self
-                .values()
-                .map(|v| Node {
-                    meta: HashMap::new(),
-                    elem: v.name().to_string(),
-                })
-                .collect(),
+            values: self.values().map(|v| v.node(db)).collect(),
         }
     }
 }
@@ -207,6 +277,10 @@ pub struct Class {
 }
 
 impl WithRepr<Class> for ClassWalker<'_> {
+    fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
+        NodeAttributes::new()
+    }
+
     fn repr(&self, db: &ParserDatabase) -> Class {
         Class {
             name: ClassId(self.name().to_string()),
@@ -276,6 +350,10 @@ pub struct Function {
 }
 
 impl WithRepr<Function> for FunctionWalker<'_> {
+    fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
+        NodeAttributes::new()
+    }
+
     fn repr(&self, db: &ParserDatabase) -> Function {
         Function {
             name: self.name().to_string(),
@@ -300,7 +378,7 @@ impl WithRepr<Function> for FunctionWalker<'_> {
             impls: self
                 .walk_variants()
                 .map(|e| Node {
-                    meta: HashMap::new(),
+                    attributes: NodeAttributes::new(),
                     elem: Implementation {
                         r#type: BackendType::LLM,
                         name: e.name().to_string(),
@@ -337,6 +415,10 @@ pub struct Client {
 }
 
 impl WithRepr<Client> for ClientWalker<'_> {
+    fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
+        NodeAttributes::new()
+    }
+
     fn repr(&self, db: &ParserDatabase) -> Client {
         Client {
             name: self.name().to_string(),
@@ -364,6 +446,10 @@ pub struct RetryPolicy {
 }
 
 impl WithRepr<RetryPolicy> for ConfigurationWalker<'_> {
+    fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
+        NodeAttributes::new()
+    }
+
     fn repr(&self, db: &ParserDatabase) -> RetryPolicy {
         RetryPolicy {
             name: self.name().to_string(),

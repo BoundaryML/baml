@@ -10,6 +10,7 @@ members = [
 [workspace.dependencies]
 serde_json = { version = "1", features = ["float_roundtrip", "preserve_order"] }
 serde = { version = "1", features = ["derive"] }
+indexmap = { version = "2.1.0", features = ["serde"] }
 indoc = "2.0.1"
 
 # 
