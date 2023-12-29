@@ -126,41 +126,35 @@ pub enum Identifier {
 }
 
 #[derive(serde::Serialize)]
-pub enum FieldValue {
+pub enum unused {
     PRIMITIVE(PrimitiveType, String),
 }
 
 #[derive(serde::Serialize)]
 pub enum Expression {
+    IDENTIFIER(String), // TODO
     NUMERIC(String),
-    Identifier(String), // TODO
-    StringValue(String),
-    RawStringValue(String),
-    Array(Vec<Expression>),
-    Map(Vec<(Expression, Expression)>),
+    STRING(String),
+    RAW_STRING(String),
+    LIST(Vec<Expression>),
+    MAP(Vec<(Expression, Expression)>),
 }
 
-impl WithRepr<FieldValue> for ast::Expression {
-    fn repr(&self, db: &ParserDatabase) -> FieldValue {
+impl WithRepr<Expression> for ast::Expression {
+    fn repr(&self, db: &ParserDatabase) -> Expression {
         match self {
             // DO NOT LAND- this needs to distinguish between "integer" and "float"
-            ast::Expression::NumericValue(val, _) => {
-                FieldValue::PRIMITIVE(PrimitiveType::FLOAT, val.clone())
-            }
-            ast::Expression::StringValue(val, _) => {
-                FieldValue::PRIMITIVE(PrimitiveType::STRING, "placeholder".to_string())
-            }
-            ast::Expression::RawStringValue(val) => {
-                FieldValue::PRIMITIVE(PrimitiveType::STRING, "placeholder".to_string())
-            }
+            ast::Expression::NumericValue(val, _) => Expression::NUMERIC(val.clone()),
+            ast::Expression::StringValue(val, _) => Expression::STRING(val.clone()),
+            ast::Expression::RawStringValue(val) => Expression::RAW_STRING(val.value().to_string()),
             ast::Expression::Identifier(idn) => {
-                FieldValue::PRIMITIVE(PrimitiveType::STRING, "placeholder".to_string())
+                Expression::IDENTIFIER("placeholder-identifier".to_string())
             }
             ast::Expression::Array(arr, _) => {
-                FieldValue::PRIMITIVE(PrimitiveType::STRING, "placeholder".to_string())
+                Expression::LIST(arr.iter().map(|e| e.repr(db)).collect())
             }
             ast::Expression::Map(arr, _) => {
-                FieldValue::PRIMITIVE(PrimitiveType::STRING, "placeholder".to_string())
+                Expression::MAP(arr.iter().map(|(k, v)| (k.repr(db), v.repr(db))).collect())
             }
         }
     }
