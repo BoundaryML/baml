@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use indexmap::IndexMap;
 use internal_baml_parser_database::{
     walkers::{
-        ClassWalker, ClientWalker, ConfigurationWalker, EnumValueWalker, EnumWalker,
+        ClassWalker, ClientWalker, ConfigurationWalker, EnumValueWalker, EnumWalker, FieldWalker,
         FunctionWalker, VariantWalker,
     },
     DynamicStringAttributes, ParserDatabase, RetryPolicyStrategy, StaticStringAttributes,
@@ -267,14 +267,27 @@ pub struct Field {
     r#type: Node<FieldType>,
 }
 
+impl WithRepr<Field> for FieldWalker<'_> {
+    fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
+        NodeAttributes::new()
+    }
+
+    fn repr(&self, db: &ParserDatabase) -> Field {
+        Field {
+            name: self.name().to_string(),
+            r#type: self.ast_field().field_type.node(db),
+        }
+    }
+}
+
 #[derive(serde::Serialize)]
 pub struct ClassId(String);
 
 #[derive(serde::Serialize)]
 pub struct Class {
     name: ClassId,
-    static_fields: Vec<Field>,
-    dynamic_fields: Vec<Field>,
+    static_fields: Vec<Node<Field>>,
+    dynamic_fields: Vec<Node<Field>>,
 }
 
 impl WithRepr<Class> for ClassWalker<'_> {
@@ -285,20 +298,8 @@ impl WithRepr<Class> for ClassWalker<'_> {
     fn repr(&self, db: &ParserDatabase) -> Class {
         Class {
             name: ClassId(self.name().to_string()),
-            static_fields: self
-                .static_fields()
-                .map(|field| Field {
-                    name: field.name().to_string(),
-                    r#type: field.ast_field().field_type.node(db),
-                })
-                .collect(),
-            dynamic_fields: self
-                .dynamic_fields()
-                .map(|field| Field {
-                    name: field.name().to_string(),
-                    r#type: field.ast_field().field_type.node(db),
-                })
-                .collect(),
+            static_fields: self.static_fields().map(|e| e.node(db)).collect(),
+            dynamic_fields: self.dynamic_fields().map(|e| e.node(db)).collect(),
         }
     }
 }
@@ -309,7 +310,8 @@ pub enum BackendType {
     LLM,
 }
 
-type ImplementationId = String;
+#[derive(serde::Serialize)]
+pub struct ImplementationId(String);
 
 #[derive(serde::Serialize)]
 pub struct Implementation {
@@ -356,7 +358,7 @@ impl WithRepr<Implementation> for VariantWalker<'_> {
     fn repr(&self, db: &ParserDatabase) -> Implementation {
         Implementation {
             r#type: BackendType::LLM,
-            name: self.name().to_string(),
+            name: ImplementationId(self.name().to_string()),
             prompt: self.properties().prompt.value.clone(),
             input_replacers: self
                 .properties()
