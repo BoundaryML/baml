@@ -5,7 +5,7 @@ use internal_baml_parser_database::{
     walkers::{ClassWalker, ClientWalker, ConfigurationWalker, EnumWalker, FunctionWalker},
     ParserDatabase, RetryPolicyStrategy,
 };
-use internal_baml_schema_ast::ast::{self, WithName};
+use internal_baml_schema_ast::ast::{self, FieldArity, WithName};
 use serde_json::{json, Value};
 
 // TODO:
@@ -15,12 +15,14 @@ use serde_json::{json, Value};
 //           block-level attributes on enums, classes
 //           field-level attributes on enum values, class fields
 //           overrides can only exist in impls
-//   [ ] FieldArity (optional / required) needs to be handled
+//   [x] FieldArity (optional / required) needs to be handled
 //   [x] other types of identifiers?
 //   [ ] `baml update` needs to update lockfile right now
 //          but baml CLI is installed globally
 //   [ ] baml configuration - retry policies, generator, etc
 //          [x] retry policies
+//   [ ] rename lockfile/mod.rs to ir/mod.rs
+//   [ ] wire Result<> type through, need this to be more sane
 
 pub trait WithRepr<T> {
     fn repr(&self, db: &ParserDatabase) -> T;
@@ -52,47 +54,66 @@ pub struct AllElements {
 
 #[derive(serde::Serialize)]
 pub enum FieldType {
-    PRIMITIVE(ast::TypeValue),
-    ENUM(EnumId),
-    CLASS(ClassId),
-    LIST(Box<FieldType>),
-    MAP(Box<FieldType>, Box<FieldType>),
-    UNION(Vec<FieldType>),
-    TUPLE(Vec<FieldType>),
+    Primitive(ast::TypeValue),
+    Enum(EnumId),
+    Class(ClassId),
+    List(Box<FieldType>),
+    Map(Box<FieldType>, Box<FieldType>),
+    Union(Vec<FieldType>),
+    Tuple(Vec<FieldType>),
+}
+
+impl FieldType {
+    fn with_arity(self, arity: &FieldArity) -> FieldType {
+        match arity {
+            FieldArity::Required => self,
+            FieldArity::Optional => {
+                FieldType::Union(vec![self, FieldType::Primitive(ast::TypeValue::Null)])
+            }
+        }
+    }
 }
 
 impl WithRepr<FieldType> for ast::FieldType {
     fn repr(&self, db: &ParserDatabase) -> FieldType {
         match self {
-            ast::FieldType::Identifier(_, idn) => match idn {
-                ast::Identifier::Primitive(t, ..) => FieldType::PRIMITIVE(*t),
-                // ast has enough info to resolve whether this is a ref to an enum or a class
+            ast::FieldType::Identifier(arity, idn) => (match idn {
+                ast::Identifier::Primitive(t, ..) => FieldType::Primitive(*t),
                 ast::Identifier::Local(name, _) => match db.find_type(idn) {
-                    Some(Either::Left(_class_walker)) => FieldType::CLASS(name.clone()),
-                    Some(Either::Right(_enum_walker)) => FieldType::ENUM(name.clone()),
+                    Some(Either::Left(_class_walker)) => FieldType::Class(ClassId(name.clone())),
+                    Some(Either::Right(_enum_walker)) => FieldType::Enum(name.clone()),
                     None => panic!("parser DB screwed up, got an invalid identifier"),
                 },
+                // DO NOT LAND - do we need to handle other identifiers here?
                 _ => panic!("Not implemented"),
-            },
+            })
+            .with_arity(arity),
             ast::FieldType::List(ft, dims, _) => {
                 // NB: potential bug: this hands back a 1D list when dims == 0
-                let mut repr = FieldType::LIST(Box::new(ft.repr(db)));
+                let mut repr = FieldType::List(Box::new(ft.repr(db)));
 
                 for _ in 1u32..*dims {
-                    repr = FieldType::LIST(Box::new(repr));
+                    repr = FieldType::List(Box::new(repr));
                 }
 
                 repr
             }
             ast::FieldType::Dictionary(kv, _) => {
                 // NB: we can't just unpack (*kv) into k, v because that would require a move/copy
-                FieldType::MAP(Box::new((*kv).0.repr(db)), Box::new((*kv).1.repr(db)))
+                FieldType::Map(Box::new((*kv).0.repr(db)), Box::new((*kv).1.repr(db)))
             }
-            ast::FieldType::Union(_, t, _) => {
-                FieldType::UNION(t.iter().map(|ft| ft.repr(db)).collect())
+            ast::FieldType::Union(arity, t, _) => {
+                // NB: preempt union flattening by mixing arity into union types
+                let mut types = t.iter().map(|ft| ft.repr(db)).collect::<Vec<_>>();
+
+                if arity.is_optional() {
+                    types.push(FieldType::Primitive(ast::TypeValue::Null));
+                }
+
+                FieldType::Union(types)
             }
-            ast::FieldType::Tuple(_, t, _) => {
-                FieldType::TUPLE(t.iter().map(|ft| ft.repr(db)).collect())
+            ast::FieldType::Tuple(arity, t, _) => {
+                FieldType::Tuple(t.iter().map(|ft| ft.repr(db)).collect()).with_arity(arity)
             }
         }
     }
@@ -175,7 +196,8 @@ pub struct Field {
     r#type: Node<FieldType>,
 }
 
-type ClassId = String;
+#[derive(serde::Serialize)]
+pub struct ClassId(String);
 
 #[derive(serde::Serialize)]
 pub struct Class {
@@ -187,7 +209,7 @@ pub struct Class {
 impl WithRepr<Class> for ClassWalker<'_> {
     fn repr(&self, db: &ParserDatabase) -> Class {
         Class {
-            name: self.name().to_string(),
+            name: ClassId(self.name().to_string()),
             static_fields: self
                 .static_fields()
                 .map(|field| Field {
@@ -239,8 +261,8 @@ pub struct NamedArgList {
 /// BAML does not allow UnnamedArgList nor a lone NamedArg
 #[derive(serde::Serialize)]
 pub enum FunctionArgs {
-    UNNAMED_ARG(Node<FieldType>),
-    NAMED_ARG_LIST(NamedArgList),
+    UnnamedArg(Node<FieldType>),
+    NamedArgList(NamedArgList),
 }
 
 type FunctionId = String;
@@ -258,7 +280,7 @@ impl WithRepr<Function> for FunctionWalker<'_> {
         Function {
             name: self.name().to_string(),
             inputs: match self.ast_function().input() {
-                ast::FunctionArgs::Named(arg_list) => FunctionArgs::NAMED_ARG_LIST(NamedArgList {
+                ast::FunctionArgs::Named(arg_list) => FunctionArgs::NamedArgList(NamedArgList {
                     arg_list: arg_list
                         .args
                         .iter()
@@ -266,7 +288,7 @@ impl WithRepr<Function> for FunctionWalker<'_> {
                         .collect(),
                 }),
                 ast::FunctionArgs::Unnamed(arg) => {
-                    FunctionArgs::UNNAMED_ARG(arg.field_type.node(db))
+                    FunctionArgs::UnnamedArg(arg.field_type.node(db))
                 }
             },
             output: match self.ast_function().output() {
