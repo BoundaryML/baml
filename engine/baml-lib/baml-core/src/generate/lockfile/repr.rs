@@ -12,6 +12,9 @@ use serde_json::{json, Value};
 //
 //   [ ] clients
 //   [ ] metadata per node (attributes, spans, etc)
+//           block-level attributes on enums, classes
+//           field-level attributes on enum values, class fields
+//           overrides can only exist in impls
 //   [ ] FieldArity (optional / required) needs to be handled
 //   [ ] other types of identifiers?
 //   [ ] `baml update` needs to update lockfile right now
@@ -59,11 +62,10 @@ pub enum FieldType {
     PRIMITIVE(PrimitiveType),
     ENUM(EnumId),
     CLASS(ClassId),
-    // TODO- make KD_LIST recursive list
-    KD_LIST(u32, Box<Node<FieldType>>),
-    MAP(Box<Node<FieldType>>, Box<Node<FieldType>>),
-    UNION(Vec<Node<FieldType>>),
-    TUPLE(Vec<Node<FieldType>>),
+    LIST(Box<FieldType>),
+    MAP(Box<FieldType>, Box<FieldType>),
+    UNION(Vec<FieldType>),
+    TUPLE(Vec<FieldType>),
 }
 
 impl WithRepr<FieldType> for ast::FieldType {
@@ -86,16 +88,25 @@ impl WithRepr<FieldType> for ast::FieldType {
                 },
                 _ => panic!("Not implemented"),
             },
-            ast::FieldType::List(ft, dims, _) => FieldType::KD_LIST(*dims, Box::new(ft.node(db))),
+            ast::FieldType::List(ft, dims, _) => {
+                // NB: potential bug: this hands back a 1D list when dims == 0
+                let mut repr = FieldType::LIST(Box::new(ft.repr(db)));
+
+                for _ in 1u32..*dims {
+                    repr = FieldType::LIST(Box::new(repr));
+                }
+
+                repr
+            }
             ast::FieldType::Dictionary(kv, _) => {
                 // NB: we can't just unpack (*kv) into k, v because that would require a move/copy
-                FieldType::MAP(Box::new((*kv).0.node(db)), Box::new((*kv).1.node(db)))
+                FieldType::MAP(Box::new((*kv).0.repr(db)), Box::new((*kv).1.repr(db)))
             }
             ast::FieldType::Union(_, t, _) => {
-                FieldType::UNION(t.iter().map(|ft| ft.node(db)).collect())
+                FieldType::UNION(t.iter().map(|ft| ft.repr(db)).collect())
             }
             ast::FieldType::Tuple(_, t, _) => {
-                FieldType::TUPLE(t.iter().map(|ft| ft.node(db)).collect())
+                FieldType::TUPLE(t.iter().map(|ft| ft.repr(db)).collect())
             }
         }
     }
@@ -187,9 +198,6 @@ pub struct Class {
     dynamic_fields: Vec<Field>,
 }
 
-// block-level attributes on enums, classes
-// field-level attributes on enum values, class fields
-// overrides can only exist in impls
 impl WithRepr<Class> for ClassWalker<'_> {
     fn repr(&self, db: &ParserDatabase) -> Class {
         Class {
