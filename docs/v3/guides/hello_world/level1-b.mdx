@@ -1,0 +1,66 @@
+---
+title: "Level 1: Testing AI functions"
+---
+
+<Warning>
+  Before writing BAML, read the entirety of the Hello World example. This is
+  important for understanding BAML project architechtures.
+</Warning>
+
+## Overview
+
+One important way to ensure your AI functions are working as expected is to write unit tests. This is especially important when you're working with AI functions that are used in production, or when you're working with a team.
+
+You have two options for adding / running tests:
+
+- Using the Playground
+- Using the CLI
+
+## Using the Playground
+
+The playground allows a type-safe interface for creating tests along with running them.
+Under the hood, the playground runs `baml test` for you and writes the test files to the `__tests__` folder (see below).
+
+<iframe
+  src="https://player.cloudinary.com/embed/?public_id=baml-playground&cloud_name=dn7wj4mr5"
+  width="600"
+  height="400"
+  allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+  allowFullScreen
+></iframe>
+
+## Using the CLI
+
+To understand how to run tests using the CLI, you'll need to understand how BAML projects are structured.
+
+```bash
+.
+├── baml_src/ # Where you write BAML files
+│   ├── __tests__/ # Where you write tests
+│   │   ├── YourAIFunction/ # A folder for each AI function
+│   │   │   ├── test_name_monkey.json # A test file for each test case for that AI function
+│   │   │   └── test_name_cricket.json
+│   │   └── YourAIFunction2/ # Another folder for another AI function
+│   │       └── test_name_jellyfish.json
+```
+
+To run tests, you'll need to run `baml test` from the root of your project. This will run all tests in the `__tests__` folder.
+
+```bash
+# This will list all tests found in the __tests__ folder
+$ baml test
+# This will run all tests found in the __tests__ folder
+$ baml test run
+```
+
+You can also run tests for a specific AI function by passing the `-i` flag.
+
+```bash
+# This will list all tests found in the __tests__/YourAIFunction folder
+$ baml test -i "YourAIFunction:"
+
+# This will run all tests found in the __tests__/YourAIFunction folder
+$ baml test run -i "YourAIFunction:" -i "YourAIFunction2:"
+```
+
+For more filters on the `baml test` command, run `baml test --help`.

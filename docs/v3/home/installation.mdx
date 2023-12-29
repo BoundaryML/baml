@@ -17,7 +17,7 @@ brew install gloohq/baml/baml
 curl -fsSL https://raw.githubusercontent.com/GlooHQ/homebrew-baml/main/install-baml.sh | bash
 ```
 
-```bash Windows (via scoop)
+```bash Windows / WSL (via scoop)
 # You can install scoop at https://scoop.sh/
 scoop bucket add baml-bucket https://github.com/gloohq/homebrew-baml
 scoop install baml
@@ -25,6 +25,11 @@ scoop install baml
 
 </CodeGroup>
 You should be able to run `baml --version` and see the version number. The VSCode Extension will keep the compiler up to date for you.
+
+<Info>
+  If you don't have brew, see: [https://brew.sh/](https://brew.sh/). If you
+  don't have scoop, see: [https://scoop.sh/](https://scoop.sh/).
+</Info>
 
   </Step>
   <Step title="Add BAML to a project">

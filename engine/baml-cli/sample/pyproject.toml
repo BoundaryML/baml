@@ -3,10 +3,10 @@ name = "baml_example"
 version = "0.1.0"
 description = ""
 authors = ["Boundary Team <contact@boundaryml.com>"]
-readme = "README.md"
+readme = "baml_README.md"
 
 [tool.poetry.dependencies]
-python = ">=3.9"
+python = ">=3.9,<4.0"
 termcolor = "^2.3.0"
 baml = ">=0.6.0"
 

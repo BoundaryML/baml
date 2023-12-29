@@ -70,8 +70,12 @@
     },
 
     {
-      "group": "Hello World",
-      "pages": ["v3/guides/hello_world/level0", "v3/guides/hello_world/level1"]
+      "group": "Hello World (REQUIRED)",
+      "pages": [
+        "v3/guides/hello_world/level0",
+        "v3/guides/hello_world/level1",
+        "v3/guides/hello_world/level1-b"
+      ]
     },
     {
       "group": "Classifiers (e.g. using Tools)",
@@ -112,8 +116,15 @@
       "pages": [
         "v3/syntax/function",
         "v3/syntax/impl",
-        "v3/syntax/function-adapters",
-        "v3/syntax/function-testing"
+        "v3/syntax/function-adapters"
+      ]
+    },
+    {
+      "group": "testing",
+      "pages": [
+        "v3/syntax/testing/unittests",
+        "v3/syntax/testing/evaluators",
+        "v3/syntax/testing/integrationtests"
       ]
     },
     {
