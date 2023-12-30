@@ -1,5 +1,5 @@
+use anyhow::{anyhow, bail, Result};
 use either::Either;
-use std::collections::HashMap;
 
 use indexmap::IndexMap;
 use internal_baml_parser_database::{
@@ -7,11 +7,45 @@ use internal_baml_parser_database::{
         ClassWalker, ClientWalker, ConfigurationWalker, EnumValueWalker, EnumWalker, FieldWalker,
         FunctionWalker, VariantWalker,
     },
-    DynamicStringAttributes, ParserDatabase, RetryPolicyStrategy, StaticStringAttributes,
-    ToStringAttributes, WithStaticRenames,
+    ParserDatabase, RetryPolicyStrategy, ToStringAttributes, WithStaticRenames,
 };
 use internal_baml_schema_ast::ast::{self, FieldArity, WithName};
-use serde_json::{json, Value};
+
+#[derive(serde::Serialize)]
+pub struct AllElements {
+    pub enums: Vec<Node<Enum>>,
+    pub classes: Vec<Node<Class>>,
+    pub functions: Vec<Node<Function>>,
+    pub clients: Vec<Node<Client>>,
+    pub retry_policies: Vec<Node<RetryPolicy>>,
+}
+
+impl AllElements {
+    pub fn from_parser_database(db: &ParserDatabase) -> Result<AllElements> {
+        Ok(AllElements {
+            enums: db
+                .walk_enums()
+                .map(|e| e.node(db))
+                .collect::<Result<Vec<_>>>()?,
+            classes: db
+                .walk_classes()
+                .map(|e| e.node(db))
+                .collect::<Result<Vec<_>>>()?,
+            functions: db
+                .walk_functions()
+                .map(|e| e.node(db))
+                .collect::<Result<Vec<_>>>()?,
+            clients: db
+                .walk_clients()
+                .map(|e| e.node(db))
+                .collect::<Result<Vec<_>>>()?,
+            retry_policies: db
+                .walk_retry_policies()
+                .map(|e| WithRepr::<RetryPolicy>::node(&e, db))
+                .collect::<Result<Vec<_>>>()?,
+        })
+    }
+}
 
 // TODO:
 //
@@ -26,8 +60,8 @@ use serde_json::{json, Value};
 //          but baml CLI is installed globally
 //   [ ] baml configuration - retry policies, generator, etc
 //          [x] retry policies
-//   [ ] rename lockfile/mod.rs to ir/mod.rs
-//   [ ] wire Result<> type through, need this to be more sane
+//   [x] rename lockfile/mod.rs to ir/mod.rs
+//   [x] wire Result<> type through, need this to be more sane
 
 #[derive(Default, serde::Serialize)]
 pub struct NodeAttributes {
@@ -96,23 +130,14 @@ pub trait WithRepr<T> {
         NodeAttributes::default()
     }
 
-    fn repr(&self, db: &ParserDatabase) -> T;
+    fn repr(&self, db: &ParserDatabase) -> Result<T>;
 
-    fn node(&self, db: &ParserDatabase) -> Node<T> {
-        Node {
-            elem: self.repr(db),
+    fn node(&self, db: &ParserDatabase) -> Result<Node<T>> {
+        Ok(Node {
+            elem: self.repr(db)?,
             attributes: self.attributes(db),
-        }
+        })
     }
-}
-
-#[derive(serde::Serialize)]
-pub struct AllElements {
-    pub enums: Vec<Node<Enum>>,
-    pub classes: Vec<Node<Class>>,
-    pub functions: Vec<Node<Function>>,
-    pub clients: Vec<Node<Client>>,
-    pub retry_policies: Vec<Node<RetryPolicy>>,
 }
 
 /// FieldType represents the type of either a class field or a function arg.
@@ -139,22 +164,23 @@ impl FieldType {
 }
 
 impl WithRepr<FieldType> for ast::FieldType {
-    fn repr(&self, db: &ParserDatabase) -> FieldType {
-        match self {
+    fn repr(&self, db: &ParserDatabase) -> Result<FieldType> {
+        Ok(match self {
             ast::FieldType::Identifier(arity, idn) => (match idn {
                 ast::Identifier::Primitive(t, ..) => FieldType::Primitive(*t),
                 ast::Identifier::Local(name, _) => match db.find_type(idn) {
-                    Some(Either::Left(_class_walker)) => FieldType::Class(ClassId(name.clone())),
-                    Some(Either::Right(_enum_walker)) => FieldType::Enum(name.clone()),
-                    None => panic!("parser DB screwed up, got an invalid identifier"),
-                },
-                // DO NOT LAND - do we need to handle other identifiers here?
-                _ => panic!("Not implemented"),
+                    Some(Either::Left(_class_walker)) => {
+                        Ok(FieldType::Class(ClassId(name.clone())))
+                    }
+                    Some(Either::Right(_enum_walker)) => Ok(FieldType::Enum(name.clone())),
+                    None => Err(anyhow!("Field type uses unresolvable local identifier")),
+                }?,
+                _ => bail!("Field type uses unsupported identifier type"),
             })
             .with_arity(arity),
             ast::FieldType::List(ft, dims, _) => {
                 // NB: potential bug: this hands back a 1D list when dims == 0
-                let mut repr = FieldType::List(Box::new(ft.repr(db)));
+                let mut repr = FieldType::List(Box::new(ft.repr(db)?));
 
                 for _ in 1u32..*dims {
                     repr = FieldType::List(Box::new(repr));
@@ -164,11 +190,11 @@ impl WithRepr<FieldType> for ast::FieldType {
             }
             ast::FieldType::Dictionary(kv, _) => {
                 // NB: we can't just unpack (*kv) into k, v because that would require a move/copy
-                FieldType::Map(Box::new((*kv).0.repr(db)), Box::new((*kv).1.repr(db)))
+                FieldType::Map(Box::new((*kv).0.repr(db)?), Box::new((*kv).1.repr(db)?))
             }
             ast::FieldType::Union(arity, t, _) => {
                 // NB: preempt union flattening by mixing arity into union types
-                let mut types = t.iter().map(|ft| ft.repr(db)).collect::<Vec<_>>();
+                let mut types = t.iter().map(|ft| ft.repr(db)).collect::<Result<Vec<_>>>()?;
 
                 if arity.is_optional() {
                     types.push(FieldType::Primitive(ast::TypeValue::Null));
@@ -177,9 +203,10 @@ impl WithRepr<FieldType> for ast::FieldType {
                 FieldType::Union(types)
             }
             ast::FieldType::Tuple(arity, t, _) => {
-                FieldType::Tuple(t.iter().map(|ft| ft.repr(db)).collect()).with_arity(arity)
+                FieldType::Tuple(t.iter().map(|ft| ft.repr(db)).collect::<Result<Vec<_>>>()?)
+                    .with_arity(arity)
             }
-        }
+        })
     }
 }
 
@@ -208,26 +235,30 @@ pub enum Expression {
 }
 
 impl WithRepr<Expression> for ast::Expression {
-    fn repr(&self, db: &ParserDatabase) -> Expression {
-        match self {
+    fn repr(&self, db: &ParserDatabase) -> Result<Expression> {
+        Ok(match self {
             ast::Expression::NumericValue(val, _) => Expression::Numeric(val.clone()),
             ast::Expression::StringValue(val, _) => Expression::String(val.clone()),
             ast::Expression::RawStringValue(val) => Expression::RawString(val.value().to_string()),
             ast::Expression::Identifier(idn) => Expression::Identifier(match idn {
-                ast::Identifier::ENV(k, _) => Identifier::ENV(k.clone()),
-                ast::Identifier::String(s, _) => Identifier::String(s.clone()),
-                ast::Identifier::Local(l, _) => Identifier::Local(l.clone()),
-                ast::Identifier::Ref(r, _) => Identifier::Ref(r.path.clone()),
-                ast::Identifier::Primitive(p, _) => Identifier::Primitive(*p),
-                ast::Identifier::Invalid(_, _) => panic!("parser db should never hand these out"),
-            }),
+                ast::Identifier::ENV(k, _) => Ok(Identifier::ENV(k.clone())),
+                ast::Identifier::String(s, _) => Ok(Identifier::String(s.clone())),
+                ast::Identifier::Local(l, _) => Ok(Identifier::Local(l.clone())),
+                ast::Identifier::Ref(r, _) => Ok(Identifier::Ref(r.path.clone())),
+                ast::Identifier::Primitive(p, _) => Ok(Identifier::Primitive(*p)),
+                ast::Identifier::Invalid(_, _) => {
+                    Err(anyhow!("Cannot represent an invalid parser-AST identifier"))
+                }
+            }?),
             ast::Expression::Array(arr, _) => {
-                Expression::List(arr.iter().map(|e| e.repr(db)).collect())
+                Expression::List(arr.iter().map(|e| e.repr(db)).collect::<Result<Vec<_>>>()?)
             }
-            ast::Expression::Map(arr, _) => {
-                Expression::Map(arr.iter().map(|(k, v)| (k.repr(db), v.repr(db))).collect())
-            }
-        }
+            ast::Expression::Map(arr, _) => Expression::Map(
+                arr.iter()
+                    .map(|(k, v)| Ok((k.repr(db)?, v.repr(db)?)))
+                    .collect::<Result<Vec<_>>>()?,
+            ),
+        })
     }
 }
 
@@ -267,8 +298,8 @@ impl WithRepr<EnumValue> for EnumValueWalker<'_> {
         attributes
     }
 
-    fn repr(&self, db: &ParserDatabase) -> EnumValue {
-        EnumValue(self.name().to_string())
+    fn repr(&self, db: &ParserDatabase) -> Result<EnumValue> {
+        Ok(EnumValue(self.name().to_string()))
     }
 }
 
@@ -297,11 +328,14 @@ impl WithRepr<Enum> for EnumWalker<'_> {
         attributes
     }
 
-    fn repr(&self, db: &ParserDatabase) -> Enum {
-        Enum {
+    fn repr(&self, db: &ParserDatabase) -> Result<Enum> {
+        Ok(Enum {
             name: self.name().to_string(),
-            values: self.values().map(|v| v.node(db)).collect(),
-        }
+            values: self
+                .values()
+                .map(|v| v.node(db))
+                .collect::<Result<Vec<_>>>()?,
+        })
     }
 }
 
@@ -335,11 +369,11 @@ impl WithRepr<Field> for FieldWalker<'_> {
         attributes
     }
 
-    fn repr(&self, db: &ParserDatabase) -> Field {
-        Field {
+    fn repr(&self, db: &ParserDatabase) -> Result<Field> {
+        Ok(Field {
             name: self.name().to_string(),
-            r#type: self.ast_field().field_type.node(db),
-        }
+            r#type: self.ast_field().field_type.node(db)?,
+        })
     }
 }
 
@@ -378,12 +412,18 @@ impl WithRepr<Class> for ClassWalker<'_> {
         attributes
     }
 
-    fn repr(&self, db: &ParserDatabase) -> Class {
-        Class {
+    fn repr(&self, db: &ParserDatabase) -> Result<Class> {
+        Ok(Class {
             name: ClassId(self.name().to_string()),
-            static_fields: self.static_fields().map(|e| e.node(db)).collect(),
-            dynamic_fields: self.dynamic_fields().map(|e| e.node(db)).collect(),
-        }
+            static_fields: self
+                .static_fields()
+                .map(|e| e.node(db))
+                .collect::<Result<Vec<_>>>()?,
+            dynamic_fields: self
+                .dynamic_fields()
+                .map(|e| e.node(db))
+                .collect::<Result<Vec<_>>>()?,
+        })
     }
 }
 
@@ -436,8 +476,8 @@ impl WithRepr<Implementation> for VariantWalker<'_> {
         NodeAttributes::default()
     }
 
-    fn repr(&self, db: &ParserDatabase) -> Implementation {
-        Implementation {
+    fn repr(&self, db: &ParserDatabase) -> Result<Implementation> {
+        Ok(Implementation {
             r#type: OracleType::LLM,
             name: ImplementationId(self.name().to_string()),
             prompt: self.properties().prompt.value.clone(),
@@ -458,34 +498,35 @@ impl WithRepr<Implementation> for VariantWalker<'_> {
                 .map(|r| (r.0.key(), r.1.clone()))
                 .collect(),
             client: ClientId(self.properties().client.value.clone()),
-        }
+        })
     }
 }
 
 impl WithRepr<Function> for FunctionWalker<'_> {
-    fn repr(&self, db: &ParserDatabase) -> Function {
-        Function {
+    fn repr(&self, db: &ParserDatabase) -> Result<Function> {
+        Ok(Function {
             name: FunctionId(self.name().to_string()),
             inputs: match self.ast_function().input() {
                 ast::FunctionArgs::Named(arg_list) => FunctionArgs::NamedArgList(NamedArgList {
                     arg_list: arg_list
                         .args
                         .iter()
-                        .map(|(id, arg)| (id.name().to_string(), arg.field_type.repr(db)))
-                        .collect(),
+                        .map(|(id, arg)| Ok((id.name().to_string(), arg.field_type.repr(db)?)))
+                        .collect::<Result<Vec<_>>>()?,
                 }),
                 ast::FunctionArgs::Unnamed(arg) => {
-                    FunctionArgs::UnnamedArg(arg.field_type.node(db))
+                    FunctionArgs::UnnamedArg(arg.field_type.node(db)?)
                 }
             },
             output: match self.ast_function().output() {
-                ast::FunctionArgs::Named(_) => {
-                    panic!("Functions may not return named args")
-                }
+                ast::FunctionArgs::Named(_) => bail!("Functions may not return named args"),
                 ast::FunctionArgs::Unnamed(arg) => arg.field_type.node(db),
-            },
-            impls: self.walk_variants().map(|e| e.node(db)).collect(),
-        }
+            }?,
+            impls: self
+                .walk_variants()
+                .map(|e| e.node(db))
+                .collect::<Result<Vec<_>>>()?,
+        })
     }
 }
 
@@ -504,17 +545,17 @@ impl WithRepr<Client> for ClientWalker<'_> {
         NodeAttributes::default()
     }
 
-    fn repr(&self, db: &ParserDatabase) -> Client {
-        Client {
+    fn repr(&self, db: &ParserDatabase) -> Result<Client> {
+        Ok(Client {
             name: ClientId(self.name().to_string()),
             provider: self.properties().provider.0.clone(),
             options: self
                 .properties()
                 .options
                 .iter()
-                .map(|(k, v)| (k.clone(), v.repr(db)))
-                .collect(),
-        }
+                .map(|(k, v)| Ok((k.clone(), v.repr(db)?)))
+                .collect::<Result<Vec<_>>>()?,
+        })
     }
 }
 
@@ -536,18 +577,18 @@ impl WithRepr<RetryPolicy> for ConfigurationWalker<'_> {
         NodeAttributes::default()
     }
 
-    fn repr(&self, db: &ParserDatabase) -> RetryPolicy {
-        RetryPolicy {
+    fn repr(&self, db: &ParserDatabase) -> Result<RetryPolicy> {
+        Ok(RetryPolicy {
             name: RetryPolicyId(self.name().to_string()),
             max_retries: self.retry_policy().max_retries,
             strategy: self.retry_policy().strategy,
             options: match &self.retry_policy().options {
                 Some(o) => o
                     .iter()
-                    .map(|((k, _), v)| (k.clone(), v.repr(db)))
-                    .collect(),
+                    .map(|((k, _), v)| Ok((k.clone(), v.repr(db)?)))
+                    .collect::<Result<Vec<_>>>()?,
                 None => vec![],
             },
-        }
+        })
     }
 }

@@ -1,3 +1,5 @@
+use anyhow::Result;
+
 use internal_baml_parser_database::ParserDatabase;
 
 use super::repr::{AllElements, RetryPolicy, WithRepr};
@@ -19,21 +21,13 @@ only thing i need to care about right now is the local part
 
  */
 
-pub fn generate_lockfile(db: &ParserDatabase) -> std::io::Result<()> {
-    let all_elements = AllElements {
-        enums: db.walk_enums().map(|e| e.node(db)).collect(),
-        classes: db.walk_classes().map(|e| e.node(db)).collect(),
-        functions: db.walk_functions().map(|e| e.node(db)).collect(),
-        clients: db.walk_clients().map(|e| e.node(db)).collect(),
-        retry_policies: db
-            .walk_retry_policies()
-            .map(|e| WithRepr::<RetryPolicy>::node(&e, db))
-            .collect(),
-    };
+pub fn generate_lockfile(db: &ParserDatabase, lockfile_path: &str) -> Result<()> {
+    let all_elements = AllElements::from_parser_database(db)?;
 
     std::fs::write(
-        "/home/sam/baml-ast.lock",
+        lockfile_path,
         serde_json::to_string_pretty(&all_elements)? + "\n",
     )?;
+
     Ok(())
 }

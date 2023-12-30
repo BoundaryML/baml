@@ -924,6 +924,7 @@ checksum = "1e186cfbae8084e513daff4240b4797e342f988cecda4fb6c939150f96315fd8"
 name = "internal-baml-core"
 version = "0.11.0-canary.0"
 dependencies = [
+ "anyhow",
  "base64 0.13.1",
  "chrono",
  "dissimilar",
