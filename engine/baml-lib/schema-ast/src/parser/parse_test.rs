@@ -12,7 +12,6 @@ use serde_json::Value;
 #[derive(Deserialize, Debug)]
 #[serde(untagged)] // This allows for different shapes of JSON
 enum Input {
-    StringInput(String),
     ObjectInput(Value), // Use serde_json::Value for a generic JSON object
 }
 
@@ -20,7 +19,6 @@ impl Input {
     // Method to get the string representation of the input
     fn to_string(&self) -> String {
         match self {
-            Input::StringInput(s) => s.clone(),
             Input::ObjectInput(obj) => serde_json::to_string(obj).unwrap_or_default(),
         }
     }
@@ -164,7 +162,7 @@ pub(crate) fn parse_test_from_json(
     let span = Span::new(source.clone(), 0, end_range);
     let content = Expression::RawStringValue(RawString::new(
         test_input,
-        Span::new(source.clone(), 0, end_range),
+        span.clone(),
         Some(("json".into(), Span::empty(source.clone()))),
     ));
     let test_case = ConfigBlockProperty {
