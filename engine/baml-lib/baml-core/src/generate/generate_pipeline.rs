@@ -6,7 +6,7 @@ use crate::{
 };
 
 use super::generate_python_client::generate_py;
-use super::lockfile;
+use super::ir;
 
 pub use super::test_request::TestRequest;
 
@@ -15,7 +15,7 @@ pub(crate) fn generate_pipeline(
     gen: &Generator,
     lock: &LockFileWrapper,
 ) -> std::io::Result<()> {
-    lockfile::generate(db)?;
+    ir::generate_lockfile(db)?;
     match gen.language {
         GeneratorLanguage::Python => generate_py(db, gen, lock),
         GeneratorLanguage::TypeScript => todo!(),
