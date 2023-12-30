@@ -12,7 +12,7 @@ pub(crate) fn generate_pipeline(
     gen: &Generator,
     lock: &LockFileWrapper,
 ) -> std::io::Result<()> {
-    ir::generate_lockfile(db)?;
+    // ir::generate_lockfile(db, "/home/sam/baml-ast.lock")?;
     match gen.language.as_str() {
         "python" => generate_py(db, gen, lock),
         _ => unreachable!("Unsupported generator language"),
