@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use internal_baml_parser_database::ParserDatabase;
 
-use super::repr::{AllElements, RetryPolicy, WithRepr};
+use super::repr::{IntermediateRepr, RetryPolicy, WithRepr};
 
 // should have a serde struct with a special serialize/deserialize
 
@@ -21,13 +21,6 @@ only thing i need to care about right now is the local part
 
  */
 
-pub fn generate_lockfile(db: &ParserDatabase, lockfile_path: &str) -> Result<()> {
-    let all_elements = AllElements::from_parser_database(db)?;
-
-    std::fs::write(
-        lockfile_path,
-        serde_json::to_string_pretty(&all_elements)? + "\n",
-    )?;
-
-    Ok(())
+pub fn to_ir(db: &ParserDatabase) -> Result<IntermediateRepr> {
+    IntermediateRepr::from_parser_database(db)
 }

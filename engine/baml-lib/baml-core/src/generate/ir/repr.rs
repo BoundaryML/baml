@@ -11,8 +11,12 @@ use internal_baml_parser_database::{
 };
 use internal_baml_schema_ast::ast::{self, FieldArity, WithName};
 
+/// This class represents the intermediate representation of the BAML AST.
+/// It is a representation of the BAML AST that is easier to work with than the
+/// raw BAML AST, and should include all information necessary to generate
+/// code in any target language.
 #[derive(serde::Serialize)]
-pub struct AllElements {
+pub struct IntermediateRepr {
     pub enums: Vec<Node<Enum>>,
     pub classes: Vec<Node<Class>>,
     pub functions: Vec<Node<Function>>,
@@ -20,9 +24,9 @@ pub struct AllElements {
     pub retry_policies: Vec<Node<RetryPolicy>>,
 }
 
-impl AllElements {
-    pub fn from_parser_database(db: &ParserDatabase) -> Result<AllElements> {
-        Ok(AllElements {
+impl IntermediateRepr {
+    pub fn from_parser_database(db: &ParserDatabase) -> Result<IntermediateRepr> {
+        Ok(IntermediateRepr {
             enums: db
                 .walk_enums()
                 .map(|e| e.node(db))
@@ -83,6 +87,12 @@ pub struct NodeAttributes {
     overrides: IndexMap<(FunctionId, ImplementationId), IndexMap<String, Expression>>,
 }
 
+impl NodeAttributes {
+    pub fn get(&self, key: &str) -> Option<&Expression> {
+        self.meta.get(key)
+    }
+}
+
 fn to_ir_attributes(
     db: &ParserDatabase,
     maybe_ast_attributes: Option<&ToStringAttributes>,
@@ -119,8 +129,8 @@ fn to_ir_attributes(
 /// Nodes allow attaching metadata to a given IR entity: attributes, source location, etc
 #[derive(serde::Serialize)]
 pub struct Node<T> {
-    attributes: NodeAttributes,
-    elem: T,
+    pub attributes: NodeAttributes,
+    pub elem: T,
 }
 
 /// Implement this for every node in the IR AST, where T is the type of IR node
@@ -169,9 +179,7 @@ impl WithRepr<FieldType> for ast::FieldType {
             ast::FieldType::Identifier(arity, idn) => (match idn {
                 ast::Identifier::Primitive(t, ..) => FieldType::Primitive(*t),
                 ast::Identifier::Local(name, _) => match db.find_type(idn) {
-                    Some(Either::Left(_class_walker)) => {
-                        Ok(FieldType::Class(ClassId(name.clone())))
-                    }
+                    Some(Either::Left(_class_walker)) => Ok(FieldType::Class(name.clone())),
                     Some(Either::Right(_enum_walker)) => Ok(FieldType::Enum(name.clone())),
                     None => Err(anyhow!("Field type uses unresolvable local identifier")),
                 }?,
@@ -269,8 +277,8 @@ pub struct EnumValue(String);
 
 #[derive(serde::Serialize)]
 pub struct Enum {
-    name: EnumId,
-    values: Vec<Node<EnumValue>>,
+    pub name: EnumId,
+    pub values: Vec<Node<EnumValue>>,
 }
 
 impl WithRepr<EnumValue> for EnumValueWalker<'_> {
@@ -285,10 +293,7 @@ impl WithRepr<EnumValue> for EnumValueWalker<'_> {
                 // TODO
                 if !node_attributes.is_empty() {
                     attributes.overrides.insert(
-                        (
-                            FunctionId(r#fn.name().to_string()),
-                            ImplementationId(r#impl.name().to_string()),
-                        ),
+                        (r#fn.name().to_string(), r#impl.name().to_string()),
                         node_attributes,
                     );
                 }
@@ -315,10 +320,7 @@ impl WithRepr<Enum> for EnumWalker<'_> {
                     to_ir_attributes(db, r#impl.find_serializer_attributes(self.name()));
                 if !node_attributes.is_empty() {
                     attributes.overrides.insert(
-                        (
-                            FunctionId(r#fn.name().to_string()),
-                            ImplementationId(r#impl.name().to_string()),
-                        ),
+                        (r#fn.name().to_string(), r#impl.name().to_string()),
                         node_attributes,
                     );
                 }
@@ -341,8 +343,8 @@ impl WithRepr<Enum> for EnumWalker<'_> {
 
 #[derive(serde::Serialize)]
 pub struct Field {
-    name: String,
-    r#type: Node<FieldType>,
+    pub name: String,
+    pub r#type: Node<FieldType>,
 }
 
 impl WithRepr<Field> for FieldWalker<'_> {
@@ -356,10 +358,7 @@ impl WithRepr<Field> for FieldWalker<'_> {
                 let node_attributes = to_ir_attributes(db, self.get_override(&r#impl));
                 if !node_attributes.is_empty() {
                     attributes.overrides.insert(
-                        (
-                            FunctionId(r#fn.name().to_string()),
-                            ImplementationId(r#impl.name().to_string()),
-                        ),
+                        (r#fn.name().to_string(), r#impl.name().to_string()),
                         node_attributes,
                     );
                 }
@@ -377,14 +376,13 @@ impl WithRepr<Field> for FieldWalker<'_> {
     }
 }
 
-#[derive(serde::Serialize)]
-pub struct ClassId(String);
+type ClassId = String;
 
 #[derive(serde::Serialize)]
 pub struct Class {
-    name: ClassId,
-    static_fields: Vec<Node<Field>>,
-    dynamic_fields: Vec<Node<Field>>,
+    pub name: ClassId,
+    pub static_fields: Vec<Node<Field>>,
+    pub dynamic_fields: Vec<Node<Field>>,
 }
 
 impl WithRepr<Class> for ClassWalker<'_> {
@@ -399,10 +397,7 @@ impl WithRepr<Class> for ClassWalker<'_> {
                     to_ir_attributes(db, r#impl.find_serializer_attributes(self.name()));
                 if !node_attributes.is_empty() {
                     attributes.overrides.insert(
-                        (
-                            FunctionId(r#fn.name().to_string()),
-                            ImplementationId(r#impl.name().to_string()),
-                        ),
+                        (r#fn.name().to_string(), r#impl.name().to_string()),
                         node_attributes,
                     );
                 }
@@ -414,7 +409,7 @@ impl WithRepr<Class> for ClassWalker<'_> {
 
     fn repr(&self, db: &ParserDatabase) -> Result<Class> {
         Ok(Class {
-            name: ClassId(self.name().to_string()),
+            name: self.name().to_string(),
             static_fields: self
                 .static_fields()
                 .map(|e| e.node(db))
@@ -432,13 +427,12 @@ pub enum OracleType {
     LLM,
 }
 
-#[derive(Eq, Hash, PartialEq, serde::Serialize)]
-pub struct ImplementationId(String);
+type ImplementationId = String;
 
 #[derive(serde::Serialize)]
 pub struct Implementation {
     r#type: OracleType,
-    name: ImplementationId,
+    pub name: ImplementationId,
 
     prompt: String,
     #[serde(with = "indexmap::map::serde_seq")]
@@ -448,27 +442,22 @@ pub struct Implementation {
     client: ClientId,
 }
 
-#[derive(serde::Serialize)]
-pub struct NamedArgList {
-    arg_list: Vec<(String, FieldType)>,
-}
-
 /// BAML does not allow UnnamedArgList nor a lone NamedArg
 #[derive(serde::Serialize)]
 pub enum FunctionArgs {
-    UnnamedArg(Node<FieldType>),
-    NamedArgList(NamedArgList),
+    UnnamedArg(FieldType),
+    NamedArgList(Vec<(String, FieldType)>),
 }
 
-#[derive(Eq, Hash, PartialEq, serde::Serialize)]
-pub struct FunctionId(String);
+type FunctionId = String;
 
 #[derive(serde::Serialize)]
 pub struct Function {
-    name: FunctionId,
-    inputs: FunctionArgs,
-    output: Node<FieldType>,
-    impls: Vec<Node<Implementation>>,
+    pub name: FunctionId,
+    pub inputs: FunctionArgs,
+    pub output: Node<FieldType>,
+    pub impls: Vec<Node<Implementation>>,
+    pub default_impl: Option<ImplementationId>,
 }
 
 impl WithRepr<Implementation> for VariantWalker<'_> {
@@ -479,7 +468,7 @@ impl WithRepr<Implementation> for VariantWalker<'_> {
     fn repr(&self, db: &ParserDatabase) -> Result<Implementation> {
         Ok(Implementation {
             r#type: OracleType::LLM,
-            name: ImplementationId(self.name().to_string()),
+            name: self.name().to_string(),
             prompt: self.properties().prompt.value.clone(),
             input_replacers: self
                 .properties()
@@ -505,23 +494,24 @@ impl WithRepr<Implementation> for VariantWalker<'_> {
 impl WithRepr<Function> for FunctionWalker<'_> {
     fn repr(&self, db: &ParserDatabase) -> Result<Function> {
         Ok(Function {
-            name: FunctionId(self.name().to_string()),
+            name: self.name().to_string(),
             inputs: match self.ast_function().input() {
-                ast::FunctionArgs::Named(arg_list) => FunctionArgs::NamedArgList(NamedArgList {
-                    arg_list: arg_list
+                ast::FunctionArgs::Named(arg_list) => FunctionArgs::NamedArgList(
+                    arg_list
                         .args
                         .iter()
                         .map(|(id, arg)| Ok((id.name().to_string(), arg.field_type.repr(db)?)))
                         .collect::<Result<Vec<_>>>()?,
-                }),
+                ),
                 ast::FunctionArgs::Unnamed(arg) => {
-                    FunctionArgs::UnnamedArg(arg.field_type.node(db)?)
+                    FunctionArgs::UnnamedArg(arg.field_type.node(db)?.elem)
                 }
             },
             output: match self.ast_function().output() {
                 ast::FunctionArgs::Named(_) => bail!("Functions may not return named args"),
                 ast::FunctionArgs::Unnamed(arg) => arg.field_type.node(db),
             }?,
+            default_impl: self.metadata().default_impl.as_ref().map(|f| f.0.clone()),
             impls: self
                 .walk_variants()
                 .map(|e| e.node(db))

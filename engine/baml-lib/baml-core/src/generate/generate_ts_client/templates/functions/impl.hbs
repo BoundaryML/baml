@@ -1,0 +1,14 @@
+{{functionName}}.registerImpl('{{name}}', {
+  name: '{{name}}',
+  run: async (
+    {{#if params.positional}}
+{{params.name}}: {{params.type}}) => Promise<{{return_type}}>
+{{else}}
+{{params.name}}: {
+  {{#each params.values as |v|}}{{v.name}}: {{v.type}}{{#unless @last}}, {{/unless}}{{/each}}
+}) => Promise<{{return_type}}>
+{{/if}}
+  ) => {
+    throw new Error('No implementation for {{name}}');
+  }
+});

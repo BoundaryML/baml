@@ -1,5 +1,7 @@
+mod dir_writer;
 mod generate_pipeline;
 mod generate_python_client;
+mod generate_ts_client;
 mod ir;
 mod test_request;
 
