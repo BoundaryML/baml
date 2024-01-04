@@ -19,6 +19,7 @@ mod function;
 mod template;
 mod traits;
 mod types;
+mod value;
 mod variants;
 pub(super) use r#file::{File, FileCollector};
 pub(super) use traits::WithToCode;
