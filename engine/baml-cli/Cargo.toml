@@ -9,6 +9,7 @@ license-file.workspace = true
 
 [dependencies]
 baml-lib = { path = "../baml-lib/baml"}
+base64 = "0.13.0"
 check-latest = "1.0.2"
 chrono = "0.4.31"
 clap = { version = "4.4.6", features = ["derive"] }
