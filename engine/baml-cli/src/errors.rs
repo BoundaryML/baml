@@ -59,6 +59,18 @@ impl From<reqwest::Error> for CliError {
     }
 }
 
+impl From<base64::DecodeError> for CliError {
+    fn from(error: base64::DecodeError) -> Self {
+        CliError::StringError(error.to_string())
+    }
+}
+
+impl From<serde_json::Error> for CliError {
+    fn from(error: serde_json::Error) -> Self {
+        CliError::StringError(error.to_string())
+    }
+}
+
 impl fmt::Display for CliError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {

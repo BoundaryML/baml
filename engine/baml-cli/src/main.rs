@@ -5,6 +5,7 @@ use std::io::Write;
 mod builder;
 mod command;
 mod errors;
+mod import_command;
 mod init_command;
 mod test_command;
 mod update;
@@ -32,6 +33,7 @@ enum Commands {
     UpdateClient(BuildArgs),
     Init(InitArgs),
     Test(TestArgs),
+    Import(ImportArgs),
 }
 
 #[derive(Args, Debug)]
@@ -81,6 +83,15 @@ enum TestAction {
     List,
 }
 
+#[derive(Args, Debug)]
+struct ImportArgs {
+    #[arg(long)]
+    baml_dir: Option<String>,
+
+    #[arg()]
+    content: String,
+}
+
 pub(crate) fn main() {
     const NAME: &str = concat!("[", env!("CARGO_PKG_NAME"), "]");
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
@@ -110,6 +121,11 @@ pub(crate) fn main() {
                 test_command::run(&args, &baml_dir, &config, schema)
             })
         }
+        Commands::Import(args) => {
+            builder::build(&args.baml_dir).and_then(|(baml_dir, config, schema)| {
+                import_command::run(&args.content, &baml_dir, &config, schema)
+            })
+        }
     };
 
     if let Err(error) = response {
@@ -117,3 +133,14 @@ pub(crate) fn main() {
         std::process::exit(1);
     }
 }
+
+enum ImportItems {
+    Version1(ImportItemsVersion1),
+}
+
+struct ImportItemsVersion1 {
+    functionName: String,
+    test_input: TestInput,
+}
+
+enum TestInput {}
