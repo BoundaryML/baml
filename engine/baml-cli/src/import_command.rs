@@ -176,7 +176,7 @@ pub fn run(
                 info!("Created test case: {}", target_file.display());
 
                 println!(
-                    "{}\nbaml test run -i {}::{}",
+                    "{}\nbaml test run -i \"{}::{}\"",
                     "To run this test:".dimmed(),
                     v1.function_name,
                     test_name

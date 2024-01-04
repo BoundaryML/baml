@@ -190,8 +190,8 @@ pub fn run(
                 excludes
                     .iter()
                     .map(|f| match f {
-                        Filter::Wildcard(s) => format!("-x {}", s),
-                        Filter::Parts(f, i, t) => format!("-x {}:{}:{}", f, i, t),
+                        Filter::Wildcard(s) => format!("-x \"{}\"", s),
+                        Filter::Parts(f, i, t) => format!("-x \"{}:{}:{}\"", f, i, t),
                     })
                     .collect::<Vec<_>>()
                     .join(" "),
