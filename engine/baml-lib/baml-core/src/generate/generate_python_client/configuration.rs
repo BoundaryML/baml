@@ -1,7 +1,7 @@
 use internal_baml_parser_database::walkers::ConfigurationWalker;
 use internal_baml_parser_database::RetryPolicyStrategy;
 use internal_baml_schema_ast::ast::{Configuration, FunctionArgs, WithName};
-use serde_json::json;
+use serde_json::{json, Value};
 
 use crate::generate::generate_python_client::file::clean_file_name;
 
@@ -9,6 +9,7 @@ use super::{
     file::FileCollector,
     template::{render_template, HSTemplate},
     traits::{JsonHelper, WithWritePythonString},
+    value::to_py_value,
     WithToCode,
 };
 
@@ -72,12 +73,17 @@ impl WithWritePythonString for ConfigurationWalker<'_> {
                 fc.last_file()
                     .add_import("..baml_types", &format!("I{}", func.name()));
 
+                let test_case_content =
+                    serde_json::from_str::<Value>(self.test_case().content.value())
+                        .map(|v| to_py_value(&v))
+                        .unwrap();
+
                 match func.ast_function().input() {
                     FunctionArgs::Unnamed(arg) => {
                         let data = json!({
                             "function_name": func.name(),
                             "test_case_name": tc.name(),
-                            "test_case_input": self.test_case().content.value(),
+                            "test_case_input": test_case_content,
                             "test_case_type": arg.to_py_string(fc.last_file()),
                         });
                         render_template(HSTemplate::SingleArgTestSnippet, fc.last_file(), data);
@@ -86,7 +92,7 @@ impl WithWritePythonString for ConfigurationWalker<'_> {
                         let data = json!({
                             "function_name": func.name(),
                             "test_case_name": tc.name(),
-                            "test_case_input": self.test_case().content.value(),
+                            "test_case_input": test_case_content,
                             "test_case_types": args.args.iter().map(|(k, v)| json!({
                                 "name": k.name(),
                                 "type": v.to_py_string(fc.last_file()),

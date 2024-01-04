@@ -15,15 +15,7 @@ impl WithToCode for Identifier {
             }
             Identifier::Local(idn, _) => idn.into(),
             Identifier::String(str, _) => str.into(),
-            Identifier::Primitive(p, _) => match p {
-                TypeValue::Bool => "bool",
-                TypeValue::Int => "int",
-                TypeValue::Float => "float",
-                TypeValue::Char => "str",
-                TypeValue::String => "str",
-                TypeValue::Null => "None",
-            }
-            .into(),
+            Identifier::Primitive(p, _) => p.to_py_string(f),
             Identifier::Invalid(inv, _) => panic!("Should never show invalid: {}", inv),
         }
     }
