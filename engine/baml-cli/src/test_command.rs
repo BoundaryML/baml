@@ -1,22 +1,9 @@
 use colored::*;
-use std::{
-    io::{BufRead, BufReader},
-    ops::Deref,
-    path::{Path, PathBuf},
-    process::{Command, Stdio},
-    str::FromStr,
-    thread,
-};
+use std::{path::PathBuf, str::FromStr};
 
 use baml_lib::{internal_baml_schema_ast::ast::WithName, Configuration, ValidatedSchema};
-use log::info;
 
-use crate::{
-    command::{run_command, run_command_with_error},
-    errors::CliError,
-    test_command::test_state::RunState,
-    TestAction, TestArgs,
-};
+use crate::{errors::CliError, test_command::test_state::RunState, TestAction, TestArgs};
 
 mod ipc_comms;
 mod run_test_with_forward;
@@ -189,6 +176,32 @@ pub fn run(
         }
         TestAction::List => {
             println!("{}", state.to_string());
+
+            let cli_command = format!(
+                "baml test run {} {}",
+                includes
+                    .iter()
+                    .map(|f| match f {
+                        Filter::Wildcard(s) => format!("-i {}", s),
+                        Filter::Parts(f, i, t) => format!("-i {}:{}:{}", f, i, t),
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" "),
+                excludes
+                    .iter()
+                    .map(|f| match f {
+                        Filter::Wildcard(s) => format!("-x \"{}\"", s),
+                        Filter::Parts(f, i, t) => format!("-x \"{}:{}:{}\"", f, i, t),
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            );
+
+            println!(
+                "{}\n{}",
+                "To run a test, use the following command:".dimmed(),
+                cli_command
+            );
             Ok(())
         }
     }?;

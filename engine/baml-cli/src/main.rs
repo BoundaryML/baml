@@ -133,14 +133,3 @@ pub(crate) fn main() {
         std::process::exit(1);
     }
 }
-
-enum ImportItems {
-    Version1(ImportItemsVersion1),
-}
-
-struct ImportItemsVersion1 {
-    functionName: String,
-    test_input: TestInput,
-}
-
-enum TestInput {}
