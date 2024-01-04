@@ -8,44 +8,43 @@
 # fmt: off
 
 from ..types.classes.cls_conversation import Conversation
-from ..types.classes.cls_improvedresponse import ImprovedResponse
 from ..types.classes.cls_message import Message
 from ..types.classes.cls_proposedmessage import ProposedMessage
 from ..types.enums.enm_messagesender import MessageSender
-from ..types.enums.enm_sentiment import Sentiment
 from baml_lib._impl.functions import BaseBAMLFunction
 from typing import Protocol, runtime_checkable
 
 
-IMaybePolishTextOutput = ImprovedResponse
+IMultiArgOutput = str
 
 @runtime_checkable
-class IMaybePolishText(Protocol):
+class IMultiArg(Protocol):
     """
     This is the interface for a function.
 
     Args:
-        arg: ProposedMessage
+        convo: ProposedMessage
+        thing: str
 
     Returns:
-        ImprovedResponse
+        str
     """
 
-    async def __call__(self, arg: ProposedMessage, /) -> ImprovedResponse:
+    async def __call__(self, *, convo: ProposedMessage, thing: str) -> str:
         ...
 
 
-class IBAMLMaybePolishText(BaseBAMLFunction[ImprovedResponse]):
+class IBAMLMultiArg(BaseBAMLFunction[str]):
     def __init__(self) -> None:
         super().__init__(
-            "MaybePolishText",
-            IMaybePolishText,
+            "MultiArg",
+            IMultiArg,
             ["v1"],
         )
 
-    async def __call__(self, *args, **kwargs) -> ImprovedResponse:
+    async def __call__(self, *args, **kwargs) -> str:
         return await self.get_impl("v1").run(*args, **kwargs)
 
-BAMLMaybePolishText = IBAMLMaybePolishText()
+BAMLMultiArg = IBAMLMultiArg()
 
-__all__ = [ "BAMLMaybePolishText" ]
+__all__ = [ "BAMLMultiArg" ]

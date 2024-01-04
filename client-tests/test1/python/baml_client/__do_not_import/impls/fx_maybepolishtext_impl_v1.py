@@ -10,7 +10,6 @@
 from ..clients.client_azure_gpt4 import AZURE_GPT4
 from ..functions.fx_maybepolishtext import BAMLMaybePolishText
 from ..types.classes.cls_conversation import Conversation
-from ..types.classes.cls_dummyobj import DummyObj
 from ..types.classes.cls_improvedresponse import ImprovedResponse
 from ..types.classes.cls_message import Message
 from ..types.classes.cls_proposedmessage import ProposedMessage

@@ -8,11 +8,9 @@
 # fmt: off
 
 from ..types.classes.cls_conversation import Conversation
-from ..types.classes.cls_improvedresponse import ImprovedResponse
 from ..types.classes.cls_message import Message
 from ..types.classes.cls_proposedmessage import ProposedMessage
 from ..types.enums.enm_messagesender import MessageSender
-from ..types.enums.enm_sentiment import Sentiment
 from typing import Protocol, runtime_checkable
 
 
@@ -28,53 +26,54 @@ T = typing.TypeVar("T", bound=typing.Callable[..., typing.Any])
 CLS = typing.TypeVar("CLS", bound=type)
 
 
-IMaybePolishTextOutput = ImprovedResponse
+IMultiArgOutput = str
 
 @runtime_checkable
-class IMaybePolishText(Protocol):
+class IMultiArg(Protocol):
     """
     This is the interface for a function.
 
     Args:
-        arg: ProposedMessage
+        convo: ProposedMessage
+        thing: str
 
     Returns:
-        ImprovedResponse
+        str
     """
 
-    async def __call__(self, arg: ProposedMessage, /) -> ImprovedResponse:
+    async def __call__(self, *, convo: ProposedMessage, thing: str) -> str:
         ...
 
 
-class BAMLMaybePolishTextImpl:
-    async def run(self, arg: ProposedMessage, /) -> ImprovedResponse:
+class BAMLMultiArgImpl:
+    async def run(self, *, convo: ProposedMessage, thing: str) -> str:
         ...
 
-class IBAMLMaybePolishText:
+class IBAMLMultiArg:
     def register_impl(
         self, name: ImplName
-    ) -> typing.Callable[[IMaybePolishText], IMaybePolishText]:
+    ) -> typing.Callable[[IMultiArg], IMultiArg]:
         ...
 
-    async def __call__(self, arg: ProposedMessage, /) -> ImprovedResponse:
+    async def __call__(self, *, convo: ProposedMessage, thing: str) -> str:
         ...
 
-    def get_impl(self, name: ImplName) -> BAMLMaybePolishTextImpl:
+    def get_impl(self, name: ImplName) -> BAMLMultiArgImpl:
         ...
 
     @contextmanager
     def mock(self) -> typing.Generator[mock.AsyncMock, None, None]:
         """
-        Utility for mocking the MaybePolishTextInterface.
+        Utility for mocking the MultiArgInterface.
 
         Usage:
             ```python
             # All implementations are mocked.
 
             async def test_logic() -> None:
-                with baml.MaybePolishText.mock() as mocked:
+                with baml.MultiArg.mock() as mocked:
                     mocked.return_value = ...
-                    result = await MaybePolishTextImpl(...)
+                    result = await MultiArgImpl(...)
                     assert mocked.called
             ```
         """
@@ -84,7 +83,7 @@ class IBAMLMaybePolishText:
     def test(self, test_function: T) -> T:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the MaybePolishTextInterface.
+        the MultiArgInterface.
 
         Args:
             test_function : T
@@ -94,9 +93,9 @@ class IBAMLMaybePolishText:
             ```python
             # All implementations will be tested.
 
-            @baml.MaybePolishText.test
-            async def test_logic(MaybePolishTextImpl: IMaybePolishText) -> None:
-                result = await MaybePolishTextImpl(...)
+            @baml.MultiArg.test
+            async def test_logic(MultiArgImpl: IMultiArg) -> None:
+                result = await MultiArgImpl(...)
             ```
         """
         ...
@@ -105,7 +104,7 @@ class IBAMLMaybePolishText:
     def test(self, *, exclude_impl: typing.Iterable[ImplName]) -> pytest.MarkDecorator:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the MaybePolishTextInterface.
+        the MultiArgInterface.
 
         Args:
             exclude_impl : Iterable[ImplName]
@@ -115,9 +114,9 @@ class IBAMLMaybePolishText:
             ```python
             # All implementations except "v1" will be tested.
 
-            @baml.MaybePolishText.test(exclude_impl=["v1"])
-            async def test_logic(MaybePolishTextImpl: IMaybePolishText) -> None:
-                result = await MaybePolishTextImpl(...)
+            @baml.MultiArg.test(exclude_impl=["v1"])
+            async def test_logic(MultiArgImpl: IMultiArg) -> None:
+                result = await MultiArgImpl(...)
             ```
         """
         ...
@@ -126,7 +125,7 @@ class IBAMLMaybePolishText:
     def test(self, test_class: typing.Type[CLS]) -> typing.Type[CLS]:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the MaybePolishTextInterface.
+        the MultiArgInterface.
 
         Args:
             test_class : Type[CLS]
@@ -136,14 +135,14 @@ class IBAMLMaybePolishText:
         ```python
         # All implementations will be tested in every test method.
 
-        @baml.MaybePolishText.test
+        @baml.MultiArg.test
         class TestClass:
-            def test_a(self, MaybePolishTextImpl: IMaybePolishText) -> None:
+            def test_a(self, MultiArgImpl: IMultiArg) -> None:
                 ...
-            def test_b(self, MaybePolishTextImpl: IMaybePolishText) -> None:
+            def test_b(self, MultiArgImpl: IMultiArg) -> None:
                 ...
         ```
         """
         ...
 
-BAMLMaybePolishText: IBAMLMaybePolishText
+BAMLMultiArg: IBAMLMultiArg
