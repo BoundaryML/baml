@@ -126,11 +126,13 @@ fn use_partial(
             f.add_import("..__do_not_import.generated_baml_client", "baml");
             f.add_import("baml_lib._impl.deserializer", "Deserializer");
             f.add_import("json", "dumps");
+            f.add_import("typing", "Any");
             String::from("single_arg_snippet")
         }
         HSTemplate::MultiArgTestSnippet => {
             register_partial_file!(reg, "tests", "multi_arg_snippet");
             f.add_import("json", "dumps");
+            f.add_import("typing", "Any");
             f.add_import("..__do_not_import.generated_baml_client", "baml");
             f.add_import("baml_lib._impl.deserializer", "Deserializer");
             String::from("multi_arg_snippet")

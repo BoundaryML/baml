@@ -1,13 +1,13 @@
 import pytest
 from baml_client import baml
 
-# from baml_client.baml_types import (
-#     Conversation,
-#     ProposedMessage,
-#     IMaybePolishText,
-#     ITextPolisher,
-# )
-# from baml_client.testing import baml_test
+from baml_client.baml_types import (
+    Conversation,
+    ProposedMessage,
+    IMaybePolishText,
+    ITextPolisher,
+)
+from baml_client.testing import baml_test
 
 
 # async def some_traced_fn():
@@ -26,13 +26,14 @@ from baml_client import baml
 #     await BlahImpl(param)
 
 
-# @baml_test
-# @pytest.mark.asyncio
-# async def test_logic() -> None:
-#     result = await baml.MaybePolishText.get_impl("v1").run(
-#         ProposedMessage(thread=Conversation(thread=[]), generated_response="test")
-#     )
-#     print(result)
+@baml_test
+@pytest.mark.asyncio
+async def test_logic() -> None:
+    result = await baml.MaybePolishText.get_impl("v1").run(
+        ProposedMessage(thread=Conversation(thread=[]), generated_response="test")
+    )
+    print(result)
+    raise Exception("asdf")
 
 
 # @baml.MaybePolishText.test

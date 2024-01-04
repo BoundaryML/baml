@@ -1,7 +1,6 @@
 class ProposedMessage {
     thread Conversation
     generated_response string 
-    dummy DummyObj?
 }
 
 class DummyObj {
@@ -60,5 +59,40 @@ impl<llm, MaybePolishText> v1 {
         {#print_type(output)}
 
         JSON:
+    "#
+}
+
+
+function Thing {
+    input string
+    output string
+}
+
+impl<llm, Thing> v1 {
+    client AZURE_GPT4
+    prompt #"
+        Generate a story from:
+        ```input
+        {#input}
+        ```
+
+        
+    "#
+} 
+ 
+function MultiArg {
+    input (convo: ProposedMessage, thing: string)
+    output string
+}
+
+impl<llm, MultiArg> v1 {
+    client AZURE_GPT4
+    prompt #"
+        Generate a story from:
+        ```input
+        {#input.thing}
+        ```
+
+        
     "#
 }

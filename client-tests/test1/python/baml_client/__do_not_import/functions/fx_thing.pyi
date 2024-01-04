@@ -7,12 +7,6 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..types.classes.cls_conversation import Conversation
-from ..types.classes.cls_improvedresponse import ImprovedResponse
-from ..types.classes.cls_message import Message
-from ..types.classes.cls_proposedmessage import ProposedMessage
-from ..types.enums.enm_messagesender import MessageSender
-from ..types.enums.enm_sentiment import Sentiment
 from typing import Protocol, runtime_checkable
 
 
@@ -28,53 +22,53 @@ T = typing.TypeVar("T", bound=typing.Callable[..., typing.Any])
 CLS = typing.TypeVar("CLS", bound=type)
 
 
-IMaybePolishTextOutput = ImprovedResponse
+IThingOutput = str
 
 @runtime_checkable
-class IMaybePolishText(Protocol):
+class IThing(Protocol):
     """
     This is the interface for a function.
 
     Args:
-        arg: ProposedMessage
+        arg: str
 
     Returns:
-        ImprovedResponse
+        str
     """
 
-    async def __call__(self, arg: ProposedMessage, /) -> ImprovedResponse:
+    async def __call__(self, arg: str, /) -> str:
         ...
 
 
-class BAMLMaybePolishTextImpl:
-    async def run(self, arg: ProposedMessage, /) -> ImprovedResponse:
+class BAMLThingImpl:
+    async def run(self, arg: str, /) -> str:
         ...
 
-class IBAMLMaybePolishText:
+class IBAMLThing:
     def register_impl(
         self, name: ImplName
-    ) -> typing.Callable[[IMaybePolishText], IMaybePolishText]:
+    ) -> typing.Callable[[IThing], IThing]:
         ...
 
-    async def __call__(self, arg: ProposedMessage, /) -> ImprovedResponse:
+    async def __call__(self, arg: str, /) -> str:
         ...
 
-    def get_impl(self, name: ImplName) -> BAMLMaybePolishTextImpl:
+    def get_impl(self, name: ImplName) -> BAMLThingImpl:
         ...
 
     @contextmanager
     def mock(self) -> typing.Generator[mock.AsyncMock, None, None]:
         """
-        Utility for mocking the MaybePolishTextInterface.
+        Utility for mocking the ThingInterface.
 
         Usage:
             ```python
             # All implementations are mocked.
 
             async def test_logic() -> None:
-                with baml.MaybePolishText.mock() as mocked:
+                with baml.Thing.mock() as mocked:
                     mocked.return_value = ...
-                    result = await MaybePolishTextImpl(...)
+                    result = await ThingImpl(...)
                     assert mocked.called
             ```
         """
@@ -84,7 +78,7 @@ class IBAMLMaybePolishText:
     def test(self, test_function: T) -> T:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the MaybePolishTextInterface.
+        the ThingInterface.
 
         Args:
             test_function : T
@@ -94,9 +88,9 @@ class IBAMLMaybePolishText:
             ```python
             # All implementations will be tested.
 
-            @baml.MaybePolishText.test
-            async def test_logic(MaybePolishTextImpl: IMaybePolishText) -> None:
-                result = await MaybePolishTextImpl(...)
+            @baml.Thing.test
+            async def test_logic(ThingImpl: IThing) -> None:
+                result = await ThingImpl(...)
             ```
         """
         ...
@@ -105,7 +99,7 @@ class IBAMLMaybePolishText:
     def test(self, *, exclude_impl: typing.Iterable[ImplName]) -> pytest.MarkDecorator:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the MaybePolishTextInterface.
+        the ThingInterface.
 
         Args:
             exclude_impl : Iterable[ImplName]
@@ -115,9 +109,9 @@ class IBAMLMaybePolishText:
             ```python
             # All implementations except "v1" will be tested.
 
-            @baml.MaybePolishText.test(exclude_impl=["v1"])
-            async def test_logic(MaybePolishTextImpl: IMaybePolishText) -> None:
-                result = await MaybePolishTextImpl(...)
+            @baml.Thing.test(exclude_impl=["v1"])
+            async def test_logic(ThingImpl: IThing) -> None:
+                result = await ThingImpl(...)
             ```
         """
         ...
@@ -126,7 +120,7 @@ class IBAMLMaybePolishText:
     def test(self, test_class: typing.Type[CLS]) -> typing.Type[CLS]:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the MaybePolishTextInterface.
+        the ThingInterface.
 
         Args:
             test_class : Type[CLS]
@@ -136,14 +130,14 @@ class IBAMLMaybePolishText:
         ```python
         # All implementations will be tested in every test method.
 
-        @baml.MaybePolishText.test
+        @baml.Thing.test
         class TestClass:
-            def test_a(self, MaybePolishTextImpl: IMaybePolishText) -> None:
+            def test_a(self, ThingImpl: IThing) -> None:
                 ...
-            def test_b(self, MaybePolishTextImpl: IMaybePolishText) -> None:
+            def test_b(self, ThingImpl: IThing) -> None:
                 ...
         ```
         """
         ...
 
-BAMLMaybePolishText: IBAMLMaybePolishText
+BAMLThing: IBAMLThing
