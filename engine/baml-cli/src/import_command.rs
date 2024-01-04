@@ -1,6 +1,7 @@
 use std::{collections::HashMap, io::Write, path::PathBuf};
 
 use baml_lib::{Configuration, ValidatedSchema};
+use colored::Colorize;
 use log::info;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -163,7 +164,7 @@ pub fn run(
 
                 let target_file = baml_dir
                     .join("__tests__")
-                    .join(v1.function_name)
+                    .join(&v1.function_name)
                     .join(format!("{}.json", test_name));
 
                 // write to file
@@ -173,6 +174,13 @@ pub fn run(
                     .map_err(|e| CliError::StringError(format!("Failed to write file: {}", e)))?;
 
                 info!("Created test case: {}", target_file.display());
+
+                println!(
+                    "{}\nbaml test run -i {}::{}",
+                    "To run this test:".dimmed(),
+                    v1.function_name,
+                    test_name
+                );
 
                 Ok(())
             } else {
