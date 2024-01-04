@@ -1,13 +1,8 @@
-use std::{
-    collections::HashMap,
-    io::{BufReader, Read, Write},
-    path::PathBuf,
-};
+use std::{collections::HashMap, io::Write, path::PathBuf};
 
 use baml_lib::{Configuration, ValidatedSchema};
-use flate2::bufread::GzDecoder;
 use log::info;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::errors::CliError;
@@ -15,10 +10,11 @@ use crate::errors::CliError;
 /*
 Content will be of the form:
 {
-  "version": 1,
+  "version": "1",
   "content": {
     "type": "test",
     "functionName": "FooBar",
+    "testName": "test_1",
     "input": {
       "name": "multi",
       "fields": { "takeaways": "List[str]", "title": "str", "author": "None" },
@@ -34,9 +30,10 @@ Content will be of the form:
 or
 
 {
-  "version": 1,
+  "version": "1",
   "content": {
     "type": "test",
+    "testName": "test_1",
     "functionName": "FooBar",
     "input": {"name":"single","fields":{"document_text":"str"},"value":"\"Solar Asset Monitoring When choosing a solution for on-demand production, irradiance and weather data, solar stakeholders should consider several key factors: Is the solar data produced by an experienced staff of scientists, researchers & engineers with a deep bench of scientific expertise? When sourcing a solar asset performance and monitoring dataset solution, choose a solution that is supported by a broad team of experienced solar industry experts that incorporates the industry\\u2019s leading solar data. Does the solar data build investor confidence? A solar asset and performance monitoring solution should be proven to validate energy projections. It should successfully benchmark solar fleet performance with monthly summaries of expected asset performance based on available irradiance. Does the solar data improve field services & customer support? Solar stakeholders should embrace solutions that can keep field teams and customers informed by reliably integrating hourly solar performance estimates and weather data. Is the solar data accessible by diagnostic software? To scale solar asset monitoring, stakeholders should integrate solar data with diagnostic software. With integration, it\\u2019s possible to generate expected power output measurements of individual or fleets of PV systems\\u2014all at a lower cost and more accurately than using ground measurements. SolarAnywhere\\u00ae SystemCheck\\u00ae estimates distributed PV energy production in real time, giving owners & operators a critical performance benchmarking tool SolarAnywhere Data (Sites) offers the most bankable solar data for PV project financing & asset management\""}
   }
@@ -126,7 +123,24 @@ pub fn run(
                         }
                     }
                     TestInput::Multi { fields, value } => {
-                        unimplemented!()
+                        let field_name = match &fields {
+                            Value::Object(x) => Ok(x
+                                .keys()
+                                .into_iter()
+                                .enumerate()
+                                .map(|(i, x)| (x.to_string(), value[i].to_string()))
+                                .collect::<Vec<(String, String)>>()),
+                            item => {
+                                Err(CliError::StringError(format!("Invalid fields: {:?}", item)))
+                            }
+                        }?;
+
+                        let mut map = HashMap::new();
+                        for (field_name, value) in field_name {
+                            let parsed = serde_json::from_str::<Value>(&value)?;
+                            map.insert(field_name, parsed);
+                        }
+                        Ok(serde_json::json!(map))
                     }
                 };
 
