@@ -81,12 +81,12 @@ pub enum TestInput {
 pub fn run(
     content: &str,
     baml_dir: &PathBuf,
-    config: &Configuration,
+    _config: &Configuration,
     schema: ValidatedSchema,
 ) -> Result<(), CliError> {
     // Parse base64 encoded content
     let decoded = base64::decode(content)
-        .map_err(|e| CliError::StringError(format!("Invalid base64: {}\n{}", e, content)))?;
+        .map_err(|e| CliError::StringError(format!("Expected encoded string: {}\n", e)))?;
 
     // Parse content as JSON
     let test: Test = serde_json::from_slice(&decoded)
