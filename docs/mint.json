@@ -52,13 +52,7 @@
   "navigation": [
     {
       "group": "Overview",
-      "pages": [
-        "v3/home/overview",
-        "v3/home/boundary-for-product-teams",
-        "v3/home/boundary-for-full-stack-devs",
-        "v3/home/boundary-for-AI-engineers",
-        "v3/home/faq"
-      ]
+      "pages": ["v3/home/overview", "v3/home/faq"]
     },
     {
       "group": "Quickstart",
@@ -78,14 +72,6 @@
       ]
     },
     {
-      "group": "Classifiers (e.g. using Tools)",
-      "pages": [
-        "v3/guides/classification/level1",
-        "v3/guides/classification/level2",
-        "v3/guides/classification/level3"
-      ]
-    },
-    {
       "group": "Extraction (i.e. getting structured data)",
       "pages": [
         "v3/guides/entity_extraction/level1",
@@ -94,6 +80,15 @@
         "v3/guides/entity_extraction/level4"
       ]
     },
+    {
+      "group": "Classifiers (e.g. using Tools)",
+      "pages": [
+        "v3/guides/classification/level1",
+        "v3/guides/classification/level2",
+        "v3/guides/classification/level3"
+      ]
+    },
+
     {
       "group": "Multi-step Apps",
       "pages": ["v3/guides/multi-step/example1"]
