@@ -162,12 +162,13 @@ pub fn run(
                     }
                 };
 
-                let target_file = baml_dir
-                    .join("__tests__")
-                    .join(&v1.function_name)
-                    .join(format!("{}.json", test_name));
+                let target_dir = baml_dir.join("__tests__").join(&v1.function_name);
+                let target_file = target_dir.join(format!("{}.json", test_name));
 
                 // write to file
+                std::fs::create_dir_all(target_dir).map_err(|e| {
+                    CliError::StringError(format!("Failed to create directory: {}", e))
+                })?; // create directory if it doesn't exist
                 let mut file = std::fs::File::create(&target_file)
                     .map_err(|e| CliError::StringError(format!("Failed to create file: {}", e)))?;
                 file.write_all(serde_json::to_string_pretty(&test_case_content)?.as_bytes())
