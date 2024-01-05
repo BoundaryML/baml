@@ -52,13 +52,7 @@
   "navigation": [
     {
       "group": "Overview",
-      "pages": [
-        "v3/home/overview",
-        "v3/home/boundary-for-product-teams",
-        "v3/home/boundary-for-full-stack-devs",
-        "v3/home/boundary-for-AI-engineers",
-        "v3/home/faq"
-      ]
+      "pages": ["v3/home/overview", "v3/home/faq"]
     },
     {
       "group": "Quickstart",
