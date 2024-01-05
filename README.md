@@ -90,9 +90,9 @@ client<llm> GPT4 {
   provider baml-openai-chat // or add your own
   retry_policy DefaultRetry
   options {
-		temperature 0.1
-		model "gpt-4"
-	}
+    temperature 0.1
+    model "gpt-4"
+  }
 }
 
 impl<llm, ExtractProductInfo> version1 {
@@ -104,19 +104,13 @@ impl<llm, ExtractProductInfo> version1 {
     ---
     Extract the following info in JSON:
     {#print_type(output)}
-	"#
+  "#
 }
 ```
 
 #### 3. Test your function with the BAML VSCode Playground
 
-<iframe
-  src="https://player.cloudinary.com/embed/?public_id=baml-playground&cloud_name=dn7wj4mr5"
-  width="600"
-  height="400"
-  allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-  allowFullScreen
-></iframe>
+[](https://player.cloudinary.com/embed/?public_id=baml-playground&cloud_name=dn7wj4mr5)
 
 #### 5. Call your functions in Python or Typescript
 
