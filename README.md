@@ -110,7 +110,7 @@ impl<llm, ExtractProductInfo> version1 {
 
 #### 3. Test your function with the BAML VSCode Playground
 
-[](https://player.cloudinary.com/embed/?public_id=baml-playground&cloud_name=dn7wj4mr5)
+![](https://player.cloudinary.com/embed/?public_id=baml-playground&cloud_name=dn7wj4mr5)
 
 #### 5. Call your functions in Python or Typescript
 
