@@ -64,13 +64,13 @@ Here’s what a `.baml` AI function looks like (watch the video to see how the p
 ```rust
 // example.baml
 function GetDetailedSentiment {
-  input string
-  output DetailedSentiment
+    input string
+    output DetailedSentiment
 }
 
 class DetailedSentiment {
-	sentiment_score float
-  summary_in_a_word string
+    sentiment_score float
+    summary_in_a_word string
 }
 ```
 
@@ -81,15 +81,15 @@ BAML compiles to fully typed Python and TypeScript. No matter how you change the
 from baml_client import baml as b
 
 async def main():	
-	message = "I'ma Mario, and I'ma gonna wiiiiin!"
+    message = "I'ma Mario, and I'ma gonna wiiiiin!"
 
-	# Your AI function defined in .baml files
-	response = await b.GetDetailedSentiment(message)
+    # Your AI function defined in .baml files
+    response = await b.GetDetailedSentiment(message)
 
-	# Response is automatically strongly typed and
-	# works with auto complete!
-	print(f"Score: {response.sentiment_score}")
-  print(f"Summary: {response.summary_in_a_word}")
+    # Response is automatically strongly typed and
+    # works with auto complete!
+    print(f"Score: {response.sentiment_score}")
+    print(f"Summary: {response.summary_in_a_word}")
 ```
 
 ## Getting Started
@@ -100,11 +100,9 @@ Learning a new language seems daunting, but it takes < 10 minutes to get started
 
 The VSCode extension provides auto-compiling on save, a realtime preview of the full prompt, syntax highlighting and great errors — every syntax error recommends a fix. 
 
-**Making writing and reading BAML easy one of our design philosophies.**
+Making BAML easy to read and write is our core design philosophy.
 
 #### What you get out-of-the-box
-
-* Workflow
     - **Typed Python/Typescript support**
     - **VSCode Playground**: see the full prompt and run tests
     - **Better code organization** — no scattered jinja templates or yaml files
@@ -112,9 +110,7 @@ The VSCode extension provides auto-compiling on save, a realtime preview of the 
     - **Full integration with** **Boundary Studio** - our observability dashboard
         - Turn live production data into a test-case with one click!
     - And best of all, **everything lives in your codebase.**
-
-* Capabilities
     - **Get structured responses,** 11 natively supported  types, including custom classes
-    - **Hallucinations Checks**, when LLMs return something unexpected, we throw an exception
+    - **Hallucination Checks**, when LLMs return something unexpected, we throw an exception
     - **Works with any LLM,** even your own
     
