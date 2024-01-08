@@ -1,153 +1,120 @@
 ---
-title: What is BAML?
+title: What is Boundary?
 "og:description": BoundaryML is a toolchain built in rust for building, testing, monitoring, and improving AI applications. Imagine trusting people to run tests instead of running it on CI/CD. It works, until it doesn't. ML systems are the same. Our toolchain is a language called **BAML**, a **VSCode extension** and a **dashboard** that all work together.
 "og:image": https://mintlify.s3-us-west-1.amazonaws.com/gloo/images/v3/AITeam.png
 "twitter:image": https://mintlify.s3-us-west-1.amazonaws.com/gloo/images/v3/AITeam.png
 ---
 
-## Introduction
-In the LLM-world, all inputs and outputs are strings, and that sucks.
+The Boundary Toolchain is a suite of tools that enable test-driven AI development using strongly typed function interfaces.
 
-A lot of applications actually want to get structured data from LLMs, but devs have to do a lot of work to define types, serialize those types into prompts, and parse the string outputs. Then when you want to analyze your LLM requests in your dashboard all you see is LLM output strings when there is actual structured data in there.
+(To skip the background and see the code, [click here](/v3/home/overview#introducing-baml-the-first-vscode-llm-playground))
 
-The typical LLM prompt to get structured data out:
-```text
-Given the following input:
-Input: "I want to buy a car"
+## Our Inspiration
 
-Output the following information in this JSON format:
-{
-  "sentiment": one of "happy", "sad", "neutral"
-}
-```
-LLM Output:
-```
-Based on the text, this is the likely output:
-{
-  "sentiment": "happy"
-}
-But as an AI language model, yadda-yadda yadda...
-```
-If you're using this approach, now you need to write more logic to detect the JSON blocks, even if you are using Pydantic. This is only one of many problems (what if I want to rename a property?) with current approaches. A deep dive on all problems is coming soon!
+The first problem LLM developers had to solve was strings. In the LLM world, everything is a string and that sucks.
 
-## Enter BAML (Basically, A Made-up Language)
-**BAML is a lightweight language to get fully typed responses from LLMs.**
+Strongly-typed systems are more robust and easier to maintain.
 
-Rather than starting out writing an AI function with a prompt, in BAML you first decide what types your AI function should have as inputs and outputs, and helps you build prompts that work for those types. 
+For example, Microsoft created TypeChat (7.1k stars) to get structured outputs out of LLMs. [See example](https://github.com/microsoft/TypeChat/blob/main/examples/sentiment/src/main.ts). 
 
-BAML is a language that compiles down to Python and Typescript clients that you can plug-and-play into your codebase -- **without any parsing boilerplate**. It comes out-of-the-box with an **integrated VSCodePlayground** and **resilience features like retries, tracing, and testing capabilities**.
+A python framework, [Marvin](https://github.com/PrefectHQ/marvin) (4.2k stars), also helped developers declare structured AI interfaces using their `@ai_fn` decorator. Under the hood, it calls openai for you. It's really elegant!
 
-It takes **< 10 minutes** to learn, works with any LLM, and runs locally on your machine.
-
-### How it works
-<img src="/images/v3/generating_baml_clients.png" />
-
-<Steps>
-<Step title="Install the baml compiler and BAML VSCode extension.
-" />
-<Step title ="Define an AI function and its types in a .baml file.">
-```rust 
-class ProductInfo {
-  price float
-  name string
-  width int @description("width in inches")
-  height int @description("height in inches")
-}
-
-function ExtractProductInfo {
-  input string // can also be more complex, like an Email type
-  output ProductInfo
-}
-```
-We support complex types like optionals, unions, nested types!
-</Step>
-<Step title="Build a prompt for that function that works for those input/output types.">
-```rust
-client<llm> GPT4 {
-  provider baml-openai-chat // or add your own
-  retry_policy DefaultRetry
-  options {
-		temperature 0.1
-		model "gpt-4"
-	}
-}
-
-impl<llm, ExtractProductInfo> version1 {
-  client GPT4
-  prompt #"
-    Given the following input:
-    ---
-    {#input}
-    ---
-    Extract the following info in JSON:
-    {#print_type(output)}
-	"#
-}
-```
-</Step>
-<Step title="Test your function with the BAML VSCode Playground">
-<iframe
-  src="https://player.cloudinary.com/embed/?public_id=baml-playground&cloud_name=dn7wj4mr5"
-  width="600"
-  height="400"
-  allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-  allowFullScreen
-></iframe>
-</Step>
-
-<Step title="Call your functions in Python or Typescript">
 ```python
+from typing_extensions import TypedDict
+from marvin import ai_fn
+
+class DetailedSentiment(TypedDict):
+    """A detailed sentiment analysis result.
+
+    - `sentiment_score` is a number between 1 (positive) and -1 (negative)
+    - `summary_in_a_word` is a one-word summary of the general sentiment
+    """
+    sentiment_score: float
+    summary_in_a_word: str
+
+@ai_fn
+def get_detailed_sentiment(text: str) -> DetailedSentiment:
+    """What do you think the sentiment of `text` is?"""
+
+get_detailed_sentiment("I'ma Mario, and I'ma gonna wiiiiin!")
+# {'sentiment_score': 0.8, 'summary_in_a_word': 'energetic'}
+```
+
+## But, types are not all you need
+
+Again, type-safety is amazing. Providing guarantees on the output of the LLM helps a lot, but we think both of these didn’t go far enough. They left a few  questions unanswered:
+
+1. **What is the full prompt?** *You can’t see it until you run the code with debug settings. Does updating the library break me?*
+2. **How do you test?** *Do you copy pasting prompts and json blobs into OpenAI’s playground or into boilerplate pytest code?*
+3. **How do you fail-over** to Anthropic when GPT4 goes down?
+4. **How do you test against that other LLMs?** *Copy and paste or do you build an abstraction layer?*
+
+Answering these questions requires more than just a python library. 
+
+## Introducing BAML + The first VSCode LLM Playground
+
+BAML is a lightweight programming language to define AI function interfaces, with a native VSCode extension.
+
+Watch this 30-second video on how you can create and test AI functions without ever leaving VSCode.
+(video coming soon!)
+
+
+Here’s what a `.baml` AI function looks like (watch the video to see how the prompt works):
+
+```rust
+// example.baml
+function GetDetailedSentiment {
+  input string
+  output DetailedSentiment
+}
+
+class DetailedSentiment {
+	sentiment_score float
+  summary_in_a_word string
+}
+```
+
+BAML compiles to fully typed Python and TypeScript. No matter how you change the prompt, or the LLM model, or fail-overs, the python code doesn’t change — unless you change your AI function’s signature.
+
+```python
+# app.py
 from baml_client import baml as b
 
-async def my_code():
-	productInfo = await b.ExtractProductInfo("Hello, we are selling a Vacuum XYZ at $40...")
-	if result.price > 80:
-		print("That seems kinda expensive")
+async def main():	
+	message = "I'ma Mario, and I'ma gonna wiiiiin!"
+
+	# Your AI function defined in .baml files
+	response = await b.GetDetailedSentiment(message)
+
+	# Response is automatically strongly typed and
+	# works with auto complete!
+	print(f"Score: {response.sentiment_score}")
+  print(f"Summary: {response.summary_in_a_word}")
 ```
-* the only import you'll ever need is baml. No need to dig through any code to figure out what other abstractions you need.
 
-</Step>
+## Getting Started
 
-</Steps>
+Start by [installing BAML](/v3/home/installation) and reading our [Hello World Tutorial](/v3/guides/hello_world/level0). 
 
-BAML is part of the **Boundary Toolchain,** which encompasses other tools like the VSCode Playground, and Boundary Studio — which enables request tracing, analytics, and labeling capabilities.
+Learning a new language seems daunting, but it takes < 10 minutes to get started. 
 
-**BAML and the VSCode Playground are 100% free to use.** For Boundary Studio we offer a free tier!
+The VSCode extension provides auto-compiling on save, a realtime preview of the full prompt, syntax highlighting and great errors — every syntax error recommends a fix. 
 
-[Join our discord, and see what the community is up to!](https://discord.gg/BTNBeXGuaS)
+**Making writing and reading BAML easy one of our design philosophies.**
 
-## Getting started
-Follow the [installation instructions](/v3/home/installation) to get started with BAML.
+#### What you get out-of-the-box
 
+* Workflow
+    - **Typed Python/Typescript support**
+    - **VSCode Playground**: see the full prompt and run tests
+    - **Better code organization** — no scattered jinja templates or yaml files
+    - **Its fast!** BAML compiles into PY and TS in less than 50ms (We ❤️ Rust)
+    - **Full integration with** **Boundary Studio** - our observability dashboard
+        - Turn live production data into a test-case with one click!
+    - And best of all, **everything lives in your codebase.**
 
-## Why build a language?
-
-Building a language and owning the compiler allows us to build an entire ecosystem vs a building a Python library or framework.
-
-Here's some examples of powerful features only a compiler-backed toolchain can provide:
-
-1. **VSCode Playground** -
-If your prompt takes in a complex set of variables, you can create a test and fill in the input with an actual form that matches your input type schema. No more copying around JSON files for quick one-off tests. The Playground _understands_ your AI functions
-2. **Boundary Studio** - 
-Rather than showing you strings on the dashboard, you get actual type information. The dashboard **knows** what the desired function signature was for your LLM call.
-As a sidenote, BAML studio also offers analytics, and commenting and labeling capabilities for each of your historical requests.
-
-<div className="flex items-center justify-center w-full">
- <img src="/images/v3/boundary_studio_pipeline.png" width="400px"/>
-</div>
-
-
-3. **And coming soon** -
-Autogenerate a fully type-safe client from your .baml functions to query your historical data in a type-safe way to train new models. Inspired by [Prisma](https://www.prisma.io/)! :).
-
-Feel free to submit a new request in our [Github repository](https://github.com/gloohq/baml) if you have a language or platform feature you’d like to see.
-
-## Design Goals
-
-Our goal is to make the easiest-to-use platform to build LLM applications. Here's our core principles:
-
-**Type-safety first.** Type completion and compile-time linting make teams much more productive. Devs shouldn't have to write out output schemas manually in a prompt ever again. We want to be what Typescript did for Javascript but for LLMs.
-
-**Your AI Logic should live in your codebase.** The more co-located everything is, the faster it is to iterate. This includes your tests, the playground itself, and the prompts. Tracking prompt versions should be as easy as commiting a new change.
-
-**Reduce abstractions, increase transparency.** At the end of the day you should be able to see the whole string going into an LLM call, and the full string coming out of it. We don't do anything fancy with your prompts, other than provide helper utilities to help you build them using your type info as the base. Our Playground allows you to see what your actual prompt will look like before you even run the code.
+* Capabilities
+    - **Get structured responses,** 11 natively supported  types, including custom classes
+    - **Hallucinations Checks**, when LLMs return something unexpected, we throw an exception
+    - **Works with any LLM,** even your own
+    
