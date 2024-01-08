@@ -118,10 +118,10 @@ Making BAML easy to read and write is our core design philosophy.
 - **Its fast!** BAML compiles into PY and TS in less than 50ms (We ❤️ Rust)
 - **Full integration with** **Boundary Studio** - our observability dashboard
   - Turn live production data into a test-case with one click!
-- And best of all, **everything lives in your codebase.**
 - **Get structured responses,** 11 natively supported types, including custom classes
 - **Hallucination Checks**, when LLMs return something unexpected, we throw an exception
 - **Works with any LLM,** even your own
+- And best of all, **everything lives in your codebase.**
 
 ### [Documentation](https://docs.boundaryml.com)
 
