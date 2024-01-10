@@ -19,6 +19,8 @@ In this tutorial we'll write an AI function that can take an Order status email 
 Our function signature will be:
 `GetOrderInfo(email: Email) -> OrderInfo`
 
+Here is the [reference code](https://github.com/BoundaryML/baml-examples/tree/main/extraction-guide) for these sets of tutorials. Clone the repo and install BAML extension to get syntax highlighting!
+
 ## 1. Define AI functions and models in BAML files
 First create the data models using [classes](/v3/syntax/class), which actually get converted to actual pydantic models at generation time if using Python.
 ```rust main.baml
@@ -128,22 +130,32 @@ from baml_client import baml as b
 # Import your generated Email model. 
 # We generate this pydantic model for you.
 from baml_client.baml_types import Email
+import asyncio
 
+# You can call a specific version using
+# b.GetOrderInfoV1.get_impl("version1").run(Email(...). Otherwise it will use the default_impl in the function definition.
+async def main():
+  order_info = await b.GetOrderInfo(Email(
+      subject="Order #1234",
+      body="Your order has been shipped. It will arrive on 1st Jan 2022. Product: iPhone 13. Cost: $999.99"
+  ))
 
-order_info = await b.GetOrderInfo(Email(
-    subject="Order #1234",
-    body="Your order has been shipped. It will arrive on 1st Jan 2022. Product: iPhone 13. Cost: $999.99"
-))
-# This is all fully typed for you:
-if order_info.price > 1000:
-    print("You spent a lot of money!")
-else if order_info.price > 500:
-    print("You spent a moderate amount of money!")
-else:
-    print("You spent a little money!")
+  # This is all fully typed for you:
+  if order_info is not None and order_info.cost is not None and order_info.cost > 1000:
+      print("You spent a lot of money!")
+  elif order_info is not None and order_info.cost is not None and order_info.cost > 500:
+      print("You spent a chunk of money!")
+  else:
+      print("You spent a little money!")
+
+if __name__ == "__main__":
+  asyncio.run(main())
 ```
 
 Note that you may get some errors testing other cases. We'll discuss how to make this more resilient in the next tutorial.
+
+## Full code
+[Check it out!](https://github.com/BoundaryML/baml-examples/blob/main/extraction-guide/baml_src/main.baml)
 
 ## Conclusion
 In this tutorial we learned:

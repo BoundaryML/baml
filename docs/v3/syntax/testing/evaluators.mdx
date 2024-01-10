@@ -4,17 +4,67 @@ title: Tests with evaluators
 
 BAML doesn't yet natively support unit testing with custom evaluators, but you can still write custom tests for your functions using pytest.
 
-## Running tests
+Follow these 3 steps to get you started.
+
+## 1. Declare the BAML AI function
+
+Given this baml snippet:
+
+```rust
+// foo.baml
+enum Sentiment {
+    POSITIVE
+    NEGATIVE
+}
+
+function ClassifySentiment {
+    input string
+    output Sentiment
+}
+
+function MatchSentiment {
+    input (actual: Sentiment, expected: Sentiment)
+    output bool
+}
+
+// impls omitted
+```
+## 2. Write the test programmatically in Python
+
+Add the **@baml_test** decorator to ensure your test results are saved in **Boundary Studio**.
+
+```python
+# Import your baml-generated functions
+from baml_client import baml as b
+# Import any custom types defined in .baml files
+from baml_client.baml_types import Sentiment
+from baml_client.testing import baml_test
+
+@baml_test
+async def test_happy_sentiments():
+    # This is testing the default impl of ClassifySentiment
+    response = await b.ClassifySentiment("I am ecstatic")
+    # Add your own assertions here
+    assert response == Sentiment.POSITIVE
+    # You can use another AI function you define in BAML to test your function
+    matches = await b.MatchSentiment(actual=response, expected=Sentiment.POSITIVE)
+    assert matches
+```
+<Warning>
+  Make sure your test file, the Test class AND/or the test function is prefixed with `Test` or `test` respectively. Otherwise, pytest will not pick up your tests. E.g. `test_foo.py`, `TestFoo`, `test_foo`
+</Warning>
+
+## 3. Running tests
 
 <Warning>
-  Since you are writing these tests yourself, you will not be able to use `baml
-  test` to run these tests.
+  Since you are writing these tests yourself, and they are not part of the VSCode playground, you will need to use `pytest` instead of `baml test`
 </Warning>
 
 <Note>
   Make sure you are running these commands from your python virtual environment
   (or **`poetry shell`** if you use poetry)
 </Note>
+
 
 ```bash
 # From your project root
@@ -55,51 +105,14 @@ To run a specific test case in a test group
 pytest -m baml_test -k 'test_group_name and test_case_name'
 ```
 
-## UnitTest an AI Function
+### Troubleshooting
+**No module named `baml_lib`**. <p/>
+Try running `poetry run python -m pytest -m baml_test` instead if you are using poetry. Double check you are in a poetry shell.
 
-Given this baml snippet:
+## Testing with multiple impls
+Sometimes you want to test multiple impls of a function without having to write a lot of boilerplate.
 
-```rust
-// foo.baml
-enum Sentiment {
-    POSITIVE
-    NEGATIVE
-}
-
-function ClassifySentiment {
-    input string
-    output Sentiment
-}
-
-function MatchSentiment {
-    input (actual: Sentiment, expected: Sentiment)
-    output bool
-}
-
-// impls omitted
-```
-
-You can write a test as follows:
-
-```python
-# Import your baml-generated functions
-from baml_client import baml as b
-# Import any custom types defined in .baml files
-from baml_client.baml_types import Sentiment
-
-async def test_happy_sentiments():
-    # This is testing the default impl of ClassifySentiment
-    response = await b.ClassifySentiment("I am ecstatic")
-    # Add your own assertions here
-    assert response == Sentiment.POSITIVE
-    # You can use another AI function you define in BAML to test your function
-    matches = await b.MatchSentiment(actual=response, expected=Sentiment.POSITIVE)
-    assert matches
-```
-
-## Using helpers to test impls
-
-You can see three different ways to write tests below.
+There are three different ways to test all impls:
 
 - Test Function: singular tests for testing a function and its impls
 - Test Class: a way of grouping tests for a function and its impls

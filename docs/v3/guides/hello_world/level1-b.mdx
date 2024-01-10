@@ -2,11 +2,6 @@
 title: "Level 2: Testing AI functions"
 ---
 
-<Warning>
-  Before writing BAML, read the entirety of the Hello World example. This is
-  important for understanding BAML project architechtures.
-</Warning>
-
 ## Overview
 
 One important way to ensure your AI functions are working as expected is to write unit tests. This is especially important when you're working with AI functions that are used in production, or when you're working with a team.
@@ -29,7 +24,9 @@ Under the hood, the playground runs `baml test` for you and writes the test file
   allowFullScreen
 ></iframe>
 
-## Using the CLI
+At the end of this video notice that the test runs are all saved into **Boundary Studio**, our analytics and observability platform, and can be accessed from within VSCode. Check out the [installation](/v3/home/installation) steps to set it up!
+
+## Run tests using the BAML CLI
 
 To understand how to run tests using the CLI, you'll need to understand how BAML projects are structured.
 
@@ -64,3 +61,10 @@ $ baml test run -i "YourAIFunction:" -i "YourAIFunction2:"
 ```
 
 For more filters on the `baml test` command, run `baml test --help`.
+
+## Evaluating test results
+
+`baml test` and the Playground UI (which uses baml test under the hood) don't have a way to evaluate results other than by manual inspection at the moment.
+
+If you want to add **asserts** or **expectations** on the output, you can declare your tests programmatically using our `pytest` plugin to do so.
+See [this tutorial](/v3/syntax/testing/evaluators)
