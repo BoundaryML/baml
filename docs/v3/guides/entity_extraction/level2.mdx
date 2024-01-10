@@ -95,8 +95,9 @@ Extract this info from the email in JSON format:
 }
 JSON:
 ```
-
-This is a similar format [OpenAI uses](https://raw.githubusercontent.com/spdustin/ChatGPT-AutoExpert/main/_system-prompts/all_tools.md) to render schemas.
+<Note>
+This is a similar format OpenAI uses to render schemas, with the description as "// Description" on top of each field.
+</Note>
 
 The [BAML deserializer](/v3/syntax/prompt_engineering/type-deserializer) is smart enough to map each field in your object back to the original property name, so you can still use `order_info.id` in your python code.
 
@@ -132,15 +133,23 @@ Nothing has changed here! You can still call your function in Python using the g
 ```python
 from baml_client import baml as b
 from baml_client.baml_types import Email
-...
-order_info = await b.GetOrderInfo(Email(
-    subject="Order #1234",
-    body="""
-Your order has been shipped. It will arrive on 1st Jan 2022. Product: iPhone 13. Cost: $999.99
-"""
-))
-print(order_info.id)
+import asyncio
+
+async def main():
+  order_info = await b.GetOrderInfo(Email(
+      subject="Order #1234",
+      body="Your order has been shipped. It will arrive on 1st Jan 2022. Product: iPhone 13. Cost: $999.99"
+  ))
+
+  if order_info is not None and order_info.cost is not None and order_info.cost > 500:
+      print("You spent a lot of money!")
+
+if __name__ == "__main__":
+  asyncio.run(main())
 ```
+
+## Full code
+[Check it out!](https://github.com/BoundaryML/baml-examples/blob/main/extraction-guide/baml_src/main.baml)
 
 ## Conclusion
 
@@ -149,7 +158,9 @@ In this tutorial we learned:
 1. How to use [@alias and @description](/v3/syntax/prompt_engineering/class#property-attributes) to modify what `print_type` renders
 1. How to use [optionals](/v3/syntax/type#optional) to handle missing data
 
-We recommend learning more about how to dynamically serialize the input using [computed properties](/v3/syntax/class#computed-properties)
+We recommend learning more about how to dynamically serialize the input using [computed properties](/v3/syntax/class#computed-properties). Specifically for serializing a string[] into a prompt.
+
+Want more resiliency? Take a look at adding [**retry policies**](/v3/syntax/client/retry) and fallbacks to your BAML LLM Client.
 
 ## Next steps
 
