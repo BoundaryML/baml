@@ -64,10 +64,13 @@ Answering these questions requires more than just a python library.
 
 BAML is a lightweight programming language to define AI function interfaces, with a native VSCode extension.
 
-Watch this 30-second video on how you can create and test AI functions without ever leaving VSCode.
-(video coming soon!)
+Watch this 1-min video on how you can create and test AI functions without ever leaving VSCode.
+(Click to watch)
+<a href="https://www.youtube.com/embed/dpEvGrVJJng?si=6CPRTxil8WjQ_t5w" target="_blank">
+<img src="https://img.youtube.com/vi/dpEvGrVJJng/mqdefault.jpg" alt="Watch the video" border="10" />
+</a>
 
-Here’s what a `.baml` AI function looks like (watch the video to see how the prompt works):
+Here’s what a `.baml` AI function looks like (watch the video to see the prompt):
 
 ```rust
 // example.baml
@@ -82,7 +85,7 @@ class DetailedSentiment {
 }
 ```
 
-BAML compiles to fully typed Python and TypeScript. No matter how you change the prompt, or the LLM model, or fail-overs, the python code doesn’t change — unless you change your AI function’s signature.
+**BAML compiles to fully typed Python and TypeScript**. No matter how you change the prompt, or the LLM model, or fail-overs, the python code doesn’t change — unless you change your AI function’s signature.
 
 ```python
 # app.py
@@ -99,6 +102,12 @@ async def main():
     print(f"Score: {response.sentiment_score}")
     print(f"Summary: {response.summary_in_a_word}")
 ```
+
+<figure>
+  <img src="docs/images/v3/baml_playground.png" width="100% alt="BAML Playground" />
+
+  <figcaption>BAML VSCode Playground</figcaption>
+</figure>
 
 ## Getting Started
 

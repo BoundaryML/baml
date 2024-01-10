@@ -13,7 +13,7 @@ title: "Level 1: Writing AI functions"
 
 ## Overview
 
-Before you call an LLM, ask yourself what kind of input or output youre expecting. If you want the LLM to generate text, then you probably want a string, but if you're trying to get it to collect user details, you may want it to return a complex type like a `UserInfo` object which contains.
+Before you call an LLM, ask yourself what kind of input or output youre expecting. If you want the LLM to generate text, then you probably want a string, but if you're trying to get it to collect user details, you may want it to return a complex type like `UserDetails`.
 
 Thinking this way can help you decompose large complex prompts into smaller, more measurable functions, and will also help you build more complex workflows and agents.
 
@@ -24,14 +24,14 @@ To get us started using BAML, we'll start with writing a simple AI function that
 ## 1. Define AI functions and models in BAML files
 
 First we will define a function of the following signature in BAML:
-`ExtractVerbs(title: string, body: string) -> string[]`
+`ExtractVerbs(input: string) -> string[]`
 
 Here's the BAML equivalent:
 
 ```rust
 /// Takes a title and body, and returns a list of verbs
 function ExtractVerbs {
-    input (title: string, body: string)
+    input string
     /// list of verbs
     output string[]
 }
@@ -60,7 +60,7 @@ To implement the function we need two things:
 <Step title="Define the LLM client">
 To implement a client we can just define one like this in a BAML file. Learn more about [clients](/v3/syntax/client) and non-openai chat providers.
 ```rust
-client<llm> GPT4 {
+client<llm> GPT4Client {
   provider baml-openai-chat
   options {
     model gpt-4 
@@ -78,14 +78,14 @@ In BAML we provide helper utilities to inject the input variables into the promp
 
 ```rust
 impl<llm, ExtractVerbs> version1 {
-  client GPT4
+  client GPT4Client
   prompt #"
-    Extract the verbs from this paragraph:
+    Extract the verbs from this INPUT:
 
-    Title: {#input.title}
+    INPUT:
     ---
-    {#input.body}
-    --
+    {#input}
+    ---
     {// this is a comment inside a prompt! //}
     Return a {#print_type(output)}.
 

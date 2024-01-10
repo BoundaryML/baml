@@ -19,7 +19,7 @@ For example, Microsoft created TypeChat (7.1k stars) to get structured outputs o
 
 A python framework, [Marvin](https://github.com/PrefectHQ/marvin) (4.2k stars), also helped developers declare structured AI interfaces using their `@ai_fn` decorator. Under the hood, it calls openai for you. It's really elegant!
 
-```python
+```python Marvin Example
 from typing_extensions import TypedDict
 from marvin import ai_fn
 
@@ -53,11 +53,12 @@ Answering these questions requires more than just a python library.
 
 ## Introducing BAML + The first VSCode LLM Playground
 
-BAML is a lightweight programming language to define AI function interfaces, with a native VSCode extension.
+BAML (Basically, A Made-Up Language) is a lightweight programming language to define AI function interfaces, with a native VSCode extension.
 
-Watch this 30-second video on how you can create and test AI functions without ever leaving VSCode.
-(video coming soon!)
+Watch this 1-min video on how you can create and test AI functions without ever leaving VSCode.
 
+
+<iframe width="560" height="315" src="https://www.youtube.com/embed/dpEvGrVJJng?si=6CPRTxil8WjQ_t5w" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
 
 Here’s what a `.baml` AI function looks like (watch the video to see how the prompt works):
 
@@ -72,9 +73,11 @@ class DetailedSentiment {
     sentiment_score float
     summary_in_a_word string
 }
+
+// prompt shown in video
 ```
 
-BAML compiles to fully typed Python and TypeScript. No matter how you change the prompt, or the LLM model, or fail-overs, the python code doesn’t change — unless you change your AI function’s signature.
+**BAML compiles to fully typed Python and TypeScript**. No matter how you change the prompt, or the LLM model, or fail-overs, the python code doesn’t change — unless you change your AI function’s signature.
 
 ```python
 # app.py
@@ -92,6 +95,10 @@ async def main():
     print(f"Summary: {response.summary_in_a_word}")
 ```
 
+<Frame caption="BAML VSCode Playground">
+<img src="/images/v3/baml_playground.png" />
+</Frame>
+
 ## Getting Started
 
 Start by [installing BAML](/v3/home/installation) and reading our [Hello World Tutorial](/v3/guides/hello_world/level0). 
@@ -106,7 +113,7 @@ Making BAML easy to read and write is our core design philosophy.
 - **Typed Python/Typescript support**
 - **VSCode Playground**: see the full prompt and run tests
 - **Better code organization** — no scattered jinja templates or yaml files
-- **Its fast!** BAML compiles into PY and TS in less than 50ms (We ❤️ Rust)
+- **Its fast!** BAML compiles into PY and TS in less than 50ms (We ❤️ Rust)
 - **Full integration with** **Boundary Studio** - our observability dashboard
     - Turn live production data into a test-case with one click!
 - **Get structured responses,** 11 natively supported  types, including custom classes
