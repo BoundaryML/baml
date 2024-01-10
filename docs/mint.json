@@ -41,11 +41,11 @@
   },
   "tabs": [
     {
-      "name": "BAML by Example",
+      "name": "Learn BAML",
       "url": "v3/guides"
     },
     {
-      "name": "BAML Syntax",
+      "name": "BAML Syntax Reference",
       "url": "v3/syntax"
     }
   ],

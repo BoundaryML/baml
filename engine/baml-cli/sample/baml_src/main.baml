@@ -2,7 +2,6 @@
 // Tip: Make sure you've got the VSCode extension for .baml files installed
 
 generator default {
-  // Right now only python is supported, but soon TS
   language python
   pkg_manager poetry
 }
