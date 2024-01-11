@@ -1,9 +1,8 @@
 ---
-title: Deep Dive - classes and print_type
-description: Understanding type serialization and deserialization
+title: Serialize a class with print_type
 ---
 
-At a very high level, `print_type` is a utility function in baml that takes all the type information about any type and converts it into a string.
+**print_type** is a utility function in baml that takes all the type information about any type and converts it into a string, useful for telling an LLM what the schema of the output should be.
 
 ## Syntax
 
@@ -27,55 +26,6 @@ At a very high level, `print_type` is a utility function in baml that takes all 
   string](/v3/syntax/strings#block-strings)!
 </Info>
 
-## Block Attributes
-
-You can add some attributes to the entire class by using a double `@@` symbol.
-
-### `@@alias`
-
-This is a block attribute that allows you to alias the name of the class itself.
-
-<Note>
-  The default printer does not use the block attribute, but you can write your
-  own printer that uses the block attribute.
-</Note>
-
-```rust
-class BugIntake {
-  last_seen string?
-  description string
-  repro_steps string?
-
-  severity int
-
-  @@alias(Bug Report)
-}
-```
-
-`print_type(BugIntake)` will now print:
-
-```
-{
-  "last_seen": string | null
-  "description": string
-  "repro_steps": string | null
-  "severity": int
-}
-```
-
-<Tip>
-  Your application code remains unchanged! Its still `BugIntake` in your code.
-  `@@alias` is only used for serialization.
-</Tip>
-
-### `@@reorder`
-
-Not currently implemented.
-
-<Warning>
-  If you want to reorder how properties are rendered, for now you will have to
-  change the order in the class definition itself.
-</Warning>
 
 ## Property Attributes
 
@@ -144,6 +94,20 @@ class BugIntake {
   "severity": int
 }
 ```
+
+## Block Attributes
+
+You can add some attributes to the entire class by using a double `@@` symbol.
+
+### `@@reorder`
+
+Not currently implemented.
+
+<Warning>
+  If you want to reorder how properties are rendered, for now you will have to
+  change the order in the class definition itself.
+</Warning>
+
 
 ## override
 

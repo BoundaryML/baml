@@ -1,15 +1,17 @@
 ---
 title: "Level 1: Writing AI functions"
 ---
-
-### Pre-requisites
-
-- Follow the [installation](/v3/home/installation) instructions to ensure you have a BAML environment set up.
-
 <Warning>
   Before writing BAML, read the entirety of the Hello World example. This is
   important for understanding BAML project architectures
 </Warning>
+
+### Pre-requisites
+
+Follow the [installation](/v3/home/installation) instructions and run **baml init** in a new project.
+
+The starting project structure will look like this:
+<img src="/images/v3/baml_init.png" />
 
 ## Overview
 
@@ -17,7 +19,7 @@ Before you call an LLM, ask yourself what kind of input or output youre expectin
 
 Thinking this way can help you decompose large complex prompts into smaller, more measurable functions, and will also help you build more complex workflows and agents.
 
-To get us started using BAML, we'll start with writing a simple AI function that extracts verbs from a sentence and start adding more and more complexity in later tutorials.
+To get us started using BAML, we'll start with writing a simple AI function that extracts verbs from a sentence and show more examples with increasing complexity.
 
 # Implementing an AI function
 
@@ -26,10 +28,9 @@ To get us started using BAML, we'll start with writing a simple AI function that
 First we will define a function of the following signature in BAML:
 `ExtractVerbs(input: string) -> string[]`
 
-Here's the BAML equivalent:
+Here's the BAML equivalent, which you can add to your main.baml file (or any other file under baml_src):
 
-```rust
-/// Takes a title and body, and returns a list of verbs
+```rust baml_src/main.baml
 function ExtractVerbs {
     input string
     /// list of verbs
@@ -37,7 +38,7 @@ function ExtractVerbs {
 }
 ```
 
-Every BAML function has a strictly typed input and output. The input and output can be either a **primitive type** (string, number, boolean) or a [complex type](/v3/syntax/type) (think unions, lists, or even custom pydantic models)
+Every [BAML function](/v3/syntax/function) has a strictly typed input and output. The input and output can be either a **primitive type** (string, number, boolean) or a [complex type](/v3/syntax/type) (think unions, lists, or even custom pydantic models)
 
 To ensure the baml compiler generates your Python / TS code, you'll also need to add a `generator` block to your main.baml file:
 
@@ -45,7 +46,8 @@ To ensure the baml compiler generates your Python / TS code, you'll also need to
 generator {
   language python
     // poetry is the default if this doesn't exist
-  pkg_manager pip
+    // You can also add "pip" here.
+  pkg_manager poetry
 }
 ```
 
@@ -60,9 +62,11 @@ To implement the function we need two things:
 <Step title="Define the LLM client">
 To implement a client we can just define one like this in a BAML file. Learn more about [clients](/v3/syntax/client) and non-openai chat providers.
 
-If you used `baml init` you should already have a **clients.baml** file with this client:
+<Tip>
+If you used `baml init` you should already have a **clients.baml** file with the client below
+</Tip>
 
-```rust
+```rust baml_src/clients.baml
 client<llm> GPT4 {
   provider baml-openai-chat
   options {
@@ -77,7 +81,7 @@ Use any parameters available to that model, like temperature etc, by adding them
 </Step>
 <Step title="Define a prompt">
 Next we can create the prompt by **implementing** the function using an LLM.
-In BAML we provide helper utilities to inject the input variables into the prompt, and also get the LLM to return the right output type. You always get full-view of the whole prompt string, without any magic.
+In BAML we provide helper utilities to inject the [input variables](/v3/syntax/prompt_engineering/variables) into the prompt, and also get the LLM to return the right output type. You always get full-view of the whole prompt string, without any magic.
 
 ```rust
 impl<llm, ExtractVerbs> version1 {
@@ -138,5 +142,10 @@ if __name__ == "__main__":
   Let us know if you want synchronous versions of your functions instead!
 </Accordion>
 
-## Show me the whole code!
-[Here it is!](https://github.com/BoundaryML/baml-examples/tree/main/hello-world). Clone the repo to get syntax highlighting.
+## Show me the code
+[Here it is!](https://github.com/BoundaryML/baml-examples/tree/main/hello-world) Clone the repo to get syntax highlighting.
+
+## Further reading
+- Continue on to the Testing + Extraction tutorials!
+- See other types of [function signatures](/v3/syntax/function) possible in BAML.
+- Learn more about [prompt variables](/v3/syntax/prompt_engineering/variables).

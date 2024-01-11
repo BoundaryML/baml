@@ -135,8 +135,8 @@
       "pages": [
         "v3/syntax/prompt_engineering/overview",
         "v3/syntax/prompt_engineering/variables",
-        "v3/syntax/prompt_engineering/enum",
         "v3/syntax/prompt_engineering/class",
+        "v3/syntax/prompt_engineering/enum",
         "v3/syntax/prompt_engineering/type-deserializer"
       ]
     }
