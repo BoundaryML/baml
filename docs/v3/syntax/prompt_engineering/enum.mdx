@@ -1,5 +1,5 @@
 ---
-title: Deep Dive - enums and print_enum
+title: Serialize an enum with print_enum
 description: Understanding enum serialization and deserialization
 ---
 
@@ -21,45 +21,6 @@ At a very high level, `print_enum` is a utility function in baml that takes all 
   string](/v3/syntax/strings#block-strings)!
 </Info>
 
-## Block Attributes
-
-You can add some attributes to the entire enum by using a double `@@` symbol.
-
-### `@@alias`
-
-This is a block attribute that allows you to alias the name of the enum itself.
-
-```rust
-enum Sentiment {
-  Happy
-  Sad
-
-  @@alias(feelings)
-}
-```
-
-`print_enum(Sentiment)` will now print:
-
-```
-feelings
----
-Happy
-Sad
-```
-
-<Tip>
-  Your application code remains unchanged! Its still `Sentiment` in your code.
-  `@@alias` is only used for serialization.
-</Tip>
-
-### `@@reorder`
-
-Not currently implemented.
-
-<Warning>
-  If you want to reorder how values are rendered, for now you will have to
-  change the order in the enum definition itself.
-</Warning>
 
 ## Value Attributes
 
@@ -135,6 +96,47 @@ Sentiment
 ---
 Sad
 ```
+
+
+## Block Attributes
+
+You can add some attributes to the entire enum by using a double `@@` symbol.
+
+### `@@alias`
+
+This is a block attribute that allows you to alias the name of the enum itself.
+
+```rust
+enum Sentiment {
+  Happy
+  Sad
+
+  @@alias(feelings)
+}
+```
+
+`print_enum(Sentiment)` will now print:
+
+```
+feelings
+---
+Happy
+Sad
+```
+
+<Tip>
+  Your application code remains unchanged! Its still `Sentiment` in your code.
+  `@@alias` is only used for serialization.
+</Tip>
+
+### `@@reorder`
+
+Not currently implemented.
+
+<Warning>
+  If you want to reorder how values are rendered, for now you will have to
+  change the order in the enum definition itself.
+</Warning>
 
 ## override
 

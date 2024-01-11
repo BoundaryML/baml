@@ -23,7 +23,7 @@ Here is the [reference code](https://github.com/BoundaryML/baml-examples/tree/ma
 
 ## 1. Define AI functions and models in BAML files
 First create the data models using [classes](/v3/syntax/class), which actually get converted to actual pydantic models at generation time if using Python.
-```rust main.baml
+```rust baml_src/main.baml
 class Email {
   subject string
   body string
@@ -38,7 +38,7 @@ class OrderInfo {
 ```
 
 Then declare the AI function signature
-```rust main.baml
+```rust baml_src/main.baml
 function GetOrderInfo {
   input Email
   output OrderInfo
