@@ -65,10 +65,14 @@ Answering these questions requires more than just a python library.
 BAML is a lightweight programming language to define AI function interfaces, with a native VSCode extension.
 
 Watch this 1-min video on how you can create and test AI functions without ever leaving VSCode.
-(Click to watch)
-<a href="https://www.youtube.com/embed/dpEvGrVJJng?si=6CPRTxil8WjQ_t5w" target="_blank">
-<img src="https://img.youtube.com/vi/dpEvGrVJJng/mqdefault.jpg" alt="Watch the video" border="10" />
-</a>
+<figure class="image table text-center m-0 w-full">
+    <video
+        style="max-width: 80%; margin: auto;"
+        autoplay loop muted playsinline
+        src="https://github.com/BoundaryML/baml/assets/5353992/4f221238-f0a0-4316-be9d-eb6e17377704"
+    ></video>
+    <figcaption></figcaption>
+</figure>
 
 Here’s what a `.baml` AI function looks like (watch the video to see the prompt):
 
