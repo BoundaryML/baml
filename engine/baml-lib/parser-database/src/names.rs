@@ -2,11 +2,12 @@ mod validate_reserved_names;
 
 use crate::{
     ast::{self, TopId, WithAttributes, WithName, WithSpan},
-    Context, DatamodelError, StaticType, StringId,
+    coerce, Context, DatamodelError, StaticType, StringId,
 };
 
 use internal_baml_schema_ast::ast::{ConfigBlockProperty, WithIdentifier};
 
+use log::info;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use validate_reserved_names::*;
 
@@ -20,7 +21,7 @@ pub(super) struct Names {
     /// Generators have their own namespace.
     pub(super) generators: HashMap<StringId, TopId>,
     /// Tests have their own namespace.
-    pub(super) tests: HashMap<StringId, TopId>,
+    pub(super) tests: HashMap<StringId, HashMap<StringId, TopId>>,
     pub(super) model_fields: HashMap<(ast::ClassId, StringId), ast::FieldId>,
     // pub(super) composite_type_fields: HashMap<(ast::CompositeTypeId, StringId), ast::FieldId>,
 }
@@ -116,7 +117,29 @@ pub(super) fn resolve_names(ctx: &mut Context<'_>) {
                 validate_config_name(config, ctx.diagnostics);
                 check_for_duplicate_properties(top, config.fields(), &mut tmp_names, ctx);
                 match config {
-                    ast::Configuration::TestCase(_) => &mut names.tests,
+                    ast::Configuration::TestCase(t) => {
+                        // TODO: I think we should do this later after all parsing, as duplication
+                        // would work best as a validation error with walkers.
+                        let function_id = t
+                            .iter_fields()
+                            .find(|f| f.1.name() == "function")
+                            .and_then(|f| match f.1.value {
+                                Some(ref v) => coerce::string(v, ctx.diagnostics),
+                                None => None,
+                            })
+                            .map(|f| ctx.interner.intern(f));
+
+                        match function_id {
+                            Some(f) => names.tests.entry(f).or_insert_with(HashMap::default),
+                            None => {
+                                ctx.push_error(DatamodelError::new_validation_error(
+                                    "Test case must have a function field",
+                                    t.identifier().span().clone(),
+                                ));
+                                &mut names.tops
+                            }
+                        }
+                    }
                     _ => &mut names.tops,
                 }
             }
