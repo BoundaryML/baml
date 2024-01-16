@@ -1,7 +1,11 @@
 mod class;
+mod client;
 mod r#enum;
+mod expression;
 mod field_type;
 mod function;
+mod r#impl;
+mod intermediate_repr;
 mod template;
 mod ts_language_features;
 
@@ -16,6 +20,13 @@ pub(crate) fn generate_ts(ir: &IntermediateRepr, gen: &Generator) -> std::io::Re
     ir.enums.iter().for_each(|e| e.write(&mut collector));
     ir.classes.iter().for_each(|c| c.write(&mut collector));
     ir.functions.iter().for_each(|f| f.write(&mut collector));
+    ir.functions.iter().for_each(|f| {
+        f.elem.impls.iter().for_each(|i| {
+            (f, i).write(&mut collector);
+        })
+    });
+    ir.clients.iter().for_each(|c| c.write(&mut collector));
+    ir.write(&mut collector);
 
     collector.commit(&gen.output)
 }

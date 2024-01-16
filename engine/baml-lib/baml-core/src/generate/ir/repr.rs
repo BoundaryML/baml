@@ -26,7 +26,7 @@ pub struct IntermediateRepr {
 
 impl IntermediateRepr {
     pub fn from_parser_database(db: &ParserDatabase) -> Result<IntermediateRepr> {
-        Ok(IntermediateRepr {
+        let mut repr = IntermediateRepr {
             enums: db
                 .walk_enums()
                 .map(|e| e.node(db))
@@ -47,7 +47,17 @@ impl IntermediateRepr {
                 .walk_retry_policies()
                 .map(|e| WithRepr::<RetryPolicy>::node(&e, db))
                 .collect::<Result<Vec<_>>>()?,
-        })
+        };
+
+        // Sort each item by name.
+        repr.enums.sort_by(|a, b| a.elem.name.cmp(&b.elem.name));
+        repr.classes.sort_by(|a, b| a.elem.name.cmp(&b.elem.name));
+        repr.functions.sort_by(|a, b| a.elem.name.cmp(&b.elem.name));
+        repr.clients.sort_by(|a, b| a.elem.name.cmp(&b.elem.name));
+        repr.retry_policies
+            .sort_by(|a, b| a.elem.name.0.cmp(&b.elem.name.0));
+
+        Ok(repr)
     }
 }
 
@@ -248,16 +258,24 @@ impl WithRepr<Expression> for ast::Expression {
             ast::Expression::NumericValue(val, _) => Expression::Numeric(val.clone()),
             ast::Expression::StringValue(val, _) => Expression::String(val.clone()),
             ast::Expression::RawStringValue(val) => Expression::RawString(val.value().to_string()),
-            ast::Expression::Identifier(idn) => Expression::Identifier(match idn {
-                ast::Identifier::ENV(k, _) => Ok(Identifier::ENV(k.clone())),
-                ast::Identifier::String(s, _) => Ok(Identifier::String(s.clone())),
-                ast::Identifier::Local(l, _) => Ok(Identifier::Local(l.clone())),
-                ast::Identifier::Ref(r, _) => Ok(Identifier::Ref(r.path.clone())),
-                ast::Identifier::Primitive(p, _) => Ok(Identifier::Primitive(*p)),
+            ast::Expression::Identifier(idn) => match idn {
+                ast::Identifier::ENV(k, _) => {
+                    Ok(Expression::Identifier(Identifier::ENV(k.clone())))
+                }
+                ast::Identifier::String(s, _) => Ok(Expression::String(s.clone())),
+                ast::Identifier::Local(l, _) => {
+                    Ok(Expression::Identifier(Identifier::Local(l.clone())))
+                }
+                ast::Identifier::Ref(r, _) => {
+                    Ok(Expression::Identifier(Identifier::Ref(r.path.clone())))
+                }
+                ast::Identifier::Primitive(p, _) => {
+                    Ok(Expression::Identifier(Identifier::Primitive(*p)))
+                }
                 ast::Identifier::Invalid(_, _) => {
                     Err(anyhow!("Cannot represent an invalid parser-AST identifier"))
                 }
-            }?),
+            }?,
             ast::Expression::Array(arr, _) => {
                 Expression::List(arr.iter().map(|e| e.repr(db)).collect::<Result<Vec<_>>>()?)
             }
@@ -434,12 +452,15 @@ pub struct Implementation {
     r#type: OracleType,
     pub name: ImplementationId,
 
-    prompt: String,
+    pub prompt: String,
+
     #[serde(with = "indexmap::map::serde_seq")]
-    input_replacers: IndexMap<String, String>,
+    pub input_replacers: IndexMap<String, String>,
+
     #[serde(with = "indexmap::map::serde_seq")]
-    output_replacers: IndexMap<String, String>,
-    client: ClientId,
+    pub output_replacers: IndexMap<String, String>,
+
+    pub client: ClientId,
 }
 
 /// BAML does not allow UnnamedArgList nor a lone NamedArg
@@ -486,7 +507,7 @@ impl WithRepr<Implementation> for VariantWalker<'_> {
                 .iter()
                 .map(|r| (r.0.key(), r.1.clone()))
                 .collect(),
-            client: ClientId(self.properties().client.value.clone()),
+            client: self.properties().client.value.clone(),
         })
     }
 }
@@ -520,14 +541,13 @@ impl WithRepr<Function> for FunctionWalker<'_> {
     }
 }
 
-#[derive(serde::Serialize)]
-pub struct ClientId(String);
+type ClientId = String;
 
 #[derive(serde::Serialize)]
 pub struct Client {
-    name: ClientId,
-    provider: String,
-    options: Vec<(String, Expression)>,
+    pub name: ClientId,
+    pub provider: String,
+    pub options: Vec<(String, Expression)>,
 }
 
 impl WithRepr<Client> for ClientWalker<'_> {
@@ -537,7 +557,7 @@ impl WithRepr<Client> for ClientWalker<'_> {
 
     fn repr(&self, db: &ParserDatabase) -> Result<Client> {
         Ok(Client {
-            name: ClientId(self.name().to_string()),
+            name: self.name().to_string(),
             provider: self.properties().provider.0.clone(),
             options: self
                 .properties()

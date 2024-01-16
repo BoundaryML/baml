@@ -1,3 +1,4 @@
+use chrono::format;
 use serde_json::json;
 
 use crate::generate::{
@@ -42,33 +43,37 @@ impl WithFileContent<TSLanguageFeatures> for Function {
             file.add_import("./types", t, None, false);
         });
 
+        let function_content = json!({
+          "name": self.elem.name.clone(),
+          "params": match &self.elem.inputs {
+            FunctionArgs::UnnamedArg(arg) => {
+              json!({
+                "positional": true,
+                "name": "arg",
+                "type": arg.to_ts(),
+              })
+            }
+            FunctionArgs::NamedArgList(args) => json!({
+                "positional": false,
+                "name": "args",
+                "values": args.iter().map(|(name, r#type)| json!({
+                  "name": name.clone(),
+                  "type": r#type.to_ts(),
+                })).collect::<Vec<_>>(),
+            }),
+          },
+          "return_type": self.elem.output.elem.to_ts(),
+          "impls": self.elem.impls.iter().map(|i| i.elem.name.clone()).collect::<Vec<_>>(),
+          "default_impl": self.elem.default_impl,
+        });
+
         file.append(render_with_hbs(
             super::template::Template::Function,
-            &json!({
-              "name": self.elem.name.clone(),
-              "params": match &self.elem.inputs {
-                FunctionArgs::UnnamedArg(arg) => {
-                  json!({
-                    "positional": true,
-                    "name": "arg",
-                    "type": arg.to_ts(),
-                  })
-                }
-                FunctionArgs::NamedArgList(args) => json!({
-                    "positional": false,
-                    "name": "args",
-                    "values": args.iter().map(|(name, r#type)| json!({
-                      "name": name.clone(),
-                      "type": r#type.to_ts(),
-                    })).collect::<Vec<_>>(),
-                }),
-              },
-              "return_type": self.elem.output.elem.to_ts(),
-              "impls": self.elem.impls.iter().map(|i| i.elem.name.clone()).collect::<Vec<_>>(),
-              "default_impl": self.elem.default_impl,
-            }),
+            &function_content,
         ));
         file.add_export(self.elem.name.clone());
+        file.add_export(format!("I{}", self.elem.name));
+        file.add_export(format!("{}Function", self.elem.name));
         collector.finish_file();
     }
 }

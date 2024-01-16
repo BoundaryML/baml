@@ -1,14 +1,33 @@
-{{functionName}}.registerImpl('{{name}}', {
+const prompt_template = `\
+{{{prompt}}}\
+`;
+
+{{function.name}}.registerImpl('{{name}}', {
   name: '{{name}}',
   run: async (
-    {{#if params.positional}}
-{{params.name}}: {{params.type}}) => Promise<{{return_type}}>
+{{#if function.params.positional}}
+{{function.params.name}}: {{function.params.type}}
 {{else}}
-{{params.name}}: {
-  {{#each params.values as |v|}}{{v.name}}: {{v.type}}{{#unless @last}}, {{/unless}}{{/each}}
-}) => Promise<{{return_type}}>
+{{function.params.name}}: {
+  {{#each function.params.values as |v|}}{{v.name}}: {{v.type}}{{#unless @last}}, {{/unless}}{{/each}}
+}
 {{/if}}
-  ) => {
-    throw new Error('No implementation for {{name}}');
+  ): Promise<{{function.return_type}}> => {
+  {{#if function.params.positional}}
+  const {{function.params.name}} = {{function.params.name}};
+  {{else}}
+  {{#each function.params.values as |v|}}
+  const {{v.name}} = {{v.expr}};
+  {{/each}}
+  {{/if}}
+  
+    const result = await {{client}}.run_prompt_template(
+      prompt_template,
+      {
+        {{#each inputs as |input key|}}
+        "{{key}}": {{input}},
+        {{/each}}
+      }
+    )
   }
 });

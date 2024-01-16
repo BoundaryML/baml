@@ -28,6 +28,9 @@ pub(super) enum Template {
     Class,
     ClassInternal,
     Function,
+    Impl,
+    Client,
+    ExportFile,
 }
 
 pub(super) fn render_with_hbs<T: serde::Serialize>(template: Template, data: &T) -> String {
@@ -58,6 +61,18 @@ pub(super) fn render_with_hbs<T: serde::Serialize>(template: Template, data: &T)
             info!("Content: {}", content);
             register_partial_file!(reg, "functions", "function");
             "function"
+        }
+        Template::Impl => {
+            register_partial_file!(reg, "functions", "impl");
+            "impl"
+        }
+        Template::Client => {
+            register_partial_file!(reg, "types", "client");
+            "client"
+        }
+        Template::ExportFile => {
+            register_partial_file!(reg, "exports", "baml_client");
+            "baml_client"
         }
     };
 

@@ -1,9 +1,9 @@
-use std::collections::HashSet;
+use std::{any::type_name, collections::HashSet};
 
 use either::Either;
 use internal_baml_schema_ast::ast::TypeValue;
 
-use crate::generate::ir::FieldType;
+use crate::generate::{dir_writer::FileContent, ir::FieldType};
 
 use super::ts_language_features::ToTypeScript;
 
@@ -196,4 +196,65 @@ pub(super) fn walk_custom_types<'a>(r#type: &'a FieldType) -> impl Iterator<Item
 
     // Convert the results into an iterator
     results.into_iter()
+}
+
+pub(super) fn to_parse_expression(
+    variable: &String,
+    r#type: &FieldType,
+    file: &mut FileContent,
+) -> String {
+    match r#type {
+        FieldType::Class(name) => {
+            file.add_import("../types_internal", format!("Internal{name}"), None, false);
+            format!("Internal{name}.from({variable})")
+        }
+        FieldType::Enum(name) => format!("{variable} as {name}"),
+        FieldType::List(inner) => {
+            format!(
+                "{variable}.map(x => {})",
+                to_parse_expression(&"x".to_string(), inner, file)
+            )
+        }
+        FieldType::Map(_key, _value) => {
+            unimplemented!("Map type is not supported in TypeScript")
+        }
+        FieldType::Primitive(_) => variable.to_string(),
+        FieldType::Union(inner) => {
+            let content = inner
+                .iter()
+                .map(|t| {
+                    let response = to_parse_expression(variable, t, file);
+                    format!(
+                        r#"
+if (to_type_check({variable}, t)) {{
+    return {response};
+}}"#
+                    )
+                    .trim()
+                    .to_string()
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            format!(
+                r#"
+((x) => {{
+    {content}
+    throw new Error(`Could not parse {variable} as {curr}`);
+}})({variable})
+"#,
+                curr = to_internal_type(r#type),
+            )
+            .trim()
+            .to_string()
+        }
+        FieldType::Tuple(inner) => format!(
+            "[{}]",
+            inner
+                .iter()
+                .enumerate()
+                .map(|(i, t)| to_parse_expression(&format!("{variable}[{i}]"), t, file))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    }
 }

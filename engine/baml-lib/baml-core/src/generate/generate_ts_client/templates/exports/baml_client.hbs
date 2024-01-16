@@ -1,0 +1,10 @@
+import * as f from "./function"
+import "./impls"
+
+const BamlClient = {
+  {{#each functions as |f|}}
+  {{f}}: f.{{f}},
+  {{/each}}
+}
+
+export default BamlClient

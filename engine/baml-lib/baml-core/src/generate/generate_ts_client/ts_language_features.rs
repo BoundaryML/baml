@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::generate::dir_writer::{FileCollector, Import, LanguageFeatures};
 
@@ -25,8 +25,8 @@ impl LanguageFeatures for TSLanguageFeatures {
         let mut imports_by_lib = imports
             .iter()
             .fold(HashMap::new(), |mut map, import| {
-                let imports = map.entry(&import.lib).or_insert(Vec::new());
-                imports.push(import);
+                let imports = map.entry(&import.lib).or_insert(HashSet::new());
+                imports.insert(import);
                 map
             })
             .into_iter()

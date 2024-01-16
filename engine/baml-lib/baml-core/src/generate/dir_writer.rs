@@ -1,5 +1,6 @@
 use std::{collections::HashMap, path::PathBuf};
 
+#[derive(PartialEq, Eq, Hash)]
 pub(super) struct Import {
     pub lib: String,
     pub name: String,
