@@ -18,7 +18,7 @@ enum_declaration = {
     ~ BLOCK_CLOSE
     }
 
-enum_value_declaration = { identifier ~ (NEWLINE? ~ field_attribute)* ~ trailing_comment? ~ NEWLINE }
+enum_value_declaration = { identifier ~ (NEWLINE? ~ (field_attribute | trailing_comment))* ~ NEWLINE }
 enum_contents = {
     (enum_value_declaration | block_attribute | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)* 
 }
