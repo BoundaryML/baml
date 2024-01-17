@@ -27,9 +27,17 @@ impl JsonHelper for ArgWalker<'_> {
             (Some(idn), arg) => json!({
                 "name": idn.to_py_string(f),
                 "type": arg.to_py_string(f),
+                "default": match arg.field_type.is_nullable() {
+                    true => Some("None"),
+                    false => None
+                }
             }),
             (None, arg) => json!({
                 "type": arg.to_py_string(f),
+                "default": match arg.field_type.is_nullable() {
+                    true => Some("None"),
+                    false => None
+                }
             }),
         }
     }
@@ -41,10 +49,13 @@ impl JsonHelper for Walker<'_, FunctionId> {
             .walk_variants()
             .map(|v| v.name().to_string())
             .collect::<Vec<_>>();
+        let mut inputs = self.walk_input_args().collect::<Vec<_>>();
+        inputs.sort_by(|a, b| a.is_optional().cmp(&b.is_optional()));
+
         json!({
             "name": self.ast_function().name(),
             "unnamed_args": self.is_positional_args(),
-            "args": self.walk_input_args().map(|a| a.json(f)).collect::<Vec<_>>(),
+            "args": inputs.iter().map(|a| a.json(f)).collect::<Vec<_>>(),
             "return": self.walk_output_args().map(|a| a.json(f)).collect::<Vec<_>>(),
             "doc_string": self.ast_function().documentation(),
             "impls": impls,
