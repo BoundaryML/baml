@@ -16,58 +16,60 @@ In this section, we will add a "reasoning step" to our AI function so the LLM ca
 ### Adding a reasoning step
 
 Note how our function signature we declared in BAML is currently:
-`ClassifyIntent(input: string) -> Intent`
+`ClassifyMessage(input: string) -> Category`
 
-If we ask the LLM to "think step by step" before writing the Intent string (like "TechnicalSupport" or "AccountIssue"), we will have a bad time parsing the intent information out, since it will be mixed with the reasoning steps. It will be even harder if we've added @aliases to our intents.
+If we ask the LLM to "think step by step" before writing the Category string (like "TechnicalSupport" or "AccountIssue"), we will have a bad time parsing the Category information out, since it will be mixed with the reasoning steps. It will be even harder if we've added @aliases to our Categories.
 
 Example LLM output with Chain of Thought:
 
 ```text
 If we think step by step, then we can see that ....
-so that means the likely intent is k1
+so that means the likely Category is k1
 
 k1
 ```
 
-Instead of trying to parse this output with hacks, we can have the LLM produce this JSON structure, so we can parse things out easily. Lets call this type **IntentWithReasoning**.
+Instead of trying to parse this output with hacks, we can have the LLM produce this JSON structure, so we can parse things out easily. Lets call this type **CategoryWithReasoning**.
 
 ```typescript desired LLM JSON output
 {
-  "reasoning_steps": "If we think step by step, then ... so that means the intent is ...",
+  "reasoning_steps": "If we think step by step, then ... so that means the Category is ...",
   // Note: could be alias used in BAML like "k1"
-  "intent": "TechnicalSupport"
+  "Category": "TechnicalSupport"
 }
 ```
 
 So we basically want our original function to go from:
-`ClassifyIntent(input: string) -> Intent`
+`ClassifyMessage(input: string) -> Category`
 
 to
 
-`ClassifyIntent(input: string) -> IntentWithReasoning`
+`ClassifyMessage(input: string) -> CategoryWithReasoning`
 
 But if we change the function's output to be of this type now we have to change our python code... which isn't ideal! **Our business logic shouldn't care about the reasoning step -- that should be an AI function implementation detail.**
 
-To fix this, we will write an **adapter** that adds a post-LLM-processing step to our AI function that allows us to change the LLM output to `IntentWithReasoning` and provides a way to map from `IntentWithReasoning` -> `Intent`. This way, we can keep our original function signature and python code.
+To fix this, we will write an **adapter** that adds a post-LLM-processing step to our AI function that allows us to change the LLM output to `CategoryWithReasoning` and provides a way to map from `CategoryWithReasoning` -> `Category`. This way, we can keep our original function signature and python code.
 
-## Writing an output adapter for ClassifyIntent
+## Writing an output adapter for ClassifyCategory
 
 Remember the output adapter will do two things, in this order:
 
-1. Allow the LLM impl to output `IntentWithReasoning` even though our function signature returns `Intent`
+1. Allow the LLM impl to output `CategoryWithReasoning` even though our function signature returns `Category`
 2. Provide a way to **map from the adapted output type to the original** BAML function output type.
 
 <Steps>
-<Step title="Declare IntentWithReasoning">
+<Step title="Declare CategoryWithReasoning">
 Add a BAML [class](/v3/syntax/class) that represents this type
 
 ```rust
-class IntentWithReasoning {
+class CategoryWithReasoning {
   reasoning_steps string @description(#"
     Some clues and reasoning steps to help the user
-    understand why the intent was chosen.
+    understand why the category was chosen.
   "#)
-  intent Intent @alias(chosen_intent)
+  category Category @alias(chosen_category) @description(#"
+    The category identifier or name.
+  "#)
 }
 ```
 
@@ -76,10 +78,10 @@ class IntentWithReasoning {
 Declare an **adapter** for our impl that indicates what output we are expecting back from the LLM.
 
 ```rust
-impl<llm, ClassifyIntent> version3 {
+impl<llm, ClassifyMessage> version3 {
   client GPT4
 
-adapter<IntentWithReasoning, output> python#" # some python code
+adapter<CategoryWithReasoning, output> python#" # some python code
 "#
 
 prompt #"
@@ -88,14 +90,14 @@ prompt #"
 }
 ```
 
-Now we must use another BAML utility in our prompt to actually print out the json schema of **IntentWithReasoning**. Here is the new prompt, which now returns a JSON output rather than a single string representing an Intent. It uses the utility function [print_type(..)](/v3/syntax/prompt_engineering/class)
+Now we must use another BAML utility in our prompt to actually print out the json schema of **CategoryWithReasoning**. Here is the new prompt, which now returns a JSON output rather than a single string representing an Category. It uses the utility function [print_type(..)](/v3/syntax/prompt_engineering/class)
 
 ```rust
   ...
   prompt #"
-    Classify the following INPUT into the best Intent.
+    Classify the following INPUT into the best Category.
 
-    {#print_enum(Intent)}
+    {#print_enum(Category)}
 
     INPUT: {#input}
 
@@ -105,14 +107,14 @@ Now we must use another BAML utility in our prompt to actually print out the jso
   "#
 ```
 
-The **output** inside **print_type(..)** is actually the adapter output -- `IntentWithReasoning` now. The BAML compiler is smart enough to know the LLM prompt's `output` has been adapted.
+The **output** inside **print_type(..)** is actually the adapter output -- `CategoryWithReasoning` now. The BAML compiler is smart enough to know the LLM prompt's `output` has been adapted.
 
-BAML will now render this prompt (assuming there are no aliases or descriptions on the Intent enum):
+BAML will now render this prompt (assuming there are no aliases or descriptions on the Category enum):
 
 ```text
-Classify the following INPUT into the best Intent:
+Classify the following INPUT into the best Category.
 
-Intent
+Category
 ---
 Refund
 CancelOrder
@@ -125,9 +127,10 @@ INPUT: {arg}
 Output in this JSON format:
 {
   // Some clues and reasoning steps to help the user
-  // understand why the intent was chosen.
+  // understand why the category was chosen.
   "reasoning_steps": string,
-  "chosen_intent": "Intent as string"
+  // The category identifier or name.
+  "chosen_category": "Category as string"
 }
 
 JSON:
@@ -141,14 +144,14 @@ JSON:
 </Step>
 
 <Step title="Implement the adapter" >
-Note that the adapter takes a `python` code block. Use this to transform IntentWithReasoning to Intent.
+Note that the adapter takes a `python` code block. Use this to transform CategoryWithReasoning to Category.
 
 ```rust
-impl<llm, ClassifyIntent> version3 {
+impl<llm, ClassifyMessage> version3 {
   ...
 
-adapter<IntentWithReasoning, output> python#"
-  return arg.intent
+adapter<CategoryWithReasoning, output> python#"
+  return arg.Category
 "#
 ...
 }
@@ -157,8 +160,8 @@ adapter<IntentWithReasoning, output> python#"
 This will get converted into this python function at compile time:
 
 ```python
-def adapter(arg: IntentWithReasoning) -> Intent:
-  return arg.intent
+def adapter(arg: CategoryWithReasoning) -> Category:
+  return arg.category
 ```
 
 </Step>
@@ -171,6 +174,9 @@ def adapter(arg: IntentWithReasoning) -> Intent:
 </Steps>
 
 At this point you will now be able to do Chain-of-thought reasoning without having to refactor your code.
+
+## Show me the code
+The full code for these tutorials are found [here](https://github.com/BoundaryML/baml-examples/tree/main/classification-guide)
 
 ## Conclusion
 

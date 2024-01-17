@@ -12,7 +12,7 @@ A common problem with LLMs is that they over-index on the name of the actual cat
 Add a **@description** attribute to each enum value we declared earlier like so:
 
 ```rust
-enum Intent {
+enum Category {
     Refund @description("Customer wants to refund a product")
     CancelOrder @description("Customer wants to cancel an order")
     TechnicalSupport @description("Customer needs help with a technical issue unrelated to account creation or login")
@@ -29,9 +29,9 @@ enum Intent {
 
 ```text
 Classify the following INPUT into ONE
-of the following Intents:
+of the following Categories:
 
-Intent
+Category
 ---
 Refund: Customer wants to refund a product
 CancelOrder: Customer wants to cancel an order
@@ -41,7 +41,8 @@ Question: Customer has a question
 
 INPUT: {arg}
 
-Response:
+Respond only with the name / identifier. Not any other description.
+Category:
 ```
 
 <Info>
@@ -58,7 +59,7 @@ In our case, we will actually rename all the classes to "symbols" (k1, k2, k3...
 To do this, we will use the `@alias` attribute. Add the following to your enum:
 
 ```rust
-enum Intent {
+enum Category {
     Refund
     @alias("k1")
     @description("Customer wants to refund a product")
@@ -85,9 +86,9 @@ The rendered prompt will now be:
 
 ```text
 Classify the following INPUT into ONE
-of the following Intents:
+of the following Categories:
 
-Intent
+Category
 ---
 k1: Customer wants to refund a product
 k2: Customer wants to cancel an order
@@ -97,7 +98,8 @@ k5: Customer has a question
 
 INPUT: {arg}
 
-Response:
+Respond only with the name / identifier. Not any other description.
+Category:
 ```
 
 At this point, your **python code remains the same**. When the LLM outputs `k1`, the [BAML deserializer](/v3/syntax/prompt_engineering/type-deserializer) will automatically recognize the alias and map it back to `Intent.Refund`.
@@ -106,14 +108,26 @@ Here is the same python code as before for reference:
 
 ```python
 from baml_client import baml as b
-# Import your generated python enum
-from baml_client.baml_types import Intent
 
-customer_intent = b.ClassifyIntent("I want to cancel my order")
-if customer_intent == Intent.CancelOrder:
-    print("Customer wants to cancel order")
-else:
-    print("Customer wants to {}".format(customer_intent))
+# Import your generated Email model.
+# We generate this pydantic model for you.
+from baml_client.baml_types import Category
+import asyncio
+
+
+# You can call a specific version using
+# b.GetOrderInfoV1.get_impl("version1").run(Email(...). Otherwise it will use the default_impl in the function definition.
+async def main():
+    category = await b.ClassifyMessage("I want to cancel my order")
+    if category == Category.CancelOrder:
+        print("Customer wants to cancel order")
+    else:
+        print("Customer wants to {}".format(category))
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+
 ```
 
 ### Skipping classes
@@ -121,7 +135,7 @@ else:
 You can also skip a class entirely by using the `@skip` attribute. For example, if you wanted to remove the `Question` class, you could do so like this:
 
 ```rust
-enum Intent {
+enum Category {
     ...
 
     Question
@@ -135,9 +149,9 @@ The **@skip** makes **print_enum** remove the class from the prompt entirely, so
 
 ```diff
   Classify the following INPUT into ONE
-  of the following Intents:
+  of the following Categories:
 
-  Intent
+  Category
   ---
   k1: Customer wants to refund a product
   k2: Customer wants to cancel an order
@@ -148,20 +162,21 @@ The **@skip** makes **print_enum** remove the class from the prompt entirely, so
 
   INPUT: {arg}
 
-  Response:
+  Respond only with the name / identifier. Not any other description.
+  Category:
 ```
 
-### Using impl-level overrides
+### Using impl-level overrides (alpha)
 
 If you want to have two different versions of a prompt -- each with different descriptions, you can do so by using **impl-level overrides**.
 
-For example, say you don't want TechnicalSupport to be aliased to "k3" and you also want a different description for it, but only in prompt `version2`. You can declare a `version2` impl with the same prompt, but with an override on the `Intent` enum like so:
+For example, say you don't want TechnicalSupport to be aliased to "k3" and you also want a different description for it, but only in prompt `version2`. You can declare a `version2` impl with the same prompt, but with an override on the `Category` enum like so:
 
 ```rust
-impl<llm, ClassifyIntent> version2 {
+impl<llm, ClassifyMessage> version2 {
   client GPT4
 
-  override Intent {
+  override Category {
     TechnicalSupport
     @alias("technical-support")
     @description("Customer needs help with a technical issue unrelated to account creation")
@@ -176,13 +191,13 @@ impl<llm, ClassifyIntent> version2 {
 
   prompt #"
     Classify the following INPUT into ONE
-    of the following Intents:
-
-    {#print_enum(Intent)}
+    of the following Categories:
+    {#print_enum(Category)}
 
     INPUT: {#input}
 
-    Response:
+    Respond only with the name / identifier. Not any other description.
+    Category:
   "#
 }
 ```
@@ -190,22 +205,22 @@ impl<llm, ClassifyIntent> version2 {
 Once you declare this, the BAML compiler will error with:
 
 ```
-error: Error validating: ClassifyIntent has multiple impls(2).
+error: Error validating: ClassifyMessage has multiple impls(2).
 Add a `default_impl your_impl` field to the function
 ```
 
 this happens because in your python code we choose a default version for you to call when you call:
 
 ```python
-b.ClassifyIntent("I want to cancel my order")
+b.ClassifyMessage("I want to cancel my order")
 ```
 
 To fix this, add `default_impl` to the BAML function declaration:
 
 ```diff
-  function ClassifyIntent {
+  function ClassifyMessage {
     input string
-    output Intent
+    output Category
 +   default_impl version2
   }
 ```
@@ -213,16 +228,16 @@ To fix this, add `default_impl` to the BAML function declaration:
 You can always call a specific impl in python using this syntax:
 
 ```python
-b.ClassifyIntent.get_impl("version1").run("I want to cancel my order")
+b.ClassifyMessage.get_impl("version1").run("I want to cancel my order")
 ```
 
 The impl version2 will now render this prompt:
 
 ```text
 Classify the following INPUT into ONE
-of the following Intents:
+of the following Categories:
 
-Intent
+Category
 ---
 k1: Customer wants to return a product
 k2: Customer wants to cancel an order
@@ -231,7 +246,8 @@ account-issue: Specifically relates to account-creation
 
 INPUT: {arg}
 
-Response:
+Respond only with the name / identifier. Not any other description.
+Category:
 ```
 
 ### Conclusion

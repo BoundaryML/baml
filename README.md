@@ -26,7 +26,7 @@ Strongly-typed systems are more robust and easier to maintain.
 
 For example, Microsoft created TypeChat (7.1k stars) to get structured outputs out of LLMs. [See example](https://github.com/microsoft/TypeChat/blob/main/examples/sentiment/src/main.ts).
 
-A python framework, [Marvin](https://github.com/PrefectHQ/marvin) (4.2k stars), also helped developers declare structured AI interfaces using their `@ai_fn` decorator. Under the hood, it calls openai for you. It's really elegant!
+A python framework, [Marvin](https://github.com/PrefectHQ/marvin) (4.2k stars), also helped developers declare structured AI interfaces using their `@ai_fn` decorator. Under the hood, it calls openai for you. It's really elegant, as seen below!
 
 ```python
 from typing_extensions import TypedDict
@@ -62,10 +62,11 @@ Answering these questions requires more than just a python library.
 
 ## Introducing BAML + The first VSCode LLM Playground
 
-BAML is a lightweight programming language to define AI function interfaces, with a native VSCode extension.
+BAML is a lightweight programming language to define AI function interfaces, with a native VSCode extension. BAML = Basically a Made-Up Language.
 
 Watch this 1-min video on how you can create and test AI functions without ever leaving VSCode.
-<figure class="image table text-center m-0 w-full">
+
+<figure class="table w-full m-0 text-center image">
     <video
         style="max-width: 80%; margin: auto;"
         autoplay loop muted playsinline
@@ -73,6 +74,8 @@ Watch this 1-min video on how you can create and test AI functions without ever 
     ></video>
     <figcaption></figcaption>
 </figure>
+
+[Alt video link](https://www.youtube.com/watch?v=dpEvGrVJJng)
 
 Here’s what a `.baml` AI function looks like (watch the video to see the prompt):
 
