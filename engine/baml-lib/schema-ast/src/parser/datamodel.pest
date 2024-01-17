@@ -38,8 +38,7 @@ interface_declaration = {
 field_declaration = {
     identifier
     ~ field_type?
-    ~ (NEWLINE? ~ field_attribute)*
-    ~ trailing_comment?
+    ~ ((NEWLINE? ~ field_attribute) | (NEWLINE? ~ trailing_comment))*
     ~ NEWLINE
 }
 
@@ -97,7 +96,7 @@ serializer_block = {
     ~ BLOCK_CLOSE
 }
 
-serializer_field = { identifier ~ (NEWLINE? ~ field_attribute)* ~ trailing_comment? ~ NEWLINE }
+serializer_field = { identifier ~ ((NEWLINE? ~ field_attribute) | (NEWLINE? ~ trailing_comment))* ~ NEWLINE }
 
 serializer_contents = {
     (serializer_field | (block_attribute ~ NEWLINE) | comment_block | empty_lines| BLOCK_LEVEL_CATCH_ALL)*
