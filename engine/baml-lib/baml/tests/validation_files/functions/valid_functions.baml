@@ -8,7 +8,13 @@ class Hello {
 }
 
 class Hello2 {
-  world string
+  /// Comment about this
+  world string // Comment about this
+  /// This works
+  // This works
+  relevant_phrase_from_user_document string        // This breaks
+  // test
+  @alias(foo)
 }
 
 function Two {
