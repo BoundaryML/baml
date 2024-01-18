@@ -47,6 +47,10 @@
     {
       "name": "BAML Syntax Reference",
       "url": "v3/syntax"
+    },
+    {
+      "name": "Guides",
+      "url": "v3/how-to"
     }
   ],
   "navigation": [
@@ -56,11 +60,7 @@
     },
     {
       "group": "Quickstart",
-      "pages": [
-        "v3/home/installation",
-        "v3/home/running-tests",
-        "v3/home/tracing-tagging"
-      ]
+      "pages": ["v3/home/installation"]
     },
 
     {
@@ -139,6 +139,45 @@
         "v3/syntax/prompt_engineering/enum",
         "v3/syntax/prompt_engineering/type-deserializer"
       ]
+    },
+    {
+      "group": "How-to Guides",
+      "pages": [
+        "v3/how-to/overview",
+        {
+          "group": "Prompt engineering",
+          "icon": "sparkles",
+          "pages": [
+            "v3/how-to/prompt_engineering/serialize_list",
+            "v3/how-to/prompt_engineering/serialize_complex_input",
+            "v3/how-to/prompt_engineering/conditional_rendering"
+          ]
+        },
+        {
+          "group": "Testing",
+          "pages": [
+            "v3/how-to/testing/unit_test",
+            "v3/how-to/testing/test_with_assertions"
+          ],
+          "icon": "flask-vial"
+        },
+        {
+          "group": "Resilience / Reliability",
+          "pages": [
+            "v3/how-to/resilience/retries",
+            "v3/how-to/resilience/fallback"
+          ],
+          "icon": "shield-check"
+        },
+        {
+          "group": "Improve LLM results",
+          "pages": [
+            "v3/how-to/improve_results/diagnose",
+            "v3/how-to/improve_results/fine_tune"
+          ],
+          "icon": "bolt"
+        }
+      ]
     }
   ],
   "footerSocials": {
@@ -148,5 +187,10 @@
   "modeToggle": {
     "default": "dark",
     "isHidden": false
+  },
+  "analytics": {
+    "posthog": {
+      "apiKey": "phc_732PWG6HFZ75S7h0TK2AuqRVkqZDiD4WePE9gXYJkOu"
+    }
   }
 }
