@@ -146,7 +146,7 @@ class RawNoneWrapper(RawWrapper):
     def as_str(self, inner: bool) -> typing.Optional[str]:
         return None
 
-    def as_smart_str(self, inner: bool) -> str | None:
+    def as_smart_str(self, inner: bool) -> typing.Optional[str]:
         return None
 
     def as_int(self) -> typing.Optional[int]:
