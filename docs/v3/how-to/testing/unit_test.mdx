@@ -1,3 +1,101 @@
 ---
 title: "Test an AI function"
 ---
+
+
+There are two types of tests you may want to run on your AI functions:
+
+- Unit Tests: Tests a single AI function
+- Integration Tests: Tests a pipeline of AI functions and potentially buisness logic
+
+We support both types of tests using BAML. See the next tutorials for more advanced testing capabilities.
+
+## Test using the playground
+
+Use the playground to run tests against individual function impls. The playground allows a type-safe interface for creating tests along with running them.
+Under the hood, the playground runs `baml test` for you and writes the test files to the `__tests__` folder (see below).
+
+<iframe
+  src="https://player.cloudinary.com/embed/?public_id=baml-playground&cloud_name=dn7wj4mr5"
+  width="600"
+  height="400"
+  allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+  allowFullScreen
+></iframe>
+
+<Note>
+Note we currently don't support assertions in these tests -- they must be manually evaluated by a human. Read the next tutorials to learn how to write more advanced tests with different kinds of assertions, including LLM-powered evaluation.
+</Note>
+## Create a test from an existing production request
+Use Boundary studio to import an existing request into a test you can run on the VSCode playground. It's a 1-click import process.
+
+<img src="/images/v3/import_test.png" />
+
+## Creating tests manually
+
+Unit tests created by the playground are stored in the `__tests__` folder.
+
+The project structure should look like this:
+
+```bash
+.
+├── baml_client/
+└── baml_src/
+    ├── __tests__/
+    │   ├── YourAIFunction/
+    │   │   ├── test_name_monkey.json
+    │   │   └── test_name_cricket.json
+    │   └── YourAIFunction2/
+    │       └── test_name_jellyfish.json
+    ├── main.baml
+    └── foo.baml
+```
+
+You can manually create tests by creating a folder for each function you want to test. Inside each folder, create a json file for each test case you want to run. The json file should be named `test_name.json` where `test_name` is the name of the test case.
+
+To see the structure of the JSON file, you can create a test using the playground and then copy the JSON file into your project.
+
+<Tip>
+  The BAML compiler reads the `__tests__` folder and generates a pytest file for
+  you so you don't have to manually write test boilerplate code.
+</Tip>
+
+
+## Run Playground tests from the terminal
+
+You can also use the BAML CLI to run Playground tests. This is useful if you want to run tests in a CI/CD pipeline. 
+
+The command to run is `baml test`. You can run it from the root of your project.
+
+```bash
+# List all tests
+$ baml test
+================= 3/3 tests selected (0 deselected) =================
+ClassifyDocumentTopic (impls: simpleclassifydocumenttopic) (1 tests)
+  combined_aquamarine ○
+GetNextQuestion (impls: v1) (1 tests)
+  beneficial_moccasin ○
+================= 3/3 tests selected (0 deselected) =================
+
+# Run all tests
+$ baml test run
+
+# Run tests for a specific function
+$ baml test -i "MyFunction:" run
+
+# Run tests for a specific function impl
+$ baml test -i "MyFunction:v1" run
+
+# Run a specific test case.
+$ baml test -i "::smoky_monkey" run
+
+# Run all tests except for a specific test case.
+$ baml test -x "::smoky_monkey" run
+
+# Help
+$ baml test --help
+```
+
+<Tip>
+  Execute `baml test` (without "run" part)  to see what tests will be run.
+</Tip>

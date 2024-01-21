@@ -114,14 +114,7 @@
         "v3/syntax/function-adapters"
       ]
     },
-    {
-      "group": "testing",
-      "pages": [
-        "v3/syntax/testing/unittests",
-        "v3/syntax/testing/evaluators",
-        "v3/syntax/testing/integrationtests"
-      ]
-    },
+
     {
       "group": "client",
       "pages": [
@@ -157,7 +150,8 @@
           "group": "Testing",
           "pages": [
             "v3/how-to/testing/unit_test",
-            "v3/how-to/testing/test_with_assertions"
+            "v3/how-to/testing/test_with_assertions",
+            "v3/how-to/testing/advanced_testing_guide"
           ],
           "icon": "flask-vial"
         },
@@ -168,6 +162,11 @@
             "v3/how-to/resilience/fallback"
           ],
           "icon": "shield-check"
+        },
+        {
+          "group": "Observability",
+          "icon": "chart-mixed",
+          "pages": ["v3/how-to/boundary_studio/tracing-tagging"]
         },
         {
           "group": "Improve LLM results",

@@ -1,3 +1,51 @@
 ---
-title: "Render input vars in a custom way"
+title: "Customize input variables"
 ---
+
+Use [computed properties](/v3/syntax/class#computed-properties) to add custom rendering logic.
+
+### Example 1 - Rendering a date in a nicer format
+
+This function takes an invoice and gives a 1 sentence summary of what it's for.
+
+We will insert the invoice details into the prompt, but will modify add a [computed property](/v3/syntax/class#computed-properties) to render the date in a more human-friendly format.
+
+```rust
+class Invoice {
+  id string?
+  amount float
+  // originally in ISO8601 format (2023-01-01T00:00:00.000Z)
+  date string
+  // The computed property
+  displayDate string @get(python#"
+    from datetime import datetime
+    return datetime.fromisoformat(self.date).strftime('%B %d, %Y')
+  "#)
+  from string
+  to string
+}
+
+function SummarizeInvoice {
+  input Invoice
+  output string
+}
+
+impl<llm, SummarizeInvoice> v1 {
+  client GPT4 // See tutorial on how to define this
+  prompt #"
+    Summarize the invoice information into a single sentence.
+
+    ### InvoiceDetails:
+    id: {#input.id}
+    amount: {#input.amount}
+    date: {#input.displayDate}
+    from: {#input.from}
+    to: {#input.to}
+    ###
+
+    Summary:
+  "#
+}
+
+```
+You can add any computed property you want to a **class**. In this case, we added a `displayDate` property that is computed from the `date` property. But you can execute any python code you want in the `@get` decorator.

@@ -1,3 +1,11 @@
 ---
 title: "Conditionally generate the prompt based on the input variables"
 ---
+
+You may want to render the prompt differently depending on
+1. The LLM model being used (anthropic vs openAI)
+2. An input variable (e.g. maybe you want to add extra instructions if the input is a question)
+
+We are working on adding `if, else` statements to the prompt itself (like jinja), but for now you can solve for #2 by using [computed properties](/v3/syntax/class#computed-properties).
+
+Contact us on Discord if you have any comments, questions or suggestions!
