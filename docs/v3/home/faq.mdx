@@ -3,17 +3,27 @@ title: FAQs
 ---
 
 <AccordionGroup>
-  <Accordion title="Making a language is a bit... much. Why?">
+ <Accordion title="How do I run BAML code">
+You don't! BAML is a language that gets compiled into Python or Typescript. You can run the generated code locally or in the cloud.
+ </Accordion>
+  <Accordion title="What's the pricing?">
+Contact us at contact@boundaryml.com for more details. We have a free tier available.
+ </Accordion>
+ <Accordion title="How do I run this locally? Does it add a new dependency?">
+Nope. We do not proxy LLM calls for you. BAML just generates a bunch of python or TypeScript code you can run on your machine. If you opt-in to our logging and analytics we only send logs to our backend. Deploying your app is like deploying any other python/TS application.
+
+  </Accordion>
+  <Accordion title="Why make a new language?">
 We're slightly masochistic and we wanted to implement an [ad hoc, informally-specified, bug-ridden, slow implementation of half of Common Lisp](https://en.wikipedia.org/wiki/Greenspun%27s_tenth_rule#:~:text=Greenspun's%20tenth%20rule%20of%20programming,of%20half%20of%20Common%20Lisp.).
 
-But in all seriousness, we were inspired by Prisma and JSX, and also being C++ and Java programmers for almost 10 years each, we hate untyped/weakly-typed systems. 🙂
+But in all seriousness, we were inspired by [Prisma](https://www.prisma.io/) and JSX, and we love working with strongly typed languages. Building our own compiler has allowed us to implement features no other python or typescript library can, like the VSCode playground.
 
   </Accordion>
 
-<Accordion title="Does Boundary offer a no-code solution?">
-  Integrating the AI functions with your application logic, requires
-  programming. However, once set up by an engineer, you can do prompt changes
-  and testing from our VSCode Extension which supports a no-code experience.
+<Accordion title="Can I edit prompts using a no-code solution?">
+  No, we believe the most resilient and/or complex AI pipelines are those that can be written and tested with your codebase.
+
+  We promise that once you setup VSCode it is trivially easy to edit your prompts. It's as easy as editing YAML or JSON.
 </Accordion>
 
 <Accordion title="What languages are supported?">
