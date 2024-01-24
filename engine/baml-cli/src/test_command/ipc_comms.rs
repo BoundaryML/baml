@@ -10,7 +10,7 @@ pub(crate) fn handle_message(message: &str) -> Option<MessageData> {
     match serde_json::from_str::<MessageData>(message) {
         Ok(data) => Some(data),
         Err(e) => {
-            log::error!("Failed to parse message: {}", e);
+            log::error!("Failed to parse message: {}\n{}", e, message);
             None
         }
     }
