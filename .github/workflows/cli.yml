@@ -57,11 +57,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       - uses: Swatinem/rust-cache@v2
-        if: ${{ matrix.platform.os != 'ubuntu-20.04' }}
         with:
           workspaces: |
             engine
-
+          prefix-key: "v1-rust" # We changed the ubuntu version so we need to invalidate the cache
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v0
         with:
