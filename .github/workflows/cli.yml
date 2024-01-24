@@ -4,7 +4,6 @@ on:
   pull_request:
     paths:
       - "engine/**"
-      - ".github/workflows/cli.yml"
     branches:
       - canary
   push:
@@ -28,8 +27,8 @@ jobs:
       fail-fast: false # Don't stop all builds if one fails
       matrix:
         platform:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-musl
+          - os: ubuntu-20.04
+            target: x86_64-unknown-linux-gnu
             bin: baml
             name: baml-linux-x86_64
             command: build
@@ -60,11 +59,7 @@ jobs:
         with:
           workspaces: |
             engine
-      - name: Install Musl target
-        if: matrix.platform.target == 'x86_64-unknown-linux-musl'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y musl-tools
+
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v0
         with:
