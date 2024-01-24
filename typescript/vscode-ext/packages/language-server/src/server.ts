@@ -20,6 +20,7 @@ import {
   Position,
   Range,
   CodeLens,
+  DidChangeWatchedFilesNotification,
 } from 'vscode-languageserver'
 import { URI } from 'vscode-uri'
 
@@ -94,8 +95,8 @@ export function startServer(options?: LSOptions): void {
 
     const result: InitializeResult = {
       capabilities: {
+        textDocumentSync: TextDocumentSyncKind.Full,
         definitionProvider: true,
-
         documentFormattingProvider: false,
         // completionProvider: {
         //   resolveProvider: false,
@@ -107,8 +108,52 @@ export function startServer(options?: LSOptions): void {
         codeLensProvider: {
           resolveProvider: true,
         },
-
+        workspace: {
+          fileOperations: {
+            didCreate: {
+              filters: [
+                {
+                  scheme: 'file',
+                  pattern: {
+                    glob: '**/*.{baml, json}',
+                  },
+                },
+              ],
+            },
+            didDelete: {
+              filters: [
+                {
+                  scheme: 'file',
+                  pattern: {
+                    glob: '**/*.{baml, json}',
+                  },
+                },
+              ],
+            },
+            didRename: {
+              filters: [
+                {
+                  scheme: 'file',
+                  pattern: {
+                    glob: '**/*.{baml, json}',
+                  },
+                },
+              ],
+            },
+          }
+        }
       },
+    }
+
+    const hasWorkspaceFolderCapability = !!(
+      capabilities.workspace && !!capabilities.workspace.workspaceFolders
+    );
+    if (hasWorkspaceFolderCapability) {
+      result.capabilities.workspace = {
+        workspaceFolders: {
+          supported: true
+        }
+      };
     }
 
     // if (hasCodeActionLiteralsCapability) {
@@ -127,6 +172,7 @@ export function startServer(options?: LSOptions): void {
       // Register for all configuration changes.
       // eslint-disable-next-line @typescript-eslint/no-floating-promises
       connection.client.register(DidChangeConfigurationNotification.type)
+      connection.client.register(DidChangeWatchedFilesNotification.type)
     }
   })
 
@@ -151,6 +197,24 @@ export function startServer(options?: LSOptions): void {
       }
     }
   }
+
+  connection.onDidChangeWatchedFiles(async (params) => {
+    console.log('onDidChangeWatchedFiles ' + JSON.stringify(params, null, 2))
+    params.changes.forEach((change) => {
+      const uri = change.uri
+      if (uri.endsWith('.baml')) {
+        const doc = documents.get(uri)
+        if (doc) {
+          bamlCache.refreshDirectory(doc)
+          debouncedValidateTextDocument(doc)
+        } else {
+          console.log('Could not find doc for ' + uri)
+        }
+      }
+    }
+    )
+  });
+
 
   connection.onDidChangeConfiguration((_change) => {
     getConfig()
@@ -196,6 +260,7 @@ export function startServer(options?: LSOptions): void {
       }
     }
   })
+
 
   // Note: VS Code strips newline characters from the message
   function showErrorToast(errorMessage: string): void {
@@ -338,6 +403,7 @@ export function startServer(options?: LSOptions): void {
   });
 
   documents.onDidChangeContent((change: { document: TextDocument }) => {
+    console.log('onDidChangeContent ' + change.document.uri)
     debouncedValidateTextDocument(change.document)
   })
 
