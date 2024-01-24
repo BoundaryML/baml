@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "engine/**"
+      - ".github/workflows/cli.yml"
     branches:
       - canary
   push:
