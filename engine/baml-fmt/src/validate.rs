@@ -57,7 +57,6 @@ pub fn run(input_schema: &str, no_color: bool) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use expect_test::expect;
 
     #[test]
     fn validate_paths() {

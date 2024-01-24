@@ -122,7 +122,7 @@ async fn run_pytest_and_update_state(
         last_print_lines = state_string.lines().count();
 
         // Flush stdout to ensure immediate output
-        io::stdout().flush();
+        let _ = io::stdout().flush();
     }
 
     // Optionally, you can handle the output after the subprocess has finished

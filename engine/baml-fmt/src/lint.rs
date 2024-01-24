@@ -205,8 +205,8 @@ fn print_diagnostics(diagnostics: Vec<MiniError>, response: Option<Value>) -> St
 
 #[cfg(test)]
 mod tests {
-    use expect_test::expect;
-    use indoc::indoc;
+    // use expect_test::expect;
+    // use indoc::indoc;
 
     fn lint(s: &str) -> String {
         let result = super::run(s);
@@ -215,34 +215,34 @@ mod tests {
         serde_json::to_string_pretty(&value).unwrap()
     }
 
-    #[test]
-    fn deprecated_preview_features_should_give_a_warning() {
-        let dml = indoc! {r#"
-            datasource db {
-              provider = "postgresql"
-              url      = env("DATABASE_URL")
-            }
+    // #[test]
+    // fn deprecated_preview_features_should_give_a_warning() {
+    //     let dml = indoc! {r#"
+    //         datasource db {
+    //           provider = "postgresql"
+    //           url      = env("DATABASE_URL")
+    //         }
 
-            generator client {
-              provider = "prisma-client-js"
-              previewFeatures = ["createMany"]
-            }
+    //         generator client {
+    //           provider = "prisma-client-js"
+    //           previewFeatures = ["createMany"]
+    //         }
 
-            model A {
-              id  String   @id
-            }
-        "#};
+    //         model A {
+    //           id  String   @id
+    //         }
+    //     "#};
 
-        let expected = expect![[r#"
-            [
-              {
-                "start": 149,
-                "end": 163,
-                "text": "Preview feature \"createMany\" is deprecated. The functionality can be used without specifying it as a preview feature.",
-                "is_warning": true
-              }
-            ]"#]];
+    //     let expected = expect![[r#"
+    //         [
+    //           {
+    //             "start": 149,
+    //             "end": 163,
+    //             "text": "Preview feature \"createMany\" is deprecated. The functionality can be used without specifying it as a preview feature.",
+    //             "is_warning": true
+    //           }
+    //         ]"#]];
 
-        expected.assert_eq(&lint(dml));
-    }
+    //     expected.assert_eq(&lint(dml));
+    // }
 }

@@ -58,6 +58,7 @@ pub(crate) fn visit_printer<'db>(
             (name, Some(_)) => ctx.push_error(DatamodelError::new_property_not_known_error(
                 name,
                 f.identifier().span().clone(),
+                ["template"].to_vec(),
             )),
         });
 
@@ -145,6 +146,7 @@ pub(crate) fn visit_retry_policy<'db>(
             (name, Some(_)) => ctx.push_error(DatamodelError::new_property_not_known_error(
                 name,
                 f.identifier().span().clone(),
+                ["max_retries", "strategy", "options"].to_vec(),
             )),
         });
     match (max_reties, strategy) {
@@ -293,6 +295,7 @@ pub(crate) fn visit_test_case<'db>(
             (name, Some(_)) => ctx.push_error(DatamodelError::new_property_not_known_error(
                 name,
                 f.identifier().span().clone(),
+                ["function", "input", "group"].to_vec(),
             )),
         });
 
