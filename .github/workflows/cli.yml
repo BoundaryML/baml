@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "engine/**"
+      - ".github/workflows/cli.yml"
     branches:
       - canary
   push:
@@ -27,7 +28,7 @@ jobs:
       fail-fast: false # Don't stop all builds if one fails
       matrix:
         platform:
-          - os: ubuntu-latest
+          - os: ubuntu-20.04
             target: x86_64-unknown-linux-gnu
             bin: baml
             name: baml-linux-x86_64
@@ -59,7 +60,7 @@ jobs:
         with:
           workspaces: |
             engine
-
+          prefix-key: "v1-rust" # We changed the ubuntu version so we need to invalidate the cache
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v0
         with:
