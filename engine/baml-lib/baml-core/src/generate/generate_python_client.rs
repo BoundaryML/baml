@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use internal_baml_parser_database::ParserDatabase;
 use internal_baml_schema_ast::ast::WithName;
-use log::{debug, info};
+use log::debug;
 use serde_json::json;
 
 use crate::{configuration::Generator, lockfile::LockFileWrapper};

@@ -4,13 +4,61 @@ use crate::{
     pretty_print::{pretty_print, DiagnosticColorer},
     Span,
 };
-use std::borrow::Cow;
+use std::{borrow::Cow, ops::Index};
+use std::iter::Iterator;
 
 #[derive(Debug, Clone)]
 pub struct DatamodelError {
     span: Span,
     message: Cow<'static, str>,
 }
+
+/// Sorts a collection of strings based on their similarity to a given name.
+///
+/// # Parameters
+/// - `name`: The reference name to compare against.
+/// - `options`: A collection of strings to sort.
+/// - `max_return`: The maximum number of results to return.
+///
+/// # Returns
+/// A vector of strings from `options` that are similar to `name`, sorted by similarity.
+fn sort_by_match<'a, I, T>(name: &str, options: &'a I, max_return: Option<usize>) -> Vec<&'a str>
+where
+    I: Index<usize, Output = T> + 'a,
+    &'a I: IntoIterator<Item = &'a T>,
+    T: AsRef<str> + 'a,
+{
+    // The maximum allowed distance for a string to be considered similar.
+    const THRESHOLD: usize = 20;
+
+    // Calculate distances and sort names by distance
+    let mut name_distances = options
+        .into_iter()
+        .enumerate()
+        .map(|(idx, n)| {
+            (
+                // Case insensitive comparison
+                strsim::osa_distance(&n.as_ref().to_lowercase(), &name.to_lowercase()),
+                idx,
+            )
+        })
+        .collect::<Vec<_>>();
+
+    name_distances.sort_by_key(|k| k.0);
+
+    // Filter names based on the threshold
+    let filtered_names = name_distances
+        .iter()
+        .filter(|&&(dist, _)| dist <= THRESHOLD)
+        .map(|&(_, idx)| options.index(idx.into()).as_ref());
+
+    // Return either a limited or full set of filtered names
+    match max_return {
+        Some(max) => filtered_names.take(max).collect(),
+        None => filtered_names.collect(),
+    }
+}
+
 
 impl DatamodelError {
     pub(crate) fn new(message: impl Into<Cow<'static, str>>, span: Span) -> Self {
@@ -331,38 +379,12 @@ impl DatamodelError {
         type_exists: bool,
         function_name: &str,
         type_name: &str,
-        names: Vec<String>,
+        mut names: Vec<String>,
         span: Span,
     ) -> DatamodelError {
-        // Filter names that are within the threshold
-        let close_names = {
-            // Calculate OSA distances and sort names by distance
-            let mut distances = names
-                .iter()
-                .map(|n| {
-                    (
-                        strsim::osa_distance(&n.to_lowercase(), &type_name.to_lowercase()),
-                        n.to_owned(),
-                    )
-                })
-                .collect::<Vec<_>>();
-            if !is_enum {
-                distances.push((
-                    strsim::osa_distance("output", &type_name.to_lowercase()),
-                    "output".to_string(),
-                ));
-            }
-            distances.sort_by_key(|k| k.0);
-
-            // Set a threshold for "closeness"
-            let threshold = 10; // for example, you can adjust this based on your needs
-
-            distances
-                .iter()
-                .filter(|&&(dist, _)| dist <= threshold)
-                .map(|(_, name)| name.to_owned())
-                .collect::<Vec<_>>()
-        };
+        if !is_enum {
+            names.push("output".to_string());
+        }
 
         let prefix = if type_exists {
             format!(
@@ -379,6 +401,7 @@ impl DatamodelError {
             )
         };
 
+        let close_names = sort_by_match(type_name, &names, Some(3));
         let suggestions = if names.is_empty() {
             if is_enum {
                 format!(" No Enums are used in the output of this function.",)
@@ -395,12 +418,7 @@ impl DatamodelError {
             // If there are multiple close names, suggest them all
             format!(
                 " Did you mean one of these: `{}`?",
-                close_names
-                    .iter()
-                    .take(3)
-                    .map(|s| s.as_str())
-                    .collect::<Vec<_>>()
-                    .join("`, `")
+                close_names.join("`, `")
             )
         };
 
@@ -412,27 +430,7 @@ impl DatamodelError {
         names: Vec<String>,
         span: Span,
     ) -> DatamodelError {
-        // Calculate OSA distances and sort names by distance
-        let mut distances = names
-            .iter()
-            .map(|n| {
-                (
-                    strsim::osa_distance(&n.to_lowercase(), &type_name.to_lowercase()),
-                    n.to_owned(),
-                )
-            })
-            .collect::<Vec<_>>();
-        distances.sort_by_key(|k| k.0);
-
-        // Set a threshold for "closeness"
-        let threshold = 10; // for example, you can adjust this based on your needs
-
-        // Filter names that are within the threshold
-        let close_names = distances
-            .iter()
-            .filter(|&&(dist, _)| dist <= threshold)
-            .map(|(_, name)| name.to_owned())
-            .collect::<Vec<_>>();
+        let close_names = sort_by_match(type_name, &names, Some(10));
 
         let msg = if close_names.is_empty() {
             // If no names are close enough, suggest nothing or provide a generic message
@@ -460,27 +458,7 @@ impl DatamodelError {
         names: Vec<String>,
         span: Span,
     ) -> DatamodelError {
-        // Calculate OSA distances and sort names by distance
-        let mut distances = names
-            .iter()
-            .map(|n| {
-                (
-                    strsim::osa_distance(&n.to_lowercase(), &impl_name.to_lowercase()),
-                    n.to_owned(),
-                )
-            })
-            .collect::<Vec<_>>();
-        distances.sort_by_key(|k| k.0);
-
-        // Set a threshold for "closeness"
-        let threshold = 10; // for example, you can adjust this based on your needs
-
-        // Filter names that are within the threshold
-        let close_names = distances
-            .iter()
-            .filter(|&&(dist, _)| dist <= threshold)
-            .map(|(_, name)| name.to_owned())
-            .collect::<Vec<_>>();
+        let close_names = sort_by_match(impl_name, &names, Some(10));
 
         let msg = if close_names.is_empty() {
             // If no names are close enough, suggest nothing or provide a generic message
@@ -507,8 +485,31 @@ impl DatamodelError {
         Self::new(format!("Attribute not known: \"@{attribute_name}\"."), span)
     }
 
-    pub fn new_property_not_known_error(property_name: &str, span: Span) -> DatamodelError {
-        Self::new(format!("Property not known: \"{property_name}\"."), span)
+    pub fn new_property_not_known_error<I, T>(
+        property_name: &str,
+        span: Span,
+        alternatives: I,
+    ) -> DatamodelError
+    where
+        I: for<'a> Index<usize, Output = T>,
+        T: AsRef<str>,
+        for<'a> &'a I: IntoIterator<Item = &'a T>,
+    {
+        let close_names = sort_by_match(property_name, &alternatives, None);
+    
+        Self::new(match close_names.len() {
+            0 => format!("Property not known: \"{property_name}\".",),
+            1 => 
+                format!(
+                    "Property not known: \"{property_name}\". Did you mean this: \"{close_name}\"?",
+                    close_name = close_names[0]
+                ),
+            _ =>
+                format!(
+                    "Property not known: \"{property_name}\". Did you mean one of these: \"{close_names}\"?",
+                    close_names = close_names.join("\", \"")
+                ),
+        }, span)
     }
 
     pub fn new_argument_not_known_error(property_name: &str, span: Span) -> DatamodelError {

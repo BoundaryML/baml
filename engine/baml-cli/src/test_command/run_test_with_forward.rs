@@ -1,13 +1,10 @@
 use colored::*;
 use std::{
     fs::{self, File},
-    io::{self, Write},
-    ops::Deref,
     process::{Command, Stdio},
     sync::Arc,
 };
 
-use log::info;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},

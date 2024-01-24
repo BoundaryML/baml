@@ -1,10 +1,6 @@
-use crate::{
-    ast::WithSpan,
-    configuration::{Generator, GeneratorConfigValue},
-    internal_baml_diagnostics::*,
-};
+use crate::{ast::WithSpan, configuration::Generator, internal_baml_diagnostics::*};
 use internal_baml_parser_database::{
-    ast::{self, Expression, WithDocumentation, WithName},
+    ast::{self, WithDocumentation, WithName},
     coerce,
 };
 use internal_baml_schema_ast::ast::WithIdentifier;
@@ -12,12 +8,14 @@ use std::{collections::HashMap, path::PathBuf};
 
 const LANGUAGE_KEY: &str = "language";
 const OUTPUT_KEY: &str = "output";
+const PROJECT_ROOT_KEY: &str = "project_root";
 const PKG_MANAGER_KEY: &str = "pkg_manager";
 const LANGUAGE_SETUP_PREFIX: &str = "python_setup_prefix";
 
 const FIRST_CLASS_PROPERTIES: &[&str] = &[
     LANGUAGE_KEY,
     OUTPUT_KEY,
+    PROJECT_ROOT_KEY,
     PKG_MANAGER_KEY,
     LANGUAGE_SETUP_PREFIX,
 ];
@@ -48,11 +46,22 @@ fn lift_generator(
     diagnostics: &mut Diagnostics,
 ) -> Option<Generator> {
     let generator_name = ast_generator.name();
-    let args: HashMap<_, &Expression> = ast_generator
+    let args = ast_generator
         .fields()
         .iter()
         .map(|arg| match &arg.value {
-            Some(expr) => Some((arg.name(), expr)),
+            Some(expr) => {
+                if FIRST_CLASS_PROPERTIES.iter().any(|k| *k == arg.name()) {
+                    Some((arg.name(), expr))
+                } else {
+                    diagnostics.push_error(DatamodelError::new_property_not_known_error(
+                        arg.name(),
+                        arg.span.clone(),
+                        FIRST_CLASS_PROPERTIES.to_vec(),
+                    ));
+                    None
+                }
+            }
             None => {
                 diagnostics.push_error(DatamodelError::new_config_property_missing_value_error(
                     arg.name(),
@@ -130,18 +139,6 @@ fn lift_generator(
         .unwrap_or(PathBuf::from("../"))
         .join("baml_client");
 
-    for prop in ast_generator.fields() {
-        let is_first_class_prop = FIRST_CLASS_PROPERTIES.iter().any(|k| *k == prop.name());
-        if is_first_class_prop {
-            continue;
-        } else {
-            diagnostics.push_error(DatamodelError::new_property_not_known_error(
-                prop.name(),
-                prop.span.clone(),
-            ));
-        }
-    }
-
     if diagnostics.has_errors() {
         return None;
     }
@@ -170,7 +167,7 @@ fn lift_generator(
 
 fn get_python_client_version(
     shell_setup: Option<&str>,
-    diagnostics: &mut Diagnostics,
+    _diagnostics: &mut Diagnostics,
 ) -> Option<String> {
     let cmd = match shell_setup {
         Some(setup) => format!("{} python -m baml_version", setup),
