@@ -3,7 +3,7 @@ use serde_json::json;
 use crate::generate::{
     dir_writer::WithFileContent,
     generate_ts_client::{field_type::to_parse_expression, ts_language_features::ToTypeScript},
-    ir::{Function, FunctionArgs, Impl},
+    ir::{Function, FunctionArgs, Impl, IntermediateRepr, Walker},
 };
 
 use super::{
@@ -11,20 +11,28 @@ use super::{
     ts_language_features::{TSFileCollector, TSLanguageFeatures},
 };
 
-impl WithFileContent<TSLanguageFeatures> for (&Function, &Impl) {
+impl WithFileContent<TSLanguageFeatures> for Walker<'_, (&Function, &Impl)> {
     fn file_dir(&self) -> &'static str {
         "./impls"
     }
 
     fn file_name(&self) -> String {
-        format!("{}_{}", self.0.elem.name, self.1.elem.name).to_lowercase()
+        format!("{}_{}", self.item.0.elem.name, self.elem().name).to_lowercase()
     }
 
     fn write(&self, collector: &mut TSFileCollector) {
-        let (function, impl_) = self;
+        let (function, impl_) = self.item;
 
         let file = collector.start_file(self.file_dir(), self.file_name(), false);
         file.add_import("../client", impl_.elem.client.clone(), None, false);
+        file.add_import("../function", function.elem.name.clone(), None, false);
+        file.add_import(
+            "@boundaryml/baml_client/baml_lib/deserializer/deserializer",
+            "Deserializer",
+            None,
+            false,
+        );
+        file.add_import("../json_schema", "schema", None, false);
 
         let function_content = json!({
           "name": function.elem.name.clone(),

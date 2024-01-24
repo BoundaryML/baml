@@ -2,6 +2,7 @@ use std::{any::type_name, collections::HashSet};
 
 use either::Either;
 use internal_baml_schema_ast::ast::TypeValue;
+use serde_json::Value;
 
 use crate::generate::{dir_writer::FileContent, ir::FieldType};
 
@@ -37,6 +38,7 @@ impl ToTypeScript for FieldType {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
+            FieldType::Optional(inner) => format!("{} | null", inner.to_ts()),
         }
     }
 }
@@ -74,6 +76,7 @@ pub(super) fn to_internal_type(r#type: &FieldType) -> String {
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
+        FieldType::Optional(inner) => format!("{} | null", inner.to_ts()),
     }
 }
 
@@ -126,6 +129,10 @@ if ({type_check}) {{
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
+        FieldType::Optional(inner) => format!(
+            "({variable} === null || {variable} === undefined) ? null : {}",
+            to_internal_type_constructor(variable, inner)
+        ),
     }
 }
 
@@ -166,6 +173,10 @@ pub(super) fn to_type_check(variable: &str, r#type: &FieldType) -> String {
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
+        FieldType::Optional(inner) => format!(
+            "({variable} === null || {variable} === undefined) || {}",
+            to_type_check(variable, inner)
+        ),
     }
 }
 
@@ -188,6 +199,7 @@ pub(super) fn walk_custom_types<'a>(r#type: &'a FieldType) -> impl Iterator<Item
                 // Handle or ignore the map type as needed
             }
             FieldType::Primitive(_) => (), // Ignore primitive types
+            FieldType::Optional(inner) => walk(inner, results),
         }
     }
 
@@ -255,6 +267,10 @@ if (to_type_check({variable}, t)) {{
                 .map(|(i, t)| to_parse_expression(&format!("{variable}[{i}]"), t, file))
                 .collect::<Vec<_>>()
                 .join(", ")
+        ),
+        FieldType::Optional(inner) => format!(
+            "({variable} === null || {variable} === undefined) ? null : {}",
+            to_parse_expression(variable, inner, file)
         ),
     }
 }

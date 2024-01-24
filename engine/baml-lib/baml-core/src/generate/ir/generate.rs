@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use internal_baml_parser_database::ParserDatabase;
 
-use super::repr::{IntermediateRepr, RetryPolicy, WithRepr};
+use super::repr::IntermediateRepr;
 
 // should have a serde struct with a special serialize/deserialize
 

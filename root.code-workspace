@@ -12,6 +12,10 @@
       "path": "clients/python"
     },
     {
+      "name": "TS Client",
+      "path": "clients/ts"
+    },
+    {
       "name": "Docs",
       "path": "docs"
     },

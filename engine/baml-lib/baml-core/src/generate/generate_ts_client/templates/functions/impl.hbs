@@ -2,6 +2,10 @@ const prompt_template = `\
 {{{prompt}}}\
 `;
 
+const deserializer = new Deserializer<{{function.return_type}}>(schema, {
+  $ref: '#/definitions/{{function.name}}_output'
+});
+
 {{function.name}}.registerImpl('{{name}}', {
   name: '{{name}}',
   run: async (
@@ -14,7 +18,7 @@ const prompt_template = `\
 {{/if}}
   ): Promise<{{function.return_type}}> => {
   {{#if function.params.positional}}
-  const {{function.params.name}} = {{function.params.name}};
+  {{!-- const {{function.params.name}} = {{function.params.name}}; --}}
   {{else}}
   {{#each function.params.values as |v|}}
   const {{v.name}} = {{v.expr}};
@@ -28,6 +32,8 @@ const prompt_template = `\
         "{{key}}": {{input}},
         {{/each}}
       }
-    )
+    );
+
+    return deserializer.coerce(result);
   }
 });

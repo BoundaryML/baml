@@ -18,7 +18,7 @@ impl WithFileContent<TSLanguageFeatures> for IntermediateRepr {
         file.append(render_with_hbs(
             super::template::Template::ExportFile,
             &json!({
-              "functions": self.functions.iter().map(|f| f.elem.name.clone()).collect::<Vec<_>>(),
+              "functions": self.walk_functions().map(|f| f.elem().name.clone()).collect::<Vec<_>>(),
             }),
         ));
         fc.finish_file();

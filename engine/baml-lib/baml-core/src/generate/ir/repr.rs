@@ -17,14 +17,47 @@ use internal_baml_schema_ast::ast::{self, FieldArity, WithName};
 /// code in any target language.
 #[derive(serde::Serialize)]
 pub struct IntermediateRepr {
-    pub enums: Vec<Node<Enum>>,
-    pub classes: Vec<Node<Class>>,
-    pub functions: Vec<Node<Function>>,
-    pub clients: Vec<Node<Client>>,
-    pub retry_policies: Vec<Node<RetryPolicy>>,
+    enums: Vec<Node<Enum>>,
+    classes: Vec<Node<Class>>,
+    functions: Vec<Node<Function>>,
+    clients: Vec<Node<Client>>,
+    retry_policies: Vec<Node<RetryPolicy>>,
+}
+
+/// A generic walker. Only walkers instantiated with a concrete ID type (`I`) are useful.
+#[derive(Clone, Copy)]
+pub struct Walker<'db, I> {
+    /// The parser database being traversed.
+    pub db: &'db IntermediateRepr,
+    /// The identifier of the focused element.
+    pub item: I,
 }
 
 impl IntermediateRepr {
+    pub fn walk_enums<'a>(&'a self) -> impl Iterator<Item = Walker<'a, &'a Node<Enum>>> {
+        self.enums.iter().map(|e| Walker { db: self, item: e })
+    }
+
+    pub fn walk_classes<'a>(&'a self) -> impl Iterator<Item = Walker<'a, &'a Node<Class>>> {
+        self.classes.iter().map(|e| Walker { db: self, item: e })
+    }
+
+    pub fn walk_functions<'a>(&'a self) -> impl Iterator<Item = Walker<'a, &'a Node<Function>>> {
+        self.functions.iter().map(|e| Walker { db: self, item: e })
+    }
+
+    pub fn walk_clients<'a>(&'a self) -> impl Iterator<Item = Walker<'a, &'a Node<Client>>> {
+        self.clients.iter().map(|e| Walker { db: self, item: e })
+    }
+
+    pub fn walk_retry_policies<'a>(
+        &'a self,
+    ) -> impl Iterator<Item = Walker<'a, &'a Node<RetryPolicy>>> {
+        self.retry_policies
+            .iter()
+            .map(|e| Walker { db: self, item: e })
+    }
+
     pub fn from_parser_database(db: &ParserDatabase) -> Result<IntermediateRepr> {
         let mut repr = IntermediateRepr {
             enums: db
@@ -170,15 +203,14 @@ pub enum FieldType {
     Map(Box<FieldType>, Box<FieldType>),
     Union(Vec<FieldType>),
     Tuple(Vec<FieldType>),
+    Optional(Box<FieldType>),
 }
 
 impl FieldType {
     fn with_arity(self, arity: &FieldArity) -> FieldType {
         match arity {
             FieldArity::Required => self,
-            FieldArity::Optional => {
-                FieldType::Union(vec![self, FieldType::Primitive(ast::TypeValue::Null)])
-            }
+            FieldArity::Optional => FieldType::Optional(Box::new(self)),
         }
     }
 }
@@ -291,7 +323,7 @@ impl WithRepr<Expression> for ast::Expression {
 type EnumId = String;
 
 #[derive(serde::Serialize)]
-pub struct EnumValue(String);
+pub struct EnumValue(pub String);
 
 #[derive(serde::Serialize)]
 pub struct Enum {

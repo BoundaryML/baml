@@ -1,5 +1,7 @@
 use std::{collections::HashMap, path::PathBuf};
 
+use log::info;
+
 #[derive(PartialEq, Eq, Hash)]
 pub(super) struct Import {
     pub lib: String,
@@ -95,11 +97,13 @@ impl<L: LanguageFeatures> FileCollector<L> {
         let mut files = self.files.iter().collect::<Vec<_>>();
         files.sort_by(|(a, _), (b, _)| a.cmp(b));
 
-        for (path, file) in files {
+        for (path, file) in &files {
             let path = dir.join(path);
             std::fs::create_dir_all(path.parent().unwrap())?;
             std::fs::write(&path, &self.format_file(file))?;
         }
+
+        info!("Wrote {} files to {}", files.len(), dir.display());
 
         Ok(())
     }

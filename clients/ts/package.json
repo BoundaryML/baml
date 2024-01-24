@@ -1,0 +1,22 @@
+{
+  "name": "@boundaryml/baml-client",
+  "version": "1.0.0",
+  "description": "",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc"
+  },
+  "keywords": [],
+  "author": "contact@boundaryml.com",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "@types/json-schema": "^7.0.15"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.12.3",
+    "openai": "^4.25.0",
+    "xregexp": "^5.1.1"
+  }
+}
