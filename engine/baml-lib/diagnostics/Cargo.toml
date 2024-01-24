@@ -9,7 +9,7 @@ license-file.workspace = true
 
 [dependencies]
 colored = "2"
-pest = "2.1.3"
+pest = { version = "2.1.3", default-features = false }
 indoc.workspace = true
 log = "0.4.20"
 strsim = "0.10.0"

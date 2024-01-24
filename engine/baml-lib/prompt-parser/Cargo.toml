@@ -11,8 +11,8 @@ internal-baml-diagnostics = { path = "../diagnostics" }
 internal-baml-schema-ast = { path = "../schema-ast" }
 log = "0.4.20"
 
-pest = "2.1.3"
-pest_derive = "2.1.0"
+pest = { version = "2.1.3", default-features = false }
+pest_derive = {version = "2.1.0", default-features = false }
 textwrap = "0.16.0"
 
 
