@@ -9,7 +9,7 @@ describe("String Deserializer", () => {
     }, {
         type: "string"
     });
-    test("string_from_string", ()  => {
+    test("string_from_string", () => {
         expect(deserializer.coerce("hello")).toBe("hello");
     });
 
@@ -48,7 +48,7 @@ describe("Enum Deserializer", () => {
         }
     }
 
-    test("enum_from_string", ()  => {
+    test("enum_from_string", () => {
         const deserializer = new Deserializer<Category>(schema, {
             $ref: "#/definitions/Category"
         });
@@ -81,20 +81,26 @@ describe("Enum Deserializer", () => {
     });
 
     test("enum_list_from_list", () => {
-        const deserializer = new Deserializer<Category[]>(schema, { type: 'array',
-            items: { $ref: "#/definitions/Category" } });
+        const deserializer = new Deserializer<Category[]>(schema, {
+            type: 'array',
+            items: { $ref: "#/definitions/Category" }
+        });
         expect(deserializer.coerce('["ONE"]')).toEqual([Category.ONE]);
     });
 
     test("enum_list_from_list_multi", () => {
-        const deserializer = new Deserializer<Category[]>(schema, { type: 'array',
-            items: { $ref: "#/definitions/Category" } });
+        const deserializer = new Deserializer<Category[]>(schema, {
+            type: 'array',
+            items: { $ref: "#/definitions/Category" }
+        });
         expect(deserializer.coerce('["ONE", "TWO"]')).toEqual([Category.ONE, Category.TWO]);
     });
 
     test("enum_list_from_list_multi_extra", () => {
-        const deserializer = new Deserializer<Category[]>(schema, { type: 'array',
-            items: { $ref: "#/definitions/Category" } });
+        const deserializer = new Deserializer<Category[]>(schema, {
+            type: 'array',
+            items: { $ref: "#/definitions/Category" }
+        });
         expect(deserializer.coerce('["ONE", "THREE", "TWO"]')).toEqual([Category.ONE, Category.TWO]);
     });
 });
@@ -118,18 +124,18 @@ registerObjectDeserializer({
 describe("Object Deserializer", () => {
     const schema: JSONSchema7 = {
         definitions: {
-        BasicObj: {
-        title: "BasicObj",
-        type: "object",
-        properties: {
-            foo: {
-                type: "string"
+            BasicObj: {
+                title: "BasicObj",
+                type: "object",
+                properties: {
+                    foo: {
+                        type: "string"
+                    }
+                },
+                required: ["foo"]
             }
-        },
-        required: ["foo"]
-    }
-    }
-};
+        }
+    };
 
     test("obj_from_str", () => {
         const deserializer = new Deserializer<BasicObj>(schema, { $ref: "#/definitions/BasicObj" });
@@ -221,17 +227,18 @@ registerObjectDeserializer({
 describe("Object Deserializer with Optionals", () => {
     const schema: JSONSchema7 = {
         definitions: {
-        ObjOptionals: {
-        title: "ObjOptionals",
-        type: "object",
-        properties: {
-            foo: {
-                type: ["string", "null"],
-                default: null
+            ObjOptionals: {
+                title: "ObjOptionals",
+                type: "object",
+                properties: {
+                    foo: {
+                        type: ["string", "null"],
+                        default: null
+                    }
+                }
             }
         }
-    }
-    }};
+    };
 
     test("obj_with_empty_input", () => {
         const deserializer = new Deserializer<ObjOptionals>(schema, { $ref: "#/definitions/ObjOptionals" });
@@ -265,20 +272,21 @@ registerObjectDeserializer({
 describe("Object Deserializer with Markdown", () => {
     const schema: JSONSchema7 = {
         definitions: {
-        BasicClass2: {
-        title: "BasicClass2",
-        type: "object",
-        properties: {
-            one: {
-                type: "string"
-            },
-            two: {
-                type: "string"
+            BasicClass2: {
+                title: "BasicClass2",
+                type: "object",
+                properties: {
+                    one: {
+                        type: "string"
+                    },
+                    two: {
+                        type: "string"
+                    }
+                },
+                required: ["one", "two"]
             }
-        },
-        required: ["one", "two"]
-    }
-    }};
+        }
+    };
 
     test("object_from_str_with_quotes", () => {
         const deserializer = new Deserializer<BasicClass2>(schema, { $ref: "#/definitions/BasicClass2" });
@@ -346,26 +354,27 @@ registerObjectDeserializer({
 describe("Object Deserializer with List", () => {
     const schema: JSONSchema7 = {
         definitions: {
-        BasicWithList: {
-        title: "BasicWithList",
-        type: "object",
-        properties: {
-            a: {
-                type: "integer"
-            },
-            b: {
-                type: "string"
-            },
-            c: {
-                type: "array",
-                items: {
-                    type: "string"
-                }
+            BasicWithList: {
+                title: "BasicWithList",
+                type: "object",
+                properties: {
+                    a: {
+                        type: "integer"
+                    },
+                    b: {
+                        type: "string"
+                    },
+                    c: {
+                        type: "array",
+                        items: {
+                            type: "string"
+                        }
+                    }
+                },
+                required: ["a", "b", "c"]
             }
-        },
-        required: ["a", "b", "c"]
-    }
-    }};
+        }
+    };
 
     test("complex_obj_from_string", () => {
         const deserializer = new Deserializer<BasicWithList>(schema, { $ref: "#/definitions/BasicWithList" });
@@ -413,32 +422,33 @@ registerObjectDeserializer({
 describe("Complex Object Deserializer", () => {
     const schema: JSONSchema7 = {
         definitions: {
-        Child: {
-        title: "Child",
-        type: "object",
-        properties: {
-            hi: {
-                type: "string"
+            Child: {
+                title: "Child",
+                type: "object",
+                properties: {
+                    hi: {
+                        type: "string"
+                    }
+                },
+                required: ["hi"]
+            },
+            Parent: {
+                title: "Parent",
+                type: "object",
+                properties: {
+                    child: {
+                        $ref: "#/definitions/Child"
+                    }
+                },
+                required: ["child"]
             }
-        },
-        required: ["hi"]
-    },
-    Parent: {
-        title: "Parent",
-        type: "object",
-        properties: {
-            child: {
-                $ref: "#/definitions/Child"
-            }
-        },
-        required: ["child"]
-    }
-    }};
+        }
+    };
 
     test("complex_obj_from_string", () => {
         const deserializer = new Deserializer<Parent>(schema, { $ref: "#/definitions/Parent" });
         const test_obj = {
-            "child": {"hi": "hello"}
+            "child": { "hi": "hello" }
         }
         const res = deserializer.coerce(JSON.stringify(test_obj));
         expect(res).toEqual(test_obj);
@@ -501,20 +511,21 @@ registerObjectDeserializer({
 describe("List Deserializer", () => {
     const schema: JSONSchema7 = {
         definitions: {
-        BasicClass: {
-        title: "BasicClass",
-        type: "object",
-        properties: {
-            a: {
-                type: "integer"
-            },
-            b: {
-                type: "string"
+            BasicClass: {
+                title: "BasicClass",
+                type: "object",
+                properties: {
+                    a: {
+                        type: "integer"
+                    },
+                    b: {
+                        type: "string"
+                    }
+                },
+                required: ["a", "b"]
             }
-        },
-        required: ["a", "b"]
-    }
-    }};
+        }
+    };
 
     test("list_from_string", () => {
         const deserializer = new Deserializer<string[]>(schema, { type: "array", items: { type: "string" } });
@@ -525,11 +536,69 @@ describe("List Deserializer", () => {
 
     test("list_object_from_string", () => {
         const deserializer = new Deserializer<BasicClass[]>(schema, { type: "array", items: { $ref: "#/definitions/BasicClass" } });
-        const test_obj = [{"a": 1, "b": "hello"}, {"a": 2, "b": "world"}];
+        const test_obj = [{ "a": 1, "b": "hello" }, { "a": 2, "b": "world" }];
         const res = deserializer.coerce(JSON.stringify(test_obj));
         expect(res).toEqual([
             { a: 1, b: "hello" },
             { a: 2, b: "world" }
         ]);
+    });
+});
+
+describe("Union Deserializer", () => {
+    const schema: JSONSchema7 = {
+        definitions: {
+            BasicClass: {
+                title: "BasicClass",
+                type: "object",
+                properties: {
+                    a: {
+                        type: "integer"
+                    },
+                    b: {
+                        type: "string"
+                    }
+                },
+                required: ["a", "b"]
+            }
+        }
+    };
+
+    test("union_from_string", () => {
+        const deserializer = new Deserializer<string | number>(schema, { anyOf: [{ type: "string" }, { type: "integer" }] });
+        expect(deserializer.coerce("hello")).toBe("hello");
+        // Since string is first, it will be the default.
+        expect(deserializer.coerce("1")).toBe("1");
+
+        const deserializer2 = new Deserializer<string | number>(schema, { anyOf: [{ type: "integer" }, { type: "string" }] });
+        expect(deserializer2.coerce("1")).toBe(1);
+    });
+
+    test("union_fail", () => {
+        const deserializer = new Deserializer<string | number>(schema, { anyOf: [{ type: "integer" }, { type: "number" }] });
+        expect(() => deserializer.coerce("hello1")).toThrow();
+    });
+
+    test("union_from_string_with_quotes", () => {
+        const deserializer = new Deserializer<string | number>(schema, { anyOf: [{ type: "string" }, { type: "integer" }] });
+        expect(deserializer.coerce("\"hello\"")).toBe("\"hello\"");
+    });
+
+    test("union_from_object", () => {
+        const obj = { hello: "world" }
+        const deserializer = new Deserializer<string | number>(schema, { anyOf: [{ type: "string" }, { type: "integer" }] });
+        expect(deserializer.coerce(JSON.stringify(obj))).toBe(JSON.stringify(obj, null, 2));
+    });
+
+    test("union_from_obj_and_string_string_first", () => {
+        const test_str = 'The output is: {"a": 19, "b": "hello"}';
+        const deserializer = new Deserializer<string | number>(schema, { anyOf: [{ type: "string" }, { type: "integer" }, { $ref: "#/definitions/BasicClass" }] });
+        expect(deserializer.coerce(test_str)).toBe(test_str);
+    });
+
+    test("union_from_obj_and_string_obj_first", () => {
+        const test_str = 'The output is: {"a": 19, "b": "hello"}';
+        const deserializer = new Deserializer<string | number>(schema, { anyOf: [{ $ref: "#/definitions/BasicClass" }, { type: "string" }, { type: "integer" }] });
+        expect(deserializer.coerce(test_str)).toEqual({ a: 19, b: "hello" });
     });
 });

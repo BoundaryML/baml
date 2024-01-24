@@ -1,4 +1,3 @@
-import exp from "constants";
 import { registerEnumDeserializer } from "../src/baml_lib/deserializer/deserializer";
 
 enum Category {
