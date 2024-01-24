@@ -117,8 +117,9 @@ const cliVersion = async (): Promise<semver.SemVer> => {
   throw new Error('Failed to get CLI version')
 }
 
-export const registerFileChange = async (fileUri: string, language: string) => {
-  return await client.sendRequest('registerFileChange', { fileUri, language })
+
+export const saveFile = async (filepath: string) => {
+  return await client.sendRequest('saveFile', { filepath })
 }
 
 interface BAMLMessage {

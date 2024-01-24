@@ -6,7 +6,7 @@ import { StringSpan, TestFileContent, TestRequest } from '@baml/common'
 import testExecutor from './execute_test'
 
 import { uniqueNamesGenerator, Config, adjectives, colors, animals } from 'unique-names-generator'
-import { BamlDB, registerFileChange } from '../plugins/language-server'
+import { BamlDB } from '../plugins/language-server'
 import { URI } from 'vscode-uri'
 
 const customConfig: Config = {
@@ -195,11 +195,11 @@ export class WebPanelView {
             const uri = saveTestRequest.testCaseName?.source_file
               ? URI.file(saveTestRequest.testCaseName?.source_file)
               : vscode.Uri.joinPath(
-                  URI.file(saveTestRequest.root_path),
-                  '__tests__',
-                  saveTestRequest.funcName,
-                  `${uniqueNamesGenerator(customConfig)}.json`,
-                )
+                URI.file(saveTestRequest.root_path),
+                '__tests__',
+                saveTestRequest.funcName,
+                `${uniqueNamesGenerator(customConfig)}.json`,
+              )
             let testInputContent: any
 
             if (saveTestRequest.params.type === 'positional') {
@@ -232,7 +232,6 @@ export class WebPanelView {
             }
             try {
               await vscode.workspace.fs.writeFile(uri, Buffer.from(JSON.stringify(testFileContent, null, 2)))
-              await registerFileChange(uri.toString(), 'json')
               WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
             } catch (e: any) {
               console.log(e)
@@ -248,7 +247,6 @@ export class WebPanelView {
             const uri = vscode.Uri.parse(removeTestRequest.testCaseName.source_file)
             try {
               await vscode.workspace.fs.delete(uri)
-              await registerFileChange(uri.toString(), 'json')
               WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
             } catch (e: any) {
               console.log(e)

@@ -15,7 +15,7 @@ import {
 } from '@baml/common'
 import { generateTestRequest } from '../plugins/language-server'
 import { bamlPath, bamlTestShell } from '../util'
-
+import { saveFile } from '../plugins/language-server'
 const outputChannel = vscode.window.createOutputChannel('baml-test-runner')
 
 function __initServer(messageHandler: (data: Buffer) => void) {
@@ -238,8 +238,18 @@ class TestExecutor {
 
   public async runTest({ root_path, tests }: { root_path: string; tests: TestRequest }) {
     // root_path is the path to baml_src, so go up one level to get to the root of the project
+    console.log(`Running tests in ${root_path}`)
     root_path = path.join(root_path, '../')
     this.testState.resetTestCases(tests)
+
+    for (const fn of tests.functions) {
+      for (const test of fn.tests) {
+        // baml_src/function_name/test_name
+        const fullPath = path.join(root_path, 'baml_src', "__tests__", fn.name, test.name + ".json");
+        console.log(`Creating test file ${fullPath}`)
+        await saveFile(fullPath);
+      }
+    }
 
     // Add filters.
     const selectedTests = tests.functions.flatMap((fn) =>

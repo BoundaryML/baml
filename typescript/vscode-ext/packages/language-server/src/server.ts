@@ -36,6 +36,8 @@ import { LinterInput } from './lib/wasm/lint'
 import { cliBuild, cliVersion } from './baml-cli'
 import { ParserDatabase, TestRequest } from '@baml/common'
 import generate_test_file from './lib/wasm/generate_test_file'
+import { FileChangeType, workspace } from 'vscode'
+import fs from 'fs'
 
 const packageJson = require('../../package.json') // eslint-disable-line
 function getConnection(options?: LSOptions): Connection {
@@ -198,21 +200,36 @@ export function startServer(options?: LSOptions): void {
     }
   }
 
+  function getLanguageExtension(uri: string): string | undefined {
+    const languageExtension = uri.split('.').pop()
+    if (!languageExtension) {
+      console.log('Could not find language extension for ' + uri)
+      return
+    }
+    return languageExtension
+  }
+
   connection.onDidChangeWatchedFiles(async (params) => {
     console.log('onDidChangeWatchedFiles ' + JSON.stringify(params, null, 2))
     params.changes.forEach((change) => {
       const uri = change.uri
-      if (uri.endsWith('.baml')) {
-        const doc = documents.get(uri)
-        if (doc) {
-          bamlCache.refreshDirectory(doc)
-          debouncedValidateTextDocument(doc)
-        } else {
-          console.log('Could not find doc for ' + uri)
-        }
+      const languageExtension = getLanguageExtension(uri)
+      if (!languageExtension) {
+        return
       }
+      const textDocument = TextDocument.create(uri, languageExtension, 1, '')
+      bamlCache.refreshDirectory(textDocument)
     }
     )
+    if (params.changes.length > 0) {
+      const uri = params.changes[0].uri
+      const languageExtension = getLanguageExtension(uri)
+      if (!languageExtension) {
+        return
+      }
+      const textDocument = TextDocument.create(uri, languageExtension, 1, '')
+      validateTextDocument(textDocument)
+    }
   });
 
 
@@ -240,23 +257,6 @@ export function startServer(options?: LSOptions): void {
         console.log('Error opening doc' + e.message + ' ' + e.stack)
       } else {
         console.log('Error opening doc' + e)
-      }
-    }
-  })
-
-  // Only keep settings for open documents
-  documents.onDidClose((e) => {
-    try {
-      bamlCache.refreshDirectory(e.document)
-      // Revalidate all open files since this one may have been deleted.
-      // we could be smarter and only do this if the doc was deleted, not just closed.
-      documents.all().forEach(debouncedValidateTextDocument)
-      documentSettings.delete(e.document.uri)
-    } catch (e: any) {
-      if (e instanceof Error) {
-        console.log('Error closing doc' + e.message + ' ' + e.stack)
-      } else {
-        console.log('Error closing doc' + e)
       }
     }
   })
@@ -329,25 +329,14 @@ export function startServer(options?: LSOptions): void {
     trailing: true,
   });
 
+
   function validateTextDocument(textDocument: TextDocument) {
     try {
       const rootPath = bamlCache.getBamlDir(textDocument)
       if (!rootPath) {
-        console.error('Could not find root path for ' + textDocument.uri)
-        connection.sendNotification('baml/message', {
-          type: 'error',
-          message: 'Could not find a baml_src directory for ' + textDocument.uri.toString(),
-        })
         return
       }
-      // add the document to the cache
-      // we want to do this since the doc may not be in disk (it's in vscode memory).
-      // If we try to just load docs from disk we will have outdated info.
-      try {
-        bamlCache.addDocument(textDocument)
-      } catch (e) {
-        console.log("Error adding document to cache " + e)
-      }
+
       const srcDocs = bamlCache.getDocuments(textDocument)
 
       if (srcDocs.length === 0) {
@@ -364,7 +353,6 @@ export function startServer(options?: LSOptions): void {
         void connection.sendDiagnostics({ uri, diagnostics: diagnosticList })
       }
 
-      // console.log('Setting database for ' + rootPath.toString() + ' ' + response.state?.functions.length)
       bamlCache.addDatabase(rootPath, response.state)
       if (response.state) {
         const filecache = bamlCache.getFileCache(textDocument)
@@ -374,12 +362,8 @@ export function startServer(options?: LSOptions): void {
           console.error('Could not find file cache for ' + textDocument.uri)
         }
 
-        // void connection.sendRequest('set_database', { rootPath: rootPath.fsPath, db: response.state })
         debouncedSetDb(rootPath, response.state)
       } else {
-        // we may have stale files and got no state due to that so lets refresh to be sure.
-        // TODO: use better filewatcher.
-        bamlCache.refreshDirectory(textDocument);
         void connection.sendRequest('rm_database', rootPath)
       }
     } catch (e: any) {
@@ -403,8 +387,26 @@ export function startServer(options?: LSOptions): void {
   });
 
   documents.onDidChangeContent((change: { document: TextDocument }) => {
-    console.log('onDidChangeContent ' + change.document.uri)
-    debouncedValidateTextDocument(change.document)
+    const textDocument = change.document;
+    const rootPath = bamlCache.getBamlDir(textDocument)
+    if (!rootPath) {
+      console.error('Could not find root path for ' + textDocument.uri)
+      connection.sendNotification('baml/message', {
+        type: 'error',
+        message: 'Could not find a baml_src directory for ' + textDocument.uri.toString(),
+      })
+      return
+    }
+    // add the document to the cache
+    // we want to do this since the doc may not be in disk (it's in vscode memory).
+    // If we try to just load docs from disk we will have outdated info.
+    try {
+      bamlCache.addDocument(textDocument)
+    } catch (e) {
+      console.log("Error adding document to cache " + e)
+    }
+
+    debouncedValidateTextDocument(textDocument)
   })
 
   const debouncedCLIBuild = debounce(cliBuild, 1000, {
@@ -670,6 +672,11 @@ export function startServer(options?: LSOptions): void {
 
       return res
     } catch (e: any) {
+      if (e instanceof Error) {
+        console.log('Error getting cli version' + e.message + ' ' + e.stack)
+      } else {
+        console.log('Error getting cli version' + e)
+      }
       return undefined
     }
   })
@@ -677,15 +684,23 @@ export function startServer(options?: LSOptions): void {
   connection.onRequest('generatePythonTests', (params: TestRequest) => {
     return generateTestFile(params)
   })
-  connection.onRequest('registerFileChange', ({ fileUri, language }: { fileUri: string; language: string }) => {
-    console.log('registerFileChange ' + fileUri)
-    // TODO: revalidate if something changed
-    // create textdocument from file:
-    const textDocument = TextDocument.create(fileUri, language, 1, '')
-    bamlCache.refreshDirectory(textDocument)
-    bamlCache.getDocuments(textDocument).forEach(({ doc }) => {
-      debouncedValidateTextDocument(doc)
-    })
+
+  connection.onRequest("saveFile", async (params: {
+    filepath: string;
+  }) => {
+    console.log("saveFile" + JSON.stringify(params, null, 2));
+    const uri = URI.parse(params.filepath);
+    const document = getDocument(uri.toString());
+
+    if (!document) {
+      console.log("Could not find document for " + uri.toString());
+      return;
+    }
+    try {
+      fs.writeFileSync(uri.fsPath, document.getText());
+    } catch (e) {
+      console.error("Error writing file " + e);
+    }
   })
 
   console.log('Server-side -- listening to connection')

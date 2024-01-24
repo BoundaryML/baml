@@ -178,6 +178,7 @@ export class BamlDirCache {
     const fileCache = this.getFileCache(textDocument)
     return fileCache?.getDocuments() ?? []
   }
+
 }
 
 let counter = 0
