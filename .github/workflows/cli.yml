@@ -62,7 +62,9 @@ jobs:
             engine
       - name: Install Musl target
         if: matrix.platform.target == 'x86_64-unknown-linux-musl'
-        run: apt-get update && apt-get install -y musl-tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v0
         with:
