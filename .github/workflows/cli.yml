@@ -27,7 +27,7 @@ jobs:
       fail-fast: false # Don't stop all builds if one fails
       matrix:
         platform:
-          - os: ubuntu-latest
+          - os: ubuntu-20.04
             target: x86_64-unknown-linux-gnu
             bin: baml
             name: baml-linux-x86_64
