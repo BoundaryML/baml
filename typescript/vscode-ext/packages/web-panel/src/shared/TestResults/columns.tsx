@@ -40,7 +40,6 @@ const TestStatusIcon: React.FC<PropsWithChildren<{ testStatus: TestStatus }>> = 
 
 export const columns: ColumnDef<TestResult>[] = [
   {
-    // accessorKey: 'testName',
     header: ({ column }) => {
       return (
         <Button
@@ -64,26 +63,6 @@ export const columns: ColumnDef<TestResult>[] = [
     accessorFn: (row) => `${row.testName}-${row.implName}`,
     id: 'testName-implName',
   },
-  // {
-  //   header: ({ column }) => {
-  //     return (
-  //       <Button
-  //         variant="ghost"
-  //         className="hover:bg-vscode-list-hoverBackground hover:text-vscode-list-hoverForeground"
-  //         onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-  //       >
-  //         impl
-  //         <CaretSortIcon className="w-4 h-4 ml-2" />
-  //       </Button>
-  //     )
-  //   },
-  //   cell: ({ row }) => (
-  //     <div className="flex flex-row gap-1">
-  //       <div className="lowercase">{row.getValue('implName')}</div>
-  //     </div>
-  //   ),
-  //   accessorKey: 'implName',
-  // },
   {
     id: 'status',
     accessorFn: (row) => ({
