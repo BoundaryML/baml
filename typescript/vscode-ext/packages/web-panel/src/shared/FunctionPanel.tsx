@@ -44,7 +44,7 @@ const FunctionPanel: React.FC = () => {
       >
         <Allotment className="h-full">
           {impl && (
-            <Allotment.Pane className="px-2" minSize={200}>
+            <Allotment.Pane className="px-0" minSize={200}>
               <div className="relative h-full">
                 <ScrollArea type="always" className="flex w-full h-full pr-3">
                   <VSCodePanels
@@ -64,7 +64,7 @@ const FunctionPanel: React.FC = () => {
               </div>
             </Allotment.Pane>
           )}
-          <Allotment.Pane className="px-2" minSize={200} visible={showTests}>
+          <Allotment.Pane className="pl-2 pr-0.5" minSize={200} visible={showTests}>
             <div className="h-full">
               <ScrollArea type="always" className="flex w-full h-full pr-3">
                 <TestCasePanel func={func} />

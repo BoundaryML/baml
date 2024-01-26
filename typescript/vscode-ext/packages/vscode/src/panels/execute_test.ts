@@ -3,7 +3,7 @@ import net from 'net'
 import * as path from 'path'
 import * as fs from 'fs'
 import * as os from 'os'
-import { exec } from 'child_process'
+import { exec, spawn } from 'child_process'
 import {
   ClientEventLog,
   TestRequest,
@@ -237,55 +237,64 @@ class TestExecutor {
   }
 
   public async runTest({ root_path, tests }: { root_path: string; tests: TestRequest }) {
-    // root_path is the path to baml_src, so go up one level to get to the root of the project
-    console.log(`Running tests in ${root_path}`)
-    root_path = path.join(root_path, '../')
-    this.testState.resetTestCases(tests)
+    try {
+      // root_path is the path to baml_src, so go up one level to get to the root of the project
+      console.log(`Running tests in ${root_path}`)
+      root_path = path.join(root_path, '../')
+      this.testState.resetTestCases(tests)
 
-    for (const fn of tests.functions) {
-      for (const test of fn.tests) {
-        // baml_src/function_name/test_name
-        const fullPath = path.join(root_path, 'baml_src', "__tests__", fn.name, test.name + ".json");
-        console.log(`Creating test file ${fullPath}`)
-        await saveFile(fullPath);
+      for (const fn of tests.functions) {
+        for (const test of fn.tests) {
+          // baml_src/function_name/test_name
+          const fullPath = path.join(root_path, 'baml_src', "__tests__", fn.name, test.name + ".json");
+          console.log(`Creating test file ${fullPath}`)
+          await saveFile(fullPath);
+        }
       }
+
+      // Add filters.
+      const selectedTests = tests.functions.flatMap((fn) =>
+        fn.tests.flatMap((test) => test.impls.map((impl) => `-i ${fn.name}:${impl}:${test.name}`)),
+      )
+      const test_filter = selectedTests.join(' ')
+
+      // Run the Python script in a child process
+      const command = `${bamlPath({ for_test: true })} test ${test_filter} run ${this.port_arg}`
+
+      // Run the Python script in a child process
+      // const process = spawn(pythonExecutable, [tempFilePath]);
+      // Run the Python script using exec
+      this.stdoutListener?.('<BAML_RESTART>')
+      this.stdoutListener?.(`\x1b[90mRunning BAML Test: ${command}\n\x1b[0m`);
+      const cp = exec(command, {
+        cwd: root_path,
+        shell: bamlTestShell(),
+        env: {
+          ...process.env,
+          CLICOLOR_FORCE: '1',
+        },
+      })
+
+      cp.stdout?.on('data', (data) => {
+        outputChannel.appendLine(data)
+        this.stdoutListener?.(data)
+      })
+      cp.stderr?.on('data', (data) => {
+        outputChannel.appendLine(data)
+        this.stdoutListener?.(data)
+      })
+
+      cp.on('exit', (code, signal) => {
+        console.log(`test exit code: ${code}`)
+        this.testState.setExitCode(code ?? (signal ? 3 : 5))
+      })
+
+
+    } catch (e) {
+      console.error(e)
+      outputChannel.appendLine(JSON.stringify(e, null, 2))
+      this.testState.setExitCode(5)
     }
-
-    // Add filters.
-    const selectedTests = tests.functions.flatMap((fn) =>
-      fn.tests.flatMap((test) => test.impls.map((impl) => `-i ${fn.name}:${impl}:${test.name}`)),
-    )
-    const test_filter = selectedTests.join(' ')
-
-    // Run the Python script in a child process
-    const command = `${bamlPath({ for_test: true })} test ${test_filter} run ${this.port_arg}`
-
-    // Run the Python script in a child process
-    // const process = spawn(pythonExecutable, [tempFilePath]);
-    // Run the Python script using exec
-    this.stdoutListener?.('<BAML_RESTART>')
-    this.stdoutListener?.(`Command: ${command}\n`)
-    const cp = exec(command, {
-      cwd: root_path,
-      shell: bamlTestShell(),
-      env: {
-        ...process.env,
-        CLICOLOR_FORCE: '1',
-      },
-    })
-
-    cp.stdout?.on('data', (data) => {
-      outputChannel.appendLine(data)
-      this.stdoutListener?.(data)
-    })
-    cp.stderr?.on('data', (data) => {
-      outputChannel.appendLine(data)
-      this.stdoutListener?.(data)
-    })
-
-    cp.on('exit', (code, signal) => {
-      this.testState.setExitCode(code ?? (signal ? 3 : 5))
-    })
   }
 
   close() {

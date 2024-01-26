@@ -32,8 +32,8 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
   })
 
   return (
-    <div className="text-xs rounded-md border-vscode-input-border">
-      <Table>
+    <div className="w-full text-xs rounded-md border-vscode-input-border">
+      <Table className="w-full">
         <TableHeader className="p-0 border-0 gap-x-1">
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow
@@ -59,7 +59,7 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
                 className="py-1 hover:bg-vscode-list-hoverBackground border-vscode-textSeparator-foreground"
               >
                 {row.getVisibleCells().map((cell) => (
-                  <TableCell className="py-1 pl-2" key={cell.id}>
+                  <TableCell className="py-1 pl-1" key={cell.id}>
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </TableCell>
                 ))}

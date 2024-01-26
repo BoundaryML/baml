@@ -145,7 +145,7 @@ pub fn run(
 
     // Print some information about the tests we are going to run
     let summary = format!(
-        "================= {}/{} tests selected ({} deselected) =================",
+        "========== {}/{} tests selected ({} deselected) ==========",
         num_selected_tests,
         num_tests,
         num_tests - num_selected_tests
@@ -153,7 +153,10 @@ pub fn run(
     .green()
     .bold();
 
-    println!("{summary}");
+    // if playground_port is set, dont print summary
+    if command.playground_port.is_none() {
+        println!("{}", summary);
+    }
     match command.action {
         TestAction::Run => {
             // Selected config:
@@ -206,6 +209,8 @@ pub fn run(
         }
     }?;
 
-    println!("{}", summary);
+    if command.playground_port.is_none() {
+        println!("{}", summary);
+    }
     Ok(())
 }

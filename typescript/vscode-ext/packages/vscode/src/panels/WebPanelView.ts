@@ -188,18 +188,30 @@ export class WebPanelView {
             const saveTestRequest: {
               root_path: string
               funcName: string
-              testCaseName: StringSpan | undefined
+              testCaseName: StringSpan | undefined | string
               params: any
             } = message.data
+            let fileName;
+            if (typeof saveTestRequest.testCaseName === 'string') {
+              fileName = `${saveTestRequest.testCaseName}.json`;
+            } else if (saveTestRequest.testCaseName?.source_file) {
+              fileName = URI.file(saveTestRequest.testCaseName.source_file).path.split('/').pop();
+            } else {
+              fileName = `${uniqueNamesGenerator(customConfig)}.json`;
+            }
 
-            const uri = saveTestRequest.testCaseName?.source_file
-              ? URI.file(saveTestRequest.testCaseName?.source_file)
-              : vscode.Uri.joinPath(
-                URI.file(saveTestRequest.root_path),
-                '__tests__',
-                saveTestRequest.funcName,
-                `${uniqueNamesGenerator(customConfig)}.json`,
-              )
+            if (!fileName) {
+              console.log('No file name provided for test' + saveTestRequest.funcName + ' ' + JSON.stringify(saveTestRequest.testCaseName));
+              return
+            }
+
+            const uri = vscode.Uri.joinPath(
+              URI.file(saveTestRequest.root_path),
+              '__tests__',
+              saveTestRequest.funcName,
+              fileName
+            )
+
             let testInputContent: any
 
             if (saveTestRequest.params.type === 'positional') {
@@ -273,20 +285,3 @@ export class WebPanelView {
     )
   }
 }
-
-// function getWorkspaceFolderPath() {
-//   // Check if there are any workspace folders open
-//   if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
-//     // Get the first workspace folder
-//     const workspaceFolder = vscode.workspace.workspaceFolders[0]
-
-//     // Get the file system path of the workspace folder
-//     const workspaceFolderPath = workspaceFolder.uri.fsPath
-
-//     return workspaceFolderPath
-//   } else {
-//     // No workspace folder is open
-//     vscode.window.showInformationMessage('No workspace folder is open.')
-//     return null
-//   }
-// }

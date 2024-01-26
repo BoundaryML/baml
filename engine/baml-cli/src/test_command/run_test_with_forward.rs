@@ -80,9 +80,11 @@ async fn run_pytest_and_update_state(
     // cmd.arg("--pytest-baml-ipc");
     // cmd.arg(format!("{}", port));
     cmd.args(["--pytest-baml-ipc", &format!("{}", port)]);
-
-    println!("Running pytest with args: {:?}", cmd);
-
+    // We don't need this - too noisy. We can append to stdout logs later or print it if there was an error.
+    // println!(
+    //     "{}",
+    //     format!("Running pytest with args: {:?}", cmd).dimmed()
+    // );
     // Create a directory in the temp folder
     let temp_dir = std::env::temp_dir();
     let baml_tests_dir = temp_dir.join("baml/tests");
@@ -93,12 +95,12 @@ async fn run_pytest_and_update_state(
     let stdout_file_path = baml_tests_dir.join(format!("{}-stdout.log", human_readable_time));
     let stderr_file_path = baml_tests_dir.join(format!("{}-stderr.log", human_readable_time));
 
-    println!(
-        "{}\n{}\n{}",
-        "Verbose logs available at: ".dimmed(),
-        stdout_file_path.display().to_string().dimmed(),
-        stderr_file_path.display().to_string().dimmed()
-    );
+    // println!(
+    //     "{}\n{}\n{}",
+    //     "Verbose logs available at: ".dimmed(),
+    //     stdout_file_path.display().to_string().dimmed(),
+    //     stderr_file_path.display().to_string().dimmed()
+    // );
 
     let stdout_file = File::create(&stdout_file_path)?;
     let stderr_file = File::create(&stderr_file_path)?;
@@ -107,7 +109,7 @@ async fn run_pytest_and_update_state(
         let state = state.lock().await;
 
         // Create a symlink to the baml directory
-        println!("{}", state.to_string())
+        // println!("{}", state.to_string())
     }
 
     let mut child = cmd
@@ -134,15 +136,35 @@ async fn run_pytest_and_update_state(
         println!("{}", state.to_string())
     }
 
-    // Optionally, you can handle the output after the subprocess has finished
-    let output = child.wait_with_output()?;
-    println!("Pytest finished with status: {}", output.status);
-    println!(
-        "{}\n{}\n{}",
-        "Verbose logs available at: ".dimmed(),
-        stdout_file_path.display().to_string().dimmed(),
-        stderr_file_path.display().to_string().dimmed()
-    );
+    // exit also with the same status only if the exit codes are
+    // 2, 3, 4 https://docs.pytest.org/en/latest/reference/exit-codes.html
+    match child.wait_with_output() {
+        Ok(output) => {
+            if let Some(code) = output.status.code() {
+                if [2, 3, 4].contains(&code) {
+                    println!("{}",
+                        format!("Testing failed with exit code {}. Open the output logs below for more details", code).bright_red().bold()
+                    );
+                    println!(
+                        "{}\n{}",
+                        stdout_file_path.display().to_string().dimmed(),
+                        stderr_file_path.display().to_string().dimmed()
+                    );
+                    // exit the process
+                    std::process::exit(code);
+                    // return Err(io::Error::new(
+                    //     io::ErrorKind::Other,
+                    //     format!("Pytest failed with exit code {}", code),
+                    // ));
+                }
+            }
+            output
+        }
+        Err(e) => {
+            eprintln!("Failed to execute command: {}", e);
+            return Err(e);
+        }
+    };
 
     Ok(())
 }
