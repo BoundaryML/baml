@@ -54,7 +54,7 @@ export const columns: ColumnDef<TestResult>[] = [
     },
     cell: ({ getValue, row, cell }) => {
       return (
-        <div className="flex flex-row items-center gap-1 text-center">
+        <div className="flex flex-row items-center gap-1 text-center w-fit">
           <div className="">{row.original.testName}</div>
           <div className="text-xs text-vscode-descriptionForeground">({row.original.implName})</div>
         </div>
