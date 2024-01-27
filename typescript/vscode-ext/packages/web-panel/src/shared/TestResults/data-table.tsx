@@ -41,8 +41,15 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
               className="hover:bg-vscode-list-hoverBackground border-vscode-textSeparator-foreground"
             >
               {headerGroup.headers.map((header) => {
+                if (header.index === 1) {
+                  return (
+                    <TableHead key={header.id} className="w-full pl-2 text-left">
+                      {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                    </TableHead>
+                  )
+                }
                 return (
-                  <TableHead key={header.id} className="pl-2 text-left">
+                  <TableHead key={header.id} className="pl-2 text-left w-fit">
                     {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                   </TableHead>
                 )
