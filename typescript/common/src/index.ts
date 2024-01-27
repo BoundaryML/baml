@@ -39,6 +39,7 @@ export interface TestState {
   exit_code?: number
   results: TestResult[]
   test_url: string | null
+  run_status: "NOT_STARTED" | "RUNNING" | "COMPLETED" | "ERROR"
 }
 
 function getFullTestName(testName: string, impl: string, fnName: string) {

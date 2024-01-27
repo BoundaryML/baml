@@ -117,8 +117,9 @@ const cliVersion = async (): Promise<semver.SemVer> => {
   throw new Error('Failed to get CLI version')
 }
 
-export const registerFileChange = async (fileUri: string, language: string) => {
-  return await client.sendRequest('registerFileChange', { fileUri, language })
+
+export const saveFile = async (filepath: string) => {
+  return await client.sendRequest('saveFile', { filepath })
 }
 
 interface BAMLMessage {
@@ -283,76 +284,30 @@ const plugin: BamlVSCodePlugin = {
         transport: TransportKind.ipc,
         options: debugOptions,
       },
+
     }
 
     // Options to control the language client
     const clientOptions: LanguageClientOptions = {
-      // Register the server for prisma documents
+      // Register the server for baml docs
       documentSelector: [
         { scheme: 'file', language: 'baml' },
         {
           language: 'json',
           pattern: '**/baml_src/**',
         },
-
-
       ],
+      synchronize: {
 
-      /* This middleware is part of the workaround for https://github.com/prisma/language-tools/issues/311 */
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      // middleware: {
-      //   async provideCodeActions(
-      //     document: TextDocument,
-      //     range: Range,
-      //     context: CodeActionContext,
-      //     token: CancellationToken,
-      //     _: ProvideCodeActionsSignature,
-      //   ) {
-      //     const params: CodeActionParams = {
-      //       textDocument: client.code2ProtocolConverter.asTextDocumentIdentifier(document),
-      //       range: client.code2ProtocolConverter.asRange(range),
-      //       context: client.code2ProtocolConverter.asCodeActionContext(context),
-      //     }
-
-      //     return client.sendRequest(CodeActionRequest.type, params, token).then(
-      //       (values: any) => {
-      //         if (values === null) {
-      //           return undefined
-      //         }
-      //         const result: (CodeAction | Command)[] = []
-      //         for (const item of values) {
-      //           if (lsCodeAction.is(item)) {
-      //             const action = client.protocol2CodeConverter.asCodeAction(item)
-      //             if (
-      //               isSnippetEdit(item, client.code2ProtocolConverter.asTextDocumentIdentifier(document)) &&
-      //               item.edit !== undefined
-      //             ) {
-      //               action.command = {
-      //                 command: 'baml.applySnippetWorkspaceEdit',
-      //                 title: '',
-      //                 arguments: [action.edit],
-      //               }
-      //               action.edit = undefined
-      //             }
-      //             result.push(action)
-      //           } else {
-      //             const command = client.protocol2CodeConverter.asCommand(item)
-      //             result.push(command)
-      //           }
-      //         }
-      //         return result
-      //       },
-      //       (_) => undefined,
-      //     )
-      //   },
-      // } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+        fileEvents: workspace.createFileSystemWatcher('**/baml_src/**/*.{baml,json}'),
+      }
     }
 
     context.subscriptions.push(
       // when the file watcher settings change, we need to ensure they are applied
       workspace.onDidChangeConfiguration((event) => {
         // if (event.affectsConfiguration('prisma.fileWatcher')) {
-        //   setGenerateWatcher(!!workspace.getConfiguration('prisma').get('fileWatcher'));
+        //   setGenerateWatcher(!!workspace.getConfiguration('baml').get('fileWatcher'));
         // }
       }),
 

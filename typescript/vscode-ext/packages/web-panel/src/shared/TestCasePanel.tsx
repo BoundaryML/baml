@@ -1,7 +1,7 @@
 /// Content once a function has been selected.
 
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { vscode } from '@/utils/vscode'
 import { ParserDatabase, StringSpan, TestRequest } from '@baml/common'
 import Form, { getDefaultRegistry } from '@rjsf/core'
@@ -20,12 +20,13 @@ import {
   titleId,
 } from '@rjsf/utils'
 import validator from '@rjsf/validator-ajv8'
-import { VSCodeButton, VSCodeTextArea, VSCodeTextField } from '@vscode/webview-ui-toolkit/react'
-import { Edit2, Play, PlusIcon, X } from 'lucide-react'
+import { VSCodeButton, VSCodeProgressRing, VSCodeTextArea, VSCodeTextField } from '@vscode/webview-ui-toolkit/react'
+import { Copy, Edit2, FileJson2, Play, PlusIcon, X } from 'lucide-react'
 import { ChangeEvent, FocusEvent, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { ASTContext } from './ASTProvider'
 import TypeComponent from './TypeComponent'
 import { useSelections } from './hooks'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 const testSchema: RJSFSchema = {
   title: 'Test form',
@@ -342,7 +343,7 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
       }
     }
   }
-  const { root_path } = useContext(ASTContext)
+  const { root_path, test_results } = useContext(ASTContext)
 
   return (
     <>
@@ -354,68 +355,60 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
             setFilter((e as React.FormEvent<HTMLInputElement>).currentTarget.value)
           }}
         />
-        <VSCodeButton
-          disabled={test_cases.length === 0}
-          onClick={() => {
-            const runTestRequest: TestRequest = {
-              functions: [
-                {
-                  name: func.name.value,
-                  tests: test_cases.map((test_case) => ({
-                    name: test_case.name.value,
-                    impls: func.impls.map((i) => i.name.value),
-                  })),
-                },
-              ],
-            }
-            vscode.postMessage({
-              command: 'runTest',
-              data: {
-                root_path,
-                tests: runTestRequest,
-              },
-            })
-          }}
-        >
-          Run {filter ? test_cases.length : 'all'} tests
-        </VSCodeButton>
-      </div>
-      <div className="flex flex-col py-2 divide-y gap-y-4 divide-vscode-textSeparator-foreground">
-        {/* <pre>{JSON.stringify(input_json_schema, null, 2)}</pre> */}
-        <Button
-          className="flex flex-row text-sm gap-x-2 bg-vscode-dropdown-background text-vscode-dropdown-foreground hover:opacity-90 hover:bg-vscode-dropdown-background"
-          onClick={() => {
-            vscode.postMessage({
-              command: 'saveTest',
-              data: {
-                root_path,
-                funcName: func.name.value,
-                testCaseName: undefined,
-                params: getTestParams({
-                  name: {
-                    value: 'new',
-                    source_file: '',
-                    start: 0,
-                    end: 0,
+        {test_results?.run_status === 'RUNNING' ? (
+          <VSCodeButton
+            className="bg-vscode-statusBarItem-errorBackground"
+            onClick={() => vscode.postMessage({ command: 'cancelTestRun' })}
+          >
+            Cancel
+          </VSCodeButton>
+        ) : (
+          <>
+            <VSCodeButton
+              disabled={test_cases.length === 0}
+              onClick={() => {
+                const runTestRequest: TestRequest = {
+                  functions: [
+                    {
+                      name: func.name.value,
+                      tests: test_cases.map((test_case) => ({
+                        name: test_case.name.value,
+                        impls: func.impls.map((i) => i.name.value),
+                      })),
+                    },
+                  ],
+                }
+                vscode.postMessage({
+                  command: 'runTest',
+                  data: {
+                    root_path,
+                    tests: runTestRequest,
                   },
-                  content: 'null',
-                }),
-              },
-            })
-          }}
-        >
-          <PlusIcon size={16} />
-          <div>Add test case</div>
-        </Button>
+                })
+              }}
+            >
+              <>Run {filter ? test_cases.length : 'all'} tests</>
+            </VSCodeButton>
+          </>
+        )}
+      </div>
+      <div className="flex flex-col py-2 divide-y gap-y-1 divide-vscode-textSeparator-foreground">
+        {/* <pre>{JSON.stringify(input_json_schema, null, 2)}</pre> */}
+        <EditTestCaseForm testCase={undefined} schema={input_json_schema} func={func} getTestParams={getTestParams}>
+          <Button className="flex flex-row text-sm gap-x-2 bg-vscode-dropdown-background text-vscode-dropdown-foreground hover:opacity-90 hover:bg-vscode-dropdown-background">
+            <PlusIcon size={16} />
+            <div>Add test case</div>
+          </Button>
+        </EditTestCaseForm>
         {test_cases.map((test_case) => (
-          <div key={test_case.name.value} className="py-2">
+          <div key={test_case.name.value} className="py-1 group">
             <div className="flex flex-row items-center justify-between">
-              <div className="flex flex-row items-center gap-x-1">
+              <div className="flex flex-row items-center justify-center gap-x-1">
                 <Button
                   variant={'ghost'}
                   size={'icon'}
                   className="p-1 rounded-md w-fit h-fit bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground"
-                  disabled={impl === undefined}
+                  disabled={impl === undefined || test_results?.run_status === 'RUNNING'}
                   onClick={() => {
                     const runTestRequest: TestRequest = {
                       functions: [
@@ -441,13 +434,59 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
                 >
                   <Play size={10} />
                 </Button>
-                <div>{test_case.name.value}</div>
-                <EditTestCaseForm
-                  testCase={test_case}
-                  schema={input_json_schema}
-                  func={func}
-                  getTestParams={getTestParams}
-                />
+                <div className="h-[24px] text-center align-middle max-w-[110px] truncate">{test_case.name.value}</div>
+                <div className="flex-row hidden gap-x-1 group-hover:flex ">
+                  <EditTestCaseForm
+                    testCase={test_case}
+                    schema={input_json_schema}
+                    func={func}
+                    getTestParams={getTestParams}
+                  >
+                    <Button
+                      variant={'ghost'}
+                      size="icon"
+                      className="p-1 w-fit h-fit hover:bg-vscode-button-secondaryHoverBackground"
+                    >
+                      <Edit2 className="w-3 h-3 text-vscode-descriptionForeground" />
+                    </Button>
+                  </EditTestCaseForm>
+                  <Tooltip delayDuration={100}>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant={'ghost'}
+                        size={'icon'}
+                        className="p-1 w-fit h-fit text-vscode-descriptionForeground hover:bg-vscode-button-secondaryHoverBackground"
+                        onClick={() => {
+                          vscode.postMessage({ command: 'jumpToFile', data: test_case.name })
+                        }}
+                      >
+                        <FileJson2 size={14} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent className="flex flex-col gap-y-1">Open test file</TooltipContent>
+                  </Tooltip>
+
+                  <EditTestCaseForm
+                    testCase={test_case}
+                    schema={input_json_schema}
+                    func={func}
+                    getTestParams={getTestParams}
+                    duplicate
+                  >
+                    <Tooltip delayDuration={100}>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant={'ghost'}
+                          size="icon"
+                          className="p-1 w-fit h-fit hover:bg-vscode-button-secondaryHoverBackground"
+                        >
+                          <Copy size={12} />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent className="flex flex-col gap-y-1">Duplicate</TooltipContent>
+                    </Tooltip>
+                  </EditTestCaseForm>
+                </div>
               </div>
               <Button
                 variant={'ghost'}
@@ -467,7 +506,14 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
                 <X size={10} />
               </Button>
             </div>
-            <TestCaseCard content={test_case.content} testCaseName={test_case.name.value} />
+            <EditTestCaseForm testCase={test_case} schema={input_json_schema} func={func} getTestParams={getTestParams}>
+              <Button
+                variant={'ghost'}
+                className="items-start justify-start w-full px-1 py-1 text-left hover:bg-vscode-button-secondaryHoverBackground h-fit"
+              >
+                <TestCaseCard content={test_case.content} testCaseName={test_case.name.value} />
+              </Button>
+            </EditTestCaseForm>
           </div>
         ))}
       </div>
@@ -480,34 +526,55 @@ const EditTestCaseForm = ({
   schema,
   func,
   getTestParams,
+  children,
+  duplicate,
 }: {
   func: Func
-  testCase: Func['test_cases'][0]
+  testCase?: Func['test_cases'][0]
   schema: any
   getTestParams: (testCase: Func['test_cases'][0]) => void
+  children: React.ReactNode
+  duplicate?: boolean
 }) => {
   const { root_path } = useContext(ASTContext)
 
   // TODO, actually fix this for named args
   const formData = useMemo(() => {
+    if (testCase === undefined) return {}
     try {
-      return JSON.parse(testCase.content)
+      return JSON.parse(testCase?.content)
     } catch (e) {
-      console.log('Error parsing data\n' + testCase.content, e)
-      return testCase.content
+      console.log('Error parsing data\n' + JSON.stringify(testCase), e)
+      return testCase?.content ?? 'null'
     }
-  }, [testCase.content])
+  }, [testCase?.content])
 
   const [showForm, setShowForm] = useState(false)
+  const [testName, setTestName] = useState(duplicate ? undefined : testCase?.name.value)
 
   return (
     <Dialog open={showForm} onOpenChange={setShowForm}>
-      <DialogTrigger asChild={true}>
-        <Button variant={'ghost'} size="icon" className="p-1 w-fit h-fit">
-          <Edit2 className="w-3 h-3 text-vscode-descriptionForeground" />
-        </Button>
-      </DialogTrigger>
+      <DialogTrigger asChild={true}>{children}</DialogTrigger>
       <DialogContent className="max-h-screen overflow-y-scroll bg-vscode-editorWidget-background border-vscode-textSeparator-foreground overflow-x-clip">
+        <DialogHeader className="flex flex-row items-center gap-x-4">
+          <DialogTitle className="text-xs font-semibold">Edit Test </DialogTitle>
+
+          <div className="flex flex-row items-center pb-1 gap-x-2">
+            {testCase === undefined || duplicate ? (
+              <VSCodeTextField
+                className="w-32"
+                value={testName === undefined ? '' : testName}
+                placeholder="Enter test name"
+                onInput={(e) => {
+                  setTestName((e as React.FormEvent<HTMLInputElement>).currentTarget.value)
+                }}
+              />
+            ) : (
+              // for now we dont support renaming existing test
+              <div>{testName}</div>
+            )}
+          </div>
+        </DialogHeader>
         <Form
           schema={schema}
           formData={formData}
@@ -526,14 +593,32 @@ const EditTestCaseForm = ({
             ArrayFieldItemTemplate: ArrayFieldItemTemplate,
           }}
           onSubmit={(data) => {
+            const testCaseToSave = testCase ?? {
+              name: {
+                value: 'new',
+                source_file: '',
+                start: 0,
+                end: 0,
+              },
+              content: 'null',
+            }
+
             vscode.postMessage({
               command: 'saveTest',
               data: {
                 root_path,
                 funcName: func.name.value,
-                testCaseName: testCase.name, // a stringspan fyi
+                testCaseName: testName, // a stringspan or string
                 params: getTestParams({
-                  ...testCase,
+                  ...(testCase ?? {
+                    name: {
+                      value: 'new',
+                      source_file: '',
+                      start: 0,
+                      end: 0,
+                    },
+                    content: 'null',
+                  }),
                   content: JSON.stringify(data.formData, null, 2),
                 }),
               },
@@ -548,10 +633,10 @@ const EditTestCaseForm = ({
 
 const TestCaseCard: React.FC<{ testCaseName: string; content: string }> = ({ testCaseName, content }) => {
   return (
-    <div className="flex flex-col gap-2 text-xs text-vscode-descriptionForeground">
-      <div>
-        {content.substring(0, 200)}
-        {content.length > 200 && '...'}
+    <div className="flex flex-col gap-2 text-xs text-left text-vscode-descriptionForeground">
+      <div className="text-balance">
+        {content.substring(0, 120)}
+        {content.length > 120 && '...'}
       </div>
     </div>
   )

@@ -99,3 +99,186 @@
 /* .array-item-remove::after {
   content: 'Remove';
 } */
+
+/* Standard ANSI colors */
+.ansi-black-fg {
+  color: var(--vscode-terminal-ansiBlack);
+}
+.ansi-red-fg {
+  color: var(--vscode-terminal-ansiRed);
+}
+.ansi-green-fg {
+  color: var(--vscode-terminal-ansiGreen);
+}
+.ansi-yellow-fg {
+  color: var(--vscode-terminal-ansiYellow);
+}
+.ansi-blue-fg {
+  color: var(--vscode-terminal-ansiBlue);
+}
+.ansi-magenta-fg {
+  color: var(--vscode-terminal-ansiMagenta);
+}
+.ansi-cyan-fg {
+  color: var(--vscode-terminal-ansiCyan);
+}
+.ansi-white-fg {
+  color: var(--vscode-terminal-ansiWhite);
+}
+
+.ansi-black-bg {
+  background-color: var(--vscode-terminal-ansiBlack);
+}
+.ansi-red-bg {
+  background-color: var(--vscode-terminal-ansiRed);
+}
+.ansi-green-bg {
+  background-color: var(--vscode-terminal-ansiGreen);
+}
+.ansi-yellow-bg {
+  background-color: var(--vscode-terminal-ansiYellow);
+}
+.ansi-blue-bg {
+  background-color: var(--vscode-terminal-ansiBlue);
+}
+.ansi-magenta-bg {
+  background-color: var(--vscode-terminal-ansiMagenta);
+}
+.ansi-cyan-bg {
+  background-color: var(--vscode-terminal-ansiCyan);
+}
+.ansi-white-bg {
+  background-color: var(--vscode-terminal-ansiWhite);
+}
+
+/* Bright ANSI colors */
+.ansi-bright-black-fg {
+  color: var(--vscode-terminal-ansiBrightBlack);
+}
+.ansi-bright-red-fg {
+  color: var(--vscode-terminal-ansiBrightRed);
+}
+.ansi-bright-green-fg {
+  color: var(--vscode-terminal-ansiBrightGreen);
+}
+.ansi-bright-yellow-fg {
+  color: var(--vscode-terminal-ansiBrightYellow);
+}
+.ansi-bright-blue-fg {
+  color: var(--vscode-terminal-ansiBrightBlue);
+}
+.ansi-bright-magenta-fg {
+  color: var(--vscode-terminal-ansiBrightMagenta);
+}
+.ansi-bright-cyan-fg {
+  color: var(--vscode-terminal-ansiBrightCyan);
+}
+.ansi-bright-white-fg {
+  color: var(--vscode-terminal-ansiBrightWhite);
+}
+
+.ansi-bright-black-bg {
+  background-color: var(--vscode-terminal-ansiBrightBlack);
+}
+.ansi-bright-red-bg {
+  background-color: var(--vscode-terminal-ansiBrightRed);
+}
+.ansi-bright-green-bg {
+  background-color: var(--vscode-terminal-ansiBrightGreen);
+}
+.ansi-bright-yellow-bg {
+  background-color: var(--vscode-terminal-ansiBrightYellow);
+}
+.ansi-bright-blue-bg {
+  background-color: var(--vscode-terminal-ansiBrightBlue);
+}
+.ansi-bright-magenta-bg {
+  background-color: var(--vscode-terminal-ansiBrightMagenta);
+}
+.ansi-bright-cyan-bg {
+  background-color: var(--vscode-terminal-ansiBrightCyan);
+}
+.ansi-bright-white-bg {
+  background-color: var(--vscode-terminal-ansiBrightWhite);
+}
+
+/* Dimmed ANSI colors using opacity */
+.ansi-dim-black {
+  color: var(--vscode-terminal-ansiBlack);
+  opacity: 0.3;
+}
+.ansi-dim-red {
+  color: var(--vscode-terminal-ansiRed);
+  opacity: 0.3;
+}
+.ansi-dim-green {
+  color: var(--vscode-terminal-ansiGreen);
+  opacity: 0.3;
+}
+.ansi-dim-yellow {
+  color: var(--vscode-terminal-ansiYellow);
+  opacity: 0.3;
+}
+.ansi-dim-blue {
+  color: var(--vscode-terminal-ansiBlue);
+  opacity: 0.3;
+}
+.ansi-dim-magenta {
+  color: var(--vscode-terminal-ansiMagenta);
+  opacity: 0.3;
+}
+.ansi-dim-cyan {
+  color: var(--vscode-terminal-ansiCyan);
+  opacity: 0.3;
+}
+.ansi-dim-white {
+  color: var(--vscode-terminal-ansiWhite);
+  opacity: 0.3;
+}
+
+.ansi-dim {
+  opacity: 0.4;
+}
+
+.ansi-dim-black-bg {
+  background-color: var(--vscode-terminal-ansiBlack);
+  opacity: 0.3;
+}
+.ansi-dim-red-bg {
+  background-color: var(--vscode-terminal-ansiRed);
+  opacity: 0.3;
+}
+.ansi-dim-green-bg {
+  background-color: var(--vscode-terminal-ansiGreen);
+  opacity: 0.3;
+}
+.ansi-dim-yellow-bg {
+  background-color: var(--vscode-terminal-ansiYellow);
+  opacity: 0.3;
+}
+.ansi-dim-blue-bg {
+  background-color: var(--vscode-terminal-ansiBlue);
+  opacity: 0.3;
+}
+.ansi-dim-magenta-bg {
+  background-color: var(--vscode-terminal-ansiMagenta);
+  opacity: 0.3;
+}
+.ansi-dim-cyan-bg {
+  background-color: var(--vscode-terminal-ansiCyan);
+  opacity: 0.3;
+}
+.ansi-dim-white-bg {
+  background-color: var(--vscode-terminal-ansiWhite);
+  opacity: 0.3;
+}
+
+/* .json-view {
+  color: var(--vscode-terminal-background);
+  --json-property: var(--vscode-terminal-ansiGreen);
+  --json-index: var(--vscode-terminal-ansiPurple);
+  --json-number: var(--vscode-terminal-ansiBlue);
+  --json-string: var(--vscode-terminal-ansiYellow);
+  --json-boolean: var(--vscode-terminal-ansiCyan);
+  --json-null: var(--vscode-terminal-ansiRed);
+} */

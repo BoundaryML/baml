@@ -43,7 +43,7 @@
     "lodash": "^4.17.21",
     "nyc": "15.1.0",
     "semver": "^7.5.4",
-    "vscode-languageserver": "8.1.0",
+    "vscode-languageserver": "^9.0.1",
     "vscode-languageserver-textdocument": "1.0.11",
     "vscode-uri": "^3.0.8"
   },

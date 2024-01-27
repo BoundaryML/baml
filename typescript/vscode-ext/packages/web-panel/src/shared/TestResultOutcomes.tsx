@@ -41,7 +41,7 @@ const TestResultPanel = () => {
       {test_result_url && (
         <div className="flex flex-row items-center justify-center w-full bg-vscode-menu-background">
           <VSCodeLink href={test_result_url.url}>
-            <div className="flex flex-row gap-1 py-1">
+            <div className="flex flex-row gap-1 py-0.5 text-xs">
               {test_result_url.text} <ExternalLink className="w-4 h-4" />
             </div>
           </VSCodeLink>
@@ -59,13 +59,30 @@ const TestResultPanel = () => {
         className="h-full"
       >
         <VSCodePanelTab id={`test-summary`}>Summary</VSCodePanelTab>
-        <VSCodePanelView id={`view-summary`}>
-          <DataTable columns={columns} data={test_results} />
+        <VSCodePanelView id={`view-summary`} className="">
+          <div className="flex flex-col w-full gap-y-2">
+            {test_result_exit_status === 'ERROR' && (
+              <div className="flex flex-row items-center justify-center w-full h-full space-x-2">
+                <div className="flex flex-col items-center justify-center space-y-2">
+                  <div className="flex flex-row items-center gap-x-2">
+                    <AlertTriangle className="w-4 h-4 text-vscode-editorWarning-foreground" />
+                    <div className="text-xs text-vscode-editorWarning-foreground">Test exited with an error</div>
+                  </div>
+
+                  <div className="text-xs font-light">Check the output tab for more details</div>
+                </div>
+              </div>
+            )}
+            <DataTable columns={columns} data={test_results} />
+          </div>
         </VSCodePanelView>
         <VSCodePanelTab id={`test-logs`}>
           <div className="flex flex-row gap-1">
-            {test_result_exit_status === undefined && <VSCodeProgressRing className="h-4" />}
-            {test_result_exit_status === 'ERROR' && <AlertTriangle className="w-4 h-4" />} Output
+            {test_result_exit_status === 'RUNNING' && <VSCodeProgressRing className="h-4" />}
+            {test_result_exit_status === 'ERROR' && (
+              <AlertTriangle className="w-4 h-4 text-vscode-editorWarning-foreground" />
+            )}{' '}
+            Output
           </div>
         </VSCodePanelTab>
         <VSCodePanelView id={`view-logs`}>
@@ -82,9 +99,9 @@ const TestLogPanel = () => {
   const { test_log } = useSelections()
 
   return (
-    <div className="h-full overflow-auto">
+    <div className="h-full overflow-auto text-xs bg-vscode-terminal-background">
       {test_log ? (
-        <AnsiText text={test_log} className="w-full whitespace-break-spaces bg-inherit text-inherit" />
+        <AnsiText text={test_log} className="w-full break-all whitespace-break-spaces bg-inherit text-inherit" />
       ) : (
         <div className="flex flex-col items-center justify-center w-full h-full space-y-2">Waiting</div>
       )}

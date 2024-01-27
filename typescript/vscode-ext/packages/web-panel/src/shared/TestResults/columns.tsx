@@ -4,8 +4,13 @@ import { Button } from '@/components/ui/button'
 import { TestResult, TestStatus } from '@baml/common'
 import { ColumnDef } from '@tanstack/react-table'
 import { VSCodeLink, VSCodeProgressRing } from '@vscode/webview-ui-toolkit/react'
-import { ExternalLink } from 'lucide-react'
-import { PropsWithChildren } from 'react'
+import { Braces, ExternalLink, File } from 'lucide-react'
+import { PropsWithChildren, useState } from 'react'
+import JsonView from 'react18-json-view'
+import 'react18-json-view/src/style.css'
+import { parseGlooObject } from '../schemaUtils'
+import { Toggle } from '@/components/ui/toggle'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 const TestStatusIcon: React.FC<PropsWithChildren<{ testStatus: TestStatus }>> = ({ testStatus, children }) => {
   return (
@@ -16,13 +21,13 @@ const TestStatusIcon: React.FC<PropsWithChildren<{ testStatus: TestStatus }>> = 
           [TestStatus.Queued]: 'Queued',
           [TestStatus.Running]: <VSCodeProgressRing className="h-4" />,
           [TestStatus.Passed]: (
-            <div className="flex flex-row gap-1 items-center">
+            <div className="flex flex-row items-center gap-1">
               <div className="text-vscode-testing-iconPassed">Passed</div>
               {children}
             </div>
           ),
           [TestStatus.Failed]: (
-            <div className="flex flex-row gap-1 items-center">
+            <div className="flex flex-row items-center gap-1">
               <div className="text-vscode-testing-iconFailed">Failed</div>
               {children}
             </div>
@@ -35,7 +40,6 @@ const TestStatusIcon: React.FC<PropsWithChildren<{ testStatus: TestStatus }>> = 
 
 export const columns: ColumnDef<TestResult>[] = [
   {
-    accessorKey: 'testName',
     header: ({ column }) => {
       return (
         <Button
@@ -48,26 +52,16 @@ export const columns: ColumnDef<TestResult>[] = [
         </Button>
       )
     },
-  },
-  {
-    header: ({ column }) => {
+    cell: ({ getValue, row, cell }) => {
       return (
-        <Button
-          variant="ghost"
-          className="hover:bg-vscode-list-hoverBackground hover:text-vscode-list-hoverForeground"
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-        >
-          impl
-          <CaretSortIcon className="w-4 h-4 ml-2" />
-        </Button>
+        <div className="flex flex-row items-center gap-1 text-center w-fit">
+          <div className="">{row.original.testName}</div>
+          <div className="text-xs text-vscode-descriptionForeground">({row.original.implName})</div>
+        </div>
       )
     },
-    cell: ({ row }) => (
-      <div className="flex flex-row gap-1">
-        <div className="lowercase">{row.getValue('implName')}</div>
-      </div>
-    ),
-    accessorKey: 'implName',
+    accessorFn: (row) => `${row.testName}-${row.implName}`,
+    id: 'testName-implName',
   },
   {
     id: 'status',
@@ -80,9 +74,10 @@ export const columns: ColumnDef<TestResult>[] = [
     }),
     cell: ({ getValue }) => {
       const val = getValue<{ status: TestStatus; render?: string; error?: string; raw?: string; url?: string }>()
+      const [showJson, setShowJson] = useState(true)
 
       return (
-        <div className="flex flex-col p-0 text-xs">
+        <div className="flex flex-col w-full p-0 text-xs">
           <TestStatusIcon testStatus={val.status}>
             {val.url && (
               <VSCodeLink href={val.url}>
@@ -91,13 +86,41 @@ export const columns: ColumnDef<TestResult>[] = [
             )}
           </TestStatusIcon>
           {val.error && (
-            <pre className="break-words whitespace-pre-wrap max-w-[500px] border-vscode-textSeparator-foreground rounded-md border p-0.5">
+            <pre className="break-words whitespace-pre-wrap w-full border-vscode-textSeparator-foreground rounded-md border p-0.5">
               {pretty_error(val.error)}
             </pre>
           )}
           {val.render && (
-            <pre className="break-words whitespace-pre-wrap max-w-[500px] border-vscode-textSeparator-foreground rounded-md border p-0.5">
-              {pretty_stringify(val.render)}
+            <pre className="break-words whitespace-pre-wrap w-full border-vscode-textSeparator-foreground rounded-md border p-0.5 relative bg-[#1E1E1E]">
+              <div className="absolute top-0 right-0 p-1 text-vscode-button-secondaryForeground">
+                <TooltipProvider>
+                  <Tooltip delayDuration={50}>
+                    <TooltipTrigger asChild>
+                      <Toggle
+                        className="hover:bg-vscode-button-secondaryHoverBackground data-[state=on]:bg-vscode-button-secondaryHoverBackground data-[state=on]:text-vscode-button-secondaryForeground px-1 py-1 opacity-60 h-fit bg-vscode-button-secondaryBackground text-vscode-button-secondaryForeground"
+                        pressed={showJson}
+                        onPressedChange={(p) => setShowJson(p)}
+                      >
+                        <Braces className="w-3 h-3" />
+                      </Toggle>
+                    </TooltipTrigger>
+                    <TooltipContent>{showJson ? 'Show Raw LLM Output' : 'Show Parsed Value'}</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+              {!showJson ? (
+                val.raw
+              ) : (
+                <JsonView
+                  enableClipboard={false}
+                  className="bg-[#1E1E1E]"
+                  theme="a11y"
+                  collapseStringsAfterLength={600}
+                  src={parseGlooObject({
+                    value: pretty_stringify(val.render),
+                  })}
+                />
+              )}
             </pre>
           )}
         </div>

@@ -14,5 +14,6 @@ try {
     document.getElementById('root'),
   )
 } catch (error) {
+  console.error(error)
   console.error('REACT error:' + JSON.stringify(error, null, 2))
 }

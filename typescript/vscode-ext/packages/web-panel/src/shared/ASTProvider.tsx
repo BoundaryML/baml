@@ -205,7 +205,7 @@ export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
   }, [])
 
   return (
-    <main className="w-full h-screen px-0 py-2">
+    <main className="w-full h-screen px-0 py-2 overflow-y-clip">
       {selectedState === undefined ? (
         projects.length === 0 ? (
           <div>

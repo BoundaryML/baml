@@ -128,15 +128,14 @@ impl RunState {
         if !additional.is_empty() {
             let mut output = String::new();
             for (spec, log) in additional {
-                output += &format!(
-                    "{} {}{}{} {}\n{}\n",
-                    spec.function.cyan().bold(),
-                    "(impl: ".dimmed(),
-                    spec.r#impl.purple(),
-                    ")".dimmed(),
-                    spec.test,
-                    log
-                );
+                let formatted_header = format!(
+                    "######## {} {}{}{} {} #############",
+                    spec.function, "(impl: ", spec.r#impl, ")", spec.test,
+                )
+                .cyan()
+                .bold();
+
+                output += &format!("{}\n{}\n", formatted_header, log);
             }
             Some(output)
         } else {
@@ -166,23 +165,23 @@ impl RunState {
 
                         match state {
                             Some(TestState::Queued) => {
-                                output += &format!(" {}{}", "○".dimmed(), impl_.purple());
+                                output += &format!(" {}{}", "○".dimmed(), impl_.dimmed());
                             }
                             Some(TestState::Running) => {
-                                output += &format!(" {}{}", "●".dimmed(), impl_.purple());
+                                output += &format!(" {}{}", "●".dimmed(), impl_.dimmed());
                             }
                             Some(TestState::Cancelled) => {
-                                output += &format!(" {}{}", "✕".dimmed(), impl_.purple());
+                                output += &format!(" {}{}", "✕".dimmed(), impl_.dimmed());
                             }
                             Some(TestState::Finished(state)) => {
                                 if state.passed {
-                                    output += &format!(" {}{}", "✔".green(), impl_.purple());
+                                    output += &format!(" {}{}", "✔".green(), impl_.dimmed());
                                 } else {
-                                    output += &format!(" {}{}", "✖".red(), impl_.purple());
+                                    output += &format!(" {}{}", "✖".red(), impl_.dimmed());
                                 }
                             }
                             None => {
-                                output += &format!(" {}", impl_.purple());
+                                output += &format!(" {}", impl_.dimmed());
                             }
                         }
                     }
@@ -194,7 +193,7 @@ impl RunState {
                     "{} {} {}{} {}{} {}\n",
                     function.bold().cyan(),
                     "(impls:".dimmed(),
-                    impls.join(", ").purple(),
+                    impls.join(", ").dimmed(),
                     ")".dimmed(),
                     "(".dimmed(),
                     tests.len() * impls.len(),
@@ -238,10 +237,10 @@ impl RunState {
 
         if let Some(d) = &self.dashboard_url {
             format!(
-                "{}\n{}\n{}\n{}",
-                "------ Dashboard -----".dimmed(),
-                d.yellow(),
-                "----------------------".dimmed(),
+                "\n\n{}\n{}\n{}\n{}\n\n",
+                "####### Dashboard #######".dimmed(),
+                d.white(),
+                "#########################".dimmed(),
                 output
             )
         } else {
@@ -344,19 +343,25 @@ impl RunState {
                                                 format!(
                                                     "{}:\n{}",
                                                     c.role.as_str().yellow().bold(),
-                                                    c.content.yellow()
+                                                    c.content.white()
                                                 )
                                             })
                                             .collect::<Vec<_>>()
                                             .join("\n"),
                                     };
 
+                                    let mut colored_input = input.clone();
+                                    meta.input.prompt.template_args.iter().for_each(|(k, v)| {
+                                        let replacement = format!("{}", v.blue()); // Colorize the replacement text in magenta
+                                        colored_input = colored_input.replace(k, &replacement);
+                                    });
+
                                     let raw_output = match &meta.output {
                                         Some(output) => Some(output.raw_text.clone()),
                                         None => None,
                                     };
 
-                                    Some((input, raw_output))
+                                    Some((colored_input, raw_output))
                                 }) {
                                     Some((llm_prompt, llm_raw_output)) => {
                                         (Some(llm_prompt), llm_raw_output)
@@ -407,17 +412,17 @@ impl RunState {
 
                             let res = match (llm_prompt, llm_raw_output, err, parsed_output) {
                                 (Some(llm_prompt), Some(llm_raw_output), Some(err), _) => vec![
-                                    format!("{}", "Prompt:".dimmed()),
+                                    format!("\n{}", "---- Prompt ---------".dimmed()),
                                     format!("{}", llm_prompt),
-                                    format!("{}", "Raw Response:".dimmed()),
-                                    format!("{}", llm_raw_output.blue()),
-                                    format!("{}", "Error:".dimmed()),
+                                    format!("\n{}", "---- Raw Response ---".dimmed()),
+                                    format!("{}", llm_raw_output.white()),
+                                    format!("{}", "----- Error -----".dimmed()),
                                     format!("{}", err.red()),
                                 ],
                                 (Some(llm_prompt), None, Some(err), _) => vec![
-                                    format!("{}", "Prompt:".dimmed()),
+                                    format!("\n{}", "---- Prompt ---------".dimmed()),
                                     format!("{}", llm_prompt),
-                                    format!("{}", "Error:".dimmed()),
+                                    format!("{}", "----- Error -----".dimmed()),
                                     format!("{}", err.red()),
                                 ],
                                 (
@@ -427,15 +432,15 @@ impl RunState {
                                     Some((output, output_type)),
                                 ) => {
                                     vec![
-                                        format!("{}", "Prompt:".dimmed()),
+                                        format!("\n{}", "------- Prompt ------".yellow()),
                                         format!("{}", llm_prompt),
-                                        format!("{}", "Raw Response:".dimmed()),
-                                        format!("{}", llm_raw_output.blue()),
+                                        format!("\n{}", "---- Raw Response ---".dimmed()),
+                                        format!("{}", llm_raw_output.dimmed()),
                                         format!(
-                                            "{}{}{}",
-                                            "Parsed Response (".dimmed(),
+                                            "\n{}{}{}",
+                                            "----- Parsed Response (".green(),
                                             output_type.green(),
-                                            "):".dimmed()
+                                            ") -----".green()
                                         ),
                                         format!("{}", output.green()),
                                     ]

@@ -32,8 +32,8 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
   })
 
   return (
-    <div className="text-xs rounded-md border-vscode-input-border">
-      <Table>
+    <div className="w-full text-xs rounded-md border-vscode-input-border">
+      <Table className="w-full">
         <TableHeader className="p-0 border-0 gap-x-1">
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow
@@ -41,8 +41,15 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
               className="hover:bg-vscode-list-hoverBackground border-vscode-textSeparator-foreground"
             >
               {headerGroup.headers.map((header) => {
+                if (header.index === 1) {
+                  return (
+                    <TableHead key={header.id} className="w-full pl-2 text-left">
+                      {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                    </TableHead>
+                  )
+                }
                 return (
-                  <TableHead key={header.id} className="pl-2 text-left">
+                  <TableHead key={header.id} className="pl-2 text-left w-fit">
                     {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                   </TableHead>
                 )
@@ -59,7 +66,7 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
                 className="py-1 hover:bg-vscode-list-hoverBackground border-vscode-textSeparator-foreground"
               >
                 {row.getVisibleCells().map((cell) => (
-                  <TableCell className="py-1 pl-2" key={cell.id}>
+                  <TableCell className="py-1 pl-1" key={cell.id}>
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </TableCell>
                 ))}
