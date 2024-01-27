@@ -1,5 +1,6 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { ASTContext } from './ASTProvider'
+import { TestState } from '@baml/common'
 
 type JSONSchema = {
   [key: string]: any
@@ -95,13 +96,11 @@ export function useSelections() {
     return func?.test_cases.find((t) => t.name.value === selectedTestCase) ?? func?.test_cases.at(0)
   }, [func, selectedTestCase])
 
-  const test_result_exit_status = useMemo(() => {
-    if (test_results_raw?.exit_code === undefined) return undefined
-    if (test_results_raw.exit_code === 0 || test_results_raw.exit_code === 1) {
-      return 'COMPLETED'
-    } else {
-      return 'ERROR'
-    }
+  // TODO: we should just publish a global test status instead of relying
+  // on this exit code.
+  const test_result_exit_status: TestState["run_status"] = useMemo(() => {
+    if (!test_results_raw) return "NOT_STARTED";
+    return test_results_raw.run_status;
   }, [test_results_raw, func?.name.value])
   const test_result_url = useMemo(() => {
     if (!test_results_raw) return undefined

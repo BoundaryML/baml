@@ -56,6 +56,7 @@ export class WebPanelView {
     })
 
     testExecutor.setTestStateListener((testResults) => {
+      console.log('test results' + JSON.stringify(testResults, null, 2));
       this._panel.webview.postMessage({
         command: 'test-results',
         content: testResults,
@@ -248,6 +249,10 @@ export class WebPanelView {
             } catch (e: any) {
               console.log(e)
             }
+            return
+          }
+          case 'cancelTestRun': {
+            testExecutor.cancelExistingTestRun()
             return
           }
           case 'removeTest': {

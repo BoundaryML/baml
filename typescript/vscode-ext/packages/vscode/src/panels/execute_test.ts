@@ -54,6 +54,7 @@ class TestState {
     this.test_results = {
       results: [],
       test_url: null,
+      run_status: 'NOT_STARTED',
     }
   }
 
@@ -61,7 +62,16 @@ class TestState {
     this.testStateListener = listener
   }
 
-  public resetTestCases(tests: TestRequest) {
+  public clearTestCases() {
+    this.test_results = {
+      results: [],
+      test_url: null,
+      run_status: 'NOT_STARTED',
+    }
+    this.testStateListener?.(this.test_results)
+  }
+
+  public initializeTestCases(tests: TestRequest) {
     this.test_results = {
       results: tests.functions.flatMap((fn) =>
         fn.tests.flatMap((test) =>
@@ -75,6 +85,9 @@ class TestState {
           })),
         ),
       ),
+      run_status: 'RUNNING',
+
+      exit_code: undefined,
       test_url: null,
     }
     this.testStateListener?.(this.test_results)
@@ -120,8 +133,16 @@ class TestState {
     }
   }
 
-  public setExitCode(code: number | null) {
-    this.test_results.exit_code = code ?? 5
+  public setExitCode(code: number | undefined) {
+    this.test_results.exit_code = code
+    if (code === undefined) {
+      this.test_results.run_status = 'NOT_STARTED'
+    } else if (code === 0 || code === 1) {
+      this.test_results.run_status = 'COMPLETED'
+    } else {
+      this.test_results.run_status = 'ERROR'
+    }
+
     this.testStateListener?.(this.test_results)
   }
 
@@ -140,7 +161,7 @@ class TestState {
   private handleUpdateTestCase(data: UpdateTestCaseEvent) {
     const testResult = this.test_results.results.find((test) => test.fullTestName === data.test_case_arg_name)
 
-    http: if (testResult) {
+    if (testResult) {
       testResult.status = data.status
       if (data.error_data) {
         testResult.output = {
@@ -156,7 +177,7 @@ class TestState {
     const testResult = this.test_results.results.find((test) => test.fullTestName === fullTestName)
     if (testResult && data.event_type === 'func_llm') {
       if (this.test_results.test_url) {
-        http: testResult.url = `${this.test_results.test_url}&s_eid=${data.event_id}&eid=${data.root_event_id}`
+        testResult.url = `${this.test_results.test_url}&s_eid=${data.event_id}&eid=${data.root_event_id}`
       }
       testResult.output = {
         error: data.error?.message ?? testResult.output.error,
@@ -173,6 +194,7 @@ class TestExecutor {
   private server: net.Server | undefined
   private testState: TestState
   private stdoutListener: ((data: string) => void) | undefined = undefined
+  private currentProcess: ReturnType<typeof exec> | undefined = undefined
 
   constructor() {
     this.server = undefined
@@ -240,8 +262,9 @@ class TestExecutor {
     try {
       // root_path is the path to baml_src, so go up one level to get to the root of the project
       console.log(`Running tests in ${root_path}`)
+      await this.cancelExistingTestRun();
       root_path = path.join(root_path, '../')
-      this.testState.resetTestCases(tests)
+      this.testState.initializeTestCases(tests)
 
       for (const fn of tests.functions) {
         for (const test of fn.tests) {
@@ -274,6 +297,7 @@ class TestExecutor {
           CLICOLOR_FORCE: '1',
         },
       })
+      this.currentProcess = cp
 
       cp.stdout?.on('data', (data) => {
         outputChannel.appendLine(data)
@@ -285,8 +309,13 @@ class TestExecutor {
       })
 
       cp.on('exit', (code, signal) => {
-        console.log(`test exit code: ${code}`)
-        this.testState.setExitCode(code ?? (signal ? 3 : 5))
+        console.log(`test exit code: ${code} signal: ${signal}`)
+        // Dont mark it as an error if we killed it ourselves
+        this.testState.setExitCode(code ?? (signal ? 0 : 5))
+        if (code === null && signal === 'SIGTERM') {
+          this.testState.clearTestCases();
+        }
+        this.currentProcess = undefined
       })
 
 
@@ -294,7 +323,39 @@ class TestExecutor {
       console.error(e)
       outputChannel.appendLine(JSON.stringify(e, null, 2))
       this.testState.setExitCode(5)
+      this.currentProcess = undefined
     }
+  }
+
+  async cancelExistingTestRun() {
+    this.testState.clearTestCases();
+    this.testState.setExitCode(undefined);
+    if (!this.currentProcess) {
+      return
+    }
+    console.log("Killing existing process", this.currentProcess?.pid);
+
+    const res = this.currentProcess.kill()
+    if (!res) {
+      console.log("Failed to kill process", this.currentProcess?.pid);
+      vscode.window.showErrorMessage('Failed to kill existing test process')
+    }
+    // do an interval and check for the current process to be undefined and await
+    // The var gets set to undefined in the .on('exit') handler
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        clearInterval(interval);
+        resolve(undefined);
+      }, 10000);
+
+      const interval = setInterval(() => {
+        if (!this.currentProcess) {
+          clearTimeout(timeout);
+          clearInterval(interval);
+          resolve(undefined);
+        }
+      }, 100);
+    });
   }
 
   close() {

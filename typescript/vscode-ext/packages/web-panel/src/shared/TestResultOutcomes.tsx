@@ -78,7 +78,7 @@ const TestResultPanel = () => {
         </VSCodePanelView>
         <VSCodePanelTab id={`test-logs`}>
           <div className="flex flex-row gap-1">
-            {test_result_exit_status === undefined && <VSCodeProgressRing className="h-4" />}
+            {test_result_exit_status === 'RUNNING' && <VSCodeProgressRing className="h-4" />}
             {test_result_exit_status === 'ERROR' && (
               <AlertTriangle className="w-4 h-4 text-vscode-editorWarning-foreground" />
             )}{' '}

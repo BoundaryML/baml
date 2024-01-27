@@ -20,7 +20,7 @@ import {
   titleId,
 } from '@rjsf/utils'
 import validator from '@rjsf/validator-ajv8'
-import { VSCodeButton, VSCodeTextArea, VSCodeTextField } from '@vscode/webview-ui-toolkit/react'
+import { VSCodeButton, VSCodeProgressRing, VSCodeTextArea, VSCodeTextField } from '@vscode/webview-ui-toolkit/react'
 import { Copy, Edit2, FileJson2, Play, PlusIcon, X } from 'lucide-react'
 import { ChangeEvent, FocusEvent, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { ASTContext } from './ASTProvider'
@@ -343,7 +343,7 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
       }
     }
   }
-  const { root_path } = useContext(ASTContext)
+  const { root_path, test_results } = useContext(ASTContext)
 
   return (
     <>
@@ -356,31 +356,40 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
               setFilter((e as React.FormEvent<HTMLInputElement>).currentTarget.value)
             }}
           />
-          <VSCodeButton
-            disabled={test_cases.length === 0}
-            onClick={() => {
-              const runTestRequest: TestRequest = {
-                functions: [
-                  {
-                    name: func.name.value,
-                    tests: test_cases.map((test_case) => ({
-                      name: test_case.name.value,
-                      impls: func.impls.map((i) => i.name.value),
-                    })),
+          {test_results?.run_status === 'RUNNING' ? (
+            <VSCodeButton
+              className="bg-vscode-statusBarItem-errorBackground"
+              onClick={() => vscode.postMessage({ command: 'cancelTestRun' })}
+            >
+              Cancel
+            </VSCodeButton>
+          ) : (
+            <VSCodeButton
+              disabled={test_cases.length === 0}
+              onClick={() => {
+                const runTestRequest: TestRequest = {
+                  functions: [
+                    {
+                      name: func.name.value,
+                      tests: test_cases.map((test_case) => ({
+                        name: test_case.name.value,
+                        impls: func.impls.map((i) => i.name.value),
+                      })),
+                    },
+                  ],
+                }
+                vscode.postMessage({
+                  command: 'runTest',
+                  data: {
+                    root_path,
+                    tests: runTestRequest,
                   },
-                ],
-              }
-              vscode.postMessage({
-                command: 'runTest',
-                data: {
-                  root_path,
-                  tests: runTestRequest,
-                },
-              })
-            }}
-          >
-            Run {filter ? test_cases.length : 'all'} tests
-          </VSCodeButton>
+                })
+              }}
+            >
+              <>Run {filter ? test_cases.length : 'all'} tests</>
+            </VSCodeButton>
+          )}
         </div>
         <div className="flex flex-col py-2 divide-y gap-y-1 divide-vscode-textSeparator-foreground">
           {/* <pre>{JSON.stringify(input_json_schema, null, 2)}</pre> */}
@@ -398,7 +407,7 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
                     variant={'ghost'}
                     size={'icon'}
                     className="p-1 rounded-md w-fit h-fit bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground"
-                    disabled={impl === undefined}
+                    disabled={impl === undefined || test_results?.run_status === 'RUNNING'}
                     onClick={() => {
                       const runTestRequest: TestRequest = {
                         functions: [
