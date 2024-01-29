@@ -96,6 +96,10 @@ function MyBaseInputTemplate(props: BaseInputTemplateProps) {
     [onFocus, id],
   )
 
+  const length = Object.keys(registry.rootSchema?.definitions ?? {}).length
+
+  const isSingleStringField = length === 0 && schema.type === 'string'
+
   const input =
     inputProps.type === 'number' || inputProps.type === 'integer' ? (
       <input
@@ -117,7 +121,7 @@ function MyBaseInputTemplate(props: BaseInputTemplateProps) {
       <textarea
         id={id}
         name={id}
-        rows={3}
+        rows={isSingleStringField ? 25 : 5}
         className="w-[90%] px-1 rounded-sm bg-vscode-input-background text-vscode-input-foreground"
         readOnly={readonly}
         disabled={disabled}

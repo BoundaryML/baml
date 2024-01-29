@@ -11,6 +11,7 @@ import 'react18-json-view/src/style.css'
 import { parseGlooObject } from '../schemaUtils'
 import { Toggle } from '@/components/ui/toggle'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 
 const TestStatusIcon: React.FC<PropsWithChildren<{ testStatus: TestStatus }>> = ({ testStatus, children }) => {
   return (
@@ -54,10 +55,29 @@ export const columns: ColumnDef<TestResult>[] = [
     },
     cell: ({ getValue, row, cell }) => {
       return (
-        <div className="flex flex-row items-center gap-1 text-center w-fit">
-          <div className="">{row.original.testName}</div>
-          <div className="text-xs text-vscode-descriptionForeground">({row.original.implName})</div>
-        </div>
+        <HoverCard openDelay={50} closeDelay={0}>
+          <HoverCardTrigger>
+            <div className="flex flex-row items-center gap-1 text-center w-fit">
+              <div className="underline">{row.original.testName}</div>
+              <div className="text-xs text-vscode-descriptionForeground">({row.original.implName})</div>
+            </div>
+          </HoverCardTrigger>
+          <HoverCardContent
+            side="top"
+            sideOffset={6}
+            className="px-1 min-w-[400px] py-1 break-all border-0 border-none bg-vscode-input-background text-vscode-input-foreground overflow-y-scroll max-h-[500px]"
+          >
+            <JsonView
+              enableClipboard={false}
+              className="bg-[#1E1E1E] "
+              theme="a11y"
+              collapseStringsAfterLength={600}
+              src={parseGlooObject({
+                value: row.original.input,
+              })}
+            />
+          </HoverCardContent>
+        </HoverCard>
       )
     },
     accessorFn: (row) => `${row.testName}-${row.implName}`,

@@ -56,7 +56,7 @@ export class WebPanelView {
     })
 
     testExecutor.setTestStateListener((testResults) => {
-      console.log('test results' + JSON.stringify(testResults, null, 2));
+
       this._panel.webview.postMessage({
         command: 'test-results',
         content: testResults,
@@ -90,6 +90,7 @@ export class WebPanelView {
           // Restrict the webview to only load resources from the `out` and `web-panel/dist` directories
           localResourceRoots: [Uri.joinPath(extensionUri, 'out'), Uri.joinPath(extensionUri, 'web-panel/dist')],
           retainContextWhenHidden: true,
+          enableCommandUris: true,
         },
       )
 
@@ -184,6 +185,19 @@ export class WebPanelView {
             const testRequest: { root_path: string; tests: TestRequest } = message.data
             await testExecutor.runTest(testRequest)
             return
+          }
+          case 'downloadTestResults': {
+            const csvData = message.data;
+            vscode.window.showSaveDialog({
+              filters: {
+                'CSV': ['csv']
+              }
+            }).then((uri) => {
+              if (uri) {
+                vscode.workspace.fs.writeFile(uri, Buffer.from(csvData));
+              }
+            })
+
           }
           case 'saveTest': {
             const saveTestRequest: {
