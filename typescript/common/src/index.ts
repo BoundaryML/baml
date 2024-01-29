@@ -28,6 +28,7 @@ export interface TestResult {
   implName: string
   status: TestStatus
   url?: string
+  input?: string
   output: {
     error?: string
     parsed?: string

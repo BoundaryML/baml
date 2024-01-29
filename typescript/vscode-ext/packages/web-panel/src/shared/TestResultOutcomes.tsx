@@ -3,6 +3,7 @@ import { useSelections } from './hooks'
 import { DataTable } from './TestResults/data-table'
 import { columns } from './TestResults/columns'
 import {
+  VSCodeButton,
   VSCodeLink,
   VSCodePanelTab,
   VSCodePanelView,
@@ -13,8 +14,10 @@ import { useMemo, useState } from 'react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import Link from './Link'
-import { AlertTriangle, ExternalLink, FileWarningIcon } from 'lucide-react'
+import { AlertTriangle, Download, ExternalLink, FileWarningIcon } from 'lucide-react'
 import AnsiText from '@/utils/AnsiText'
+import Papa from 'papaparse'
+import { vscode } from '@/utils/vscode'
 
 const TestResultPanel = () => {
   const { test_results, test_result_url, test_result_exit_status } = useSelections()
@@ -47,50 +50,78 @@ const TestResultPanel = () => {
           </VSCodeLink>
         </div>
       )}
+      <div className="relative flex flex-col w-full h-full">
+        <VSCodePanels
+          activeid={`test-${selected}`}
+          onChange={(e) => {
+            const selected: string | undefined = (e.target as any)?.activetab?.id
+            if (selected && selected.startsWith(`test-`)) {
+              setSelection(selected.split('-', 2)[1])
+            }
+          }}
+          className="h-full"
+        >
+          <VSCodePanelTab id={`test-summary`}>Summary</VSCodePanelTab>
+          <VSCodePanelView id={`view-summary`} className="">
+            <div className="flex flex-col w-full gap-y-1">
+              {test_result_exit_status === 'ERROR' && (
+                <div className="flex flex-row items-center justify-center w-full h-full space-x-2">
+                  <div className="flex flex-col items-center justify-center space-y-2">
+                    <div className="flex flex-row items-center gap-x-2">
+                      <AlertTriangle className="w-4 h-4 text-vscode-editorWarning-foreground" />
+                      <div className="text-xs text-vscode-editorWarning-foreground">Test exited with an error</div>
+                    </div>
 
-      <VSCodePanels
-        activeid={`test-${selected}`}
-        onChange={(e) => {
-          const selected: string | undefined = (e.target as any)?.activetab?.id
-          if (selected && selected.startsWith(`test-`)) {
-            setSelection(selected.split('-', 2)[1])
-          }
-        }}
-        className="h-full"
-      >
-        <VSCodePanelTab id={`test-summary`}>Summary</VSCodePanelTab>
-        <VSCodePanelView id={`view-summary`} className="">
-          <div className="flex flex-col w-full gap-y-2">
-            {test_result_exit_status === 'ERROR' && (
-              <div className="flex flex-row items-center justify-center w-full h-full space-x-2">
-                <div className="flex flex-col items-center justify-center space-y-2">
-                  <div className="flex flex-row items-center gap-x-2">
-                    <AlertTriangle className="w-4 h-4 text-vscode-editorWarning-foreground" />
-                    <div className="text-xs text-vscode-editorWarning-foreground">Test exited with an error</div>
+                    <div className="text-xs font-light">Check the output tab for more details</div>
                   </div>
-
-                  <div className="text-xs font-light">Check the output tab for more details</div>
                 </div>
-              </div>
-            )}
-            <DataTable columns={columns} data={test_results} />
+              )}
+              <DataTable columns={columns} data={test_results} />
+            </div>
+          </VSCodePanelView>
+          <VSCodePanelTab id={`test-logs`}>
+            <div className="flex flex-row gap-1">
+              {test_result_exit_status === 'RUNNING' && <VSCodeProgressRing className="h-4" />}
+              {test_result_exit_status === 'ERROR' && (
+                <AlertTriangle className="w-4 h-4 text-vscode-editorWarning-foreground" />
+              )}{' '}
+              Output
+            </div>
+          </VSCodePanelTab>
+          <VSCodePanelView id={`view-logs`}>
+            <ScrollArea type="always" className="flex w-full h-full pr-3">
+              <TestLogPanel />
+            </ScrollArea>
+          </VSCodePanelView>
+        </VSCodePanels>
+        {test_result_exit_status === 'COMPLETED' || test_result_exit_status === 'ERROR' ? (
+          <div className="absolute right-0 z-20 top-1">
+            <Button
+              className="flex flex-row px-2 py-1 rounded-sm bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground w-fit h-fit whitespace-nowrap gap-x-1"
+              onClick={() => {
+                const test_csv = test_results.map((test) => ({
+                  function_name: test.functionName,
+                  test_name: test.testName,
+                  impl_name: test.implName,
+                  input: test.input,
+                  output_raw: test.output.raw,
+                  output_parsed: test.output.parsed,
+                  output_error: test.output.error,
+                  status: test.status,
+                  url: test.url,
+                }))
+                vscode.postMessage({
+                  command: 'downloadTestResults',
+                  data: Papa.unparse(test_csv),
+                })
+              }}
+            >
+              <Download className="w-4 h-4" />
+              <span className="pl-1 text-xs">CSV</span>
+            </Button>
           </div>
-        </VSCodePanelView>
-        <VSCodePanelTab id={`test-logs`}>
-          <div className="flex flex-row gap-1">
-            {test_result_exit_status === 'RUNNING' && <VSCodeProgressRing className="h-4" />}
-            {test_result_exit_status === 'ERROR' && (
-              <AlertTriangle className="w-4 h-4 text-vscode-editorWarning-foreground" />
-            )}{' '}
-            Output
-          </div>
-        </VSCodePanelTab>
-        <VSCodePanelView id={`view-logs`}>
-          <ScrollArea type="always" className="flex w-full h-full pr-3">
-            <TestLogPanel />
-          </ScrollArea>
-        </VSCodePanelView>
-      </VSCodePanels>
+        ) : null}
+      </div>
     </>
   )
 }
