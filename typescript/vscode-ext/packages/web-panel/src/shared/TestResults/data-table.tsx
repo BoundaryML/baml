@@ -38,7 +38,7 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow
               key={headerGroup.id}
-              className="hover:bg-vscode-list-hoverBackground border-vscode-textSeparator-foreground"
+              className="py-1 hover:bg-vscode-list-hoverBackground border-vscode-textSeparator-foreground"
             >
               {headerGroup.headers.map((header) => {
                 if (header.index === 1) {
