@@ -140,7 +140,7 @@ export const columns: ColumnDef<TestResult & { span?: StringSpan }>[] = [
             </pre>
           )}
           {val.render && (
-            <pre className="break-words whitespace-pre-wrap w-full border-vscode-textSeparator-foreground rounded-md border p-0.5 relative bg-[#1E1E1E]">
+            <pre className="break-words whitespace-pre-wrap w-full border-vscode-textSeparator-foreground rounded-md border p-0.5 relative bg-[#1E1E1E] text-white/90">
               {!showJson ? (
                 val.raw
               ) : (
