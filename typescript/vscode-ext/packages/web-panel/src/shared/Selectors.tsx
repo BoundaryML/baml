@@ -18,8 +18,8 @@ export const FunctionSelector: React.FC = () => {
   const function_names = functions.map((func) => func.name.value)
 
   return (
-    <div className="flex flex-col gap-1 items-start">
-      <div className="flex flex-row gap-1 items-center">
+    <div className="flex flex-col items-start gap-1">
+      <div className="flex flex-row items-center gap-1">
         <ProjectToggle />
 
         <span className="font-light">Function</span>
@@ -43,7 +43,7 @@ export const FunctionSelector: React.FC = () => {
         </VSCodeDropdown>
       </div>
       {func && (
-        <div className="flex flex-row gap-1 items-center">
+        <div className="flex flex-row items-center gap-0 text-xs">
           <Link item={func.name} />(
           {func.input.arg_type === 'positional' ? (
             <div className="flex flex-row gap-1">

@@ -148,17 +148,16 @@ const ImplPanel: React.FC<{ impl: Impl }> = ({ impl }) => {
       </VSCodePanelTab>
       <VSCodePanelView key={`view-${impl.name.value}`} id={`view-${func.name.value}-${impl.name.value}`}>
         <div className="flex flex-col w-full gap-2">
-          <div className="flex flex-row gap-1">
-            <span className="font-light">Client</span>
-            <Link item={impl.client} />
-          </div>
-
           <div className="flex flex-col gap-1">
             <div className="flex flex-row items-center justify-between">
               <span className="flex gap-1">
                 <b>Prompt</b>
                 <Link item={impl.name} display="Edit" />
               </span>
+              <div className="flex flex-row gap-1">
+                {/* <span className="font-light">Client</span> */}
+                <Link item={impl.client} />
+              </div>
             </div>
             <Snippet text={implPrompt} />
           </div>

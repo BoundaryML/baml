@@ -121,7 +121,7 @@ function MyBaseInputTemplate(props: BaseInputTemplateProps) {
       <textarea
         id={id}
         name={id}
-        rows={isSingleStringField ? 25 : 5}
+        rows={isSingleStringField ? 15 : 5}
         className="w-[90%] px-1 rounded-sm bg-vscode-input-background text-vscode-input-foreground"
         readOnly={readonly}
         disabled={disabled}
@@ -354,6 +354,7 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
       <div className="flex flex-row justify-between gap-x-1">
         <VSCodeTextField
           placeholder="Search test cases"
+          className="w-32 shrink"
           value={filter}
           onInput={(e) => {
             setFilter((e as React.FormEvent<HTMLInputElement>).currentTarget.value)
@@ -368,7 +369,8 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
           </VSCodeButton>
         ) : (
           <>
-            <VSCodeButton
+            <Button
+              className="px-1 py-1 text-sm round ed-sm h-fit whitespace-nowrap bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground"
               disabled={test_cases.length === 0}
               onClick={() => {
                 const runTestRequest: TestRequest = {
@@ -391,8 +393,8 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
                 })
               }}
             >
-              <>Run {filter ? test_cases.length : 'all'} tests</>
-            </VSCodeButton>
+              <>Run {filter ? test_cases.length : 'all'}</>
+            </Button>
           </>
         )}
       </div>
@@ -438,58 +440,62 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
                 >
                   <Play size={10} />
                 </Button>
-                <div className="h-[24px] text-center align-middle max-w-[110px] truncate">{test_case.name.value}</div>
-                <div className="flex-row hidden gap-x-1 group-hover:flex ">
-                  <EditTestCaseForm
-                    testCase={test_case}
-                    schema={input_json_schema}
-                    func={func}
-                    getTestParams={getTestParams}
-                  >
-                    <Button
-                      variant={'ghost'}
-                      size="icon"
-                      className="p-1 w-fit h-fit hover:bg-vscode-button-secondaryHoverBackground"
+                {/* IDK why it doesnt truncate. Probably cause of the allotment */}
+                <div className="flex w-full flex-nowrap">
+                  <span className="h-[24px] max-w-[120px] text-center align-middle overflow-hidden flex-1 truncate">
+                    {test_case.name.value}
+                  </span>
+                  <div className="hidden gap-x-1 group-hover:flex">
+                    <EditTestCaseForm
+                      testCase={test_case}
+                      schema={input_json_schema}
+                      func={func}
+                      getTestParams={getTestParams}
                     >
-                      <Edit2 className="w-3 h-3 text-vscode-descriptionForeground" />
-                    </Button>
-                  </EditTestCaseForm>
-                  <Tooltip delayDuration={100}>
-                    <TooltipTrigger asChild>
                       <Button
                         variant={'ghost'}
-                        size={'icon'}
-                        className="p-1 w-fit h-fit text-vscode-descriptionForeground hover:bg-vscode-button-secondaryHoverBackground"
-                        onClick={() => {
-                          vscode.postMessage({ command: 'jumpToFile', data: test_case.name })
-                        }}
+                        size="icon"
+                        className="p-1 w-fit h-fit hover:bg-vscode-button-secondaryHoverBackground"
                       >
-                        <FileJson2 size={14} />
+                        <Edit2 className="w-3 h-3 text-vscode-descriptionForeground" />
                       </Button>
-                    </TooltipTrigger>
-                    <TooltipContent className="flex flex-col gap-y-1">Open test file</TooltipContent>
-                  </Tooltip>
-
-                  <EditTestCaseForm
-                    testCase={test_case}
-                    schema={input_json_schema}
-                    func={func}
-                    getTestParams={getTestParams}
-                    duplicate
-                  >
+                    </EditTestCaseForm>
                     <Tooltip delayDuration={100}>
                       <TooltipTrigger asChild>
                         <Button
                           variant={'ghost'}
-                          size="icon"
-                          className="p-1 w-fit h-fit hover:bg-vscode-button-secondaryHoverBackground"
+                          size={'icon'}
+                          className="p-1 w-fit h-fit text-vscode-descriptionForeground hover:bg-vscode-button-secondaryHoverBackground"
+                          onClick={() => {
+                            vscode.postMessage({ command: 'jumpToFile', data: test_case.name })
+                          }}
                         >
-                          <Copy size={12} />
+                          <FileJson2 size={14} />
                         </Button>
+                      </TooltipTrigger>
+                      <TooltipContent className="flex flex-col gap-y-1">Open test file</TooltipContent>
+                    </Tooltip>
+                    <Tooltip delayDuration={100}>
+                      <TooltipTrigger>
+                        <EditTestCaseForm
+                          testCase={test_case}
+                          schema={input_json_schema}
+                          func={func}
+                          getTestParams={getTestParams}
+                          duplicate
+                        >
+                          <Button
+                            variant={'ghost'}
+                            size="icon"
+                            className="p-1 w-fit h-fit hover:bg-vscode-button-secondaryHoverBackground"
+                          >
+                            <Copy size={12} />
+                          </Button>
+                        </EditTestCaseForm>
                       </TooltipTrigger>
                       <TooltipContent className="flex flex-col gap-y-1">Duplicate</TooltipContent>
                     </Tooltip>
-                  </EditTestCaseForm>
+                  </div>
                 </div>
               </div>
               <Button
@@ -561,7 +567,7 @@ const EditTestCaseForm = ({
       <DialogTrigger asChild={true}>{children}</DialogTrigger>
       <DialogContent className="max-h-screen overflow-y-scroll bg-vscode-editorWidget-background border-vscode-textSeparator-foreground overflow-x-clip">
         <DialogHeader className="flex flex-row items-center gap-x-4">
-          <DialogTitle className="text-xs font-semibold">Edit Test </DialogTitle>
+          <DialogTitle className="text-xs font-semibold">{duplicate ? 'Duplicate test' : 'Edit test'}</DialogTitle>
 
           <div className="flex flex-row items-center pb-1 gap-x-2">
             {testCase === undefined || duplicate ? (

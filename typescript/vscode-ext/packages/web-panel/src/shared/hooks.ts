@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { ASTContext } from './ASTProvider'
-import { TestResult, TestState } from '@baml/common'
+import { StringSpan, TestResult, TestState } from '@baml/common'
 
 type JSONSchema = {
   [key: string]: any
@@ -114,12 +114,14 @@ export function useSelections() {
     }
   }, [test_results_raw, func?.name.value])
 
-  const test_results: TestResult[] | undefined = useMemo(
+  const test_results: (TestResult[] & { span?: StringSpan }) | undefined = useMemo(
     () => {
       return test_results_raw?.results.filter((tr) => tr.functionName == func?.name.value).map((tr) => {
+        const relatedTest = func?.test_cases.find((tc) => tc.name.value == tr.testName);
         return {
           ...tr,
-          input: func?.test_cases.find((tc) => tc.name.value == tr.testName)?.content
+          input: relatedTest?.content,
+          span: relatedTest?.name
         }
       })
     },
