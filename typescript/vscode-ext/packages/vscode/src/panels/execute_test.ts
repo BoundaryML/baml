@@ -137,7 +137,7 @@ class TestState {
     this.test_results.exit_code = code
     if (code === undefined) {
       this.test_results.run_status = 'NOT_STARTED'
-    } else if (code === 0 || code === 1) {
+    } else if (code === 0) {
       this.test_results.run_status = 'COMPLETED'
     } else {
       this.test_results.run_status = 'ERROR'
@@ -266,14 +266,18 @@ class TestExecutor {
       root_path = path.join(root_path, '../')
       this.testState.initializeTestCases(tests)
 
-      for (const fn of tests.functions) {
-        for (const test of fn.tests) {
-          // baml_src/function_name/test_name
-          const fullPath = path.join(root_path, 'baml_src', "__tests__", fn.name, test.name + ".json");
-          console.log(`Creating test file ${fullPath}`)
-          await saveFile(fullPath);
-        }
-      }
+
+      await vscode.commands.executeCommand('workbench.action.files.saveAll');
+      // There is a bug where there are still some .tmp files that make the compiler bug out on `baml build` if we don't wait
+      // a second before running the tests.
+      // This is likely because VSCode adds the save event to the NodeJS event loop, so
+      // we have to wait for the next tick to ensure the files are actually saved.
+      // Awaiting a promise is the easiest way to do this.
+      await new Promise((resolve, reject) => {
+        setTimeout(() => {
+          resolve(undefined);
+        }, 100);
+      });
 
       // Add filters.
       const selectedTests = tests.functions.flatMap((fn) =>

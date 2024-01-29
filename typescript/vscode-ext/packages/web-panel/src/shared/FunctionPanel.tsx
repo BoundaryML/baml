@@ -67,7 +67,7 @@ const FunctionPanel: React.FC = () => {
               </Allotment.Pane>
             )}
             <Allotment.Pane className="pl-2 pr-0.5" minSize={200} visible={showTests}>
-              <div className="h-full ">
+              <div className="w-full h-full overflow-auto">
                 <ScrollArea type="always" className="flex w-full h-full pr-3">
                   <TestCasePanel func={func} />
                 </ScrollArea>
