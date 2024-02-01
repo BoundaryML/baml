@@ -37,7 +37,7 @@
   ],
   "topbarCtaButton": {
     "type": "github",
-    "url": "https://github.com/gloohq/baml"
+    "url": "https://github.com/boundaryml/baml"
   },
   "tabs": [
     {
@@ -61,6 +61,10 @@
     {
       "group": "Quickstart",
       "pages": ["v3/home/installation"]
+    },
+    {
+      "group": "Comparisons",
+      "pages": ["v3/home/comparisons/marvin", "v3/home/comparisons/pydantic"]
     },
 
     {

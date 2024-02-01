@@ -1,0 +1,133 @@
+---
+title: Comparing Marvin
+---
+
+[Marvin](https://github.com/PrefectHQ/marvin) lets developers do extraction or classification tasks in Python as shown below (TypeScript is not supported):
+
+
+```python
+import pydantic
+
+class Location(pydantic.BaseModel):
+    city: str
+    state: str
+
+marvin.extract("I moved from NY to CHI", target=Location)
+```
+
+You can also provide instructions:
+```python
+marvin.extract(
+    "I paid $10 for 3 tacos and got a dollar and 25 cents back.",
+    target=float,
+    instructions="Only extract money"
+)
+
+#  [10.0, 1.25]
+```
+or using enums to classify
+```python
+from enum import Enum
+import marvin
+
+class RequestType(Enum):
+    SUPPORT = "support request"
+    ACCOUNT = "account issue"
+    INQUIRY = "general inquiry"
+
+request = marvin.classify("Reset my password", RequestType)
+assert request == RequestType.ACCOUNT
+```
+
+
+For enum classification, you can add more instructions to each enum, but then you don't get fully typed outputs, nor can reuse the enum in your own code. You're back to working with raw strings.
+
+```python
+# Classifying a task based on project specifications
+project_specs = {
+    "Frontend": "Tasks involving UI design, CSS, and JavaScript.",
+    "Backend": "Tasks related to server, database, and application logic.",
+    "DevOps": "Tasks involving deployment, CI/CD, and server maintenance."
+}
+
+task_description = "Set up the server for the new application."
+
+task_category = marvin.classify(
+    task_description,
+    labels=list(project_specs.keys()),
+    instructions="Match the task to the project category based on the provided specifications."
+)
+assert task_category == "Backend"
+```
+
+Marvin has some inherent limitations for example:
+1. How to use a different model?
+2. What is the full prompt? Where does it live? What if I want to change it because it doesn't work well for my use-case? How many tokens is it?
+3. How do I test this function?
+4. How do I visualize results over time in production?
+
+
+### Using BAML
+Here is the BAML equivalent of this classification task based off the prompt Marvin uses under-the-hood. Note how the prompt becomes transparent to you using BAML. You can easily make it more complex or simpler depending on the model.
+
+```rust
+enum RequestType {
+  SUPPORT @alias("support request")
+  ACCOUNT @alias("account issue") @description("A detailed description")
+  INQUIRY @alias("general inquiry")
+}
+
+function ClassifyRequest {
+  input string
+  output RequestType
+}
+
+impl<llm, ClassifyRequest> {
+  client GPT4 // choose even open source models
+  prompt #"
+    You are an expert classifier that always maintains as much semantic meaning
+    as possible when labeling text. Classify the provided data,
+    text, or information as one of the provided labels:
+
+    TEXT:
+    ---
+    Reset my password
+    ---
+
+    LABELS:
+    {#print_enum(RequestType)}
+
+    The best label for the text is:
+  "#
+}
+```
+And you can call this function in your code
+```python
+from baml_client import baml as b
+
+...
+requestType = await b.ClassifyRequest("Reset my password")
+# fully typed output
+assert requestType == RequestType.ACCOUNT
+```
+
+The prompt string may be more wordy, but with BAML you now have
+1. Fully typed responses, guaranteed
+1. Full transparency and flexibility of the prompt string
+1. Full freedom for what model to use
+1. Helper functions to manipulate types in prompts (print_enum)
+1. Testing capabilities using the VSCode playground
+1. Analytics in the Boundary Dashboard
+1. Support for TypeScript
+1. A better understanding of how prompt engineering works
+
+
+Marvin was a big source of inspiration for us -- their approach is simple and elegant. We recommend checking out Marvin if you're just starting out with prompt engineering or want to do a one-off simple task in Python. But if you'd like a whole added set of features, we'd love for you to give BAML a try and let us know what you think.
+
+### Limitations of BAML
+
+BAML does have some limitations we are continuously working on. Here are a few of them:
+1. It is a new language. However, it is fully open source and getting started takes less than 10 minutes. We are on-call 24/7 to help with any issues (and even provide prompt engineering tips)
+1. Developing requires VSCode. You _could_ use vim and we have workarounds but we don't recommend it.
+1. Explicitly defining system / and user prompts. We have worked with many customers across healthcare and finance and have not seen any issues but we will support this soon.
+1. BAML does not support images. Until this is available you can definitely use BAML alongside other frameworks.
