@@ -6,9 +6,9 @@
     </picture>
   </a>
   <h1>BAML</h1>
-  <h2>A programming language to build type-safe natural language Functions<h2>
+  <h2>A programming language to get structured data from LLMs<h2>
   <a href="https://discord.gg/ENtBB6kkXH"><img src="https://img.shields.io/discord/1119368998161752075.svg?logo=discord" /></a>
-  <a href="https://twitter.com/intent/follow?screen_name=tryGloo"><img src="https://img.shields.io/twitter/follow/tryGloo?style=social"></a>
+  <a href="https://twitter.com/intent/follow?screen_name=boundaryml"><img src="https://img.shields.io/twitter/follow/boundaryml?style=social"></a>
   <!-- <a href="https://docs.boundaryml.com"><img src="https://img.shields.io/badge/documentation-gloo-brightgreen.svg"></a> -->
   <br /> 
   <a href="https://docs.boundaryml.com">Documentation</a>
@@ -16,59 +16,20 @@
    <h4>Made by Boundary (formerly Gloo)</h4>
 </div>
 
-The Boundary Toolchain is a suite of tools that enable test-driven AI development using strongly typed function interfaces.
+Most AI engineers use LLMs to get structured outputs (e.g. a json schema) from unstructured inputs (strings). For example, to extract a resume from a chunk of text.
 
-## Our Inspiration
-
-The first problem LLM developers had to solve was strings. In the LLM world, everything is a string and that sucks.
-
-Strongly-typed systems are more robust and easier to maintain.
-
-For example, Microsoft created TypeChat (7.1k stars) to get structured outputs out of LLMs. [See example](https://github.com/microsoft/TypeChat/blob/main/examples/sentiment/src/main.ts).
-
-A python framework, [Marvin](https://github.com/PrefectHQ/marvin) (4.2k stars), also helped developers declare structured AI interfaces using their `@ai_fn` decorator. Under the hood, it calls openai for you. It's really elegant, as seen below!
-
-```python
-from typing_extensions import TypedDict
-from marvin import ai_fn
-
-class DetailedSentiment(TypedDict):
-    """A detailed sentiment analysis result.
-
-    - `sentiment_score` is a number between 1 (positive) and -1 (negative)
-    - `summary_in_a_word` is a one-word summary of the general sentiment
-    """
-    sentiment_score: float
-    summary_in_a_word: str
-
-@ai_fn
-def get_detailed_sentiment(text: str) -> DetailedSentiment:
-    """What do you think the sentiment of `text` is?"""
-
-get_detailed_sentiment("I'ma Mario, and I'ma gonna wiiiiin!")
-# {'sentiment_score': 0.8, 'summary_in_a_word': 'energetic'}
-```
-
-## But, types are not all you need
-
-Again, type-safety is amazing. Providing guarantees on the output of the LLM helps a lot, but we think both of these didn’t go far enough. They left a few questions unanswered:
-
-1. **What is the full prompt?** _You can’t see it until you run the code with debug settings. Does updating the library break me?_
-2. **How do you test?** _Do you copy pasting prompts and json blobs into OpenAI’s playground or into boilerplate pytest code?_
-3. **How do you fail-over** to Anthropic when GPT4 goes down?
-4. **How do you test against that other LLMs?** _Copy and paste or do you build an abstraction layer?_
-
-Answering these questions requires more than just a python library.
+Existing LLM python libraries aren't powerful enough for structured prompting nor do they have easy testing capabilities ([see our comparisons with other frameworks, like Pydantic](https://docs.boundaryml.com/v3/home/comparisons/pydantic)) -- so we decided to build a compiler.
 
 ## Introducing BAML + The first VSCode LLM Playground
 
-BAML is a lightweight programming language to define AI function interfaces, with a native VSCode extension. BAML = Basically a Made-Up Language.
+**BAML** (Basically, A Made-Up Language) is a lightweight programming language to define AI functions with structured inputs and outputs using natural language.
 
-Watch this 1-min video on how you can create and test AI functions without ever leaving VSCode.
+The **BAML VSCode Playground** allows you to test prompts instantly with any LLM, without ever leaving VSCode.
+<img src="docs/images/v3/testing_2.gif" />
 
 <figure class="table w-full m-0 text-center image">
     <video
-        style="max-width: 80%; margin: auto;"
+        style="max-width: 90%; margin: auto;"
         autoplay loop muted playsinline
         src="https://github.com/BoundaryML/baml/assets/5353992/4f221238-f0a0-4316-be9d-eb6e17377704"
     ></video>
@@ -76,21 +37,38 @@ Watch this 1-min video on how you can create and test AI functions without ever 
 </figure>
 
 [Alt video link](https://www.youtube.com/watch?v=dpEvGrVJJng)
+Here’s a `.baml` AI function:
 
-Here’s what a `.baml` AI function looks like (watch the video to see the prompt):
-
-```rust
+```rust example.baml
 // example.baml
-function GetDetailedSentiment {
-    input string
-    output DetailedSentiment
+class Resume {
+  name string
+  skills string[]
 }
 
-class DetailedSentiment {
-    sentiment_score float
-    summary_in_a_word string
+function ExtractResume {
+  input (resume_text: string)
+  output Resume[]
+}
+
+impl<llm, ExtractResume> version1 {
+  client GPT4Client // client definition not shown
+  prompt #"
+    Parse the following resume and return a structured representation of the data in the schema below.
+
+    Resume:
+    ---
+    {#input.resume_text}
+    ---
+    Output in this JSON format:
+    {#print_type(output)}
+
+    Output JSON:
+  "#
 }
 ```
+
+(We have better syntax highlighting in VSCode)
 
 **BAML compiles to fully typed Python and TypeScript**. No matter how you change the prompt, or the LLM model, or fail-overs, the python code doesn’t change — unless you change your AI function’s signature.
 
@@ -99,16 +77,15 @@ class DetailedSentiment {
 from baml_client import baml as b
 
 async def main():
-    message = "I'ma Mario, and I'ma gonna wiiiiin!"
+  resume = await b.ExtractResume(resume_text="""John Doe
+Python, Rust
+University of California, Berkeley, B.S.
+in Computer Science, 2020""")
 
-    # Your AI function defined in .baml files
-    response = await b.GetDetailedSentiment(message)
-
-    # Response is automatically strongly typed and
-    # works with auto complete!
-    print(f"Score: {response.sentiment_score}")
-    print(f"Summary: {response.summary_in_a_word}")
+  assert resume.name == "John Doe"
 ```
+
+BAML can be deployed to any container, with only a single package dependency required (`e.g. pip install baml`).
 
 <figure>
   <img src="docs/images/v3/baml_playground.png" width="100% alt="BAML Playground" />
@@ -120,7 +97,7 @@ async def main():
 
 Start by [installing BAML](https://docs.boundaryml.com/v3/home/installation) and reading our [Hello World Tutorial](https://docs.boundaryml.com/v3/guides/hello_world/level0).
 
-Learning a new language seems daunting, but it takes < 10 minutes to get started.
+Learning a new language may seem daunting, but it takes < 10 minutes to get started.
 
 The VSCode extension provides auto-compiling on save, a realtime preview of the full prompt, syntax highlighting and great errors — every syntax error recommends a fix.
 
