@@ -39,7 +39,7 @@ The **BAML VSCode Playground** allows you to test prompts instantly with any LLM
 [Alt video link](https://www.youtube.com/watch?v=dpEvGrVJJng)
 Here’s a `.baml` AI function:
 
-```rust example.baml
+```rust
 // example.baml
 class Resume {
   name string
@@ -54,16 +54,7 @@ function ExtractResume {
 impl<llm, ExtractResume> version1 {
   client GPT4Client // client definition not shown
   prompt #"
-    Parse the following resume and return a structured representation of the data in the schema below.
-
-    Resume:
-    ---
-    {#input.resume_text}
-    ---
-    Output in this JSON format:
-    {#print_type(output)}
-
-    Output JSON:
+    (see the syntax highlighted prompt in the video)
   "#
 }
 ```
