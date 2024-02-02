@@ -55,9 +55,7 @@ class OpenAICompletionProvider(LLMProvider):
         pass
 
     async def _run(self, prompt: str) -> LLMResponse:
-        response: Completion = await self._client.completions.create(
-            prompt=prompt, **self.__kwargs
-        )
+        response: Completion = await self._client.completions.create(prompt=prompt, **self.__kwargs)  # type: ignore
         choice = response.choices[0]
         if not choice:
             raise ValueError(
