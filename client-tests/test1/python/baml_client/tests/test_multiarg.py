@@ -21,7 +21,7 @@ async def test_vital_coral(MultiArgImpl: IMultiArg):
             return item
         return dumps(item)
 
-    case = {"convo":{"thread":{"thread":[]},"generated_response":"sefsefsfsdfs"},"thing":"asdfasdfs"}
+    case = {"convo": {"thread": {"thread": [], }, "generated_response": "sefsefsfsdfs", }, "thing": "asdfasdfs", }
     deserializer_convo = Deserializer[ProposedMessage](ProposedMessage) # type: ignore
     convo = deserializer_convo.from_string(to_str(case["convo"]))
     deserializer_thing = Deserializer[str](str) # type: ignore

@@ -33,7 +33,6 @@ async def test_logic() -> None:
         ProposedMessage(thread=Conversation(thread=[]), generated_response="test")
     )
     print(result)
-    raise Exception("asdf")
 
 
 # @baml.MaybePolishText.test
