@@ -62,8 +62,14 @@ __deserializer.overload("ImprovedResponse", {"ShouldImprove": "should_improve"})
 
 
 
-@BAMLMaybePolishText.register_impl("v2")
 async def v2(arg: ProposedMessage, /) -> ImprovedResponse:
     response = await AZURE_GPT4.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
     deserialized = __deserializer.from_string(response.generated)
     return deserialized
+
+async def v2_stream(arg: ProposedMessage, /, __onstream__) -> ImprovedResponse:
+    response = await AZURE_GPT4.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
+    deserialized = __deserializer.from_string(response.generated)
+    return deserialized
+
+BAMLMaybePolishText.register_impl("v2")(v2, v2_stream)

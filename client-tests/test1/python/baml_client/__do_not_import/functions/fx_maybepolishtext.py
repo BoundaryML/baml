@@ -15,7 +15,7 @@ from ..types.enums.enm_messagesender import MessageSender
 from ..types.enums.enm_sentiment import Sentiment
 from baml_lib._impl.functions import BaseBAMLFunction
 from typing import Protocol, runtime_checkable
-
+from baml_lib._impl.functions import OnStreamCallable
 
 IMaybePolishTextOutput = ImprovedResponse
 
@@ -31,9 +31,12 @@ class IMaybePolishText(Protocol):
         ImprovedResponse
     """
 
-    async def __call__(self, arg: ProposedMessage, /) -> ImprovedResponse:
+    async def __call__(self, arg: ProposedMessage, thing: str, /) -> ImprovedResponse:
         ...
 
+    
+    async def stream(self, arg: ProposedMessage, __onstream__: OnStreamCallable) -> ImprovedResponse:
+        ...
 
 class IBAMLMaybePolishText(BaseBAMLFunction[ImprovedResponse]):
     def __init__(self) -> None:
@@ -45,6 +48,9 @@ class IBAMLMaybePolishText(BaseBAMLFunction[ImprovedResponse]):
 
     async def __call__(self, *args, **kwargs) -> ImprovedResponse:
         return await self.get_impl("v1").run(*args, **kwargs)
+    
+    async def stream(self, *args, __onstream__, **kwargs) -> ImprovedResponse:
+        return await self.get_impl("v1").stream(*args, __onstream__=__onstream__, **kwargs)
 
 BAMLMaybePolishText = IBAMLMaybePolishText()
 

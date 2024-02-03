@@ -14,9 +14,10 @@ from ..types.classes.cls_proposedmessage import ProposedMessage
 from ..types.enums.enm_messagesender import MessageSender
 from ..types.enums.enm_sentiment import Sentiment
 from typing import Protocol, runtime_checkable
-
+from baml_lib._impl.functions import OnStreamCallable
 
 import typing
+from typing import Callable, Protocol, Awaitable
 
 import pytest
 from contextlib import contextmanager
@@ -45,18 +46,44 @@ class IMaybePolishText(Protocol):
     async def __call__(self, arg: ProposedMessage, /) -> ImprovedResponse:
         ...
 
+   
+
+@runtime_checkable
+class IMaybePolishTextStream(Protocol):
+    """
+    This is the interface for a function.
+
+    Args:
+        arg: ProposedMessage
+        __onstream__: OnStreamCallable
+
+    Returns:
+        None
+    """
+
+    async def __call__(self, arg: ProposedMessage, /, __onstream__: OnStreamCallable) -> ImprovedResponse:
+        ...
 
 class BAMLMaybePolishTextImpl:
     async def run(self, arg: ProposedMessage, /) -> ImprovedResponse:
+        ...
+    
+    async def stream(self, arg: ProposedMessage, /, __onstream__: OnStreamCallable) -> None:
         ...
 
 class IBAMLMaybePolishText:
     def register_impl(
         self, name: ImplName
-    ) -> typing.Callable[[IMaybePolishText], IMaybePolishText]:
+    ) -> typing.Callable[
+        [IMaybePolishText, IMaybePolishTextStream], 
+        None
+    ]:
         ...
 
     async def __call__(self, arg: ProposedMessage, /) -> ImprovedResponse:
+        ...
+
+    async def stream(self, arg: ProposedMessage, /, __onstream__: OnStreamCallable) -> ImprovedResponse:
         ...
 
     def get_impl(self, name: ImplName) -> BAMLMaybePolishTextImpl:

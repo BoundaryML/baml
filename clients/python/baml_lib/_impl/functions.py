@@ -9,7 +9,7 @@ import inspect
 import types
 import typing
 from unittest import mock
-
+from typing import Callable, Tuple, Awaitable, Any, Generic, Dict
 import pytest
 
 from contextlib import contextmanager
@@ -45,6 +45,8 @@ def __parse_arg(arg: typing.Any, t: typing.Type[T], _default: T) -> T:
 
 RET = typing.TypeVar("RET", covariant=True)
 
+OnStreamCallable = Callable[[str], None]  # Define __onstream__ callable type
+
 
 class CB(typing.Generic[RET], typing.Protocol):
     """
@@ -53,8 +55,7 @@ class CB(typing.Generic[RET], typing.Protocol):
 
     def __call__(
         self, *args: typing.Any, **kwargs: typing.Any
-    ) -> typing.Awaitable[RET]:
-        ...
+    ) -> typing.Awaitable[RET]: ...
 
 
 class BAMLImpl(typing.Generic[RET]):
@@ -63,41 +64,45 @@ class BAMLImpl(typing.Generic[RET]):
     """
 
     __cb: CB[RET]
+    __stream_cb: CB[RET]
 
-    def __init__(self, cb: CB[RET]) -> None:
+    def __init__(self, cb: CB[RET], stream_cb: CB[RET]) -> None:
         """
-        Initializes a BAML implementation.
+        Initializes a BAML implementation with separate callbacks for regular and stream operations.
 
         Args:
-            cb: The callable object to use for the implementation.
+            cb: The callable object to use for the non-streaming implementation.
+            stream_cb: The callable object to use for the streaming implementation.
         """
         self.__cb = trace(cb)
+        self.__stream_cb = trace(stream_cb)
 
-    async def run(self, *args: typing.Any, **kwargs: typing.Any) -> RET:
+    async def run(self, *args: Any, **kwargs: Any) -> RET:
         """
-        Runs the BAML implementation.
+        Runs the BAML implementation for non-streaming operations.
 
         Args:
             *args: The arguments to pass to the callable object.
-            **kwargs: The arguments to pass to the callable object.
+            **kwargs: The keyword arguments to pass to the callable object.
 
         Returns:
-            The result of the callable object.
+            The result of the callable object for non-streaming operations.
         """
         return await self.__cb(*args, **kwargs)
 
-    async def stream(self, *args: typing.Any, **kwargs: typing.Any) -> RET:
+    async def stream(self, *args: Any, **kwargs: Any) -> RET:
         """
         Streams the BAML implementation.
 
         Args:
             *args: The arguments to pass to the callable object.
-            **kwargs: The arguments to pass to the callable object.
+            **kwargs: The keyword arguments to pass to the callable object.
 
         Returns:
-            The result of the callable object.
+            The result of the callable object for streaming operations.
         """
-        return await self.__cb(*args, **kwargs)
+        assert self.__stream_cb is not None, "Stream callback not implemented."
+        return await self.__stream_cb(*args, **kwargs)
 
 
 class BaseBAMLFunction(typing.Generic[RET]):
@@ -105,7 +110,7 @@ class BaseBAMLFunction(typing.Generic[RET]):
     Base class for a BAML function.
     """
 
-    __impls: typing.Dict[str, BAMLImpl[RET]]
+    __impls: Dict[str, BAMLImpl[RET]]
 
     def __init__(
         self, name: str, interface: typing.Any, impl_names: typing.List[str]
@@ -123,9 +128,6 @@ class BaseBAMLFunction(typing.Generic[RET]):
         self.__interface = interface
 
     def debug_validate(self) -> None:
-        """
-        Validates the BAML function.
-        """
         missing_impls = set(self.__impl_names) - set(self.__impls.keys())
         assert (
             len(missing_impls) == 0
@@ -133,7 +135,7 @@ class BaseBAMLFunction(typing.Generic[RET]):
         for impl in self.__impls.values():
             assert isinstance(impl, BAMLImpl), f"Invalid impl: {impl}"
 
-    def register_impl(self, name: str) -> typing.Callable[[CB[RET]], None]:
+    def register_impl(self, name: str) -> Callable[[CB[RET], CB[RET]], None]:
         """
         Registers an implementation for the BAML function.
 
@@ -150,39 +152,40 @@ class BaseBAMLFunction(typing.Generic[RET]):
             name in self.__impl_names
         ), f"Unknown impl: {self.__name}:{name}. Valid impl names: {' '.join(self.__impl_names)}"
 
-        def decorator(cb: CB[RET]) -> None:
-            # Runtime check
-            sig = inspect.signature(cb)
-            expected_sig = inspect.signature(self.__interface.__call__)
-            sig_params = list(sig.parameters.values())
-            expected_sig_params = list(expected_sig.parameters.values())
-            if expected_sig_params and expected_sig_params[0].name == "self":
-                expected_sig_params = expected_sig_params[1:]
-            assert (
-                sig_params == expected_sig_params
-            ), f"{self.name} {sig} does not match expected signature {expected_sig}"
+        def decorator(cb: CB[RET], stream_cb: CB[RET]) -> None:
+            for run_impl_fn in (cb, stream_cb):
+                # Runtime check
+                sig = inspect.signature(run_impl_fn)
+                expected_sig = inspect.signature(self.__interface.__call__)
+                sig_params = list(sig.parameters.values())
+                expected_sig_params = list(expected_sig.parameters.values())
+                if expected_sig_params and expected_sig_params[0].name == "self":
+                    expected_sig_params = expected_sig_params[1:]
+                assert (
+                    sig_params == expected_sig_params
+                ), f"{self.name} {sig} does not match expected signature {expected_sig}"
 
-            cb.__qualname__ = f"{self.__name}[impl:{cb.__qualname__}]"  # type: ignore
+                run_impl_fn.__qualname__ = f"{self.__name}[impl:{run_impl_fn.__qualname__}]"  # type: ignore
 
-            if asyncio.iscoroutinefunction(cb):
+                if asyncio.iscoroutinefunction(run_impl_fn):
 
-                @functools.wraps(cb)
-                async def wrapper(
-                    *args: typing.Any, **kwargs: typing.Any
-                ) -> typing.Any:
-                    create_event("variant", {"name": name})
-                    return await cb(*args, **kwargs)
+                    @functools.wraps(run_impl_fn)
+                    async def wrapper(
+                        *args: typing.Any, **kwargs: typing.Any
+                    ) -> typing.Any:
+                        create_event("variant", {"name": name})
+                        return await run_impl_fn(*args, **kwargs)
 
-            else:
+                else:
 
-                @functools.wraps(cb)
-                def wrapper(*args: typing.Any, **kwargs: typing.Any) -> typing.Any:
-                    create_event("variant", {"name": name})
-                    return cb(*args, **kwargs)
+                    @functools.wraps(run_impl_fn)
+                    def wrapper(*args: typing.Any, **kwargs: typing.Any) -> typing.Any:
+                        create_event("variant", {"name": name})
+                        return run_impl_fn(*args, **kwargs)
 
-            wrapper.__name__ = self.__name
+                wrapper.__name__ = self.__name
 
-            self.__impls[name] = BAMLImpl(wrapper)
+            self.__impls[name] = BAMLImpl(cb, stream_cb)
 
         return decorator
 
