@@ -15,6 +15,7 @@ from baml_core.provider_manager import (
 @typing.final
 class OpenAICompletionProvider(LLMProvider):
     __kwargs: typing.Dict[str, typing.Any]
+    _client: AsyncClient
 
     def __init__(
         self, *, options: typing.Dict[str, typing.Any], **kwargs: typing.Any

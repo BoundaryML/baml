@@ -167,6 +167,54 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
         return await self._run_chat_internal(*messages)
 
     #
+    # Public stream methods
+    #
+    # @typing.final
+    # @typechecked
+    # async def stream_run_chat_template(
+    #     self,
+    #     *message_templates: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]],
+    #     replacers: typing.Iterable[str],
+    #     params: typing.Dict[str, typing.Any],
+    #     on_stream: typing.Callable[[LLMResponse], None],
+    # ) -> LLMResponse:
+    #     return await self._stream_run_chat_template_internal(
+    #         *message_templates,
+    #         replacers=replacers,
+    #         params=params,
+    #         on_stream=on_stream,
+    #     )
+
+    # @typing.final
+    # @typechecked
+    # async def stream_run_prompt_template(
+    #     self,
+    #     *,
+    #     template: str,
+    #     replacers: typing.Iterable[str],
+    #     params: typing.Dict[str, typing.Any],
+    #     on_stream: typing.Callable[[LLMResponse], None],
+    # ) -> LLMResponse:
+    #     return await self._stream_run_prompt_template_internal(
+    #         template=template,
+    #         replacers=replacers,
+    #         params=params,
+    #         on_stream=on_stream,
+    #     )
+
+    # @typing.final
+    # @typechecked
+    # async def stream_run_chat(
+    #     self,
+    #     *messages: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]],
+    #     on_stream: typing.Callable[[LLMResponse], None],
+    # ) -> LLMResponse:
+    #     return await self._stream_run_chat_internal(
+    #         *messages,
+    #         on_stream=on_stream,
+    #     )
+
+    #
     # Internal API
     #
     @abc.abstractmethod
@@ -197,6 +245,36 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
         params: typing.Dict[str, typing.Any],
     ) -> LLMResponse:
         pass
+
+    ## Internal stream methods
+    # @abc.abstractmethod
+    # async def _stream_run_chat_template_internal(
+    #     self,
+    #     *message_templates: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]],
+    #     replacers: typing.Iterable[str],
+    #     params: typing.Dict[str, typing.Any],
+    #     on_stream: typing.Callable[[LLMResponse], None],
+    # ) -> LLMResponse:
+    #     pass
+
+    # @abc.abstractmethod
+    # async def _stream_run_prompt_template_internal(
+    #     self,
+    #     *,
+    #     template: str,
+    #     replacers: typing.Iterable[str],
+    #     params: typing.Dict[str, typing.Any],
+    #     on_stream: typing.Callable[[LLMResponse], None],
+    # ) -> LLMResponse:
+    #     pass
+
+    # @abc.abstractmethod
+    # async def _stream_run_chat_internal(
+    #     self,
+    #     *messages: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]],
+    #     on_stream: typing.Callable[[LLMResponse], None],
+    # ) -> LLMResponse:
+    #     pass
 
     @typing.final
     def validate(self) -> None:
@@ -252,9 +330,9 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
                 "model_name": response.mdl_name,
                 "meta": json.dumps(
                     response.meta,
-                    default=lambda x: x.model_dump()
-                    if isinstance(x, BaseModel)
-                    else str(x),
+                    default=lambda x: (
+                        x.model_dump() if isinstance(x, BaseModel) else str(x)
+                    ),
                 ),
             },
         )
@@ -291,205 +369,3 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
             self._end_run(reply)
             return reply
         return None
-
-
-def default_chat_to_prompt(messages: typing.List[LLMChatMessage]) -> str:
-    return "\n".join(
-        [
-            msg["content"]
-            for msg in messages
-            if isinstance(msg, dict) and "content" in msg
-        ]
-    )
-
-
-class LLMProvider(AbstractLLMProvider):
-    @typechecked
-    def __init__(
-        self,
-        *,
-        chat_to_prompt: typing.Callable[
-            [typing.List[LLMChatMessage]], str
-        ] = default_chat_to_prompt,
-        **kwargs: typing.Any,
-    ) -> None:
-        super().__init__(**kwargs)
-        self.__chat_to_prompt = chat_to_prompt
-
-    @typing.final
-    @typechecked
-    async def _run_prompt_template_internal(
-        self,
-        *,
-        template: str,
-        replacers: typing.Iterable[str],
-        params: typing.Dict[str, typing.Any],
-    ) -> LLMResponse:
-        updates = {k: k.format(**params) for k in replacers}
-        create_event(
-            "llm_prompt_template",
-            {
-                "prompt": template,
-                "provider": self.provider,
-                "template_vars": json.dumps(updates),
-            },
-        )
-        if cached := self._check_cache(prompt=template, prompt_vars=updates):
-            return cached
-        prompt = _update_template_with_vars(template=template, updates=updates)
-        try:
-            return await self.__run(prompt)
-        except Exception as e:
-            self._raise_error(e)
-
-    @typing.final
-    @typechecked
-    async def _run_chat_template_internal(
-        self,
-        *message_templates: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]],
-        replacers: typing.Iterable[str],
-        params: typing.Dict[str, typing.Any],
-    ) -> LLMResponse:
-        if len(message_templates) == 1 and isinstance(message_templates[0], list):
-            chats = message_templates[0]
-        else:
-            chats = typing.cast(typing.List[LLMChatMessage], message_templates)
-        return await self._run_prompt_template_internal(
-            template=self.__chat_to_prompt(chats),
-            replacers=replacers,
-            params=params,
-        )
-
-    @typing.final
-    @typechecked
-    async def _run_prompt_internal(self, prompt: str) -> LLMResponse:
-        if cached := self._check_cache(prompt=prompt, prompt_vars={}):
-            return cached
-
-        try:
-            return await self.__run(prompt)
-        except Exception as e:
-            self._raise_error(e)
-
-    @typing.final
-    @typechecked
-    async def _run_chat_internal(
-        self, *messages: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]]
-    ) -> LLMResponse:
-        if len(messages) == 1 and isinstance(messages[0], list):
-            chats = messages[0]
-        else:
-            chats = typing.cast(typing.List[LLMChatMessage], messages)
-        return await self._run_prompt_internal(self.__chat_to_prompt(chats))
-
-    @typing.final
-    async def __run(self, prompt: str) -> LLMResponse:
-        self._start_run(prompt)
-        response = await self._run(prompt)
-        self._end_run(response)
-        return response
-
-    @abc.abstractmethod
-    async def _run(self, prompt: str) -> LLMResponse:
-        raise NotImplementedError
-
-
-class LLMChatProvider(AbstractLLMProvider):
-    @typechecked
-    def __init__(
-        self,
-        *,
-        prompt_to_chat: typing.Callable[[str], LLMChatMessage],
-        **kwargs: typing.Any,
-    ) -> None:
-        super().__init__(**kwargs)
-        self.__prompt_to_chat = prompt_to_chat
-
-    @typing.final
-    @typechecked
-    async def _run_prompt_template_internal(
-        self,
-        *,
-        template: str,
-        replacers: typing.Iterable[str],
-        params: typing.Dict[str, typing.Any],
-    ) -> LLMResponse:
-        return await self._run_chat_template_internal(
-            [self.__prompt_to_chat(template)], replacers=replacers, params=params
-        )
-
-    @typing.final
-    @typechecked
-    async def _run_chat_template_internal(
-        self,
-        *message_templates: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]],
-        replacers: typing.Iterable[str],
-        params: typing.Dict[str, typing.Any],
-    ) -> LLMResponse:
-        updates = {k: k.format(**params) for k in replacers}
-        if len(message_templates) == 1 and isinstance(message_templates[0], list):
-            chats = message_templates[0]
-        else:
-            chats = typing.cast(typing.List[LLMChatMessage], message_templates)
-
-        create_event(
-            "llm_prompt_template",
-            {
-                "chat_prompt": list(map(lambda x: json.dumps(x), chats)),
-                "provider": self.provider,
-                "template_vars": json.dumps(updates),
-            },
-        )
-
-        if cached := self._check_cache(
-            prompt=chats, prompt_vars={k: v for k, v in updates.items()}
-        ):
-            return cached
-
-        # Before we run the chat, we need to update the chat messages.
-        messages: typing.List[LLMChatMessage] = [
-            {
-                "role": msg["role"],
-                "content": _update_template_with_vars(
-                    template=msg["content"], updates=updates
-                ),
-            }
-            for msg in chats
-        ]
-
-        try:
-            return await self.__run_chat(messages)
-        except Exception as e:
-            self._raise_error(e)
-
-    @typechecked
-    async def _run_prompt_internal(self, prompt: str) -> LLMResponse:
-        return await self._run_chat_internal([self.__prompt_to_chat(prompt)])
-
-    @typechecked
-    async def _run_chat_internal(
-        self, *messages: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]]
-    ) -> LLMResponse:
-        if len(messages) == 1 and isinstance(messages[0], list):
-            chat_message = messages[0]
-        else:
-            chat_message = typing.cast(typing.List[LLMChatMessage], messages)
-
-        if cached := self._check_cache(prompt=chat_message, prompt_vars={}):
-            return cached
-
-        try:
-            return await self.__run_chat(chat_message)
-        except Exception as e:
-            self._raise_error(e)
-
-    @typing.final
-    async def __run_chat(self, messages: typing.List[LLMChatMessage]) -> LLMResponse:
-        self._start_run(messages)
-        response = await self._run_chat(messages)
-        self._end_run(response)
-        return response
-
-    @abc.abstractmethod
-    async def _run_chat(self, messages: typing.List[LLMChatMessage]) -> LLMResponse:
-        raise NotImplementedError

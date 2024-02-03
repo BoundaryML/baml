@@ -69,7 +69,106 @@ async def v1(arg: ProposedMessage, /) -> ImprovedResponse:
     deserialized = __deserializer.from_string(response.generated)
     return deserialized
 
+from pydantic import BaseModel
+import typing
+from typing import final, Tuple, Union, Literal
+from abc import ABC, abstractmethod
+class StreamResponse(ABC):
+    @abstractmethod
+    def is_complete(self) -> bool:
+        pass
 
+@final
+class StreamResponsePartial(StreamResponse):
+    partial_response: Partial[ImprovedResponse] # but for str outputs it's just a str
+    delta: str
+
+    def __init__(self, partial_response: Partial[ImprovedResponse], delta: str):
+        self.partial_response = partial_response
+        self.delta = delta
+
+    def is_complete(self) -> bool:
+        return False
+
+@final
+class StreamResponseFinal(StreamResponse):
+    response: ImprovedResponse
+    def __init__(self, response: ImprovedResponse):
+        self.response = response
+
+    def is_complete(self) -> bool:
+        return True
+
+
+async def test_stream() -> typing.AsyncGenerator[Union[Tuple[Literal['partial'], StreamResponsePartial], Tuple[Literal['final'], StreamResponseFinal]], None]:
+    """
+    ```python
+    async def caller_func() -> None:
+        async for s in test_stream():
+            match s[0]:
+                case 'final':
+                    response = s[1].response
+                    print(s[1].response)
+                case 'partial':
+                    stream = s[1]
+    ```
+    """
+
+    yield ('final', StreamResponseFinal(response=ImprovedResponse(should_improve=True, improved_response="Improved response", field=Sentiment.Negative)))
+    yield ('partial', StreamResponsePartial(partial_response=ImprovedResponse(should_improve=True, improved_response="Improved response", field=Sentiment.Negative), delta="delta"))
+
+
+async def test_stream_with_callback(callback: Callable[[Union[StreamResponsePartial, StreamResponseFinal]], None]) -> ImprovedResponse:
+    async for s in test_stream():
+        callback(s[1])
+
+    return ImprovedResponse(should_improve=True, improved_response="Improved response", field=Sentiment.Negative)
+
+
+class Unset:
+    pass
+_UNSET = Unset()
+async def caller_func() -> None:
+    final_response = None  # Use None as the initial unset state
+
+    async for s in test_stream():
+        if s[0] == 'final':
+            final_response = s[1]  # Directly store the final response
+            print(final_response)
+        elif s[0] == 'partial':
+            # Process partial responses if necessary
+            print(s[1])  # Assuming s[1] is directly usable or represents the stream
+
+    # After the loop, check if the final response was set
+    if final_response is None:
+        raise ValueError("Final response was not set.")
+    
+    actual_response = final_response.response
+
+    
+    # Assuming final_response has the attribute should_improve for further operations
+    # Perform operations with final_response.should_improve
+
+    # If there's a need to handle a stream with a callback
+    await test_stream_with_callback(lambda x: print(x))
+
+
+    response = await test_stream_with_callback(lambda x: print(x))
+
+# how to create generator from the callback:
+async def create_generator_from_callback(callback: Callable[[Union[StreamResponsePartial, StreamResponseFinal]], None]) -> typing.AsyncGenerator[Union[StreamResponsePartial, StreamResponseFinal], None]:
+    async for s in test_stream():
+        callback(s[1])
+        yield s[1]
+
+async def call_generator() -> None:
+    response =  create_generator_from_callback(lambda x: print(x))
+
+    for r in response:
+        
+
+# TODO: use async generator
+# -> AsyncGenerator[StreamResponse]
 async def v1_stream(arg: ProposedMessage, /, __onstream__: OnStreamCallable) -> ImprovedResponse:
     # Since the original operation was commented out, we'll implement a placeholder
     # This should mimic the streaming operation, calling __onstream__ with a string
@@ -79,11 +178,9 @@ async def v1_stream(arg: ProposedMessage, /, __onstream__: OnStreamCallable) -> 
     # __onstream__(mock_stream_response)  # Call the __onstream__ callback with mock data
     
     # Here you would have your actual streaming logic, something like:
-    # while not end_of_stream:
-    #     response_part = await get_next_stream_part(...)
-    #     deserialized_part = __deserializer.from_string(response_part)
-    #     __onstream__(deserialized_part)
-    # return final_response
+    response = await AZURE_GPT4.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
+    for part in response:
+        __onstream__(part)
 
     # Placeholder for the final return, since the real implementation is commented out
     # In a real scenario, you would return the final or aggregated response from the stream

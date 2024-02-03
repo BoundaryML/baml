@@ -6,7 +6,7 @@ from baml_core.provider_manager import (
     LLMManager,
     LLMChatMessage,
 )
-from baml_core.provider_manager.llm_provider import AbstractLLMProvider
+from baml_core.provider_manager.llm_provider_completion import AbstractLLMProvider
 
 
 class ChainItem(typing.TypedDict):

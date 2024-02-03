@@ -101,7 +101,6 @@ class BAMLImpl(typing.Generic[RET]):
         Returns:
             The result of the callable object for streaming operations.
         """
-        assert self.__stream_cb is not None, "Stream callback not implemented."
         return await self.__stream_cb(*args, **kwargs)
 
 
