@@ -8,13 +8,13 @@
 # fmt: off
 
 from ..types.classes.cls_conversation import Conversation
-from ..types.classes.cls_improvedresponse import ImprovedResponse
+from ..types.classes.cls_improvedresponse import ImprovedResponse, PartialImprovedResponse
 from ..types.classes.cls_message import Message
 from ..types.classes.cls_proposedmessage import ProposedMessage
 from ..types.enums.enm_messagesender import MessageSender
 from ..types.enums.enm_sentiment import Sentiment
 from typing import Protocol, runtime_checkable
-from baml_lib._impl.functions import OnStreamCallable
+from baml_core.stream import BAMLStreamResponse
 
 import typing
 from typing import Callable, Protocol, Awaitable
@@ -46,36 +46,22 @@ class IMaybePolishText(Protocol):
     async def __call__(self, arg: ProposedMessage, /) -> ImprovedResponse:
         ...
 
-   
-
-@runtime_checkable
-class IMaybePolishTextStream(Protocol):
-    """
-    This is the interface for a function.
-
-    Args:
-        arg: ProposedMessage
-        __onstream__: OnStreamCallable
-
-    Returns:
-        None
-    """
-
-    async def __call__(self, arg: ProposedMessage, /, __onstream__: OnStreamCallable) -> ImprovedResponse:
-        ...
 
 class BAMLMaybePolishTextImpl:
     async def run(self, arg: ProposedMessage, /) -> ImprovedResponse:
         ...
     
-    async def stream(self, arg: ProposedMessage, /, __onstream__: OnStreamCallable) -> None:
+    async def stream(self, arg: ProposedMessage, /) ->  typing.AsyncIterator[BAMLStreamResponse[ImprovedResponse, PartialImprovedResponse]]:
         ...
 
 class IBAMLMaybePolishText:
     def register_impl(
         self, name: ImplName
     ) -> typing.Callable[
-        [IMaybePolishText, IMaybePolishTextStream], 
+        [IMaybePolishText, 
+        Callable[[ProposedMessage],
+                 typing.AsyncIterator[BAMLStreamResponse[ImprovedResponse, PartialImprovedResponse]]]
+         ], 
         None
     ]:
         ...
@@ -83,7 +69,7 @@ class IBAMLMaybePolishText:
     async def __call__(self, arg: ProposedMessage, /) -> ImprovedResponse:
         ...
 
-    async def stream(self, arg: ProposedMessage, /, __onstream__: OnStreamCallable) -> ImprovedResponse:
+    async def stream(self, arg: ProposedMessage, /) -> typing.AsyncIterator[BAMLStreamResponse[ImprovedResponse, PartialImprovedResponse]]:
         ...
 
     def get_impl(self, name: ImplName) -> BAMLMaybePolishTextImpl:

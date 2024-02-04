@@ -32,7 +32,7 @@ class IMessageSimplifier(Protocol):
         ...
 
 
-class IBAMLMessageSimplifier(BaseBAMLFunction[Optional[int]]):
+class IBAMLMessageSimplifier(BaseBAMLFunction[Optional[int], Optional[int]]):
     def __init__(self) -> None:
         super().__init__(
             "MessageSimplifier",

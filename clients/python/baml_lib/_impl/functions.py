@@ -14,6 +14,7 @@ import pytest
 
 from contextlib import contextmanager
 from baml_core.otel import trace, create_event
+from baml_core.stream import BAMLStreamResponse
 
 from pytest_baml.exports import baml_function_test
 
@@ -44,8 +45,7 @@ def __parse_arg(arg: typing.Any, t: typing.Type[T], _default: T) -> T:
 
 
 RET = typing.TypeVar("RET", covariant=True)
-
-OnStreamCallable = Callable[[str], None]  # Define __onstream__ callable type
+PARTIAL_RET = typing.TypeVar("PARTIAL_RET", covariant=True)
 
 
 class CB(typing.Generic[RET], typing.Protocol):
@@ -58,15 +58,25 @@ class CB(typing.Generic[RET], typing.Protocol):
     ) -> typing.Awaitable[RET]: ...
 
 
-class BAMLImpl(typing.Generic[RET]):
+class STREAM_CB(typing.Generic[RET, PARTIAL_RET], typing.Protocol):
+    """
+    Protocol for a callable object.
+    """
+
+    def __call__(
+        self, *args: typing.Any, **kwargs: typing.Any
+    ) -> typing.AsyncIterator[BAMLStreamResponse[RET, PARTIAL_RET]]: ...
+
+
+class BAMLImpl(typing.Generic[RET, PARTIAL_RET]):
     """
     Class representing a BAML implementation.
     """
 
     __cb: CB[RET]
-    __stream_cb: CB[RET]
+    __stream_cb: STREAM_CB[RET, PARTIAL_RET]
 
-    def __init__(self, cb: CB[RET], stream_cb: CB[RET]) -> None:
+    def __init__(self, cb: CB[RET], stream_cb: STREAM_CB[RET, PARTIAL_RET]) -> None:
         """
         Initializes a BAML implementation with separate callbacks for regular and stream operations.
 
@@ -90,7 +100,9 @@ class BAMLImpl(typing.Generic[RET]):
         """
         return await self.__cb(*args, **kwargs)
 
-    async def stream(self, *args: Any, **kwargs: Any) -> RET:
+    async def stream(
+        self, *args: Any, **kwargs: Any
+    ) -> typing.AsyncIterator[BAMLStreamResponse[RET, PARTIAL_RET]]:
         """
         Streams the BAML implementation.
 
@@ -101,15 +113,17 @@ class BAMLImpl(typing.Generic[RET]):
         Returns:
             The result of the callable object for streaming operations.
         """
-        return await self.__stream_cb(*args, **kwargs)
+        res = self.__stream_cb(*args, **kwargs)
+        async for r in res:
+            yield r
 
 
-class BaseBAMLFunction(typing.Generic[RET]):
+class BaseBAMLFunction(typing.Generic[RET, PARTIAL_RET]):
     """
     Base class for a BAML function.
     """
 
-    __impls: Dict[str, BAMLImpl[RET]]
+    __impls: Dict[str, BAMLImpl[RET, PARTIAL_RET]]
 
     def __init__(
         self, name: str, interface: typing.Any, impl_names: typing.List[str]
@@ -134,7 +148,9 @@ class BaseBAMLFunction(typing.Generic[RET]):
         for impl in self.__impls.values():
             assert isinstance(impl, BAMLImpl), f"Invalid impl: {impl}"
 
-    def register_impl(self, name: str) -> Callable[[CB[RET], CB[RET]], None]:
+    def register_impl(
+        self, name: str
+    ) -> Callable[[CB[RET], STREAM_CB[RET, PARTIAL_RET]], None]:
         """
         Registers an implementation for the BAML function.
 
@@ -151,7 +167,7 @@ class BaseBAMLFunction(typing.Generic[RET]):
             name in self.__impl_names
         ), f"Unknown impl: {self.__name}:{name}. Valid impl names: {' '.join(self.__impl_names)}"
 
-        def decorator(cb: CB[RET], stream_cb: CB[RET]) -> None:
+        def decorator(cb: CB[RET], stream_cb: STREAM_CB[RET, PARTIAL_RET]) -> None:
             for run_impl_fn in (cb, stream_cb):
                 # Runtime check
                 sig = inspect.signature(run_impl_fn)
@@ -173,7 +189,10 @@ class BaseBAMLFunction(typing.Generic[RET]):
                         *args: typing.Any, **kwargs: typing.Any
                     ) -> typing.Any:
                         create_event("variant", {"name": name})
-                        return await run_impl_fn(*args, **kwargs)
+                        if run_impl_fn is not stream_cb:
+                            return await run_impl_fn(*args, **kwargs)  # type: ignore
+                        else:
+                            return run_impl_fn(*args, **kwargs)
 
                 else:
 
@@ -188,7 +207,7 @@ class BaseBAMLFunction(typing.Generic[RET]):
 
         return decorator
 
-    def get_impl(self, name: str) -> BAMLImpl[RET]:
+    def get_impl(self, name: str) -> BAMLImpl[RET, PARTIAL_RET]:
         """
         Gets an implementation for the BAML function.
 
@@ -217,7 +236,7 @@ class BaseBAMLFunction(typing.Generic[RET]):
         return self.__name
 
     @property
-    def _impls(self) -> typing.Dict[str, BAMLImpl[RET]]:
+    def _impls(self) -> typing.Dict[str, BAMLImpl[RET, PARTIAL_RET]]:
         """
         Gets the implementations for the BAML function.
 

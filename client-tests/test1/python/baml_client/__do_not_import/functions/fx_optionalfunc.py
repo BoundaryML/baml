@@ -30,7 +30,7 @@ class IOptionalFunc(Protocol):
         ...
 
 
-class IBAMLOptionalFunc(BaseBAMLFunction[str]):
+class IBAMLOptionalFunc(BaseBAMLFunction[str, str]):
     def __init__(self) -> None:
         super().__init__(
             "OptionalFunc",

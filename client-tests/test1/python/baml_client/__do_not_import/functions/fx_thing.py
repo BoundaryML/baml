@@ -29,7 +29,7 @@ class IThing(Protocol):
         ...
 
 
-class IBAMLThing(BaseBAMLFunction[str]):
+class IBAMLThing(BaseBAMLFunction[str, str]):
     def __init__(self) -> None:
         super().__init__(
             "Thing",

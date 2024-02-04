@@ -30,24 +30,28 @@ from baml_client.testing import baml_test
 @pytest.mark.asyncio
 async def test_logic() -> None:
 
-    await baml.MaybePolishText.get_impl("v1").stream(
+    res = await baml.MaybePolishText.get_impl("v1").stream(
         ProposedMessage(thread=Conversation(thread=[]), generated_response="test"),
-        __onstream__=lambda x: print(f"streaming: {x}"),
     )
+    print(f"streaming1")
+    async for x in res:
+        print(f"streaming: {x}")
 
-    await baml.MaybePolishText.stream(
-        ProposedMessage(thread=Conversation(thread=[]), generated_response="test"),
-        __onstream__=lambda x: print(f"streaming: {x}"),
-    )
-
-    await baml.MaybePolishText(
+    stream = await baml.MaybePolishText.stream(
         ProposedMessage(thread=Conversation(thread=[]), generated_response="test")
     )
+    print(f"streaming2")
+    async for x in stream:
+        print(f"streaming: {x}")
 
-    result = await baml.MaybePolishText.get_impl("v1").run(
-        ProposedMessage(thread=Conversation(thread=[]), generated_response="test")
-    )
-    print(result)
+    # await baml.MaybePolishText(
+    #     ProposedMessage(thread=Conversation(thread=[]), generated_response="test")
+    # )
+
+    # result = await baml.MaybePolishText.get_impl("v1").run(
+    #     ProposedMessage(thread=Conversation(thread=[]), generated_response="test")
+    # )
+    # print(result)
 
 
 # @baml.MaybePolishText.test

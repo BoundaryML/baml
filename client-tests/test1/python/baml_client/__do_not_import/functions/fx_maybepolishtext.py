@@ -8,14 +8,15 @@
 # fmt: off
 
 from ..types.classes.cls_conversation import Conversation
-from ..types.classes.cls_improvedresponse import ImprovedResponse
+from ..types.classes.cls_improvedresponse import ImprovedResponse, PartialImprovedResponse
 from ..types.classes.cls_message import Message
 from ..types.classes.cls_proposedmessage import ProposedMessage
 from ..types.enums.enm_messagesender import MessageSender
 from ..types.enums.enm_sentiment import Sentiment
 from baml_lib._impl.functions import BaseBAMLFunction
 from typing import Protocol, runtime_checkable
-from baml_lib._impl.functions import OnStreamCallable
+import typing
+from baml_core.stream import BAMLStreamResponse
 
 IMaybePolishTextOutput = ImprovedResponse
 
@@ -35,10 +36,10 @@ class IMaybePolishText(Protocol):
         ...
 
     
-    async def stream(self, arg: ProposedMessage, __onstream__: OnStreamCallable) -> ImprovedResponse:
+    async def stream(self, arg: ProposedMessage, /) ->  typing.AsyncIterator[BAMLStreamResponse[ImprovedResponse, PartialImprovedResponse]]:
         ...
 
-class IBAMLMaybePolishText(BaseBAMLFunction[ImprovedResponse]):
+class IBAMLMaybePolishText(BaseBAMLFunction[ImprovedResponse, PartialImprovedResponse]):
     def __init__(self) -> None:
         super().__init__(
             "MaybePolishText",
@@ -49,8 +50,10 @@ class IBAMLMaybePolishText(BaseBAMLFunction[ImprovedResponse]):
     async def __call__(self, *args, **kwargs) -> ImprovedResponse:
         return await self.get_impl("v1").run(*args, **kwargs)
     
-    async def stream(self, *args, __onstream__, **kwargs) -> ImprovedResponse:
-        return await self.get_impl("v1").stream(*args, __onstream__=__onstream__, **kwargs)
+    async def stream(self, *args, **kwargs) -> typing.AsyncIterator[BAMLStreamResponse[ImprovedResponse, PartialImprovedResponse]]:
+        res = self.get_impl("v1").stream(*args, **kwargs)
+        async for r in res:
+            yield r
 
 BAMLMaybePolishText = IBAMLMaybePolishText()
 

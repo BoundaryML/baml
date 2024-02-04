@@ -34,7 +34,7 @@ class IMultiArg(Protocol):
         ...
 
 
-class IBAMLMultiArg(BaseBAMLFunction[str]):
+class IBAMLMultiArg(BaseBAMLFunction[str, str]):
     def __init__(self) -> None:
         super().__init__(
             "MultiArg",

@@ -18,3 +18,8 @@ class ImprovedResponse(BaseModel):
     should_improve: bool
     improved_response: Optional[str] = None
     field: Sentiment
+
+class PartialImprovedResponse(BaseModel):
+    should_improve: Optional[bool] = None
+    improved_response: Optional[str] = None
+    field: Optional[Sentiment] = None

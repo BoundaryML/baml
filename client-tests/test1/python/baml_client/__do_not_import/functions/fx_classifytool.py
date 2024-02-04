@@ -32,7 +32,7 @@ class IClassifyTool(Protocol):
         ...
 
 
-class IBAMLClassifyTool(BaseBAMLFunction[ClassifyResponse]):
+class IBAMLClassifyTool(BaseBAMLFunction[ClassifyResponse, ClassifyResponse]):
     def __init__(self) -> None:
         super().__init__(
             "ClassifyTool",

@@ -33,7 +33,7 @@ class ITextPolisher(Protocol):
         ...
 
 
-class IBAMLTextPolisher(BaseBAMLFunction[str]):
+class IBAMLTextPolisher(BaseBAMLFunction[str, str]):
     def __init__(self) -> None:
         super().__init__(
             "TextPolisher",

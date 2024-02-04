@@ -107,7 +107,7 @@ class OpenAIChatProvider(LLMChatProvider):
 
     async def _stream_chat(
         self, messages: typing.List[LLMChatMessage]
-    ) -> typing.AsyncGenerator[LLMResponse, None]:
+    ) -> typing.AsyncIterator[LLMResponse]:
 
         response = await self._client.chat.completions.create(
             messages=messages,
