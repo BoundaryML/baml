@@ -5,7 +5,6 @@ from baml_client.baml_types import (
     Conversation,
     ProposedMessage,
     IMaybePolishText,
-    ITextPolisher,
 )
 from baml_client.testing import baml_test
 
@@ -30,19 +29,18 @@ from baml_client.testing import baml_test
 @pytest.mark.asyncio
 async def test_logic() -> None:
 
-    res = await baml.MaybePolishText.get_impl("v1").stream(
+    res = baml.MaybePolishText.get_impl("v1").stream(
         ProposedMessage(thread=Conversation(thread=[]), generated_response="test"),
     )
-    print(f"streaming1")
     async for x in res:
-        print(f"streaming: {x}")
+        print(f"streaming: {x.dump_json()}")
 
-    stream = await baml.MaybePolishText.stream(
-        ProposedMessage(thread=Conversation(thread=[]), generated_response="test")
-    )
-    print(f"streaming2")
-    async for x in stream:
-        print(f"streaming: {x}")
+    # stream = baml.MaybePolishText.stream(
+    #     ProposedMessage(thread=Conversation(thread=[]), generated_response="test")
+    # )
+    # print(f"streaming2")
+    # async for x in stream:
+    #     print(f"streaming: {x}")
 
     # await baml.MaybePolishText(
     #     ProposedMessage(thread=Conversation(thread=[]), generated_response="test")

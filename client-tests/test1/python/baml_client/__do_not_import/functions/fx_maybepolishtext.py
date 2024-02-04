@@ -32,7 +32,7 @@ class IMaybePolishText(Protocol):
         ImprovedResponse
     """
 
-    async def __call__(self, arg: ProposedMessage, thing: str, /) -> ImprovedResponse:
+    async def __call__(self, arg: ProposedMessage, /) -> ImprovedResponse:
         ...
 
     

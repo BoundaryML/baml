@@ -12,13 +12,7 @@ from .clients.client_azure_gpt4 import AZURE_GPT4
 from .clients.client_azure_yes_no import AZURE_YES_NO
 from .clients.client_large_response import LARGE_RESPONSE
 from .clients.client_resilientgpt4 import ResilientGPT4
-from .functions.fx_classifytool import BAMLClassifyTool
 from .functions.fx_maybepolishtext import BAMLMaybePolishText
-from .functions.fx_messagesimplifier import BAMLMessageSimplifier
-from .functions.fx_multiarg import BAMLMultiArg
-from .functions.fx_optionalfunc import BAMLOptionalFunc
-from .functions.fx_textpolisher import BAMLTextPolisher
-from .functions.fx_thing import BAMLThing
 from baml_core.otel import add_message_transformer_hook, flush_trace_logs
 from baml_core.provider_manager import LLMManager
 from baml_core.services import LogSchema
@@ -28,13 +22,7 @@ from typing import Callable, List, Optional
 
 
 class BAMLClient:
-    ClassifyTool = BAMLClassifyTool
     MaybePolishText = BAMLMaybePolishText
-    MessageSimplifier = BAMLMessageSimplifier
-    MultiArg = BAMLMultiArg
-    OptionalFunc = BAMLOptionalFunc
-    TextPolisher = BAMLTextPolisher
-    Thing = BAMLThing
     AZURE_DEFAULT = AZURE_DEFAULT
     AZURE_GPT4 = AZURE_GPT4
     AZURE_YES_NO = AZURE_YES_NO

@@ -51,7 +51,7 @@ class BAMLMaybePolishTextImpl:
     async def run(self, arg: ProposedMessage, /) -> ImprovedResponse:
         ...
     
-    async def stream(self, arg: ProposedMessage, /) ->  typing.AsyncIterator[BAMLStreamResponse[ImprovedResponse, PartialImprovedResponse]]:
+    def stream(self, arg: ProposedMessage, /) -> typing.AsyncIterator[BAMLStreamResponse[ImprovedResponse, PartialImprovedResponse]]:
         ...
 
 class IBAMLMaybePolishText:
@@ -69,7 +69,7 @@ class IBAMLMaybePolishText:
     async def __call__(self, arg: ProposedMessage, /) -> ImprovedResponse:
         ...
 
-    async def stream(self, arg: ProposedMessage, /) -> typing.AsyncIterator[BAMLStreamResponse[ImprovedResponse, PartialImprovedResponse]]:
+    def stream(self, arg: ProposedMessage, /) -> typing.AsyncIterator[BAMLStreamResponse[ImprovedResponse, PartialImprovedResponse]]:
         ...
 
     def get_impl(self, name: ImplName) -> BAMLMaybePolishTextImpl:

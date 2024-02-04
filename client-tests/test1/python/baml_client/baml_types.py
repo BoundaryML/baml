@@ -7,13 +7,8 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from .__do_not_import.functions.fx_classifytool import IClassifyTool, IClassifyToolOutput
 from .__do_not_import.functions.fx_maybepolishtext import IMaybePolishText, IMaybePolishTextOutput
-from .__do_not_import.functions.fx_messagesimplifier import IMessageSimplifier, IMessageSimplifierOutput
-from .__do_not_import.functions.fx_multiarg import IMultiArg, IMultiArgOutput
-from .__do_not_import.functions.fx_optionalfunc import IOptionalFunc, IOptionalFuncOutput
-from .__do_not_import.functions.fx_textpolisher import ITextPolisher, ITextPolisherOutput
-from .__do_not_import.functions.fx_thing import IThing, IThingOutput
+
 from .__do_not_import.types.classes.cls_basicclass import BasicClass
 from .__do_not_import.types.classes.cls_classifyresponse import ClassifyResponse
 from .__do_not_import.types.classes.cls_conversation import Conversation
@@ -28,5 +23,3 @@ from .__do_not_import.types.enums.enm_emptyenum import EmptyEnum
 from .__do_not_import.types.enums.enm_messagesender import MessageSender
 from .__do_not_import.types.enums.enm_sentiment import Sentiment
 from .__do_not_import.types.enums.enm_tool import Tool
-
-

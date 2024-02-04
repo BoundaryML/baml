@@ -168,44 +168,63 @@ class BaseBAMLFunction(typing.Generic[RET, PARTIAL_RET]):
         ), f"Unknown impl: {self.__name}:{name}. Valid impl names: {' '.join(self.__impl_names)}"
 
         def decorator(cb: CB[RET], stream_cb: STREAM_CB[RET, PARTIAL_RET]) -> None:
-            for run_impl_fn in (cb, stream_cb):
-                # Runtime check
-                sig = inspect.signature(run_impl_fn)
-                expected_sig = inspect.signature(self.__interface.__call__)
-                sig_params = list(sig.parameters.values())
-                expected_sig_params = list(expected_sig.parameters.values())
-                if expected_sig_params and expected_sig_params[0].name == "self":
-                    expected_sig_params = expected_sig_params[1:]
-                assert (
-                    sig_params == expected_sig_params
-                ), f"{self.name} {sig} does not match expected signature {expected_sig}"
-
-                run_impl_fn.__qualname__ = f"{self.__name}[impl:{run_impl_fn.__qualname__}]"  # type: ignore
-
-                if asyncio.iscoroutinefunction(run_impl_fn):
-
-                    @functools.wraps(run_impl_fn)
-                    async def wrapper(
-                        *args: typing.Any, **kwargs: typing.Any
-                    ) -> typing.Any:
-                        create_event("variant", {"name": name})
-                        if run_impl_fn is not stream_cb:
-                            return await run_impl_fn(*args, **kwargs)  # type: ignore
-                        else:
-                            return run_impl_fn(*args, **kwargs)
-
-                else:
-
-                    @functools.wraps(run_impl_fn)
-                    def wrapper(*args: typing.Any, **kwargs: typing.Any) -> typing.Any:
-                        create_event("variant", {"name": name})
-                        return run_impl_fn(*args, **kwargs)
-
-                wrapper.__name__ = self.__name
-
+            self.__register_cb(name, cb)
+            self.__register_stream_cb(name, stream_cb)
             self.__impls[name] = BAMLImpl(cb, stream_cb)
 
         return decorator
+
+    def __register_cb(self, name: str, cb: CB[RET]) -> None:
+        self.__register_impl_fn(name, cb)
+
+    def __register_stream_cb(
+        self, name: str, stream_cb: STREAM_CB[RET, PARTIAL_RET]
+    ) -> None:
+        self.__register_impl_fn(name, stream_cb, is_stream=True)
+
+    def __register_impl_fn(
+        self, name: str, run_impl_fn: Callable, is_stream: bool = False
+    ) -> None:
+        # Runtime check
+        sig = inspect.signature(run_impl_fn)
+        expected_sig = inspect.signature(self.__interface.__call__)
+        sig_params = list(sig.parameters.values())
+        expected_sig_params = list(expected_sig.parameters.values())
+        if expected_sig_params and expected_sig_params[0].name == "self":
+            expected_sig_params = expected_sig_params[1:]
+        assert (
+            sig_params == expected_sig_params
+        ), f"{self.name} {sig} does not match expected signature {expected_sig}"
+
+        run_impl_fn.__qualname__ = f"{self.__name}[impl:{run_impl_fn.__qualname__}]"  # type: ignore
+        if asyncio.iscoroutinefunction(run_impl_fn):
+            if is_stream:
+
+                @functools.wraps(run_impl_fn)
+                async def wrapper(
+                    *args: typing.Any, **kwargs: typing.Any
+                ) -> typing.AsyncIterator:
+                    create_event("variant", {"name": name})
+                    async for item in run_impl_fn(*args, **kwargs):
+                        yield item
+
+            else:
+
+                @functools.wraps(run_impl_fn)
+                async def wrapper(
+                    *args: typing.Any, **kwargs: typing.Any
+                ) -> typing.Any:
+                    create_event("variant", {"name": name})
+                    return await run_impl_fn(*args, **kwargs)
+
+        else:
+
+            @functools.wraps(run_impl_fn)
+            def wrapper(*args: typing.Any, **kwargs: typing.Any) -> typing.Any:
+                create_event("variant", {"name": name})
+                return run_impl_fn(*args, **kwargs)
+
+        wrapper.__name__ = self.__name
 
     def get_impl(self, name: str) -> BAMLImpl[RET, PARTIAL_RET]:
         """
