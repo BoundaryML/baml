@@ -111,8 +111,8 @@ class OpenAIChatProvider(LLMChatProvider):
 
         response = await self._client.chat.completions.create(
             messages=messages,
-            stream=True,
             **self.__kwargs,
+            stream=True,
         )
         async for r in response:
             print("\nres1", r)
@@ -151,8 +151,3 @@ class OpenAIChatProvider(LLMChatProvider):
                         finish_reason=r.choices[0].finish_reason if r.choices else None,
                     ),
                 )
-        # return LLMResponse(
-        #     generated="",
-        #     model_name="",
-        #     meta=dict()
-        # )

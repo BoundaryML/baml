@@ -48,12 +48,27 @@ class LLMChatProvider(AbstractLLMProvider):
 
     @typing.final
     @typechecked
+    async def _run_prompt_template_internal_stream(
+        self,
+        *,
+        template: str,
+        replacers: typing.Iterable[str],
+        params: typing.Dict[str, typing.Any],
+    ) -> typing.AsyncIterator[LLMResponse]:
+        async for r in self._run_chat_template_internal_stream(
+            [self.__prompt_to_chat(template)],
+            replacers=replacers,
+            params=params,
+        ):
+            yield r
+
+    @typing.final
+    @typechecked
     async def _run_chat_template_internal(
         self,
         *message_templates: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]],
         replacers: typing.Iterable[str],
         params: typing.Dict[str, typing.Any],
-        on_stream: typing.Optional[typing.Callable[[LLMResponse], None]] = None,
     ) -> LLMResponse:
         updates = {k: k.format(**params) for k in replacers}
         if len(message_templates) == 1 and isinstance(message_templates[0], list):
@@ -86,16 +101,53 @@ class LLMChatProvider(AbstractLLMProvider):
             for msg in chats
         ]
 
-        if on_stream is not None:
-            response = await self._stream_chat(messages)
-            for r in response:
-                on_stream(r)
-            return response
-
         try:
             return await self.__run_chat_with_telemetry(messages)
         except Exception as e:
             self._raise_error(e)
+
+    @typing.final
+    @typechecked
+    async def _run_chat_template_internal_stream(
+        self,
+        *message_templates: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]],
+        replacers: typing.Iterable[str],
+        params: typing.Dict[str, typing.Any],
+    ) -> typing.AsyncIterator[LLMResponse]:
+        updates = {k: k.format(**params) for k in replacers}
+        if len(message_templates) == 1 and isinstance(message_templates[0], list):
+            chats = message_templates[0]
+        else:
+            chats = typing.cast(typing.List[LLMChatMessage], message_templates)
+
+        create_event(
+            "llm_prompt_template",
+            {
+                "chat_prompt": list(map(lambda x: json.dumps(x), chats)),
+                "provider": self.provider,
+                "template_vars": json.dumps(updates),
+            },
+        )
+
+        if cached := self._check_cache(
+            prompt=chats, prompt_vars={k: v for k, v in updates.items()}
+        ):
+            yield cached
+            return
+
+        # Before we run the chat, we need to update the chat messages.
+        messages: typing.List[LLMChatMessage] = [
+            {
+                "role": msg["role"],
+                "content": _update_template_with_vars(
+                    template=msg["content"], updates=updates
+                ),
+            }
+            for msg in chats
+        ]
+
+        async for response in self._stream_chat(messages):
+            yield response
 
     @typechecked
     async def _run_prompt_internal(self, prompt: str) -> LLMResponse:
@@ -137,3 +189,4 @@ class LLMChatProvider(AbstractLLMProvider):
         self, messages: typing.List[LLMChatMessage]
     ) -> typing.AsyncIterator[LLMResponse]:
         raise NotImplementedError
+        yield  # To appease typechecker. It thinks it's not a generator function unless it has a yield.

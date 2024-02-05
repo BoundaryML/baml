@@ -117,3 +117,33 @@ class AnthropicProvider(LLMChatProvider):
                 finish_reason=response.stop_reason,
             ),
         )
+
+    async def _stream_chat(
+        self, messages: typing.List[LLMChatMessage]
+    ) -> typing.AsyncIterator[LLMResponse]:
+        prompt = (
+            "".join(
+                map(
+                    lambda c: f'{anthropic.HUMAN_PROMPT if  c["role"] != "system" else anthropic.AI_PROMPT} {c["content"]}',
+                    messages,
+                )
+            )
+            + anthropic.AI_PROMPT
+        )
+        prompt_tokens = await self.__client.count_tokens(prompt)
+        stream = await self.__client.completions.create(
+            prompt=prompt, **self.__caller_kwargs, stream=True
+        )
+        async for response in stream:
+            output_tokens = await self.__client.count_tokens(response.completion)
+            yield LLMResponse(
+                generated=response.completion,
+                model_name=response.model,
+                meta=dict(
+                    baml_is_complete=response.stop_reason == "stop_sequence",
+                    prompt_tokens=prompt_tokens,
+                    output_tokens=output_tokens,
+                    total_tokens=prompt_tokens + output_tokens,
+                    finish_reason=response.stop_reason,
+                ),
+            )

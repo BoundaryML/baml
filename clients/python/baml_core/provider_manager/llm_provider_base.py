@@ -142,6 +142,22 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
 
     @typing.final
     @typechecked
+    async def run_prompt_template_stream(
+        self,
+        *,
+        template: str,
+        replacers: typing.Iterable[str],
+        params: typing.Dict[str, typing.Any],
+    ) -> typing.AsyncIterator[LLMResponse]:
+        async for r in self._run_prompt_template_internal_stream(
+            template=template,
+            replacers=replacers,
+            params=params,
+        ):
+            yield r
+
+    @typing.final
+    @typechecked
     async def run_chat_template(
         self,
         *message_templates: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]],
@@ -167,58 +183,20 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
         return await self._run_chat_internal(*messages)
 
     #
-    # Public stream methods
-    #
-    # @typing.final
-    # @typechecked
-    # async def stream_run_chat_template(
-    #     self,
-    #     *message_templates: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]],
-    #     replacers: typing.Iterable[str],
-    #     params: typing.Dict[str, typing.Any],
-    #     on_stream: typing.Callable[[LLMResponse], None],
-    # ) -> LLMResponse:
-    #     return await self._stream_run_chat_template_internal(
-    #         *message_templates,
-    #         replacers=replacers,
-    #         params=params,
-    #         on_stream=on_stream,
-    #     )
-
-    # @typing.final
-    # @typechecked
-    # async def stream_run_prompt_template(
-    #     self,
-    #     *,
-    #     template: str,
-    #     replacers: typing.Iterable[str],
-    #     params: typing.Dict[str, typing.Any],
-    #     on_stream: typing.Callable[[LLMResponse], None],
-    # ) -> LLMResponse:
-    #     return await self._stream_run_prompt_template_internal(
-    #         template=template,
-    #         replacers=replacers,
-    #         params=params,
-    #         on_stream=on_stream,
-    #     )
-
-    # @typing.final
-    # @typechecked
-    # async def stream_run_chat(
-    #     self,
-    #     *messages: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]],
-    #     on_stream: typing.Callable[[LLMResponse], None],
-    # ) -> LLMResponse:
-    #     return await self._stream_run_chat_internal(
-    #         *messages,
-    #         on_stream=on_stream,
-    #     )
-
-    #
     # Internal API
     #
     @abc.abstractmethod
     async def _run_prompt_internal(self, prompt: str) -> LLMResponse:
+        pass
+
+    @abc.abstractmethod
+    def _run_prompt_template_internal_stream(
+        self,
+        *,
+        template: str,
+        replacers: typing.Iterable[str],
+        params: typing.Dict[str, typing.Any],
+    ) -> typing.AsyncIterator[LLMResponse]:
         pass
 
     @abc.abstractmethod
@@ -246,35 +224,14 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
     ) -> LLMResponse:
         pass
 
-    ## Internal stream methods
-    # @abc.abstractmethod
-    # async def _stream_run_chat_template_internal(
-    #     self,
-    #     *message_templates: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]],
-    #     replacers: typing.Iterable[str],
-    #     params: typing.Dict[str, typing.Any],
-    #     on_stream: typing.Callable[[LLMResponse], None],
-    # ) -> LLMResponse:
-    #     pass
-
-    # @abc.abstractmethod
-    # async def _stream_run_prompt_template_internal(
-    #     self,
-    #     *,
-    #     template: str,
-    #     replacers: typing.Iterable[str],
-    #     params: typing.Dict[str, typing.Any],
-    #     on_stream: typing.Callable[[LLMResponse], None],
-    # ) -> LLMResponse:
-    #     pass
-
-    # @abc.abstractmethod
-    # async def _stream_run_chat_internal(
-    #     self,
-    #     *messages: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]],
-    #     on_stream: typing.Callable[[LLMResponse], None],
-    # ) -> LLMResponse:
-    #     pass
+    @abc.abstractmethod
+    async def _run_chat_template_internal_stream(
+        self,
+        *message_templates: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]],
+        replacers: typing.Iterable[str],
+        params: typing.Dict[str, typing.Any],
+    ) -> typing.AsyncIterator[LLMResponse]:
+        pass
 
     @typing.final
     def validate(self) -> None:

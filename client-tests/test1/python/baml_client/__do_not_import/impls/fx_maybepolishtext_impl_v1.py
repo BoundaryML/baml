@@ -72,8 +72,10 @@ async def v1(arg: ProposedMessage, /) -> ImprovedResponse:
 
 
 async def v1_stream(arg: ProposedMessage, /) -> typing.AsyncIterator[BAMLStreamResponse[ImprovedResponse, PartialImprovedResponse]]:
-
-    for _ in range(3):
+    response = AZURE_GPT4.run_prompt_template_stream(template=__prompt_template, 
+    replacers=__input_replacers, params=dict(arg=arg))
+    async for response in response:
+        print("\nres1", response)
         yield BAMLStreamResponse.from_parsed_partial(
             partial=PartialImprovedResponse(
                     should_improve=True,
@@ -83,13 +85,7 @@ async def v1_stream(arg: ProposedMessage, /) -> typing.AsyncIterator[BAMLStreamR
             delta="123--\n--",
         )
         await asyncio.sleep(1)
-    yield BAMLStreamResponse.from_final_response(
-        response=ImprovedResponse(
-            should_improve=True,
-            improved_response="Improved response",
-            field=Sentiment.Negative
-        ),
-    )
+
 
     
 async def call_v1(arg: ProposedMessage, /) -> ImprovedResponse:
