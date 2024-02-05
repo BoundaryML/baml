@@ -19,6 +19,7 @@ class ImprovedResponse(BaseModel):
     improved_response: Optional[str] = None
     field: Sentiment
 
+@register_deserializer({  })
 class PartialImprovedResponse(BaseModel):
     should_improve: Optional[bool] = None
     improved_response: Optional[str] = None

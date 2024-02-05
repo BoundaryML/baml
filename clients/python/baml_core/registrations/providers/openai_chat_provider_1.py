@@ -115,7 +115,6 @@ class OpenAIChatProvider(LLMChatProvider):
             stream=True,
         )
         async for r in response:
-            print("\nres1", r)
             if isinstance(r, ChatCompletionChunk):
                 prompt_tokens = None
                 output_tokens = None

@@ -32,8 +32,13 @@ async def test_logic() -> None:
     res = baml.MaybePolishText.get_impl("v1").stream(
         ProposedMessage(thread=Conversation(thread=[]), generated_response="test"),
     )
+    count = 0
     async for x in res:
-        print(f"streaming: {x.dump_json()}")
+        x.dump_json()
+        count += 1
+        # print(f"streaming: {x.dump_json()}")
+    print(f"chunks: {count}")
+    assert count > 0
 
     # stream = baml.MaybePolishText.stream(
     #     ProposedMessage(thread=Conversation(thread=[]), generated_response="test")

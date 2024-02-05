@@ -93,7 +93,7 @@ class LLMProvider(AbstractLLMProvider):
             yield cached
         prompt = _update_template_with_vars(template=template, updates=updates)
         try:
-            async for r in self._run_stream(prompt)
+            async for r in self._run_stream(prompt):
                 yield r
         except Exception as e:
             self._raise_error(e)
@@ -151,6 +151,6 @@ class LLMProvider(AbstractLLMProvider):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def _run_stream(self, prompt: str) -> LLMResponse:
+    async def _run_stream(self, prompt: str) -> typing.AsyncIterator[LLMResponse]:
         raise NotImplementedError
-        yield # appease the linter that doesn't understand that this is an async generator unless theres a yield
+        yield  # appease the linter that doesn't understand that this is an async generator unless theres a yield

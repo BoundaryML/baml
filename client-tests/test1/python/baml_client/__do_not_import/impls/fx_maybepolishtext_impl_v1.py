@@ -17,11 +17,10 @@ from ..types.classes.cls_proposedmessage import ProposedMessage
 from ..types.enums.enm_messagesender import MessageSender
 from ..types.enums.enm_sentiment import Sentiment
 from baml_lib._impl.deserializer import Deserializer
-from typing import Generic, AsyncIterator, Dict, Optional, Any
 import typing
 from baml_core.stream import BAMLStreamResponse
-import json
-import asyncio
+from baml_core.stream import JSONParser
+
 # Impl: v1
 # Client: AZURE_GPT4
 # An implementation of .
@@ -62,8 +61,10 @@ __deserializer = Deserializer[ImprovedResponse](ImprovedResponse)  # type: ignor
 __deserializer.overload("ImprovedResponse", {"ShouldImprove": "should_improve"})
 
 
+parser = JSONParser()
 
-
+__partial_deserializer = Deserializer[PartialImprovedResponse](PartialImprovedResponse)  # type: ignore
+__partial_deserializer.overload("PartialImprovedResponse", {"ShouldImprove": "should_improve"})
 
 async def v1(arg: ProposedMessage, /) -> ImprovedResponse:
     response = await AZURE_GPT4.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
@@ -74,19 +75,29 @@ async def v1(arg: ProposedMessage, /) -> ImprovedResponse:
 async def v1_stream(arg: ProposedMessage, /) -> typing.AsyncIterator[BAMLStreamResponse[ImprovedResponse, PartialImprovedResponse]]:
     response = AZURE_GPT4.run_prompt_template_stream(template=__prompt_template, 
     replacers=__input_replacers, params=dict(arg=arg))
+    total_generated = ""
     async for response in response:
-        print("\nres1", response)
-        yield BAMLStreamResponse.from_parsed_partial(
-            partial=PartialImprovedResponse(
-                    should_improve=True,
-                    improved_response="Improved \nresponse",
-                    field=Sentiment.Negative
-            ),
-            delta="123--\n--",
-        )
-        await asyncio.sleep(1)
+        total_generated += response.generated
+        parsed = parser.parse(total_generated)
+        try:
+            deserialized = __partial_deserializer.from_string(parsed)
+            print(deserialized)
+            yield BAMLStreamResponse.from_parsed_partial(
+                partial=deserialized,
+                delta=response.generated,
+            )
+        except Exception as e:
+            # print("error")
+            # TODO: decide how to treat errors
+            yield BAMLStreamResponse.from_failed_partial(
+                delta=response.generated,
+            )
 
-
+    final_response = __deserializer.from_string(total_generated)
+    yield BAMLStreamResponse.from_final_response(
+        response=final_response
+    )
+    
     
 async def call_v1(arg: ProposedMessage, /) -> ImprovedResponse:
     response = v1_stream(arg)
