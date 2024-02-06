@@ -7,6 +7,7 @@ pub(super) enum HSTemplate {
     Function,
     FunctionPYI,
     Enum,
+    ClassPartial,
     Class,
     Client,
     BAMLClient,
@@ -59,8 +60,7 @@ fn use_partial(
             register_partial_file!(reg, "functions", "func_params");
             f.add_import("baml_lib._impl.deserializer", "Deserializer");
             f.add_line("import typing");
-            f.add_import("baml_core.stream", "BAMLStreamResponse");
-            f.add_import("baml_core.stream", "JSONParser");
+            f.add_import("baml_core.stream", "AsyncStream");
 
             register_partial_file!(reg, "functions", "variant");
             String::from("variant")
@@ -95,6 +95,12 @@ fn use_partial(
             f.add_import("baml_lib._impl.deserializer", "register_deserializer");
             String::from("class")
         }
+        HSTemplate::ClassPartial => {
+            register_partial_file!(reg, "types", "class_partial");
+            f.add_import("pydantic", "BaseModel");
+            f.add_import("baml_lib._impl.deserializer", "register_deserializer");
+            String::from("class_partial")
+        }
         HSTemplate::Enum => {
             register_partial!(reg, "enum_value", r#"{{name}} = "{{name}}""#);
             register_partial_file!(reg, "types", "enum");
@@ -112,7 +118,7 @@ fn use_partial(
             f.add_import("typing", "Protocol");
             f.add_import("typing", "Callable");
             f.add_import("typing", "AsyncIterator");
-            f.add_import("baml_core.stream", "BAMLStreamResponse");
+            f.add_import("baml_core.stream", "AsyncStream");
 
             register_partial_file!(reg, "functions", "function_py");
             f.add_import("baml_lib._impl.functions", "BaseBAMLFunction");
@@ -127,7 +133,7 @@ fn use_partial(
             f.add_import("typing", "runtime_checkable");
             f.add_import("typing", "Protocol");
             f.add_import("typing", "Callable");
-            f.add_import("baml_core.stream", "BAMLStreamResponse");
+            f.add_import("baml_core.stream", "AsyncStream");
 
             register_partial_file!(reg, "functions", "function_pyi");
             String::from("function_pyi")

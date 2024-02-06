@@ -54,14 +54,14 @@ async def test_logic() -> None:
     count = 0
     async with res as stream:
         async for x in stream.parsed_stream:
-            print(f"streaming: {x.json()}")
+            print(f"streaming: {x.parsed}")
             count += 1
             # print(f"streaming: {x.dump_json()}")
     print(f"chunks: {count}")
     assert count > 0
     print(f"streaming done")
     result = await stream.get_final_response()
-    print(f"final: {result.value.model_dump_json()}")
+    print(f"final: {result.value}")
 
     # stream = baml.MaybePolishText.stream(
     #     ProposedMessage(thread=Conversation(thread=[]), generated_response="test")

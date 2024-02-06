@@ -89,81 +89,81 @@ class PartialValueWrapper(Generic[PARTIAL_TYPE]):
         }
 
 
-class BAMLStreamResponse(Generic[TYPE, PARTIAL_TYPE]):
-    __partial_value: ValueWrapper[PartialValueWrapper[PARTIAL_TYPE]]
-    __final_value: ValueWrapper[TYPE]
+# class BAMLStreamResponse(Generic[TYPE, PARTIAL_TYPE]):
+#     __partial_value: ValueWrapper[PartialValueWrapper[PARTIAL_TYPE]]
+#     __final_value: ValueWrapper[TYPE]
 
-    def __init__(
-        self,
-        response: ValueWrapper[TYPE],
-        partial_value: ValueWrapper[PartialValueWrapper[PARTIAL_TYPE]],
-    ) -> None:
-        self.__partial_value = partial_value
-        self.__final_value = response
+#     def __init__(
+#         self,
+#         response: ValueWrapper[TYPE],
+#         partial_value: ValueWrapper[PartialValueWrapper[PARTIAL_TYPE]],
+#     ) -> None:
+#         self.__partial_value = partial_value
+#         self.__final_value = response
 
-    @staticmethod
-    def from_parsed_partial(
-        partial: PARTIAL_TYPE, delta: str
-    ) -> "BAMLStreamResponse[TYPE, PARTIAL_TYPE]":
-        return BAMLStreamResponse[TYPE, PARTIAL_TYPE](
-            ValueWrapper.unset(),
-            ValueWrapper.from_value(PartialValueWrapper.from_parseable(partial, delta)),
-        )
+#     @staticmethod
+#     def from_parsed_partial(
+#         partial: PARTIAL_TYPE, delta: str
+#     ) -> "BAMLStreamResponse[TYPE, PARTIAL_TYPE]":
+#         return BAMLStreamResponse[TYPE, PARTIAL_TYPE](
+#             ValueWrapper.unset(),
+#             ValueWrapper.from_value(PartialValueWrapper.from_parseable(partial, delta)),
+#         )
 
-    @staticmethod
-    def from_failed_partial(delta: str) -> "BAMLStreamResponse[TYPE, PARTIAL_TYPE]":
-        return BAMLStreamResponse[TYPE, PARTIAL_TYPE](
-            ValueWrapper.unset(),
-            ValueWrapper.from_value(PartialValueWrapper.from_parse_failure(delta)),
-        )
+#     @staticmethod
+#     def from_failed_partial(delta: str) -> "BAMLStreamResponse[TYPE, PARTIAL_TYPE]":
+#         return BAMLStreamResponse[TYPE, PARTIAL_TYPE](
+#             ValueWrapper.unset(),
+#             ValueWrapper.from_value(PartialValueWrapper.from_parse_failure(delta)),
+#         )
 
-    @staticmethod
-    def from_final_response(response: TYPE) -> "BAMLStreamResponse[TYPE, PARTIAL_TYPE]":
-        return BAMLStreamResponse[TYPE, PARTIAL_TYPE](
-            ValueWrapper.from_value(response), ValueWrapper.unset()
-        )
+#     @staticmethod
+#     def from_final_response(response: TYPE) -> "BAMLStreamResponse[TYPE, PARTIAL_TYPE]":
+#         return BAMLStreamResponse[TYPE, PARTIAL_TYPE](
+#             ValueWrapper.from_value(response), ValueWrapper.unset()
+#         )
 
-    @property
-    def is_complete(self) -> bool:
-        return self.__final_value.has_value
+#     @property
+#     def is_complete(self) -> bool:
+#         return self.__final_value.has_value
 
-    @property
-    def final_response(self) -> TYPE:
-        if not self.is_complete:
-            raise ValueError("Stream not yet complete")
-        return self.__final_value.value
+#     @property
+#     def final_response(self) -> TYPE:
+#         if not self.is_complete:
+#             raise ValueError("Stream not yet complete")
+#         return self.__final_value.value
 
-    @property
-    def has_partial_value(self) -> bool:
-        return self.__partial_value.has_value
+#     @property
+#     def has_partial_value(self) -> bool:
+#         return self.__partial_value.has_value
 
-    @property
-    def partial(self) -> PartialValueWrapper[PARTIAL_TYPE]:
-        if not self.has_partial_value:
-            raise ValueError("No partial value")
-        return self.__partial_value.value
+#     @property
+#     def partial(self) -> PartialValueWrapper[PARTIAL_TYPE]:
+#         if not self.has_partial_value:
+#             raise ValueError("No partial value")
+#         return self.__partial_value.value
 
-    def dump_json(self, **kwargs) -> str:
-        return json.dumps(self.json(), **kwargs)
+#     def dump_json(self, **kwargs) -> str:
+#         return json.dumps(self.json(), **kwargs)
 
-    def json(self) -> Dict[str, Any]:
-        if self.has_partial_value:
-            return {
-                "partial": self.partial.json(),
-                "final_response": self.__final_value.json(),
-            }
+#     def json(self) -> Dict[str, Any]:
+#         if self.has_partial_value:
+#             return {
+#                 "partial": self.partial.json(),
+#                 "final_response": self.__final_value.json(),
+#             }
 
-        return {
-            "partial": None,
-            "final_response": self.__final_value.json(),
-        }
+#         return {
+#             "partial": None,
+#             "final_response": self.__final_value.json(),
+#         }
 
 
 class TextDelta(BaseModel):
     delta: str
 
 
-class AsyncBAMLStream(Generic[TYPE, PARTIAL_TYPE]):
+class AsyncStream(Generic[TYPE, PARTIAL_TYPE]):
     __stream: AsyncIterator[LLMResponse]
     __final_response: ValueWrapper[TYPE]
 
@@ -220,44 +220,3 @@ class AsyncBAMLStream(Generic[TYPE, PARTIAL_TYPE]):
             return
         async for r in self.parsed_stream:
             pass
-
-    # async def __aiter__(self) -> AsyncIterator[BAMLStreamResponse[TYPE, PARTIAL_TYPE]]:
-    #     total_text = ""
-    #     async for response in self.stream:
-    #         try:
-    #             total_text += response.generated
-    #             parsed = self.__partial_deserializer.from_string(total_text)
-    #             yield BAMLStreamResponse.from_parsed_partial(
-    #                 partial=parsed, delta=response.generated
-    #             )
-    #         except Exception as e:
-    #             yield BAMLStreamResponse.from_failed_partial(delta=response.generated)
-
-    #     final_response = self.__deserializer.from_string(total_text)
-    #     yield BAMLStreamResponse.from_final_response(response=final_response)
-
-    # async def __anext__(self) -> BAMLStreamResponse[TYPE, PARTIAL_TYPE]:
-    #     return await self.__aiter__().__anext__()
-
-    # async def __await__(self) -> BAMLStreamResponse[TYPE, PARTIAL_TYPE]:
-    #     return await self.__anext__()
-
-
-# class AsyncBAMLStreamManager(Generic[TYPE, PARTIAL_TYPE]):
-#     def __init__(
-#         self,
-#         stream_creation_coroutine: typing.Awaitable[
-#             AsyncBAMLStream[TYPE, PARTIAL_TYPE]
-#         ],
-#     ):
-#         self.__stream_creation_coroutine = stream_creation_coroutine
-#         self.__stream: AsyncBAMLStream[TYPE, PARTIAL_TYPE] | None = None
-
-#     async def __aenter__(self) -> AsyncBAMLStream[TYPE, PARTIAL_TYPE]:
-#         self.__stream = await self.__stream_creation_coroutine
-#         return self.__stream
-
-#     async def __aexit__(self, exc_type, exc_val, exc_tb):
-#         pass
-#         # if self.__stream is not None:
-#         #     await self.__stream.close()  # Ensure proper closure of the stream

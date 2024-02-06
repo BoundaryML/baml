@@ -1,6 +1,6 @@
 {{> interface}}
 
-class IBAML{{name}}(BaseBAMLFunction[{{return.0.type}}, Partial{{return.0.type}}]):
+class IBAML{{name}}(BaseBAMLFunction[{{return.0.type}}, {{return.0.type_partial}}]):
     def __init__(self) -> None:
         super().__init__(
             "{{name}}",
@@ -15,11 +15,10 @@ class IBAML{{name}}(BaseBAMLFunction[{{return.0.type}}, Partial{{return.0.type}}
         raise NotImplemented("No impls defined")
         {{/if}}
     
-    async def stream(self, *args, **kwargs) -> AsyncIterator[BAMLStreamResponse[{{return.0.type}}, Partial{{return.0.type}}]]:
+    def stream(self, *args, **kwargs) -> AsyncStream[{{return.0.type}}, {{return.0.type_partial}}]:
         {{#if has_impls}}
         res = self.get_impl("{{default_impl}}").stream(*args, **kwargs)
-        async for r in res:
-            yield r
+        return res
         {{else}}
         raise NotImplemented("No impls defined")
         {{/if}}

@@ -14,7 +14,7 @@ import pytest
 
 from contextlib import contextmanager
 from baml_core.otel import trace, create_event
-from baml_core.stream import AsyncBAMLStream
+from baml_core.stream import AsyncStream
 
 from pytest_baml.exports import baml_function_test
 
@@ -65,7 +65,7 @@ class STREAM_CB(typing.Generic[RET, PARTIAL_RET], typing.Protocol):
 
     def __call__(
         self, *args: typing.Any, **kwargs: typing.Any
-    ) -> AsyncBAMLStream[RET, PARTIAL_RET]: ...
+    ) -> AsyncStream[RET, PARTIAL_RET]: ...
 
 
 class BAMLImpl(typing.Generic[RET, PARTIAL_RET]):
@@ -100,7 +100,7 @@ class BAMLImpl(typing.Generic[RET, PARTIAL_RET]):
         """
         return await self.__cb(*args, **kwargs)
 
-    def stream(self, *args: Any, **kwargs: Any) -> AsyncBAMLStream[RET, PARTIAL_RET]:
+    def stream(self, *args: Any, **kwargs: Any) -> AsyncStream[RET, PARTIAL_RET]:
         """
         Streams the BAML implementation.
 

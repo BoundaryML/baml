@@ -8,16 +8,17 @@
 # fmt: off
 
 from ..types.classes.cls_conversation import Conversation
-from ..types.classes.cls_improvedresponse import ImprovedResponse, PartialImprovedResponse
 from ..types.classes.cls_message import Message
 from ..types.classes.cls_proposedmessage import ProposedMessage
 from ..types.enums.enm_messagesender import MessageSender
-from ..types.enums.enm_sentiment import Sentiment
-from typing import Protocol, runtime_checkable
-from baml_core.stream import BAMLStreamResponse, AsyncBAMLStream
+from ..types.partial.classes.cls_conversation import PartialConversation
+from ..types.partial.classes.cls_message import PartialMessage
+from ..types.partial.classes.cls_proposedmessage import PartialProposedMessage
+from baml_core.stream import AsyncStream
+from typing import Callable, Protocol, runtime_checkable
+
 
 import typing
-from typing import Callable, Protocol, Awaitable
 
 import pytest
 from contextlib import contextmanager
@@ -29,7 +30,7 @@ T = typing.TypeVar("T", bound=typing.Callable[..., typing.Any])
 CLS = typing.TypeVar("CLS", bound=type)
 
 
-IMaybePolishTextOutput = ImprovedResponse
+IMaybePolishTextOutput = str
 
 @runtime_checkable
 class IMaybePolishText(Protocol):
@@ -40,32 +41,33 @@ class IMaybePolishText(Protocol):
         arg: ProposedMessage
 
     Returns:
-        ImprovedResponse
+        str
     """
 
-    async def __call__(self, arg: ProposedMessage, /) -> ImprovedResponse:
+    async def __call__(self, arg: ProposedMessage, /) -> str:
         ...
+
+   
 
 @runtime_checkable
 class IMaybePolishTextStream(Protocol):
     """
-    This is the interface for a function.
+    This is the interface for a stream function.
 
     Args:
         arg: ProposedMessage
 
     Returns:
-        AsyncBAMLStream[ImprovedResponse, PartialImprovedResponse]
+        AsyncStream[str, str]
     """
 
-    def __call__(self, arg: ProposedMessage, /) -> AsyncBAMLStream[ImprovedResponse, PartialImprovedResponse]:
+    def __call__(self, arg: ProposedMessage, /) -> AsyncStream[str, str]:
         ...
-
 class BAMLMaybePolishTextImpl:
-    async def run(self, arg: ProposedMessage, /) -> ImprovedResponse:
+    async def run(self, arg: ProposedMessage, /) -> str:
         ...
     
-    def stream(self, arg: ProposedMessage, /) -> AsyncBAMLStream[ImprovedResponse, PartialImprovedResponse]:
+    def stream(self, arg: ProposedMessage, /) -> AsyncStream[str, str]:
         ...
 
 class IBAMLMaybePolishText:
@@ -74,10 +76,10 @@ class IBAMLMaybePolishText:
     ) -> typing.Callable[[IMaybePolishText, IMaybePolishTextStream], None]:
         ...
 
-    async def __call__(self, arg: ProposedMessage, /) -> ImprovedResponse:
+    async def __call__(self, arg: ProposedMessage, /) -> str:
         ...
 
-    def stream(self, arg: ProposedMessage, /) -> AsyncBAMLStream[ImprovedResponse, PartialImprovedResponse]:
+    def stream(self, arg: ProposedMessage, /) -> AsyncStream[str, str]:
         ...
 
     def get_impl(self, name: ImplName) -> BAMLMaybePolishTextImpl:
@@ -134,9 +136,9 @@ class IBAMLMaybePolishText:
 
         Usage:
             ```python
-            # All implementations except "v1" will be tested.
+            # All implementations except the given impl will be tested.
 
-            @baml.MaybePolishText.test(exclude_impl=["v1"])
+            @baml.MaybePolishText.test(exclude_impl=["implname"])
             async def test_logic(MaybePolishTextImpl: IMaybePolishText) -> None:
                 result = await MaybePolishTextImpl(...)
             ```

@@ -20,24 +20,19 @@ class BAML{{name}}Impl:
     {{> method_def func_name="run" unnamed_args=this.unnamed_args args=this.args return=this.return}}
         ...
     
-    def stream(self, {{> func_params unnamed_args=this.unnamed_args args=this.args}}) -> typing.AsyncIterator[BAMLStreamResponse[{{return.0.type}}, Partial{{return.0.type}}]]:
+    def stream(self, {{> func_params unnamed_args=this.unnamed_args args=this.args}}) -> AsyncStream[{{return.0.type}}, {{return.0.type_partial}}]:
         ...
 
 class IBAML{{name}}:
     def register_impl(
         self, name: ImplName
-    ) -> typing.Callable[
-        [I{{name}}, 
-        Callable[[{{> arg_types_list unnamed_args=this.unnamed_args args=this.args}}], typing.AsyncIterator[BAMLStreamResponse[{{return.0.type}}, Partial{{return.0.type}}]]]
-        ], 
-        None
-    ]:
+    ) -> typing.Callable[[I{{name}}, I{{name}}Stream], None]:
         ...
 
     {{> method_def func_name="__call__" unnamed_args=this.unnamed_args args=this.args return=this.return}}
         ...
 
-    def stream(self, {{> func_params unnamed_args=this.unnamed_args args=this.args}}) -> typing.AsyncIterator[BAMLStreamResponse[{{return.0.type}}, Partial{{return.0.type}}]]:
+    def stream(self, {{> func_params unnamed_args=this.unnamed_args args=this.args}}) -> AsyncStream[{{return.0.type}}, {{return.0.type_partial}}]:
         ...
 
     def get_impl(self, name: ImplName) -> BAML{{name}}Impl:

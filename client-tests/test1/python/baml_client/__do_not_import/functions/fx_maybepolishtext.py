@@ -8,17 +8,18 @@
 # fmt: off
 
 from ..types.classes.cls_conversation import Conversation
-from ..types.classes.cls_improvedresponse import ImprovedResponse, PartialImprovedResponse
 from ..types.classes.cls_message import Message
 from ..types.classes.cls_proposedmessage import ProposedMessage
 from ..types.enums.enm_messagesender import MessageSender
-from ..types.enums.enm_sentiment import Sentiment
+from ..types.partial.classes.cls_conversation import PartialConversation
+from ..types.partial.classes.cls_message import PartialMessage
+from ..types.partial.classes.cls_proposedmessage import PartialProposedMessage
+from baml_core.stream import AsyncStream
 from baml_lib._impl.functions import BaseBAMLFunction
-from typing import Protocol, runtime_checkable
-import typing
-from baml_core.stream import BAMLStreamResponse, AsyncBAMLStream
+from typing import AsyncIterator, Callable, Protocol, runtime_checkable
 
-IMaybePolishTextOutput = ImprovedResponse
+
+IMaybePolishTextOutput = str
 
 @runtime_checkable
 class IMaybePolishText(Protocol):
@@ -29,17 +30,29 @@ class IMaybePolishText(Protocol):
         arg: ProposedMessage
 
     Returns:
-        ImprovedResponse
+        str
     """
 
-    async def __call__(self, arg: ProposedMessage, /) -> ImprovedResponse:
+    async def __call__(self, arg: ProposedMessage, /) -> str:
         ...
 
-    
-    def stream(self, arg: ProposedMessage, /) ->  AsyncBAMLStream[ImprovedResponse, PartialImprovedResponse]:
-        ...
+   
 
-class IBAMLMaybePolishText(BaseBAMLFunction[ImprovedResponse, PartialImprovedResponse]):
+@runtime_checkable
+class IMaybePolishTextStream(Protocol):
+    """
+    This is the interface for a stream function.
+
+    Args:
+        arg: ProposedMessage
+
+    Returns:
+        AsyncStream[str, str]
+    """
+
+    def __call__(self, arg: ProposedMessage, /) -> AsyncStream[str, str]:
+        ...
+class IBAMLMaybePolishText(BaseBAMLFunction[str, str]):
     def __init__(self) -> None:
         super().__init__(
             "MaybePolishText",
@@ -47,10 +60,10 @@ class IBAMLMaybePolishText(BaseBAMLFunction[ImprovedResponse, PartialImprovedRes
             ["v1", "v2"],
         )
 
-    async def __call__(self, *args, **kwargs) -> ImprovedResponse:
+    async def __call__(self, *args, **kwargs) -> str:
         return await self.get_impl("v1").run(*args, **kwargs)
     
-    def stream(self, *args, **kwargs) -> AsyncBAMLStream[ImprovedResponse, PartialImprovedResponse]:
+    def stream(self, *args, **kwargs) -> AsyncStream[str, str]:
         res = self.get_impl("v1").stream(*args, **kwargs)
         return res
 

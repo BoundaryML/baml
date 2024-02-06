@@ -185,6 +185,21 @@ impl FieldType {
         }
     }
 
+    // Whether the field could theoretically be made optional.
+    pub fn can_be_null(&self) -> bool {
+        match self {
+            FieldType::Identifier(arity, t) => match t {
+                Identifier::Primitive(TypeValue::Null, _) => true,
+                _ => true,
+            },
+            FieldType::Union(arity, f, ..) => f.iter().any(|t| t.can_be_null()),
+            FieldType::Tuple(arity, ..) => true,
+            // Lists can't be nullable
+            FieldType::Dictionary(_kv, _) => false,
+            FieldType::List(_t, _, _) => false,
+        }
+    }
+
     // All the identifiers used in this type.
     pub fn flat_idns(&self) -> Vec<&Identifier> {
         match self {

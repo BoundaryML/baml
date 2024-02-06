@@ -1,8 +1,7 @@
 from .partialjson import JSONParser
-from .baml_stream import BAMLStreamResponse, AsyncBAMLStream
+from .baml_stream import AsyncStream
 
 __all__ = [
-    "BAMLStreamResponse",
     "JSONParser",
-    "AsyncBAMLStream",
+    "AsyncStream",
 ]

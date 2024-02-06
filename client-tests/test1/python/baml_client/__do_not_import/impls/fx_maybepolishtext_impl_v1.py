@@ -7,23 +7,23 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from pydantic import BaseModel
 from ..clients.client_azure_gpt4 import AZURE_GPT4
 from ..functions.fx_maybepolishtext import BAMLMaybePolishText
 from ..types.classes.cls_conversation import Conversation
-from ..types.classes.cls_improvedresponse import ImprovedResponse, PartialImprovedResponse
 from ..types.classes.cls_message import Message
 from ..types.classes.cls_proposedmessage import ProposedMessage
 from ..types.enums.enm_messagesender import MessageSender
-from ..types.enums.enm_sentiment import Sentiment
+from ..types.partial.classes.cls_conversation import PartialConversation
+from ..types.partial.classes.cls_message import PartialMessage
+from ..types.partial.classes.cls_proposedmessage import PartialProposedMessage
+from baml_core.stream import AsyncStream
 from baml_lib._impl.deserializer import Deserializer
-import typing
-from baml_core.stream import BAMLStreamResponse, AsyncBAMLStream
 
+
+import typing
 # Impl: v1
 # Client: AZURE_GPT4
-# An implementation of .
-
+# An implementation of MaybePolishText.
 
 __prompt_template = """\
 Given a conversation with a resident, consider improving the response previously shown.
@@ -38,13 +38,7 @@ Do not use or negative unless the question is a yes or no question.
 
 
 Output JSON Format:
-{
-  // false if the response is already contextual and pleasant
-  "ShouldImprove": bool,
-  // string if should_improve else null
-  "improved_response": string | null,
-  "field": "Sentiment as string"
-}
+string
 
 JSON:\
 """
@@ -56,73 +50,29 @@ __input_replacers = {
 
 # We ignore the type here because baml does some type magic to make this work
 # for inline SpecialForms like Optional, Union, List.
-__deserializer = Deserializer[ImprovedResponse](ImprovedResponse)  # type: ignore
+__deserializer = Deserializer[str](str)  # type: ignore
 __deserializer.overload("ImprovedResponse", {"ShouldImprove": "should_improve"})
 
+# Add a deserializer that handles stream responses, which are all Partial types
+__partial_deserializer = Deserializer[str](str)  # type: ignore
+__partial_deserializer.overload("ImprovedResponse", {"ShouldImprove": "should_improve"})
 
-__partial_deserializer = Deserializer[PartialImprovedResponse](PartialImprovedResponse)  # type: ignore
-__partial_deserializer.overload("PartialImprovedResponse", {"ShouldImprove": "should_improve"})
 
-async def v1(arg: ProposedMessage, /) -> ImprovedResponse:
+
+
+
+
+
+async def v1(arg: ProposedMessage, /) -> str:
     response = await AZURE_GPT4.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
     deserialized = __deserializer.from_string(response.generated)
     return deserialized
 
-async def create_stream(arg: ProposedMessage, /) -> AsyncBAMLStream[ImprovedResponse, PartialImprovedResponse]:
-    raw_stream = AZURE_GPT4.run_prompt_template_stream(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
-    baml_stream = AsyncBAMLStream(raw_stream, __partial_deserializer, __deserializer)
-    return baml_stream
 
-def v1_stream(arg: ProposedMessage, /) -> AsyncBAMLStream[ImprovedResponse, PartialImprovedResponse]:
+def v1_stream(arg: ProposedMessage, /) -> AsyncStream[str, str]:
+
     raw_stream = AZURE_GPT4.run_prompt_template_stream(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
-    stream = AsyncBAMLStream(raw_stream, __partial_deserializer, __deserializer)
-    
+    stream = AsyncStream(raw_stream, __partial_deserializer, __deserializer)
     return stream
-
-async def call_new_v1_stream(arg: ProposedMessage, /) -> ImprovedResponse:
-    async with v1_stream(arg) as stream:
-        async for text in stream.text_stream:
-            pass
-
-    final_res = await stream.get_final_response()
-    return final_res.value
-
-
-# async def v1_stream(arg: ProposedMessage, /) -> typing.AsyncIterator[BAMLStreamResponse[ImprovedResponse, PartialImprovedResponse]]:
-#     response = AZURE_GPT4.run_prompt_template_stream(template=__prompt_template, 
-#     replacers=__input_replacers, params=dict(arg=arg))
-#     total_generated = ""
-#     async for response in response:
-#         total_generated += response.generated
-#         parsed = parser.parse(total_generated)
-#         try:
-#             deserialized = __partial_deserializer.from_string(parsed)
-#             print(deserialized)
-#             yield BAMLStreamResponse.from_parsed_partial(
-#                 partial=deserialized,
-#                 delta=response.generated,
-#             )
-#         except Exception as e:
-#             # print("error")
-#             # TODO: decide how to treat errors
-#             yield BAMLStreamResponse.from_failed_partial(
-#                 delta=response.generated,
-#             )
-
-#     final_response = __deserializer.from_string(total_generated)
-#     yield BAMLStreamResponse.from_final_response(
-#         response=final_response
-#     )
-    
-    
-# async def call_v1(arg: ProposedMessage, /) -> ImprovedResponse:
-#     response = v1_stream(arg)
-#     async for r in response:
-#         if r.is_complete:
-#             return r.final_response
-#         else:
-#             print(r.partial.parsed)
-#     raise ValueError("Final response was not set.")
-
 
 BAMLMaybePolishText.register_impl("v1")(v1, v1_stream)

@@ -19,13 +19,25 @@ class ImprovedResponse {
  
 function MaybePolishText {
     input ProposedMessage
-    output ImprovedResponse
+    output string
     default_impl v1
 }
  
 function TextPolisher {
     input ProposedMessage
     output string
+}
+
+impl<llm, TextPolisher> v1 {
+    client AZURE_GPT4
+    prompt #"
+        Write a haiku about:
+        ```input
+        {#input}
+        ```
+
+        JSON:
+    "#
 }
 
 impl<llm, MaybePolishText> v1 {
