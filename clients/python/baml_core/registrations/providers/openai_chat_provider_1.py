@@ -70,7 +70,7 @@ class OpenAIChatProvider(LLMChatProvider):
 
     async def _run_chat(self, messages: typing.List[LLMChatMessage]) -> LLMResponse:
         response: ChatCompletion = await self._client.chat.completions.create(
-            messages=messages, **self.__kwargs
+            messages=messages, **self.__kwargs  # type: ignore
         )
         if not isinstance(response, ChatCompletion):
             raise ValueError(

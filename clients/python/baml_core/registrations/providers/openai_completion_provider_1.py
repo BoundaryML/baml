@@ -1,4 +1,4 @@
-from openai import AsyncOpenAI, AsyncAzureOpenAI, AsyncClient
+from openai import AsyncOpenAI, AsyncAzureOpenAI
 from openai.types.completion import Completion
 from .openai_helper_1 import to_error_code
 import typing
@@ -35,7 +35,7 @@ class OpenAICompletionProvider(LLMProvider):
                 azure_endpoint=options["api_base"] or options["azure_endpoint"],
             )
         else:
-            self._client = AsyncOpenAI(api_key=options["api_key"])
+            self._client = AsyncOpenAI(api_key=options["api_key"])  # type: ignore
         options.pop("api_key", None)
         options.pop("api_version", None)
         options.pop("api_base", None)
@@ -55,7 +55,9 @@ class OpenAICompletionProvider(LLMProvider):
         pass
 
     async def _run(self, prompt: str) -> LLMResponse:
-        response: Completion = await self._client.completions.create(prompt=prompt, **self.__kwargs)  # type: ignore
+        response: Completion = await self._client.completions.create(
+            prompt=prompt, **self.__kwargs
+        )
         choice = response.choices[0]
         if not choice:
             raise ValueError(
