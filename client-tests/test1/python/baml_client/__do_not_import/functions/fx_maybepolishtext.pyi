@@ -14,7 +14,7 @@ from ..types.classes.cls_proposedmessage import ProposedMessage
 from ..types.enums.enm_messagesender import MessageSender
 from ..types.enums.enm_sentiment import Sentiment
 from typing import Protocol, runtime_checkable
-from baml_core.stream import BAMLStreamResponse
+from baml_core.stream import BAMLStreamResponse, AsyncBAMLStream
 
 import typing
 from typing import Callable, Protocol, Awaitable
@@ -46,30 +46,38 @@ class IMaybePolishText(Protocol):
     async def __call__(self, arg: ProposedMessage, /) -> ImprovedResponse:
         ...
 
+@runtime_checkable
+class IMaybePolishTextStream(Protocol):
+    """
+    This is the interface for a function.
+
+    Args:
+        arg: ProposedMessage
+
+    Returns:
+        AsyncBAMLStream[ImprovedResponse, PartialImprovedResponse]
+    """
+
+    def __call__(self, arg: ProposedMessage, /) -> AsyncBAMLStream[ImprovedResponse, PartialImprovedResponse]:
+        ...
 
 class BAMLMaybePolishTextImpl:
     async def run(self, arg: ProposedMessage, /) -> ImprovedResponse:
         ...
     
-    def stream(self, arg: ProposedMessage, /) -> typing.AsyncIterator[BAMLStreamResponse[ImprovedResponse, PartialImprovedResponse]]:
+    def stream(self, arg: ProposedMessage, /) -> AsyncBAMLStream[ImprovedResponse, PartialImprovedResponse]:
         ...
 
 class IBAMLMaybePolishText:
     def register_impl(
         self, name: ImplName
-    ) -> typing.Callable[
-        [IMaybePolishText, 
-        Callable[[ProposedMessage],
-                 typing.AsyncIterator[BAMLStreamResponse[ImprovedResponse, PartialImprovedResponse]]]
-         ], 
-        None
-    ]:
+    ) -> typing.Callable[[IMaybePolishText, IMaybePolishTextStream], None]:
         ...
 
     async def __call__(self, arg: ProposedMessage, /) -> ImprovedResponse:
         ...
 
-    def stream(self, arg: ProposedMessage, /) -> typing.AsyncIterator[BAMLStreamResponse[ImprovedResponse, PartialImprovedResponse]]:
+    def stream(self, arg: ProposedMessage, /) -> AsyncBAMLStream[ImprovedResponse, PartialImprovedResponse]:
         ...
 
     def get_impl(self, name: ImplName) -> BAMLMaybePolishTextImpl:

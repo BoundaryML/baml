@@ -14,7 +14,7 @@ import pytest
 
 from contextlib import contextmanager
 from baml_core.otel import trace, create_event
-from baml_core.stream import BAMLStreamResponse
+from baml_core.stream import AsyncBAMLStream
 
 from pytest_baml.exports import baml_function_test
 
@@ -65,7 +65,7 @@ class STREAM_CB(typing.Generic[RET, PARTIAL_RET], typing.Protocol):
 
     def __call__(
         self, *args: typing.Any, **kwargs: typing.Any
-    ) -> typing.AsyncIterator[BAMLStreamResponse[RET, PARTIAL_RET]]: ...
+    ) -> AsyncBAMLStream[RET, PARTIAL_RET]: ...
 
 
 class BAMLImpl(typing.Generic[RET, PARTIAL_RET]):
@@ -100,9 +100,7 @@ class BAMLImpl(typing.Generic[RET, PARTIAL_RET]):
         """
         return await self.__cb(*args, **kwargs)
 
-    async def stream(
-        self, *args: Any, **kwargs: Any
-    ) -> typing.AsyncIterator[BAMLStreamResponse[RET, PARTIAL_RET]]:
+    def stream(self, *args: Any, **kwargs: Any) -> AsyncBAMLStream[RET, PARTIAL_RET]:
         """
         Streams the BAML implementation.
 
@@ -114,8 +112,7 @@ class BAMLImpl(typing.Generic[RET, PARTIAL_RET]):
             The result of the callable object for streaming operations.
         """
         res = self.__stream_cb(*args, **kwargs)
-        async for r in res:
-            yield r
+        return res
 
 
 class BaseBAMLFunction(typing.Generic[RET, PARTIAL_RET]):
@@ -203,10 +200,10 @@ class BaseBAMLFunction(typing.Generic[RET, PARTIAL_RET]):
                 @functools.wraps(run_impl_fn)
                 async def wrapper(
                     *args: typing.Any, **kwargs: typing.Any
-                ) -> typing.AsyncIterator:
+                ) -> typing.Any:
                     create_event("variant", {"name": name})
-                    async for item in run_impl_fn(*args, **kwargs):
-                        yield item
+                    stream = run_impl_fn(*args, **kwargs)
+                    return stream
 
             else:
 

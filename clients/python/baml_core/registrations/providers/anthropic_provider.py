@@ -131,6 +131,7 @@ class AnthropicProvider(LLMChatProvider):
             + anthropic.AI_PROMPT
         )
         prompt_tokens = await self.__client.count_tokens(prompt)
+        self.__client.beta.messages.stream
         stream = await self.__client.completions.create(
             prompt=prompt, **self.__caller_kwargs, stream=True
         )

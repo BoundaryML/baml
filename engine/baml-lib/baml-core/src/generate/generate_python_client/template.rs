@@ -22,7 +22,7 @@ fn init_hs() -> handlebars::Handlebars<'static> {
     let mut reg = handlebars::Handlebars::new();
     reg.register_helper("BLOCK_OPEN", Box::new(BLOCK_OPEN));
     reg.register_helper("BLOCK_CLOSE", Box::new(BLOCK_CLOSE));
-
+    reg.set_strict_mode(true);
     reg
 }
 
@@ -56,7 +56,11 @@ fn use_partial(
             register_partial_file!(reg, "functions", "arg_list");
             register_partial_file!(reg, "functions", "arg_values");
             register_partial_file!(reg, "functions", "func_def");
+            register_partial_file!(reg, "functions", "func_params");
             f.add_import("baml_lib._impl.deserializer", "Deserializer");
+            f.add_line("import typing");
+            f.add_import("baml_core.stream", "BAMLStreamResponse");
+            f.add_import("baml_core.stream", "JSONParser");
 
             register_partial_file!(reg, "functions", "variant");
             String::from("variant")
@@ -101,10 +105,14 @@ fn use_partial(
         HSTemplate::Function => {
             register_partial_file!(reg, "functions", "arg_list");
             register_partial_file!(reg, "functions", "method_def");
-
+            register_partial_file!(reg, "functions", "func_params");
+            register_partial_file!(reg, "functions", "arg_types_list");
             register_partial_file!(reg, "functions", "interface");
             f.add_import("typing", "runtime_checkable");
             f.add_import("typing", "Protocol");
+            f.add_import("typing", "Callable");
+            f.add_import("typing", "AsyncIterator");
+            f.add_import("baml_core.stream", "BAMLStreamResponse");
 
             register_partial_file!(reg, "functions", "function_py");
             f.add_import("baml_lib._impl.functions", "BaseBAMLFunction");
@@ -113,10 +121,13 @@ fn use_partial(
         HSTemplate::FunctionPYI => {
             register_partial_file!(reg, "functions", "arg_list");
             register_partial_file!(reg, "functions", "method_def");
-
+            register_partial_file!(reg, "functions", "func_params");
+            register_partial_file!(reg, "functions", "arg_types_list");
             register_partial_file!(reg, "functions", "interface");
             f.add_import("typing", "runtime_checkable");
             f.add_import("typing", "Protocol");
+            f.add_import("typing", "Callable");
+            f.add_import("baml_core.stream", "BAMLStreamResponse");
 
             register_partial_file!(reg, "functions", "function_pyi");
             String::from("function_pyi")

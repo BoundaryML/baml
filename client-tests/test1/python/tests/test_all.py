@@ -29,16 +29,39 @@ from baml_client.testing import baml_test
 @pytest.mark.asyncio
 async def test_logic() -> None:
 
-    res = baml.MaybePolishText.get_impl("v1").stream(
-        ProposedMessage(thread=Conversation(thread=[]), generated_response="test"),
+    # res = baml.MaybePolishText.get_impl("v1").stream(
+    #     ProposedMessage(thread=Conversation(thread=[]), generated_response="test"),
+    # )
+    # count = 0
+    # async with res as stream:
+    #     async for x in stream.parsed_stream:
+    #         print(f"streaming: {x.json()}")
+    #         count += 1
+    #         # print(f"streaming: {x.dump_json()}")
+    # print(f"chunks: {count}")
+    # assert count > 0
+    # print(f"streaming done")
+    # result = await stream.get_final_response()
+    # print(f"final: {result.value.model_dump_json()}")
+
+    res = baml.MaybePolishText.stream(
+        ProposedMessage(
+            thread=Conversation(thread=[]),
+            generated_response="i dont have that account ready",
+        )
     )
+
     count = 0
-    async for x in res:
-        x.dump_json()
-        count += 1
-        # print(f"streaming: {x.dump_json()}")
+    async with res as stream:
+        async for x in stream.parsed_stream:
+            print(f"streaming: {x.json()}")
+            count += 1
+            # print(f"streaming: {x.dump_json()}")
     print(f"chunks: {count}")
     assert count > 0
+    print(f"streaming done")
+    result = await stream.get_final_response()
+    print(f"final: {result.value.model_dump_json()}")
 
     # stream = baml.MaybePolishText.stream(
     #     ProposedMessage(thread=Conversation(thread=[]), generated_response="test")

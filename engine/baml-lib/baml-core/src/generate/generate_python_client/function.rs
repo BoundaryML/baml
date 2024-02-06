@@ -16,7 +16,13 @@ impl JsonHelper for ArgWalker<'_> {
     fn json(&self, f: &mut File) -> serde_json::Value {
         let _ = self
             .required_classes()
-            .map(|cls| f.add_import(&format!("..types.classes.{}", cls.file_name()), cls.name()))
+            .map(|cls| {
+                f.add_import(&format!("..types.classes.{}", cls.file_name()), cls.name());
+                f.add_import(
+                    &format!("..types.classes.{}", cls.file_name()),
+                    &format!("Partial{}", cls.name()),
+                );
+            })
             .collect::<Vec<_>>();
         let _ = self
             .required_enums()

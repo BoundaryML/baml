@@ -1,10 +1,14 @@
-from typing import Any, Dict, Generic
+from typing import Any, Dict, Generic, AsyncIterator
 import json
 import typing
 from pydantic import BaseModel
+from baml_core.provider_manager import LLMResponse
+from baml_lib._impl.deserializer import Deserializer
+from baml_core.stream import JSONParser
 
 TYPE = typing.TypeVar("TYPE")
 PARTIAL_TYPE = typing.TypeVar("PARTIAL_TYPE")
+partial_parser = JSONParser()
 
 
 class Unset:
@@ -153,3 +157,107 @@ class BAMLStreamResponse(Generic[TYPE, PARTIAL_TYPE]):
             "partial": None,
             "final_response": self.__final_value.json(),
         }
+
+
+class TextDelta(BaseModel):
+    delta: str
+
+
+class AsyncBAMLStream(Generic[TYPE, PARTIAL_TYPE]):
+    __stream: AsyncIterator[LLMResponse]
+    __final_response: ValueWrapper[TYPE]
+
+    def __init__(
+        self,
+        stream: AsyncIterator[LLMResponse],
+        partial_deserializer: Deserializer[PARTIAL_TYPE],
+        final_deserializer: Deserializer[TYPE],
+    ):
+        self.__stream = stream
+        self.__partial_deserializer = partial_deserializer
+        self.__deserializer = final_deserializer
+        self.__final_response = ValueWrapper.unset()
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.until_done()
+
+    @property
+    async def text_stream(self) -> AsyncIterator[TextDelta]:
+        async for response in self.__stream:
+            yield TextDelta(delta=response.generated)
+
+    @property
+    async def parsed_stream(self) -> AsyncIterator[PartialValueWrapper[PARTIAL_TYPE]]:
+        total_text = ""
+        if self.__final_response.has_value:
+            return
+        async for response in self.__stream:
+            try:
+                total_text += response.generated
+                parsed_json = partial_parser.parse(total_text)
+                parsed = self.__partial_deserializer.from_string(parsed_json)
+                yield PartialValueWrapper.from_parseable(
+                    partial=parsed, delta=response.generated
+                )
+            except Exception as e:
+                yield PartialValueWrapper.from_parse_failure(delta=response.generated)
+        try:
+            self.__final_response = ValueWrapper.from_value(
+                self.__deserializer.from_string(total_text)
+            )
+        except Exception as e:
+            self.__final_response = ValueWrapper.unset()
+
+    async def get_final_response(self) -> ValueWrapper[TYPE]:
+        await self.until_done()
+        return self.__final_response
+
+    async def until_done(self) -> None:
+        if self.__final_response.has_value:
+            return
+        async for r in self.parsed_stream:
+            pass
+
+    # async def __aiter__(self) -> AsyncIterator[BAMLStreamResponse[TYPE, PARTIAL_TYPE]]:
+    #     total_text = ""
+    #     async for response in self.stream:
+    #         try:
+    #             total_text += response.generated
+    #             parsed = self.__partial_deserializer.from_string(total_text)
+    #             yield BAMLStreamResponse.from_parsed_partial(
+    #                 partial=parsed, delta=response.generated
+    #             )
+    #         except Exception as e:
+    #             yield BAMLStreamResponse.from_failed_partial(delta=response.generated)
+
+    #     final_response = self.__deserializer.from_string(total_text)
+    #     yield BAMLStreamResponse.from_final_response(response=final_response)
+
+    # async def __anext__(self) -> BAMLStreamResponse[TYPE, PARTIAL_TYPE]:
+    #     return await self.__aiter__().__anext__()
+
+    # async def __await__(self) -> BAMLStreamResponse[TYPE, PARTIAL_TYPE]:
+    #     return await self.__anext__()
+
+
+# class AsyncBAMLStreamManager(Generic[TYPE, PARTIAL_TYPE]):
+#     def __init__(
+#         self,
+#         stream_creation_coroutine: typing.Awaitable[
+#             AsyncBAMLStream[TYPE, PARTIAL_TYPE]
+#         ],
+#     ):
+#         self.__stream_creation_coroutine = stream_creation_coroutine
+#         self.__stream: AsyncBAMLStream[TYPE, PARTIAL_TYPE] | None = None
+
+#     async def __aenter__(self) -> AsyncBAMLStream[TYPE, PARTIAL_TYPE]:
+#         self.__stream = await self.__stream_creation_coroutine
+#         return self.__stream
+
+#     async def __aexit__(self, exc_type, exc_val, exc_tb):
+#         pass
+#         # if self.__stream is not None:
+#         #     await self.__stream.close()  # Ensure proper closure of the stream

@@ -17,21 +17,21 @@
 //         Given a user is trying to schedule a meeting, extract the relevant information
 //         {#input}
 //         information from the query.
-//         JSON: 
+//         JSON:   
 //     "#
 // } 
 
 class BasicClass {
-    name string
+    name string 
     age int
     address string
-}
- 
-// function ClassFunc {
+}  
+         
+// function ClassFunc { 
 //     input BasicClass
 //     output string
 // }
-
+   
 // impl<llm, ClassFunc> version {
 //     client AZURE_GPT4
  
@@ -114,13 +114,13 @@ class BasicClass {
 //     output string
 // }
 
-class OptionalObject {
-    a string?
-    b bool? 
-}   
+// class OptionalObject {
+//     a string?
+//     b bool? 
+// }   
  
-function OptionalFunc {
-    input OptionalObject
-    output string
-}
+// function OptionalFunc {
+//     input OptionalObject
+//     output string
+// }
  

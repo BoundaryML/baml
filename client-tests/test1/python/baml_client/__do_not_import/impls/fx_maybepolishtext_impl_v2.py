@@ -7,6 +7,7 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
+from baml_core import LLMResponse
 from pydantic import BaseModel
 from ..clients.client_azure_gpt4 import AZURE_GPT4
 from ..functions.fx_maybepolishtext import BAMLMaybePolishText
@@ -62,11 +63,6 @@ __input_replacers = {
 # for inline SpecialForms like Optional, Union, List.
 __deserializer = Deserializer[ImprovedResponse](ImprovedResponse)  # type: ignore
 __deserializer.overload("ImprovedResponse", {"ShouldImprove": "should_improve"})
-
-
-
-
-
 
 async def v2(arg: ProposedMessage, /) -> ImprovedResponse:
     response = await AZURE_GPT4.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
