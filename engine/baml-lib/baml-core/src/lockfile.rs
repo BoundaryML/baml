@@ -163,6 +163,13 @@ impl LockFileWrapper {
                 ));
             }
             (Some(a), Some(b)) => {
+                if a.to_string().contains("canary") || b.to_string().contains("canary") {
+                    diag.push_warning(DatamodelWarning::new(
+                        "You're using a prerelease version of baml.".to_string(),
+                        self.span.clone().unwrap(),
+                    ));
+                    return;
+                }
                 match a.cmp(b) {
                     std::cmp::Ordering::Less => {
                         // Not ok as prev is newer than current.

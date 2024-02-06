@@ -40,7 +40,7 @@ class IBAMLMaybePolishText(BaseBAMLFunction[ImprovedResponse]):
         super().__init__(
             "MaybePolishText",
             IMaybePolishText,
-            ["v1"],
+            ["v1", "v2"],
         )
 
     async def __call__(self, *args, **kwargs) -> ImprovedResponse:

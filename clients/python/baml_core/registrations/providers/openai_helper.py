@@ -1,3 +1,4 @@
+# type: ignore
 import typing
 from openai import error as o_error
 

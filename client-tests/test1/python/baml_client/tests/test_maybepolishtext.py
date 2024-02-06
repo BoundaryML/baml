@@ -21,7 +21,7 @@ async def test_psychological_salmon(MaybePolishTextImpl: IMaybePolishText):
             return item
         return dumps(item)
 
-    content = to_str({"thread":{"thread":[{"sender":"AI","body":"asdfasdfsdf"}]},"generated_response":"asfasfsee"})
+    content = to_str({"thread": {"thread": [{"sender": "AI", "body": "asdfasdfsdf", }], }, "generated_response": "asfasfsee", })
     deserializer = Deserializer[ProposedMessage](ProposedMessage) # type: ignore
     param = deserializer.from_string(content)
     await MaybePolishTextImpl(param)

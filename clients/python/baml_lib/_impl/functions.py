@@ -86,6 +86,19 @@ class BAMLImpl(typing.Generic[RET]):
         """
         return await self.__cb(*args, **kwargs)
 
+    async def stream(self, *args: typing.Any, **kwargs: typing.Any) -> RET:
+        """
+        Streams the BAML implementation.
+
+        Args:
+            *args: The arguments to pass to the callable object.
+            **kwargs: The arguments to pass to the callable object.
+
+        Returns:
+            The result of the callable object.
+        """
+        return await self.__cb(*args, **kwargs)
+
 
 class BaseBAMLFunction(typing.Generic[RET]):
     """

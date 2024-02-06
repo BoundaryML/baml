@@ -25,6 +25,7 @@ class ImprovedResponse {
 function MaybePolishText {
     input ProposedMessage
     output ImprovedResponse
+    default_impl v1
 }
  
 function TextPolisher {
@@ -61,7 +62,35 @@ impl<llm, MaybePolishText> v1 {
         JSON:
     "#
 }
+impl<llm, MaybePolishText> v2 {
+    client AZURE_GPT4
+ 
+    override ImprovedResponse {
+        should_improve @alias("ShouldImprove")
+        @description(false if the response is already contextual and pleasant)
+        @meta(fooz, "foo, bar, baz")
 
+        improved_response @description(string if should_improve else null)
+    }
+
+    prompt #"
+        Given a conversation with a resident, consider improving the response previously shown.
+
+        Good responses are amiable and direct.
+
+        Do not use {// affirmative //} or negative unless the question is a yes or no question.
+
+        ```input
+        {#input}
+        ```       
+
+        {// The word format is required. don't remove it //}
+        Output JSON Format:
+        {#print_type(output)}
+
+        JSON:
+    "#
+}
 
 function Thing {
     input string
