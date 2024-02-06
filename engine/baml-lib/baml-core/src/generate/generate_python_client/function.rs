@@ -54,11 +54,10 @@ impl JsonHelper for ArgWalker<'_> {
                             Identifier::Local(idn, _) => format!("Partial{}", &idn.to_string()),
                             Identifier::String(str, _) => format!("Partial{}", str.to_string()),
                             Identifier::Primitive(p, _) => p.to_py_string(f),
-                            Identifier::Invalid(inv, _) => panic!("Should never show invalid: {}", inv),
-                            _ => panic!("Should never show invalid: {:?}", idn),
+                            _ => arg.to_py_string(f),
                         }
                     },
-                    _ => panic!("Unhandled field type: {:?}", arg.field_type),
+                    _ => arg.to_py_string(f),
                 },
                 "default": match arg.field_type.is_nullable() {
                     true => Some("None"),
@@ -79,12 +78,11 @@ impl JsonHelper for ArgWalker<'_> {
                                 Identifier::Local(idn, _) => format!("Partial{}", &idn.to_string()),
                                 Identifier::String(str, _) => format!("Partial{}", str.to_string()),
                                 Identifier::Primitive(p, _) => p.to_py_string(f),
-                                Identifier::Invalid(inv, _) => panic!("Should never show invalid: {}", inv),
-                                _ => panic!("Should never show invalid: {:?}", idn),
+                                _ => arg.to_py_string(f),
                             }
                         }
                     },
-                    _ => panic!("Unhandled field type: {:?}", arg.field_type),
+                    _ => arg.to_py_string(f),
                 },
                 "default": match arg.field_type.is_nullable() {
                     true => Some("None"),

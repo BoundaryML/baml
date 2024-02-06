@@ -1,7 +1,7 @@
 generator Default {
   language python
   pkg_manager poetry
-  python_setup_prefix "infisical run --env=test -- poetry run"
+//   python_setup_prefix "infisical run --env=test -- poetry run"
 }    
                
 enum MessageSender {             
