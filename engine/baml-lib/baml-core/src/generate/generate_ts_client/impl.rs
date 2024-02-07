@@ -3,7 +3,7 @@ use serde_json::json;
 use crate::generate::{
     dir_writer::WithFileContent,
     generate_ts_client::{field_type::to_parse_expression, ts_language_features::ToTypeScript},
-    ir::{Function, FunctionArgs, Impl, IntermediateRepr, Walker},
+    ir::{Function, FunctionArgs, Impl, Walker},
 };
 
 use super::{

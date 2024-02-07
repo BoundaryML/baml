@@ -64,5 +64,5 @@ pub(crate) fn generate_ts(ir: &IntermediateRepr, gen: &Generator) -> std::io::Re
     collector.finish_file();
     ir.write(&mut collector);
 
-    collector.commit(&gen.output)
+    collector.commit(&gen.output_path)
 }

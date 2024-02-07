@@ -7,7 +7,7 @@ use crate::{
 };
 
 use super::{ClassWalker, VariantWalker, Walker};
-use internal_baml_schema_ast::ast::{self, FieldType, Identifier, TypeValue, WithName};
+use internal_baml_schema_ast::ast::{self, FieldType, Identifier, WithName};
 use serde_json::json;
 
 /// A model field, scalar or relation.

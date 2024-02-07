@@ -162,7 +162,7 @@ impl<'db> WithJsonSchema for FieldType {
                 "type": "array",
                 "items": (*item).json_schema()
             }),
-            FieldType::Map(k, v) => json!({
+            FieldType::Map(_k, v) => json!({
                 "type": "object",
                 "additionalProperties": {
                     "type": v.json_schema(),

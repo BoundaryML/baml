@@ -353,7 +353,7 @@ impl WithRepr<EnumValue> for EnumValueWalker<'_> {
         attributes
     }
 
-    fn repr(&self, db: &ParserDatabase) -> Result<EnumValue> {
+    fn repr(&self, _db: &ParserDatabase) -> Result<EnumValue> {
         Ok(EnumValue(self.name().to_string()))
     }
 }
@@ -514,11 +514,11 @@ pub struct Function {
 }
 
 impl WithRepr<Implementation> for VariantWalker<'_> {
-    fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
+    fn attributes(&self, _db: &ParserDatabase) -> NodeAttributes {
         NodeAttributes::default()
     }
 
-    fn repr(&self, db: &ParserDatabase) -> Result<Implementation> {
+    fn repr(&self, _db: &ParserDatabase) -> Result<Implementation> {
         Ok(Implementation {
             r#type: OracleType::LLM,
             name: self.name().to_string(),
@@ -615,7 +615,7 @@ pub struct RetryPolicy {
 }
 
 impl WithRepr<RetryPolicy> for ConfigurationWalker<'_> {
-    fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
+    fn attributes(&self, _db: &ParserDatabase) -> NodeAttributes {
         NodeAttributes::default()
     }
 

@@ -1,8 +1,6 @@
-use std::{any::type_name, collections::HashSet};
+use std::collections::HashSet;
 
-use either::Either;
 use internal_baml_schema_ast::ast::TypeValue;
-use serde_json::Value;
 
 use crate::generate::{dir_writer::FileContent, ir::FieldType};
 
