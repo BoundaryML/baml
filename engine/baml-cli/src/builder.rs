@@ -19,9 +19,9 @@ pub fn build(
     let src_files = get_src_files(&baml_dir)?;
 
     info!(
-        "Building: {} ({} BAML files found)",
-        baml_dir.to_string_lossy().bold(),
-        src_files.len()
+        "Building baml project: {} {}",
+        baml_dir.canonicalize()?.to_string_lossy().green().bold(),
+        format!("({} files)", src_files.len()).dimmed()
     );
 
     let mut parsed = parse_and_validate_schema(

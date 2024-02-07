@@ -61,13 +61,15 @@ pub(crate) fn generate_py(
     test_cases.iter().for_each(|f| generate_py_file(f, &mut fc));
 
     generate_py_file(db, &mut fc);
-    debug!("Writing files to {}", gen.output.to_string_lossy());
-    let temp_path = PathBuf::from(format!("{}.tmp", &gen.output.to_string_lossy().to_string()));
+
+    let output_path = &gen.output_path;
+    debug!("Writing files to {}", output_path.to_string_lossy());
+    let temp_path = PathBuf::from(format!("{}.tmp", output_path.to_string_lossy().to_string()));
 
     match fc.write(&temp_path, gen, lock) {
         Ok(_) => {
-            let _ = std::fs::remove_dir_all(&gen.output);
-            std::fs::rename(&temp_path, &gen.output)
+            let _ = std::fs::remove_dir_all(output_path);
+            std::fs::rename(&temp_path, output_path)
         }
         Err(e) => {
             let _ = std::fs::remove_file(&temp_path);

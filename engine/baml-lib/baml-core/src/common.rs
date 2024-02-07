@@ -3,5 +3,5 @@
 mod preview_features;
 
 pub use self::preview_features::{
-    FeatureMap, PreviewFeature, PreviewFeatures, ALL_PREVIEW_FEATURES,
+    PreviewFeature, PreviewFeatures, ALL_PREVIEW_FEATURES,
 };
