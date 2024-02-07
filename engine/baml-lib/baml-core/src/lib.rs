@@ -20,6 +20,7 @@ mod lockfile;
 mod validate;
 
 use self::validate::generator_loader;
+
 pub use crate::{
     common::{PreviewFeature, PreviewFeatures, ALL_PREVIEW_FEATURES},
     configuration::Configuration,
@@ -141,7 +142,7 @@ fn validate_configuration(
             |gen| match lockfile::LockFileWrapper::from_generator(&gen) {
                 Ok(lock_file) => {
                     if let Ok(prev) =
-                        lockfile::LockFileWrapper::from_path(&gen.output.join("baml.lock"))
+                        lockfile::LockFileWrapper::from_path(gen.output_path.join("baml.lock"))
                     {
                         lock_file.validate(&prev, &mut diagnostics);
                     }
@@ -150,7 +151,7 @@ fn validate_configuration(
                 Err(err) => {
                     diagnostics.push_error(DatamodelError::new_validation_error(
                         &format!("Failed to create lock file: {}", err),
-                        gen.span.clone().unwrap(),
+                        gen.span.clone(),
                     ));
                     None
                 }

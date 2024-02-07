@@ -7,6 +7,7 @@ mod command;
 mod errors;
 mod import_command;
 mod init_command;
+mod shell;
 mod test_command;
 mod update;
 mod update_client;
@@ -14,56 +15,68 @@ mod update_client;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::fmt;
 
-/// Simple program to greet a person
+/// A versatile CLI tool for managing BAML projects and their dependencies.
 #[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
+#[command(author, version, about = "A CLI tool for BAML project management.", long_about = None)]
 #[command(propagate_version = true)]
 struct Cli {
+    /// Specifies a subcommand to run.
     #[command(subcommand)]
     command: Commands,
 }
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    // Build a BAML project
+    /// Builds a BAML project from the specified directory.
     Build(BuildArgs),
-    // Update this cli
+    /// Updates the CLI to the latest version.
     Update(UpdateArgs),
-    // Update client libraries for a BAML project
+    /// Updates client libraries for a specified BAML project.
     UpdateClient(BuildArgs),
+    /// Initializes a new BAML project in the current directory.
     Init(InitArgs),
+    /// Runs tests for a BAML project.
     Test(TestArgs),
+    /// Imports content into a BAML project.
     Import(ImportArgs),
 }
 
 #[derive(Args, Debug)]
 struct BuildArgs {
+    /// Optional: Specifies the directory of the BAML project to build.
     #[arg(long)]
     baml_dir: Option<String>,
 }
 
 #[derive(Args, Debug)]
-struct InitArgs {}
+struct InitArgs {
+    /// Skips the interactive prompt and initializes the project with default settings.
+    #[arg(long, short = 'n')]
+    no_prompt: bool,
+}
 
 #[derive(Args, Debug)]
 struct UpdateArgs {}
 
 #[derive(Args, Debug)]
 pub struct TestArgs {
+    /// Optional: Specifies the directory of the BAML project to test.
     #[arg(long)]
     baml_dir: Option<String>,
 
+    /// Includes specific tests or test groups in the execution.
     #[arg(long, short = 'i')]
     include: Vec<String>,
 
+    /// Excludes specific tests or test groups from the execution.
     #[arg(long, short = 'x')]
     exclude: Vec<String>,
 
-    // The `default_value_t` is used to set a default value for the `action` field.
-    // `action` is now an optional positional argument.
+    /// Sets the default action to perform. Can be either 'run' to execute tests or 'list' to list available tests.
     #[arg(default_value_t = TestAction::List)]
     action: TestAction,
 
+    /// Specifies a port for the test playground. Hidden from help text.
     #[arg(long, hide = true)]
     playground_port: Option<u16>,
 }
@@ -85,9 +98,11 @@ enum TestAction {
 
 #[derive(Args, Debug)]
 struct ImportArgs {
+    /// Optional: Specifies the directory of the BAML project to which the content will be imported.
     #[arg(long)]
     baml_dir: Option<String>,
 
+    /// Specifies the content to be imported into the BAML project.
     #[arg()]
     content: String,
 }
@@ -113,9 +128,8 @@ pub(crate) fn main() {
         Commands::Update(_args) => update::update(),
         Commands::Build(args) => builder::build(&args.baml_dir).map(|_| ()),
         Commands::UpdateClient(args) => update_client::update_client(&args.baml_dir),
-        Commands::Init(_args) => {
-            init_command::init_command().and_then(|_| builder::build(&None).map(|_| ()))
-        }
+        Commands::Init(args) => init_command::init_command(args.no_prompt)
+            .and_then(|_| builder::build(&None).map(|_| ())),
         Commands::Test(args) => {
             builder::build(&args.baml_dir).and_then(|(baml_dir, config, schema)| {
                 test_command::run(&args, &baml_dir, &config, schema)

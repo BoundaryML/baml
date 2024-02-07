@@ -1,7 +1,8 @@
+use colored::*;
 use std::{
     fs::{self, File},
     io::{self, Write},
-    process::{Command, Stdio},
+    process::Stdio,
     sync::Arc,
 };
 
@@ -12,7 +13,7 @@ use tokio::{
     time,
 };
 
-use crate::errors::CliError;
+use crate::{errors::CliError, shell::build_shell_command};
 
 use super::{ipc_comms, test_state::RunState};
 
@@ -54,7 +55,7 @@ async fn start_server() -> std::io::Result<(TcpListener, u16)> {
 
 async fn run_pytest_and_update_state(
     state: Arc<Mutex<RunState>>,
-    mut cmd: Command,
+    mut shell_command: Vec<String>,
 ) -> tokio::io::Result<()> {
     let (listener, port) = start_server().await?;
 
@@ -68,17 +69,19 @@ async fn run_pytest_and_update_state(
         }
     });
 
-    // Append args to pytest to enable IPC
-    // println!("Running pytest with args: {:?}", cmd);
-    // cmd.arg("--pytest-baml-ipc");
-    // cmd.arg(format!("{}", port));
-    cmd.args(["--pytest-baml-ipc", &format!("{}", port)]);
+    shell_command.push("--pytest-baml-ipc".into());
+    shell_command.push(format!("{}", port));
+
+    let mut cmd = build_shell_command(shell_command);
 
     println!("Running pytest with args: {:?}", cmd);
 
     // Create a directory in the temp folder
-    let temp_dir = std::env::temp_dir();
-    let baml_tests_dir = temp_dir.join("baml/tests");
+    // Load from environment variable (BAML_TEST_LOGS) if set or use temp_dir
+    let baml_tests_dir = match std::env::var("BAML_TEST_LOGS") {
+        Ok(dir) => std::path::PathBuf::from(dir),
+        Err(_) => std::env::temp_dir().join("baml/tests"),
+    };
     fs::create_dir_all(&baml_tests_dir)?;
 
     // Create files for stdout and stderr
@@ -89,7 +92,7 @@ async fn run_pytest_and_update_state(
     println!("Verbose logs available at: {}", stdout_file_path.display());
 
     let stdout_file = File::create(&stdout_file_path)?;
-    let stderr_file = File::create(stderr_file_path)?;
+    let stderr_file = File::create(&stderr_file_path)?;
 
     let mut child = cmd
         .stdout(Stdio::from(stdout_file))
@@ -127,16 +130,35 @@ async fn run_pytest_and_update_state(
 
     // Optionally, you can handle the output after the subprocess has finished
     let output = child.wait_with_output()?;
-    println!("Pytest finished with status: {}", output.status);
-    println!("Verbose logs available at: {}", stdout_file_path.display());
+    if let Some(code) = output.status.code() {
+        if ![0, 1].contains(&code) {
+            println!(
+                "{}",
+                format!(
+                    "Testing failed with exit code {}. Open the output logs below for more details",
+                    code
+                )
+                .bright_red()
+                .bold()
+            );
+            println!(
+                "{}\n{}",
+                stdout_file_path.display().to_string().dimmed(),
+                stderr_file_path.display().to_string().dimmed()
+            );
+        }
+    }
 
     Ok(())
 }
 
-pub(crate) fn run_test_with_watcher(state: RunState, cmd: Command) -> Result<(), CliError> {
+pub(crate) fn run_test_with_watcher(
+    state: RunState,
+    shell_command: Vec<String>,
+) -> Result<(), CliError> {
     let rt = tokio::runtime::Runtime::new().unwrap();
 
     let state = Arc::new(Mutex::new(state));
-    rt.block_on(run_pytest_and_update_state(state, cmd))
-        .map_err(|e| format!("Failed to run pytest: {}", e).into())
+    rt.block_on(run_pytest_and_update_state(state, shell_command))
+        .map_err(|e| format!("Failed to run tests: {}", e).into())
 }

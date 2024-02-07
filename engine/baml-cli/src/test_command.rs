@@ -87,7 +87,7 @@ fn matches_filters(
 
 pub fn run(
     command: &TestArgs,
-    baml_dir: &PathBuf,
+    _baml_dir: &PathBuf,
     config: &Configuration,
     schema: ValidatedSchema,
 ) -> Result<(), CliError> {
@@ -159,20 +159,45 @@ pub fn run(
     }
     match command.action {
         TestAction::Run => {
-            // Selected config:
-            let shell_setup = config.generators.iter().find_map(|(f, _)| {
-                if f.language == "python" {
-                    f.shell_setup.clone()
-                } else {
-                    None
-                }
-            });
+            // If no generators are selected, return an error
+            if config.generators.is_empty() {
+                return Err("No generators are available".into());
+            }
+
+            // Find the selected generator
+            let generator = &config
+                .generators
+                .iter()
+                .find(|(f, _)| f.used_in_tests)
+                .unwrap_or(&config.generators.first().unwrap())
+                .0;
+
+            // Print some information about the generator we are going to use
+            println!(
+                "{}",
+                format!(
+                    "Running tests using: {}\n  {} {}\n  {} {}",
+                    generator.language.to_string().green(),
+                    "test_directory:".dimmed(),
+                    generator.output_path.to_string_lossy().yellow(),
+                    "test_command:".dimmed(),
+                    generator.test_command.yellow()
+                )
+            );
+
+            let test_dir = generator.output_path.canonicalize().map_err(|e| {
+                format!(
+                    "Directory Error: {}: {}",
+                    generator.output_path.display(),
+                    e
+                )
+            })?;
 
             // Run the tests
             run_tests::run_tests(
                 state,
-                shell_setup,
-                baml_dir,
+                &test_dir,
+                &generator.test_command,
                 &selected_tests,
                 command.playground_port,
             )

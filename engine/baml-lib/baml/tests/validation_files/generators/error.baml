@@ -3,7 +3,7 @@ generator default {
   o o
 }
 
-// error: Property not known: "o". Did you mean one of these: "output", "language", "project_root", "pkg_manager", "python_setup_prefix"?
+// error: Property not known: "o". Did you mean one of these: "language", "project_root", "test_command", "install_command"?
 //   -->  generators/error.baml:3
 //    | 
 //  2 |   language python

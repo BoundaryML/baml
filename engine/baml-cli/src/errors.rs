@@ -1,4 +1,4 @@
-use std::{fmt, path::PathBuf};
+use std::{fmt, io, path::PathBuf};
 
 use baml_lib::Diagnostics;
 use colored::Colorize;
@@ -67,6 +67,24 @@ impl From<base64::DecodeError> for CliError {
 
 impl From<serde_json::Error> for CliError {
     fn from(error: serde_json::Error) -> Self {
+        CliError::StringError(error.to_string())
+    }
+}
+
+impl From<io::Error> for CliError {
+    fn from(error: io::Error) -> Self {
+        CliError::StringError(error.to_string())
+    }
+}
+
+impl From<std::string::FromUtf8Error> for CliError {
+    fn from(error: std::string::FromUtf8Error) -> Self {
+        CliError::StringError(error.to_string())
+    }
+}
+
+impl From<dialoguer::Error> for CliError {
+    fn from(error: dialoguer::Error) -> Self {
         CliError::StringError(error.to_string())
     }
 }
