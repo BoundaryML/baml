@@ -211,6 +211,22 @@ def test_object_from_str_with_quotes() -> None:
     assert test_obj["one"] == res.one
 
 
+@register_deserializer({})
+class BasicClass3(BaseModel):
+    one: str
+    two: Optional[str] = None
+
+
+def test_object_from_str_missing_optional_key() -> None:
+    deserializer = Deserializer[BasicClass3](BasicClass3)
+    test_obj = {
+        "one": "hello",
+    }
+    res = deserializer.from_string(json.dumps(test_obj))
+    assert test_obj["one"] == res.one
+    assert res.two is None
+
+
 def test_obj_from_json_markdown() -> None:
     test_value = """Here is how you can build the API call:
 ```json

@@ -7,7 +7,7 @@ from baml_client.baml_types import (
     IMaybePolishText,
 )
 from baml_client.testing import baml_test
-
+import json
 
 # async def some_traced_fn():
 #     pass
@@ -43,6 +43,7 @@ async def test_logic() -> None:
     # print(f"streaming done")
     # result = await stream.get_final_response()
     # print(f"final: {result.value.model_dump_json()}")
+    # json.loads(" hi")
 
     res = baml.MaybePolishText.stream(
         ProposedMessage(

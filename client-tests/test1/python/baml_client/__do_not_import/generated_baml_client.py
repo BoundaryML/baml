@@ -7,6 +7,7 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
+from .clients.client_anthropic import Anthropic
 from .clients.client_azure_default import AZURE_DEFAULT
 from .clients.client_azure_gpt4 import AZURE_GPT4
 from .clients.client_azure_yes_no import AZURE_YES_NO
@@ -46,6 +47,7 @@ class BAMLClient:
     AZURE_DEFAULT = AZURE_DEFAULT
     AZURE_GPT4 = AZURE_GPT4
     AZURE_YES_NO = AZURE_YES_NO
+    Anthropic = Anthropic
     LARGE_RESPONSE = LARGE_RESPONSE
     ResilientGPT4 = ResilientGPT4
 

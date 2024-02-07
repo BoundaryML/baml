@@ -52,21 +52,9 @@ impl<llm, MaybePolishText> v1 {
     }
 
     prompt #"
-        Given a conversation with a resident, consider improving the response previously shown.
+        Write a haiku:
 
-        Good responses are amiable and direct.
-
-        Do not use {// affirmative //} or negative unless the question is a yes or no question.
-
-        ```input
-        {#input}
-        ```       
-
-        {// The word format is required. don't remove it //}
-        Output JSON Format:
-        {#print_type(output)}
-
-        JSON:
+        
     "#
 }
 impl<llm, MaybePolishText> v2 {

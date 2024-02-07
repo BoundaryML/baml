@@ -1,6 +1,6 @@
 from typing import Any, Dict, Generic, AsyncIterator
-import json
 import typing
+from typing_extensions import get_origin
 from pydantic import BaseModel
 from baml_core.provider_manager import LLMResponse
 from baml_lib._impl.deserializer import Deserializer
@@ -189,6 +189,44 @@ class AsyncStream(Generic[TYPE, PARTIAL_TYPE]):
         async for response in self.__stream:
             yield TextDelta(delta=response.generated)
 
+    async def parse_stream_chunk(
+        self, total_text: str, delta: str
+    ) -> PartialValueWrapper[PARTIAL_TYPE]:
+        t = typing.get_args(self.__partial_deserializer.__orig_class__)[  # type: ignore
+            0
+        ]  # deserializer only has 1 type arg
+        is_list = get_origin(t) is list
+        if get_origin(t) is list or (
+            isinstance(t, type) and not issubclass(t, (str, bytes, int, float))
+        ):
+            # get the text that's between the first [ and the last ], and if the last ] is missing, get the whole remaining text.
+            start_char = "[" if is_list else "{"
+            end_char = "]" if is_list else "}"
+            start_index = total_text.find(start_char)
+            end_index = start_index
+            bracket_count = 0
+            for i, char in enumerate(total_text[start_index:]):
+                if char == start_char:
+                    bracket_count += 1
+                elif char == end_char:
+                    bracket_count -= 1
+                if bracket_count == 0:
+                    end_index = start_index + i
+                    break
+            else:  # No matching closing bracket found
+                end_index = len(total_text)
+            first_partial_json_substr = total_text[start_index : end_index + 1]
+
+            # Fill in the rest of the json
+            json_string = partial_parser.parse(first_partial_json_substr)
+            # run through our deserializer
+            parsed = self.__partial_deserializer.from_string(json_string)
+            return PartialValueWrapper.from_parseable(partial=parsed, delta=delta)
+
+        else:
+            parsed = self.__partial_deserializer.from_string(total_text)
+            return PartialValueWrapper.from_parseable(partial=parsed, delta=delta)
+
     @property
     async def parsed_stream(self) -> AsyncIterator[PartialValueWrapper[PARTIAL_TYPE]]:
         total_text = ""
@@ -197,10 +235,8 @@ class AsyncStream(Generic[TYPE, PARTIAL_TYPE]):
         async for response in self.__stream:
             try:
                 total_text += response.generated
-                parsed_json = partial_parser.parse(total_text)
-                parsed = self.__partial_deserializer.from_string(parsed_json)
-                yield PartialValueWrapper.from_parseable(
-                    partial=parsed, delta=response.generated
+                yield await self.parse_stream_chunk(
+                    total_text, delta=response.generated
                 )
             except Exception as e:
                 yield PartialValueWrapper.from_parse_failure(delta=response.generated)

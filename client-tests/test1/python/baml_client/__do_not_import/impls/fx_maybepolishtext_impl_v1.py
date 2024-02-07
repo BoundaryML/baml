@@ -26,25 +26,10 @@ import typing
 # An implementation of MaybePolishText.
 
 __prompt_template = """\
-Given a conversation with a resident, consider improving the response previously shown.
-
-Good responses are amiable and direct.
-
-Do not use or negative unless the question is a yes or no question.
-
-```input
-{arg}
-```       
-
-
-Output JSON Format:
-string
-
-JSON:\
+Write a haiku:\
 """
 
 __input_replacers = {
-    "{arg}"
 }
 
 
