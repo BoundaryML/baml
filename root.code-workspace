@@ -62,6 +62,14 @@
     }
   },
   "extensions": {
-    "recommendations": ["xaver.clang-format"]
+    "recommendations": [
+      "mhutchie.git-graph",
+      "github.copilot",
+      "pest.pest-ide-tools",
+      "ms-python.python",
+      "rust-lang.rust-analyzer",
+      "unifiedjs.vscode-mdx",
+      "tamasfe.even-better-toml"
+    ]
   }
 }

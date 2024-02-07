@@ -31,7 +31,7 @@ fn parse_generator(
             Ok(gen) => {
                 // Convert the generator to the new format:
 
-                let UPDATED_SYNTAX = format!(
+                let updated_client = format!(
                     r#"generator {} {{
     language "{}"
     project_root "{}"
@@ -50,7 +50,7 @@ fn parse_generator(
                 diagnostics.push_warning(DatamodelWarning::new(
                     format!(
                         "The generator format is deprecated. Please use the new format.\n{}",
-                        UPDATED_SYNTAX
+                        updated_client
                     ),
                     ast_generator.span().clone(),
                 ));
