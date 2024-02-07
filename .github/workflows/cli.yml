@@ -60,7 +60,7 @@ jobs:
         with:
           workspaces: |
             engine
-          prefix-key: "v1-rust" # We changed the ubuntu version so we need to invalidate the cache
+          prefix-key: "v2-rust" # We changed the ubuntu version so we need to invalidate the cache
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v0
         with:
@@ -69,6 +69,13 @@ jobs:
           args: "--locked --release"
           strip: false # Don't strip debug symbols
           working-directory: engine/baml-cli
+
+      # Run Tests on Linux
+      - name: Run tests
+        if: ${{ matrix.platform.target == 'x86_64-unknown-linux-gnu' }}
+        working-directory: engine/baml-cli
+        run: |
+          cargo test --locked --release --target x86_64-unknown-linux-gnu
 
       - name: Add artifact
         uses: actions/upload-artifact@v3
