@@ -3,10 +3,13 @@ Run this script to see how the BAML client can be used in Python.
 
 python -m example_baml_app
 """
+
 import asyncio
 from baml_client import baml as b
 from datetime import datetime
 from typing import List, TypedDict
+import asyncio
+
 
 async def extract_resume(resume: str) -> None:
     """
@@ -17,10 +20,22 @@ async def extract_resume(resume: str) -> None:
     parsed_resume = await b.ExtractResume(resume)
     print(parsed_resume.model_dump_json(indent=2))
 
+    await asyncio.sleep(1)
+    print("\n\nNow extracting using streaming")
+    async with b.ExtractResume.stream(resume) as stream:
+        async for x in stream.parsed_stream:
+            if x.is_parseable:
+                print(f"streaming: {x.parsed.model_dump_json()}")
+
+        print(
+            f"\n final: {await stream.get_final_response().value.model_dump_json(indent=2)}"
+        )
+
 
 class ChatMessage(TypedDict):
     sender: str
     message: str
+
 
 async def classify_chat(messages: List[ChatMessage]) -> None:
     """
@@ -31,8 +46,7 @@ async def classify_chat(messages: List[ChatMessage]) -> None:
     print(chat[:100] + "..." if len(chat) > 100 else chat)
 
     classification = await b.ClassifyMessage(
-        message=chat, 
-        message_date=datetime.now().strftime("%Y-%m-%d")
+        message=chat, message_date=datetime.now().strftime("%Y-%m-%d")
     )
     print("Got categories: ", classification)
 
@@ -70,8 +84,14 @@ async def main():
 
     messages = [
         {"sender": "Alice", "message": "I'm having issues with my computer."},
-        {"sender": "Assistant", "message": "I'm sorry to hear that. What seems to be the problem?"},
-        {"sender": "Alice", "message": "It's running really slow. I need to return it. Can I get a refund?"},
+        {
+            "sender": "Assistant",
+            "message": "I'm sorry to hear that. What seems to be the problem?",
+        },
+        {
+            "sender": "Alice",
+            "message": "It's running really slow. I need to return it. Can I get a refund?",
+        },
     ]
     await classify_chat(messages)
 

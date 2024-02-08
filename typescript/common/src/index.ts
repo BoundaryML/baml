@@ -2,6 +2,8 @@ import { ParserDatabase, ArgType } from './parser_db'
 export interface TestRequest {
   functions: {
     name: string
+    // whether these are actually all available tests for this function
+    run_all_available_tests?: boolean
     tests: {
       name: string
       impls: string[]

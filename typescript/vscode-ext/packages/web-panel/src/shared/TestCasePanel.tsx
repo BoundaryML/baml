@@ -377,6 +377,7 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
                   functions: [
                     {
                       name: func.name.value,
+                      run_all_available_tests: filter === '' ? true : false,
                       tests: test_cases.map((test_case) => ({
                         name: test_case.name.value,
                         impls: func.impls.map((i) => i.name.value),
@@ -644,7 +645,7 @@ const EditTestCaseForm = ({
 const TestCaseCard: React.FC<{ testCaseName: string; content: string }> = ({ testCaseName, content }) => {
   return (
     <div className="flex flex-col gap-2 text-xs text-left text-vscode-descriptionForeground">
-      <div className="text-balance">
+      <div className="break-all text-balance">
         {content.substring(0, 120)}
         {content.length > 120 && '...'}
       </div>

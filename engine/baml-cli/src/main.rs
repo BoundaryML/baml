@@ -144,6 +144,6 @@ pub(crate) fn main() {
 
     if let Err(error) = response {
         log::error!("{}", error);
-        std::process::exit(1);
+        std::process::exit(2);
     }
 }
