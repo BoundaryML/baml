@@ -2,11 +2,11 @@ function ClassifyTool {
   input (query: string, context: string)
   output ClassifyResponse
 }
- 
+   
 class ClassifyResponse { 
   tool Tool[] @description(#"
     Any number of tools the user may want to use
-  "#)
+  "#) 
   assistant_response string 
   
   pretty_message string @get(

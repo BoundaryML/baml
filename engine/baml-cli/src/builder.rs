@@ -17,10 +17,9 @@ pub fn build(
 ) -> Result<(PathBuf, Configuration, ValidatedSchema), CliError> {
     let (baml_dir, (config, diagnostics)) = get_src_dir(baml_dir)?;
     let src_files = get_src_files(&baml_dir)?;
-
     info!(
         "Building baml project: {} {}",
-        baml_dir.canonicalize()?.to_string_lossy().green().bold(),
+        baml_dir.to_string_lossy().green().bold(),
         format!("({} files)", src_files.len()).dimmed()
     );
 

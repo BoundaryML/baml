@@ -65,6 +65,7 @@ pub(crate) fn generate_py(
 
     let output_path = &gen.output_path;
     debug!("Writing files to {}", output_path.to_string_lossy());
+
     let temp_path = PathBuf::from(format!("{}.tmp", output_path.to_string_lossy().to_string()));
 
     match fc.write(&temp_path, gen, lock) {
