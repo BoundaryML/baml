@@ -113,6 +113,7 @@ class OpenAIChatProvider(LLMChatProvider):
             **self.__kwargs,
             stream=True,
         )
+
         async for r in response:  # type: ignore
             prompt_tokens = None
             output_tokens = None

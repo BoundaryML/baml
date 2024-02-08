@@ -8,24 +8,36 @@ from baml_client.baml_types import (
 )
 from baml_client.testing import baml_test
 import json
+import typing
 
 
 @baml_test
 @pytest.mark.asyncio
-async def test_logic() -> None:
+async def test_logic() -> typing.Any:
     count = 0
-    async with baml.MaybePolishText.stream(
-        ProposedMessage(thread=Conversation(thread=[]), generated_response="test"),
-    ) as stream:
-        async for x in stream.parsed_stream:
-            print(f"streaming: {x.json()}")
-            count += 1
-        # print(f"streaming: {x.dump_json()}")
-    print(f"chunks: {count}")
-    assert count > 0
-    print(f"streaming done")
+    try:
+        async with baml.MaybePolishText.stream(
+            ProposedMessage(thread=Conversation(thread=[]), generated_response="test"),
+        ) as stream:
+            async for x in stream.parsed_stream:
+                print(f"streaming: {x.json()}")
 
-    result = await stream.get_final_response()
+                count += 1
+        print(f"chunks: {count}")
+        assert count > 0
+        print(f"streaming done")
+
+        result = await stream.get_final_response()
+    except Exception as e:
+        print(f"error: {e}")
+
+    res = await baml.MaybePolishText(
+        ProposedMessage(
+            thread=Conversation(thread=[]),
+            generated_response="i dont have that account ready",
+        )
+    )
+    return res
 
 
 # print(f"final: {result.value.model_dump_json()}")

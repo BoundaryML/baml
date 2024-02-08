@@ -6,6 +6,7 @@ import typing
 from opentelemetry.trace import get_current_span
 from .provider import BamlSpanContextManager, baml_tracer, set_tags
 from baml_core.stream import AsyncStream
+import sys
 
 
 def trace(*args, **kwargs) -> Any:
@@ -70,15 +71,17 @@ class AsyncGeneratorContextManager:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         if not self.gen_instance:
             raise ValueError("The async generator has not been initialized.")
-        await self.gen_instance.__aexit__(exc_type, exc_val, exc_tb)
-        if self.ctx:
-            if not self.gen_instance:
-                raise ValueError("The async generator has not been initialized.")
 
+        try:
+            await self.gen_instance.__aexit__(exc_type, exc_val, exc_tb)
             final_res = await self.gen_instance.get_final_response()
-            self.ctx.complete(final_res.value)
-            self.ctx.__exit__(exc_type, exc_val, exc_tb)
+            if self.ctx:
+                self.ctx.complete(final_res.value)
+        except Exception as e:
+            exc_type, exc_val, exc_tb = sys.exc_info()
 
+        if self.ctx:
+            self.ctx.__exit__(exc_type, exc_val, exc_tb)
         if self.span_context:
             self.span_context.__exit__(exc_type, exc_val, exc_tb)
 
