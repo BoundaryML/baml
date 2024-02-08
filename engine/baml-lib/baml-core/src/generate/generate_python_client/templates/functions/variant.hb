@@ -26,7 +26,7 @@ __deserializer.overload("{{{name}}}", {{BLOCK_OPEN}}{{#each aliases}}"{{{alias}}
 
 # Add a deserializer that handles stream responses, which are all Partial types
 {{#if output_adapter}}
-__partial_deserializer = Deserializer[{{output_adapter.type_partial}}]({{output_adapter.type_partial}})  # type: ignore
+__partial_deserializer = Deserializer[{{output_adapter.type}}]({{output_adapter.type}})  # type: ignore
 {{else}}
 __partial_deserializer = Deserializer[{{function.return.0.type_partial}}]({{function.return.0.type_partial}})  # type: ignore
 {{/if}}
