@@ -57,9 +57,6 @@ impl<llm, MaybePolishText> v1 {
 
     "#
 
-    adapter<string, output> python#"
-        return "hello"
-    "#
 }
 impl<llm, MaybePolishText> v2 {
     client AZURE_GPT4
