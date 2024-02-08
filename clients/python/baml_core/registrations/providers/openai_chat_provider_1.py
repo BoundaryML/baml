@@ -115,7 +115,6 @@ class OpenAIChatProvider(LLMChatProvider):
             stream=True,
         )
         async for r in response:
-            print(f"openai {r}")
             prompt_tokens = None
             output_tokens = None
             total_tokens = None

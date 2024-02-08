@@ -149,8 +149,6 @@ class AnthropicProvider(LLMChatProvider):
         ) as stream:
             last_response: typing.Optional[MessageStreamEvent] = None
             async for response in stream:
-                print(f"anthropic {response}")
-
                 last_response = response
                 if isinstance(response, MessageStartEvent):
                     total_input_tokens = response.message.usage.input_tokens

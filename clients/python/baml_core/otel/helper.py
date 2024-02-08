@@ -461,9 +461,7 @@ def event_to_log(
         io=IO(input=None, output=None),
         metadata=[],
     )
-    print("\n\n------------------------events-----\n")
     for event in span.events:
-        print(event.name)
         fill_partial(event, partial)
 
     return partial.to_final()

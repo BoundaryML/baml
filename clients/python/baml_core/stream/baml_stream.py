@@ -9,7 +9,6 @@ from baml_core.stream import JSONParser
 TYPE = typing.TypeVar("TYPE")
 PARTIAL_TYPE = typing.TypeVar("PARTIAL_TYPE")
 partial_parser = JSONParser()
-# from baml_core.otel import trace, create_event
 
 
 class Unset:
@@ -90,91 +89,8 @@ class PartialValueWrapper(Generic[PARTIAL_TYPE]):
         }
 
 
-# class BAMLStreamResponse(Generic[TYPE, PARTIAL_TYPE]):
-#     __partial_value: ValueWrapper[PartialValueWrapper[PARTIAL_TYPE]]
-#     __final_value: ValueWrapper[TYPE]
-
-#     def __init__(
-#         self,
-#         response: ValueWrapper[TYPE],
-#         partial_value: ValueWrapper[PartialValueWrapper[PARTIAL_TYPE]],
-#     ) -> None:
-#         self.__partial_value = partial_value
-#         self.__final_value = response
-
-#     @staticmethod
-#     def from_parsed_partial(
-#         partial: PARTIAL_TYPE, delta: str
-#     ) -> "BAMLStreamResponse[TYPE, PARTIAL_TYPE]":
-#         return BAMLStreamResponse[TYPE, PARTIAL_TYPE](
-#             ValueWrapper.unset(),
-#             ValueWrapper.from_value(PartialValueWrapper.from_parseable(partial, delta)),
-#         )
-
-#     @staticmethod
-#     def from_failed_partial(delta: str) -> "BAMLStreamResponse[TYPE, PARTIAL_TYPE]":
-#         return BAMLStreamResponse[TYPE, PARTIAL_TYPE](
-#             ValueWrapper.unset(),
-#             ValueWrapper.from_value(PartialValueWrapper.from_parse_failure(delta)),
-#         )
-
-#     @staticmethod
-#     def from_final_response(response: TYPE) -> "BAMLStreamResponse[TYPE, PARTIAL_TYPE]":
-#         return BAMLStreamResponse[TYPE, PARTIAL_TYPE](
-#             ValueWrapper.from_value(response), ValueWrapper.unset()
-#         )
-
-#     @property
-#     def is_complete(self) -> bool:
-#         return self.__final_value.has_value
-
-#     @property
-#     def final_response(self) -> TYPE:
-#         if not self.is_complete:
-#             raise ValueError("Stream not yet complete")
-#         return self.__final_value.value
-
-#     @property
-#     def has_partial_value(self) -> bool:
-#         return self.__partial_value.has_value
-
-#     @property
-#     def partial(self) -> PartialValueWrapper[PARTIAL_TYPE]:
-#         if not self.has_partial_value:
-#             raise ValueError("No partial value")
-#         return self.__partial_value.value
-
-#     def dump_json(self, **kwargs) -> str:
-#         return json.dumps(self.json(), **kwargs)
-
-#     def json(self) -> Dict[str, Any]:
-#         if self.has_partial_value:
-#             return {
-#                 "partial": self.partial.json(),
-#                 "final_response": self.__final_value.json(),
-#             }
-
-#         return {
-#             "partial": None,
-#             "final_response": self.__final_value.json(),
-#         }
-
-
 class TextDelta(BaseModel):
     delta: str
-
-
-# class AsyncStreamManager(Generic[TYPE, PARTIAL_TYPE]):
-#     def __init__(
-#         self,
-#         stream_cb: typing.Callable[[Any], AsyncIterator[LLMResponse]],
-#         partial_deserializer: Deserializer[PARTIAL_TYPE],
-#         final_deserializer: Deserializer[TYPE],
-#     ):
-#         self.__stream_cb = stream_cb
-#         self.__partial_deserializer = partial_deserializer
-#         self.__deserializer = final_deserializer
-#     )
 
 
 class AsyncStream(Generic[TYPE, PARTIAL_TYPE]):
@@ -194,29 +110,18 @@ class AsyncStream(Generic[TYPE, PARTIAL_TYPE]):
         self.__deserializer = final_deserializer
         self.__final_response = ValueWrapper.unset()
         self.__is_stream_completed = False
-        # self.__trace_callback = trace_callback  # Store the callback
         self.__stream_cb = stream_cb
-        self.__ctx = None
 
     async def __aenter__(self):
-        # if self.__ctx is None:
-        #     raise ValueError("Context not set")
-        # with self.__ctx:
-        print("Entering")
-        # self.__stream = self.__stream_cb()
+        self.__stream = self.__stream_cb()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.__until_done()
-        res = await self.get_final_response()
-        if self.__ctx is not None:
-            await self.__ctx.complete(res)
-        else:
-            raise ValueError("Context not set")
 
     @property
     async def text_stream(self) -> AsyncIterator[TextDelta]:
-        async for response in self.__stream_cb():
+        async for response in self.__get_stream():
             yield TextDelta(delta=response.generated)
         self.__is_stream_completed = True
 
@@ -258,12 +163,16 @@ class AsyncStream(Generic[TYPE, PARTIAL_TYPE]):
             parsed = self.__partial_deserializer.from_string(total_text)
             return PartialValueWrapper.from_parseable(partial=parsed, delta=delta)
 
+    def __get_stream(self):
+        assert self.__stream is not None, "Stream not initialized"
+        return self.__stream
+
     @property
     async def parsed_stream(self) -> AsyncIterator[PartialValueWrapper[PARTIAL_TYPE]]:
         total_text = ""
         if self.__final_response.has_value:
             return
-        async for response in self.__stream_cb():
+        async for response in self.__get_stream():
             try:
                 total_text += response.generated
                 yield await self.__parse_stream_chunk(

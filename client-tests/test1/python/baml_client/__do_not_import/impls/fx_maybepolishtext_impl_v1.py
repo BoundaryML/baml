@@ -59,8 +59,6 @@ async def v1(arg: ProposedMessage, /) -> str:
 
 
 def v1_stream(arg: ProposedMessage, /) -> AsyncStream[str, str]:
-
-    # raw_stream = AZURE_GPT4.run_prompt_template_stream(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
     def run_prompt() -> AsyncIterator[LLMResponse]:
         print("running prompt")
         return AZURE_GPT4.run_prompt_template_stream(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
