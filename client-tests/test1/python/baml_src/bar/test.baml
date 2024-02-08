@@ -14,7 +14,7 @@ class ImprovedResponse {
     should_improve bool
     improved_response string?
     field Sentiment
-}
+} 
 
  
 function MaybePolishText {
@@ -23,22 +23,22 @@ function MaybePolishText {
     default_impl v1
 }
  
-function TextPolisher {
-    input ProposedMessage
-    output string
-}
+// function TextPolisher {
+//     input ProposedMessage
+//     output string
+// }
 
-impl<llm, TextPolisher> v1 {
-    client AZURE_GPT4
-    prompt #"
-        Write a haiku about:
-        ```input
-        {#input}
-        ```
+// impl<llm, TextPolisher> v1 {
+//     client AZURE_GPT4
+//     prompt #"
+//         Write a haiku about:
+//         ```input
+//         {#input}
+//         ```
 
-        JSON:
-    "#
-}
+//         JSON:
+//     "#
+// }
 
 impl<llm, MaybePolishText> v1 {
     client AZURE_GPT4

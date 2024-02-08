@@ -6,14 +6,13 @@ import typing
 from opentelemetry.trace import get_current_span
 from .provider import BamlSpanContextManager, baml_tracer, set_tags
 from baml_core.stream import AsyncStream
+from typing import Any, AsyncGenerator, Callable, TypeVar, Coroutine
 
-F = TypeVar("F", bound=Callable[..., Any])  # Function type
+# F = TypeVar("F", bound=Callable[..., Any])  # Function type
 
 # TODO:aaron
 # DO NOT CHECKIN
-# You need to update trace, so for trace(func) when func is a context manager,
-# the wrapper should return a context manager that wraps the original context manager
-# and starts a span when __enter__ is called and ends the span when __exit__ is called
+# You need to update
 
 
 def trace(*args, **kwargs) -> Any:
@@ -32,6 +31,57 @@ def trace(*args, **kwargs) -> Any:
             return _trace_internal(func, __name__=name)
 
         return wrapper
+
+
+F = TypeVar("F", bound=Callable[..., Coroutine[Any, Any, AsyncGenerator[Any, None]]])
+
+
+class AsyncGeneratorContextManager:
+    def __init__(
+        self, gen_factory: Callable[..., AsyncStream[Any, Any]], params, *args, **kwargs
+    ):
+        self.gen_factory = gen_factory
+        self.params = params
+        self.args = args
+        self.kwargs = kwargs
+        self.gen_instance = None
+        self.span = None  # Placeholder for span object
+        self.ctx = (
+            None  # Placeholder for BamlSpanContextManager or similar context manager
+        )
+
+    async def __aenter__(self) -> "AsyncStream":
+        # Assuming baml_tracer.start_as_current_span and BamlSpanContextManager are available in scope
+        # and set_tags, get_current_span are implemented
+        name = self.kwargs.get("name", "default_name")  # Customize this as needed
+        parent_id = (
+            get_current_span().get_span_context().span_id
+        )  # Adapt this line to your tracing context retrieval logic
+        # Simplified params handling
+        tags = self.kwargs.get("tags", {})  # Extract tags if any
+
+        # Start the tracing span
+        self.span_context = baml_tracer.start_as_current_span(name)
+        self.span = self.span_context.__enter__()
+        # Enter the custom context manager with tracing and context setup
+        self.ctx = BamlSpanContextManager(name, parent_id, self.span, self.params)
+        self.ctx.__enter__()  # Manually enter the context manager if not using 'with'
+
+        if tags:
+            set_tags(**tags)
+
+        self.gen_instance = self.gen_factory(*self.args, **self.kwargs)
+        return self.gen_instance
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if self.ctx:
+            if not self.gen_instance:
+                raise ValueError("The async generator has not been initialized.")
+            final_res = await self.gen_instance.get_final_response()
+            self.ctx.complete(final_res.value)
+            self.ctx.__exit__(exc_type, exc_val, exc_tb)
+        if self.span_context:
+            self.span_context.__exit__(exc_type, exc_val, exc_tb)
 
 
 def _trace_internal(func: F, **kwargs: typing.Any) -> F:
@@ -56,6 +106,26 @@ def _trace_internal(func: F, **kwargs: typing.Any) -> F:
     # Ensure that the user doesn't pass in any other kwargs
     assert not kwargs, f"Unexpected kwargs: {kwargs}"
 
+    print(f"{func.__qualname__} is async gen func {inspect.isasyncgenfunction(func)}")
+    # print if it is an async context gen func
+    print()
+
+    # TODO: find a resilient way to check
+    if "_stream" in func.__qualname__:
+        print(f"async gen func name {func.__name__}")
+
+        def wrapper(*args: Any, **kwargs: Any) -> AsyncGeneratorContextManager:
+            params = {
+                param_names[i] if i < len(param_names) else f"<arg:{i}>": arg
+                for i, arg in enumerate(args)
+            }
+            params.update(kwargs)
+
+            return AsyncGeneratorContextManager(func, params, *args, **kwargs)
+
+        return wrapper
+
+        # return func
     if asyncio.iscoroutinefunction(func):
 
         @functools.wraps(func)
@@ -91,20 +161,11 @@ def _trace_internal(func: F, **kwargs: typing.Any) -> F:
 
             with baml_tracer.start_as_current_span(name) as span:
                 with BamlSpanContextManager(name, parent_id, span, params) as ctx:
-
-                    def trace_callback(response):
-                        ctx.complete(
-                            response
-                        )  # Complete the trace with the final response
-
                     if tags:
                         set_tags(**tags)
                     response = func(*args, **kwargs)
-                    if isinstance(response, AsyncStream):
-                        response.__trace_callback = trace_callback
-                        return response
-                    else:
-                        ctx.complete(response)
-                        return response
+
+                    ctx.complete(response)
+                    return response
 
         return wrapper  # type: ignore

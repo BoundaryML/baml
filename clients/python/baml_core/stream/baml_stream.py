@@ -164,39 +164,59 @@ class TextDelta(BaseModel):
     delta: str
 
 
+# class AsyncStreamManager(Generic[TYPE, PARTIAL_TYPE]):
+#     def __init__(
+#         self,
+#         stream_cb: typing.Callable[[Any], AsyncIterator[LLMResponse]],
+#         partial_deserializer: Deserializer[PARTIAL_TYPE],
+#         final_deserializer: Deserializer[TYPE],
+#     ):
+#         self.__stream_cb = stream_cb
+#         self.__partial_deserializer = partial_deserializer
+#         self.__deserializer = final_deserializer
+#     )
+
+
 class AsyncStream(Generic[TYPE, PARTIAL_TYPE]):
-    __stream: AsyncIterator[LLMResponse]
+    __stream: typing.Optional[AsyncIterator[LLMResponse]] = None
     __final_response: ValueWrapper[TYPE]
     __is_stream_completed: bool
+    __stream_cb: typing.Callable[[], AsyncIterator[LLMResponse]]
+    __ctx: Any
 
     def __init__(
         self,
-        stream: AsyncIterator[LLMResponse],
+        stream_cb: typing.Callable[[], AsyncIterator[LLMResponse]],
         partial_deserializer: Deserializer[PARTIAL_TYPE],
         final_deserializer: Deserializer[TYPE],
-        trace_callback: typing.Optional[
-            typing.Callable[[Any], None]
-        ] = None,  # Add a tracing callback
     ):
-        self.__stream = stream
         self.__partial_deserializer = partial_deserializer
         self.__deserializer = final_deserializer
         self.__final_response = ValueWrapper.unset()
         self.__is_stream_completed = False
-        self.__trace_callback = trace_callback  # Store the callback
+        # self.__trace_callback = trace_callback  # Store the callback
+        self.__stream_cb = stream_cb
+        self.__ctx = None
 
     async def __aenter__(self):
-
+        # if self.__ctx is None:
+        #     raise ValueError("Context not set")
+        # with self.__ctx:
+        print("Entering")
+        # self.__stream = self.__stream_cb()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.__until_done()
-        if self.__trace_callback:
-            self.__trace_callback(self.__final_response.value)
+        res = await self.get_final_response()
+        if self.__ctx is not None:
+            await self.__ctx.complete(res)
+        else:
+            raise ValueError("Context not set")
 
     @property
     async def text_stream(self) -> AsyncIterator[TextDelta]:
-        async for response in self.__stream:
+        async for response in self.__stream_cb():
             yield TextDelta(delta=response.generated)
         self.__is_stream_completed = True
 
@@ -243,7 +263,7 @@ class AsyncStream(Generic[TYPE, PARTIAL_TYPE]):
         total_text = ""
         if self.__final_response.has_value:
             return
-        async for response in self.__stream:
+        async for response in self.__stream_cb():
             try:
                 total_text += response.generated
                 yield await self.__parse_stream_chunk(

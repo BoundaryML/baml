@@ -18,8 +18,9 @@ from ..types.partial.classes.cls_message import PartialMessage
 from ..types.partial.classes.cls_proposedmessage import PartialProposedMessage
 from baml_core.stream import AsyncStream
 from baml_lib._impl.deserializer import Deserializer
-from typing import Optional, AsyncIterator
 from baml_core.provider_manager.llm_response import LLMResponse
+from typing import AsyncIterator
+import contextlib
 
 import typing
 # Impl: v1
@@ -27,7 +28,7 @@ import typing
 # An implementation of MaybePolishText.
 
 __prompt_template = """\
-Write a haiku:\
+Write a haiku of the ocean:\
 """
 
 __input_replacers = {
@@ -54,15 +55,17 @@ async def v1(arg: ProposedMessage, /) -> str:
     deserialized = __deserializer.from_string(response.generated)
     return deserialized
 
-async def run_prompt(arg: ProposedMessage, /) -> AsyncIterator[LLMResponse]:
-    async for r in AZURE_GPT4.run_prompt_template_stream(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg)):
-        yield r
+
 
 
 def v1_stream(arg: ProposedMessage, /) -> AsyncStream[str, str]:
 
-    raw_stream = AZURE_GPT4.run_prompt_template_stream(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
-    stream = AsyncStream(raw_stream, __partial_deserializer, __deserializer)
+    # raw_stream = AZURE_GPT4.run_prompt_template_stream(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
+    def run_prompt() -> AsyncIterator[LLMResponse]:
+        print("running prompt")
+        return AZURE_GPT4.run_prompt_template_stream(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
+    stream = AsyncStream(stream_cb=run_prompt, partial_deserializer=__partial_deserializer, final_deserializer=__deserializer)
     return stream
+
 
 BAMLMaybePolishText.register_impl("v1")(v1, v1_stream)

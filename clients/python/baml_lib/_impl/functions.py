@@ -192,22 +192,15 @@ class BaseBAMLFunction(typing.Generic[RET, PARTIAL_RET]):
         assert (
             sig_params == expected_sig_params
         ), f"{self.name} {sig} does not match expected signature {expected_sig}"
-        run_impl_fn.__qualname__ = f"{self.__name}[impl:{run_impl_fn.__qualname__.replace('_stream', '')}]"  # type: ignore
+        run_impl_fn.__qualname__ = f"{self.__name}[impl:{run_impl_fn.__qualname__}]"  # type: ignore
         print("------------", run_impl_fn.__qualname__)
 
         if asyncio.iscoroutinefunction(run_impl_fn):
             print("------------is coroutine! -------", run_impl_fn.__qualname__)
             if is_stream:
-                print("------------is stream! -------", run_impl_fn.__qualname__)
-                pass
-                # @functools.wraps(run_impl_fn)
-                # async def wrapper(
-                #     *args: typing.Any, **kwargs: typing.Any
-                # ) -> typing.Any:
-                #     create_event("variant", {"name": name})
-                #     stream = run_impl_fn(*args, **kwargs)
-                # TODO: iterate over the whole stream?
-                #     return stream
+                print("-----wrapper here---")
+
+                return
 
             else:
                 print("------------Normal fn -------", run_impl_fn.__qualname__)
@@ -223,14 +216,14 @@ class BaseBAMLFunction(typing.Generic[RET, PARTIAL_RET]):
             print("------------Not coroutine! -------", run_impl_fn.__qualname__)
             if is_stream:
                 print("-----wrapper here---")
-
-                @functools.wraps(run_impl_fn)
-                async def wrapper(
-                    *args: typing.Any, **kwargs: typing.Any
-                ) -> typing.Any:
-                    # create_event("variant", {"name": name})
-                    stream_resp = run_impl_fn(*args, **kwargs)
-                    return stream_resp
+                return
+                # @functools.wraps(run_impl_fn)
+                # async def wrapper(
+                #     *args: typing.Any, **kwargs: typing.Any
+                # ) -> typing.Any:
+                #     # create_event("variant", {"name": name})
+                #     stream_resp = run_impl_fn(*args, **kwargs)
+                #     return stream_resp
 
             else:
                 print("------------Normal fn -------", run_impl_fn.__qualname__)
