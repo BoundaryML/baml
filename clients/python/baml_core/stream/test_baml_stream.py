@@ -31,7 +31,6 @@ str_async_stream = create_async_stream(
 
 @pytest.mark.asyncio
 async def test_input_str_output_str() -> None:
-
     text = "The answer is: hello"
     result = await str_async_stream._parse_stream_chunk(text, text[-3:])
 
