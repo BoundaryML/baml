@@ -19,8 +19,8 @@ async def test_logic() -> typing.Any:
         async with baml.MaybePolishText.stream(
             ProposedMessage(thread=Conversation(thread=[]), generated_response="test"),
         ) as stream:
-            async for x in stream.parsed_stream:
-                print(f"streaming: {x.json()}")
+            async for x in stream.text_stream:
+                print(f"streaming: {x.delta}")
 
                 count += 1
         print(f"chunks: {count}")

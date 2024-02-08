@@ -44,8 +44,7 @@ __partial_deserializer = Deserializer[str](str)  # type: ignore
 __partial_deserializer.overload("ImprovedResponse", {"ShouldImprove": "should_improve"})
 
 
-def output_adapter(arg: str) -> str:
-    return "hello"
+
 
 
 
@@ -53,10 +52,14 @@ def output_adapter(arg: str) -> str:
 async def v1(arg: ProposedMessage, /) -> str:
     response = await AZURE_GPT4.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
     deserialized = __deserializer.from_string(response.generated)
-    return output_adapter(deserialized)
+    return deserialized
 
 
 def v1_stream(arg: ProposedMessage, /) -> AsyncStream[str, str]:
-    raise NotImplementedError("Stream functions do not support output adapters")
+    def run_prompt() -> typing.AsyncIterator[LLMResponse]:
+        raw_stream = AZURE_GPT4.run_prompt_template_stream(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
+        return raw_stream
+    stream = AsyncStream(stream_cb=run_prompt, partial_deserializer=__partial_deserializer, final_deserializer=__deserializer)
+    return stream
 
 BAMLMaybePolishText.register_impl("v1")(v1, v1_stream)
