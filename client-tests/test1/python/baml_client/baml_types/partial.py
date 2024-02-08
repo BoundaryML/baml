@@ -7,7 +7,10 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
+from ..__do_not_import.types.partial.classes.cls_classifyresponse import PartialClassifyResponse
 from ..__do_not_import.types.partial.classes.cls_conversation import PartialConversation
+from ..__do_not_import.types.partial.classes.cls_empty import PartialEmpty
+from ..__do_not_import.types.partial.classes.cls_hi import PartialHi
 from ..__do_not_import.types.partial.classes.cls_improvedresponse import PartialImprovedResponse
 from ..__do_not_import.types.partial.classes.cls_message import PartialMessage
 from ..__do_not_import.types.partial.classes.cls_proposedmessage import PartialProposedMessage
@@ -16,8 +19,11 @@ from ..__do_not_import.types.partial.classes.cls_proposedmessage import PartialP
 
 
 __all__ = [
+    'PartialEmpty',
+    'PartialHi',
     'PartialMessage',
     'PartialConversation',
+    'PartialClassifyResponse',
     'PartialProposedMessage',
     'PartialImprovedResponse'
 ]

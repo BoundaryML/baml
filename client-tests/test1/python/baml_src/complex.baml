@@ -1,85 +1,85 @@
-// function ClassifyTool {
-//   input (query: string, context: string)
-//   output ClassifyResponse
-// }
+function ClassifyTool {
+  input (query: string, context: string)
+  output ClassifyResponse
+}
  
-// class ClassifyResponse { 
-//   tool Tool[] @description(#"
-//     Any number of tools the user may want to use
-//   "#)
-//   assistant_response string 
+class ClassifyResponse { 
+  tool Tool[] @description(#"
+    Any number of tools the user may want to use
+  "#)
+  assistant_response string 
   
-//   pretty_message string @get(
-//     python#"
-//       import json
-//       from xyz import xyz
+  pretty_message string @get(
+    python#"
+      import json
+      from xyz import xyz
 
-//       thingy = []
-//       # iterate over stuff
-//       json.loads()
-//       return f'You can use the following tools: {self.tool}'
-//     "#
-//   )
+      thingy = []
+      # iterate over stuff
+      json.loads()
+      return f'You can use the following tools: {self.tool}'
+    "#
+  )
  
     
-//   pretty_message2 string @get(
-//     python#"
-//       import json
-//       from xyz import xyz
+  pretty_message2 string @get(
+    python#"
+      import json
+      from xyz import xyz
 
-//       thingy = []
-//       # iterate over stuff
-//       json.loads()
-//       return f'You can use the following tools: {self.tool}'
-//     "#
-//   )
-// }
+      thingy = []
+      # iterate over stuff
+      json.loads()
+      return f'You can use the following tools: {self.tool}'
+    "#
+  )
+}
 
-// enum Tool {
-//   @@alias(tools)
+enum Tool {
+  @@alias(tools)
   
-//   CodeInterpreter
-//   @alias(k1) 
-//   @description(Use this tool if the user is asking to compute something)
+  CodeInterpreter
+  @alias(k1) 
+  @description(Use this tool if the user is asking to compute something)
 
-//   DrawImage
-//   @alias(k2) 
-//   @description(Use this tool if the user is asking to draw something)
+  DrawImage
+  @alias(k2) 
+  @description(Use this tool if the user is asking to draw something)
 
-//   GenerateText 
-//   @alias(k3)
-//   @description(Use this tool if the user is asking to generate text)
-// }
+  GenerateText 
+  @alias(k3)
+  @description(Use this tool if the user is asking to generate text)
+}
 
  
  
-// impl<llm, ClassifyTool> v1 {
-//     client AZURE_GPT4
+impl<llm, ClassifyTool> v1 {
+    client AZURE_GPT4
 
-//     override Tool {
-//       @@alias(tool)
-//     }
+    override Tool {
+      @@alias(tool)
+    }
 
-//     override ClassifyResponse {
-//       assistant_response @alias(foo)
-//       @description(#"
-//         This is the assistance reponse
-//       "#)
-//     }
+    override ClassifyResponse {
+      assistant_response @alias(foo)
+      @description(#"
+        This is the assistance reponse
+      "#)
+    }
 
-//     prompt #"
+    prompt #"
         
-//         {#input.query}
+        {#input.query}
  
-//         UserContext:
-//         {#input.context}
+        UserContext:
+        {#input.context}
   
-//         {#print_enum(Tool)} 
+        {#print_enum(Tool)} 
 
-//         Use this output format:
-//         {#print_type(output)}
+        Use this output format:
+        {#print_type(output)}
 
-//         JSON:
-//     "#
+        JSON:
+    "#
 
-// }
+}

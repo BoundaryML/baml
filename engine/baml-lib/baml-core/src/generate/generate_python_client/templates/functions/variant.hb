@@ -67,14 +67,15 @@ def {{name}}_stream({{> func_params unnamed_args=this.function.unnamed_args args
     {{#if output_adapter}}
     raise NotImplementedError("Stream functions do not support output adapters")
     {{else}}
-
-    {{#if input_adapter}}
-    adapted_input = input_adapter({{> arg_values unnamed_args=function.unnamed_args args=function.args}})
-    raw_stream = {{client}}.run_prompt_template_stream(template=__prompt_template, replacers=__input_replacers, params=dict(arg=adapted_input))
-    {{else}}
-    raw_stream = {{client}}.run_prompt_template_stream(template=__prompt_template, replacers=__input_replacers, params=dict({{> arg_values unnamed_args=function.unnamed_args args=function.args}}))
-    {{/if}}
-    stream = AsyncStream(raw_stream, __partial_deserializer, __deserializer)
+    def run_prompt() -> typing.AsyncIterator[LLMResponse]:
+        {{#if input_adapter}}
+        adapted_input = input_adapter({{> arg_values unnamed_args=function.unnamed_args args=function.args}})
+        raw_stream = {{client}}.run_prompt_template_stream(template=__prompt_template, replacers=__input_replacers, params=dict(arg=adapted_input))
+        {{else}}
+        raw_stream = {{client}}.run_prompt_template_stream(template=__prompt_template, replacers=__input_replacers, params=dict({{> arg_values unnamed_args=function.unnamed_args args=function.args}}))
+        {{/if}}
+        return raw_stream
+    stream = AsyncStream(stream_cb=run_prompt, partial_deserializer=__partial_deserializer, final_deserializer=__deserializer)
     return stream
     {{/if}}
 

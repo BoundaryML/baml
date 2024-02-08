@@ -7,41 +7,48 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..clients.client_azure_gpt4 import AZURE_GPT4
-from ..functions.fx_maybepolishtext import BAMLMaybePolishText
+from ..clients.client_azure_default import AZURE_DEFAULT
+from ..functions.fx_messagesimplifier import BAMLMessageSimplifier
 from ..types.classes.cls_conversation import Conversation
 from ..types.classes.cls_message import Message
-from ..types.classes.cls_proposedmessage import ProposedMessage
 from ..types.enums.enm_messagesender import MessageSender
 from ..types.partial.classes.cls_conversation import PartialConversation
 from ..types.partial.classes.cls_message import PartialMessage
-from ..types.partial.classes.cls_proposedmessage import PartialProposedMessage
 from baml_core.provider_manager.llm_response import LLMResponse
 from baml_core.stream import AsyncStream
 from baml_lib._impl.deserializer import Deserializer
+from typing import Optional
 
 
 import typing
 # Impl: v1
-# Client: AZURE_GPT4
-# An implementation of MaybePolishText.
+# Client: AZURE_DEFAULT
+# An implementation of MessageSimplifier.
 
 __prompt_template = """\
-Write a haiku:\
+Given a chat conversation between a human and ai
+simplify the most recent message from the human into a single sentence that includes all prior relevant context. Don't include any previously answered questions. 
+
+{arg}
+
+Most Recent Message:
+{arg}
+
+Simplified message:
+Human:\
 """
 
 __input_replacers = {
+    "{arg}"
 }
 
 
 # We ignore the type here because baml does some type magic to make this work
 # for inline SpecialForms like Optional, Union, List.
-__deserializer = Deserializer[str](str)  # type: ignore
-__deserializer.overload("ImprovedResponse", {"ShouldImprove": "should_improve"})
+__deserializer = Deserializer[Optional[int]](Optional[int])  # type: ignore
 
 # Add a deserializer that handles stream responses, which are all Partial types
-__partial_deserializer = Deserializer[str](str)  # type: ignore
-__partial_deserializer.overload("ImprovedResponse", {"ShouldImprove": "should_improve"})
+__partial_deserializer = Deserializer[int](int)  # type: ignore
 
 
 
@@ -49,17 +56,17 @@ __partial_deserializer.overload("ImprovedResponse", {"ShouldImprove": "should_im
 
 
 
-async def v1(arg: ProposedMessage, /) -> str:
-    response = await AZURE_GPT4.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
+async def v1(arg: Conversation, /) -> Optional[int]:
+    response = await AZURE_DEFAULT.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
     deserialized = __deserializer.from_string(response.generated)
     return deserialized
 
 
-def v1_stream(arg: ProposedMessage, /) -> AsyncStream[str, str]:
+def v1_stream(arg: Conversation, /) -> AsyncStream[Optional[int], int]:
     def run_prompt() -> typing.AsyncIterator[LLMResponse]:
-        raw_stream = AZURE_GPT4.run_prompt_template_stream(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
+        raw_stream = AZURE_DEFAULT.run_prompt_template_stream(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
         return raw_stream
     stream = AsyncStream(stream_cb=run_prompt, partial_deserializer=__partial_deserializer, final_deserializer=__deserializer)
     return stream
 
-BAMLMaybePolishText.register_impl("v1")(v1, v1_stream)
+BAMLMessageSimplifier.register_impl("v1")(v1, v1_stream)

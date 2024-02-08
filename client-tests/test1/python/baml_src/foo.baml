@@ -1,31 +1,31 @@
-// function MessageSimplifier {
-//     input Conversation
-//     output int?
-// } 
+function MessageSimplifier {
+    input Conversation
+    output int?
+} 
 
-// class Empty {
-// }
+class Empty {
+}
 
-// enum EmptyEnum {
-// }
+enum EmptyEnum {
+}
 
-// class Hi {  
-//   thing bool
-// } 
+class Hi {  
+  thing bool 
+} 
+ 
+impl<llm, MessageSimplifier> v1 {
+  client AZURE_DEFAULT
 
-// impl<llm, MessageSimplifier> v1 {
-//   client AZURE_DEFAULT
+  prompt #"
+        Given a chat conversation between a human and ai
+        simplify the most recent message from the human into a single sentence that includes all prior relevant context. Don't include any previously answered questions. 
 
-//   prompt #"
-//         Given a chat conversation between a human and ai
-//         simplify the most recent message from the human into a single sentence that includes all prior relevant context. Don't include any previously answered questions. 
+        {#input}
 
-//         {#input}
+        Most Recent Message:
+        {#input}
 
-//         Most Recent Message:
-//         {#input}
-
-//         Simplified message:
-//         Human:
-//   "#
-// }  
+        Simplified message:
+        Human:
+  "#
+}  

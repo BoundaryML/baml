@@ -61,6 +61,7 @@ fn use_partial(
             f.add_import("baml_lib._impl.deserializer", "Deserializer");
             f.add_line("import typing");
             f.add_import("baml_core.stream", "AsyncStream");
+            f.add_import("baml_core.provider_manager.llm_response", "LLMResponse");
 
             register_partial_file!(reg, "functions", "variant");
             String::from("variant")

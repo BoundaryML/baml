@@ -97,7 +97,6 @@ class CustomBackendExporter(SpanExporter):
                         )
 
             CacheManager.save_llm_request(item)
-            print(f"-----------\n{item}\n")
 
             if self.__api_wrapper:
                 # TODO: Send a single large payload.

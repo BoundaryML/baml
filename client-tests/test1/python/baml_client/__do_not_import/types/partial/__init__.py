@@ -7,7 +7,10 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
+from .classes.cls_classifyresponse import PartialClassifyResponse
 from .classes.cls_conversation import PartialConversation
+from .classes.cls_empty import PartialEmpty
+from .classes.cls_hi import PartialHi
 from .classes.cls_improvedresponse import PartialImprovedResponse
 from .classes.cls_message import PartialMessage
 from .classes.cls_proposedmessage import PartialProposedMessage
@@ -16,7 +19,10 @@ from .classes.cls_proposedmessage import PartialProposedMessage
 
 
 __all__ = [
+    'PartialClassifyResponse',
     'PartialConversation',
+    'PartialEmpty',
+    'PartialHi',
     'PartialImprovedResponse',
     'PartialMessage',
     'PartialProposedMessage'

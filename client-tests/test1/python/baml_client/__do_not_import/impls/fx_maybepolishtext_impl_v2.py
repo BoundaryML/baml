@@ -16,6 +16,7 @@ from ..types.enums.enm_messagesender import MessageSender
 from ..types.partial.classes.cls_conversation import PartialConversation
 from ..types.partial.classes.cls_message import PartialMessage
 from ..types.partial.classes.cls_proposedmessage import PartialProposedMessage
+from baml_core.provider_manager.llm_response import LLMResponse
 from baml_core.stream import AsyncStream
 from baml_lib._impl.deserializer import Deserializer
 
@@ -70,9 +71,10 @@ async def v2(arg: ProposedMessage, /) -> str:
 
 
 def v2_stream(arg: ProposedMessage, /) -> AsyncStream[str, str]:
-
-    raw_stream = AZURE_GPT4.run_prompt_template_stream(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
-    stream = AsyncStream(raw_stream, __partial_deserializer, __deserializer)
+    def run_prompt() -> typing.AsyncIterator[LLMResponse]:
+        raw_stream = AZURE_GPT4.run_prompt_template_stream(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
+        return raw_stream
+    stream = AsyncStream(stream_cb=run_prompt, partial_deserializer=__partial_deserializer, final_deserializer=__deserializer)
     return stream
 
 BAMLMaybePolishText.register_impl("v2")(v2, v2_stream)
