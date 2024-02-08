@@ -49,12 +49,16 @@ impl<llm, MaybePolishText> v1 {
         @meta(fooz, "foo, bar, baz")
 
         improved_response @description(string if should_improve else null)
-    }
+    } 
 
     prompt #"
         Write a haiku:
 
 
+    "#
+
+    adapter<string, output> python#"
+        return "hello"
     "#
 }
 impl<llm, MaybePolishText> v2 {
