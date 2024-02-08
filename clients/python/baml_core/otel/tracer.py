@@ -77,7 +77,7 @@ class AsyncGeneratorContextManager:
             final_res = await self.gen_instance.get_final_response()
             if self.ctx:
                 self.ctx.complete(final_res.value)
-        except Exception as e:
+        except Exception:
             exc_type, exc_val, exc_tb = sys.exc_info()
 
         if self.ctx:
