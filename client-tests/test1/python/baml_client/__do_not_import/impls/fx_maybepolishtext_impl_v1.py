@@ -18,7 +18,8 @@ from ..types.partial.classes.cls_message import PartialMessage
 from ..types.partial.classes.cls_proposedmessage import PartialProposedMessage
 from baml_core.stream import AsyncStream
 from baml_lib._impl.deserializer import Deserializer
-
+from typing import Optional, AsyncIterator
+from baml_core.provider_manager.llm_response import LLMResponse
 
 import typing
 # Impl: v1
@@ -52,6 +53,10 @@ async def v1(arg: ProposedMessage, /) -> str:
     response = await AZURE_GPT4.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
     deserialized = __deserializer.from_string(response.generated)
     return deserialized
+
+async def run_prompt(arg: ProposedMessage, /) -> AsyncIterator[LLMResponse]:
+    async for r in AZURE_GPT4.run_prompt_template_stream(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg)):
+        yield r
 
 
 def v1_stream(arg: ProposedMessage, /) -> AsyncStream[str, str]:

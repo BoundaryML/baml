@@ -2,13 +2,14 @@ from typing import Any, Dict, Generic, AsyncIterator
 import typing
 from typing_extensions import get_origin
 from pydantic import BaseModel
-from baml_core.provider_manager import LLMResponse
+from baml_core.provider_manager.llm_response import LLMResponse
 from baml_lib._impl.deserializer import Deserializer
 from baml_core.stream import JSONParser
 
 TYPE = typing.TypeVar("TYPE")
 PARTIAL_TYPE = typing.TypeVar("PARTIAL_TYPE")
 partial_parser = JSONParser()
+# from baml_core.otel import trace, create_event
 
 
 class Unset:
@@ -166,30 +167,40 @@ class TextDelta(BaseModel):
 class AsyncStream(Generic[TYPE, PARTIAL_TYPE]):
     __stream: AsyncIterator[LLMResponse]
     __final_response: ValueWrapper[TYPE]
+    __is_stream_completed: bool
 
     def __init__(
         self,
         stream: AsyncIterator[LLMResponse],
         partial_deserializer: Deserializer[PARTIAL_TYPE],
         final_deserializer: Deserializer[TYPE],
+        trace_callback: typing.Optional[
+            typing.Callable[[Any], None]
+        ] = None,  # Add a tracing callback
     ):
         self.__stream = stream
         self.__partial_deserializer = partial_deserializer
         self.__deserializer = final_deserializer
         self.__final_response = ValueWrapper.unset()
+        self.__is_stream_completed = False
+        self.__trace_callback = trace_callback  # Store the callback
 
     async def __aenter__(self):
+
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.until_done()
+        await self.__until_done()
+        if self.__trace_callback:
+            self.__trace_callback(self.__final_response.value)
 
     @property
     async def text_stream(self) -> AsyncIterator[TextDelta]:
         async for response in self.__stream:
             yield TextDelta(delta=response.generated)
+        self.__is_stream_completed = True
 
-    async def parse_stream_chunk(
+    async def __parse_stream_chunk(
         self, total_text: str, delta: str
     ) -> PartialValueWrapper[PARTIAL_TYPE]:
         t = typing.get_args(self.__partial_deserializer.__orig_class__)[  # type: ignore
@@ -235,7 +246,7 @@ class AsyncStream(Generic[TYPE, PARTIAL_TYPE]):
         async for response in self.__stream:
             try:
                 total_text += response.generated
-                yield await self.parse_stream_chunk(
+                yield await self.__parse_stream_chunk(
                     total_text, delta=response.generated
                 )
             except Exception as e:
@@ -248,11 +259,11 @@ class AsyncStream(Generic[TYPE, PARTIAL_TYPE]):
             self.__final_response = ValueWrapper.unset()
 
     async def get_final_response(self) -> ValueWrapper[TYPE]:
-        await self.until_done()
+        await self.__until_done()
         return self.__final_response
 
-    async def until_done(self) -> None:
-        if self.__final_response.has_value:
+    async def __until_done(self) -> None:
+        if self.__final_response.has_value or self.__is_stream_completed:
             return
         async for r in self.parsed_stream:
             pass

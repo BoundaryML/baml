@@ -128,6 +128,7 @@ class LLMOutputModelMetadata(BaseModel):
     output_tokens: Optional[int] = None
     total_tokens: Optional[int] = None
     finish_reason: Optional[str] = None
+    stream: Optional[bool] = None
 
 
 class LLMOutputModel(BaseModel):

@@ -5,8 +5,15 @@ from typing import Any, Callable, TypeVar
 import typing
 from opentelemetry.trace import get_current_span
 from .provider import BamlSpanContextManager, baml_tracer, set_tags
+from baml_core.stream import AsyncStream
 
 F = TypeVar("F", bound=Callable[..., Any])  # Function type
+
+# TODO:aaron
+# DO NOT CHECKIN
+# You need to update trace, so for trace(func) when func is a context manager,
+# the wrapper should return a context manager that wraps the original context manager
+# and starts a span when __enter__ is called and ends the span when __exit__ is called
 
 
 def trace(*args, **kwargs) -> Any:
@@ -84,10 +91,20 @@ def _trace_internal(func: F, **kwargs: typing.Any) -> F:
 
             with baml_tracer.start_as_current_span(name) as span:
                 with BamlSpanContextManager(name, parent_id, span, params) as ctx:
+
+                    def trace_callback(response):
+                        ctx.complete(
+                            response
+                        )  # Complete the trace with the final response
+
                     if tags:
                         set_tags(**tags)
                     response = func(*args, **kwargs)
-                    ctx.complete(response)
-                    return response
+                    if isinstance(response, AsyncStream):
+                        response.__trace_callback = trace_callback
+                        return response
+                    else:
+                        ctx.complete(response)
+                        return response
 
         return wrapper  # type: ignore

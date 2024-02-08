@@ -28,7 +28,7 @@ def create_async_stream(partial_deserializer, final_deserializer):
 @pytest.mark.asyncio
 async def test_input_str_output_str():
     text = "The answer is: hello"
-    result = await async_stream.parse_stream_chunk(text, text[-3:])
+    result = await async_stream.__parse_stream_chunk(text, text[-3:])
 
     # Check the result
     assert isinstance(result, PartialValueWrapper)
@@ -36,9 +36,10 @@ async def test_input_str_output_str():
 
 
 @pytest.mark.asyncio
+@pytest.mark.asyncio
 async def test_input_str_with_quotes_output_str():
     text = '"The answer is: hello"'
-    result = await async_stream.parse_stream_chunk(text, text[-3:])
+    result = await async_stream.__parse_stream_chunk(text, text[-3:])
 
     # Check the result
     assert isinstance(result, PartialValueWrapper)
@@ -67,7 +68,7 @@ user_async_stream = create_async_stream(
 @pytest.mark.asyncio
 async def test_input_dict_output_user():
     user_dict = '{"name": "John", "age": 30}'
-    result = await user_async_stream.parse_stream_chunk(user_dict, user_dict[-3:])
+    result = await user_async_stream.__parse_stream_chunk(user_dict, user_dict[-3:])
 
     # Check the result
     assert isinstance(result, PartialValueWrapper)
@@ -79,7 +80,7 @@ async def test_input_dict_output_user():
 @pytest.mark.asyncio
 async def test_input_dict_with_text_prefix_output_user():
     user_dict = 'The output is: {"name": "John", "age": 30}'
-    result = await user_async_stream.parse_stream_chunk(user_dict, user_dict[-3:])
+    result = await user_async_stream.__parse_stream_chunk(user_dict, user_dict[-3:])
 
     # Check the result
     assert isinstance(result, PartialValueWrapper)
@@ -97,7 +98,7 @@ async def test_input_dict_with_text_prefix_output_user_pretty_json():
         "age": 30
     }
     """
-    result = await user_async_stream.parse_stream_chunk(user_dict, user_dict[-3:])
+    result = await user_async_stream.__parse_stream_chunk(user_dict, user_dict[-3:])
 
     # Check the result
     assert isinstance(result, PartialValueWrapper)
@@ -109,7 +110,7 @@ async def test_input_dict_with_text_prefix_output_user_pretty_json():
 @pytest.mark.asyncio
 async def test_input_dict_with_text_prefix_output_user_truncated():
     user_dict = 'The output is: {"name": "John", '
-    result = await user_async_stream.parse_stream_chunk(user_dict, user_dict[-3:])
+    result = await user_async_stream.__parse_stream_chunk(user_dict, user_dict[-3:])
 
     # Check the result
     assert isinstance(result, PartialValueWrapper)
@@ -121,7 +122,7 @@ async def test_input_dict_with_text_prefix_output_user_truncated():
 @pytest.mark.asyncio
 async def test_input_dict_with_text_prefix_output_user_truncated2():
     user_dict = 'The output is: \n{"name": "John", "'
-    result = await user_async_stream.parse_stream_chunk(user_dict, user_dict[-3:])
+    result = await user_async_stream.__parse_stream_chunk(user_dict, user_dict[-3:])
 
     # Check the result
     assert isinstance(result, PartialValueWrapper)
@@ -133,7 +134,7 @@ async def test_input_dict_with_text_prefix_output_user_truncated2():
 @pytest.mark.asyncio
 async def test_input_two_dict_with_text_prefix_output_user():
     user_dict = 'The output is: {"name": "John", "age": 30}, but it could also be {"name": "John", age: 25}\nYeah.'
-    result = await user_async_stream.parse_stream_chunk(user_dict, user_dict[-3:])
+    result = await user_async_stream.__parse_stream_chunk(user_dict, user_dict[-3:])
 
     # Check the result
     assert isinstance(result, PartialValueWrapper)
@@ -145,7 +146,7 @@ async def test_input_two_dict_with_text_prefix_output_user():
 @pytest.mark.asyncio
 async def test_input_two_dict_with_text_prefix_output_user_truncated():
     user_dict = 'The output is: {"name": "John", "age": 30}, but it could also be {"name": "John"'
-    result = await user_async_stream.parse_stream_chunk(user_dict, user_dict[-3:])
+    result = await user_async_stream.__parse_stream_chunk(user_dict, user_dict[-3:])
 
     # Check the result
     assert isinstance(result, PartialValueWrapper)
@@ -157,7 +158,7 @@ async def test_input_two_dict_with_text_prefix_output_user_truncated():
 @pytest.mark.asyncio
 async def test_input_dict_with_text_before_and_after_output_user():
     user_dict = 'The output is: {"name": "John", "age": 30}, and that is the end'
-    result = await user_async_stream.parse_stream_chunk(user_dict, user_dict[-3:])
+    result = await user_async_stream.__parse_stream_chunk(user_dict, user_dict[-3:])
 
     # Check the result
     assert isinstance(result, PartialValueWrapper)
@@ -191,7 +192,7 @@ nested_user_async_stream = create_async_stream(
 @pytest.mark.asyncio
 async def test_input_dict_output_nested_user():
     nested_user_dict = '{"user": {"name": "John", "age": 30}, "status": "active"}'
-    result = await nested_user_async_stream.parse_stream_chunk(
+    result = await nested_user_async_stream.__parse_stream_chunk(
         nested_user_dict, nested_user_dict[-3:]
     )
 
@@ -207,7 +208,7 @@ async def test_input_dict_output_nested_user():
 @pytest.mark.asyncio
 async def test_input_dict_output_nested_user_truncated():
     nested_user_dict = '{"user": {"name": "John", '
-    result = await nested_user_async_stream.parse_stream_chunk(
+    result = await nested_user_async_stream.__parse_stream_chunk(
         nested_user_dict, nested_user_dict[-3:]
     )
 
@@ -233,7 +234,7 @@ list_async_stream = create_async_stream(list_deserializer, list_deserializer)
 @pytest.mark.asyncio
 async def test_input_str_output_int():
     text = "123"
-    result = await int_async_stream.parse_stream_chunk(text, text[-3:])
+    result = await int_async_stream.__parse_stream_chunk(text, text[-3:])
 
     assert result.parsed == 123
 
@@ -241,7 +242,7 @@ async def test_input_str_output_int():
 @pytest.mark.asyncio
 async def test_input_str_output_float():
     text = "123.45"
-    result = await float_async_stream.parse_stream_chunk(text, text[-3:])
+    result = await float_async_stream.__parse_stream_chunk(text, text[-3:])
 
     assert result.parsed == 123.45
 
@@ -249,7 +250,7 @@ async def test_input_str_output_float():
 @pytest.mark.asyncio
 async def test_input_str_output_list():
     text = '["1", "2", "3"]'
-    result = await list_async_stream.parse_stream_chunk(text, text[-3:])
+    result = await list_async_stream.__parse_stream_chunk(text, text[-3:])
 
     assert result.parsed == ["1", "2", "3"]
 
@@ -257,7 +258,7 @@ async def test_input_str_output_list():
 @pytest.mark.asyncio
 async def test_input_str_output_list2():
     text = ' ["1", "2", "3"] '
-    result = await list_async_stream.parse_stream_chunk(text, text[-3:])
+    result = await list_async_stream.__parse_stream_chunk(text, text[-3:])
 
     assert result.parsed == ["1", "2", "3"]
 
@@ -265,7 +266,7 @@ async def test_input_str_output_list2():
 @pytest.mark.asyncio
 async def test_input_str_with_prefix_output_list():
     text = 'The output is: ["1", "2", "3"]\n. Let me know if you need anything else.'
-    result = await list_async_stream.parse_stream_chunk(text, text[-3:])
+    result = await list_async_stream.__parse_stream_chunk(text, text[-3:])
 
     assert result.parsed == ["1", "2", "3"]
 
@@ -273,7 +274,7 @@ async def test_input_str_with_prefix_output_list():
 @pytest.mark.asyncio
 async def test_input_dict_output_user_truncated():
     user_dict = '{"name": "John"'
-    result = await user_async_stream.parse_stream_chunk(user_dict, user_dict[-3:])
+    result = await user_async_stream.__parse_stream_chunk(user_dict, user_dict[-3:])
 
     # Check the result
     assert isinstance(result, PartialValueWrapper)
@@ -285,7 +286,7 @@ async def test_input_dict_output_user_truncated():
 @pytest.mark.asyncio
 async def test_input_str_output_int_truncated():
     text = "12"
-    result = await int_async_stream.parse_stream_chunk(text, text[-3:])
+    result = await int_async_stream.__parse_stream_chunk(text, text[-3:])
 
     assert result.parsed == 12
 
@@ -294,7 +295,7 @@ async def test_input_str_output_int_truncated():
 # @pytest.mark.asyncio
 # async def test_input_str_output_float_truncated():
 #     text = "123."
-#     result = await float_async_stream.parse_stream_chunk(text, text[-3:])
+#     result = await float_async_stream.__parse_stream_chunk(text, text[-3:])
 
 #     assert result.parsed == 123.0
 
@@ -302,7 +303,7 @@ async def test_input_str_output_int_truncated():
 @pytest.mark.asyncio
 async def test_input_str_output_list_truncated():
     text = '["1", "2"'
-    result = await list_async_stream.parse_stream_chunk(text, text[-3:])
+    result = await list_async_stream.__parse_stream_chunk(text, text[-3:])
 
     assert result.parsed == ["1", "2"]
 

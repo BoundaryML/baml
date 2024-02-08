@@ -115,38 +115,21 @@ class OpenAIChatProvider(LLMChatProvider):
             stream=True,
         )
         async for r in response:
-            if isinstance(r, ChatCompletionChunk):
-                prompt_tokens = None
-                output_tokens = None
-                total_tokens = None
-            else:
-                prompt_tokens = r.usage.prompt_tokens
-                output_tokens = r.usage.completion_tokens
-                total_tokens = r.usage.total_tokens
-
-            if r.choices[0].finish_reason == "stop":
-                yield LLMResponse(
-                    generated="",
-                    model_name=r.model if r.model else "unknown-model",
-                    meta=dict(
-                        baml_is_complete=r.choices[0].finish_reason == "stop",
-                        logprobs=None,
-                        prompt_tokens=prompt_tokens,
-                        output_tokens=output_tokens,
-                        total_tokens=total_tokens,
-                        finish_reason=r.choices[0].finish_reason if r.choices else None,
-                    ),
-                )
-            else:
-                yield LLMResponse(
-                    generated=r.choices[0].delta.content,
-                    model_name=r.model if r.model else "unknown-model",
-                    meta=dict(
-                        baml_is_complete=r.choices[0].finish_reason == "stop",
-                        logprobs=None,
-                        prompt_tokens=prompt_tokens,
-                        output_tokens=output_tokens,
-                        total_tokens=total_tokens,
-                        finish_reason=r.choices[0].finish_reason if r.choices else None,
-                    ),
-                )
+            print(f"openai {r}")
+            prompt_tokens = None
+            output_tokens = None
+            total_tokens = None
+            # Note, openai currently does not provide usages for streams.
+            yield LLMResponse(
+                generated=r.choices[0].delta.content or "",
+                model_name=r.model if r.model else "unknown-model",
+                meta=dict(
+                    baml_is_complete=r.choices[0].finish_reason == "stop",
+                    logprobs=None,
+                    prompt_tokens=prompt_tokens,
+                    output_tokens=output_tokens,
+                    total_tokens=total_tokens,
+                    finish_reason=r.choices[0].finish_reason if r.choices else None,
+                    stream=True,
+                ),
+            )

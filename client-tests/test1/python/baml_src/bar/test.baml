@@ -54,7 +54,7 @@ impl<llm, MaybePolishText> v1 {
     prompt #"
         Write a haiku:
 
-        
+
     "#
 }
 impl<llm, MaybePolishText> v2 {

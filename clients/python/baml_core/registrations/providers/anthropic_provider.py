@@ -1,6 +1,14 @@
 import anthropic
 import typing
-
+from anthropic.types.beta import (
+    MessageStartEvent,
+    MessageStopEvent,
+    MessageStreamEvent,
+    MessageDeltaEvent,
+    ContentBlockStartEvent,
+    ContentBlockStopEvent,
+    ContentBlockDeltaEvent,
+)
 
 from baml_core.provider_manager import (
     LLMChatProvider,
@@ -48,7 +56,7 @@ class AnthropicProvider(LLMChatProvider):
             ), "Either use max_retries with Anthropic via options or retry via BAML, not both"
 
         super().__init__(
-            prompt_to_chat=lambda chat: {"role": "human", "content": chat},
+            prompt_to_chat=lambda chat: {"role": "user", "content": chat},
             **kwargs,
         )
 
@@ -110,7 +118,8 @@ class AnthropicProvider(LLMChatProvider):
             generated=response.completion,
             model_name=response.model,
             meta=dict(
-                baml_is_complete=response.stop_reason == "stop_sequence",
+                baml_is_complete=response.stop_reason == "stop_sequence"
+                or response.stop_reason == "stop_sequences",
                 prompt_tokens=prompt_tokens,
                 output_tokens=output_tokens,
                 total_tokens=prompt_tokens + output_tokens,
@@ -121,30 +130,59 @@ class AnthropicProvider(LLMChatProvider):
     async def _stream_chat(
         self, messages: typing.List[LLMChatMessage]
     ) -> typing.AsyncIterator[LLMResponse]:
-        prompt = (
-            "".join(
-                map(
-                    lambda c: f'{anthropic.HUMAN_PROMPT if  c["role"] != "system" else anthropic.AI_PROMPT} {c["content"]}',
-                    messages,
+        # beta client has diff params
+        caller_kwargs_copy = self.__caller_kwargs.copy()
+        if "max_tokens" not in caller_kwargs_copy:
+            caller_kwargs_copy["max_tokens"] = caller_kwargs_copy.pop(
+                "max_tokens_to_sample", None
+            )
+        else:
+            caller_kwargs_copy.pop("max_tokens_to_sample", None)
+
+        total_input_tokens = 0
+        # cumulative token count
+        total_output_tokens = 0
+        model = None
+        finish_reason = None
+        async with self.__client.beta.messages.stream(
+            messages=messages, **caller_kwargs_copy
+        ) as stream:
+            last_response: typing.Optional[MessageStreamEvent] = None
+            async for response in stream:
+                print(f"anthropic {response}")
+
+                last_response = response
+                if isinstance(response, MessageStartEvent):
+                    total_input_tokens = response.message.usage.input_tokens
+                    model = response.message.model
+                elif isinstance(response, MessageDeltaEvent):
+                    total_output_tokens = response.usage.output_tokens
+                    finish_reason = response.delta.stop_reason
+                elif isinstance(response, ContentBlockStartEvent):
+                    yield LLMResponse(
+                        generated=response.content_block.text,
+                        model_name=model or "<unknown-stream-model>",
+                        meta={},
+                    )
+                elif isinstance(response, ContentBlockDeltaEvent):
+                    yield LLMResponse(
+                        generated=response.delta.text,
+                        model_name=model or "<unknown-stream-model>",
+                        meta={},
+                    )
+
+            # Send final delta with cumulative token counts
+            if last_response is not None:
+                yield LLMResponse(
+                    generated="",
+                    model_name="",
+                    meta=dict(
+                        baml_is_complete=finish_reason is not None
+                        and finish_reason != "max_tokens",
+                        prompt_tokens=total_input_tokens,
+                        output_tokens=total_output_tokens,
+                        total_tokens=total_input_tokens + total_output_tokens,
+                        finish_reason=finish_reason,
+                        stream=True,
+                    ),
                 )
-            )
-            + anthropic.AI_PROMPT
-        )
-        prompt_tokens = await self.__client.count_tokens(prompt)
-        self.__client.beta.messages.stream
-        stream = await self.__client.completions.create(
-            prompt=prompt, **self.__caller_kwargs, stream=True
-        )
-        async for response in stream:
-            output_tokens = await self.__client.count_tokens(response.completion)
-            yield LLMResponse(
-                generated=response.completion,
-                model_name=response.model,
-                meta=dict(
-                    baml_is_complete=response.stop_reason == "stop_sequence",
-                    prompt_tokens=prompt_tokens,
-                    output_tokens=output_tokens,
-                    total_tokens=prompt_tokens + output_tokens,
-                    finish_reason=response.stop_reason,
-                ),
-            )

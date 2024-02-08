@@ -14,18 +14,8 @@ from ..cache_manager import CacheManager
 from ..services.api_types import CacheRequest, LLMChat
 from ..otel.helper import try_serialize
 from ..otel.provider import create_event
-
-
-class LLMResponse(BaseModel):
-    generated: str
-    mdl_name: str = Field(alias="model_name")
-    meta: typing.Any
-
-    @property
-    def ok(self) -> bool:
-        if isinstance(self.meta, dict):
-            return bool(self.meta.get("baml_is_complete", True))
-        return True
+from .llm_response import LLMResponse
+import contextlib
 
 
 class BaseProvider(abc.ABC):
@@ -142,6 +132,7 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
 
     @typing.final
     @typechecked
+    # @contextlib.asynccontextmanager
     async def run_prompt_template_stream(
         self,
         *,

@@ -146,7 +146,11 @@ class LLMChatProvider(AbstractLLMProvider):
             for msg in chats
         ]
 
-        async for response in self._stream_chat(messages):
+        # The end state is tracked by the AsyncStream.
+        # self._start_run(messages)
+        # async for response in self._stream_chat(messages):
+        #     yield response
+        async for response in self.__run_chat_stream_with_telemetry(messages):
             yield response
 
     @typechecked
@@ -178,6 +182,32 @@ class LLMChatProvider(AbstractLLMProvider):
         response = await self._run_chat(messages)
         self._end_run(response)
         return response
+
+    # Accumulates all messages and sends final payload
+    # to the backend for tracing purposes
+    async def __run_chat_stream_with_telemetry(
+        self, messages: typing.List[LLMChatMessage]
+    ) -> typing.AsyncIterator[LLMResponse]:
+        self._start_run(messages)
+        last_response: typing.Optional[LLMResponse] = None
+        total_text = ""
+        async for response in self._stream_chat(messages):
+            yield response
+            total_text += response.generated
+            last_response = response
+        if last_response is not None:
+            self._end_run(
+                LLMResponse(
+                    generated=total_text,
+                    model_name=last_response.mdl_name,
+                    meta=last_response.meta,
+                )
+            )
+        else:
+            raise LLMException(
+                code=ProviderErrorCode.INTERNAL_ERROR,
+                message="No response from provider stream",
+            )
 
     # Implemented by the actual providers that extend this
     @abc.abstractmethod
