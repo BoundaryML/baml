@@ -94,19 +94,7 @@ impl WithDocumentation for Field {
 /// An arity of a data model field.
 #[derive(Copy, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum FieldArity {
-    /// The field either must be in an insert statement, or the field must have
-    /// a default value for the insert to succeed.
-    ///
-    /// ```ignore
-    /// name String
-    /// ```
     Required,
-    /// The field does not need to be in an insert statement for the write to
-    /// succeed.
-    ///
-    /// ```ignore
-    /// name String?
-    /// ```
     Optional,
 }
 
@@ -191,6 +179,21 @@ impl FieldType {
                 arity.is_optional() || f.iter().any(|t| t.is_nullable())
             }
             FieldType::Tuple(arity, ..) => arity.is_optional(),
+            // Lists can't be nullable
+            FieldType::Dictionary(_kv, _) => false,
+            FieldType::List(_t, _, _) => false,
+        }
+    }
+
+    // Whether the field could theoretically be made optional.
+    pub fn can_be_null(&self) -> bool {
+        match self {
+            FieldType::Identifier(arity, t) => match t {
+                Identifier::Primitive(TypeValue::Null, _) => true,
+                _ => true,
+            },
+            FieldType::Union(arity, f, ..) => f.iter().any(|t| t.can_be_null()),
+            FieldType::Tuple(arity, ..) => true,
             // Lists can't be nullable
             FieldType::Dictionary(_kv, _) => false,
             FieldType::List(_t, _, _) => false,

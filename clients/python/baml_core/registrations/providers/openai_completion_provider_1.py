@@ -1,12 +1,12 @@
 from openai import AsyncOpenAI, AsyncAzureOpenAI
 from openai.types.completion import Completion
+from openai import AsyncClient
 from .openai_helper_1 import to_error_code
 import typing
-
-
 from baml_core.provider_manager import (
     LLMProvider,
     LLMResponse,
+    LLMChatMessage,
     register_llm_provider,
 )
 
@@ -15,6 +15,7 @@ from baml_core.provider_manager import (
 @typing.final
 class OpenAICompletionProvider(LLMProvider):
     __kwargs: typing.Dict[str, typing.Any]
+    _client: AsyncClient
 
     def __init__(
         self, *, options: typing.Dict[str, typing.Any], **kwargs: typing.Any
@@ -35,7 +36,7 @@ class OpenAICompletionProvider(LLMProvider):
                 azure_endpoint=options["api_base"] or options["azure_endpoint"],
             )
         else:
-            self._client = AsyncOpenAI(api_key=options["api_key"])  # type: ignore
+            self._client = AsyncOpenAI(api_key=options["api_key"])
         options.pop("api_key", None)
         options.pop("api_version", None)
         options.pop("api_base", None)
@@ -97,3 +98,14 @@ class OpenAICompletionProvider(LLMProvider):
                 finish_reason=finish_reason,
             ),
         )
+
+    async def _run_stream(self, prompt: str) -> typing.AsyncIterator[LLMResponse]:  # type: ignore
+        raise NotImplementedError("Stream is not supported for this provider")
+
+    async def _run_chat_template_internal_stream(
+        self,
+        *message_templates: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]],
+        replacers: typing.Iterable[str],
+        params: typing.Dict[str, typing.Any],
+    ) -> typing.AsyncIterator[LLMResponse]:
+        raise NotImplementedError("Stream is not supported for this provider")

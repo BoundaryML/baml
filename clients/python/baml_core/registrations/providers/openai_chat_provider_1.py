@@ -103,3 +103,31 @@ class OpenAIChatProvider(LLMChatProvider):
                 finish_reason=finish_reason,
             ),
         )
+
+    async def _stream_chat(
+        self, messages: typing.List[LLMChatMessage]
+    ) -> typing.AsyncIterator[LLMResponse]:
+        response = await self._client.chat.completions.create(
+            messages=messages,  # type: ignore
+            **self.__kwargs,
+            stream=True,
+        )
+
+        async for r in response:  # type: ignore
+            prompt_tokens = None
+            output_tokens = None
+            total_tokens = None
+            # Note, openai currently does not provide usages for streams.
+            yield LLMResponse(
+                generated=r.choices[0].delta.content or "",
+                model_name=r.model if r.model else "unknown-model",
+                meta=dict(
+                    baml_is_complete=r.choices[0].finish_reason == "stop",
+                    logprobs=None,
+                    prompt_tokens=prompt_tokens,
+                    output_tokens=output_tokens,
+                    total_tokens=total_tokens,
+                    finish_reason=r.choices[0].finish_reason if r.choices else None,
+                    stream=True,
+                ),
+            )

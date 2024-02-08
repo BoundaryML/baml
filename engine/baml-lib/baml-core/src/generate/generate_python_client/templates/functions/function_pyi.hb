@@ -19,14 +19,20 @@ CLS = typing.TypeVar("CLS", bound=type)
 class BAML{{name}}Impl:
     {{> method_def func_name="run" unnamed_args=this.unnamed_args args=this.args return=this.return}}
         ...
+    
+    def stream(self, {{> func_params unnamed_args=this.unnamed_args args=this.args}}) -> AsyncStream[{{return.0.type}}, {{return.0.type_partial}}]:
+        ...
 
 class IBAML{{name}}:
     def register_impl(
         self, name: ImplName
-    ) -> typing.Callable[[I{{name}}], I{{name}}]:
+    ) -> typing.Callable[[I{{name}}, I{{name}}Stream], None]:
         ...
 
     {{> method_def func_name="__call__" unnamed_args=this.unnamed_args args=this.args return=this.return}}
+        ...
+
+    def stream(self, {{> func_params unnamed_args=this.unnamed_args args=this.args}}) -> AsyncStream[{{return.0.type}}, {{return.0.type_partial}}]:
         ...
 
     def get_impl(self, name: ImplName) -> BAML{{name}}Impl:
@@ -83,9 +89,9 @@ class IBAML{{name}}:
 
         Usage:
             ```python
-            # All implementations except "{{impls.[0]}}" will be tested.
+            # All implementations except the given impl will be tested.
 
-            @baml.{{name}}.test(exclude_impl=["{{impls.[0]}}"])
+            @baml.{{name}}.test(exclude_impl=["implname"])
             async def test_logic({{name}}Impl: I{{name}}) -> None:
                 result = await {{name}}Impl(...)
             ```

@@ -9,7 +9,9 @@
 
 from ..types.classes.cls_classifyresponse import ClassifyResponse
 from ..types.enums.enm_tool import Tool
-from typing import Protocol, runtime_checkable
+from ..types.partial.classes.cls_classifyresponse import PartialClassifyResponse
+from baml_core.stream import AsyncStream
+from typing import Callable, Protocol, runtime_checkable
 
 
 import typing
@@ -42,18 +44,43 @@ class IClassifyTool(Protocol):
     async def __call__(self, *, query: str, context: str) -> ClassifyResponse:
         ...
 
+   
 
+@runtime_checkable
+class IClassifyToolStream(Protocol):
+    """
+    This is the interface for a stream function.
+
+    Args:
+        query: str
+        context: str
+
+    Returns:
+        AsyncStream[ClassifyResponse, PartialClassifyResponse]
+    """
+
+    def __call__(self, *, query: str, context: str
+) -> AsyncStream[ClassifyResponse, PartialClassifyResponse]:
+        ...
 class BAMLClassifyToolImpl:
     async def run(self, *, query: str, context: str) -> ClassifyResponse:
+        ...
+    
+    def stream(self, *, query: str, context: str
+) -> AsyncStream[ClassifyResponse, PartialClassifyResponse]:
         ...
 
 class IBAMLClassifyTool:
     def register_impl(
         self, name: ImplName
-    ) -> typing.Callable[[IClassifyTool], IClassifyTool]:
+    ) -> typing.Callable[[IClassifyTool, IClassifyToolStream], None]:
         ...
 
     async def __call__(self, *, query: str, context: str) -> ClassifyResponse:
+        ...
+
+    def stream(self, *, query: str, context: str
+) -> AsyncStream[ClassifyResponse, PartialClassifyResponse]:
         ...
 
     def get_impl(self, name: ImplName) -> BAMLClassifyToolImpl:
@@ -110,9 +137,9 @@ class IBAMLClassifyTool:
 
         Usage:
             ```python
-            # All implementations except "v1" will be tested.
+            # All implementations except the given impl will be tested.
 
-            @baml.ClassifyTool.test(exclude_impl=["v1"])
+            @baml.ClassifyTool.test(exclude_impl=["implname"])
             async def test_logic(ClassifyToolImpl: IClassifyTool) -> None:
                 result = await ClassifyToolImpl(...)
             ```

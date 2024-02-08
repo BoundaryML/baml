@@ -1,40 +1,40 @@
 
 
-// enum Categories {
-//     ONE
-//     TWO
-// }
+// // enum Categories {
+// //     ONE
+// //     TWO
+// // }
  
-// function EnumFunc {
-//     input Categories
-//     output string
-// } 
+// // function EnumFunc {
+// //     input Categories
+// //     output string
+// // } 
  
-// impl<llm, EnumFunc> version {
-//     client AZURE_GPT4
+// // impl<llm, EnumFunc> version {
+// //     client AZURE_GPT4
  
-//     prompt #"
-//         Given a user is trying to schedule a meeting, extract the relevant information
-//         {#input}
-//         information from the query.
-//         JSON: 
-//     "#
-// } 
+// //     prompt #"
+// //         Given a user is trying to schedule a meeting, extract the relevant information
+// //         {#input}
+// //         information from the query.
+// //         JSON:   
+// //     "#
+// // } 
 
-class BasicClass {
-    name string
-    age int
-    address string
-}
- 
-// function ClassFunc {
+// class BasicClass {
+//     name string 
+//     age int
+//     address string
+// }  
+         
+// function ClassFunc { 
 //     input BasicClass
 //     output string
 // }
-
-// impl<llm, ClassFunc> version {
+   
+// impl<llm, ClassFunc> version { 
 //     client AZURE_GPT4
- 
+  
 //     prompt #"
 //         Given a user is trying to schedule a meeting, extract the relevant information
 //         {#input}
@@ -114,13 +114,13 @@ class BasicClass {
 //     output string
 // }
 
-class OptionalObject {
-    a string?
-    b bool? 
-}   
+// class OptionalObject {
+//     a string?
+//     b bool? 
+// }   
  
-function OptionalFunc {
-    input OptionalObject
-    output string
-}
+// function OptionalFunc {
+//     input OptionalObject
+//     output string
+// }
  

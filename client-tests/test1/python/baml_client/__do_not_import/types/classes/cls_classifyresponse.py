@@ -10,7 +10,7 @@
 from ..enums.enm_tool import Tool
 from baml_lib._impl.deserializer import register_deserializer
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 
 
 @register_deserializer({  })

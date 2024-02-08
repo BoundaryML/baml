@@ -10,6 +10,7 @@
 from ..enums.enm_messagesender import MessageSender
 from baml_lib._impl.deserializer import register_deserializer
 from pydantic import BaseModel
+from typing import Optional
 
 
 @register_deserializer({ "sender1": "sender","body1": "body", })

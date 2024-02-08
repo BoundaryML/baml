@@ -78,3 +78,10 @@ client<llm> LARGE_RESPONSE {
     }
 }
 
+client<llm> Anthropic {
+    provider baml-anthropic
+    options {
+      model claude-instant-1.2
+      max_tokens_to_sample 300
+    }
+}

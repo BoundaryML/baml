@@ -1,5 +1,8 @@
 '''
 File for testing baml
+
+Run with:
+infisical run --env=test -- python3 -m pytest e2e_tests.py -s -v
 '''
 
 import subprocess
@@ -17,6 +20,11 @@ def setup_baml_builder():
         pytest.exit("Setup failed, exiting tests.", 1)
 
 
+@pytest.fixture(scope="session")
+def openai_key():
+    return os.environ.get("OPENAI_API_KEY", "sk-unset-openai-key")
+
+
 def get_test_cases():
     test_groups = []
     for test_dir in os.listdir(os.path.join(CWD, '.docker')):
@@ -29,8 +37,14 @@ def get_test_cases():
     return test_groups
 
 @pytest.mark.parametrize("context,tag", get_test_cases())
-def test_docker_builds_and_runs(context: str, tag: str):
+def test_docker_builds_and_runs(context: str, tag: str, openai_key: str):
     build_cmd: str = "docker build -q"
     subprocess.check_output(f"{build_cmd} --cache-from baml_builder -t baml_{tag} .docker/{context}/{tag}", shell=True, stderr=subprocess.STDOUT, cwd=CWD)
     os.makedirs(f"{os.path.join(CWD, 'test_logs', tag)}", exist_ok=True)
-    subprocess.check_call(f"docker run --env-file .docker/test.env -v ./test_logs/{tag}:/usr/src/logs baml_{tag}", shell=True, cwd=CWD)
+    env_vars = {
+        "OPENAI_API_KEY": openai_key,
+    }
+    env_vars_str = " ".join([f"-e {k}={v}" for k, v in env_vars.items()])
+
+    run_cmd = f"docker run {env_vars_str} -v {os.path.join(CWD, 'test_logs', tag)}:/usr/src/logs baml_{tag}"
+    subprocess.check_call(run_cmd, shell=True, cwd=CWD, )

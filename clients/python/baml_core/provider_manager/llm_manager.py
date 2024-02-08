@@ -1,7 +1,7 @@
 import typing
 
 from .llm_provider_factory import llm_provider_factory
-from .llm_provider import AbstractLLMProvider
+from .llm_provider_base import AbstractLLMProvider
 from ..logger import logger
 
 

@@ -3,35 +3,42 @@ class ProposedMessage {
     generated_response string 
 }
 
-class DummyObj {
-    prop1 string
-    prop2 int
-    prop3 bool
-}
 
 enum  Sentiment {
     Positive
     Negative
     Neutral
 }
-
+ 
 class ImprovedResponse {
     should_improve bool
     improved_response string?
     field Sentiment
-}
+} 
 
  
 function MaybePolishText {
     input ProposedMessage
-    output ImprovedResponse
+    output string
     default_impl v1
 }
  
-function TextPolisher {
-    input ProposedMessage
-    output string
-}
+// function TextPolisher {
+//     input ProposedMessage
+//     output string
+// }
+
+// impl<llm, TextPolisher> v1 {
+//     client AZURE_GPT4
+//     prompt #"
+//         Write a haiku about:
+//         ```input
+//         {#input}
+//         ```
+
+//         JSON:
+//     "#
+// }
 
 impl<llm, MaybePolishText> v1 {
     client AZURE_GPT4
@@ -45,21 +52,9 @@ impl<llm, MaybePolishText> v1 {
     }
 
     prompt #"
-        Given a conversation with a resident, consider improving the response previously shown.
+        Write a haiku:
 
-        Good responses are amiable and direct.
 
-        Do not use {// affirmative //} or negative unless the question is a yes or no question.
-
-        ```input
-        {#input}
-        ```       
-
-        {// The word format is required. don't remove it //}
-        Output JSON Format:
-        {#print_type(output)}
-
-        JSON:
     "#
 }
 impl<llm, MaybePolishText> v2 {
@@ -92,36 +87,36 @@ impl<llm, MaybePolishText> v2 {
     "#
 }
 
-function Thing {
-    input string
-    output string
-}
+// function Thing {
+//     input string
+//     output string
+// }
 
-impl<llm, Thing> v1 {
-    client AZURE_GPT4
-    prompt #"
-        Generate a story from:
-        ```input
-        {#input}
-        ```
+// impl<llm, Thing> v1 {
+//     client AZURE_GPT4
+//     prompt #"
+//         Generate a story from:
+//         ```input
+//         {#input}
+//         ```
 
         
-    "#
-} 
+//     "#
+// } 
  
-function MultiArg {
-    input (convo: ProposedMessage, thing: string)
-    output string
-}
+// function MultiArg {
+//     input (convo: ProposedMessage, thing: string)
+//     output string
+// }
 
-impl<llm, MultiArg> v1 {
-    client AZURE_GPT4
-    prompt #"
-        Generate a story from:
-        ```input
-        {#input.thing}
-        ```
+// impl<llm, MultiArg> v1 {
+//     client AZURE_GPT4
+//     prompt #"
+//         Generate a story from:
+//         ```input
+//         {#input.thing}
+//         ```
 
         
-    "#
-}
+//     "#
+// }

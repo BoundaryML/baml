@@ -19,6 +19,7 @@ mod function;
 mod template;
 mod traits;
 mod types;
+mod types_partial;
 mod value;
 mod variants;
 pub(super) use r#file::{File, FileCollector};
@@ -101,29 +102,38 @@ impl WithWritePythonString for ParserDatabase {
             .add_import_and_reexport("baml_core.services.api_types", "LogSchema");
         fc.complete_file();
 
-        fc.start_export_file(".", "baml_types");
+        fc.start_export_file("./baml_types", "__init__");
         self.walk_functions().for_each(|f| {
             fc.last_file().add_import(
-                &format!(".__do_not_import.functions.{}", f.file_name()),
+                &format!("..__do_not_import.functions.{}", f.file_name()),
                 &format!("I{}", f.name()),
             );
             fc.last_file().add_import(
-                &format!(".__do_not_import.functions.{}", f.file_name()),
+                &format!("..__do_not_import.functions.{}", f.file_name()),
                 &format!("I{}Output", f.name()),
             )
         });
-
         self.walk_enums().for_each(|e| {
             fc.last_file().add_import(
-                &format!(".__do_not_import.types.enums.{}", e.file_name()),
+                &format!("..__do_not_import.types.enums.{}", e.file_name()),
                 e.name(),
             )
         });
 
         self.walk_classes().for_each(|c| {
             fc.last_file().add_import(
-                &format!(".__do_not_import.types.classes.{}", c.file_name()),
+                &format!("..__do_not_import.types.classes.{}", c.file_name()),
                 c.name(),
+            )
+        });
+        fc.complete_file();
+
+        // Add the partial type exports for streaming and handling incomplete data.
+        fc.start_export_file("./baml_types", "partial");
+        self.walk_classes().for_each(|c| {
+            fc.last_file().add_import_and_reexport(
+                &format!("..__do_not_import.types.partial.classes.{}", c.file_name()),
+                &format!("Partial{}", c.name()),
             )
         });
         fc.complete_file();
