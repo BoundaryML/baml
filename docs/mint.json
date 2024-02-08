@@ -179,6 +179,11 @@
             "v3/how-to/improve_results/fine_tune"
           ],
           "icon": "bolt"
+        },
+        {
+          "group": "Streaming",
+          "icon": "water",
+          "pages": ["v3/how-to/streaming/streaming"]
         }
       ]
     }
