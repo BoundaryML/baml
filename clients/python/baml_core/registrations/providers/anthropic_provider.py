@@ -2,11 +2,9 @@ import anthropic
 import typing
 from anthropic.types.beta import (
     MessageStartEvent,
-    MessageStopEvent,
     MessageStreamEvent,
     MessageDeltaEvent,
     ContentBlockStartEvent,
-    ContentBlockStopEvent,
     ContentBlockDeltaEvent,
 )
 
@@ -145,7 +143,7 @@ class AnthropicProvider(LLMChatProvider):
         model = None
         finish_reason = None
         async with self.__client.beta.messages.stream(
-            messages=messages, **caller_kwargs_copy
+            messages=messages, **caller_kwargs_copy  # type: ignore
         ) as stream:
             last_response: typing.Optional[MessageStreamEvent] = None
             async for response in stream:

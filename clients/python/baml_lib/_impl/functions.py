@@ -9,10 +9,10 @@ import inspect
 import types
 import typing
 from unittest import mock
-from typing import Callable, Tuple, Awaitable, Any, Generic, Dict
+from typing import Callable, Any, Dict
 import pytest
 
-from contextlib import contextmanager, asynccontextmanager
+from contextlib import contextmanager
 from baml_core.otel import trace, create_event
 from baml_core.stream import AsyncStream
 
@@ -45,7 +45,7 @@ def __parse_arg(arg: typing.Any, t: typing.Type[T], _default: T) -> T:
 
 
 RET = typing.TypeVar("RET", covariant=True)
-PARTIAL_RET = typing.TypeVar("PARTIAL_RET", covariant=True)
+PARTIAL_RET = typing.TypeVar("PARTIAL_RET")
 
 
 class CB(typing.Generic[RET], typing.Protocol):
@@ -58,7 +58,7 @@ class CB(typing.Generic[RET], typing.Protocol):
     ) -> typing.Awaitable[RET]: ...
 
 
-class STREAM_CB(typing.Generic[RET, PARTIAL_RET], typing.Protocol):
+class STREAM_CB(typing.Generic[RET, PARTIAL_RET], typing.Protocol):  # type: ignore
     """
     Protocol for a callable object.
     """
@@ -180,7 +180,10 @@ class BaseBAMLFunction(typing.Generic[RET, PARTIAL_RET]):
         self.__register_impl_fn(name, stream_cb, is_stream=True)
 
     def __register_impl_fn(
-        self, name: str, run_impl_fn: Callable, is_stream: bool = False
+        self,
+        name: str,
+        run_impl_fn: Callable[[typing.Any], typing.Any],
+        is_stream: bool = False,
     ) -> None:
         # Runtime check
         sig = inspect.signature(run_impl_fn)
@@ -192,7 +195,7 @@ class BaseBAMLFunction(typing.Generic[RET, PARTIAL_RET]):
         assert (
             sig_params == expected_sig_params
         ), f"{self.name} {sig} does not match expected signature {expected_sig}"
-        run_impl_fn.__qualname__ = f"{self.__name}[impl:{run_impl_fn.__qualname__}]"  # type: ignore
+        run_impl_fn.__qualname__ = f"{self.__name}[impl:{run_impl_fn.__qualname__}]"
 
         if asyncio.iscoroutinefunction(run_impl_fn):
             if is_stream:

@@ -1,3 +1,4 @@
+# type: ignore
 """
 partialjson - Parse Partial and incomplete JSON in python
 Copyright (c) 2023 Nima Akbarzadeh

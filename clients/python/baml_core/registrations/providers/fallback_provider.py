@@ -6,7 +6,7 @@ from baml_core.provider_manager import (
     LLMManager,
     LLMChatMessage,
 )
-from baml_core.provider_manager.llm_provider_completion import AbstractLLMProvider
+from baml_core.provider_manager.llm_provider_base import AbstractLLMProvider
 
 
 class ChainItem(typing.TypedDict):
@@ -161,7 +161,7 @@ class FallbackProvider(AbstractLLMProvider):
             params=params,
         )
 
-    async def _run_prompt_template_internal_stream(
+    async def _run_prompt_template_internal_stream(  # type: ignore
         self,
         *,
         template: str,

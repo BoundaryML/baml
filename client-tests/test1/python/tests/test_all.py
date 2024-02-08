@@ -17,8 +17,6 @@ async def test_logic() -> None:
     async with baml.MaybePolishText.stream(
         ProposedMessage(thread=Conversation(thread=[]), generated_response="test"),
     ) as stream:
-        print("hi")
-
         async for x in stream.parsed_stream:
             print(f"streaming: {x.json()}")
             count += 1

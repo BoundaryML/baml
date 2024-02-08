@@ -1,12 +1,11 @@
 import functools
 import asyncio
 import inspect
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable, TypeVar, Coroutine, AsyncGenerator
 import typing
 from opentelemetry.trace import get_current_span
 from .provider import BamlSpanContextManager, baml_tracer, set_tags
 from baml_core.stream import AsyncStream
-from typing import Any, AsyncGenerator, Callable, TypeVar, Coroutine
 
 
 def trace(*args, **kwargs) -> Any:

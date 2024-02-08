@@ -1,6 +1,5 @@
 from openai import AsyncOpenAI, AsyncAzureOpenAI, AsyncClient
 from openai.types.chat.chat_completion import ChatCompletion
-from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
 from .openai_helper_1 import to_error_code
 
 import typing
@@ -110,11 +109,11 @@ class OpenAIChatProvider(LLMChatProvider):
     ) -> typing.AsyncIterator[LLMResponse]:
 
         response = await self._client.chat.completions.create(
-            messages=messages,
+            messages=messages,  # type: ignore
             **self.__kwargs,
             stream=True,
         )
-        async for r in response:
+        async for r in response:  # type: ignore
             prompt_tokens = None
             output_tokens = None
             total_tokens = None

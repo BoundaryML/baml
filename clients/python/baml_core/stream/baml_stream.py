@@ -98,7 +98,6 @@ class AsyncStream(Generic[TYPE, PARTIAL_TYPE]):
     __final_response: ValueWrapper[TYPE]
     __is_stream_completed: bool
     __stream_cb: typing.Callable[[], AsyncIterator[LLMResponse]]
-    __ctx: Any
 
     def __init__(
         self,
@@ -112,11 +111,11 @@ class AsyncStream(Generic[TYPE, PARTIAL_TYPE]):
         self.__is_stream_completed = False
         self.__stream_cb = stream_cb
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "AsyncStream[TYPE, PARTIAL_TYPE]":
         self.__stream = self.__stream_cb()
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:  # type: ignore
         await self.__until_done()
 
     @property
@@ -125,7 +124,7 @@ class AsyncStream(Generic[TYPE, PARTIAL_TYPE]):
             yield TextDelta(delta=response.generated)
         self.__is_stream_completed = True
 
-    async def __parse_stream_chunk(
+    async def _parse_stream_chunk(
         self, total_text: str, delta: str
     ) -> PartialValueWrapper[PARTIAL_TYPE]:
         t = typing.get_args(self.__partial_deserializer.__orig_class__)[  # type: ignore
@@ -163,7 +162,7 @@ class AsyncStream(Generic[TYPE, PARTIAL_TYPE]):
             parsed = self.__partial_deserializer.from_string(total_text)
             return PartialValueWrapper.from_parseable(partial=parsed, delta=delta)
 
-    def __get_stream(self):
+    def __get_stream(self) -> AsyncIterator[LLMResponse]:
         assert self.__stream is not None, "Stream not initialized"
         return self.__stream
 
@@ -175,16 +174,16 @@ class AsyncStream(Generic[TYPE, PARTIAL_TYPE]):
         async for response in self.__get_stream():
             try:
                 total_text += response.generated
-                yield await self.__parse_stream_chunk(
+                yield await self._parse_stream_chunk(
                     total_text, delta=response.generated
                 )
-            except Exception as e:
+            except Exception:
                 yield PartialValueWrapper.from_parse_failure(delta=response.generated)
         try:
             self.__final_response = ValueWrapper.from_value(
                 self.__deserializer.from_string(total_text)
             )
-        except Exception as e:
+        except Exception:
             self.__final_response = ValueWrapper.unset()
 
     async def get_final_response(self) -> ValueWrapper[TYPE]:

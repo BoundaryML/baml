@@ -3,7 +3,7 @@ import json
 import traceback
 import typing
 import aiohttp
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typeguard import typechecked
 
 from ..configs.retry_policy import WrappedFn
@@ -15,7 +15,6 @@ from ..services.api_types import CacheRequest, LLMChat
 from ..otel.helper import try_serialize
 from ..otel.provider import create_event
 from .llm_response import LLMResponse
-import contextlib
 
 
 class BaseProvider(abc.ABC):

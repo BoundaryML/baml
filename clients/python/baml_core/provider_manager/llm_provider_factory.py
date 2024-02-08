@@ -1,5 +1,5 @@
 import typing
-from .llm_provider_completion import AbstractLLMProvider
+from .llm_provider_base import AbstractLLMProvider
 
 T = typing.TypeVar("T", bound=AbstractLLMProvider)
 

@@ -1,5 +1,3 @@
-from .openai_chat_provider_1 import OpenAIChatProvider
-import pytest
 import os
 from dotenv import load_dotenv
 
