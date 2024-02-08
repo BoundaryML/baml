@@ -10,7 +10,10 @@
 from ..types.classes.cls_conversation import Conversation
 from ..types.classes.cls_message import Message
 from ..types.enums.enm_messagesender import MessageSender
-from typing import Optional, Protocol, runtime_checkable
+from ..types.partial.classes.cls_conversation import PartialConversation
+from ..types.partial.classes.cls_message import PartialMessage
+from baml_core.stream import AsyncStream
+from typing import Callable, Optional, Protocol, runtime_checkable
 
 
 import typing
@@ -42,18 +45,39 @@ class IMessageSimplifier(Protocol):
     async def __call__(self, arg: Conversation, /) -> Optional[int]:
         ...
 
+   
 
+@runtime_checkable
+class IMessageSimplifierStream(Protocol):
+    """
+    This is the interface for a stream function.
+
+    Args:
+        arg: Conversation
+
+    Returns:
+        AsyncStream[Optional[int], int]
+    """
+
+    def __call__(self, arg: Conversation, /) -> AsyncStream[Optional[int], int]:
+        ...
 class BAMLMessageSimplifierImpl:
     async def run(self, arg: Conversation, /) -> Optional[int]:
+        ...
+    
+    def stream(self, arg: Conversation, /) -> AsyncStream[Optional[int], int]:
         ...
 
 class IBAMLMessageSimplifier:
     def register_impl(
         self, name: ImplName
-    ) -> typing.Callable[[IMessageSimplifier], IMessageSimplifier]:
+    ) -> typing.Callable[[IMessageSimplifier, IMessageSimplifierStream], None]:
         ...
 
     async def __call__(self, arg: Conversation, /) -> Optional[int]:
+        ...
+
+    def stream(self, arg: Conversation, /) -> AsyncStream[Optional[int], int]:
         ...
 
     def get_impl(self, name: ImplName) -> BAMLMessageSimplifierImpl:
@@ -110,9 +134,9 @@ class IBAMLMessageSimplifier:
 
         Usage:
             ```python
-            # All implementations except "v1" will be tested.
+            # All implementations except the given impl will be tested.
 
-            @baml.MessageSimplifier.test(exclude_impl=["v1"])
+            @baml.MessageSimplifier.test(exclude_impl=["implname"])
             async def test_logic(MessageSimplifierImpl: IMessageSimplifier) -> None:
                 result = await MessageSimplifierImpl(...)
             ```

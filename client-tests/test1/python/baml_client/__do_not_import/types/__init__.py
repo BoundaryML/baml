@@ -7,15 +7,12 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from .classes.cls_basicclass import BasicClass
 from .classes.cls_classifyresponse import ClassifyResponse
 from .classes.cls_conversation import Conversation
-from .classes.cls_dummyobj import DummyObj
 from .classes.cls_empty import Empty
 from .classes.cls_hi import Hi
 from .classes.cls_improvedresponse import ImprovedResponse
 from .classes.cls_message import Message
-from .classes.cls_optionalobject import OptionalObject
 from .classes.cls_proposedmessage import ProposedMessage
 from .enums.enm_emptyenum import EmptyEnum
 from .enums.enm_messagesender import MessageSender
@@ -26,15 +23,12 @@ from .enums.enm_tool import Tool
 
 
 __all__ = [
-    'BasicClass',
     'ClassifyResponse',
     'Conversation',
-    'DummyObj',
     'Empty',
     'Hi',
     'ImprovedResponse',
     'Message',
-    'OptionalObject',
     'ProposedMessage',
     'EmptyEnum',
     'MessageSender',

@@ -7,12 +7,13 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
+from ...enums.enm_messagesender import MessageSender
 from baml_lib._impl.deserializer import register_deserializer
 from pydantic import BaseModel
 from typing import Optional
 
 
-@register_deserializer({  })
-class OptionalObject(BaseModel):
-    a: Optional[str] = None
-    b: Optional[bool] = None
+@register_deserializer({ "sender1": "sender","body1": "body", })
+class PartialMessage(BaseModel):
+    sender: Optional[MessageSender] = None
+    body: Optional[str] = None

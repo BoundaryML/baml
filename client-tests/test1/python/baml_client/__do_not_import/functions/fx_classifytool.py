@@ -9,8 +9,10 @@
 
 from ..types.classes.cls_classifyresponse import ClassifyResponse
 from ..types.enums.enm_tool import Tool
+from ..types.partial.classes.cls_classifyresponse import PartialClassifyResponse
+from baml_core.stream import AsyncStream
 from baml_lib._impl.functions import BaseBAMLFunction
-from typing import Protocol, runtime_checkable
+from typing import AsyncIterator, Callable, Protocol, runtime_checkable
 
 
 IClassifyToolOutput = ClassifyResponse
@@ -31,8 +33,25 @@ class IClassifyTool(Protocol):
     async def __call__(self, *, query: str, context: str) -> ClassifyResponse:
         ...
 
+   
 
-class IBAMLClassifyTool(BaseBAMLFunction[ClassifyResponse]):
+@runtime_checkable
+class IClassifyToolStream(Protocol):
+    """
+    This is the interface for a stream function.
+
+    Args:
+        query: str
+        context: str
+
+    Returns:
+        AsyncStream[ClassifyResponse, PartialClassifyResponse]
+    """
+
+    def __call__(self, *, query: str, context: str
+) -> AsyncStream[ClassifyResponse, PartialClassifyResponse]:
+        ...
+class IBAMLClassifyTool(BaseBAMLFunction[ClassifyResponse, PartialClassifyResponse]):
     def __init__(self) -> None:
         super().__init__(
             "ClassifyTool",
@@ -42,6 +61,10 @@ class IBAMLClassifyTool(BaseBAMLFunction[ClassifyResponse]):
 
     async def __call__(self, *args, **kwargs) -> ClassifyResponse:
         return await self.get_impl("v1").run(*args, **kwargs)
+    
+    def stream(self, *args, **kwargs) -> AsyncStream[ClassifyResponse, PartialClassifyResponse]:
+        res = self.get_impl("v1").stream(*args, **kwargs)
+        return res
 
 BAMLClassifyTool = IBAMLClassifyTool()
 

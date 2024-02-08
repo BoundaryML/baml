@@ -44,9 +44,11 @@ def try_serialize_inner(
 def try_serialize(value: typing.Any) -> typing.Tuple[types.AttributeValue, str]:
     as_str = json.dumps(
         value,
-        default=lambda a: a.model_dump()
-        if isinstance(a, BaseModel)
-        else (a.value if isinstance(a, Enum) else str(a)),
+        default=lambda a: (
+            a.model_dump()
+            if isinstance(a, BaseModel)
+            else (a.value if isinstance(a, Enum) else str(a))
+        ),
     )
 
     if value is None:
@@ -435,9 +437,11 @@ def event_to_log(
         project_id=project_id or "BAML_PLACEHOLDER_PROJECT_ID",
         root_event_id=get_uuid(parent_history[0], parent_history[0]),
         event_id=get_uuid(parent_history[0], span.context.span_id),
-        parent_event_id=get_uuid(parent_history[0], parent_history[-2])
-        if len(parent_history) > 1
-        else None,
+        parent_event_id=(
+            get_uuid(parent_history[0], parent_history[-2])
+            if len(parent_history) > 1
+            else None
+        ),
         event_type="func_code",
         context=LogSchemaContext(
             event_chain=[

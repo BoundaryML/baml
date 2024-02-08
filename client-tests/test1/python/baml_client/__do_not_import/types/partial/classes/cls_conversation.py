@@ -7,12 +7,13 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
+from ...classes.cls_message import Message
+from ...enums.enm_messagesender import MessageSender
 from baml_lib._impl.deserializer import register_deserializer
 from pydantic import BaseModel
+from typing import List
 
 
 @register_deserializer({  })
-class BasicClass(BaseModel):
-    name: str
-    age: int
-    address: str
+class PartialConversation(BaseModel):
+    thread: List[Message]

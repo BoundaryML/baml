@@ -12,7 +12,5 @@ from pydantic import BaseModel
 
 
 @register_deserializer({  })
-class DummyObj(BaseModel):
-    prop1: str
-    prop2: int
-    prop3: bool
+class PartialEmpty(BaseModel):
+    pass

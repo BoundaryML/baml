@@ -10,8 +10,11 @@
 from ..types.classes.cls_conversation import Conversation
 from ..types.classes.cls_message import Message
 from ..types.enums.enm_messagesender import MessageSender
+from ..types.partial.classes.cls_conversation import PartialConversation
+from ..types.partial.classes.cls_message import PartialMessage
+from baml_core.stream import AsyncStream
 from baml_lib._impl.functions import BaseBAMLFunction
-from typing import Optional, Protocol, runtime_checkable
+from typing import AsyncIterator, Callable, Optional, Protocol, runtime_checkable
 
 
 IMessageSimplifierOutput = Optional[int]
@@ -31,8 +34,23 @@ class IMessageSimplifier(Protocol):
     async def __call__(self, arg: Conversation, /) -> Optional[int]:
         ...
 
+   
 
-class IBAMLMessageSimplifier(BaseBAMLFunction[Optional[int]]):
+@runtime_checkable
+class IMessageSimplifierStream(Protocol):
+    """
+    This is the interface for a stream function.
+
+    Args:
+        arg: Conversation
+
+    Returns:
+        AsyncStream[Optional[int], int]
+    """
+
+    def __call__(self, arg: Conversation, /) -> AsyncStream[Optional[int], int]:
+        ...
+class IBAMLMessageSimplifier(BaseBAMLFunction[Optional[int], int]):
     def __init__(self) -> None:
         super().__init__(
             "MessageSimplifier",
@@ -42,6 +60,10 @@ class IBAMLMessageSimplifier(BaseBAMLFunction[Optional[int]]):
 
     async def __call__(self, *args, **kwargs) -> Optional[int]:
         return await self.get_impl("v1").run(*args, **kwargs)
+    
+    def stream(self, *args, **kwargs) -> AsyncStream[Optional[int], int]:
+        res = self.get_impl("v1").stream(*args, **kwargs)
+        return res
 
 BAMLMessageSimplifier = IBAMLMessageSimplifier()
 

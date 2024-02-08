@@ -1,12 +1,12 @@
 import functools
 import asyncio
 import inspect
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable, TypeVar, Coroutine, AsyncGenerator
 import typing
 from opentelemetry.trace import get_current_span
 from .provider import BamlSpanContextManager, baml_tracer, set_tags
-
-F = TypeVar("F", bound=Callable[..., Any])  # Function type
+from baml_core.stream import AsyncStream
+import sys
 
 
 def trace(*args, **kwargs) -> Any:
@@ -25,6 +25,65 @@ def trace(*args, **kwargs) -> Any:
             return _trace_internal(func, __name__=name)
 
         return wrapper
+
+
+F = TypeVar("F", bound=Callable[..., Coroutine[Any, Any, AsyncGenerator[Any, None]]])
+
+
+class AsyncGeneratorContextManager:
+    def __init__(
+        self,
+        gen_factory: Callable[..., AsyncStream[Any, Any]],
+        name,
+        params,
+        *args,
+        **kwargs,
+    ):
+        self.gen_factory = gen_factory
+        self.name = name
+        self.params = params
+        self.args = args
+        self.kwargs = kwargs
+        self.gen_instance = None
+        self.span = None
+        self.span_context = None
+        self.ctx = None
+
+    async def __aenter__(self) -> "AsyncStream":
+        name = self.name
+        parent_id = get_current_span().get_span_context().span_id
+        tags = self.kwargs.get("tags", {})
+
+        # Start the tracing span
+        self.span_context = baml_tracer.start_as_current_span(name)
+        self.span = self.span_context.__enter__()
+        # Enter the custom context manager with tracing and context setup
+        self.ctx = BamlSpanContextManager(name, parent_id, self.span, self.params)
+        self.ctx.__enter__()
+
+        if tags:
+            set_tags(**tags)
+
+        self.gen_instance = self.gen_factory(*self.args, **self.kwargs)
+        await self.gen_instance.__aenter__()
+        return self.gen_instance
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if not self.gen_instance:
+            raise ValueError("The async generator has not been initialized.")
+
+        try:
+            await self.gen_instance.__aexit__(exc_type, exc_val, exc_tb)
+            final_res = await self.gen_instance.get_final_response()
+            if self.ctx:
+                self.ctx.complete(final_res.value)
+        except Exception as e:
+            exc_type, exc_val, exc_tb = sys.exc_info()
+
+        if self.ctx:
+            self.ctx.__exit__(exc_type, exc_val, exc_tb)
+        if self.span_context:
+            self.span_context.__exit__(exc_type, exc_val, exc_tb)
 
 
 def _trace_internal(func: F, **kwargs: typing.Any) -> F:
@@ -49,6 +108,21 @@ def _trace_internal(func: F, **kwargs: typing.Any) -> F:
     # Ensure that the user doesn't pass in any other kwargs
     assert not kwargs, f"Unexpected kwargs: {kwargs}"
 
+    # TODO: find a resilient way to check
+    if "_stream" in func.__qualname__:
+
+        @functools.wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> AsyncGeneratorContextManager:
+            params = {
+                param_names[i] if i < len(param_names) else f"<arg:{i}>": arg
+                for i, arg in enumerate(args)
+            }
+            params.update(kwargs)
+
+            return AsyncGeneratorContextManager(func, name, params, *args, **kwargs)  # type: ignore
+
+        return typing.cast(F, wrapper)
+
     if asyncio.iscoroutinefunction(func):
 
         @functools.wraps(func)
@@ -69,7 +143,7 @@ def _trace_internal(func: F, **kwargs: typing.Any) -> F:
                     ctx.complete(response)
                     return response
 
-        return wrapper  # type: ignore
+        return typing.cast(F, wrapper)
     else:
 
         @functools.wraps(func)
@@ -87,6 +161,7 @@ def _trace_internal(func: F, **kwargs: typing.Any) -> F:
                     if tags:
                         set_tags(**tags)
                     response = func(*args, **kwargs)
+
                     ctx.complete(response)
                     return response
 
