@@ -116,10 +116,11 @@ class AsyncStream(Generic[TYPE, PARTIAL_TYPE]):
         self.__stream = self.__stream_cb()
         return self
 
-    async def __aexit__(self, 
+    async def __aexit__(
+        self,
         exc_type: Optional[Type[BaseException]],
         exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType]
+        exc_tb: Optional[TracebackType],
     ) -> None:
         await self.__until_done()
 
@@ -127,7 +128,7 @@ class AsyncStream(Generic[TYPE, PARTIAL_TYPE]):
         self, total_text: str, delta: str
     ) -> PartialValueWrapper[PARTIAL_TYPE]:
         # We do some magic here to get the orig_class
-        t = typing.get_args(self.__partial_deserializer.__orig_class__)[ # type: ignore
+        t = typing.get_args(self.__partial_deserializer.__orig_class__)[  # type: ignore
             0
         ]  # deserializer only has 1 type arg
         is_list = get_origin(t) is list

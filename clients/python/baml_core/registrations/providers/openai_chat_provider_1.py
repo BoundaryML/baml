@@ -13,6 +13,7 @@ from baml_core.provider_manager import (
     register_llm_provider,
 )
 
+
 def _to_chat_completion_messages(msg: LLMChatMessage) -> ChatCompletionMessageParam:
     if msg["role"] == "user":
         return {"role": "user", "content": msg["content"]}
@@ -20,7 +21,7 @@ def _to_chat_completion_messages(msg: LLMChatMessage) -> ChatCompletionMessagePa
         return {"role": "assistant", "content": msg["content"]}
     # Default to system messages
     return {"role": "system", "content": msg["content"]}
-            
+
 
 @register_llm_provider("baml-openai-chat", "baml-azure-chat")
 @typing.final
@@ -74,7 +75,6 @@ class OpenAIChatProvider(LLMChatProvider):
 
     def _validate(self) -> None:
         pass
-
 
     async def _run_chat(self, messages: typing.List[LLMChatMessage]) -> LLMResponse:
         response: ChatCompletion = await self._client.chat.completions.create(

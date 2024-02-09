@@ -6,7 +6,7 @@ from anthropic.types.beta import (
     MessageDeltaEvent,
     ContentBlockStartEvent,
     ContentBlockDeltaEvent,
-    MessageParam
+    MessageParam,
 )
 
 from baml_core.provider_manager import (
@@ -140,7 +140,7 @@ class AnthropicProvider(LLMChatProvider):
 
         def to_anthropic_message(msg: LLMChatMessage) -> MessageParam:
             return {
-                "role": "user" if msg['role'] == "user" else "assistant",
+                "role": "user" if msg["role"] == "user" else "assistant",
                 "content": msg["content"],
             }
 

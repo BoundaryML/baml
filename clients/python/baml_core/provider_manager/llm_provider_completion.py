@@ -119,7 +119,9 @@ class LLMProvider(AbstractLLMProvider):
             chats = typing.cast(typing.List[LLMChatMessage], message_templates)
         try:
             async for x in self._run_prompt_template_internal_stream(
-                template=self.__chat_to_prompt(chats), replacers=replacers, params=params
+                template=self.__chat_to_prompt(chats),
+                replacers=replacers,
+                params=params,
             ):
                 yield x
         except Exception as e:

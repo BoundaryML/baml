@@ -34,7 +34,9 @@ class JSONParser:
         self.last_parse_reminding: typing.Optional[str] = None
         self.on_extra_token = None
 
-    def default_on_extra_token(self, text: str, data: typing.Any, reminding: str) -> None:
+    def default_on_extra_token(
+        self, text: str, data: typing.Any, reminding: str
+    ) -> None:
         pass
 
     def parse(self, s: str) -> typing.Any:
@@ -61,7 +63,9 @@ class JSONParser:
     def parse_space(self, s: str, e: Exception) -> typing.Tuple[typing.Any, str]:
         return self.parse_any(s.strip(), e)
 
-    def parse_array(self, s: str, e: Exception) -> typing.Tuple[typing.List[typing.Any], str]:
+    def parse_array(
+        self, s: str, e: Exception
+    ) -> typing.Tuple[typing.List[typing.Any], str]:
         s = s[1:]  # skip starting '['
         acc = []
         s = s.strip()
@@ -77,7 +81,9 @@ class JSONParser:
                 s = s.strip()
         return acc, s
 
-    def parse_object(self, s: str, e: Exception) -> typing.Tuple[typing.Dict[str, typing.Any], str]:
+    def parse_object(
+        self, s: str, e: Exception
+    ) -> typing.Tuple[typing.Dict[str, typing.Any], str]:
         s = s[1:]  # skip starting '{'
         acc: typing.Dict[str, typing.Any] = {}
         s = s.strip()
@@ -126,7 +132,9 @@ class JSONParser:
         s = s[end + 1 :]
         return json.loads(str_val), s
 
-    def parse_number(self, s: str, e: Exception) -> typing.Tuple[typing.Union[int, float, str], str]:
+    def parse_number(
+        self, s: str, e: Exception
+    ) -> typing.Tuple[typing.Union[int, float, str], str]:
         i = 0
         while i < len(s) and s[i] in "0123456789.-":
             i += 1
@@ -158,5 +166,6 @@ class JSONParser:
         if s.startswith("null"):
             return None, s[4:]
         raise e
+
 
 __all__ = ["JSONParser"]
