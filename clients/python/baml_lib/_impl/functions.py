@@ -9,7 +9,8 @@ import inspect
 import types
 import typing
 from unittest import mock
-from typing import Callable, Any, Dict
+from typing import Callable, Any, Dict, Optional, Type
+from types import TracebackType
 import pytest
 
 from contextlib import contextmanager
@@ -50,29 +51,31 @@ PARTIAL_RET = typing.TypeVar("PARTIAL_RET")
 class AsyncGenWrapper:
     def __init__(
         self,
-        name,
+        name: str,
         gen_factory: Callable[..., AsyncStream[Any, Any]],
-        *args,
-        **kwargs,
-    ):
+        *args: typing.Any,
+        **kwargs: typing.Any,
+    ) -> None:
         self.name = name
-        self.gen_factory = gen_factory
+        self.gen_factory = trace(gen_factory)
         self.args = args
         self.kwargs = kwargs
-        self.gen_instance = None
+        self.gen_instance: typing.Optional[AsyncStream[Any, Any]] = None
 
-    async def __aenter__(self) -> "AsyncStream":
-
-        self.traced_fn = trace(self.gen_factory)
-
-        self.gen_instance = self.traced_fn(*self.args, **self.kwargs)
+    async def __aenter__(self) -> "AsyncStream[Any, Any]":
+        self.gen_instance = self.gen_factory(*self.args, **self.kwargs)
 
         resp = await self.gen_instance.__aenter__()
         create_event("variant", {"name": self.name})
 
         return resp
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
         if not self.gen_instance:
             raise ValueError("The async generator has not been initialized.")
         await self.gen_instance.__aexit__(exc_type, exc_val, exc_tb)
@@ -85,7 +88,8 @@ class CB(typing.Generic[RET], typing.Protocol):
 
     def __call__(
         self, *args: typing.Any, **kwargs: typing.Any
-    ) -> typing.Awaitable[RET]: ...
+    ) -> typing.Awaitable[RET]:
+        ...
 
 
 class STREAM_CB(typing.Generic[RET, PARTIAL_RET], typing.Protocol):  # type: ignore
@@ -95,7 +99,8 @@ class STREAM_CB(typing.Generic[RET, PARTIAL_RET], typing.Protocol):  # type: ign
 
     def __call__(
         self, *args: typing.Any, **kwargs: typing.Any
-    ) -> AsyncStream[RET, PARTIAL_RET]: ...
+    ) -> AsyncStream[RET, PARTIAL_RET]:
+        ...
 
 
 class BAMLImpl(typing.Generic[RET, PARTIAL_RET]):
@@ -229,7 +234,7 @@ class BaseBAMLFunction(typing.Generic[RET, PARTIAL_RET]):
         if is_stream:
             assert run_impl_fn.__qualname__.endswith(
                 "_stream"
-            ), f"Stream function should end with _stream"
+            ), "Stream function should end with _stream"
             name_without_stream = run_impl_fn.__qualname__[: -len("_stream")]
             run_impl_fn.__qualname__ = f"{self.__name}[impl:{name_without_stream}]"
         else:
