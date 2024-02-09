@@ -306,7 +306,11 @@ fn parse_arg_list(
     assert_correct_parser!(current, Rule::arg_list);
 
     let mut arguments = vec![];
+
     for current in current.into_inner() {
+        if current.as_rule() == Rule::WHITESPACE {
+            continue;
+        }
         assert_correct_parser!(current, Rule::variable);
         // For every variable in the arg list
         current

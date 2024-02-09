@@ -25,7 +25,8 @@ impl<llm, MessageSimplifier> v1 {
         Most Recent Message:
         {#input}
 
-        Simplified message:
-        Human:
+        Output Format: {#print_type(output)}
+
+        Output:
   "#
 }  
