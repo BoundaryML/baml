@@ -139,10 +139,6 @@ class LLMChatProvider(AbstractLLMProvider):
             for msg in chats
         ]
 
-        # The end state is tracked by the AsyncStream.
-        # self._start_run(messages)
-        # async for response in self._stream_chat(messages):
-        #     yield response
         async for response in self.__run_chat_stream_with_telemetry(messages):
             yield response
 
