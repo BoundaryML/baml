@@ -26,11 +26,13 @@ async def extract_resume(resume: str) -> None:
         async for x in stream.parsed_stream:
             if x.is_parseable:
                 print(f"streaming: {x.parsed.model_dump_json()}")
-
-        print(
-            f"\n final: {await stream.get_final_response().value.model_dump_json(indent=2)}"
-        )
-
+        response = await stream.get_final_response()
+        if response.has_value:
+            print(
+                f"\n final: {response.value.model_dump_json(indent=2)}"
+            )
+        else:
+            print("No final response")
 
 class ChatMessage(TypedDict):
     sender: str
