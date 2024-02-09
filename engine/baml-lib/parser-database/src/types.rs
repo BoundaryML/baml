@@ -186,12 +186,9 @@ impl VariantProperties {
             match parts.first() {
                 // If the first chat block is not at the start of the prompt, add the first part.
                 Some(&(Some(_), (start, _))) if start > 0 => {
-                    info!("First chat block is not at the start of the prompt");
                     parts.insert(0, (None, (0, 0)));
                 }
-                Some(_) => {
-                    info!("First chat block is at the start of the prompt")
-                }
+                Some(_) => {}
                 _ => unreachable!("At least one chat block should exist"),
             }
 
