@@ -192,7 +192,8 @@ impl FieldType {
                 Identifier::Primitive(TypeValue::Null, _) => true,
                 _ => true,
             },
-            FieldType::Union(arity, f, ..) => f.iter().any(|t| t.can_be_null()),
+            // There's a bug with unions where we cant parse optionals in unions right now
+            FieldType::Union(arity, f, ..) => false,
             FieldType::Tuple(arity, ..) => true,
             // Lists can't be nullable
             FieldType::Dictionary(_kv, _) => false,
