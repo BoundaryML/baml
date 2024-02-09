@@ -6,10 +6,11 @@ generator default {
   pkg_manager poetry
 }
 
+
 // warning: The generator format is deprecated. Please use the new format.
 // generator default {
 //     language "python"
-//     project_root "../"
+//     project_root "generators/../"
 //     test_command "poetry run python -m pytest"
 //     install_command "poetry install baml@latest"
 //     package_version_command "poetry show baml"
