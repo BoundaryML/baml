@@ -10,6 +10,7 @@
 from .classes.cls_classifyresponse import PartialClassifyResponse
 from .classes.cls_conversation import PartialConversation
 from .classes.cls_empty import PartialEmpty
+from .classes.cls_haiku import PartialHaiku
 from .classes.cls_hi import PartialHi
 from .classes.cls_improvedresponse import PartialImprovedResponse
 from .classes.cls_message import PartialMessage
@@ -22,6 +23,7 @@ __all__ = [
     'PartialClassifyResponse',
     'PartialConversation',
     'PartialEmpty',
+    'PartialHaiku',
     'PartialHi',
     'PartialImprovedResponse',
     'PartialMessage',

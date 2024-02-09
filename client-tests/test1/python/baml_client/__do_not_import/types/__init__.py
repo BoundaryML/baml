@@ -10,6 +10,7 @@
 from .classes.cls_classifyresponse import ClassifyResponse
 from .classes.cls_conversation import Conversation
 from .classes.cls_empty import Empty
+from .classes.cls_haiku import Haiku
 from .classes.cls_hi import Hi
 from .classes.cls_improvedresponse import ImprovedResponse
 from .classes.cls_message import Message
@@ -26,6 +27,7 @@ __all__ = [
     'ClassifyResponse',
     'Conversation',
     'Empty',
+    'Haiku',
     'Hi',
     'ImprovedResponse',
     'Message',

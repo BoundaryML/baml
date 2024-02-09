@@ -10,6 +10,7 @@
 from ..__do_not_import.types.partial.classes.cls_classifyresponse import PartialClassifyResponse
 from ..__do_not_import.types.partial.classes.cls_conversation import PartialConversation
 from ..__do_not_import.types.partial.classes.cls_empty import PartialEmpty
+from ..__do_not_import.types.partial.classes.cls_haiku import PartialHaiku
 from ..__do_not_import.types.partial.classes.cls_hi import PartialHi
 from ..__do_not_import.types.partial.classes.cls_improvedresponse import PartialImprovedResponse
 from ..__do_not_import.types.partial.classes.cls_message import PartialMessage
@@ -25,5 +26,6 @@ __all__ = [
     'PartialHi',
     'PartialClassifyResponse',
     'PartialProposedMessage',
+    'PartialHaiku',
     'PartialImprovedResponse'
 ]

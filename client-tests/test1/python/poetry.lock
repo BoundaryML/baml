@@ -126,13 +126,13 @@ typing-extensions = {version = ">=4.0.0", markers = "python_version < \"3.9\""}
 
 [[package]]
 name = "anthropic"
-version = "0.15.0"
+version = "0.15.1"
 description = "The official Python library for the anthropic API"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "anthropic-0.15.0-py3-none-any.whl", hash = "sha256:e864c447f5368a78169d694c2dd48f745f18ff4024b7497659b5259a6451e669"},
-    {file = "anthropic-0.15.0.tar.gz", hash = "sha256:c8d8b119a02416c8e0658afce44dc9d42fba8b6227f35b7d2ccc422ec881e3b4"},
+    {file = "anthropic-0.15.1-py3-none-any.whl", hash = "sha256:50344141ba12580dac829acc1a6921905e975393cca16c99b796a63903e997b9"},
+    {file = "anthropic-0.15.1.tar.gz", hash = "sha256:f188037c09a86c993196967a7c4ca7b0c30a7f51b261a9360528b5104069c088"},
 ]
 
 [package.dependencies]
@@ -202,7 +202,7 @@ tests-no-zope = ["attrs[tests-mypy]", "cloudpickle", "hypothesis", "pympler", "p
 
 [[package]]
 name = "baml"
-version = "0.11.0.dev0"
+version = "0.12.0.dev0"
 description = ""
 optional = false
 python-versions = ">=3.8,<4.0"
@@ -220,7 +220,7 @@ opentelemetry-api = ">=1.15.0"
 opentelemetry-instrumentation = ">=0.34b0"
 opentelemetry-sdk = ">=1.15.0"
 packaging = "^23.2"
-pydantic = ">1,<3"
+pydantic = ">=2,<3"
 pytest = ">=7.1.3,<8"
 pytest-asyncio = "^0.21.1"
 python-dotenv = ">=0.21.0"
@@ -867,13 +867,13 @@ files = [
 
 [[package]]
 name = "openai"
-version = "1.11.1"
+version = "1.12.0"
 description = "The official Python library for the openai API"
 optional = false
 python-versions = ">=3.7.1"
 files = [
-    {file = "openai-1.11.1-py3-none-any.whl", hash = "sha256:e0f388ce499f53f58079d0c1f571f356f2b168b84d0d24a412506b6abc714980"},
-    {file = "openai-1.11.1.tar.gz", hash = "sha256:f66b8fe431af43e09594147ef3cdcb79758285de72ebafd52be9700a2af41e99"},
+    {file = "openai-1.12.0-py3-none-any.whl", hash = "sha256:a54002c814e05222e413664f651b5916714e4700d041d5cf5724d3ae1a3e3481"},
+    {file = "openai-1.12.0.tar.gz", hash = "sha256:99c5d257d09ea6533d689d1cc77caa0ac679fa21efef8893d8b0832a86877f1b"},
 ]
 
 [package.dependencies]

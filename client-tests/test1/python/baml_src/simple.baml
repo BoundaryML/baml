@@ -19,7 +19,7 @@
 // //         information from the query.
 // //         JSON:   
 // //     "#
-// // } 
+// // }  
 
 // class BasicClass {
 //     name string 

@@ -1,8 +1,10 @@
 generator Default {
-  language python
-  pkg_manager poetry
-//   python_setup_prefix "infisical run --env=test -- poetry run"
-}    
+    language "python"
+    project_root "../"
+    test_command "poetry run python -m pytest"
+    install_command "poetry install baml@latest"
+    package_version_command "poetry show baml"
+}
                
 enum MessageSender {             
     AI @alias("ai")          

@@ -9,13 +9,13 @@ import inspect
 import types
 import typing
 from unittest import mock
-from typing import Callable, Any, Dict
+from typing import Callable, Any, Dict, Optional, Type
+from types import TracebackType
 import pytest
 
 from contextlib import contextmanager
 from baml_core.otel import trace, create_event
 from baml_core.stream import AsyncStream
-
 from pytest_baml.exports import baml_function_test
 
 
@@ -46,6 +46,39 @@ def __parse_arg(arg: typing.Any, t: typing.Type[T], _default: T) -> T:
 
 RET = typing.TypeVar("RET", covariant=True)
 PARTIAL_RET = typing.TypeVar("PARTIAL_RET")
+
+
+class AsyncGenWrapper:
+    def __init__(
+        self,
+        name: str,
+        gen_factory: Callable[..., AsyncStream[Any, Any]],
+        *args: typing.Any,
+        **kwargs: typing.Any,
+    ) -> None:
+        self.name = name
+        self.gen_factory = trace(gen_factory)
+        self.args = args
+        self.kwargs = kwargs
+        self.gen_instance: typing.Optional[AsyncStream[Any, Any]] = None
+
+    async def __aenter__(self) -> "AsyncStream[Any, Any]":
+        self.gen_instance = self.gen_factory(*self.args, **self.kwargs)
+
+        resp = await self.gen_instance.__aenter__()
+        create_event("variant", {"name": self.name})
+
+        return resp
+
+    async def __aexit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
+        if not self.gen_instance:
+            raise ValueError("The async generator has not been initialized.")
+        await self.gen_instance.__aexit__(exc_type, exc_val, exc_tb)
 
 
 class CB(typing.Generic[RET], typing.Protocol):
@@ -87,7 +120,7 @@ class BAMLImpl(typing.Generic[RET, PARTIAL_RET]):
             stream_cb: The callable object to use for the streaming implementation.
         """
         self.__cb = trace(cb)
-        self.__stream_cb = trace(stream_cb)
+        self.__stream_cb = stream_cb
 
     async def run(self, *args: Any, **kwargs: Any) -> RET:
         """
@@ -167,26 +200,26 @@ class BaseBAMLFunction(typing.Generic[RET, PARTIAL_RET]):
         ), f"Unknown impl: {self.__name}:{name}. Valid impl names: {' '.join(self.__impl_names)}"
 
         def decorator(cb: CB[RET], stream_cb: STREAM_CB[RET, PARTIAL_RET]) -> None:
-            self.__register_cb(name, cb)
-            self.__register_stream_cb(name, stream_cb)
-            self.__impls[name] = BAMLImpl(cb, stream_cb)
+            wrapped_cb = self.__register_cb(name, cb)
+            wrapped_stream_cb = self.__register_stream_cb(name, stream_cb)
+            self.__impls[name] = BAMLImpl(wrapped_cb, wrapped_stream_cb)
 
         return decorator
 
-    def __register_cb(self, name: str, cb: CB[RET]) -> None:
-        self.__register_impl_fn(name, cb)
+    def __register_cb(self, name: str, cb: CB[RET]) -> typing.Any:
+        return self.__register_impl_fn(name, cb)
 
     def __register_stream_cb(
         self, name: str, stream_cb: STREAM_CB[RET, PARTIAL_RET]
-    ) -> None:
-        self.__register_impl_fn(name, stream_cb, is_stream=True)
+    ) -> typing.Any:
+        return self.__register_impl_fn(name, stream_cb, is_stream=True)
 
     def __register_impl_fn(
         self,
         name: str,
         run_impl_fn: Callable[[typing.Any], typing.Any],
         is_stream: bool = False,
-    ) -> None:
+    ) -> typing.Any:
         # Runtime check
         sig = inspect.signature(run_impl_fn)
         expected_sig = inspect.signature(self.__interface.__call__)
@@ -197,7 +230,17 @@ class BaseBAMLFunction(typing.Generic[RET, PARTIAL_RET]):
         assert (
             sig_params == expected_sig_params
         ), f"{self.name} {sig} does not match expected signature {expected_sig}"
-        run_impl_fn.__qualname__ = f"{self.__name}[impl:{run_impl_fn.__qualname__}]"
+
+        if is_stream:
+            assert run_impl_fn.__qualname__.endswith(
+                "_stream"
+            ), "Stream function should end with _stream"
+            name_without_stream = run_impl_fn.__qualname__[: -len("_stream")]
+            run_impl_fn.__qualname__ = f"{self.__name}[impl:{name_without_stream}]"
+        else:
+            run_impl_fn.__qualname__ = f"{self.__name}[impl:{run_impl_fn.__qualname__}]"
+
+        run_impl_fn.__annotations__["baml_is_stream"] = is_stream
 
         if asyncio.iscoroutinefunction(run_impl_fn):
             if is_stream:
@@ -214,14 +257,13 @@ class BaseBAMLFunction(typing.Generic[RET, PARTIAL_RET]):
 
         else:
             if is_stream:
-                # return
+
                 @functools.wraps(run_impl_fn)
-                async def wrapper(
-                    *args: typing.Any, **kwargs: typing.Any
-                ) -> typing.Any:
-                    create_event("variant", {"name": name})
-                    stream_resp = run_impl_fn(*args, **kwargs)
-                    return stream_resp
+                def wrapper(*args: typing.Any, **kwargs: typing.Any) -> typing.Any:
+                    # For streams override the actual function name (v1_stream).
+                    # The qualname already contains impl info anyway and that is what is printed out in the logs.
+                    run_impl_fn.__name__ = self.__name
+                    return AsyncGenWrapper(name, run_impl_fn, *args, **kwargs)
 
             else:
 
@@ -231,6 +273,8 @@ class BaseBAMLFunction(typing.Generic[RET, PARTIAL_RET]):
                     return run_impl_fn(*args, **kwargs)
 
         wrapper.__name__ = self.__name
+
+        return wrapper
 
     def get_impl(self, name: str) -> BAMLImpl[RET, PARTIAL_RET]:
         """

@@ -22,26 +22,27 @@ from baml_lib._impl.deserializer import Deserializer
 
 
 import typing
-# Impl: v1
+# Impl: v3
 # Client: AZURE_GPT4
 # An implementation of MaybePolishText.
 
 __prompt_template = """\
-Write a haiku:\
+Hi please write whatever the user asks in haiku form.
+
+{arg.generated_response}\
 """
 
 __input_replacers = {
+    "{arg.generated_response}"
 }
 
 
 # We ignore the type here because baml does some type magic to make this work
 # for inline SpecialForms like Optional, Union, List.
 __deserializer = Deserializer[str](str)  # type: ignore
-__deserializer.overload("ImprovedResponse", {"ShouldImprove": "should_improve"})
 
 # Add a deserializer that handles stream responses, which are all Partial types
 __partial_deserializer = Deserializer[str](str)  # type: ignore
-__partial_deserializer.overload("ImprovedResponse", {"ShouldImprove": "should_improve"})
 
 
 
@@ -49,17 +50,17 @@ __partial_deserializer.overload("ImprovedResponse", {"ShouldImprove": "should_im
 
 
 
-async def v1(arg: ProposedMessage, /) -> str:
+async def v3(arg: ProposedMessage, /) -> str:
     response = await AZURE_GPT4.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
     deserialized = __deserializer.from_string(response.generated)
     return deserialized
 
 
-def v1_stream(arg: ProposedMessage, /) -> AsyncStream[str, str]:
+def v3_stream(arg: ProposedMessage, /) -> AsyncStream[str, str]:
     def run_prompt() -> typing.AsyncIterator[LLMResponse]:
         raw_stream = AZURE_GPT4.run_prompt_template_stream(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
         return raw_stream
     stream = AsyncStream(stream_cb=run_prompt, partial_deserializer=__partial_deserializer, final_deserializer=__deserializer)
     return stream
 
-BAMLMaybePolishText.register_impl("v1")(v1, v1_stream)
+BAMLMaybePolishText.register_impl("v3")(v3, v3_stream)

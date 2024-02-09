@@ -13,6 +13,7 @@ from ..__do_not_import.functions.fx_messagesimplifier import IMessageSimplifier,
 from ..__do_not_import.types.classes.cls_classifyresponse import ClassifyResponse
 from ..__do_not_import.types.classes.cls_conversation import Conversation
 from ..__do_not_import.types.classes.cls_empty import Empty
+from ..__do_not_import.types.classes.cls_haiku import Haiku
 from ..__do_not_import.types.classes.cls_hi import Hi
 from ..__do_not_import.types.classes.cls_improvedresponse import ImprovedResponse
 from ..__do_not_import.types.classes.cls_message import Message
@@ -35,6 +36,7 @@ __all__ = [
     'ClassifyResponse',
     'Conversation',
     'Empty',
+    'Haiku',
     'Hi',
     'ImprovedResponse',
     'Message',
