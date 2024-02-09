@@ -1,4 +1,3 @@
-# type: ignore
 """
 partialjson - Parse Partial and incomplete JSON in python
 Copyright (c) 2023 Nima Akbarzadeh
@@ -11,10 +10,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 """
 
 import json
+import typing
 
 
 class JSONParser:
-    def __init__(self):
+    def __init__(self) -> None:
         self.parsers = {
             " ": self.parse_space,
             "\r": self.parse_space,
@@ -31,13 +31,13 @@ class JSONParser:
         for c in "0123456789.-":
             self.parsers[c] = self.parse_number
 
-        self.last_parse_reminding = None
-        self.on_extra_token = self.default_on_extra_token
+        self.last_parse_reminding: typing.Optional[str] = None
+        self.on_extra_token = None
 
-    def default_on_extra_token(self, text, data, reminding):
+    def default_on_extra_token(self, text: str, data: typing.Any, reminding: str) -> None:
         pass
 
-    def parse(self, s):
+    def parse(self, s: str) -> typing.Any:
         if len(s) >= 1:
             try:
                 return json.loads(s)
@@ -50,7 +50,7 @@ class JSONParser:
         else:
             return json.loads("{}")
 
-    def parse_any(self, s, e):
+    def parse_any(self, s: str, e: Exception) -> typing.Tuple[typing.Any, str]:
         if not s:
             raise e
         parser = self.parsers.get(s[0])
@@ -58,10 +58,10 @@ class JSONParser:
             raise e
         return parser(s, e)
 
-    def parse_space(self, s, e):
+    def parse_space(self, s: str, e: Exception) -> typing.Tuple[typing.Any, str]:
         return self.parse_any(s.strip(), e)
 
-    def parse_array(self, s, e):
+    def parse_array(self, s: str, e: Exception) -> typing.Tuple[typing.List[typing.Any], str]:
         s = s[1:]  # skip starting '['
         acc = []
         s = s.strip()
@@ -77,9 +77,9 @@ class JSONParser:
                 s = s.strip()
         return acc, s
 
-    def parse_object(self, s, e):
+    def parse_object(self, s: str, e: Exception) -> typing.Tuple[typing.Dict[str, typing.Any], str]:
         s = s[1:]  # skip starting '{'
-        acc = {}
+        acc: typing.Dict[str, typing.Any] = {}
         s = s.strip()
         while s:
             if s[0] == "}":
@@ -115,7 +115,7 @@ class JSONParser:
                 s = s.strip()
         return acc, s
 
-    def parse_string(self, s, e):
+    def parse_string(self, s: str, e: Exception) -> typing.Tuple[str, str]:
         end = s.find('"', 1)
         while end != -1 and s[end - 1] == "\\":  # Handle escaped quotes
             end = s.find('"', end + 1)
@@ -126,7 +126,7 @@ class JSONParser:
         s = s[end + 1 :]
         return json.loads(str_val), s
 
-    def parse_number(self, s):
+    def parse_number(self, s: str, e: Exception) -> typing.Tuple[typing.Union[int, float, str], str]:
         i = 0
         while i < len(s) and s[i] in "0123456789.-":
             i += 1
@@ -144,17 +144,19 @@ class JSONParser:
             raise e
         return num, s
 
-    def parse_true(self, s, e):
+    def parse_true(self, s: str, e: Exception) -> typing.Tuple[bool, str]:
         if s.startswith("true"):
             return True, s[4:]
         raise e
 
-    def parse_false(self, s, e):
+    def parse_false(self, s: str, e: Exception) -> typing.Tuple[bool, str]:
         if s.startswith("false"):
             return False, s[5:]
         raise e
 
-    def parse_null(self, s, e):
+    def parse_null(self, s: str, e: Exception) -> typing.Tuple[None, str]:
         if s.startswith("null"):
             return None, s[4:]
         raise e
+
+__all__ = ["JSONParser"]

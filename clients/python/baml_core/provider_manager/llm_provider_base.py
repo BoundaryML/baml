@@ -235,7 +235,8 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
         replacers: typing.Iterable[str],
         params: typing.Dict[str, typing.Any],
     ) -> typing.AsyncIterator[LLMResponse]:
-        pass
+        raise NotImplementedError()
+        yield
 
     @typing.final
     def validate(self) -> None:

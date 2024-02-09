@@ -6,6 +6,7 @@ from anthropic.types.beta import (
     MessageDeltaEvent,
     ContentBlockStartEvent,
     ContentBlockDeltaEvent,
+    MessageParam
 )
 
 from baml_core.provider_manager import (
@@ -137,13 +138,19 @@ class AnthropicProvider(LLMChatProvider):
         else:
             caller_kwargs_copy.pop("max_tokens_to_sample", None)
 
+        def to_anthropic_message(msg: LLMChatMessage) -> MessageParam:
+            return {
+                "role": "user" if msg['role'] == "user" else "assistant",
+                "content": msg["content"],
+            }
+
         total_input_tokens = 0
         # cumulative token count
         total_output_tokens = 0
         model = None
         finish_reason = None
         async with self.__client.beta.messages.stream(
-            messages=messages, **caller_kwargs_copy  # type: ignore
+            messages=map(to_anthropic_message, messages), **caller_kwargs_copy
         ) as stream:
             last_response: typing.Optional[MessageStreamEvent] = None
             async for response in stream:

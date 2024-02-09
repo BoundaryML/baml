@@ -107,7 +107,7 @@ class LLMProvider(AbstractLLMProvider):
 
     @typing.final
     @typechecked
-    async def _run_chat_template_internal_stream(  # type: ignore
+    async def _run_chat_template_internal_stream(
         self,
         *message_templates: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]],
         replacers: typing.Iterable[str],
@@ -117,9 +117,13 @@ class LLMProvider(AbstractLLMProvider):
             chats = message_templates[0]
         else:
             chats = typing.cast(typing.List[LLMChatMessage], message_templates)
-        return self._run_prompt_template_internal_stream(
-            template=self.__chat_to_prompt(chats), replacers=replacers, params=params
-        )
+        try:
+            async for x in self._run_prompt_template_internal_stream(
+                template=self.__chat_to_prompt(chats), replacers=replacers, params=params
+            ):
+                yield x
+        except Exception as e:
+            self._raise_error(e)
 
     @typing.final
     @typechecked

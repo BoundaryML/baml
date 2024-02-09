@@ -101,7 +101,7 @@ class LLMChatProvider(AbstractLLMProvider):
 
     @typing.final
     @typechecked
-    async def _run_chat_template_internal_stream(  # type: ignore
+    async def _run_chat_template_internal_stream(
         self,
         *message_templates: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]],
         replacers: typing.Iterable[str],

@@ -1,5 +1,6 @@
 from openai import AsyncOpenAI, AsyncAzureOpenAI, AsyncClient
 from openai.types.chat.chat_completion import ChatCompletion
+from openai.types.chat.chat_completion_message_param import ChatCompletionMessageParam
 from .openai_helper_1 import to_error_code
 
 import typing
@@ -12,6 +13,14 @@ from baml_core.provider_manager import (
     register_llm_provider,
 )
 
+def _to_chat_completion_messages(msg: LLMChatMessage) -> ChatCompletionMessageParam:
+    if msg["role"] == "user":
+        return {"role": "user", "content": msg["content"]}
+    if msg["role"] == "assistant":
+        return {"role": "assistant", "content": msg["content"]}
+    # Default to system messages
+    return {"role": "system", "content": msg["content"]}
+            
 
 @register_llm_provider("baml-openai-chat", "baml-azure-chat")
 @typing.final
@@ -66,11 +75,10 @@ class OpenAIChatProvider(LLMChatProvider):
     def _validate(self) -> None:
         pass
 
-    # def _to_chat_completion_messages(self, messages: typing.List[LLMChatMessage]) -> ChatComple
 
     async def _run_chat(self, messages: typing.List[LLMChatMessage]) -> LLMResponse:
         response: ChatCompletion = await self._client.chat.completions.create(
-            messages=messages, **self.__kwargs  # type: ignore
+            messages=list(map(_to_chat_completion_messages, messages)), **self.__kwargs
         )
         if not isinstance(response, ChatCompletion):
             raise ValueError(
@@ -108,12 +116,12 @@ class OpenAIChatProvider(LLMChatProvider):
         self, messages: typing.List[LLMChatMessage]
     ) -> typing.AsyncIterator[LLMResponse]:
         response = await self._client.chat.completions.create(
-            messages=messages,  # type: ignore
+            messages=list(map(_to_chat_completion_messages, messages)),
             **self.__kwargs,
             stream=True,
         )
 
-        async for r in response:  # type: ignore
+        async for r in response:
             prompt_tokens = None
             output_tokens = None
             total_tokens = None
