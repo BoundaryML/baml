@@ -108,8 +108,7 @@ def _trace_internal(func: F, **kwargs: typing.Any) -> F:
     # Ensure that the user doesn't pass in any other kwargs
     assert not kwargs, f"Unexpected kwargs: {kwargs}"
 
-    # TODO: find a resilient way to check
-    if "_stream" in func.__qualname__:
+    if func.__annotations__.get("baml_is_stream") is True:
 
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> AsyncGeneratorContextManager:

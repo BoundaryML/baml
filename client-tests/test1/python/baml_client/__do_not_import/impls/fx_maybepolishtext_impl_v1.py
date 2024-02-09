@@ -27,21 +27,25 @@ import typing
 # An implementation of MaybePolishText.
 
 __prompt_template = """\
-Write a haiku:\
+Write a haiku about {arg.generated_response}
+
+add it to this json schema and return it
+string
+
+JSON:\
 """
 
 __input_replacers = {
+    "{arg.generated_response}"
 }
 
 
 # We ignore the type here because baml does some type magic to make this work
 # for inline SpecialForms like Optional, Union, List.
 __deserializer = Deserializer[str](str)  # type: ignore
-__deserializer.overload("ImprovedResponse", {"ShouldImprove": "should_improve"})
 
 # Add a deserializer that handles stream responses, which are all Partial types
 __partial_deserializer = Deserializer[str](str)  # type: ignore
-__partial_deserializer.overload("ImprovedResponse", {"ShouldImprove": "should_improve"})
 
 
 

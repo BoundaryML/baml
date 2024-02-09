@@ -57,7 +57,7 @@ class IBAMLMaybePolishText(BaseBAMLFunction[str, str]):
         super().__init__(
             "MaybePolishText",
             IMaybePolishText,
-            ["v1", "v2"],
+            ["v1", "v2", "v3"],
         )
 
     async def __call__(self, *args, **kwargs) -> str:

@@ -8,9 +8,10 @@
 # fmt: off
 
 from baml_lib._impl.deserializer import register_deserializer
-from enum import Enum
+from pydantic import BaseModel
+from typing import Optional
 
 
 @register_deserializer({  })
-class EmptyEnum(str, Enum):
-    pass
+class Haiku(BaseModel):
+    haiku: str

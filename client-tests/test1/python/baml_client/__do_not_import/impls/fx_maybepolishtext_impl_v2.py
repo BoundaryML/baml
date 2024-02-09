@@ -52,11 +52,9 @@ __input_replacers = {
 # We ignore the type here because baml does some type magic to make this work
 # for inline SpecialForms like Optional, Union, List.
 __deserializer = Deserializer[str](str)  # type: ignore
-__deserializer.overload("ImprovedResponse", {"ShouldImprove": "should_improve"})
 
 # Add a deserializer that handles stream responses, which are all Partial types
 __partial_deserializer = Deserializer[str](str)  # type: ignore
-__partial_deserializer.overload("ImprovedResponse", {"ShouldImprove": "should_improve"})
 
 
 

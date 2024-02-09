@@ -7,13 +7,11 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ...classes.cls_message import Message
-from ...enums.enm_messagesender import MessageSender
 from baml_lib._impl.deserializer import register_deserializer
 from pydantic import BaseModel
-from typing import List
+from typing import Optional
 
 
 @register_deserializer({  })
-class PartialConversation(BaseModel):
-    thread: List[Message]
+class PartialHaiku(BaseModel):
+    haiku: Optional[str] = None

@@ -118,12 +118,6 @@ class AsyncStream(Generic[TYPE, PARTIAL_TYPE]):
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:  # type: ignore
         await self.__until_done()
 
-    @property
-    async def text_stream(self) -> AsyncIterator[TextDelta]:
-        async for response in self.__get_stream():
-            yield TextDelta(delta=response.generated)
-        self.__is_stream_completed = True
-
     async def _parse_stream_chunk(
         self, total_text: str, delta: str
     ) -> PartialValueWrapper[PARTIAL_TYPE]:
