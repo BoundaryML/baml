@@ -1,0 +1,40 @@
+---
+title: "System vs user prompts"
+---
+
+When using certain models, you may wish to add a role to a section of a message.
+
+This can be done by adding a `{#chat(role)}` block into the prompt.
+
+For example:
+
+```rust example.baml
+// example.baml
+class Resume {
+  name string
+  skills string[]
+}
+
+function ExtractResume {
+  input (resume_text: string)
+  output Resume[]
+}
+
+impl<llm, ExtractResume> version1 {
+  client GPT4Client // client definition not shown
+  prompt #"
+    {#chat(system)}
+    Parse the following resume and return a structured representation of the data in the schema below.
+
+    {#chat(user)}
+    Resume:
+    ---
+    {#input.resume_text}
+    ---
+    Output in this JSON format:
+    {#print_type(output)}
+
+    Output JSON:
+  "#
+}
+```

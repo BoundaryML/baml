@@ -145,6 +145,7 @@
           "group": "Prompt engineering",
           "icon": "sparkles",
           "pages": [
+            "v3/how-to/prompt_engineering/chat-prompts",
             "v3/how-to/prompt_engineering/serialize_list",
             "v3/how-to/prompt_engineering/serialize_complex_input",
             "v3/how-to/prompt_engineering/conditional_rendering"
