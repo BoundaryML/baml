@@ -203,7 +203,13 @@ pub(crate) fn parse_generator(
 
     Generator::new(
         generator_name.to_string(),
-        project_root,
+        ast_generator
+            .span()
+            .file
+            .path_buf()
+            .parent()
+            .unwrap()
+            .join(project_root),
         GeneratorLanguage::Python,
         test_command,
         install_command,

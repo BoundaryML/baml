@@ -29,7 +29,11 @@ import typing
 __prompt_template = """\
 Hi please write whatever the user asks in haiku form.
 
+<<<<<<< HEAD
 {arg.generated_response}\
+=======
+Can you write about a computer science?\
+>>>>>>> dff6d4d (Adding more files)
 """
 
 __input_replacers = {

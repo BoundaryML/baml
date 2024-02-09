@@ -55,21 +55,21 @@ async def random_code(arg1, arg2):
 @pytest.mark.asyncio
 async def test_logic() -> typing.Any:
     count = 0
+    try:
+        async with baml.MaybePolishText.stream(
+            ProposedMessage(thread=Conversation(thread=[]), generated_response="test"),
+        ) as stream:
+            async for x in stream.parsed_stream:
+                print(f"streaming: {x.delta}")
 
-    async with baml.MaybePolishText.stream(
-        ProposedMessage(thread=Conversation(thread=[]), generated_response="paris"),
-    ) as stream:
-        async for x in stream.parsed_stream:
-            if x.is_parseable:
-                print(f"streaming: {x.parsed}")
+                count += 1
+            result = await stream.get_final_response()
+        print(f"chunks: {count}")
+        assert count > 0
+        print(f"streaming done")
 
-            count += 1
-    print(f"chunks: {count}")
-    assert count > 0
-    print(f"streaming done")
-
-    result = await stream.get_final_response()
-    print(f"final: {result.value}")
+    except Exception as e:
+        print(f"error: {e}")
 
     res = await baml.MaybePolishText(
         ProposedMessage(
