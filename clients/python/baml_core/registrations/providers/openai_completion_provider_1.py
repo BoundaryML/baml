@@ -6,7 +6,6 @@ import typing
 from baml_core.provider_manager import (
     LLMProvider,
     LLMResponse,
-    LLMChatMessage,
     register_llm_provider,
 )
 
