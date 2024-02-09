@@ -9,6 +9,7 @@ use jsonschema::WithJsonSchema;
 
 use baml_lib::{
     internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span},
+    internal_baml_parser_database::PromptRepr,
     internal_baml_schema_ast::ast::{self, WithIdentifier, WithName, WithSpan},
     SourceFile,
 };
@@ -160,6 +161,11 @@ pub(crate) fn run(input: &str) -> String {
                 "impls": func.walk_variants().map(
                     |i| {
                         let props = i.properties();
+                        let prompt = props.to_prompt();
+                        let is_chat = match &prompt {
+                            PromptRepr::Chat(..) => true,
+                            _ => false,
+                        };
                         json!({
                             "type": "llm",
                             "name": StringSpan::new(i.ast_variant().name(), &i.identifier().span()),
@@ -168,7 +174,26 @@ pub(crate) fn run(input: &str) -> String {
                                 "end": props.prompt.key_span.end,
                                 "source_file": props.prompt.key_span.file.path(),
                             },
+                            "has_v2": is_chat,
+                            // Passed for legacy reasons
                             "prompt": props.prompt.value,
+                            // This is the new value to use
+                            "prompt_v2": {
+                                "is_chat": is_chat,
+                                "prompt": match &prompt {
+                                    PromptRepr::Chat(parts, _) => {
+                                        json!(parts.iter().map(|(ctx, text)| {
+                                            json!({
+                                                "role": ctx.map(|c| c.role.0.as_str()).unwrap_or("system"),
+                                                "content": text,
+                                            })
+                                        }).collect::<Vec<_>>())
+                                    },
+                                    PromptRepr::String(content, _) => {
+                                        json!(content)
+                                    },
+                                },
+                            },
                             "input_replacers": props.replacers.0.iter().map(
                                 |r| json!({
                                     "key": r.0.key(),

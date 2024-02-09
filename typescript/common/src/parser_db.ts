@@ -31,28 +31,44 @@ export interface StringSpan extends Span {
 
 export type ArgType =
   | {
-      arg_type: 'positional'
+    arg_type: 'positional'
+    type: string
+    jsonSchema: Record<string, any>
+  }
+  | {
+    arg_type: 'named'
+    values: {
+      name: StringSpan
       type: string
       jsonSchema: Record<string, any>
-    }
-  | {
-      arg_type: 'named'
-      values: {
-        name: StringSpan
-        type: string
-        jsonSchema: Record<string, any>
-      }[]
-    }
+    }[]
+  }
 
-interface Impl {
+export type Impl = {
   type: 'llm'
   name: StringSpan
   prompt_key: Span
-  prompt: string
   input_replacers: { key: string; value: string }[]
   output_replacers: { key: string; value: string }[]
   client: StringSpan
-}
+} & (
+    {
+      has_v2?: false
+      prompt: string
+    } | {
+      has_v2: true
+      prompt_v2: {
+        is_chat: false,
+        prompt: string
+      } | {
+        is_chat: true,
+        prompt: {
+          role: string
+          content: string
+        }[]
+      }
+    }
+  )
 
 interface SFunction {
   name: StringSpan

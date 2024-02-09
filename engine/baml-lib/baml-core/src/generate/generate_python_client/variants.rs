@@ -1,13 +1,7 @@
-use std::collections::HashSet;
-
 use either::Either;
-use internal_baml_parser_database::{
-    walkers::{PromptRepr, VariantWalker},
-    WithStaticRenames,
-};
+use internal_baml_parser_database::{walkers::VariantWalker, PromptRepr, WithStaticRenames};
 use internal_baml_schema_ast::ast::WithName;
 
-use log::info;
 use serde_json::json;
 
 use crate::generate::generate_python_client::file::clean_file_name;

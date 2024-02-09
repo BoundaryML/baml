@@ -126,16 +126,23 @@ const Snippet: React.FC<{ text: string }> = ({ text }) => {
 const ImplPanel: React.FC<{ impl: Impl }> = ({ impl }) => {
   const { func } = useImplCtx(impl.name.value)
 
+
   const implPrompt = useMemo(() => {
-    let prompt = impl.prompt
-    impl.input_replacers.forEach(({ key, value }) => {
-      prompt = prompt.replaceAll(key, `{${value}}`)
-    })
-    impl.output_replacers.forEach(({ key, value }) => {
-      prompt = prompt.replaceAll(key, value)
-    })
-    return prompt
-  }, [impl.prompt, impl.input_replacers, impl.output_replacers])
+    if (impl.has_v2 === undefined) {
+      let prompt = impl.prompt
+      impl.input_replacers.forEach(({ key, value }) => {
+        prompt = prompt.replaceAll(key, `{${value}}`)
+      })
+      impl.output_replacers.forEach(({ key, value }) => {
+        prompt = prompt.replaceAll(key, value)
+      })
+      return prompt
+    } else if (impl.has_v2) {
+      return impl.prompt_v2.prompt
+    } else {
+      return impl.prompt
+    }
+  }, [impl])
 
   if (!func) return null
 
@@ -159,7 +166,14 @@ const ImplPanel: React.FC<{ impl: Impl }> = ({ impl }) => {
                 <Link item={impl.client} />
               </div>
             </div>
-            <Snippet text={implPrompt} />
+            {typeof implPrompt === 'string' ? <Snippet text={implPrompt} /> : <div className='flex flex-col gap-2'>
+              {implPrompt.map(({ role, content }, index) => (
+                <div className='flex flex-col'>
+                  <div className='text-xs'><span className='text-muted-foreground'>Role:</span> <span className='font-bold'>{role}</span></div>
+                  <Snippet key={index} text={content} />
+                </div>
+              ))}
+            </div>}
           </div>
         </div>
       </VSCodePanelView>

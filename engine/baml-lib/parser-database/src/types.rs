@@ -18,6 +18,7 @@ mod prompt;
 mod to_string_attributes;
 mod types;
 
+use log::info;
 use prompt::validate_prompt;
 
 pub use to_string_attributes::{
@@ -121,6 +122,17 @@ pub struct VariantProperties {
     pub output_adapter: Option<(AdapterId, Vec<RawString>)>,
 }
 
+/// The representation of a prompt.
+pub enum PromptRepr<'a> {
+    /// For single string prompts
+    /// Prompt + Any used input replacers
+    String(String, Vec<String>),
+
+    /// For prompts with multiple parts
+    /// ChatBlock + Prompt + Any used input replacers
+    Chat(Vec<(Option<&'a ChatBlock>, String)>, Vec<String>),
+}
+
 impl VariantProperties {
     pub fn output_adapter_for_language(&self, language: &str) -> Option<&str> {
         self.output_adapter.as_ref().and_then(|f| {
@@ -128,6 +140,85 @@ impl VariantProperties {
                 .find(|r| r.language.as_ref().map(|(l, _)| l.as_str()) == Some(language))
                 .map(|r| r.value())
         })
+    }
+
+    pub fn to_prompt<'a>(&'a self) -> PromptRepr<'a> {
+        let (input, output, chats) = &self.replacers;
+
+        // Replace all the inputs with the input replacers
+        let mut used_inputs = vec![];
+        let prompt = input
+            .iter()
+            .fold(self.prompt.value.clone(), |prompt, (k, val)| {
+                // Only add the input if it's used in the prompt
+                if prompt.contains(&k.key()) {
+                    used_inputs.push(val.clone());
+                    prompt.replace(&k.key(), &format!("{{{}}}", val))
+                } else {
+                    prompt
+                }
+            });
+        // Replace all the outputs with the output replacers
+        let prompt = output.iter().fold(prompt, |prompt, (k, val)| {
+            prompt.replace(&k.key(), &format!("{}", val))
+        });
+
+        used_inputs.sort();
+
+        if chats.is_empty() {
+            PromptRepr::String(prompt, used_inputs)
+        } else {
+            // Split the prompt into parts based on the chat blocks.
+            let mut last_idx = 0;
+            let mut parts = vec![];
+            for chat in chats {
+                let splitter = chat.key();
+                let idx = prompt[last_idx..].find(&splitter);
+                if let Some(idx) = idx {
+                    parts.push((
+                        Some(chat),
+                        (idx + last_idx, idx + last_idx + splitter.len()),
+                    ));
+                    last_idx += idx + splitter.len();
+                }
+            }
+
+            match parts.first() {
+                // If the first chat block is not at the start of the prompt, add the first part.
+                Some(&(Some(_), (start, _))) if start > 0 => {
+                    info!("First chat block is not at the start of the prompt");
+                    parts.insert(0, (None, (0, 0)));
+                }
+                Some(_) => {
+                    info!("First chat block is at the start of the prompt")
+                }
+                _ => unreachable!("At least one chat block should exist"),
+            }
+
+            // Each chat block owns a part of the prompt. until the next chat block.
+            PromptRepr::Chat(
+                parts
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(idx, &(chat, (_, start)))| {
+                        let end = if idx + 1 < parts.len() {
+                            parts[idx + 1].1 .0
+                        } else {
+                            prompt.len()
+                        };
+
+                        let p = prompt[start..end].trim();
+                        if p.is_empty() {
+                            info!("Skipping empty prompt part: {} {} {}", idx, start, end);
+                            None
+                        } else {
+                            Some((chat, p.to_string()))
+                        }
+                    })
+                    .collect(),
+                used_inputs,
+            )
+        }
     }
 }
 
