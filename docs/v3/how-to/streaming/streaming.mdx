@@ -24,7 +24,7 @@ async def main():
               print("my property is present", output.parsed.my_property)
               print(f"streaming: {output.parsed.model_dump_json()}")
             
-            # You can also get the current delta
+            # You can also get the current delta. This will always be present.
             print(f"streaming: {output.delta}")
 
         final_output = await stream.get_final_response()
@@ -36,36 +36,25 @@ async def main():
 ```
 You can also get the deltas from the `output` using `output.delta`
 
-### Stream deltas only
-The following returns a stream of deltas. This is useful if you want to process the response as it comes in, but don't want to deal with the object being partially filled in.
-
-```python
-async def main():
-    async with baml.MyFunction.stream(MyInput(...)) as stream:
-        async for chunk in stream.text_stream:
-            print(f"streaming: {chunk.delta}")
-
-        # You won't be able to do this if you're streaming deltas only. This will throw.
-        # final_output = await stream.get_final_response()
-```
-<Warning>
-You can't call `get_final_response()` if you're streaming deltas only. It will throw a ValueError.
-</Warning>
-
 ### Stream a specific impl
 The following returns a stream of a specific impl. This is useful if you want to process the response as it comes in, but don't want to deal with the object being partially filled in.
 
 ```python
 async def main():
     async with baml.MyFunction.get_impl("v1").stream(...) as stream:
-        async for chunk in stream.text_stream:
+        async for chunk in stream.parsed_stream:
             print(f"streaming: {chunk.delta}")
 
         final_output = await stream.get_final_response()
+        if final_output.has_value:
+            print(f"final response: {final_output.value}")
 ```
 
 
 ### Caveats
-1. Not available in TypeScript yet
-2. Not supported for Fallback clients
-3. Retry policies may not work correctly at the moment
+Not supported with:
+1. Fallback clients
+2. Retry policies (it may work but there may be unknown behaviors)
+3. Output adapters
+4. Union types
+5. TypeScript
