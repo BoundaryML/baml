@@ -43,7 +43,7 @@ class ValueWrapper(Generic[TYPE]):
         assert not isinstance(self.__value, Unset)
         return self.__value
 
-    def json(self) -> Dict[str, Any] | None:
+    def json(self) -> Optional[Dict[str, Any]]:
         if not self.__is_set:
             return None
         val = self.value
