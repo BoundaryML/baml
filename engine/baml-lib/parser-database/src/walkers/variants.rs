@@ -132,8 +132,17 @@ impl<'db> VariantWalker<'db> {
                 let idx = prompt[last_idx..].find(&splitter);
                 if let Some(idx) = idx {
                     last_idx += idx + splitter.len();
-                    parts.push((chat, (idx, last_idx)));
+                    parts.push((Some(chat), (idx, last_idx)));
                 }
+            }
+
+            match parts.first() {
+                // If the first chat block is not at the start of the prompt, add the first part.
+                Some(&(Some(_), (start, _))) if start > 0 => {
+                    parts.insert(0, (None, (0, start)));
+                }
+                Some(_) => {}
+                _ => unreachable!("At least one chat block should exist"),
             }
 
             // Each chat block owns a part of the prompt. until the next chat block.
@@ -141,14 +150,19 @@ impl<'db> VariantWalker<'db> {
                 parts
                     .iter()
                     .enumerate()
-                    .map(|(idx, &(chat, (_, start)))| {
+                    .filter_map(|(idx, &(chat, (_, start)))| {
                         let end = if idx + 1 < parts.len() {
                             parts[idx + 1].1 .0
                         } else {
                             prompt.len()
                         };
 
-                        (Some(chat), prompt[start..end].to_string())
+                        let prompt = prompt[start..end].trim();
+                        if prompt.is_empty() {
+                            None
+                        } else {
+                            Some((chat, prompt.to_string()))
+                        }
                     })
                     .collect(),
                 used_inputs,
