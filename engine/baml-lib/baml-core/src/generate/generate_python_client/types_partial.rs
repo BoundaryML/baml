@@ -100,14 +100,16 @@ impl WithPartial for FieldType {
                 let mut repr = format!(
                     "Union[{}]",
                     vals.iter()
-                        .map(|v| v.to_partial_py_string(f))
+                        .map(|v| v.to_py_string(f))
                         .collect::<Vec<String>>()
                         .join(", ")
                 );
 
-                f.add_import("typing", "Optional");
-                repr = format!("Optional[{}]", repr);
-
+                // Optional unions are broken at the moment so dont make this worse for now
+                if arity.is_optional() {
+                    f.add_import("typing", "Optional");
+                    repr = format!("Optional[{}]", repr);
+                }
                 repr
             }
         }
