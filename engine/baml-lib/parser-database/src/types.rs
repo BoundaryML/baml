@@ -151,9 +151,10 @@ impl VariantProperties {
             .iter()
             .fold(self.prompt.value.clone(), |prompt, (k, val)| {
                 // Only add the input if it's used in the prompt
-                if prompt.contains(&k.key()) {
+                let key = k.key();
+                if prompt.contains(&key) {
                     used_inputs.push(val.clone());
-                    prompt.replace(&k.key(), &format!("{{{}}}", val))
+                    prompt.replace(&key, &format!("{{{}}}", val))
                 } else {
                     prompt
                 }

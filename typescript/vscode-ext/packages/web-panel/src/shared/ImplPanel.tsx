@@ -128,7 +128,9 @@ const ImplPanel: React.FC<{ impl: Impl }> = ({ impl }) => {
 
 
   const implPrompt = useMemo(() => {
-    if (impl.has_v2 === undefined) {
+    if (impl.has_v2) {
+      return impl.prompt_v2.prompt
+    } else {
       let prompt = impl.prompt
       impl.input_replacers.forEach(({ key, value }) => {
         prompt = prompt.replaceAll(key, `{${value}}`)
@@ -137,10 +139,6 @@ const ImplPanel: React.FC<{ impl: Impl }> = ({ impl }) => {
         prompt = prompt.replaceAll(key, value)
       })
       return prompt
-    } else if (impl.has_v2) {
-      return impl.prompt_v2.prompt
-    } else {
-      return impl.prompt
     }
   }, [impl])
 

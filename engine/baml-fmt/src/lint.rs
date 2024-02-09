@@ -174,7 +174,7 @@ pub(crate) fn run(input: &str) -> String {
                                 "end": props.prompt.key_span.end,
                                 "source_file": props.prompt.key_span.file.path(),
                             },
-                            "has_v2": is_chat,
+                            "has_v2": true,
                             // Passed for legacy reasons
                             "prompt": props.prompt.value,
                             // This is the new value to use
