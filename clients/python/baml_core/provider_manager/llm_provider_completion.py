@@ -117,7 +117,9 @@ class LLMProvider(AbstractLLMProvider):
             chats = message_templates[0]
         else:
             chats = typing.cast(typing.List[LLMChatMessage], message_templates)
-        return self._run_prompt_template_internal_stream(template=self.__chat_to_prompt(chats), replacers=replacers, params=params)
+        return self._run_prompt_template_internal_stream(
+            template=self.__chat_to_prompt(chats), replacers=replacers, params=params
+        )
 
     @typing.final
     @typechecked
