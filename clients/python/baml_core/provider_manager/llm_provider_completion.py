@@ -82,7 +82,7 @@ class LLMProvider(AbstractLLMProvider):
             yield cached
         prompt = _update_template_with_vars(template=template, updates=updates)
         try:
-            async for r in self._run_stream(prompt):
+            async for r in self._stream(prompt):
                 yield r
         except Exception as e:
             self._raise_error(e)
@@ -104,6 +104,28 @@ class LLMProvider(AbstractLLMProvider):
             replacers=replacers,
             params=params,
         )
+
+    @typing.final
+    @typechecked
+    async def _run_chat_template_internal_stream(
+        self,
+        *message_templates: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]],
+        replacers: typing.Iterable[str],
+        params: typing.Dict[str, typing.Any],
+    ) -> typing.AsyncIterator[LLMResponse]:
+        if len(message_templates) == 1 and isinstance(message_templates[0], list):
+            chats = message_templates[0]
+        else:
+            chats = typing.cast(typing.List[LLMChatMessage], message_templates)
+        try:
+            async for x in self._run_prompt_template_internal_stream(
+                template=self.__chat_to_prompt(chats),
+                replacers=replacers,
+                params=params,
+            ):
+                yield x
+        except Exception as e:
+            self._raise_error(e)
 
     @typing.final
     @typechecked
@@ -140,6 +162,6 @@ class LLMProvider(AbstractLLMProvider):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def _run_stream(self, prompt: str) -> typing.AsyncIterator[LLMResponse]:
+    async def _stream(self, prompt: str) -> typing.AsyncIterator[LLMResponse]:
         raise NotImplementedError
         yield  # appease the linter that doesn't understand that this is an async generator unless theres a yield

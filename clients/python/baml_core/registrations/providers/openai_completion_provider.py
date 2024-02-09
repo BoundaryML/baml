@@ -27,7 +27,7 @@ class OpenAICompletionProvider(LLMProvider):
         pass
 
     async def _run(self, prompt: str) -> LLMResponse:
-        response = await openai.Completion.acreate(prompt=prompt, **self.__kwargs)  # type: ignore
+        response = await openai.Completion.acreate(prompt=prompt, **self.__kwargs)
         text = response["choices"][0]["text"]
         usage = response["usage"]
         model = response["model"]
@@ -46,5 +46,6 @@ class OpenAICompletionProvider(LLMProvider):
             ),
         )
 
-    async def _run_stream(self, prompt: str) -> typing.AsyncIterator[LLMResponse]:
+    async def _stream(self, prompt: str) -> typing.AsyncIterator[LLMResponse]:
         raise NotImplementedError
+        yield

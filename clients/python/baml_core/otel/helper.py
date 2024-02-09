@@ -160,7 +160,7 @@ class PartialLogSchema(BaseModel):
                     full_meta, err = m.to_full()
                     event = LogSchema(
                         project_id=self.project_id,
-                        event_type=self.event_type,  # type: ignore
+                        event_type="func_llm",
                         root_event_id=self.root_event_id,
                         event_id=str(uuid.uuid4()),
                         parent_event_id=self.event_id,
@@ -200,7 +200,7 @@ class PartialLogSchema(BaseModel):
             return [
                 LogSchema(
                     project_id=self.project_id,
-                    event_type=self.event_type,  # type: ignore
+                    event_type="func_llm",
                     root_event_id=self.root_event_id,
                     event_id=self.event_id,
                     parent_event_id=self.parent_event_id,
@@ -218,6 +218,7 @@ class PartialLogSchema(BaseModel):
         return [
             LogSchema(
                 project_id=self.project_id,
+                # Ignore type error as we have already checked
                 event_type=self.event_type,  # type: ignore
                 root_event_id=self.root_event_id,
                 event_id=self.event_id,

@@ -6,7 +6,6 @@ import typing
 from baml_core.provider_manager import (
     LLMProvider,
     LLMResponse,
-    LLMChatMessage,
     register_llm_provider,
 )
 
@@ -99,13 +98,6 @@ class OpenAICompletionProvider(LLMProvider):
             ),
         )
 
-    async def _run_stream(self, prompt: str) -> typing.AsyncIterator[LLMResponse]:  # type: ignore
+    async def _stream(self, prompt: str) -> typing.AsyncIterator[LLMResponse]:
         raise NotImplementedError("Stream is not supported for this provider")
-
-    async def _run_chat_template_internal_stream(
-        self,
-        *message_templates: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]],
-        replacers: typing.Iterable[str],
-        params: typing.Dict[str, typing.Any],
-    ) -> typing.AsyncIterator[LLMResponse]:
-        raise NotImplementedError("Stream is not supported for this provider")
+        yield

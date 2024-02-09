@@ -5,7 +5,7 @@ use internal_baml_diagnostics::{DatamodelError, Diagnostics, Span};
 use internal_baml_schema_ast::ast::{RawString, WithSpan};
 use pest::Parser;
 
-use super::{BAMLPromptParser, Rule};
+use super::{helpers::Pair, BAMLPromptParser, Rule};
 
 #[cfg(feature = "debug_parser")]
 fn pretty_print<'a>(pair: pest::iterators::Pair<'a, Rule>, indent_level: usize) {
@@ -33,6 +33,8 @@ pub fn parse_prompt(
     let parse_result = BAMLPromptParser::parse(Rule::entry, raw_string.value());
     let mut top_level_definitions = Vec::new();
 
+    let mut num_chat_blocks = 0;
+
     match parse_result {
         Ok(mut parsed_rules) => {
             for pair in parsed_rules.next().unwrap().into_inner() {
@@ -51,6 +53,7 @@ pub fn parse_prompt(
                                     &mut top_level_definitions,
                                     &mut diagnostics,
                                     &raw_string,
+                                    &mut num_chat_blocks,
                                 ),
                                 Rule::comment_block => handle_comment_block(
                                     inner,
@@ -109,6 +112,7 @@ fn handle_code_block(
     top_level_definitions: &mut Vec<Top>,
     diagnostics: &mut Diagnostics,
     raw_string: &RawString,
+    num_chat_blocks: &mut usize,
 ) {
     assert_correct_parser!(pair, Rule::code_block);
 
@@ -120,6 +124,13 @@ fn handle_code_block(
             Rule::print_block => {
                 handle_print_block(current, top_level_definitions, diagnostics, raw_string)
             }
+            Rule::chat_block => handle_chat_block(
+                current,
+                top_level_definitions,
+                diagnostics,
+                raw_string,
+                num_chat_blocks,
+            ),
             Rule::WHITESPACE => {}
             _ => unreachable_rule!(current, Rule::code_block),
         }
@@ -208,19 +219,8 @@ fn handle_print_block(
                     }
                 }
             }
-            Rule::variable => {
-                for current in current.into_inner() {
-                    match current.as_rule() {
-                        Rule::identifier => {
-                            argument.push((
-                                current.as_str().to_string(),
-                                raw_string.to_raw_span(current.as_span().clone()),
-                            ));
-                        }
-                        Rule::WHITESPACE => {}
-                        _ => unreachable_rule!(current, Rule::variable),
-                    }
-                }
+            Rule::arg_list => {
+                argument = parse_arg_list(current, raw_string);
             }
             Rule::WHITESPACE => {}
             _ => unreachable_rule!(current, Rule::print_block),
@@ -297,6 +297,128 @@ fn handle_print_block(
     if let Some(block) = block {
         top_level_definitions.push(Top::CodeBlock(block));
     }
+}
+
+fn parse_arg_list(
+    current: pest::iterators::Pair<'_, Rule>,
+    raw_string: &RawString,
+) -> Vec<(String, Span)> {
+    assert_correct_parser!(current, Rule::arg_list);
+
+    let mut arguments = vec![];
+
+    for current in current.into_inner() {
+        if current.as_rule() == Rule::WHITESPACE {
+            continue;
+        }
+        assert_correct_parser!(current, Rule::variable);
+        // For every variable in the arg list
+        current
+            .into_inner()
+            .for_each(|inner| match inner.as_rule() {
+                Rule::identifier => {
+                    arguments.push((
+                        inner.as_str().to_string(),
+                        raw_string.to_raw_span(inner.as_span().clone()),
+                    ));
+                }
+                Rule::WHITESPACE => {}
+                _ => unreachable_rule!(inner, Rule::variable),
+            });
+    }
+
+    arguments
+}
+
+fn handle_chat_block(
+    current: pest::iterators::Pair<'_, Rule>,
+    top_level_definitions: &mut Vec<Top>,
+    diagnostics: &mut Diagnostics,
+    raw_string: &RawString,
+    num_chat_blocks: &mut usize,
+) {
+    assert_correct_parser!(current, Rule::chat_block);
+
+    let _block_span = &raw_string.to_raw_span(current.as_span().clone());
+    let mut arguments = vec![];
+
+    for current in current.clone().into_inner() {
+        match current.as_rule() {
+            Rule::arg_list => {
+                arguments = parse_arg_list(current, raw_string);
+            }
+            Rule::WHITESPACE => {}
+            _ => unreachable_rule!(current, Rule::chat_block),
+        }
+    }
+    if arguments.len() == 1 {
+        let (role, span) = &arguments[0];
+
+        let curr_idx = *num_chat_blocks;
+        *num_chat_blocks += 1;
+
+        top_level_definitions.push(Top::CodeBlock(CodeBlock::Chat(ChatBlock {
+            idx: curr_idx as u32,
+            role: (role.clone(), span.clone()),
+            options: Default::default(),
+        })))
+    } else {
+        diagnostics.push_error(DatamodelError::new_parser_error(
+            "Expected exactly one argument for role. e.g. {#chat(user)} or {#chat(system)}"
+                .to_string(),
+            raw_string.to_raw_span(current.as_span().clone()),
+        ));
+    }
+
+    // let block = match role {
+    //     (Some(true), Some((argument, arg_span))) => Some(CodeBlock::PrintEnum(PrinterBlock {
+    //         printer,
+    //         target: Variable {
+    //             path: vec![argument.clone()],
+    //             text: argument.clone(),
+    //             span: arg_span.clone(),
+    //         },
+    //     })),
+    //     (Some(false), Some((argument, arg_span))) => Some(CodeBlock::PrintType(PrinterBlock {
+    //         printer,
+    //         target: Variable {
+    //             path: vec![argument.clone()],
+    //             text: argument.clone(),
+    //             span: arg_span.clone(),
+    //         },
+    //     })),
+    //     (None, Some(arg)) => {
+    //         diagnostics.push_error(DatamodelError::new_parser_error(
+    //             format!("Did you mean print_type({0}) or print_enum({0})?", arg.0),
+    //             raw_string.to_raw_span(current.as_span().clone()),
+    //         ));
+    //         None
+    //     }
+    //     (Some(printer_type), None) => {
+    //         diagnostics.push_error(DatamodelError::new_parser_error(
+    //             format!(
+    //                 "Missing argument. Did you mean print_{}(SomeType)?",
+    //                 match printer_type {
+    //                     true => "enum",
+    //                     false => "type",
+    //                 }
+    //             ),
+    //             raw_string.to_raw_span(current.as_span().clone()),
+    //         ));
+    //         None
+    //     }
+    //     (None, None) => {
+    //         diagnostics.push_error(DatamodelError::new_parser_error(
+    //             "Missing argument. Did you mean print_type(SomeType)?".into(),
+    //             raw_string.to_raw_span(current.as_span().clone()),
+    //         ));
+    //         None
+    //     }
+    // };
+
+    // if let Some(block) = block {
+    //     top_level_definitions.push(Top::CodeBlock(block));
+    // }
 }
 
 fn handle_comment_block(

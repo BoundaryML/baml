@@ -1,4 +1,4 @@
-from .partialjson import JSONParser  # type: ignore
+from .partialjson import JSONParser
 from .baml_stream import AsyncStream
 
 __all__ = [

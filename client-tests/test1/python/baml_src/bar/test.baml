@@ -24,7 +24,7 @@ class ImprovedResponse {
 function MaybePolishText {
     input ProposedMessage
     output string
-    default_impl v1
+    default_impl v3
 }
  
 // function TextPolisher {
@@ -102,6 +102,12 @@ impl<llm, MaybePolishText> v3 {
         Hi please write whatever the user asks in haiku form.
 
         {#input.generated_response}
+        
+        {#chat(system)}
+        Hi please write whatever the user asks in haiku form.
+        
+        {#chat(user)}
+        Can you write about a computer science?
     "#
 } 
 

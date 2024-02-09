@@ -131,7 +131,6 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
 
     @typing.final
     @typechecked
-    # @contextlib.asynccontextmanager
     async def run_prompt_template_stream(
         self,
         *,
@@ -159,6 +158,21 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
             replacers=replacers,
             params=params,
         )
+
+    @typing.final
+    @typechecked
+    async def run_chat_template_stream(
+        self,
+        *message_templates: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]],
+        replacers: typing.Iterable[str],
+        params: typing.Dict[str, typing.Any],
+    ) -> typing.AsyncIterator[LLMResponse]:
+        async for r in self._run_chat_template_internal_stream(
+            *message_templates,
+            replacers=replacers,
+            params=params,
+        ):
+            yield r
 
     @typing.final
     @typechecked
@@ -221,7 +235,8 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
         replacers: typing.Iterable[str],
         params: typing.Dict[str, typing.Any],
     ) -> typing.AsyncIterator[LLMResponse]:
-        pass
+        raise NotImplementedError()
+        yield
 
     @typing.final
     def validate(self) -> None:

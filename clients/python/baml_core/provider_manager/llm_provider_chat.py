@@ -101,7 +101,7 @@ class LLMChatProvider(AbstractLLMProvider):
 
     @typing.final
     @typechecked
-    async def _run_chat_template_internal_stream(  # type: ignore
+    async def _run_chat_template_internal_stream(
         self,
         *message_templates: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]],
         replacers: typing.Iterable[str],
@@ -139,10 +139,6 @@ class LLMChatProvider(AbstractLLMProvider):
             for msg in chats
         ]
 
-        # The end state is tracked by the AsyncStream.
-        # self._start_run(messages)
-        # async for response in self._stream_chat(messages):
-        #     yield response
         async for response in self.__run_chat_stream_with_telemetry(messages):
             yield response
 

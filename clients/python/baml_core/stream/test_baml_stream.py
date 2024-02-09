@@ -1,3 +1,4 @@
+# type: ignore
 import pytest
 from baml_core.stream.baml_stream import AsyncStream, PartialValueWrapper
 from baml_lib._impl.deserializer import Deserializer, register_deserializer
@@ -6,7 +7,7 @@ from pydantic import BaseModel
 import typing
 
 
-def async_generator() -> typing.Any:
+def async_generator() -> typing.AsyncIterator[str]:
     async def run_generator() -> typing.AsyncIterator[str]:
         yield "hi"
 
@@ -15,7 +16,7 @@ def async_generator() -> typing.Any:
 
 def create_async_stream(
     partial_deserializer: typing.Any, final_deserializer: typing.Any
-) -> AsyncStream:  # type: ignore
+) -> AsyncStream[str, typing.Any]:
     return AsyncStream(
         stream_cb=async_generator(),
         partial_deserializer=partial_deserializer,

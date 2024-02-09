@@ -2,7 +2,7 @@ use internal_baml_schema_ast::ast::{Identifier, WithName};
 
 use crate::{
     ast::{self, WithIdentifier},
-    types::{ToStringAttributes, VariantProperties},
+    types::{PromptRepr, ToStringAttributes, VariantProperties},
 };
 
 use super::{ClassWalker, ClientWalker, EnumWalker, FunctionWalker, Walker};
@@ -79,6 +79,11 @@ impl<'db> VariantWalker<'db> {
     /// The properties of the variant.
     pub fn properties(self) -> &'db VariantProperties {
         &self.db.types.variant_properties[&self.id]
+    }
+
+    /// The prompt representation.
+    pub fn to_prompt<'a>(&'a self) -> PromptRepr<'a> {
+        self.properties().to_prompt()
     }
 
     /// Get the output of a function.

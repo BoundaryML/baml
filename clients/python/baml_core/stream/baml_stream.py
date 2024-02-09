@@ -1,4 +1,5 @@
-from typing import Any, Dict, Generic, AsyncIterator
+from types import TracebackType
+from typing import Any, Dict, Generic, AsyncIterator, Optional, Type
 import typing
 from typing_extensions import get_origin
 from pydantic import BaseModel
@@ -20,13 +21,13 @@ class ValueWrapper(Generic[TYPE]):
     __value: typing.Union[TYPE, Unset]
     __is_set: bool
 
-    def __init__(self, val: TYPE, is_set: bool) -> None:
+    def __init__(self, val: typing.Union[TYPE, Unset], is_set: bool) -> None:
         self.__value = val
         self.__is_set = is_set
 
     @staticmethod
     def unset() -> "ValueWrapper[TYPE]":
-        return ValueWrapper[TYPE](Unset, False)  # type: ignore
+        return ValueWrapper[TYPE](Unset(), False)
 
     @staticmethod
     def from_value(val: TYPE) -> "ValueWrapper[TYPE]":
@@ -115,12 +116,18 @@ class AsyncStream(Generic[TYPE, PARTIAL_TYPE]):
         self.__stream = self.__stream_cb()
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:  # type: ignore
+    async def __aexit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
         await self.__until_done()
 
     async def _parse_stream_chunk(
         self, total_text: str, delta: str
     ) -> PartialValueWrapper[PARTIAL_TYPE]:
+        # We do some magic here to get the orig_class
         t = typing.get_args(self.__partial_deserializer.__orig_class__)[  # type: ignore
             0
         ]  # deserializer only has 1 type arg

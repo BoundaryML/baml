@@ -45,8 +45,8 @@ use internal_baml_schema_ast::ast::{SchemaAst, WithIdentifier, WithName, WithSpa
 pub use printer::WithStaticRenames;
 pub use types::{
     ContantDelayStrategy, DynamicStringAttributes, ExponentialBackoffStrategy, PrinterType,
-    PromptVariable, RetryPolicy, RetryPolicyStrategy, StaticStringAttributes, StaticType,
-    ToStringAttributes,
+    PromptRepr, PromptVariable, RetryPolicy, RetryPolicyStrategy, StaticStringAttributes,
+    StaticType, ToStringAttributes,
 };
 
 use self::{context::Context, interner::StringId, types::Types};
@@ -284,6 +284,7 @@ impl ParserDatabase {
         self.walk_variants().for_each(|variant| {
             let mut input_replacers = HashMap::new();
             let mut output_replacers = HashMap::new();
+            let mut chat_replacers = vec![];
             if let Some(fn_walker) = variant.walk_function() {
                 // Now lets validate the prompt is what we expect.
                 let prompt_variables = &variant.properties().prompt_replacements;
@@ -331,6 +332,10 @@ impl ParserDatabase {
                             }
                         }
                     }
+                    PromptVariable::Chat(c) => {
+                        chat_replacers.push(c.clone());
+                        count
+                    }
                 });
 
                 if num_errors == 0 {
@@ -354,7 +359,10 @@ impl ParserDatabase {
                     }
 
                     // Only in this case update the prompt.
-                    vars.insert(variant.id, (input_replacers, output_replacers));
+                    vars.insert(
+                        variant.id,
+                        (input_replacers, output_replacers, chat_replacers),
+                    );
                 }
             } else {
                 diag.push_error(DatamodelError::new_type_not_found_error(

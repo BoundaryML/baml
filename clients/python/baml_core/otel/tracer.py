@@ -118,7 +118,7 @@ def _trace_internal(func: F, **kwargs: typing.Any) -> F:
             }
             params.update(kwargs)
 
-            return AsyncGeneratorContextManager(func, name, params, *args, **kwargs)  # type: ignore
+            return AsyncGeneratorContextManager(func, name, params, *args, **kwargs)
 
         return typing.cast(F, wrapper)
 
@@ -164,4 +164,4 @@ def _trace_internal(func: F, **kwargs: typing.Any) -> F:
                     ctx.complete(response)
                     return response
 
-        return wrapper  # type: ignore
+        return wrapper

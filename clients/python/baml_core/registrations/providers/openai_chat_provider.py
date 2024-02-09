@@ -42,8 +42,10 @@ class OpenAIChatProvider(LLMChatProvider):
         pass
 
     async def _run_chat(self, messages: typing.List[LLMChatMessage]) -> LLMResponse:
-        response = await openai.ChatCompletion.acreate(  # type: ignore
-            messages=messages, **self.__kwargs
+        response = await openai.ChatCompletion.acreate(
+            # type: ignore
+            messages=messages,
+            **self.__kwargs,
         )
         text = response["choices"][0]["message"]["content"]
         usage = response["usage"]

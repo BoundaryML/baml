@@ -5,7 +5,7 @@ use crate::coerce;
 use crate::{context::Context, DatamodelError};
 
 use internal_baml_diagnostics::{DatamodelWarning, Span};
-use internal_baml_prompt_parser::ast::{PrinterBlock, Variable};
+use internal_baml_prompt_parser::ast::{ChatBlock, PrinterBlock, Variable};
 use internal_baml_schema_ast::ast::{
     self, AdapterId, ClassId, ClientId, ConfigurationId, EnumId, EnumValueId, Expression, FieldId,
     FieldType, FunctionId, RawString, SerializerFieldId, VariantConfigId, VariantSerializerId,
@@ -18,6 +18,7 @@ mod prompt;
 mod to_string_attributes;
 mod types;
 
+use log::info;
 use prompt::validate_prompt;
 
 pub use to_string_attributes::{
@@ -53,7 +54,7 @@ pub(super) fn resolve_types(ctx: &mut Context<'_>) {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone)]
 /// Variables used inside of raw strings.
 pub enum PromptVariable {
     /// Input variable.
@@ -62,11 +63,17 @@ pub enum PromptVariable {
     Enum(PrinterBlock),
     /// Output variable.
     Type(PrinterBlock),
+    /// Chat
+    Chat(ChatBlock),
 }
 
 impl Hash for PromptVariable {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
+            PromptVariable::Chat(blk) => {
+                "chat".hash(state);
+                blk.role.0.hash(state);
+            }
             PromptVariable::Input(var) => {
                 "input".hash(state);
                 var.text.hash(state);
@@ -90,6 +97,7 @@ impl<'a> PromptVariable {
             PromptVariable::Input(var) => var.key(),
             PromptVariable::Enum(blk) => blk.key(),
             PromptVariable::Type(blk) => blk.key(),
+            PromptVariable::Chat(blk) => blk.key(),
         }
     }
 }
@@ -106,8 +114,23 @@ pub struct VariantProperties {
     pub client: StringValue,
     pub prompt: StringValue,
     pub prompt_replacements: Vec<PromptVariable>,
-    pub replacers: (HashMap<Variable, String>, HashMap<PrinterBlock, String>),
+    pub replacers: (
+        HashMap<Variable, String>,
+        HashMap<PrinterBlock, String>,
+        Vec<ChatBlock>,
+    ),
     pub output_adapter: Option<(AdapterId, Vec<RawString>)>,
+}
+
+/// The representation of a prompt.
+pub enum PromptRepr<'a> {
+    /// For single string prompts
+    /// Prompt + Any used input replacers
+    String(String, Vec<String>),
+
+    /// For prompts with multiple parts
+    /// ChatBlock + Prompt + Any used input replacers
+    Chat(Vec<(Option<&'a ChatBlock>, String)>, Vec<String>),
 }
 
 impl VariantProperties {
@@ -117,6 +140,83 @@ impl VariantProperties {
                 .find(|r| r.language.as_ref().map(|(l, _)| l.as_str()) == Some(language))
                 .map(|r| r.value())
         })
+    }
+
+    pub fn to_prompt<'a>(&'a self) -> PromptRepr<'a> {
+        let (input, output, chats) = &self.replacers;
+
+        // Replace all the inputs with the input replacers
+        let mut used_inputs = vec![];
+        let prompt = input
+            .iter()
+            .fold(self.prompt.value.clone(), |prompt, (k, val)| {
+                // Only add the input if it's used in the prompt
+                let key = k.key();
+                if prompt.contains(&key) {
+                    used_inputs.push(val.clone());
+                    prompt.replace(&key, &format!("{{{}}}", val))
+                } else {
+                    prompt
+                }
+            });
+        // Replace all the outputs with the output replacers
+        let prompt = output.iter().fold(prompt, |prompt, (k, val)| {
+            prompt.replace(&k.key(), &format!("{}", val))
+        });
+
+        used_inputs.sort();
+
+        if chats.is_empty() {
+            PromptRepr::String(prompt, used_inputs)
+        } else {
+            // Split the prompt into parts based on the chat blocks.
+            let mut last_idx = 0;
+            let mut parts = vec![];
+            for chat in chats {
+                let splitter = chat.key();
+                let idx = prompt[last_idx..].find(&splitter);
+                if let Some(idx) = idx {
+                    parts.push((
+                        Some(chat),
+                        (idx + last_idx, idx + last_idx + splitter.len()),
+                    ));
+                    last_idx += idx + splitter.len();
+                }
+            }
+
+            match parts.first() {
+                // If the first chat block is not at the start of the prompt, add the first part.
+                Some(&(Some(_), (start, _))) if start > 0 => {
+                    parts.insert(0, (None, (0, 0)));
+                }
+                Some(_) => {}
+                _ => unreachable!("At least one chat block should exist"),
+            }
+
+            // Each chat block owns a part of the prompt. until the next chat block.
+            PromptRepr::Chat(
+                parts
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(idx, &(chat, (_, start)))| {
+                        let end = if idx + 1 < parts.len() {
+                            parts[idx + 1].1 .0
+                        } else {
+                            prompt.len()
+                        };
+
+                        let p = prompt[start..end].trim();
+                        if p.is_empty() {
+                            info!("Skipping empty prompt part: {} {} {}", idx, start, end);
+                            None
+                        } else {
+                            Some((chat, p.to_string()))
+                        }
+                    })
+                    .collect(),
+                used_inputs,
+            )
+        }
     }
 }
 

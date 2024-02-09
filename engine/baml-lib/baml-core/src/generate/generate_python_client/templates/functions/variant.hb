@@ -2,9 +2,23 @@
 # Client: {{client}}
 # An implementation of {{function.name}}.
 
+{{#if is_chat}}
+__prompt_template: List[LLMChatMessage] = [
+{{#each prompt}}
+{
+    "role": "{{this.role}}",
+    "content": """\
+{{{this.content}}}\
+"""
+}
+{{#unless @last}},{{/unless}}
+{{/each}}
+]
+{{else}}
 __prompt_template = """\
 {{{prompt}}}\
 """
+{{/if}}
 
 __input_replacers = {
     {{#each inputs}}
@@ -51,9 +65,9 @@ def output_adapter(arg: {{output_adapter.type}}) -> {{function.return.0.type}}:
 {{> func_def func_name=name unnamed_args=function.unnamed_args args=function.args return=function.return}}
     {{#if input_adapter}}
     adapted_input = input_adapter({{> arg_values unnamed_args=function.unnamed_args args=function.args}})
-    response = await {{client}}.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(arg=adapted_input))
+    response = await {{client}}.run_{{#if is_chat}}chat{{else}}prompt{{/if}}_template({{#if is_chat}}__prompt_template{{else}}template=__prompt_template{{/if}}, replacers=__input_replacers, params=dict(arg=adapted_input))
     {{else}}
-    response = await {{client}}.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict({{> arg_values unnamed_args=function.unnamed_args args=function.args}}))
+    response = await {{client}}.run_{{#if is_chat}}chat{{else}}prompt{{/if}}_template({{#if is_chat}}__prompt_template{{else}}template=__prompt_template{{/if}}, replacers=__input_replacers, params=dict({{> arg_values unnamed_args=function.unnamed_args args=function.args}}))
     {{/if}}
     deserialized = __deserializer.from_string(response.generated)
     {{#if output_adapter}}
@@ -70,9 +84,9 @@ def {{name}}_stream({{> func_params unnamed_args=this.function.unnamed_args args
     def run_prompt() -> typing.AsyncIterator[LLMResponse]:
         {{#if input_adapter}}
         adapted_input = input_adapter({{> arg_values unnamed_args=function.unnamed_args args=function.args}})
-        raw_stream = {{client}}.run_prompt_template_stream(template=__prompt_template, replacers=__input_replacers, params=dict(arg=adapted_input))
+        raw_stream = {{client}}.run_{{#if is_chat}}chat{{else}}prompt{{/if}}_template_stream({{#if is_chat}}__prompt_template{{else}}template=__prompt_template{{/if}}, replacers=__input_replacers, params=dict(arg=adapted_input))
         {{else}}
-        raw_stream = {{client}}.run_prompt_template_stream(template=__prompt_template, replacers=__input_replacers, params=dict({{> arg_values unnamed_args=function.unnamed_args args=function.args}}))
+        raw_stream = {{client}}.run_{{#if is_chat}}chat{{else}}prompt{{/if}}_template_stream({{#if is_chat}}__prompt_template{{else}}template=__prompt_template{{/if}}, replacers=__input_replacers, params=dict({{> arg_values unnamed_args=function.unnamed_args args=function.args}}))
         {{/if}}
         return raw_stream
     stream = AsyncStream(stream_cb=run_prompt, partial_deserializer=__partial_deserializer, final_deserializer=__deserializer)

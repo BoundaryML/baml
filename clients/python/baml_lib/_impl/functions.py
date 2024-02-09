@@ -45,14 +45,15 @@ def __parse_arg(arg: typing.Any, t: typing.Type[T], _default: T) -> T:
 
 
 RET = typing.TypeVar("RET", covariant=True)
+RET2 = typing.TypeVar("RET2")
 PARTIAL_RET = typing.TypeVar("PARTIAL_RET")
 
 
-class AsyncGenWrapper:
+class AsyncGenWrapper(typing.Generic[RET, PARTIAL_RET]):
     def __init__(
         self,
         name: str,
-        gen_factory: Callable[..., AsyncStream[Any, Any]],
+        gen_factory: Callable[..., AsyncStream[RET, PARTIAL_RET]],
         *args: typing.Any,
         **kwargs: typing.Any,
     ) -> None:
@@ -60,9 +61,9 @@ class AsyncGenWrapper:
         self.gen_factory = trace(gen_factory)
         self.args = args
         self.kwargs = kwargs
-        self.gen_instance: typing.Optional[AsyncStream[Any, Any]] = None
+        self.gen_instance: typing.Optional[AsyncStream[RET, PARTIAL_RET]] = None
 
-    async def __aenter__(self) -> "AsyncStream[Any, Any]":
+    async def __aenter__(self) -> "AsyncStream[RET, PARTIAL_RET]":
         self.gen_instance = self.gen_factory(*self.args, **self.kwargs)
 
         resp = await self.gen_instance.__aenter__()
@@ -92,14 +93,14 @@ class CB(typing.Generic[RET], typing.Protocol):
         ...
 
 
-class STREAM_CB(typing.Generic[RET, PARTIAL_RET], typing.Protocol):  # type: ignore
+class STREAM_CB(typing.Generic[RET2, PARTIAL_RET], typing.Protocol):
     """
     Protocol for a callable object.
     """
 
     def __call__(
         self, *args: typing.Any, **kwargs: typing.Any
-    ) -> AsyncStream[RET, PARTIAL_RET]:
+    ) -> AsyncStream[RET2, PARTIAL_RET]:
         ...
 
 

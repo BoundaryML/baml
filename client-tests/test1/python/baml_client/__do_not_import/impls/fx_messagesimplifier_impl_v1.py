@@ -34,8 +34,9 @@ simplify the most recent message from the human into a single sentence that incl
 Most Recent Message:
 {arg}
 
-Simplified message:
-Human:\
+Output Format: int | null
+
+Output:\
 """
 
 __input_replacers = {

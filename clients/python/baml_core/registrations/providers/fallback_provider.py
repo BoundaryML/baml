@@ -161,7 +161,7 @@ class FallbackProvider(AbstractLLMProvider):
             params=params,
         )
 
-    async def _run_prompt_template_internal_stream(  # type: ignore
+    async def _run_prompt_template_internal_stream(
         self,
         *,
         template: str,
@@ -169,11 +169,13 @@ class FallbackProvider(AbstractLLMProvider):
         params: typing.Dict[str, typing.Any],
     ) -> typing.AsyncIterator[LLMResponse]:
         raise NotImplementedError
+        yield
 
     async def _run_chat_internal_stream(
         self, *messages: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]]
     ) -> typing.AsyncIterator[LLMResponse]:
         raise NotImplementedError
+        yield
 
     async def _run_chat_template_internal_stream(
         self,
@@ -182,3 +184,4 @@ class FallbackProvider(AbstractLLMProvider):
         params: typing.Dict[str, typing.Any],
     ) -> typing.AsyncIterator[LLMResponse]:
         raise NotImplementedError
+        yield
