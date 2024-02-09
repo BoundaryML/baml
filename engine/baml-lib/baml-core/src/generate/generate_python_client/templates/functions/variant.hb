@@ -3,7 +3,7 @@
 # An implementation of {{function.name}}.
 
 {{#if is_chat}}
-__prompt_template = [
+__prompt_template: List[LLMChatMessage] = [
 {{#each prompt}}
 {
     "role": "{{this.role}}",

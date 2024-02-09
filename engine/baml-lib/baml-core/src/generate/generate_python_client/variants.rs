@@ -45,13 +45,23 @@ impl<'db> JsonHelper for VariantWalker<'db> {
             PromptRepr::String(_, used_inputs) => used_inputs,
         };
 
+        let is_chat = match &prompt {
+            PromptRepr::Chat(..) => true,
+            _ => false,
+        };
+
+        if is_chat {
+            f.add_import("typing", "List");
+            f.add_import(
+                "baml_core.provider_manager.llm_provider_chat",
+                "LLMChatMessage",
+            );
+        }
+
         json!({
             "name": self.name(),
             "function": func.json(f),
-            "is_chat": match &prompt {
-                PromptRepr::Chat(..) => true,
-                _ => false,
-            },
+            "is_chat": is_chat,
             "prompt": match &prompt {
                 PromptRepr::Chat(parts, _) => {
                         json!(parts.iter().map(|(ctx, text)| {
