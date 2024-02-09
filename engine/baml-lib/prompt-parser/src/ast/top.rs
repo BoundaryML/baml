@@ -18,6 +18,7 @@ impl Top {
             Top::CodeBlock(CodeBlock::Variable(..)) => "input",
             Top::CodeBlock(CodeBlock::PrintEnum(..)) => "print_enum",
             Top::CodeBlock(CodeBlock::PrintType(..)) => "print_type",
+            Top::CodeBlock(CodeBlock::Chat(..)) => "chat",
             Top::WhiteSpace(..) => "white_space",
         }
     }

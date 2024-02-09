@@ -142,6 +142,7 @@ fn process_prompt_ast(ctx: &mut Context<'_>, ast: PromptAst) -> (String, Vec<Pro
 
 fn process_code_block(ctx: &mut Context<'_>, code_block: CodeBlock) -> Option<PromptVariable> {
     match code_block {
+        CodeBlock::Chat(c) => Some(PromptVariable::Chat(c)),
         CodeBlock::Variable(var) => match process_input(ctx, &var) {
             true => Some(PromptVariable::Input(var)),
             false => None,

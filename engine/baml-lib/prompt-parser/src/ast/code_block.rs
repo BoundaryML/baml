@@ -1,5 +1,7 @@
 use std::hash::Hash;
 
+use internal_baml_schema_ast::ast::Expression;
+
 use crate::ast::{Span, WithSpan};
 
 use super::Variable;
@@ -19,6 +21,7 @@ pub enum CodeBlock {
     PrintEnum(PrinterBlock),
     PrintType(PrinterBlock),
     Variable(Variable),
+    Chat(ChatBlock),
 }
 
 impl CodeBlock {
@@ -27,6 +30,7 @@ impl CodeBlock {
             CodeBlock::PrintEnum(printer_block) => printer_block.target.text.as_str(),
             CodeBlock::PrintType(printer_block) => printer_block.target.text.as_str(),
             CodeBlock::Variable(variable) => variable.text.as_str(),
+            CodeBlock::Chat(chat_block) => chat_block.role.0.as_str(),
         }
     }
 }
@@ -59,12 +63,33 @@ impl WithSpan for PrinterBlock {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct ChatBlock {
+    pub idx: u32,
+    pub role: (String, Span),
+    pub options: Vec<(String, Expression)>,
+}
+
+impl ChatBlock {
+    /// Unique Key
+    pub fn key(&self) -> String {
+        format!("{{//BAML_CLIENT_REPLACE_ME_CHAT_MAGIC_{}//}}", self.idx)
+    }
+}
+
+impl WithSpan for ChatBlock {
+    fn span(&self) -> &Span {
+        &self.role.1
+    }
+}
+
 impl WithSpan for CodeBlock {
     fn span(&self) -> &Span {
         match self {
             CodeBlock::Variable(v) => v.span(),
             CodeBlock::PrintEnum(v) => v.span(),
             CodeBlock::PrintType(v) => v.span(),
+            CodeBlock::Chat(v) => v.span(),
         }
     }
 }

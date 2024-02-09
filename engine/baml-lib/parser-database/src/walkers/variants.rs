@@ -1,3 +1,4 @@
+use internal_baml_prompt_parser::ast::ChatBlock;
 use internal_baml_schema_ast::ast::{Identifier, WithName};
 
 use crate::{
@@ -9,6 +10,17 @@ use super::{ClassWalker, ClientWalker, EnumWalker, FunctionWalker, Walker};
 
 /// A `function` declaration in the Prisma schema.
 pub type VariantWalker<'db> = Walker<'db, ast::VariantConfigId>;
+
+/// The representation of a prompt.
+pub enum PromptRepr<'a> {
+    /// For single string prompts
+    /// Prompt + Any used input replacers
+    String(String, Vec<String>),
+
+    /// For prompts with multiple parts
+    /// ChatBlock + Prompt + Any used input replacers
+    Chat(Vec<(Option<&'a ChatBlock>, String)>, Vec<String>),
+}
 
 impl<'db> VariantWalker<'db> {
     /// The name of the function.
@@ -79,6 +91,69 @@ impl<'db> VariantWalker<'db> {
     /// The properties of the variant.
     pub fn properties(self) -> &'db VariantProperties {
         &self.db.types.variant_properties[&self.id]
+    }
+
+    /// The prompt representation.
+    pub fn to_prompt<'a>(&'a self) -> PromptRepr<'a> {
+        // If the prompt is a chat prompt, we need to collect the chat blocks
+        // by splitting the prompt into parts.
+        let properties = self.properties();
+
+        let (input, output, chats) = &properties.replacers;
+
+        // Replace all the inputs with the input replacers
+        let mut used_inputs = vec![];
+        let prompt = input
+            .iter()
+            .fold(properties.prompt.value.clone(), |prompt, (k, val)| {
+                // Only add the input if it's used in the prompt
+                if prompt.contains(&k.key()) {
+                    used_inputs.push(val.clone());
+                    prompt.replace(&k.key(), &format!("{{{}}}", val))
+                } else {
+                    prompt
+                }
+            });
+        // Replace all the outputs with the output replacers
+        let prompt = output.iter().fold(prompt, |prompt, (k, val)| {
+            prompt.replace(&k.key(), &format!("{}", val))
+        });
+
+        used_inputs.sort();
+
+        if chats.is_empty() {
+            PromptRepr::String(prompt, used_inputs)
+        } else {
+            // Split the prompt into parts based on the chat blocks.
+            let mut last_idx = 0;
+            let mut parts = vec![];
+            for chat in chats {
+                let splitter = chat.key();
+                let idx = prompt[last_idx..].find(&splitter);
+                if let Some(idx) = idx {
+                    last_idx += idx + splitter.len();
+                    parts.push((chat, (idx, last_idx)));
+                }
+            }
+
+            // Each chat block owns a part of the prompt. until the next chat block.
+            PromptRepr::Chat(
+                parts
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, &(chat, (_, start)))| {
+                        let end = if idx + 1 < parts.len() {
+                            parts[idx + 1].1 .0
+                        } else {
+                            prompt.len()
+                        };
+
+                        (Some(chat), prompt[start..end].to_string())
+                    })
+                    .collect(),
+                used_inputs,
+            )
+        }
     }
 
     /// Get the output of a function.

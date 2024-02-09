@@ -64,6 +64,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
                     PromptVariable::Enum(e) => e.printer.as_ref().map(|f| (f, "enum")),
                     PromptVariable::Type(t) => t.printer.as_ref().map(|f| (f, "type")),
                     PromptVariable::Input(_) => None,
+                    PromptVariable::Chat(_) => None,
                 })
                 .for_each(|(printer, t)| {
                     match ctx.db.find_printer(&printer.0) {

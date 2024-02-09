@@ -1,3 +1,7 @@
+use super::Rule;
+
+pub type Pair<'a> = pest::iterators::Pair<'a, Rule>;
+
 #[macro_export]
 macro_rules! assert_correct_parser {
     ($pair:expr, $rule:expr) => {

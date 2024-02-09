@@ -5,7 +5,7 @@ use crate::coerce;
 use crate::{context::Context, DatamodelError};
 
 use internal_baml_diagnostics::{DatamodelWarning, Span};
-use internal_baml_prompt_parser::ast::{PrinterBlock, Variable};
+use internal_baml_prompt_parser::ast::{ChatBlock, PrinterBlock, Variable};
 use internal_baml_schema_ast::ast::{
     self, AdapterId, ClassId, ClientId, ConfigurationId, EnumId, EnumValueId, Expression, FieldId,
     FieldType, FunctionId, RawString, SerializerFieldId, VariantConfigId, VariantSerializerId,
@@ -53,7 +53,7 @@ pub(super) fn resolve_types(ctx: &mut Context<'_>) {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone)]
 /// Variables used inside of raw strings.
 pub enum PromptVariable {
     /// Input variable.
@@ -62,11 +62,17 @@ pub enum PromptVariable {
     Enum(PrinterBlock),
     /// Output variable.
     Type(PrinterBlock),
+    /// Chat
+    Chat(ChatBlock),
 }
 
 impl Hash for PromptVariable {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
+            PromptVariable::Chat(blk) => {
+                "chat".hash(state);
+                blk.role.0.hash(state);
+            }
             PromptVariable::Input(var) => {
                 "input".hash(state);
                 var.text.hash(state);
@@ -90,6 +96,7 @@ impl<'a> PromptVariable {
             PromptVariable::Input(var) => var.key(),
             PromptVariable::Enum(blk) => blk.key(),
             PromptVariable::Type(blk) => blk.key(),
+            PromptVariable::Chat(blk) => blk.key(),
         }
     }
 }
@@ -106,7 +113,11 @@ pub struct VariantProperties {
     pub client: StringValue,
     pub prompt: StringValue,
     pub prompt_replacements: Vec<PromptVariable>,
-    pub replacers: (HashMap<Variable, String>, HashMap<PrinterBlock, String>),
+    pub replacers: (
+        HashMap<Variable, String>,
+        HashMap<PrinterBlock, String>,
+        Vec<ChatBlock>,
+    ),
     pub output_adapter: Option<(AdapterId, Vec<RawString>)>,
 }
 

@@ -1,9 +1,13 @@
 use std::collections::HashSet;
 
 use either::Either;
-use internal_baml_parser_database::{walkers::VariantWalker, WithStaticRenames};
+use internal_baml_parser_database::{
+    walkers::{PromptRepr, VariantWalker},
+    WithStaticRenames,
+};
 use internal_baml_schema_ast::ast::WithName;
 
+use log::info;
 use serde_json::json;
 
 use crate::generate::generate_python_client::file::clean_file_name;
@@ -25,22 +29,7 @@ impl<'db> JsonHelper for VariantWalker<'db> {
         );
         f.add_import(&format!("..clients.{}", client.file_name()), client.name());
 
-        let mut prompt = self.properties().prompt.value.clone();
-
-        let (input, output) = &self.properties().replacers;
-
-        let inputs: HashSet<_> = input
-            .iter()
-            .map(|(k, val)| {
-                prompt = prompt.replace(&k.key(), &format!("{{{}}}", val));
-                val
-            })
-            .collect();
-        let mut inputs: Vec<_> = inputs.into_iter().collect();
-        inputs.sort();
-        output.iter().for_each(|(k, val)| {
-            prompt = prompt.replace(&k.key(), &format!("{}", val));
-        });
+        let prompt = self.to_prompt();
 
         let _ = self
             .output_required_classes()
@@ -51,10 +40,31 @@ impl<'db> JsonHelper for VariantWalker<'db> {
             .map(|enm| f.add_import(&format!("..types.enums.{}", enm.file_name()), enm.name()))
             .collect::<Vec<_>>();
 
+        let inputs = match &prompt {
+            PromptRepr::Chat(_, used_inputs) => used_inputs,
+            PromptRepr::String(_, used_inputs) => used_inputs,
+        };
+
         json!({
             "name": self.name(),
             "function": func.json(f),
-            "prompt": prompt,
+            "is_chat": match &prompt {
+                PromptRepr::Chat(..) => true,
+                _ => false,
+            },
+            "prompt": match &prompt {
+                PromptRepr::Chat(parts, _) => {
+                        json!(parts.iter().map(|(ctx, text)| {
+                            json!({
+                                "role": ctx.map(|c| c.role.0.as_str()).unwrap_or("system"),
+                                "content": text,
+                            })
+                        }).collect::<Vec<_>>())
+                },
+                PromptRepr::String(content, _) => {
+                    json!(content)
+                },
+            },
             "client": client.name(),
             "inputs": inputs,
             "output_adapter": self.properties().output_adapter.as_ref().map(|(idx, _)| {
