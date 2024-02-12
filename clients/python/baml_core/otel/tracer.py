@@ -1,7 +1,8 @@
 import functools
 import asyncio
 import inspect
-from typing import Any, Callable, TypeVar, Coroutine, AsyncGenerator
+from types import TracebackType
+from typing import Any, Callable, Optional, Type, TypeVar, Coroutine, AsyncGenerator
 import typing
 from opentelemetry.trace import get_current_span
 from .provider import BamlSpanContextManager, baml_tracer, set_tags
@@ -9,7 +10,7 @@ from baml_core.stream import AsyncStream
 import sys
 
 
-def trace(*args, **kwargs) -> Any:
+def trace(*args: Any, **kwargs: Any) -> Any:
     if len(args) == 1:
         func = args[0]
         assert callable(func), f"Expected func to be callable, got {func}"
@@ -34,10 +35,10 @@ class AsyncGeneratorContextManager:
     def __init__(
         self,
         gen_factory: Callable[..., AsyncStream[Any, Any]],
-        name,
-        params,
-        *args,
-        **kwargs,
+        name: str,
+        params: Any,
+        *args: Any,
+        **kwargs: Any,
     ):
         self.gen_factory = gen_factory
         self.name = name
@@ -49,7 +50,7 @@ class AsyncGeneratorContextManager:
         self.span_context = None
         self.ctx = None
 
-    async def __aenter__(self) -> "AsyncStream":
+    async def __aenter__(self) -> AsyncStream[Any, Any]:
         name = self.name
         parent_id = get_current_span().get_span_context().span_id
         tags = self.kwargs.get("tags", {})
@@ -68,7 +69,12 @@ class AsyncGeneratorContextManager:
         await self.gen_instance.__aenter__()
         return self.gen_instance
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ):
         if not self.gen_instance:
             raise ValueError("The async generator has not been initialized.")
 
@@ -97,11 +103,11 @@ def _trace_internal(func: F, **kwargs: typing.Any) -> F:
     """
     signature = inspect.signature(func).parameters
     param_names = list(signature.keys())
-    tags = kwargs.pop("__tags__", {})
+    tags: typing.Dict[str, str] = kwargs.pop("__tags__", {})
     name = kwargs.pop("__name__", func.__name__)
     # Validate that the user is passing in the correct kwargs types
     assert isinstance(tags, dict), f"Expected tags to be a dict, got {tags}"
-    for key, value in tags.items():
+    for key in tags:
         assert isinstance(key, str), f"Expected key to be a str, got {key}"
     assert isinstance(name, str), f"Expected name to be a str, got {name}"
 
@@ -109,9 +115,10 @@ def _trace_internal(func: F, **kwargs: typing.Any) -> F:
     assert not kwargs, f"Unexpected kwargs: {kwargs}"
 
     if func.__annotations__.get("baml_is_stream") is True:
+        # TODO: Assert the return type of the function is an AsyncStream
 
         @functools.wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> AsyncGeneratorContextManager:
+        def stream_wrapper(*args: Any, **kwargs: Any) -> AsyncGeneratorContextManager:
             params = {
                 param_names[i] if i < len(param_names) else f"<arg:{i}>": arg
                 for i, arg in enumerate(args)
@@ -120,12 +127,12 @@ def _trace_internal(func: F, **kwargs: typing.Any) -> F:
 
             return AsyncGeneratorContextManager(func, name, params, *args, **kwargs)
 
-        return typing.cast(F, wrapper)
+        return typing.cast(F, stream_wrapper)
 
     if asyncio.iscoroutinefunction(func):
 
         @functools.wraps(func)
-        async def wrapper(*args: Any, **kwargs: Any) -> Any:
+        async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
             params = {
                 param_names[i] if i < len(param_names) else f"<arg:{i}>": arg
                 for i, arg in enumerate(args)
@@ -142,7 +149,7 @@ def _trace_internal(func: F, **kwargs: typing.Any) -> F:
                     ctx.complete(response)
                     return response
 
-        return typing.cast(F, wrapper)
+        return typing.cast(F, async_wrapper)
     else:
 
         @functools.wraps(func)
@@ -164,4 +171,4 @@ def _trace_internal(func: F, **kwargs: typing.Any) -> F:
                     ctx.complete(response)
                     return response
 
-        return wrapper
+        return typing.cast(F, wrapper)

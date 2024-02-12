@@ -1,35 +1,36 @@
 import typing
+import typing_extensions
 from pydantic import BaseModel
 from enum import Enum
 
 
-class ListTypeDefinition(typing.TypedDict):
+class ListTypeDefinition(typing_extensions.TypedDict):
     type: typing.Literal["List"]
     item: "ITypeDefinition"
 
 
-class UnionTypeDefinition(typing.TypedDict):
+class UnionTypeDefinition(typing_extensions.TypedDict):
     type: typing.Literal["Union"]
     choices: typing.List["ITypeDefinition"]
 
 
-class OptionalTypeDefinition(typing.TypedDict):
+class OptionalTypeDefinition(typing_extensions.TypedDict):
     type: typing.Literal["Optional"]
     item: "ITypeDefinition"
 
 
-class PrimitiveTypeDefinition(typing.TypedDict):
+class PrimitiveTypeDefinition(typing_extensions.TypedDict):
     type: typing.Union[
         typing.Type[str], typing.Type[bool], typing.Type[int], typing.Type[float]
     ]
 
 
-class NamedTypeDefinition(typing.TypedDict):
+class NamedTypeDefinition(typing_extensions.TypedDict):
     type: typing.Literal["Ref"]
     ref: typing.Union[typing.Type[BaseModel], typing.Type[Enum]]
 
 
-class NoneTypeDefinition(typing.TypedDict):
+class NoneTypeDefinition(typing_extensions.TypedDict):
     type: typing.Literal["None"]
 
 

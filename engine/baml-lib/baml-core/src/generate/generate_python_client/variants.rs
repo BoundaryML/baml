@@ -47,7 +47,7 @@ impl<'db> JsonHelper for VariantWalker<'db> {
         if is_chat {
             f.add_import("typing", "List");
             f.add_import(
-                "baml_core.provider_manager.llm_provider_chat",
+                "baml_core.provider_manager.llm_provider_base",
                 "LLMChatMessage",
             );
         }

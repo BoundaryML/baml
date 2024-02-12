@@ -35,13 +35,12 @@ class RawBaseWrapper(RawWrapper, typing.Generic[T]):
     def as_float(self) -> typing.Optional[float]:
         if isinstance(self.__val, float):
             return self.__val
-        if isinstance(self.__val, int):
-            return float(self.__val)
         if isinstance(self.__val, bool):
             if self.__val:
                 return 1.0
             return 0.0
-        raise Exception("Unreachable code")
+        assert isinstance(self.__val, int), "Unreachable code"
+        return float(self.__val)
 
     def as_bool(self) -> typing.Optional[bool]:
         if isinstance(self.__val, bool):

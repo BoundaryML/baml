@@ -2,10 +2,12 @@ import abc
 import socket
 import time
 import typing
+import json
 
 from pydantic import BaseModel
+from baml_core.stream.baml_stream import _PartialDict
 
-T = typing.TypeVar("T", bound=BaseModel)
+T = typing.TypeVar("T", BaseModel, _PartialDict)
 
 
 class Message(BaseModel, typing.Generic[T]):
@@ -41,6 +43,12 @@ def connect_to_server(
     raise ConnectionError(f"Could not connect to the server after {retries} attempts")
 
 
+def custom_serializer(obj: typing.Any) -> typing.Any:
+    if isinstance(obj, BaseModel):
+        return obj.model_dump(by_alias=True)
+    raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
+
+
 @typing.final
 class IPCChannel(BaseIPCChannel):
     def __init__(self, host: str, port: int) -> None:
@@ -49,7 +57,7 @@ class IPCChannel(BaseIPCChannel):
         self._socket = connect_to_server(host, port)
 
     def send(self, name: str, data: T) -> None:
-        message = (
-            Message(name=name, data=data).model_dump_json(by_alias=True) + "<END_MSG>\n"
+        message = json.dumps(
+            {"name": name, "data": data}, default=custom_serializer
         ).encode("utf-8")
         connect_to_server(self._host, self._port).sendall(message)

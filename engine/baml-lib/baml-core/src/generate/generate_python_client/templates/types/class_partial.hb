@@ -6,9 +6,3 @@ class Partial{{name}}(BaseModel):
     {{#each fields}}
     {{name}}: {{type_partial}}{{#if can_be_null}} = None{{/if}}
     {{/each}}
-    {{#each properties}}
-    @property
-    def {{name}}(self) -> {{type}}:
-        {{> print_code code=this.code}}
-
-    {{/each}}

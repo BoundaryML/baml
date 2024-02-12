@@ -1,5 +1,5 @@
-@baml.{{function_name}}.test
-async def test_{{test_case_name}}({{function_name}}Impl: I{{function_name}}):
+@baml.{{function_name}}.test(stream=True)
+async def test_{{test_case_name}}({{function_name}}Impl: I{{function_name}}Stream, baml_ipc_channel: BaseIPCChannel):
     def to_str(item: Any) -> str:
         if isinstance(item, str):
             return item
@@ -8,6 +8,8 @@ async def test_{{test_case_name}}({{function_name}}Impl: I{{function_name}}):
     content = to_str({{{test_case_input}}})
     deserializer = Deserializer[{{test_case_type}}]({{test_case_type}}) # type: ignore
     param = deserializer.from_string(content)
-    await {{function_name}}Impl(param)
+    async with {{function_name}}Impl(param) as stream:
+        async for response in stream.parsed_stream:
+            baml_ipc_channel.send("partial_response", response.json())
 
-
+        await stream.get_final_response()

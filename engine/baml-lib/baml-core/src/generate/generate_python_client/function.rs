@@ -1,6 +1,6 @@
 use internal_baml_parser_database::walkers::{ArgWalker, EnumWalker, Walker};
 use internal_baml_schema_ast::ast::{
-    EnumValue, FieldType, FunctionArg, FunctionId, Identifier, WithDocumentation, WithIdentifier,
+    FieldType, FunctionArg, FunctionId, Identifier, WithDocumentation,
     WithName,
 };
 
@@ -11,7 +11,7 @@ use crate::generate::generate_python_client::file::clean_file_name;
 use super::{
     file::File,
     template::render_template,
-    traits::{JsonHelper, WithPartial, WithToCode, WithWritePythonString},
+    traits::{JsonHelper, WithToCode, WithWritePythonString},
     FileCollector,
 };
 
@@ -43,7 +43,7 @@ impl JsonHelper for ArgWalker<'_> {
                 "type_partial": match arg.clone().field_type {
                     // if the names match any of the required_enums, just return the same name, otherwise return Partial{name} unless it's a primitive
                     _ if self.required_enums().any(|enm| enm.name() == idn.name()) => idn.to_py_string(f),
-                    FieldType::Identifier(arity, idn) => {
+                    FieldType::Identifier(_arity, idn) => {
                         // check the identifier
                         match idn {
 
@@ -67,7 +67,7 @@ impl JsonHelper for ArgWalker<'_> {
             (None, arg) => json!({
                 "type": arg.to_py_string(f),
                 "type_partial": match arg.clone().field_type {
-                    FieldType::Identifier(arity, idn) => {
+                    FieldType::Identifier(_arity, idn) => {
                         if is_enum(&idn, &arg, f, self.required_enums()) {
                             idn.to_py_string(f)
                         } else {
@@ -116,8 +116,8 @@ impl JsonHelper for Walker<'_, FunctionId> {
 }
 fn is_enum<'a>(
     idn: &Identifier,
-    arg: &FunctionArg,
-    f: &mut File,
+    _arg: &FunctionArg,
+    _f: &mut File,
     required_enums: impl Iterator<Item = EnumWalker<'a>>,
 ) -> bool {
     let required_enums_vec: Vec<_> = required_enums.collect();

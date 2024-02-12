@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use internal_baml_parser_database::ParserDatabase;
 use internal_baml_schema_ast::ast::WithName;
-use log::{debug, info};
+use log::info;
 use serde_json::json;
 
 use crate::{configuration::Generator, lockfile::LockFileWrapper};
@@ -22,7 +22,7 @@ mod types;
 mod types_partial;
 mod value;
 mod variants;
-pub(super) use r#file::{File, FileCollector};
+pub(super) use r#file::FileCollector;
 pub(super) use traits::WithToCode;
 
 fn generate_py_file<'a>(obj: &impl WithWritePythonString, fc: &'a mut FileCollector) {
@@ -99,8 +99,6 @@ impl WithWritePythonString for ParserDatabase {
             .add_import_and_reexport("baml_core.otel", "trace");
         fc.last_file()
             .add_import_and_reexport("baml_core.otel", "set_tags");
-        fc.last_file()
-            .add_import_and_reexport("baml_core.services.api_types", "LogSchema");
         fc.complete_file();
 
         fc.start_export_file("./baml_types", "__init__");
@@ -108,6 +106,10 @@ impl WithWritePythonString for ParserDatabase {
             fc.last_file().add_import(
                 &format!("..__do_not_import.functions.{}", f.file_name()),
                 &format!("I{}", f.name()),
+            );
+            fc.last_file().add_import(
+                &format!("..__do_not_import.functions.{}", f.file_name()),
+                &format!("I{}Stream", f.name()),
             );
             fc.last_file().add_import(
                 &format!("..__do_not_import.functions.{}", f.file_name()),

@@ -11,7 +11,7 @@ from .llm_response import LLMResponse
 from .llm_provider_base import (
     AbstractLLMProvider,
     LLMChatMessage,
-    _update_template_with_vars,
+    update_template_with_vars,
 )
 
 
@@ -87,7 +87,7 @@ class LLMChatProvider(AbstractLLMProvider):
         messages: typing.List[LLMChatMessage] = [
             {
                 "role": msg["role"],
-                "content": _update_template_with_vars(
+                "content": update_template_with_vars(
                     template=msg["content"], updates=updates
                 ),
             }
@@ -100,7 +100,6 @@ class LLMChatProvider(AbstractLLMProvider):
             self._raise_error(e)
 
     @typing.final
-    @typechecked
     async def _run_chat_template_internal_stream(
         self,
         *message_templates: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]],
@@ -132,7 +131,7 @@ class LLMChatProvider(AbstractLLMProvider):
         messages: typing.List[LLMChatMessage] = [
             {
                 "role": msg["role"],
-                "content": _update_template_with_vars(
+                "content": update_template_with_vars(
                     template=msg["content"], updates=updates
                 ),
             }
@@ -201,11 +200,11 @@ class LLMChatProvider(AbstractLLMProvider):
     # Implemented by the actual providers that extend this
     @abc.abstractmethod
     async def _run_chat(self, messages: typing.List[LLMChatMessage]) -> LLMResponse:
-        raise NotImplementedError
+        raise NotImplementedError()
 
     @abc.abstractmethod
     async def _stream_chat(
         self, messages: typing.List[LLMChatMessage]
     ) -> typing.AsyncIterator[LLMResponse]:
-        raise NotImplementedError
+        raise NotImplementedError()
         yield  # To appease typechecker. It thinks it's not a generator function unless it has a yield.

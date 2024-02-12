@@ -8,13 +8,11 @@
 # fmt: off
 
 from baml_core.otel import set_tags, trace
-from baml_core.services.api_types import LogSchema
 
 
 
 
 __all__ = [
     'trace',
-    'set_tags',
-    'LogSchema'
+    'set_tags'
 ]

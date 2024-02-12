@@ -67,7 +67,7 @@ class JSONParser:
         self, s: str, e: Exception
     ) -> typing.Tuple[typing.List[typing.Any], str]:
         s = s[1:]  # skip starting '['
-        acc = []
+        acc: typing.List[typing.Any] = []
         s = s.strip()
         while s:
             if s[0] == "]":

@@ -1,5 +1,6 @@
 import asyncio
 import typing
+import typing_extensions
 import colorama
 from pydantic import BaseModel
 import pytest
@@ -11,10 +12,10 @@ from baml_core.services import api_types
 import re
 
 from baml_core.otel import flush_trace_logs, add_message_transformer_hook
-from .ipc_channel import IPCChannel, NoopIPCChannel
+from .ipc_channel import BaseIPCChannel, IPCChannel, NoopIPCChannel
 
 
-class GlooTestCaseBase(typing.TypedDict):
+class GlooTestCaseBase(typing_extensions.TypedDict):
     name: str
 
 
@@ -151,6 +152,27 @@ class BamlPytestPlugin:
                     [None],
                     ids=[f"{owner.name}-SKIPPED"],
                 )
+        for marker in metafunc.definition.iter_markers("baml_function_stream_test"):
+            owner = marker.kwargs["owner"]
+            if marker.kwargs["impls"]:
+                metafunc.parametrize(
+                    f"{owner.name}Impl",
+                    list(
+                        map(lambda x: owner.get_impl(x).stream, marker.kwargs["impls"])
+                    ),
+                    ids=map(lambda x: f"{owner.name}-{x}", marker.kwargs["impls"]),
+                )
+            else:
+                # Remove the test if no impls are specified
+                metafunc.parametrize(
+                    f"{owner.name}Impl",
+                    [None],
+                    ids=[f"{owner.name}-SKIPPED"],
+                )
+
+    @pytest.fixture
+    def baml_ipc_channel(self) -> BaseIPCChannel:
+        return self.__ipc
 
     @pytest.hookimpl(trylast=True)
     def pytest_collection_modifyitems(
@@ -161,13 +183,14 @@ class BamlPytestPlugin:
         ]
 
         for item in filtered_items:
-            if "baml_function_test" in item.keywords:
-                item.add_marker("baml_test")
-                # Add more keywords here:
-                kwargs = item.keywords["baml_function_test"].kwargs
-                impls = kwargs.get("impls", [])
-                if not impls:
-                    item.add_marker(pytest.mark.skip(reason="No impls specified"))
+            for k in ["baml_function_test", "baml_function_stream_test"]:
+                if k in item.keywords:
+                    item.add_marker("baml_test")
+                    # Add more keywords here:
+                    kwargs = item.keywords[k].kwargs
+                    impls = kwargs.get("impls", [])
+                    if not impls:
+                        item.add_marker(pytest.mark.skip(reason="No impls specified"))
 
             if "baml_test" in item.keywords:
                 if hasattr(item, "function") and asyncio.iscoroutinefunction(

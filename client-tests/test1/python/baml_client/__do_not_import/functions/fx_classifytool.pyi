@@ -126,7 +126,7 @@ class IBAMLClassifyTool:
         ...
 
     @typing.overload
-    def test(self, *, exclude_impl: typing.Iterable[ImplName]) -> pytest.MarkDecorator:
+    def test(self, *, exclude_impl: typing.Iterable[ImplName] = [], stream: bool = False) -> pytest.MarkDecorator:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
         the ClassifyToolInterface.
@@ -134,6 +134,8 @@ class IBAMLClassifyTool:
         Args:
             exclude_impl : Iterable[ImplName]
                 The names of the implementations to exclude from testing.
+            stream: bool
+                If set, will return a streamable version of the test function.
 
         Usage:
             ```python
@@ -142,6 +144,15 @@ class IBAMLClassifyTool:
             @baml.ClassifyTool.test(exclude_impl=["implname"])
             async def test_logic(ClassifyToolImpl: IClassifyTool) -> None:
                 result = await ClassifyToolImpl(...)
+            ```
+
+            ```python
+            # Streamable version of the test function.
+
+            @baml.ClassifyTool.test(stream=True)
+            async def test_logic(ClassifyToolImpl: IClassifyToolStream) -> None:
+                async for result in ClassifyToolImpl(...):
+                    ...
             ```
         """
         ...

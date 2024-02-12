@@ -7,6 +7,7 @@ from .wrappers import (
     RawBaseWrapper,
     RawStringWrapper,
 )
+from .raw_wrapper import RawWrapper
 from ..diagnostics import Diagnostics
 
 
@@ -74,10 +75,11 @@ def test_hidden_object() -> None:
     d = Diagnostics(item)
     parsed = from_string(item, d)
     assert isinstance(parsed, RawStringWrapper)
-    keys = set()
+    keys: typing.Set[str] = set()
     for k, v in parsed.as_dict():
         assert isinstance(k, RawStringWrapper), k
         key = k.as_str(inner=True)
+        assert key is not None, k
         keys.add(key)
         if key == "test":
             assert isinstance(v.as_dict(), typing.ItemsView)
@@ -102,7 +104,7 @@ def test_hidden_list() -> None:
     d = Diagnostics(item)
     parsed = from_string(item, d)
     assert isinstance(parsed, RawStringWrapper)
-    values = []
+    values: typing.List[RawWrapper] = []
     for i, v in enumerate(parsed.as_list()):
         values.append(v)
         if i == 0:

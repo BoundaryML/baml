@@ -57,12 +57,14 @@ class BaseDeserializer(typing.Generic[T], metaclass=abc.ABCMeta):
         self,
         raw: RawWrapper,
         diagnostics: Diagnostics,
-        from_lut: typing.Callable[[ITypeDefinition], "BaseDeserializer[typing.Any]"],
+        from_lut: typing.Callable[
+            [ITypeDefinition], "typing.Optional[BaseDeserializer[typing.Any]]"
+        ],
     ) -> Result[T]:
-        raise NotImplementedError
+        raise NotImplementedError()
 
 
-CheckLutFn = typing.Callable[[ITypeDefinition], BaseDeserializer[T]]
+CheckLutFn = typing.Callable[[ITypeDefinition], typing.Optional[BaseDeserializer[T]]]
 
 
 __all__ = [

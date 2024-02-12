@@ -8,14 +8,15 @@
 # fmt: off
 
 from ..__do_not_import.generated_baml_client import baml
-from ..baml_types import ClassifyResponse, IClassifyTool, Tool
+from ..baml_types import ClassifyResponse, IClassifyToolStream, Tool
 from baml_lib._impl.deserializer import Deserializer
 from json import dumps
+from pytest_baml.ipc_channel import BaseIPCChannel
 from typing import Any
 
 
-@baml.ClassifyTool.test
-async def test_fun_indigo(ClassifyToolImpl: IClassifyTool):
+@baml.ClassifyTool.test(stream=True)
+async def test_fun_indigo(ClassifyToolImpl: IClassifyToolStream, baml_ipc_channel: BaseIPCChannel):
     def to_str(item: Any) -> str:
         if isinstance(item, str):
             return item
@@ -26,14 +27,17 @@ async def test_fun_indigo(ClassifyToolImpl: IClassifyTool):
     query = deserializer_query.from_string(to_str(case["query"]))
     deserializer_context = Deserializer[str](str) # type: ignore
     context = deserializer_context.from_string(to_str(case["context"]))
-    await ClassifyToolImpl(
+    async with ClassifyToolImpl(
         query=query,
         context=context
-    )
+    ) as stream:
+        async for response in stream.parsed_stream:
+            baml_ipc_channel.send("partial_response", response.json())
 
+        await stream.get_final_response()
 
-@baml.ClassifyTool.test
-async def test_particular_tan(ClassifyToolImpl: IClassifyTool):
+@baml.ClassifyTool.test(stream=True)
+async def test_particular_tan(ClassifyToolImpl: IClassifyToolStream, baml_ipc_channel: BaseIPCChannel):
     def to_str(item: Any) -> str:
         if isinstance(item, str):
             return item
@@ -44,9 +48,12 @@ async def test_particular_tan(ClassifyToolImpl: IClassifyTool):
     query = deserializer_query.from_string(to_str(case["query"]))
     deserializer_context = Deserializer[str](str) # type: ignore
     context = deserializer_context.from_string(to_str(case["context"]))
-    await ClassifyToolImpl(
+    async with ClassifyToolImpl(
         query=query,
         context=context
-    )
+    ) as stream:
+        async for response in stream.parsed_stream:
+            baml_ipc_channel.send("partial_response", response.json())
 
+        await stream.get_final_response()
 

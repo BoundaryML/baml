@@ -50,9 +50,7 @@ class AnthropicProvider(LLMChatProvider):
         _hydrate_anthropic_tokenizer()
 
         if "max_retries" in options and "retry" in kwargs:
-            assert (
-                False
-            ), "Either use max_retries with Anthropic via options or retry via BAML, not both"
+            assert False, "Either use max_retries with Anthropic via options or retry via BAML, not both"
 
         super().__init__(
             prompt_to_chat=lambda chat: {"role": "user", "content": chat},
@@ -150,7 +148,7 @@ class AnthropicProvider(LLMChatProvider):
         model = None
         finish_reason = None
         async with self.__client.beta.messages.stream(
-            messages=map(to_anthropic_message, messages), **caller_kwargs_copy
+            messages=list(map(to_anthropic_message, messages)), **caller_kwargs_copy
         ) as stream:
             last_response: typing.Optional[MessageStreamEvent] = None
             async for response in stream:

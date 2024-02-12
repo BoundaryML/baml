@@ -12,26 +12,30 @@ class UniversalFormatter(logging.Formatter):
         "ENDC": "\033[0m",  # End color
     }
 
-    def format(self, record):
+    def format(self, record: logging.LogRecord):
         color = self.COLORS.get(record.levelname, self.COLORS["ENDC"])
 
         # Create a new attribute in 'record' for 'additional_info' and initialize it
-        record.additional_info = ""
+        additional_info = ""
 
         # If user_id is present in the record, add it to 'additional_info'
         if hasattr(record, "user_id"):
-            record.additional_info += f"user_id={record.user_id} "
+            additional_info += f"user_id={record.user_id} "  # type: ignore
 
         # If json_payload is present in the record
         if hasattr(record, "json_payload"):
             # Pretty print the JSON
-            record.json_payload = json.dumps(record.json_payload, indent=4)
-            record.additional_info += f"{record.json_payload} "
+            record.json_payload = json.dumps(record.json_payload, indent=4)  # type: ignore
+            additional_info += f"{record.json_payload} "  # type: ignore
 
         # Trim the last space from 'additional_info' and add a newline if it's not empty
-        record.additional_info = record.additional_info.rstrip()
-        if record.additional_info:
-            record.additional_info = "\n" + record.additional_info
+        if hasattr(record, "additional_info"):
+            previous_additional_info = record.additional_info.rstrip()  # type: ignore
+            if previous_additional_info:
+                additional_info = previous_additional_info + "\n" + additional_info
+
+        if additional_info:
+            record.additional_info = additional_info
 
         # Handle the case where the message itself is JSON
         if isinstance(record.msg, (dict, list)):

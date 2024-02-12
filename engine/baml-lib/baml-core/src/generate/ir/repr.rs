@@ -50,6 +50,7 @@ impl IntermediateRepr {
         self.clients.iter().map(|e| Walker { db: self, item: e })
     }
 
+    #[allow(dead_code)]
     pub fn walk_retry_policies<'a>(
         &'a self,
     ) -> impl Iterator<Item = Walker<'a, &'a Node<RetryPolicy>>> {
@@ -270,8 +271,6 @@ pub enum Identifier {
     Local(String),
     /// Special types (always lowercase).
     Primitive(ast::TypeValue),
-    /// A string without spaces, but contains '-'
-    String(String),
 }
 
 #[derive(serde::Serialize)]

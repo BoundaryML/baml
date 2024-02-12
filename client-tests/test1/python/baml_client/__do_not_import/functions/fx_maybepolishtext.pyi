@@ -125,7 +125,7 @@ class IBAMLMaybePolishText:
         ...
 
     @typing.overload
-    def test(self, *, exclude_impl: typing.Iterable[ImplName]) -> pytest.MarkDecorator:
+    def test(self, *, exclude_impl: typing.Iterable[ImplName] = [], stream: bool = False) -> pytest.MarkDecorator:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
         the MaybePolishTextInterface.
@@ -133,6 +133,8 @@ class IBAMLMaybePolishText:
         Args:
             exclude_impl : Iterable[ImplName]
                 The names of the implementations to exclude from testing.
+            stream: bool
+                If set, will return a streamable version of the test function.
 
         Usage:
             ```python
@@ -141,6 +143,15 @@ class IBAMLMaybePolishText:
             @baml.MaybePolishText.test(exclude_impl=["implname"])
             async def test_logic(MaybePolishTextImpl: IMaybePolishText) -> None:
                 result = await MaybePolishTextImpl(...)
+            ```
+
+            ```python
+            # Streamable version of the test function.
+
+            @baml.MaybePolishText.test(stream=True)
+            async def test_logic(MaybePolishTextImpl: IMaybePolishTextStream) -> None:
+                async for result in MaybePolishTextImpl(...):
+                    ...
             ```
         """
         ...

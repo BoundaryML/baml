@@ -1,19 +1,22 @@
 from types import TracebackType
-from typing import Any, Dict, Generic, AsyncIterator, Optional, Type
+from typing import Any, Generic, AsyncIterator, Optional, Type
 import typing
-from typing_extensions import get_origin
+from typing_extensions import get_origin, TypedDict
 from pydantic import BaseModel
 from baml_core.provider_manager.llm_response import LLMResponse
 from baml_lib._impl.deserializer import Deserializer
 from baml_core.stream import JSONParser
 
 TYPE = typing.TypeVar("TYPE")
-PARTIAL_TYPE = typing.TypeVar("PARTIAL_TYPE")
 partial_parser = JSONParser()
 
 
 class Unset:
     pass
+
+
+_ValDict = TypedDict("_ValDict", {"value": Any})
+_PartialDict = TypedDict("_PartialDict", {"delta": str, "parsed": Optional[_ValDict]})
 
 
 # Note the generic here could be partial or actual type
@@ -43,32 +46,28 @@ class ValueWrapper(Generic[TYPE]):
         assert not isinstance(self.__value, Unset)
         return self.__value
 
-    def json(self) -> Optional[Dict[str, Any]]:
+    def json(self) -> Optional[_ValDict]:
         if not self.__is_set:
             return None
         val = self.value
         return {"value": val.model_dump() if isinstance(val, BaseModel) else val}
 
 
-class PartialValueWrapper(Generic[PARTIAL_TYPE]):
-    __partial: ValueWrapper[PARTIAL_TYPE]
+class PartialValueWrapper(Generic[TYPE]):
+    __partial: ValueWrapper[TYPE]
     __delta: str
 
-    def __init__(self, partial: ValueWrapper[PARTIAL_TYPE], delta: str) -> None:
+    def __init__(self, partial: ValueWrapper[TYPE], delta: str) -> None:
         self.__partial = partial
         self.__delta = delta
 
     @staticmethod
-    def from_parseable(
-        partial: PARTIAL_TYPE, delta: str
-    ) -> "PartialValueWrapper[PARTIAL_TYPE]":
-        return PartialValueWrapper[PARTIAL_TYPE](
-            ValueWrapper.from_value(partial), delta
-        )
+    def from_parseable(partial: TYPE, delta: str) -> "PartialValueWrapper[TYPE]":
+        return PartialValueWrapper[TYPE](ValueWrapper.from_value(partial), delta)
 
     @staticmethod
-    def from_parse_failure(delta: str) -> "PartialValueWrapper[PARTIAL_TYPE]":
-        return PartialValueWrapper[PARTIAL_TYPE](ValueWrapper.unset(), delta)
+    def from_parse_failure(delta: str) -> "PartialValueWrapper[TYPE]":
+        return PartialValueWrapper[TYPE](ValueWrapper.unset(), delta)
 
     @property
     def delta(self) -> str:
@@ -79,11 +78,11 @@ class PartialValueWrapper(Generic[PARTIAL_TYPE]):
         return self.__partial.has_value
 
     @property
-    def parsed(self) -> PARTIAL_TYPE:
+    def parsed(self) -> TYPE:
         assert self.is_parseable, "No parsed value."
         return self.__partial.value
 
-    def json(self) -> Dict[str, Any]:
+    def json(self) -> _PartialDict:
         return {
             "delta": self.delta,
             "parsed": self.__partial.json(),
@@ -92,6 +91,10 @@ class PartialValueWrapper(Generic[PARTIAL_TYPE]):
 
 class TextDelta(BaseModel):
     delta: str
+
+
+# We need another generic here
+PARTIAL_TYPE = typing.TypeVar("PARTIAL_TYPE")
 
 
 class AsyncStream(Generic[TYPE, PARTIAL_TYPE]):
@@ -194,5 +197,5 @@ class AsyncStream(Generic[TYPE, PARTIAL_TYPE]):
     async def __until_done(self) -> None:
         if self.__final_response.has_value or self.__is_stream_completed:
             return
-        async for r in self.parsed_stream:
+        async for _ in self.parsed_stream:
             pass

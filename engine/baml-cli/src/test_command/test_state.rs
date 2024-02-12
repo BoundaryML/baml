@@ -462,6 +462,10 @@ impl RunState {
                     None
                 })
             }
+            MessageData::PartialData(_v) => {
+                // Test CLI doesn't use partial data
+                None
+            }
         }
     }
 }

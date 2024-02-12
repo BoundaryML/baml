@@ -16,7 +16,7 @@ from ..types.enums.enm_messagesender import MessageSender
 from ..types.partial.classes.cls_conversation import PartialConversation
 from ..types.partial.classes.cls_message import PartialMessage
 from ..types.partial.classes.cls_proposedmessage import PartialProposedMessage
-from baml_core.provider_manager.llm_provider_chat import LLMChatMessage
+from baml_core.provider_manager.llm_provider_base import LLMChatMessage
 from baml_core.provider_manager.llm_response import LLMResponse
 from baml_core.stream import AsyncStream
 from baml_lib._impl.deserializer import Deserializer

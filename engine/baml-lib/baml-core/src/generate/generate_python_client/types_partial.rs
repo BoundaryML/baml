@@ -1,6 +1,6 @@
-use std::fmt::format;
 
-use internal_baml_schema_ast::ast::{Class, FieldType, FunctionArg, Identifier, TypeValue};
+
+use internal_baml_schema_ast::ast::{FieldType, FunctionArg, Identifier, TypeValue};
 
 use super::{file::File, traits::WithPartial, traits::WithToCode};
 
@@ -51,7 +51,7 @@ impl WithPartial for FunctionArg {
 impl WithPartial for FieldType {
     fn to_partial_py_string(&self, f: &mut File) -> String {
         match self {
-            FieldType::Identifier(arity, idn) => {
+            FieldType::Identifier(_arity, idn) => {
                 let mut repr = idn.to_partial_py_string(f);
 
                 // they are all optional
@@ -80,7 +80,7 @@ impl WithPartial for FieldType {
                 );
                 repr
             }
-            FieldType::Tuple(arity, vals, _) => {
+            FieldType::Tuple(_arity, vals, _) => {
                 f.add_import("typing", "Tuple");
                 let mut repr = format!(
                     "Tuple[{}]",

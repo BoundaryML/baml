@@ -123,7 +123,7 @@ class IBAMLMessageSimplifier:
         ...
 
     @typing.overload
-    def test(self, *, exclude_impl: typing.Iterable[ImplName]) -> pytest.MarkDecorator:
+    def test(self, *, exclude_impl: typing.Iterable[ImplName] = [], stream: bool = False) -> pytest.MarkDecorator:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
         the MessageSimplifierInterface.
@@ -131,6 +131,8 @@ class IBAMLMessageSimplifier:
         Args:
             exclude_impl : Iterable[ImplName]
                 The names of the implementations to exclude from testing.
+            stream: bool
+                If set, will return a streamable version of the test function.
 
         Usage:
             ```python
@@ -139,6 +141,15 @@ class IBAMLMessageSimplifier:
             @baml.MessageSimplifier.test(exclude_impl=["implname"])
             async def test_logic(MessageSimplifierImpl: IMessageSimplifier) -> None:
                 result = await MessageSimplifierImpl(...)
+            ```
+
+            ```python
+            # Streamable version of the test function.
+
+            @baml.MessageSimplifier.test(stream=True)
+            async def test_logic(MessageSimplifierImpl: IMessageSimplifierStream) -> None:
+                async for result in MessageSimplifierImpl(...):
+                    ...
             ```
         """
         ...

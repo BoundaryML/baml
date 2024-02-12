@@ -71,8 +71,9 @@ impl WithWritePythonString for ConfigurationWalker<'_> {
                     });
                 });
                 fc.last_file()
-                    .add_import("..baml_types", &format!("I{}", func.name()));
-
+                    .add_import("..baml_types", &format!("I{}Stream", func.name()));
+                fc.last_file()
+                    .add_import("pytest_baml.ipc_channel", "BaseIPCChannel");
                 let test_case_content =
                     serde_json::from_str::<Value>(self.test_case().content.value())
                         .map(|v| to_py_value(&v))

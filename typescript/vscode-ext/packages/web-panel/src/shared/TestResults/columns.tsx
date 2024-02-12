@@ -5,7 +5,7 @@ import { StringSpan, TestResult, TestStatus } from '@baml/common'
 import { ColumnDef } from '@tanstack/react-table'
 import { VSCodeLink, VSCodeProgressRing } from '@vscode/webview-ui-toolkit/react'
 import { Braces, ExternalLink, File } from 'lucide-react'
-import { PropsWithChildren, useState } from 'react'
+import { PropsWithChildren, useMemo, useState } from 'react'
 import JsonView from 'react18-json-view'
 import 'react18-json-view/src/style.css'
 import { parseGlooObject } from '../schemaUtils'
@@ -98,14 +98,34 @@ export const columns: ColumnDef<TestResult & { span?: StringSpan }>[] = [
     id: 'status',
     accessorFn: (row) => ({
       status: row.status,
+      partial_output: row.partial_output,
       error: row.output.error,
       render: row.output.parsed,
       raw: row.output.raw,
       url: row.url,
     }),
     cell: ({ getValue }) => {
-      const val = getValue<{ status: TestStatus; render?: string; error?: string; raw?: string; url?: string }>()
+      const val = getValue<{
+        status: TestStatus; render?: string; error?: string; raw?: string; url?: string, partial_output: {
+          raw?: string
+          parsed?: string
+        }
+      }>()
       const [showJson, setShowJson] = useState(true)
+
+      const raw_value = useMemo(() => {
+        if (val.raw) {
+          return val.raw
+        }
+        return val.partial_output.raw ?? ''
+      }, [val.raw, val.partial_output.raw])
+
+      const parsed_value = useMemo(() => {
+        if (val.render) {
+          return val.render
+        }
+        return val.partial_output.parsed ?? ''
+      }, [val.render, val.partial_output.parsed])
 
       return (
         <div className="flex flex-col w-full p-0 text-xs">
@@ -139,10 +159,10 @@ export const columns: ColumnDef<TestResult & { span?: StringSpan }>[] = [
               {pretty_error(val.error)}
             </pre>
           )}
-          {val.render && (
+          {parsed_value && (
             <pre className="break-words whitespace-pre-wrap w-full border-vscode-textSeparator-foreground rounded-md border p-0.5 relative bg-[#1E1E1E] text-white/90">
               {!showJson ? (
-                val.raw
+                raw_value
               ) : (
                 <JsonView
                   enableClipboard={false}
@@ -150,7 +170,7 @@ export const columns: ColumnDef<TestResult & { span?: StringSpan }>[] = [
                   theme="a11y"
                   collapseStringsAfterLength={600}
                   src={parseGlooObject({
-                    value: pretty_stringify(val.render),
+                    value: pretty_stringify(parsed_value),
                   })}
                 />
               )}

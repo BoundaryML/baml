@@ -188,13 +188,13 @@ impl FieldType {
     // Whether the field could theoretically be made optional.
     pub fn can_be_null(&self) -> bool {
         match self {
-            FieldType::Identifier(arity, t) => match t {
+            FieldType::Identifier(_arity, t) => match t {
                 Identifier::Primitive(TypeValue::Null, _) => true,
                 _ => true,
             },
             // There's a bug with unions where we cant parse optionals in unions right now
-            FieldType::Union(arity, f, ..) => false,
-            FieldType::Tuple(arity, ..) => true,
+            FieldType::Union(_arity, _f, ..) => false,
+            FieldType::Tuple(_arity, ..) => true,
             // Lists can't be nullable
             FieldType::Dictionary(_kv, _) => false,
             FieldType::List(_t, _, _) => false,

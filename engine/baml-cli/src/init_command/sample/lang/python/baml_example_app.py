@@ -7,7 +7,8 @@ python -m example_baml_app
 import asyncio
 from baml_client import baml as b
 from datetime import datetime
-from typing import List, TypedDict
+from typing import List
+from typing_extensions import TypedDict
 import asyncio
 
 
@@ -28,11 +29,10 @@ async def extract_resume(resume: str) -> None:
                 print(f"streaming: {x.parsed.model_dump_json()}")
         response = await stream.get_final_response()
         if response.has_value:
-            print(
-                f"\n final: {response.value.model_dump_json(indent=2)}"
-            )
+            print(f"\n final: {response.value.model_dump_json(indent=2)}")
         else:
             print("No final response")
+
 
 class ChatMessage(TypedDict):
     sender: str

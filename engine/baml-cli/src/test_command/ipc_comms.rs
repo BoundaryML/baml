@@ -25,6 +25,8 @@ pub(crate) enum MessageData {
     UpdateTestCase(UpdateTestCase),
     #[serde(rename = "log")]
     Log(LogSchema),
+    #[serde(rename = "partial_response")]
+    PartialData(Value),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
