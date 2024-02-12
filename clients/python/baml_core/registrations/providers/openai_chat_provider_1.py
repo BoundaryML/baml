@@ -126,6 +126,8 @@ class OpenAIChatProvider(LLMChatProvider):
             prompt_tokens = None
             output_tokens = None
             total_tokens = None
+            if not r.choices:
+                continue
             # Note, openai currently does not provide usages for streams.
             yield LLMResponse(
                 generated=r.choices[0].delta.content or "",
