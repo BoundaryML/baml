@@ -54,18 +54,19 @@ class OpenAIChatProvider(LLMChatProvider):
             self._client = AsyncAzureOpenAI(
                 api_key=options["api_key"],
                 api_version=options["api_version"],
-                azure_endpoint=options["api_base"] or options["azure_endpoint"],
+                azure_endpoint=options.get("api_base") or options["azure_endpoint"],
             )
         else:
             self._client = AsyncOpenAI(api_key=options["api_key"])
         options.pop("api_key", None)
         options.pop("api_version", None)
         options.pop("api_base", None)
+        options.pop("api_type", None)
         options.pop("azure_endpoint", None)
         timeout = options.get("timeout") or options.get("request_timeout") or None
         if options.pop("request_timeout", None) is not None:
             self._client.timeout = timeout
-        options["model"] = options.get("model", None) or options.get("engine")
+        options["model"] = options.get("model", None) or options.pop("engine", None)
 
         self.__kwargs = options
         self._set_args(**self.__kwargs)
