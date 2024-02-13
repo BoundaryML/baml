@@ -276,7 +276,7 @@ class TestExecutor {
       await new Promise((resolve, reject) => {
         setTimeout(() => {
           resolve(undefined);
-        }, 100);
+        }, 200);
       });
 
       // Add filters.
@@ -285,7 +285,7 @@ class TestExecutor {
       )
 
       const is_single_function = tests.functions.length === 1
-      const test_filter = is_single_function && tests.functions[0]?.run_all_available_tests ? `-i '${tests.functions[0].name}:'` : selectedTests.join(' ')
+      const test_filter = is_single_function && tests.functions[0]?.run_all_available_tests ? `-i ${tests.functions[0].name}:` : selectedTests.join(' ')
 
       // Run the Python script in a child process
       const command = `${bamlPath({ for_test: true })} test ${test_filter} run ${this.port_arg}`
