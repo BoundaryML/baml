@@ -2,7 +2,6 @@ import abc
 import json
 import traceback
 import typing
-import typing_extensions
 import aiohttp
 from pydantic import BaseModel
 from typeguard import typechecked
