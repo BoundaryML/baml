@@ -20,18 +20,10 @@ class ClassifyResponse(BaseModel):
     @property
     def pretty_message(self) -> str:
         import json
-        from xyz import xyz
         
         thingy = []
         # iterate over stuff
-        json.loads()
-        return f'You can use the following tools: {self.tool}'
+        return f'You can use the following tools: {self.tool} {json.dumps(self.pretty_message2)}'
     @property
     def pretty_message2(self) -> str:
-        import json
-        from xyz import xyz
-        
-        thingy = []
-        # iterate over stuff
-        json.loads()
-        return f'You can use the following tools: {self.tool}'
+        return f"Here is the assistant response: {self.assistant_response}"

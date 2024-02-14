@@ -37,7 +37,7 @@ class BaseProvider(abc.ABC):
     def _to_error_code(
         self, e: Exception
     ) -> typing.Optional[typing.Union[ProviderErrorCode, int]]:
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def _raise_error(self, e: Exception) -> typing.NoReturn:
         formatted_traceback = "".join(
@@ -64,7 +64,7 @@ class LLMChatMessage(typing.TypedDict):
     content: str
 
 
-def _update_template_with_vars(
+def update_template_with_vars(
     *, template: str, updates: typing.Mapping[str, str]
 ) -> str:
     prompt = str(template)

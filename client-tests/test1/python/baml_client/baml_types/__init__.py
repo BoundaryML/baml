@@ -7,9 +7,9 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..__do_not_import.functions.fx_classifytool import IClassifyTool, IClassifyToolOutput
-from ..__do_not_import.functions.fx_maybepolishtext import IMaybePolishText, IMaybePolishTextOutput
-from ..__do_not_import.functions.fx_messagesimplifier import IMessageSimplifier, IMessageSimplifierOutput
+from ..__do_not_import.functions.fx_classifytool import IClassifyTool, IClassifyToolOutput, IClassifyToolStream
+from ..__do_not_import.functions.fx_maybepolishtext import IMaybePolishText, IMaybePolishTextOutput, IMaybePolishTextStream
+from ..__do_not_import.functions.fx_messagesimplifier import IMessageSimplifier, IMessageSimplifierOutput, IMessageSimplifierStream
 from ..__do_not_import.types.classes.cls_classifyresponse import ClassifyResponse
 from ..__do_not_import.types.classes.cls_conversation import Conversation
 from ..__do_not_import.types.classes.cls_empty import Empty
@@ -29,10 +29,13 @@ from ..__do_not_import.types.enums.enm_tool import Tool
 __all__ = [
     'IClassifyTool',
     'IClassifyToolOutput',
+    'IClassifyToolStream',
     'IMaybePolishText',
     'IMaybePolishTextOutput',
+    'IMaybePolishTextStream',
     'IMessageSimplifier',
     'IMessageSimplifierOutput',
+    'IMessageSimplifierStream',
     'ClassifyResponse',
     'Conversation',
     'Empty',

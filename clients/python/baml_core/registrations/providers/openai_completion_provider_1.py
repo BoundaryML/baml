@@ -58,29 +58,27 @@ class OpenAICompletionProvider(LLMProvider):
         response: Completion = await self._client.completions.create(
             prompt=prompt, **self.__kwargs
         )
-        choice = response.choices[0]
-        if not choice:
+
+        assert isinstance(
+            response, Completion
+        ), f"No completion response returned from LLM provider {self.provider}"
+
+        if not response.choices:
             raise ValueError(
                 f"No completion choice returned from LLM provider {self.provider}"
             )
 
+        choice = response.choices[0]
         text = choice.text
 
-        if not isinstance(text, str):
-            raise ValueError(
-                f"No content string returned from LLM provider: {self.provider}"
-            )
+        assert isinstance(
+            text, str
+        ), f"No content string returned from LLM provider: {self.provider}"
 
         usage = response.usage
         model = response.model
         finish_reason = choice.finish_reason
         logprobs = choice.logprobs
-
-        if not isinstance(text, str):
-            raise ValueError(
-                f"No content string returned from LLM provider: {self.provider}"
-            )
-
         prompt_tokens = usage.prompt_tokens if usage else None
         output_tokens = usage.completion_tokens if usage else None
         total_tokens = usage.total_tokens if usage else None

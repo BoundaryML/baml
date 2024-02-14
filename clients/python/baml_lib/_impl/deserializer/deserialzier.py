@@ -47,16 +47,20 @@ class Deserializer(typing.Generic[T]):
 
     def __from_lut(self, dfn: ITypeDefinition) -> BaseDeserializer[T]:
         if dfn["type"] == "List":
+            assert "item" in dfn, "List type must have an item"
             return typing.cast(BaseDeserializer[T], ListDeserializer(item=dfn["item"]))
         if dfn["type"] == "Union":
+            assert "choices" in dfn, "Union type must have choices"
             return UnionDeserializer(
                 *dfn["choices"],
             )
         if dfn["type"] == "Optional":
+            assert "item" in dfn, "Optional type must have an item"
             return typing.cast(
                 BaseDeserializer[T], OptionalDeserializer(item=dfn["item"])
             )
         if dfn["type"] == "Ref":
+            assert "ref" in dfn, "Ref type must have a ref"
             key = dfn["ref"]
             if key.__name__ in self.__lut:
                 return self.__lut[key.__name__]

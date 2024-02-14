@@ -27,7 +27,6 @@ impl ToTypeScript for Expression {
             }
             Expression::Identifier(idn) => match idn {
                 Identifier::ENV(idn) => format!("process.env.{}", idn),
-                Identifier::String(k) => format!("\"{}\"", k.replace('"', "\\\"")),
                 Identifier::Local(k) => format!("\"{}\"", k.replace('"', "\\\"")),
                 Identifier::Ref(r) => format!("\"{}\"", r.join(".")),
                 Identifier::Primitive(p) => p.to_ts(),

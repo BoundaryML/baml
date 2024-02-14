@@ -79,11 +79,16 @@ class OpenAIChatProvider(LLMChatProvider):
 
     async def _run_chat(self, messages: typing.List[LLMChatMessage]) -> LLMResponse:
         response: ChatCompletion = await self._client.chat.completions.create(
-            messages=list(map(_to_chat_completion_messages, messages)), **self.__kwargs
+            messages=list(map(_to_chat_completion_messages, messages)),
+            **self.__kwargs,
         )
-        if not isinstance(response, ChatCompletion):
+        assert isinstance(
+            response, ChatCompletion
+        ), f"Invalid response type returned from LLM provider: {self.provider}"
+
+        if not response.choices:
             raise ValueError(
-                f"Invalid response type returned from LLM provider: {self.provider}"
+                f"No completion choice returned from LLM provider {self.provider}"
             )
 
         text = response.choices[0].message.content

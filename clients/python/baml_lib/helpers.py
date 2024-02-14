@@ -141,7 +141,7 @@ def baml_init(
     **kwargs: typing.Any,
 ) -> __InternalBAMLConfig:
     if log_level := os.environ.get("BAML_LOG_LEVEL", None):
-        int_level = logging._checkLevel(log_level)  # type: ignore
+        int_level = typing.cast(int, logging._checkLevel(log_level))  # type: ignore
         set_print_log_level(int_level)
 
     if kwargs.pop("idempotent", None) is not None:

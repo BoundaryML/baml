@@ -1,5 +1,13 @@
 {
+  "python.analysis.typeCheckingMode": "off",
   "mypy.enabled": true,
+  "mypy.configFile": "mypy.ini",
   "mypy.runUsingActiveInterpreter": true,
-  "baml.path": "ethingy"
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff"
+  },
+  "python.defaultInterpreterPath": "${workspacePath}/.venv/bin/python",
+  "python.analysis.inlayHints.callArgumentNames": "partial",
+  "python.analysis.inlayHints.functionReturnTypes": true,
+  "python.analysis.inlayHints.variableTypes": true,
 }

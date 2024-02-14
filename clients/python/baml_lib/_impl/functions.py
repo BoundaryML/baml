@@ -16,13 +16,13 @@ import pytest
 from contextlib import contextmanager
 from baml_core.otel import trace, create_event
 from baml_core.stream import AsyncStream
-from pytest_baml.exports import baml_function_test
+from pytest_baml.exports import baml_function_test, baml_function_stream_test
 
 
 T = typing.TypeVar("T")
 
 
-def __parse_arg(arg: typing.Any, t: typing.Type[T], _default: T) -> T:
+def _parse_arg(arg: typing.Any, t: typing.Type[T], _default: T) -> T:
     """
     Parses the argument based on the provided type.
 
@@ -250,21 +250,29 @@ class BaseBAMLFunction(typing.Generic[RET, PARTIAL_RET]):
             else:
 
                 @functools.wraps(run_impl_fn)
-                async def wrapper(
+                async def async_wrapper(
                     *args: typing.Any, **kwargs: typing.Any
                 ) -> typing.Any:
                     create_event("variant", {"name": name})
                     return await run_impl_fn(*args, **kwargs)
 
+                async_wrapper.__name__ = self.__name
+                return async_wrapper
         else:
             if is_stream:
 
                 @functools.wraps(run_impl_fn)
-                def wrapper(*args: typing.Any, **kwargs: typing.Any) -> typing.Any:
+                def stream_wrapper(
+                    *args: typing.Any, **kwargs: typing.Any
+                ) -> typing.Any:
                     # For streams override the actual function name (v1_stream).
                     # The qualname already contains impl info anyway and that is what is printed out in the logs.
+                    # TODO: Determine how to call create_event("variant", {"name": name}) for streams.
                     run_impl_fn.__name__ = self.__name
                     return AsyncGenWrapper(name, run_impl_fn, *args, **kwargs)
+
+                stream_wrapper.__name__ = self.__name
+                return stream_wrapper
 
             else:
 
@@ -273,9 +281,8 @@ class BaseBAMLFunction(typing.Generic[RET, PARTIAL_RET]):
                     create_event("variant", {"name": name})
                     return run_impl_fn(*args, **kwargs)
 
-        wrapper.__name__ = self.__name
-
-        return wrapper
+                wrapper.__name__ = self.__name
+                return wrapper
 
     def get_impl(self, name: str) -> BAMLImpl[RET, PARTIAL_RET]:
         """
@@ -318,6 +325,7 @@ class BaseBAMLFunction(typing.Generic[RET, PARTIAL_RET]):
     def __parametrize_test_methods(
         self,
         test_class: T,
+        use_stream: bool,
         excluded_impls: typing.Optional[typing.Iterable[str]] = None,
     ) -> T:
         """
@@ -333,7 +341,7 @@ class BaseBAMLFunction(typing.Generic[RET, PARTIAL_RET]):
         selected_impls = filter(
             lambda k: k not in (excluded_impls or []), self.__impls.keys()
         )
-        decorator = self.__test_wrapper(selected_impls)
+        decorator = self.__test_wrapper(selected_impls, use_stream=use_stream)
 
         for attr_name, attr_value in vars(test_class).items():
             if isinstance(attr_value, types.FunctionType) and attr_name.startswith(
@@ -346,17 +354,22 @@ class BaseBAMLFunction(typing.Generic[RET, PARTIAL_RET]):
                 )
         return test_class
 
-    def __test_wrapper(self, impls: typing.Iterable[str]) -> pytest.MarkDecorator:
+    def __test_wrapper(
+        self, impls: typing.Iterable[str], *, use_stream: bool
+    ) -> pytest.MarkDecorator:
         """
         Creates a pytest.mark.parametrize decorator for the given implementations.
 
         Args:
             impls: The implementations to include in the test.
+            use_stream: Whether to use streaming for the test.
 
         Returns:
             A pytest.mark.parametrize decorator.
         """
 
+        if use_stream:
+            return baml_function_stream_test(impls=list(impls), owner=self, stream=True)
         return baml_function_test(impls=list(impls), owner=self)
 
     @contextmanager
@@ -393,18 +406,21 @@ class BaseBAMLFunction(typing.Generic[RET, PARTIAL_RET]):
                 raise ValueError("To specify parameters, use keyword arguments.")
 
             if callable(args[0]) and inspect.isclass(args[0]):
-                return self.__parametrize_test_methods(args[0])
+                return self.__parametrize_test_methods(args[0], use_stream=False)
             elif callable(args[0]):
-                return self.__test_wrapper(self.__impls.keys())(args[0])
+                return self.__test_wrapper(self.__impls.keys(), use_stream=False)(
+                    args[0]
+                )
         if len(args) != 0:
             raise ValueError(
                 "Only keyword arguments are supported. Otherwise use without ()."
             )
 
-        excluded_impls = __parse_arg(
+        excluded_impls = _parse_arg(
             kwargs.get("exclude_impl"),
             typing.cast(typing.Type[typing.Iterable[str]], set),
             set(),
         )
+        use_stream = kwargs.get("stream", False)
         selected_impls = filter(lambda k: k not in excluded_impls, self.__impls.keys())
-        return self.__test_wrapper(selected_impls)
+        return self.__test_wrapper(selected_impls, use_stream=use_stream)

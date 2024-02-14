@@ -12,25 +12,17 @@ class ClassifyResponse {
   pretty_message string @get(
     python#"
       import json
-      from xyz import xyz
 
       thingy = []
       # iterate over stuff
-      json.loads()
-      return f'You can use the following tools: {self.tool}'
+      return f'You can use the following tools: {self.tool} {json.dumps(self.pretty_message2)}'
     "#
   )
  
     
   pretty_message2 string @get(
     python#"
-      import json
-      from xyz import xyz
-
-      thingy = []
-      # iterate over stuff
-      json.loads()
-      return f'You can use the following tools: {self.tool}'
+      return f"Here is the assistant response: {self.assistant_response}"
     "#
   )
 }

@@ -19,7 +19,7 @@ T = typing.TypeVar("T", bound=BaseModel)
 def _generate_type_definitions_for_model(
     model: typing.Type[T],
 ) -> typing.Dict[str, ITypeDefinition]:
-    field_definitions = {}
+    field_definitions: typing.Dict[str, ITypeDefinition] = {}
 
     for field_name, field_info in model.model_fields.items():
         field_type = field_info.annotation

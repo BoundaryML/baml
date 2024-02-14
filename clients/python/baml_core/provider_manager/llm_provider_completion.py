@@ -7,18 +7,12 @@ from .llm_response import LLMResponse
 from .llm_provider_base import (
     AbstractLLMProvider,
     LLMChatMessage,
-    _update_template_with_vars,
+    update_template_with_vars,
 )
 
 
 def default_chat_to_prompt(messages: typing.List[LLMChatMessage]) -> str:
-    return "\n".join(
-        [
-            msg["content"]
-            for msg in messages
-            if isinstance(msg, dict) and "content" in msg
-        ]
-    )
+    return "\n".join([msg["content"] for msg in messages if "content" in msg])
 
 
 class LLMProvider(AbstractLLMProvider):
@@ -54,7 +48,7 @@ class LLMProvider(AbstractLLMProvider):
         )
         if cached := self._check_cache(prompt=template, prompt_vars=updates):
             return cached
-        prompt = _update_template_with_vars(template=template, updates=updates)
+        prompt = update_template_with_vars(template=template, updates=updates)
         try:
             return await self.__run_with_telemetry(prompt)
         except Exception as e:
@@ -80,7 +74,7 @@ class LLMProvider(AbstractLLMProvider):
         )
         if cached := self._check_cache(prompt=template, prompt_vars=updates):
             yield cached
-        prompt = _update_template_with_vars(template=template, updates=updates)
+        prompt = update_template_with_vars(template=template, updates=updates)
         try:
             async for r in self._stream(prompt):
                 yield r
@@ -159,9 +153,9 @@ class LLMProvider(AbstractLLMProvider):
     # Implemented by the actual providers that extend this
     @abc.abstractmethod
     async def _run(self, prompt: str) -> LLMResponse:
-        raise NotImplementedError
+        raise NotImplementedError()
 
     @abc.abstractmethod
     async def _stream(self, prompt: str) -> typing.AsyncIterator[LLMResponse]:
-        raise NotImplementedError
+        raise NotImplementedError()
         yield  # appease the linter that doesn't understand that this is an async generator unless theres a yield

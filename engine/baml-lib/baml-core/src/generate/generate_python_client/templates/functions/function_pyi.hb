@@ -78,7 +78,7 @@ class IBAML{{name}}:
         ...
 
     @typing.overload
-    def test(self, *, exclude_impl: typing.Iterable[ImplName]) -> pytest.MarkDecorator:
+    def test(self, *, exclude_impl: typing.Iterable[ImplName] = [], stream: bool = False) -> pytest.MarkDecorator:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
         the {{name}}Interface.
@@ -86,6 +86,8 @@ class IBAML{{name}}:
         Args:
             exclude_impl : Iterable[ImplName]
                 The names of the implementations to exclude from testing.
+            stream: bool
+                If set, will return a streamable version of the test function.
 
         Usage:
             ```python
@@ -94,6 +96,15 @@ class IBAML{{name}}:
             @baml.{{name}}.test(exclude_impl=["implname"])
             async def test_logic({{name}}Impl: I{{name}}) -> None:
                 result = await {{name}}Impl(...)
+            ```
+
+            ```python
+            # Streamable version of the test function.
+
+            @baml.{{name}}.test(stream=True)
+            async def test_logic({{name}}Impl: I{{name}}Stream) -> None:
+                async for result in {{name}}Impl(...):
+                    ...
             ```
         """
         ...

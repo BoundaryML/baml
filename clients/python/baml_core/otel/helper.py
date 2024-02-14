@@ -273,11 +273,7 @@ def as_int(value: Optional[AttributeValue]) -> int:
 
 def get_io_value(event: Event) -> Optional[IOValue]:
     attrs = event.attributes or {}
-    params = []
-    for key, value in attrs.items():
-        if "." in key:
-            continue
-        params.append(key)
+    params = list(filter(lambda x: "." not in x, attrs.keys()))
     if len(params) == 0:
         return None
     elif len(params) == 1:
@@ -305,7 +301,7 @@ def fill_partial(event: Event, partial: PartialLogSchema) -> None:
     if event.name == "set_tags":
         for key, value in attrs.items():
             val = as_str(value)
-            if val is not None and key != "__BAML_ID__":
+            if key != "__BAML_ID__":
                 partial.context.tags[key] = val
         return
     elif event.name == "input":
@@ -368,23 +364,25 @@ def fill_partial(event: Event, partial: PartialLogSchema) -> None:
             )
         )
     elif event.name == "llm_request_error":
-        last_partial = partial.metadata[-1]
-        if last_partial is None:
+        if not partial.metadata:
             return
+        last_partial = partial.metadata[-1]
         last_partial.error = Error(
             code=as_int(attrs["code"]),
             message=as_str(attrs["message"]),
             traceback=as_str(attrs["traceback"]),
         )
     elif event.name == "llm_request_args":
+        if not partial.metadata:
+            return
         last_partial = partial.metadata[-1]
-        if last_partial is None or last_partial.input is None:
+        if last_partial.input is None:
             return
         last_partial.input.invocation_params = {k: v for k, v in attrs.items()}
     elif event.name == "llm_request_end":
-        last_partial = partial.metadata[-1]
-        if last_partial is None:
+        if not partial.metadata:
             return
+        last_partial = partial.metadata[-1]
         last_partial.output = LLMOutputModel(
             raw_text=as_str(attrs["generated"]),
             metadata=LLMOutputModelMetadata.model_validate_json(as_str(attrs["meta"])),
@@ -432,7 +430,7 @@ def event_to_log(
         return []
 
     assert span.name == parent_names[-1]
-    assert span.context.span_id == parent_history[-1]
+    assert span.context and span.context.span_id == parent_history[-1]
 
     partial = PartialLogSchema(
         project_id=project_id or "BAML_PLACEHOLDER_PROJECT_ID",

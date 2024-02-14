@@ -82,7 +82,7 @@ class CustomBackendExporter(SpanExporter):
 
         for item in items:
             item.print(self.__print_log_level)
-            if self.__message_override_callback is not None:
+            if self.__message_override_callback:
                 # Run every callback in parallel
                 for cb in self.__message_override_callback.values():
                     try:

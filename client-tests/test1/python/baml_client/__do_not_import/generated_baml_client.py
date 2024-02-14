@@ -19,7 +19,6 @@ from .functions.fx_messagesimplifier import BAMLMessageSimplifier
 from baml_core.otel import add_message_transformer_hook, flush_trace_logs
 from baml_core.provider_manager import LLMManager
 from baml_core.services import LogSchema
-from baml_core.services.api_types import LogSchema
 from baml_lib import DeserializerException, baml_init
 from typing import Callable, List, Optional
 

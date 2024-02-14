@@ -101,12 +101,12 @@ async fn run_pytest_and_update_state(
     let stdout_file_path = baml_tests_dir.join(format!("{}-stdout.log", human_readable_time));
     let stderr_file_path = baml_tests_dir.join(format!("{}-stderr.log", human_readable_time));
 
-    // println!(
-    //     "{}\n{}\n{}",
-    //     "Verbose logs available at: ".dimmed(),
-    //     stdout_file_path.display().to_string().dimmed(),
-    //     stderr_file_path.display().to_string().dimmed()
-    // );
+    println!(
+        "{}\n{}\n{}",
+        "Verbose logs available at: ".dimmed(),
+        stdout_file_path.display().to_string().dimmed(),
+        stderr_file_path.display().to_string().dimmed()
+    );
 
     let stdout_file = File::create(&stdout_file_path)?;
     let stderr_file = File::create(&stderr_file_path)?;

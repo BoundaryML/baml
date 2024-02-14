@@ -5,7 +5,7 @@ use internal_baml_diagnostics::{DatamodelError, Diagnostics, Span};
 use internal_baml_schema_ast::ast::{RawString, WithSpan};
 use pest::Parser;
 
-use super::{helpers::Pair, BAMLPromptParser, Rule};
+use super::{BAMLPromptParser, Rule};
 
 #[cfg(feature = "debug_parser")]
 fn pretty_print<'a>(pair: pest::iterators::Pair<'a, Rule>, indent_level: usize) {

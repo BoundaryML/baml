@@ -30,13 +30,15 @@ class ListDeserializer(BaseDeserializer[typing.List[T]]):
     ) -> Result[typing.List[T]]:
         items: typing.List[T] = []
         item_deserializer = from_lut(self.__item_deserializer)
-        for i, item in enumerate(raw.as_list()):
-            diagnostics.push_scope(str(i))
-            parsed = item_deserializer.coerce(item, diagnostics, from_lut)
-            diagnostics.pop_scope(errors_as_warnings=True)
-            if parsed.has_value:
-                items.append(parsed.as_value)
-        return Result.from_value(items)
+        if item_deserializer:
+            for i, item in enumerate(raw.as_list()):
+                diagnostics.push_scope(str(i))
+                parsed = item_deserializer.coerce(item, diagnostics, from_lut)
+                diagnostics.pop_scope(errors_as_warnings=True)
+                if parsed.has_value:
+                    items.append(parsed.as_value)
+            return Result.from_value(items)
+        return Result.failed()
 
 
 @typing.final
@@ -55,7 +57,7 @@ class OptionalDeserializer(BaseDeserializer[typing.Optional[T]]):
         from_lut: CheckLutFn[typing.Optional[T]],
     ) -> Result[typing.Optional[T]]:
         item_deserializer = from_lut(self.__item_deserializer)
-        if isinstance(raw, RawNoneWrapper):
+        if isinstance(raw, RawNoneWrapper) or item_deserializer is None:
             return Result.from_value(None)
         # TODO: Merge child errors as warnings into the parent diagnostics object.
         # The point is that if the child fails, this is optional, so we're just gonna return None
@@ -82,10 +84,16 @@ class UnionDeserializer(BaseDeserializer[T]):
         from_lut: CheckLutFn[T],
     ) -> Result[T]:
         deserializers = sorted(
-            [
-                from_lut(item_deserializer)
-                for item_deserializer in self.__item_deserializer
-            ],
+            typing.cast(
+                typing.List[BaseDeserializer[typing.Any]],
+                filter(
+                    lambda x: x is not None,
+                    [
+                        from_lut(item_deserializer)
+                        for item_deserializer in self.__item_deserializer
+                    ],
+                ),
+            ),
             key=lambda x: x.rank,
             reverse=True,
         )

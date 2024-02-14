@@ -31,6 +31,10 @@ export interface TestResult {
   status: TestStatus
   url?: string
   input?: string
+  partial_output: {
+    raw?: string
+    parsed?: string
+  }
   output: {
     error?: string
     parsed?: string

@@ -35,35 +35,21 @@
     }
   ],
   "settings": {
+    "editor.formatOnSaveMode": "file",
     "editor.formatOnSave": true,
     "editor.defaultFormatter": "esbenp.prettier-vscode",
     "[rust]": {
       "editor.defaultFormatter": "rust-lang.rust-analyzer"
     },
-    "[python]": {
-      "editor.defaultFormatter": "ms-python.black-formatter"
-    },
-    "[cpp]": {
-      "editor.defaultFormatter": "xaver.clang-format"
-    },
+    "python.defaultInterpreterPath": "python3",
     "mypy.enabled": false,
-    "gloo.path": "${workspaceFolder}/cli/target/debug",
     "editor.tabSize": 2,
-    "jest.disabledWorkspaceFolders": [
-      "test1/python",
-      "Python Client",
-      "Release Tools",
-      "Docs",
-      "engine",
-      ".github",
-      "Rust CLI"
-    ],
     "git.openDiffOnClick": true,
     "workbench.colorCustomizations": {
       "activityBar.background": "#630001",
       "titleBar.activeBackground": "#8B0002",
       "titleBar.activeForeground": "#FFFBFB"
-    }
+    },
   },
   "extensions": {
     "recommendations": [
@@ -73,7 +59,9 @@
       "ms-python.python",
       "rust-lang.rust-analyzer",
       "unifiedjs.vscode-mdx",
-      "tamasfe.even-better-toml"
+      "tamasfe.even-better-toml",
+      "charliermarsh.ruff",
+      "matangover.mypy"
     ]
   }
 }

@@ -47,7 +47,7 @@ jobs:
         run: |
           poetry run mypy .
           poetry run ruff check .
-          poetry run black --check .
+          poetry run ruff format --check .
         working-directory: clients/python
 
       - name: Test Python Client

@@ -9,8 +9,6 @@ use super::generate_python_client::generate_py;
 use super::generate_ts_client::generate_ts;
 use super::ir;
 
-pub use super::test_request::TestRequest;
-
 pub(crate) fn generate_pipeline(
     db: &ParserDatabase,
     gen: &Generator,

@@ -257,7 +257,7 @@ class LogSchema(BaseModel):
 
     def to_pretty_string(self) -> str:
         separator = "-------------------"
-        pp = []
+        pp: List[str] = []
 
         if metadata := self.metadata:
             if isinstance(metadata.input.prompt.template, list):
@@ -301,10 +301,13 @@ class LogSchema(BaseModel):
                     + colorama.Style.NORMAL
                 )
                 try:
+                    # The type of output.value is Any, so we need to ignore the typecheck here
+
                     # TODO: Figure out why we get a tuple here sometimes
                     if isinstance(output.value, tuple) and len(output.value) == 1:
                         pretty = json.dumps(json.loads(output.value[0]), indent=2)
-                    pretty = json.dumps(json.loads(output.value), indent=2)
+                    else:
+                        pretty = json.dumps(json.loads(output.value), indent=2)
                 except Exception:
                     pretty = str(output.value)
 

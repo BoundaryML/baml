@@ -48,6 +48,7 @@ def pytest_configure(config: pytest.Config) -> None:
     config.pluginmanager.register(
         BamlPytestPlugin(
             api=baml_conf.api,
+            # We can for now assume that the options are only passed by baml test, which ensures correct types
             ipc_channel=config.getoption("baml_ipc"),
             include_filters=config.getoption("baml_include"),
             exclude_filters=config.getoption("baml_exclude"),

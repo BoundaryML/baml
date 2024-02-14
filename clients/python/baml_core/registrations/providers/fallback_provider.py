@@ -1,4 +1,5 @@
 import typing
+import typing_extensions
 
 from baml_core.provider_manager import (
     register_llm_provider,
@@ -9,7 +10,7 @@ from baml_core.provider_manager import (
 from baml_core.provider_manager.llm_provider_base import AbstractLLMProvider
 
 
-class ChainItem(typing.TypedDict):
+class ChainItem(typing_extensions.TypedDict):
     client_name: str
     on_status_code: typing.Optional[typing.List[int]]
     retry_policy: typing.Optional[str]
@@ -27,7 +28,7 @@ def _parse_strategy_item(item: typing.Any) -> ChainItem:
             retry_policy=item.pop("retry_policy", None),
         )
 
-        assert len(item) == 0, f"Unexpected options in strategy item: {item}"
+        assert not item, f"Unexpected options in strategy item: {item}"
         return strategy_item
 
     raise ValueError(
@@ -129,6 +130,33 @@ class FallbackProvider(AbstractLLMProvider):
         assert last_exception is not None, "Should have caught an exception"
         raise last_exception
 
+    async def _stream_strategy(
+        self,
+        method_name: typing.Literal[
+            "run_prompt_stream",
+            "run_prompt_template_stream",
+            "run_chat_stream",
+            "run_chat_template_stream",
+        ],
+        *args: typing.Any,
+        **kwargs: typing.Any,
+    ) -> typing.AsyncIterator[LLMResponse]:
+        error_code = None
+        last_exception = None
+        for idx, (llm, if_code) in enumerate(self._strategy):
+            try:
+                if idx > 0 and if_code is not None:
+                    if error_code not in if_code:
+                        continue
+                async for r in getattr(llm, method_name)(*args, **kwargs):
+                    yield r
+                return
+            except Exception as e:
+                error_code = self._to_error_code(e)
+                last_exception = e
+        assert last_exception is not None, "Should have caught an exception"
+        raise last_exception
+
     async def _run_prompt_internal(self, prompt: str) -> LLMResponse:
         return await self._run_strategy("run_prompt", prompt)
 
@@ -161,6 +189,12 @@ class FallbackProvider(AbstractLLMProvider):
             params=params,
         )
 
+    async def _run_prompt_internal_stream(
+        self, prompt: str
+    ) -> typing.AsyncIterator[LLMResponse]:
+        async for r in self._stream_strategy("run_prompt_stream", prompt):
+            yield r
+
     async def _run_prompt_template_internal_stream(
         self,
         *,
@@ -168,14 +202,19 @@ class FallbackProvider(AbstractLLMProvider):
         replacers: typing.Iterable[str],
         params: typing.Dict[str, typing.Any],
     ) -> typing.AsyncIterator[LLMResponse]:
-        raise NotImplementedError
-        yield
+        async for r in self._stream_strategy(
+            "run_prompt_template_stream",
+            template=template,
+            replacers=replacers,
+            params=params,
+        ):
+            yield r
 
     async def _run_chat_internal_stream(
         self, *messages: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]]
     ) -> typing.AsyncIterator[LLMResponse]:
-        raise NotImplementedError
-        yield
+        async for r in self._stream_strategy("run_chat_stream", *messages):
+            yield r
 
     async def _run_chat_template_internal_stream(
         self,
@@ -183,5 +222,10 @@ class FallbackProvider(AbstractLLMProvider):
         replacers: typing.Iterable[str],
         params: typing.Dict[str, typing.Any],
     ) -> typing.AsyncIterator[LLMResponse]:
-        raise NotImplementedError
-        yield
+        async for r in self._stream_strategy(
+            "run_chat_template_stream",
+            *message_templates,
+            replacers=replacers,
+            params=params,
+        ):
+            yield r

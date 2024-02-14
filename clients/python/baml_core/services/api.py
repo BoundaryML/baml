@@ -42,8 +42,11 @@ class _APIWrapper:
     def session_id(self) -> str:
         return self.__session_id
 
-    def _call_api_sync(
-        self, endpoint: str, payload: T, parser: typing.Type[U] | None = None
+    def call_api_sync(
+        self,
+        endpoint: str,
+        payload: pydantic.BaseModel,
+        parser: typing.Type[U] | None = None,
     ) -> U | None:
         data = payload.model_dump(by_alias=True)
         response = requests.post(
@@ -93,9 +96,12 @@ class __APIBase:
         return self.__base.stage
 
     def _call_api_sync(
-        self, endpoint: str, payload: T, parser: typing.Type[U] | None = None
+        self,
+        endpoint: str,
+        payload: pydantic.BaseModel,
+        parser: typing.Type[U] | None = None,
     ) -> U | None:
-        return self.__base._call_api_sync(endpoint, payload, parser)
+        return self.__base.call_api_sync(endpoint, payload, parser)
 
     # async def _call_api(
     #     self, endpoint: str, payload: T, parser: typing.Type[U] | None = None

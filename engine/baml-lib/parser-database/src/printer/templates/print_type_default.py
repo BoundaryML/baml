@@ -1,4 +1,6 @@
-from typing import List, Optional, Union, TypedDict, Any, Literal
+from typing import List, Optional, Union, Any, Literal
+from typing_extensions import TypedDict
+
 
 # Define TypedDict classes
 

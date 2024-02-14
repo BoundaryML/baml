@@ -44,8 +44,16 @@ interface UpdateTestCaseEvent {
   error_data: null | any
 }
 
+interface PartialResponseEvent {
+  delta: string
+  parsed: null | {
+    value: string
+  }
+}
+
 class TestState {
   private test_results: TestStateType
+  private active_full_test_name: string | undefined = undefined
   private testStateListener: ((testResults: TestStateType) => void) | undefined = undefined
 
   constructor() {
@@ -82,6 +90,7 @@ class TestState {
             implName: impl,
             status: TestStatus.Compiling,
             output: {},
+            partial_output: {},
           })),
         ),
       ),
@@ -130,6 +139,9 @@ class TestState {
           this.handleLog(payload.data)
         }
         break
+      case 'partial_response':
+        this.handlePartialResponse(payload.data)
+        break
     }
   }
 
@@ -163,10 +175,25 @@ class TestState {
 
     if (testResult) {
       testResult.status = data.status
+      if (data.status === TestStatus.Running) {
+        this.active_full_test_name = data.test_case_arg_name
+      }
       if (data.error_data) {
         testResult.output = {
           error: JSON.stringify(data.error_data),
         }
+      }
+      this.testStateListener?.(this.test_results)
+    }
+  }
+
+  private handlePartialResponse(data: PartialResponseEvent) {
+    const testResult = this.test_results.results.find((test) => test.fullTestName === this.active_full_test_name);
+
+    if (testResult) {
+      testResult.partial_output.raw = `${testResult.partial_output.raw ?? ''}${data.delta}`
+      if (data.parsed) {
+        testResult.partial_output.parsed = data.parsed.value
       }
       this.testStateListener?.(this.test_results)
     }

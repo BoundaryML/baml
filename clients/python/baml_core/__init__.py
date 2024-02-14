@@ -12,7 +12,6 @@ from .errors.llm_exc import LLMException
 from .registrations import providers, caches  # noqa: F401
 
 __all__ = [
-    "register_llm_provider",
     "LLMException",
     "CacheManager",
     "LLMManager",

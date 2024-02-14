@@ -17,6 +17,7 @@ impl<'a> Walker<'a, &'a Function> {
 }
 
 impl<'a> Walker<'a, &'a Enum> {
+    #[allow(dead_code)]
     pub fn walk_values(&'a self) -> impl Iterator<Item = &'a repr::EnumValue> {
         self.item.elem.values.iter().map(|v| &v.elem)
     }
@@ -27,6 +28,7 @@ impl<'a> Walker<'a, &'a Enum> {
 }
 
 impl<'a> Walker<'a, (&'a Function, &'a Impl)> {
+    #[allow(dead_code)]
     pub fn function(&'a self) -> Walker<'a, &'a Function> {
         Walker {
             db: self.db,
@@ -40,6 +42,7 @@ impl<'a> Walker<'a, (&'a Function, &'a Impl)> {
 }
 
 impl<'a> Walker<'a, &'a Class> {
+    #[allow(dead_code)]
     pub fn walk_fields(&'a self) -> impl Iterator<Item = &'a repr::Field> {
         self.item.elem.static_fields.iter().map(|f| &f.elem)
     }
