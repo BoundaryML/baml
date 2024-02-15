@@ -172,7 +172,6 @@ class AsyncStream(Generic[TYPE, PARTIAL_TYPE]):
 
     @property
     async def parsed_stream(self) -> AsyncIterator[PartialValueWrapper[PARTIAL_TYPE]]:
-        
         if self.__is_stream_completed:
             return
         async for response in self.__get_stream():
@@ -183,9 +182,8 @@ class AsyncStream(Generic[TYPE, PARTIAL_TYPE]):
                 )
             except Exception:
                 yield PartialValueWrapper.from_parse_failure(delta=response.generated)
-        
+
         self.__is_stream_completed = True
-        
 
     async def get_final_response(self) -> ValueWrapper[TYPE]:
         await self.__until_done()
@@ -193,7 +191,7 @@ class AsyncStream(Generic[TYPE, PARTIAL_TYPE]):
         final_response = ValueWrapper.from_value(
             self.__deserializer.from_string(self.__total_text)
         )
-        
+
         return final_response
 
     async def __until_done(self) -> None:
