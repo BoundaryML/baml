@@ -48,7 +48,7 @@ const FunctionPanel: React.FC = () => {
             {impl && (
               <Allotment.Pane className="px-0" minSize={200}>
                 <div className="relative h-full">
-                  <ScrollArea type="always" className="flex w-full h-full pr-3">
+                  <ScrollArea type="always" className="flex w-full h-full pr-3 ">
                     <VSCodePanels
                       activeid={`tab-${func.name.value}-${impl.name.value}`}
                       onChange={(e) => {

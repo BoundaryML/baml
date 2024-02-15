@@ -99,9 +99,9 @@ PARTIAL_TYPE = typing.TypeVar("PARTIAL_TYPE")
 
 class AsyncStream(Generic[TYPE, PARTIAL_TYPE]):
     __stream: typing.Optional[AsyncIterator[LLMResponse]] = None
-    __final_response: ValueWrapper[TYPE]
     __is_stream_completed: bool
     __stream_cb: typing.Callable[[], AsyncIterator[LLMResponse]]
+    __total_text: str
 
     def __init__(
         self,
@@ -111,9 +111,9 @@ class AsyncStream(Generic[TYPE, PARTIAL_TYPE]):
     ):
         self.__partial_deserializer = partial_deserializer
         self.__deserializer = final_deserializer
-        self.__final_response = ValueWrapper.unset()
         self.__is_stream_completed = False
         self.__stream_cb = stream_cb
+        self.__total_text = ""
 
     async def __aenter__(self) -> "AsyncStream[TYPE, PARTIAL_TYPE]":
         self.__stream = self.__stream_cb()
@@ -172,30 +172,32 @@ class AsyncStream(Generic[TYPE, PARTIAL_TYPE]):
 
     @property
     async def parsed_stream(self) -> AsyncIterator[PartialValueWrapper[PARTIAL_TYPE]]:
-        total_text = ""
-        if self.__final_response.has_value:
+        
+        if self.__is_stream_completed:
             return
         async for response in self.__get_stream():
             try:
-                total_text += response.generated
+                self.__total_text += response.generated
                 yield await self._parse_stream_chunk(
-                    total_text, delta=response.generated
+                    self.__total_text, delta=response.generated
                 )
             except Exception:
                 yield PartialValueWrapper.from_parse_failure(delta=response.generated)
-        try:
-            self.__final_response = ValueWrapper.from_value(
-                self.__deserializer.from_string(total_text)
-            )
-        except Exception:
-            self.__final_response = ValueWrapper.unset()
+        
+        self.__is_stream_completed = True
+        
 
     async def get_final_response(self) -> ValueWrapper[TYPE]:
         await self.__until_done()
-        return self.__final_response
+        # This ensures any deserialization exception is bubbled up
+        final_response = ValueWrapper.from_value(
+            self.__deserializer.from_string(self.__total_text)
+        )
+        
+        return final_response
 
     async def __until_done(self) -> None:
-        if self.__final_response.has_value or self.__is_stream_completed:
+        if self.__is_stream_completed:
             return
         async for _ in self.parsed_stream:
             pass

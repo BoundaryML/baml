@@ -351,7 +351,7 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
 
   return (
     <>
-      <div className="flex flex-row justify-between gap-x-1">
+      <div className="flex flex-row gap-x-1">
         <VSCodeTextField
           placeholder="Search test cases"
           className="w-32 shrink"
@@ -370,7 +370,7 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
         ) : (
           <>
             <Button
-              className="px-1 py-1 text-sm round ed-sm h-fit whitespace-nowrap bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground"
+              className="px-1 py-1 text-sm rounded-sm h-fit whitespace-nowrap bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground"
               disabled={test_cases.length === 0}
               onClick={() => {
                 const runTestRequest: TestRequest = {
@@ -604,16 +604,6 @@ const EditTestCaseForm = ({
             ArrayFieldItemTemplate: ArrayFieldItemTemplate,
           }}
           onSubmit={(data) => {
-            const testCaseToSave = testCase ?? {
-              name: {
-                value: 'new',
-                source_file: '',
-                start: 0,
-                end: 0,
-              },
-              content: 'null',
-            }
-
             vscode.postMessage({
               command: 'saveTest',
               data: {
@@ -635,6 +625,7 @@ const EditTestCaseForm = ({
               },
             })
             setShowForm(false)
+            setTestName(undefined)
           }}
         />
       </DialogContent>
@@ -645,7 +636,7 @@ const EditTestCaseForm = ({
 const TestCaseCard: React.FC<{ testCaseName: string; content: string }> = ({ testCaseName, content }) => {
   return (
     <div className="flex flex-col gap-2 text-xs text-left text-vscode-descriptionForeground">
-      <div className="break-all text-balance">
+      <div className="break-all">
         {content.substring(0, 120)}
         {content.length > 120 && '...'}
       </div>
