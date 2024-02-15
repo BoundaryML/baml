@@ -103,11 +103,7 @@ impl<llm, MaybePolishText> v3 {
 
         {#input.generated_response}
         
-        {#chat(system)}
-        Hi please write whatever the user asks in haiku form.
-        
-        {#chat(user)}
-        Can you write about a computer science?
+       
     "#
 } 
 

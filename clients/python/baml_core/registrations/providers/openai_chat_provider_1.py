@@ -144,6 +144,5 @@ class OpenAIChatProvider(LLMChatProvider):
                     output_tokens=output_tokens,
                     total_tokens=total_tokens,
                     finish_reason=r.choices[0].finish_reason if r.choices else None,
-                    stream=True,
                 ),
             )

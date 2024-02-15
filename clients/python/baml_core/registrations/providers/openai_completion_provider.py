@@ -47,5 +47,4 @@ class OpenAICompletionProvider(LLMProvider):
         )
 
     async def _stream(self, prompt: str) -> typing.AsyncIterator[LLMResponse]:
-        raise NotImplementedError()
-        yield
+        yield await self._run(prompt)

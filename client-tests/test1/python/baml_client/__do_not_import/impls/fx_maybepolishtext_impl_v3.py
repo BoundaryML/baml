@@ -16,11 +16,9 @@ from ..types.enums.enm_messagesender import MessageSender
 from ..types.partial.classes.cls_conversation import PartialConversation
 from ..types.partial.classes.cls_message import PartialMessage
 from ..types.partial.classes.cls_proposedmessage import PartialProposedMessage
-from baml_core.provider_manager.llm_provider_base import LLMChatMessage
 from baml_core.provider_manager.llm_response import LLMResponse
 from baml_core.stream import AsyncStream
 from baml_lib._impl.deserializer import Deserializer
-from typing import List
 
 
 import typing
@@ -28,31 +26,11 @@ import typing
 # Client: AZURE_GPT4
 # An implementation of MaybePolishText.
 
-__prompt_template: List[LLMChatMessage] = [
-{
-    "role": "system",
-    "content": """\
+__prompt_template = """\
 Hi please write whatever the user asks in haiku form.
 
 {arg.generated_response}\
 """
-}
-,
-{
-    "role": "system",
-    "content": """\
-Hi please write whatever the user asks in haiku form.\
-"""
-}
-,
-{
-    "role": "user",
-    "content": """\
-Can you write about a computer science?\
-"""
-}
-
-]
 
 __input_replacers = {
     "{arg.generated_response}"
@@ -73,14 +51,14 @@ __partial_deserializer = Deserializer[str](str)  # type: ignore
 
 
 async def v3(arg: ProposedMessage, /) -> str:
-    response = await AZURE_GPT4.run_chat_template(__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
+    response = await AZURE_GPT4.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
     deserialized = __deserializer.from_string(response.generated)
     return deserialized
 
 
 def v3_stream(arg: ProposedMessage, /) -> AsyncStream[str, str]:
     def run_prompt() -> typing.AsyncIterator[LLMResponse]:
-        raw_stream = AZURE_GPT4.run_chat_template_stream(__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
+        raw_stream = AZURE_GPT4.run_prompt_template_stream(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
         return raw_stream
     stream = AsyncStream(stream_cb=run_prompt, partial_deserializer=__partial_deserializer, final_deserializer=__deserializer)
     return stream
