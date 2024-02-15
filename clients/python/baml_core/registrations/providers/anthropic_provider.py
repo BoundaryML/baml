@@ -1,13 +1,26 @@
 import anthropic
 import typing
-from anthropic.types import (
-    MessageStartEvent,
-    MessageStreamEvent,
-    MessageDeltaEvent,
-    ContentBlockStartEvent,
-    ContentBlockDeltaEvent,
-    MessageParam,
-)
+from packaging.version import parse as parse_version
+print("anthropic: ", anthropic.__version__)
+if parse_version(version=anthropic.__version__) < parse_version("0.16.0"):
+    from anthropic.types.beta import (
+        MessageStartEvent,
+        MessageStreamEvent,
+        MessageDeltaEvent,
+        ContentBlockStartEvent,
+        ContentBlockDeltaEvent,
+        MessageParam,
+    )
+else:
+    from anthropic.types import (
+        MessageStartEvent,
+        MessageStreamEvent,
+        MessageDeltaEvent,
+        ContentBlockStartEvent,
+        ContentBlockDeltaEvent,
+        MessageParam,
+    )
+
 
 from baml_core.provider_manager import (
     LLMChatProvider,
@@ -147,7 +160,12 @@ class AnthropicProvider(LLMChatProvider):
         total_output_tokens = 0
         model = None
         finish_reason = None
-        async with self.__client.messages.stream(
+        messages_api = None
+        if parse_version(version=anthropic.__version__) < parse_version("0.16.0"):
+            messages_api = self.__client.beta.messages
+        else:
+            messages_api = self.__client.messages
+        async with messages_api.stream(
             messages=list(map(to_anthropic_message, messages)), **caller_kwargs_copy
         ) as stream:
             last_response: typing.Optional[MessageStreamEvent] = None

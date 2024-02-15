@@ -4,7 +4,7 @@ import openai
 from packaging.version import parse as parse_version
 from .fallback_provider import FallbackProvider
 
-if parse_version(openai.__version__) < parse_version("1.0.0"):
+if parse_version(version=openai.__version__) < parse_version("1.0.0"):
     from .openai_chat_provider import OpenAIChatProvider
     from .openai_completion_provider import OpenAICompletionProvider
 else:
