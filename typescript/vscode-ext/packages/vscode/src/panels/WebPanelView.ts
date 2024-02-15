@@ -210,7 +210,7 @@ export class WebPanelView {
             if (typeof saveTestRequest.testCaseName === 'string') {
               fileName = `${saveTestRequest.testCaseName}.json`;
             } else if (saveTestRequest.testCaseName?.source_file) {
-              fileName = URI.file(saveTestRequest.testCaseName.source_file).path.split('/').pop();
+              fileName = vscode.Uri.file(saveTestRequest.testCaseName.source_file).path.split('/').pop();
             } else {
               fileName = `${uniqueNamesGenerator(customConfig)}.json`;
             }
@@ -275,7 +275,7 @@ export class WebPanelView {
               funcName: string
               testCaseName: StringSpan
             } = message.data
-            const uri = vscode.Uri.parse(removeTestRequest.testCaseName.source_file)
+            const uri = vscode.Uri.file(removeTestRequest.testCaseName.source_file)
             try {
               await vscode.workspace.fs.delete(uri)
               WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
@@ -287,7 +287,10 @@ export class WebPanelView {
           case 'jumpToFile': {
             try {
               const span = message.data as StringSpan
-              const uri = vscode.Uri.parse(span.source_file)
+              // const uri = vscode.Uri.parse(span.source_file)
+              const uri = vscode.Uri.file(span.source_file)
+
+
               await vscode.workspace.openTextDocument(uri).then((doc) => {
                 const range = new vscode.Range(doc.positionAt(span.start), doc.positionAt(span.end))
                 vscode.window.showTextDocument(doc, { selection: range, viewColumn: ViewColumn.One })

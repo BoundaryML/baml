@@ -6,7 +6,7 @@ function ClassifyTool {
 class ClassifyResponse { 
   tool Tool[] @description(#"
     Any number of tools the user may want to use
-  "#) 
+  "#)  
   assistant_response string 
   
   pretty_message string @get(
@@ -25,7 +25,7 @@ class ClassifyResponse {
       return f"Here is the assistant response: {self.assistant_response}"
     "#
   )
-}
+} 
 
 enum Tool {
   @@alias(tools)
@@ -57,7 +57,7 @@ impl<llm, ClassifyTool> v1 {
       @description(#"
         This is the assistance reponse
       "#)
-    }
+    } 
 
     prompt #"
         

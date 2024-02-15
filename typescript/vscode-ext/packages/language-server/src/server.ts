@@ -111,6 +111,7 @@ export function startServer(options?: LSOptions): void {
           resolveProvider: true,
         },
         workspace: {
+
           fileOperations: {
             didCreate: {
               filters: [
@@ -164,11 +165,13 @@ export function startServer(options?: LSOptions): void {
     //   }
     // }
 
+
     return result
   })
 
   connection.onInitialized(() => {
     console.log('initialized')
+    getConfig()
 
     if (hasConfigurationCapability) {
       // Register for all configuration changes.
@@ -188,6 +191,7 @@ export function startServer(options?: LSOptions): void {
 
   const getConfig = async () => {
     try {
+      console.log("getting config")
       const configResponse = await connection.workspace.getConfiguration('baml')
       console.log('configResponse ' + JSON.stringify(configResponse, null, 2))
       config = configResponse as BamlConfig
@@ -689,7 +693,7 @@ export function startServer(options?: LSOptions): void {
     filepath: string;
   }) => {
     console.log("saveFile" + JSON.stringify(params, null, 2));
-    const uri = URI.parse(params.filepath);
+    const uri = URI.file(params.filepath);
     const document = getDocument(uri.toString());
 
     if (!document) {

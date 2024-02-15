@@ -67,10 +67,9 @@ const FunctionPanel: React.FC = () => {
               </Allotment.Pane>
             )}
             <Allotment.Pane className="pl-2 pr-0.5" minSize={200} visible={showTests}>
-              <div className="w-full h-full overflow-auto">
-                <ScrollArea type="always" className="flex w-full h-full pr-3">
-                  <TestCasePanel func={func} />
-                </ScrollArea>
+              <div className="flex flex-col h-full overflow-y-scroll overflow-x-clip">
+                {/* On windows this scroll area extends beyond the wanted width, so we just use a normal scrollbar here vs using ScrollArea*/}
+                <TestCasePanel func={func} />
               </div>
             </Allotment.Pane>
           </Allotment>

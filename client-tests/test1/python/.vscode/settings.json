@@ -10,5 +10,10 @@
   "python.analysis.inlayHints.functionReturnTypes": true,
   "python.analysis.inlayHints.variableTypes": true,
   "python.analysis.enablePytestSupport": true,
+  "workbench.colorCustomizations": {
+    "activityBar.background": "#053612",
+    "titleBar.activeBackground": "#074B19",
+    "titleBar.activeForeground": "#EEFDF2"
+  },
   // "baml.path": "/Users/vbv/repos/gloo-lang/engine/target/debug/baml"
 }
