@@ -9,6 +9,8 @@ from .llm_provider_base import (
     LLMChatMessage,
     update_template_with_vars,
 )
+from ..errors.llm_exc import LLMException, ProviderErrorCode
+
 
 
 def default_chat_to_prompt(messages: typing.List[LLMChatMessage]) -> str:
@@ -76,10 +78,40 @@ class LLMProvider(AbstractLLMProvider):
             yield cached
         prompt = update_template_with_vars(template=template, updates=updates)
         try:
-            async for r in self._stream(prompt):
+            async for r in self.__stream_with_telemetry(prompt):
                 yield r
         except Exception as e:
             self._raise_error(e)
+
+    async def __stream_with_telemetry(
+        self, prompt: str
+    ) -> typing.AsyncIterator[LLMResponse]:
+        self._start_run(prompt)
+        last_response: typing.Optional[LLMResponse] = None
+        total_text = ""
+        
+        async for response in self._stream(prompt):
+            if isinstance(response, NotImplementedError):
+                print("Streaming not implemented for {}. Falling back to non-streaming API".format(self.provider))
+                # if this is also not implemented we will error out
+                response = await self._run(prompt)
+            yield response
+            total_text += response.generated
+            last_response = response
+        if last_response is not None:
+            self._end_run(
+                LLMResponse(
+                    generated=total_text,
+                    model_name=last_response.mdl_name,
+                    meta=last_response.meta,
+                )
+            )
+        else:
+            raise LLMException(
+                code=ProviderErrorCode.INTERNAL_ERROR,
+                message="No response from provider stream",
+            )
+    
 
     @typing.final
     @typechecked

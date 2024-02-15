@@ -24,8 +24,8 @@ __all__ = [
     'PartialHi',
     'PartialMessage',
     'PartialConversation',
+    'PartialClassifyResponse',
     'PartialProposedMessage',
     'PartialHaiku',
-    'PartialImprovedResponse',
-    'PartialClassifyResponse'
+    'PartialImprovedResponse'
 ]

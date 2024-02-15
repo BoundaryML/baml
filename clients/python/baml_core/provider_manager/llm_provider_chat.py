@@ -179,7 +179,12 @@ class LLMChatProvider(AbstractLLMProvider):
         self._start_run(messages)
         last_response: typing.Optional[LLMResponse] = None
         total_text = ""
+        
         async for response in self._stream_chat(messages):
+            if isinstance(response, NotImplementedError):
+                print("Streaming not implemented for {}. Falling back to non-streaming API".format(self.provider))
+                # if this is also not implemented we will error out
+                response = await self._run_chat(messages)
             yield response
             total_text += response.generated
             last_response = response
