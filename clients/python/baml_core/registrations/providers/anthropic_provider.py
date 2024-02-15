@@ -1,6 +1,6 @@
 import anthropic
 import typing
-from anthropic.types.beta import (
+from anthropic.types import (
     MessageStartEvent,
     MessageStreamEvent,
     MessageDeltaEvent,
@@ -127,7 +127,7 @@ class AnthropicProvider(LLMChatProvider):
     async def _stream_chat(
         self, messages: typing.List[LLMChatMessage]
     ) -> typing.AsyncIterator[LLMResponse]:
-        # beta client has diff params
+        # messages client has diff params
         caller_kwargs_copy = self.__caller_kwargs.copy()
         if "max_tokens" not in caller_kwargs_copy:
             caller_kwargs_copy["max_tokens"] = caller_kwargs_copy.pop(
@@ -147,7 +147,7 @@ class AnthropicProvider(LLMChatProvider):
         total_output_tokens = 0
         model = None
         finish_reason = None
-        async with self.__client.beta.messages.stream(
+        async with self.__client.messages.stream(
             messages=list(map(to_anthropic_message, messages)), **caller_kwargs_copy
         ) as stream:
             last_response: typing.Optional[MessageStreamEvent] = None
