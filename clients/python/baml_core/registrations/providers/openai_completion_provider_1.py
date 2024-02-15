@@ -97,5 +97,4 @@ class OpenAICompletionProvider(LLMProvider):
         )
 
     async def _stream(self, prompt: str) -> typing.AsyncIterator[LLMResponse]:
-        yield NotImplementedError("Stream is not supported for this provider")
-        
+        yield await self._run(prompt)

@@ -12,7 +12,6 @@ from .llm_provider_base import (
 from ..errors.llm_exc import LLMException, ProviderErrorCode
 
 
-
 def default_chat_to_prompt(messages: typing.List[LLMChatMessage]) -> str:
     return "\n".join([msg["content"] for msg in messages if "content" in msg])
 
@@ -89,10 +88,14 @@ class LLMProvider(AbstractLLMProvider):
         self._start_run(prompt)
         last_response: typing.Optional[LLMResponse] = None
         total_text = ""
-        
+
         async for response in self._stream(prompt):
             if isinstance(response, NotImplementedError):
-                print("Streaming not implemented for {}. Falling back to non-streaming API".format(self.provider))
+                print(
+                    "Streaming not implemented for {}. Falling back to non-streaming API".format(
+                        self.provider
+                    )
+                )
                 # if this is also not implemented we will error out
                 response = await self._run(prompt)
             yield response
@@ -111,7 +114,6 @@ class LLMProvider(AbstractLLMProvider):
                 code=ProviderErrorCode.INTERNAL_ERROR,
                 message="No response from provider stream",
             )
-    
 
     @typing.final
     @typechecked

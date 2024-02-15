@@ -68,6 +68,4 @@ class OpenAIChatProvider(LLMChatProvider):
     async def _stream_chat(
         self, messages: typing.List[LLMChatMessage]
     ) -> typing.AsyncIterator[LLMResponse]:
-        yield NotImplementedError(
-            "Streaming unsupported on older versions of Open AI < 1.x"
-        )
+        yield await self._run_chat(messages)
