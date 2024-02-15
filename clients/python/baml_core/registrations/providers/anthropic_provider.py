@@ -2,7 +2,7 @@ import anthropic
 import typing
 from packaging.version import parse as parse_version
 if parse_version(version=anthropic.__version__) < parse_version("0.16.0"):
-    from anthropic.types.beta import (
+    from anthropic.types.beta import ( # type: ignore
         MessageStartEvent,
         MessageStreamEvent,
         MessageDeltaEvent,
@@ -148,7 +148,7 @@ class AnthropicProvider(LLMChatProvider):
         else:
             caller_kwargs_copy.pop("max_tokens_to_sample", None)
 
-        def to_anthropic_message(msg: LLMChatMessage) -> MessageParam:
+        def to_anthropic_message(msg: LLMChatMessage) -> MessageParam: # type: ignore
             return {
                 "role": "user" if msg["role"] == "user" else "assistant",
                 "content": msg["content"],
@@ -161,13 +161,13 @@ class AnthropicProvider(LLMChatProvider):
         finish_reason = None
         messages_api = None
         if parse_version(version=anthropic.__version__) < parse_version("0.16.0"):
-            messages_api = self.__client.beta.messages
+            messages_api = self.__client.beta.messages # type: ignore
         else:
             messages_api = self.__client.messages
         async with messages_api.stream(
             messages=list(map(to_anthropic_message, messages)), **caller_kwargs_copy
         ) as stream:
-            last_response: typing.Optional[MessageStreamEvent] = None
+            last_response: typing.Optional[MessageStreamEvent] = None # type: ignore
             async for response in stream:
                 last_response = response
                 if isinstance(response, MessageStartEvent):
