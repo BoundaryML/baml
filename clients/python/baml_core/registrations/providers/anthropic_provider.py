@@ -1,7 +1,6 @@
 import anthropic
 import typing
 from packaging.version import parse as parse_version
-print("anthropic: ", anthropic.__version__)
 if parse_version(version=anthropic.__version__) < parse_version("0.16.0"):
     from anthropic.types.beta import (
         MessageStartEvent,
