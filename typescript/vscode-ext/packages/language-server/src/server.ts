@@ -80,8 +80,6 @@ export function startServer(options?: LSOptions): void {
   const bamlCache = new BamlDirCache()
 
   connection.onInitialize((params: InitializeParams) => {
-    // Logging first...
-
     connection.console.info(
       // eslint-disable-next-line
       `Extension '${packageJson?.name}': ${packageJson?.version}`,
@@ -111,6 +109,7 @@ export function startServer(options?: LSOptions): void {
           resolveProvider: true,
         },
         workspace: {
+
           fileOperations: {
             didCreate: {
               filters: [
@@ -164,11 +163,13 @@ export function startServer(options?: LSOptions): void {
     //   }
     // }
 
+
     return result
   })
 
   connection.onInitialized(() => {
     console.log('initialized')
+    getConfig()
 
     if (hasConfigurationCapability) {
       // Register for all configuration changes.
@@ -178,16 +179,12 @@ export function startServer(options?: LSOptions): void {
     }
   })
 
-  // The global settings, used when the `workspace/configuration` request is not supported by the client or is not set by the user.
-  // This does not apply to VS Code, as this client supports this setting.
-  // const defaultSettings: LSSettings = {}
-  // let globalSettings: LSSettings = defaultSettings // eslint-disable-line
-
   // Cache the settings of all open documents
   const documentSettings: Map<string, Thenable<LSSettings>> = new Map<string, Thenable<LSSettings>>()
 
   const getConfig = async () => {
     try {
+      console.log("getting config")
       const configResponse = await connection.workspace.getConfiguration('baml')
       console.log('configResponse ' + JSON.stringify(configResponse, null, 2))
       config = configResponse as BamlConfig
@@ -242,14 +239,12 @@ export function startServer(options?: LSOptions): void {
       // globalSettings = <LSSettings>(change.settings.prisma || defaultSettings) // eslint-disable-line @typescript-eslint/no-unsafe-member-access
     }
 
-    // Revalidate all open prisma schemas
     documents.all().forEach(debouncedValidateTextDocument) // eslint-disable-line @typescript-eslint/no-misused-promises
   })
 
   documents.onDidOpen((e) => {
     try {
       // TODO: revalidate if something changed
-      bamlCache.refreshDirectory(e.document)
       bamlCache.addDocument(e.document)
       debouncedValidateTextDocument(e.document)
     } catch (e: any) {
@@ -321,12 +316,8 @@ export function startServer(options?: LSOptions): void {
 
   // TODO: dont actually debounce for now or strange out of sync things happen..
   // so we currently set to 0
-  const debouncedSetDb = debounce((rootPath: URI, db: ParserDatabase) => {
+  const updateClientDB = ((rootPath: URI, db: ParserDatabase) => {
     void connection.sendRequest('set_database', { rootPath: rootPath.fsPath, db })
-  }, 0, {
-    maxWait: 4000,
-    leading: true,
-    trailing: true,
   });
 
 
@@ -362,7 +353,7 @@ export function startServer(options?: LSOptions): void {
           console.error('Could not find file cache for ' + textDocument.uri)
         }
 
-        debouncedSetDb(rootPath, response.state)
+        updateClientDB(rootPath, response.state)
       } else {
         void connection.sendRequest('rm_database', rootPath)
       }
@@ -375,16 +366,12 @@ export function startServer(options?: LSOptions): void {
     }
   }
 
-  const debouncedValidateTextDocument = debounce(validateTextDocument, 400, {
+  const debouncedValidateTextDocument = debounce(validateTextDocument, 800, {
     maxWait: 4000,
     leading: true,
     trailing: true,
   })
-  const debouncedValidateCodelens = debounce(validateTextDocument, 1000, {
-    maxWait: 4000,
-    leading: true,
-    trailing: true,
-  });
+
 
   documents.onDidChangeContent((change: { document: TextDocument }) => {
     const textDocument = change.document;
@@ -405,11 +392,10 @@ export function startServer(options?: LSOptions): void {
     } catch (e) {
       console.log("Error adding document to cache " + e)
     }
-
     debouncedValidateTextDocument(textDocument)
   })
 
-  const debouncedCLIBuild = debounce(cliBuild, 1000, {
+  const debouncedCLIBuild = debounce(cliBuild, 2000, {
     leading: true,
     trailing: true,
   })
@@ -487,11 +473,13 @@ export function startServer(options?: LSOptions): void {
     const document = getDocument(params.textDocument.uri)
     const codeLenses: CodeLens[] = []
     if (!document) {
+      console.log("No text document available to compute codelens " + params.textDocument.uri.toString())
       return codeLenses
     }
     bamlCache.addDocument(document)
-    // Must be separate from the other validateText since we don't want to get stale in our code lenses.
-    debouncedValidateCodelens(document)
+    // Dont debounce this! We need to give VSCode the most up to date info.
+    // VSCode will actually do adaptive debouncing for us https://github.com/microsoft/vscode/issues/106267
+    validateTextDocument(document)
 
     const db = bamlCache.getParserDatabase(document);
     const docFsPath = URI.parse(document.uri).fsPath;
@@ -608,10 +596,7 @@ export function startServer(options?: LSOptions): void {
       });
 
     })
-
     return codeLenses
-
-    // return [];
   })
 
 
@@ -685,23 +670,6 @@ export function startServer(options?: LSOptions): void {
     return generateTestFile(params)
   })
 
-  connection.onRequest("saveFile", async (params: {
-    filepath: string;
-  }) => {
-    console.log("saveFile" + JSON.stringify(params, null, 2));
-    const uri = URI.parse(params.filepath);
-    const document = getDocument(uri.toString());
-
-    if (!document) {
-      console.log("Could not find document for " + uri.toString());
-      return;
-    }
-    try {
-      fs.writeFileSync(uri.fsPath, document.getText());
-    } catch (e) {
-      console.error("Error writing file " + e);
-    }
-  })
 
   console.log('Server-side -- listening to connection')
   // Make the text document manager listen on the connection

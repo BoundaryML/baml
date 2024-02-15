@@ -16,34 +16,13 @@ from typing import Any
 
 
 @baml.ClassifyTool.test(stream=True)
-async def test_fun_indigo(ClassifyToolImpl: IClassifyToolStream, baml_ipc_channel: BaseIPCChannel):
+async def test_southern_gold(ClassifyToolImpl: IClassifyToolStream, baml_ipc_channel: BaseIPCChannel):
     def to_str(item: Any) -> str:
         if isinstance(item, str):
             return item
         return dumps(item)
 
-    case = {"query": "sesefsfsefsefsefsefsefsefsfsefsefsefsefsefsefsefsefsefsef", "context": None, }
-    deserializer_query = Deserializer[str](str) # type: ignore
-    query = deserializer_query.from_string(to_str(case["query"]))
-    deserializer_context = Deserializer[str](str) # type: ignore
-    context = deserializer_context.from_string(to_str(case["context"]))
-    async with ClassifyToolImpl(
-        query=query,
-        context=context
-    ) as stream:
-        async for response in stream.parsed_stream:
-            baml_ipc_channel.send("partial_response", response.json())
-
-        await stream.get_final_response()
-
-@baml.ClassifyTool.test(stream=True)
-async def test_particular_tan(ClassifyToolImpl: IClassifyToolStream, baml_ipc_channel: BaseIPCChannel):
-    def to_str(item: Any) -> str:
-        if isinstance(item, str):
-            return item
-        return dumps(item)
-
-    case = {"query": "sefesfsfsefsefsefesfsfsefsefsefesfsfsefsefsefesfsfsefsefsefesfsfsefsefsefesfsfsefsefsefesfsfsefsefsefesfsfsefsefsefesfsfsefsefsefesfsfsefsefsefesfsfsefsefsefesfsfsefsefsefesfsfsefsefsefesfsfsefsefsefesfsfsefsefsefesfsfsefsefsefesfsfsefsefsefesfsfsefsefsefesfsfsefsefsefesfsfsefsefsefesfsfsefsefsefesfsfsefsefsefesfsfsefsefsefesfsfsefsefsefesfsfsefsef", "context": "sefesfsfsefsefsefesfsfsefsefsefesfsfsefsefsefesfsfsefsefsefesfsfsefsefsefesfsfsefsef", }
+    case = {"query": "ereeees", "context": "zzzzz", }
     deserializer_query = Deserializer[str](str) # type: ignore
     query = deserializer_query.from_string(to_str(case["query"]))
     deserializer_context = Deserializer[str](str) # type: ignore

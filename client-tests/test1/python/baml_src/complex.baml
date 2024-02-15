@@ -6,7 +6,7 @@ function ClassifyTool {
 class ClassifyResponse { 
   tool Tool[] @description(#"
     Any number of tools the user may want to use
-  "#) 
+  "#)  
   assistant_response string 
   
   pretty_message string @get(
@@ -18,14 +18,14 @@ class ClassifyResponse {
       return f'You can use the following tools: {self.tool} {json.dumps(self.pretty_message2)}'
     "#
   )
- 
+  
     
   pretty_message2 string @get(
     python#"
       return f"Here is the assistant response: {self.assistant_response}"
     "#
   )
-}
+} 
 
 enum Tool {
   @@alias(tools)
@@ -42,8 +42,6 @@ enum Tool {
   @alias(k3)
   @description(Use this tool if the user is asking to generate text)
 }
-
- 
  
 impl<llm, ClassifyTool> v1 {
     client AZURE_GPT4
@@ -57,7 +55,7 @@ impl<llm, ClassifyTool> v1 {
       @description(#"
         This is the assistance reponse
       "#)
-    }
+    }           
 
     prompt #"
         
@@ -74,4 +72,6 @@ impl<llm, ClassifyTool> v1 {
         JSON:
     "#
 
-} 
+}  
+  
+  

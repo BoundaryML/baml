@@ -1,13 +1,14 @@
 use std::path::PathBuf;
 
+use self::traits::WithWritePythonString;
+use crate::{configuration::Generator, lockfile::LockFileWrapper};
 use internal_baml_parser_database::ParserDatabase;
 use internal_baml_schema_ast::ast::WithName;
 use log::info;
 use serde_json::json;
-
-use crate::{configuration::Generator, lockfile::LockFileWrapper};
-
-use self::traits::WithWritePythonString;
+use std::io::{self, ErrorKind};
+use std::thread::sleep;
+use std::time::Duration;
 
 mod r#class;
 mod client;
@@ -67,6 +68,45 @@ pub(crate) fn generate_py(
     info!("Writing files to {}", output_path.to_string_lossy());
 
     let temp_path = PathBuf::from(format!("{}.tmp", output_path.to_string_lossy().to_string()));
+
+    // if the .tmp dir exists, delete it so we can get back to a working state without user intervention.
+    let delete_attempts = 3; // Number of attempts to delete the directory
+    let attempt_interval = Duration::from_millis(200); // Wait time between attempts
+
+    for attempt in 1..=delete_attempts {
+        if temp_path.exists() {
+            match std::fs::remove_dir_all(&temp_path) {
+                Ok(_) => {
+                    println!("Temp directory successfully removed.");
+                    break; // Exit loop after successful deletion
+                }
+                Err(e) if e.kind() == ErrorKind::Other && attempt < delete_attempts => {
+                    info!(
+                        "Attempt {}: Failed to delete temp directory: {}",
+                        attempt, e
+                    );
+                    sleep(attempt_interval); // Wait before retrying
+                }
+                Err(e) => {
+                    // For other errors or if it's the last attempt, fail with an error
+                    return Err(io::Error::new(
+                        e.kind(),
+                        format!("Failed to delete temp directory: {}", e),
+                    ));
+                }
+            }
+        } else {
+            break;
+        }
+    }
+
+    if temp_path.exists() {
+        // If the directory still exists after the loop, return an error
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Failed to delete existing temp directory within the timeout",
+        ));
+    }
 
     match fc.write(&temp_path, gen, lock) {
         Ok(_) => {

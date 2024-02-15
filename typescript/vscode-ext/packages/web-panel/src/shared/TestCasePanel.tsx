@@ -635,7 +635,7 @@ const EditTestCaseForm = ({
 
 const TestCaseCard: React.FC<{ testCaseName: string; content: string }> = ({ testCaseName, content }) => {
   return (
-    <div className="flex flex-col gap-2 text-xs text-left text-vscode-descriptionForeground">
+    <div className="flex flex-col max-w-full gap-2 text-xs text-left text-vscode-descriptionForeground">
       <div className="break-all">
         {content.substring(0, 120)}
         {content.length > 120 && '...'}
