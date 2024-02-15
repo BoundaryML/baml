@@ -29,7 +29,7 @@
          
 // function ClassFunc { 
 //     input BasicClass
-//     output string
+//     output string 
 // }
    
 // impl<llm, ClassFunc> version { 

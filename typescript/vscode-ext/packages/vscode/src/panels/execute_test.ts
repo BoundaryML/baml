@@ -15,7 +15,6 @@ import {
 } from '@baml/common'
 import { generateTestRequest } from '../plugins/language-server'
 import { bamlPath, bamlTestShell } from '../util'
-import { saveFile } from '../plugins/language-server'
 const outputChannel = vscode.window.createOutputChannel('baml-test-runner')
 
 function __initServer(messageHandler: (data: Buffer) => void) {

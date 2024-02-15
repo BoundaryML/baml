@@ -18,7 +18,7 @@ class ClassifyResponse {
       return f'You can use the following tools: {self.tool} {json.dumps(self.pretty_message2)}'
     "#
   )
- 
+  
     
   pretty_message2 string @get(
     python#"
@@ -42,8 +42,6 @@ enum Tool {
   @alias(k3)
   @description(Use this tool if the user is asking to generate text)
 }
-
- 
  
 impl<llm, ClassifyTool> v1 {
     client AZURE_GPT4
@@ -57,7 +55,7 @@ impl<llm, ClassifyTool> v1 {
       @description(#"
         This is the assistance reponse
       "#)
-    } 
+    }           
 
     prompt #"
         
@@ -74,4 +72,6 @@ impl<llm, ClassifyTool> v1 {
         JSON:
     "#
 
-} 
+}  
+  
+  

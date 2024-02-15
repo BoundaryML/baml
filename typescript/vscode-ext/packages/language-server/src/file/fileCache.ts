@@ -62,8 +62,8 @@ export class BamlDirCache {
     return cache
   }
 
-  public getCacheForUri(uri: string): FileCache | null {
-    const key = this.getBamlDirUri(URI.parse(uri))
+  public getCacheForUri(path: string): FileCache | null {
+    const key = this.getBamlDirUri(URI.file(path))
     if (!key) {
       return null
     }

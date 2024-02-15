@@ -117,11 +117,6 @@ const cliVersion = async (): Promise<semver.SemVer> => {
   throw new Error('Failed to get CLI version')
 }
 
-
-export const saveFile = async (filepath: string) => {
-  return await client.sendRequest('saveFile', { filepath })
-}
-
 interface BAMLMessage {
   type: 'warn' | 'info' | 'error'
   message: string
@@ -298,19 +293,11 @@ const plugin: BamlVSCodePlugin = {
         },
       ],
       synchronize: {
-
         fileEvents: workspace.createFileSystemWatcher('**/baml_src/**/*.{baml,json}'),
       }
     }
 
     context.subscriptions.push(
-      // when the file watcher settings change, we need to ensure they are applied
-      workspace.onDidChangeConfiguration((event) => {
-        // if (event.affectsConfiguration('prisma.fileWatcher')) {
-        //   setGenerateWatcher(!!workspace.getConfiguration('baml').get('fileWatcher'));
-        // }
-      }),
-
       commands.registerCommand('baml.restartLanguageServer', async () => {
         client = await restartClient(context, client, serverOptions, clientOptions)
         window.showInformationMessage('Baml language server restarted.') // eslint-disable-line @typescript-eslint/no-floating-promises

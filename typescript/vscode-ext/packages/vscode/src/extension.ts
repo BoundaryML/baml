@@ -15,7 +15,6 @@ const LANG_NAME = 'Baml'
 
 export function activate(context: vscode.ExtensionContext) {
   const baml_config = vscode.workspace.getConfiguration('baml')
-  testExecutor.start()
 
 
   const bamlPlygroundCommand = vscode.commands.registerCommand(
@@ -65,6 +64,8 @@ export function activate(context: vscode.ExtensionContext) {
       console.log(`${plugin.name} is Disabled`)
     }
   })
+
+  testExecutor.start()
 }
 
 export function deactivate(): void {
