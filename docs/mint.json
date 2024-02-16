@@ -70,9 +70,9 @@
     {
       "group": "Hello World (REQUIRED)",
       "pages": [
-        "v3/guides/hello_world/level0",
         "v3/guides/hello_world/level1",
-        "v3/guides/hello_world/level1-b"
+        "v3/guides/hello_world/level1-b",
+        "v3/guides/hello_world/level0"
       ]
     },
     {
