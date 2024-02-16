@@ -63,7 +63,7 @@ impl<llm, GetOrderInfo> version1 {
   "#
 }
 ```
-Note, depending on the model, this may require more prompt engineering! Let us know if you are running into issues with other models.
+The example given can literally be the actual prompt. Using `{ ... the json schema ...}` tells the model you're just explaining how to do things. It's just english instructions after all. We also don't show the full step-by-step reasoning as an example and truncate it with `...`. This can still work fine. You can make this as detailed as you want, but this lets the model know the general structure of the output.
 
 #### Why this works
 Unlike the classification tutorial for CoT, adding CoT here is easier because the BAML deserializer can recognize the start and end of a JSON block (as opposed to a free-form string), and can strip out all unecessary free-form text.
