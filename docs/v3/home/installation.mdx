@@ -33,25 +33,8 @@ You should be able to run `baml --version` and see the version number. The VSCod
 
   </Step>
   <Step title="Add BAML to a project">
-    <Tabs>
-    <Tab title="poetry">
-    - [What is poetry?](https://python-poetry.org/docs/)
-
-    ```bash
-    # Assuming my_project is an existing python project
-    # managed by poetry
-    > cd /path/to/my_project
-
-    # Add BAML to the project (similar to git init)
-    > baml init
-
-    # copy .env.example to .env and fill in the values
-    cp .env.example .env
-
-    # Run the demo.
-    > poetry run python -m chatbot_example
-    ```
-
+    In your python project, run `baml init`.
+    
     <Tip>
     After running `baml init`, add or modify baml files in the `./baml_src` directory
     </Tip>
@@ -89,6 +72,11 @@ You should be able to run `baml --version` and see the version number. The VSCod
     </Tab>
     </Tabs>
 
+  </Step>
+  <Step title="Update the python dependency">
+    The BAML CLI will install a python package called `baml` into your project (not to be confused with the baml CLI of the same name).
+
+    Run `baml update-client` to make sure the python package is installed and on the latest version.
   </Step>
   <Step title="Set up Boundary Studio (optional)">
     Create an account at [https://app.trygloo.com](https://app.trygloo.com) (In the process of rebranding 🙂).
