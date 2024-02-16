@@ -33,44 +33,12 @@ You should be able to run `baml --version` and see the version number. The VSCod
 
   </Step>
   <Step title="Add BAML to a project">
-    In your python project, run `baml init`.
+    In your python project, run 
+    ```baml init```.
     
     <Tip>
     After running `baml init`, add or modify baml files in the `./baml_src` directory
     </Tip>
-
-    </Tab>
-    <Tab title="manual (python)">
-      ```bash
-      # Go into your project directory
-      > cd /path/to/my_project
-
-      # Install baml python package
-      > pip install baml
-
-      # Create a baml_src directory
-      > mkdir baml_src
-
-      # Create a main.baml file
-      > touch baml_src/main.baml
-
-      # Edit main.baml
-      > vim baml_src/main.baml
-      ```
-
-      Declare a generator block in `main.baml`
-      ```llvm
-      generator {
-        language python
-      }
-      ```
-
-      <Warning>
-      You should read docs about [generator](/v3/syntax/generator) to handle different python environments (e.g. pipenv, venv, pip3 vs pip etc.)
-      </Warning>
-
-    </Tab>
-    </Tabs>
 
   </Step>
   <Step title="Update the python dependency">
