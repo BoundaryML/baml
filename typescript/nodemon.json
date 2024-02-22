@@ -1,0 +1,13 @@
+{
+  "ignore": [
+    "**/dist",
+    "**/node_modules",
+    "**/out"
+  ],
+  "verbose": true,
+  "execMap": {
+  },
+  "watch": ["*.*"],
+  "env": {},
+  "ext": "js,ts"
+}
