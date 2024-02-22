@@ -18,7 +18,7 @@ const packageJson = require('../../../package.json') // eslint-disable-line
 let client: LanguageClient
 let serverModule: string
 let telemetry: TelemetryReporter
-let intervalTimers: NodeJS.Timer[] = [];
+let intervalTimers: NodeJS.Timer[] = []
 
 const isDebugMode = () => process.env.VSCODE_DEBUG_MODE === 'true'
 const isE2ETestOnPullRequest = () => process.env.PRISMA_USE_LOCAL_LS === 'true'
@@ -49,7 +49,7 @@ const getLatestVersion = async () => {
   return { cli, py_client }
 }
 
-const getCheckForUpdates = async ({showIfNoUpdates}: {showIfNoUpdates: boolean}) => {
+const getCheckForUpdates = async ({ showIfNoUpdates }: { showIfNoUpdates: boolean }) => {
   try {
     const [versions, localVersion] = await Promise.allSettled([getLatestVersion(), cliVersion()])
 
@@ -105,7 +105,7 @@ const getCheckForUpdates = async ({showIfNoUpdates}: {showIfNoUpdates: boolean})
       }
     }
   } catch (e) {
-    console.error('Failed to check for updates', e);
+    console.error('Failed to check for updates', e)
   }
 }
 
@@ -142,11 +142,11 @@ const activateClient = (
 ) => {
   // Create the language client
   client = createLanguageServer(serverOptions, clientOptions)
-  window.showInformationMessage("client activating");
-  console.log("client activating");
+  window.showInformationMessage('client activating')
+  console.log('client activating')
 
   client.onReady().then(() => {
-    window.showInformationMessage("client onReady");
+    window.showInformationMessage('client onReady')
     client.onNotification('baml/showLanguageServerOutput', () => {
       // need to append line for the show to work for some reason.
       // dont delete this.
@@ -210,7 +210,7 @@ const activateClient = (
       try {
         BamlDB.set(rootPath, db)
         glooLens.setDB(rootPath, db)
-        console.log('set_database');
+        console.log('set_database')
         WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
       } catch (e) {
         console.log('Error setting database', e)
@@ -224,12 +224,14 @@ const activateClient = (
 
     // this will fail otherwise in dev mode if the config where the baml path is hasnt been picked up yet. TODO: pass the config to the server to avoid this.
     // Immediately check for updates on extension activation
-    void getCheckForUpdates({showIfNoUpdates: false});
+    void getCheckForUpdates({ showIfNoUpdates: false })
     // And check again once every hour
-    intervalTimers.push(setInterval(async () => {
-      console.log(`checking for updates ${new Date()}`)
-      await getCheckForUpdates({showIfNoUpdates: false});
-    }, 5 * 1000 /* 1h in milliseconds: min/hr * secs/min * ms/sec */));
+    intervalTimers.push(
+      setInterval(async () => {
+        console.log(`checking for updates ${new Date()}`)
+        await getCheckForUpdates({ showIfNoUpdates: false })
+      }, 5 * 1000 /* 1h in milliseconds: min/hr * secs/min * ms/sec */),
+    )
   })
 
   const disposable = client.start()
@@ -287,7 +289,6 @@ const plugin: BamlVSCodePlugin = {
         transport: TransportKind.ipc,
         options: debugOptions,
       },
-
     }
 
     // Options to control the language client
@@ -302,7 +303,7 @@ const plugin: BamlVSCodePlugin = {
       ],
       synchronize: {
         fileEvents: workspace.createFileSystemWatcher('**/baml_src/**/*.{baml,json}'),
-      }
+      },
     }
 
     context.subscriptions.push(
@@ -312,7 +313,7 @@ const plugin: BamlVSCodePlugin = {
       }),
 
       commands.registerCommand('baml.checkForUpdates', async () => {
-        getCheckForUpdates({showIfNoUpdates: true}).catch((e) => {
+        getCheckForUpdates({ showIfNoUpdates: true }).catch((e) => {
           console.error('Failed to check for updates', e)
         })
       }),
@@ -357,7 +358,7 @@ const plugin: BamlVSCodePlugin = {
       telemetry = new TelemetryReporter(extensionId, extensionVersion)
 
       context.subscriptions.push(telemetry)
-      await telemetry.initialize();
+      await telemetry.initialize()
 
       if (extensionId === 'Gloo.baml-insider') {
         // checkForOtherExtension()
@@ -376,12 +377,12 @@ const plugin: BamlVSCodePlugin = {
     }
 
     while (intervalTimers.length > 0) {
-      clearInterval(intervalTimers.pop());
+      clearInterval(intervalTimers.pop())
     }
 
     return client.stop()
   },
 }
 
-export { telemetry };
+export { telemetry }
 export default plugin
