@@ -357,6 +357,13 @@ const plugin: BamlVSCodePlugin = {
     }
 
     checkForMinimalColorTheme()
+
+    // Immediately check for updates on extension activation
+    void commands.executeCommand('baml.checkForUpdates');
+    // And check again once every hour
+    setInterval(() => {
+      void commands.executeCommand('baml.checkForUpdates');
+    }, 60 * 60 * 1000 /* 1h in milliseconds: min/hr * secs/min * ms/sec */);
   },
   deactivate: async () => {
     if (!client) {
