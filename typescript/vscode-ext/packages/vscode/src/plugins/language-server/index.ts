@@ -18,7 +18,7 @@ const packageJson = require('../../../package.json') // eslint-disable-line
 let client: LanguageClient
 let serverModule: string
 let telemetry: TelemetryReporter
-let lastKnownErrorToast: Thenable<any> | undefined
+let intervalTimers: NodeJS.Timer[] = [];
 
 const isDebugMode = () => process.env.VSCODE_DEBUG_MODE === 'true'
 const isE2ETestOnPullRequest = () => process.env.PRISMA_USE_LOCAL_LS === 'true'
@@ -49,59 +49,63 @@ const getLatestVersion = async () => {
   return { cli, py_client }
 }
 
-const getCheckForUpdates = async (showIfNoUpdates: boolean) => {
-  const [versions, localVersion] = await Promise.allSettled([getLatestVersion(), cliVersion()])
+const getCheckForUpdates = async ({showIfNoUpdates}: {showIfNoUpdates: boolean}) => {
+  try {
+    const [versions, localVersion] = await Promise.allSettled([getLatestVersion(), cliVersion()])
 
-  if (versions.status === 'rejected') {
-    vscode.window.showErrorMessage(`Failed to check for updates ${versions.reason}`)
-    return
-  }
-
-  if (localVersion.status === 'rejected') {
-    vscode.window
-      .showErrorMessage(`Have you installed BAML? ${localVersion.reason}`, {
-        title: 'Install BAML',
-      })
-      .then((selection) => {
-        if (selection?.title === 'Install BAML') {
-          // Open a url to: docs.boundaryml.com
-          vscode.commands.executeCommand(
-            'vscode.open',
-            Uri.parse('https://docs.boundaryml.com/v2/mdx/quickstart#install-baml-compiler'),
-          )
-        }
-      })
-    return
-  }
-
-  let { cli } = versions.value
-  let localCli = localVersion.value
-
-  if (semver.gt(cli, localCli)) {
-    vscode.window
-      .showInformationMessage(
-        `A new version of BAML is available. Please update from ${localCli} -> ${cli} by running "baml update" in the terminal.`,
-        {
-          title: 'Update now',
-        },
-      )
-      .then((selection) => {
-        if (selection?.title === 'Update now') {
-          // Open a new terminal
-          vscode.commands.executeCommand('workbench.action.terminal.new').then(() => {
-            // Run the update command
-            vscode.commands.executeCommand('workbench.action.terminal.sendSequence', {
-              text: 'baml update\n',
-            })
-          })
-        }
-      })
-  } else {
-    if (showIfNoUpdates) {
-      vscode.window.showInformationMessage(`BAML ${cli} is up to date!`)
-    } else {
-      console.info(`BAML is up to date! ${cli} <= ${localCli}`)
+    if (versions.status === 'rejected') {
+      vscode.window.showErrorMessage(`Failed to check for updates ${versions.reason}`)
+      return
     }
+
+    if (localVersion.status === 'rejected') {
+      vscode.window
+        .showErrorMessage(`Have you installed BAML? ${localVersion.reason}`, {
+          title: 'Install BAML',
+        })
+        .then((selection) => {
+          if (selection?.title === 'Install BAML') {
+            // Open a url to: docs.boundaryml.com
+            vscode.commands.executeCommand(
+              'vscode.open',
+              Uri.parse('https://docs.boundaryml.com/v2/mdx/quickstart#install-baml-compiler'),
+            )
+          }
+        })
+      return
+    }
+
+    let { cli } = versions.value
+    let localCli = localVersion.value
+
+    if (semver.gt(cli, localCli)) {
+      vscode.window
+        .showInformationMessage(
+          `A new version of BAML is available. Please update from ${localCli} -> ${cli} by running "baml update" in the terminal.`,
+          {
+            title: 'Update now',
+          },
+        )
+        .then((selection) => {
+          if (selection?.title === 'Update now') {
+            // Open a new terminal
+            vscode.commands.executeCommand('workbench.action.terminal.new').then(() => {
+              // Run the update command
+              vscode.commands.executeCommand('workbench.action.terminal.sendSequence', {
+                text: 'baml update\n',
+              })
+            })
+          }
+        })
+    } else {
+      if (showIfNoUpdates) {
+        vscode.window.showInformationMessage(`BAML ${cli} is up to date!`)
+      } else {
+        console.info(`BAML is up to date! ${cli} <= ${localCli}`)
+      }
+    }
+  } catch (e) {
+    console.error('Failed to check for updates', e);
   }
 }
 
@@ -138,8 +142,11 @@ const activateClient = (
 ) => {
   // Create the language client
   client = createLanguageServer(serverOptions, clientOptions)
+  window.showInformationMessage("client activating");
+  console.log("client activating");
 
   client.onReady().then(() => {
+    window.showInformationMessage("client onReady");
     client.onNotification('baml/showLanguageServerOutput', () => {
       // need to append line for the show to work for some reason.
       // dont delete this.
@@ -216,11 +223,13 @@ const activateClient = (
     })
 
     // this will fail otherwise in dev mode if the config where the baml path is hasnt been picked up yet. TODO: pass the config to the server to avoid this.
-    setTimeout(() => {
-      getCheckForUpdates(false).catch((e) => {
-        console.error('Failed to check for updates', e)
-      })
-    }, 5000)
+    // Immediately check for updates on extension activation
+    void getCheckForUpdates({showIfNoUpdates: false});
+    // And check again once every hour
+    intervalTimers.push(setInterval(async () => {
+      console.log(`checking for updates ${new Date()}`)
+      await getCheckForUpdates({showIfNoUpdates: false});
+    }, 5 * 1000 /* 1h in milliseconds: min/hr * secs/min * ms/sec */));
   })
 
   const disposable = client.start()
@@ -237,9 +246,8 @@ const onFileChange = (filepath: string) => {
 const plugin: BamlVSCodePlugin = {
   name: 'baml-language-server',
   enabled: () => true,
-  activate: async (context, outputChannel) => {
+  activate: async (context, _outputChannel) => {
     const isDebugOrTest = isDebugOrTestSession()
-    bamlOutputChannel = outputChannel
 
     // setGenerateWatcher(!!workspace.getConfiguration('baml').get('fileWatcher'))
 
@@ -304,7 +312,7 @@ const plugin: BamlVSCodePlugin = {
       }),
 
       commands.registerCommand('baml.checkForUpdates', async () => {
-        getCheckForUpdates(true).catch((e) => {
+        getCheckForUpdates({showIfNoUpdates: true}).catch((e) => {
           console.error('Failed to check for updates', e)
         })
       }),
@@ -338,7 +346,7 @@ const plugin: BamlVSCodePlugin = {
     )
 
     activateClient(context, serverOptions, clientOptions)
-    console.log('activated')
+    console.log('hugga humma choo choo activated')
 
     if (!isDebugOrTest) {
       // eslint-disable-next-line
@@ -357,13 +365,6 @@ const plugin: BamlVSCodePlugin = {
     }
 
     checkForMinimalColorTheme()
-
-    // Immediately check for updates on extension activation
-    void commands.executeCommand('baml.checkForUpdates');
-    // And check again once every hour
-    setInterval(() => {
-      void commands.executeCommand('baml.checkForUpdates');
-    }, 60 * 60 * 1000 /* 1h in milliseconds: min/hr * secs/min * ms/sec */);
   },
   deactivate: async () => {
     if (!client) {
@@ -372,6 +373,10 @@ const plugin: BamlVSCodePlugin = {
 
     if (!isDebugOrTestSession()) {
       telemetry.dispose() // eslint-disable-line @typescript-eslint/no-floating-promises
+    }
+
+    while (intervalTimers.length > 0) {
+      clearInterval(intervalTimers.pop());
     }
 
     return client.stop()
