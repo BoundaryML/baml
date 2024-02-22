@@ -134,7 +134,6 @@ const sleep = (time: number) => {
   })
 }
 
-let bamlOutputChannel: OutputChannel | null = null
 const activateClient = (
   context: ExtensionContext,
   serverOptions: ServerOptions,
@@ -142,11 +141,8 @@ const activateClient = (
 ) => {
   // Create the language client
   client = createLanguageServer(serverOptions, clientOptions)
-  window.showInformationMessage('client activating')
-  console.log('client activating')
 
   client.onReady().then(() => {
-    window.showInformationMessage('client onReady')
     client.onNotification('baml/showLanguageServerOutput', () => {
       // need to append line for the show to work for some reason.
       // dont delete this.
@@ -347,7 +343,6 @@ const plugin: BamlVSCodePlugin = {
     )
 
     activateClient(context, serverOptions, clientOptions)
-    console.log('hugga humma choo choo activated')
 
     if (!isDebugOrTest) {
       // eslint-disable-next-line
