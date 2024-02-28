@@ -30,7 +30,7 @@ export const generateTestRequest = async (test_request: TestRequest): Promise<st
 }
 
 const getLatestVersion = async () => {
-  const url = 'https://raw.githubusercontent.com/GlooHQ/homebrew-baml/main/version.json'
+  const url = 'https://raw.githubusercontent.com/BoundaryML/homebrew-baml/main/version.json'
   console.info('Checking for updates at', url)
   const response = await fetch(url)
   if (!response.ok) {

@@ -19,7 +19,7 @@ class Params:
     def __init__(self) -> None:
         self.__stage: str = os.environ.get("GLOO_STAGE", "prod")
         self.__base_url: str = os.environ.get(
-            "GLOO_BASE_URL", "https://app.trygloo.com/api"
+            "GLOO_BASE_URL", "https://app.boundaryml.com/api"
         )
         self.__project_id: typing.Optional[str] = os.environ.get(
             "BOUNDARY_PROJECT_ID"
@@ -62,7 +62,7 @@ class Params:
     @base_url.setter
     def base_url(self, base_url: str) -> None:
         if base_url == "reset":
-            base_url = os.environ.get("GLOO_BASE_URL", "https://app.trygloo.com/api")
+            base_url = os.environ.get("GLOO_BASE_URL", "https://app.boundaryml.com/api")
         if base_url != self.__base_url:
             self.__base_url = base_url
             self.process_id = str(uuid.uuid4())
