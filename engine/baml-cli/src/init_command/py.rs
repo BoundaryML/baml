@@ -28,7 +28,7 @@ impl WithLoader<PythonConfig> for PythonConfig {
     ) -> Result<Self, CliError> {
         let modified_prompt = format!(
             "What is the root of your {} project?",
-            "Python".blue().bold()
+            "Python".cyan().bold()
         );
         let py_project_root =
             get_value_or_default(&modified_prompt, "./".to_string(), no_prompt)?.into();

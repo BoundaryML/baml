@@ -27,7 +27,7 @@ impl WithLoader<TypeScriptConfig> for TypeScriptConfig {
     ) -> Result<Self, CliError> {
         let modified_prompt = format!(
             "What is the root of your {} project (where package.json lives)?",
-            "TypeScript".blue().bold()
+            "TypeScript".cyan().bold()
         );
         let ts_project_root: PathBuf =
             get_value_or_default(&modified_prompt, "./".to_string(), no_prompt)?.into();
