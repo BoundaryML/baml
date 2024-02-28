@@ -55,6 +55,7 @@ pub fn get_client_version(
 
     // NOTE(sam): no idea why this has to start in the cwd; this is copied from update_client.rs
     // according to vbv@ this had to be done for _some_ reason, so just preserving it as closely as i can
+    // per aaron@ there's some Windows slash MacOS funniness going on here
     let cwd = std::env::current_dir()?.canonicalize()?;
     let project_root = cwd.join(project_root);
     let project_root = project_root.canonicalize().map_err(|e| {
@@ -122,6 +123,7 @@ pub fn recommended_update(current: &str, latest: &Option<String>) -> Option<Stri
     let Ok(latest) = semver::Version::parse(latest_str) else {
         return None;
     };
+
     if latest > current {
         Some(latest_str.clone())
     } else {
@@ -205,15 +207,21 @@ pub struct VersionArgs {
 
 pub fn run(args: &VersionArgs) -> Result<(), CliError> {
     if args.check {
-        // TODO- fix the ok_or
         let ret = check_for_updates(&args.baml_dir)?;
         match args.output_type {
             OutputType::Human => {
+                // Don't message about vscode: it's not useful in the context of a human running `baml version` manually
+                let CheckedVersions {
+                    cli,
+                    generators,
+                    vscode: _,
+                } = ret;
+
                 println!(
                     "{} {} {}",
                     clap::crate_name!().cyan(),
-                    ret.cli.current_version,
-                    ret.cli.recommended_update.as_ref().map_or(
+                    cli.current_version,
+                    cli.recommended_update.as_ref().map_or(
                         "(up-to-date)".to_string(),
                         |latest| format!("(update recommended: {})", latest.green())
                     )
@@ -224,28 +232,24 @@ pub fn run(args: &VersionArgs) -> Result<(), CliError> {
                     current_version,
                     recommended_update,
                     ..
-                } in ret.generators.iter()
+                } in generators.iter()
                 {
                     println!(
-                        "{} {current_version} via generator {name} {}",
-                        format!("{language} baml client").cyan(),
+                        "{} {current_version} via {} {}",
+                        format!("{language} client").cyan(),
+                        format!("generator {name}").cyan(),
                         recommended_update.as_ref().map_or(
                             "(up-to-date)".to_string(),
                             |latest| format!("(update recommended: {})", latest.green())
                         )
                     );
                 }
-                // Don't message about vscode: it's not useful in the context of human output
 
                 let mut update_commands = Vec::new();
-                if ret.cli.recommended_update.is_some() {
+                if cli.recommended_update.is_some() {
                     update_commands.push(format!("{} update", clap::crate_name!()));
                 }
-                if ret
-                    .generators
-                    .iter()
-                    .any(|g| g.recommended_update.is_some())
-                {
+                if generators.iter().any(|g| g.recommended_update.is_some()) {
                     update_commands.push(format!("{} update-client", clap::crate_name!()));
                 }
                 if !update_commands.is_empty() {
@@ -265,7 +269,7 @@ pub fn run(args: &VersionArgs) -> Result<(), CliError> {
 
     match args.output_type {
         OutputType::Human => {
-            println!("{} {}", clap::crate_name!(), clap::crate_version!());
+            println!("{} {}", clap::crate_name!().cyan(), clap::crate_version!());
         }
         OutputType::Json => {
             let ret = CheckedVersions {
