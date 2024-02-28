@@ -139,7 +139,11 @@ fn is_installed_from_brew() -> bool {
 }
 
 fn update_brew() -> Result<(), CliError> {
-    run_command_with_error("brew", ["tap", "gloohq/baml"], "brew tap BoundaryML/baml")?;
+    run_command_with_error(
+        "brew",
+        ["tap", "BoundaryML/baml"],
+        "brew tap BoundaryML/baml",
+    )?;
     run_command_with_error("brew", ["update"], "brew update")?;
     run_command_with_error("brew", ["upgrade", "baml"], "brew upgrade baml")
 }
