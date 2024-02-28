@@ -177,7 +177,7 @@ pub fn run(
                 "{}",
                 format!(
                     "Running tests using: {}\n  {} {}\n  {} {}",
-                    generator.language.to_string().green(),
+                    generator.language.as_str().green(),
                     "test_directory:".dimmed(),
                     generator.output_path.to_string_lossy().yellow(),
                     "test_command:".dimmed(),

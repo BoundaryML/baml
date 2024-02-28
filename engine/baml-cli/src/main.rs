@@ -11,6 +11,7 @@ mod shell;
 mod test_command;
 mod update;
 mod update_client;
+mod version_command;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::fmt;
@@ -39,6 +40,8 @@ enum Commands {
     Test(TestArgs),
     /// Imports content into a BAML project.
     Import(ImportArgs),
+    /// Reports the current and latest versions of everything.
+    Version(version_command::VersionArgs),
 }
 
 #[derive(Args, Debug)]
@@ -107,8 +110,23 @@ struct ImportArgs {
     content: String,
 }
 
+impl fmt::Display for OutputType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            OutputType::Human => write!(f, "human"),
+            OutputType::Json => write!(f, "json"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, ValueEnum)]
+pub enum OutputType {
+    Human,
+    Json,
+}
+
 pub(crate) fn main() {
-    const NAME: &str = concat!("[", env!("CARGO_PKG_NAME"), "]");
+    const NAME: &str = concat!("[", clap::crate_name!(), "]");
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
         .format(|buf, record| {
             let level = record.level();
@@ -140,6 +158,7 @@ pub(crate) fn main() {
                 import_command::run(&args.content, &baml_dir, &config, schema)
             })
         }
+        Commands::Version(args) => version_command::run(args),
     };
 
     if let Err(error) = response {

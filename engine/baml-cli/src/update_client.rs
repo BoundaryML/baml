@@ -21,7 +21,7 @@ pub fn update_client(baml_dir: &Option<String>) -> Result<(), CliError> {
 
             println!(
                 "Installing/Upgrading client for {}:\n  {} {}\n  {} {}",
-                gen.language.to_string().green(),
+                gen.language.as_str().green(),
                 "project_root:".dimmed(),
                 gen.project_root.to_string_lossy().yellow(),
                 "install_command:".dimmed(),

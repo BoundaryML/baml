@@ -40,7 +40,7 @@ fn parse_generator(
     package_version_command "{}"
 }}"#,
                     gen.name,
-                    gen.language.to_string(),
+                    gen.language.as_str(),
                     gen.project_root.display(),
                     gen.test_command,
                     gen.install_command,
