@@ -155,7 +155,7 @@ fn update_windows() -> Result<(), CliError> {
 
 fn update_shell_install() -> Result<(), CliError> {
     static INSTALL_SCRIPT: &str =
-        "https://raw.githubusercontent.com/BoundaryMl/homebrew-baml/main/install-baml.sh";
+        "https://raw.githubusercontent.com/BoundaryML/homebrew-baml/main/install-baml.sh";
 
     let command = ["-c", "curl", "-fsS", INSTALL_SCRIPT, "|", "sh"];
     run_command_with_error("sh", &command, "install command")
