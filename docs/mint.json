@@ -22,7 +22,7 @@
     {
       "name": "Open Boundary Studio",
       "icon": "sparkles",
-      "url": "https://app.trygloo.com"
+      "url": "https://app.boundaryml.com"
     },
     {
       "name": "Join our Discord",
@@ -190,8 +190,8 @@
     }
   ],
   "footerSocials": {
-    "twitter": "https://twitter.com/trygloo",
-    "github": "https://github.com/GlooHQ"
+    "twitter": "https://twitter.com/boundaryml",
+    "github": "https://github.com/BoundaryML/baml"
   },
   "modeToggle": {
     "default": "dark",
