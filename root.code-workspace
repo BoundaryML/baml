@@ -36,18 +36,14 @@
   ],
   "settings": {
     "editor.formatOnSave": true,
-    "editor.defaultFormatter": "esbenp.prettier-vscode",
     "[rust]": {
-      "editor.defaultFormatter": "rust-lang.rust-analyzer"
+      "editor.defaultFormatter": "rust-lang.rust-analyzer",
+      "editor.formatOnSave": true
     },
     "[python]": {
       "editor.defaultFormatter": "ms-python.black-formatter"
     },
-    "[cpp]": {
-      "editor.defaultFormatter": "xaver.clang-format"
-    },
     "mypy.enabled": false,
-    "gloo.path": "${workspaceFolder}/cli/target/debug",
     "editor.tabSize": 2,
     "jest.disabledWorkspaceFolders": [
       "test1/python",

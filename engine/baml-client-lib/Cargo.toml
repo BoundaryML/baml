@@ -1,0 +1,35 @@
+[package]
+edition = "2021"
+name = "baml-client-lib"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+license-file.workspace = true
+exclude = ["index.node"]
+
+[dependencies]
+anyhow.workspace = true
+chrono = "0.4.34"
+futures-core = "0.3.30"
+opentelemetry = "0.21.0"
+opentelemetry-stdout = { version = "0.2.0", features = ["trace"]}
+opentelemetry_sdk = {version = "0.21.2", features = ["rt-tokio-current-thread", "trace"]}
+reqwest = {version = "0.11.24", features = ["json"] }
+serde.workspace = true
+serde_json.workspace = true
+tracing = "0.1.40"
+uuid = {version = "1.7.0", features = ["v4", "js"]}
+tokio = { version = "1.36.0", features = ["full", "tracing"] }
+once_cell = "1.19.0"
+lazy_static = "1.4.0"
+neon = { version = "1.0.0-alpha.4", features = ["napi-6", "futures"] }
+tracing-subscriber = "0.3.18"
+hostname = "0.3.1"
+# tokio_unstable, feature = "tracing"
+# tokio_unstable = { version = "*", features = ["tracing"] }
+# [dependencies.neon]
+# default-features = false
+# features = ["napi-6", "promise-api"]
+
+[lib]
+crate-type = ["cdylib"]

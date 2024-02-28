@@ -3,3 +3,4 @@ packages:
   - 'vscode-ext/packages'
   - 'baml-schema-wasm'
   - 'common'
+  # - 'example_tests'
