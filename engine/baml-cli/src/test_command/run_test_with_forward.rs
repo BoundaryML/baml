@@ -144,7 +144,7 @@ async fn run_pytest_and_update_state(
                 // But we could also get exit code 1 from other things like infisical CLI being absent, or python not being found.
                 let stderr_content = tokio::fs::read_to_string(&stderr_file_path).await?;
                 let stdout_content = tokio::fs::read_to_string(&stdout_file_path).await?;
-                if ![0, 1].contains(&code) {
+                if ![0, 1].contains(&code) || !stderr_content.is_empty() {
                     println!(
                         "\n####### STDOUT Logs for this test ########\n{}",
                         stdout_content
