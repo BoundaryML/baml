@@ -13,7 +13,7 @@ This VS Code extension provides support for the Baml language used to define fun
 
 First, install the **baml CLI**:
 
-1. `brew tap gloohq/baml`
+1. `brew tap boundaryml/baml`
 2. `brew install baml`
 
 To update the CLI

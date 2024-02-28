@@ -165,7 +165,7 @@ jobs:
         uses: peter-evans/repository-dispatch@v2
         with:
           token: ${{ secrets.HOMEBREW_BAML_PAT }}
-          repository: gloohq/homebrew-baml
+          repository: boundaryml/homebrew-baml
           event-type: update-formula
           client-payload: '{"version": "${{ steps.hash.outputs.full_version }}", "hash_linux": "${{ steps.hash.outputs.linux_hash }}", "hash_mac_intel": "${{ steps.hash.outputs.darwin_intel_hash }}", "hash_mac_arm": "${{ steps.hash.outputs.darwin_arm_hash }}", "hash_windows": "${{ steps.hash.outputs.windows_hash }}", "nightly": true}'
 
@@ -252,6 +252,6 @@ jobs:
         uses: peter-evans/repository-dispatch@v2
         with:
           token: ${{ secrets.HOMEBREW_BAML_PAT }}
-          repository: gloohq/homebrew-baml
+          repository: boundaryml/homebrew-baml
           event-type: update-formula
           client-payload: '{"version": "${{ steps.hash.outputs.version }}", "hash_linux": "${{ steps.hash.outputs.linux_hash }}", "hash_mac_intel": "${{ steps.hash.outputs.darwin_intel_hash }}", "hash_mac_arm": "${{ steps.hash.outputs.darwin_arm_hash }}", "hash_windows": "${{ steps.hash.outputs.windows_hash }}"}'
