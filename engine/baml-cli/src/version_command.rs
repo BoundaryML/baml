@@ -213,7 +213,7 @@ pub fn run(args: &VersionArgs) -> Result<(), CliError> {
                     ret.cli.current_version,
                     ret.cli
                         .latest_version
-                        .map_or("".to_string(), |latest| format!(
+                        .map_or("(up-to-date)".to_string(), |latest| format!(
                             "(update available: {})",
                             latest.green()
                         ))
@@ -225,7 +225,7 @@ pub fn run(args: &VersionArgs) -> Result<(), CliError> {
                         client.current_version,
                         client
                             .latest_version
-                            .map_or("".to_string(), |latest| format!(
+                            .map_or("(up-to-date)".to_string(), |latest| format!(
                                 "(update available: {})",
                                 latest.green()
                             ))
