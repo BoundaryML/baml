@@ -157,8 +157,6 @@ async fn run_pytest_and_update_state(
                     "Testing failed with exit code {}. Output logs were printed above this line.",
                     code
                 )
-                .bright_red()
-                .bold()
             );
             println!(
                 "{}\n{}",
