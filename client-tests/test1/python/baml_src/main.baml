@@ -14,9 +14,9 @@ enum MessageSender {
 class Message {
     sender MessageSender @alias("sender1") 
     body   string @alias("body1")
-}   
+}    
   
 class Conversation {
     thread Message[] 
 }      
-  
+    
