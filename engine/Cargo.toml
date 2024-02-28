@@ -5,6 +5,7 @@ members = [
   "baml-cli",
   "baml-fmt",
   "baml-schema-wasm",
+  "baml-client-lib"
 ]
 
 [workspace.dependencies]

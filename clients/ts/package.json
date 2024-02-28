@@ -13,12 +13,16 @@
   "devDependencies": {
     "@types/jest": "^29.5.11",
     "@types/json-schema": "^7.0.15",
+    "@types/node": "^20.11.21",
+    "install": "^0.13.0",
     "jest": "^29.7.0",
     "ts-jest": "^29.1.2",
+    "ts-node": "^10.9.2",
     "typescript": "^5.3.3"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.12.3",
+    "baml-client-lib": "/Users/vbv/repos/gloo-lang/engine/baml-client-lib",
     "json-schema": "^0.4.0",
     "openai": "^4.25.0",
     "xregexp": "^5.1.1"

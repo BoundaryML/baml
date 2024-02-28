@@ -37,11 +37,13 @@
   "settings": {
     "editor.formatOnSaveMode": "file",
     "editor.formatOnSave": true,
-    "editor.defaultFormatter": "esbenp.prettier-vscode",
     "[rust]": {
-      "editor.defaultFormatter": "rust-lang.rust-analyzer"
+      "editor.defaultFormatter": "rust-lang.rust-analyzer",
+      "editor.formatOnSave": true
     },
-    "python.defaultInterpreterPath": "python3",
+    "[python]": {
+      "editor.defaultFormatter": "ms-python.black-formatter"
+    },
     "mypy.enabled": false,
     "editor.tabSize": 2,
     "git.openDiffOnClick": true,
