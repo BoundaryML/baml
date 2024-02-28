@@ -7,8 +7,6 @@ set -x
 
 baml init -n
 
-baml update-client
-
 # Run the command and write stdout and stderr to different files
 baml test run > $CAPTURE_DIR/baml_test_stdout.log 2> $CAPTURE_DIR/baml_test_stderr.log
 
