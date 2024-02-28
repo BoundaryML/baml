@@ -140,17 +140,31 @@ async fn run_pytest_and_update_state(
     match child.wait_with_output() {
         Ok(output) => {
             if let Some(code) = output.status.code() {
+                // Pytest exits with 1 even if it ran fine but had some tests failing (we should suppress this via a pytest plugin) so we don't mark as failure on exit code 1
+                // But we could also get exit code 1 from other things like infisical CLI being absent, or python not being found.
+                let stderr_content = tokio::fs::read_to_string(&stderr_file_path).await?;
                 if ![0, 1].contains(&code) {
                     println!("{}",
                         format!("Testing failed with exit code {}. Open the output logs below for more details", code).bright_red().bold()
                     );
                     println!(
-                        "{}\n{}",
+                        "\n{}\n{}",
                         stdout_file_path.display().to_string().dimmed(),
                         stderr_file_path.display().to_string().dimmed()
                     );
                     // exit the process
                     std::process::exit(code);
+                }
+
+                // if stderr is not empty and exit code is 1, we also have an issue
+                if code == 1 && !stderr_content.is_empty() {
+                    // Don't say the test failed since the exit code 1 may just be pytest saying some tests failed.
+                    println!("{}", stderr_content.bright_red().bold());
+                    println!(
+                        "\n{}\n{}",
+                        stdout_file_path.display().to_string().dimmed(),
+                        stderr_file_path.display().to_string().dimmed()
+                    );
                 }
             }
             output

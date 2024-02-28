@@ -7,8 +7,6 @@ set -x
 
 baml init -n
 
-baml update-client
-
 # Check that poetry installed baml
 poetry run python -m baml_version
 

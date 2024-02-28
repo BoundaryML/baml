@@ -1,3 +1,4 @@
+use colored::Colorize;
 use dialoguer::{theme::ColorfulTheme, Input};
 
 use crate::errors::CliError;
@@ -97,8 +98,13 @@ pub(crate) fn get_multi_selection_or_default(
             .filter_map(|(i, &selected)| if selected { Some(i) } else { None })
             .collect())
     } else {
+        let modified_prompt = format!(
+            "{}\n{}",
+            prompt_message,
+            "Space to select, Enter to continue".dimmed()
+        );
         match dialoguer::MultiSelect::with_theme(&ColorfulTheme::default())
-            .with_prompt(prompt_message)
+            .with_prompt(&modified_prompt)
             .items(items)
             .defaults(default)
             .interact()

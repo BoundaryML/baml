@@ -39,7 +39,6 @@ impl WithLoader<ProjectConfig> for ProjectConfig {
             return Err("At least one language must be selected".into());
         }
 
-        let languages = LanguageConfig::from_dialoguer(no_prompt, project_root, writer)?;
         let clients = ClientConfig::from_dialoguer(no_prompt, project_root, writer)?;
 
         writer.write_fmt(format_args!(

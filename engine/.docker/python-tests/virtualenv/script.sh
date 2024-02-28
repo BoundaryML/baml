@@ -7,8 +7,6 @@ set -x
 
 baml init -n
 
-baml update-client
-
 # Check if the venv has baml installed (python -m baml_version)
 . venv/bin/activate && python -m baml_version
 deactivate
