@@ -174,7 +174,7 @@ pub(crate) fn parse_generator(
     };
 
     let install_command = match pkg_manager {
-        Some("poetry") => "poetry install baml@latest".into(),
+        Some("poetry") => "poetry add baml@latest".into(),
         Some("pip3") => "pip3 install --upgrade baml".into(),
         Some("pip") => "pip install --upgrade baml".into(),
         _ => {

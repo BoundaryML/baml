@@ -109,7 +109,7 @@ async fn run_pytest_and_update_state(
         .expect("failed to spawn pytest");
 
     // Print state every 2 seconds while pytest is running
-    let mut interval = time::interval(time::Duration::from_millis(500));
+    let mut interval = time::interval(time::Duration::from_millis(1000));
     let mut last_print_lines = 0;
     while child.try_wait()?.is_none() {
         interval.tick().await;
@@ -144,17 +144,25 @@ async fn run_pytest_and_update_state(
         // Pytest exits with 1 even if it ran fine but had some tests failing (we should suppress this via a pytest plugin) so we dont mark as failure
         // But we could also get exit code 1 from other things like infisical CLI being absent, or python not being found.
         // so check the stderr for any other issues.
-        if ![0, 1].contains(&code) || !stderr_content.is_empty() {
+        if ![0, 1].contains(&code) {
             println!(
                 "{}",
                 format!(
-                    "Testing failed with exit code {}. Open the output logs below for more details\n\n{}",
+                    "Testing failed with exit code {}. Open the output logs below for more details\n",
                     code,
-                    stderr_content
                 )
-                .bright_red()
-                .bold()
             );
+            println!(
+                "{}\n{}",
+                stdout_file_path.display().to_string().dimmed(),
+                stderr_file_path.display().to_string().dimmed()
+            );
+        }
+
+        // if stderr is not empty and exit code is 1, we also have an issue
+        if code == 1 && !stderr_content.is_empty() {
+            // Don't say the test failed since the exit code 1 may just be pytest saying some tests failed.
+            println!("{}", stderr_content.bright_red().bold());
             println!(
                 "{}\n{}",
                 stdout_file_path.display().to_string().dimmed(),

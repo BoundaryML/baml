@@ -51,6 +51,5 @@ pub fn init_command(no_prompt: bool) -> Result<(), CliError> {
         std::fs::create_dir_all(path.parent().unwrap())?;
         std::fs::write(path, content)?;
     }
-
     Ok(())
 }

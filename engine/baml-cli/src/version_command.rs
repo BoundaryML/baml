@@ -1,5 +1,5 @@
 use crate::{builder::get_src_dir, shell::build_shell_command, update::UPDATE_CHANNEL};
-use crate::{command::run_command_with_error, errors::CliError, OutputType};
+use crate::{errors::CliError, OutputType};
 use clap;
 use colored::Colorize;
 use log;
