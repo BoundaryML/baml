@@ -1,4 +1,4 @@
-use crate::{builder::get_src_dir, shell::build_shell_command};
+use crate::{builder::get_src_dir, shell::build_shell_command, update::UPDATE_CHANNEL};
 use crate::{command::run_command_with_error, errors::CliError, OutputType};
 use clap;
 use colored::Colorize;
@@ -18,7 +18,7 @@ pub struct LatestVersionsManifest {
 #[derive(Debug, serde::Serialize)]
 pub struct CheckedVersions {
     pub cli: CliVersion,
-    pub clients: Vec<ClientVersions>,
+    pub generators: Vec<GeneratorVersion>,
     pub vscode: VscodeVersion,
 }
 
@@ -26,14 +26,17 @@ pub struct CheckedVersions {
 pub struct CliVersion {
     pub current_version: String,
     pub latest_version: Option<String>,
+    pub recommended_update: Option<String>,
 }
 
 #[derive(Debug, serde::Serialize)]
-pub struct ClientVersions {
+pub struct GeneratorVersion {
+    pub name: String,
     pub dir: PathBuf,
     pub language: String,
     pub current_version: String,
     pub latest_version: Option<String>,
+    pub recommended_update: Option<String>,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -107,16 +110,23 @@ pub fn get_client_version(
     Ok(version.as_str().to_string())
 }
 
-pub fn current_should_update_to_latest(current: &str, latest: &str) -> bool {
+pub fn recommended_update(current: &str, latest: &Option<String>) -> Option<String> {
     let Ok(current) = semver::Version::parse(current) else {
         // NB: this means we immediately return false if the current version is 0.14.0.dev0,
         // since that is not a valid semver, even though we publish it to PyPI
-        return false;
+        return None;
     };
-    let Ok(latest) = semver::Version::parse(latest) else {
-        return false;
+    let Some(latest_str) = latest else {
+        return None;
     };
-    current < latest
+    let Ok(latest) = semver::Version::parse(latest_str) else {
+        return None;
+    };
+    if latest > current {
+        Some(latest_str.clone())
+    } else {
+        None
+    }
 }
 
 /// Checks for updates to everything: CLI, client libraries, and vscode
@@ -131,25 +141,23 @@ pub fn check_for_updates(baml_dir_override: &Option<String>) -> Result<CheckedVe
         cli: CliVersion {
             current_version: clap::crate_version!().to_string(),
             latest_version: None,
+            recommended_update: None,
         },
-        clients: Vec::new(),
+        generators: Vec::new(),
         vscode: VscodeVersion {
             latest_version: None,
         },
     };
-    let url = "https://raw.githubusercontent.com/GlooHQ/homebrew-baml/main/version.json";
-    log::debug!("Checking for updates at {}", url);
-    let response = reqwest::blocking::get(url)?;
+    log::debug!("Checking for updates at {}", UPDATE_CHANNEL);
+    let response = reqwest::blocking::get(UPDATE_CHANNEL)?;
     if !response.status().is_success() {
         return Err(format!("Failed to get versions: {}", response.status()).into());
     }
     let latest_versions = response.json::<LatestVersionsManifest>()?;
 
-    if let Some(cli_latest_version) = latest_versions.cli.clone() {
-        if current_should_update_to_latest(&ret.cli.current_version, &cli_latest_version) {
-            ret.cli.latest_version = latest_versions.cli;
-        }
-    };
+    ret.cli.latest_version = latest_versions.cli;
+    ret.cli.recommended_update =
+        recommended_update(&ret.cli.current_version, &ret.cli.latest_version);
     ret.vscode.latest_version = latest_versions.vscode;
 
     if let Ok((_, (config, _))) = get_src_dir(baml_dir_override) {
@@ -159,26 +167,20 @@ pub fn check_for_updates(baml_dir_override: &Option<String>) -> Result<CheckedVe
                 gen.project_root.to_str().unwrap(),
                 gen.package_version_command.as_str(),
             )?;
-            let maybe_latest_version = match gen.language.as_str() {
+            let latest_version = match gen.language.as_str() {
                 "python" => latest_versions.py_client.clone(),
                 "typescript" => latest_versions.ts_client.clone(),
                 _ => None,
             };
-            let latest_version = if let Some(latest_version) = maybe_latest_version {
-                if current_should_update_to_latest(&current_version, &latest_version) {
-                    Some(latest_version)
-                } else {
-                    None
-                }
-            } else {
-                None
-            };
+            let recommended_update = recommended_update(&current_version, &latest_version);
 
-            ret.clients.push(ClientVersions {
+            ret.generators.push(GeneratorVersion {
+                name: gen.name,
                 dir: gen.project_root.canonicalize()?,
                 language: gen.language.as_str().to_string(),
                 current_version: current_version,
                 latest_version: latest_version,
+                recommended_update: recommended_update,
             });
         }
     }
@@ -209,29 +211,50 @@ pub fn run(args: &VersionArgs) -> Result<(), CliError> {
             OutputType::Human => {
                 println!(
                     "{} {} {}",
-                    clap::crate_name!(),
+                    clap::crate_name!().cyan(),
                     ret.cli.current_version,
-                    ret.cli
-                        .latest_version
-                        .map_or("(up-to-date)".to_string(), |latest| format!(
-                            "(update available: {})",
-                            latest.green()
-                        ))
+                    ret.cli.recommended_update.as_ref().map_or(
+                        "(up-to-date)".to_string(),
+                        |latest| format!("(update recommended: {})", latest.green())
+                    )
                 );
-                for client in ret.clients {
+                for GeneratorVersion {
+                    language,
+                    name,
+                    current_version,
+                    recommended_update,
+                    ..
+                } in ret.generators.iter()
+                {
                     println!(
-                        "{} client {} {}",
-                        client.language,
-                        client.current_version,
-                        client
-                            .latest_version
-                            .map_or("(up-to-date)".to_string(), |latest| format!(
-                                "(update available: {})",
-                                latest.green()
-                            ))
+                        "{} {current_version} via generator {name} {}",
+                        format!("{language} baml client").cyan(),
+                        recommended_update.as_ref().map_or(
+                            "(up-to-date)".to_string(),
+                            |latest| format!("(update recommended: {})", latest.green())
+                        )
                     );
                 }
                 // Don't message about vscode: it's not useful in the context of human output
+
+                let mut update_commands = Vec::new();
+                if ret.cli.recommended_update.is_some() {
+                    update_commands.push(format!("{} update", clap::crate_name!()));
+                }
+                if ret
+                    .generators
+                    .iter()
+                    .any(|g| g.recommended_update.is_some())
+                {
+                    update_commands.push(format!("{} update-client", clap::crate_name!()));
+                }
+                if !update_commands.is_empty() {
+                    println!(
+                        "\nTo update, run:\n  {}",
+                        // update commands go on a different line so users can triple-click to copy
+                        update_commands.join(" && ").green().bold()
+                    );
+                }
             }
             OutputType::Json => {
                 println!("{}", serde_json::to_string_pretty(&ret)?);
@@ -249,8 +272,9 @@ pub fn run(args: &VersionArgs) -> Result<(), CliError> {
                 cli: CliVersion {
                     current_version: clap::crate_version!().to_string(),
                     latest_version: None,
+                    recommended_update: None,
                 },
-                clients: Vec::new(),
+                generators: Vec::new(),
                 vscode: VscodeVersion {
                     latest_version: None,
                 },
