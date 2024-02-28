@@ -20,12 +20,12 @@ from ..__do_not_import.types.partial.classes.cls_proposedmessage import PartialP
 
 
 __all__ = [
-    'PartialEmpty',
-    'PartialHi',
     'PartialMessage',
     'PartialConversation',
-    'PartialClassifyResponse',
+    'PartialEmpty',
+    'PartialHi',
     'PartialProposedMessage',
     'PartialHaiku',
-    'PartialImprovedResponse'
+    'PartialImprovedResponse',
+    'PartialClassifyResponse'
 ]

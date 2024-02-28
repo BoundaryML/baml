@@ -65,3 +65,27 @@ export function cliVersion(
     }
   })
 }
+
+export function cliCheckForUpdates(
+  cliPath: string,
+  onError?: (errorMessage: string) => void,
+  onSuccess?: (ver: string) => void,
+) {
+  let buildCommand = `${cliPath} version --check --output json`
+
+  exec(buildCommand, (error: Error | null, stdout: string, stderr: string) => {
+    if (stderr) {
+      // our CLI is by default logging everything to stderr
+      console.info(stderr)
+    }
+
+    if (error) {
+      onError?.(`Baml cli error`)
+      return
+    } else {
+      if (onSuccess) {
+        onSuccess(stdout)
+      }
+    }
+  })
+}
