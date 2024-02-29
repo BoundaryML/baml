@@ -39,7 +39,8 @@
     "vscode-jsonrpc": "^8.2.0",
     "vscode-languageclient": "7.0.0",
     "vscode-uri": "^3.0.8",
-    "watcher": "1.2.0"
+    "watcher": "1.2.0",
+    "zod": "^3.22.4"
   },
   "devDependencies": {
     "@types/glob": "8.1.0",

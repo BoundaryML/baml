@@ -33,11 +33,12 @@ import type { LSOptions, LSSettings } from './lib/types'
 import { getVersion, getEnginesVersion, getCliVersion } from './lib/wasm/internals'
 import { BamlDirCache } from './file/fileCache'
 import { LinterInput } from './lib/wasm/lint'
-import { cliBuild, cliVersion } from './baml-cli'
+import { cliBuild, cliCheckForUpdates, cliVersion } from './baml-cli'
 import { ParserDatabase, TestRequest } from '@baml/common'
 import generate_test_file from './lib/wasm/generate_test_file'
 import { FileChangeType, workspace } from 'vscode'
 import fs from 'fs'
+import { z } from 'zod'
 
 const packageJson = require('../../package.json') // eslint-disable-line
 function getConnection(options?: LSOptions): Connection {
@@ -53,12 +54,17 @@ function getConnection(options?: LSOptions): Connection {
 let hasCodeActionLiteralsCapability = false
 let hasConfigurationCapability = true
 
-type BamlConfig = {
-  path?: string
-  trace: {
-    server: string
-  }
-}
+const BamlConfig = z.optional(
+  z.object({
+    path: z.string().optional(),
+    trace: z.optional(
+      z.object({
+        server: z.string(),
+      }),
+    ),
+  }),
+)
+type BamlConfig = z.infer<typeof BamlConfig>
 let config: BamlConfig | null = null
 
 /**
@@ -109,7 +115,6 @@ export function startServer(options?: LSOptions): void {
           resolveProvider: true,
         },
         workspace: {
-
           fileOperations: {
             didCreate: {
               filters: [
@@ -141,20 +146,18 @@ export function startServer(options?: LSOptions): void {
                 },
               ],
             },
-          }
-        }
+          },
+        },
       },
     }
 
-    const hasWorkspaceFolderCapability = !!(
-      capabilities.workspace && !!capabilities.workspace.workspaceFolders
-    );
+    const hasWorkspaceFolderCapability = !!(capabilities.workspace && !!capabilities.workspace.workspaceFolders)
     if (hasWorkspaceFolderCapability) {
       result.capabilities.workspace = {
         workspaceFolders: {
-          supported: true
-        }
-      };
+          supported: true,
+        },
+      }
     }
 
     // if (hasCodeActionLiteralsCapability) {
@@ -162,7 +165,6 @@ export function startServer(options?: LSOptions): void {
     //     codeActionKinds: [CodeActionKind.QuickFix],
     //   }
     // }
-
 
     return result
   })
@@ -184,10 +186,10 @@ export function startServer(options?: LSOptions): void {
 
   const getConfig = async () => {
     try {
-      console.log("getting config")
+      console.log('getting config')
       const configResponse = await connection.workspace.getConfiguration('baml')
       console.log('configResponse ' + JSON.stringify(configResponse, null, 2))
-      config = configResponse as BamlConfig
+      config = BamlConfig.parse(configResponse)
     } catch (e: any) {
       if (e instanceof Error) {
         console.log('Error getting config' + e.message + ' ' + e.stack)
@@ -216,8 +218,7 @@ export function startServer(options?: LSOptions): void {
       }
       const textDocument = TextDocument.create(uri, languageExtension, 1, '')
       bamlCache.refreshDirectory(textDocument)
-    }
-    )
+    })
     if (params.changes.length > 0) {
       const uri = params.changes[0].uri
       const languageExtension = getLanguageExtension(uri)
@@ -227,8 +228,7 @@ export function startServer(options?: LSOptions): void {
       const textDocument = TextDocument.create(uri, languageExtension, 1, '')
       validateTextDocument(textDocument)
     }
-  });
-
+  })
 
   connection.onDidChangeConfiguration((_change) => {
     getConfig()
@@ -255,7 +255,6 @@ export function startServer(options?: LSOptions): void {
       }
     }
   })
-
 
   // Note: VS Code strips newline characters from the message
   function showErrorToast(errorMessage: string): void {
@@ -316,10 +315,9 @@ export function startServer(options?: LSOptions): void {
 
   // TODO: dont actually debounce for now or strange out of sync things happen..
   // so we currently set to 0
-  const updateClientDB = ((rootPath: URI, db: ParserDatabase) => {
+  const updateClientDB = (rootPath: URI, db: ParserDatabase) => {
     void connection.sendRequest('set_database', { rootPath: rootPath.fsPath, db })
-  });
-
+  }
 
   function validateTextDocument(textDocument: TextDocument) {
     try {
@@ -372,9 +370,8 @@ export function startServer(options?: LSOptions): void {
     trailing: true,
   })
 
-
   documents.onDidChangeContent((change: { document: TextDocument }) => {
-    const textDocument = change.document;
+    const textDocument = change.document
     const rootPath = bamlCache.getBamlDir(textDocument)
     if (!rootPath) {
       console.error('Could not find root path for ' + textDocument.uri)
@@ -390,7 +387,7 @@ export function startServer(options?: LSOptions): void {
     try {
       bamlCache.addDocument(textDocument)
     } catch (e) {
-      console.log("Error adding document to cache " + e)
+      console.log('Error adding document to cache ' + e)
     }
     debouncedValidateTextDocument(textDocument)
   })
@@ -410,7 +407,6 @@ export function startServer(options?: LSOptions): void {
         )
         return
       }
-
 
       debouncedCLIBuild(cliPath, bamlDir, showErrorToast, () => {
         connection.sendNotification('baml/message', {
@@ -473,7 +469,7 @@ export function startServer(options?: LSOptions): void {
     const document = getDocument(params.textDocument.uri)
     const codeLenses: CodeLens[] = []
     if (!document) {
-      console.log("No text document available to compute codelens " + params.textDocument.uri.toString())
+      console.log('No text document available to compute codelens ' + params.textDocument.uri.toString())
       return codeLenses
     }
     bamlCache.addDocument(document)
@@ -481,16 +477,16 @@ export function startServer(options?: LSOptions): void {
     // VSCode will actually do adaptive debouncing for us https://github.com/microsoft/vscode/issues/106267
     validateTextDocument(document)
 
-    const db = bamlCache.getParserDatabase(document);
-    const docFsPath = URI.parse(document.uri).fsPath;
-    const baml_dir = bamlCache.getBamlDir(document);
+    const db = bamlCache.getParserDatabase(document)
+    const docFsPath = URI.parse(document.uri).fsPath
+    const baml_dir = bamlCache.getBamlDir(document)
     if (!db) {
-      console.log('No db for ' + document.uri + ". There may be a linter error or out of sync file");
+      console.log('No db for ' + document.uri + '. There may be a linter error or out of sync file')
       return codeLenses
     }
 
     const functionNames = db.functions.filter((x) => x.name.source_file === docFsPath).map((f) => f.name)
-    const position: Position = document.positionAt(0);
+    const position: Position = document.positionAt(0)
     functionNames.forEach((name) => {
       const range = Range.create(document.positionAt(name.start), document.positionAt(name.end))
       const command: Command = {
@@ -506,8 +502,8 @@ export function startServer(options?: LSOptions): void {
       }
       codeLenses.push({
         range,
-        command
-      });
+        command,
+      })
     })
 
     const implNames = db.functions
@@ -526,41 +522,36 @@ export function startServer(options?: LSOptions): void {
       .filter((x) => x.source_file === docFsPath)
 
     implNames.forEach((name) => {
-      codeLenses.push(
-        {
-          range: (Range.create(document.positionAt(name.start), document.positionAt(name.end))),
-          command: {
-            title: '▶️ Open Playground',
-            command: 'baml.openBamlPanel',
-            arguments: [
-              {
-                projectId: baml_dir?.fsPath || '',
-                functionName: name.function,
-                implName: name.value,
-                showTests: true,
-              },
-            ],
-          }
-        }
-      )
-      codeLenses.push(
-        {
-          range: Range.create(document.positionAt(name.prompt_key.start), document.positionAt(name.prompt_key.end)),
-          command: {
-            title: '▶️ Open Live Preview',
-            command: 'baml.openBamlPanel',
-            arguments: [
-              {
-                projectId: baml_dir?.fsPath || '',
-                functionName: name.function,
-                implName: name.value,
-                showTests: false,
-              },
-            ],
-          },
+      codeLenses.push({
+        range: Range.create(document.positionAt(name.start), document.positionAt(name.end)),
+        command: {
+          title: '▶️ Open Playground',
+          command: 'baml.openBamlPanel',
+          arguments: [
+            {
+              projectId: baml_dir?.fsPath || '',
+              functionName: name.function,
+              implName: name.value,
+              showTests: true,
+            },
+          ],
         },
-      )
-
+      })
+      codeLenses.push({
+        range: Range.create(document.positionAt(name.prompt_key.start), document.positionAt(name.prompt_key.end)),
+        command: {
+          title: '▶️ Open Live Preview',
+          command: 'baml.openBamlPanel',
+          arguments: [
+            {
+              projectId: baml_dir?.fsPath || '',
+              functionName: name.function,
+              implName: name.value,
+              showTests: false,
+            },
+          ],
+        },
+      })
     })
 
     const testCases = db.functions
@@ -592,13 +583,11 @@ export function startServer(options?: LSOptions): void {
       }
       codeLenses.push({
         range,
-        command
-      });
-
+        command,
+      })
     })
     return codeLenses
   })
-
 
   // connection.onDocumentFormatting((params: DocumentFormattingParams) => {
   //   const doc = getDocument(params.textDocument.uri)
@@ -666,10 +655,29 @@ export function startServer(options?: LSOptions): void {
     }
   })
 
+  connection.onRequest('cliCheckForUpdates', async () => {
+    console.log('Calling baml version --check using ' + config?.path)
+    try {
+      const res = await new Promise<string>((resolve, reject) => {
+        cliCheckForUpdates(config?.path || 'baml', reject, (ver) => {
+          resolve(ver)
+        })
+      })
+
+      return res
+    } catch (e: any) {
+      if (e instanceof Error) {
+        console.log('Error getting cli version' + e.message + ' ' + e.stack)
+      } else {
+        console.log('Error getting cli version' + e)
+      }
+      return undefined
+    }
+  })
+
   connection.onRequest('generatePythonTests', (params: TestRequest) => {
     return generateTestFile(params)
   })
-
 
   console.log('Server-side -- listening to connection')
   // Make the text document manager listen on the connection

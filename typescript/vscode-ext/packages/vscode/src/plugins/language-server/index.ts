@@ -12,9 +12,22 @@ import { ParserDatabase, TestRequest } from '@baml/common'
 import glooLens from '../../GlooCodeLensProvider'
 import fetch from 'node-fetch'
 import semver from 'semver'
+import { z } from 'zod'
 
 const packageJson = require('../../../package.json') // eslint-disable-line
 
+const BamlConfig = z.optional(
+  z.object({
+    path: z.string().optional(),
+    trace: z.optional(
+      z.object({
+        server: z.string(),
+      }),
+    ),
+  }),
+)
+type BamlConfig = z.infer<typeof BamlConfig>
+let config: BamlConfig | null = null
 let client: LanguageClient
 let serverModule: string
 let telemetry: TelemetryReporter
@@ -29,96 +42,124 @@ export const generateTestRequest = async (test_request: TestRequest): Promise<st
   return await client.sendRequest('generatePythonTests', test_request)
 }
 
-const getLatestVersion = async () => {
-  const url = 'https://raw.githubusercontent.com/BoundaryML/homebrew-baml/main/version.json'
-  console.info('Checking for updates at', url)
-  const response = await fetch(url)
-  if (!response.ok) {
-    throw new Error(`Failed to get versions: ${response.status}`)
+const LatestVersions = z.object({
+  cli: z.object({
+    current_version: z.string(),
+    latest_version: z.string().nullable(),
+    recommended_update: z.string().nullable(),
+  }),
+  generators: z.array(
+    z.object({
+      name: z.string(),
+      current_version: z.string(),
+      latest_version: z.string().nullable(),
+      recommended_update: z.string().nullable(),
+    }),
+  ),
+  vscode: z.object({
+    latest_version: z.string().nullable(),
+  }),
+})
+type LatestVersions = z.infer<typeof LatestVersions>
+
+const bamlCliPath = () => config?.path || 'baml'
+
+const buildUpdateMessage = (latestVersions: LatestVersions): { message: string; command: string } | null => {
+  const shouldUpdateCli = !!latestVersions.cli.recommended_update
+  const shouldUpdateGenerators = latestVersions.generators.filter((g) => g.recommended_update).length > 0
+
+  if (shouldUpdateCli && shouldUpdateGenerators) {
+    return {
+      message: 'Please update BAML and its client libraries',
+      command: `${bamlCliPath()} update && ${bamlCliPath()} update-client`,
+    }
   }
-  const versions = (await response.json()) as { cli: string; py_client: string }
 
-  // Parse as semver
-  const cli = semver.parse(versions.cli)
-  const py_client = semver.parse(versions.py_client)
-
-  if (!cli || !py_client) {
-    throw new Error('Failed to parse versions')
+  if (shouldUpdateCli) {
+    return {
+      message: 'Please update BAML',
+      command: `${bamlCliPath()} update`,
+    }
   }
 
-  return { cli, py_client }
+  if (shouldUpdateGenerators) {
+    return {
+      message: 'Please update the BAML client libraries',
+      command: `${bamlCliPath()} update-client`,
+    }
+  }
+
+  return null
 }
 
-const getCheckForUpdates = async ({ showIfNoUpdates }: { showIfNoUpdates: boolean }) => {
+const checkForUpdates = async ({ showIfNoUpdates }: { showIfNoUpdates: boolean }) => {
   try {
-    const [versions, localVersion] = await Promise.allSettled([getLatestVersion(), cliVersion()])
+    const res = await client.sendRequest<string | undefined>('cliCheckForUpdates')
 
-    if (versions.status === 'rejected') {
-      vscode.window.showErrorMessage(`Failed to check for updates ${versions.reason}`)
-      return
+    if (!res) {
+      throw new Error('Failed to get latest updates')
     }
 
-    if (localVersion.status === 'rejected') {
-      vscode.window
-        .showErrorMessage(`Have you installed BAML? ${localVersion.reason}`, {
-          title: 'Install BAML',
-        })
-        .then((selection) => {
-          if (selection?.title === 'Install BAML') {
-            // Open a url to: docs.boundaryml.com
-            vscode.commands.executeCommand(
-              'vscode.open',
-              Uri.parse('https://docs.boundaryml.com/v2/mdx/quickstart#install-baml-compiler'),
-            )
-          }
-        })
-      return
-    }
+    const latestVersions = LatestVersions.parse(JSON.parse(res))
+    const update = buildUpdateMessage(latestVersions)
+    const shouldUpdateVscode = semver.lt(packageJson.version, latestVersions.vscode.latest_version || '0.0.0')
 
-    let { cli } = versions.value
-    let localCli = localVersion.value
-
-    if (semver.gt(cli, localCli)) {
+    if (update) {
+      const updateNowAction = 'Update now'
+      const detailsAction = 'Details'
       vscode.window
         .showInformationMessage(
-          `A new version of BAML is available. Please update from ${localCli} -> ${cli} by running "baml update" in the terminal.`,
+          update.message,
           {
-            title: 'Update now',
+            title: updateNowAction,
+          },
+          {
+            title: detailsAction,
           },
         )
         .then((selection) => {
-          if (selection?.title === 'Update now') {
+          if (selection?.title === updateNowAction) {
             // Open a new terminal
             vscode.commands.executeCommand('workbench.action.terminal.new').then(() => {
               // Run the update command
               vscode.commands.executeCommand('workbench.action.terminal.sendSequence', {
-                text: 'baml update\n',
+                text: `${update.command}\n`,
+              })
+            })
+          }
+          if (selection?.title === detailsAction) {
+            // Open a new terminal
+            vscode.commands.executeCommand('workbench.action.terminal.new').then(() => {
+              // Run the update command
+              vscode.commands.executeCommand('workbench.action.terminal.sendSequence', {
+                text: `${bamlCliPath()} version --check\n`,
               })
             })
           }
         })
     } else {
       if (showIfNoUpdates) {
-        vscode.window.showInformationMessage(`BAML ${cli} is up to date!`)
+        vscode.window.showInformationMessage(`BAML is up to date!`)
       } else {
-        console.info(`BAML is up to date! ${cli} <= ${localCli}`)
+        console.info(`BAML is up to date! ${JSON.stringify(latestVersions, null, 2)}`)
       }
+    }
+
+    if (shouldUpdateVscode) {
+      const updateNowAction = 'Open Extensions View'
+      vscode.window
+        .showInformationMessage('Please update the BAML VSCode extension', {
+          title: updateNowAction,
+        })
+        .then((selection) => {
+          if (selection?.title === updateNowAction) {
+            vscode.commands.executeCommand('workbench.view.extensions')
+          }
+        })
     }
   } catch (e) {
     console.error('Failed to check for updates', e)
   }
-}
-
-const cliVersion = async (): Promise<semver.SemVer> => {
-  const res = await client.sendRequest<string | undefined>('cliVersion')
-  if (res) {
-    let parsed = semver.parse(res.split(' ').at(-1))
-    if (!parsed) {
-      throw new Error(`Failed to parse version: ${res}`)
-    }
-    return parsed
-  }
-  throw new Error('Failed to get CLI version')
 }
 
 interface BAMLMessage {
@@ -134,11 +175,28 @@ const sleep = (time: number) => {
   })
 }
 
+const getConfig = async () => {
+  try {
+    console.log('getting config')
+    const configResponse = await workspace.getConfiguration('baml')
+    console.log('configResponse ' + JSON.stringify(configResponse, null, 2))
+    config = BamlConfig.parse(configResponse)
+  } catch (e: any) {
+    if (e instanceof Error) {
+      console.log('Error getting config' + e.message + ' ' + e.stack)
+    } else {
+      console.log('Error getting config' + e)
+    }
+  }
+}
+
 const activateClient = (
   context: ExtensionContext,
   serverOptions: ServerOptions,
   clientOptions: LanguageClientOptions,
 ) => {
+  getConfig()
+
   // Create the language client
   client = createLanguageServer(serverOptions, clientOptions)
 
@@ -220,13 +278,13 @@ const activateClient = (
 
     // this will fail otherwise in dev mode if the config where the baml path is hasnt been picked up yet. TODO: pass the config to the server to avoid this.
     // Immediately check for updates on extension activation
-    void getCheckForUpdates({ showIfNoUpdates: false })
+    void checkForUpdates({ showIfNoUpdates: false })
     // And check again once every hour
     intervalTimers.push(
       setInterval(async () => {
         console.log(`checking for updates ${new Date()}`)
-        await getCheckForUpdates({ showIfNoUpdates: false })
-      }, 5 * 1000 /* 1h in milliseconds: min/hr * secs/min * ms/sec */),
+        await checkForUpdates({ showIfNoUpdates: false })
+      }, 60 * 60 * 1000 /* 1h in milliseconds: min/hr * secs/min * ms/sec */),
     )
   })
 
@@ -309,7 +367,7 @@ const plugin: BamlVSCodePlugin = {
       }),
 
       commands.registerCommand('baml.checkForUpdates', async () => {
-        getCheckForUpdates({ showIfNoUpdates: true }).catch((e) => {
+        checkForUpdates({ showIfNoUpdates: true }).catch((e) => {
           console.error('Failed to check for updates', e)
         })
       }),

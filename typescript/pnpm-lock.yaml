@@ -1,4 +1,4 @@
-lockfileVersion: '6.1'
+lockfileVersion: '6.0'
 
 settings:
   autoInstallPeers: true
@@ -162,6 +162,9 @@ importers:
       vscode-uri:
         specifier: ^3.0.8
         version: 3.0.8
+      zod:
+        specifier: ^3.22.4
+        version: 3.22.4
     devDependencies:
       '@types/lodash':
         specifier: ^4.14.200
@@ -226,6 +229,9 @@ importers:
       watcher:
         specifier: 1.2.0
         version: 1.2.0
+      zod:
+        specifier: ^3.22.4
+        version: 3.22.4
     devDependencies:
       '@types/glob':
         specifier: 8.1.0
