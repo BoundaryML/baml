@@ -15,8 +15,6 @@ baml init -n
 # Go back to the main environment
 conda activate base
 
-baml update-client
-
 # Check that conda installed baml
 conda run -n envbaml python -m baml_version
 

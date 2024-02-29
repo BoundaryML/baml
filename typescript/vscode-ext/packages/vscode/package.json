@@ -4,7 +4,7 @@
   "description": "This is the Insider Build of the Baml VS Code extension (only use it if you are also using the dev version of the CLI).",
   "version": "0.1.1",
   "publisher": "Gloo",
-  "repository": "https://github.com/GlooHQ/gloo-lang",
+  "repository": "https://github.com/BoundaryML/baml",
   "homepage": "https://boundaryml.com",
   "icon": "baml-logo.png",
   "engines": {

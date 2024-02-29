@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use crate::errors::CliError;
+use colored::Colorize;
 use walkdir::WalkDir;
 
 use super::{
@@ -25,12 +26,12 @@ impl WithLoader<PythonConfig> for PythonConfig {
         _project_root: &PathBuf,
         writer: &mut Writer,
     ) -> Result<Self, CliError> {
-        let py_project_root = get_value_or_default(
-            "What is the root of your Python project?",
-            "./".to_string(),
-            no_prompt,
-        )?
-        .into();
+        let modified_prompt = format!(
+            "What is the root of your {} project?",
+            "Python".cyan().bold()
+        );
+        let py_project_root =
+            get_value_or_default(&modified_prompt, "./".to_string(), no_prompt)?.into();
 
         let package_manager = PackageManager::from_dialoguer(no_prompt, &py_project_root, writer)?;
         Ok(PythonConfig {

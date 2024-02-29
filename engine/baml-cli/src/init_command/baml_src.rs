@@ -26,7 +26,7 @@ impl LanguageConfig {
     pub fn name(&self) -> String {
         match self {
             LanguageConfig::Python(_) => "python".into(),
-            LanguageConfig::TypeScript(_) => "typeScript".into(),
+            LanguageConfig::TypeScript(_) => "TypeScript".into(),
         }
     }
 }
@@ -61,11 +61,13 @@ impl WithLoader<Vec<LanguageConfig>> for LanguageConfig {
         writer: &mut Writer,
     ) -> Result<Vec<LanguageConfig>, CliError> {
         let languages = get_multi_selection_or_default(
-            "What language do you want to use with BAML?",
+            "What language(s) do you want to use with BAML?",
             &["Python", "TypeScript"],
             &[true, false],
             no_prompt,
         )?;
+
+        writer.write_fmt(format_args!("\nGreat choice!\n"))?;
 
         languages
             .iter()

@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use colored::Colorize;
+
 use super::{
     interact::{get_selection_or_default, get_value_or_default},
     traits::{WithLanguage, WithLoader, Writer},
@@ -23,12 +25,12 @@ impl WithLoader<TypeScriptConfig> for TypeScriptConfig {
         _project_root: &PathBuf,
         writer: &mut Writer,
     ) -> Result<Self, CliError> {
-        let ts_project_root: PathBuf = get_value_or_default(
-            "What is the root of your TypeScript project?",
-            "./".to_string(),
-            no_prompt,
-        )?
-        .into();
+        let modified_prompt = format!(
+            "What is the root of your {} project (where package.json lives)?",
+            "TypeScript".cyan().bold()
+        );
+        let ts_project_root: PathBuf =
+            get_value_or_default(&modified_prompt, "./".to_string(), no_prompt)?.into();
 
         // Ensure a package.json exists
         if !ts_project_root.join("package.json").exists() {

@@ -282,6 +282,7 @@ impl File {
         buffer.push_str(&self.content);
 
         if !exports.is_empty() {
+            exports.sort();
             buffer.push_str("\n\n__all__ = [\n");
             buffer.push_str(
                 &exports
