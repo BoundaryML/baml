@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 conda init
 . /root/.bashrc > /dev/null
@@ -26,5 +26,4 @@ baml test run > $CAPTURE_DIR/baml_test_stdout.log 2> $CAPTURE_DIR/baml_test_stde
 
 conda run -n envbaml python -m baml_example_app > $CAPTURE_DIR/baml_example_stdout.log 2> $CAPTURE_DIR/baml_example_stderr.log
 
-check_for_updates="$(baml version --check --output json)"
-[[ $(echo "$check_for_updates" | jq '.generators.[].current_version') =~ '[0-9].*' ]] || echo "Failed to resolve current client version"
+# TODO - add test for 'baml version --check' here

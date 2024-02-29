@@ -84,9 +84,17 @@ pub fn get_client_version(
             Ok(String::from_utf8(e.stdout)?)
         })?;
 
-    let version_line_re = Regex::new(r#"(?i)\b(?:version)\b"#).map_err(|e| {
-        CliError::StringError(format!("{} Error: {}", "Failed!".red(), e.to_string()))
-    })?;
+    let version_line_re = if package_version_command.starts_with("conda") {
+        // conda's version output has "baml" in the same line
+        Regex::new(r#"(?i)\b(?:baml)\b"#).map_err(|e| {
+            CliError::StringError(format!("{} Error: {}", "Failed!".red(), e.to_string()))
+        })?
+    } else {
+        // for other python package managers, they have "version" in the same line
+        Regex::new(r#"(?i)\b(?:version)\b"#).map_err(|e| {
+            CliError::StringError(format!("{} Error: {}", "Failed!".red(), e.to_string()))
+        })?
+    };
 
     let Some(version_line) = output.lines().find(|line| version_line_re.is_match(line)) else {
         return Err(CliError::StringError(format!(
