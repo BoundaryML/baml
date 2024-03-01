@@ -113,7 +113,7 @@ impl WithLanguage for PackageManager {
             PackageManager::Pip3(_) => "pip3 show baml".into(),
             PackageManager::Poetry => "poetry show baml".into(),
             PackageManager::Venv(path) => format!(". {}/bin/activate && pip show baml", path),
-            PackageManager::Conda(name) => format!("conda list -n {}", name),
+            PackageManager::Conda(name) => format!("conda list -n {} baml", name),
         }
     }
 }
