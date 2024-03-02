@@ -3,3 +3,5 @@ packages:
   - 'vscode-ext/packages'
   - 'baml-schema-wasm'
   - 'common'
+  - 'ts-test-project'
+  - 'baml-test-runner'
