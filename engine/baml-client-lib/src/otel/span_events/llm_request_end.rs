@@ -1,4 +1,5 @@
 use anyhow::Result;
+use serde::Deserialize;
 use tracing::field::Visit;
 
 use crate::{
@@ -8,7 +9,7 @@ use crate::{
 
 use super::partial_types::{Apply, PartialLogSchema};
 
-#[derive(Default)]
+#[derive(Default, Deserialize)]
 pub(crate) struct LlmRequestEnd {
     model_name: Option<String>,
     generated: Option<String>,
@@ -16,6 +17,19 @@ pub(crate) struct LlmRequestEnd {
 }
 
 impl LlmRequestEnd {
+    pub fn self_event(&self) -> Result<()> {
+        match (
+            self.model_name.as_ref(),
+            self.generated.as_ref(),
+            self.metadata.as_ref(),
+        ) {
+            (Some(model_name), Some(generated), Some(metadata)) => {
+                Self::event(model_name, generated, metadata)
+            }
+            _ => Ok(()),
+        }
+    }
+
     pub fn event(
         model_name: &str,
         generated: &str,

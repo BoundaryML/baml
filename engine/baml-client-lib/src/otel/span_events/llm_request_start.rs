@@ -1,4 +1,5 @@
 use anyhow::Result;
+use serde::Deserialize;
 use tracing::field::Visit;
 
 use crate::{
@@ -8,13 +9,20 @@ use crate::{
 
 use super::partial_types::{Apply, PartialLogSchema};
 
-#[derive(Default)]
+#[derive(Default, Deserialize)]
 pub(crate) struct LlmRequestStart {
     prompt: Option<Template>,
     provider: String,
 }
 
 impl LlmRequestStart {
+    pub fn self_event(&self) -> Result<()> {
+        match &self.prompt {
+            Some(prompt) => Self::event(prompt, &self.provider),
+            None => Ok(()),
+        }
+    }
+
     pub fn event(prompt: &Template, provider: &str) -> Result<()> {
         let prompt = serde_json::to_string(prompt)?;
         baml_event_def!(LlmRequestStart, prompt, provider);

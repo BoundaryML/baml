@@ -6,9 +6,7 @@ const deserializer = new Deserializer<{{function.return_type}}>(schema, {
   $ref: '#/definitions/{{function.name}}_output'
 });
 
-{{function.name}}.registerImpl('{{name}}', {
-  name: '{{name}}',
-  run: async (
+{{function.name}}.registerImpl('{{name}}', async (
 {{#if function.params.positional}}
 {{function.params.name}}: {{function.params.type}}
 {{else}}
@@ -36,4 +34,4 @@ const deserializer = new Deserializer<{{function.return_type}}>(schema, {
 
     return deserializer.coerce(result);
   }
-});
+);

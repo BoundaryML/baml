@@ -1,6 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { ChatMessage, clientManager, IClient } from "../client_manager";
-import { CompletionCreateParamsNonStreaming } from '@anthropic-ai/sdk/resources';
+import { CompletionCreateParamsNonStreaming } from '@anthropic-ai/sdk/resources/completions';
+import { logLLMEvent } from 'baml-client-lib';
+
 
 class AnthropicClient implements IClient {
     private client: Anthropic;
@@ -62,6 +64,14 @@ class AnthropicClient implements IClient {
                 chat.content = chat.content.replaceAll(key, value);
             });
         });
+
+        logLLMEvent({
+            name: 'llm_prompt_template',
+            data: {
+                template: chats.map((chat) => ({ ...chat })),
+                template_args: templates,
+            }
+        })
 
         return await this.run_chat(chats);
     }

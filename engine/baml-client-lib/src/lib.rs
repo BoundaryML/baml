@@ -450,19 +450,18 @@ fn set_llm_event(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let name: Handle<JsString> = event
         .get_value(&mut cx, "name")?
         .downcast_or_throw(&mut cx)?;
-    let _name = name.value(&mut cx);
+    let name = name.value(&mut cx);
 
     let meta: Handle<JsString> = event
         .get_value(&mut cx, "meta")?
         .downcast_or_throw(&mut cx)?;
 
-    let _meta = meta.value(&mut cx);
+    let meta = meta.value(&mut cx);
 
-    // match otel::tracer::set_llm_event(name, meta) {
-    //     Ok(_) => Ok(cx.undefined()),
-    //     Err(e) => cx.throw_error(e.to_string()),
-    // }
-    Ok(cx.undefined())
+    match otel::log_event(name.as_str(), meta.as_str()) {
+        Ok(_) => Ok(cx.undefined()),
+        Err(e) => cx.throw_error(e.to_string()),
+    }
 }
 
 #[neon::main]
@@ -473,8 +472,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     cx.export_function("traceAsync", run_with_trace_async)?;
     cx.export_function("getSpanForAsync", get_span)?;
     cx.export_function("setTags", set_tags)?;
-    cx.export_function("setLLMEvent", set_llm_event)?;
-    // cx.export_function("createWrappedPromise", example::create_wrapped_promise)?;
+    cx.export_function("logLLMEvent", set_llm_event)?;
 
     Ok(())
 }

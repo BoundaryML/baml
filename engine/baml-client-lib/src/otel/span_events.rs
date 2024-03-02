@@ -16,7 +16,10 @@ use anyhow::Result;
 use tracing::Subscriber;
 use tracing_subscriber::layer::Layer;
 
-use crate::api_wrapper::core_types::{EventChain, LogSchemaContext};
+use crate::{
+    api_wrapper::core_types::{EventChain, LogSchemaContext},
+    baml_event,
+};
 
 use self::events::SpanEvent;
 use self::exception::Exception;
@@ -248,4 +251,54 @@ impl Drop for BamlEventSubscriber<'_> {
             }
         }
     }
+}
+
+pub fn log_event(name: &str, raw_content: &str) -> Result<()> {
+    let event: SpanEvent = name.into();
+
+    match event {
+        SpanEvent::SetTags => {
+            let content = serde_json::from_str(raw_content)?;
+            let content = &content;
+            baml_event!(SetTags, content)?;
+        }
+        SpanEvent::LlmPromptTemplate => {
+            let content: LlmPromptTemplate = serde_json::from_str(raw_content)?;
+            content.self_event()?;
+        }
+        SpanEvent::LlmRequestCacheHit => {
+            let content: LlmRequestCacheHit = serde_json::from_str(raw_content)?;
+            let content = content.latency_ms();
+            baml_event!(LlmRequestCacheHit, content)?;
+        }
+        SpanEvent::LlmRequestStart => {
+            let content: LlmRequestStart = serde_json::from_str(raw_content)?;
+            content.self_event()?;
+        }
+        SpanEvent::LlmRequestError => {
+            let content: LlmRequestError = serde_json::from_str(raw_content)?;
+            content.self_event()?;
+        }
+        SpanEvent::LlmRequestArgs => {
+            let content = serde_json::from_str(raw_content)?;
+            let content = &content;
+            baml_event!(LlmRequestArgs, content)?;
+        }
+        SpanEvent::LlmRequestEnd => {
+            let content: LlmRequestEnd = serde_json::from_str(raw_content)?;
+            content.self_event()?;
+        }
+        SpanEvent::Variant => {
+            let content = serde_json::from_str(raw_content)?;
+            baml_event!(Variant, content)?;
+        }
+        SpanEvent::Exception | SpanEvent::InputOutput => {
+            Err(anyhow::anyhow!("Event type not supported: {}", name))?;
+        }
+        SpanEvent::Unknown => {
+            Err(anyhow::anyhow!("Unknown event type: {}", name))?;
+        }
+    };
+
+    Ok(())
 }

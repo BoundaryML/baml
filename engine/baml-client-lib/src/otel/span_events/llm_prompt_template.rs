@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
+use serde::Deserialize;
 use tracing::field::Visit;
 
 use crate::{
@@ -10,13 +11,17 @@ use crate::{
 
 use super::partial_types::{Apply, PartialLogSchema};
 
-#[derive(Default)]
+#[derive(Default, Deserialize)]
 pub(crate) struct LlmPromptTemplate {
     template: Template,
     template_args: HashMap<String, String>,
 }
 
 impl LlmPromptTemplate {
+    pub fn self_event(&self) -> Result<()> {
+        Self::event(&self.template, self.template_args.clone())
+    }
+
     pub fn event(template: &Template, template_args: HashMap<String, String>) -> Result<()> {
         let template = serde_json::to_string(template)?;
         let template_args = serde_json::to_string(&template_args)?;
