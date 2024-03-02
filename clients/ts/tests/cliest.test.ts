@@ -1,4 +1,4 @@
-import { trace, initTracer, shutdownTracer } from "baml-client-lib";
+import { trace, initTracer } from "baml-client-lib";
 
 initTracer();
 

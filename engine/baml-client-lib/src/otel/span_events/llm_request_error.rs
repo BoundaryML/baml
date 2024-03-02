@@ -1,11 +1,12 @@
 use anyhow::Result;
+use serde::Deserialize;
 use tracing::field::Visit;
 
 use crate::{api_wrapper::core_types::Error, baml_event_def};
 
 use super::partial_types::{Apply, PartialLogSchema};
 
-#[derive(Default)]
+#[derive(Default, Deserialize)]
 pub(crate) struct LlmRequestError {
     error_code: i32,
     message: Option<String>,
@@ -13,6 +14,14 @@ pub(crate) struct LlmRequestError {
 }
 
 impl LlmRequestError {
+    pub fn self_event(&self) -> Result<()> {
+        Self::event(
+            self.error_code,
+            self.message.as_deref(),
+            self.traceback.as_deref(),
+        )
+    }
+
     pub fn event(error_code: i32, message: Option<&str>, traceback: Option<&str>) -> Result<()> {
         baml_event_def!(LlmRequestError, error_code, message, traceback);
         Ok(())

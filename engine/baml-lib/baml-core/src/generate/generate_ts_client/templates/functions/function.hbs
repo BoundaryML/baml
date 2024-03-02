@@ -34,11 +34,39 @@ function create{{name}}Instance(): I{{name}} & {{name}}Function {
       }
       return impl;
     },
-    registerImpl: (name: {{name}}Impls, impl: {{name}}Impl) => {
+    registerImpl: (name: {{name}}Impls, cb: I{{name}}) => {
       if (registry[name]) {
         throw new Error(`Implementation for {{name}} with name ${name} already exists`);
       }
-      registry[name] = impl;
+      registry[name] = {
+        name,
+        run: traceAsync(async (
+          {{#if params.positional}}
+          {{params.name}}: {{params.type}}
+          {{else}}
+          params: {
+            {{#each params.values as |v|}}{{v.name}}: {{v.type}}{{#unless @last}}, {{/unless}}{{/each}}
+          }
+          {{/if}}
+        ) => {
+          setVariant(name);
+          return await cb({{#if params.positional}}{{params.name}}{{else}}params{{/if}});
+        }, '{{name}}', [
+          {{#if params.positional}}
+          {
+            name: '{{params.name}}',
+            type: '{{params.type}}'
+          }
+          {{else}}
+          {{#each params.values as |v|}}
+          {
+            name: '{{v.name}}',
+            type: '{{v.type}}'
+          }{{#unless @last}},{{/unless}}
+          {{/each}}
+          {{/if}}
+        ], {{params.positional}}, '{{return_type}}')
+      };
     },
     validate: () => {
       {{#if impls}}

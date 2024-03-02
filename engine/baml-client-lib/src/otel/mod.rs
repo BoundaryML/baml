@@ -60,6 +60,14 @@ pub fn flush_tracer() -> Result<()> {
     }
 }
 
+pub fn log_event(name: &str, raw_content: &str) -> Result<()> {
+    if let Some(config) = default_config_mut() {
+        span_events::log_event(name, raw_content)
+    } else {
+        Ok(())
+    }
+}
+
 // pub(super) async fn update_tracer(
 //     base_url: Option<&str>,
 //     api_key: Option<&str>,

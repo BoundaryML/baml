@@ -31,3 +31,55 @@ export function traceAsync<TArgs extends any[], TReturn>(
   asKwargs: boolean,
   returnType: string
 ): (...args: TArgs) => Promise<TReturn>;
+
+
+type LLMEvent = {
+  name: 'llm_prompt_template',
+  data: {
+    template: string | {
+      role: string,
+      content: string,
+    }[],
+    template_args: {
+      [key: string]: string,
+    }
+  }
+} | {
+  name: 'llm_request_args',
+  data: {
+    invocation_params: {
+      [key: string]: string,
+    }
+  }
+} | {
+  name: 'llm_request_end',
+  data: {
+    model_name: string,
+    generated: string,
+    metadata: {
+      logprobs: any,
+      prompt_tokens?: number,
+      output_tokens?: number,
+      total_tokens?: number,
+      finish_reason?: string,
+    }
+  }
+} | {
+  name: 'llm_request_error',
+  data: {
+    error_code: number,
+    message?: string,
+    traceback?: string,
+  }
+} | {
+  name: 'llm_request_start',
+  data: {
+    prompt: string | {
+      role: string,
+      content: string,
+    }[],
+    provider: string
+  }
+};
+
+export function logLLMEvent(event: LLMEvent): void;

@@ -1,11 +1,12 @@
 use anyhow::Result;
-use tracing::{field::Visit};
+use serde::Deserialize;
+use tracing::field::Visit;
 
 use crate::baml_event_def;
 
 use super::partial_types::{Apply, PartialLogSchema};
 
-#[derive(Default)]
+#[derive(Default, Deserialize)]
 pub(crate) struct LlmRequestCacheHit {
     /// The latency of the original request
     latency_ms: u64,

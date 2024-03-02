@@ -1,3 +1,5 @@
+import { logLLMEvent } from "baml-client-lib";
+
 export type ChatMessage = {
     role: string;
     content: string;
@@ -53,3 +55,59 @@ interface IProvider {
 }
 
 export const clientManager = new ClientManager();
+
+
+// ----
+class LLMException extends Error {
+    code: number;
+    constructor(message: string, code: number) {
+        super(message);
+        this.code = code;
+    }
+}
+
+abstract class BaseProvider {
+    private __to_error_code(err: Error): number | undefined {
+        if (err instanceof LLMException) {
+            return err.code;
+        }
+        const code = this._to_error_code(err);
+        if (code !== undefined) {
+            return code;
+        }
+
+        return undefined;
+    }
+
+    protected abstract _to_error_code(err: Error): number | undefined;
+
+    protected _raise_error(err: Error): never {
+        const formatted_traceback = err.stack?.split("\n").map((line) => `    ${line}`).join("\n");
+        logLLMEvent({
+            name: 'llm_request_error',
+            data: {
+                error_code: this.__to_error_code(err) ?? 1,
+                message: err.message,
+                traceback: formatted_traceback,
+            }
+        });
+        if (err instanceof LLMException) {
+            throw err;
+        }
+        const code = this.__to_error_code(err);
+        if (code !== undefined) {
+            throw new LLMException(err.message, code);
+        }
+        throw err;
+    }
+}
+
+function update_template_args(template: string, args: {
+    [key: string]: string;
+}): string {
+    Object.entries(args).forEach(([key, value]) => {
+        template = template.replace(`{{${key}}}`, value);
+    });
+
+    return template;
+}

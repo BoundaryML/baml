@@ -5,6 +5,7 @@ const {
   trace,
   setTags,
   traceAsync,
+  logLLMEvent: logLLMEventNode,
   getSpanForAsync
 } = require("./index.node");
 const {AsyncLocalStorage} = require('async_hooks');
@@ -57,11 +58,16 @@ const tracerAsync = (cb, name, args, asKwargs, returnType) => {
   };
 };
 
+function logLLMEvent(event) {
+  logLLMEventNode(event.name, event.data);
+}
+
 initTracer();
 
 module.exports = {
   initTracer,
   setTags,
+  logLLMEvent,
   trace: tracer,
   traceAsync: tracerAsync,
 };
