@@ -5,6 +5,7 @@
   "compilerOptions": {
     "isolatedModules": true,
     "moduleResolution": "node",
+    "esModuleInterop": true,
     "allowJs": true,
     "declarationMap": true,
     "target": "ES2021",

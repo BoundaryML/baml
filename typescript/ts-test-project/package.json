@@ -7,6 +7,7 @@
   "types": "dist/index.d.ts",
   "keywords": [],
   "author": "",
+  "type": "module",
   "license": "ISC",
   "scripts": {
     "prebuild": "rimraf dist",
@@ -22,6 +23,7 @@
   ],
   "devDependencies": {
     "jest-runner-baml": "*",
+    "baml-client-lib": "*",
     "@types/jest": "^29.5.12",
     "@types/node": "^20.4.9",
     "@types/uuid": "^9.0.2",

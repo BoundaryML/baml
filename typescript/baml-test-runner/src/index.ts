@@ -16,7 +16,7 @@ import axios, { AxiosError, AxiosResponse } from "axios";
 import { TestingAPI } from "./api/client";
 import { v4 as uuidv4 } from 'uuid'
 import { TestCaseStatus } from "./api/types";
-
+import { initTracer } from "baml-client-lib";
 class BamlTestRunner extends TestRunner {
   readonly api?: TestingAPI;
   constructor(globalConfig: Config.GlobalConfig, context: TestRunnerContext) {
@@ -49,12 +49,15 @@ class BamlTestRunner extends TestRunner {
     options: TestRunnerOptions,
   ): Promise<void> {
     // TODO: SET THE process id as env var here for all logs to be sent to the same place.
+    initTracer();
+    if (process.stdout.isTTY && process.stderr.isTTY) {
+      process.stderr.write = process.stdout.write;
+    }
 
     process.env.BAML_TEST_RUNNER = "HI"
     const res = await this.api?.createTestCycleId();
     console.log("created test cycle" + JSON.stringify(res, null, 2))
     this.on('test-case-result', async (data) => {
-      // console.log("test-case-result" + JSON.stringify(data, null, 2))
       await this.api?.createTestCases({
         test_name: "test",
         test_dataset_name: "test_dataset",
@@ -76,6 +79,9 @@ class BamlTestRunner extends TestRunner {
       // console.log("test-case-start" + JSON.stringify(data, null, 2))
     });
 
+    // NB: the test name can be retrieved by otel by using `expect.getState().currentTestName`
+
+    // NB: At this point, any logs from the rust logger threads may not be captured in stdout due to some jest weirdness. https://github.com/jestjs/jest/issues/4977
     await super.runTests(tests, watcher, options)
 
     console.log("finished all tests")

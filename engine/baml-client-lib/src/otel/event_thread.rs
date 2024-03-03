@@ -7,6 +7,7 @@ use std::{
 use crate::api_wrapper::{api_interface::BoundaryAPI, core_types::LogSchema, APIWrapper};
 
 fn process_batch(api_config: &APIWrapper, batch: Vec<LogSchema>) {
+    println!("Processing batch of {:?} items", batch);
     for work in batch {
         api_config.pretty_print(&work);
         let _ = api_config.log_schema(&work);
@@ -19,6 +20,7 @@ fn batch_processor(
     tx: Sender<RxEventSignal>,
     max_batch_size: usize,
 ) {
+    println!("Starting batch_processor");
     let api_config = &api_config;
     let mut batch = Vec::with_capacity(max_batch_size);
     loop {
@@ -81,6 +83,7 @@ fn start_worker(
     let (tx, rx) = std::sync::mpsc::channel();
     let (stop_tx, stop_rx) = std::sync::mpsc::channel();
     let api_config = api_config.clone();
+    println!("Starting worker thread");
     let join_handle =
         std::thread::spawn(move || batch_processor(api_config, rx, stop_tx, max_batch_size));
     (tx, stop_rx, join_handle)

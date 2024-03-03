@@ -12,7 +12,7 @@ use otel::span_events::IOEvent;
 
 // use otel::tracer::{BamlSpanContextManager, FunctionArgs};
 use tokio::runtime::Runtime;
-use tracing::{span::Entered, warn, Instrument};
+use tracing::{info, span::Entered, warn, Instrument};
 
 // Return a global tokio runtime or create one if it doesn't exist.
 // Throws a JavaScript exception if the `Runtime` fails to create.
@@ -23,6 +23,8 @@ fn runtime<'a, C: Context<'a>>(cx: &mut C) -> NeonResult<&'static Runtime> {
 }
 
 fn init_tracer(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+    println!("Initializing tracerr");
+
     otel::init_tracer();
     Ok(cx.undefined())
 }

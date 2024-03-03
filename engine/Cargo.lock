@@ -180,7 +180,7 @@ dependencies = [
 
 [[package]]
 name = "baml-client-lib"
-version = "0.12.0-canary.1"
+version = "0.14.0-canary.0"
 dependencies = [
  "anyhow",
  "chrono",

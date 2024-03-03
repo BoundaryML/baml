@@ -5,3 +5,4 @@ packages:
   - 'common'
   - 'ts-test-project'
   - 'baml-test-runner'
+  - '../engine/baml-client-lib'

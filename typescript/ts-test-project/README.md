@@ -1,3 +1,6 @@
-This has almost the same models as the boundary-studio repo in /typescript/packages/common
+If you change the rust functions all you need to do is run
+`pnpm i` in this project alone to rebuild them and test them.
 
-Eventually we will have an actual common package we can import here.
+`pnpm run test` to test jest
+
+`npx tsx src/index.ts` to test without jest
