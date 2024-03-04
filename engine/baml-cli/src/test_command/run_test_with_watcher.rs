@@ -141,16 +141,24 @@ async fn run_pytest_and_update_state(
     if let Some(code) = output.status.code() {
         // Open the stderr file and check if it has any content
         let stderr_content = tokio::fs::read_to_string(&stderr_file_path).await?;
+        let stdout_content = tokio::fs::read_to_string(&stdout_file_path).await?;
         // Pytest exits with 1 even if it ran fine but had some tests failing (we should suppress this via a pytest plugin) so we dont mark as failure
         // But we could also get exit code 1 from other things like infisical CLI being absent, or python not being found.
         // so check the stderr for any other issues.
         if ![0, 1].contains(&code) {
+            println!("\n####### STDOUT Logs ########\n{}", stdout_content);
+            if !stderr_content.is_empty() {
+                println!("\n####### STDERR Logs ########\n{}", stderr_content);
+            }
+
             println!(
                 "{}",
                 format!(
-                    "Testing failed with exit code {}. Open the output logs below for more details\n",
-                    code,
+                    "Testing failed with exit code {}. Output logs were printed above this line.",
+                    code
                 )
+                .bright_red()
+                .bold()
             );
             println!(
                 "{}\n{}",
