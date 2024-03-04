@@ -81,6 +81,7 @@ pub(super) struct BamlEventSubscriber<'a> {
 
 impl<'a> BamlEventSubscriber<'a> {
     pub fn new(config: &'a mut BatchProcessor) -> Self {
+        println!("Creating BAML event subscriber");
         Self { config }
     }
 }
@@ -118,8 +119,8 @@ where
         id: &tracing::span::Id,
         ctx: tracing_subscriber::layer::Context<'_, S>,
     ) {
+        println!("Creating new span");
         // Get all parents
-
         let span = ctx.span(id).unwrap();
         let mut parents = vec![];
 
@@ -153,6 +154,7 @@ where
             None => return,
         };
         let event_id = uuid::Uuid::new_v4().to_string();
+        println!("New span: {} {}", function_name, event_id);
         let (parent_id, root_event_id, mut event_chain, tags) = span
             .parent()
             .map(|parent| {
@@ -160,21 +162,23 @@ where
                     .extensions()
                     .get::<partial_types::PartialLogSchema>()
                     .map(|p| {
+                        println!("\tParent: {:?}", p.event_id);
                         (
                             Some(p.event_id.clone()),
-                            p.root_event_id.clone(),
+                            Some(p.root_event_id.clone()),
                             p.context.event_chain.clone(),
                             p.context.tags.clone(),
                         )
                     })
-                    .unwrap_or((
-                        None,
-                        event_id.clone(),
-                        vec![],
-                        std::collections::HashMap::new(),
-                    ))
+                    .unwrap_or((None, None, vec![], std::collections::HashMap::new()))
             })
             .unwrap_or_default();
+
+        let root_event_id = root_event_id.unwrap_or(event_id.clone());
+        println!(
+            "Creating new span: {} {}: root: {}, parent: {:?}",
+            function_name, event_id, root_event_id, parent_id
+        );
 
         event_chain.push(EventChain {
             function_name,
@@ -210,10 +214,6 @@ where
         }
     }
 
-    fn on_exit(&self, _id: &tracing::span::Id, _ctx: tracing_subscriber::layer::Context<'_, S>) {
-        // Do nothing
-    }
-
     fn on_close(&self, id: tracing::span::Id, ctx: tracing_subscriber::layer::Context<'_, S>) {
         let span = ctx.span(&id).unwrap();
         let mut extension = span.extensions_mut();
@@ -223,6 +223,7 @@ where
                 return;
             }
         };
+
         match schema.to_final() {
             Ok(log_schema) => {
                 for schema in log_schema {
@@ -230,13 +231,13 @@ where
                     match self.config.submit(schema) {
                         Ok(_) => {}
                         Err(e) => {
-                            eprintln!("Error submitting log schema: {:?}", e);
+                            println!("Error submitting log schema: {:?}", e);
                         }
                     }
                 }
             }
             Err(e) => {
-                eprintln!("Error converting to final log schema: {:?}", e);
+                println!("Error converting to final log schema: {:?}", e);
             }
         }
     }

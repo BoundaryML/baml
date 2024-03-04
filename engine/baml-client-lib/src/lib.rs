@@ -229,6 +229,7 @@ fn run_with_trace_async(mut o_cx: FunctionContext) -> JsResult<JsArray> {
         let span = cx.argument::<JsBox<BamlSpanOwner>>(0)?;
         let result = cx.argument::<JsValue>(1)?;
         let _guard = span.enter();
+        println!("Return Got span: {:?}", span);
 
         let json_stringify = load_json_stringify(&mut cx)?;
         match native_stringify(&mut cx, json_stringify, result) {
@@ -247,6 +248,7 @@ fn run_with_trace_async(mut o_cx: FunctionContext) -> JsResult<JsArray> {
         let span = cx.argument::<JsBox<BamlSpanOwner>>(0)?;
         let args = cx.argument::<JsArray>(1)?.root(&mut cx);
         let _guard = span.enter();
+        println!("Input Got span: {:?}", span);
 
         let json_stringify = load_json_stringify(&mut cx)?;
         let args = args.to_inner(&mut cx).to_vec(&mut cx)?;
@@ -254,7 +256,9 @@ fn run_with_trace_async(mut o_cx: FunctionContext) -> JsResult<JsArray> {
             Ok(args) => {
                 IOEvent::input_event(&args);
             }
-            Err(e) => {}
+            Err(e) => {
+                return cx.throw_error(e.to_string());
+            }
         };
 
         Ok(cx.undefined())

@@ -25,7 +25,7 @@ fn batch_processor(
     let mut batch = Vec::with_capacity(max_batch_size);
     loop {
         // Try to fill the batch up to max_batch_size
-        match rx.recv_timeout(Duration::from_millis(1000)) {
+        match rx.recv_timeout(Duration::from_millis(10)) {
             Ok(TxEventSignal::Submit(work)) => batch.push(work),
             Ok(TxEventSignal::Flush) => {
                 if !batch.is_empty() {
@@ -67,8 +67,8 @@ enum RxEventSignal {
 
 pub(super) struct BatchProcessor {
     api_config: APIWrapper,
-    tx: Sender<TxEventSignal>,
-    rx: Receiver<RxEventSignal>,
+    tx: std::sync::Arc<std::sync::Mutex<Sender<TxEventSignal>>>,
+    rx: std::sync::Arc<std::sync::Mutex<Receiver<RxEventSignal>>>,
     join_handle: Option<std::thread::JoinHandle<()>>,
 }
 
@@ -98,31 +98,42 @@ impl BatchProcessor {
         let (tx, rx, join_handle) = start_worker(&api_config, max_batch_size);
         Self {
             api_config,
-            tx,
-            rx,
+            tx: std::sync::Arc::new(std::sync::Mutex::new(tx)),
+            rx: std::sync::Arc::new(std::sync::Mutex::new(rx)),
             join_handle: Some(join_handle),
         }
     }
 
     pub fn submit(&self, work: LogSchema) -> Result<()> {
-        self.tx.send(TxEventSignal::Submit(work))?;
+        println!("Submitting work");
+        let tx = match self.tx.lock() {
+            Ok(tx) => tx,
+            Err(e) => return Err(anyhow::anyhow!("Error submitting work: {:?}", e)),
+        };
+        tx.send(TxEventSignal::Submit(work))?;
         Ok(())
     }
 
     pub fn flush(&self) -> Result<()> {
         // Send a flush signal to the worker
-        self.tx.send(TxEventSignal::Flush)?;
+        self.tx
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Error flushing BatchProcessor: {:?}", e))?
+            .send(TxEventSignal::Flush)?;
 
         // Wait for the worker to finish processing the flush
         loop {
-            match self.rx.try_recv() {
-                Ok(RxEventSignal::Done) => return Ok(()),
-                Err(TryRecvError::Empty) => {
-                    std::thread::sleep(Duration::from_millis(100));
-                }
-                Err(TryRecvError::Disconnected) => {
-                    return Err(anyhow::anyhow!("BatchProcessor worker thread disconnected"))
-                }
+            match self.rx.lock() {
+                Ok(rx) => match rx.try_recv() {
+                    Ok(RxEventSignal::Done) => return Ok(()),
+                    Err(TryRecvError::Empty) => {
+                        std::thread::sleep(Duration::from_millis(100));
+                    }
+                    Err(TryRecvError::Disconnected) => {
+                        return Err(anyhow::anyhow!("BatchProcessor worker thread disconnected"))
+                    }
+                },
+                Err(e) => return Err(anyhow::anyhow!("Error flushing BatchProcessor: {:?}", e)),
             }
         }
     }
@@ -133,7 +144,10 @@ impl BatchProcessor {
             None => return Ok(()), // Already stopped
         };
 
-        self.tx.send(TxEventSignal::Stop)?;
+        self.tx
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Error stopping BatchProcessor: {:?}", e))?
+            .send(TxEventSignal::Stop)?;
         match join_handle.join() {
             Ok(_) => Ok(()),
             Err(e) => Err(anyhow::anyhow!("Error stopping BatchProcessor: {:?}", e)),
@@ -144,9 +158,15 @@ impl BatchProcessor {
         self.stop()?;
         let (tx, rx, join_handle) = start_worker(&api_config, max_batch_size);
         self.api_config = api_config;
-        self.tx = tx;
-        self.rx = rx;
+        self.tx = std::sync::Arc::new(std::sync::Mutex::new(tx));
+        self.rx = std::sync::Arc::new(std::sync::Mutex::new(rx));
         self.join_handle = Some(join_handle);
         Ok(())
+    }
+}
+
+impl Drop for BatchProcessor {
+    fn drop(&mut self) {
+        println!("Dropping BatchProcessor");
     }
 }

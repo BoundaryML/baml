@@ -1,9 +1,9 @@
 use core::panic;
-use std::{collections::HashMap};
+use std::collections::HashMap;
 
 use anyhow::Result;
 use opentelemetry::propagation::Injector;
-use tracing::{field::Visit};
+use tracing::field::Visit;
 
 use crate::{
     api_wrapper::core_types::{IOValue, TypeSchema, TypeSchemaName, ValueType},
@@ -17,6 +17,7 @@ use super::partial_types::{Apply, PartialLogSchema};
 pub(crate) struct IOEvent {
     is_input: bool,
     args: FunctionArgs,
+    ts_ms: u64,
 }
 
 pub type ArgAndType = (String, String);
@@ -28,7 +29,12 @@ impl IOEvent {
     pub fn input_event(args: &FunctionArgs) -> Result<()> {
         let args = serde_json::to_string(args)?;
         let is_input = true;
-        baml_event_def!(InputOutput, is_input, args);
+        // now
+        let ts_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+        baml_event_def!(InputOutput, is_input, args, ts_ms);
         Ok(())
     }
     pub fn output_event(value: &String, r#type: &String) -> Result<()> {
@@ -36,7 +42,12 @@ impl IOEvent {
         let args: FunctionArgs = (packet, Default::default());
         let args = serde_json::to_string(&args)?;
         let is_input = false;
-        baml_event_def!(InputOutput, is_input, args);
+        // now
+        let ts_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+        baml_event_def!(InputOutput, is_input, args, ts_ms);
         Ok(())
     }
 }
@@ -49,6 +60,15 @@ impl Visit for IOEvent {
     fn record_bool(&mut self, field: &tracing::field::Field, value: bool) {
         match field.name() {
             "is_input" => self.is_input = value,
+            name => {
+                panic!("unexpected field name: {}", name);
+            }
+        }
+    }
+
+    fn record_u64(&mut self, field: &tracing::field::Field, value: u64) {
+        match field.name() {
+            "ts_ms" => self.ts_ms = value,
             name => {
                 panic!("unexpected field name: {}", name);
             }
@@ -158,9 +178,18 @@ where
     S: for<'lookup> tracing_subscriber::registry::LookupSpan<'lookup>,
 {
     fn apply(&mut self, event: IOEvent, _span: &tracing_subscriber::registry::SpanRef<'a, S>) {
+        println!("Applying IOEvent");
+        let ts = event.ts_ms;
+        println!("Latency for ts: {}  {}", event.is_input, ts);
         match event.is_input {
-            true => self.io.input = event.into(),
-            false => self.io.output = event.into(),
+            true => {
+                self.io.input = event.into();
+                self.context.latency_ms -= ts;
+            }
+            false => {
+                self.io.output = event.into();
+                self.context.latency_ms += ts;
+            }
         }
     }
 }

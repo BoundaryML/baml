@@ -45,9 +45,11 @@ const tracerAsync = (cb, name, args, asKwargs, returnType) => {
     let store = asyncLocalStorage.getStore() ?? [];
     return await asyncLocalStorage.run([...store], async () => {
       let span = createSpan(name);
+      console.log('tracerAsync: span:', span, cb_args);
       trace_inputs(span, cb_args);
       try {
         const result = await cb(...cb_args);
+        console.log('tracerAsync: output:', span, result);
         trace_outputs(span, result);
         return result;
       } catch (e) {

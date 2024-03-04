@@ -1,3 +1,5 @@
+use std::os::unix::process;
+
 use anyhow::{Ok, Result};
 mod custom_exporter;
 mod event_thread;
@@ -22,6 +24,9 @@ fn maybe_create_config() -> bool {
             None => {
                 let processor = BatchProcessor::new(APIWrapper::default(), 100);
                 DEFAULT_CONFIG = Some(processor);
+                let subscriber = tracing_subscriber::registry::Registry::default()
+                    .with(BamlEventSubscriber::new(DEFAULT_CONFIG.as_mut().unwrap()));
+                tracing::subscriber::set_global_default(subscriber).unwrap();
                 true
             }
         }
@@ -38,10 +43,7 @@ fn default_config_mut() -> Option<&'static mut BatchProcessor> {
 }
 
 pub fn init_tracer() {
-    if maybe_create_config() {
-        let config = default_config_mut().unwrap();
-        tracing_subscriber::registry::Registry::default().with(BamlEventSubscriber::new(config));
-    }
+    maybe_create_config();
 }
 
 pub fn flush() -> Result<()> {

@@ -56,13 +56,7 @@ type LLMEvent = {
   data: {
     model_name: string,
     generated: string,
-    metadata: {
-      logprobs: any,
-      prompt_tokens?: number,
-      output_tokens?: number,
-      total_tokens?: number,
-      finish_reason?: string,
-    }
+    metadata: any
   }
 } | {
   name: 'llm_request_error',
