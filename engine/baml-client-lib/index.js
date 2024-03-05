@@ -66,7 +66,12 @@ const tracerAsync = (cb, name, args, asKwargs, returnType) => {
 };
 
 function logLLMEvent(event) {
-  logLLMEventNode({
+  const span = getSpan();
+  if (span === undefined) {
+    console.warn('BAML: Attempting to call an LLM event without an active span. Ignoring.');
+    return;
+  }
+  logLLMEventNode(span, {
     name: event.name, 
     meta: JSON.stringify(event.data)
   });

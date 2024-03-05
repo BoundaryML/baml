@@ -17,7 +17,7 @@ use tracing::Subscriber;
 use tracing_subscriber::layer::Layer;
 
 use crate::{
-    api_wrapper::core_types::{EventChain, LogSchemaContext},
+    api_wrapper::core_types::{EventChain, EventType, LogSchemaContext},
     baml_event,
 };
 
@@ -201,7 +201,14 @@ where
                 if let Err(e) = parse_event(event, &span) {
                     println!("Error parsing event: {:?}", e);
                 }
+            } else {
+                println!(
+                    "No inner span found for event {:?}",
+                    event.metadata().name()
+                );
             }
+        } else {
+            println!("No span id found for event: {:?}", event.metadata().name());
         }
     }
 

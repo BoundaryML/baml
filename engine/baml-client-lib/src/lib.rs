@@ -519,13 +519,8 @@ fn set_tags(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 }
 
 fn set_llm_event(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-    let event = cx.argument::<JsObject>(0)?;
-    /*
-        Event is {
-            name: string,
-            meta: string // JSON string
-        }
-    */
+    let span = cx.argument::<JsBox<BamlSpanOwner>>(0)?;
+    let event = cx.argument::<JsObject>(1)?;
 
     let name: Handle<JsString> = event
         .get_value(&mut cx, "name")?
@@ -538,6 +533,7 @@ fn set_llm_event(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
     let meta = meta.value(&mut cx);
 
+    let _guard = span.enter();
     match otel::log_event(name.as_str(), meta.as_str()) {
         Ok(_) => Ok(cx.undefined()),
         Err(e) => cx.throw_error(e.to_string()),

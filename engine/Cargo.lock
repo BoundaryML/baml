@@ -184,6 +184,7 @@ version = "0.14.0-canary.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "colored",
  "futures-core",
  "hostname",
  "lazy_static",

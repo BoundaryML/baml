@@ -48,9 +48,12 @@ where
         event: LlmRequestArgs,
         _span: &tracing_subscriber::registry::SpanRef<'a, S>,
     ) {
-        let meta = self.get_meta_data_mut(true).unwrap();
-        if let Some(input) = &mut meta.input {
-            input.invocation_params = event.invocation_params;
+        if let Some(meta) = self.get_meta_data_mut(false) {
+            if let Some(input) = &mut meta.input {
+                input.invocation_params = event.invocation_params;
+            }
+        } else {
+            println!("No metadata found for llm event");
         }
     }
 }

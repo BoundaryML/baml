@@ -1,5 +1,7 @@
-use std::collections::HashMap;
+use colored::*;
+use std::{collections::HashMap, str::FromStr};
 
+use neon::meta;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -201,12 +203,147 @@ impl Default for Template {
     }
 }
 
+impl LLMEventInputPrompt {
+    fn pretty_print(&self) -> String {
+        match &self.template {
+            Template::Single(s) => s.clone(),
+            Template::Multiple(chats) => chats
+                .iter()
+                .map(|chat| {
+                    format!(
+                        "{} {}\n{}",
+                        "Role:".yellow(),
+                        chat.role.as_str().yellow(),
+                        chat.content
+                    )
+                })
+                .collect::<Vec<String>>()
+                .join("\n"),
+        }
+    }
+}
+
 impl LogSchema {
     pub fn pretty_string(&self) -> Option<String> {
         match self.event_type {
             EventType::FuncLlm => {
-                // Returns a colored string representation of the LogSchema
-                todo!();
+                let log = self;
+                let (llm_prompt, llm_raw_output) = match log.metadata.as_ref().and_then(|meta| {
+                    // TODO: Swap out template vars
+                    let input = match &meta.input.prompt.template {
+                        Template::Single(o) => o.clone(),
+                        Template::Multiple(chats) => chats
+                            .iter()
+                            .map(|c| {
+                                format!(
+                                    "{}:\n{}",
+                                    c.role.as_str().yellow().bold(),
+                                    c.content.white()
+                                )
+                            })
+                            .collect::<Vec<_>>()
+                            .join("\n"),
+                    };
+
+                    let mut colored_input = input.clone();
+                    meta.input.prompt.template_args.iter().for_each(|(k, v)| {
+                        let replacement = format!("{}", v.blue()); // Colorize the replacement text in magenta
+                        colored_input = colored_input.replace(k, &replacement);
+                    });
+
+                    let raw_output = match &meta.output {
+                        Some(output) => Some(output.raw_text.clone()),
+                        None => None,
+                    };
+
+                    Some((colored_input, raw_output))
+                }) {
+                    Some((llm_prompt, llm_raw_output)) => (Some(llm_prompt), llm_raw_output),
+                    None => (None, None),
+                };
+
+                let err = log.error.as_ref().and_then(|error| match &error.traceback {
+                    Some(traceback) => Some(format!("{}\n{}", error.message, traceback)),
+                    None => Some(error.message.clone()),
+                });
+
+                let parsed_output = match log.io.output.as_ref().and_then(|output| {
+                    let r#type = match &output.r#type.name {
+                        TypeSchemaName::Single => {
+                            let fields = output
+                                .r#type
+                                .fields
+                                .iter()
+                                .map(|(k, v)| format!("{}: {}", k, v))
+                                .collect::<Vec<_>>()
+                                .join(", ");
+                            format!("{}", fields)
+                        }
+                        TypeSchemaName::Multi => {
+                            let fields = output
+                                .r#type
+                                .fields
+                                .iter()
+                                .map(|(k, v)| format!("{}: {}", k, v))
+                                .collect::<Vec<_>>()
+                                .join(", ");
+                            format!("{}", fields)
+                        }
+                    };
+                    let output = match &output.value {
+                        ValueType::String(s) => serde_json::Value::from_str(s),
+                        ValueType::List(l) => l
+                            .iter()
+                            .map(|v| serde_json::Value::from_str(v))
+                            .collect::<Result<Vec<_>, _>>()
+                            .map(|v| serde_json::Value::Array(v)),
+                    }
+                    .map(|v| {
+                        serde_json::to_string_pretty(&v)
+                            .unwrap_or_else(|_| format!("Failed to serialize output: {:?}", v))
+                    })
+                    .ok();
+                    Some((output, Some(r#type)))
+                }) {
+                    Some((Some(output), Some(r#type))) => Some((output, r#type)),
+                    _ => None,
+                };
+
+                let res = match (llm_prompt, llm_raw_output, err, parsed_output) {
+                    (Some(llm_prompt), Some(llm_raw_output), Some(err), _) => vec![
+                        format!("\n{}", "---- Prompt ---------".dimmed()),
+                        format!("{}", llm_prompt),
+                        format!("\n{}", "---- Raw Response ---".dimmed()),
+                        format!("{}", llm_raw_output.white()),
+                        format!("{}", "----- Error -----".dimmed()),
+                        format!("{}", err.red()),
+                    ],
+                    (Some(llm_prompt), None, Some(err), _) => vec![
+                        format!("\n{}", "---- Prompt ---------".dimmed()),
+                        format!("{}", llm_prompt),
+                        format!("{}", "----- Error -----".dimmed()),
+                        format!("{}", err.red()),
+                    ],
+                    (Some(llm_prompt), Some(llm_raw_output), None, Some((output, output_type))) => {
+                        vec![
+                            format!("\n{}", "------- Prompt ------".yellow()),
+                            format!("{}", llm_prompt),
+                            format!("\n{}", "---- Raw Response ---".dimmed()),
+                            format!("{}", llm_raw_output.dimmed()),
+                            format!(
+                                "\n{}{}{}",
+                                "----- Parsed Response (".green(),
+                                output_type.green(),
+                                ") -----".green()
+                            ),
+                            format!("{}", output.green()),
+                        ]
+                    }
+                    _ => vec![],
+                }
+                .join("\n");
+
+                Some(res)
             }
             _ => None,
         }

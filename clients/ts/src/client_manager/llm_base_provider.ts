@@ -53,6 +53,10 @@ abstract class LLMBaseProvider extends BaseProvider {
       throw new Error(`Unknown arguments: ${Object.keys(rest).join(', ')}`);
     }
 
+    if (typeof provider !== 'string') {
+      throw new Error(`provider must be a string: ${provider}`);
+    }
+
     super();
 
     this.provider = provider;

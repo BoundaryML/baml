@@ -70,23 +70,26 @@ where
         event: LlmRequestEnd,
         _span: &tracing_subscriber::registry::SpanRef<'a, S>,
     ) {
-        let meta = self.get_meta_data_mut(true).unwrap();
-        meta.model_name = event.model_name;
-        match (event.generated, event.metadata) {
-            (None, _) => {}
-            (Some(generated), Some(metadata)) => {
-                meta.output = Some(LLMOutputModel {
-                    raw_text: generated,
-                    metadata,
-                    ..Default::default()
-                });
+        if let Some(meta) = self.get_meta_data_mut(false) {
+            meta.model_name = event.model_name;
+            match (event.generated, event.metadata) {
+                (None, _) => {}
+                (Some(generated), Some(metadata)) => {
+                    meta.output = Some(LLMOutputModel {
+                        raw_text: generated,
+                        metadata,
+                        ..Default::default()
+                    });
+                }
+                (Some(generated), None) => {
+                    meta.output = Some(LLMOutputModel {
+                        raw_text: generated,
+                        ..Default::default()
+                    });
+                }
             }
-            (Some(generated), None) => {
-                meta.output = Some(LLMOutputModel {
-                    raw_text: generated,
-                    ..Default::default()
-                });
-            }
+        } else {
+            println!("No metadata found for llm event");
         }
     }
 }

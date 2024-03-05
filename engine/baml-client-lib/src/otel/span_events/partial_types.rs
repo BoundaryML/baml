@@ -4,7 +4,7 @@ use crate::api_wrapper::core_types::{
 };
 use anyhow::Result;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(super) struct PartialMetadataType {
     pub(super) model_name: Option<String>,
     pub(super) provider: Option<String>,
@@ -55,7 +55,7 @@ impl PartialLogSchema {
                         let (metadata, error) = self.metadata.pop().unwrap().to_final();
                         Ok(vec![LogSchema {
                             project_id,
-                            event_type: self.event_type.clone(),
+                            event_type: EventType::FuncLlm,
                             root_event_id: self.root_event_id.clone(),
                             event_id: self.event_id.clone(),
                             parent_event_id: self.parent_event_id.clone(),
@@ -77,7 +77,7 @@ impl PartialLogSchema {
                             let (metadata, error) = partial.to_final();
                             let mut schema = LogSchema {
                                 project_id: project_id.clone(),
-                                event_type: self.event_type.clone(),
+                                event_type: EventType::FuncLlm,
                                 root_event_id: self.root_event_id.clone(),
                                 event_id: uuid::Uuid::new_v4().to_string(),
                                 parent_event_id: Some(self.event_id.clone()),
@@ -122,7 +122,7 @@ impl PartialLogSchema {
                 }
                 Ok(vec![LogSchema {
                     project_id,
-                    event_type: self.event_type.clone(),
+                    event_type: EventType::Log,
                     root_event_id: self.root_event_id.clone(),
                     event_id: self.event_id.clone(),
                     parent_event_id: self.parent_event_id.clone(),
@@ -138,7 +138,10 @@ impl PartialLogSchema {
 
 impl PartialMetadataType {
     fn to_final(self) -> (Option<LLMEventSchema>, Option<Error>) {
-        if self.provider.is_none() || self.input.is_none() {
+        if self.provider.is_none() {
+            return (None, self.error);
+        }
+        if self.input.is_none() {
             return (None, self.error);
         }
         if self.output.is_none() && self.error.is_none() {

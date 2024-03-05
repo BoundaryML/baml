@@ -28,6 +28,7 @@ lazy_static = "1.4.0"
 neon = { version = "1.0.0-alpha.4", features = ["napi-6", "futures"] }
 tracing-subscriber = "0.3.18"
 hostname = "0.3.1"
+colored = "2.1.0"
 # tokio_unstable, feature = "tracing"
 # tokio_unstable = { version = "*", features = ["tracing"] }
 # [dependencies.neon]

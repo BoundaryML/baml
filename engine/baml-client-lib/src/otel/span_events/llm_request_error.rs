@@ -71,6 +71,8 @@ where
                 traceback: event.traceback,
                 ..Default::default()
             });
+        } else {
+            println!("No metadata found for llm event");
         }
     }
 }

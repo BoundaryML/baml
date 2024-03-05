@@ -3,7 +3,7 @@ use serde::Deserialize;
 use tracing::field::Visit;
 
 use crate::{
-    api_wrapper::core_types::{LLMEventInput, LLMEventInputPrompt, Template},
+    api_wrapper::core_types::{EventType, LLMEventInput, LLMEventInputPrompt, Template},
     baml_event_def,
 };
 
@@ -12,14 +12,16 @@ use super::partial_types::{Apply, PartialLogSchema};
 #[derive(Default, Deserialize)]
 pub(crate) struct LlmRequestStart {
     prompt: Option<Template>,
-    provider: String,
+    provider: Option<String>,
 }
 
 impl LlmRequestStart {
     pub fn self_event(&self) -> Result<()> {
-        match &self.prompt {
-            Some(prompt) => Self::event(prompt, &self.provider),
-            None => Ok(()),
+        match (&self.prompt, &self.provider) {
+            (Some(prompt), Some(provider)) => Self::event(prompt, provider),
+            (Some(_), None) => Err(anyhow::anyhow!("provider is missing")),
+            (None, Some(_)) => Err(anyhow::anyhow!("prompt is missing")),
+            (None, None) => Err(anyhow::anyhow!("prompt and provider are missing")),
         }
     }
 
@@ -39,7 +41,7 @@ impl Visit for LlmRequestStart {
     fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
         match field.name() {
             "prompt" => self.prompt = serde_json::from_str(value).ok(),
-            "provider" => self.provider = value.to_string(),
+            "provider" => self.provider = Some(value.to_string()),
             name => {
                 panic!("unexpected field name: {}", name);
             }
@@ -57,6 +59,7 @@ where
         event: LlmRequestStart,
         _span: &tracing_subscriber::registry::SpanRef<'a, S>,
     ) {
+        self.event_type = EventType::FuncLlm;
         let meta = self.get_meta_data_mut(true).unwrap();
         match (&mut meta.input, event.prompt) {
             (_, None) => {
@@ -75,6 +78,6 @@ where
                 });
             }
         }
-        meta.provider = Some(event.provider);
+        meta.provider = event.provider;
     }
 }

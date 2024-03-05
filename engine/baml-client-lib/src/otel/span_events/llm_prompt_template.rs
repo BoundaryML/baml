@@ -59,13 +59,16 @@ where
         event: LlmPromptTemplate,
         _span: &tracing_subscriber::registry::SpanRef<'a, S>,
     ) {
-        let meta = self.get_meta_data_mut(true).unwrap();
-        if let Some(input) = &mut meta.input {
-            input.prompt = LLMEventInputPrompt {
-                template: event.template,
-                template_args: event.template_args,
-                ..Default::default()
+        if let Some(meta) = self.get_meta_data_mut(false) {
+            if let Some(input) = &mut meta.input {
+                input.prompt = LLMEventInputPrompt {
+                    template: event.template,
+                    template_args: event.template_args,
+                    ..Default::default()
+                }
             }
+        } else {
+            println!("No metadata found for llm event");
         }
     }
 }

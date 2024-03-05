@@ -1,4 +1,5 @@
 use anyhow::Result;
+use colored::*;
 pub(super) mod api_interface;
 pub(super) mod core_types;
 use serde_json::Value;
@@ -22,7 +23,7 @@ impl APIWrapper {
 
         if log_level {
             match payload.pretty_string() {
-                Some(s) => println!("{}", s),
+                Some(s) => println!("{s}"),
                 None => println!("Failed to pretty print log schema {:?}", payload),
             }
         }
