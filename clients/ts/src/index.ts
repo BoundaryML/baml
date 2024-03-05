@@ -1,4 +1,4 @@
-import { traceAsync } from "baml-client-lib";
+import { traceAsync, setTags, setVariant } from "baml-client-lib";
 
 
-export { traceAsync };
+export { traceAsync, setTags, setVariant };

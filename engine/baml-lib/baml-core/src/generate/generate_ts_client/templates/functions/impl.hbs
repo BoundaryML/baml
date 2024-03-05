@@ -19,12 +19,15 @@ const deserializer = new Deserializer<{{function.return_type}}>(schema, {
   {{!-- const {{function.params.name}} = {{function.params.name}}; --}}
   {{else}}
   {{#each function.params.values as |v|}}
-  const {{v.name}} = {{v.expr}};
+  const {{v.name}} = {{{v.expr}}};
   {{/each}}
   {{/if}}
   
     const result = await {{client}}.run_prompt_template(
       prompt_template,
+      [{{#each inputs as |input key|}}
+        "{{key}}",
+      {{/each}}],
       {
         {{#each inputs as |input key|}}
         "{{key}}": {{input}},
@@ -32,6 +35,6 @@ const deserializer = new Deserializer<{{function.return_type}}>(schema, {
       }
     );
 
-    return deserializer.coerce(result);
+    return deserializer.coerce(result.generated);
   }
 );

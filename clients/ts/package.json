@@ -1,8 +1,15 @@
 {
   "name": "@boundaryml/baml-client",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "",
-  "main": "src/baml_lib/index.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./client_manager": "./dist/client_manager/index.js",
+    "./deserializer": "./dist/deserializer/index.js",
+    "./deserializer/deserializer": "./dist/deserializer/deserializer.js"
+  },
   "scripts": {
     "test": "jest",
     "build": "tsc"

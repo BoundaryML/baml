@@ -178,9 +178,7 @@ where
     S: for<'lookup> tracing_subscriber::registry::LookupSpan<'lookup>,
 {
     fn apply(&mut self, event: IOEvent, _span: &tracing_subscriber::registry::SpanRef<'a, S>) {
-        println!("Applying IOEvent");
         let ts = event.ts_ms;
-        println!("Latency for ts: {}  {}", event.is_input, ts);
         match event.is_input {
             true => {
                 self.io.input = event.into();

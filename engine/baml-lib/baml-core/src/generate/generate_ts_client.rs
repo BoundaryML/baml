@@ -33,13 +33,13 @@ pub(crate) fn generate_ts(ir: &IntermediateRepr, gen: &Generator) -> std::io::Re
     let file = collector.start_file("./", "json_schema", false);
     file.add_import("json-schema", "JSONSchema7", None, false);
     file.add_import(
-        "@boundaryml/baml_client/baml_lib/deserializer/deserializer",
+        "@boundaryml/baml-client/deserializer/deserializer",
         "registerEnumDeserializer",
         None,
         false,
     );
     file.add_import(
-        "@boundaryml/baml_client/baml_lib/deserializer/deserializer",
+        "@boundaryml/baml-client/deserializer/deserializer",
         "registerObjectDeserializer",
         None,
         false,

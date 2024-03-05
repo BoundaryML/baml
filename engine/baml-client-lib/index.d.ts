@@ -11,6 +11,8 @@ export function setTags(tags: {
   [key: string]: string | null;
 }): void;
 
+export function setVariant(variant: string): void;
+
 // Define a more specific type for the argument metadata.
 type ArgMetadata = { name: string; type: string };
 

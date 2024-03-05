@@ -56,7 +56,7 @@ impl GeneratorLanguage {
     pub fn package_name(&self) -> &'static str {
         match self {
             Self::Python => "baml",
-            Self::TypeScript => "@boundaryml/baml_client",
+            Self::TypeScript => "@boundaryml/baml-client",
         }
     }
 

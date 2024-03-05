@@ -21,7 +21,10 @@ impl APIWrapper {
         };
 
         if log_level {
-            println!("{:?}", payload.pretty_string());
+            match payload.pretty_string() {
+                Some(s) => println!("{}", s),
+                None => println!("Failed to pretty print log schema {:?}", payload),
+            }
         }
     }
 

@@ -24,7 +24,7 @@ class ClientManager {
         if (!provider_) {
             throw new Error(`Provider ${provider} not found`);
         }
-        const client = provider_.createClient(name, options);
+        const client = provider_.createClient(name, { ...options, provider });
         this.clients.set(name, client);
         return client;
     }

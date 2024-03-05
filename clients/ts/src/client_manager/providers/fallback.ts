@@ -6,19 +6,19 @@ class FallbackClient extends LLMBaseProvider {
     private fallbackNames: string[];
 
     constructor(params: LLMBaseProviderArgs & {
-        fallbacks?: string[]
+        strategy?: string[]
     }) {
         const {
-            fallbacks,
+            strategy,
             ...rest
         } = params;
 
-        if (!fallbacks) {
-            throw new Error("No fallbacks provided");
+        if (!strategy) {
+            throw new Error("No fallback strategy provided");
         }
 
         super(rest);
-        this.fallbackNames = fallbacks;
+        this.fallbackNames = strategy;
     }
 
 

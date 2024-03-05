@@ -23,8 +23,6 @@ fn runtime<'a, C: Context<'a>>(cx: &mut C) -> NeonResult<&'static Runtime> {
 }
 
 fn init_tracer(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-    println!("Initializing tracerr");
-
     otel::init_tracer();
     Ok(cx.undefined())
 }
@@ -38,10 +36,7 @@ fn stop_tracer(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
 fn load_json_stringify<'a, C: Context<'a>>(cx: &mut C) -> JsResult<'a, JsFunction> {
     // Get the global object.
-    let global = cx.global();
-
-    // Access the JSON object from the global scope.
-    let json: Handle<'_, JsObject> = global.get(cx, "JSON")?;
+    let json = cx.global::<JsObject>("JSON")?;
 
     // Get the stringify function from the JSON object.
     json.get(cx, "stringify")
@@ -225,11 +220,36 @@ fn run_with_trace_async(mut o_cx: FunctionContext) -> JsResult<JsArray> {
     let fnx = o_cx.argument::<JsFunction>(0)?.root(&mut o_cx);
     let (as_kwargs, args_native, return_type) = args_to_native(&mut o_cx, 1)?;
 
+    let log_error = JsFunction::new(&mut o_cx, move |mut cx| {
+        let span = cx.argument::<JsBox<BamlSpanOwner>>(0)?;
+        let error_code = cx.argument::<JsValue>(1)?;
+        let error_code = match error_code.downcast::<JsNumber, _>(&mut cx) {
+            Ok(n) => n.value(&mut cx) as i32,
+            Err(_) => -2,
+        };
+        let error_message = cx.argument::<JsString>(2)?.value(&mut cx);
+        let traceback = match cx.argument_opt(3) {
+            Some(traceback) => match traceback.downcast::<JsString, _>(&mut cx) {
+                Ok(s) => Some(s.value(&mut cx)),
+                Err(_) => None,
+            },
+            None => None,
+        };
+        let error_message = Some(error_message.as_str());
+        let traceback = traceback.as_deref();
+
+        let _guard = span.enter();
+
+        // let traceback = error.
+        baml_event!(Exception, error_code, error_message, traceback);
+
+        Ok(cx.undefined())
+    })?;
+
     let log_return_type = JsFunction::new(&mut o_cx, move |mut cx| {
         let span = cx.argument::<JsBox<BamlSpanOwner>>(0)?;
         let result = cx.argument::<JsValue>(1)?;
         let _guard = span.enter();
-        println!("Return Got span: {:?}", span);
 
         let json_stringify = load_json_stringify(&mut cx)?;
         match native_stringify(&mut cx, json_stringify, result) {
@@ -247,8 +267,7 @@ fn run_with_trace_async(mut o_cx: FunctionContext) -> JsResult<JsArray> {
     let log_input_args = JsFunction::new(&mut o_cx, move |mut cx| {
         let span = cx.argument::<JsBox<BamlSpanOwner>>(0)?;
         let args = cx.argument::<JsArray>(1)?.root(&mut cx);
-        let _guard = span.enter();
-        println!("Input Got span: {:?}", span);
+        let _guard: Entered<'_> = span.enter();
 
         let json_stringify = load_json_stringify(&mut cx)?;
         let args = args.to_inner(&mut cx).to_vec(&mut cx)?;
@@ -268,8 +287,8 @@ fn run_with_trace_async(mut o_cx: FunctionContext) -> JsResult<JsArray> {
      * Rust seems to lose the AsyncLocalStorage context required to properly do tracing.
      * Becaues of this, we instead let typescript handle actually calling the function, and rust just exposes helper functions to propagate the inputs, outputs of calling those functions, etc.
      */
-    let function_arrays = vec![log_input_args, log_return_type];
-    let js_array = JsArray::new(&mut o_cx, function_arrays.len() as u32);
+    let function_arrays = vec![log_input_args, log_return_type, log_error];
+    let js_array = JsArray::new(&mut o_cx, function_arrays.len());
     for (i, f) in function_arrays.iter().enumerate() {
         js_array.set(&mut o_cx, i as u32, f.clone())?;
     }
@@ -396,8 +415,54 @@ fn run_with_trace(mut o_cx: FunctionContext) -> JsResult<JsFunction> {
     })
 }
 
+fn set_variant(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+    let (span, variant) = match cx.len() {
+        1 => {
+            let variant = cx.argument::<JsString>(0)?.value(&mut cx);
+            (None, variant)
+        }
+        2 => {
+            let span = cx.argument::<JsBox<BamlSpanOwner>>(0)?;
+            let variant = cx.argument::<JsString>(1)?.value(&mut cx);
+            (Some(span), variant)
+        }
+        _ => {
+            return cx.throw_error("Expected 1 or 2 arguments");
+        }
+    };
+
+    let variant = variant.as_str();
+
+    match span {
+        Some(span) => {
+            let _guard = span.enter();
+            match baml_event!(Variant, variant) {
+                Ok(_) => Ok(cx.undefined()),
+                Err(e) => cx.throw_error(e.to_string()),
+            }
+        }
+        None => match baml_event!(Variant, variant) {
+            Ok(_) => Ok(cx.undefined()),
+            Err(e) => cx.throw_error(e.to_string()),
+        },
+    }
+}
+
 fn set_tags(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-    let kv_map = cx.argument::<JsObject>(0)?;
+    let (span, kv_map) = match cx.len() {
+        1 => {
+            let kv_map = cx.argument::<JsObject>(0)?;
+            (None, kv_map)
+        }
+        2 => {
+            let span = cx.argument::<JsBox<BamlSpanOwner>>(0)?;
+            let kv_map = cx.argument::<JsObject>(1)?;
+            (Some(span), kv_map)
+        }
+        _ => {
+            return cx.throw_error("Expected 1 or 2 arguments");
+        }
+    };
     let mut tags = HashMap::new();
 
     let keys = kv_map
@@ -438,9 +503,18 @@ fn set_tags(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     }
 
     let tags = &tags;
-    match baml_event!(SetTags, tags) {
-        Ok(_) => Ok(cx.undefined()),
-        Err(e) => cx.throw_error(e.to_string()),
+    match span {
+        Some(span) => {
+            let _guard = span.enter();
+            match baml_event!(SetTags, tags) {
+                Ok(_) => Ok(cx.undefined()),
+                Err(e) => cx.throw_error(e.to_string()),
+            }
+        }
+        None => match baml_event!(SetTags, tags) {
+            Ok(_) => Ok(cx.undefined()),
+            Err(e) => cx.throw_error(e.to_string()),
+        },
     }
 }
 
@@ -478,6 +552,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     cx.export_function("traceAsync", run_with_trace_async)?;
     cx.export_function("getSpanForAsync", get_span)?;
     cx.export_function("setTags", set_tags)?;
+    cx.export_function("setVariant", set_variant)?;
     cx.export_function("logLLMEvent", set_llm_event)?;
 
     Ok(())

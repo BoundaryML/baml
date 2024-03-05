@@ -23,14 +23,8 @@ impl WithFileContent<TSLanguageFeatures> for Walker<'_, &Client> {
     fn write(&self, collector: &mut TSFileCollector) {
         let file = collector.start_file(self.file_dir(), self.file_name(), false);
         file.add_import(
-            "@boundaryml/baml_client/baml_lib/client_manager",
+            "@boundaryml/baml-client/client_manager",
             "clientManager",
-            None,
-            false,
-        );
-        file.add_import(
-            "@boundaryml/baml_client/baml_lib/client_manager",
-            "IClient",
             None,
             false,
         );

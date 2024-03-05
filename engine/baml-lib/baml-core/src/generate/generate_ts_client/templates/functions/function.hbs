@@ -49,7 +49,7 @@ function create{{name}}Instance(): I{{name}} & {{name}}Function {
           }
           {{/if}}
         ) => {
-          setVariant(name);
+          setVariant("{{v.name}}");
           return await cb({{#if params.positional}}{{params.name}}{{else}}params{{/if}});
         }, '{{name}}', [
           {{#if params.positional}}

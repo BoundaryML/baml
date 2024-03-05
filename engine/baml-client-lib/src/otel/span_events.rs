@@ -22,7 +22,6 @@ use crate::{
 };
 
 use self::events::SpanEvent;
-use self::exception::Exception;
 use self::llm_prompt_template::LlmPromptTemplate;
 use self::llm_request_args::LlmRequestArgs;
 use self::llm_request_end::LlmRequestEnd;
@@ -30,8 +29,8 @@ use self::llm_request_error::LlmRequestError;
 use self::partial_types::Apply;
 
 pub(crate) use self::{
-    io::IOEvent, llm_cache_hit::LlmRequestCacheHit, llm_request_start::LlmRequestStart,
-    set_tags::SetTags, variant::Variant,
+    exception::Exception, io::IOEvent, llm_cache_hit::LlmRequestCacheHit,
+    llm_request_start::LlmRequestStart, set_tags::SetTags, variant::Variant,
 };
 
 use super::event_thread::BatchProcessor;
@@ -81,7 +80,6 @@ pub(super) struct BamlEventSubscriber<'a> {
 
 impl<'a> BamlEventSubscriber<'a> {
     pub fn new(config: &'a mut BatchProcessor) -> Self {
-        println!("Creating BAML event subscriber");
         Self { config }
     }
 }
@@ -119,7 +117,6 @@ where
         id: &tracing::span::Id,
         ctx: tracing_subscriber::layer::Context<'_, S>,
     ) {
-        println!("Creating new span");
         // Get all parents
         let span = ctx.span(id).unwrap();
         let mut parents = vec![];
@@ -154,7 +151,6 @@ where
             None => return,
         };
         let event_id = uuid::Uuid::new_v4().to_string();
-        println!("New span: {} {}", function_name, event_id);
         let (parent_id, root_event_id, mut event_chain, tags) = span
             .parent()
             .map(|parent| {
@@ -162,7 +158,6 @@ where
                     .extensions()
                     .get::<partial_types::PartialLogSchema>()
                     .map(|p| {
-                        println!("\tParent: {:?}", p.event_id);
                         (
                             Some(p.event_id.clone()),
                             Some(p.root_event_id.clone()),
@@ -175,10 +170,6 @@ where
             .unwrap_or_default();
 
         let root_event_id = root_event_id.unwrap_or(event_id.clone());
-        println!(
-            "Creating new span: {} {}: root: {}, parent: {:?}",
-            function_name, event_id, root_event_id, parent_id
-        );
 
         event_chain.push(EventChain {
             function_name,
@@ -208,7 +199,7 @@ where
         if let Some(span_id) = ctx.current_span().id() {
             if let Some(span) = ctx.span(span_id) {
                 if let Err(e) = parse_event(event, &span) {
-                    eprintln!("Error parsing event: {:?}", e);
+                    println!("Error parsing event: {:?}", e);
                 }
             }
         }
@@ -248,7 +239,7 @@ impl Drop for BamlEventSubscriber<'_> {
         match self.config.stop() {
             Ok(_) => {}
             Err(e) => {
-                eprintln!("Error BAML thread: {:?}", e);
+                println!("Error BAML thread: {:?}", e);
             }
         }
     }

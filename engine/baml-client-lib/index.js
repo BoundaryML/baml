@@ -3,7 +3,8 @@
 const {
   initTracer,
   trace,
-  setTags,
+  setVariant: setVariantNode,
+  setTags: setTagsNode,
   traceAsync,
   logLLMEvent: logLLMEventNode,
   getSpanForAsync
@@ -29,7 +30,9 @@ const createSpan = (name) => {
 
 const getSpan = () => {
   let store = asyncLocalStorage.getStore();
-  console.assert(store !== undefined, 'getSpan: store is undefined');
+  if (store === undefined) {
+    return undefined;
+  }
   return store.at(-1);
 }
 
@@ -40,20 +43,22 @@ const tracer = (cb, name, args, asKwargs, returnType) => {
 };
 
 const tracerAsync = (cb, name, args, asKwargs, returnType) => {
-  const [trace_inputs, trace_outputs] = traceAsync(cb, args, asKwargs, returnType);
+  const [trace_inputs, trace_outputs, trace_errors] = traceAsync(cb, args, asKwargs, returnType);
   return async (...cb_args) => {
     let store = asyncLocalStorage.getStore() ?? [];
     return await asyncLocalStorage.run([...store], async () => {
       let span = createSpan(name);
-      console.log('tracerAsync: span:', span, cb_args);
       trace_inputs(span, cb_args);
       try {
         const result = await cb(...cb_args);
-        console.log('tracerAsync: output:', span, result);
         trace_outputs(span, result);
         return result;
       } catch (e) {
-        console.log('error:', e);
+        if (e instanceof Error) {
+          trace_errors(span, 2, e.message, e.stack?.split('\n').slice(1).join('\n'));
+        } else {
+          trace_errors(span, 2, `${e}`);
+        }
         throw e;
       }
     });
@@ -61,7 +66,28 @@ const tracerAsync = (cb, name, args, asKwargs, returnType) => {
 };
 
 function logLLMEvent(event) {
-  logLLMEventNode(event.name, event.data);
+  logLLMEventNode({
+    name: event.name, 
+    meta: JSON.stringify(event.data)
+  });
+}
+
+function setTags(tags) {
+  const span = getSpan();
+  if (span) {
+    setTagsNode(span, tags);
+  } else {
+    setTagsNode(tags);
+  }
+}
+
+function setVariant(variant) {
+  const span = getSpan();
+  if (span) {
+    setVariantNode(span, variant);
+  } else {
+    setVariantNode(variant);
+  }
 }
 
 initTracer();
@@ -69,6 +95,7 @@ initTracer();
 module.exports = {
   initTracer,
   setTags,
+  setVariant,
   logLLMEvent,
   trace: tracer,
   traceAsync: tracerAsync,

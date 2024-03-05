@@ -11,6 +11,10 @@ class OpenAIClient extends LLMChatProvider {
     constructor(params: LLMBaseProviderArgs) {
         const {
             api_key,
+            api_base,
+            api_version,
+            api_type,
+            engine,
             organization,
             base_url,
             timeout,
@@ -39,13 +43,26 @@ class OpenAIClient extends LLMChatProvider {
             },
             ...rest
         });
-        this.client = new OpenAI({
-            apiKey: api_key,
-            organization: organization,
-            baseURL: base_url,
-            timeout: timeout,
-            maxRetries: max_retries ?? 0,
-        });
+
+        if (api_type === "azure") {
+            this.client = new OpenAI({
+                apiKey: api_key,
+                organization,
+                baseURL: base_url ?? `https://${engine}.openai.azure.com/openai/deployments/${model}`,
+                timeout,
+                maxRetries: max_retries ?? 0,
+                defaultQuery: api_version ? { 'api_version': api_version } : undefined,
+                defaultHeaders: { 'api-key': api_key }
+            });
+        } else {
+            this.client = new OpenAI({
+                apiKey: api_key,
+                organization: organization,
+                baseURL: base_url,
+                timeout: timeout,
+                maxRetries: max_retries ?? 0,
+            });
+        }
 
         this.params = {
             model,
