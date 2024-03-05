@@ -1,4 +1,4 @@
-import { registerEnumDeserializer } from "../src/baml_lib/deserializer/deserializer";
+import { registerEnumDeserializer } from "../src/deserializer/deserializer";
 
 enum Category {
     ONE = "ONE",

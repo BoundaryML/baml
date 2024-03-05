@@ -1,5 +1,5 @@
 import { JSONSchema7 } from "json-schema";
-import { Deserializer, registerObjectDeserializer } from "../src/baml_lib/deserializer/deserializer";
+import { Deserializer, registerObjectDeserializer } from "../src/deserializer/deserializer";
 import { Category } from "./test_helpers";
 
 

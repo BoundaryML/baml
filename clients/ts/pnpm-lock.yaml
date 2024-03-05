@@ -1,4 +1,4 @@
-lockfileVersion: '6.0'
+lockfileVersion: '6.1'
 
 settings:
   autoInstallPeers: true
@@ -17,6 +17,9 @@ dependencies:
   openai:
     specifier: ^4.25.0
     version: 4.25.0
+  string-format:
+    specifier: ^2.0.0
+    version: 2.0.0
   xregexp:
     specifier: ^5.1.1
     version: 5.1.1
@@ -31,6 +34,9 @@ devDependencies:
   '@types/node':
     specifier: ^20.11.21
     version: 20.11.21
+  '@types/string-format':
+    specifier: ^2.0.3
+    version: 2.0.3
   install:
     specifier: ^0.13.0
     version: 0.13.0
@@ -798,6 +804,10 @@ packages:
 
   /@types/stack-utils@2.0.3:
     resolution: {integrity: sha512-9aEbYZ3TbYMznPdcdr3SmIrLXwC/AKZXQeCf9Pgao5CKb8CyHuEX5jzWPTkvregvhRJHcpRO6BFoGW9ycaOkYw==}
+    dev: true
+
+  /@types/string-format@2.0.3:
+    resolution: {integrity: sha512-2BuDXYaQvSZR5XHlLJQ3KQ455NW+C1Mok0uOO6q8bnp97V/gtZbDEYy44kmu5Ng1U8wRtCSF/leREYVmH2vYmQ==}
     dev: true
 
   /@types/yargs-parser@21.0.3:
@@ -2365,6 +2375,10 @@ packages:
     dependencies:
       escape-string-regexp: 2.0.0
     dev: true
+
+  /string-format@2.0.0:
+    resolution: {integrity: sha512-bbEs3scLeYNXLecRRuk6uJxdXUSj6le/8rNPHChIJTn2V79aXVTR1EH2OH5zLKKoz0V02fOUKZZcw01pLUShZA==}
+    dev: false
 
   /string-length@4.0.2:
     resolution: {integrity: sha512-+l6rNN5fYHNhZZy41RXsYptCjA2Igmq4EG7kZAYFQI1E1VTXarr6ZPXBg6eq7Y6eK4FEhY6AJlyuFIb/v/S0VQ==}
