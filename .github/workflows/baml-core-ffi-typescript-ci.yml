@@ -172,6 +172,9 @@ jobs:
   build-freebsd:
     runs-on: macos-13
     name: Build FreeBSD
+    defaults:
+      run:
+        working-directory: engine/baml-core-ffi
     steps:
       - uses: actions/checkout@v4
       - name: Build
@@ -199,6 +202,7 @@ jobs:
             node -v
             echo "~~~~ yarn --version ~~~~"
             yarn --version
+            cd engine/baml-core-ffi
             pwd
             ls -lah
             whoami
@@ -248,7 +252,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: bindings-${{ matrix.settings.target }}
-          path: .
+          path: engine/baml-core-ffi
       - name: List packages
         run: ls -R .
         shell: bash
@@ -282,7 +286,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: bindings-x86_64-unknown-linux-gnu
-          path: .
+          path: engine/baml-core-ffi
       - name: List packages
         run: ls -R .
         shell: bash
@@ -318,7 +322,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: bindings-x86_64-unknown-linux-musl
-          path: .
+          path: engine/baml-core-ffi
       - name: List packages
         run: ls -R .
         shell: bash
@@ -344,7 +348,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: bindings-aarch64-unknown-linux-gnu
-          path: .
+          path: engine/baml-core-ffi
       - name: List packages
         run: ls -R .
         shell: bash
@@ -381,7 +385,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: bindings-aarch64-unknown-linux-musl
-          path: .
+          path: engine/baml-core-ffi
       - name: List packages
         run: ls -R .
         shell: bash
@@ -423,7 +427,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: bindings-armv7-unknown-linux-gnueabihf
-          path: .
+          path: engine/baml-core-ffi
       - name: List packages
         run: ls -R .
         shell: bash
@@ -472,7 +476,7 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          path: artifacts
+          path: engine/baml-core-ffi/artifacts
       - name: Move artifacts
         run: yarn artifacts
       - name: List packages
