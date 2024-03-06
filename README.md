@@ -1,5 +1,5 @@
 <div align="center">
-  <a href="https://app.trygloo.com?utm_source=github" target="_blank" rel="noopener noreferrer">
+  <a href="https://boundaryml.com?utm_source=github" target="_blank" rel="noopener noreferrer">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="https://www.trygloo.com/gloo-ai-square-256.png">
       <img src="https://www.trygloo.com/gloo-ai-square-256.png" height="64">
@@ -24,19 +24,20 @@ Existing LLM python libraries aren't powerful enough for structured prompting no
 
 **BAML** (Basically, A Made-Up Language) is a lightweight programming language to define AI functions with structured inputs and outputs using natural language.
 
-The **BAML VSCode Playground** allows you to test prompts instantly with any LLM, without ever leaving VSCode.
+BAML comes with a **VSCode Playground**, which allows you to test prompts instantly with any LLM, without ever leaving VSCode.
 <img src="docs/images/v3/testing_2.gif" />
 
-<figure class="table w-full m-0 text-center image">
+<!-- <figure class="table w-full m-0 text-center image">
     <video
         style="max-width: 90%; margin: auto;"
         autoplay loop muted playsinline
         src="https://github.com/BoundaryML/baml/assets/5353992/4f221238-f0a0-4316-be9d-eb6e17377704"
     ></video>
     <figcaption></figcaption>
-</figure>
+</figure> -->
 
-[Alt video link](https://www.youtube.com/watch?v=dpEvGrVJJng)
+<!-- [Alt video link](https://www.youtube.com/watch?v=dpEvGrVJJng) -->
+
 Here’s a `.baml` AI function:
 
 ```rust
@@ -106,6 +107,17 @@ Making BAML easy to read and write is our core design philosophy.
 - **Hallucination Checks**, when LLMs return something unexpected, we throw an exception
 - **Works with any LLM,** even your own
 - And best of all, **everything lives in your codebase.**
+
+### Language Support
+
+Because we have our own language and our compiler generates native Python/TS code from BAML files, we are able to treat both languages as first class citizens in the ecosystem.
+
+| Language Support | Status | Notes                               |
+| ---------------- | ------ | ----------------------------------- |
+| Python           | ✅     |                                     |
+| TypeScript       | 🚧     | Pending Retry and Streaming Support |
+
+Contact us on Discord if you have a language you'd like to see supported.
 
 ### [Documentation](https://docs.boundaryml.com)
 
