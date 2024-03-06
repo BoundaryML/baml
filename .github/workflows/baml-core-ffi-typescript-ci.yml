@@ -327,7 +327,7 @@ jobs:
         run: ls -R .
         shell: bash
       - name: Test bindings
-        run: docker run --rm -v $(pwd)/engine/baml-core-ffi:/build -w /build node:${{ matrix.node }}-alpine yarn test
+        run: docker run --rm -v $(pwd):/build -w /build node:${{ matrix.node }}-alpine yarn test
   test-linux-aarch64-gnu-binding:
     defaults:
       run:

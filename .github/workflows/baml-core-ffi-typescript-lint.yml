@@ -13,6 +13,9 @@ concurrency:
   cancel-in-progress: true
 jobs:
   lint:
+    defaults:
+      run:
+        working-directory: engine/baml-core-ffi
     name: Lint
     runs-on: ubuntu-latest
     steps:
@@ -23,7 +26,7 @@ jobs:
         with:
           node-version: 18
           cache: "yarn"
-
+          cache-dependency-path: engine/baml-core-ffi/yarn.lock
       - name: Install
         uses: dtolnay/rust-toolchain@stable
         with:
