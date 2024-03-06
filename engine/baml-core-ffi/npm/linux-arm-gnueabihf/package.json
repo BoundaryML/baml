@@ -1,5 +1,5 @@
 {
-  "name": "@boundaryml/baml-core-linux-arm-gnueabihf",
+  "name": "@boundaryml/baml-core-ffi-linux-arm-gnueabihf",
   "version": "1.0.1",
   "os": [
     "linux"
@@ -7,9 +7,9 @@
   "cpu": [
     "arm"
   ],
-  "main": "baml-core.linux-arm-gnueabihf.node",
+  "main": "baml-core-ffi.linux-arm-gnueabihf.node",
   "files": [
-    "baml-core.linux-arm-gnueabihf.node"
+    "baml-core-ffi.linux-arm-gnueabihf.node"
   ],
   "description": "Template project for writing node package with napi-rs",
   "keywords": [

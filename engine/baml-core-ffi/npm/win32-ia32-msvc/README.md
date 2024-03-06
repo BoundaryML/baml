@@ -1,3 +1,3 @@
-# `@boundaryml/baml-core-win32-ia32-msvc`
+# `@boundaryml/baml-core-ffi-win32-ia32-msvc`
 
-This is the **i686-pc-windows-msvc** binary for `@boundaryml/baml-core`
+This is the **i686-pc-windows-msvc** binary for `@boundaryml/baml-core-ffi`

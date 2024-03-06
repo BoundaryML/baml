@@ -1,5 +1,5 @@
 {
-  "name": "@boundaryml/baml-core-android-arm64",
+  "name": "@boundaryml/baml-core-ffi-android-arm64",
   "version": "1.0.1",
   "os": [
     "android"
@@ -7,9 +7,9 @@
   "cpu": [
     "arm64"
   ],
-  "main": "baml-core.android-arm64.node",
+  "main": "baml-core-ffi.android-arm64.node",
   "files": [
-    "baml-core.android-arm64.node"
+    "baml-core-ffi.android-arm64.node"
   ],
   "description": "Template project for writing node package with napi-rs",
   "keywords": [

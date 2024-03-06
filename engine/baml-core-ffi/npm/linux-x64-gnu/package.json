@@ -1,5 +1,5 @@
 {
-  "name": "@boundaryml/baml-core-linux-x64-gnu",
+  "name": "@boundaryml/baml-core-ffi-linux-x64-gnu",
   "version": "1.0.1",
   "os": [
     "linux"
@@ -7,9 +7,9 @@
   "cpu": [
     "x64"
   ],
-  "main": "baml-core.linux-x64-gnu.node",
+  "main": "baml-core-ffi.linux-x64-gnu.node",
   "files": [
-    "baml-core.linux-x64-gnu.node"
+    "baml-core-ffi.linux-x64-gnu.node"
   ],
   "description": "Template project for writing node package with napi-rs",
   "keywords": [

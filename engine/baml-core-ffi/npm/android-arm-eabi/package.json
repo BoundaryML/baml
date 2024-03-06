@@ -1,5 +1,5 @@
 {
-  "name": "@boundaryml/baml-core-android-arm-eabi",
+  "name": "@boundaryml/baml-core-ffi-android-arm-eabi",
   "version": "1.0.1",
   "os": [
     "android"
@@ -7,9 +7,9 @@
   "cpu": [
     "arm"
   ],
-  "main": "baml-core.android-arm-eabi.node",
+  "main": "baml-core-ffi.android-arm-eabi.node",
   "files": [
-    "baml-core.android-arm-eabi.node"
+    "baml-core-ffi.android-arm-eabi.node"
   ],
   "description": "Template project for writing node package with napi-rs",
   "keywords": [

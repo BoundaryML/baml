@@ -1,5 +1,5 @@
 {
-  "name": "@boundaryml/baml-core",
+  "name": "@boundaryml/baml-core-ffi",
   "version": "1.0.1",
   "description": "Template project for writing node package with napi-rs",
   "main": "index.js",
@@ -18,7 +18,7 @@
     "index.js"
   ],
   "napi": {
-    "name": "baml-core",
+    "name": "baml-core-ffi",
     "triples": {
       "defaults": true,
       "additional": [

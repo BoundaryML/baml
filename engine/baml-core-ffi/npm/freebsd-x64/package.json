@@ -1,5 +1,5 @@
 {
-  "name": "@boundaryml/baml-core-freebsd-x64",
+  "name": "@boundaryml/baml-core-ffi-freebsd-x64",
   "version": "1.0.1",
   "os": [
     "freebsd"
@@ -7,9 +7,9 @@
   "cpu": [
     "x64"
   ],
-  "main": "baml-core.freebsd-x64.node",
+  "main": "baml-core-ffi.freebsd-x64.node",
   "files": [
-    "baml-core.freebsd-x64.node"
+    "baml-core-ffi.freebsd-x64.node"
   ],
   "description": "Template project for writing node package with napi-rs",
   "keywords": [

@@ -1,5 +1,5 @@
 {
-  "name": "@boundaryml/baml-core-darwin-x64",
+  "name": "@boundaryml/baml-core-ffi-darwin-x64",
   "version": "1.0.1",
   "os": [
     "darwin"
@@ -7,9 +7,9 @@
   "cpu": [
     "x64"
   ],
-  "main": "baml-core.darwin-x64.node",
+  "main": "baml-core-ffi.darwin-x64.node",
   "files": [
-    "baml-core.darwin-x64.node"
+    "baml-core-ffi.darwin-x64.node"
   ],
   "description": "Template project for writing node package with napi-rs",
   "keywords": [
