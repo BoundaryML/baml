@@ -1,6 +1,6 @@
 [package]
 edition = "2021"
-name = "baml-client-lib"
+name = "baml-ffi"
 version.workspace = true
 authors.workspace = true
 description.workspace = true
@@ -17,7 +17,10 @@ opentelemetry_sdk = { version = "0.21.2", features = [
   "rt-tokio-current-thread",
   "trace",
 ] }
-reqwest = { version = "0.11.24", features = ["json"] }
+reqwest = { version = "0.11.24", features = [
+  "json",
+  "rustls-tls",
+], default-features = false }
 serde.workspace = true
 serde_json.workspace = true
 tracing = "0.1.40"
@@ -29,11 +32,6 @@ neon = { version = "1.0.0-alpha.4", features = ["napi-6", "futures"] }
 tracing-subscriber = "0.3.18"
 hostname = "0.3.1"
 colored = "2.1.0"
-# tokio_unstable, feature = "tracing"
-# tokio_unstable = { version = "*", features = ["tracing"] }
-# [dependencies.neon]
-# default-features = false
-# features = ["napi-6", "promise-api"]
 
 [lib]
 crate-type = ["cdylib"]

@@ -178,7 +178,7 @@ where
     S: for<'lookup> tracing_subscriber::registry::LookupSpan<'lookup>,
 {
     fn apply(&mut self, event: IOEvent, _span: &tracing_subscriber::registry::SpanRef<'a, S>) {
-        let ts = event.ts_ms;
+        let ts = event.ts_ms as i128;
         match event.is_input {
             true => {
                 self.io.input = event.into();

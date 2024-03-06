@@ -1,14 +1,17 @@
 {
-  "name": "baml-client-lib",
-  "version": "0.1.0",
-  "description": "Neon CPU Count",
+  "name": "@boundaryml/baml-ffi",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "version": "0.1.3",
+  "description": "BAML FFI Layer",
   "main": "index.js",
   "types": "index.d.ts",
   "scripts": {
-    "build": "cargo-cp-artifact -nc index.node -- cargo build --message-format=json-render-diagnostics",
+    "build": "cargo-cp-artifact -a cdylib baml-ffi index.node -- cargo build --message-format=json-render-diagnostics",
     "build-debug": "pnpm run build",
     "build-release": "pnpm run build --release",
-    "install": "pnpm run build-release",
     "test": "cargo test"
   },
   "license": "MIT",
@@ -17,15 +20,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/neon-bindings/examples.git"
+    "url": "git+https://github.com/boundaryml/baml.git"
   },
   "keywords": [
     "Neon",
     "Examples"
   ],
-  "bugs": {
-    "url": "https://github.com/neon-bindings/examples/issues"
-  },
   "homepage": "https://github.com/neon-bindings/examples#readme",
   "packageManager": "pnpm@8.0.0"
 }

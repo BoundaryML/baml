@@ -102,7 +102,7 @@ pub(crate) struct LogSchemaContext {
     pub hostname: String,
     pub process_id: String,
     pub stage: Option<String>,
-    pub latency_ms: u64,
+    pub latency_ms: i128,
     pub start_time: String,
     pub tags: HashMap<String, String>,
     pub event_chain: Vec<EventChain>,

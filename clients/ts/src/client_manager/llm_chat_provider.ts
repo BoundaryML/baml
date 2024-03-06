@@ -1,4 +1,4 @@
-import { logLLMEvent } from "baml-client-lib";
+import { logLLMEvent } from "@boundaryml/baml-ffi";
 import { LLMBaseProvider, LLMBaseProviderArgs, LLMChatMessage, LLMResponse } from "./llm_base_provider";
 import format from 'string-format';
 

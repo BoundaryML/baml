@@ -1,5 +1,7 @@
 use crate::ast::WithName;
+use anyhow::Result;
 use internal_baml_parser_database::ast::Expression;
+use regex::Regex;
 use serde::Serialize;
 use std::{collections::HashMap, path::PathBuf, process::Command};
 
@@ -56,7 +58,7 @@ impl GeneratorLanguage {
     pub fn package_name(&self) -> &'static str {
         match self {
             Self::Python => "baml",
-            Self::TypeScript => "@boundaryml/baml-client",
+            Self::TypeScript => "@boundaryml/baml-core",
         }
     }
 
@@ -76,22 +78,54 @@ impl GeneratorLanguage {
                 String::from_utf8(output.stdout)
                     .ok()
                     .map(|v| v.trim().to_string())
-                    .map(|v| match self {
-                        Self::Python => {
-                            // Split the string by lines, and take the first line that has "version" in it
-                            v.lines()
-                                .find(|line| {
-                                    // Check if the line has "version" in it case-insensitively and has a whitespace
-                                    line.to_lowercase().contains("version") && line.contains(' ')
-                                })
-                                .map(|line| line.split_whitespace().last().unwrap().to_string())
-                        }
-                        Self::TypeScript => None,
-                    })
+                    .map(|v| self.parse_version(v.as_str()).ok())
                     .flatten()
             })
             .ok()
             .flatten()
+    }
+
+    pub fn parse_version(&self, output: &str) -> Result<String> {
+        match self {
+            Self::Python => {
+                // Split the string by lines, and take the first line that has "version" in it
+                let version_line_re = Regex::new(r#"(?i)\b(?:version)\b"#)?;
+
+                let Some(version_line) = output
+                    .trim()
+                    .lines()
+                    .find(|line| version_line_re.is_match(line))
+                else {
+                    return Err(anyhow::format_err!(
+                        "Could not infer the version of the client"
+                    ));
+                };
+
+                let version_re = Regex::new("[0-9][^ ]*")?;
+
+                let Some(version) = version_re.find(version_line) else {
+                    return Err(anyhow::format_err!(
+                        "Could not parse the version of the client"
+                    ));
+                };
+
+                Ok(version.as_str().to_string())
+            }
+            Self::TypeScript => {
+                // Look for "<package_name>@<version>"
+                let version_re = Regex::new(&format!(r#"{}@[^ ]+"#, self.package_name()))?;
+
+                let Some(version) = version_re.find(output.trim()) else {
+                    return Err(anyhow::format_err!(
+                        "Could not parse the version of the client:{}\n{}",
+                        self.package_name(),
+                        output
+                    ));
+                };
+
+                Ok(version.as_str().split('@').last().unwrap().to_string())
+            }
+        }
     }
 }
 

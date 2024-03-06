@@ -179,7 +179,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "baml-client-lib"
+name = "baml-ffi"
 version = "0.14.0-canary.0"
 dependencies = [
  "anyhow",
@@ -1018,9 +1018,11 @@ dependencies = [
  "internal-baml-schema-ast",
  "log",
  "rayon",
+ "regex",
  "semver",
  "serde",
  "serde_json",
+ "shellwords",
  "strsim 0.10.0",
  "textwrap 0.16.1",
  "whoami",

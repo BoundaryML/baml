@@ -26,7 +26,7 @@ impl LanguageConfig {
     pub fn name(&self) -> String {
         match self {
             LanguageConfig::Python(_) => "python".into(),
-            LanguageConfig::TypeScript(_) => "TypeScript".into(),
+            LanguageConfig::TypeScript(_) => "typescript".into(),
         }
     }
 }

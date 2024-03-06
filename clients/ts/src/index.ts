@@ -1,4 +1,4 @@
-import { traceAsync, setTags, setVariant } from "baml-client-lib";
+import { traceAsync, setTags, setVariant } from "@boundaryml/baml-ffi";
 
 
 export { traceAsync, setTags, setVariant };

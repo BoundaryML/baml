@@ -1,6 +1,6 @@
 {
-  "name": "@boundaryml/baml-client",
-  "version": "1.0.2",
+  "name": "@boundaryml/baml-core",
+  "version": "1.0.3",
   "description": "",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -13,6 +13,10 @@
   "scripts": {
     "test": "jest",
     "build": "tsc"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "keywords": [],
   "author": "contact@boundaryml.com",
@@ -30,7 +34,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.12.3",
-    "baml-client-lib": "/Users/vbv/repos/gloo-lang/engine/baml-client-lib",
+    "@boundaryml/baml-ffi": "^0.1.0",
     "json-schema": "^0.4.0",
     "openai": "^4.25.0",
     "string-format": "^2.0.0",

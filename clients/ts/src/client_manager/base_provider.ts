@@ -1,4 +1,4 @@
-import { logLLMEvent } from "baml-client-lib";
+import { logLLMEvent } from "@boundaryml/baml-ffi";
 import { LLMException } from "./errors";
 
 abstract class BaseProvider {
