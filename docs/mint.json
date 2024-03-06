@@ -60,7 +60,7 @@
     },
     {
       "group": "Quickstart",
-      "pages": ["v3/home/installation"]
+      "pages": ["v3/home/installation", "v3/home/roadmap"]
     },
     {
       "group": "Comparisons",
