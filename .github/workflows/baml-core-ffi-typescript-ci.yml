@@ -2,20 +2,21 @@ name: CI
 env:
   DEBUG: napi:*
   APP_NAME: baml-core-ffi
-  MACOSX_DEPLOYMENT_TARGET: '10.13'
+  MACOSX_DEPLOYMENT_TARGET: "10.13"
 permissions:
   contents: write
   id-token: write
-'on':
+"on":
   push:
     branches:
-      - main
+      - log-jest
+      - canary
     tags-ignore:
-      - '**'
+      - "**"
     paths-ignore:
-      - '**/*.md'
+      - "**/*.md"
       - LICENSE
-      - '**/*.gitignore'
+      - "**/*.gitignore"
       - .editorconfig
       - docs/**
   pull_request: null
@@ -77,16 +78,16 @@ jobs:
             build: |
               yarn build --target armv7-unknown-linux-gnueabihf
               arm-linux-gnueabihf-strip *.node
-          - host: ubuntu-latest
-            target: aarch64-linux-android
-            build: |
-              yarn build --target aarch64-linux-android
-              ${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip *.node
-          - host: ubuntu-latest
-            target: armv7-linux-androideabi
-            build: |
-              yarn build --target armv7-linux-androideabi
-              ${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip *.node
+          # - host: ubuntu-latest
+          #   target: aarch64-linux-android
+          #   build: |
+          #     yarn build --target aarch64-linux-android
+          #     ${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip *.node
+          # - host: ubuntu-latest
+          #   target: armv7-linux-androideabi
+          #   build: |
+          #     yarn build --target armv7-linux-androideabi
+          #     ${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip *.node
           - host: ubuntu-latest
             target: aarch64-unknown-linux-musl
             docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-alpine
@@ -118,11 +119,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            .cargo-cache
-            target/
+            engine/baml-core-ffi/.cargo/registry/index/
+            engine/baml-core-ffi/.cargo/registry/cache/
+            engine/baml-core-ffi/.cargo/git/db/
+            engine/baml-core-ffi/.cargo-cache
+            engine/baml-core-ffi/target/
           key: ${{ matrix.settings.target }}-cargo-${{ matrix.settings.host }}
       - uses: goto-bus-stop/setup-zig@v2
         if: ${{ matrix.settings.target == 'armv7-unknown-linux-gnueabihf' }}
@@ -138,6 +139,7 @@ jobs:
         shell: bash
       - name: Install dependencies
         run: yarn install
+        working-directory: engine/baml-core-ffi
       - name: Setup node x86
         uses: actions/setup-node@v4
         if: matrix.settings.target == 'i686-pc-windows-msvc'
@@ -150,7 +152,7 @@ jobs:
         if: ${{ matrix.settings.docker }}
         with:
           image: ${{ matrix.settings.docker }}
-          options: '--user 0:0 -v ${{ github.workspace }}/.cargo-cache/git/db:/usr/local/cargo/git/db -v ${{ github.workspace }}/.cargo/registry/cache:/usr/local/cargo/registry/cache -v ${{ github.workspace }}/.cargo/registry/index:/usr/local/cargo/registry/index -v ${{ github.workspace }}:/build -w /build'
+          options: "--user 0:0 -v ${{ github.workspace }}/engine/baml-core-ffi/.cargo-cache/git/db:/usr/local/cargo/git/db -v ${{ github.workspace }}/engine/baml-core-ffi/.cargo/registry/cache:/usr/local/cargo/registry/cache -v ${{ github.workspace }}/engine/baml-core-ffi/.cargo/registry/index:/usr/local/cargo/registry/index -v ${{ github.workspace }}/engine/baml-core-ffi:/build -w /build"
           run: ${{ matrix.settings.build }}
       - name: Build
         run: ${{ matrix.settings.build }}
@@ -160,7 +162,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: bindings-${{ matrix.settings.target }}
-          path: ${{ env.APP_NAME }}.*.node
+          path: engine/baml-core-ffi/${{ env.APP_NAME }}.*.node
           if-no-files-found: error
   build-freebsd:
     runs-on: macos-13
@@ -175,7 +177,7 @@ jobs:
           RUSTUP_IO_THREADS: 1
         with:
           operating_system: freebsd
-          version: '13.2'
+          version: "13.2"
           memory: 13G
           cpu_count: 3
           environment_variables: DEBUG RUSTUP_IO_THREADS
@@ -206,7 +208,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: bindings-freebsd
-          path: ${{ env.APP_NAME }}.*.node
+          path: engine/baml-core-ffi/${{ env.APP_NAME }}.*.node
           if-no-files-found: error
   test-macOS-windows-binding:
     name: Test bindings on ${{ matrix.settings.target }} - node@${{ matrix.node }}
@@ -221,8 +223,8 @@ jobs:
           - host: macos-latest
             target: x86_64-apple-darwin
         node:
-          - '18'
-          - '20'
+          - "18"
+          - "20"
     runs-on: ${{ matrix.settings.host }}
     steps:
       - uses: actions/checkout@v4
@@ -233,6 +235,7 @@ jobs:
           cache: yarn
       - name: Install dependencies
         run: yarn install
+        working-directory: engine/baml-core-ffi
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
@@ -251,8 +254,8 @@ jobs:
       fail-fast: false
       matrix:
         node:
-          - '18'
-          - '20'
+          - "18"
+          - "20"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -263,6 +266,7 @@ jobs:
           cache: yarn
       - name: Install dependencies
         run: yarn install
+        working-directory: engine/baml-core-ffi
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
@@ -281,8 +285,8 @@ jobs:
       fail-fast: false
       matrix:
         node:
-          - '18'
-          - '20'
+          - "18"
+          - "20"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -295,6 +299,7 @@ jobs:
         run: |
           yarn config set supportedArchitectures.libc "musl"
           yarn install
+        working-directory: engine/baml-core-ffi
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
@@ -313,8 +318,8 @@ jobs:
       fail-fast: false
       matrix:
         node:
-          - '18'
-          - '20'
+          - "18"
+          - "20"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -327,6 +332,7 @@ jobs:
         run: ls -R .
         shell: bash
       - name: Install dependencies
+        working-directory: engine/baml-core-ffi
         run: |
           yarn config set supportedArchitectures.cpu "arm64"
           yarn config set supportedArchitectures.libc "glibc"
@@ -340,7 +346,7 @@ jobs:
         uses: addnab/docker-run-action@v3
         with:
           image: node:${{ matrix.node }}-slim
-          options: '--platform linux/arm64 -v ${{ github.workspace }}:/build -w /build'
+          options: "--platform linux/arm64 -v ${{ github.workspace }}:/build -w /build"
           run: |
             set -e
             yarn test
@@ -361,6 +367,7 @@ jobs:
         run: ls -R .
         shell: bash
       - name: Install dependencies
+        working-directory: engine/baml-core-ffi
         run: |
           yarn config set supportedArchitectures.cpu "arm64"
           yarn config set supportedArchitectures.libc "musl"
@@ -374,7 +381,7 @@ jobs:
         uses: addnab/docker-run-action@v3
         with:
           image: node:lts-alpine
-          options: '--platform linux/arm64 -v ${{ github.workspace }}:/build -w /build'
+          options: "--platform linux/arm64 -v ${{ github.workspace }}:/build -w /build"
           run: |
             set -e
             yarn test
@@ -386,8 +393,8 @@ jobs:
       fail-fast: false
       matrix:
         node:
-          - '18'
-          - '20'
+          - "18"
+          - "20"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -400,6 +407,7 @@ jobs:
         run: ls -R .
         shell: bash
       - name: Install dependencies
+        working-directory: engine/baml-core-ffi
         run: |
           yarn config set supportedArchitectures.cpu "arm"
           yarn install
@@ -412,7 +420,7 @@ jobs:
         uses: addnab/docker-run-action@v3
         with:
           image: node:${{ matrix.node }}-bullseye-slim
-          options: '--platform linux/arm/v7 -v ${{ github.workspace }}:/build -w /build'
+          options: "--platform linux/arm/v7 -v ${{ github.workspace }}:/build -w /build"
           run: |
             set -e
             yarn test
@@ -436,6 +444,7 @@ jobs:
           node-version: 18
           cache: yarn
       - name: Install dependencies
+        working-directory: engine/baml-core-ffi
         run: yarn install
       - name: Download all artifacts
         uses: actions/download-artifact@v4

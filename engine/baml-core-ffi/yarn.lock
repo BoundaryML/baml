@@ -84,9 +84,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@boundaryml/baml-core-napi@workspace:.":
+"@boundaryml/baml-core-ffi@workspace:.":
   version: 0.0.0-use.local
-  resolution: "@boundaryml/baml-core-napi@workspace:."
+  resolution: "@boundaryml/baml-core-ffi@workspace:."
   dependencies:
     "@napi-rs/cli": "npm:^2.16.4"
     "@swc-node/register": "npm:^1.6.8"
