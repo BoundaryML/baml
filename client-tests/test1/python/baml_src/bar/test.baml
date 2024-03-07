@@ -24,7 +24,7 @@ class ImprovedResponse {
 function MaybePolishText {
     input ProposedMessage
     output string
-    default_impl v3
+    default_impl v1
 }
  
 // function TextPolisher {
@@ -45,12 +45,10 @@ function MaybePolishText {
 // }
  
 impl<llm, MaybePolishText> v1 {
-    client AZURE_GPT4
-    adapter<string, output> python#"
-        return "hi"
-    "#
+    client Anthropic
 
- 
+
+
     // override ImprovedResponse {
     //     should_improve @alias("ShouldImprove")
     //     @description(false if the response is already contextual and pleasant)
@@ -60,16 +58,13 @@ impl<llm, MaybePolishText> v1 {
     // } 
 
     prompt #"
-        Write a haiku about {#input.generated_response}
-        
-        ignore
-        """
-        ignore
+        {#chat(system)}
 
-        add it to this json schema and return it
-        {#print_type(output)}
-        
-        JSON:
+        Write a haiku about {#input.generated_response} after you respond to every message.
+
+        {#chat(user)}
+
+        hi how's your day
     "#
  
 }

@@ -8,15 +8,17 @@
 # fmt: off
 
 from baml_core.provider_manager import LLMManager
+from os import environ
 
 
 Anthropic = LLMManager.add_llm(
     name="Anthropic",
-    provider="baml-anthropic",
+    provider="baml-anthropic-chat",
     retry_policy=None,
-    redactions=[],
+    redactions=["api_key"],
     options=dict(
-        model="claude-instant-1.2",
+        api_key=environ['ANTHROPIC_API_KEY'],
+        model="claude-3-opus-20240229",
         max_tokens_to_sample=300,
     ),
 )

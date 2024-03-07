@@ -15,8 +15,8 @@ from pytest_baml.ipc_channel import BaseIPCChannel
 from typing import Any
 
 
-@baml.MaybePolishText.test(stream=False)
-async def test_homeless_salmon(MaybePolishTextImpl: IMaybePolishText, baml_ipc_channel: BaseIPCChannel):
+@baml.MaybePolishText.test(stream=True)
+async def test_homeless_salmon(MaybePolishTextImpl: IMaybePolishTextStream, baml_ipc_channel: BaseIPCChannel):
     def to_str(item: Any) -> str:
         if isinstance(item, str):
             return item
@@ -25,5 +25,8 @@ async def test_homeless_salmon(MaybePolishTextImpl: IMaybePolishText, baml_ipc_c
     content = to_str({"thread": {"thread": [], }, "generated_response": "oceans", })
     deserializer = Deserializer[ProposedMessage](ProposedMessage) # type: ignore
     param = deserializer.from_string(content)
-    await MaybePolishTextImpl(param)
-    
+    async with MaybePolishTextImpl(param) as stream:
+        async for response in stream.parsed_stream:
+            baml_ipc_channel.send("partial_response", response.json())
+
+        await stream.get_final_response()

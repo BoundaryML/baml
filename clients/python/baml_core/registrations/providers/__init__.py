@@ -1,5 +1,6 @@
 # type: ignore
 from .anthropic_provider import AnthropicProvider
+from .anthropic_chat_provider import AnthropicChatProvider
 import openai
 from packaging.version import parse as parse_version
 from .fallback_provider import FallbackProvider
@@ -15,6 +16,7 @@ else:
 __all__ = [
     "FallbackProvider",
     "AnthropicProvider",
+    "AnthropicChatProvider",
     "OpenAIChatProvider",
     "OpenAICompletionProvider",
 ]
