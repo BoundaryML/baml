@@ -8,7 +8,7 @@ class EnumDeserializer<T extends Record<string, string>> extends BaseDeserialize
 
     private constructor(public readonly name: string, private readonly values: Map<string, keyof T>, aliases: Record<string, string>) {
         super(3);
-        
+
         // Aliases are case-insensitive
         Object.entries(aliases).forEach(([k, v]) => {
             this.aliases.set(k.toLowerCase(), v.toLowerCase());
@@ -67,10 +67,20 @@ class EnumDeserializer<T extends Record<string, string>> extends BaseDeserialize
             return Result.failed();
         }
 
-        const value = parsed.toLowerCase();
+        const regex = /^[\w#.-]*\w(?=[:\s.]|$)/;
+        const potentialMatch = parsed.match(regex);
+        if (potentialMatch === null || potentialMatch.length === 0) {
+            diagnostics.pushUnknownError(`Invalid format: ${parsed}`);
+            diagnostics.popScope(false);
+            return Result.failed();
+        }
+
+        // Use the matched value
+        const value = potentialMatch[0].toLowerCase();
+
         const valName = this.values.get(value);
         if (!valName) {
-            diagnostics.pushUnknownError(`Unknown value: ${parsed}`);
+            diagnostics.pushUnknownError(`Unknown enum value: ${parsed}`);
             diagnostics.popScope(false);
             return Result.failed();
         }

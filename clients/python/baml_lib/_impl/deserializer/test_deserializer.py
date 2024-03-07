@@ -100,6 +100,43 @@ def test_enum_list_from_list() -> None:
     assert res == [Category.TWO]
 
 
+# Test case for when LLM writes something like: "k1: The description of k1"
+def test_enum_from_string_with_extra_text_after() -> None:
+    deserializer = Deserializer[Category](Category)
+    res = deserializer.from_string('"ONE: The description of k1"')
+    assert res == Category.ONE
+    res = deserializer.from_string('"ONE - The description of ONE, not TWO"')
+    assert res == Category.ONE
+
+
+# TODO:
+# Test case insensitivity
+
+
+@register_deserializer(
+    aliases={"k1": "ONE", "k-2-3.1_1": "TWO", "NUMBER_THREE": "THREE"}
+)
+class CategoryWithAlias(str, Enum):
+    ONE = "ONE"
+    TWO = "TWO"
+    THREE = "THREE"
+
+
+def test_enum_aliases_from_string_with_extra_text() -> None:
+    deserializer = Deserializer[CategoryWithAlias](CategoryWithAlias)
+    res = deserializer.from_string("k1: The description of k1, not k-2-3.1_1")
+    assert res == CategoryWithAlias.ONE
+    # separated by colon
+    res = deserializer.from_string("k-2-3.1_1: The description of k-2-3.1_1, not k1")
+    assert res == CategoryWithAlias.TWO
+    # separated by whitespace
+    res = deserializer.from_string("k-2-3.1_1 is the description of k-2-3.1_1, not k1")
+    assert res == CategoryWithAlias.TWO
+    # trailing period
+    res = deserializer.from_string("k-2-3.1_1. is the description of k-2-3.1_1, not k1")
+    assert res == CategoryWithAlias.TWO
+
+
 @register_deserializer({})
 class BasicObj(BaseModel):
     foo: str

@@ -103,6 +103,20 @@ describe("Enum Deserializer", () => {
         });
         expect(deserializer.coerce('["ONE", "THREE", "TWO"]')).toEqual([Category.ONE, Category.TWO]);
     });
+
+    test("test_enum_from_string_with_extra_text_after", () => {
+        const deserializer = new Deserializer<Category>(schema, { $ref: "#/definitions/Category" });
+        expect(deserializer.coerce("ONE is the output")).toBe(Category.ONE);
+        expect(deserializer.coerce("ONE - is the answer, not TWO")).toBe(Category.ONE);
+        expect(deserializer.coerce("ONE. is the answer, not TWO")).toBe(Category.ONE);
+        expect(deserializer.coerce("ONE: is the answer, not TWO")).toBe(Category.ONE);
+    });
+
+    // test("test_enum_aliases_from_string_with_extra_text", () => {
+    //     const deserializer = new Deserializer<Category>(schema, { $ref: "#/definitions/Category" });
+    //     expect(deserializer.coerce("ONE is the output")).toBe(Category.ONE);
+    //     expect(deserializer.coerce("ONE - is the answer, not TWO")).toBe(Category.ONE);
+    // });
 });
 
 
