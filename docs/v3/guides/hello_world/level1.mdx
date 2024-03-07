@@ -43,11 +43,13 @@ Every [BAML function](/v3/syntax/function) has a strictly typed input and output
 To ensure the baml compiler generates your Python / TS code, you'll also need to add a `generator` block to your main.baml file:
 
 ```rust
-generator {
-  language python
-    // poetry is the default if this doesn't exist
-    // You can also add "pip" here.
-  pkg_manager poetry
+generator MyGenerator{
+  language "python"
+  // This is where the generated baml-client will be written to
+  project_root "../"
+  test_command "poetry run python -m pytest"
+  install_command "poetry add baml@latest"
+  package_version_command "poetry show baml"
 }
 ```
 
