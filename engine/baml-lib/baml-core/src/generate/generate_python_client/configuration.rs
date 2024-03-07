@@ -98,6 +98,7 @@ impl WithWritePythonString for ConfigurationWalker<'_> {
                                 "name": k.name(),
                                 "type": v.to_py_string(fc.last_file()),
                              })).collect::<Vec<_>>(),
+
                         });
                         render_template(HSTemplate::MultiArgTestSnippet, fc.last_file(), data);
                     }

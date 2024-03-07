@@ -29,6 +29,10 @@ import typing
 __prompt_template = """\
 Write a haiku about {arg.generated_response}
 
+ignore
+\"\"\"
+ignore
+
 add it to this json schema and return it
 string
 
