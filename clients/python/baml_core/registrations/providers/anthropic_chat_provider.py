@@ -21,7 +21,6 @@ else:
         MessageParam,
     )
 
-
 from baml_core.provider_manager import (
     LLMChatProvider,
     register_llm_provider,
@@ -30,17 +29,16 @@ from baml_core.provider_manager import (
 )
 
 
-def _hydrate_anthropic_tokenizer() -> None:
-    # Anthropic's tokenizer is a bit slow to load, so we do it here
-    # to avoid the first call to run_prompt being slow.
-    # Calling this multiple times is fine, as it's a no-op if the
-    # tokenizer is already loaded.
-    anthropic.Client().get_tokenizer()
+def to_anthropic_message(msg: LLMChatMessage) -> MessageParam:  # type: ignore
+    return {
+        "role": "user" if msg["role"] == "user" else "assistant",
+        "content": msg["content"],
+    }
 
 
-@register_llm_provider("baml-anthropic", "baml-anthropic-completion")
+@register_llm_provider("baml-anthropic-chat")
 @typing.final
-class AnthropicProvider(LLMChatProvider):
+class AnthropicChatProvider(LLMChatProvider):
     __kwargs: typing.Dict[str, typing.Any]
 
     def _to_error_code(self, e: Exception) -> typing.Optional[int]:
@@ -60,20 +58,17 @@ class AnthropicProvider(LLMChatProvider):
     def __init__(
         self, *, options: typing.Dict[str, typing.Any], **kwargs: typing.Any
     ) -> None:
-        _hydrate_anthropic_tokenizer()
-
-        if "max_retries" in options and "retry" in kwargs:
-            assert False, "Either use max_retries with Anthropic via options or retry via BAML, not both"
+        assert not (
+            "max_retries" in options and "retry" in kwargs
+        ), "Either use max_retries with Anthropic via options or retry via BAML, not both"
 
         super().__init__(
             prompt_to_chat=lambda chat: {"role": "user", "content": chat},
             **kwargs,
         )
 
-        if "max_tokens_to_sample" not in options:
-            # Anthropic requires a max_tokens_to_sample arg
-            # We
-            options["max_tokens_to_sample"] = 1000
+        self._ensure_option_defaults(options, "max_tokens_to_sample", 1000)
+        self._ensure_option_defaults(options, "temperature", 0)
 
         client_arg_names = [
             "api_key",
@@ -88,51 +83,72 @@ class AnthropicProvider(LLMChatProvider):
             "_strict_response_validation",
             "max_retries",
         ]
-        # add temperature 0 to options if not present
-        if "temperature" not in options:
-            options["temperature"] = 0
+        self._ensure_option_defaults(options, "max_retries", 0)
         client_kwargs = {k: options.pop(k) for k in client_arg_names if k in options}
-
-        # Default to 0 retries if not specified.
-        if "max_retries" not in client_kwargs:
-            client_kwargs["max_retries"] = 0
 
         self.__client = anthropic.AsyncAnthropic(**client_kwargs)
         self.__client_kwargs = client_kwargs
         self.__caller_kwargs = options
         self._set_args(**self.__caller_kwargs, **self.__client_kwargs)
 
+    def _ensure_option_defaults(
+        self, options: typing.Dict[str, typing.Any], key: str, default_value: typing.Any
+    ) -> None:
+        if key not in options:
+            options[key] = default_value
+
+    def _prepare_message_handling(
+        self, messages: typing.List[LLMChatMessage]
+    ) -> typing.Tuple[typing.Optional[str], typing.Dict[str, typing.Any]]:
+        system_messages = [m for m in messages if m.get("role") == "system"]
+        if len(system_messages) > 1:
+            raise ValueError("Only one system message is allowed")
+        system_message: typing.Optional[str] = (
+            system_messages[0].get("content") if system_messages else None
+        )
+        if system_message:
+            messages.remove(system_messages[0])
+
+        caller_kwargs_copy = self.__caller_kwargs.copy()
+        max_tokens_key = (
+            "max_tokens_to_sample"
+            if "max_tokens_to_sample" in caller_kwargs_copy
+            else "max_tokens"
+        )
+        caller_kwargs_copy["max_tokens"] = caller_kwargs_copy.pop(max_tokens_key, None)
+        return system_message, caller_kwargs_copy
+
     def _validate(self) -> None:
         pass
 
     async def _run_chat(self, messages: typing.List[LLMChatMessage]) -> LLMResponse:
-        prompt = (
-            "".join(
-                map(
-                    lambda c: f'{anthropic.HUMAN_PROMPT if  c["role"] != "system" else anthropic.AI_PROMPT} {c["content"]}',
-                    messages,
-                )
-            )
-            + anthropic.AI_PROMPT
+        system_message, caller_kwargs_copy = self._prepare_message_handling(messages)
+
+        messages_kwargs: typing.Dict[str, typing.Any] = {
+            "messages": list(map(to_anthropic_message, messages)),
+            **caller_kwargs_copy,
+        }
+
+        if system_message:
+            messages_kwargs["system"] = system_message
+
+        response = await self.__client.messages.create(
+            **messages_kwargs,
         )
-        prompt_tokens = await self.__client.count_tokens(prompt)
-        response = typing.cast(
-            anthropic.types.Completion,
-            await self.__client.completions.create(
-                prompt=prompt, **self.__caller_kwargs
-            ),
-        )
-        output_tokens = await self.__client.count_tokens(response.completion)
+
+        generated_content: typing.Optional[str] = None
+        if len(response.content) > 0:
+            generated_content = response.content[0].text
 
         return LLMResponse(
-            generated=response.completion,
+            generated=generated_content or "",
             model_name=response.model,
             meta=dict(
                 baml_is_complete=response.stop_reason == "stop_sequence"
-                or response.stop_reason == "stop_sequences",
-                prompt_tokens=prompt_tokens,
-                output_tokens=output_tokens,
-                total_tokens=prompt_tokens + output_tokens,
+                or response.stop_reason == "end_turn",
+                prompt_tokens=response.usage.input_tokens,
+                output_tokens=response.usage.output_tokens,
+                total_tokens=response.usage.input_tokens + response.usage.output_tokens,
                 finish_reason=response.stop_reason,
             ),
         )
@@ -140,30 +156,7 @@ class AnthropicProvider(LLMChatProvider):
     async def _stream_chat(
         self, messages: typing.List[LLMChatMessage]
     ) -> typing.AsyncIterator[LLMResponse]:
-        # Grab the message that has "system" in it and pop it from the list
-        system_message: typing.Optional[str] = None
-        system_messages = [m for m in messages if m.get("role") == "system"]
-        if len(system_messages) > 1:
-            raise ValueError("Only one system message is allowed")
-        elif len(system_messages) == 1:
-            system_chat_msg = system_messages[0]
-            messages.remove(system_chat_msg)
-            system_message = system_chat_msg.get("content")
-
-        # messages client has diff params
-        caller_kwargs_copy = self.__caller_kwargs.copy()
-        if "max_tokens" not in caller_kwargs_copy:
-            caller_kwargs_copy["max_tokens"] = caller_kwargs_copy.pop(
-                "max_tokens_to_sample", None
-            )
-        else:
-            caller_kwargs_copy.pop("max_tokens_to_sample", None)
-
-        def to_anthropic_message(msg: LLMChatMessage) -> MessageParam:  # type: ignore
-            return {
-                "role": "user" if msg["role"] == "user" else "assistant",
-                "content": msg["content"],
-            }
+        system_message, caller_kwargs_copy = self._prepare_message_handling(messages)
 
         total_input_tokens = 0
         # cumulative token count

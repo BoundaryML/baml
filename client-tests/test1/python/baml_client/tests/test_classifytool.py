@@ -8,7 +8,7 @@
 # fmt: off
 
 from ..__do_not_import.generated_baml_client import baml
-from ..baml_types import ClassifyResponse, IClassifyToolStream, Tool
+from ..baml_types import ClassifyResponse, IClassifyTool, IClassifyToolStream, Tool
 from baml_lib._impl.deserializer import Deserializer
 from json import dumps
 from pytest_baml.ipc_channel import BaseIPCChannel
@@ -35,4 +35,3 @@ async def test_southern_gold(ClassifyToolImpl: IClassifyToolStream, baml_ipc_cha
             baml_ipc_channel.send("partial_response", response.json())
 
         await stream.get_final_response()
-
