@@ -115,7 +115,7 @@ Because we have our own language and our compiler generates native Python/TS cod
 | Language Support | Status | Notes                               |
 | ---------------- | ------ | ----------------------------------- |
 | Python           | ✅     |                                     |
-| TypeScript       | 🚧     | Pending Retry and Streaming Support |
+| TypeScript       | 🚧     | Pending Retry and Streaming Support, and some stability fixes |
 
 Contact us on Discord if you have a language you'd like to see supported.
 
