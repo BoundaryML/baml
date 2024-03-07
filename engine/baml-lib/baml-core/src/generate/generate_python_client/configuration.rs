@@ -73,6 +73,8 @@ impl WithWritePythonString for ConfigurationWalker<'_> {
                 fc.last_file()
                     .add_import("..baml_types", &format!("I{}Stream", func.name()));
                 fc.last_file()
+                    .add_import("..baml_types", &format!("I{}", func.name()));
+                fc.last_file()
                     .add_import("pytest_baml.ipc_channel", "BaseIPCChannel");
                 let test_case_content =
                     serde_json::from_str::<Value>(self.test_case().content.value())
@@ -86,6 +88,7 @@ impl WithWritePythonString for ConfigurationWalker<'_> {
                             "test_case_name": tc.name(),
                             "test_case_input": test_case_content,
                             "test_case_type": arg.to_py_string(fc.last_file()),
+                            "is_streaming_supported": self.is_streaming_supported(),
                         });
                         render_template(HSTemplate::SingleArgTestSnippet, fc.last_file(), data);
                     }
@@ -98,6 +101,7 @@ impl WithWritePythonString for ConfigurationWalker<'_> {
                                 "name": k.name(),
                                 "type": v.to_py_string(fc.last_file()),
                              })).collect::<Vec<_>>(),
+                             "is_streaming_supported": self.is_streaming_supported(),
 
                         });
                         render_template(HSTemplate::MultiArgTestSnippet, fc.last_file(), data);

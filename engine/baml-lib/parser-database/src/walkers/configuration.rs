@@ -36,6 +36,14 @@ impl ConfigurationWalker<'_> {
             .find_function_by_name(&self.test_case().function.0)
             .unwrap()
     }
+
+    /// If adapters are not present we can stream
+    pub fn is_streaming_supported(&self) -> bool {
+        !self
+            .walk_function()
+            .walk_variants()
+            .any(|v| v.properties().output_adapter.is_some())
+    }
 }
 
 impl WithIdentifier for ConfigurationWalker<'_> {
