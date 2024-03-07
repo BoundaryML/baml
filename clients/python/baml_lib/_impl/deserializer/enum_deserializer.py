@@ -76,8 +76,8 @@ class EnumDeserializer(BaseDeserializer[T]):
             )
             return Result.failed()
 
-        potential_match = potential_match.group(0)
-        parsed = potential_match
+        potential_match_group = potential_match.group(0)
+        parsed = potential_match_group
 
         if parsed in self.__value_aliases:
             parsed = self.__value_aliases[parsed]
