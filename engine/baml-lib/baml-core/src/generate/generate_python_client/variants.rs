@@ -61,12 +61,12 @@ impl<'db> JsonHelper for VariantWalker<'db> {
                         json!(parts.iter().map(|(ctx, text)| {
                             json!({
                                 "role": ctx.map(|c| c.role.0.as_str()).unwrap_or("system"),
-                                "content": text,
+                                "content": escape_python_triple_quote(text),
                             })
                         }).collect::<Vec<_>>())
                 },
                 PromptRepr::String(content, _) => {
-                    json!(content)
+                    json!(escape_python_triple_quote(content))
                 },
             },
             "client": client.name(),
@@ -129,6 +129,11 @@ impl<'db> JsonHelper for VariantWalker<'db> {
             }).collect::<Vec<_>>(),
         })
     }
+}
+
+// Until we move to the IR patch a bug where characters are not escaped prpoerly in the generated prompt:
+fn escape_python_triple_quote(input: &str) -> String {
+    input.replace("\"\"\"", "\\\"\\\"\\\"") // Escape triple double quotes
 }
 
 impl WithWritePythonString for VariantWalker<'_> {

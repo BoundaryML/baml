@@ -43,9 +43,13 @@ function MaybePolishText {
 //         JSON:
 //     "#
 // }
-
+ 
 impl<llm, MaybePolishText> v1 {
     client AZURE_GPT4
+    adapter<string, output> python#"
+        return "hi"
+    "#
+
  
     // override ImprovedResponse {
     //     should_improve @alias("ShouldImprove")
@@ -57,6 +61,10 @@ impl<llm, MaybePolishText> v1 {
 
     prompt #"
         Write a haiku about {#input.generated_response}
+        
+        ignore
+        """
+        ignore
 
         add it to this json schema and return it
         {#print_type(output)}
