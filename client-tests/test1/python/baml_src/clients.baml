@@ -79,9 +79,10 @@ client<llm> LARGE_RESPONSE {
 }
 
 client<llm> Anthropic {
-    provider baml-anthropic
+    provider baml-anthropic-chat
     options {
-      model claude-instant-1.2
+      api_key env.ANTHROPIC_API_KEY
+      model claude-3-opus-20240229
       max_tokens_to_sample 300
     }
 }

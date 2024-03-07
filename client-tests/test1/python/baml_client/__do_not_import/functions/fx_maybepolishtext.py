@@ -61,10 +61,10 @@ class IBAMLMaybePolishText(BaseBAMLFunction[str, str]):
         )
 
     async def __call__(self, *args, **kwargs) -> str:
-        return await self.get_impl("v3").run(*args, **kwargs)
+        return await self.get_impl("v1").run(*args, **kwargs)
     
     def stream(self, *args, **kwargs) -> AsyncStream[str, str]:
-        res = self.get_impl("v3").stream(*args, **kwargs)
+        res = self.get_impl("v1").stream(*args, **kwargs)
         return res
 
 BAMLMaybePolishText = IBAMLMaybePolishText()
