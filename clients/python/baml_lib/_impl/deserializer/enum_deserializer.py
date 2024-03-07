@@ -1,7 +1,7 @@
 import typing
 
 from enum import Enum
-
+import re
 
 from .base_deserialzier import (
     BaseDeserializer,
@@ -64,6 +64,21 @@ class EnumDeserializer(BaseDeserializer[T]):
                 + [f"{k} ({v})" for k, v in self.__value_aliases.items()],
             )
             return Result.failed()
+
+        # Use a regex to get the first word (not including colons)
+        potential_match = re.search(r"^[\w#.-]*\w(?=[:\s.]|$)", parsed)
+        if potential_match is None:
+            diagnostics.push_enum_error(
+                self.__enm.__name__,
+                parsed,
+                [item.name for item in self.__enm]
+                + [f"{k} ({v})" for k, v in self.__value_aliases.items()],
+            )
+            return Result.failed()
+
+        potential_match_group = potential_match.group(0)
+        parsed = potential_match_group
+
         if parsed in self.__value_aliases:
             parsed = self.__value_aliases[parsed]
 
