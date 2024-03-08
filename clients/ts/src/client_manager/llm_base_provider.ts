@@ -1,4 +1,4 @@
-import { logLLMEvent } from "@boundaryml/baml-ffi";
+import { FireBamlEvent } from "../ffi_layer";
 import { BaseProvider } from "./base_provider";
 
 interface LLMChatMessage {
@@ -81,30 +81,21 @@ abstract class LLMBaseProvider extends BaseProvider {
 
 
   protected start_run(prompt: Prompt) {
-    logLLMEvent({
-      name: 'llm_request_start',
-      data: {
-        provider: this.provider,
-        prompt: prompt,
-      }
+    FireBamlEvent.llmStart({
+      provider: this.provider,
+      prompt: prompt,
     });
 
-    logLLMEvent({
-      name: 'llm_request_args',
-      data: {
-        invocation_params: Object.fromEntries(Object.entries(this.client_args).map(([k, v]) => [k, JSON.stringify(v)])),
-      }
-    })
+    FireBamlEvent.llmArgs(Object.fromEntries(
+      Object.entries(this.client_args).map(([k, v]) => [k, JSON.stringify(v)])
+    ))
   }
 
   protected end_run(response: LLMResponse) {
-    logLLMEvent({
-      name: 'llm_request_end',
-      data: {
-        generated: response.generated,
-        model_name: response.model_name,
-        metadata: response.meta,
-      }
+    FireBamlEvent.llmEnd({
+      generated: response.generated,
+      model_name: response.model_name,
+      metadata: response.meta,
     });
   }
 }

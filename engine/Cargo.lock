@@ -179,7 +179,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "baml-ffi"
+name = "baml-client-lib"
 version = "0.14.0-canary.0"
 dependencies = [
  "anyhow",
@@ -197,6 +197,25 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "baml-ffi"
+version = "0.14.0-canary.0"
+dependencies = [
+ "anyhow",
+ "baml-client-lib",
+ "colored",
+ "hostname",
+ "napi",
+ "napi-build",
+ "napi-derive",
+ "reqwest",
+ "serde",
+ "serde_json",
  "tracing",
  "tracing-subscriber",
  "uuid",
@@ -1246,11 +1265,14 @@ version = "2.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "54a63d0570e4c3e0daf7a8d380563610e159f538e20448d6c911337246f40e84"
 dependencies = [
+ "anyhow",
  "bitflags 2.4.2",
  "ctor",
  "napi-derive",
  "napi-sys",
  "once_cell",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1286,15 +1308,6 @@ dependencies = [
  "regex",
  "semver",
  "syn 2.0.52",
-]
-
-[[package]]
-name = "napi-package-template"
-version = "0.1.0"
-dependencies = [
- "napi",
- "napi-build",
- "napi-derive",
 ]
 
 [[package]]

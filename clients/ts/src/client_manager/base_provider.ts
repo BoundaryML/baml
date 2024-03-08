@@ -1,4 +1,4 @@
-import { logLLMEvent } from "@boundaryml/baml-ffi";
+import { FireBamlEvent } from "../ffi_layer";
 import { LLMException } from "./errors";
 
 abstract class BaseProvider {
@@ -21,13 +21,10 @@ abstract class BaseProvider {
       const formatted_traceback = err.stack?.split("\n").map((line) => `    ${line}`).join("\n");
 
       const errorCode = this.to_error_code(err);
-      logLLMEvent({
-        name: 'llm_request_error',
-        data: {
-          error_code: errorCode ?? 2,
-          message: err.message,
-          traceback: formatted_traceback,
-        }
+      FireBamlEvent.llmError({
+        error_code: errorCode ?? 2,
+        message: err.message,
+        traceback: formatted_traceback,
       });
 
       if (err instanceof LLMException) {
@@ -38,12 +35,9 @@ abstract class BaseProvider {
       }
       throw err;
     } else {
-      logLLMEvent({
-        name: 'llm_request_error',
-        data: {
-          error_code: 2,
-          message: `Unknown Error: ${err}`,
-        }
+      FireBamlEvent.llmError({
+        error_code: 2,
+        message: `Unknown Error: ${err}`,
       });
       throw LLMException.fromError(err, 2);
     }

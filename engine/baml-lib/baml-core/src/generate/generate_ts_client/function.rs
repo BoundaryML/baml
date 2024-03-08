@@ -70,9 +70,13 @@ impl WithFileContent<TSLanguageFeatures> for Walker<'_, &Function> {
             super::template::Template::Function,
             &function_content,
         ));
-        file.add_import("@boundaryml/baml-core", "setVariant", None, false);
-        file.add_import("@boundaryml/baml-core", "traceAsync", None, false);
-        file.add_import("@boundaryml/baml-core", "logLlmEvent", None, false);
+        file.add_import(
+            "@boundaryml/baml-core/ffi_layer",
+            "FireBamlEvent",
+            None,
+            false,
+        );
+        file.add_import("@boundaryml/baml-core/ffi_layer", "traceAsync", None, false);
         file.add_export(self.elem().name.clone());
         file.add_export(format!("I{}", self.elem().name));
         file.add_export(format!("{}Function", self.elem().name));

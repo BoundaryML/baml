@@ -8,9 +8,9 @@ dependencies:
   '@anthropic-ai/sdk':
     specifier: ^0.12.3
     version: 0.12.3
-  '@boundaryml/baml-ffi':
-    specifier: ^0.1.0
-    version: 0.1.2
+  '@boundaryml/baml-core-ffi':
+    specifier: link:../../engine/baml-core-ffi
+    version: link:../engine/baml-core-ffi
   json-schema:
     specifier: ^0.4.0
     version: 0.4.0
@@ -415,10 +415,6 @@ packages:
   /@bcoe/v8-coverage@0.2.3:
     resolution: {integrity: sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==}
     dev: true
-
-  /@boundaryml/baml-ffi@0.1.2:
-    resolution: {integrity: sha512-LvfD6gREhPGdoBgMdaZ8zg3Akho+1kZKQHFuA1gvss/RzA5FGLfSkNFANpHpDz3xgIM9n/PJa0fzedGacxDW3g==}
-    dev: false
 
   /@cspotcode/source-map-support@0.8.1:
     resolution: {integrity: sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw==}

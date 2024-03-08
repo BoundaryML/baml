@@ -1,4 +1,5 @@
-import { traceAsync, setTags, setVariant } from "@boundaryml/baml-ffi";
+import { FireBamlEvent } from "./ffi_layer";
 
+const setTags = FireBamlEvent.tags;
 
-export { traceAsync, setTags, setVariant };
+export { setTags };

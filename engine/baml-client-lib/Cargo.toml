@@ -1,6 +1,6 @@
 [package]
 edition = "2021"
-name = "baml-ffi"
+name = "baml-client-lib"
 version.workspace = true
 authors.workspace = true
 description.workspace = true

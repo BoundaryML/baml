@@ -10,6 +10,8 @@ use once_cell::sync::OnceCell;
 
 use otel::span_events::IOEvent;
 
+pub use otel::init_tracer as foo;
+
 // use otel::tracer::{BamlSpanContextManager, FunctionArgs};
 use tokio::runtime::Runtime;
 use tracing::{info, span::Entered, warn, Instrument};

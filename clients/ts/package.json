@@ -8,6 +8,7 @@
     ".": "./dist/index.js",
     "./client_manager": "./dist/client_manager/index.js",
     "./deserializer": "./dist/deserializer/index.js",
+    "./ffi_layer": "./dist/ffi_layer.js",
     "./deserializer/deserializer": "./dist/deserializer/deserializer.js"
   },
   "scripts": {
@@ -34,7 +35,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.12.3",
-    "@boundaryml/baml-ffi": "^0.1.0",
+    "@boundaryml/baml-core-ffi": "link:../../engine/baml-core-ffi",
     "json-schema": "^0.4.0",
     "openai": "^4.25.0",
     "string-format": "^2.0.0",

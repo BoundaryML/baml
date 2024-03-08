@@ -35,6 +35,11 @@
     }
   ],
   "settings": {
+    "rust-analyzer.procMacro.ignored": {
+      "napi-derive": [
+        "napi"
+      ]
+    },
     "editor.formatOnSaveMode": "file",
     "editor.formatOnSave": true,
     "[rust]": {

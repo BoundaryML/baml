@@ -1,4 +1,4 @@
-import { logLLMEvent } from "@boundaryml/baml-ffi";
+import { FireBamlEvent } from "../ffi_layer";
 import { LLMBaseProvider, LLMBaseProviderArgs, LLMChatMessage, LLMResponse } from "./llm_base_provider";
 import format from 'string-format';
 
@@ -34,12 +34,9 @@ abstract class LLMChatProvider extends LLMBaseProvider {
     );
 
     this.start_run(prompts);
-    logLLMEvent({
-      name: 'llm_prompt_template',
-      data: {
-        template: prompts,
-        template_args: Object.fromEntries(updates),
-      }
+    FireBamlEvent.llmTemplateArgs({
+      template: prompts,
+      template_args: Object.fromEntries(updates),
     });
     prompts.forEach((prompt) => {
       let content = prompt.content;

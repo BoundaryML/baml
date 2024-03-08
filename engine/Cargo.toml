@@ -26,3 +26,6 @@ license-file = "LICENSE"
 
 [workspace.metadata.workspaces]
 allow_branch = "canary"
+
+[profile.release]
+lto = true
