@@ -63,11 +63,11 @@ const trace = <T, R>(functionName: string, returnType: string, parameters: Array
 
 const traceAsync = <T, R>(
   functionName: string,
-   returnType: string,
-    parameters: Array<[string, string]>, 
-    arg_type: 'positional' | 'named', 
-    cb: FunctionCallback<T, Promise<R>>
-  ): FunctionCallback<T, Promise<R>> => {
+  returnType: string,
+  parameters: Array<[string, string]>,
+  arg_type: 'positional' | 'named',
+  cb: FunctionCallback<T, Promise<R>>
+): FunctionCallback<T, Promise<R>> => {
   return async (arg: T) => {
     console.log('traceAsync', {
       functionName,

@@ -10,7 +10,7 @@ dependencies:
     version: 0.12.3
   '@boundaryml/baml-core-ffi':
     specifier: link:../../engine/baml-core-ffi
-    version: link:../engine/baml-core-ffi
+    version: link:../../engine/baml-core-ffi
   json-schema:
     specifier: ^0.4.0
     version: 0.4.0
