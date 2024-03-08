@@ -9,7 +9,7 @@ use jsonschema::WithJsonSchema;
 
 use baml_lib::{
     internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span},
-    internal_baml_parser_database::PromptRepr,
+    internal_baml_parser_database::PromptAst,
     internal_baml_schema_ast::ast::{self, WithIdentifier, WithName, WithSpan},
     SourceFile,
 };
@@ -163,7 +163,7 @@ pub(crate) fn run(input: &str) -> String {
                         let props = i.properties();
                         let prompt = props.to_prompt();
                         let is_chat = match &prompt {
-                            PromptRepr::Chat(..) => true,
+                            PromptAst::Chat(..) => true,
                             _ => false,
                         };
                         json!({
@@ -181,7 +181,7 @@ pub(crate) fn run(input: &str) -> String {
                             "prompt_v2": {
                                 "is_chat": is_chat,
                                 "prompt": match &prompt {
-                                    PromptRepr::Chat(parts, _) => {
+                                    PromptAst::Chat(parts, _) => {
                                         json!(parts.iter().map(|(ctx, text)| {
                                             json!({
                                                 "role": ctx.map(|c| c.role.0.as_str()).unwrap_or("system"),
@@ -189,7 +189,7 @@ pub(crate) fn run(input: &str) -> String {
                                             })
                                         }).collect::<Vec<_>>())
                                     },
-                                    PromptRepr::String(content, _) => {
+                                    PromptAst::String(content, _) => {
                                         json!(content)
                                     },
                                 },

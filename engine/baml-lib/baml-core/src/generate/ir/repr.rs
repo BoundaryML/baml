@@ -7,9 +7,11 @@ use internal_baml_parser_database::{
         ClassWalker, ClientWalker, ConfigurationWalker, EnumValueWalker, EnumWalker, FieldWalker,
         FunctionWalker, VariantWalker,
     },
-    ParserDatabase, RetryPolicyStrategy, ToStringAttributes, WithStaticRenames,
+    ParserDatabase, PromptAst, RetryPolicyStrategy, ToStringAttributes, WithStaticRenames,
 };
+
 use internal_baml_schema_ast::ast::{self, FieldArity, WithName};
+use serde::Serialize;
 
 /// This class represents the intermediate representation of the BAML AST.
 /// It is a representation of the BAML AST that is easier to work with than the
@@ -118,7 +120,7 @@ impl IntermediateRepr {
 //   [x] rename lockfile/mod.rs to ir/mod.rs
 //   [x] wire Result<> type through, need this to be more sane
 
-#[derive(Default, serde::Serialize)]
+#[derive(Default, Debug, serde::Serialize)]
 pub struct NodeAttributes {
     /// Map of attributes on the corresponding IR node.
     ///
@@ -178,7 +180,7 @@ fn to_ir_attributes(
 }
 
 /// Nodes allow attaching metadata to a given IR entity: attributes, source location, etc
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Debug)]
 pub struct Node<T> {
     pub attributes: NodeAttributes,
     pub elem: T,
@@ -202,7 +204,7 @@ pub trait WithRepr<T> {
 }
 
 /// FieldType represents the type of either a class field or a function arg.
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Debug)]
 pub enum FieldType {
     Primitive(ast::TypeValue),
     Enum(EnumId),
@@ -268,7 +270,7 @@ impl WithRepr<FieldType> for ast::FieldType {
     }
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Debug)]
 pub enum Identifier {
     /// Starts with env.*
     ENV(String),
@@ -280,7 +282,7 @@ pub enum Identifier {
     Primitive(ast::TypeValue),
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Debug)]
 pub enum Expression {
     Identifier(Identifier),
     Numeric(String),
@@ -328,10 +330,10 @@ impl WithRepr<Expression> for ast::Expression {
 
 type EnumId = String;
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Debug)]
 pub struct EnumValue(pub String);
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Debug)]
 pub struct Enum {
     pub name: EnumId,
     pub values: Vec<Node<EnumValue>>,
@@ -347,6 +349,7 @@ impl WithRepr<EnumValue> for EnumValueWalker<'_> {
             for r#impl in r#fn.walk_variants() {
                 let node_attributes = to_ir_attributes(db, self.get_override(&r#impl));
                 // TODO
+
                 if !node_attributes.is_empty() {
                     attributes.overrides.insert(
                         (r#fn.name().to_string(), r#impl.name().to_string()),
@@ -397,7 +400,7 @@ impl WithRepr<Enum> for EnumWalker<'_> {
     }
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Debug)]
 pub struct Field {
     pub name: String,
     pub r#type: Node<FieldType>,
@@ -434,7 +437,7 @@ impl WithRepr<Field> for FieldWalker<'_> {
 
 type ClassId = String;
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Debug)]
 pub struct Class {
     pub name: ClassId,
     pub static_fields: Vec<Node<Field>>,
@@ -490,7 +493,7 @@ pub struct Implementation {
     r#type: OracleType,
     pub name: ImplementationId,
 
-    pub prompt: String,
+    pub prompt: Prompt,
 
     #[serde(with = "indexmap::map::serde_seq")]
     pub input_replacers: IndexMap<String, String>,
@@ -525,11 +528,11 @@ impl WithRepr<Implementation> for VariantWalker<'_> {
         NodeAttributes::default()
     }
 
-    fn repr(&self, _db: &ParserDatabase) -> Result<Implementation> {
+    fn repr(&self, db: &ParserDatabase) -> Result<Implementation> {
         Ok(Implementation {
             r#type: OracleType::LLM,
             name: self.name().to_string(),
-            prompt: self.properties().prompt.value.clone(),
+            prompt: self.properties().to_prompt().repr(db)?,
             input_replacers: self
                 .properties()
                 .replacers
@@ -586,10 +589,11 @@ impl WithRepr<Function> for FunctionWalker<'_> {
 
 type ClientId = String;
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Debug)]
 pub struct Client {
     pub name: ClientId,
     pub provider: String,
+    pub retry_policy_id: Option<String>,
     pub options: Vec<(String, Expression)>,
 }
 
@@ -608,14 +612,19 @@ impl WithRepr<Client> for ClientWalker<'_> {
                 .iter()
                 .map(|(k, v)| Ok((k.clone(), v.repr(db)?)))
                 .collect::<Result<Vec<_>>>()?,
+            retry_policy_id: self
+                .properties()
+                .retry_policy
+                .as_ref()
+                .map(|(id, _)| id.clone()),
         })
     }
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Debug)]
 pub struct RetryPolicyId(String);
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Debug)]
 pub struct RetryPolicy {
     name: RetryPolicyId,
     max_retries: u32,
@@ -660,3 +669,46 @@ impl WithRepr<TestCase> for ConfigurationWalker<'_> {
         })
     }
 }
+#[derive(Debug, Clone, Serialize)]
+pub enum Prompt {
+    // The prompt stirng, and a list of input replacer keys
+    String(String, Vec<String>),
+
+    // same thing, the chat message, and the replacer input keys
+    Chat(Vec<ChatMessage>, Vec<String>),
+}
+
+#[derive(serde::Serialize, Debug, Clone)]
+pub struct ChatMessage {
+    pub idx: u32,
+    pub role: String,
+    pub content: String,
+}
+
+impl WithRepr<Prompt> for PromptAst<'_> {
+    fn repr(&self, db: &ParserDatabase) -> Result<Prompt> {
+        Ok(match self {
+            PromptAst::String(content, _) => Prompt::String(content.clone(), vec![]),
+            PromptAst::Chat(messages, input_replacers) => Prompt::Chat(
+                messages
+                    .iter()
+                    .filter_map(|(message, content)| {
+                        message.as_ref().map(|m| ChatMessage {
+                            idx: m.idx,
+                            role: m.role.0.clone(),
+                            content: content.clone(),
+                        })
+                    })
+                    .collect::<Vec<_>>(),
+                input_replacers.to_vec(),
+            ),
+        })
+    }
+}
+
+// impl ChatBlock {
+//     /// Unique Key
+//     pub fn key(&self) -> String {
+//         format!("{{//BAML_CLIENT_REPLACE_ME_CHAT_MAGIC_{}//}}", self.idx)
+//     }
+// }

@@ -165,3 +165,12 @@ pub(super) trait WithFileContent<L: LanguageFeatures> {
     fn file_name(&self) -> String;
     fn write(&self, fc: &mut FileCollector<L>);
 }
+
+// Until rust supports trait specialization, we can't implement a trait for the same type twice, even if it's generic and the generic type is different (e.g. a diff language).
+// See https://users.rust-lang.org/t/multiple-trait-implementations-based-on-generic-type-bound/17064
+// So to fix we have to hack around and actually have a *different* trait for Python
+pub(super) trait WithFileContentPy<L: LanguageFeatures> {
+    fn file_dir(&self) -> &'static str;
+    fn file_name(&self) -> String;
+    fn write(&self, fc: &mut FileCollector<L>);
+}

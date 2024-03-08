@@ -3,7 +3,7 @@ use serde_json::json;
 use crate::generate::{
     dir_writer::WithFileContent,
     generate_ts_client::{field_type::to_parse_expression, ts_language_features::ToTypeScript},
-    ir::{Function, FunctionArgs, Impl, Walker},
+    ir::{Function, FunctionArgs, Impl, Prompt, Walker},
 };
 
 use super::{
@@ -58,7 +58,12 @@ impl WithFileContent<TSLanguageFeatures> for Walker<'_, (&Function, &Impl)> {
           "return_type": function.elem.output.elem.to_ts(),
         });
 
-        let mut prompt = impl_.elem.prompt.clone();
+        let mut prompt = match &impl_.elem.prompt {
+            Prompt::String(s, _) => s,
+            // TODO: Implement chat prompt
+            Prompt::Chat(messages, _) => "",
+        }
+        .to_string();
         impl_.elem.output_replacers.iter().for_each(|(k, val)| {
             prompt = prompt.replace(k, &format!("{}", val));
         });

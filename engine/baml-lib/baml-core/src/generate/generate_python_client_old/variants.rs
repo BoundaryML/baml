@@ -4,7 +4,7 @@ use internal_baml_schema_ast::ast::WithName;
 
 use serde_json::json;
 
-use crate::generate::generate_python_client::file::clean_file_name;
+use crate::generate::generate_python_client_old::file::clean_file_name;
 
 use super::{
     file::File,
