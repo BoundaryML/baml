@@ -28,6 +28,7 @@ function isMusl() {
   }
 }
 
+// const searchDir = "/Users/vbv/repos/gloo-lang/engine/baml-core-ffi";
 const searchDir = __dirname;
 
 switch (platform) {
