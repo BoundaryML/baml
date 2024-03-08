@@ -61,19 +61,42 @@ const trace = <T, R>(functionName: string, returnType: string, parameters: Array
   };
 };
 
-const traceAsync = <T, R>(functionName: string, returnType: string, parameters: Array<[string, string]>, arg_type: 'positional' | 'named', cb: FunctionCallback<T, Promise<R>>): FunctionCallback<T, Promise<R>> => {
+const traceAsync = <T, R>(
+  functionName: string,
+   returnType: string,
+    parameters: Array<[string, string]>, 
+    arg_type: 'positional' | 'named', 
+    cb: FunctionCallback<T, Promise<R>>
+  ): FunctionCallback<T, Promise<R>> => {
   return async (arg: T) => {
+    console.log('traceAsync', {
+      functionName,
+      returnType,
+      parameters,
+      arg_type
+    })
     const scopeGuard = createGuard(functionName, returnType, parameters, arg_type === 'named');
     return await asyncThreadScopeGuard.run(scopeGuard, async () => {
+      console.log('traceAsyncInputs', {
+        serializeArgs: serializeArg(arg_type, arg)
+      });
       scopeGuard.logInputs(serializeArg(arg_type, arg));
       try {
         const result = await cb(arg);
+        console.log('traceAsyncOutput', {
+          result: JSON.stringify(result)
+        });
         scopeGuard.logOutput(JSON.stringify(result));
         return result;
       } catch (error) {
+        console.log('traceAsyncError', {
+          error: error
+        });
         if (error instanceof Error) {
           const code = error instanceof LLMException ? error.code : -2;
           scopeGuard.logError(code, error.message, error.stack);
+        } else {
+          scopeGuard.logError(-2, `${error}`);
         }
         throw error;
       }

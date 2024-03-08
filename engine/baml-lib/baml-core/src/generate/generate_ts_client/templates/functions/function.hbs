@@ -40,7 +40,26 @@ function create{{name}}Instance(): I{{name}} & {{name}}Function {
       }
       registry[name] = {
         name,
-        run: traceAsync(async (
+        run: traceAsync(
+          /* functionName */"{{name}}",
+          /* returnType */ "{{return_type}}",
+          /* paramters */ [
+            {{#if params.positional}}
+            [
+              "{{params.name}}",
+              "{{params.type}}"
+            ]
+            {{else}}
+            {{#each params.values as |v|}}
+            [
+              "{{v.name}}",
+              "{{v.type}}"
+            ]{{#unless @last}},{{/unless}}
+            {{/each}}
+            {{/if}}
+          ],
+          /* arg_type */ {{#if params.positional}}'positional'{{else}}'named'{{/if}},
+          /* cb */ async (
           {{#if params.positional}}
           {{params.name}}: {{params.type}}
           {{else}}
@@ -51,21 +70,7 @@ function create{{name}}Instance(): I{{name}} & {{name}}Function {
         ) => {
           FireBamlEvent.variant("{{v.name}}");
           return await cb({{#if params.positional}}{{params.name}}{{else}}params{{/if}});
-        }, '{{name}}', [
-          {{#if params.positional}}
-          {
-            name: '{{params.name}}',
-            type: '{{params.type}}'
-          }
-          {{else}}
-          {{#each params.values as |v|}}
-          {
-            name: '{{v.name}}',
-            type: '{{v.type}}'
-          }{{#unless @last}},{{/unless}}
-          {{/each}}
-          {{/if}}
-        ], {{params.positional}}, '{{return_type}}')
+        })
       };
     },
     validate: () => {
