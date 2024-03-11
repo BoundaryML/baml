@@ -485,6 +485,18 @@ impl WithRepr<Class> for ClassWalker<'_> {
 pub enum OracleType {
     LLM,
 }
+#[derive(serde::Serialize)]
+pub struct Override {
+    pub name: String,
+    pub aliased_keys: Vec<AliasedKey>,
+}
+
+// TODO, also add skips
+#[derive(serde::Serialize)]
+pub struct AliasedKey {
+    pub key: String,
+    pub alias: Expression,
+}
 
 type ImplementationId = String;
 
@@ -492,6 +504,7 @@ type ImplementationId = String;
 pub struct Implementation {
     r#type: OracleType,
     pub name: ImplementationId,
+    pub function_name: String,
 
     pub prompt: Prompt,
 
@@ -502,6 +515,8 @@ pub struct Implementation {
     pub output_replacers: IndexMap<String, String>,
 
     pub client: ClientId,
+
+    pub overrides: Vec<Override>,
 }
 
 /// BAML does not allow UnnamedArgList nor a lone NamedArg
@@ -529,9 +544,13 @@ impl WithRepr<Implementation> for VariantWalker<'_> {
     }
 
     fn repr(&self, db: &ParserDatabase) -> Result<Implementation> {
+        let function_name = self.ast_variant().function_name().name();
+        let impl_name = self.name();
+
         Ok(Implementation {
             r#type: OracleType::LLM,
             name: self.name().to_string(),
+            function_name: function_name.to_string(),
             prompt: self.properties().to_prompt().repr(db)?,
             input_replacers: self
                 .properties()
@@ -550,7 +569,91 @@ impl WithRepr<Implementation> for VariantWalker<'_> {
                 .map(|r| (r.0.key(), r.1.clone()))
                 .collect(),
             client: self.properties().client.value.clone(),
+            overrides: self
+                .ast_variant()
+                .iter_serializers()
+                .filter_map(|(_k, v)| {
+                    let matches = match self.db.find_type_by_str(v.name()) {
+                        Some(either) => match either {
+                            Either::Left(left_value) => {
+                                let cls_res = left_value.repr(db);
+                                match cls_res {
+                                    Ok(cls) => cls
+                                        .static_fields
+                                        .iter()
+                                        .flat_map(|f| {
+                                            process_field(
+                                                &f.attributes.overrides,
+                                                function_name,
+                                                impl_name,
+                                            )
+                                        })
+                                        .collect::<Vec<_>>(),
+
+                                    _ => vec![],
+                                }
+                            }
+                            Either::Right(right_value) => {
+                                let enm_res = right_value.repr(db);
+                                match enm_res {
+                                    Ok(enm) => enm
+                                        .values
+                                        .iter()
+                                        .flat_map(|f| {
+                                            process_field(
+                                                &f.attributes.overrides,
+                                                function_name,
+                                                impl_name,
+                                            )
+                                        })
+                                        .collect::<Vec<_>>(),
+
+                                    _ => vec![],
+                                }
+                            }
+                        },
+                        None => {
+                            vec![]
+                        }
+                    };
+
+                    if matches.is_empty() {
+                        None
+                    } else {
+                        Some(Override {
+                            name: v.name().to_string(),
+                            aliased_keys: matches,
+                        })
+                    }
+                })
+                .collect::<Vec<_>>(),
         })
+    }
+}
+
+fn process_field(
+    overrides: &IndexMap<(String, String), IndexMap<String, Expression>>, // Adjust the type according to your actual field type
+    function_name: &str,
+    impl_name: &str,
+) -> Vec<AliasedKey> {
+    match overrides.get(&((*function_name).to_string(), (*impl_name).to_string())) {
+        Some(overrides) => overrides
+            .iter()
+            .filter_map(|(k, expression)| match expression {
+                Expression::String(s) => {
+                    if k == "alias" {
+                        Some(AliasedKey {
+                            key: k.to_string(),
+                            alias: Expression::String(s.clone()),
+                        })
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            })
+            .collect::<Vec<AliasedKey>>(),
+        None => Vec::new(),
     }
 }
 
@@ -686,7 +789,7 @@ pub struct ChatMessage {
 }
 
 impl WithRepr<Prompt> for PromptAst<'_> {
-    fn repr(&self, db: &ParserDatabase) -> Result<Prompt> {
+    fn repr(&self, _db: &ParserDatabase) -> Result<Prompt> {
         Ok(match self {
             PromptAst::String(content, _) => Prompt::String(content.clone(), vec![]),
             PromptAst::Chat(messages, input_replacers) => Prompt::Chat(

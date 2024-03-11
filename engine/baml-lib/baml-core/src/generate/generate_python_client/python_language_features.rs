@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::generate::dir_writer::{FileCollector, Import, LanguageFeatures};
+use crate::generate::dir_writer::{FileCollector, Import, LanguageFeatures, LibImport};
 
 pub(super) struct PythonLanguageFeatures {}
 
@@ -41,7 +41,7 @@ impl LanguageFeatures for PythonLanguageFeatures {
         }
     }
 
-    fn format_imports(&self, imports: &Vec<Import>) -> String {
+    fn format_imports(&self, libs: &HashSet<LibImport>, imports: &Vec<Import>) -> String {
         // group imports by lib
         let mut imports_by_lib = imports
             .iter()
