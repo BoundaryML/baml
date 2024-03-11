@@ -67,8 +67,9 @@ pub(crate) enum ValueType {
 // Supporting data structures for the above types
 //
 
-#[derive(Serialize, Deserialize, Debug)]
-pub(crate) enum TestCaseStatus {
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[napi_derive::napi]
+pub enum TestCaseStatus {
   #[serde(rename = "QUEUED")]
   Queued,
   #[serde(rename = "RUNNING")]

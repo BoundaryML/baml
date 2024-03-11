@@ -7,6 +7,7 @@ mod function;
 mod r#impl;
 mod intermediate_repr;
 mod template;
+mod test_case;
 mod ts_language_features;
 
 use crate::configuration::Generator;
@@ -26,7 +27,10 @@ pub(crate) fn generate_ts(ir: &IntermediateRepr, gen: &Generator) -> std::io::Re
     ir.walk_functions().for_each(|f| {
         f.walk_impls().for_each(|i| {
             i.write(&mut collector);
-        })
+        });
+        f.walk_tests().for_each(|t| {
+            t.write(&mut collector);
+        });
     });
     ir.walk_clients().for_each(|c| c.write(&mut collector));
 

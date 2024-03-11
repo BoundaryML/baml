@@ -12,7 +12,7 @@ license-file.workspace = true
 crate-type = ["cdylib"]
 
 [dependencies]
-napi = { version = "2", features = ["serde-json", "anyhow"] }
+napi = { version = "2", features = ["serde-json", "anyhow", "async"] }
 napi-derive = "2"
 baml-client-lib = { path = "../baml-client-lib" }
 anyhow.workspace = true

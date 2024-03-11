@@ -284,10 +284,7 @@ pub(crate) fn visit_test_case<'db>(
                 Some((t, span)) => function_name = Some((t.to_string(), span.clone())),
                 None => {}
             },
-            ("input", Some(val)) => match coerce::raw_string(&val, ctx.diagnostics) {
-                Some(raw_string) => test_case = Some(raw_string),
-                None => {}
-            },
+            ("input", Some(val)) => test_case = Some(val),
             ("group", Some(val)) => match coerce::string_with_span(&val, ctx.diagnostics) {
                 Some((t, span)) => group = Some((t.to_string(), span.clone())),
                 None => {}

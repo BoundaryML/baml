@@ -77,10 +77,7 @@ impl WithWritePythonString for ConfigurationWalker<'_> {
                 fc.last_file()
                     .add_import("pytest_baml.ipc_channel", "BaseIPCChannel");
                 let test_case_content =
-                    serde_json::from_str::<Value>(self.test_case().content.value())
-                        .map(|v| to_py_value(&v))
-                        .unwrap();
-
+                    to_py_value(&Into::<serde_json::Value>::into(&self.test_case().content));
                 match func.ast_function().input() {
                     FunctionArgs::Unnamed(arg) => {
                         let data = json!({
@@ -156,7 +153,7 @@ impl JsonHelper for ConfigurationWalker<'_> {
                 json!({
                     "name": self.name(),
                     "function": self.test_case().function.0,
-                    "test_case": self.test_case().content.value(),
+                    "test_case": Into::<serde_json::Value>::into(&self.test_case().content),
                 })
             }
             "printer" => {

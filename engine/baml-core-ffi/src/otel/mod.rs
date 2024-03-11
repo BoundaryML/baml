@@ -1,6 +1,4 @@
-use std::os::unix::process;
-
-use anyhow::{Ok, Result};
+use anyhow::Result;
 mod custom_exporter;
 pub(super) mod event_thread;
 mod partial_types;
@@ -9,23 +7,21 @@ pub(super) mod span_events;
 
 use tracing_subscriber::prelude::*;
 
-use crate::api_wrapper::APIWrapper;
+use crate::api_wrapper::{core_types::TestCaseStatus, APIWrapper, BoundaryAPI, BoundaryTestAPI};
 
 use self::{event_thread::BatchProcessor, span_events::BamlEventSubscriber};
 
-// use self::custom_exporter::CustomBackendExporter;
-
-static mut DEFAULT_CONFIG: Option<BatchProcessor> = None;
+static mut DEFAULT_HANDLER: Option<BatchProcessor> = None;
 
 fn maybe_create_config() -> bool {
   unsafe {
-    match &DEFAULT_CONFIG {
+    match &DEFAULT_HANDLER {
       Some(_) => false,
       None => {
         let processor = BatchProcessor::new(APIWrapper::default(), 100);
-        DEFAULT_CONFIG = Some(processor);
+        DEFAULT_HANDLER = Some(processor);
         let subscriber = tracing_subscriber::registry::Registry::default()
-          .with(BamlEventSubscriber::new(DEFAULT_CONFIG.as_mut().unwrap()));
+          .with(BamlEventSubscriber::new(DEFAULT_HANDLER.as_mut().unwrap()));
         tracing::subscriber::set_global_default(subscriber).unwrap();
         true
       }
@@ -33,9 +29,9 @@ fn maybe_create_config() -> bool {
   }
 }
 
-fn default_config_mut() -> Option<&'static mut BatchProcessor> {
+pub fn event_handler() -> Option<&'static mut BatchProcessor> {
   unsafe {
-    match &mut DEFAULT_CONFIG {
+    match &mut DEFAULT_HANDLER {
       Some(processor) => Some(processor),
       None => None,
     }
@@ -47,7 +43,7 @@ pub fn init_tracer() {
 }
 
 pub fn stop_tracer() -> Result<()> {
-  if let Some(config) = default_config_mut() {
+  if let Some(config) = event_handler() {
     config.stop()
   } else {
     Ok(())
@@ -55,7 +51,7 @@ pub fn stop_tracer() -> Result<()> {
 }
 
 pub fn flush_tracer() -> Result<()> {
-  if let Some(config) = default_config_mut() {
+  if let Some(config) = event_handler() {
     config.flush()
   } else {
     Ok(())
@@ -63,7 +59,7 @@ pub fn flush_tracer() -> Result<()> {
 }
 
 pub fn log_event(name: span_events::SpanEvent, raw_content: serde_json::Value) -> Result<()> {
-  if let Some(config) = default_config_mut() {
+  if let Some(_) = event_handler() {
     span_events::log_event(name, raw_content)
   } else {
     Ok(())
@@ -78,9 +74,9 @@ pub fn log_event(name: span_events::SpanEvent, raw_content: serde_json::Value) -
 //     stage: Option<&str>,
 // ) {
 //     // Update the default config
-//     let config = default_config().copy_from(base_url, api_key, project_id, sessions_id, stage);
+//     let config = DEFAULT_HANDLER().copy_from(base_url, api_key, project_id, sessions_id, stage);
 //     unsafe {
-//         DEFAULT_CONFIG = Some(config.clone());
+//         DEFAULT_HANDLER = Some(config.clone());
 //     }
 
 //     // Update the exporter

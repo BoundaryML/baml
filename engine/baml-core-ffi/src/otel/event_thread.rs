@@ -21,15 +21,16 @@ fn batch_processor(
 ) {
   let api_config = &api_config;
   let mut batch = Vec::with_capacity(max_batch_size);
+  let mut now = std::time::Instant::now();
   loop {
     // Try to fill the batch up to max_batch_size
-    match rx.recv_timeout(Duration::from_millis(10)) {
+    match rx.recv_timeout(Duration::from_millis(100)) {
       Ok(TxEventSignal::Submit(work)) => batch.push(work),
       Ok(TxEventSignal::Flush) => {
         if !batch.is_empty() {
           process_batch(api_config, std::mem::take(&mut batch));
         }
-        tx.send(RxEventSignal::Done);
+        let _ = tx.send(RxEventSignal::Done);
       }
       Ok(TxEventSignal::Stop) => {
         if !batch.is_empty() {
@@ -38,7 +39,7 @@ fn batch_processor(
         return; // Exit loop and thread
       }
       Err(std::sync::mpsc::RecvTimeoutError::Timeout) => { /* No work, continue */ }
-      Err(e) => {
+      Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
         if !batch.is_empty() {
           process_batch(api_config, std::mem::take(&mut batch));
         }
@@ -46,9 +47,10 @@ fn batch_processor(
       }
     }
 
-    // Process the batch if it's full or after waiting a bit
-    if !batch.is_empty() {
+    // Send events every 1 second or when the batch is full
+    if batch.len() >= max_batch_size || now.elapsed().as_secs() >= 1 {
       process_batch(api_config, std::mem::take(&mut batch));
+      now = std::time::Instant::now();
     }
   }
 }

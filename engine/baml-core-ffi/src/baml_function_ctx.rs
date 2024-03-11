@@ -117,7 +117,7 @@ impl FunctionCtx {
         Some(arr) => {
           if arr.len() > self.parameters.len() {
             return Err(anyhow::anyhow!(
-              "Too many arguements to function: {}. Expected {}, got {}",
+              "Too many arguments to function: {}. Expected {}, got {}",
               self.function_name,
               self.parameters.len(),
               arr.len()
@@ -126,9 +126,8 @@ impl FunctionCtx {
 
           let positional_args = arr
             .iter()
-            .enumerate()
             .zip(self.parameters.iter())
-            .map(|((i, arg), (name, r#type))| {
+            .map(|(arg, (name, r#type))| {
               (
                 Some(name.clone()),
                 (

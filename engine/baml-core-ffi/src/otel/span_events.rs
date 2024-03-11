@@ -16,10 +16,7 @@ use anyhow::Result;
 use tracing::Subscriber;
 use tracing_subscriber::layer::Layer;
 
-use crate::{
-  api_wrapper::core_types::{EventChain, EventType, LogSchemaContext},
-  baml_event,
-};
+use crate::api_wrapper::core_types::{EventChain, LogSchemaContext};
 
 pub use self::events::SpanEvent;
 use self::llm_prompt_template::LlmPromptTemplate;

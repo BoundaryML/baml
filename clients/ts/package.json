@@ -9,7 +9,8 @@
     "./client_manager": "./dist/client_manager/index.js",
     "./deserializer": "./dist/deserializer/index.js",
     "./ffi_layer": "./dist/ffi_layer.js",
-    "./deserializer/deserializer": "./dist/deserializer/deserializer.js"
+    "./deserializer/deserializer": "./dist/deserializer/deserializer.js",
+    "./baml_test_runner": "./dist/baml_test_runner/index.js"
   },
   "scripts": {
     "test": "jest",
@@ -23,12 +24,14 @@
   "author": "contact@boundaryml.com",
   "license": "Apache-2.0",
   "devDependencies": {
+    "@jest/types": "^29.6.3",
     "@types/jest": "^29.5.11",
     "@types/json-schema": "^7.0.15",
     "@types/node": "^20.11.21",
     "@types/string-format": "^2.0.3",
     "install": "^0.13.0",
     "jest": "^29.7.0",
+    "jest-runner": "^29.7.0",
     "ts-jest": "^29.1.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.3.3"

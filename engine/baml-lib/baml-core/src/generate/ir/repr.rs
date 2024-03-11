@@ -50,6 +50,13 @@ impl IntermediateRepr {
         self.clients.iter().map(|e| Walker { db: self, item: e })
     }
 
+    pub fn walk_tests<'a>(&'a self) -> impl Iterator<Item = Walker<'a, &'a Node<Function>>> {
+        self.functions
+            .iter()
+            .filter(|f| f.elem.name.starts_with("test"))
+            .map(|e| Walker { db: self, item: e })
+    }
+
     #[allow(dead_code)]
     pub fn walk_retry_policies<'a>(
         &'a self,
@@ -509,6 +516,7 @@ pub struct Function {
     pub inputs: FunctionArgs,
     pub output: Node<FieldType>,
     pub impls: Vec<Node<Implementation>>,
+    pub tests: Vec<Node<TestCase>>,
     pub default_impl: Option<ImplementationId>,
 }
 
@@ -566,6 +574,10 @@ impl WithRepr<Function> for FunctionWalker<'_> {
             default_impl: self.metadata().default_impl.as_ref().map(|f| f.0.clone()),
             impls: self
                 .walk_variants()
+                .map(|e| e.node(db))
+                .collect::<Result<Vec<_>>>()?,
+            tests: self
+                .walk_tests()
                 .map(|e| e.node(db))
                 .collect::<Result<Vec<_>>>()?,
         })
@@ -630,6 +642,21 @@ impl WithRepr<RetryPolicy> for ConfigurationWalker<'_> {
                     .collect::<Result<Vec<_>>>()?,
                 None => vec![],
             },
+        })
+    }
+}
+
+#[derive(serde::Serialize)]
+pub struct TestCase {
+    pub name: String,
+    pub content: Expression,
+}
+
+impl WithRepr<TestCase> for ConfigurationWalker<'_> {
+    fn repr(&self, db: &ParserDatabase) -> Result<TestCase> {
+        Ok(TestCase {
+            name: self.name().to_string(),
+            content: self.test_case().content.repr(db)?,
         })
     }
 }

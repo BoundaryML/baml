@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::generate::dir_writer::{FileCollector, Import, LanguageFeatures};
+use crate::generate::dir_writer::{FileCollector, Import, LanguageFeatures, LibImport};
 
 pub(super) struct TSLanguageFeatures {}
 
@@ -20,7 +20,16 @@ impl LanguageFeatures for TSLanguageFeatures {
         format!("export {{ {} }}", exports.join(", "))
     }
 
-    fn format_imports(&self, imports: &Vec<Import>) -> String {
+    fn format_imports(&self, libs: &HashSet<LibImport>, imports: &Vec<Import>) -> String {
+        let lib_imports = libs.iter().fold(String::new(), |mut buffer, lib| {
+            buffer.push_str(&format!(
+                "import {} from '{}';\n",
+                lib.as_name.as_ref().unwrap_or(&lib.lib),
+                lib.lib
+            ));
+            buffer
+        });
+
         // group imports by lib
         let mut imports_by_lib = imports
             .iter()
@@ -33,7 +42,7 @@ impl LanguageFeatures for TSLanguageFeatures {
             .collect::<Vec<_>>();
         imports_by_lib.sort_by(|a, b| a.0.cmp(b.0));
 
-        imports_by_lib
+        let imports = imports_by_lib
             .iter()
             .fold(String::new(), |mut buffer, (lib, imports)| {
                 buffer.push_str(&format!(
@@ -56,7 +65,9 @@ impl LanguageFeatures for TSLanguageFeatures {
                     lib
                 ));
                 buffer
-            })
+            });
+
+        format!("{}\n{}", lib_imports, imports)
     }
 
     fn to_file_path(&self, path: &str, name: &str) -> std::path::PathBuf {

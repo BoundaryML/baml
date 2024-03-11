@@ -1,6 +1,15 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+};
 
 use log::info;
+
+#[derive(PartialEq, Eq, Hash)]
+pub(super) struct LibImport {
+    pub lib: String,
+    pub as_name: Option<String>,
+}
 
 #[derive(PartialEq, Eq, Hash)]
 pub(super) struct Import {
@@ -11,12 +20,20 @@ pub(super) struct Import {
 
 pub(super) struct FileContent {
     content: Vec<String>,
+    import_libs: HashSet<LibImport>,
     imports: Vec<Import>,
     exports: Vec<String>,
     export_all: bool,
 }
 
 impl FileContent {
+    pub fn add_import_lib(&mut self, lib: impl Into<String>, as_name: Option<&str>) {
+        self.import_libs.insert(LibImport {
+            lib: lib.into(),
+            as_name: as_name.map(|s| s.to_string()),
+        });
+    }
+
     pub fn add_import(
         &mut self,
         lib: impl Into<String>,
@@ -86,6 +103,7 @@ impl<L: LanguageFeatures> FileCollector<L> {
         self.last_file = Some(path.clone());
         self.files.entry(path).or_insert_with(|| FileContent {
             content: vec![],
+            import_libs: HashSet::new(),
             imports: vec![],
             exports: vec![],
             export_all,
@@ -115,8 +133,11 @@ impl<L: LanguageFeatures> FileCollector<L> {
             result.push(self.lang.content_prefix().to_string());
         }
 
-        if content.imports.len() > 0 {
-            result.push(self.lang.format_imports(&content.imports));
+        if content.imports.len() + content.import_libs.len() > 0 {
+            result.push(
+                self.lang
+                    .format_imports(&content.import_libs, &content.imports),
+            );
         }
 
         if content.content.len() > 0 {
@@ -134,7 +155,7 @@ impl<L: LanguageFeatures> FileCollector<L> {
 // Add a trait per language that can be used to convert an Import into a string
 pub(super) trait LanguageFeatures {
     fn to_file_path(&self, path: &str, name: &str) -> PathBuf;
-    fn format_imports(&self, import: &Vec<Import>) -> String;
+    fn format_imports(&self, libs: &HashSet<LibImport>, import: &Vec<Import>) -> String;
     fn format_exports(&self, exports: &Vec<String>) -> String;
     fn content_prefix(&self) -> &'static str;
 }

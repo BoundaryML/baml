@@ -29,6 +29,7 @@ pub(super) enum Template {
     ClassInternal,
     Function,
     Impl,
+    TestCase,
     Client,
     ExportFile,
 }
@@ -65,6 +66,10 @@ pub(super) fn render_with_hbs<T: serde::Serialize>(template: Template, data: &T)
         Template::Impl => {
             register_partial_file!(reg, "functions", "impl");
             "impl"
+        }
+        Template::TestCase => {
+            register_partial_file!(reg, "functions", "test_case");
+            "test_case"
         }
         Template::Client => {
             register_partial_file!(reg, "types", "client");

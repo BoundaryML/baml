@@ -43,6 +43,7 @@ class BamlTestRunner extends TestRunner {
   async runTests(
     tests: Array<Test>,
     watcher: TestWatcher,
+    // // Available if the runner is a CallbackTestRunner
     // onStart: OnTestStart | undefined,
     // onResult: OnTestSuccess | undefined,
     // onFailure: OnTestFailure | undefined,
@@ -87,9 +88,9 @@ class BamlTestRunner extends TestRunner {
     console.log("finished all tests")
   }
 
-  on<Name extends keyof TestEvents>(eventName: Name, listener: (eventData: TestEvents[Name]) => void | Promise<void>): UnsubscribeFn {
-    return super.on(eventName, listener)
-  }
+  // on<Name extends keyof TestEvents>(eventName: Name, listener: (eventData: TestEvents[Name]) => void | Promise<void>): UnsubscribeFn {
+  //   return super.on(eventName, listener)
+  // }
 
 }
 

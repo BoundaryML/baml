@@ -1,11 +1,15 @@
-use super::{
-    repr::{self},
-    Class, Client, Enum, Function, Impl, Walker,
-};
+use super::{repr, Class, Client, Enum, Function, Impl, TestCase, Walker};
 
 impl<'a> Walker<'a, &'a Function> {
     pub fn walk_impls(&'a self) -> impl Iterator<Item = Walker<'a, (&'a Function, &'a Impl)>> {
         self.item.elem.impls.iter().map(|i| Walker {
+            db: self.db,
+            item: (self.item, i),
+        })
+    }
+
+    pub fn walk_tests(&'a self) -> impl Iterator<Item = Walker<'a, (&'a Function, &'a TestCase)>> {
+        self.item.elem.tests.iter().map(|i| Walker {
             db: self.db,
             item: (self.item, i),
         })

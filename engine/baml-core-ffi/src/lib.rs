@@ -1,10 +1,16 @@
 #![deny(clippy::all)]
 
+use colored::*;
+use std::collections::HashMap;
+
 use anyhow::Result;
 mod api_wrapper;
 mod baml_function_ctx;
 mod otel;
 
+use api_wrapper::{
+  api_interface::UpdateTestCaseRequest, core_types::TestCaseStatus, BoundaryAPI, BoundaryTestAPI,
+};
 use baml_function_ctx::{FunctionCtx, ScopeGuard};
 use napi_derive::napi;
 use otel::span_events::SpanEvent;
@@ -27,6 +33,110 @@ impl BamlTracer {
   #[napi]
   pub fn flush(&self) -> Result<()> {
     otel::flush_tracer()
+  }
+}
+
+#[napi]
+pub struct BamlTester {
+  // First key is the test suite name, second key is the test case name
+  test_cases: HashMap<(String, String), TestCaseStatus>,
+}
+
+#[napi]
+impl BamlTester {
+  #[napi(constructor)]
+  pub fn new(test_cases: Vec<(String, String)>) -> Self {
+    Self {
+      test_cases: test_cases
+        .into_iter()
+        .map(|(suite, case)| ((suite, case), TestCaseStatus::Queued))
+        .collect(),
+    }
+  }
+
+  #[napi]
+  pub async fn start(&self) -> Result<(), napi::Error> {
+    match otel::event_handler() {
+      Some(handler) => {
+        let dashboard_url = handler
+          .api()
+          .create_session()
+          .await
+          .map(|s| Some(s.session_id))?;
+
+        handler
+          .api()
+          .register_test_cases(self.test_cases.keys().cloned())
+          .await?;
+
+        if let Some(url) = dashboard_url {
+          println!("Boundary Studio: {}", url.blue());
+        }
+
+        Ok(())
+      }
+      None => Ok(()),
+    }
+  }
+
+  #[napi]
+  pub async fn end(&self) -> Result<(), napi::Error> {
+    match otel::event_handler() {
+      Some(handler) => {
+        // For any tests that are still queued, mark them as skipped
+        let queued_tests = self
+          .test_cases
+          .iter()
+          .filter(|(_, status)| **status == TestCaseStatus::Queued)
+          .map(|((suite, case), _)| UpdateTestCaseRequest {
+            test_suite: suite.clone(),
+            test_case: case.clone(),
+            status: TestCaseStatus::Cancelled,
+          })
+          .collect::<Vec<_>>();
+
+        handler.api().update_test_case_batch(&queued_tests).await?;
+
+        handler.api().finish_session().await?;
+
+        Ok(())
+      }
+      None => Ok(()),
+    }
+  }
+
+  #[napi]
+  pub async fn update_test_case(
+    &self,
+    test_suite: String,
+    test_case: String,
+    status: TestCaseStatus,
+    error_data: Option<serde_json::Value>,
+  ) -> Result<(), napi::Error> {
+    if !self
+      .test_cases
+      .contains_key(&(test_suite.clone(), test_case.clone()))
+    {
+      return Err(
+        anyhow::Error::msg(format!(
+          "Not registered test case - {}::{}\n{:?}",
+          test_suite, test_case, self.test_cases
+        ))
+        .into(),
+      );
+    }
+
+    match otel::event_handler() {
+      Some(handler) => {
+        handler
+          .api()
+          .update_test_case(&test_suite, &test_case, status, error_data)
+          .await?;
+
+        Ok(())
+      }
+      None => Ok(()),
+    }
   }
 }
 

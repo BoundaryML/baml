@@ -230,7 +230,7 @@ pub struct ClientProperties {
 #[derive(Debug, Clone)]
 pub struct TestCase {
     pub function: (String, Span),
-    pub content: RawString,
+    pub content: Expression,
     pub group: Option<(String, Span)>,
 }
 
