@@ -30,23 +30,25 @@ abstract class LLMChatProvider extends LLMBaseProvider {
   run_chat_template(prompt: LLMChatMessage | LLMChatMessage[], template_args: Array<string>, params: { [key: string]: any; }): Promise<LLMResponse> {
     const prompts = Array.isArray(prompt) ? prompt : [prompt];
 
-    const updates = template_args.map((arg): [string, string] => [arg, format(arg, params)]
-    );
+    const updates = template_args.map((arg): [string, string] => [arg, `${params[arg]}`]);
 
     this.start_run(prompts);
     FireBamlEvent.llmTemplateArgs({
       template: prompts,
       template_args: Object.fromEntries(updates),
     });
-    prompts.forEach((prompt) => {
+    const filled_prompts = prompts.map((prompt) => {
       let content = prompt.content;
       updates.forEach(([arg, value]) => {
         content = content.replaceAll(arg, value);
       });
-      prompt.content = content;
+      return {
+        role: prompt.role,
+        content,
+      }
     });
 
-    return this.chat_with_telemetry(prompts);
+    return this.chat_with_telemetry(filled_prompts);
   }
 
   private async chat_with_telemetry(prompt: LLMChatMessage[]): Promise<LLMResponse> {
