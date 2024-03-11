@@ -35,7 +35,7 @@ __deserializer = Deserializer[{{output_adapter.type}}]({{output_adapter.type}}) 
 __deserializer = Deserializer[{{function.return_type}}]({{function.return_type}})  # type: ignore
 {{/if}}
 {{#each overrides}}
-__deserializer.overload("{{{name}}}", {{BLOCK_OPEN}}{{#each aliases}}"{{{alias}}}": "{{value}}"{{#unless @last}}, {{/unless}}{{/each}}{{BLOCK_CLOSE}})
+__deserializer.overload("{{{name}}}", {{BLOCK_OPEN}}{{#each aliases}}{{{alias}}}: "{{value}}"{{#unless @last}}, {{/unless}}{{/each}}{{BLOCK_CLOSE}})
 {{/each}}
 
 # Add a deserializer that handles stream responses, which are all Partial types
@@ -45,7 +45,7 @@ __partial_deserializer = Deserializer[{{output_adapter.type}}]({{output_adapter.
 __partial_deserializer = Deserializer[{{function.return_type_partial}}]({{function.return_type_partial}})  # type: ignore
 {{/if}}
 {{#each overrides}}
-__partial_deserializer.overload("{{{name}}}", {{BLOCK_OPEN}}{{#each aliases}}"{{{alias}}}": "{{value}}"{{#unless @last}}, {{/unless}}{{/each}}{{BLOCK_CLOSE}})
+__partial_deserializer.overload("{{{name}}}", {{BLOCK_OPEN}}{{#each aliases}}{{{alias}}}: "{{value}}"{{#unless @last}}, {{/unless}}{{/each}}{{BLOCK_CLOSE}})
 {{/each}}
 
 

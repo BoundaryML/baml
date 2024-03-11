@@ -74,7 +74,7 @@ impl WithFileContent<PythonLanguageFeatures> for Walker<'_, &Function> {
           "default_impl": self.elem().default_impl,
         });
 
-        println!("function_content: {:#?}", function_content);
+        // println!("function_content: {:#?}", function_content);
 
         file.append(render_with_hbs(
             super::template::Template::Function,

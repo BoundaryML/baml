@@ -65,7 +65,7 @@ impl WithFileContent<PythonLanguageFeatures> for Walker<'_, (&Function, &Impl)> 
           "has_impls": !function.elem.impls.is_empty(),
           "default_impl": function.elem.default_impl,
         });
-        println!("{:#?}", function_content);
+        println!("func content: {:#?}", function_content);
 
         let prompt = &impl_.elem.prompt;
 
@@ -94,7 +94,17 @@ impl WithFileContent<PythonLanguageFeatures> for Walker<'_, (&Function, &Impl)> 
             "client": impl_.elem.client.clone(),
             "inputs": impl_.elem.input_replacers,
             // add empty override
-            "overrides": [],
+            "overrides": impl_.elem.overrides.iter().map(|f| {
+                json!({
+                    "name": f.name,
+                    "aliases": f.aliased_keys.iter().map(|aliased_key| {
+                        json!({
+                            "alias": aliased_key.alias.to_py(),
+                            "value": aliased_key.key,
+                        })
+                    }).collect::<Vec<_>>(),
+                })
+            }).collect::<Vec<_>>(),
             // "overrides": impl_.attributes.get("overrides").map(|overrides| {
             //     match overrides {
             //         Expression::String(s) => "s",
@@ -109,7 +119,7 @@ impl WithFileContent<PythonLanguageFeatures> for Walker<'_, (&Function, &Impl)> 
             // }),
 
         });
-        println!("{:#?}", impl_content);
+        println!("impl content: {:#?}", impl_content);
 
         file.append(render_with_hbs(
             super::template::Template::Impl,

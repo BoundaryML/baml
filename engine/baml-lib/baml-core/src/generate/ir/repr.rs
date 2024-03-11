@@ -488,6 +488,7 @@ pub enum OracleType {
 #[derive(serde::Serialize)]
 pub struct Override {
     pub name: String,
+    // This is used to generate deserializers with aliased keys (see .overload in python deserializer)
     pub aliased_keys: Vec<AliasedKey>,
 }
 
@@ -584,6 +585,7 @@ impl WithRepr<Implementation> for VariantWalker<'_> {
                                         .flat_map(|f| {
                                             process_field(
                                                 &f.attributes.overrides,
+                                                &f.elem.name,
                                                 function_name,
                                                 impl_name,
                                             )
@@ -602,6 +604,7 @@ impl WithRepr<Implementation> for VariantWalker<'_> {
                                         .flat_map(|f| {
                                             process_field(
                                                 &f.attributes.overrides,
+                                                &f.elem.0,
                                                 function_name,
                                                 impl_name,
                                             )
@@ -633,6 +636,7 @@ impl WithRepr<Implementation> for VariantWalker<'_> {
 
 fn process_field(
     overrides: &IndexMap<(String, String), IndexMap<String, Expression>>, // Adjust the type according to your actual field type
+    original_name: &str,
     function_name: &str,
     impl_name: &str,
 ) -> Vec<AliasedKey> {
@@ -643,8 +647,8 @@ fn process_field(
                 Expression::String(s) => {
                     if k == "alias" {
                         Some(AliasedKey {
-                            key: k.to_string(),
-                            alias: Expression::String(s.clone()),
+                            key: original_name.to_string(),
+                            alias: Expression::String(s.to_string()),
                         })
                     } else {
                         None
