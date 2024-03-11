@@ -38,7 +38,7 @@ export class BamlScopeGuard {
   ): JsScopeGuard
   child(functionName: string, returnType: string, parameters: Array<[string, string]>, asKwarg: boolean): BamlScopeGuard
   logInputs(args: { [key: string]: any } | any[]): void
-  logOutput(result: string): void
+  logOutput(result?: string | undefined | null): void
   logError(errorCode: number, message?: string | undefined | null, stack?: string | undefined | null): void
   logLlmStart(event: {
     prompt:

@@ -4,6 +4,8 @@ pub(super) mod core_types;
 mod ipc_interface;
 use serde_json::{json, Value};
 
+use crate::env_setup::{Config, LogLevel};
+
 pub(super) use self::api_interface::{BoundaryAPI, BoundaryTestAPI};
 use self::core_types::TestCaseStatus;
 
@@ -65,40 +67,26 @@ impl APIConfig {
   }
 
   pub fn default() -> Self {
-    let base_url = std::env::var("BOUNDARY_BASE_URL").unwrap_or(DEFAULT_BASE_URL.to_string());
-    let api_key = std::env::var("BOUNDARY_API_KEY").ok();
-    let project_id = std::env::var("BOUNDARY_PROJECT_ID").ok();
-    let sessions_id =
-      std::env::var("BOUNDARY_SESSIONS_ID").unwrap_or(uuid::Uuid::new_v4().to_string());
-    let stage = std::env::var("BOUNDARY_STAGE").unwrap_or("development".to_string());
-    let host_name = std::env::var("BOUNDARY_HOST_NAME").unwrap_or(
-      hostname::get()
-        .map(|host| host.to_string_lossy().to_string())
-        .unwrap_or_else(|_| "unknown".to_string()),
-    );
-    let log_level = std::env::var("BOUNDARY_PRINT_EVENTS")
-      .ok()
-      .map(|v| v == "true" || v == "1")
-      .unwrap_or(false);
+    let config = Config::from_env().unwrap();
 
-    match (&api_key, &project_id) {
+    match (&config.api_key, &config.project_id) {
       (Some(api_key), Some(project_id)) => Self::Web(CompleteAPIConfig {
-        log_level,
-        base_url,
+        log_level: config.log_level != LogLevel::None,
+        base_url: config.base_url,
         api_key: api_key.to_string(),
         project_id: project_id.to_string(),
-        stage,
-        sessions_id,
-        host_name,
+        stage: config.stage,
+        sessions_id: config.sessions_id,
+        host_name: config.host_name,
       }),
       _ => Self::LocalOnly(PartialAPIConfig {
-        log_level,
-        base_url,
-        api_key,
-        project_id,
-        stage,
-        sessions_id,
-        host_name,
+        log_level: config.log_level != LogLevel::None,
+        base_url: config.base_url,
+        api_key: config.api_key,
+        project_id: config.project_id,
+        stage: config.stage,
+        sessions_id: config.sessions_id,
+        host_name: config.host_name,
       }),
     }
   }

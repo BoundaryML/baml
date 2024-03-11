@@ -24,6 +24,7 @@ hostname = "0.3.1"
 reqwest = "0.11.24"
 uuid = "1.7.0"
 tracing-subscriber = "0.3.18"
+envy = "0.4.2"
 
 [build-dependencies]
 napi-build = "2"

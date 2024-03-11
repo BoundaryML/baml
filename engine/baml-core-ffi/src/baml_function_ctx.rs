@@ -38,7 +38,7 @@ impl ScopeGuard {
     IOEvent::input_event(&args)
   }
 
-  pub fn log_output(&self, value: &String) -> Result<()> {
+  pub fn log_output(&self, value: &str) -> Result<()> {
     let _guard = self.span.enter();
     IOEvent::output_event(value, &self.function.return_type)
   }

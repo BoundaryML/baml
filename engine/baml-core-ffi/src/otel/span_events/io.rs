@@ -36,8 +36,8 @@ impl IOEvent {
     baml_event_def!(InputOutput, is_input, args, ts_ms);
     Ok(())
   }
-  pub fn output_event(value: &String, r#type: &String) -> Result<()> {
-    let packet: PositionalArgs = vec![(Some("result".into()), (value.clone(), r#type.clone()))];
+  pub fn output_event(value: &str, r#type: &String) -> Result<()> {
+    let packet: PositionalArgs = vec![(Some("result".into()), (value.to_string(), r#type.clone()))];
     let args: FunctionArgs = (packet, Default::default());
     let args = serde_json::to_string(&args)?;
     let is_input = false;

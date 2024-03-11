@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use anyhow::Result;
 mod api_wrapper;
 mod baml_function_ctx;
+mod env_setup;
 mod otel;
 
 use api_wrapper::{
@@ -191,8 +192,10 @@ impl JsScopeGuard {
   }
 
   #[napi]
-  pub fn log_output(&self, result: String) -> Result<()> {
-    self.guard.log_output(&result)
+  pub fn log_output(&self, result: Option<String>) -> Result<()> {
+    self
+      .guard
+      .log_output(result.as_ref().map(|s| s.as_str()).unwrap_or("null"))
   }
 
   #[napi]
