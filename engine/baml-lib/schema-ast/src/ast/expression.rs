@@ -1,3 +1,5 @@
+use internal_baml_diagnostics::SourceFile;
+
 use crate::ast::Span;
 use std::fmt;
 
@@ -144,6 +146,41 @@ pub enum Expression {
     Array(Vec<Expression>, Span),
     /// A mapping function.
     Map(Vec<(Expression, Expression)>, Span),
+}
+
+impl Expression {
+    pub fn from_json(value: serde_json::Value, span: Span, empty_span: Span) -> Expression {
+        match value {
+            serde_json::Value::Null => {
+                Expression::Identifier(Identifier::Primitive(super::TypeValue::Null, span))
+            }
+            serde_json::Value::Bool(b) => {
+                // NB(sam): I don't like this, but I don't see a good way of dumping out a bool literal
+                Expression::Identifier(Identifier::Local(b.to_string(), span))
+            }
+            serde_json::Value::Number(n) => Expression::NumericValue(n.to_string(), span),
+            serde_json::Value::String(s) => Expression::StringValue(s, span),
+            serde_json::Value::Array(arr) => {
+                let arr = arr
+                    .into_iter()
+                    .map(|v| Expression::from_json(v, empty_span.clone(), empty_span.clone()))
+                    .collect();
+                Expression::Array(arr, span)
+            }
+            serde_json::Value::Object(obj) => {
+                let obj = obj
+                    .into_iter()
+                    .map(|(k, v)| {
+                        (
+                            Expression::StringValue(k, empty_span.clone()),
+                            Expression::from_json(v, empty_span.clone(), empty_span.clone()),
+                        )
+                    })
+                    .collect();
+                Expression::Map(obj, span)
+            }
+        }
+    }
 }
 
 impl Into<serde_json::Value> for &Expression {
