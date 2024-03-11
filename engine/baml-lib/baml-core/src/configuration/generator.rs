@@ -22,6 +22,7 @@ impl From<String> for GeneratorConfigValue {
 impl From<&Expression> for GeneratorConfigValue {
     fn from(expr: &Expression) -> Self {
         match expr {
+            Expression::BoolValue(val, _) => val.to_string().into(),
             Expression::NumericValue(val, _) => val.clone().into(),
             Expression::StringValue(val, _) => val.clone().into(),
             Expression::Array(elements, _) => {

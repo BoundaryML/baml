@@ -34,6 +34,7 @@ impl ToTypeScript for Expression {
             Expression::String(val) => format!("\"{}\"", val.replace('"', "\\\"")),
             Expression::RawString(val) => format!("`{}`", val.replace('`', "\\`")),
             Expression::Numeric(val) => val.clone(),
+            Expression::Bool(val) => val.to_string(),
         }
     }
 }

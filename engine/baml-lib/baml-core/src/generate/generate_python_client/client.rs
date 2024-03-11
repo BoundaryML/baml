@@ -33,6 +33,7 @@ impl ToPyObject for Identifier {
 impl ToPyObject for Expression {
     fn to_py_object(&self, f: &mut File) -> String {
         match self {
+            Expression::BoolValue(val, _) => val.to_string(),
             Expression::NumericValue(val, _) => val.clone(),
             Expression::StringValue(val, _) => {
                 format!("\"{}\"", escaped_string(val, ("\"", "\\\"")))

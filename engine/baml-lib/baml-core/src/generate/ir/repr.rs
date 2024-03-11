@@ -283,6 +283,7 @@ pub enum Identifier {
 #[derive(serde::Serialize)]
 pub enum Expression {
     Identifier(Identifier),
+    Bool(bool),
     Numeric(String),
     String(String),
     RawString(String),
@@ -293,6 +294,7 @@ pub enum Expression {
 impl WithRepr<Expression> for ast::Expression {
     fn repr(&self, db: &ParserDatabase) -> Result<Expression> {
         Ok(match self {
+            ast::Expression::BoolValue(val, _) => Expression::Bool(val.clone()),
             ast::Expression::NumericValue(val, _) => Expression::Numeric(val.clone()),
             ast::Expression::StringValue(val, _) => Expression::String(val.clone()),
             ast::Expression::RawStringValue(val) => Expression::RawString(val.value().to_string()),
