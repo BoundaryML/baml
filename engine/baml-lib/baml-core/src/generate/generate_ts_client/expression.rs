@@ -31,7 +31,9 @@ impl ToTypeScript for Expression {
                 Identifier::Ref(r) => format!("\"{}\"", r.join(".")),
                 Identifier::Primitive(p) => p.to_ts(),
             },
-            Expression::String(val) => format!("\"{}\"", val.replace('"', "\\\"")),
+            Expression::String(val) => {
+                format!("\"{}\"", val.replace('"', "\\\"").replace('\n', "\\n"))
+            }
             Expression::RawString(val) => format!("`{}`", val.replace('`', "\\`")),
             Expression::Numeric(val) => val.clone(),
             Expression::Bool(val) => val.to_string(),
