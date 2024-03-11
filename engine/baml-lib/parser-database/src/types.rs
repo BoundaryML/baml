@@ -123,7 +123,7 @@ pub struct VariantProperties {
 }
 
 /// The representation of a prompt.
-pub enum PromptRepr<'a> {
+pub enum PromptAst<'a> {
     /// For single string prompts
     /// Prompt + Any used input replacers
     String(String, Vec<String>),
@@ -142,7 +142,7 @@ impl VariantProperties {
         })
     }
 
-    pub fn to_prompt<'a>(&'a self) -> PromptRepr<'a> {
+    pub fn to_prompt<'a>(&'a self) -> PromptAst<'a> {
         let (input, output, chats) = &self.replacers;
 
         // Replace all the inputs with the input replacers
@@ -167,7 +167,7 @@ impl VariantProperties {
         used_inputs.sort();
 
         if chats.is_empty() {
-            PromptRepr::String(prompt, used_inputs)
+            PromptAst::String(prompt, used_inputs)
         } else {
             // Split the prompt into parts based on the chat blocks.
             let mut last_idx = 0;
@@ -194,7 +194,7 @@ impl VariantProperties {
             }
 
             // Each chat block owns a part of the prompt. until the next chat block.
-            PromptRepr::Chat(
+            PromptAst::Chat(
                 parts
                     .iter()
                     .enumerate()

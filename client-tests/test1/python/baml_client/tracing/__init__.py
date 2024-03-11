@@ -13,6 +13,6 @@ from baml_core.otel import set_tags, trace
 
 
 __all__ = [
-    'trace',
-    'set_tags'
+    'set_tags',
+    'trace'
 ]
