@@ -1,6 +1,20 @@
+
+{{#if is_chat}}
+
+const prompt_template = [
+  {{#each prompt}}
+  {
+    role: "{{role}}",
+    content: `{{{content}}}`
+  }{{#unless @last}},{{/unless}}
+  {{/each}}
+];
+
+{{else}}
 const prompt_template = `\
 {{{prompt}}}\
 `;
+{{/if}}
 
 const deserializer = new Deserializer<{{function.return_type}}>(schema, {
   $ref: '#/definitions/{{function.name}}_output'
@@ -23,7 +37,7 @@ const deserializer = new Deserializer<{{function.return_type}}>(schema, {
   {{/each}}
   {{/if}}
   
-    const result = await {{client}}.run_prompt_template(
+    const result = await {{client}}.run_{{#if is_chat}}chat{{else}}prompt{{/if}}_template(
       prompt_template,
       [{{#each inputs as |input key|}}
         "{{key}}",
