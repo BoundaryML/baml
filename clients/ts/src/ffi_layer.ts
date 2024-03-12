@@ -74,7 +74,6 @@ const traceAsync = <T, R>(
       scopeGuard.logInputs(serializeArg(arg_type, arg));
       try {
         const result = await cb(arg);
-        console.log('result', functionName, result);
         scopeGuard.logOutput(JSON.stringify(result));
         return result;
       } catch (error) {
