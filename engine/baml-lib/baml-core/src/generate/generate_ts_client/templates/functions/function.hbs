@@ -68,7 +68,7 @@ function create{{name}}Instance(): I{{name}} & {{name}}Function {
           }
           {{/if}}
         ) => {
-          FireBamlEvent.variant("{{v.name}}");
+          FireBamlEvent.variant(name);
           return await cb({{#if params.positional}}{{params.name}}{{else}}params{{/if}});
         })
       };

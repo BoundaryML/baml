@@ -21,3 +21,4 @@ pub(super) type Impl = repr::Node<repr::Implementation>;
 pub(super) type Client = repr::Node<repr::Client>;
 pub(super) type TestCase = repr::Node<repr::TestCase>;
 pub(super) type Walker<'db, I> = repr::Walker<'db, I>;
+pub(super) type Prompt = repr::Prompt;

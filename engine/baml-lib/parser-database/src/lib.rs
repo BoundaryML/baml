@@ -45,7 +45,7 @@ use internal_baml_schema_ast::ast::{SchemaAst, WithIdentifier, WithName, WithSpa
 pub use printer::WithStaticRenames;
 pub use types::{
     ContantDelayStrategy, DynamicStringAttributes, ExponentialBackoffStrategy, PrinterType,
-    PromptRepr, PromptVariable, RetryPolicy, RetryPolicyStrategy, StaticStringAttributes,
+    PromptAst, PromptVariable, RetryPolicy, RetryPolicyStrategy, StaticStringAttributes,
     StaticType, ToStringAttributes,
 };
 

@@ -38,6 +38,7 @@ pub(super) fn render_with_hbs<T: serde::Serialize>(template: Template, data: &T)
     let mut reg = handlebars::Handlebars::new();
     reg.register_helper("BLOCK_OPEN", Box::new(BLOCK_OPEN));
     reg.register_helper("BLOCK_CLOSE", Box::new(BLOCK_CLOSE));
+    reg.set_strict_mode(true);
 
     let content = serde_json::to_string(&data).unwrap();
 

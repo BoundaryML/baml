@@ -3,7 +3,7 @@ use internal_baml_parser_database::RetryPolicyStrategy;
 use internal_baml_schema_ast::ast::{Configuration, FunctionArgs, WithName};
 use serde_json::{json, Value};
 
-use crate::generate::generate_python_client::file::clean_file_name;
+use crate::generate::generate_python_client_old::file::clean_file_name;
 
 use super::{
     file::FileCollector,

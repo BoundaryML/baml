@@ -1,10 +1,10 @@
 use either::Either;
-use internal_baml_parser_database::{walkers::VariantWalker, PromptRepr, WithStaticRenames};
+use internal_baml_parser_database::{walkers::VariantWalker, PromptAst, WithStaticRenames};
 use internal_baml_schema_ast::ast::WithName;
 
 use serde_json::json;
 
-use crate::generate::generate_python_client::file::clean_file_name;
+use crate::generate::generate_python_client_old::file::clean_file_name;
 
 use super::{
     file::File,
@@ -35,12 +35,12 @@ impl<'db> JsonHelper for VariantWalker<'db> {
             .collect::<Vec<_>>();
 
         let inputs = match &prompt {
-            PromptRepr::Chat(_, used_inputs) => used_inputs,
-            PromptRepr::String(_, used_inputs) => used_inputs,
+            PromptAst::Chat(_, used_inputs) => used_inputs,
+            PromptAst::String(_, used_inputs) => used_inputs,
         };
 
         let is_chat = match &prompt {
-            PromptRepr::Chat(..) => true,
+            PromptAst::Chat(..) => true,
             _ => false,
         };
 
@@ -57,7 +57,7 @@ impl<'db> JsonHelper for VariantWalker<'db> {
             "function": func.json(f),
             "is_chat": is_chat,
             "prompt": match &prompt {
-                PromptRepr::Chat(parts, _) => {
+                PromptAst::Chat(parts, _) => {
                         json!(parts.iter().map(|(ctx, text)| {
                             json!({
                                 "role": ctx.map(|c| c.role.0.as_str()).unwrap_or("system"),
@@ -65,7 +65,7 @@ impl<'db> JsonHelper for VariantWalker<'db> {
                             })
                         }).collect::<Vec<_>>())
                 },
-                PromptRepr::String(content, _) => {
+                PromptAst::String(content, _) => {
                     json!(escape_python_triple_quote(content))
                 },
             },

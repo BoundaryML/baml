@@ -1,52 +1,45 @@
-use internal_baml_parser_database::{
-    walkers::{EnumValueWalker, EnumWalker},
-    WithStaticRenames,
-};
-use internal_baml_schema_ast::ast::WithName;
 use serde_json::json;
 
-use crate::generate::generate_python_client::file::clean_file_name;
-
-use super::{
-    file::{File, FileCollector},
-    template::render_template,
-    traits::{JsonHelper, WithWritePythonString},
+use crate::generate::{
+    dir_writer::WithFileContentPy as WithFileContent,
+    ir::{Enum, Walker},
 };
 
-impl JsonHelper for EnumWalker<'_> {
-    fn json(&self, _f: &mut File) -> serde_json::Value {
-        json!({
-            "name": self.name(),
-            "values": self.values().map(|v| v.json(_f)).collect::<Vec<_>>(),
-        })
-    }
-}
+use super::{
+    python_language_features::{PythonFileCollector, PythonLanguageFeatures, ToPython},
+    template::render_with_hbs,
+};
 
-impl JsonHelper for EnumValueWalker<'_> {
-    fn json(&self, _f: &mut File) -> serde_json::Value {
-        json!({
-            "name": self.name(),
-            "alias": self.maybe_alias(self.db),
-        })
+impl WithFileContent<PythonLanguageFeatures> for Walker<'_, &Enum> {
+    fn file_dir(&self) -> &'static str {
+        "."
     }
-}
 
-impl WithWritePythonString for EnumWalker<'_> {
     fn file_name(&self) -> String {
-        format!("enm_{}", clean_file_name(self.name()))
+        "types".into()
     }
 
-    fn write_py_file<'a>(&'a self, fc: &'a mut FileCollector) {
-        fc.start_py_file("types/enums", "__init__");
-        fc.complete_file();
-        fc.start_py_file("types", "__init__");
-        fc.last_file()
-            .add_import(&format!(".enums.{}", self.file_name()), self.name());
-        fc.complete_file();
+    fn write(&self, collector: &mut PythonFileCollector) {
+        let file = collector.start_file(self.file_dir(), self.file_name(), false);
+        file.append(render_with_hbs(
+            super::template::Template::Enum,
+            &json!({
+              "name": self.elem().name,
+              "values": self.elem().values.iter().map(|v| json!({
+                "alias": v.attributes.get("alias").map(|s| s.to_py()),
+                "name": v.elem,
+              })).collect::<Vec<_>>()
+            }),
+        ));
+        file.add_export(&self.elem().name);
+        collector.finish_file();
 
-        fc.start_py_file("types/enums", self.file_name());
-        let json = self.json(fc.last_file());
-        render_template(super::template::HSTemplate::Enum, fc.last_file(), json);
-        fc.complete_file();
+        let file = collector.start_file(self.file_dir(), self.file_name() + "_internal", false);
+        file.add_import("./types", self.elem().name.clone(), None, false);
+        // file.append(render_with_hbs(
+        //     super::template::Template::EnumInternal,
+        //     &self.item,
+        // ));
+        collector.finish_file();
     }
 }

@@ -5,7 +5,8 @@ use crate::{
     lockfile::LockFileWrapper,
 };
 
-use super::generate_python_client::generate_py;
+// use super::generate_python_client::generate_python;
+use super::generate_python_client_old::generate_py;
 use super::generate_ts_client::generate_ts;
 use super::ir;
 
@@ -21,6 +22,7 @@ pub(crate) fn generate_pipeline(
         )
     })?;
     match gen.language {
+        // GeneratorLanguage::Python => generate_py(&ir, gen),
         GeneratorLanguage::Python => generate_py(db, gen, lock),
         GeneratorLanguage::TypeScript => generate_ts(&ir, gen),
     }

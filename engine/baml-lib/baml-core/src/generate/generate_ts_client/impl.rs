@@ -3,7 +3,7 @@ use serde_json::json;
 use crate::generate::{
     dir_writer::WithFileContent,
     generate_ts_client::{field_type::to_parse_expression, ts_language_features::ToTypeScript},
-    ir::{Function, FunctionArgs, Impl, Walker},
+    ir::{Function, FunctionArgs, Impl, Prompt, Walker},
 };
 
 use super::{
@@ -58,18 +58,33 @@ impl WithFileContent<TSLanguageFeatures> for Walker<'_, (&Function, &Impl)> {
           "return_type": function.elem.output.elem.to_ts(),
         });
 
-        let mut prompt = impl_.elem.prompt.clone();
-        impl_.elem.output_replacers.iter().for_each(|(k, val)| {
-            prompt = prompt.replace(k, &format!("{}", val));
-        });
-        prompt = prompt.replace("`", "\\`");
+        let is_chat = match impl_.elem.prompt {
+            Prompt::Chat(_, _) => true,
+            _ => false,
+        };
 
         file.append(render_with_hbs(
             super::template::Template::Impl,
             &json!({
                 "function": function_content,
+                "is_chat": is_chat,
                 "name": impl_.elem.name.clone(),
-                "prompt": prompt,
+                "prompt": match &impl_.elem.prompt {
+                    Prompt::String(prompt, _) => {
+                        let mut prompt = prompt.to_string();
+                        impl_.elem.output_replacers.iter().for_each(|(k, val)| {
+                            prompt = prompt.replace(k, &format!("{}", val));
+                        });
+                        json!(prompt.replace("`", "\\`"))
+                    },
+                    Prompt::Chat(messages, _) => json!(
+                        messages.iter().map(|message|
+                            json!({
+                                "role": message.role,
+                                "content": message.content.replace("`", "\\`"),
+                            })
+                        ).collect::<Vec<_>>()),
+                    },
                 "client": impl_.elem.client.clone(),
                 "inputs": impl_.elem.input_replacers,
             }),
