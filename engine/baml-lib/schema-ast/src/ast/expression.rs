@@ -1,3 +1,5 @@
+use internal_baml_diagnostics::SourceFile;
+
 use crate::ast::Span;
 use std::fmt;
 
@@ -132,6 +134,8 @@ impl RawString {
 /// Represents arbitrary, even nested, expressions.
 #[derive(Debug, Clone)]
 pub enum Expression {
+    /// Boolean values aka true or false
+    BoolValue(bool, Span),
     /// Any numeric value e.g. floats or ints.
     NumericValue(String, Span),
     /// An identifier
@@ -146,9 +150,42 @@ pub enum Expression {
     Map(Vec<(Expression, Expression)>, Span),
 }
 
+impl Expression {
+    pub fn from_json(value: serde_json::Value, span: Span, empty_span: Span) -> Expression {
+        match value {
+            serde_json::Value::Null => {
+                Expression::Identifier(Identifier::Primitive(super::TypeValue::Null, span))
+            }
+            serde_json::Value::Bool(b) => Expression::BoolValue(b, span),
+            serde_json::Value::Number(n) => Expression::NumericValue(n.to_string(), span),
+            serde_json::Value::String(s) => Expression::StringValue(s, span),
+            serde_json::Value::Array(arr) => {
+                let arr = arr
+                    .into_iter()
+                    .map(|v| Expression::from_json(v, empty_span.clone(), empty_span.clone()))
+                    .collect();
+                Expression::Array(arr, span)
+            }
+            serde_json::Value::Object(obj) => {
+                let obj = obj
+                    .into_iter()
+                    .map(|(k, v)| {
+                        (
+                            Expression::StringValue(k, empty_span.clone()),
+                            Expression::from_json(v, empty_span.clone(), empty_span.clone()),
+                        )
+                    })
+                    .collect();
+                Expression::Map(obj, span)
+            }
+        }
+    }
+}
+
 impl Into<serde_json::Value> for &Expression {
     fn into(self) -> serde_json::Value {
         match self {
+            Expression::BoolValue(val, _) => serde_json::Value::Bool(*val),
             Expression::NumericValue(val, _) => serde_json::Value::Number(val.parse().unwrap()),
             Expression::StringValue(val, _) => serde_json::Value::String(val.clone()),
             Expression::RawStringValue(val) => serde_json::Value::String(val.value().to_string()),
@@ -169,6 +206,7 @@ impl fmt::Display for Expression {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Expression::Identifier(id) => fmt::Display::fmt(id.name(), f),
+            Expression::BoolValue(val, _) => fmt::Display::fmt(val, f),
             Expression::NumericValue(val, _) => fmt::Display::fmt(val, f),
             Expression::StringValue(val, _) => write!(f, "{}", crate::string_literal(val)),
             Expression::RawStringValue(val, ..) => {
@@ -264,6 +302,7 @@ impl Expression {
 
     pub fn span(&self) -> &Span {
         match &self {
+            Self::BoolValue(_, span) => span,
             Self::NumericValue(_, span) => span,
             Self::StringValue(_, span) => span,
             Self::RawStringValue(r) => r.span(),
@@ -283,6 +322,7 @@ impl Expression {
     /// Creates a friendly readable representation for a value's type.
     pub fn describe_value_type(&self) -> &'static str {
         match self {
+            Expression::BoolValue(_, _) => "boolean",
             Expression::NumericValue(_, _) => "numeric",
             Expression::StringValue(_, _) => "string",
             Expression::RawStringValue(_) => "raw_string",

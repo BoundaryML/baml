@@ -5,7 +5,6 @@ enum Category {
     TWO = "TWO"
 }
 
-
 registerEnumDeserializer({
     type: "string",
     title: "Category",

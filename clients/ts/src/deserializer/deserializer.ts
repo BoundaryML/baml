@@ -40,16 +40,18 @@ class Deserializer<T> {
     constructor(private schema: JSONSchema7, private target: JSONSchema7) {
     }
 
+    // on aliases that are scoped to a specific impl, this needs to be specialized for the constructed deserializer instance
+    // for that specific impl
     overload(name: string, aliases: Record<string, string>) {
         if (!GeneratedDeserializerLUT.has(name)) {
             throw new Error(`Deserializer for ${name} not found`);
         }
     
-        const overriden = GeneratedDeserializerLUT.get(name)!.copy_with_aliases(aliases);
+        const overridden = GeneratedDeserializerLUT.get(name)!.copy_with_aliases(aliases);
         if (this.overrides.has(name)) {
             throw new Error(`Overload for ${name} already exists`);
         }
-        this.overrides.set(name, overriden);
+        this.overrides.set(name, overridden);
     }
 
     private getInterface(t: JSONSchema7): JSONSchema7 {

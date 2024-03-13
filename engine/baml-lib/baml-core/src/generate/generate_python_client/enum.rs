@@ -25,10 +25,16 @@ impl WithFileContent<PythonLanguageFeatures> for Walker<'_, &Enum> {
             super::template::Template::Enum,
             &json!({
               "name": self.elem().name,
-              "values": self.elem().values.iter().map(|v| json!({
+              "values": self.elem().values.iter().flat_map(|v| vec!{json!({
                 "alias": v.attributes.get("alias").map(|s| s.to_py()),
                 "name": v.elem,
-              })).collect::<Vec<_>>()
+              }),
+              json!({
+                "alias": format!("{}: {}", v.attributes.get("alias").map(|s| s.to_py()), v.attributes.get("description").map(|s| s.to_py())),
+                "name": v.elem,
+
+              })
+            }).collect::<Vec<_>>()
             }),
         ));
         file.add_export(&self.elem().name);

@@ -160,11 +160,11 @@ pub(crate) fn parse_test_from_json(
     let test_input = file_content.input.to_string();
     let end_range = test_input.len();
     let span = Span::new(source.clone(), 0, end_range);
-    let content = Expression::RawStringValue(RawString::new(
-        test_input,
-        span.clone(),
-        Some(("json".into(), Span::empty(source.clone()))),
-    ));
+    let content = match file_content.input {
+        Input::ObjectInput(val) => {
+            Expression::from_json(val, span.clone(), Span::empty(source.clone()))
+        }
+    };
     let test_case = ConfigBlockProperty {
         name: Identifier::Local("input".into(), span.clone()),
         value: Some(content),
