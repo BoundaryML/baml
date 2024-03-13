@@ -22,7 +22,7 @@ const deserializer = new Deserializer<{{function.return_type}}>(schema, {
 
 {{function.name}}.registerImpl('{{name}}', async (
 {{#if function.params.positional}}
-{{function.params.name}}: {{function.params.type}}
+  {{function.params.name}}: {{function.params.type}}
 {{else}}
 {{function.params.name}}: {
   {{#each function.params.values as |v|}}{{v.name}}: {{v.type}}{{#unless @last}}, {{/unless}}{{/each}}
