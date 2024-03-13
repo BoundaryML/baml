@@ -56,7 +56,10 @@
       "activityBar.background": "#630001",
       "titleBar.activeBackground": "#8B0002",
       "titleBar.activeForeground": "#FFFBFB"
-    }
+    },
+    "rust-analyzer.linkedProjects": [
+      "./engine/Cargo.toml"
+    ]
   },
   "extensions": {
     "recommendations": [

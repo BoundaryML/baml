@@ -33,7 +33,7 @@ const deserializer = new Deserializer<{{function.return_type}}>(schema, {
   {{!-- const {{function.params.name}} = {{function.params.name}}; --}}
   {{else}}
   {{#each function.params.values as |v|}}
-  const {{v.name}} = {{{v.expr}}};
+    const {{v.name}} = {{{v.expr}}};
   {{/each}}
   {{/if}}
   

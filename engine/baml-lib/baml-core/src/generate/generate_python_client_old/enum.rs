@@ -17,16 +17,13 @@ impl JsonHelper for EnumWalker<'_> {
     fn json(&self, _f: &mut File) -> serde_json::Value {
         json!({
             "name": self.name(),
-            "values": self.values().map(|v| v.json(_f)).collect::<Vec<_>>(),
-        })
-    }
-}
-
-impl JsonHelper for EnumValueWalker<'_> {
-    fn json(&self, _f: &mut File) -> serde_json::Value {
-        json!({
-            "name": self.name(),
-            "alias": self.maybe_alias(self.db),
+            "values": self.values().flat_map(|v|
+                vec![
+                    json!({
+                        "name": v.name(),
+                        "alias": v.maybe_alias(self.db),
+                    }),
+                ]).collect::<Vec<_>>(),
         })
     }
 }

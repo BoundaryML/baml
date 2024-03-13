@@ -7,15 +7,9 @@ import { JSONSchema7 } from "json-schema";
 const regex_escape = (s: string) => s .replace(/[|\\{}()[\]^$+*?.]/g, '\\$&') .replace(/-/g, '\\x2d');
 
 const count_occurrences = (text: string, searchTerm: string) => {
-    const indexes = [];
-    let index = text.indexOf(searchTerm);
+    const re = new RegExp(`\\b${regex_escape(searchTerm)}\\b`, 'g');
 
-    while (index !== -1) {
-        indexes.push(index);
-        index = text.indexOf(searchTerm, index + 1);
-    }
-
-    return indexes.length;
+    return [...text.matchAll(re)].length;
 }
 
 class EnumDeserializer<T extends Record<string, string>> extends BaseDeserializer<keyof T> {
@@ -75,12 +69,12 @@ class EnumDeserializer<T extends Record<string, string>> extends BaseDeserialize
 
     *aliases(): IterableIterator<[string, keyof T]> {
         for (const [value_name, value] of this.values.entries()) {
-            yield [value_name, value];
+            yield [value_name.toLowerCase(), value];
         }
         for (const [alias, value_name] of this.value_names_by_alias.entries()) {
             const value = this.values.get(value_name);
             if (value) {
-                yield [alias, value];
+                yield [alias.toLowerCase(), value];
             }
         }
     }
@@ -107,14 +101,14 @@ class EnumDeserializer<T extends Record<string, string>> extends BaseDeserialize
             return Result.failed();
         }
 
-        const search = (contents: string, aliases: () => IterableIterator<[string, keyof T]>): keyof T | undefined => {
-            for (const [alias, value] of aliases()) {
+        const search = (contents: string, aliases: Array<[string, keyof T]>): keyof T | undefined => {
+            for (const [alias, value] of aliases) {
                 if (contents === alias) {
                     return value;
                 }
             }
 
-            for (const [alias, value] of aliases()) {
+            for (const [alias, value] of aliases) {
                 if (contents.endsWith(`: ${alias}`)) {
                     return value;
                 }
@@ -124,6 +118,7 @@ class EnumDeserializer<T extends Record<string, string>> extends BaseDeserialize
             }
 
             // TODO: uncomment when descriptions are wired through
+            // remember to apply word boundaries in this search
             // for (const [alias, value] of this.aliases()) {
             //     const description = "";
             //     const matches = [...contents.matchAll(new RegExp(`${regex_escape(alias)}[^a-zA-Z0-9]{1,5}${regex_escape(description)}`, 'g'))];
@@ -133,21 +128,21 @@ class EnumDeserializer<T extends Record<string, string>> extends BaseDeserialize
             // }
         }
 
-        const value = search(parsed.toLowerCase(),() => this.aliases());
+        const value = search(parsed.toLowerCase(), [...this.aliases()]);
         if (value) {
             diagnostics.popScope(true);
             return Result.from_value(value);
         }
 
-        const value2 = search(parsed.toLowerCase().replaceAll(/[^a-zA-Z0-9]+/g, ' '), () => this.normalized_aliases());
+        const value2 = search(parsed.toLowerCase().replaceAll(/[^a-zA-Z0-9]+/g, ' '), [...this.normalized_aliases()]);
         if (value2) {
             diagnostics.popScope(true);
             return Result.from_value(value2);
         }
 
-        const find_most_common = (contents: string, aliases: () => IterableIterator<[string, keyof T]>): keyof T | undefined => {
+        const find_most_common = (contents: string, aliases: Array<[string, keyof T]>): keyof T | undefined => {
             let most_freq_match = undefined;
-            for (const [alias, value] of this.aliases()) {
+            for (const [alias, value] of aliases) {
                 const match = {
                     alias,
                     value,
@@ -168,12 +163,12 @@ class EnumDeserializer<T extends Record<string, string>> extends BaseDeserialize
             }
         };
 
-        const most_common = find_most_common(parsed.toLowerCase(), () => this.aliases());
+        const most_common = find_most_common(parsed.toLowerCase(), [...this.aliases()]);
         if (most_common) {
             diagnostics.popScope(true);
             return Result.from_value(most_common);
         }
-        const most_common2 = find_most_common(parsed.toLowerCase().replaceAll(/[^a-zA-Z0-9]+/g, ' '), () => this.normalized_aliases());
+        const most_common2 = find_most_common(parsed.toLowerCase().replaceAll(/[^a-zA-Z0-9]+/g, ' '), [...this.normalized_aliases()]);
         if (most_common2) {
             diagnostics.popScope(true);
             return Result.from_value(most_common2);

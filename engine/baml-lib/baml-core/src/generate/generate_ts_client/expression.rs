@@ -32,6 +32,7 @@ impl ToTypeScript for Expression {
                 Identifier::Primitive(p) => p.to_ts(),
             },
             Expression::String(val) => {
+                // TODO: consider using escape_default here
                 format!("\"{}\"", val.replace('"', "\\\"").replace('\n', "\\n"))
             }
             Expression::RawString(val) => format!("`{}`", val.replace('`', "\\`")),

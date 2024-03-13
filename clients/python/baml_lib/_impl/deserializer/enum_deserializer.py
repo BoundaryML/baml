@@ -1,5 +1,5 @@
 import typing
-from typing import Callable, Generator, Tuple
+from typing import Callable, Generator, List, Tuple
 
 from enum import Enum
 import re
@@ -79,29 +79,37 @@ class EnumDeserializer(BaseDeserializer[T]):
             )
             return Result.failed()
 
-        def search(contents: str, aliases: Callable[[], Generator[Tuple[str, T], None, None]]):
+        def search(contents: str, aliases: Callable[[], List[Tuple[str, T]]]):
 
-            for alias, value in aliases():
+            for alias, value in aliases:
                 if alias == contents:
                     return value
 
-            for alias, value in aliases():
+            for alias, value in aliases:
                 if contents.endswith(f": {alias}"):
                     return value
                 if contents.endswith(f"\n\n{alias}"):
                     return value
         
-        value = search(parsed.strip().lower(), self.aliases)
+        value = search(parsed.strip().lower(), list(self.aliases()))
         if value:
             return Result.from_value(value)
 
-        value2 = search(re.sub('[^a-zA-Z0-9]+', ' ',parsed.strip().lower()), self.normalized_aliases)
+        value2 = search(re.sub('[^a-zA-Z0-9]+', ' ',parsed.strip().lower()), list(self.normalized_aliases()))
         if value2:
             return Result.from_value(value2)
         
 
-        def find_most_common(contents: str, aliases: Callable[[], Generator[Tuple[str, T], None, None]]):
-            counts = [(contents.count(alias), alias, value) for alias, value in aliases() if alias in contents]
+        def find_most_common(contents: str, aliases: Callable[[], List[Tuple[str, T]]]):
+            counts = [
+                (
+                    len(re.findall(rf'\b{re.escape(alias)}\b', contents)),
+                    alias,
+                    value
+                )
+                for alias, value in aliases
+                if re.search(rf'\b{re.escape(alias)}\b', contents)
+            ]
             counts.sort(reverse=True)
             if len(counts) == 1:
                 return counts[0][2]
@@ -109,11 +117,11 @@ class EnumDeserializer(BaseDeserializer[T]):
                 return counts[0][2]
             return None
 
-        most_common = find_most_common(parsed.strip().lower(), self.aliases)
+        most_common = find_most_common(parsed.strip().lower(), list(self.aliases()))
         if most_common:
             return Result.from_value(most_common)
 
-        most_common2 = find_most_common(re.sub('[^a-zA-Z0-9]+', ' ',parsed.strip().lower()), self.normalized_aliases)
+        most_common2 = find_most_common(re.sub('[^a-zA-Z0-9]+', ' ',parsed.strip().lower()), list(self.normalized_aliases()))
         if most_common2:
             return Result.from_value(most_common2)
 

@@ -53,6 +53,8 @@ describe("Enum Deserializer", () => {
             $ref: "#/definitions/Category"
         });
         expect(deserializer.coerce("ONE")).toBe(Category.ONE);
+        expect(deserializer.coerce("one")).toBe(Category.ONE);
+        expect(() => deserializer.coerce("citronella")).toThrow();
     });
 
     test("enum_from_str_w_quotes", () => {

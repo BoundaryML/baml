@@ -11,6 +11,4 @@ registerEnumDeserializer({
     enum: ["ONE", "TWO"]
 }, {});
 
-// need to add aliases here
-
 export { Category };

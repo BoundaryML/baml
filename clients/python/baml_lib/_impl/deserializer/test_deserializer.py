@@ -72,6 +72,12 @@ def test_enum_case_insensitive() -> None:
     assert res == Category.TWO
 
 
+def test_enum_word_boundaries() -> None:
+    deserializer = Deserializer[Category](Category)
+    with pytest.raises(Exception):
+        deserializer.from_string("artwork")
+
+
 def test_enum_with_quotes() -> None:
     deserializer = Deserializer[Category](Category)
     res = deserializer.from_string('"TWO"')
