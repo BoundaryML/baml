@@ -9,6 +9,8 @@ mod ts;
 
 use std::path::PathBuf;
 
+use colored::Colorize;
+
 use crate::{builder::get_baml_src, errors::CliError};
 
 use self::{
@@ -22,7 +24,10 @@ fn walkthrough(no_prompt: bool) -> Result<ProjectConfig, CliError> {
     // - Language (Python and/or TypeScript)
 
     let project_root = get_value_or_default(
-        "What is the root of your project?",
+        &format!(
+            "What is the root of your project? {}",
+            "This is where baml_src/ and .baml files will live".dimmed()
+        ),
         "./".to_string(),
         no_prompt,
     )?;

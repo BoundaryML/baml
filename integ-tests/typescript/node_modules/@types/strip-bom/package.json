@@ -1,0 +1,17 @@
+{
+    "name": "@types/strip-bom",
+    "version": "3.0.0",
+    "description": "TypeScript definitions for strip-bom",
+    "license": "MIT",
+    "author": "Mohamed Hegazy <https://github.com/mhegazy>",
+    "main": "",
+    "repository": {
+        "type": "git",
+        "url": "https://www.github.com/DefinitelyTyped/DefinitelyTyped.git"
+    },
+    "scripts": {},
+    "dependencies": {},
+    "peerDependencies": {},
+    "typesPublisherContentHash": "a71cc0aa11e13d7f1054cc11f24652aed5fb12100e0c0b9601b2c4fc95528452",
+    "typeScriptVersion": "2.0"
+}

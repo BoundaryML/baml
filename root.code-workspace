@@ -4,6 +4,9 @@
       "path": "engine"
     },
     {
+       "path": "integ-tests",
+    },
+    {
       "name": "typescript",
       "path": "typescript"
     },

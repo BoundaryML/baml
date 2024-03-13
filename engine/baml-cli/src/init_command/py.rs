@@ -27,8 +27,9 @@ impl WithLoader<PythonConfig> for PythonConfig {
         writer: &mut Writer,
     ) -> Result<Self, CliError> {
         let modified_prompt = format!(
-            "What is the root of your {} project?",
-            "Python".cyan().bold()
+            "What is the root of your {} project? {}",
+            "Python".cyan().bold(),
+            "(This is where we'll generate the baml python client)".dimmed()
         );
         let py_project_root =
             get_value_or_default(&modified_prompt, "./".to_string(), no_prompt)?.into();

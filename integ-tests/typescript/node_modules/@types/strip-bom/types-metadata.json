@@ -1,0 +1,22 @@
+{
+    "authors": "Mohamed Hegazy <https://github.com/mhegazy>",
+    "libraryDependencies": [],
+    "moduleDependencies": [],
+    "libraryMajorVersion": 3,
+    "libraryMinorVersion": 0,
+    "typeScriptVersion": "2.0",
+    "libraryName": "strip-bom",
+    "typingsPackageName": "strip-bom",
+    "projectName": "https://github.com/sindresorhus/strip-bom#readme",
+    "sourceRepoURL": "https://www.github.com/DefinitelyTyped/DefinitelyTyped",
+    "sourceBranch": "master",
+    "globals": [],
+    "declaredModules": [
+        "strip-bom"
+    ],
+    "files": [
+        "index.d.ts"
+    ],
+    "hasPackageJson": false,
+    "contentHash": "a71cc0aa11e13d7f1054cc11f24652aed5fb12100e0c0b9601b2c4fc95528452"
+}

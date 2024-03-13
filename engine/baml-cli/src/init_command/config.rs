@@ -1,5 +1,6 @@
 use std::{collections::HashMap, path::PathBuf};
 
+use chrono::format;
 use colored::Colorize;
 use include_dir::{include_dir, Dir};
 use regex::Regex;
@@ -73,7 +74,15 @@ impl WithLoader<ProjectConfig> for ProjectConfig {
                 )?;
 
                 // Convert l.project_root() as relative to project_root
-                let relative_project_root = l.project_root().strip_prefix(project_root).unwrap();
+                let relative_project_root_res = l.project_root().strip_prefix(project_root);
+                // strip prefix fails if the user chose
+                // the default project root ./
+                // and a child dir for the language, like "python", which has no ./ prefix.
+                // So we just ignore it and use the language root as is.
+                let relative_project_root = match relative_project_root_res {
+                    Ok(p) => p,
+                    Err(_e) => l.project_root().as_path(),
+                };
 
                 Ok(Generator::new(
                     l.name(),
