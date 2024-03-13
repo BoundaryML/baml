@@ -37,7 +37,7 @@ describe("String Deserializer", () => {
     });
 });
 
-describe.only("Enum Deserializer", () => {
+describe("Enum Deserializer", () => {
     const schema: JSONSchema7 = {
         definitions: {
             "Category": {
