@@ -206,14 +206,19 @@ def test_enum_aliases_from_multiple_aliases() -> None:
     res = deserializer.from_string("k-2-3.1_1. is the description of k-2-3.1_1, not k1")
     assert res == CategoryWithAlias.TWO
 
-def test_enum_from_string_with_alias() -> None:
-    pass
+def test_enum_aliases_from_punctuation() -> None:
+    deserializer = Deserializer[CategoryWithAlias](CategoryWithAlias)
 
-def test_enum_from_string_with_alias_with_punctuation() -> None:
-    pass
+    res = deserializer.from_string("k-2-3.1_1")
+    assert res == CategoryWithAlias.TWO
+
+    res = deserializer.from_string("k.2.3.1.1")
+    assert res == CategoryWithAlias.TWO
 
 def test_enum_list_from_string_with_aliases() -> None:
-    pass
+    deserializer = Deserializer[List[CategoryWithAlias]](List[CategoryWithAlias])
+    res = deserializer.from_string('["k1", "k-2-3.1_1", "NUMBER_THREE"]')
+    assert res == [CategoryWithAlias.ONE, CategoryWithAlias.TWO, CategoryWithAlias.THREE]
 
 
 @register_deserializer({})
