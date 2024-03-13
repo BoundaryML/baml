@@ -5,11 +5,12 @@ enum Category {
     TWO = "TWO"
 }
 
-
 registerEnumDeserializer({
     type: "string",
     title: "Category",
     enum: ["ONE", "TWO"]
 }, {});
+
+// need to add aliases here
 
 export { Category };

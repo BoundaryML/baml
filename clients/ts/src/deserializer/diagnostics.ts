@@ -52,6 +52,8 @@ class DeserializerException extends Error {
         this.errors = errors;
         this.warnings = warnings;
         this.rawString = rawString;
+
+        this.message = this.toString();
     }
 
     toString(): string {
