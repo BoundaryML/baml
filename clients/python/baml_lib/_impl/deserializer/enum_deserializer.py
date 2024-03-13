@@ -4,7 +4,7 @@ from typing import Callable, Generator, List, Tuple
 from enum import Enum
 import re
 
-from .base_deserialzier import (
+from .base_deserializer import (
     BaseDeserializer,
     CheckLutFn,
     RawWrapper,

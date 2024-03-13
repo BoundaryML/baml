@@ -1,6 +1,6 @@
 import typing
 
-from .base_deserialzier import BaseDeserializer, ITypeDefinition, Diagnostics
+from .base_deserializer import BaseDeserializer, ITypeDefinition, Diagnostics
 from .enum_deserializer import EnumDeserializer
 from .object_deserializer import ObjectDeserializer
 from .complex_deserializer import (
