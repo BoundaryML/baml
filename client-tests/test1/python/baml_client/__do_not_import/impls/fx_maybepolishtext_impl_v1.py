@@ -32,7 +32,7 @@ __prompt_template: List[LLMChatMessage] = [
 {
     "role": "system",
     "content": """\
-Write a haiku about {arg.generated_response} after you respond to every message.\
+Write a haiku about {//BAML_CLIENT_REPLACE_ME_MAGIC_input.generated_response//} after you respond to every message.\
 """
 }
 ,

@@ -15,7 +15,7 @@ use tokio::{
 
 use crate::{errors::CliError, shell::build_shell_command};
 
-use super::{ipc_comms, test_state::RunState};
+use super::{ipc_comms, run_tests::TestRunner, test_state::RunState};
 
 async fn handle_connection(
     mut stream: TcpStream,
@@ -53,7 +53,8 @@ async fn start_server() -> std::io::Result<(TcpListener, u16)> {
     Ok((listener, port))
 }
 
-async fn run_pytest_and_update_state(
+async fn run_and_update_state(
+    runner: TestRunner,
     state: Arc<Mutex<RunState>>,
     mut shell_command: Vec<String>,
 ) -> tokio::io::Result<()> {
@@ -69,15 +70,12 @@ async fn run_pytest_and_update_state(
         }
     });
 
-    shell_command.push("--pytest-baml-ipc".into());
-    shell_command.push(format!("{}", port));
+    // Add the port to the shell command
+    runner.add_ipc_to_command(&mut shell_command, port);
 
     let mut cmd = build_shell_command(shell_command);
 
-    println!(
-        "{}",
-        format!("Running pytest with args: {:?}", cmd).dimmed()
-    );
+    println!("{}", format!("Running test with args: {:?}", cmd).dimmed());
 
     // Create a directory in the temp folder
     // Load from environment variable (BAML_TEST_LOGS) if set or use temp_dir
@@ -103,12 +101,14 @@ async fn run_pytest_and_update_state(
     let stderr_file = File::create(&stderr_file_path)?;
 
     let mut child = cmd
+        .envs(runner.env_vars().into_iter())
+        .env("BAML_IPC_PORT", port.to_string())
         .stdout(Stdio::from(stdout_file))
         .stderr(Stdio::from(stderr_file))
         .spawn()
-        .expect("failed to spawn pytest");
+        .expect("failed to spawn test process");
 
-    // Print state every 2 seconds while pytest is running
+    // Print state every 2 seconds while pytest/jest is running
     let mut interval = time::interval(time::Duration::from_millis(1000));
     let mut last_print_lines = 0;
     while child.try_wait()?.is_none() {
@@ -145,7 +145,7 @@ async fn run_pytest_and_update_state(
         // Pytest exits with 1 even if it ran fine but had some tests failing (we should suppress this via a pytest plugin) so we dont mark as failure
         // But we could also get exit code 1 from other things like infisical CLI being absent, or python not being found.
         // so check the stderr for any other issues.
-        if ![0, 1].contains(&code) || !stderr_content.is_empty() {
+        if ![0, 1].contains(&code) {
             println!("\n####### STDOUT Logs ########\n{}", stdout_content);
             if !stderr_content.is_empty() {
                 println!("\n####### STDERR Logs ########\n{}", stderr_content);
@@ -166,11 +166,16 @@ async fn run_pytest_and_update_state(
         }
 
         // if stderr is not empty and exit code is 1, we also have an issue
-        if code == 1 && !stderr_content.is_empty() {
+        if code == 1 && (!stderr_content.is_empty() || !stdout_content.is_empty()) {
             // Don't say the test failed since the exit code 1 may just be pytest saying some tests failed.
+            // print stdout
+            println!(
+                "\n####### STDOUT Logs for this test ########\n{}",
+                stdout_content
+            );
             println!("{}", stderr_content.bright_red().bold());
             println!(
-                "{}\n{}",
+                "\n{}\n{}",
                 stdout_file_path.display().to_string().dimmed(),
                 stderr_file_path.display().to_string().dimmed()
             );
@@ -181,12 +186,13 @@ async fn run_pytest_and_update_state(
 }
 
 pub(crate) fn run_test_with_watcher(
+    runner: TestRunner,
     state: RunState,
     shell_command: Vec<String>,
 ) -> Result<(), CliError> {
     let rt = tokio::runtime::Runtime::new().unwrap();
 
     let state = Arc::new(Mutex::new(state));
-    rt.block_on(run_pytest_and_update_state(state, shell_command))
+    rt.block_on(run_and_update_state(runner, state, shell_command))
         .map_err(|e| format!("Failed to run tests: {}", e).into())
 }

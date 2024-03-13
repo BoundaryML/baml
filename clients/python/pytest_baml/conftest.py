@@ -5,8 +5,18 @@ from .pytest_baml import BamlPytestPlugin
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
+    # To be deprecated in favor of baml-ipc
     parser.addoption(
         "--pytest-baml-ipc",
+        action="store",
+        dest="baml_ipc",
+        default=None,
+        type=int,
+        help="The name of the ipc pipe to communicate on.",
+    )
+    # Making it more generic.
+    parser.addoption(
+        "--baml-ipc",
         action="store",
         dest="baml_ipc",
         default=None,

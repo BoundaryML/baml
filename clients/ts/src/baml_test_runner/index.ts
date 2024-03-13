@@ -45,7 +45,7 @@ class BamlTestRunner extends TestRunner {
     // Read the json file and pass it to the BamlTester
     const fileContents: BamlTestArgs = require(bamlConfigFileName);
 
-    console.log("Tests:", fileContents);
+    // console.log("Tests:", fileContents);
 
     super(globalConfig, context);
     this.bamlTester = new BamlTester(fileContents.expected_tests.map(([test_name, impl_name, func_name]) => [func_name, `${test_name}-${impl_name}`]));

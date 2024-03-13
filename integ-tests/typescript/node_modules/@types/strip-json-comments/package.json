@@ -1,0 +1,21 @@
+{
+    "name": "@types/strip-json-comments",
+    "version": "0.0.30",
+    "description": "TypeScript definitions for strip-json-comments",
+    "license": "MIT",
+    "contributors": [
+        {
+            "name": "Dylan R. E. Moonfire",
+            "url": "https://github.com/dmoonfire"
+        }
+    ],
+    "main": "",
+    "repository": {
+        "type": "git",
+        "url": "https://www.github.com/DefinitelyTyped/DefinitelyTyped.git"
+    },
+    "scripts": {},
+    "dependencies": {},
+    "typesPublisherContentHash": "212d3944fc0bc37ab045ce08ca8674e2bf0339d750ddbd530783a8af89c3f818",
+    "typeScriptVersion": "2.0"
+}

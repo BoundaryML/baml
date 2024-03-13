@@ -63,28 +63,30 @@ impl WithFileContent<TSLanguageFeatures> for Walker<'_, (&Function, &Impl)> {
             _ => false,
         };
 
+        let prompt = match &impl_.elem.prompt {
+            Prompt::String(prompt, _) => {
+                let mut prompt = prompt.to_string();
+                impl_.elem.output_replacers.iter().for_each(|(k, val)| {
+                    prompt = prompt.replace(k, &format!("{}", val));
+                });
+                json!(prompt.replace("`", "\\`"))
+            }
+            Prompt::Chat(messages, _) => json!(messages
+                .iter()
+                .map(|message| json!({
+                    "role": message.role,
+                    "content": message.content.replace("`", "\\`"),
+                }))
+                .collect::<Vec<_>>()),
+        };
+
         file.append(render_with_hbs(
             super::template::Template::Impl,
             &json!({
                 "function": function_content,
                 "is_chat": is_chat,
                 "name": impl_.elem.name.clone(),
-                "prompt": match &impl_.elem.prompt {
-                    Prompt::String(prompt, _) => {
-                        let mut prompt = prompt.to_string();
-                        impl_.elem.output_replacers.iter().for_each(|(k, val)| {
-                            prompt = prompt.replace(k, &format!("{}", val));
-                        });
-                        json!(prompt.replace("`", "\\`"))
-                    },
-                    Prompt::Chat(messages, _) => json!(
-                        messages.iter().map(|message|
-                            json!({
-                                "role": message.role,
-                                "content": message.content.replace("`", "\\`"),
-                            })
-                        ).collect::<Vec<_>>()),
-                    },
+                "prompt": prompt,
                 "client": impl_.elem.client.clone(),
                 "inputs": impl_.elem.input_replacers,
             }),

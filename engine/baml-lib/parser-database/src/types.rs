@@ -154,7 +154,10 @@ impl VariantProperties {
                 let key = k.key();
                 if prompt.contains(&key) {
                     used_inputs.push(val.clone());
-                    prompt.replace(&key, &format!("{{{}}}", val))
+                    // TODO: this isn't necessary at this point, but tbd
+                    // This replaces the {replace_me_magic_arg} with just the {arg}
+                    // prompt.replace(&key, &format!("{{{}}}", val))
+                    prompt
                 } else {
                     prompt
                 }

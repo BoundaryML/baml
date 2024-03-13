@@ -29,10 +29,10 @@ __prompt_template = """\
 Given a chat conversation between a human and ai
 simplify the most recent message from the human into a single sentence that includes all prior relevant context. Don't include any previously answered questions. 
 
-{arg}
+{//BAML_CLIENT_REPLACE_ME_MAGIC_input//}
 
 Most Recent Message:
-{arg}
+{//BAML_CLIENT_REPLACE_ME_MAGIC_input//}
 
 Output Format: int | null
 
@@ -40,6 +40,7 @@ Output:\
 """
 
 __input_replacers = {
+    "{arg}",
     "{arg}"
 }
 

@@ -14,7 +14,7 @@ use tokio::{
 
 use crate::{errors::CliError, shell::build_shell_command};
 
-use super::{ipc_comms, test_state::RunState};
+use super::{ipc_comms, run_tests::TestRunner, test_state::RunState};
 
 async fn handle_connection(
     mut stream: TcpStream,
@@ -58,7 +58,8 @@ async fn start_server() -> std::io::Result<(TcpListener, u16)> {
     Ok((listener, port))
 }
 
-async fn run_pytest_and_update_state(
+async fn run_and_update_state(
+    runner: TestRunner,
     state: Arc<Mutex<RunState>>,
     mut shell_command: Vec<String>,
     forward_port: u16,
@@ -75,12 +76,7 @@ async fn run_pytest_and_update_state(
         }
     });
 
-    // Append args to pytest to enable IPC
-    // println!("Running pytest with args: {:?}", cmd);
-    // cmd.arg("--pytest-baml-ipc");
-    // cmd.arg(format!("{}", port));
-    shell_command.push("--pytest-baml-ipc".into());
-    shell_command.push(format!("{}", port));
+    runner.add_ipc_to_command(&mut shell_command, port);
 
     let mut cmd = build_shell_command(shell_command);
 
@@ -112,6 +108,8 @@ async fn run_pytest_and_update_state(
     let stderr_file = File::create(&stderr_file_path)?;
 
     let mut child = cmd
+        .envs(runner.env_vars().into_iter())
+        .env("BAML_IPC_PORT", port.to_string())
         .stdout(Stdio::from(stdout_file))
         .stderr(Stdio::from(stderr_file))
         .spawn()
@@ -144,17 +142,15 @@ async fn run_pytest_and_update_state(
                 // But we could also get exit code 1 from other things like infisical CLI being absent, or python not being found.
                 let stderr_content = tokio::fs::read_to_string(&stderr_file_path).await?;
                 let stdout_content = tokio::fs::read_to_string(&stdout_file_path).await?;
-                if ![0, 1].contains(&code) || !stderr_content.is_empty() {
+                if ![0, 1].contains(&code) {
                     println!(
                         "\n####### STDOUT Logs for this test ########\n{}",
                         stdout_content
                     );
-                    if !stderr_content.is_empty() {
-                        println!(
-                            "\n####### STDERR Logs for this test ########\n{}",
-                            stderr_content
-                        );
-                    }
+                    println!(
+                        "\n####### STDERR Logs for this test ########\n{}",
+                        stderr_content
+                    );
 
                     println!(
                         "{}",
@@ -175,8 +171,13 @@ async fn run_pytest_and_update_state(
                 }
 
                 // if stderr is not empty and exit code is 1, we also have an issue
-                if code == 1 && !stderr_content.is_empty() {
+                if code == 1 && (!stderr_content.is_empty() || !stdout_content.is_empty()) {
                     // Don't say the test failed since the exit code 1 may just be pytest saying some tests failed.
+                    // print stdout
+                    println!(
+                        "\n####### STDOUT Logs for this test ########\n{}",
+                        stdout_content
+                    );
                     println!("{}", stderr_content.bright_red().bold());
                     println!(
                         "\n{}\n{}",
@@ -197,6 +198,7 @@ async fn run_pytest_and_update_state(
 }
 
 pub(crate) fn run_test_with_forward(
+    runner: TestRunner,
     state: RunState,
     shell_command: Vec<String>,
     forward_port: u16,
@@ -205,7 +207,8 @@ pub(crate) fn run_test_with_forward(
 
     let state = Arc::new(Mutex::new(state));
 
-    rt.block_on(run_pytest_and_update_state(
+    rt.block_on(run_and_update_state(
+        runner,
         state,
         shell_command,
         forward_port,

@@ -174,7 +174,9 @@ dependencies = [
  "serde",
  "serde_json",
  "shellwords",
+ "tempfile",
  "tokio",
+ "uuid",
  "walkdir",
 ]
 
