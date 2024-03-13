@@ -64,6 +64,14 @@ def test_enum() -> None:
     assert res == Category.TWO
 
 
+def test_enum_case_insensitive() -> None:
+    deserializer = Deserializer[Category](Category)
+    res = deserializer.from_string("two")
+    assert res == Category.TWO
+    res = deserializer.from_string("TWO")
+    assert res == Category.TWO
+
+
 def test_enum_with_quotes() -> None:
     deserializer = Deserializer[Category](Category)
     res = deserializer.from_string('"TWO"')
@@ -91,7 +99,7 @@ def test_enum_from_enum_list_single() -> None:
 def test_enum_from_enum_list_multi() -> None:
     deserializer = Deserializer[Category](Category)
     res = deserializer.from_string('["TWO", "THREE"]')
-    assert res == [Category.TWO, Category.THREE]
+    assert res == Category.TWO
 
 
 def test_enum_list_from_list() -> None:
@@ -103,10 +111,94 @@ def test_enum_list_from_list() -> None:
 # Test case for when LLM writes something like: "k1: The description of k1"
 def test_enum_from_string_with_extra_text_after() -> None:
     deserializer = Deserializer[Category](Category)
+
     res = deserializer.from_string('"ONE: The description of k1"')
     assert res == Category.ONE
+
     res = deserializer.from_string('"ONE - The description of an enum value"')
     assert res == Category.ONE
+
+    with pytest.raises(Exception):
+        res = deserializer.from_string('"ONE - is the answer, not TWO"')
+        assert res == Category.ONE
+
+    with pytest.raises(Exception):
+        deserializer.from_string('"ONE. is the answer, not TWO"')
+
+    with pytest.raises(Exception):
+        deserializer.from_string('"ONE: is the answer, not TWO"')
+
+
+@register_deserializer(
+    aliases={"k1": "ONE",
+            "k1: The description of enum value une": "ONE",
+            "k-2-3.1_1": "TWO", 
+            "k-2-3.1_1: The description of enum value deux": "TWO",
+            "NUMBER_THREE": "THREE"}
+)
+class CategoryWithAlias(str, Enum):
+    ONE = "ONE"
+    TWO = "TWO"
+    THREE = "THREE"
+
+def test_enum_aliases() -> None:
+    deserializer = Deserializer[CategoryWithAlias](CategoryWithAlias)
+
+    res = deserializer.from_string("k1")
+    assert res == CategoryWithAlias.ONE
+
+    res = deserializer.from_string("k-2-3.1_1")
+    assert res == CategoryWithAlias.TWO
+
+    res = deserializer.from_string("NUMBER_THREE")
+    assert res == CategoryWithAlias.THREE
+
+def test_enum_aliases_with_punctuation() -> None:
+    deserializer = Deserializer[CategoryWithAlias](CategoryWithAlias)
+
+    res = deserializer.from_string("k1")
+    assert res == CategoryWithAlias.ONE
+
+    res = deserializer.from_string("k 2 3 1_1")
+    assert res == CategoryWithAlias.TWO
+
+    res = deserializer.from_string("number three")
+    assert res == CategoryWithAlias.THREE
+
+def test_enum_aliases_with_extra_text() -> None:
+    deserializer = Deserializer[CategoryWithAlias](CategoryWithAlias)
+    res = deserializer.from_string("k1: The description of enum value une")
+    assert res == CategoryWithAlias.ONE
+
+    # separated by colon
+    res = deserializer.from_string("k-2-3.1_1: The description of enum value deux")
+    assert res == CategoryWithAlias.TWO
+
+    # separated by whitespace
+    res = deserializer.from_string("k-2-3.1_1 The description of enum value deux")
+    assert res == CategoryWithAlias.TWO
+
+    # trailing period
+    res = deserializer.from_string("k-2-3.1_1. The description of enum value deux")
+    assert res == CategoryWithAlias.TWO
+
+def test_enum_aliases_from_multiple_aliases() -> None:
+    deserializer = Deserializer[CategoryWithAlias](CategoryWithAlias)
+
+    res = deserializer.from_string("k1: The description of k1, not k-2-3.1_1")
+    assert res == CategoryWithAlias.ONE
+
+    # separated by colon
+    res = deserializer.from_string("k-2-3.1_1: The description of k-2-3.1_1, not k1")
+    assert res == CategoryWithAlias.TWO
+
+    # separated by whitespace
+    res = deserializer.from_string("k-2-3.1_1 is the description of k-2-3.1_1, not k1")
+    assert res == CategoryWithAlias.TWO
+
+    # trailing period
+    res = deserializer.from_string("k-2-3.1_1. is the description of k-2-3.1_1, not k1")
+    assert res == CategoryWithAlias.TWO
 
 def test_enum_from_string_with_alias() -> None:
     pass
@@ -116,51 +208,6 @@ def test_enum_from_string_with_alias_with_punctuation() -> None:
 
 def test_enum_list_from_string_with_aliases() -> None:
     pass
-
-
-# TODO:
-# Test case insensitivity
-
-
-@register_deserializer(
-    aliases={"k1": "ONE", "k-2-3.1_1": "TWO", "NUMBER_THREE": "THREE"}
-)
-class CategoryWithAlias(str, Enum):
-    ONE = "ONE"
-    TWO = "TWO"
-    THREE = "THREE"
-
-def test_enum_aliases_from_string_with_extra_text() -> None:
-    deserializer = Deserializer[CategoryWithAlias](CategoryWithAlias)
-    res = deserializer.from_string("k1: The description of an enum value")
-    assert res == CategoryWithAlias.ONE
-    # separated by colon
-    res = deserializer.from_string("k-2-3.1_1: The description of an enum value")
-    assert res == CategoryWithAlias.TWO
-    # separated by whitespace
-    res = deserializer.from_string("k-2-3.1_1 is the description of an enum value")
-    assert res == CategoryWithAlias.TWO
-    # trailing period
-    res = deserializer.from_string("k-2-3.1_1. is the description of an enum value")
-    assert res == CategoryWithAlias.TWO
-
-def test_enum_aliases_from_string_with_multiple_aliases() -> None:
-    deserializer = Deserializer[CategoryWithAlias](CategoryWithAlias)
-
-    with pytest.raises(DeserializerException):
-        res = deserializer.from_string("k1: The description of k1, not k-2-3.1_1")
-
-    # separated by colon
-    with pytest.raises(DeserializerException):
-        res = deserializer.from_string("k-2-3.1_1: The description of k-2-3.1_1, not k1")
-
-    # separated by whitespace
-    with pytest.raises(DeserializerException):
-        res = deserializer.from_string("k-2-3.1_1 is the description of k-2-3.1_1, not k1")
-
-    # trailing period
-    with pytest.raises(DeserializerException):
-        res = deserializer.from_string("k-2-3.1_1. is the description of k-2-3.1_1, not k1")
 
 
 @register_deserializer({})

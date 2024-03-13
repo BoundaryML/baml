@@ -60,7 +60,7 @@ class EnumDeserializer(BaseDeserializer[T]):
         for item in self.__enm:
             yield item.name.lower(), item
         for alias, value_name in self.__value_aliases.items():
-            yield re.sub('[^a-zA-Z0-9]+', ' ', alias), self.__enm(value_name)
+            yield re.sub('[^a-zA-Z0-9]+', ' ', alias.lower()), self.__enm(value_name)
     
     def coerce(
         self,
@@ -95,7 +95,7 @@ class EnumDeserializer(BaseDeserializer[T]):
         if value:
             return Result.from_value(value)
 
-        value2 = search(parsed.strip().lower(), self.normalized_aliases)
+        value2 = search(re.sub('[^a-zA-Z0-9]+', ' ',parsed.strip().lower()), self.normalized_aliases)
         if value2:
             return Result.from_value(value2)
         
@@ -104,16 +104,16 @@ class EnumDeserializer(BaseDeserializer[T]):
             counts = [(contents.count(alias), alias, value) for alias, value in aliases() if alias in contents]
             counts.sort(reverse=True)
             if len(counts) == 1:
-                return counts[0][1]
-            if len(counts) > 1 and counts[0][2] > counts[1][2]:
-                return counts[0][1]
+                return counts[0][2]
+            if len(counts) > 1 and counts[0][0] > counts[1][0]:
+                return counts[0][2]
             return None
 
         most_common = find_most_common(parsed.strip().lower(), self.aliases)
         if most_common:
             return Result.from_value(most_common)
 
-        most_common2 = find_most_common(parsed.strip().lower(), self.normalized_aliases)
+        most_common2 = find_most_common(re.sub('[^a-zA-Z0-9]+', ' ',parsed.strip().lower()), self.normalized_aliases)
         if most_common2:
             return Result.from_value(most_common2)
 
