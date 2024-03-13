@@ -28,7 +28,7 @@ function isMusl() {
   }
 }
 
-const searchDir = "/Users/vbv/repos/gloo-lang/engine/baml-core-ffi";
+const searchDir = '/Users/aaronvillalpando/Projects/baml/engine/baml-core-ffi'
 // const searchDir = __dirname;
 
 switch (platform) {
@@ -131,7 +131,7 @@ switch (platform) {
         localFileExisted = existsSync(join(searchDir, 'baml-core-ffi.darwin-arm64.node'))
         try {
           if (localFileExisted) {
-            nativeBinding = require('/Users/vbv/repos/gloo-lang/engine/baml-core-ffi/baml-core-ffi.darwin-arm64.node')
+            nativeBinding = require('/Users/aaronvillalpando/Projects/baml/engine/baml-core-ffi/baml-core-ffi.darwin-arm64.node')
           } else {
             nativeBinding = require('@boundaryml/baml-core-ffi-darwin-arm64')
           }
@@ -237,7 +237,7 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { BamlTracer, BamlScopeGuard, BamlTester  } = nativeBinding
+const { BamlTracer, BamlScopeGuard, BamlTester } = nativeBinding
 
 module.exports.BamlTester = BamlTester
 module.exports.BamlTracer = BamlTracer

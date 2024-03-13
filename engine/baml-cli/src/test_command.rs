@@ -1,14 +1,22 @@
 use colored::*;
 use std::{path::PathBuf, str::FromStr};
 
-use baml_lib::{internal_baml_schema_ast::ast::WithName, Configuration, ValidatedSchema};
+use baml_lib::{
+    internal_baml_core::ast::GeneratorConfig, internal_baml_schema_ast::ast::WithName,
+    Configuration, ValidatedSchema,
+};
+
+use baml_lib::internal_baml_core::configuration::GeneratorLanguage;
 
 use crate::{errors::CliError, test_command::test_state::RunState, TestAction, TestArgs};
+
+use run_tests::TestRunner;
 
 mod ipc_comms;
 mod run_test_with_forward;
 mod run_test_with_watcher;
 mod run_tests;
+
 mod test_state;
 
 enum Filter {
@@ -193,8 +201,14 @@ pub fn run(
                 )
             })?;
 
+            let test_runner: TestRunner = match generator.language {
+                GeneratorLanguage::Python => TestRunner::Pytest,
+                GeneratorLanguage::TypeScript => TestRunner::Jest,
+                _ => return Err("Invalid test runner".into()),
+            };
+
             // Run the tests
-            run_tests::run_tests(
+            test_runner.run(
                 state,
                 &test_dir,
                 &generator.test_command,

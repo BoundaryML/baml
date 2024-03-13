@@ -14,7 +14,7 @@ use std::{path::PathBuf, sync::Mutex};
 use internal_baml_diagnostics::{DatamodelError, Diagnostics, SourceFile, Span};
 
 mod common;
-mod configuration;
+pub mod configuration;
 mod generate;
 mod lockfile;
 mod validate;

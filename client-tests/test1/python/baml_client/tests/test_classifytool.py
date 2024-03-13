@@ -22,7 +22,7 @@ async def test_southern_gold(ClassifyToolImpl: IClassifyToolStream, baml_ipc_cha
             return item
         return dumps(item)
 
-    case = {"query": "ereeees", "context": "zzzzz", }
+    case = "{\"query\":\"ereeees\",\"context\":\"zzzzz\"}"
     deserializer_query = Deserializer[str](str) # type: ignore
     query = deserializer_query.from_string(to_str(case["query"]))
     deserializer_context = Deserializer[str](str) # type: ignore
