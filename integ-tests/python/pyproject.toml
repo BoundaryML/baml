@@ -9,8 +9,8 @@ packages = [{include = "app"}]
 [tool.poetry.dependencies]
 python = "^3.8"
 # Use client in production
-baml = "^0.14.1"
-
+# baml = "^0.14.1"
+baml = {path = "../../clients/python", develop = true}
 
 [build-system]
 requires = ["poetry-core"]

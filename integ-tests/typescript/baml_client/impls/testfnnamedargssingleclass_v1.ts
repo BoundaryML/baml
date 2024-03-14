@@ -33,16 +33,16 @@ TestFnNamedArgsSingleClass.registerImpl('v1', async (
     const result = await GPT35.run_prompt_template(
       prompt_template,
       [
-        "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg.key//}",
-      
         "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg.key_three//}",
       
         "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg.key_two//}",
+      
+        "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg.key//}",
       ],
       {
-        "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg.key//}": myArg.key,
         "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg.key_three//}": myArg.key_three,
         "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg.key_two//}": myArg.key_two,
+        "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg.key//}": myArg.key,
       }
     );
 

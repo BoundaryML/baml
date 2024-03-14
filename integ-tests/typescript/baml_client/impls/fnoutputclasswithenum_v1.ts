@@ -12,7 +12,7 @@ import { Deserializer } from '@boundaryml/baml-core/deserializer/deserializer';
 
 
 const prompt_template = `\
-Return an array of a made up json blob that matches this schema:
+Return a made up json blob that matches this schema:
 {
   "prop1": string,
   "prop2": "EnumInClass as string"

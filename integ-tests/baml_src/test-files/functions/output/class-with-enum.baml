@@ -16,7 +16,7 @@ function FnOutputClassWithEnum {
 impl<llm, FnOutputClassWithEnum> v1 {
   client GPT35
   prompt #"
-    Return an array of a made up json blob that matches this schema:
+    Return a made up json blob that matches this schema:
     {#print_type(output)}
 
     Here are the values to use for enum:
