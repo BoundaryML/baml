@@ -55,6 +55,7 @@ async fn start_server() -> std::io::Result<(TcpListener, u16)> {
 
 async fn run_and_update_state(
     runner: TestRunner,
+    language_root_dir: std::path::PathBuf,
     state: Arc<Mutex<RunState>>,
     mut shell_command: Vec<String>,
 ) -> tokio::io::Result<()> {
@@ -103,6 +104,7 @@ async fn run_and_update_state(
     let mut child = cmd
         .envs(runner.env_vars().into_iter())
         .env("BAML_IPC_PORT", port.to_string())
+        .current_dir(language_root_dir)
         .stdout(Stdio::from(stdout_file))
         .stderr(Stdio::from(stderr_file))
         .spawn()
@@ -173,7 +175,14 @@ async fn run_and_update_state(
                 "\n####### STDOUT Logs for this test ########\n{}",
                 stdout_content
             );
+            println!(
+                "{}",
+                "Some tests failed or there was a problem running the tests."
+                    .bright_red()
+                    .bold()
+            );
             println!("{}", stderr_content.bright_red().bold());
+
             println!(
                 "\n{}\n{}",
                 stdout_file_path.display().to_string().dimmed(),
@@ -187,12 +196,18 @@ async fn run_and_update_state(
 
 pub(crate) fn run_test_with_watcher(
     runner: TestRunner,
+    language_root_dir: std::path::PathBuf,
     state: RunState,
     shell_command: Vec<String>,
 ) -> Result<(), CliError> {
     let rt = tokio::runtime::Runtime::new().unwrap();
 
     let state = Arc::new(Mutex::new(state));
-    rt.block_on(run_and_update_state(runner, state, shell_command))
-        .map_err(|e| format!("Failed to run tests: {}", e).into())
+    rt.block_on(run_and_update_state(
+        runner,
+        language_root_dir,
+        state,
+        shell_command,
+    ))
+    .map_err(|e| format!("Failed to run tests: {}", e).into())
 }

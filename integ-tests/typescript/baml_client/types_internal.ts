@@ -5,92 +5,54 @@
 // @ts-nocheck
 
 
-import { Resume, Category, Education } from './types';
+import { NamedArgsSingleEnum, NamedArgsSingleEnumList, NamedArgsSingleClass } from './types';
 
 
-// Function to check if a value is a member of the Category enum
-function isCategory(value: any): value is Category {
-  return Object.values(Category).includes(value);
+// Function to check if a value is a member of the NamedArgsSingleEnum enum
+function isNamedArgsSingleEnum(value: any): value is NamedArgsSingleEnum {
+  return Object.values(NamedArgsSingleEnum).includes(value);
 }
 
-// Function to validate if an object is a Education object
-function isEducation(obj: any): obj is Education {
+// Function to check if a value is a member of the NamedArgsSingleEnumList enum
+function isNamedArgsSingleEnumList(value: any): value is NamedArgsSingleEnumList {
+  return Object.values(NamedArgsSingleEnumList).includes(value);
+}
+
+// Function to validate if an object is a NamedArgsSingleClass object
+function isNamedArgsSingleClass(obj: any): obj is NamedArgsSingleClass {
   return (
     obj &&
     typeof obj === "object"
-    && ("school" in obj && (typeof obj.school === 'string'))
-    && ("degree" in obj && (typeof obj.degree === 'string'))
-    && ("year" in obj && (typeof obj.year === 'number'))
+    && ("key" in obj && (typeof obj.key === 'string'))
+    && ("key_two" in obj && (typeof obj.key_two === 'boolean'))
+    && ("key_three" in obj && (typeof obj.key_three === 'number'))
   );
 }
 
 
-class InternalEducation implements Education {
+class InternalNamedArgsSingleClass implements NamedArgsSingleClass {
   private constructor(private data: {
-    school: string,
-    degree: string,
-    year: number,
-  }, private raw: Education) {}
+    key: string,
+    key_two: boolean,
+    key_three: number,
+  }, private raw: NamedArgsSingleClass) {}
 
-  static from(data: Education): InternalEducation {
-    return new InternalEducation({
-      school: data.school,
-      degree: data.degree,
-      year: data.year,
+  static from(data: NamedArgsSingleClass): InternalNamedArgsSingleClass {
+    return new InternalNamedArgsSingleClass({
+      key: data.key,
+      key_two: data.key_two,
+      key_three: data.key_three,
     }, data);
   }
 
-  get school(): string {
-    return this.data.school;
+  get key(): string {
+    return this.data.key;
   }
-  get degree(): string {
-    return this.data.degree;
+  get key_two(): boolean {
+    return this.data.key_two;
   }
-  get year(): number {
-    return this.data.year;
-  }
-
-
-  toJSON(): string {
-    return JSON.stringify(this.raw, null, 2);
-  }
-}
-
-// Function to validate if an object is a Resume object
-function isResume(obj: any): obj is Resume {
-  return (
-    obj &&
-    typeof obj === "object"
-    && ("name" in obj && (typeof obj.name === 'string'))
-    && ("education" in obj && (Array.isArray(obj.education) && obj.education.every((x: any) => isEducation(x))))
-    && ("skills" in obj && (Array.isArray(obj.skills) && obj.skills.every((x: any) => typeof x === 'string')))
-  );
-}
-
-
-class InternalResume implements Resume {
-  private constructor(private data: {
-    name: string,
-    education: InternalEducation[],
-    skills: string[],
-  }, private raw: Resume) {}
-
-  static from(data: Resume): InternalResume {
-    return new InternalResume({
-      name: data.name,
-      education: data.education.map(x => new InternalEducation(x)),
-      skills: data.skills.map(x => x),
-    }, data);
-  }
-
-  get name(): string {
-    return this.data.name;
-  }
-  get education(): InternalEducation[] {
-    return this.data.education;
-  }
-  get skills(): string[] {
-    return this.data.skills;
+  get key_three(): number {
+    return this.data.key_three;
   }
 
 
@@ -100,4 +62,4 @@ class InternalResume implements Resume {
 }
 
 
-export { InternalEducation, InternalResume }
+export { InternalNamedArgsSingleClass }

@@ -95,10 +95,19 @@ impl TestRunner {
                         test_command.push(format!("--config=\"{}\"", jest_temp_path));
 
                         let res = match playground_port {
-                            Some(port) => {
-                                run_test_with_forward(self.clone(), state, test_command, port)
-                            }
-                            None => run_test_with_watcher(self.clone(), state, test_command),
+                            Some(port) => run_test_with_forward(
+                                self.clone(),
+                                output_path.clone(),
+                                state,
+                                test_command,
+                                port,
+                            ),
+                            None => run_test_with_watcher(
+                                self.clone(),
+                                output_path.clone(),
+                                state,
+                                test_command,
+                            ),
                         };
 
                         let _ = baml_file.close();
@@ -129,8 +138,19 @@ impl TestRunner {
                 });
 
                 let res = match playground_port {
-                    Some(port) => run_test_with_forward(self.clone(), state, test_command, port),
-                    None => run_test_with_watcher(self.clone(), state, test_command),
+                    Some(port) => run_test_with_forward(
+                        self.clone(),
+                        output_path.clone(),
+                        state,
+                        test_command,
+                        port,
+                    ),
+                    None => run_test_with_watcher(
+                        self.clone(),
+                        output_path.clone(),
+                        state,
+                        test_command,
+                    ),
                 };
                 res
             }
@@ -143,7 +163,7 @@ impl TestRunner {
                 command.push(format!("--baml-ipc={}", port));
             }
             TestRunner::Pytest => {
-                command.push("--baml-ipc".into());
+                command.push("--pytest-baml-ipc".into());
                 command.push(format!("{}", port));
             }
         }

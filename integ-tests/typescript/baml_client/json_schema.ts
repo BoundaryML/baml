@@ -5,17 +5,159 @@
 // @ts-nocheck
 
 
-import { registerEnumDeserializer, registerObjectDeserializer } from '@boundaryml/baml-core/deserializer/deserializer';
+import { registerObjectDeserializer, registerEnumDeserializer } from '@boundaryml/baml-core/deserializer/deserializer';
 import { JSONSchema7 } from 'json-schema';
 
 
-const schema: JSONSchema7 = {"definitions":{"Category":{"title":"Category","enum":[{"const":"Refund"},{"const":"CancelOrder"},{"const":"TechnicalSupport"},{"const":"AccountIssue"},{"const":"Question"}]},"Education":{"title":"Education","type":"object","properties":{"school":{"type":"string"},"degree":{"type":"string"},"year":{"type":"integer"}},"required":["school","degree","year"]},"Resume":{"title":"Resume","type":"object","properties":{"name":{"type":"string"},"education":{"type":"array","items":{"$ref":"#/definitions/Education"}},"skills":{"type":"array","items":{"type":"string"}}},"required":["name","education","skills"]},"ClassifyMessage_input":{"type":"object","properties":{"message":{"type":"string"},"message_date":{"type":"string"}},"required":[],"title":"ClassifyMessage input"},"ExtractResume_input":{"type":"string","title":"ExtractResume input"},"ClassifyMessage_output":{"type":"array","items":{"$ref":"#/definitions/Category"},"title":"ClassifyMessage output"},"ExtractResume_output":{"$ref":"#/definitions/Resume","title":"ExtractResume output"}}};
+const schema: JSONSchema7 = {
+  "definitions": {
+    "NamedArgsSingleEnum": {
+      "title": "NamedArgsSingleEnum",
+      "enum": [
+        {
+          "const": "ONE"
+        },
+        {
+          "const": "TWO"
+        }
+      ]
+    },
+    "NamedArgsSingleEnumList": {
+      "title": "NamedArgsSingleEnumList",
+      "enum": [
+        {
+          "const": "ONE"
+        },
+        {
+          "const": "TWO"
+        }
+      ]
+    },
+    "NamedArgsSingleClass": {
+      "title": "NamedArgsSingleClass",
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "key_two": {
+          "type": "boolean"
+        },
+        "key_three": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "key",
+        "key_two",
+        "key_three"
+      ]
+    },
+    "TestFnNamedArgsSingleBool_input": {
+      "type": "object",
+      "properties": {
+        "myBool": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "title": "TestFnNamedArgsSingleBool input"
+    },
+    "TestFnNamedArgsSingleClass_input": {
+      "type": "object",
+      "properties": {
+        "myArg": {
+          "$ref": "#/definitions/NamedArgsSingleClass"
+        }
+      },
+      "required": [],
+      "title": "TestFnNamedArgsSingleClass input"
+    },
+    "TestFnNamedArgsSingleEnum_input": {
+      "type": "object",
+      "properties": {
+        "myArg": {
+          "$ref": "#/definitions/NamedArgsSingleEnum"
+        }
+      },
+      "required": [],
+      "title": "TestFnNamedArgsSingleEnum input"
+    },
+    "TestFnNamedArgsSingleEnumList_input": {
+      "type": "object",
+      "properties": {
+        "myArg": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/NamedArgsSingleEnumList"
+          }
+        }
+      },
+      "required": [],
+      "title": "TestFnNamedArgsSingleEnumList input"
+    },
+    "TestFnNamedArgsSingleStringList_input": {
+      "type": "object",
+      "properties": {
+        "myArg": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [],
+      "title": "TestFnNamedArgsSingleStringList input"
+    },
+    "TestFnNamedArgsSyntax_input": {
+      "type": "object",
+      "properties": {
+        "var": {
+          "type": "string"
+        },
+        "var_with_underscores": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "title": "TestFnNamedArgsSyntax input"
+    },
+    "TestFnNamedArgsSingleBool_output": {
+      "type": "string",
+      "title": "TestFnNamedArgsSingleBool output"
+    },
+    "TestFnNamedArgsSingleClass_output": {
+      "type": "string",
+      "title": "TestFnNamedArgsSingleClass output"
+    },
+    "TestFnNamedArgsSingleEnum_output": {
+      "type": "string",
+      "title": "TestFnNamedArgsSingleEnum output"
+    },
+    "TestFnNamedArgsSingleEnumList_output": {
+      "type": "string",
+      "title": "TestFnNamedArgsSingleEnumList output"
+    },
+    "TestFnNamedArgsSingleStringList_output": {
+      "type": "string",
+      "title": "TestFnNamedArgsSingleStringList output"
+    },
+    "TestFnNamedArgsSyntax_output": {
+      "type": "string",
+      "title": "TestFnNamedArgsSyntax output"
+    }
+  }
+};
 
-registerEnumDeserializer(schema.definitions.Category, { });
+registerEnumDeserializer(schema.definitions.NamedArgsSingleEnum, {
 
-registerObjectDeserializer(schema.definitions.Education, { });
+});
 
-registerObjectDeserializer(schema.definitions.Resume, { });
+registerEnumDeserializer(schema.definitions.NamedArgsSingleEnumList, {
+
+});
+
+registerObjectDeserializer(schema.definitions.NamedArgsSingleClass, { });
 
 
 export { schema }

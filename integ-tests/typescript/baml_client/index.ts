@@ -8,8 +8,12 @@ import * as f from "./function"
 import "./impls"
 
 const BamlClient = {
-  ClassifyMessage: f.ClassifyMessage,
-  ExtractResume: f.ExtractResume,
+  TestFnNamedArgsSingleBool: f.TestFnNamedArgsSingleBool,
+  TestFnNamedArgsSingleClass: f.TestFnNamedArgsSingleClass,
+  TestFnNamedArgsSingleEnum: f.TestFnNamedArgsSingleEnum,
+  TestFnNamedArgsSingleEnumList: f.TestFnNamedArgsSingleEnumList,
+  TestFnNamedArgsSingleStringList: f.TestFnNamedArgsSingleStringList,
+  TestFnNamedArgsSyntax: f.TestFnNamedArgsSyntax,
 }
 
 export default BamlClient

@@ -172,13 +172,20 @@ pub fn run(
                 return Err("No generators are available".into());
             }
 
-            // Find the selected generator
-            let generator = &config
-                .generators
-                .iter()
-                .find(|(f, _)| f.used_in_tests)
-                .unwrap_or(&config.generators.first().unwrap())
-                .0;
+            let generator = match &command.generator {
+                Some(generator_name) => config
+                    .generators
+                    .iter()
+                    .find(|(f, _)| &f.name == generator_name)
+                    .map(|(f, _)| f)
+                    .unwrap_or_else(|| panic!("Generator {} not found", generator_name)),
+                None => config
+                    .generators
+                    .iter()
+                    .find(|(f, _)| f.used_in_tests)
+                    .map(|(f, _)| f)
+                    .unwrap_or(&config.generators.first().unwrap().0),
+            };
 
             // Print some information about the generator we are going to use
             println!(

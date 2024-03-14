@@ -82,6 +82,10 @@ pub struct TestArgs {
     /// Specifies a port for the test playground. Hidden from help text.
     #[arg(long, hide = true)]
     playground_port: Option<u16>,
+
+    /// Specify which generator (and therefore language) you want to use to run the tests.
+    #[arg(long, short = 'g')]
+    generator: Option<String>,
 }
 
 impl fmt::Display for TestAction {

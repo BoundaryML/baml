@@ -48,13 +48,13 @@ args: {
     const result = await GPT4.run_prompt_template(
       prompt_template,
       [
-        "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.message//}",
-      
         "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.message_date//}",
+      
+        "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.message//}",
       ],
       {
-        "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.message//}": message,
         "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.message_date//}": message_date,
+        "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.message//}": message,
       }
     );
 

@@ -7,13 +7,11 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from .classes.cls_education import PartialEducation
-from .classes.cls_resume import PartialResume
+from .classes.cls_namedargssingleclass import PartialNamedArgsSingleClass
 
 
 
 
 __all__ = [
-    'PartialEducation',
-    'PartialResume'
+    'PartialNamedArgsSingleClass'
 ]

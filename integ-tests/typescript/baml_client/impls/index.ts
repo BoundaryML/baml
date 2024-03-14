@@ -4,6 +4,12 @@
 // tslint:disable
 // @ts-nocheck
 
-import './classifymessage_level1';
+import './testfnnamedargssinglebool_v1';
 
-import './extractresume_version1';
+import './testfnnamedargssingleclass_v1';
+
+import './testfnnamedargssingleenum_v1';
+
+import './testfnnamedargssingleenumlist_v1';
+
+import './testfnnamedargssinglestringlist_v1';

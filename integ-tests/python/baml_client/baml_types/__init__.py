@@ -7,23 +7,39 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..__do_not_import.functions.fx_classifymessage import IClassifyMessage, IClassifyMessageOutput, IClassifyMessageStream
-from ..__do_not_import.functions.fx_extractresume import IExtractResume, IExtractResumeOutput, IExtractResumeStream
-from ..__do_not_import.types.classes.cls_education import Education
-from ..__do_not_import.types.classes.cls_resume import Resume
-from ..__do_not_import.types.enums.enm_category import Category
+from ..__do_not_import.functions.fx_testfnnamedargssinglebool import ITestFnNamedArgsSingleBool, ITestFnNamedArgsSingleBoolOutput, ITestFnNamedArgsSingleBoolStream
+from ..__do_not_import.functions.fx_testfnnamedargssingleclass import ITestFnNamedArgsSingleClass, ITestFnNamedArgsSingleClassOutput, ITestFnNamedArgsSingleClassStream
+from ..__do_not_import.functions.fx_testfnnamedargssingleenum import ITestFnNamedArgsSingleEnum, ITestFnNamedArgsSingleEnumOutput, ITestFnNamedArgsSingleEnumStream
+from ..__do_not_import.functions.fx_testfnnamedargssingleenumlist import ITestFnNamedArgsSingleEnumList, ITestFnNamedArgsSingleEnumListOutput, ITestFnNamedArgsSingleEnumListStream
+from ..__do_not_import.functions.fx_testfnnamedargssinglestringlist import ITestFnNamedArgsSingleStringList, ITestFnNamedArgsSingleStringListOutput, ITestFnNamedArgsSingleStringListStream
+from ..__do_not_import.functions.fx_testfnnamedargssyntax import ITestFnNamedArgsSyntax, ITestFnNamedArgsSyntaxOutput, ITestFnNamedArgsSyntaxStream
+from ..__do_not_import.types.classes.cls_namedargssingleclass import NamedArgsSingleClass
+from ..__do_not_import.types.enums.enm_namedargssingleenum import NamedArgsSingleEnum
+from ..__do_not_import.types.enums.enm_namedargssingleenumlist import NamedArgsSingleEnumList
 
 
 
 
 __all__ = [
-    'Category',
-    'Education',
-    'IClassifyMessage',
-    'IClassifyMessageOutput',
-    'IClassifyMessageStream',
-    'IExtractResume',
-    'IExtractResumeOutput',
-    'IExtractResumeStream',
-    'Resume'
+    'ITestFnNamedArgsSingleBool',
+    'ITestFnNamedArgsSingleBoolOutput',
+    'ITestFnNamedArgsSingleBoolStream',
+    'ITestFnNamedArgsSingleClass',
+    'ITestFnNamedArgsSingleClassOutput',
+    'ITestFnNamedArgsSingleClassStream',
+    'ITestFnNamedArgsSingleEnum',
+    'ITestFnNamedArgsSingleEnumList',
+    'ITestFnNamedArgsSingleEnumListOutput',
+    'ITestFnNamedArgsSingleEnumListStream',
+    'ITestFnNamedArgsSingleEnumOutput',
+    'ITestFnNamedArgsSingleEnumStream',
+    'ITestFnNamedArgsSingleStringList',
+    'ITestFnNamedArgsSingleStringListOutput',
+    'ITestFnNamedArgsSingleStringListStream',
+    'ITestFnNamedArgsSyntax',
+    'ITestFnNamedArgsSyntaxOutput',
+    'ITestFnNamedArgsSyntaxStream',
+    'NamedArgsSingleClass',
+    'NamedArgsSingleEnum',
+    'NamedArgsSingleEnumList'
 ]

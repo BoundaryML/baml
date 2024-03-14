@@ -60,7 +60,6 @@ pub(super) fn render_with_hbs<T: serde::Serialize>(template: Template, data: &T)
             "class_internal"
         }
         Template::Function => {
-            info!("Content: {}", content);
             register_partial_file!(reg, "functions", "function");
             "function"
         }

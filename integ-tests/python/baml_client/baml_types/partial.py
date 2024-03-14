@@ -7,13 +7,11 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..__do_not_import.types.partial.classes.cls_education import PartialEducation
-from ..__do_not_import.types.partial.classes.cls_resume import PartialResume
+from ..__do_not_import.types.partial.classes.cls_namedargssingleclass import PartialNamedArgsSingleClass
 
 
 
 
 __all__ = [
-    'PartialEducation',
-    'PartialResume'
+    'PartialNamedArgsSingleClass'
 ]

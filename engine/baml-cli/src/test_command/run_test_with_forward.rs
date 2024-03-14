@@ -60,6 +60,7 @@ async fn start_server() -> std::io::Result<(TcpListener, u16)> {
 
 async fn run_and_update_state(
     runner: TestRunner,
+    language_root_dir: std::path::PathBuf,
     state: Arc<Mutex<RunState>>,
     mut shell_command: Vec<String>,
     forward_port: u16,
@@ -109,6 +110,7 @@ async fn run_and_update_state(
 
     let mut child = cmd
         .envs(runner.env_vars().into_iter())
+        .current_dir(language_root_dir)
         .env("BAML_IPC_PORT", port.to_string())
         .stdout(Stdio::from(stdout_file))
         .stderr(Stdio::from(stderr_file))
@@ -142,7 +144,7 @@ async fn run_and_update_state(
                 // But we could also get exit code 1 from other things like infisical CLI being absent, or python not being found.
                 let stderr_content = tokio::fs::read_to_string(&stderr_file_path).await?;
                 let stdout_content = tokio::fs::read_to_string(&stdout_file_path).await?;
-                if ![0, 1].contains(&code) {
+                if code >= 2 {
                     println!(
                         "\n####### STDOUT Logs for this test ########\n{}",
                         stdout_content
@@ -180,10 +182,17 @@ async fn run_and_update_state(
                     );
                     println!("{}", stderr_content.bright_red().bold());
                     println!(
+                        "{}",
+                        "Some tests failed or there was a problem running the tests."
+                            .bright_red()
+                            .bold()
+                    );
+                    println!(
                         "\n{}\n{}",
                         stdout_file_path.display().to_string().dimmed(),
                         stderr_file_path.display().to_string().dimmed()
                     );
+                    std::process::exit(code);
                 }
             }
             output
@@ -199,6 +208,7 @@ async fn run_and_update_state(
 
 pub(crate) fn run_test_with_forward(
     runner: TestRunner,
+    language_root_dir: std::path::PathBuf,
     state: RunState,
     shell_command: Vec<String>,
     forward_port: u16,
@@ -209,6 +219,7 @@ pub(crate) fn run_test_with_forward(
 
     rt.block_on(run_and_update_state(
         runner,
+        language_root_dir,
         state,
         shell_command,
         forward_port,

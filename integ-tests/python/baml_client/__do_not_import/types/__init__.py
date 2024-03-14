@@ -7,15 +7,15 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from .classes.cls_education import Education
-from .classes.cls_resume import Resume
-from .enums.enm_category import Category
+from .classes.cls_namedargssingleclass import NamedArgsSingleClass
+from .enums.enm_namedargssingleenum import NamedArgsSingleEnum
+from .enums.enm_namedargssingleenumlist import NamedArgsSingleEnumList
 
 
 
 
 __all__ = [
-    'Category',
-    'Education',
-    'Resume'
+    'NamedArgsSingleClass',
+    'NamedArgsSingleEnum',
+    'NamedArgsSingleEnumList'
 ]

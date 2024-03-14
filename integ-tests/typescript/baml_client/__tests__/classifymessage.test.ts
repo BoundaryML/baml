@@ -6,7 +6,7 @@
 
 import b from '../';
 
-import { FireBamlEvent, traceAsync } from '@boundaryml/baml-core/ffi_layer';
+import { traceAsync, FireBamlEvent } from '@boundaryml/baml-core/ffi_layer';
 
 
 describe('test_case:blue_dolphin', () => {

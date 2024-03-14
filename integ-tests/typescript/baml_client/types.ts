@@ -4,25 +4,21 @@
 // tslint:disable
 // @ts-nocheck
 
-const enum Category {
-    Refund = "Refund",
-    CancelOrder = "CancelOrder",
-    TechnicalSupport = "TechnicalSupport",
-    AccountIssue = "AccountIssue",
-    Question = "Question",
+const enum NamedArgsSingleEnum {
+    ONE = "ONE",
+    TWO = "TWO",
 }
 
-interface Education {
-  school: string;
-  degree: string;
-  year: number;
+const enum NamedArgsSingleEnumList {
+    ONE = "ONE",
+    TWO = "TWO",
 }
 
-interface Resume {
-  name: string;
-  education: Education[];
-  skills: string[];
+interface NamedArgsSingleClass {
+  key: string;
+  key_two: boolean;
+  key_three: number;
 }
 
 
-export { Category, Education, Resume }
+export { NamedArgsSingleEnum, NamedArgsSingleEnumList, NamedArgsSingleClass }

@@ -7,13 +7,15 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from .clients.client_claude import Claude
-from .clients.client_claudeinstant import ClaudeInstant
-from .clients.client_gpt3 import GPT3
+from .clients.client_gpt35 import GPT35
 from .clients.client_gpt4 import GPT4
 from .clients.client_gpt4turbo import GPT4Turbo
-from .functions.fx_classifymessage import BAMLClassifyMessage
-from .functions.fx_extractresume import BAMLExtractResume
+from .functions.fx_testfnnamedargssinglebool import BAMLTestFnNamedArgsSingleBool
+from .functions.fx_testfnnamedargssingleclass import BAMLTestFnNamedArgsSingleClass
+from .functions.fx_testfnnamedargssingleenum import BAMLTestFnNamedArgsSingleEnum
+from .functions.fx_testfnnamedargssingleenumlist import BAMLTestFnNamedArgsSingleEnumList
+from .functions.fx_testfnnamedargssinglestringlist import BAMLTestFnNamedArgsSingleStringList
+from .functions.fx_testfnnamedargssyntax import BAMLTestFnNamedArgsSyntax
 from baml_core.otel import add_message_transformer_hook, flush_trace_logs
 from baml_core.provider_manager import LLMManager
 from baml_core.services import LogSchema
@@ -22,11 +24,13 @@ from typing import Callable, List, Optional
 
 
 class BAMLClient:
-    ClassifyMessage = BAMLClassifyMessage
-    ExtractResume = BAMLExtractResume
-    Claude = Claude
-    ClaudeInstant = ClaudeInstant
-    GPT3 = GPT3
+    TestFnNamedArgsSingleBool = BAMLTestFnNamedArgsSingleBool
+    TestFnNamedArgsSingleClass = BAMLTestFnNamedArgsSingleClass
+    TestFnNamedArgsSingleEnum = BAMLTestFnNamedArgsSingleEnum
+    TestFnNamedArgsSingleEnumList = BAMLTestFnNamedArgsSingleEnumList
+    TestFnNamedArgsSingleStringList = BAMLTestFnNamedArgsSingleStringList
+    TestFnNamedArgsSyntax = BAMLTestFnNamedArgsSyntax
+    GPT35 = GPT35
     GPT4 = GPT4
     GPT4Turbo = GPT4Turbo
 
