@@ -20,4 +20,4 @@ impl<llm, TestFnNamedArgsSingleClass> v1 {
     {#input.myArg.key_two}
     {#input.myArg.key_three}
   "#
-}
+} 
