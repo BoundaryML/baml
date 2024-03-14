@@ -34,7 +34,7 @@ const deserializer = new Deserializer<TestClassWithEnum>(schema, {
 
 FnOutputClassWithEnum.registerImpl('v1', async (
   arg: string
-  ): Promise<TestClassWithEnum> => {
+): Promise<TestClassWithEnum> => {
   
     const result = await GPT35.run_prompt_template(
       prompt_template,
@@ -42,6 +42,7 @@ FnOutputClassWithEnum.registerImpl('v1', async (
       {
       }
     );
+
 
     return deserializer.coerce(result.generated);
   }

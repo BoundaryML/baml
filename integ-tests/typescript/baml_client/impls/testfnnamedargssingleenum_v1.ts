@@ -21,10 +21,10 @@ const deserializer = new Deserializer<string>(schema, {
 });
 
 TestFnNamedArgsSingleEnum.registerImpl('v1', async (
-args: {
-  myArg: NamedArgsSingleEnum
-}
-  ): Promise<string> => {
+  args: {
+    myArg: NamedArgsSingleEnum
+  }
+): Promise<string> => {
     const myArg = args.myArg as NamedArgsSingleEnum;
   
     const result = await GPT35.run_prompt_template(
@@ -36,6 +36,7 @@ args: {
         "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg//}": myArg,
       }
     );
+
 
     return deserializer.coerce(result.generated);
   }

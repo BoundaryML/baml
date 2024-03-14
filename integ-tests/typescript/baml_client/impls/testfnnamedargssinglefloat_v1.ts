@@ -20,10 +20,10 @@ const deserializer = new Deserializer<string>(schema, {
 });
 
 TestFnNamedArgsSingleFloat.registerImpl('v1', async (
-args: {
-  myFloat: number
-}
-  ): Promise<string> => {
+  args: {
+    myFloat: number
+  }
+): Promise<string> => {
     const myFloat = args.myFloat;
   
     const result = await GPT35.run_prompt_template(
@@ -35,6 +35,7 @@ args: {
         "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myFloat//}": myFloat,
       }
     );
+
 
     return deserializer.coerce(result.generated);
   }

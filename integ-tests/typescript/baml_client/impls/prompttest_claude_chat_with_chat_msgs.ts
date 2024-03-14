@@ -29,7 +29,7 @@ const deserializer = new Deserializer<string>(schema, {
 
 PromptTest.registerImpl('claude_chat_with_chat_msgs', async (
   arg: string
-  ): Promise<string> => {
+): Promise<string> => {
   
     const result = await Claude.run_chat_template(
       prompt_template,
@@ -40,6 +40,7 @@ PromptTest.registerImpl('claude_chat_with_chat_msgs', async (
         "{//BAML_CLIENT_REPLACE_ME_MAGIC_input//}": arg,
       }
     );
+
 
     return deserializer.coerce(result.generated);
   }

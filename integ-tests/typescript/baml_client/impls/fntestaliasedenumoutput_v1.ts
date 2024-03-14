@@ -34,7 +34,7 @@ const deserializer = new Deserializer<TestEnum>(schema, {
 
 FnTestAliasedEnumOutput.registerImpl('v1', async (
   arg: string
-  ): Promise<TestEnum> => {
+): Promise<TestEnum> => {
   
     const result = await GPT35.run_prompt_template(
       prompt_template,
@@ -45,6 +45,7 @@ FnTestAliasedEnumOutput.registerImpl('v1', async (
         "{//BAML_CLIENT_REPLACE_ME_MAGIC_input//}": arg,
       }
     );
+
 
     return deserializer.coerce(result.generated);
   }

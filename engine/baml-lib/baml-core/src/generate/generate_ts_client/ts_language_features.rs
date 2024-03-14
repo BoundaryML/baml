@@ -45,9 +45,12 @@ impl LanguageFeatures for TSLanguageFeatures {
         let imports = imports_by_lib
             .iter()
             .fold(String::new(), |mut buffer, (lib, imports)| {
+                let mut sorted_imports: Vec<_> = imports.iter().collect();
+                sorted_imports.sort_by(|a, b| a.name.cmp(&b.name));
+
                 buffer.push_str(&format!(
                     "import {{ {} }} from '{}';\n",
-                    imports
+                    sorted_imports
                         .iter()
                         .fold(String::new(), |mut buffer, import| {
                             match import.as_name {

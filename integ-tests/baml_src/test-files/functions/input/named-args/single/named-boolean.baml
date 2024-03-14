@@ -8,4 +8,4 @@ impl<llm, TestFnNamedArgsSingleBool> v1 {
   prompt #"
     Return this value back to me: {#input.myBool}
   "#
-}
+}  

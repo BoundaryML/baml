@@ -1,3 +1,6 @@
+use std::io::{self, ErrorKind};
+use std::thread::sleep;
+use std::time::Duration;
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
@@ -111,19 +114,65 @@ impl<L: LanguageFeatures> FileCollector<L> {
     }
 
     pub(super) fn commit(&self, dir: &PathBuf) -> std::io::Result<()> {
+        let output_path = dir;
+        // info!("Writing files to {}", output_path.to_string_lossy());
+
+        let temp_path = PathBuf::from(format!("{}.tmp", output_path.to_string_lossy().to_string()));
+
+        // if the .tmp dir exists, delete it so we can get back to a working state without user intervention.
+        let delete_attempts = 3; // Number of attempts to delete the directory
+        let attempt_interval = Duration::from_millis(200); // Wait time between attempts
+
+        for attempt in 1..=delete_attempts {
+            if temp_path.exists() {
+                match std::fs::remove_dir_all(&temp_path) {
+                    Ok(_) => {
+                        println!("Temp directory successfully removed.");
+                        break; // Exit loop after successful deletion
+                    }
+                    Err(e) if e.kind() == ErrorKind::Other && attempt < delete_attempts => {
+                        info!(
+                            "Attempt {}: Failed to delete temp directory: {}",
+                            attempt, e
+                        );
+                        sleep(attempt_interval); // Wait before retrying
+                    }
+                    Err(e) => {
+                        // For other errors or if it's the last attempt, fail with an error
+                        return Err(io::Error::new(
+                            e.kind(),
+                            format!("Failed to delete temp directory: {}", e),
+                        ));
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+
+        if temp_path.exists() {
+            // If the directory still exists after the loop, return an error
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Failed to delete existing temp directory within the timeout",
+            ));
+        }
+
         // Sort the files by path so that we always write to the same file
         let mut files = self.files.iter().collect::<Vec<_>>();
         files.sort_by(|(a, _), (b, _)| a.cmp(b));
 
-        for (path, file) in &files {
-            let path = dir.join(path);
-            std::fs::create_dir_all(path.parent().unwrap())?;
-            std::fs::write(&path, &self.format_file(file))?;
+        for (relative_file_path, file) in &files {
+            let full_file_path = temp_path.join(relative_file_path);
+            std::fs::create_dir_all(full_file_path.parent().unwrap())?;
+            std::fs::write(&full_file_path, &self.format_file(file))?;
         }
 
-        // info!("Wrote {} files to {}", files.len(), dir.display());
+        let _ = std::fs::remove_dir_all(dir);
+        let res = std::fs::rename(&temp_path, output_path);
 
-        Ok(())
+        info!("Wrote {} files to {}", files.len(), dir.display());
+        res
     }
 
     fn format_file(&self, content: &FileContent) -> String {

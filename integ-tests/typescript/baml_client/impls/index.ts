@@ -24,13 +24,13 @@ import './fntestclassalias_v1';
 
 import './fntestoutputadapter_v1';
 
-import './prompttest_claude_chat_with_chat_msgs';
-
-import './prompttest_openai_chat_with_chat_msgs';
-
 import './prompttest_claude_chat';
 
 import './prompttest_openai_chat';
+
+import './prompttest_claude_chat_with_chat_msgs';
+
+import './prompttest_openai_chat_with_chat_msgs';
 
 import './testfnnamedargssinglebool_v1';
 

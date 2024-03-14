@@ -20,10 +20,10 @@ const deserializer = new Deserializer<string>(schema, {
 });
 
 TestFnNamedArgsSingleBool.registerImpl('v1', async (
-args: {
-  myBool: boolean
-}
-  ): Promise<string> => {
+  args: {
+    myBool: boolean
+  }
+): Promise<string> => {
     const myBool = args.myBool;
   
     const result = await GPT35.run_prompt_template(
@@ -35,6 +35,7 @@ args: {
         "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myBool//}": myBool,
       }
     );
+
 
     return deserializer.coerce(result.generated);
   }

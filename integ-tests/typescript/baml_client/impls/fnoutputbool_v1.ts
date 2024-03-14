@@ -21,7 +21,7 @@ const deserializer = new Deserializer<boolean>(schema, {
 
 FnOutputBool.registerImpl('v1', async (
   arg: string
-  ): Promise<boolean> => {
+): Promise<boolean> => {
   
     const result = await GPT35.run_prompt_template(
       prompt_template,
@@ -29,6 +29,7 @@ FnOutputBool.registerImpl('v1', async (
       {
       }
     );
+
 
     return deserializer.coerce(result.generated);
   }

@@ -20,10 +20,10 @@ const deserializer = new Deserializer<string>(schema, {
 });
 
 TestFnNamedArgsSingleStringArray.registerImpl('v1', async (
-args: {
-  myStringArray: string[]
-}
-  ): Promise<string> => {
+  args: {
+    myStringArray: string[]
+  }
+): Promise<string> => {
     const myStringArray = args.myStringArray.map(x => x);
   
     const result = await GPT35.run_prompt_template(
@@ -35,6 +35,7 @@ args: {
         "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myStringArray//}": myStringArray,
       }
     );
+
 
     return deserializer.coerce(result.generated);
   }

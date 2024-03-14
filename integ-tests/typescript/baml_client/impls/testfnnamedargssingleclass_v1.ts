@@ -24,10 +24,10 @@ const deserializer = new Deserializer<string>(schema, {
 });
 
 TestFnNamedArgsSingleClass.registerImpl('v1', async (
-args: {
-  myArg: NamedArgsSingleClass
-}
-  ): Promise<string> => {
+  args: {
+    myArg: NamedArgsSingleClass
+  }
+): Promise<string> => {
     const myArg = InternalNamedArgsSingleClass.from(args.myArg);
   
     const result = await GPT35.run_prompt_template(
@@ -45,6 +45,7 @@ args: {
         "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg.key_two//}": myArg.key_two,
       }
     );
+
 
     return deserializer.coerce(result.generated);
   }

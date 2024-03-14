@@ -21,7 +21,7 @@ const deserializer = new Deserializer<string>(schema, {
 
 PromptTest.registerImpl('openai_chat', async (
   arg: string
-  ): Promise<string> => {
+): Promise<string> => {
   
     const result = await GPT35.run_prompt_template(
       prompt_template,
@@ -32,6 +32,7 @@ PromptTest.registerImpl('openai_chat', async (
         "{//BAML_CLIENT_REPLACE_ME_MAGIC_input//}": arg,
       }
     );
+
 
     return deserializer.coerce(result.generated);
   }
