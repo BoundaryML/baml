@@ -121,7 +121,7 @@ impl<L: LanguageFeatures> FileCollector<L> {
             std::fs::write(&path, &self.format_file(file))?;
         }
 
-        info!("Wrote {} files to {}", files.len(), dir.display());
+        // info!("Wrote {} files to {}", files.len(), dir.display());
 
         Ok(())
     }

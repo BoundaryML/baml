@@ -5,7 +5,7 @@
 // @ts-nocheck
 
 
-import { EnumOutput, NamedArgsSingleEnumList, TestOutputClass, TestEnum, TestClassAlias, NamedArgsSingleClass, TestClassWithEnum, NamedArgsSingleEnum } from './types';
+import { TestClassWithEnum, NamedArgsSingleEnumList, NamedArgsSingleEnum, TestEnum, TestClassAlias, TestOutputClass, NamedArgsSingleClass, EnumOutput } from './types';
 import { FireBamlEvent, traceAsync } from '@boundaryml/baml-core/ffi_layer';
 
 
@@ -721,7 +721,7 @@ const FnTestOutputAdapter = createFnTestOutputAdapterInstance();
 
 type IPromptTest = (arg: string) => Promise<string>
 
-type PromptTestImpls = 'claude_chat' | 'openai_chat' | 'claude_chat_with_chat_msgs' | 'openai_chat_with_chat_msgs';
+type PromptTestImpls = 'claude_chat_with_chat_msgs' | 'openai_chat_with_chat_msgs' | 'claude_chat' | 'openai_chat';
 
 interface PromptTestImpl {
     run: IPromptTest;
@@ -770,7 +770,7 @@ function createPromptTestInstance(): IPromptTest & PromptTestFunction {
       };
     },
     validate: () => {
-      const targets = ['claude_chat', 'openai_chat', 'claude_chat_with_chat_msgs', 'openai_chat_with_chat_msgs'];
+      const targets = ['claude_chat_with_chat_msgs', 'openai_chat_with_chat_msgs', 'claude_chat', 'openai_chat'];
       const impls = Object.keys(registry);
       const missing = targets.filter(t => !impls.includes(t));
       if (missing.length > 0) {
