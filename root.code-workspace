@@ -61,7 +61,7 @@
       "titleBar.activeForeground": "#FFFBFB"
     },
     "rust-analyzer.linkedProjects": [
-      "./engine/Cargo.toml"
+      "Cargo.toml"
     ]
   },
   "extensions": {

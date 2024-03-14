@@ -5,6 +5,7 @@ use crate::generate::{
     generate_ts_client::{field_type::to_parse_expression, ts_language_features::ToTypeScript},
     ir::{Function, FunctionArgs, Impl, Prompt, Walker},
 };
+use std::collections::HashMap;
 
 use super::{
     template::render_with_hbs,
@@ -89,6 +90,13 @@ impl WithFileContent<TSLanguageFeatures> for Walker<'_, (&Function, &Impl)> {
                 "prompt": prompt,
                 "client": impl_.elem.client.clone(),
                 "inputs": impl_.elem.input_replacers,
+                "overrides": json!(impl_.elem.overrides.iter().map(|o| json!({
+                    "category": &o.name,
+                    "aliased_keys": o.aliased_keys.iter().map(|a| json!({
+                        "key": a.key.clone(),
+                        "alias": a.alias.to_ts(),
+                        })).collect::<Vec<_>>(),
+                })).collect::<Vec<_>>()),
             }),
         ));
         collector.finish_file();

@@ -488,7 +488,7 @@ pub enum OracleType {
     LLM,
 }
 #[derive(serde::Serialize)]
-pub struct Override {
+pub struct AliasOverride {
     pub name: String,
     // This is used to generate deserializers with aliased keys (see .overload in python deserializer)
     pub aliased_keys: Vec<AliasedKey>,
@@ -519,7 +519,14 @@ pub struct Implementation {
 
     pub client: ClientId,
 
-    pub overrides: Vec<Override>,
+    /// Inputs for deserializer.overload in the generated code.
+    ///
+    /// This is NOT 1:1 with "override" clauses in the .baml file.
+    ///
+    /// For enums, we generate one for "alias", one for "description", and one for "alias: description"
+    /// (this means that we currently don't support deserializing "alias[^a-zA-Z0-9]{1,5}description" but
+    /// for now it suffices)
+    pub overrides: Vec<AliasOverride>,
 }
 
 /// BAML does not allow UnnamedArgList nor a lone NamedArg
@@ -625,7 +632,7 @@ impl WithRepr<Implementation> for VariantWalker<'_> {
                     if matches.is_empty() {
                         None
                     } else {
-                        Some(Override {
+                        Some(AliasOverride {
                             name: v.name().to_string(),
                             aliased_keys: matches,
                         })
@@ -643,22 +650,42 @@ fn process_field(
     impl_name: &str,
 ) -> Vec<AliasedKey> {
     match overrides.get(&((*function_name).to_string(), (*impl_name).to_string())) {
-        Some(overrides) => overrides
-            .iter()
-            .filter_map(|(k, expression)| match expression {
-                Expression::String(s) => {
-                    if k == "alias" {
-                        Some(AliasedKey {
+        Some(overrides) => {
+            if let Some(Expression::String(alias)) = overrides.get("alias") {
+                if let Some(Expression::String(description)) = overrides.get("description") {
+                    // "alias" and "alias: description" and "description"
+                    vec![
+                        AliasedKey {
                             key: original_name.to_string(),
-                            alias: Expression::String(s.to_string()),
-                        })
-                    } else {
-                        None
-                    }
+                            alias: Expression::String(alias.clone()),
+                        },
+                        AliasedKey {
+                            key: original_name.to_string(),
+                            alias: Expression::String(format!("{}: {}", alias, description)),
+                        },
+                        AliasedKey {
+                            key: original_name.to_string(),
+                            alias: Expression::String(description.clone()),
+                        },
+                    ]
+                } else {
+                    // "alias"
+                    vec![AliasedKey {
+                        key: original_name.to_string(),
+                        alias: Expression::String(alias.clone()),
+                    }]
                 }
-                _ => None,
-            })
-            .collect::<Vec<AliasedKey>>(),
+            } else if let Some(Expression::String(description)) = overrides.get("description") {
+                // "description"
+                vec![AliasedKey {
+                    key: original_name.to_string(),
+                    alias: Expression::String(description.clone()),
+                }]
+            } else {
+                // no overrides
+                vec![]
+            }
+        }
         None => Vec::new(),
     }
 }
