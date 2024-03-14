@@ -5,7 +5,7 @@
 // @ts-nocheck
 
 
-import { NamedArgsSingleEnumList, TestClassAlias, TestClassWithEnum, EnumOutput, ModifiedOutput, EnumInClass, TestEnum, NamedArgsSingleEnum, NamedArgsSingleClass, TestOutputClass } from './types';
+import { TestEnum, NamedArgsSingleEnumList, TestClassAlias, ModifiedOutput, EnumOutput, EnumInClass, NamedArgsSingleClass, TestClassWithEnum, TestOutputClass, NamedArgsSingleEnum } from './types';
 
 
 // Function to check if a value is a member of the EnumInClass enum

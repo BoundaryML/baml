@@ -5,8 +5,8 @@
 // @ts-nocheck
 
 
-import { EnumOutput, TestClassWithEnum, NamedArgsSingleClass, TestOutputClass, TestClassAlias, NamedArgsSingleEnumList, NamedArgsSingleEnum, TestEnum } from './types';
-import { traceAsync, FireBamlEvent } from '@boundaryml/baml-core/ffi_layer';
+import { EnumOutput, NamedArgsSingleEnumList, TestOutputClass, TestEnum, TestClassAlias, NamedArgsSingleClass, TestClassWithEnum, NamedArgsSingleEnum } from './types';
+import { FireBamlEvent, traceAsync } from '@boundaryml/baml-core/ffi_layer';
 
 
 type IFnEnumListOutput = (arg: string) => Promise<EnumOutput[]>

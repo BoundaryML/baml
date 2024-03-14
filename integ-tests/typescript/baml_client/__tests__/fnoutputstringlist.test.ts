@@ -6,24 +6,24 @@
 
 import b from '../';
 
-import { traceAsync, FireBamlEvent } from '@boundaryml/baml-core/ffi_layer';
+import { FireBamlEvent, traceAsync } from '@boundaryml/baml-core/ffi_layer';
 
 
-describe('test_case:early_chocolate', () => {
-  const test_fn = traceAsync('early_chocolate', 'null', [['impl', 'string']], 'positional', async (impl) => {
+describe('test_case:substantial_tan', () => {
+  const test_fn = traceAsync('substantial_tan', 'null', [['impl', 'string']], 'positional', async (impl) => {
     FireBamlEvent.tags({
-      'test_dataset_name': 'FnOutputClass',
+      'test_dataset_name': 'FnOutputStringList',
       'test_case_name': 'test',
-      'test_case_arg_name': `early_chocolate[${impl}]`,
+      'test_case_arg_name': `substantial_tan[${impl}]`,
       'test_cycle_id': process.env.BOUNDARY_PROCESS_ID || 'local-run',
     });
     const test_case = "noop";
-    const result = await b.FnOutputClass.getImpl(impl).run(
+    const result = await b.FnOutputStringList.getImpl(impl).run(
       test_case
     );
   });
 
-  describe('function:FnOutputClass', () => {
+  describe('function:FnOutputStringList', () => {
     test('impl:v1', async () => {
       await test_fn('v1');
     });
