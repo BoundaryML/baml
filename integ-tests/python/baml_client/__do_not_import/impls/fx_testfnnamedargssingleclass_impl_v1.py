@@ -23,9 +23,9 @@ import typing
 
 __prompt_template = """\
 Print these values back to me:
-{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg.key//}
-{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg.key_two//}
-{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg.key_three//}\
+{myArg.key}
+{myArg.key_two}
+{myArg.key_three}\
 """
 
 __input_replacers = {

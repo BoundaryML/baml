@@ -23,7 +23,7 @@ import typing
 
 __prompt_template = """\
 Print these values back to me:
-{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg//}\
+{myArg}\
 """
 
 __input_replacers = {

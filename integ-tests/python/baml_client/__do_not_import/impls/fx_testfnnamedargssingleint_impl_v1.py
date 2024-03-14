@@ -20,7 +20,7 @@ import typing
 # An implementation of TestFnNamedArgsSingleInt.
 
 __prompt_template = """\
-Return this value back to me: {//BAML_CLIENT_REPLACE_ME_MAGIC_input.myInt//}\
+Return this value back to me: {myInt}\
 """
 
 __input_replacers = {

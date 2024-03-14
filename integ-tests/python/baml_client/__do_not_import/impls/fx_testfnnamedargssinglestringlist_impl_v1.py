@@ -21,7 +21,7 @@ import typing
 # An implementation of TestFnNamedArgsSingleStringList.
 
 __prompt_template = """\
-Return this same value back: {//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg//}\
+Return this same value back: {myArg}\
 """
 
 __input_replacers = {

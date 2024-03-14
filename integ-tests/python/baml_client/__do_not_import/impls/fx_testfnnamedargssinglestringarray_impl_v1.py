@@ -21,7 +21,7 @@ import typing
 # An implementation of TestFnNamedArgsSingleStringArray.
 
 __prompt_template = """\
-Return this value back to me: {//BAML_CLIENT_REPLACE_ME_MAGIC_input.myStringArray//}\
+Return this value back to me: {myStringArray}\
 """
 
 __input_replacers = {

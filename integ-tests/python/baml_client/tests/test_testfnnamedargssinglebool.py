@@ -22,7 +22,7 @@ async def test_case1(TestFnNamedArgsSingleBoolImpl: ITestFnNamedArgsSingleBoolSt
             return item
         return dumps(item)
 
-    case = {""myBool"": True, }
+    case = {"myBool": True, }
     deserializer_myBool = Deserializer[bool](bool) # type: ignore
     myBool = deserializer_myBool.from_string(to_str(case["myBool"]))
     async with TestFnNamedArgsSingleBoolImpl(

@@ -22,7 +22,7 @@ async def test_nearby_black(TestFnNamedArgsSingleClassImpl: ITestFnNamedArgsSing
             return item
         return dumps(item)
 
-    case = {""myArg"": {""key"": "one", ""key_two"": False, ""key_three"": 5, }, }
+    case = {"myArg": {"key": "one", "key_two": False, "key_three": 5, }, }
     deserializer_myArg = Deserializer[NamedArgsSingleClass](NamedArgsSingleClass) # type: ignore
     myArg = deserializer_myArg.from_string(to_str(case["myArg"]))
     async with TestFnNamedArgsSingleClassImpl(

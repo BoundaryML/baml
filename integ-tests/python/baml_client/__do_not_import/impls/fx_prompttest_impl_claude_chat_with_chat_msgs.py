@@ -25,14 +25,14 @@ __prompt_template: List[LLMChatMessage] = [
 {
     "role": "system",
     "content": """\
-You are an assistant that always responds in a very excited way with emojis and also outputs this word 4 times after giving a response: {//BAML_CLIENT_REPLACE_ME_MAGIC_input//}\
+You are an assistant that always responds in a very excited way with emojis and also outputs this word 4 times after giving a response: {arg}\
 """
 }
 ,
 {
     "role": "user",
     "content": """\
-Tell me a haiku about {//BAML_CLIENT_REPLACE_ME_MAGIC_input//}\
+Tell me a haiku about {arg}\
 """
 }
 

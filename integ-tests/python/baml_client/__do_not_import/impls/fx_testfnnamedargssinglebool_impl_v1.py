@@ -20,7 +20,7 @@ import typing
 # An implementation of TestFnNamedArgsSingleBool.
 
 __prompt_template = """\
-Return this value back to me: {//BAML_CLIENT_REPLACE_ME_MAGIC_input.myBool//}\
+Return this value back to me: {myBool}\
 """
 
 __input_replacers = {

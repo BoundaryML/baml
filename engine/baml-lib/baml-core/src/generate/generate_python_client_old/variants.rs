@@ -58,19 +58,32 @@ impl<'db> JsonHelper for VariantWalker<'db> {
             "is_chat": is_chat,
             "prompt": match &prompt {
                 PromptAst::Chat(parts, _) => {
+
+
                         json!(parts.iter().map(|(ctx, text)| {
+                            let mut new_text = text.clone();
+                            for input in inputs.iter() {
+                                new_text = new_text.replace(&input.0, &format!("{{{}}}", &input.1));
+                            }
+
                             json!({
                                 "role": ctx.map(|c| c.role.0.as_str()).unwrap_or("system"),
-                                "content": escape_python_triple_quote(text),
+                                "content": escape_python_triple_quote(&new_text),
                             })
                         }).collect::<Vec<_>>())
                 },
                 PromptAst::String(content, _) => {
-                    json!(escape_python_triple_quote(content))
+
+                    let mut new_content = content.clone();
+                    for input in inputs.iter() {
+                        new_content = new_content.replace(&input.0, &format!("{{{}}}", &input.1));
+                    }
+
+                    json!(escape_python_triple_quote(&new_content))
                 },
             },
             "client": client.name(),
-            "inputs": inputs,
+            "inputs": inputs.iter().map(|(_, second)| second.clone()).collect::<Vec<_>>(),
             "output_adapter": self.properties().output_adapter.as_ref().map(|(idx, _)| {
                 let adapter = &self.ast_variant()[*idx];
 

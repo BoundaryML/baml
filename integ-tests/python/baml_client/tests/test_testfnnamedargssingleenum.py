@@ -22,7 +22,7 @@ async def test_case1(TestFnNamedArgsSingleEnumImpl: ITestFnNamedArgsSingleEnumSt
             return item
         return dumps(item)
 
-    case = {""myArg"": "ONE", }
+    case = {"myArg": "ONE", }
     deserializer_myArg = Deserializer[NamedArgsSingleEnum](NamedArgsSingleEnum) # type: ignore
     myArg = deserializer_myArg.from_string(to_str(case["myArg"]))
     async with TestFnNamedArgsSingleEnumImpl(

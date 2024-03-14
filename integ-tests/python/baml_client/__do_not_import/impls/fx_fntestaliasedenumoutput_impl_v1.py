@@ -32,7 +32,7 @@ k44: User is confused
 E: User is excited
 ---
 
-input: {//BAML_CLIENT_REPLACE_ME_MAGIC_input//}
+input: {arg}
 
 Category ID:\
 """

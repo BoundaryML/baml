@@ -20,7 +20,7 @@ import typing
 # An implementation of PromptTest.
 
 __prompt_template = """\
-Tell me a haiku about {//BAML_CLIENT_REPLACE_ME_MAGIC_input//}\
+Tell me a haiku about {arg}\
 """
 
 __input_replacers = {

@@ -125,12 +125,12 @@ pub struct VariantProperties {
 /// The representation of a prompt.
 pub enum PromptAst<'a> {
     /// For single string prompts
-    /// Prompt + Any used input replacers
-    String(String, Vec<String>),
+    /// Prompt + Any used input replacers (key, val)
+    String(String, Vec<(String, String)>),
 
     /// For prompts with multiple parts
-    /// ChatBlock + Prompt + Any used input replacers
-    Chat(Vec<(Option<&'a ChatBlock>, String)>, Vec<String>),
+    /// ChatBlock + Prompt + Any used input replacers (key, val)
+    Chat(Vec<(Option<&'a ChatBlock>, String)>, Vec<(String, String)>),
 }
 
 impl VariantProperties {
@@ -153,10 +153,7 @@ impl VariantProperties {
                 // Only add the input if it's used in the prompt
                 let key = k.key();
                 if prompt.contains(&key) {
-                    used_inputs.push(val.clone());
-                    // TODO: this isn't necessary at this point, but tbd
-                    // This replaces the {replace_me_magic_arg} with just the {arg}
-                    // prompt.replace(&key, &format!("{{{}}}", val))
+                    used_inputs.push((key.clone(), val.clone()));
                     prompt
                 } else {
                     prompt

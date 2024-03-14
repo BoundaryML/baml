@@ -22,7 +22,7 @@ async def test_invisible_peach(TestFnNamedArgsSingleStringListImpl: ITestFnNamed
             return item
         return dumps(item)
 
-    case = {""myArg"": ["one", "two", "three"], }
+    case = {"myArg": ["one", "two", "three"], }
     deserializer_myArg = Deserializer[List[str]](List[str]) # type: ignore
     myArg = deserializer_myArg.from_string(to_str(case["myArg"]))
     async with TestFnNamedArgsSingleStringListImpl(

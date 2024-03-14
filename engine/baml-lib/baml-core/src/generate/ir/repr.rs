@@ -807,11 +807,11 @@ impl WithRepr<TestCase> for ConfigurationWalker<'_> {
 }
 #[derive(Debug, Clone, Serialize)]
 pub enum Prompt {
-    // The prompt stirng, and a list of input replacer keys
-    String(String, Vec<String>),
+    // The prompt stirng, and a list of input replacer keys (raw key w/ magic string, and key to replace with)
+    String(String, Vec<(String, String)>),
 
-    // same thing, the chat message, and the replacer input keys
-    Chat(Vec<ChatMessage>, Vec<String>),
+    // same thing, the chat message, and the replacer input keys (raw key w/ magic string, and key to replace with)
+    Chat(Vec<ChatMessage>, Vec<(String, String)>),
 }
 
 #[derive(serde::Serialize, Debug, Clone)]
