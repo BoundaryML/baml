@@ -8,11 +8,25 @@ import * as f from "./function"
 import "./impls"
 
 const BamlClient = {
+  FnEnumListOutput: f.FnEnumListOutput,
+  FnEnumOutput: f.FnEnumOutput,
+  FnOutputBool: f.FnOutputBool,
+  FnOutputClass: f.FnOutputClass,
+  FnOutputClassList: f.FnOutputClassList,
+  FnOutputClassWithEnum: f.FnOutputClassWithEnum,
+  FnOutputStringList: f.FnOutputStringList,
+  FnTestAliasedEnumOutput: f.FnTestAliasedEnumOutput,
   FnTestClassAlias: f.FnTestClassAlias,
+  FnTestOutputAdapter: f.FnTestOutputAdapter,
+  PromptTest: f.PromptTest,
   TestFnNamedArgsSingleBool: f.TestFnNamedArgsSingleBool,
   TestFnNamedArgsSingleClass: f.TestFnNamedArgsSingleClass,
   TestFnNamedArgsSingleEnum: f.TestFnNamedArgsSingleEnum,
   TestFnNamedArgsSingleEnumList: f.TestFnNamedArgsSingleEnumList,
+  TestFnNamedArgsSingleFloat: f.TestFnNamedArgsSingleFloat,
+  TestFnNamedArgsSingleInt: f.TestFnNamedArgsSingleInt,
+  TestFnNamedArgsSingleString: f.TestFnNamedArgsSingleString,
+  TestFnNamedArgsSingleStringArray: f.TestFnNamedArgsSingleStringArray,
   TestFnNamedArgsSingleStringList: f.TestFnNamedArgsSingleStringList,
   TestFnNamedArgsSyntax: f.TestFnNamedArgsSyntax,
 }

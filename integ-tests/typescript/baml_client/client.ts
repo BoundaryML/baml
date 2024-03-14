@@ -8,6 +8,11 @@
 import { clientManager } from '@boundaryml/baml-core/client_manager';
 
 
+const Claude = clientManager.createClient('Claude', 'baml-anthropic-chat', {
+    model_name: "claude-3-haiku-20240307",
+    api_key: process.env.ANTHROPIC_API_KEY
+});
+
 const GPT35 = clientManager.createClient('GPT35', 'baml-openai-chat', {
     model: "gpt-3",
     api_key: process.env.OPENAI_API_KEY
@@ -24,4 +29,4 @@ const GPT4Turbo = clientManager.createClient('GPT4Turbo', 'baml-openai-chat', {
 });
 
 
-export { GPT35, GPT4, GPT4Turbo }
+export { Claude, GPT35, GPT4, GPT4Turbo }

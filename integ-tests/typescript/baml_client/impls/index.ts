@@ -4,7 +4,33 @@
 // tslint:disable
 // @ts-nocheck
 
+import './fnenumlistoutput_v1';
+
+import './fnenumoutput_v1';
+
+import './fnoutputbool_v1';
+
+import './fnoutputclass_v1';
+
+import './fnoutputclasslist_v1';
+
+import './fnoutputclasswithenum_v1';
+
+import './fnoutputstringlist_v1';
+
+import './fntestaliasedenumoutput_v1';
+
 import './fntestclassalias_v1';
+
+import './fntestoutputadapter_v1';
+
+import './prompttest_claude_chat';
+
+import './prompttest_openai_chat';
+
+import './prompttest_claude_chat_with_chat_msgs';
+
+import './prompttest_openai_chat_with_chat_msgs';
 
 import './testfnnamedargssinglebool_v1';
 
@@ -13,5 +39,13 @@ import './testfnnamedargssingleclass_v1';
 import './testfnnamedargssingleenum_v1';
 
 import './testfnnamedargssingleenumlist_v1';
+
+import './testfnnamedargssinglefloat_v1';
+
+import './testfnnamedargssingleint_v1';
+
+import './testfnnamedargssinglestring_v1';
+
+import './testfnnamedargssinglestringarray_v1';
 
 import './testfnnamedargssinglestringlist_v1';

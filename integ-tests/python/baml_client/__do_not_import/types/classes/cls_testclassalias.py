@@ -12,9 +12,10 @@ from pydantic import BaseModel
 from typing import Optional
 
 
-@register_deserializer({ "key-dash": "key","key21": "key2","key with space": "key3", })
+@register_deserializer({ "key-dash": "key","key21": "key2","key with space": "key3","key.with.punctuation/123": "key5", })
 class TestClassAlias(BaseModel):
     key: str
     key2: str
     key3: str
     key4: str
+    key5: str

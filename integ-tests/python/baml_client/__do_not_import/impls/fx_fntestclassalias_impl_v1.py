@@ -27,8 +27,11 @@ Return a json blob that has this schema:
   "key-dash": string,
   "key21": string,
   "key with space": string,
-  "key4": string
-}\
+  "key4": string,
+  "key.with.punctuation/123": string
+}
+
+JSON:\
 """
 
 __input_replacers = {

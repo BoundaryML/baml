@@ -7,13 +7,19 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
+from .classes.cls_modifiedoutput import PartialModifiedOutput
 from .classes.cls_namedargssingleclass import PartialNamedArgsSingleClass
 from .classes.cls_testclassalias import PartialTestClassAlias
+from .classes.cls_testclasswithenum import PartialTestClassWithEnum
+from .classes.cls_testoutputclass import PartialTestOutputClass
 
 
 
 
 __all__ = [
+    'PartialModifiedOutput',
     'PartialNamedArgsSingleClass',
-    'PartialTestClassAlias'
+    'PartialTestClassAlias',
+    'PartialTestClassWithEnum',
+    'PartialTestOutputClass'
 ]

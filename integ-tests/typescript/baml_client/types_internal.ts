@@ -5,8 +5,18 @@
 // @ts-nocheck
 
 
-import { NamedArgsSingleEnum, TestClassAlias, NamedArgsSingleClass, NamedArgsSingleEnumList } from './types';
+import { NamedArgsSingleEnumList, TestClassAlias, TestClassWithEnum, EnumOutput, ModifiedOutput, EnumInClass, TestEnum, NamedArgsSingleEnum, NamedArgsSingleClass, TestOutputClass } from './types';
 
+
+// Function to check if a value is a member of the EnumInClass enum
+function isEnumInClass(value: any): value is EnumInClass {
+  return Object.values(EnumInClass).includes(value);
+}
+
+// Function to check if a value is a member of the EnumOutput enum
+function isEnumOutput(value: any): value is EnumOutput {
+  return Object.values(EnumOutput).includes(value);
+}
 
 // Function to check if a value is a member of the NamedArgsSingleEnum enum
 function isNamedArgsSingleEnum(value: any): value is NamedArgsSingleEnum {
@@ -16,6 +26,48 @@ function isNamedArgsSingleEnum(value: any): value is NamedArgsSingleEnum {
 // Function to check if a value is a member of the NamedArgsSingleEnumList enum
 function isNamedArgsSingleEnumList(value: any): value is NamedArgsSingleEnumList {
   return Object.values(NamedArgsSingleEnumList).includes(value);
+}
+
+// Function to check if a value is a member of the TestEnum enum
+function isTestEnum(value: any): value is TestEnum {
+  return Object.values(TestEnum).includes(value);
+}
+
+// Function to validate if an object is a ModifiedOutput object
+function isModifiedOutput(obj: any): obj is ModifiedOutput {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("reasoning" in obj && (typeof obj.reasoning === 'string'))
+    && ("answer" in obj && (typeof obj.answer === 'string'))
+  );
+}
+
+
+class InternalModifiedOutput implements ModifiedOutput {
+  private constructor(private data: {
+    reasoning: string,
+    answer: string,
+  }, private raw: ModifiedOutput) {}
+
+  static from(data: ModifiedOutput): InternalModifiedOutput {
+    return new InternalModifiedOutput({
+      reasoning: data.reasoning,
+      answer: data.answer,
+    }, data);
+  }
+
+  get reasoning(): string {
+    return this.data.reasoning;
+  }
+  get answer(): string {
+    return this.data.answer;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
 }
 
 // Function to validate if an object is a NamedArgsSingleClass object
@@ -70,6 +122,7 @@ function isTestClassAlias(obj: any): obj is TestClassAlias {
     && ("key2" in obj && (typeof obj.key2 === 'string'))
     && ("key3" in obj && (typeof obj.key3 === 'string'))
     && ("key4" in obj && (typeof obj.key4 === 'string'))
+    && ("key5" in obj && (typeof obj.key5 === 'string'))
   );
 }
 
@@ -80,6 +133,7 @@ class InternalTestClassAlias implements TestClassAlias {
     key2: string,
     key3: string,
     key4: string,
+    key5: string,
   }, private raw: TestClassAlias) {}
 
   static from(data: TestClassAlias): InternalTestClassAlias {
@@ -88,6 +142,7 @@ class InternalTestClassAlias implements TestClassAlias {
       key2: data.key2,
       key3: data.key3,
       key4: data.key4,
+      key5: data.key5,
     }, data);
   }
 
@@ -103,6 +158,83 @@ class InternalTestClassAlias implements TestClassAlias {
   get key4(): string {
     return this.data.key4;
   }
+  get key5(): string {
+    return this.data.key5;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
+// Function to validate if an object is a TestClassWithEnum object
+function isTestClassWithEnum(obj: any): obj is TestClassWithEnum {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("prop1" in obj && (typeof obj.prop1 === 'string'))
+    && ("prop2" in obj && (isEnumInClass(obj.prop2)))
+  );
+}
+
+
+class InternalTestClassWithEnum implements TestClassWithEnum {
+  private constructor(private data: {
+    prop1: string,
+    prop2: EnumInClass,
+  }, private raw: TestClassWithEnum) {}
+
+  static from(data: TestClassWithEnum): InternalTestClassWithEnum {
+    return new InternalTestClassWithEnum({
+      prop1: data.prop1,
+      prop2: data.prop2,
+    }, data);
+  }
+
+  get prop1(): string {
+    return this.data.prop1;
+  }
+  get prop2(): EnumInClass {
+    return this.data.prop2;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
+// Function to validate if an object is a TestOutputClass object
+function isTestOutputClass(obj: any): obj is TestOutputClass {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("prop1" in obj && (typeof obj.prop1 === 'string'))
+    && ("prop2" in obj && (typeof obj.prop2 === 'number'))
+  );
+}
+
+
+class InternalTestOutputClass implements TestOutputClass {
+  private constructor(private data: {
+    prop1: string,
+    prop2: number,
+  }, private raw: TestOutputClass) {}
+
+  static from(data: TestOutputClass): InternalTestOutputClass {
+    return new InternalTestOutputClass({
+      prop1: data.prop1,
+      prop2: data.prop2,
+    }, data);
+  }
+
+  get prop1(): string {
+    return this.data.prop1;
+  }
+  get prop2(): number {
+    return this.data.prop2;
+  }
 
 
   toJSON(): string {
@@ -111,4 +243,4 @@ class InternalTestClassAlias implements TestClassAlias {
 }
 
 
-export { InternalNamedArgsSingleClass, InternalTestClassAlias }
+export { InternalModifiedOutput, InternalNamedArgsSingleClass, InternalTestClassAlias, InternalTestClassWithEnum, InternalTestOutputClass }

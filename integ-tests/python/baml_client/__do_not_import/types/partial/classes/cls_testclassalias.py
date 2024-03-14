@@ -12,9 +12,10 @@ from pydantic import BaseModel
 from typing import Optional
 
 
-@register_deserializer({ "key-dash": "key","key21": "key2","key with space": "key3", })
+@register_deserializer({ "key-dash": "key","key21": "key2","key with space": "key3","key.with.punctuation/123": "key5", })
 class PartialTestClassAlias(BaseModel):
     key: Optional[str] = None
     key2: Optional[str] = None
     key3: Optional[str] = None
     key4: Optional[str] = None
+    key5: Optional[str] = None

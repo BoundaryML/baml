@@ -22,18 +22,10 @@ client<llm> GPT35 {
   }
 } 
 
-// client<llm> Claude {
-//   provider baml-anthropic
-//   options {
-//     model_name claude-2.1
-//     api_key env.ANTHROPIC_API_KEY
-//   }
-// }
-
-// client<llm> ClaudeInstant {
-//   provider baml-anthropic
-//   options {
-//     model_name claude-instant-1.2
-//     api_key env.ANTHROPIC_API_KEY
-//   }
-// }
+client<llm> Claude {
+  provider baml-anthropic-chat
+  options {
+    model_name claude-3-haiku-20240307
+    api_key env.ANTHROPIC_API_KEY
+  }
+}
