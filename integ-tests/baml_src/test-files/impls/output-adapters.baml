@@ -1,0 +1,1 @@
+// Add a function with an output adapter.

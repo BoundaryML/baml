@@ -5,8 +5,8 @@
 // @ts-nocheck
 
 
-import { NamedArgsSingleClass, NamedArgsSingleEnumList, NamedArgsSingleEnum, TestClassAlias } from './types';
-import { FireBamlEvent, traceAsync } from '@boundaryml/baml-core/ffi_layer';
+import { NamedArgsSingleClass, TestClassAlias, NamedArgsSingleEnumList, NamedArgsSingleEnum } from './types';
+import { traceAsync, FireBamlEvent } from '@boundaryml/baml-core/ffi_layer';
 
 
 type IFnTestClassAlias = (arg: string) => Promise<TestClassAlias>
