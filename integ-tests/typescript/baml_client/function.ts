@@ -5,9 +5,80 @@
 // @ts-nocheck
 
 
-import { NamedArgsSingleEnumList, NamedArgsSingleClass, NamedArgsSingleEnum } from './types';
+import { NamedArgsSingleClass, NamedArgsSingleEnumList, NamedArgsSingleEnum, TestClassAlias } from './types';
 import { FireBamlEvent, traceAsync } from '@boundaryml/baml-core/ffi_layer';
 
+
+type IFnTestClassAlias = (arg: string) => Promise<TestClassAlias>
+
+type FnTestClassAliasImpls = 'v1';
+
+interface FnTestClassAliasImpl {
+    run: IFnTestClassAlias;
+    name: FnTestClassAliasImpls;
+}
+
+interface FnTestClassAliasFunction {
+  registerImpl: (name: FnTestClassAliasImpls, impl: FnTestClassAliasImpl) => void;
+  getImpl: (name: FnTestClassAliasImpls) => FnTestClassAliasImpl;
+}
+
+function createFnTestClassAliasInstance(): IFnTestClassAlias & FnTestClassAliasFunction {
+
+  const registry: Record<FnTestClassAliasImpls, FnTestClassAliasImpl> = {}
+
+  const wrapper: FnTestClassAliasFunction = {
+    getImpl: (name: FnTestClassAliasImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for FnTestClassAlias with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: FnTestClassAliasImpls, cb: IFnTestClassAlias) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for FnTestClassAlias with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"FnTestClassAlias",
+          /* returnType */ "TestClassAlias",
+          /* paramters */ [
+            [
+              "arg",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'positional',
+          /* cb */ async (
+          arg: string
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(arg);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['v1'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for FnTestClassAlias: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (arg: string) => {
+    return wrapper.getImpl('v1').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IFnTestClassAlias & FnTestClassAliasFunction;
+}
+
+const FnTestClassAlias = createFnTestClassAliasInstance();
 
 type ITestFnNamedArgsSingleBool = (args: {
   myBool: boolean
@@ -470,4 +541,4 @@ function createTestFnNamedArgsSyntaxInstance(): ITestFnNamedArgsSyntax & TestFnN
 const TestFnNamedArgsSyntax = createTestFnNamedArgsSyntaxInstance();
 
 
-export { TestFnNamedArgsSingleBool, ITestFnNamedArgsSingleBool, TestFnNamedArgsSingleBoolFunction, TestFnNamedArgsSingleClass, ITestFnNamedArgsSingleClass, TestFnNamedArgsSingleClassFunction, TestFnNamedArgsSingleEnum, ITestFnNamedArgsSingleEnum, TestFnNamedArgsSingleEnumFunction, TestFnNamedArgsSingleEnumList, ITestFnNamedArgsSingleEnumList, TestFnNamedArgsSingleEnumListFunction, TestFnNamedArgsSingleStringList, ITestFnNamedArgsSingleStringList, TestFnNamedArgsSingleStringListFunction, TestFnNamedArgsSyntax, ITestFnNamedArgsSyntax, TestFnNamedArgsSyntaxFunction }
+export { FnTestClassAlias, IFnTestClassAlias, FnTestClassAliasFunction, TestFnNamedArgsSingleBool, ITestFnNamedArgsSingleBool, TestFnNamedArgsSingleBoolFunction, TestFnNamedArgsSingleClass, ITestFnNamedArgsSingleClass, TestFnNamedArgsSingleClassFunction, TestFnNamedArgsSingleEnum, ITestFnNamedArgsSingleEnum, TestFnNamedArgsSingleEnumFunction, TestFnNamedArgsSingleEnumList, ITestFnNamedArgsSingleEnumList, TestFnNamedArgsSingleEnumListFunction, TestFnNamedArgsSingleStringList, ITestFnNamedArgsSingleStringList, TestFnNamedArgsSingleStringListFunction, TestFnNamedArgsSyntax, ITestFnNamedArgsSyntax, TestFnNamedArgsSyntaxFunction }

@@ -4,6 +4,8 @@
 // tslint:disable
 // @ts-nocheck
 
+import './fntestclassalias_v1';
+
 import './testfnnamedargssinglebool_v1';
 
 import './testfnnamedargssingleclass_v1';

@@ -8,6 +8,7 @@
 # fmt: off
 
 from .classes.cls_namedargssingleclass import NamedArgsSingleClass
+from .classes.cls_testclassalias import TestClassAlias
 from .enums.enm_namedargssingleenum import NamedArgsSingleEnum
 from .enums.enm_namedargssingleenumlist import NamedArgsSingleEnumList
 
@@ -17,5 +18,6 @@ from .enums.enm_namedargssingleenumlist import NamedArgsSingleEnumList
 __all__ = [
     'NamedArgsSingleClass',
     'NamedArgsSingleEnum',
-    'NamedArgsSingleEnumList'
+    'NamedArgsSingleEnumList',
+    'TestClassAlias'
 ]

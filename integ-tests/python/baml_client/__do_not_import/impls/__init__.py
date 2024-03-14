@@ -9,6 +9,7 @@
 
 
 
+from .fx_fntestclassalias_impl_v1 import v1 as unused_fx_fntestclassalias_impl_v1
 from .fx_testfnnamedargssinglebool_impl_v1 import v1 as unused_fx_testfnnamedargssinglebool_impl_v1
 from .fx_testfnnamedargssingleclass_impl_v1 import v1 as unused_fx_testfnnamedargssingleclass_impl_v1
 from .fx_testfnnamedargssingleenum_impl_v1 import v1 as unused_fx_testfnnamedargssingleenum_impl_v1

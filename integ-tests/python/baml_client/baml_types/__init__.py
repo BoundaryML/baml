@@ -7,6 +7,7 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
+from ..__do_not_import.functions.fx_fntestclassalias import IFnTestClassAlias, IFnTestClassAliasOutput, IFnTestClassAliasStream
 from ..__do_not_import.functions.fx_testfnnamedargssinglebool import ITestFnNamedArgsSingleBool, ITestFnNamedArgsSingleBoolOutput, ITestFnNamedArgsSingleBoolStream
 from ..__do_not_import.functions.fx_testfnnamedargssingleclass import ITestFnNamedArgsSingleClass, ITestFnNamedArgsSingleClassOutput, ITestFnNamedArgsSingleClassStream
 from ..__do_not_import.functions.fx_testfnnamedargssingleenum import ITestFnNamedArgsSingleEnum, ITestFnNamedArgsSingleEnumOutput, ITestFnNamedArgsSingleEnumStream
@@ -14,6 +15,7 @@ from ..__do_not_import.functions.fx_testfnnamedargssingleenumlist import ITestFn
 from ..__do_not_import.functions.fx_testfnnamedargssinglestringlist import ITestFnNamedArgsSingleStringList, ITestFnNamedArgsSingleStringListOutput, ITestFnNamedArgsSingleStringListStream
 from ..__do_not_import.functions.fx_testfnnamedargssyntax import ITestFnNamedArgsSyntax, ITestFnNamedArgsSyntaxOutput, ITestFnNamedArgsSyntaxStream
 from ..__do_not_import.types.classes.cls_namedargssingleclass import NamedArgsSingleClass
+from ..__do_not_import.types.classes.cls_testclassalias import TestClassAlias
 from ..__do_not_import.types.enums.enm_namedargssingleenum import NamedArgsSingleEnum
 from ..__do_not_import.types.enums.enm_namedargssingleenumlist import NamedArgsSingleEnumList
 
@@ -21,6 +23,9 @@ from ..__do_not_import.types.enums.enm_namedargssingleenumlist import NamedArgsS
 
 
 __all__ = [
+    'IFnTestClassAlias',
+    'IFnTestClassAliasOutput',
+    'IFnTestClassAliasStream',
     'ITestFnNamedArgsSingleBool',
     'ITestFnNamedArgsSingleBoolOutput',
     'ITestFnNamedArgsSingleBoolStream',
@@ -41,5 +46,6 @@ __all__ = [
     'ITestFnNamedArgsSyntaxStream',
     'NamedArgsSingleClass',
     'NamedArgsSingleEnum',
-    'NamedArgsSingleEnumList'
+    'NamedArgsSingleEnumList',
+    'TestClassAlias'
 ]

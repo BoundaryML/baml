@@ -20,5 +20,12 @@ interface NamedArgsSingleClass {
   key_three: number;
 }
 
+interface TestClassAlias {
+  key: string;
+  key2: string;
+  key3: string;
+  key4: string;
+}
 
-export { NamedArgsSingleEnum, NamedArgsSingleEnumList, NamedArgsSingleClass }
+
+export { NamedArgsSingleEnum, NamedArgsSingleEnumList, NamedArgsSingleClass, TestClassAlias }

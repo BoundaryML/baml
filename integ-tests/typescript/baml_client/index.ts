@@ -8,6 +8,7 @@ import * as f from "./function"
 import "./impls"
 
 const BamlClient = {
+  FnTestClassAlias: f.FnTestClassAlias,
   TestFnNamedArgsSingleBool: f.TestFnNamedArgsSingleBool,
   TestFnNamedArgsSingleClass: f.TestFnNamedArgsSingleClass,
   TestFnNamedArgsSingleEnum: f.TestFnNamedArgsSingleEnum,

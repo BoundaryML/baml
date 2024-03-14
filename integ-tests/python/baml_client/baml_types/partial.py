@@ -8,10 +8,12 @@
 # fmt: off
 
 from ..__do_not_import.types.partial.classes.cls_namedargssingleclass import PartialNamedArgsSingleClass
+from ..__do_not_import.types.partial.classes.cls_testclassalias import PartialTestClassAlias
 
 
 
 
 __all__ = [
-    'PartialNamedArgsSingleClass'
+    'PartialNamedArgsSingleClass',
+    'PartialTestClassAlias'
 ]

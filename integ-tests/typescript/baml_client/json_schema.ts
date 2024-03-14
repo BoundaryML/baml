@@ -53,6 +53,34 @@ const schema: JSONSchema7 = {
         "key_three"
       ]
     },
+    "TestClassAlias": {
+      "title": "TestClassAlias",
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "key2": {
+          "type": "string"
+        },
+        "key3": {
+          "type": "string"
+        },
+        "key4": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "key2",
+        "key3",
+        "key4"
+      ]
+    },
+    "FnTestClassAlias_input": {
+      "type": "string",
+      "title": "FnTestClassAlias input"
+    },
     "TestFnNamedArgsSingleBool_input": {
       "type": "object",
       "properties": {
@@ -122,6 +150,10 @@ const schema: JSONSchema7 = {
       "required": [],
       "title": "TestFnNamedArgsSyntax input"
     },
+    "FnTestClassAlias_output": {
+      "$ref": "#/definitions/TestClassAlias",
+      "title": "FnTestClassAlias output"
+    },
     "TestFnNamedArgsSingleBool_output": {
       "type": "string",
       "title": "TestFnNamedArgsSingleBool output"
@@ -158,6 +190,8 @@ registerEnumDeserializer(schema.definitions.NamedArgsSingleEnumList, {
 });
 
 registerObjectDeserializer(schema.definitions.NamedArgsSingleClass, { });
+
+registerObjectDeserializer(schema.definitions.TestClassAlias, { });
 
 
 export { schema }

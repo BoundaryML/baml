@@ -10,6 +10,7 @@
 from .clients.client_gpt35 import GPT35
 from .clients.client_gpt4 import GPT4
 from .clients.client_gpt4turbo import GPT4Turbo
+from .functions.fx_fntestclassalias import BAMLFnTestClassAlias
 from .functions.fx_testfnnamedargssinglebool import BAMLTestFnNamedArgsSingleBool
 from .functions.fx_testfnnamedargssingleclass import BAMLTestFnNamedArgsSingleClass
 from .functions.fx_testfnnamedargssingleenum import BAMLTestFnNamedArgsSingleEnum
@@ -24,6 +25,7 @@ from typing import Callable, List, Optional
 
 
 class BAMLClient:
+    FnTestClassAlias = BAMLFnTestClassAlias
     TestFnNamedArgsSingleBool = BAMLTestFnNamedArgsSingleBool
     TestFnNamedArgsSingleClass = BAMLTestFnNamedArgsSingleClass
     TestFnNamedArgsSingleEnum = BAMLTestFnNamedArgsSingleEnum

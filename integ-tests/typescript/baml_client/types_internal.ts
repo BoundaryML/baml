@@ -5,7 +5,7 @@
 // @ts-nocheck
 
 
-import { NamedArgsSingleEnum, NamedArgsSingleEnumList, NamedArgsSingleClass } from './types';
+import { NamedArgsSingleClass, NamedArgsSingleEnum, TestClassAlias, NamedArgsSingleEnumList } from './types';
 
 
 // Function to check if a value is a member of the NamedArgsSingleEnum enum
@@ -61,5 +61,54 @@ class InternalNamedArgsSingleClass implements NamedArgsSingleClass {
   }
 }
 
+// Function to validate if an object is a TestClassAlias object
+function isTestClassAlias(obj: any): obj is TestClassAlias {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("key" in obj && (typeof obj.key === 'string'))
+    && ("key2" in obj && (typeof obj.key2 === 'string'))
+    && ("key3" in obj && (typeof obj.key3 === 'string'))
+    && ("key4" in obj && (typeof obj.key4 === 'string'))
+  );
+}
 
-export { InternalNamedArgsSingleClass }
+
+class InternalTestClassAlias implements TestClassAlias {
+  private constructor(private data: {
+    key: string,
+    key2: string,
+    key3: string,
+    key4: string,
+  }, private raw: TestClassAlias) {}
+
+  static from(data: TestClassAlias): InternalTestClassAlias {
+    return new InternalTestClassAlias({
+      key: data.key,
+      key2: data.key2,
+      key3: data.key3,
+      key4: data.key4,
+    }, data);
+  }
+
+  get key(): string {
+    return this.data.key;
+  }
+  get key2(): string {
+    return this.data.key2;
+  }
+  get key3(): string {
+    return this.data.key3;
+  }
+  get key4(): string {
+    return this.data.key4;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
+
+export { InternalNamedArgsSingleClass, InternalTestClassAlias }
