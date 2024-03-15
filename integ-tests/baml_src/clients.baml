@@ -20,7 +20,7 @@ client<llm> GPT35 {
     model gpt-3.5-turbo
     api_key env.OPENAI_API_KEY
   }
-} 
+}  
 
 client<llm> Claude {
   provider baml-anthropic-chat

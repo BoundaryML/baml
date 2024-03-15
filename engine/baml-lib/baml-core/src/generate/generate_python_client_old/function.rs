@@ -94,10 +94,11 @@ impl JsonHelper for ArgWalker<'_> {
 
 impl JsonHelper for Walker<'_, FunctionId> {
     fn json(&self, f: &mut File) -> serde_json::Value {
-        let impls = self
+        let mut impls = self
             .walk_variants()
             .map(|v| v.name().to_string())
             .collect::<Vec<_>>();
+        impls.sort();
         let mut inputs = self.walk_input_args().collect::<Vec<_>>();
         inputs.sort_by(|a, b| a.is_optional().cmp(&b.is_optional()));
 

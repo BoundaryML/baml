@@ -50,7 +50,7 @@ class IBAMLPromptTest(BaseBAMLFunction[str, str]):
         super().__init__(
             "PromptTest",
             IPromptTest,
-            ["claude_chat", "openai_chat", "claude_chat_with_chat_msgs", "openai_chat_with_chat_msgs"],
+            ["claude_chat", "claude_chat_with_chat_msgs", "openai_chat", "openai_chat_with_chat_msgs"],
         )
 
     async def __call__(self, *args, **kwargs) -> str:
