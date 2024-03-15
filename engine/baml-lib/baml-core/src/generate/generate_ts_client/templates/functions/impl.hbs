@@ -19,6 +19,13 @@ const prompt_template = `\
 const deserializer = new Deserializer<{{function.return_type}}>(schema, {
   $ref: '#/definitions/{{function.name}}_output'
 });
+{{#each overrides as |o|}}
+deserializer.overload("{{o.category}}", {
+  {{#each o.aliased_keys as |a|}}
+  {{{a.alias}}}: "{{a.key}}",
+  {{/each}}
+});
+{{/each}}
 
 {{function.name}}.registerImpl('{{name}}', async (
 {{#if function.params.positional}}
@@ -48,14 +55,6 @@ const deserializer = new Deserializer<{{function.return_type}}>(schema, {
         {{/each}}
       }
     );
-
-    {{#each overrides as |o|}}
-    deserializer.overload("{{o.category}}", {
-      {{#each o.aliased_keys as |a|}}
-      {{{a.alias}}}: "{{a.key}}",
-      {{/each}}
-    });
-    {{/each}}
 
     return deserializer.coerce(result.generated);
   }
