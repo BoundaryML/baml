@@ -113,7 +113,7 @@ fn anthropic_clients<T: From<&'static str> + AsRef<str>>() -> Vec<ClientConfig<T
     vec![
         ClientConfig {
             comment: None,
-            provider: "baml-anthropic".into(),
+            provider: "baml-anthropic-chat".into(),
             name: "Claude".into(),
             params: vec![
                 ("model_name", "claude-2.1"),
@@ -122,7 +122,7 @@ fn anthropic_clients<T: From<&'static str> + AsRef<str>>() -> Vec<ClientConfig<T
         },
         ClientConfig {
             comment: None,
-            provider: "baml-anthropic".into(),
+            provider: "baml-anthropic-chat".into(),
             name: "ClaudeInstant".into(),
             params: vec![
                 ("model_name", "claude-instant-1.2"),

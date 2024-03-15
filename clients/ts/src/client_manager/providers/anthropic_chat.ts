@@ -90,3 +90,10 @@ clientManager.registerProvider("baml-anthropic", {
         return new AnthropicClient(options);
     },
 });
+
+clientManager.registerProvider("baml-anthropic-chat", {
+    createClient: (name: string, options: LLMBaseProviderArgs): LLMBaseProvider => {
+        return new AnthropicClient(options);
+    },
+});
+
