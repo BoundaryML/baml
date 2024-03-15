@@ -556,20 +556,29 @@ impl WithRepr<Implementation> for VariantWalker<'_> {
     fn repr(&self, db: &ParserDatabase) -> Result<Implementation> {
         let function_name = self.ast_variant().function_name().name();
         let impl_name = self.name();
+        // Convert the IndexMap to a Vec of tuples
+        let mut replacers_vec: Vec<(_, _)> = self
+            .properties()
+            .replacers
+            // NB: .0 should really be .input
+            .0
+            .iter()
+            .map(|r| (r.0.key(), r.1.clone()))
+            .collect();
+        // Sort the Vec by the keys
+        replacers_vec.sort_by(|a, b| a.0.cmp(&b.0));
+        // Convert the sorted Vec back to an IndexMap
+        let sorted_replacers: IndexMap<String, String> = replacers_vec
+            .into_iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
 
         Ok(Implementation {
             r#type: OracleType::LLM,
             name: self.name().to_string(),
             function_name: function_name.to_string(),
             prompt: self.properties().to_prompt().repr(db)?,
-            input_replacers: self
-                .properties()
-                .replacers
-                // NB: .0 should really be .input
-                .0
-                .iter()
-                .map(|r| (r.0.key(), r.1.clone()))
-                .collect(),
+            input_replacers: sorted_replacers,
             output_replacers: self
                 .properties()
                 .replacers
