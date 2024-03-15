@@ -720,10 +720,14 @@ impl WithRepr<Function> for FunctionWalker<'_> {
                 ast::FunctionArgs::Unnamed(arg) => arg.field_type.node(db),
             }?,
             default_impl: self.metadata().default_impl.as_ref().map(|f| f.0.clone()),
-            impls: self
-                .walk_variants()
-                .map(|e| e.node(db))
-                .collect::<Result<Vec<_>>>()?,
+            impls: {
+                let mut impls = self
+                    .walk_variants()
+                    .map(|e| e.node(db))
+                    .collect::<Result<Vec<_>>>()?;
+                impls.sort_by(|a, b| a.elem.name.cmp(&&b.elem.name));
+                impls
+            },
             tests: self
                 .walk_tests()
                 .map(|e| e.node(db))
