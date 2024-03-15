@@ -178,8 +178,9 @@ impl<L: LanguageFeatures> FileCollector<L> {
     fn format_file(&self, content: &FileContent) -> String {
         let mut result = vec![];
 
-        if self.lang.content_prefix().len() > 0 {
-            result.push(self.lang.content_prefix().to_string());
+        let content_prefix = self.lang.content_prefix();
+        if content_prefix.len() > 0 {
+            result.push(content_prefix.to_string());
         }
 
         if content.imports.len() + content.import_libs.len() > 0 {
@@ -197,7 +198,10 @@ impl<L: LanguageFeatures> FileCollector<L> {
             result.push(self.lang.format_exports(&content.exports));
         }
 
-        result.join("\n\n") + "\n"
+        // Ensure that the file ends with newlines.
+        result.push("".into());
+
+        result.join("\n\n")
     }
 }
 
