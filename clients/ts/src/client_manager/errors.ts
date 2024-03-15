@@ -60,7 +60,11 @@ class LLMException extends Error {
     return new LLMException("Unknown Error", code);
   }
 
-  static from_retry_errors(errors: LLMException[], retry_policy: any): LLMException {
+  static from_retry_errors(errors: any[], retry_policy: any): LLMException {
+    const last_error = errors.at(-1);
+    const error_code = (
+      last_error !== undefined && last_error instanceof LLMException
+    ) ? last_error.code : ProviderErrorCode.Unknown;
     return new LLMException(
       [
         "Retry policy exhausted",
@@ -69,7 +73,7 @@ class LLMException extends Error {
         "Errors:",
         ...errors.map((e) => e.toString())
       ].join("\n"),
-      errors.at(-1)?.code ?? ProviderErrorCode.Unknown);
+      error_code);
 
   }
 }
