@@ -34,7 +34,7 @@ Good responses are amiable and direct.
 Do not use or negative unless the question is a yes or no question.
 
 ```input
-{//BAML_CLIENT_REPLACE_ME_MAGIC_input//}
+{arg}
 ```       
 
 

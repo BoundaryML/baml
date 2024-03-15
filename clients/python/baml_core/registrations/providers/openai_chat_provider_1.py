@@ -45,6 +45,12 @@ class OpenAIChatProvider(LLMChatProvider):
             **kwargs,
         )
 
+        # set a default timeout of 3 minutes
+        timeout = options.pop("request_timeout", options.pop("timeout", 60 * 3))
+        
+        if options.pop("max_retries", None) is not None:
+            raise ValueError("Use a BAML RetryPolicy instead of passing in max_retries")
+
         if options.get("api_type") == "azure" or options.get("azure_endpoint"):
             # We still need to map from the 0.x API to the 1.x API. People may use either of these:
             # api_key / api_key
@@ -55,19 +61,20 @@ class OpenAIChatProvider(LLMChatProvider):
                 api_key=options["api_key"],
                 api_version=options["api_version"],
                 azure_endpoint=options.get("api_base") or options["azure_endpoint"],
+                max_retries=0,
+                timeout=timeout
             )
         else:
-            self._client = AsyncOpenAI(api_key=options["api_key"])
+            self._client = AsyncOpenAI(api_key=options["api_key"], max_retries=0, timeout=timeout)
+
+        # Lets build up the actual request args, which don't include any of these.
         options.pop("api_key", None)
         options.pop("api_version", None)
         options.pop("api_base", None)
         options.pop("api_type", None)
         options.pop("azure_endpoint", None)
-        timeout = options.get("timeout") or options.get("request_timeout") or None
-        if options.pop("request_timeout", None) is not None:
-            self._client.timeout = timeout
+      
         options["model"] = options.get("model", None) or options.pop("engine", None)
-
         self.__kwargs = options
         self._set_args(**self.__kwargs)
 
@@ -78,6 +85,7 @@ class OpenAIChatProvider(LLMChatProvider):
         pass
 
     async def _run_chat(self, messages: typing.List[LLMChatMessage]) -> LLMResponse:
+
         response: ChatCompletion = await self._client.chat.completions.create(
             messages=list(map(_to_chat_completion_messages, messages)),
             **self.__kwargs,

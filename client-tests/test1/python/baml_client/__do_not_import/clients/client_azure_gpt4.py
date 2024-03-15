@@ -17,9 +17,7 @@ AZURE_GPT4 = LLMManager.add_llm(
     retry_policy=None,
     redactions=["api_key"],
     options=dict(
-        model="gpt-3.5-turbo",
+        model="gpt-4-turbo-preview",
         api_key=environ['OPENAI_API_KEY'],
-        request_timeout=45,
-        max_tokens=400,
     ),
 )

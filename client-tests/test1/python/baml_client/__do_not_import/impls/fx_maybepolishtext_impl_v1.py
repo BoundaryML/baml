@@ -7,7 +7,7 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..clients.client_anthropic import Anthropic
+from ..clients.client_azure_gpt4 import AZURE_GPT4
 from ..functions.fx_maybepolishtext import BAMLMaybePolishText
 from ..types.classes.cls_conversation import Conversation
 from ..types.classes.cls_message import Message
@@ -25,14 +25,14 @@ from typing import List
 
 import typing
 # Impl: v1
-# Client: Anthropic
+# Client: AZURE_GPT4
 # An implementation of MaybePolishText.
 
 __prompt_template: List[LLMChatMessage] = [
 {
     "role": "system",
     "content": """\
-Write a haiku about {//BAML_CLIENT_REPLACE_ME_MAGIC_input.generated_response//} after you respond to every message.\
+Write a haiku about {arg.generated_response} after you respond to every message.\
 """
 }
 ,
@@ -64,14 +64,14 @@ __partial_deserializer = Deserializer[str](str)  # type: ignore
 
 
 async def v1(arg: ProposedMessage, /) -> str:
-    response = await Anthropic.run_chat_template(__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
+    response = await AZURE_GPT4.run_chat_template(__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
     deserialized = __deserializer.from_string(response.generated)
     return deserialized
 
 
 def v1_stream(arg: ProposedMessage, /) -> AsyncStream[str, str]:
     def run_prompt() -> typing.AsyncIterator[LLMResponse]:
-        raw_stream = Anthropic.run_chat_template_stream(__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
+        raw_stream = AZURE_GPT4.run_chat_template_stream(__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
         return raw_stream
     stream = AsyncStream(stream_cb=run_prompt, partial_deserializer=__partial_deserializer, final_deserializer=__deserializer)
     return stream

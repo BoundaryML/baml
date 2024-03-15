@@ -11,7 +11,11 @@ from baml_lib._impl.deserializer import register_deserializer
 from enum import Enum
 
 
-@register_deserializer({ "ai": "AI","resident": "RESIDENT", })
+@register_deserializer({
+  "ai": "AI",
+  "resident": "RESIDENT",
+
+})
 class MessageSender(str, Enum):
     AI = "AI"
     RESIDENT = "RESIDENT"

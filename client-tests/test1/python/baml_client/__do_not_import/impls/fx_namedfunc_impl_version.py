@@ -23,7 +23,7 @@ import typing
 
 __prompt_template = """\
 Given a userr is trying to schedule a meeting, extract the relevant information
-{//BAML_CLIENT_REPLACE_ME_MAGIC_input.name//}
+{name}
 information from the query.
 JSON:\
 """

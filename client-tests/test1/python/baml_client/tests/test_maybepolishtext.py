@@ -22,7 +22,7 @@ async def test_homeless_salmon(MaybePolishTextImpl: IMaybePolishTextStream, baml
             return item
         return dumps(item)
 
-    content = to_str("{\"thread\":{\"thread\":[]},\"generated_response\":\"oceans\"}")
+    content = to_str({"thread": {"thread": [], }, "generated_response": "oceans", })
     deserializer = Deserializer[ProposedMessage](ProposedMessage) # type: ignore
     param = deserializer.from_string(content)
     async with MaybePolishTextImpl(param) as stream:

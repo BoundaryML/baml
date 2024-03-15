@@ -24,10 +24,10 @@ import typing
 
 __prompt_template = """\
 
-{//BAML_CLIENT_REPLACE_ME_MAGIC_input.query//}
+{query}
 
 UserContext:
-{//BAML_CLIENT_REPLACE_ME_MAGIC_input.context//}
+{context}
 
 tool
 ---

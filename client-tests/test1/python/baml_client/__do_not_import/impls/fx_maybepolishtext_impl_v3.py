@@ -29,7 +29,7 @@ import typing
 __prompt_template = """\
 Hi please write whatever the user asks in haiku form.
 
-{//BAML_CLIENT_REPLACE_ME_MAGIC_input.generated_response//}\
+{arg.generated_response}\
 """
 
 __input_replacers = {
