@@ -12,6 +12,7 @@ impl LanguageFeatures for TSLanguageFeatures {
 // Disable formatting for this file to avoid linting errors.
 // tslint:disable
 // @ts-nocheck
+/* eslint-disable */
         "#
         .trim()
     }

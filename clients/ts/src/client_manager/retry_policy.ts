@@ -25,11 +25,7 @@ export class ConstantDelayRetryPolicy {
       try {
         return await fn();
       } catch (err) {
-        if (!(err instanceof LLMException)) {
-          throw err;
-        }
-
-        if (TerminalErrorCodes.includes(err.code)) {
+        if (err instanceof LLMException && TerminalErrorCodes.includes(err.code)) {
           throw err;
         }
 
@@ -84,11 +80,7 @@ export class ExponentialBackoffRetryPolicy {
       try {
         return await fn();
       } catch (err) {
-        if (!(err instanceof LLMException)) {
-          throw err;
-        }
-
-        if (TerminalErrorCodes.includes(err.code)) {
+        if (err instanceof LLMException && TerminalErrorCodes.includes(err.code)) {
           throw err;
         }
 
