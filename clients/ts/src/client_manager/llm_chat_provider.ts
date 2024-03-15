@@ -15,19 +15,19 @@ abstract class LLMChatProvider extends LLMBaseProvider {
     this.prompt_to_chat = prompt_to_chat;
   }
 
-  run_prompt(prompt: string): Promise<LLMResponse> {
+  run_prompt_once(prompt: string): Promise<LLMResponse> {
     return this.run_chat([this.prompt_to_chat(prompt)]);
   }
-  run_prompt_template(prompt: string, template_args: Array<string>, params: { [key: string]: any; }): Promise<LLMResponse> {
+  run_prompt_template_once(prompt: string, template_args: Array<string>, params: { [key: string]: any; }): Promise<LLMResponse> {
     return this.run_chat_template([this.prompt_to_chat(prompt)], template_args, params);
   }
 
-  run_chat(prompt: LLMChatMessage | LLMChatMessage[]): Promise<LLMResponse> {
+  run_chat_once(prompt: LLMChatMessage | LLMChatMessage[]): Promise<LLMResponse> {
     const prompts = Array.isArray(prompt) ? prompt : [prompt];
     this.start_run(prompts);
     return this.chat_with_telemetry(prompts);
   }
-  run_chat_template(prompt: LLMChatMessage | LLMChatMessage[], template_args: Array<string>, params: { [key: string]: any; }): Promise<LLMResponse> {
+  run_chat_template_once(prompt: LLMChatMessage | LLMChatMessage[], template_args: Array<string>, params: { [key: string]: any; }): Promise<LLMResponse> {
     const prompts = Array.isArray(prompt) ? prompt : [prompt];
 
     const updates = template_args.map((arg): [string, string] => [arg, `${params[arg]}`]);

@@ -28,8 +28,8 @@ function isMusl() {
   }
 }
 
-// const searchDir = "/home/sam/baml/engine/baml-core-ffi";
-const searchDir = '/Users/aaronvillalpando/Projects/baml/engine/baml-core-ffi'
+const searchDir = "/home/sam/baml/engine/baml-core-ffi";
+// const searchDir = '/Users/aaronvillalpando/Projects/baml/engine/baml-core-ffi'
 // const searchDir = __dirname;
 
 switch (platform) {
@@ -133,7 +133,6 @@ switch (platform) {
         try {
           if (localFileExisted) {
             nativeBinding = require(join(searchDir, 'baml-core-ffi.darwin-arm64.node'))
-            nativeBinding = require('/Users/aaronvillalpando/Projects/baml/engine/baml-core-ffi/baml-core-ffi.darwin-arm64.node')
           } else {
             nativeBinding = require('@boundaryml/baml-core-ffi-darwin-arm64')
           }

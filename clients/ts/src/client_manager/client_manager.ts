@@ -14,7 +14,7 @@ class ClientManager {
     getClient(name: string): LLMBaseProvider {
         const client = this.clients.get(name);
         if (!client) {
-            throw new Error(`Client ${name} not found`);
+            throw new Error(`Client ${JSON.stringify(name)} not found`);
         }
         return client;
     }

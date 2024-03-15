@@ -197,7 +197,7 @@ impl<L: LanguageFeatures> FileCollector<L> {
             result.push(self.lang.format_exports(&content.exports));
         }
 
-        result.join("\n\n")
+        result.join("\n\n") + "\n"
     }
 }
 

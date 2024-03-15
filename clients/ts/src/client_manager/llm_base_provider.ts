@@ -1,5 +1,6 @@
 import { FireBamlEvent } from "../ffi_layer";
 import { BaseProvider } from "./base_provider";
+import { RetryPolicy } from "./retry_policy"
 
 interface LLMChatMessage {
   role: string;
@@ -43,7 +44,7 @@ function redact(value: any): any {
 
 abstract class LLMBaseProvider extends BaseProvider {
   private provider: string;
-  private retry_policy: any;
+  private retry_policy: RetryPolicy;
   private redactions: string[];
   private client_args: { [key: string]: any };
 
@@ -69,13 +70,43 @@ abstract class LLMBaseProvider extends BaseProvider {
     this.client_args = Object.fromEntries(Object.entries(args).map(([k, v]) => [k, redact(v)]));
   }
 
-  abstract run_prompt(prompt: string): Promise<LLMResponse>;
-  abstract run_chat(prompt: LLMChatMessage | LLMChatMessage[]): Promise<LLMResponse>;
+  async run_prompt(prompt: string): Promise<LLMResponse> {
+    if (this.retry_policy) {
+      return await this.retry_policy.run(() => this.run_prompt_once(prompt));
+    }
+    return await this.run_prompt_once(prompt);
+   }
+  protected abstract run_prompt_once(prompt: string): Promise<LLMResponse>;
 
-  abstract run_prompt_template(prompt: string, template_args: Iterable<string>, params: {
+  async run_chat(prompt: LLMChatMessage | LLMChatMessage[]): Promise<LLMResponse> {
+    if (this.retry_policy) {
+      return await this.retry_policy.run(() => this.run_chat_once(prompt));
+    }
+    return await this.run_chat_once(prompt);
+  }
+  protected abstract run_chat_once(prompt: LLMChatMessage | LLMChatMessage[]): Promise<LLMResponse>;
+
+  async run_prompt_template(prompt: string, template_args: Iterable<string>, params: {
+    [key: string]: any
+  }): Promise<LLMResponse> {
+    if (this.retry_policy) {
+      return await this.retry_policy.run(() => this.run_prompt_template_once(prompt, template_args, params));
+    }
+    return await this.run_prompt_template_once(prompt, template_args, params);
+  }
+  protected abstract run_prompt_template_once(prompt: string, template_args: Iterable<string>, params: {
     [key: string]: any
   }): Promise<LLMResponse>;
-  abstract run_chat_template(prompt: LLMChatMessage | LLMChatMessage[], template_args: Iterable<string>, params: {
+
+  async run_chat_template(prompt: LLMChatMessage | LLMChatMessage[], template_args: Iterable<string>, params: {
+    [key: string]: any
+  }): Promise<LLMResponse> {
+    if (this.retry_policy) {
+      return await this.retry_policy.run(() => this.run_chat_template_once(prompt, template_args, params));
+    }
+    return await this.run_chat_template_once(prompt, template_args, params);
+  }
+  protected abstract run_chat_template_once(prompt: LLMChatMessage | LLMChatMessage[], template_args: Iterable<string>, params: {
     [key: string]: any
   }): Promise<LLMResponse>;
 

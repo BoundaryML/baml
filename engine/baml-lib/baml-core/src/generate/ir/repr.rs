@@ -771,13 +771,13 @@ impl WithRepr<Client> for ClientWalker<'_> {
 }
 
 #[derive(serde::Serialize, Debug)]
-pub struct RetryPolicyId(String);
+pub struct RetryPolicyId(pub String);
 
 #[derive(serde::Serialize, Debug)]
 pub struct RetryPolicy {
-    name: RetryPolicyId,
-    max_retries: u32,
-    strategy: RetryPolicyStrategy,
+    pub name: RetryPolicyId,
+    pub max_retries: u32,
+    pub strategy: RetryPolicyStrategy,
     // NB: the parser DB has a notion of "empty options" vs "no options"; we collapse
     // those here into an empty vec
     options: Vec<(String, Expression)>,

@@ -1,4 +1,4 @@
-use super::{repr, Class, Client, Enum, Function, Impl, TestCase, Walker};
+use super::{repr, Class, Client, Enum, Function, Impl, RetryPolicy, TestCase, Walker};
 
 impl<'a> Walker<'a, &'a Function> {
     pub fn walk_impls(&'a self) -> impl Iterator<Item = Walker<'a, (&'a Function, &'a Impl)>> {
@@ -58,6 +58,12 @@ impl<'a> Walker<'a, &'a Class> {
 
 impl<'a> Walker<'a, &'a Client> {
     pub fn elem(&self) -> &'a repr::Client {
+        &self.item.elem
+    }
+}
+
+impl<'a> Walker<'a, &'a RetryPolicy> {
+    pub fn elem(&self) -> &'a repr::RetryPolicy {
         &self.item.elem
     }
 }

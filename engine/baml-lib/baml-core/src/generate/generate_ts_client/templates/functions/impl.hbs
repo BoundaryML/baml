@@ -50,7 +50,7 @@ const deserializer = new Deserializer<{{function.return_type}}>(schema, {
     );
 
     {{#each overrides as |o|}}
-    deserializer.overload({{o.category}}, {
+    deserializer.overload("{{o.category}}", {
       {{#each o.aliased_keys as |a|}}
       {{{a.alias}}}: "{{a.key}}",
       {{/each}}

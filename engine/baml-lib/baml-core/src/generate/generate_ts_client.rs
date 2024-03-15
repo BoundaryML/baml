@@ -6,6 +6,7 @@ mod field_type;
 mod function;
 mod r#impl;
 mod intermediate_repr;
+mod retry_policy;
 mod template;
 mod test_case;
 mod ts_language_features;
@@ -33,6 +34,8 @@ pub(crate) fn generate_ts(ir: &IntermediateRepr, gen: &Generator) -> std::io::Re
         });
     });
     ir.walk_clients().for_each(|c| c.write(&mut collector));
+    ir.walk_retry_policies()
+        .for_each(|r| r.write(&mut collector));
 
     let file = collector.start_file("./", "json_schema", false);
     file.add_import("json-schema", "JSONSchema7", None, false);

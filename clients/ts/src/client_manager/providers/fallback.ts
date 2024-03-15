@@ -6,7 +6,7 @@ class FallbackClient extends LLMBaseProvider {
     private fallbackNames: string[];
 
     constructor(params: LLMBaseProviderArgs & {
-        strategy?: string[]
+        strategy?: {client: string}[]
     }) {
         const {
             strategy,
@@ -18,7 +18,7 @@ class FallbackClient extends LLMBaseProvider {
         }
 
         super(rest);
-        this.fallbackNames = strategy;
+        this.fallbackNames = strategy.map((s) => s.client);
     }
 
 
@@ -43,18 +43,18 @@ class FallbackClient extends LLMBaseProvider {
     }
 
 
-    async run_prompt(prompt: string): Promise<LLMResponse> {
+    async run_prompt_once(prompt: string): Promise<LLMResponse> {
         return this.try_fallback((fallback) => fallback.run_prompt(prompt));
     }
 
-    async run_chat(prompt: LLMChatMessage | LLMChatMessage[]): Promise<LLMResponse> {
+    async run_chat_once(prompt: LLMChatMessage | LLMChatMessage[]): Promise<LLMResponse> {
         return this.try_fallback((fallback) => fallback.run_chat(prompt));
     }
 
-    async run_prompt_template(prompt: string, template_args: Iterable<string>, params: { [key: string]: any; }): Promise<LLMResponse> {
+    async run_prompt_template_once(prompt: string, template_args: Iterable<string>, params: { [key: string]: any; }): Promise<LLMResponse> {
         return this.try_fallback((fallback) => fallback.run_prompt_template(prompt, template_args, params));
     }
-    async run_chat_template(prompt: LLMChatMessage | LLMChatMessage[], template_args: Iterable<string>, params: { [key: string]: any; }): Promise<LLMResponse> {
+    async run_chat_template_once(prompt: LLMChatMessage | LLMChatMessage[], template_args: Iterable<string>, params: { [key: string]: any; }): Promise<LLMResponse> {
         return this.try_fallback((fallback) => fallback.run_chat_template(prompt, template_args, params));
     }
     protected to_error_code_impl(err: unknown): number | undefined {

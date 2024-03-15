@@ -50,7 +50,6 @@ class LLMException extends Error {
     return `LLM Failed (${ProviderErrorCodeToString(this.code)}): ${this.message}`;
   }
 
-
   static fromError(err: Error | unknown, code: ProviderErrorCode | number): LLMException {
     if (err instanceof LLMException) {
       return err;
@@ -59,6 +58,19 @@ class LLMException extends Error {
       return new LLMException(err.message, code);
     }
     return new LLMException("Unknown Error", code);
+  }
+
+  static from_retry_errors(errors: LLMException[], retry_policy: any): LLMException {
+    return new LLMException(
+      [
+        "Retry policy exhausted",
+        JSON.stringify(retry_policy, null, 2),
+        "-----",
+        "Errors:",
+        ...errors.map((e) => e.toString())
+      ].join("\n"),
+      errors.at(-1)?.code ?? ProviderErrorCode.Unknown);
+
   }
 }
 
