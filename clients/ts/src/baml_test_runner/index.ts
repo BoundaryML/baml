@@ -1,10 +1,15 @@
 import type { Config } from '@jest/types';
 import TestRunner, { TestRunnerContext, Test, TestWatcher, TestRunnerOptions } from 'jest-runner';
 import { BamlTester, TestCaseStatus } from '@boundaryml/baml-core-ffi';
+import { BamlTracer } from "../ffi_layer";
 
 interface BamlTestArgs {
   // [test_name, impl_name, func_name]
   expected_tests: [string, string, string][];
+}
+
+const to_test_name = (funcName: string, implName: string, testName: string) => {
+  return `test_${testName}[${funcName}-${implName}]`
 }
 
 const test_name = (meta: { ancestorTitles: Array<string>, title: string }) => {
@@ -30,7 +35,7 @@ const test_name = (meta: { ancestorTitles: Array<string>, title: string }) => {
 
   return {
     suite: funcName,
-    test: `${testName}-${implName}`
+    test: to_test_name(funcName, implName, testName),
   };
 }
 
@@ -48,7 +53,7 @@ class BamlTestRunner extends TestRunner {
     // console.log("Tests:", fileContents);
 
     super(globalConfig, context);
-    this.bamlTester = new BamlTester(fileContents.expected_tests.map(([test_name, impl_name, func_name]) => [func_name, `${test_name}-${impl_name}`]));
+    this.bamlTester = new BamlTester(fileContents.expected_tests.map(([test_name, impl_name, func_name]) => [func_name, to_test_name(func_name, impl_name, test_name)]));
   }
 
   async runTests(test_files: Array<Test>, watcher: TestWatcher, options: TestRunnerOptions) {
@@ -58,7 +63,7 @@ class BamlTestRunner extends TestRunner {
     });
     this.on('test-case-result', async ([name, result]) => {
       const testName = test_name(result);
-      await this.bamlTester.updateTestCase(testName.suite, testName.test, result.status === 'passed' ? TestCaseStatus.Passed : TestCaseStatus.Failed);
+      await this.bamlTester.updateTestCase(testName.suite, testName.test, result.status === 'passed' ? TestCaseStatus.Passed : TestCaseStatus.Failed)
     });
 
     await this.bamlTester.start();

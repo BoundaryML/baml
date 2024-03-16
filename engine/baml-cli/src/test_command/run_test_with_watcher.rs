@@ -28,8 +28,8 @@ async fn handle_connection(
         return Ok(());
     }
     // buffer may have multiple messages in it, so we need to split it
-    // on the message separator <END_MSG>\n
-    let messages = buffer.split("<END_MSG>\n");
+    // on the message separator <BAML_END_MSG>\n
+    let messages = buffer.split("<BAML_END_MSG>\n");
     let mut state = state.lock().await;
     for message in messages {
         if message.is_empty() {
@@ -74,9 +74,9 @@ async fn run_and_update_state(
     // Add the port to the shell command
     runner.add_ipc_to_command(&mut shell_command, port);
 
-    let mut cmd = build_shell_command(shell_command);
+    let mut cmd = build_shell_command(shell_command.clone());
 
-    println!("{}", format!("Running test with args: {:?}", cmd).dimmed());
+    println!("{}", format!("Running test with args: {:?}", &cmd).dimmed());
 
     // Create a directory in the temp folder
     // Load from environment variable (BAML_TEST_LOGS) if set or use temp_dir
@@ -101,9 +101,10 @@ async fn run_and_update_state(
     let stdout_file = File::create(&stdout_file_path)?;
     let stderr_file = File::create(&stderr_file_path)?;
 
+    println!("{}", format!("Running tests using: {:?}", cmd));
     let mut child = cmd
         .envs(runner.env_vars().into_iter())
-        .env("BAML_IPC_PORT", port.to_string())
+        .env("BOUNDARY_IPC_PORT", port.to_string())
         .current_dir(language_root_dir)
         .stdout(Stdio::from(stdout_file))
         .stderr(Stdio::from(stderr_file))

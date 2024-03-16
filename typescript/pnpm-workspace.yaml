@@ -3,4 +3,3 @@ packages:
   - 'vscode-ext/packages'
   - 'baml-schema-wasm'
   - 'common'
-  - '../engine/baml-client-lib'

@@ -3,7 +3,7 @@ describe('test_case:{{test_name}}', () => {
     FireBamlEvent.tags({
       'test_dataset_name': '{{function_name}}',
       'test_case_name': 'test',
-      'test_case_arg_name': `{{test_name}}[${impl}]`,
+      'test_case_arg_name': `test_{{test_name}}[{{function_name}}-${impl}]`,
       'test_cycle_id': process.env.BOUNDARY_PROCESS_ID || 'local-run',
     });
     const test_case = {{{test_content}}};
@@ -16,7 +16,7 @@ describe('test_case:{{test_name}}', () => {
     {{#each impl_names as |impl|}}
     test('impl:{{impl}}', async () => {
       await test_fn('{{impl}}');
-    });
+    }, 60000);
     {{/each}}
   });
 });

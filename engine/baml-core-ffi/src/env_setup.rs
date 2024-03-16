@@ -79,6 +79,7 @@ pub struct Config {
   pub host_name: String,
   #[serde(default = "default_log_level")]
   pub log_level: LogLevel,
+  pub ipc_port: Option<u16>,
 }
 
 fn default_base_url() -> String {

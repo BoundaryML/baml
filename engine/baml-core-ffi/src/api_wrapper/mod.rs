@@ -1,4 +1,4 @@
-use anyhow::{Ok, Result};
+use anyhow::Result;
 pub(super) mod api_interface;
 pub(super) mod core_types;
 mod ipc_interface;
@@ -7,7 +7,7 @@ use serde_json::{json, Value};
 use crate::env_setup::{Config, LogLevel};
 
 pub(super) use self::api_interface::{BoundaryAPI, BoundaryTestAPI};
-use self::core_types::TestCaseStatus;
+use self::core_types::{TestCaseStatus, UpdateTestCase};
 
 #[derive(Debug, Clone)]
 pub(crate) struct APIWrapper {
@@ -20,8 +20,6 @@ enum APIConfig {
   LocalOnly(PartialAPIConfig),
   Web(CompleteAPIConfig),
 }
-
-const DEFAULT_BASE_URL: &str = "https://api.boundary.com";
 
 impl APIConfig {
   pub fn pretty_print(&self, payload: &core_types::LogSchema) {
@@ -52,6 +50,13 @@ impl APIConfig {
     }
   }
 
+  pub fn ipc_port(&self) -> Option<u16> {
+    match self {
+      Self::LocalOnly(config) => config.ipc_port,
+      Self::Web(config) => config.ipc_port,
+    }
+  }
+
   pub fn project_id(&self) -> Option<&str> {
     match self {
       Self::LocalOnly(config) => config.project_id.as_deref(),
@@ -78,6 +83,7 @@ impl APIConfig {
         stage: config.stage,
         sessions_id: config.sessions_id,
         host_name: config.host_name,
+        ipc_port: config.ipc_port,
       }),
       _ => Self::LocalOnly(PartialAPIConfig {
         log_level: config.log_level != LogLevel::None,
@@ -87,6 +93,7 @@ impl APIConfig {
         stage: config.stage,
         sessions_id: config.sessions_id,
         host_name: config.host_name,
+        ipc_port: config.ipc_port,
       }),
     }
   }
@@ -131,6 +138,11 @@ impl APIConfig {
       Self::Web(config) => config.log_level,
     });
 
+    let ipc_port = match self {
+      Self::LocalOnly(config) => config.ipc_port,
+      Self::Web(config) => config.ipc_port,
+    };
+
     match (api_key, project_id) {
       (Some(api_key), Some(project_id)) => Self::Web(CompleteAPIConfig {
         log_level,
@@ -140,6 +152,7 @@ impl APIConfig {
         stage: stage.to_string(),
         sessions_id: sessions_id.to_string(),
         host_name: host_name.to_string(),
+        ipc_port,
       }),
       _ => Self::LocalOnly(PartialAPIConfig {
         log_level,
@@ -149,6 +162,7 @@ impl APIConfig {
         stage: stage.to_string(),
         sessions_id: sessions_id.to_string(),
         host_name: host_name.to_string(),
+        ipc_port,
       }),
     }
   }
@@ -163,6 +177,7 @@ pub(super) struct CompleteAPIConfig {
   pub stage: String,
   pub sessions_id: String,
   pub host_name: String,
+  pub ipc_port: Option<u16>,
 }
 
 #[derive(Debug, Clone)]
@@ -174,6 +189,7 @@ pub(super) struct PartialAPIConfig {
   stage: String,
   sessions_id: String,
   host_name: String,
+  ipc_port: Option<u16>,
 }
 
 impl CompleteAPIConfig {
@@ -235,6 +251,8 @@ impl BoundaryAPI for APIWrapper {
   }
 
   async fn log_schema(&self, payload: &core_types::LogSchema) -> Result<()> {
+    let _ = self.ipc.send(ipc_interface::IPCMessage::Log(payload)).await;
+
     match &self.config {
       APIConfig::LocalOnly(_) => Ok(()),
       APIConfig::Web(config) => config.log_schema(payload).await,
@@ -242,13 +260,31 @@ impl BoundaryAPI for APIWrapper {
   }
 
   async fn create_session(&self) -> Result<api_interface::CreateSessionResponse> {
-    match &self.config {
+    let result = match &self.config {
       APIConfig::LocalOnly(config) => Ok(api_interface::CreateSessionResponse {
         session_id: config.sessions_id.clone(),
         dashboard_url: None,
       }),
       APIConfig::Web(config) => config.create_session().await,
+    };
+
+    match &result {
+      Ok(response) => {
+        if let Some(dashboard_url) = &response.dashboard_url {
+          let _ = self
+            .ipc
+            .send(ipc_interface::IPCMessage::TestRunMeta(
+              &ipc_interface::TestRunMeta {
+                dashboard_url: dashboard_url.clone(),
+              },
+            ))
+            .await;
+        }
+      }
+      _ => {}
     }
+
+    result
   }
 
   async fn finish_session(&self) -> Result<()> {
@@ -310,21 +346,26 @@ impl BoundaryTestAPI for APIWrapper {
     status: TestCaseStatus,
     error_data: Option<Value>,
   ) -> Result<()> {
-    let body = json!({
-      "project_id": self.config.project_id(),
-      "test_cycle_id": self.config.session_id(),
-      "test_dataset_name": test_suite,
+    let body = UpdateTestCase {
+      project_id: self.config.project_id().map(String::from),
+      test_cycle_id: self.config.session_id().to_string(),
+      test_dataset_name: test_suite.to_string(),
       // Deprecated (exists legacy api reason)
-      "test_case_definition_name": "test",
-      "test_case_arg_name": test_case,
-      "status": status,
-      "error_data": error_data,
-    });
+      test_case_definition_name: "test".to_string(),
+      test_case_arg_name: test_case.to_string(),
+      status,
+      error_data,
+    };
+
+    let _ = self
+      .ipc
+      .send(ipc_interface::IPCMessage::UpdateTestCase(&body))
+      .await;
 
     match &self.config {
       APIConfig::LocalOnly(_) => Ok(()),
       APIConfig::Web(config) => {
-        config.post("tests/update", &body).await?;
+        config.post("tests/update", &json!(body)).await?;
         Ok(())
       }
     }
@@ -334,10 +375,16 @@ impl BoundaryTestAPI for APIWrapper {
 impl APIWrapper {
   pub fn default() -> Self {
     let config = APIConfig::default();
-    let ipc_port = std::env::var("BOUNDARY_IPC_PORT").ok();
-    let ipc_addr = ipc_port.map(|port| format!("127.0.0.1:{}", port));
+    let ipc_addr = config.ipc_port().map(|port| format!("127.0.0.1:{}", port));
     let ipc = ipc_interface::IPCChannel::new(ipc_addr).unwrap();
     Self { config, ipc }
+  }
+
+  pub fn is_test_mode(&self) -> bool {
+    match &self.config {
+      APIConfig::LocalOnly(_) => true,
+      APIConfig::Web(_) => false,
+    }
   }
 
   pub fn pretty_print(&self, payload: &core_types::LogSchema) {

@@ -30,8 +30,8 @@ async fn handle_connection(
     let promise = forward_to_port(forward_port, &buffer);
 
     // buffer may have multiple messages in it, so we need to split it
-    // on the message separator <END_MSG>\n
-    let messages = buffer.split("<END_MSG>\n");
+    // on the message separator <BAML_END_MSG>\n
+    let messages = buffer.split("<BAML_END_MSG>\n");
     let mut state = state.lock().await;
     for message in messages {
         if message.is_empty() {
@@ -79,7 +79,7 @@ async fn run_and_update_state(
 
     runner.add_ipc_to_command(&mut shell_command, port);
 
-    let mut cmd = build_shell_command(shell_command);
+    let mut cmd = build_shell_command(shell_command.clone());
 
     // We don't need this - too noisy. We can append to stdout logs later or print it if there was an error.
     // println!(
@@ -108,14 +108,18 @@ async fn run_and_update_state(
     let stdout_file = File::create(&stdout_file_path)?;
     let stderr_file = File::create(&stderr_file_path)?;
 
+    println!("{}", format!("Running tests using: {:?}", &cmd,));
     let mut child = cmd
         .envs(runner.env_vars().into_iter())
         .current_dir(language_root_dir)
-        .env("BAML_IPC_PORT", port.to_string())
+        .env("BOUNDARY_IPC_PORT", port.to_string())
         .stdout(Stdio::from(stdout_file))
         .stderr(Stdio::from(stderr_file))
         .spawn()
-        .expect("failed to spawn pytest");
+        .expect(&format!(
+            "failed to spawn child process {}",
+            shell_command.join(" ")
+        ));
 
     // Print state every 2 seconds while pytest is running
     let mut interval = time::interval(time::Duration::from_millis(500));
@@ -231,5 +235,6 @@ async fn forward_to_port(port: u16, message: &String) -> tokio::io::Result<()> {
     const HOST: &str = "127.0.0.1";
     // Forward message to the port.
     let mut stream = TcpStream::connect(format!("{}:{}", HOST, port)).await?;
-    stream.write_all(message.as_bytes()).await
+    stream.write_all(message.as_bytes()).await?;
+    stream.flush().await
 }

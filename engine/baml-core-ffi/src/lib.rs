@@ -1,7 +1,7 @@
 #![deny(clippy::all)]
 
 use colored::*;
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Result;
 mod api_wrapper;
@@ -40,7 +40,7 @@ impl BamlTracer {
 #[napi]
 pub struct BamlTester {
   // First key is the test suite name, second key is the test case name
-  test_cases: HashMap<(String, String), TestCaseStatus>,
+  test_cases: Arc<napi::tokio::sync::Mutex<HashMap<(String, String), TestCaseStatus>>>,
 }
 
 #[napi]
@@ -48,10 +48,12 @@ impl BamlTester {
   #[napi(constructor)]
   pub fn new(test_cases: Vec<(String, String)>) -> Self {
     Self {
-      test_cases: test_cases
-        .into_iter()
-        .map(|(suite, case)| ((suite, case), TestCaseStatus::Queued))
-        .collect(),
+      test_cases: Arc::new(napi::tokio::sync::Mutex::new(
+        test_cases
+          .into_iter()
+          .map(|(suite, case)| ((suite, case), TestCaseStatus::Queued))
+          .collect(),
+      )),
     }
   }
 
@@ -65,10 +67,14 @@ impl BamlTester {
           .await
           .map(|s| Some(s.session_id))?;
 
-        handler
-          .api()
-          .register_test_cases(self.test_cases.keys().cloned())
-          .await?;
+        let keys = self
+          .test_cases
+          .lock()
+          .await
+          .keys()
+          .cloned()
+          .collect::<Vec<_>>();
+        handler.api().register_test_cases(keys).await?;
 
         if let Some(url) = dashboard_url {
           println!("Boundary Studio: {}", url.blue());
@@ -84,9 +90,9 @@ impl BamlTester {
   pub async fn end(&self) -> Result<(), napi::Error> {
     match otel::event_handler() {
       Some(handler) => {
+        let test_cases = self.test_cases.lock().await;
         // For any tests that are still queued, mark them as skipped
-        let queued_tests = self
-          .test_cases
+        let queued_tests = test_cases
           .iter()
           .filter(|(_, status)| **status == TestCaseStatus::Queued)
           .map(|((suite, case), _)| UpdateTestCaseRequest {
@@ -114,17 +120,21 @@ impl BamlTester {
     status: TestCaseStatus,
     error_data: Option<serde_json::Value>,
   ) -> Result<(), napi::Error> {
-    if !self
-      .test_cases
-      .contains_key(&(test_suite.clone(), test_case.clone()))
     {
-      return Err(
-        anyhow::Error::msg(format!(
-          "Not registered test case - {}::{}\n{:?}",
-          test_suite, test_case, self.test_cases
-        ))
-        .into(),
-      );
+      let mut test_cases = self.test_cases.lock().await;
+      // Update the status of the test case
+      match test_cases.insert((test_suite.clone(), test_case.clone()), status) {
+        Some(_) => {}
+        None => {
+          return Err(
+            anyhow::Error::msg(format!(
+              "Not registered test case - {}::{}\n{:?}",
+              test_suite, test_case, self.test_cases
+            ))
+            .into(),
+          );
+        }
+      }
     }
 
     match otel::event_handler() {

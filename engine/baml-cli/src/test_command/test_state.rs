@@ -261,7 +261,7 @@ impl RunState {
                 None
             }
             MessageData::UpdateTestCase(update) => {
-                // update.test_case_arg_name is of form "<test>[<function>-<impl>]"
+                // update.test_case_arg_name is of form "test_<test>[<function>-<impl>]"
                 let mut parts = update.test_case_arg_name.split('[');
                 let test = parts.next().unwrap();
                 // Strip leading "test_"
@@ -297,6 +297,7 @@ impl RunState {
                 };
 
                 let state = if let Some(x) = self.tests.get_mut(&key) {
+                    info!("Updating test state for {:?} {:?}", key, x);
                     x
                 } else {
                     info!("Unable to find test state for {:?}", key);
@@ -334,6 +335,7 @@ impl RunState {
                     }
                 }
                 .and_then(|spec| {
+                    info!("Updating log test state for {:?}", spec);
                     let state = self.tests.get_mut(&spec);
                     if let Some(state) = state {
                         if let TestState::Finished(state) = state {

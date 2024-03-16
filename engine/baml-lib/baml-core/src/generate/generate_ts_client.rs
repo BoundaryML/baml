@@ -33,6 +33,19 @@ pub(crate) fn generate_ts(ir: &IntermediateRepr, gen: &Generator) -> std::io::Re
             t.write(&mut collector);
         });
     });
+
+    {
+        let clients = collector.start_file(".", "client", false);
+        clients.append(
+            r#"
+    import dotenv from 'dotenv';
+    let env = dotenv.config();
+            "#
+            .to_string(),
+        );
+        collector.finish_file();
+    }
+
     ir.walk_clients().for_each(|c| c.write(&mut collector));
     ir.walk_retry_policies()
         .for_each(|r| r.write(&mut collector));

@@ -195,7 +195,14 @@ impl Into<serde_json::Value> for &Expression {
             }
             Expression::Map(vals, _) => serde_json::Value::Object(
                 vals.into_iter()
-                    .map(|(k, v)| (Into::<serde_json::Value>::into(k).to_string(), v.into()))
+                    .map(|(k, v)| {
+                        let k = Into::<serde_json::Value>::into(k);
+                        let k = match k.as_str() {
+                            Some(k) => k.to_string(),
+                            None => k.to_string(),
+                        };
+                        (k, v.into())
+                    })
                     .collect(),
             ),
         }

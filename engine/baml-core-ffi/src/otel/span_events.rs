@@ -187,6 +187,7 @@ where
           process_id: self.config.api().session_id().to_string(),
           event_chain,
           tags,
+          start_time: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
           ..Default::default()
         },
         ..Default::default()
@@ -194,6 +195,7 @@ where
   }
 
   fn on_event(&self, event: &tracing::Event<'_>, ctx: tracing_subscriber::layer::Context<'_, S>) {
+    println!("Event: {:?}", event.metadata().name());
     if let Some(span_id) = ctx.current_span().id() {
       if let Some(span) = ctx.span(span_id) {
         if let Err(e) = parse_event(event, &span) {
@@ -225,7 +227,9 @@ where
         for schema in log_schema {
           // Submit to a background thread that will send the log schema to the server
           match self.config.submit(schema) {
-            Ok(_) => {}
+            Ok(_) => {
+              println!("Submitted log schema");
+            }
             Err(e) => {
               println!("Error submitting log schema: {:?}", e);
             }

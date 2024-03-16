@@ -1,10 +1,13 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{json, Value};
 use std::io::{self, Write};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::thread::sleep;
 use std::time::Duration;
+use tracing::info;
+
+use super::core_types::{LogSchema, UpdateTestCase};
 
 // Assuming _PartialDict and BaseModel structures are analogous to some serde-serializable Rust structs
 // These would need to be defined or mapped from existing structs.
@@ -50,21 +53,21 @@ impl TcpIPCChannel {
   }
 
   fn send<T: Serialize>(&mut self, name: &str, data: &T) -> Result<()> {
+    println!("Sending message: {}", name);
     let message = json!({
       "name": name,
       "data": data,
     })
-    .to_string();
-    self
-      .socket
-      .write_all(message.as_bytes())
-      .map_err(|e| e.into())
+    .to_string()
+      + "<BAML_END_MSG>\n";
+    self.socket.write_all(message.as_bytes())?;
+    self.socket.flush().map_err(|e| e.into())
   }
 }
 
 #[derive(Debug, Clone)]
 pub struct IPCChannel {
-  channel: Option<TcpIPCChannel>,
+  channel: Option<std::sync::Arc<napi::tokio::sync::Mutex<TcpIPCChannel>>>,
 }
 
 impl IPCChannel {
@@ -74,16 +77,48 @@ impl IPCChannel {
       None => None,
     };
 
+    let channel = channel.map(|c| std::sync::Arc::new(napi::tokio::sync::Mutex::new(c)));
+
     Ok(Self { channel })
   }
 
-  pub fn send<T: Serialize>(&mut self, name: &str, data: T) -> Result<()> {
-    self
-      .channel
-      .as_mut()
-      .map(|c| c.send(name, &data))
-      .transpose()?;
+  pub async fn send(&self, message: IPCMessage<'_>) -> Result<()> {
+    match self.channel {
+      Some(ref c) => {
+        let mut c = c.lock().await;
+        c.send(message.name(), &message.data())?;
+        Ok(())
+      }
+      None => Ok(()),
+    }
+  }
+}
 
-    Ok(())
+#[derive(Serialize, Deserialize, Debug)]
+pub(crate) struct TestRunMeta {
+  pub dashboard_url: String,
+}
+
+pub enum IPCMessage<'a> {
+  Log(&'a LogSchema),
+  TestRunMeta(&'a TestRunMeta),
+  UpdateTestCase(&'a UpdateTestCase),
+}
+
+impl<'a> IPCMessage<'a> {
+  fn name(&self) -> &str {
+    match self {
+      IPCMessage::Log(_) => "log",
+      IPCMessage::TestRunMeta(_) => "test_url",
+      IPCMessage::UpdateTestCase(_) => "update_test_case",
+    }
+  }
+
+  fn data(&self) -> Value {
+    match self {
+      IPCMessage::Log(data) => json!(data),
+      IPCMessage::TestRunMeta(data) => json!(data),
+      IPCMessage::UpdateTestCase(data) => json!(data),
+    }
   }
 }

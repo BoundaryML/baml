@@ -1,4 +1,5 @@
 use anyhow::Result;
+use napi::tokio::runtime::Runtime;
 use std::{
   sync::mpsc::{Receiver, Sender, TryRecvError},
   time::Duration,
@@ -6,11 +7,16 @@ use std::{
 
 use crate::api_wrapper::{api_interface::BoundaryAPI, core_types::LogSchema, APIWrapper};
 
-fn process_batch(api_config: &APIWrapper, batch: Vec<LogSchema>) {
+async fn process_batch_async(api_config: &APIWrapper, batch: Vec<LogSchema>) {
   for work in batch {
     api_config.pretty_print(&work);
-    let _ = api_config.log_schema(&work);
+    let _ = api_config.log_schema(&work).await;
   }
+}
+
+fn process_batch(rt: &Runtime, api_config: &APIWrapper, batch: Vec<LogSchema>) {
+  println!("Processing batch of {} logs", batch.len());
+  rt.block_on(process_batch_async(api_config, batch));
 }
 
 fn batch_processor(
@@ -20,37 +26,58 @@ fn batch_processor(
   max_batch_size: usize,
 ) {
   let api_config = &api_config;
-  let mut batch = Vec::with_capacity(max_batch_size);
+  let mut batch = Vec::with_capacity(if api_config.is_test_mode() {
+    1
+  } else {
+    max_batch_size
+  });
   let mut now = std::time::Instant::now();
+  let rt = Runtime::new().unwrap();
   loop {
     // Try to fill the batch up to max_batch_size
-    match rx.recv_timeout(Duration::from_millis(100)) {
-      Ok(TxEventSignal::Submit(work)) => batch.push(work),
-      Ok(TxEventSignal::Flush) => {
-        if !batch.is_empty() {
-          process_batch(api_config, std::mem::take(&mut batch));
-        }
-        let _ = tx.send(RxEventSignal::Done);
+    let (batch_full, flush, exit) = match rx.recv_timeout(Duration::from_millis(100)) {
+      Ok(TxEventSignal::Submit(work)) => {
+        batch.push(work);
+        (batch.len() >= max_batch_size, false, false)
       }
-      Ok(TxEventSignal::Stop) => {
-        if !batch.is_empty() {
-          process_batch(api_config, std::mem::take(&mut batch));
-        }
-        return; // Exit loop and thread
-      }
-      Err(std::sync::mpsc::RecvTimeoutError::Timeout) => { /* No work, continue */ }
-      Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-        if !batch.is_empty() {
-          process_batch(api_config, std::mem::take(&mut batch));
-        }
-        return; // Exit loop and thread
-      }
-    }
+      Ok(TxEventSignal::Flush) => (false, true, false),
+      Ok(TxEventSignal::Stop) => (false, false, true),
+      Err(std::sync::mpsc::RecvTimeoutError::Timeout) => (false, false, false),
+      Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => (false, false, true),
+    };
+
+    let time_trigger = if now.elapsed().as_millis() >= 1000 {
+      true
+    } else {
+      false
+    };
+
+    let should_process_batch = (batch_full || flush || exit || time_trigger) && !batch.is_empty();
 
     // Send events every 1 second or when the batch is full
-    if batch.len() >= max_batch_size || now.elapsed().as_secs() >= 1 {
-      process_batch(api_config, std::mem::take(&mut batch));
+    if should_process_batch {
+      println!(
+        "Trigger hit: {} or {}ms",
+        batch.len(),
+        now.elapsed().as_millis()
+      );
+      process_batch(&rt, api_config, std::mem::take(&mut batch));
+    }
+
+    if should_process_batch || time_trigger {
       now = std::time::Instant::now();
+    }
+
+    if flush {
+      match tx.send(RxEventSignal::Done) {
+        Ok(_) => {}
+        Err(e) => {
+          println!("Error sending flush signal: {:?}", e);
+        }
+      }
+    }
+    if exit {
+      return;
     }
   }
 }
@@ -138,11 +165,13 @@ impl BatchProcessor {
   }
 
   pub fn stop(&mut self) -> Result<()> {
+    println!("Stopping batch processor");
     let join_handle = match self.join_handle.take() {
       Some(handle) => handle,
       None => return Ok(()), // Already stopped
     };
 
+    println!("Sending stop signal");
     self
       .tx
       .lock()
@@ -167,8 +196,11 @@ impl BatchProcessor {
 
 impl Drop for BatchProcessor {
   fn drop(&mut self) {
+    println!("Dropping batch processor");
     match self.stop() {
-      Ok(_) => (),
+      Ok(_) => {
+        println!("Done! Stopped batch processor");
+      }
       Err(e) => println!("Error stopping BatchProcessor: {:?}", e),
     }
   }

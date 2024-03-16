@@ -1,3 +1,4 @@
+use log::info;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -7,6 +8,7 @@ pub(crate) fn handle_message(message: &str) -> Option<MessageData> {
         return None;
     }
     // Parse the message as json
+    info!("Received message: {}", message);
     match serde_json::from_str::<MessageData>(message) {
         Ok(data) => Some(data),
         Err(e) => {
@@ -36,7 +38,7 @@ pub(crate) struct TestRunMeta {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub(crate) struct UpdateTestCase {
-    project_id: String,
+    project_id: Option<String>,
     test_cycle_id: String,
     test_dataset_name: String,
     test_case_definition_name: String,
@@ -47,7 +49,7 @@ pub(crate) struct UpdateTestCase {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub(crate) struct LogSchema {
-    project_id: String,
+    project_id: Option<String>,
     event_type: EventType,
     root_event_id: String,
     event_id: String,

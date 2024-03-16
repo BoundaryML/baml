@@ -154,7 +154,7 @@ pub(crate) fn run(input: &str) -> String {
                         let props = t.test_case();
                         json!({
                             "name": StringSpan::new(t.name(), &t.identifier().span()),
-                            "content": Into::<serde_json::Value>::into(&props.content),
+                            "content": Into::<serde_json::Value>::into(&props.content).to_string(),
                         })
                     }
                 ).collect::<Vec<_>>(),

@@ -104,10 +104,13 @@ class TestState {
   public handleMessage(data: Buffer) {
     try {
       // Data may be inadvertently concatenated together, but we actually send a \n delimiter between messages to be able to split msgs properly.
-      const delimitedData = data.toString().split('<END_MSG>\n')
-      delimitedData.forEach((data) => {
+      const delimitedData = data.toString().split('<BAML_END_MSG>')
+      console.log(`Got a ${delimitedData.length} message`)
+      delimitedData.map(d => d.trim()).forEach((data) => {
         if (data) {
           this.handleMessageLine(data)
+        } else {
+          console.log('Empty message')
         }
       })
     } catch (e) {
@@ -118,11 +121,12 @@ class TestState {
   }
 
   private handleMessageLine(data: string) {
-    const payload = JSON.parse(data.toString()) as {
+    const payload = JSON.parse(data) as {
       name: string
       data: any
     }
 
+    console.log('Got message:', payload.name)
     switch (payload.name) {
       case 'test_url':
         this.setTestUrl(payload.data)
@@ -133,7 +137,8 @@ class TestState {
       case 'log':
         let res = clientEventLogSchema.safeParse(payload.data)
         if (!res.success) {
-          // console.error(res.error)
+          console.error(`Failed to parse log event: ${JSON.stringify(payload.data, null, 2)}`)
+          console.error(res.error)
         } else {
           this.handleLog(payload.data)
         }
@@ -201,7 +206,9 @@ class TestState {
   private handleLog(data: ClientEventLog) {
     const fullTestName = data.context.tags?.['test_case_arg_name']
     const testResult = this.test_results.results.find((test) => test.fullTestName === fullTestName)
+
     if (testResult && data.event_type === 'func_llm') {
+      console.log('Found:', fullTestName, JSON.stringify(data, null, 2))
       if (this.test_results.test_url) {
         testResult.url = `${this.test_results.test_url}&s_eid=${data.event_id}&eid=${data.root_event_id}`
       }
@@ -211,6 +218,8 @@ class TestState {
         raw: data.metadata?.output?.raw_text ?? testResult.output.raw,
       }
       this.testStateListener?.(this.test_results)
+    } else {
+      console.log('Not found:', fullTestName, JSON.stringify(data, null, 2))
     }
   }
 }

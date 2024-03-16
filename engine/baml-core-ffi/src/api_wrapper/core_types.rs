@@ -6,10 +6,10 @@ use serde_json::Value;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub(crate) struct UpdateTestCase {
-  project_id: Option<String>,
-  test_cycle_id: String,
-  test_dataset_name: String,
-  test_case_definition_name: String,
+  pub project_id: Option<String>,
+  pub test_cycle_id: String,
+  pub test_dataset_name: String,
+  pub test_case_definition_name: String,
   pub test_case_arg_name: String,
   pub status: TestCaseStatus,
   pub error_data: Option<Value>, // Rust doesn't have a direct equivalent of Python's Any type, so we use serde_json::Value
