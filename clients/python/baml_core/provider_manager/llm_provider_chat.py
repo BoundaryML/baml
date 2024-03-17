@@ -211,9 +211,8 @@ class LLMChatProvider(AbstractLLMProvider):
     async def _run_chat(self, messages: typing.List[LLMChatMessage]) -> LLMResponse:
         raise NotImplementedError()
 
-    @abc.abstractmethod
     async def _stream_chat(
         self, messages: typing.List[LLMChatMessage]
     ) -> typing.AsyncIterator[LLMResponse]:
-        raise NotImplementedError()
-        yield  # To appease typechecker. It thinks it's not a generator function unless it has a yield.
+        yield await self._run_chat(messages)
+        # yield  # To appease typechecker. It thinks it's not a generator function unless it has a yield.

@@ -17,3 +17,4 @@ async def test_{{test_case_name}}({{function_name}}Impl: I{{function_name}}{{#if
     {{else}}
     await {{function_name}}Impl(param)
     {{/if}}
+

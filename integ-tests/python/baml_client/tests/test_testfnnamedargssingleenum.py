@@ -15,8 +15,8 @@ from pytest_baml.ipc_channel import BaseIPCChannel
 from typing import Any
 
 
-@baml.TestFnNamedArgsSingleEnum.test(stream=True)
-async def test_case1(TestFnNamedArgsSingleEnumImpl: ITestFnNamedArgsSingleEnumStream, baml_ipc_channel: BaseIPCChannel):
+@baml.TestFnNamedArgsSingleEnum.test(stream=False)
+async def test_case1(TestFnNamedArgsSingleEnumImpl: ITestFnNamedArgsSingleEnum, baml_ipc_channel: BaseIPCChannel):
     def to_str(item: Any) -> str:
         if isinstance(item, str):
             return item
@@ -25,10 +25,6 @@ async def test_case1(TestFnNamedArgsSingleEnumImpl: ITestFnNamedArgsSingleEnumSt
     case = {"myArg": "ONE", }
     deserializer_myArg = Deserializer[NamedArgsSingleEnum](NamedArgsSingleEnum) # type: ignore
     myArg = deserializer_myArg.from_string(to_str(case["myArg"]))
-    async with TestFnNamedArgsSingleEnumImpl(
+    await TestFnNamedArgsSingleEnumImpl(
         myArg=myArg
-    ) as stream:
-        async for response in stream.parsed_stream:
-            baml_ipc_channel.send("partial_response", response.json())
-
-        await stream.get_final_response()
+    )

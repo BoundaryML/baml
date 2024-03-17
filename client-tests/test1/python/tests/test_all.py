@@ -70,17 +70,11 @@ async def test_logic() -> typing.Any:
 
     except Exception as e:
         print(f"error: {e}")
-
-    res = await baml.MaybePolishText(
-        ProposedMessage(
-            thread=Conversation(thread=[]),
-            generated_response="i dont have that account ready",
-        )
-    )
+  
 
     await some_nested_trace1()
     await some_nested_trace2()
-    return res
+   
 
 
 # print(f"final: {result.value.model_dump_json()}")

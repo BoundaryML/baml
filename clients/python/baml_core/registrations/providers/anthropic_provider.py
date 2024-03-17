@@ -41,7 +41,8 @@ def _hydrate_anthropic_tokenizer() -> None:
 @register_llm_provider("baml-anthropic", "baml-anthropic-completion")
 @typing.final
 class AnthropicProvider(LLMChatProvider):
-    __kwargs: typing.Dict[str, typing.Any]
+    __caller_kwargs: typing.Dict[str, typing.Any]
+    __client_kwargs: typing.Dict[str, typing.Any]
 
     def _to_error_code(self, e: Exception) -> typing.Optional[int]:
         if isinstance(e, anthropic.APIStatusError):
@@ -60,20 +61,17 @@ class AnthropicProvider(LLMChatProvider):
     def __init__(
         self, *, options: typing.Dict[str, typing.Any], **kwargs: typing.Any
     ) -> None:
-        _hydrate_anthropic_tokenizer()
-
-        if "max_retries" in options and "retry" in kwargs:
-            assert False, "Either use max_retries with Anthropic via options or retry via BAML, not both"
+        assert not (
+            "max_retries" in options and "retry" in kwargs
+        ), "Either use max_retries with Anthropic via options or retry via BAML, not both"
 
         super().__init__(
             prompt_to_chat=lambda chat: {"role": "user", "content": chat},
             **kwargs,
         )
 
-        if "max_tokens_to_sample" not in options:
-            # Anthropic requires a max_tokens_to_sample arg
-            # We
-            options["max_tokens_to_sample"] = 1000
+        self._ensure_option_defaults(options, "max_tokens_to_sample", 1000)
+        self._ensure_option_defaults(options, "temperature", 0)
 
         client_arg_names = [
             "api_key",
@@ -88,19 +86,21 @@ class AnthropicProvider(LLMChatProvider):
             "_strict_response_validation",
             "max_retries",
         ]
-        # add temperature 0 to options if not present
-        if "temperature" not in options:
-            options["temperature"] = 0
+        self._ensure_option_defaults(options, "max_retries", 0)
         client_kwargs = {k: options.pop(k) for k in client_arg_names if k in options}
 
-        # Default to 0 retries if not specified.
-        if "max_retries" not in client_kwargs:
-            client_kwargs["max_retries"] = 0
-
-        self.__client = anthropic.AsyncAnthropic(**client_kwargs)
         self.__client_kwargs = client_kwargs
         self.__caller_kwargs = options
         self._set_args(**self.__caller_kwargs, **self.__client_kwargs)
+
+    def _ensure_option_defaults(
+        self, options: typing.Dict[str, typing.Any], key: str, default_value: typing.Any
+    ) -> None:
+        if key not in options:
+            options[key] = default_value
+
+    def __create_client(self) -> anthropic.AsyncAnthropic:
+        return anthropic.AsyncAnthropic(**self.__client_kwargs)
 
     def _validate(self) -> None:
         pass
@@ -115,14 +115,15 @@ class AnthropicProvider(LLMChatProvider):
             )
             + anthropic.AI_PROMPT
         )
-        prompt_tokens = await self.__client.count_tokens(prompt)
+        client = self.__create_client()
+        prompt_tokens = await client.count_tokens(prompt)
         response = typing.cast(
             anthropic.types.Completion,
-            await self.__client.completions.create(
+            await client.completions.create(
                 prompt=prompt, **self.__caller_kwargs
             ),
         )
-        output_tokens = await self.__client.count_tokens(response.completion)
+        output_tokens = await client.count_tokens(response.completion)
 
         return LLMResponse(
             generated=response.completion,
@@ -180,10 +181,12 @@ class AnthropicProvider(LLMChatProvider):
         if system_message:
             messages_kwargs["system"] = system_message
 
+        client = self.__create_client()
+
         if parse_version(version=anthropic.__version__) < parse_version("0.16.0"):
-            messages_api = self.__client.beta.messages  # type: ignore
+            messages_api = client.beta.messages  # type: ignore
         else:
-            messages_api = self.__client.messages
+            messages_api = client.messages
         async with messages_api.stream(
             **messages_kwargs,
         ) as stream:

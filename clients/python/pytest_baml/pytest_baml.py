@@ -193,6 +193,7 @@ class BamlPytestPlugin:
                         item.add_marker(pytest.mark.skip(reason="No impls specified"))
 
             if "baml_test" in item.keywords:
+               
                 if hasattr(item, "function") and asyncio.iscoroutinefunction(
                     item.function
                 ):

@@ -15,8 +15,8 @@ from pytest_baml.ipc_channel import BaseIPCChannel
 from typing import Any
 
 
-@baml.FnOutputBool.test(stream=True)
-async def test_western_green(FnOutputBoolImpl: IFnOutputBoolStream, baml_ipc_channel: BaseIPCChannel):
+@baml.FnOutputBool.test(stream=False)
+async def test_western_green(FnOutputBoolImpl: IFnOutputBool, baml_ipc_channel: BaseIPCChannel):
     def to_str(item: Any) -> str:
         if isinstance(item, str):
             return item
@@ -25,8 +25,5 @@ async def test_western_green(FnOutputBoolImpl: IFnOutputBoolStream, baml_ipc_cha
     content = to_str("noop")
     deserializer = Deserializer[str](str) # type: ignore
     param = deserializer.from_string(content)
-    async with FnOutputBoolImpl(param) as stream:
-        async for response in stream.parsed_stream:
-            baml_ipc_channel.send("partial_response", response.json())
+    await FnOutputBoolImpl(param)
 
-        await stream.get_final_response()

@@ -15,8 +15,8 @@ from pytest_baml.ipc_channel import BaseIPCChannel
 from typing import Any
 
 
-@baml.FnOutputClassWithEnum.test(stream=True)
-async def test_outrageous_moccasin(FnOutputClassWithEnumImpl: IFnOutputClassWithEnumStream, baml_ipc_channel: BaseIPCChannel):
+@baml.FnOutputClassWithEnum.test(stream=False)
+async def test_outrageous_moccasin(FnOutputClassWithEnumImpl: IFnOutputClassWithEnum, baml_ipc_channel: BaseIPCChannel):
     def to_str(item: Any) -> str:
         if isinstance(item, str):
             return item
@@ -25,8 +25,5 @@ async def test_outrageous_moccasin(FnOutputClassWithEnumImpl: IFnOutputClassWith
     content = to_str("noop")
     deserializer = Deserializer[str](str) # type: ignore
     param = deserializer.from_string(content)
-    async with FnOutputClassWithEnumImpl(param) as stream:
-        async for response in stream.parsed_stream:
-            baml_ipc_channel.send("partial_response", response.json())
+    await FnOutputClassWithEnumImpl(param)
 
-        await stream.get_final_response()

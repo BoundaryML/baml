@@ -47,6 +47,7 @@ class OpenAIChatProvider(LLMChatProvider):
             messages=messages,
             **self.__kwargs,
         )
+
         text = response["choices"][0]["message"]["content"]
         usage = response["usage"]
         model = response["model"]
@@ -65,7 +66,7 @@ class OpenAIChatProvider(LLMChatProvider):
             ),
         )
 
-    async def _stream_chat(
-        self, messages: typing.List[LLMChatMessage]
-    ) -> typing.AsyncIterator[LLMResponse]:
-        yield await self._run_chat(messages)
+    # async def _stream_chat(
+    #     self, messages: typing.List[LLMChatMessage]
+    # ) -> typing.AsyncIterator[LLMResponse]:
+    #     yield await self._run_chat(messages)
