@@ -48,7 +48,7 @@ impl WithLoader<TypeScriptConfig> for TypeScriptConfig {
     }
 }
 
-enum PackageManager {
+pub(super) enum PackageManager {
     Yarn,
     Pnpm,
     Npm,
