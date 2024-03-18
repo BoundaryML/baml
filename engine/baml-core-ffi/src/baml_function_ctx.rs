@@ -57,6 +57,10 @@ impl ScopeGuard {
     let _guard = self.span.enter();
     otel::log_event(name, event)
   }
+
+  pub fn close(self) {
+    drop(self.span)
+  }
 }
 
 #[derive(Clone)]

@@ -57,6 +57,8 @@ const trace = <T, R>(functionName: string, returnType: string, parameters: Array
         scopeGuard.logError(code, error.message, error.stack);
       }
       throw error;
+    } finally {
+      scopeGuard.close();
     }
   };
 };
@@ -85,6 +87,12 @@ const traceAsync = <T, R>(
         }
         throw error;
       }
+    }).then((result) => {
+      scopeGuard.close()
+      return result;
+    }).catch((error) => {
+      scopeGuard.close()
+      throw error;
     });
   }
 }

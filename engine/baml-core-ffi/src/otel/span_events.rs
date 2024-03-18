@@ -195,7 +195,8 @@ where
   }
 
   fn on_event(&self, event: &tracing::Event<'_>, ctx: tracing_subscriber::layer::Context<'_, S>) {
-    println!("Event: {:?}", event.metadata().name());
+    // let now = chrono::Local::now().format("%M:%S%.3f");
+    // println!("{now} Event: {:?}", event.metadata().name());
     if let Some(span_id) = ctx.current_span().id() {
       if let Some(span) = ctx.span(span_id) {
         if let Err(e) = parse_event(event, &span) {
@@ -228,7 +229,8 @@ where
           // Submit to a background thread that will send the log schema to the server
           match self.config.submit(schema) {
             Ok(_) => {
-              println!("Submitted log schema");
+              let now = chrono::Local::now().format("%M:%S%.3f");
+              println!("{now} Submitted log schema");
             }
             Err(e) => {
               println!("Error submitting log schema: {:?}", e);
@@ -245,6 +247,8 @@ where
 
 impl Drop for BamlEventSubscriber<'_> {
   fn drop(&mut self) {
+    let now = chrono::Local::now().format("%M:%S%.3f");
+    println!("{now} Dropping BamlEventSubscriber");
     match self.config.stop() {
       Ok(_) => {}
       Err(e) => {

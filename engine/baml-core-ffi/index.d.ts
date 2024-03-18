@@ -66,4 +66,5 @@ export class BamlScopeGuard {
   }): void
   logVariant(event: string): void
   setTags(event: { [key: string]: string | null }): void
+  close(): void
 }

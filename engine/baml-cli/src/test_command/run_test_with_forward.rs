@@ -30,14 +30,14 @@ async fn handle_connection(
     let promise = forward_to_port(forward_port, &buffer);
 
     // buffer may have multiple messages in it, so we need to split it
-    // on the message separator <BAML_END_MSG>\n
-    let messages = buffer.split("<BAML_END_MSG>\n");
+    // on the message separator <BAML_END_MSG>
+    let messages = buffer.split("<BAML_END_MSG>");
     let mut state = state.lock().await;
     for message in messages {
         if message.is_empty() {
             continue;
         }
-        if let Some(message) = ipc_comms::handle_message(message) {
+        if let Some(message) = ipc_comms::handle_message(message.trim()) {
             state.add_message(message);
         } else {
             _ = promise.await;

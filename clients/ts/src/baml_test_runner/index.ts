@@ -75,4 +75,12 @@ class BamlTestRunner extends TestRunner {
   }
 }
 
+process.on("beforeExit", () => {
+  console.log("beforeExit");
+});
+
+process.on("exit", () => {
+  console.log("exit");
+});
+
 export default BamlTestRunner;

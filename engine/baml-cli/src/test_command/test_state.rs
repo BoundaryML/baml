@@ -314,6 +314,7 @@ impl RunState {
                 // Log messages always come after the test case update
                 {
                     let test_name = log.context.tags.get("test_case_arg_name");
+                    println!("Test name: {:?}", test_name);
                     if let Some(test_name) = test_name {
                         let mut parts = test_name.split('[');
                         let test = parts.next().unwrap();
@@ -335,7 +336,10 @@ impl RunState {
                     }
                 }
                 .and_then(|spec| {
-                    info!("Updating log test state for {:?}", spec);
+                    info!(
+                        "Updating log test state for {:?} {:?}",
+                        spec, log.context.tags
+                    );
                     let state = self.tests.get_mut(&spec);
                     if let Some(state) = state {
                         if let TestState::Finished(state) = state {
@@ -459,6 +463,8 @@ impl RunState {
                             if !res.is_empty() {
                                 return Some((spec, res));
                             }
+                        } else {
+                            println!("Test state is not finished: {:?}", state);
                         }
                     }
                     None

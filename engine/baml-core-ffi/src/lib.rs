@@ -153,7 +153,7 @@ impl BamlTester {
 
 #[napi(js_name = "BamlScopeGuard")]
 pub struct JsScopeGuard {
-  guard: ScopeGuard,
+  guard: Option<ScopeGuard>,
 }
 
 #[napi]
@@ -166,12 +166,12 @@ impl JsScopeGuard {
     as_kwarg: bool,
   ) -> Self {
     Self {
-      guard: ScopeGuard::new(&FunctionCtx::new(
+      guard: Some(ScopeGuard::new(&FunctionCtx::new(
         function_name,
         return_type,
         parameters,
         as_kwarg,
-      )),
+      ))),
     }
   }
 
@@ -183,13 +183,16 @@ impl JsScopeGuard {
     parameters: Vec<(String, String)>,
     as_kwarg: bool,
   ) -> Self {
-    Self {
-      guard: self.guard.new_with_parent(&FunctionCtx::new(
-        function_name,
-        return_type,
-        parameters,
-        as_kwarg,
-      )),
+    match &self.guard {
+      Some(guard) => Self {
+        guard: Some(guard.new_with_parent(&FunctionCtx::new(
+          function_name,
+          return_type,
+          parameters,
+          as_kwarg,
+        ))),
+      },
+      None => panic!("Invalid scope guard is used"),
     }
   }
 
@@ -198,14 +201,18 @@ impl JsScopeGuard {
     &self,
     #[napi(ts_arg_type = "{[key: string]: any} | any[]")] args: serde_json::Value,
   ) -> Result<()> {
-    self.guard.log_inputs(args)
+    match &self.guard {
+      Some(guard) => guard.log_inputs(args),
+      None => Err(anyhow::anyhow!("Invalid scope guard is used")),
+    }
   }
 
   #[napi]
   pub fn log_output(&self, result: Option<String>) -> Result<()> {
-    self
-      .guard
-      .log_output(result.as_ref().map(|s| s.as_str()).unwrap_or("null"))
+    match &self.guard {
+      Some(guard) => guard.log_output(result.as_ref().map(|s| s.as_str()).unwrap_or("null")),
+      None => Err(anyhow::anyhow!("Invalid scope guard is used")),
+    }
   }
 
   #[napi]
@@ -215,9 +222,10 @@ impl JsScopeGuard {
     message: Option<String>,
     stack: Option<String>,
   ) -> Result<()> {
-    self
-      .guard
-      .log_error(error_code, message.as_deref(), stack.as_deref())
+    match &self.guard {
+      Some(guard) => guard.log_error(error_code, message.as_deref(), stack.as_deref()),
+      None => Err(anyhow::anyhow!("Invalid scope guard is used")),
+    }
   }
 
   #[napi]
@@ -232,7 +240,10 @@ impl JsScopeGuard {
     }")]
     event: serde_json::Value,
   ) -> Result<()> {
-    self.guard.log_llm_event(SpanEvent::LlmRequestStart, event)
+    match &self.guard {
+      Some(guard) => guard.log_llm_event(SpanEvent::LlmRequestStart, event),
+      None => Err(anyhow::anyhow!("Invalid scope guard is used")),
+    }
   }
 
   #[napi]
@@ -245,7 +256,10 @@ impl JsScopeGuard {
     }")]
     event: serde_json::Value,
   ) -> Result<()> {
-    self.guard.log_llm_event(SpanEvent::LlmRequestEnd, event)
+    match &self.guard {
+      Some(guard) => guard.log_llm_event(SpanEvent::LlmRequestEnd, event),
+      None => Err(anyhow::anyhow!("Invalid scope guard is used")),
+    }
   }
 
   #[napi]
@@ -258,7 +272,10 @@ impl JsScopeGuard {
     }")]
     event: serde_json::Value,
   ) -> Result<()> {
-    self.guard.log_llm_event(SpanEvent::LlmRequestError, event)
+    match &self.guard {
+      Some(guard) => guard.log_llm_event(SpanEvent::LlmRequestError, event),
+      None => Err(anyhow::anyhow!("Invalid scope guard is used")),
+    }
   }
 
   #[napi]
@@ -266,9 +283,10 @@ impl JsScopeGuard {
     &self,
     #[napi(ts_arg_type = "number")] event: serde_json::Value,
   ) -> Result<()> {
-    self
-      .guard
-      .log_llm_event(SpanEvent::LlmRequestCacheHit, event)
+    match &self.guard {
+      Some(guard) => guard.log_llm_event(SpanEvent::LlmRequestCacheHit, event),
+      None => Err(anyhow::anyhow!("Invalid scope guard is used")),
+    }
   }
 
   #[napi]
@@ -276,7 +294,10 @@ impl JsScopeGuard {
     &self,
     #[napi(ts_arg_type = "{[key: string]: any}")] args: serde_json::Value,
   ) -> Result<()> {
-    self.guard.log_llm_event(SpanEvent::LlmRequestArgs, args)
+    match &self.guard {
+      Some(guard) => guard.log_llm_event(SpanEvent::LlmRequestArgs, args),
+      None => Err(anyhow::anyhow!("Invalid scope guard is used")),
+    }
   }
 
   #[napi]
@@ -293,7 +314,10 @@ impl JsScopeGuard {
     }")]
     args: serde_json::Value,
   ) -> Result<()> {
-    self.guard.log_llm_event(SpanEvent::LlmPromptTemplate, args)
+    match &self.guard {
+      Some(guard) => guard.log_llm_event(SpanEvent::LlmPromptTemplate, args),
+      None => Err(anyhow::anyhow!("Invalid scope guard is used")),
+    }
   }
 
   #[napi]
@@ -301,7 +325,10 @@ impl JsScopeGuard {
     &self,
     #[napi(ts_arg_type = "string")] event: serde_json::Value,
   ) -> Result<()> {
-    self.guard.log_llm_event(SpanEvent::Variant, event)
+    match &self.guard {
+      Some(guard) => guard.log_llm_event(SpanEvent::Variant, event),
+      None => Err(anyhow::anyhow!("Invalid scope guard is used")),
+    }
   }
 
   #[napi]
@@ -312,6 +339,15 @@ impl JsScopeGuard {
     }")]
     event: serde_json::Value,
   ) -> Result<()> {
-    self.guard.log_llm_event(SpanEvent::SetTags, event)
+    match &self.guard {
+      Some(guard) => guard.log_llm_event(SpanEvent::SetTags, event),
+      None => Err(anyhow::anyhow!("Invalid scope guard is used")),
+    }
+  }
+
+  #[napi]
+  pub fn close(&mut self) {
+    // In Rust, we need to manually drop the guard to release the lock
+    self.guard = None;
   }
 }
