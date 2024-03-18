@@ -38,8 +38,8 @@ pub(crate) fn generate_ts(ir: &IntermediateRepr, gen: &Generator) -> std::io::Re
         let clients = collector.start_file(".", "client", false);
         clients.append(
             r#"
-    import dotenv from 'dotenv';
-    let env = dotenv.config();
+    import { loadEnvVars } from '@boundaryml/baml-core';
+    loadEnvVars();
             "#
             .to_string(),
         );

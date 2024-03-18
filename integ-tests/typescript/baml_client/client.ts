@@ -9,8 +9,8 @@
 import { clientManager } from '@boundaryml/baml-core/client_manager';
 
 
-import dotenv from 'dotenv';
-    let env = dotenv.config();
+import { loadEnvVars } from '@boundaryml/baml-core';
+    loadEnvVars();
 
 const Claude = clientManager.createClient('Claude', 'baml-anthropic-chat', {
     model: "claude-3-haiku-20240307",

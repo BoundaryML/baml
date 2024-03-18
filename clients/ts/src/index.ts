@@ -1,5 +1,9 @@
 import { FireBamlEvent } from "./ffi_layer";
-
+import dotenv from 'dotenv';
 const setTags = FireBamlEvent.tags;
 
-export { setTags };
+const loadEnvVars = () => {
+  dotenv.config();
+}
+
+export { setTags, loadEnvVars };
