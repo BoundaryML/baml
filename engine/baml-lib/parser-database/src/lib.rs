@@ -345,7 +345,7 @@ impl ParserDatabase {
                     // We should just ensure that atleast one of the input or output replacers is used.
                     if input_replacers.is_empty() {
                         diag.push_warning(DatamodelWarning::prompt_variable_unused(
-                            "Never uses {#input}",
+                            "Expected prompt to use {#input}",
                             span.clone(),
                         ));
                     }
@@ -353,7 +353,7 @@ impl ParserDatabase {
                     // TODO: We should ensure every enum the class uses is used here.
                     if output_replacers.is_empty() {
                         diag.push_warning(DatamodelWarning::prompt_variable_unused(
-                            "Never uses {#print_type(..)} or {#print_enum(..)}",
+                            "Expected prompt to use {#print_type(..)} or {#print_enum(..)} but none was found",
                             span.clone(),
                         ));
                     }
