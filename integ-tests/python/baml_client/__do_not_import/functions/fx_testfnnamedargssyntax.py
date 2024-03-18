@@ -57,10 +57,10 @@ class IBAMLTestFnNamedArgsSyntax(BaseBAMLFunction[str, str]):
         )
 
     async def __call__(self, *args, **kwargs) -> str:
-        raise NotImplemented("No impls defined")
+        raise NotImplementedError("No impls defined")
     
     def stream(self, *args, **kwargs) -> AsyncStream[str, str]:
-        raise NotImplemented("No impls defined")
+        raise NotImplementedError("No impls defined")
 
 BAMLTestFnNamedArgsSyntax = IBAMLTestFnNamedArgsSyntax()
 

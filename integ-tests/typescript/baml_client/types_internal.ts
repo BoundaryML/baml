@@ -3,9 +3,10 @@
 // Disable formatting for this file to avoid linting errors.
 // tslint:disable
 // @ts-nocheck
+/* eslint-disable */
 
 
-import { EnumInClass, EnumOutput, ModifiedOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass } from './types';
+import { EnumInClass, EnumOutput, ModifiedOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OverrideClass, OverrideEnum, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass } from './types';
 
 
 // Function to check if a value is a member of the EnumInClass enum
@@ -26,6 +27,11 @@ function isNamedArgsSingleEnum(value: any): value is NamedArgsSingleEnum {
 // Function to check if a value is a member of the NamedArgsSingleEnumList enum
 function isNamedArgsSingleEnumList(value: any): value is NamedArgsSingleEnumList {
   return Object.values(NamedArgsSingleEnumList).includes(value);
+}
+
+// Function to check if a value is a member of the OverrideEnum enum
+function isOverrideEnum(value: any): value is OverrideEnum {
+  return Object.values(OverrideEnum).includes(value);
 }
 
 // Function to check if a value is a member of the TestEnum enum
@@ -105,6 +111,43 @@ class InternalNamedArgsSingleClass implements NamedArgsSingleClass {
   }
   get key_three(): number {
     return this.data.key_three;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
+// Function to validate if an object is a OverrideClass object
+function isOverrideClass(obj: any): obj is OverrideClass {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("prop1" in obj && (typeof obj.prop1 === 'string'))
+    && ("prop2" in obj && (typeof obj.prop2 === 'string'))
+  );
+}
+
+
+class InternalOverrideClass implements OverrideClass {
+  private constructor(private data: {
+    prop1: string,
+    prop2: string,
+  }, private raw: OverrideClass) {}
+
+  static from(data: OverrideClass): InternalOverrideClass {
+    return new InternalOverrideClass({
+      prop1: data.prop1,
+      prop2: data.prop2,
+    }, data);
+  }
+
+  get prop1(): string {
+    return this.data.prop1;
+  }
+  get prop2(): string {
+    return this.data.prop2;
   }
 
 
@@ -243,4 +286,5 @@ class InternalTestOutputClass implements TestOutputClass {
 }
 
 
-export { InternalModifiedOutput, InternalNamedArgsSingleClass, InternalTestClassAlias, InternalTestClassWithEnum, InternalTestOutputClass }
+export { InternalModifiedOutput, InternalNamedArgsSingleClass, InternalOverrideClass, InternalTestClassAlias, InternalTestClassWithEnum, InternalTestOutputClass }
+

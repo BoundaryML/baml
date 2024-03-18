@@ -8,7 +8,7 @@
 # fmt: off
 
 from ..clients.client_gpt35 import GPT35
-from ..functions.fx_testfnnamedargssingleenum import BAMLTestFnNamedArgsSingleEnum
+from ..functions.fx_fntestnamedargssingleenum import BAMLFnTestNamedArgsSingleEnum
 from ..types.enums.enm_namedargssingleenum import NamedArgsSingleEnum
 from baml_core.provider_manager.llm_response import LLMResponse
 from baml_core.stream import AsyncStream
@@ -18,7 +18,7 @@ from baml_lib._impl.deserializer import Deserializer
 import typing
 # Impl: v1
 # Client: GPT35
-# An implementation of TestFnNamedArgsSingleEnum.
+# An implementation of FnTestNamedArgsSingleEnum.
 
 __prompt_template = """\
 Print these values back to me:
@@ -57,4 +57,4 @@ def v1_stream(*, myArg: NamedArgsSingleEnum
     stream = AsyncStream(stream_cb=run_prompt, partial_deserializer=__partial_deserializer, final_deserializer=__deserializer)
     return stream
 
-BAMLTestFnNamedArgsSingleEnum.register_impl("v1")(v1, v1_stream)
+BAMLFnTestNamedArgsSingleEnum.register_impl("v1")(v1, v1_stream)

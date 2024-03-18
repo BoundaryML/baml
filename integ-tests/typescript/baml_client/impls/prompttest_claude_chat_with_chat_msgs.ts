@@ -3,6 +3,7 @@
 // Disable formatting for this file to avoid linting errors.
 // tslint:disable
 // @ts-nocheck
+/* eslint-disable */
 
 
 import { Claude } from '../client';
@@ -41,7 +42,8 @@ PromptTest.registerImpl('claude_chat_with_chat_msgs', async (
       }
     );
 
-
     return deserializer.coerce(result.generated);
   }
 );
+
+

@@ -3,6 +3,7 @@
 // Disable formatting for this file to avoid linting errors.
 // tslint:disable
 // @ts-nocheck
+/* eslint-disable */
 
 
 import { registerEnumDeserializer, registerObjectDeserializer } from '@boundaryml/baml-core/deserializer/deserializer';
@@ -49,6 +50,17 @@ const schema: JSONSchema7 = {
     },
     "NamedArgsSingleEnumList": {
       "title": "NamedArgsSingleEnumList",
+      "enum": [
+        {
+          "const": "ONE"
+        },
+        {
+          "const": "TWO"
+        }
+      ]
+    },
+    "OverrideEnum": {
+      "title": "OverrideEnum",
       "enum": [
         {
           "const": "ONE"
@@ -112,6 +124,22 @@ const schema: JSONSchema7 = {
         "key",
         "key_two",
         "key_three"
+      ]
+    },
+    "OverrideClass": {
+      "title": "OverrideClass",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "type": "string"
+        },
+        "prop2": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "prop1",
+        "prop2"
       ]
     },
     "TestClassAlias": {
@@ -210,6 +238,24 @@ const schema: JSONSchema7 = {
       "type": "string",
       "title": "FnTestClassAlias input"
     },
+    "FnTestClassOverride_input": {
+      "type": "string",
+      "title": "FnTestClassOverride input"
+    },
+    "FnTestEnumOverride_input": {
+      "type": "string",
+      "title": "FnTestEnumOverride input"
+    },
+    "FnTestNamedArgsSingleEnum_input": {
+      "type": "object",
+      "properties": {
+        "myArg": {
+          "$ref": "#/definitions/NamedArgsSingleEnum"
+        }
+      },
+      "required": [],
+      "title": "FnTestNamedArgsSingleEnum input"
+    },
     "FnTestOutputAdapter_input": {
       "type": "string",
       "title": "FnTestOutputAdapter input"
@@ -237,16 +283,6 @@ const schema: JSONSchema7 = {
       },
       "required": [],
       "title": "TestFnNamedArgsSingleClass input"
-    },
-    "TestFnNamedArgsSingleEnum_input": {
-      "type": "object",
-      "properties": {
-        "myArg": {
-          "$ref": "#/definitions/NamedArgsSingleEnum"
-        }
-      },
-      "required": [],
-      "title": "TestFnNamedArgsSingleEnum input"
     },
     "TestFnNamedArgsSingleEnumList_input": {
       "type": "object",
@@ -375,6 +411,18 @@ const schema: JSONSchema7 = {
       "$ref": "#/definitions/TestClassAlias",
       "title": "FnTestClassAlias output"
     },
+    "FnTestClassOverride_output": {
+      "$ref": "#/definitions/OverrideClass",
+      "title": "FnTestClassOverride output"
+    },
+    "FnTestEnumOverride_output": {
+      "$ref": "#/definitions/OverrideEnum",
+      "title": "FnTestEnumOverride output"
+    },
+    "FnTestNamedArgsSingleEnum_output": {
+      "type": "string",
+      "title": "FnTestNamedArgsSingleEnum output"
+    },
     "FnTestOutputAdapter_output": {
       "type": "string",
       "title": "FnTestOutputAdapter output"
@@ -390,10 +438,6 @@ const schema: JSONSchema7 = {
     "TestFnNamedArgsSingleClass_output": {
       "type": "string",
       "title": "TestFnNamedArgsSingleClass output"
-    },
-    "TestFnNamedArgsSingleEnum_output": {
-      "type": "string",
-      "title": "TestFnNamedArgsSingleEnum output"
     },
     "TestFnNamedArgsSingleEnumList_output": {
       "type": "string",
@@ -442,6 +486,10 @@ registerEnumDeserializer(schema.definitions.NamedArgsSingleEnumList, {
 
 });
 
+registerEnumDeserializer(schema.definitions.OverrideEnum, {
+
+});
+
 registerEnumDeserializer(schema.definitions.TestEnum, {
   "k1": "A",
   "k1: User is angry": "A",
@@ -457,6 +505,8 @@ registerObjectDeserializer(schema.definitions.ModifiedOutput, { });
 
 registerObjectDeserializer(schema.definitions.NamedArgsSingleClass, { });
 
+registerObjectDeserializer(schema.definitions.OverrideClass, { });
+
 registerObjectDeserializer(schema.definitions.TestClassAlias, { });
 
 registerObjectDeserializer(schema.definitions.TestClassWithEnum, { });
@@ -465,3 +515,4 @@ registerObjectDeserializer(schema.definitions.TestOutputClass, { });
 
 
 export { schema }
+

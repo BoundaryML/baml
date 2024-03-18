@@ -3,6 +3,10 @@
 // Disable formatting for this file to avoid linting errors.
 // tslint:disable
 // @ts-nocheck
+/* eslint-disable */
+
+import dotenv from 'dotenv';
+let env = dotenv.config();
 
 import * as f from "./function"
 import "./impls"
@@ -17,11 +21,13 @@ const BamlClient = {
   FnOutputStringList: f.FnOutputStringList,
   FnTestAliasedEnumOutput: f.FnTestAliasedEnumOutput,
   FnTestClassAlias: f.FnTestClassAlias,
+  FnTestClassOverride: f.FnTestClassOverride,
+  FnTestEnumOverride: f.FnTestEnumOverride,
+  FnTestNamedArgsSingleEnum: f.FnTestNamedArgsSingleEnum,
   FnTestOutputAdapter: f.FnTestOutputAdapter,
   PromptTest: f.PromptTest,
   TestFnNamedArgsSingleBool: f.TestFnNamedArgsSingleBool,
   TestFnNamedArgsSingleClass: f.TestFnNamedArgsSingleClass,
-  TestFnNamedArgsSingleEnum: f.TestFnNamedArgsSingleEnum,
   TestFnNamedArgsSingleEnumList: f.TestFnNamedArgsSingleEnumList,
   TestFnNamedArgsSingleFloat: f.TestFnNamedArgsSingleFloat,
   TestFnNamedArgsSingleInt: f.TestFnNamedArgsSingleInt,
@@ -32,3 +38,5 @@ const BamlClient = {
 }
 
 export default BamlClient
+
+

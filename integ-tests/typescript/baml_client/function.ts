@@ -3,9 +3,10 @@
 // Disable formatting for this file to avoid linting errors.
 // tslint:disable
 // @ts-nocheck
+/* eslint-disable */
 
 
-import { EnumOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass } from './types';
+import { EnumOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OverrideClass, OverrideEnum, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass } from './types';
 import { FireBamlEvent, traceAsync } from '@boundaryml/baml-core/ffi_layer';
 
 
@@ -648,6 +649,225 @@ function createFnTestClassAliasInstance(): IFnTestClassAlias & FnTestClassAliasF
 
 const FnTestClassAlias = createFnTestClassAliasInstance();
 
+type IFnTestClassOverride = (arg: string) => Promise<OverrideClass>
+
+type FnTestClassOverrideImpls = 'v1';
+
+interface FnTestClassOverrideImpl {
+    run: IFnTestClassOverride;
+    name: FnTestClassOverrideImpls;
+}
+
+interface FnTestClassOverrideFunction {
+  registerImpl: (name: FnTestClassOverrideImpls, impl: FnTestClassOverrideImpl) => void;
+  getImpl: (name: FnTestClassOverrideImpls) => FnTestClassOverrideImpl;
+}
+
+function createFnTestClassOverrideInstance(): IFnTestClassOverride & FnTestClassOverrideFunction {
+
+  const registry: Record<FnTestClassOverrideImpls, FnTestClassOverrideImpl> = {}
+
+  const wrapper: FnTestClassOverrideFunction = {
+    getImpl: (name: FnTestClassOverrideImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for FnTestClassOverride with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: FnTestClassOverrideImpls, cb: IFnTestClassOverride) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for FnTestClassOverride with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"FnTestClassOverride",
+          /* returnType */ "OverrideClass",
+          /* paramters */ [
+            [
+              "arg",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'positional',
+          /* cb */ async (
+          arg: string
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(arg);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['v1'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for FnTestClassOverride: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (arg: string) => {
+    return wrapper.getImpl('v1').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IFnTestClassOverride & FnTestClassOverrideFunction;
+}
+
+const FnTestClassOverride = createFnTestClassOverrideInstance();
+
+type IFnTestEnumOverride = (arg: string) => Promise<OverrideEnum>
+
+type FnTestEnumOverrideImpls = 'v1';
+
+interface FnTestEnumOverrideImpl {
+    run: IFnTestEnumOverride;
+    name: FnTestEnumOverrideImpls;
+}
+
+interface FnTestEnumOverrideFunction {
+  registerImpl: (name: FnTestEnumOverrideImpls, impl: FnTestEnumOverrideImpl) => void;
+  getImpl: (name: FnTestEnumOverrideImpls) => FnTestEnumOverrideImpl;
+}
+
+function createFnTestEnumOverrideInstance(): IFnTestEnumOverride & FnTestEnumOverrideFunction {
+
+  const registry: Record<FnTestEnumOverrideImpls, FnTestEnumOverrideImpl> = {}
+
+  const wrapper: FnTestEnumOverrideFunction = {
+    getImpl: (name: FnTestEnumOverrideImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for FnTestEnumOverride with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: FnTestEnumOverrideImpls, cb: IFnTestEnumOverride) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for FnTestEnumOverride with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"FnTestEnumOverride",
+          /* returnType */ "OverrideEnum",
+          /* paramters */ [
+            [
+              "arg",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'positional',
+          /* cb */ async (
+          arg: string
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(arg);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['v1'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for FnTestEnumOverride: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (arg: string) => {
+    return wrapper.getImpl('v1').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IFnTestEnumOverride & FnTestEnumOverrideFunction;
+}
+
+const FnTestEnumOverride = createFnTestEnumOverrideInstance();
+
+type IFnTestNamedArgsSingleEnum = (args: {
+  myArg: NamedArgsSingleEnum
+}) => Promise<string>
+
+type FnTestNamedArgsSingleEnumImpls = 'v1';
+
+interface FnTestNamedArgsSingleEnumImpl {
+    run: IFnTestNamedArgsSingleEnum;
+    name: FnTestNamedArgsSingleEnumImpls;
+}
+
+interface FnTestNamedArgsSingleEnumFunction {
+  registerImpl: (name: FnTestNamedArgsSingleEnumImpls, impl: FnTestNamedArgsSingleEnumImpl) => void;
+  getImpl: (name: FnTestNamedArgsSingleEnumImpls) => FnTestNamedArgsSingleEnumImpl;
+}
+
+function createFnTestNamedArgsSingleEnumInstance(): IFnTestNamedArgsSingleEnum & FnTestNamedArgsSingleEnumFunction {
+
+  const registry: Record<FnTestNamedArgsSingleEnumImpls, FnTestNamedArgsSingleEnumImpl> = {}
+
+  const wrapper: FnTestNamedArgsSingleEnumFunction = {
+    getImpl: (name: FnTestNamedArgsSingleEnumImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for FnTestNamedArgsSingleEnum with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: FnTestNamedArgsSingleEnumImpls, cb: IFnTestNamedArgsSingleEnum) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for FnTestNamedArgsSingleEnum with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"FnTestNamedArgsSingleEnum",
+          /* returnType */ "string",
+          /* paramters */ [
+            [
+              "myArg",
+              "NamedArgsSingleEnum"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            myArg: NamedArgsSingleEnum
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['v1'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for FnTestNamedArgsSingleEnum: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    myArg: NamedArgsSingleEnum
+  }) => {
+    return wrapper.getImpl('v1').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IFnTestNamedArgsSingleEnum & FnTestNamedArgsSingleEnumFunction;
+}
+
+const FnTestNamedArgsSingleEnum = createFnTestNamedArgsSingleEnumInstance();
+
 type IFnTestOutputAdapter = (arg: string) => Promise<string>
 
 type FnTestOutputAdapterImpls = 'v1';
@@ -943,83 +1163,6 @@ function createTestFnNamedArgsSingleClassInstance(): ITestFnNamedArgsSingleClass
 }
 
 const TestFnNamedArgsSingleClass = createTestFnNamedArgsSingleClassInstance();
-
-type ITestFnNamedArgsSingleEnum = (args: {
-  myArg: NamedArgsSingleEnum
-}) => Promise<string>
-
-type TestFnNamedArgsSingleEnumImpls = 'v1';
-
-interface TestFnNamedArgsSingleEnumImpl {
-    run: ITestFnNamedArgsSingleEnum;
-    name: TestFnNamedArgsSingleEnumImpls;
-}
-
-interface TestFnNamedArgsSingleEnumFunction {
-  registerImpl: (name: TestFnNamedArgsSingleEnumImpls, impl: TestFnNamedArgsSingleEnumImpl) => void;
-  getImpl: (name: TestFnNamedArgsSingleEnumImpls) => TestFnNamedArgsSingleEnumImpl;
-}
-
-function createTestFnNamedArgsSingleEnumInstance(): ITestFnNamedArgsSingleEnum & TestFnNamedArgsSingleEnumFunction {
-
-  const registry: Record<TestFnNamedArgsSingleEnumImpls, TestFnNamedArgsSingleEnumImpl> = {}
-
-  const wrapper: TestFnNamedArgsSingleEnumFunction = {
-    getImpl: (name: TestFnNamedArgsSingleEnumImpls) => {
-      const impl = registry[name];
-      if (!impl) {
-        throw new Error(`No implementation for TestFnNamedArgsSingleEnum with name ${name}`);
-      }
-      return impl;
-    },
-    registerImpl: (name: TestFnNamedArgsSingleEnumImpls, cb: ITestFnNamedArgsSingleEnum) => {
-      if (registry[name]) {
-        throw new Error(`Implementation for TestFnNamedArgsSingleEnum with name ${name} already exists`);
-      }
-      registry[name] = {
-        name,
-        run: traceAsync(
-          /* functionName */"TestFnNamedArgsSingleEnum",
-          /* returnType */ "string",
-          /* paramters */ [
-            [
-              "myArg",
-              "NamedArgsSingleEnum"
-            ]
-          ],
-          /* arg_type */ 'named',
-          /* cb */ async (
-          params: {
-            myArg: NamedArgsSingleEnum
-          }
-        ) => {
-          FireBamlEvent.variant(name);
-          return await cb(params);
-        })
-      };
-    },
-    validate: () => {
-      const targets = ['v1'];
-      const impls = Object.keys(registry);
-      const missing = targets.filter(t => !impls.includes(t));
-      if (missing.length > 0) {
-        throw new Error(`Missing implementations for TestFnNamedArgsSingleEnum: ${missing.join(', ')}`);
-      }
-    }
-  };
-
-  const impl = async (params : {
-    myArg: NamedArgsSingleEnum
-  }) => {
-    return wrapper.getImpl('v1').run(params);
-  };
-
-  Object.assign(impl, wrapper);
-
-  return impl as  ITestFnNamedArgsSingleEnum & TestFnNamedArgsSingleEnumFunction;
-}
-
-const TestFnNamedArgsSingleEnum = createTestFnNamedArgsSingleEnumInstance();
 
 type ITestFnNamedArgsSingleEnumList = (args: {
   myArg: NamedArgsSingleEnumList[]
@@ -1559,4 +1702,5 @@ function createTestFnNamedArgsSyntaxInstance(): ITestFnNamedArgsSyntax & TestFnN
 const TestFnNamedArgsSyntax = createTestFnNamedArgsSyntaxInstance();
 
 
-export { FnEnumListOutput, IFnEnumListOutput, FnEnumListOutputFunction, FnEnumOutput, IFnEnumOutput, FnEnumOutputFunction, FnOutputBool, IFnOutputBool, FnOutputBoolFunction, FnOutputClass, IFnOutputClass, FnOutputClassFunction, FnOutputClassList, IFnOutputClassList, FnOutputClassListFunction, FnOutputClassWithEnum, IFnOutputClassWithEnum, FnOutputClassWithEnumFunction, FnOutputStringList, IFnOutputStringList, FnOutputStringListFunction, FnTestAliasedEnumOutput, IFnTestAliasedEnumOutput, FnTestAliasedEnumOutputFunction, FnTestClassAlias, IFnTestClassAlias, FnTestClassAliasFunction, FnTestOutputAdapter, IFnTestOutputAdapter, FnTestOutputAdapterFunction, PromptTest, IPromptTest, PromptTestFunction, TestFnNamedArgsSingleBool, ITestFnNamedArgsSingleBool, TestFnNamedArgsSingleBoolFunction, TestFnNamedArgsSingleClass, ITestFnNamedArgsSingleClass, TestFnNamedArgsSingleClassFunction, TestFnNamedArgsSingleEnum, ITestFnNamedArgsSingleEnum, TestFnNamedArgsSingleEnumFunction, TestFnNamedArgsSingleEnumList, ITestFnNamedArgsSingleEnumList, TestFnNamedArgsSingleEnumListFunction, TestFnNamedArgsSingleFloat, ITestFnNamedArgsSingleFloat, TestFnNamedArgsSingleFloatFunction, TestFnNamedArgsSingleInt, ITestFnNamedArgsSingleInt, TestFnNamedArgsSingleIntFunction, TestFnNamedArgsSingleString, ITestFnNamedArgsSingleString, TestFnNamedArgsSingleStringFunction, TestFnNamedArgsSingleStringArray, ITestFnNamedArgsSingleStringArray, TestFnNamedArgsSingleStringArrayFunction, TestFnNamedArgsSingleStringList, ITestFnNamedArgsSingleStringList, TestFnNamedArgsSingleStringListFunction, TestFnNamedArgsSyntax, ITestFnNamedArgsSyntax, TestFnNamedArgsSyntaxFunction }
+export { FnEnumListOutput, IFnEnumListOutput, FnEnumListOutputFunction, FnEnumOutput, IFnEnumOutput, FnEnumOutputFunction, FnOutputBool, IFnOutputBool, FnOutputBoolFunction, FnOutputClass, IFnOutputClass, FnOutputClassFunction, FnOutputClassList, IFnOutputClassList, FnOutputClassListFunction, FnOutputClassWithEnum, IFnOutputClassWithEnum, FnOutputClassWithEnumFunction, FnOutputStringList, IFnOutputStringList, FnOutputStringListFunction, FnTestAliasedEnumOutput, IFnTestAliasedEnumOutput, FnTestAliasedEnumOutputFunction, FnTestClassAlias, IFnTestClassAlias, FnTestClassAliasFunction, FnTestClassOverride, IFnTestClassOverride, FnTestClassOverrideFunction, FnTestEnumOverride, IFnTestEnumOverride, FnTestEnumOverrideFunction, FnTestNamedArgsSingleEnum, IFnTestNamedArgsSingleEnum, FnTestNamedArgsSingleEnumFunction, FnTestOutputAdapter, IFnTestOutputAdapter, FnTestOutputAdapterFunction, PromptTest, IPromptTest, PromptTestFunction, TestFnNamedArgsSingleBool, ITestFnNamedArgsSingleBool, TestFnNamedArgsSingleBoolFunction, TestFnNamedArgsSingleClass, ITestFnNamedArgsSingleClass, TestFnNamedArgsSingleClassFunction, TestFnNamedArgsSingleEnumList, ITestFnNamedArgsSingleEnumList, TestFnNamedArgsSingleEnumListFunction, TestFnNamedArgsSingleFloat, ITestFnNamedArgsSingleFloat, TestFnNamedArgsSingleFloatFunction, TestFnNamedArgsSingleInt, ITestFnNamedArgsSingleInt, TestFnNamedArgsSingleIntFunction, TestFnNamedArgsSingleString, ITestFnNamedArgsSingleString, TestFnNamedArgsSingleStringFunction, TestFnNamedArgsSingleStringArray, ITestFnNamedArgsSingleStringArray, TestFnNamedArgsSingleStringArrayFunction, TestFnNamedArgsSingleStringList, ITestFnNamedArgsSingleStringList, TestFnNamedArgsSingleStringListFunction, TestFnNamedArgsSyntax, ITestFnNamedArgsSyntax, TestFnNamedArgsSyntaxFunction }
+

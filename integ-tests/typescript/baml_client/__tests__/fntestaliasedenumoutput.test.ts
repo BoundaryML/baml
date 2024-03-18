@@ -3,6 +3,7 @@
 // Disable formatting for this file to avoid linting errors.
 // tslint:disable
 // @ts-nocheck
+/* eslint-disable */
 
 import b from '../';
 
@@ -14,7 +15,7 @@ describe('test_case:plain_maroon', () => {
     FireBamlEvent.tags({
       'test_dataset_name': 'FnTestAliasedEnumOutput',
       'test_case_name': 'test',
-      'test_case_arg_name': `plain_maroon[${impl}]`,
+      'test_case_arg_name': `test_plain_maroon[FnTestAliasedEnumOutput-${impl}]`,
       'test_cycle_id': process.env.BOUNDARY_PROCESS_ID || 'local-run',
     });
     const test_case = "I am so excited!";
@@ -26,7 +27,7 @@ describe('test_case:plain_maroon', () => {
   describe('function:FnTestAliasedEnumOutput', () => {
     test('impl:v1', async () => {
       await test_fn('v1');
-    });
+    }, 60000);
   });
 });
 
@@ -35,7 +36,7 @@ describe('test_case:practical_blush', () => {
     FireBamlEvent.tags({
       'test_dataset_name': 'FnTestAliasedEnumOutput',
       'test_case_name': 'test',
-      'test_case_arg_name': `practical_blush[${impl}]`,
+      'test_case_arg_name': `test_practical_blush[FnTestAliasedEnumOutput-${impl}]`,
       'test_cycle_id': process.env.BOUNDARY_PROCESS_ID || 'local-run',
     });
     const test_case = "I am so sad";
@@ -47,7 +48,7 @@ describe('test_case:practical_blush', () => {
   describe('function:FnTestAliasedEnumOutput', () => {
     test('impl:v1', async () => {
       await test_fn('v1');
-    });
+    }, 60000);
   });
 });
 
@@ -56,7 +57,7 @@ describe('test_case:pretty_maroon', () => {
     FireBamlEvent.tags({
       'test_dataset_name': 'FnTestAliasedEnumOutput',
       'test_case_name': 'test',
-      'test_case_arg_name': `pretty_maroon[${impl}]`,
+      'test_case_arg_name': `test_pretty_maroon[FnTestAliasedEnumOutput-${impl}]`,
       'test_cycle_id': process.env.BOUNDARY_PROCESS_ID || 'local-run',
     });
     const test_case = "I am angry!!!!";
@@ -68,6 +69,8 @@ describe('test_case:pretty_maroon', () => {
   describe('function:FnTestAliasedEnumOutput', () => {
     test('impl:v1', async () => {
       await test_fn('v1');
-    });
+    }, 60000);
   });
 });
+
+

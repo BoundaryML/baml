@@ -15,8 +15,8 @@ from pytest_baml.ipc_channel import BaseIPCChannel
 from typing import Any
 
 
-@baml.TestFnNamedArgsSingleString.test(stream=False)
-async def test_case1(TestFnNamedArgsSingleStringImpl: ITestFnNamedArgsSingleString, baml_ipc_channel: BaseIPCChannel):
+@baml.TestFnNamedArgsSingleString.test(stream=True)
+async def test_case1(TestFnNamedArgsSingleStringImpl: ITestFnNamedArgsSingleStringStream, baml_ipc_channel: BaseIPCChannel):
     def to_str(item: Any) -> str:
         if isinstance(item, str):
             return item
@@ -25,6 +25,10 @@ async def test_case1(TestFnNamedArgsSingleStringImpl: ITestFnNamedArgsSingleStri
     case = {"myString": "hellothere.\n\nSome new lines\n\n\\n\\n\n\n\"\"\"triple quote string\"\"\"\n\nsome json:\n```json\n{\n    \"hi\": \"there\"\n}\n```\nSingle chars\n(\n{\n{}\nXML Tags:\n<hi>hey</hi>\n\n", }
     deserializer_myString = Deserializer[str](str) # type: ignore
     myString = deserializer_myString.from_string(to_str(case["myString"]))
-    await TestFnNamedArgsSingleStringImpl(
+    async with TestFnNamedArgsSingleStringImpl(
         myString=myString
-    )
+    ) as stream:
+        async for response in stream.parsed_stream:
+            baml_ipc_channel.send("partial_response", response.json())
+
+        await stream.get_final_response()

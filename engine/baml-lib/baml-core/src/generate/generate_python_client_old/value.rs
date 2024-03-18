@@ -19,7 +19,7 @@ pub(super) fn to_py_value(val: &Value) -> String {
         Value::Object(obj) => {
             let mut repr = "{".to_string();
             for (k, v) in obj {
-                repr.push_str(&format!("{}: {}, ", k, to_py_value(v)));
+                repr.push_str(&format!("\"{}\": {}, ", k, to_py_value(v)));
             }
             repr.push_str("}");
             repr

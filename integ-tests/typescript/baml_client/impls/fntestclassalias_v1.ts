@@ -3,6 +3,7 @@
 // Disable formatting for this file to avoid linting errors.
 // tslint:disable
 // @ts-nocheck
+/* eslint-disable */
 
 
 import { GPT35 } from '../client';
@@ -39,7 +40,8 @@ FnTestClassAlias.registerImpl('v1', async (
       }
     );
 
-
     return deserializer.coerce(result.generated);
   }
 );
+
+

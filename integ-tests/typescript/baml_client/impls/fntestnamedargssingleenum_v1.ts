@@ -3,10 +3,11 @@
 // Disable formatting for this file to avoid linting errors.
 // tslint:disable
 // @ts-nocheck
+/* eslint-disable */
 
 
 import { GPT35 } from '../client';
-import { TestFnNamedArgsSingleEnum } from '../function';
+import { FnTestNamedArgsSingleEnum } from '../function';
 import { schema } from '../json_schema';
 import { Deserializer } from '@boundaryml/baml-core/deserializer/deserializer';
 
@@ -17,10 +18,10 @@ Print these values back to me:
 `;
 
 const deserializer = new Deserializer<string>(schema, {
-  $ref: '#/definitions/TestFnNamedArgsSingleEnum_output'
+  $ref: '#/definitions/FnTestNamedArgsSingleEnum_output'
 });
 
-TestFnNamedArgsSingleEnum.registerImpl('v1', async (
+FnTestNamedArgsSingleEnum.registerImpl('v1', async (
   args: {
     myArg: NamedArgsSingleEnum
   }
@@ -37,7 +38,8 @@ TestFnNamedArgsSingleEnum.registerImpl('v1', async (
       }
     );
 
-
     return deserializer.coerce(result.generated);
   }
 );
+
+

@@ -20,11 +20,13 @@ from .functions.fx_fnoutputclasswithenum import BAMLFnOutputClassWithEnum
 from .functions.fx_fnoutputstringlist import BAMLFnOutputStringList
 from .functions.fx_fntestaliasedenumoutput import BAMLFnTestAliasedEnumOutput
 from .functions.fx_fntestclassalias import BAMLFnTestClassAlias
+from .functions.fx_fntestclassoverride import BAMLFnTestClassOverride
+from .functions.fx_fntestenumoverride import BAMLFnTestEnumOverride
+from .functions.fx_fntestnamedargssingleenum import BAMLFnTestNamedArgsSingleEnum
 from .functions.fx_fntestoutputadapter import BAMLFnTestOutputAdapter
 from .functions.fx_prompttest import BAMLPromptTest
 from .functions.fx_testfnnamedargssinglebool import BAMLTestFnNamedArgsSingleBool
 from .functions.fx_testfnnamedargssingleclass import BAMLTestFnNamedArgsSingleClass
-from .functions.fx_testfnnamedargssingleenum import BAMLTestFnNamedArgsSingleEnum
 from .functions.fx_testfnnamedargssingleenumlist import BAMLTestFnNamedArgsSingleEnumList
 from .functions.fx_testfnnamedargssinglefloat import BAMLTestFnNamedArgsSingleFloat
 from .functions.fx_testfnnamedargssingleint import BAMLTestFnNamedArgsSingleInt
@@ -49,11 +51,13 @@ class BAMLClient:
     FnOutputStringList = BAMLFnOutputStringList
     FnTestAliasedEnumOutput = BAMLFnTestAliasedEnumOutput
     FnTestClassAlias = BAMLFnTestClassAlias
+    FnTestClassOverride = BAMLFnTestClassOverride
+    FnTestEnumOverride = BAMLFnTestEnumOverride
+    FnTestNamedArgsSingleEnum = BAMLFnTestNamedArgsSingleEnum
     FnTestOutputAdapter = BAMLFnTestOutputAdapter
     PromptTest = BAMLPromptTest
     TestFnNamedArgsSingleBool = BAMLTestFnNamedArgsSingleBool
     TestFnNamedArgsSingleClass = BAMLTestFnNamedArgsSingleClass
-    TestFnNamedArgsSingleEnum = BAMLTestFnNamedArgsSingleEnum
     TestFnNamedArgsSingleEnumList = BAMLTestFnNamedArgsSingleEnumList
     TestFnNamedArgsSingleFloat = BAMLTestFnNamedArgsSingleFloat
     TestFnNamedArgsSingleInt = BAMLTestFnNamedArgsSingleInt

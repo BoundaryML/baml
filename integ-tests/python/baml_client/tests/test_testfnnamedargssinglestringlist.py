@@ -15,8 +15,8 @@ from pytest_baml.ipc_channel import BaseIPCChannel
 from typing import Any, List
 
 
-@baml.TestFnNamedArgsSingleStringList.test(stream=False)
-async def test_invisible_peach(TestFnNamedArgsSingleStringListImpl: ITestFnNamedArgsSingleStringList, baml_ipc_channel: BaseIPCChannel):
+@baml.TestFnNamedArgsSingleStringList.test(stream=True)
+async def test_invisible_peach(TestFnNamedArgsSingleStringListImpl: ITestFnNamedArgsSingleStringListStream, baml_ipc_channel: BaseIPCChannel):
     def to_str(item: Any) -> str:
         if isinstance(item, str):
             return item
@@ -25,6 +25,10 @@ async def test_invisible_peach(TestFnNamedArgsSingleStringListImpl: ITestFnNamed
     case = {"myArg": ["one", "two", "three"], }
     deserializer_myArg = Deserializer[List[str]](List[str]) # type: ignore
     myArg = deserializer_myArg.from_string(to_str(case["myArg"]))
-    await TestFnNamedArgsSingleStringListImpl(
+    async with TestFnNamedArgsSingleStringListImpl(
         myArg=myArg
-    )
+    ) as stream:
+        async for response in stream.parsed_stream:
+            baml_ipc_channel.send("partial_response", response.json())
+
+        await stream.get_final_response()

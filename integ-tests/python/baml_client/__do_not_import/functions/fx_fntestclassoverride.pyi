@@ -7,7 +7,8 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..types.enums.enm_namedargssingleenum import NamedArgsSingleEnum
+from ..types.classes.cls_overrideclass import OverrideClass
+from ..types.partial.classes.cls_overrideclass import PartialOverrideClass
 from baml_core.stream import AsyncStream
 from typing import Callable, Protocol, runtime_checkable
 
@@ -24,77 +25,74 @@ T = typing.TypeVar("T", bound=typing.Callable[..., typing.Any])
 CLS = typing.TypeVar("CLS", bound=type)
 
 
-ITestFnNamedArgsSingleEnumOutput = str
+IFnTestClassOverrideOutput = OverrideClass
 
 @runtime_checkable
-class ITestFnNamedArgsSingleEnum(Protocol):
+class IFnTestClassOverride(Protocol):
     """
     This is the interface for a function.
 
     Args:
-        myArg: NamedArgsSingleEnum
+        arg: str
 
     Returns:
-        str
+        OverrideClass
     """
 
-    async def __call__(self, *, myArg: NamedArgsSingleEnum) -> str:
+    async def __call__(self, arg: str, /) -> OverrideClass:
         ...
 
    
 
 @runtime_checkable
-class ITestFnNamedArgsSingleEnumStream(Protocol):
+class IFnTestClassOverrideStream(Protocol):
     """
     This is the interface for a stream function.
 
     Args:
-        myArg: NamedArgsSingleEnum
+        arg: str
 
     Returns:
-        AsyncStream[str, str]
+        AsyncStream[OverrideClass, PartialOverrideClass]
     """
 
-    def __call__(self, *, myArg: NamedArgsSingleEnum
-) -> AsyncStream[str, str]:
+    def __call__(self, arg: str, /) -> AsyncStream[OverrideClass, PartialOverrideClass]:
         ...
-class BAMLTestFnNamedArgsSingleEnumImpl:
-    async def run(self, *, myArg: NamedArgsSingleEnum) -> str:
+class BAMLFnTestClassOverrideImpl:
+    async def run(self, arg: str, /) -> OverrideClass:
         ...
     
-    def stream(self, *, myArg: NamedArgsSingleEnum
-) -> AsyncStream[str, str]:
+    def stream(self, arg: str, /) -> AsyncStream[OverrideClass, PartialOverrideClass]:
         ...
 
-class IBAMLTestFnNamedArgsSingleEnum:
+class IBAMLFnTestClassOverride:
     def register_impl(
         self, name: ImplName
-    ) -> typing.Callable[[ITestFnNamedArgsSingleEnum, ITestFnNamedArgsSingleEnumStream], None]:
+    ) -> typing.Callable[[IFnTestClassOverride, IFnTestClassOverrideStream], None]:
         ...
 
-    async def __call__(self, *, myArg: NamedArgsSingleEnum) -> str:
+    async def __call__(self, arg: str, /) -> OverrideClass:
         ...
 
-    def stream(self, *, myArg: NamedArgsSingleEnum
-) -> AsyncStream[str, str]:
+    def stream(self, arg: str, /) -> AsyncStream[OverrideClass, PartialOverrideClass]:
         ...
 
-    def get_impl(self, name: ImplName) -> BAMLTestFnNamedArgsSingleEnumImpl:
+    def get_impl(self, name: ImplName) -> BAMLFnTestClassOverrideImpl:
         ...
 
     @contextmanager
     def mock(self) -> typing.Generator[mock.AsyncMock, None, None]:
         """
-        Utility for mocking the TestFnNamedArgsSingleEnumInterface.
+        Utility for mocking the FnTestClassOverrideInterface.
 
         Usage:
             ```python
             # All implementations are mocked.
 
             async def test_logic() -> None:
-                with baml.TestFnNamedArgsSingleEnum.mock() as mocked:
+                with baml.FnTestClassOverride.mock() as mocked:
                     mocked.return_value = ...
-                    result = await TestFnNamedArgsSingleEnumImpl(...)
+                    result = await FnTestClassOverrideImpl(...)
                     assert mocked.called
             ```
         """
@@ -104,7 +102,7 @@ class IBAMLTestFnNamedArgsSingleEnum:
     def test(self, test_function: T) -> T:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the TestFnNamedArgsSingleEnumInterface.
+        the FnTestClassOverrideInterface.
 
         Args:
             test_function : T
@@ -114,9 +112,9 @@ class IBAMLTestFnNamedArgsSingleEnum:
             ```python
             # All implementations will be tested.
 
-            @baml.TestFnNamedArgsSingleEnum.test
-            async def test_logic(TestFnNamedArgsSingleEnumImpl: ITestFnNamedArgsSingleEnum) -> None:
-                result = await TestFnNamedArgsSingleEnumImpl(...)
+            @baml.FnTestClassOverride.test
+            async def test_logic(FnTestClassOverrideImpl: IFnTestClassOverride) -> None:
+                result = await FnTestClassOverrideImpl(...)
             ```
         """
         ...
@@ -125,7 +123,7 @@ class IBAMLTestFnNamedArgsSingleEnum:
     def test(self, *, exclude_impl: typing.Iterable[ImplName] = [], stream: bool = False) -> pytest.MarkDecorator:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the TestFnNamedArgsSingleEnumInterface.
+        the FnTestClassOverrideInterface.
 
         Args:
             exclude_impl : Iterable[ImplName]
@@ -137,17 +135,17 @@ class IBAMLTestFnNamedArgsSingleEnum:
             ```python
             # All implementations except the given impl will be tested.
 
-            @baml.TestFnNamedArgsSingleEnum.test(exclude_impl=["implname"])
-            async def test_logic(TestFnNamedArgsSingleEnumImpl: ITestFnNamedArgsSingleEnum) -> None:
-                result = await TestFnNamedArgsSingleEnumImpl(...)
+            @baml.FnTestClassOverride.test(exclude_impl=["implname"])
+            async def test_logic(FnTestClassOverrideImpl: IFnTestClassOverride) -> None:
+                result = await FnTestClassOverrideImpl(...)
             ```
 
             ```python
             # Streamable version of the test function.
 
-            @baml.TestFnNamedArgsSingleEnum.test(stream=True)
-            async def test_logic(TestFnNamedArgsSingleEnumImpl: ITestFnNamedArgsSingleEnumStream) -> None:
-                async for result in TestFnNamedArgsSingleEnumImpl(...):
+            @baml.FnTestClassOverride.test(stream=True)
+            async def test_logic(FnTestClassOverrideImpl: IFnTestClassOverrideStream) -> None:
+                async for result in FnTestClassOverrideImpl(...):
                     ...
             ```
         """
@@ -157,7 +155,7 @@ class IBAMLTestFnNamedArgsSingleEnum:
     def test(self, test_class: typing.Type[CLS]) -> typing.Type[CLS]:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the TestFnNamedArgsSingleEnumInterface.
+        the FnTestClassOverrideInterface.
 
         Args:
             test_class : Type[CLS]
@@ -167,14 +165,14 @@ class IBAMLTestFnNamedArgsSingleEnum:
         ```python
         # All implementations will be tested in every test method.
 
-        @baml.TestFnNamedArgsSingleEnum.test
+        @baml.FnTestClassOverride.test
         class TestClass:
-            def test_a(self, TestFnNamedArgsSingleEnumImpl: ITestFnNamedArgsSingleEnum) -> None:
+            def test_a(self, FnTestClassOverrideImpl: IFnTestClassOverride) -> None:
                 ...
-            def test_b(self, TestFnNamedArgsSingleEnumImpl: ITestFnNamedArgsSingleEnum) -> None:
+            def test_b(self, FnTestClassOverrideImpl: IFnTestClassOverride) -> None:
                 ...
         ```
         """
         ...
 
-BAMLTestFnNamedArgsSingleEnum: IBAMLTestFnNamedArgsSingleEnum
+BAMLFnTestClassOverride: IBAMLFnTestClassOverride

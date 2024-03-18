@@ -15,8 +15,8 @@ from pytest_baml.ipc_channel import BaseIPCChannel
 from typing import Any
 
 
-@baml.FnOutputClassList.test(stream=False)
-async def test_deep_scarlet(FnOutputClassListImpl: IFnOutputClassList, baml_ipc_channel: BaseIPCChannel):
+@baml.FnOutputClassList.test(stream=True)
+async def test_deep_scarlet(FnOutputClassListImpl: IFnOutputClassListStream, baml_ipc_channel: BaseIPCChannel):
     def to_str(item: Any) -> str:
         if isinstance(item, str):
             return item
@@ -25,5 +25,9 @@ async def test_deep_scarlet(FnOutputClassListImpl: IFnOutputClassList, baml_ipc_
     content = to_str("noop")
     deserializer = Deserializer[str](str) # type: ignore
     param = deserializer.from_string(content)
-    await FnOutputClassListImpl(param)
+    async with FnOutputClassListImpl(param) as stream:
+        async for response in stream.parsed_stream:
+            baml_ipc_channel.send("partial_response", response.json())
+
+        await stream.get_final_response()
 

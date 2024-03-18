@@ -8,23 +8,22 @@
 # fmt: off
 
 from ..__do_not_import.generated_baml_client import baml
-from ..baml_types import ITestFnNamedArgsSingleEnum, ITestFnNamedArgsSingleEnumStream, NamedArgsSingleEnum
+from ..baml_types import IFnTestOutputAdapter, IFnTestOutputAdapterStream
 from baml_lib._impl.deserializer import Deserializer
 from json import dumps
 from pytest_baml.ipc_channel import BaseIPCChannel
 from typing import Any
 
 
-@baml.TestFnNamedArgsSingleEnum.test(stream=False)
-async def test_case1(TestFnNamedArgsSingleEnumImpl: ITestFnNamedArgsSingleEnum, baml_ipc_channel: BaseIPCChannel):
+@baml.FnTestOutputAdapter.test(stream=False)
+async def test_impressed_cyan(FnTestOutputAdapterImpl: IFnTestOutputAdapter, baml_ipc_channel: BaseIPCChannel):
     def to_str(item: Any) -> str:
         if isinstance(item, str):
             return item
         return dumps(item)
 
-    case = {"myArg": "ONE", }
-    deserializer_myArg = Deserializer[NamedArgsSingleEnum](NamedArgsSingleEnum) # type: ignore
-    myArg = deserializer_myArg.from_string(to_str(case["myArg"]))
-    await TestFnNamedArgsSingleEnumImpl(
-        myArg=myArg
-    )
+    content = to_str("noop")
+    deserializer = Deserializer[str](str) # type: ignore
+    param = deserializer.from_string(content)
+    await FnTestOutputAdapterImpl(param)
+

@@ -9,6 +9,7 @@
 
 from .classes.cls_modifiedoutput import PartialModifiedOutput
 from .classes.cls_namedargssingleclass import PartialNamedArgsSingleClass
+from .classes.cls_overrideclass import PartialOverrideClass
 from .classes.cls_testclassalias import PartialTestClassAlias
 from .classes.cls_testclasswithenum import PartialTestClassWithEnum
 from .classes.cls_testoutputclass import PartialTestOutputClass
@@ -19,6 +20,7 @@ from .classes.cls_testoutputclass import PartialTestOutputClass
 __all__ = [
     'PartialModifiedOutput',
     'PartialNamedArgsSingleClass',
+    'PartialOverrideClass',
     'PartialTestClassAlias',
     'PartialTestClassWithEnum',
     'PartialTestOutputClass'

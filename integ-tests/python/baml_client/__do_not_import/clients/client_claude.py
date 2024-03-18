@@ -17,7 +17,7 @@ Claude = LLMManager.add_llm(
     retry_policy=None,
     redactions=["api_key"],
     options=dict(
-        model_name="claude-3-haiku-20240307",
+        model="claude-3-haiku-20240307",
         api_key=environ['ANTHROPIC_API_KEY'],
     ),
 )

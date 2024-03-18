@@ -3,6 +3,7 @@
 // Disable formatting for this file to avoid linting errors.
 // tslint:disable
 // @ts-nocheck
+/* eslint-disable */
 
 const enum EnumInClass {
     ONE = "ONE",
@@ -21,6 +22,11 @@ const enum NamedArgsSingleEnum {
 }
 
 const enum NamedArgsSingleEnumList {
+    ONE = "ONE",
+    TWO = "TWO",
+}
+
+const enum OverrideEnum {
     ONE = "ONE",
     TWO = "TWO",
 }
@@ -44,6 +50,11 @@ interface NamedArgsSingleClass {
   key_three: number;
 }
 
+interface OverrideClass {
+  prop1: string;
+  prop2: string;
+}
+
 interface TestClassAlias {
   key: string;
   key2: string;
@@ -63,4 +74,5 @@ interface TestOutputClass {
 }
 
 
-export { EnumInClass, EnumOutput, NamedArgsSingleEnum, NamedArgsSingleEnumList, TestEnum, ModifiedOutput, NamedArgsSingleClass, TestClassAlias, TestClassWithEnum, TestOutputClass }
+export { EnumInClass, EnumOutput, NamedArgsSingleEnum, NamedArgsSingleEnumList, OverrideEnum, TestEnum, ModifiedOutput, NamedArgsSingleClass, OverrideClass, TestClassAlias, TestClassWithEnum, TestOutputClass }
+

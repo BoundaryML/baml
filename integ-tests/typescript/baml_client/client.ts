@@ -3,18 +3,22 @@
 // Disable formatting for this file to avoid linting errors.
 // tslint:disable
 // @ts-nocheck
+/* eslint-disable */
 
 
 import { clientManager } from '@boundaryml/baml-core/client_manager';
 
 
+import dotenv from 'dotenv';
+    let env = dotenv.config();
+
 const Claude = clientManager.createClient('Claude', 'baml-anthropic-chat', {
-    model_name: "claude-3-haiku-20240307",
+    model: "claude-3-haiku-20240307",
     api_key: process.env.ANTHROPIC_API_KEY
 });
 
 const GPT35 = clientManager.createClient('GPT35', 'baml-openai-chat', {
-    model: "gpt-3",
+    model: "gpt-3.5-turbo",
     api_key: process.env.OPENAI_API_KEY
 });
 
@@ -30,3 +34,4 @@ const GPT4Turbo = clientManager.createClient('GPT4Turbo', 'baml-openai-chat', {
 
 
 export { Claude, GPT35, GPT4, GPT4Turbo }
+

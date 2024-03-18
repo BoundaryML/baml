@@ -53,10 +53,10 @@ impl WithFileContent<PythonLanguageFeatures> for Walker<'_, &Class> {
                     FieldType::Optional(_) => true,
                     _ => false,
                 },
-                "code": f.attributes.get("get/python").map_or("raise NotImplemented()".to_string(), |v| match v {
+                "code": f.attributes.get("get/python").map_or("raise NotImplementedError()".to_string(), |v| match v {
                     Expression::RawString(s) => s.clone(),
                     Expression::String(s) => s.clone(),
-                    _ => "raise NotImplemented()".to_string(),
+                    _ => "raise NotImplementedError()".to_string(),
                 }),
             })
         }).collect::<Vec<_>>();

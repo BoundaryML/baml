@@ -7,61 +7,60 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..types.enums.enm_namedargssingleenum import NamedArgsSingleEnum
+from ..types.enums.enm_overrideenum import OverrideEnum
 from baml_core.stream import AsyncStream
 from baml_lib._impl.functions import BaseBAMLFunction
 from typing import AsyncIterator, Callable, Protocol, runtime_checkable
 
 
-ITestFnNamedArgsSingleEnumOutput = str
+IFnTestEnumOverrideOutput = OverrideEnum
 
 @runtime_checkable
-class ITestFnNamedArgsSingleEnum(Protocol):
+class IFnTestEnumOverride(Protocol):
     """
     This is the interface for a function.
 
     Args:
-        myArg: NamedArgsSingleEnum
+        arg: str
 
     Returns:
-        str
+        OverrideEnum
     """
 
-    async def __call__(self, *, myArg: NamedArgsSingleEnum) -> str:
+    async def __call__(self, arg: str, /) -> OverrideEnum:
         ...
 
    
 
 @runtime_checkable
-class ITestFnNamedArgsSingleEnumStream(Protocol):
+class IFnTestEnumOverrideStream(Protocol):
     """
     This is the interface for a stream function.
 
     Args:
-        myArg: NamedArgsSingleEnum
+        arg: str
 
     Returns:
-        AsyncStream[str, str]
+        AsyncStream[OverrideEnum, OverrideEnum]
     """
 
-    def __call__(self, *, myArg: NamedArgsSingleEnum
-) -> AsyncStream[str, str]:
+    def __call__(self, arg: str, /) -> AsyncStream[OverrideEnum, OverrideEnum]:
         ...
-class IBAMLTestFnNamedArgsSingleEnum(BaseBAMLFunction[str, str]):
+class IBAMLFnTestEnumOverride(BaseBAMLFunction[OverrideEnum, OverrideEnum]):
     def __init__(self) -> None:
         super().__init__(
-            "TestFnNamedArgsSingleEnum",
-            ITestFnNamedArgsSingleEnum,
+            "FnTestEnumOverride",
+            IFnTestEnumOverride,
             ["v1"],
         )
 
-    async def __call__(self, *args, **kwargs) -> str:
+    async def __call__(self, *args, **kwargs) -> OverrideEnum:
         return await self.get_impl("v1").run(*args, **kwargs)
     
-    def stream(self, *args, **kwargs) -> AsyncStream[str, str]:
+    def stream(self, *args, **kwargs) -> AsyncStream[OverrideEnum, OverrideEnum]:
         res = self.get_impl("v1").stream(*args, **kwargs)
         return res
 
-BAMLTestFnNamedArgsSingleEnum = IBAMLTestFnNamedArgsSingleEnum()
+BAMLFnTestEnumOverride = IBAMLFnTestEnumOverride()
 
-__all__ = [ "BAMLTestFnNamedArgsSingleEnum" ]
+__all__ = [ "BAMLFnTestEnumOverride" ]

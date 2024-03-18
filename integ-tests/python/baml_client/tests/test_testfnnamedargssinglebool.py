@@ -15,8 +15,8 @@ from pytest_baml.ipc_channel import BaseIPCChannel
 from typing import Any
 
 
-@baml.TestFnNamedArgsSingleBool.test(stream=False)
-async def test_case1(TestFnNamedArgsSingleBoolImpl: ITestFnNamedArgsSingleBool, baml_ipc_channel: BaseIPCChannel):
+@baml.TestFnNamedArgsSingleBool.test(stream=True)
+async def test_case1(TestFnNamedArgsSingleBoolImpl: ITestFnNamedArgsSingleBoolStream, baml_ipc_channel: BaseIPCChannel):
     def to_str(item: Any) -> str:
         if isinstance(item, str):
             return item
@@ -25,6 +25,10 @@ async def test_case1(TestFnNamedArgsSingleBoolImpl: ITestFnNamedArgsSingleBool, 
     case = {"myBool": True, }
     deserializer_myBool = Deserializer[bool](bool) # type: ignore
     myBool = deserializer_myBool.from_string(to_str(case["myBool"]))
-    await TestFnNamedArgsSingleBoolImpl(
+    async with TestFnNamedArgsSingleBoolImpl(
         myBool=myBool
-    )
+    ) as stream:
+        async for response in stream.parsed_stream:
+            baml_ipc_channel.send("partial_response", response.json())
+
+        await stream.get_final_response()

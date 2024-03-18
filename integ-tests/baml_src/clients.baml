@@ -25,7 +25,7 @@ client<llm> GPT35 {
 client<llm> Claude {
   provider baml-anthropic-chat
   options {
-    model_name claude-3-haiku-20240307
+    model claude-3-haiku-20240307
     api_key env.ANTHROPIC_API_KEY
   }
 }

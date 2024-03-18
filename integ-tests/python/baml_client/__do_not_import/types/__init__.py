@@ -9,6 +9,7 @@
 
 from .classes.cls_modifiedoutput import ModifiedOutput
 from .classes.cls_namedargssingleclass import NamedArgsSingleClass
+from .classes.cls_overrideclass import OverrideClass
 from .classes.cls_testclassalias import TestClassAlias
 from .classes.cls_testclasswithenum import TestClassWithEnum
 from .classes.cls_testoutputclass import TestOutputClass
@@ -16,6 +17,7 @@ from .enums.enm_enuminclass import EnumInClass
 from .enums.enm_enumoutput import EnumOutput
 from .enums.enm_namedargssingleenum import NamedArgsSingleEnum
 from .enums.enm_namedargssingleenumlist import NamedArgsSingleEnumList
+from .enums.enm_overrideenum import OverrideEnum
 from .enums.enm_testenum import TestEnum
 
 
@@ -28,6 +30,8 @@ __all__ = [
     'NamedArgsSingleClass',
     'NamedArgsSingleEnum',
     'NamedArgsSingleEnumList',
+    'OverrideClass',
+    'OverrideEnum',
     'TestClassAlias',
     'TestClassWithEnum',
     'TestEnum',

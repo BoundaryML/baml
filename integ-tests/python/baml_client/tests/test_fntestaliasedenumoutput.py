@@ -15,8 +15,8 @@ from pytest_baml.ipc_channel import BaseIPCChannel
 from typing import Any
 
 
-@baml.FnTestAliasedEnumOutput.test(stream=False)
-async def test_plain_maroon(FnTestAliasedEnumOutputImpl: IFnTestAliasedEnumOutput, baml_ipc_channel: BaseIPCChannel):
+@baml.FnTestAliasedEnumOutput.test(stream=True)
+async def test_plain_maroon(FnTestAliasedEnumOutputImpl: IFnTestAliasedEnumOutputStream, baml_ipc_channel: BaseIPCChannel):
     def to_str(item: Any) -> str:
         if isinstance(item, str):
             return item
@@ -25,10 +25,14 @@ async def test_plain_maroon(FnTestAliasedEnumOutputImpl: IFnTestAliasedEnumOutpu
     content = to_str("I am so excited!")
     deserializer = Deserializer[str](str) # type: ignore
     param = deserializer.from_string(content)
-    await FnTestAliasedEnumOutputImpl(param)
+    async with FnTestAliasedEnumOutputImpl(param) as stream:
+        async for response in stream.parsed_stream:
+            baml_ipc_channel.send("partial_response", response.json())
 
-@baml.FnTestAliasedEnumOutput.test(stream=False)
-async def test_practical_blush(FnTestAliasedEnumOutputImpl: IFnTestAliasedEnumOutput, baml_ipc_channel: BaseIPCChannel):
+        await stream.get_final_response()
+
+@baml.FnTestAliasedEnumOutput.test(stream=True)
+async def test_practical_blush(FnTestAliasedEnumOutputImpl: IFnTestAliasedEnumOutputStream, baml_ipc_channel: BaseIPCChannel):
     def to_str(item: Any) -> str:
         if isinstance(item, str):
             return item
@@ -37,10 +41,14 @@ async def test_practical_blush(FnTestAliasedEnumOutputImpl: IFnTestAliasedEnumOu
     content = to_str("I am so sad")
     deserializer = Deserializer[str](str) # type: ignore
     param = deserializer.from_string(content)
-    await FnTestAliasedEnumOutputImpl(param)
+    async with FnTestAliasedEnumOutputImpl(param) as stream:
+        async for response in stream.parsed_stream:
+            baml_ipc_channel.send("partial_response", response.json())
 
-@baml.FnTestAliasedEnumOutput.test(stream=False)
-async def test_pretty_maroon(FnTestAliasedEnumOutputImpl: IFnTestAliasedEnumOutput, baml_ipc_channel: BaseIPCChannel):
+        await stream.get_final_response()
+
+@baml.FnTestAliasedEnumOutput.test(stream=True)
+async def test_pretty_maroon(FnTestAliasedEnumOutputImpl: IFnTestAliasedEnumOutputStream, baml_ipc_channel: BaseIPCChannel):
     def to_str(item: Any) -> str:
         if isinstance(item, str):
             return item
@@ -49,5 +57,9 @@ async def test_pretty_maroon(FnTestAliasedEnumOutputImpl: IFnTestAliasedEnumOutp
     content = to_str("I am angry!!!!")
     deserializer = Deserializer[str](str) # type: ignore
     param = deserializer.from_string(content)
-    await FnTestAliasedEnumOutputImpl(param)
+    async with FnTestAliasedEnumOutputImpl(param) as stream:
+        async for response in stream.parsed_stream:
+            baml_ipc_channel.send("partial_response", response.json())
+
+        await stream.get_final_response()
 

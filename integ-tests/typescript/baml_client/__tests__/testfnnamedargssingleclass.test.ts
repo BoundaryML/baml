@@ -3,6 +3,7 @@
 // Disable formatting for this file to avoid linting errors.
 // tslint:disable
 // @ts-nocheck
+/* eslint-disable */
 
 import b from '../';
 
@@ -14,7 +15,7 @@ describe('test_case:nearby_black', () => {
     FireBamlEvent.tags({
       'test_dataset_name': 'TestFnNamedArgsSingleClass',
       'test_case_name': 'test',
-      'test_case_arg_name': `nearby_black[${impl}]`,
+      'test_case_arg_name': `test_nearby_black[TestFnNamedArgsSingleClass-${impl}]`,
       'test_cycle_id': process.env.BOUNDARY_PROCESS_ID || 'local-run',
     });
     const test_case = { "myArg": { "key": "one", "key_two": false, "key_three": 5 } };
@@ -26,6 +27,8 @@ describe('test_case:nearby_black', () => {
   describe('function:TestFnNamedArgsSingleClass', () => {
     test('impl:v1', async () => {
       await test_fn('v1');
-    });
+    }, 60000);
   });
 });
+
+

@@ -3,6 +3,7 @@
 // Disable formatting for this file to avoid linting errors.
 // tslint:disable
 // @ts-nocheck
+/* eslint-disable */
 
 import './fnenumlistoutput_v1';
 
@@ -22,6 +23,12 @@ import './fntestaliasedenumoutput_v1';
 
 import './fntestclassalias_v1';
 
+import './fntestclassoverride_v1';
+
+import './fntestenumoverride_v1';
+
+import './fntestnamedargssingleenum_v1';
+
 import './fntestoutputadapter_v1';
 
 import './prompttest_claude_chat';
@@ -36,8 +43,6 @@ import './testfnnamedargssinglebool_v1';
 
 import './testfnnamedargssingleclass_v1';
 
-import './testfnnamedargssingleenum_v1';
-
 import './testfnnamedargssingleenumlist_v1';
 
 import './testfnnamedargssinglefloat_v1';
@@ -49,3 +54,5 @@ import './testfnnamedargssinglestring_v1';
 import './testfnnamedargssinglestringarray_v1';
 
 import './testfnnamedargssinglestringlist_v1';
+
+

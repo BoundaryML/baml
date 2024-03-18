@@ -3,6 +3,7 @@
 // Disable formatting for this file to avoid linting errors.
 // tslint:disable
 // @ts-nocheck
+/* eslint-disable */
 
 
 import { GPT35 } from '../client';
@@ -41,7 +42,8 @@ PromptTest.registerImpl('openai_chat_with_chat_msgs', async (
       }
     );
 
-
     return deserializer.coerce(result.generated);
   }
 );
+
+

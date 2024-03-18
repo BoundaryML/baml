@@ -9,8 +9,6 @@ from baml_client import baml as b
 from datetime import datetime
 from typing import List
 from typing_extensions import TypedDict
-import asyncio
-
 
 async def extract_resume(resume: str) -> None:
     """

@@ -3,6 +3,7 @@
 // Disable formatting for this file to avoid linting errors.
 // tslint:disable
 // @ts-nocheck
+/* eslint-disable */
 
 import b from '../';
 
@@ -14,7 +15,7 @@ describe('test_case:western_green', () => {
     FireBamlEvent.tags({
       'test_dataset_name': 'FnOutputBool',
       'test_case_name': 'test',
-      'test_case_arg_name': `western_green[${impl}]`,
+      'test_case_arg_name': `test_western_green[FnOutputBool-${impl}]`,
       'test_cycle_id': process.env.BOUNDARY_PROCESS_ID || 'local-run',
     });
     const test_case = "noop";
@@ -26,6 +27,8 @@ describe('test_case:western_green', () => {
   describe('function:FnOutputBool', () => {
     test('impl:v1', async () => {
       await test_fn('v1');
-    });
+    }, 60000);
   });
 });
+
+

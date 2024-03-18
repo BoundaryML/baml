@@ -15,8 +15,8 @@ from pytest_baml.ipc_channel import BaseIPCChannel
 from typing import Any
 
 
-@baml.TestFnNamedArgsSingleClass.test(stream=False)
-async def test_nearby_black(TestFnNamedArgsSingleClassImpl: ITestFnNamedArgsSingleClass, baml_ipc_channel: BaseIPCChannel):
+@baml.TestFnNamedArgsSingleClass.test(stream=True)
+async def test_nearby_black(TestFnNamedArgsSingleClassImpl: ITestFnNamedArgsSingleClassStream, baml_ipc_channel: BaseIPCChannel):
     def to_str(item: Any) -> str:
         if isinstance(item, str):
             return item
@@ -25,6 +25,10 @@ async def test_nearby_black(TestFnNamedArgsSingleClassImpl: ITestFnNamedArgsSing
     case = {"myArg": {"key": "one", "key_two": False, "key_three": 5, }, }
     deserializer_myArg = Deserializer[NamedArgsSingleClass](NamedArgsSingleClass) # type: ignore
     myArg = deserializer_myArg.from_string(to_str(case["myArg"]))
-    await TestFnNamedArgsSingleClassImpl(
+    async with TestFnNamedArgsSingleClassImpl(
         myArg=myArg
-    )
+    ) as stream:
+        async for response in stream.parsed_stream:
+            baml_ipc_channel.send("partial_response", response.json())
+
+        await stream.get_final_response()

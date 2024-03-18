@@ -15,8 +15,8 @@ from pytest_baml.ipc_channel import BaseIPCChannel
 from typing import Any, List
 
 
-@baml.TestFnNamedArgsSingleStringArray.test(stream=False)
-async def test_ministerial_beige(TestFnNamedArgsSingleStringArrayImpl: ITestFnNamedArgsSingleStringArray, baml_ipc_channel: BaseIPCChannel):
+@baml.TestFnNamedArgsSingleStringArray.test(stream=True)
+async def test_ministerial_beige(TestFnNamedArgsSingleStringArrayImpl: ITestFnNamedArgsSingleStringArrayStream, baml_ipc_channel: BaseIPCChannel):
     def to_str(item: Any) -> str:
         if isinstance(item, str):
             return item
@@ -25,6 +25,10 @@ async def test_ministerial_beige(TestFnNamedArgsSingleStringArrayImpl: ITestFnNa
     case = {"myStringArray": ["hello there!\n\nhow are you.", "im doing fine'"], }
     deserializer_myStringArray = Deserializer[List[str]](List[str]) # type: ignore
     myStringArray = deserializer_myStringArray.from_string(to_str(case["myStringArray"]))
-    await TestFnNamedArgsSingleStringArrayImpl(
+    async with TestFnNamedArgsSingleStringArrayImpl(
         myStringArray=myStringArray
-    )
+    ) as stream:
+        async for response in stream.parsed_stream:
+            baml_ipc_channel.send("partial_response", response.json())
+
+        await stream.get_final_response()
