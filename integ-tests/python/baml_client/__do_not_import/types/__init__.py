@@ -14,7 +14,6 @@ from .classes.cls_classoptionaloutput2 import ClassOptionalOutput2
 from .classes.cls_modifiedoutput import ModifiedOutput
 from .classes.cls_namedargssingleclass import NamedArgsSingleClass
 from .classes.cls_optionalclass import OptionalClass
-from .classes.cls_optionaltest_returntype import OptionalTest_ReturnType
 from .classes.cls_overrideclass import OverrideClass
 from .classes.cls_testclassalias import TestClassAlias
 from .classes.cls_testclasswithenum import TestClassWithEnum
@@ -42,7 +41,6 @@ __all__ = [
     'NamedArgsSingleEnum',
     'NamedArgsSingleEnumList',
     'OptionalClass',
-    'OptionalTest_ReturnType',
     'OverrideClass',
     'OverrideEnum',
     'TestClassAlias',

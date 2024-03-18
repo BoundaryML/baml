@@ -227,22 +227,6 @@ const schema: JSONSchema7 = {
         "prop2"
       ]
     },
-    "OptionalTest_ReturnType": {
-      "title": "OptionalTest_ReturnType",
-      "type": "object",
-      "properties": {
-        "prop1": {
-          "type": "string"
-        },
-        "prop2": {
-          "type": "integer"
-        }
-      },
-      "required": [
-        "prop1",
-        "prop2"
-      ]
-    },
     "OverrideClass": {
       "title": "OverrideClass",
       "type": "object",
@@ -463,10 +447,6 @@ const schema: JSONSchema7 = {
     "FnTestOutputAdapter_input": {
       "type": "string",
       "title": "FnTestOutputAdapter input"
-    },
-    "OptionalTest_Function_input": {
-      "type": "string",
-      "title": "OptionalTest_Function input"
     },
     "PromptTest_input": {
       "type": "string",
@@ -692,20 +672,6 @@ const schema: JSONSchema7 = {
       "type": "string",
       "title": "FnTestOutputAdapter output"
     },
-    "OptionalTest_Function_output": {
-      "anyOf": [
-        {
-          "$ref": "#/definitions/OptionalTest_ReturnType",
-          "title": "OptionalTest_ReturnType"
-        },
-        {
-          "type": "null",
-          "title": "null"
-        }
-      ],
-      "default": null,
-      "title": "OptionalTest_Function output"
-    },
     "PromptTest_output": {
       "type": "string",
       "title": "PromptTest output"
@@ -797,8 +763,6 @@ registerObjectDeserializer(schema.definitions.ModifiedOutput, { });
 registerObjectDeserializer(schema.definitions.NamedArgsSingleClass, { });
 
 registerObjectDeserializer(schema.definitions.OptionalClass, { });
-
-registerObjectDeserializer(schema.definitions.OptionalTest_ReturnType, { });
 
 registerObjectDeserializer(schema.definitions.OverrideClass, { });
 

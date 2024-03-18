@@ -31,7 +31,6 @@ const BamlClient = {
   FnTestEnumOverride: f.FnTestEnumOverride,
   FnTestNamedArgsSingleEnum: f.FnTestNamedArgsSingleEnum,
   FnTestOutputAdapter: f.FnTestOutputAdapter,
-  OptionalTest_Function: f.OptionalTest_Function,
   PromptTest: f.PromptTest,
   TestFnNamedArgsSingleBool: f.TestFnNamedArgsSingleBool,
   TestFnNamedArgsSingleClass: f.TestFnNamedArgsSingleClass,

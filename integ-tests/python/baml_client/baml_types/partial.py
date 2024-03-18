@@ -14,7 +14,6 @@ from ..__do_not_import.types.partial.classes.cls_classoptionaloutput2 import Par
 from ..__do_not_import.types.partial.classes.cls_modifiedoutput import PartialModifiedOutput
 from ..__do_not_import.types.partial.classes.cls_namedargssingleclass import PartialNamedArgsSingleClass
 from ..__do_not_import.types.partial.classes.cls_optionalclass import PartialOptionalClass
-from ..__do_not_import.types.partial.classes.cls_optionaltest_returntype import PartialOptionalTest_ReturnType
 from ..__do_not_import.types.partial.classes.cls_overrideclass import PartialOverrideClass
 from ..__do_not_import.types.partial.classes.cls_testclassalias import PartialTestClassAlias
 from ..__do_not_import.types.partial.classes.cls_testclasswithenum import PartialTestClassWithEnum
@@ -32,7 +31,6 @@ __all__ = [
     'PartialModifiedOutput',
     'PartialNamedArgsSingleClass',
     'PartialOptionalClass',
-    'PartialOptionalTest_ReturnType',
     'PartialOverrideClass',
     'PartialTestClassAlias',
     'PartialTestClassWithEnum',
