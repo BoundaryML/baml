@@ -114,6 +114,9 @@ where
     id: &tracing::span::Id,
     ctx: tracing_subscriber::layer::Context<'_, S>,
   ) {
+    let now = chrono::Local::now().format("%M:%S%.3f");
+    println!("{now} Starting span: {:?}", id);
+
     // Get all parents
     let span = ctx.span(id).unwrap();
     let mut parents = vec![];
@@ -214,6 +217,8 @@ where
   }
 
   fn on_close(&self, id: tracing::span::Id, ctx: tracing_subscriber::layer::Context<'_, S>) {
+    let now = chrono::Local::now().format("%M:%S%.3f");
+    println!("{now} Closing span: {:?}", id);
     let span = ctx.span(&id).unwrap();
     let mut extension = span.extensions_mut();
     let schema = match extension.get_mut::<partial_types::PartialLogSchema>() {
