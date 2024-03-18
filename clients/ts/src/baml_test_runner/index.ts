@@ -75,4 +75,9 @@ class BamlTestRunner extends TestRunner {
   }
 }
 
+
+process.on('exit', (code) => {
+  BamlTracer.flush();
+});
+
 export default BamlTestRunner;

@@ -460,7 +460,7 @@ impl RunState {
                                 return Some((spec, res));
                             }
                         } else {
-                            println!("Test state is not finished: {:?}", state);
+                            println!("Test state is not finished: {:?} {:?}", spec, state);
                         }
                     }
                     None
