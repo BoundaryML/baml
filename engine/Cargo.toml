@@ -5,7 +5,6 @@ members = [
   "baml-cli",
   "baml-fmt",
   "baml-schema-wasm",
-  "baml-client-lib",
   "baml-core-ffi",
 ]
 

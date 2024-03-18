@@ -1,13 +1,11 @@
 use anyhow::Result;
-mod custom_exporter;
 pub(super) mod event_thread;
 mod partial_types;
 pub(super) mod span_events;
-// pub mod tracer;
 
 use tracing_subscriber::prelude::*;
 
-use crate::api_wrapper::{core_types::TestCaseStatus, APIWrapper, BoundaryAPI, BoundaryTestAPI};
+use crate::api_wrapper::APIWrapper;
 
 use self::{event_thread::BatchProcessor, span_events::BamlEventSubscriber};
 
