@@ -31,11 +31,17 @@ describe('test_case:powerful_coffee', () => {
     test('impl:claude_chat_with_chat_msgs', async () => {
       await test_fn('claude_chat_with_chat_msgs');
     }, 60000);
+    test('impl:claude_chat_with_chat_msgs_no_system', async () => {
+      await test_fn('claude_chat_with_chat_msgs_no_system');
+    }, 60000);
     test('impl:openai_chat', async () => {
       await test_fn('openai_chat');
     }, 60000);
     test('impl:openai_chat_with_chat_msgs', async () => {
       await test_fn('openai_chat_with_chat_msgs');
+    }, 60000);
+    test('impl:openai_chat_with_chat_msgs_no_system', async () => {
+      await test_fn('openai_chat_with_chat_msgs_no_system');
     }, 60000);
   });
 });

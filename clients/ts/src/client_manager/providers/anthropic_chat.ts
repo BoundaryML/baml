@@ -1,6 +1,6 @@
 import Anthropic, { APIError, AnthropicError } from '@anthropic-ai/sdk';
 import { clientManager } from "../client_manager";
-import { MessageCreateParamsNonStreaming } from '@anthropic-ai/sdk/resources/beta/messages';
+import { MessageCreateParamsNonStreaming } from '@anthropic-ai/sdk/resources/messages';
 import { LLMChatProvider, LLMChatProviderArgs } from '../llm_chat_provider';
 import { LLMBaseProvider, LLMBaseProviderArgs, LLMChatMessage, LLMResponse } from '../llm_base_provider';
 
@@ -62,11 +62,25 @@ class AnthropicClient extends LLMChatProvider {
     }
 
     protected async chat_impl(prompt: LLMChatMessage[]): Promise<LLMResponse> {
-        const response = await this.client.beta.messages.create({
-            messages: prompt.map((chat) => ({
+
+        const systemMessages = prompt.filter(chat => chat.role === "system");
+        const nonSystemMessages = prompt.filter(chat => chat.role !== "system");
+
+        if (systemMessages.length > 1) {
+            throw new Error("More than one system message found");
+        }
+
+        let systemMessage: LLMChatMessage | undefined;
+        if (systemMessages.length === 1) {
+            systemMessage = systemMessages[0];
+        }
+
+        const response = await this.client.messages.create({
+            messages: nonSystemMessages.map((chat) => ({
                 role: chat.role === "user" ? "user" : "assistant",
                 content: chat.content,
             })),
+            system: systemMessage?.content,
             ...this.params,
         });
 

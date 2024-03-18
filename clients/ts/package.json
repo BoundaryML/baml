@@ -37,7 +37,7 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.12.3",
+    "@anthropic-ai/sdk": "^0.18.0",
     "@boundaryml/baml-core-ffi": "link:../../engine/baml-core-ffi",
     "dotenv": "^16.4.5",
     "json-schema": "^0.4.0",

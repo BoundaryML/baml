@@ -1373,7 +1373,7 @@ const FnTestOutputAdapter = createFnTestOutputAdapterInstance();
 
 type IPromptTest = (arg: string) => Promise<string>
 
-type PromptTestImpls = 'claude_chat' | 'claude_chat_with_chat_msgs' | 'openai_chat' | 'openai_chat_with_chat_msgs';
+type PromptTestImpls = 'claude_chat' | 'claude_chat_with_chat_msgs' | 'claude_chat_with_chat_msgs_no_system' | 'openai_chat' | 'openai_chat_with_chat_msgs' | 'openai_chat_with_chat_msgs_no_system';
 
 interface PromptTestImpl {
     run: IPromptTest;
@@ -1422,7 +1422,7 @@ function createPromptTestInstance(): IPromptTest & PromptTestFunction {
       };
     },
     validate: () => {
-      const targets = ['claude_chat', 'claude_chat_with_chat_msgs', 'openai_chat', 'openai_chat_with_chat_msgs'];
+      const targets = ['claude_chat', 'claude_chat_with_chat_msgs', 'claude_chat_with_chat_msgs_no_system', 'openai_chat', 'openai_chat_with_chat_msgs', 'openai_chat_with_chat_msgs_no_system'];
       const impls = Object.keys(registry);
       const missing = targets.filter(t => !impls.includes(t));
       if (missing.length > 0) {

@@ -1,4 +1,4 @@
-lockfileVersion: '6.1'
+lockfileVersion: '6.0'
 
 settings:
   autoInstallPeers: true
@@ -6,8 +6,8 @@ settings:
 
 dependencies:
   '@anthropic-ai/sdk':
-    specifier: ^0.12.3
-    version: 0.12.3
+    specifier: ^0.18.0
+    version: 0.18.0
   '@boundaryml/baml-core-ffi':
     specifier: link:../../engine/baml-core-ffi
     version: link:../../engine/baml-core-ffi
@@ -72,8 +72,8 @@ packages:
       '@jridgewell/trace-mapping': 0.3.25
     dev: true
 
-  /@anthropic-ai/sdk@0.12.3:
-    resolution: {integrity: sha512-+LnITHTLxa5qVN4Zh+C72xCgELY9zKDSDnSq88CsqEnKy7rQ/U0PXk3micnvnRCNjXbzDHs+WOcTfYOKqqOdYw==}
+  /@anthropic-ai/sdk@0.18.0:
+    resolution: {integrity: sha512-3XsWEn/4nPGRd4AdSguugbSDFy6Z2AWTNOeI3iK+aV22+w23+vY9CEb3Hiy0kvKIQuxSmZz/+5WKC8nPWy8gVg==}
     dependencies:
       '@types/node': 18.19.21
       '@types/node-fetch': 2.6.11
