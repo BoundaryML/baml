@@ -90,6 +90,91 @@ const schema: JSONSchema7 = {
         }
       ]
     },
+    "Blah": {
+      "title": "Blah",
+      "type": "object",
+      "properties": {
+        "prop4": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": []
+    },
+    "ClassOptionalFields": {
+      "title": "ClassOptionalFields",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "prop2": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": []
+    },
+    "ClassOptionalOutput": {
+      "title": "ClassOptionalOutput",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "type": "string"
+        },
+        "prop2": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "prop1",
+        "prop2"
+      ]
+    },
+    "ClassOptionalOutput2": {
+      "title": "ClassOptionalOutput2",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "prop2": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "prop3": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Blah",
+              "title": "Blah"
+            },
+            {
+              "type": "null",
+              "title": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": []
+    },
     "ModifiedOutput": {
       "title": "ModifiedOutput",
       "type": "object",
@@ -124,6 +209,22 @@ const schema: JSONSchema7 = {
         "key",
         "key_two",
         "key_three"
+      ]
+    },
+    "OptionalClass": {
+      "title": "OptionalClass",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "type": "string"
+        },
+        "prop2": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "prop1",
+        "prop2"
       ]
     },
     "OverrideClass": {
@@ -202,6 +303,32 @@ const schema: JSONSchema7 = {
         "prop2"
       ]
     },
+    "FnClassOptional_input": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/OptionalClass",
+          "title": "OptionalClass"
+        },
+        {
+          "type": "null",
+          "title": "null"
+        }
+      ],
+      "default": null,
+      "title": "FnClassOptional input"
+    },
+    "FnClassOptional2_input": {
+      "$ref": "#/definitions/ClassOptionalFields",
+      "title": "FnClassOptional2 input"
+    },
+    "FnClassOptionalOutput_input": {
+      "type": "string",
+      "title": "FnClassOptionalOutput input"
+    },
+    "FnClassOptionalOutput2_input": {
+      "type": "string",
+      "title": "FnClassOptionalOutput2 input"
+    },
     "FnEnumListOutput_input": {
       "type": "string",
       "title": "FnEnumListOutput input"
@@ -229,6 +356,14 @@ const schema: JSONSchema7 = {
     "FnOutputStringList_input": {
       "type": "string",
       "title": "FnOutputStringList input"
+    },
+    "FnStringOptional_input": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null,
+      "title": "FnStringOptional input"
     },
     "FnTestAliasedEnumOutput_input": {
       "type": "string",
@@ -259,6 +394,10 @@ const schema: JSONSchema7 = {
     "FnTestOutputAdapter_input": {
       "type": "string",
       "title": "FnTestOutputAdapter input"
+    },
+    "FnUnionStringBoolWithArrayOutput_input": {
+      "type": "string",
+      "title": "FnUnionStringBoolWithArrayOutput input"
     },
     "PromptTest_input": {
       "type": "string",
@@ -366,6 +505,42 @@ const schema: JSONSchema7 = {
       "required": [],
       "title": "TestFnNamedArgsSyntax input"
     },
+    "FnClassOptional_output": {
+      "type": "string",
+      "title": "FnClassOptional output"
+    },
+    "FnClassOptional2_output": {
+      "type": "string",
+      "title": "FnClassOptional2 output"
+    },
+    "FnClassOptionalOutput_output": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ClassOptionalOutput",
+          "title": "ClassOptionalOutput"
+        },
+        {
+          "type": "null",
+          "title": "null"
+        }
+      ],
+      "default": null,
+      "title": "FnClassOptionalOutput output"
+    },
+    "FnClassOptionalOutput2_output": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ClassOptionalOutput2",
+          "title": "ClassOptionalOutput2"
+        },
+        {
+          "type": "null",
+          "title": "null"
+        }
+      ],
+      "default": null,
+      "title": "FnClassOptionalOutput2 output"
+    },
     "FnEnumListOutput_output": {
       "type": "array",
       "items": {
@@ -403,6 +578,10 @@ const schema: JSONSchema7 = {
       },
       "title": "FnOutputStringList output"
     },
+    "FnStringOptional_output": {
+      "type": "string",
+      "title": "FnStringOptional output"
+    },
     "FnTestAliasedEnumOutput_output": {
       "$ref": "#/definitions/TestEnum",
       "title": "FnTestAliasedEnumOutput output"
@@ -426,6 +605,10 @@ const schema: JSONSchema7 = {
     "FnTestOutputAdapter_output": {
       "type": "string",
       "title": "FnTestOutputAdapter output"
+    },
+    "FnUnionStringBoolWithArrayOutput_output": {
+      "type": "number",
+      "title": "FnUnionStringBoolWithArrayOutput output"
     },
     "PromptTest_output": {
       "type": "string",
@@ -501,9 +684,19 @@ registerEnumDeserializer(schema.definitions.TestEnum, {
   "k44: User is confused": "D"
 });
 
+registerObjectDeserializer(schema.definitions.Blah, { });
+
+registerObjectDeserializer(schema.definitions.ClassOptionalFields, { });
+
+registerObjectDeserializer(schema.definitions.ClassOptionalOutput, { });
+
+registerObjectDeserializer(schema.definitions.ClassOptionalOutput2, { });
+
 registerObjectDeserializer(schema.definitions.ModifiedOutput, { });
 
 registerObjectDeserializer(schema.definitions.NamedArgsSingleClass, { });
+
+registerObjectDeserializer(schema.definitions.OptionalClass, { });
 
 registerObjectDeserializer(schema.definitions.OverrideClass, { });
 

@@ -7,8 +7,13 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
+from ..__do_not_import.types.partial.classes.cls_blah import PartialBlah
+from ..__do_not_import.types.partial.classes.cls_classoptionalfields import PartialClassOptionalFields
+from ..__do_not_import.types.partial.classes.cls_classoptionaloutput import PartialClassOptionalOutput
+from ..__do_not_import.types.partial.classes.cls_classoptionaloutput2 import PartialClassOptionalOutput2
 from ..__do_not_import.types.partial.classes.cls_modifiedoutput import PartialModifiedOutput
 from ..__do_not_import.types.partial.classes.cls_namedargssingleclass import PartialNamedArgsSingleClass
+from ..__do_not_import.types.partial.classes.cls_optionalclass import PartialOptionalClass
 from ..__do_not_import.types.partial.classes.cls_overrideclass import PartialOverrideClass
 from ..__do_not_import.types.partial.classes.cls_testclassalias import PartialTestClassAlias
 from ..__do_not_import.types.partial.classes.cls_testclasswithenum import PartialTestClassWithEnum
@@ -18,8 +23,13 @@ from ..__do_not_import.types.partial.classes.cls_testoutputclass import PartialT
 
 
 __all__ = [
+    'PartialBlah',
+    'PartialClassOptionalFields',
+    'PartialClassOptionalOutput',
+    'PartialClassOptionalOutput2',
     'PartialModifiedOutput',
     'PartialNamedArgsSingleClass',
+    'PartialOptionalClass',
     'PartialOverrideClass',
     'PartialTestClassAlias',
     'PartialTestClassWithEnum',

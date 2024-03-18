@@ -6,7 +6,7 @@
 /* eslint-disable */
 
 
-import { EnumInClass, EnumOutput, ModifiedOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OverrideClass, OverrideEnum, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass } from './types';
+import { Blah, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, EnumInClass, EnumOutput, ModifiedOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalClass, OverrideClass, OverrideEnum, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass } from './types';
 
 
 // Function to check if a value is a member of the EnumInClass enum
@@ -37,6 +37,154 @@ function isOverrideEnum(value: any): value is OverrideEnum {
 // Function to check if a value is a member of the TestEnum enum
 function isTestEnum(value: any): value is TestEnum {
   return Object.values(TestEnum).includes(value);
+}
+
+// Function to validate if an object is a Blah object
+function isBlah(obj: any): obj is Blah {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("prop4" in obj && ((obj.prop4 === null || obj.prop4 === undefined) || typeof obj.prop4 === 'string'))
+  );
+}
+
+
+class InternalBlah implements Blah {
+  private constructor(private data: {
+    prop4: string | null,
+  }, private raw: Blah) {}
+
+  static from(data: Blah): InternalBlah {
+    return new InternalBlah({
+      prop4: (data.prop4 === null || data.prop4 === undefined) ? null : data.prop4,
+    }, data);
+  }
+
+  get prop4(): string | null {
+    return this.data.prop4;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
+// Function to validate if an object is a ClassOptionalFields object
+function isClassOptionalFields(obj: any): obj is ClassOptionalFields {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("prop1" in obj && ((obj.prop1 === null || obj.prop1 === undefined) || typeof obj.prop1 === 'string'))
+    && ("prop2" in obj && ((obj.prop2 === null || obj.prop2 === undefined) || typeof obj.prop2 === 'string'))
+  );
+}
+
+
+class InternalClassOptionalFields implements ClassOptionalFields {
+  private constructor(private data: {
+    prop1: string | null,
+    prop2: string | null,
+  }, private raw: ClassOptionalFields) {}
+
+  static from(data: ClassOptionalFields): InternalClassOptionalFields {
+    return new InternalClassOptionalFields({
+      prop1: (data.prop1 === null || data.prop1 === undefined) ? null : data.prop1,
+      prop2: (data.prop2 === null || data.prop2 === undefined) ? null : data.prop2,
+    }, data);
+  }
+
+  get prop1(): string | null {
+    return this.data.prop1;
+  }
+  get prop2(): string | null {
+    return this.data.prop2;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
+// Function to validate if an object is a ClassOptionalOutput object
+function isClassOptionalOutput(obj: any): obj is ClassOptionalOutput {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("prop1" in obj && (typeof obj.prop1 === 'string'))
+    && ("prop2" in obj && (typeof obj.prop2 === 'string'))
+  );
+}
+
+
+class InternalClassOptionalOutput implements ClassOptionalOutput {
+  private constructor(private data: {
+    prop1: string,
+    prop2: string,
+  }, private raw: ClassOptionalOutput) {}
+
+  static from(data: ClassOptionalOutput): InternalClassOptionalOutput {
+    return new InternalClassOptionalOutput({
+      prop1: data.prop1,
+      prop2: data.prop2,
+    }, data);
+  }
+
+  get prop1(): string {
+    return this.data.prop1;
+  }
+  get prop2(): string {
+    return this.data.prop2;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
+// Function to validate if an object is a ClassOptionalOutput2 object
+function isClassOptionalOutput2(obj: any): obj is ClassOptionalOutput2 {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("prop1" in obj && ((obj.prop1 === null || obj.prop1 === undefined) || typeof obj.prop1 === 'string'))
+    && ("prop2" in obj && ((obj.prop2 === null || obj.prop2 === undefined) || typeof obj.prop2 === 'string'))
+    && ("prop3" in obj && ((obj.prop3 === null || obj.prop3 === undefined) || isBlah(obj.prop3)))
+  );
+}
+
+
+class InternalClassOptionalOutput2 implements ClassOptionalOutput2 {
+  private constructor(private data: {
+    prop1: string | null,
+    prop2: string | null,
+    prop3: Blah | null,
+  }, private raw: ClassOptionalOutput2) {}
+
+  static from(data: ClassOptionalOutput2): InternalClassOptionalOutput2 {
+    return new InternalClassOptionalOutput2({
+      prop1: (data.prop1 === null || data.prop1 === undefined) ? null : data.prop1,
+      prop2: (data.prop2 === null || data.prop2 === undefined) ? null : data.prop2,
+      prop3: (data.prop3 === null || data.prop3 === undefined) ? null : new InternalBlah(data.prop3),
+    }, data);
+  }
+
+  get prop1(): string | null {
+    return this.data.prop1;
+  }
+  get prop2(): string | null {
+    return this.data.prop2;
+  }
+  get prop3(): Blah | null {
+    return this.data.prop3;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
 }
 
 // Function to validate if an object is a ModifiedOutput object
@@ -111,6 +259,43 @@ class InternalNamedArgsSingleClass implements NamedArgsSingleClass {
   }
   get key_three(): number {
     return this.data.key_three;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
+// Function to validate if an object is a OptionalClass object
+function isOptionalClass(obj: any): obj is OptionalClass {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("prop1" in obj && (typeof obj.prop1 === 'string'))
+    && ("prop2" in obj && (typeof obj.prop2 === 'string'))
+  );
+}
+
+
+class InternalOptionalClass implements OptionalClass {
+  private constructor(private data: {
+    prop1: string,
+    prop2: string,
+  }, private raw: OptionalClass) {}
+
+  static from(data: OptionalClass): InternalOptionalClass {
+    return new InternalOptionalClass({
+      prop1: data.prop1,
+      prop2: data.prop2,
+    }, data);
+  }
+
+  get prop1(): string {
+    return this.data.prop1;
+  }
+  get prop2(): string {
+    return this.data.prop2;
   }
 
 
@@ -286,5 +471,5 @@ class InternalTestOutputClass implements TestOutputClass {
 }
 
 
-export { InternalModifiedOutput, InternalNamedArgsSingleClass, InternalOverrideClass, InternalTestClassAlias, InternalTestClassWithEnum, InternalTestOutputClass }
+export { InternalBlah, InternalClassOptionalFields, InternalClassOptionalOutput, InternalClassOptionalOutput2, InternalModifiedOutput, InternalNamedArgsSingleClass, InternalOptionalClass, InternalOverrideClass, InternalTestClassAlias, InternalTestClassWithEnum, InternalTestOutputClass }
 

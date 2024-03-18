@@ -28,11 +28,11 @@ function isMusl() {
   }
 }
 
-const searchDir = "/home/sam/baml/engine/baml-core-ffi";
-// const searchDir = '/Users/aaronvillalpando/Projects/baml/engine/baml-core-ffi'
 // const searchDir = "/home/sam/baml/engine/baml-core-ffi";
 // const searchDir = '/Users/aaronvillalpando/Projects/baml/engine/baml-core-ffi'
-const searchDir = '/Users/vbv/repos/gloo-lang/engine/baml-core-ffi'
+// const searchDir = "/home/sam/baml/engine/baml-core-ffi";
+const searchDir = '/Users/aaronvillalpando/Projects/baml/engine/baml-core-ffi'
+// const searchDir = '/Users/vbv/repos/gloo-lang/engine/baml-core-ffi'
 // const searchDir = __dirname;
 
 switch (platform) {

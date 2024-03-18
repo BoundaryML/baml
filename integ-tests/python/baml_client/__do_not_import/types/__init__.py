@@ -7,8 +7,13 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
+from .classes.cls_blah import Blah
+from .classes.cls_classoptionalfields import ClassOptionalFields
+from .classes.cls_classoptionaloutput import ClassOptionalOutput
+from .classes.cls_classoptionaloutput2 import ClassOptionalOutput2
 from .classes.cls_modifiedoutput import ModifiedOutput
 from .classes.cls_namedargssingleclass import NamedArgsSingleClass
+from .classes.cls_optionalclass import OptionalClass
 from .classes.cls_overrideclass import OverrideClass
 from .classes.cls_testclassalias import TestClassAlias
 from .classes.cls_testclasswithenum import TestClassWithEnum
@@ -24,12 +29,17 @@ from .enums.enm_testenum import TestEnum
 
 
 __all__ = [
+    'Blah',
+    'ClassOptionalFields',
+    'ClassOptionalOutput',
+    'ClassOptionalOutput2',
     'EnumInClass',
     'EnumOutput',
     'ModifiedOutput',
     'NamedArgsSingleClass',
     'NamedArgsSingleEnum',
     'NamedArgsSingleEnumList',
+    'OptionalClass',
     'OverrideClass',
     'OverrideEnum',
     'TestClassAlias',

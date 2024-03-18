@@ -21,7 +21,7 @@ tracing = "0.1.40"
 colored = "2.1.0"
 hostname = "0.3.1"
 reqwest = "0.11.24"
-uuid = "1.7.0"
+uuid = { version = "1.7.0", features = ["v4"] }
 tracing-subscriber = "0.3.18"
 envy = "0.4.2"
 chrono = "0.4.35"

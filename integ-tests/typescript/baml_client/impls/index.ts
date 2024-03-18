@@ -5,6 +5,14 @@
 // @ts-nocheck
 /* eslint-disable */
 
+import './fnclassoptional_v1';
+
+import './fnclassoptional2_v1';
+
+import './fnclassoptionaloutput_v1';
+
+import './fnclassoptionaloutput2_v1';
+
 import './fnenumlistoutput_v1';
 
 import './fnenumoutput_v1';
@@ -19,6 +27,8 @@ import './fnoutputclasswithenum_v1';
 
 import './fnoutputstringlist_v1';
 
+import './fnstringoptional_v1';
+
 import './fntestaliasedenumoutput_v1';
 
 import './fntestclassalias_v1';
@@ -30,6 +40,8 @@ import './fntestenumoverride_v1';
 import './fntestnamedargssingleenum_v1';
 
 import './fntestoutputadapter_v1';
+
+import './fnunionstringboolwitharrayoutput_v1';
 
 import './prompttest_claude_chat';
 

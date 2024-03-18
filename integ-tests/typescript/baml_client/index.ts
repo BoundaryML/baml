@@ -12,6 +12,10 @@ import * as f from "./function"
 import "./impls"
 
 const BamlClient = {
+  FnClassOptional: f.FnClassOptional,
+  FnClassOptional2: f.FnClassOptional2,
+  FnClassOptionalOutput: f.FnClassOptionalOutput,
+  FnClassOptionalOutput2: f.FnClassOptionalOutput2,
   FnEnumListOutput: f.FnEnumListOutput,
   FnEnumOutput: f.FnEnumOutput,
   FnOutputBool: f.FnOutputBool,
@@ -19,12 +23,14 @@ const BamlClient = {
   FnOutputClassList: f.FnOutputClassList,
   FnOutputClassWithEnum: f.FnOutputClassWithEnum,
   FnOutputStringList: f.FnOutputStringList,
+  FnStringOptional: f.FnStringOptional,
   FnTestAliasedEnumOutput: f.FnTestAliasedEnumOutput,
   FnTestClassAlias: f.FnTestClassAlias,
   FnTestClassOverride: f.FnTestClassOverride,
   FnTestEnumOverride: f.FnTestEnumOverride,
   FnTestNamedArgsSingleEnum: f.FnTestNamedArgsSingleEnum,
   FnTestOutputAdapter: f.FnTestOutputAdapter,
+  FnUnionStringBoolWithArrayOutput: f.FnUnionStringBoolWithArrayOutput,
   PromptTest: f.PromptTest,
   TestFnNamedArgsSingleBool: f.TestFnNamedArgsSingleBool,
   TestFnNamedArgsSingleClass: f.TestFnNamedArgsSingleClass,

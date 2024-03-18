@@ -11,6 +11,10 @@ from .clients.client_claude import Claude
 from .clients.client_gpt35 import GPT35
 from .clients.client_gpt4 import GPT4
 from .clients.client_gpt4turbo import GPT4Turbo
+from .functions.fx_fnclassoptional import BAMLFnClassOptional
+from .functions.fx_fnclassoptional2 import BAMLFnClassOptional2
+from .functions.fx_fnclassoptionaloutput import BAMLFnClassOptionalOutput
+from .functions.fx_fnclassoptionaloutput2 import BAMLFnClassOptionalOutput2
 from .functions.fx_fnenumlistoutput import BAMLFnEnumListOutput
 from .functions.fx_fnenumoutput import BAMLFnEnumOutput
 from .functions.fx_fnoutputbool import BAMLFnOutputBool
@@ -18,12 +22,14 @@ from .functions.fx_fnoutputclass import BAMLFnOutputClass
 from .functions.fx_fnoutputclasslist import BAMLFnOutputClassList
 from .functions.fx_fnoutputclasswithenum import BAMLFnOutputClassWithEnum
 from .functions.fx_fnoutputstringlist import BAMLFnOutputStringList
+from .functions.fx_fnstringoptional import BAMLFnStringOptional
 from .functions.fx_fntestaliasedenumoutput import BAMLFnTestAliasedEnumOutput
 from .functions.fx_fntestclassalias import BAMLFnTestClassAlias
 from .functions.fx_fntestclassoverride import BAMLFnTestClassOverride
 from .functions.fx_fntestenumoverride import BAMLFnTestEnumOverride
 from .functions.fx_fntestnamedargssingleenum import BAMLFnTestNamedArgsSingleEnum
 from .functions.fx_fntestoutputadapter import BAMLFnTestOutputAdapter
+from .functions.fx_fnunionstringboolwitharrayoutput import BAMLFnUnionStringBoolWithArrayOutput
 from .functions.fx_prompttest import BAMLPromptTest
 from .functions.fx_testfnnamedargssinglebool import BAMLTestFnNamedArgsSingleBool
 from .functions.fx_testfnnamedargssingleclass import BAMLTestFnNamedArgsSingleClass
@@ -42,6 +48,10 @@ from typing import Callable, List, Optional
 
 
 class BAMLClient:
+    FnClassOptional = BAMLFnClassOptional
+    FnClassOptional2 = BAMLFnClassOptional2
+    FnClassOptionalOutput = BAMLFnClassOptionalOutput
+    FnClassOptionalOutput2 = BAMLFnClassOptionalOutput2
     FnEnumListOutput = BAMLFnEnumListOutput
     FnEnumOutput = BAMLFnEnumOutput
     FnOutputBool = BAMLFnOutputBool
@@ -49,12 +59,14 @@ class BAMLClient:
     FnOutputClassList = BAMLFnOutputClassList
     FnOutputClassWithEnum = BAMLFnOutputClassWithEnum
     FnOutputStringList = BAMLFnOutputStringList
+    FnStringOptional = BAMLFnStringOptional
     FnTestAliasedEnumOutput = BAMLFnTestAliasedEnumOutput
     FnTestClassAlias = BAMLFnTestClassAlias
     FnTestClassOverride = BAMLFnTestClassOverride
     FnTestEnumOverride = BAMLFnTestEnumOverride
     FnTestNamedArgsSingleEnum = BAMLFnTestNamedArgsSingleEnum
     FnTestOutputAdapter = BAMLFnTestOutputAdapter
+    FnUnionStringBoolWithArrayOutput = BAMLFnUnionStringBoolWithArrayOutput
     PromptTest = BAMLPromptTest
     TestFnNamedArgsSingleBool = BAMLTestFnNamedArgsSingleBool
     TestFnNamedArgsSingleClass = BAMLTestFnNamedArgsSingleClass

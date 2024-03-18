@@ -39,6 +39,26 @@ const enum TestEnum {
     E = "E",
 }
 
+interface Blah {
+  prop4: string | null;
+}
+
+interface ClassOptionalFields {
+  prop1: string | null;
+  prop2: string | null;
+}
+
+interface ClassOptionalOutput {
+  prop1: string;
+  prop2: string;
+}
+
+interface ClassOptionalOutput2 {
+  prop1: string | null;
+  prop2: string | null;
+  prop3: Blah | null;
+}
+
 interface ModifiedOutput {
   reasoning: string;
   answer: string;
@@ -48,6 +68,11 @@ interface NamedArgsSingleClass {
   key: string;
   key_two: boolean;
   key_three: number;
+}
+
+interface OptionalClass {
+  prop1: string;
+  prop2: string;
 }
 
 interface OverrideClass {
@@ -74,5 +99,5 @@ interface TestOutputClass {
 }
 
 
-export { EnumInClass, EnumOutput, NamedArgsSingleEnum, NamedArgsSingleEnumList, OverrideEnum, TestEnum, ModifiedOutput, NamedArgsSingleClass, OverrideClass, TestClassAlias, TestClassWithEnum, TestOutputClass }
+export { EnumInClass, EnumOutput, NamedArgsSingleEnum, NamedArgsSingleEnumList, OverrideEnum, TestEnum, Blah, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, ModifiedOutput, NamedArgsSingleClass, OptionalClass, OverrideClass, TestClassAlias, TestClassWithEnum, TestOutputClass }
 

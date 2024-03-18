@@ -7,6 +7,10 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
+from ..__do_not_import.functions.fx_fnclassoptional import IFnClassOptional, IFnClassOptionalOutput, IFnClassOptionalStream
+from ..__do_not_import.functions.fx_fnclassoptional2 import IFnClassOptional2, IFnClassOptional2Output, IFnClassOptional2Stream
+from ..__do_not_import.functions.fx_fnclassoptionaloutput import IFnClassOptionalOutput, IFnClassOptionalOutputOutput, IFnClassOptionalOutputStream
+from ..__do_not_import.functions.fx_fnclassoptionaloutput2 import IFnClassOptionalOutput2, IFnClassOptionalOutput2Output, IFnClassOptionalOutput2Stream
 from ..__do_not_import.functions.fx_fnenumlistoutput import IFnEnumListOutput, IFnEnumListOutputOutput, IFnEnumListOutputStream
 from ..__do_not_import.functions.fx_fnenumoutput import IFnEnumOutput, IFnEnumOutputOutput, IFnEnumOutputStream
 from ..__do_not_import.functions.fx_fnoutputbool import IFnOutputBool, IFnOutputBoolOutput, IFnOutputBoolStream
@@ -14,12 +18,14 @@ from ..__do_not_import.functions.fx_fnoutputclass import IFnOutputClass, IFnOutp
 from ..__do_not_import.functions.fx_fnoutputclasslist import IFnOutputClassList, IFnOutputClassListOutput, IFnOutputClassListStream
 from ..__do_not_import.functions.fx_fnoutputclasswithenum import IFnOutputClassWithEnum, IFnOutputClassWithEnumOutput, IFnOutputClassWithEnumStream
 from ..__do_not_import.functions.fx_fnoutputstringlist import IFnOutputStringList, IFnOutputStringListOutput, IFnOutputStringListStream
+from ..__do_not_import.functions.fx_fnstringoptional import IFnStringOptional, IFnStringOptionalOutput, IFnStringOptionalStream
 from ..__do_not_import.functions.fx_fntestaliasedenumoutput import IFnTestAliasedEnumOutput, IFnTestAliasedEnumOutputOutput, IFnTestAliasedEnumOutputStream
 from ..__do_not_import.functions.fx_fntestclassalias import IFnTestClassAlias, IFnTestClassAliasOutput, IFnTestClassAliasStream
 from ..__do_not_import.functions.fx_fntestclassoverride import IFnTestClassOverride, IFnTestClassOverrideOutput, IFnTestClassOverrideStream
 from ..__do_not_import.functions.fx_fntestenumoverride import IFnTestEnumOverride, IFnTestEnumOverrideOutput, IFnTestEnumOverrideStream
 from ..__do_not_import.functions.fx_fntestnamedargssingleenum import IFnTestNamedArgsSingleEnum, IFnTestNamedArgsSingleEnumOutput, IFnTestNamedArgsSingleEnumStream
 from ..__do_not_import.functions.fx_fntestoutputadapter import IFnTestOutputAdapter, IFnTestOutputAdapterOutput, IFnTestOutputAdapterStream
+from ..__do_not_import.functions.fx_fnunionstringboolwitharrayoutput import IFnUnionStringBoolWithArrayOutput, IFnUnionStringBoolWithArrayOutputOutput, IFnUnionStringBoolWithArrayOutputStream
 from ..__do_not_import.functions.fx_prompttest import IPromptTest, IPromptTestOutput, IPromptTestStream
 from ..__do_not_import.functions.fx_testfnnamedargssinglebool import ITestFnNamedArgsSingleBool, ITestFnNamedArgsSingleBoolOutput, ITestFnNamedArgsSingleBoolStream
 from ..__do_not_import.functions.fx_testfnnamedargssingleclass import ITestFnNamedArgsSingleClass, ITestFnNamedArgsSingleClassOutput, ITestFnNamedArgsSingleClassStream
@@ -30,8 +36,13 @@ from ..__do_not_import.functions.fx_testfnnamedargssinglestring import ITestFnNa
 from ..__do_not_import.functions.fx_testfnnamedargssinglestringarray import ITestFnNamedArgsSingleStringArray, ITestFnNamedArgsSingleStringArrayOutput, ITestFnNamedArgsSingleStringArrayStream
 from ..__do_not_import.functions.fx_testfnnamedargssinglestringlist import ITestFnNamedArgsSingleStringList, ITestFnNamedArgsSingleStringListOutput, ITestFnNamedArgsSingleStringListStream
 from ..__do_not_import.functions.fx_testfnnamedargssyntax import ITestFnNamedArgsSyntax, ITestFnNamedArgsSyntaxOutput, ITestFnNamedArgsSyntaxStream
+from ..__do_not_import.types.classes.cls_blah import Blah
+from ..__do_not_import.types.classes.cls_classoptionalfields import ClassOptionalFields
+from ..__do_not_import.types.classes.cls_classoptionaloutput import ClassOptionalOutput
+from ..__do_not_import.types.classes.cls_classoptionaloutput2 import ClassOptionalOutput2
 from ..__do_not_import.types.classes.cls_modifiedoutput import ModifiedOutput
 from ..__do_not_import.types.classes.cls_namedargssingleclass import NamedArgsSingleClass
+from ..__do_not_import.types.classes.cls_optionalclass import OptionalClass
 from ..__do_not_import.types.classes.cls_overrideclass import OverrideClass
 from ..__do_not_import.types.classes.cls_testclassalias import TestClassAlias
 from ..__do_not_import.types.classes.cls_testclasswithenum import TestClassWithEnum
@@ -47,8 +58,24 @@ from ..__do_not_import.types.enums.enm_testenum import TestEnum
 
 
 __all__ = [
+    'Blah',
+    'ClassOptionalFields',
+    'ClassOptionalOutput',
+    'ClassOptionalOutput2',
     'EnumInClass',
     'EnumOutput',
+    'IFnClassOptional',
+    'IFnClassOptional2',
+    'IFnClassOptional2Output',
+    'IFnClassOptional2Stream',
+    'IFnClassOptionalOutput',
+    'IFnClassOptionalOutput',
+    'IFnClassOptionalOutput2',
+    'IFnClassOptionalOutput2Output',
+    'IFnClassOptionalOutput2Stream',
+    'IFnClassOptionalOutputOutput',
+    'IFnClassOptionalOutputStream',
+    'IFnClassOptionalStream',
     'IFnEnumListOutput',
     'IFnEnumListOutputOutput',
     'IFnEnumListOutputStream',
@@ -70,6 +97,9 @@ __all__ = [
     'IFnOutputStringList',
     'IFnOutputStringListOutput',
     'IFnOutputStringListStream',
+    'IFnStringOptional',
+    'IFnStringOptionalOutput',
+    'IFnStringOptionalStream',
     'IFnTestAliasedEnumOutput',
     'IFnTestAliasedEnumOutputOutput',
     'IFnTestAliasedEnumOutputStream',
@@ -88,6 +118,9 @@ __all__ = [
     'IFnTestOutputAdapter',
     'IFnTestOutputAdapterOutput',
     'IFnTestOutputAdapterStream',
+    'IFnUnionStringBoolWithArrayOutput',
+    'IFnUnionStringBoolWithArrayOutputOutput',
+    'IFnUnionStringBoolWithArrayOutputStream',
     'IPromptTest',
     'IPromptTestOutput',
     'IPromptTestStream',
@@ -122,6 +155,7 @@ __all__ = [
     'NamedArgsSingleClass',
     'NamedArgsSingleEnum',
     'NamedArgsSingleEnumList',
+    'OptionalClass',
     'OverrideClass',
     'OverrideEnum',
     'TestClassAlias',
