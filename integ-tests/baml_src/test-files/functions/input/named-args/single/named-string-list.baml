@@ -1,12 +1,13 @@
 // string[]
-function TestFnNamedArgsSingleStringArray {
-  input (myStringArray: string[])
+function FnNamedArgsSingleStringOptional {
+  input (myString: string?)
   output string
 }
 
-impl<llm, TestFnNamedArgsSingleStringArray> v1 {
+impl<llm, FnNamedArgsSingleStringOptional> v1 {
   client GPT35
   prompt #"
-    Return this value back to me: {#input.myStringArray}
+    Return this value back to me: {#input.myString}
   "#
 }
+ 

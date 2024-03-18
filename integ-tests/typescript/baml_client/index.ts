@@ -18,6 +18,7 @@ const BamlClient = {
   FnClassOptionalOutput2: f.FnClassOptionalOutput2,
   FnEnumListOutput: f.FnEnumListOutput,
   FnEnumOutput: f.FnEnumOutput,
+  FnNamedArgsSingleStringOptional: f.FnNamedArgsSingleStringOptional,
   FnOutputBool: f.FnOutputBool,
   FnOutputClass: f.FnOutputClass,
   FnOutputClassList: f.FnOutputClassList,

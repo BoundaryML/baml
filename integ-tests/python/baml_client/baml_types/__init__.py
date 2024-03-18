@@ -13,6 +13,7 @@ from ..__do_not_import.functions.fx_fnclassoptionaloutput import IFnClassOptiona
 from ..__do_not_import.functions.fx_fnclassoptionaloutput2 import IFnClassOptionalOutput2, IFnClassOptionalOutput2Output, IFnClassOptionalOutput2Stream
 from ..__do_not_import.functions.fx_fnenumlistoutput import IFnEnumListOutput, IFnEnumListOutputOutput, IFnEnumListOutputStream
 from ..__do_not_import.functions.fx_fnenumoutput import IFnEnumOutput, IFnEnumOutputOutput, IFnEnumOutputStream
+from ..__do_not_import.functions.fx_fnnamedargssinglestringoptional import IFnNamedArgsSingleStringOptional, IFnNamedArgsSingleStringOptionalOutput, IFnNamedArgsSingleStringOptionalStream
 from ..__do_not_import.functions.fx_fnoutputbool import IFnOutputBool, IFnOutputBoolOutput, IFnOutputBoolStream
 from ..__do_not_import.functions.fx_fnoutputclass import IFnOutputClass, IFnOutputClassOutput, IFnOutputClassStream
 from ..__do_not_import.functions.fx_fnoutputclasslist import IFnOutputClassList, IFnOutputClassListOutput, IFnOutputClassListStream
@@ -82,6 +83,9 @@ __all__ = [
     'IFnEnumOutput',
     'IFnEnumOutputOutput',
     'IFnEnumOutputStream',
+    'IFnNamedArgsSingleStringOptional',
+    'IFnNamedArgsSingleStringOptionalOutput',
+    'IFnNamedArgsSingleStringOptionalStream',
     'IFnOutputBool',
     'IFnOutputBoolOutput',
     'IFnOutputBoolStream',

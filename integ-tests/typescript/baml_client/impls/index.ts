@@ -17,6 +17,8 @@ import './fnenumlistoutput_v1';
 
 import './fnenumoutput_v1';
 
+import './fnnamedargssinglestringoptional_v1';
+
 import './fnoutputbool_v1';
 
 import './fnoutputclass_v1';

@@ -337,6 +337,22 @@ const schema: JSONSchema7 = {
       "type": "string",
       "title": "FnEnumOutput input"
     },
+    "FnNamedArgsSingleStringOptional_input": {
+      "type": "object",
+      "properties": {
+        "myString": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "myString"
+      ],
+      "title": "FnNamedArgsSingleStringOptional input"
+    },
     "FnOutputBool_input": {
       "type": "string",
       "title": "FnOutputBool input"
@@ -551,6 +567,10 @@ const schema: JSONSchema7 = {
     "FnEnumOutput_output": {
       "$ref": "#/definitions/EnumOutput",
       "title": "FnEnumOutput output"
+    },
+    "FnNamedArgsSingleStringOptional_output": {
+      "type": "string",
+      "title": "FnNamedArgsSingleStringOptional output"
     },
     "FnOutputBool_output": {
       "type": "boolean",

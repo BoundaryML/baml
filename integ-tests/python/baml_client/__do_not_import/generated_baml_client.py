@@ -17,6 +17,7 @@ from .functions.fx_fnclassoptionaloutput import BAMLFnClassOptionalOutput
 from .functions.fx_fnclassoptionaloutput2 import BAMLFnClassOptionalOutput2
 from .functions.fx_fnenumlistoutput import BAMLFnEnumListOutput
 from .functions.fx_fnenumoutput import BAMLFnEnumOutput
+from .functions.fx_fnnamedargssinglestringoptional import BAMLFnNamedArgsSingleStringOptional
 from .functions.fx_fnoutputbool import BAMLFnOutputBool
 from .functions.fx_fnoutputclass import BAMLFnOutputClass
 from .functions.fx_fnoutputclasslist import BAMLFnOutputClassList
@@ -54,6 +55,7 @@ class BAMLClient:
     FnClassOptionalOutput2 = BAMLFnClassOptionalOutput2
     FnEnumListOutput = BAMLFnEnumListOutput
     FnEnumOutput = BAMLFnEnumOutput
+    FnNamedArgsSingleStringOptional = BAMLFnNamedArgsSingleStringOptional
     FnOutputBool = BAMLFnOutputBool
     FnOutputClass = BAMLFnOutputClass
     FnOutputClassList = BAMLFnOutputClassList

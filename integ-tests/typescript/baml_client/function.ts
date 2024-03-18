@@ -436,6 +436,83 @@ function createFnEnumOutputInstance(): IFnEnumOutput & FnEnumOutputFunction {
 
 const FnEnumOutput = createFnEnumOutputInstance();
 
+type IFnNamedArgsSingleStringOptional = (args: {
+  myString: string | null
+}) => Promise<string>
+
+type FnNamedArgsSingleStringOptionalImpls = 'v1';
+
+interface FnNamedArgsSingleStringOptionalImpl {
+    run: IFnNamedArgsSingleStringOptional;
+    name: FnNamedArgsSingleStringOptionalImpls;
+}
+
+interface FnNamedArgsSingleStringOptionalFunction {
+  registerImpl: (name: FnNamedArgsSingleStringOptionalImpls, impl: FnNamedArgsSingleStringOptionalImpl) => void;
+  getImpl: (name: FnNamedArgsSingleStringOptionalImpls) => FnNamedArgsSingleStringOptionalImpl;
+}
+
+function createFnNamedArgsSingleStringOptionalInstance(): IFnNamedArgsSingleStringOptional & FnNamedArgsSingleStringOptionalFunction {
+
+  const registry: Record<FnNamedArgsSingleStringOptionalImpls, FnNamedArgsSingleStringOptionalImpl> = {}
+
+  const wrapper: FnNamedArgsSingleStringOptionalFunction = {
+    getImpl: (name: FnNamedArgsSingleStringOptionalImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for FnNamedArgsSingleStringOptional with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: FnNamedArgsSingleStringOptionalImpls, cb: IFnNamedArgsSingleStringOptional) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for FnNamedArgsSingleStringOptional with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"FnNamedArgsSingleStringOptional",
+          /* returnType */ "string",
+          /* paramters */ [
+            [
+              "myString",
+              "string | null"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            myString: string | null
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['v1'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for FnNamedArgsSingleStringOptional: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    myString: string | null
+  }) => {
+    return wrapper.getImpl('v1').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IFnNamedArgsSingleStringOptional & FnNamedArgsSingleStringOptionalFunction;
+}
+
+const FnNamedArgsSingleStringOptional = createFnNamedArgsSingleStringOptionalInstance();
+
 type IFnOutputBool = (arg: string) => Promise<boolean>
 
 type FnOutputBoolImpls = 'v1';
@@ -2128,5 +2205,5 @@ function createTestFnNamedArgsSyntaxInstance(): ITestFnNamedArgsSyntax & TestFnN
 const TestFnNamedArgsSyntax = createTestFnNamedArgsSyntaxInstance();
 
 
-export { FnClassOptional, IFnClassOptional, FnClassOptionalFunction, FnClassOptional2, IFnClassOptional2, FnClassOptional2Function, FnClassOptionalOutput, IFnClassOptionalOutput, FnClassOptionalOutputFunction, FnClassOptionalOutput2, IFnClassOptionalOutput2, FnClassOptionalOutput2Function, FnEnumListOutput, IFnEnumListOutput, FnEnumListOutputFunction, FnEnumOutput, IFnEnumOutput, FnEnumOutputFunction, FnOutputBool, IFnOutputBool, FnOutputBoolFunction, FnOutputClass, IFnOutputClass, FnOutputClassFunction, FnOutputClassList, IFnOutputClassList, FnOutputClassListFunction, FnOutputClassWithEnum, IFnOutputClassWithEnum, FnOutputClassWithEnumFunction, FnOutputStringList, IFnOutputStringList, FnOutputStringListFunction, FnStringOptional, IFnStringOptional, FnStringOptionalFunction, FnTestAliasedEnumOutput, IFnTestAliasedEnumOutput, FnTestAliasedEnumOutputFunction, FnTestClassAlias, IFnTestClassAlias, FnTestClassAliasFunction, FnTestClassOverride, IFnTestClassOverride, FnTestClassOverrideFunction, FnTestEnumOverride, IFnTestEnumOverride, FnTestEnumOverrideFunction, FnTestNamedArgsSingleEnum, IFnTestNamedArgsSingleEnum, FnTestNamedArgsSingleEnumFunction, FnTestOutputAdapter, IFnTestOutputAdapter, FnTestOutputAdapterFunction, FnUnionStringBoolWithArrayOutput, IFnUnionStringBoolWithArrayOutput, FnUnionStringBoolWithArrayOutputFunction, PromptTest, IPromptTest, PromptTestFunction, TestFnNamedArgsSingleBool, ITestFnNamedArgsSingleBool, TestFnNamedArgsSingleBoolFunction, TestFnNamedArgsSingleClass, ITestFnNamedArgsSingleClass, TestFnNamedArgsSingleClassFunction, TestFnNamedArgsSingleEnumList, ITestFnNamedArgsSingleEnumList, TestFnNamedArgsSingleEnumListFunction, TestFnNamedArgsSingleFloat, ITestFnNamedArgsSingleFloat, TestFnNamedArgsSingleFloatFunction, TestFnNamedArgsSingleInt, ITestFnNamedArgsSingleInt, TestFnNamedArgsSingleIntFunction, TestFnNamedArgsSingleString, ITestFnNamedArgsSingleString, TestFnNamedArgsSingleStringFunction, TestFnNamedArgsSingleStringArray, ITestFnNamedArgsSingleStringArray, TestFnNamedArgsSingleStringArrayFunction, TestFnNamedArgsSingleStringList, ITestFnNamedArgsSingleStringList, TestFnNamedArgsSingleStringListFunction, TestFnNamedArgsSyntax, ITestFnNamedArgsSyntax, TestFnNamedArgsSyntaxFunction }
+export { FnClassOptional, IFnClassOptional, FnClassOptionalFunction, FnClassOptional2, IFnClassOptional2, FnClassOptional2Function, FnClassOptionalOutput, IFnClassOptionalOutput, FnClassOptionalOutputFunction, FnClassOptionalOutput2, IFnClassOptionalOutput2, FnClassOptionalOutput2Function, FnEnumListOutput, IFnEnumListOutput, FnEnumListOutputFunction, FnEnumOutput, IFnEnumOutput, FnEnumOutputFunction, FnNamedArgsSingleStringOptional, IFnNamedArgsSingleStringOptional, FnNamedArgsSingleStringOptionalFunction, FnOutputBool, IFnOutputBool, FnOutputBoolFunction, FnOutputClass, IFnOutputClass, FnOutputClassFunction, FnOutputClassList, IFnOutputClassList, FnOutputClassListFunction, FnOutputClassWithEnum, IFnOutputClassWithEnum, FnOutputClassWithEnumFunction, FnOutputStringList, IFnOutputStringList, FnOutputStringListFunction, FnStringOptional, IFnStringOptional, FnStringOptionalFunction, FnTestAliasedEnumOutput, IFnTestAliasedEnumOutput, FnTestAliasedEnumOutputFunction, FnTestClassAlias, IFnTestClassAlias, FnTestClassAliasFunction, FnTestClassOverride, IFnTestClassOverride, FnTestClassOverrideFunction, FnTestEnumOverride, IFnTestEnumOverride, FnTestEnumOverrideFunction, FnTestNamedArgsSingleEnum, IFnTestNamedArgsSingleEnum, FnTestNamedArgsSingleEnumFunction, FnTestOutputAdapter, IFnTestOutputAdapter, FnTestOutputAdapterFunction, FnUnionStringBoolWithArrayOutput, IFnUnionStringBoolWithArrayOutput, FnUnionStringBoolWithArrayOutputFunction, PromptTest, IPromptTest, PromptTestFunction, TestFnNamedArgsSingleBool, ITestFnNamedArgsSingleBool, TestFnNamedArgsSingleBoolFunction, TestFnNamedArgsSingleClass, ITestFnNamedArgsSingleClass, TestFnNamedArgsSingleClassFunction, TestFnNamedArgsSingleEnumList, ITestFnNamedArgsSingleEnumList, TestFnNamedArgsSingleEnumListFunction, TestFnNamedArgsSingleFloat, ITestFnNamedArgsSingleFloat, TestFnNamedArgsSingleFloatFunction, TestFnNamedArgsSingleInt, ITestFnNamedArgsSingleInt, TestFnNamedArgsSingleIntFunction, TestFnNamedArgsSingleString, ITestFnNamedArgsSingleString, TestFnNamedArgsSingleStringFunction, TestFnNamedArgsSingleStringArray, ITestFnNamedArgsSingleStringArray, TestFnNamedArgsSingleStringArrayFunction, TestFnNamedArgsSingleStringList, ITestFnNamedArgsSingleStringList, TestFnNamedArgsSingleStringListFunction, TestFnNamedArgsSyntax, ITestFnNamedArgsSyntax, TestFnNamedArgsSyntaxFunction }
 

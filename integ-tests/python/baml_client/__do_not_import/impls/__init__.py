@@ -15,6 +15,7 @@ from .fx_fnclassoptionaloutput_impl_v1 import v1 as unused_fx_fnclassoptionalout
 from .fx_fnclassoptionaloutput2_impl_v1 import v1 as unused_fx_fnclassoptionaloutput2_impl_v1
 from .fx_fnenumlistoutput_impl_v1 import v1 as unused_fx_fnenumlistoutput_impl_v1
 from .fx_fnenumoutput_impl_v1 import v1 as unused_fx_fnenumoutput_impl_v1
+from .fx_fnnamedargssinglestringoptional_impl_v1 import v1 as unused_fx_fnnamedargssinglestringoptional_impl_v1
 from .fx_fnoutputbool_impl_v1 import v1 as unused_fx_fnoutputbool_impl_v1
 from .fx_fnoutputclass_impl_v1 import v1 as unused_fx_fnoutputclass_impl_v1
 from .fx_fnoutputclasslist_impl_v1 import v1 as unused_fx_fnoutputclasslist_impl_v1
