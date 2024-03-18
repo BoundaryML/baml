@@ -309,7 +309,14 @@ impl WithRepr<Expression> for ast::Expression {
                     Ok(Expression::Identifier(Identifier::Local(l.clone())))
                 }
                 ast::Identifier::Ref(r, _) => {
-                    Ok(Expression::Identifier(Identifier::Ref(r.path.clone())))
+                    // NOTE(sam): this feels very very wrong, but per vbv, we don't really use refs
+                    // right now, so this should be safe. this is done to ensure that
+                    // "options { model gpt-3.5-turbo }" is represented correctly in the resulting IR,
+                    // specifically that "gpt-3.5-turbo" is actually modelled as Expression::String
+                    //
+                    // this does not impact the handling of "options { api_key env.OPENAI_API_KEY }"
+                    // because that's modelled as Identifier::ENV, not Identifier::Ref
+                    Ok(Expression::String(r.full_name.clone()))
                 }
                 ast::Identifier::Primitive(p, _) => {
                     Ok(Expression::Identifier(Identifier::Primitive(*p)))
@@ -350,7 +357,6 @@ impl WithRepr<EnumValue> for EnumValueWalker<'_> {
         for r#fn in db.walk_functions() {
             for r#impl in r#fn.walk_variants() {
                 let node_attributes = to_ir_attributes(db, self.get_override(&r#impl));
-                // TODO
 
                 if !node_attributes.is_empty() {
                     attributes.overrides.insert(

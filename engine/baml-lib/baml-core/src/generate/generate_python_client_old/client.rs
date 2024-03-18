@@ -72,8 +72,8 @@ impl JsonHelper for ClientWalker<'_> {
             .iter()
             .map(|(k, v)| {
                 json!({
-                            "key": k.clone(),
-                            "value": v.to_py_object(f),
+                    "key": k.clone(),
+                    "value": v.to_py_object(f),
                 })
             })
             .collect::<Vec<_>>();

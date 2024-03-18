@@ -1,7 +1,7 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{fmt, path::PathBuf, sync::Arc};
 
 /// A Prisma schema document.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct SourceFile {
     path: PathBuf,
     contents: Contents,
@@ -43,6 +43,14 @@ impl SourceFile {
 
     pub fn path_buf(&self) -> &PathBuf {
         &self.path
+    }
+}
+
+impl fmt::Debug for SourceFile {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "SourceFile {{ path: {:?}, contents: ... }}", self.path)?;
+
+        Ok(())
     }
 }
 
