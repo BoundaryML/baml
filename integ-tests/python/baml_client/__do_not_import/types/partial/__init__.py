@@ -14,10 +14,12 @@ from .classes.cls_classoptionaloutput2 import PartialClassOptionalOutput2
 from .classes.cls_modifiedoutput import PartialModifiedOutput
 from .classes.cls_namedargssingleclass import PartialNamedArgsSingleClass
 from .classes.cls_optionalclass import PartialOptionalClass
+from .classes.cls_optionaltest_returntype import PartialOptionalTest_ReturnType
 from .classes.cls_overrideclass import PartialOverrideClass
 from .classes.cls_testclassalias import PartialTestClassAlias
 from .classes.cls_testclasswithenum import PartialTestClassWithEnum
 from .classes.cls_testoutputclass import PartialTestOutputClass
+from .classes.cls_uniontest_returntype import PartialUnionTest_ReturnType
 
 
 
@@ -30,8 +32,10 @@ __all__ = [
     'PartialModifiedOutput',
     'PartialNamedArgsSingleClass',
     'PartialOptionalClass',
+    'PartialOptionalTest_ReturnType',
     'PartialOverrideClass',
     'PartialTestClassAlias',
     'PartialTestClassWithEnum',
-    'PartialTestOutputClass'
+    'PartialTestOutputClass',
+    'PartialUnionTest_ReturnType'
 ]

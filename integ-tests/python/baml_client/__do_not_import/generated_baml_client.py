@@ -30,7 +30,7 @@ from .functions.fx_fntestclassoverride import BAMLFnTestClassOverride
 from .functions.fx_fntestenumoverride import BAMLFnTestEnumOverride
 from .functions.fx_fntestnamedargssingleenum import BAMLFnTestNamedArgsSingleEnum
 from .functions.fx_fntestoutputadapter import BAMLFnTestOutputAdapter
-from .functions.fx_fnunionstringboolwitharrayoutput import BAMLFnUnionStringBoolWithArrayOutput
+from .functions.fx_optionaltest_function import BAMLOptionalTest_Function
 from .functions.fx_prompttest import BAMLPromptTest
 from .functions.fx_testfnnamedargssinglebool import BAMLTestFnNamedArgsSingleBool
 from .functions.fx_testfnnamedargssingleclass import BAMLTestFnNamedArgsSingleClass
@@ -41,6 +41,7 @@ from .functions.fx_testfnnamedargssinglestring import BAMLTestFnNamedArgsSingleS
 from .functions.fx_testfnnamedargssinglestringarray import BAMLTestFnNamedArgsSingleStringArray
 from .functions.fx_testfnnamedargssinglestringlist import BAMLTestFnNamedArgsSingleStringList
 from .functions.fx_testfnnamedargssyntax import BAMLTestFnNamedArgsSyntax
+from .functions.fx_uniontest_function import BAMLUnionTest_Function
 from baml_core.otel import add_message_transformer_hook, flush_trace_logs
 from baml_core.provider_manager import LLMManager
 from baml_core.services import LogSchema
@@ -68,7 +69,7 @@ class BAMLClient:
     FnTestEnumOverride = BAMLFnTestEnumOverride
     FnTestNamedArgsSingleEnum = BAMLFnTestNamedArgsSingleEnum
     FnTestOutputAdapter = BAMLFnTestOutputAdapter
-    FnUnionStringBoolWithArrayOutput = BAMLFnUnionStringBoolWithArrayOutput
+    OptionalTest_Function = BAMLOptionalTest_Function
     PromptTest = BAMLPromptTest
     TestFnNamedArgsSingleBool = BAMLTestFnNamedArgsSingleBool
     TestFnNamedArgsSingleClass = BAMLTestFnNamedArgsSingleClass
@@ -79,6 +80,7 @@ class BAMLClient:
     TestFnNamedArgsSingleStringArray = BAMLTestFnNamedArgsSingleStringArray
     TestFnNamedArgsSingleStringList = BAMLTestFnNamedArgsSingleStringList
     TestFnNamedArgsSyntax = BAMLTestFnNamedArgsSyntax
+    UnionTest_Function = BAMLUnionTest_Function
     Claude = Claude
     GPT35 = GPT35
     GPT4 = GPT4

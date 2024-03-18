@@ -43,7 +43,7 @@ import './fntestnamedargssingleenum_v1';
 
 import './fntestoutputadapter_v1';
 
-import './fnunionstringboolwitharrayoutput_v1';
+import './optionaltest_function_v1';
 
 import './prompttest_claude_chat';
 
@@ -68,5 +68,7 @@ import './testfnnamedargssinglestring_v1';
 import './testfnnamedargssinglestringarray_v1';
 
 import './testfnnamedargssinglestringlist_v1';
+
+import './uniontest_function_v1';
 
 

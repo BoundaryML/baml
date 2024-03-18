@@ -6,7 +6,7 @@
 /* eslint-disable */
 
 
-import { ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, EnumOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalClass, OverrideClass, OverrideEnum, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass } from './types';
+import { ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, EnumOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalClass, OptionalTest_ReturnType, OverrideClass, OverrideEnum, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass, UnionTest_ReturnType } from './types';
 import { FireBamlEvent, traceAsync } from '@boundaryml/baml-core/ffi_layer';
 
 
@@ -1371,41 +1371,41 @@ function createFnTestOutputAdapterInstance(): IFnTestOutputAdapter & FnTestOutpu
 
 const FnTestOutputAdapter = createFnTestOutputAdapterInstance();
 
-type IFnUnionStringBoolWithArrayOutput = (arg: string) => Promise<number>
+type IOptionalTest_Function = (arg: string) => Promise<OptionalTest_ReturnType | null>
 
-type FnUnionStringBoolWithArrayOutputImpls = 'v1';
+type OptionalTest_FunctionImpls = 'v1';
 
-interface FnUnionStringBoolWithArrayOutputImpl {
-    run: IFnUnionStringBoolWithArrayOutput;
-    name: FnUnionStringBoolWithArrayOutputImpls;
+interface OptionalTest_FunctionImpl {
+    run: IOptionalTest_Function;
+    name: OptionalTest_FunctionImpls;
 }
 
-interface FnUnionStringBoolWithArrayOutputFunction {
-  registerImpl: (name: FnUnionStringBoolWithArrayOutputImpls, impl: FnUnionStringBoolWithArrayOutputImpl) => void;
-  getImpl: (name: FnUnionStringBoolWithArrayOutputImpls) => FnUnionStringBoolWithArrayOutputImpl;
+interface OptionalTest_FunctionFunction {
+  registerImpl: (name: OptionalTest_FunctionImpls, impl: OptionalTest_FunctionImpl) => void;
+  getImpl: (name: OptionalTest_FunctionImpls) => OptionalTest_FunctionImpl;
 }
 
-function createFnUnionStringBoolWithArrayOutputInstance(): IFnUnionStringBoolWithArrayOutput & FnUnionStringBoolWithArrayOutputFunction {
+function createOptionalTest_FunctionInstance(): IOptionalTest_Function & OptionalTest_FunctionFunction {
 
-  const registry: Record<FnUnionStringBoolWithArrayOutputImpls, FnUnionStringBoolWithArrayOutputImpl> = {}
+  const registry: Record<OptionalTest_FunctionImpls, OptionalTest_FunctionImpl> = {}
 
-  const wrapper: FnUnionStringBoolWithArrayOutputFunction = {
-    getImpl: (name: FnUnionStringBoolWithArrayOutputImpls) => {
+  const wrapper: OptionalTest_FunctionFunction = {
+    getImpl: (name: OptionalTest_FunctionImpls) => {
       const impl = registry[name];
       if (!impl) {
-        throw new Error(`No implementation for FnUnionStringBoolWithArrayOutput with name ${name}`);
+        throw new Error(`No implementation for OptionalTest_Function with name ${name}`);
       }
       return impl;
     },
-    registerImpl: (name: FnUnionStringBoolWithArrayOutputImpls, cb: IFnUnionStringBoolWithArrayOutput) => {
+    registerImpl: (name: OptionalTest_FunctionImpls, cb: IOptionalTest_Function) => {
       if (registry[name]) {
-        throw new Error(`Implementation for FnUnionStringBoolWithArrayOutput with name ${name} already exists`);
+        throw new Error(`Implementation for OptionalTest_Function with name ${name} already exists`);
       }
       registry[name] = {
         name,
         run: traceAsync(
-          /* functionName */"FnUnionStringBoolWithArrayOutput",
-          /* returnType */ "number",
+          /* functionName */"OptionalTest_Function",
+          /* returnType */ "OptionalTest_ReturnType | null",
           /* paramters */ [
             [
               "arg",
@@ -1426,7 +1426,7 @@ function createFnUnionStringBoolWithArrayOutputInstance(): IFnUnionStringBoolWit
       const impls = Object.keys(registry);
       const missing = targets.filter(t => !impls.includes(t));
       if (missing.length > 0) {
-        throw new Error(`Missing implementations for FnUnionStringBoolWithArrayOutput: ${missing.join(', ')}`);
+        throw new Error(`Missing implementations for OptionalTest_Function: ${missing.join(', ')}`);
       }
     }
   };
@@ -1437,10 +1437,10 @@ function createFnUnionStringBoolWithArrayOutputInstance(): IFnUnionStringBoolWit
 
   Object.assign(impl, wrapper);
 
-  return impl as  IFnUnionStringBoolWithArrayOutput & FnUnionStringBoolWithArrayOutputFunction;
+  return impl as  IOptionalTest_Function & OptionalTest_FunctionFunction;
 }
 
-const FnUnionStringBoolWithArrayOutput = createFnUnionStringBoolWithArrayOutputInstance();
+const OptionalTest_Function = createOptionalTest_FunctionInstance();
 
 type IPromptTest = (arg: string) => Promise<string>
 
@@ -2204,6 +2204,77 @@ function createTestFnNamedArgsSyntaxInstance(): ITestFnNamedArgsSyntax & TestFnN
 
 const TestFnNamedArgsSyntax = createTestFnNamedArgsSyntaxInstance();
 
+type IUnionTest_Function = (arg: string | boolean) => Promise<UnionTest_ReturnType>
 
-export { FnClassOptional, IFnClassOptional, FnClassOptionalFunction, FnClassOptional2, IFnClassOptional2, FnClassOptional2Function, FnClassOptionalOutput, IFnClassOptionalOutput, FnClassOptionalOutputFunction, FnClassOptionalOutput2, IFnClassOptionalOutput2, FnClassOptionalOutput2Function, FnEnumListOutput, IFnEnumListOutput, FnEnumListOutputFunction, FnEnumOutput, IFnEnumOutput, FnEnumOutputFunction, FnNamedArgsSingleStringOptional, IFnNamedArgsSingleStringOptional, FnNamedArgsSingleStringOptionalFunction, FnOutputBool, IFnOutputBool, FnOutputBoolFunction, FnOutputClass, IFnOutputClass, FnOutputClassFunction, FnOutputClassList, IFnOutputClassList, FnOutputClassListFunction, FnOutputClassWithEnum, IFnOutputClassWithEnum, FnOutputClassWithEnumFunction, FnOutputStringList, IFnOutputStringList, FnOutputStringListFunction, FnStringOptional, IFnStringOptional, FnStringOptionalFunction, FnTestAliasedEnumOutput, IFnTestAliasedEnumOutput, FnTestAliasedEnumOutputFunction, FnTestClassAlias, IFnTestClassAlias, FnTestClassAliasFunction, FnTestClassOverride, IFnTestClassOverride, FnTestClassOverrideFunction, FnTestEnumOverride, IFnTestEnumOverride, FnTestEnumOverrideFunction, FnTestNamedArgsSingleEnum, IFnTestNamedArgsSingleEnum, FnTestNamedArgsSingleEnumFunction, FnTestOutputAdapter, IFnTestOutputAdapter, FnTestOutputAdapterFunction, FnUnionStringBoolWithArrayOutput, IFnUnionStringBoolWithArrayOutput, FnUnionStringBoolWithArrayOutputFunction, PromptTest, IPromptTest, PromptTestFunction, TestFnNamedArgsSingleBool, ITestFnNamedArgsSingleBool, TestFnNamedArgsSingleBoolFunction, TestFnNamedArgsSingleClass, ITestFnNamedArgsSingleClass, TestFnNamedArgsSingleClassFunction, TestFnNamedArgsSingleEnumList, ITestFnNamedArgsSingleEnumList, TestFnNamedArgsSingleEnumListFunction, TestFnNamedArgsSingleFloat, ITestFnNamedArgsSingleFloat, TestFnNamedArgsSingleFloatFunction, TestFnNamedArgsSingleInt, ITestFnNamedArgsSingleInt, TestFnNamedArgsSingleIntFunction, TestFnNamedArgsSingleString, ITestFnNamedArgsSingleString, TestFnNamedArgsSingleStringFunction, TestFnNamedArgsSingleStringArray, ITestFnNamedArgsSingleStringArray, TestFnNamedArgsSingleStringArrayFunction, TestFnNamedArgsSingleStringList, ITestFnNamedArgsSingleStringList, TestFnNamedArgsSingleStringListFunction, TestFnNamedArgsSyntax, ITestFnNamedArgsSyntax, TestFnNamedArgsSyntaxFunction }
+type UnionTest_FunctionImpls = 'v1';
+
+interface UnionTest_FunctionImpl {
+    run: IUnionTest_Function;
+    name: UnionTest_FunctionImpls;
+}
+
+interface UnionTest_FunctionFunction {
+  registerImpl: (name: UnionTest_FunctionImpls, impl: UnionTest_FunctionImpl) => void;
+  getImpl: (name: UnionTest_FunctionImpls) => UnionTest_FunctionImpl;
+}
+
+function createUnionTest_FunctionInstance(): IUnionTest_Function & UnionTest_FunctionFunction {
+
+  const registry: Record<UnionTest_FunctionImpls, UnionTest_FunctionImpl> = {}
+
+  const wrapper: UnionTest_FunctionFunction = {
+    getImpl: (name: UnionTest_FunctionImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for UnionTest_Function with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: UnionTest_FunctionImpls, cb: IUnionTest_Function) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for UnionTest_Function with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"UnionTest_Function",
+          /* returnType */ "UnionTest_ReturnType",
+          /* paramters */ [
+            [
+              "arg",
+              "string | boolean"
+            ]
+          ],
+          /* arg_type */ 'positional',
+          /* cb */ async (
+          arg: string | boolean
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(arg);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['v1'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for UnionTest_Function: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (arg: string | boolean) => {
+    return wrapper.getImpl('v1').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IUnionTest_Function & UnionTest_FunctionFunction;
+}
+
+const UnionTest_Function = createUnionTest_FunctionInstance();
+
+
+export { FnClassOptional, IFnClassOptional, FnClassOptionalFunction, FnClassOptional2, IFnClassOptional2, FnClassOptional2Function, FnClassOptionalOutput, IFnClassOptionalOutput, FnClassOptionalOutputFunction, FnClassOptionalOutput2, IFnClassOptionalOutput2, FnClassOptionalOutput2Function, FnEnumListOutput, IFnEnumListOutput, FnEnumListOutputFunction, FnEnumOutput, IFnEnumOutput, FnEnumOutputFunction, FnNamedArgsSingleStringOptional, IFnNamedArgsSingleStringOptional, FnNamedArgsSingleStringOptionalFunction, FnOutputBool, IFnOutputBool, FnOutputBoolFunction, FnOutputClass, IFnOutputClass, FnOutputClassFunction, FnOutputClassList, IFnOutputClassList, FnOutputClassListFunction, FnOutputClassWithEnum, IFnOutputClassWithEnum, FnOutputClassWithEnumFunction, FnOutputStringList, IFnOutputStringList, FnOutputStringListFunction, FnStringOptional, IFnStringOptional, FnStringOptionalFunction, FnTestAliasedEnumOutput, IFnTestAliasedEnumOutput, FnTestAliasedEnumOutputFunction, FnTestClassAlias, IFnTestClassAlias, FnTestClassAliasFunction, FnTestClassOverride, IFnTestClassOverride, FnTestClassOverrideFunction, FnTestEnumOverride, IFnTestEnumOverride, FnTestEnumOverrideFunction, FnTestNamedArgsSingleEnum, IFnTestNamedArgsSingleEnum, FnTestNamedArgsSingleEnumFunction, FnTestOutputAdapter, IFnTestOutputAdapter, FnTestOutputAdapterFunction, OptionalTest_Function, IOptionalTest_Function, OptionalTest_FunctionFunction, PromptTest, IPromptTest, PromptTestFunction, TestFnNamedArgsSingleBool, ITestFnNamedArgsSingleBool, TestFnNamedArgsSingleBoolFunction, TestFnNamedArgsSingleClass, ITestFnNamedArgsSingleClass, TestFnNamedArgsSingleClassFunction, TestFnNamedArgsSingleEnumList, ITestFnNamedArgsSingleEnumList, TestFnNamedArgsSingleEnumListFunction, TestFnNamedArgsSingleFloat, ITestFnNamedArgsSingleFloat, TestFnNamedArgsSingleFloatFunction, TestFnNamedArgsSingleInt, ITestFnNamedArgsSingleInt, TestFnNamedArgsSingleIntFunction, TestFnNamedArgsSingleString, ITestFnNamedArgsSingleString, TestFnNamedArgsSingleStringFunction, TestFnNamedArgsSingleStringArray, ITestFnNamedArgsSingleStringArray, TestFnNamedArgsSingleStringArrayFunction, TestFnNamedArgsSingleStringList, ITestFnNamedArgsSingleStringList, TestFnNamedArgsSingleStringListFunction, TestFnNamedArgsSyntax, ITestFnNamedArgsSyntax, TestFnNamedArgsSyntaxFunction, UnionTest_Function, IUnionTest_Function, UnionTest_FunctionFunction }
 

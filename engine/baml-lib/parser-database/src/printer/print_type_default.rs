@@ -147,9 +147,13 @@ fn print_class(item: &ClassType) -> String {
 }
 
 fn print_list(item: &ListType) -> String {
-    let inner_type = print_type(&*item.inner);
+    let inner_type = item.inner.as_ref();
+    let inner_type_str = match inner_type {
+        DataType::Union(_) => format!("({})", print_type(inner_type)),
+        _ => print_type(inner_type),
+    };
     let dims_str = (0..item.dims).map(|_| "[]").collect::<String>();
-    format!("{}{}", inner_type, dims_str)
+    format!("{inner_type_str}{dims_str}")
 }
 
 fn print_enum(item: &EnumType) -> String {
@@ -162,7 +166,7 @@ fn print_union(item: &UnionType) -> String {
         .iter()
         .map(|member| print_type(member))
         .collect();
-    format!("({})", member_types.join(" | "))
+    format!("{}", member_types.join(" | "))
 }
 
 fn parse_field_type(json_input: &Value) -> Result<FieldType, serde_json::Error> {

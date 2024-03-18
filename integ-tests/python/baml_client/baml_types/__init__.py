@@ -26,7 +26,7 @@ from ..__do_not_import.functions.fx_fntestclassoverride import IFnTestClassOverr
 from ..__do_not_import.functions.fx_fntestenumoverride import IFnTestEnumOverride, IFnTestEnumOverrideOutput, IFnTestEnumOverrideStream
 from ..__do_not_import.functions.fx_fntestnamedargssingleenum import IFnTestNamedArgsSingleEnum, IFnTestNamedArgsSingleEnumOutput, IFnTestNamedArgsSingleEnumStream
 from ..__do_not_import.functions.fx_fntestoutputadapter import IFnTestOutputAdapter, IFnTestOutputAdapterOutput, IFnTestOutputAdapterStream
-from ..__do_not_import.functions.fx_fnunionstringboolwitharrayoutput import IFnUnionStringBoolWithArrayOutput, IFnUnionStringBoolWithArrayOutputOutput, IFnUnionStringBoolWithArrayOutputStream
+from ..__do_not_import.functions.fx_optionaltest_function import IOptionalTest_Function, IOptionalTest_FunctionOutput, IOptionalTest_FunctionStream
 from ..__do_not_import.functions.fx_prompttest import IPromptTest, IPromptTestOutput, IPromptTestStream
 from ..__do_not_import.functions.fx_testfnnamedargssinglebool import ITestFnNamedArgsSingleBool, ITestFnNamedArgsSingleBoolOutput, ITestFnNamedArgsSingleBoolStream
 from ..__do_not_import.functions.fx_testfnnamedargssingleclass import ITestFnNamedArgsSingleClass, ITestFnNamedArgsSingleClassOutput, ITestFnNamedArgsSingleClassStream
@@ -37,6 +37,7 @@ from ..__do_not_import.functions.fx_testfnnamedargssinglestring import ITestFnNa
 from ..__do_not_import.functions.fx_testfnnamedargssinglestringarray import ITestFnNamedArgsSingleStringArray, ITestFnNamedArgsSingleStringArrayOutput, ITestFnNamedArgsSingleStringArrayStream
 from ..__do_not_import.functions.fx_testfnnamedargssinglestringlist import ITestFnNamedArgsSingleStringList, ITestFnNamedArgsSingleStringListOutput, ITestFnNamedArgsSingleStringListStream
 from ..__do_not_import.functions.fx_testfnnamedargssyntax import ITestFnNamedArgsSyntax, ITestFnNamedArgsSyntaxOutput, ITestFnNamedArgsSyntaxStream
+from ..__do_not_import.functions.fx_uniontest_function import IUnionTest_Function, IUnionTest_FunctionOutput, IUnionTest_FunctionStream
 from ..__do_not_import.types.classes.cls_blah import Blah
 from ..__do_not_import.types.classes.cls_classoptionalfields import ClassOptionalFields
 from ..__do_not_import.types.classes.cls_classoptionaloutput import ClassOptionalOutput
@@ -44,10 +45,12 @@ from ..__do_not_import.types.classes.cls_classoptionaloutput2 import ClassOption
 from ..__do_not_import.types.classes.cls_modifiedoutput import ModifiedOutput
 from ..__do_not_import.types.classes.cls_namedargssingleclass import NamedArgsSingleClass
 from ..__do_not_import.types.classes.cls_optionalclass import OptionalClass
+from ..__do_not_import.types.classes.cls_optionaltest_returntype import OptionalTest_ReturnType
 from ..__do_not_import.types.classes.cls_overrideclass import OverrideClass
 from ..__do_not_import.types.classes.cls_testclassalias import TestClassAlias
 from ..__do_not_import.types.classes.cls_testclasswithenum import TestClassWithEnum
 from ..__do_not_import.types.classes.cls_testoutputclass import TestOutputClass
+from ..__do_not_import.types.classes.cls_uniontest_returntype import UnionTest_ReturnType
 from ..__do_not_import.types.enums.enm_enuminclass import EnumInClass
 from ..__do_not_import.types.enums.enm_enumoutput import EnumOutput
 from ..__do_not_import.types.enums.enm_namedargssingleenum import NamedArgsSingleEnum
@@ -122,9 +125,9 @@ __all__ = [
     'IFnTestOutputAdapter',
     'IFnTestOutputAdapterOutput',
     'IFnTestOutputAdapterStream',
-    'IFnUnionStringBoolWithArrayOutput',
-    'IFnUnionStringBoolWithArrayOutputOutput',
-    'IFnUnionStringBoolWithArrayOutputStream',
+    'IOptionalTest_Function',
+    'IOptionalTest_FunctionOutput',
+    'IOptionalTest_FunctionStream',
     'IPromptTest',
     'IPromptTestOutput',
     'IPromptTestStream',
@@ -155,15 +158,20 @@ __all__ = [
     'ITestFnNamedArgsSyntax',
     'ITestFnNamedArgsSyntaxOutput',
     'ITestFnNamedArgsSyntaxStream',
+    'IUnionTest_Function',
+    'IUnionTest_FunctionOutput',
+    'IUnionTest_FunctionStream',
     'ModifiedOutput',
     'NamedArgsSingleClass',
     'NamedArgsSingleEnum',
     'NamedArgsSingleEnumList',
     'OptionalClass',
+    'OptionalTest_ReturnType',
     'OverrideClass',
     'OverrideEnum',
     'TestClassAlias',
     'TestClassWithEnum',
     'TestEnum',
-    'TestOutputClass'
+    'TestOutputClass',
+    'UnionTest_ReturnType'
 ]

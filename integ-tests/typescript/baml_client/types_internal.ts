@@ -6,7 +6,7 @@
 /* eslint-disable */
 
 
-import { Blah, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, EnumInClass, EnumOutput, ModifiedOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalClass, OverrideClass, OverrideEnum, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass } from './types';
+import { Blah, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, EnumInClass, EnumOutput, ModifiedOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalClass, OptionalTest_ReturnType, OverrideClass, OverrideEnum, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass, UnionTest_ReturnType } from './types';
 
 
 // Function to check if a value is a member of the EnumInClass enum
@@ -304,6 +304,43 @@ class InternalOptionalClass implements OptionalClass {
   }
 }
 
+// Function to validate if an object is a OptionalTest_ReturnType object
+function isOptionalTest_ReturnType(obj: any): obj is OptionalTest_ReturnType {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("prop1" in obj && (typeof obj.prop1 === 'string'))
+    && ("prop2" in obj && (typeof obj.prop2 === 'number'))
+  );
+}
+
+
+class InternalOptionalTest_ReturnType implements OptionalTest_ReturnType {
+  private constructor(private data: {
+    prop1: string,
+    prop2: number,
+  }, private raw: OptionalTest_ReturnType) {}
+
+  static from(data: OptionalTest_ReturnType): InternalOptionalTest_ReturnType {
+    return new InternalOptionalTest_ReturnType({
+      prop1: data.prop1,
+      prop2: data.prop2,
+    }, data);
+  }
+
+  get prop1(): string {
+    return this.data.prop1;
+  }
+  get prop2(): number {
+    return this.data.prop2;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
 // Function to validate if an object is a OverrideClass object
 function isOverrideClass(obj: any): obj is OverrideClass {
   return (
@@ -470,6 +507,57 @@ class InternalTestOutputClass implements TestOutputClass {
   }
 }
 
+// Function to validate if an object is a UnionTest_ReturnType object
+function isUnionTest_ReturnType(obj: any): obj is UnionTest_ReturnType {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("prop1" in obj && ((typeof obj.prop1 === 'string') || (typeof obj.prop1 === 'boolean')))
+    && ("prop2" in obj && (Array.isArray(obj.prop2) && obj.prop2.every((x: any) => (typeof x === 'number') || (typeof x === 'boolean'))))
+  );
+}
 
-export { InternalBlah, InternalClassOptionalFields, InternalClassOptionalOutput, InternalClassOptionalOutput2, InternalModifiedOutput, InternalNamedArgsSingleClass, InternalOptionalClass, InternalOverrideClass, InternalTestClassAlias, InternalTestClassWithEnum, InternalTestOutputClass }
+
+class InternalUnionTest_ReturnType implements UnionTest_ReturnType {
+  private constructor(private data: {
+    prop1: string | boolean,
+    prop2: number | boolean[],
+  }, private raw: UnionTest_ReturnType) {}
+
+  static from(data: UnionTest_ReturnType): InternalUnionTest_ReturnType {
+    return new InternalUnionTest_ReturnType({
+      prop1: ((x) => {
+if (typeof x === 'string') {
+  return x;
+}
+if (typeof x === 'boolean') {
+  return x;
+}
+})(data.prop1),
+      prop2: data.prop2.map(x => ((x) => {
+if (typeof x === 'number') {
+  return x;
+}
+if (typeof x === 'boolean') {
+  return x;
+}
+})(x)),
+    }, data);
+  }
+
+  get prop1(): string | boolean {
+    return this.data.prop1;
+  }
+  get prop2(): number | boolean[] {
+    return this.data.prop2;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
+
+export { InternalBlah, InternalClassOptionalFields, InternalClassOptionalOutput, InternalClassOptionalOutput2, InternalModifiedOutput, InternalNamedArgsSingleClass, InternalOptionalClass, InternalOptionalTest_ReturnType, InternalOverrideClass, InternalTestClassAlias, InternalTestClassWithEnum, InternalTestOutputClass, InternalUnionTest_ReturnType }
 

@@ -227,6 +227,22 @@ const schema: JSONSchema7 = {
         "prop2"
       ]
     },
+    "OptionalTest_ReturnType": {
+      "title": "OptionalTest_ReturnType",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "type": "string"
+        },
+        "prop2": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "prop1",
+        "prop2"
+      ]
+    },
     "OverrideClass": {
       "title": "OverrideClass",
       "type": "object",
@@ -296,6 +312,43 @@ const schema: JSONSchema7 = {
         },
         "prop2": {
           "type": "integer"
+        }
+      },
+      "required": [
+        "prop1",
+        "prop2"
+      ]
+    },
+    "UnionTest_ReturnType": {
+      "title": "UnionTest_ReturnType",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "anyOf": [
+            {
+              "type": "string",
+              "title": "string"
+            },
+            {
+              "type": "boolean",
+              "title": "bool"
+            }
+          ]
+        },
+        "prop2": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "number",
+                "title": "float"
+              },
+              {
+                "type": "boolean",
+                "title": "bool"
+              }
+            ]
+          }
         }
       },
       "required": [
@@ -411,9 +464,9 @@ const schema: JSONSchema7 = {
       "type": "string",
       "title": "FnTestOutputAdapter input"
     },
-    "FnUnionStringBoolWithArrayOutput_input": {
+    "OptionalTest_Function_input": {
       "type": "string",
-      "title": "FnUnionStringBoolWithArrayOutput input"
+      "title": "OptionalTest_Function input"
     },
     "PromptTest_input": {
       "type": "string",
@@ -521,6 +574,19 @@ const schema: JSONSchema7 = {
       "required": [],
       "title": "TestFnNamedArgsSyntax input"
     },
+    "UnionTest_Function_input": {
+      "anyOf": [
+        {
+          "type": "string",
+          "title": "string"
+        },
+        {
+          "type": "boolean",
+          "title": "bool"
+        }
+      ],
+      "title": "UnionTest_Function input"
+    },
     "FnClassOptional_output": {
       "type": "string",
       "title": "FnClassOptional output"
@@ -626,9 +692,19 @@ const schema: JSONSchema7 = {
       "type": "string",
       "title": "FnTestOutputAdapter output"
     },
-    "FnUnionStringBoolWithArrayOutput_output": {
-      "type": "number",
-      "title": "FnUnionStringBoolWithArrayOutput output"
+    "OptionalTest_Function_output": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/OptionalTest_ReturnType",
+          "title": "OptionalTest_ReturnType"
+        },
+        {
+          "type": "null",
+          "title": "null"
+        }
+      ],
+      "default": null,
+      "title": "OptionalTest_Function output"
     },
     "PromptTest_output": {
       "type": "string",
@@ -669,6 +745,10 @@ const schema: JSONSchema7 = {
     "TestFnNamedArgsSyntax_output": {
       "type": "string",
       "title": "TestFnNamedArgsSyntax output"
+    },
+    "UnionTest_Function_output": {
+      "$ref": "#/definitions/UnionTest_ReturnType",
+      "title": "UnionTest_Function output"
     }
   }
 };
@@ -718,6 +798,8 @@ registerObjectDeserializer(schema.definitions.NamedArgsSingleClass, { });
 
 registerObjectDeserializer(schema.definitions.OptionalClass, { });
 
+registerObjectDeserializer(schema.definitions.OptionalTest_ReturnType, { });
+
 registerObjectDeserializer(schema.definitions.OverrideClass, { });
 
 registerObjectDeserializer(schema.definitions.TestClassAlias, { });
@@ -725,6 +807,8 @@ registerObjectDeserializer(schema.definitions.TestClassAlias, { });
 registerObjectDeserializer(schema.definitions.TestClassWithEnum, { });
 
 registerObjectDeserializer(schema.definitions.TestOutputClass, { });
+
+registerObjectDeserializer(schema.definitions.UnionTest_ReturnType, { });
 
 
 export { schema }

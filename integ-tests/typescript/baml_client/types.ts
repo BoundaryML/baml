@@ -75,6 +75,11 @@ interface OptionalClass {
   prop2: string;
 }
 
+interface OptionalTest_ReturnType {
+  prop1: string;
+  prop2: number;
+}
+
 interface OverrideClass {
   prop1: string;
   prop2: string;
@@ -98,6 +103,11 @@ interface TestOutputClass {
   prop2: number;
 }
 
+interface UnionTest_ReturnType {
+  prop1: string | boolean;
+  prop2: number | boolean[];
+}
 
-export { EnumInClass, EnumOutput, NamedArgsSingleEnum, NamedArgsSingleEnumList, OverrideEnum, TestEnum, Blah, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, ModifiedOutput, NamedArgsSingleClass, OptionalClass, OverrideClass, TestClassAlias, TestClassWithEnum, TestOutputClass }
+
+export { EnumInClass, EnumOutput, NamedArgsSingleEnum, NamedArgsSingleEnumList, OverrideEnum, TestEnum, Blah, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, ModifiedOutput, NamedArgsSingleClass, OptionalClass, OptionalTest_ReturnType, OverrideClass, TestClassAlias, TestClassWithEnum, TestOutputClass, UnionTest_ReturnType }
 
