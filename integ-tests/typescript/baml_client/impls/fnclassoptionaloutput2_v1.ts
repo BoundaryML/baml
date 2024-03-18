@@ -22,8 +22,8 @@ Answer in JSON using this schema:
   "prop2": string | null,
   "prop3": {
     "prop4": string | null
-  }
-}
+  } | null
+} | null
 
 JSON:\
 `;

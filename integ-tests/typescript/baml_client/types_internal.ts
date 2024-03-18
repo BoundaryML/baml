@@ -6,7 +6,7 @@
 /* eslint-disable */
 
 
-import { Blah, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, EnumInClass, EnumOutput, ModifiedOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalClass, OverrideClass, OverrideEnum, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass, UnionTest_ReturnType } from './types';
+import { Blah, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, EnumInClass, EnumOutput, ModifiedOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalClass, OptionalTest_CategoryType, OptionalTest_Prop1, OptionalTest_ReturnType, OverrideClass, OverrideEnum, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass, UnionTest_ReturnType } from './types';
 
 
 // Function to check if a value is a member of the EnumInClass enum
@@ -27,6 +27,11 @@ function isNamedArgsSingleEnum(value: any): value is NamedArgsSingleEnum {
 // Function to check if a value is a member of the NamedArgsSingleEnumList enum
 function isNamedArgsSingleEnumList(value: any): value is NamedArgsSingleEnumList {
   return Object.values(NamedArgsSingleEnumList).includes(value);
+}
+
+// Function to check if a value is a member of the OptionalTest_CategoryType enum
+function isOptionalTest_CategoryType(value: any): value is OptionalTest_CategoryType {
+  return Object.values(OptionalTest_CategoryType).includes(value);
 }
 
 // Function to check if a value is a member of the OverrideEnum enum
@@ -304,6 +309,86 @@ class InternalOptionalClass implements OptionalClass {
   }
 }
 
+// Function to validate if an object is a OptionalTest_Prop1 object
+function isOptionalTest_Prop1(obj: any): obj is OptionalTest_Prop1 {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("omega_a" in obj && (typeof obj.omega_a === 'string'))
+    && ("omega_b" in obj && (typeof obj.omega_b === 'number'))
+  );
+}
+
+
+class InternalOptionalTest_Prop1 implements OptionalTest_Prop1 {
+  private constructor(private data: {
+    omega_a: string,
+    omega_b: number,
+  }, private raw: OptionalTest_Prop1) {}
+
+  static from(data: OptionalTest_Prop1): InternalOptionalTest_Prop1 {
+    return new InternalOptionalTest_Prop1({
+      omega_a: data.omega_a,
+      omega_b: data.omega_b,
+    }, data);
+  }
+
+  get omega_a(): string {
+    return this.data.omega_a;
+  }
+  get omega_b(): number {
+    return this.data.omega_b;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
+// Function to validate if an object is a OptionalTest_ReturnType object
+function isOptionalTest_ReturnType(obj: any): obj is OptionalTest_ReturnType {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("omega_1" in obj && ((obj.omega_1 === null || obj.omega_1 === undefined) || isOptionalTest_Prop1(obj.omega_1)))
+    && ("omega_2" in obj && ((obj.omega_2 === null || obj.omega_2 === undefined) || typeof obj.omega_2 === 'string'))
+    && ("omega_3" in obj && (Array.isArray(obj.omega_3) && obj.omega_3.every((x: any) => (x === null || x === undefined) || isOptionalTest_CategoryType(x))))
+  );
+}
+
+
+class InternalOptionalTest_ReturnType implements OptionalTest_ReturnType {
+  private constructor(private data: {
+    omega_1: OptionalTest_Prop1 | null,
+    omega_2: string | null,
+    omega_3: OptionalTest_CategoryType | null[],
+  }, private raw: OptionalTest_ReturnType) {}
+
+  static from(data: OptionalTest_ReturnType): InternalOptionalTest_ReturnType {
+    return new InternalOptionalTest_ReturnType({
+      omega_1: (data.omega_1 === null || data.omega_1 === undefined) ? null : new InternalOptionalTest_Prop1(data.omega_1),
+      omega_2: (data.omega_2 === null || data.omega_2 === undefined) ? null : data.omega_2,
+      omega_3: data.omega_3.map(x => (x === null || x === undefined) ? null : x),
+    }, data);
+  }
+
+  get omega_1(): OptionalTest_Prop1 | null {
+    return this.data.omega_1;
+  }
+  get omega_2(): string | null {
+    return this.data.omega_2;
+  }
+  get omega_3(): OptionalTest_CategoryType | null[] {
+    return this.data.omega_3;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
 // Function to validate if an object is a OverrideClass object
 function isOverrideClass(obj: any): obj is OverrideClass {
   return (
@@ -522,5 +607,5 @@ if (typeof x === 'boolean') {
 }
 
 
-export { InternalBlah, InternalClassOptionalFields, InternalClassOptionalOutput, InternalClassOptionalOutput2, InternalModifiedOutput, InternalNamedArgsSingleClass, InternalOptionalClass, InternalOverrideClass, InternalTestClassAlias, InternalTestClassWithEnum, InternalTestOutputClass, InternalUnionTest_ReturnType }
+export { InternalBlah, InternalClassOptionalFields, InternalClassOptionalOutput, InternalClassOptionalOutput2, InternalModifiedOutput, InternalNamedArgsSingleClass, InternalOptionalClass, InternalOptionalTest_Prop1, InternalOptionalTest_ReturnType, InternalOverrideClass, InternalTestClassAlias, InternalTestClassWithEnum, InternalTestOutputClass, InternalUnionTest_ReturnType }
 

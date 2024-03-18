@@ -44,6 +44,13 @@ from ..__do_not_import.types.classes.cls_classoptionaloutput2 import ClassOption
 from ..__do_not_import.types.classes.cls_modifiedoutput import ModifiedOutput
 from ..__do_not_import.types.classes.cls_namedargssingleclass import NamedArgsSingleClass
 from ..__do_not_import.types.classes.cls_optionalclass import OptionalClass
+<<<<<<< HEAD
+||||||| parent of 8a198b3 (fix: print ClassType | null types correctly)
+from ..__do_not_import.types.classes.cls_optionaltest_returntype import OptionalTest_ReturnType
+=======
+from ..__do_not_import.types.classes.cls_optionaltest_prop1 import OptionalTest_Prop1
+from ..__do_not_import.types.classes.cls_optionaltest_returntype import OptionalTest_ReturnType
+>>>>>>> 8a198b3 (fix: print ClassType | null types correctly)
 from ..__do_not_import.types.classes.cls_overrideclass import OverrideClass
 from ..__do_not_import.types.classes.cls_testclassalias import TestClassAlias
 from ..__do_not_import.types.classes.cls_testclasswithenum import TestClassWithEnum
@@ -53,6 +60,7 @@ from ..__do_not_import.types.enums.enm_enuminclass import EnumInClass
 from ..__do_not_import.types.enums.enm_enumoutput import EnumOutput
 from ..__do_not_import.types.enums.enm_namedargssingleenum import NamedArgsSingleEnum
 from ..__do_not_import.types.enums.enm_namedargssingleenumlist import NamedArgsSingleEnumList
+from ..__do_not_import.types.enums.enm_optionaltest_categorytype import OptionalTest_CategoryType
 from ..__do_not_import.types.enums.enm_overrideenum import OverrideEnum
 from ..__do_not_import.types.enums.enm_testenum import TestEnum
 
@@ -161,6 +169,14 @@ __all__ = [
     'NamedArgsSingleEnum',
     'NamedArgsSingleEnumList',
     'OptionalClass',
+<<<<<<< HEAD
+||||||| parent of 8a198b3 (fix: print ClassType | null types correctly)
+    'OptionalTest_ReturnType',
+=======
+    'OptionalTest_CategoryType',
+    'OptionalTest_Prop1',
+    'OptionalTest_ReturnType',
+>>>>>>> 8a198b3 (fix: print ClassType | null types correctly)
     'OverrideClass',
     'OverrideEnum',
     'TestClassAlias',

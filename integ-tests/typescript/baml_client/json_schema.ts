@@ -59,6 +59,20 @@ const schema: JSONSchema7 = {
         }
       ]
     },
+    "OptionalTest_CategoryType": {
+      "title": "OptionalTest_CategoryType",
+      "enum": [
+        {
+          "const": "Aleph"
+        },
+        {
+          "const": "Beta"
+        },
+        {
+          "const": "Gamma"
+        }
+      ]
+    },
     "OverrideEnum": {
       "title": "OverrideEnum",
       "enum": [
@@ -225,6 +239,67 @@ const schema: JSONSchema7 = {
       "required": [
         "prop1",
         "prop2"
+      ]
+    },
+    "OptionalTest_Prop1": {
+      "title": "OptionalTest_Prop1",
+      "type": "object",
+      "properties": {
+        "omega_a": {
+          "type": "string"
+        },
+        "omega_b": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "omega_a",
+        "omega_b"
+      ]
+    },
+    "OptionalTest_ReturnType": {
+      "title": "OptionalTest_ReturnType",
+      "type": "object",
+      "properties": {
+        "omega_1": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/OptionalTest_Prop1",
+              "title": "OptionalTest_Prop1"
+            },
+            {
+              "type": "null",
+              "title": "null"
+            }
+          ],
+          "default": null
+        },
+        "omega_2": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "omega_3": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/OptionalTest_CategoryType",
+                "title": "OptionalTest_CategoryType"
+              },
+              {
+                "type": "null",
+                "title": "null"
+              }
+            ],
+            "default": null
+          }
+        }
+      },
+      "required": [
+        "omega_3"
       ]
     },
     "OverrideClass": {
@@ -447,6 +522,10 @@ const schema: JSONSchema7 = {
     "FnTestOutputAdapter_input": {
       "type": "string",
       "title": "FnTestOutputAdapter input"
+    },
+    "OptionalTest_Function_input": {
+      "type": "string",
+      "title": "OptionalTest_Function input"
     },
     "PromptTest_input": {
       "type": "string",
@@ -672,6 +751,23 @@ const schema: JSONSchema7 = {
       "type": "string",
       "title": "FnTestOutputAdapter output"
     },
+    "OptionalTest_Function_output": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "$ref": "#/definitions/OptionalTest_ReturnType",
+            "title": "OptionalTest_ReturnType"
+          },
+          {
+            "type": "null",
+            "title": "null"
+          }
+        ],
+        "default": null
+      },
+      "title": "OptionalTest_Function output"
+    },
     "PromptTest_output": {
       "type": "string",
       "title": "PromptTest output"
@@ -735,6 +831,10 @@ registerEnumDeserializer(schema.definitions.NamedArgsSingleEnumList, {
 
 });
 
+registerEnumDeserializer(schema.definitions.OptionalTest_CategoryType, {
+
+});
+
 registerEnumDeserializer(schema.definitions.OverrideEnum, {
 
 });
@@ -763,6 +863,10 @@ registerObjectDeserializer(schema.definitions.ModifiedOutput, { });
 registerObjectDeserializer(schema.definitions.NamedArgsSingleClass, { });
 
 registerObjectDeserializer(schema.definitions.OptionalClass, { });
+
+registerObjectDeserializer(schema.definitions.OptionalTest_Prop1, { });
+
+registerObjectDeserializer(schema.definitions.OptionalTest_ReturnType, { });
 
 registerObjectDeserializer(schema.definitions.OverrideClass, { });
 

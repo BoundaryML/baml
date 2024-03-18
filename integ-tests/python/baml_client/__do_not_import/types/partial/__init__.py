@@ -14,6 +14,13 @@ from .classes.cls_classoptionaloutput2 import PartialClassOptionalOutput2
 from .classes.cls_modifiedoutput import PartialModifiedOutput
 from .classes.cls_namedargssingleclass import PartialNamedArgsSingleClass
 from .classes.cls_optionalclass import PartialOptionalClass
+<<<<<<< HEAD
+||||||| parent of 8a198b3 (fix: print ClassType | null types correctly)
+from .classes.cls_optionaltest_returntype import PartialOptionalTest_ReturnType
+=======
+from .classes.cls_optionaltest_prop1 import PartialOptionalTest_Prop1
+from .classes.cls_optionaltest_returntype import PartialOptionalTest_ReturnType
+>>>>>>> 8a198b3 (fix: print ClassType | null types correctly)
 from .classes.cls_overrideclass import PartialOverrideClass
 from .classes.cls_testclassalias import PartialTestClassAlias
 from .classes.cls_testclasswithenum import PartialTestClassWithEnum
@@ -31,6 +38,13 @@ __all__ = [
     'PartialModifiedOutput',
     'PartialNamedArgsSingleClass',
     'PartialOptionalClass',
+<<<<<<< HEAD
+||||||| parent of 8a198b3 (fix: print ClassType | null types correctly)
+    'PartialOptionalTest_ReturnType',
+=======
+    'PartialOptionalTest_Prop1',
+    'PartialOptionalTest_ReturnType',
+>>>>>>> 8a198b3 (fix: print ClassType | null types correctly)
     'PartialOverrideClass',
     'PartialTestClassAlias',
     'PartialTestClassWithEnum',

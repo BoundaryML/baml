@@ -36,7 +36,7 @@ struct FieldType {
 #[serde(rename_all = "camelCase")]
 struct ClassType {
     fields: Vec<FieldType>,
-    optional: Option<bool>,
+    optional: bool,
 }
 
 #[derive(Serialize, Debug)]
@@ -142,14 +142,27 @@ fn print_class(item: &ClassType) -> String {
         .collect();
 
     let class_content = as_indented_string(&fields.join(",\n"), 1);
-    let optional = item.optional.unwrap_or(false);
-    print_optional(&format!("{{\n{}\n}}", class_content), optional)
+    print_optional(&format!("{{\n{}\n}}", class_content), item.optional)
 }
 
 fn print_list(item: &ListType) -> String {
     let inner_type = item.inner.as_ref();
     let inner_type_str = match inner_type {
         DataType::Union(_) => format!("({})", print_type(inner_type)),
+        DataType::Class(t) => {
+            if t.optional {
+                format!("({})", print_type(inner_type))
+            } else {
+                print_type(inner_type)
+            }
+        },
+        DataType::Enum(t) => {
+            if t.optional {
+                format!("({})", print_type(inner_type))
+            } else {
+                print_type(inner_type)
+            }
+        }
         _ => print_type(inner_type),
     };
     let dims_str = (0..item.dims).map(|_| "[]").collect::<String>();
@@ -197,7 +210,7 @@ fn parse_data_type(json_input: &Value) -> Result<DataType, serde_json::Error> {
                 .collect::<Result<Vec<_>, _>>()?;
             Ok(DataType::Class(ClassType {
                 fields,
-                optional: json_input["optional"].as_bool(),
+                optional: json_input["optional"].as_bool().unwrap_or(false),
             }))
         }
         Some("enum") => {

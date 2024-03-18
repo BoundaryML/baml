@@ -20,7 +20,7 @@ Answer in JSON using this schema:
 {
   "prop1": string,
   "prop2": string
-}
+} | null
 
 JSON:\
 `;

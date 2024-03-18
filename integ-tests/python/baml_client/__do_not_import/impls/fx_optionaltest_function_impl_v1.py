@@ -8,44 +8,47 @@
 # fmt: off
 
 from ..clients.client_gpt35 import GPT35
-from ..functions.fx_fnclassoptionaloutput import BAMLFnClassOptionalOutput
-from ..types.classes.cls_classoptionaloutput import ClassOptionalOutput
-from ..types.partial.classes.cls_classoptionaloutput import PartialClassOptionalOutput
+from ..functions.fx_optionaltest_function import BAMLOptionalTest_Function
+from ..types.classes.cls_optionaltest_prop1 import OptionalTest_Prop1
+from ..types.classes.cls_optionaltest_returntype import OptionalTest_ReturnType
+from ..types.enums.enm_optionaltest_categorytype import OptionalTest_CategoryType
+from ..types.partial.classes.cls_optionaltest_prop1 import PartialOptionalTest_Prop1
+from ..types.partial.classes.cls_optionaltest_returntype import PartialOptionalTest_ReturnType
 from baml_core.provider_manager.llm_response import LLMResponse
 from baml_core.stream import AsyncStream
 from baml_lib._impl.deserializer import Deserializer
-from typing import Optional
+from typing import List, Optional
 
 
 import typing
 # Impl: v1
 # Client: GPT35
-# An implementation of FnClassOptionalOutput.
+# An implementation of OptionalTest_Function.
 
 __prompt_template = """\
-Return a json blob for the following input:
-{arg}
-
-Answer in JSON using this schema:
-{
-  "prop1": string,
-  "prop2": string
-} | null
+Return a JSON blob with this schema: 
+({
+  "omega_1": {
+    "omega_a": string,
+    "omega_b": int
+  } | null,
+  "omega_2": string | null,
+  "omega_3": ("OptionalTest_CategoryType as string" | null)[]
+} | null)[]
 
 JSON:\
 """
 
 __input_replacers = {
-    "{arg}"
 }
 
 
 # We ignore the type here because baml does some type magic to make this work
 # for inline SpecialForms like Optional, Union, List.
-__deserializer = Deserializer[Optional[ClassOptionalOutput]](Optional[ClassOptionalOutput])  # type: ignore
+__deserializer = Deserializer[List[Optional[OptionalTest_ReturnType]]](List[Optional[OptionalTest_ReturnType]])  # type: ignore
 
 # Add a deserializer that handles stream responses, which are all Partial types
-__partial_deserializer = Deserializer[PartialClassOptionalOutput](PartialClassOptionalOutput)  # type: ignore
+__partial_deserializer = Deserializer[List[Optional[OptionalTest_ReturnType]]](List[Optional[OptionalTest_ReturnType]])  # type: ignore
 
 
 
@@ -53,17 +56,17 @@ __partial_deserializer = Deserializer[PartialClassOptionalOutput](PartialClassOp
 
 
 
-async def v1(arg: str, /) -> Optional[ClassOptionalOutput]:
+async def v1(arg: str, /) -> List[Optional[OptionalTest_ReturnType]]:
     response = await GPT35.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
     deserialized = __deserializer.from_string(response.generated)
     return deserialized
 
 
-def v1_stream(arg: str, /) -> AsyncStream[Optional[ClassOptionalOutput], PartialClassOptionalOutput]:
+def v1_stream(arg: str, /) -> AsyncStream[List[Optional[OptionalTest_ReturnType]], List[Optional[OptionalTest_ReturnType]]]:
     def run_prompt() -> typing.AsyncIterator[LLMResponse]:
         raw_stream = GPT35.run_prompt_template_stream(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
         return raw_stream
     stream = AsyncStream(stream_cb=run_prompt, partial_deserializer=__partial_deserializer, final_deserializer=__deserializer)
     return stream
 
-BAMLFnClassOptionalOutput.register_impl("v1")(v1, v1_stream)
+BAMLOptionalTest_Function.register_impl("v1")(v1, v1_stream)

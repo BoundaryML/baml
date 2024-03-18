@@ -82,9 +82,9 @@ impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
                 "rtype": "unsupported",
                 "optional": false,
             }),
-            FieldType::Union(airty, fts, _) => json!({
+            FieldType::Union(arity, fts, _) => json!({
                 "rtype": "union",
-                "optional": airty.is_optional(),
+                "optional": arity.is_optional(),
                 "options": fts.iter().map(|ft| (self.0, ft).serialize_data(variant)).collect::<Vec<_>>(),
             }),
             FieldType::List(ft, dims, _) => json!({
@@ -108,7 +108,14 @@ impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
             }
             FieldType::Identifier(arity, Identifier::Local(name, ..)) => {
                 match self.0.find_type_by_str(name) {
-                    Some(either::Either::Left(cls)) => cls.serialize_data(variant),
+                    Some(either::Either::Left(cls)) => {
+                        let mut class_type = cls.serialize_data(variant);
+                        let Some(obj) = class_type.as_object_mut() else {
+                            return class_type;
+                        };
+                        obj.insert("optional".to_string(), arity.is_optional().into());
+                        class_type
+                    }
                     Some(either::Either::Right(enm)) => {
                         json!({
                             "rtype": "enum",

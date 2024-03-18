@@ -26,6 +26,12 @@ const enum NamedArgsSingleEnumList {
     TWO = "TWO",
 }
 
+const enum OptionalTest_CategoryType {
+    Aleph = "Aleph",
+    Beta = "Beta",
+    Gamma = "Gamma",
+}
+
 const enum OverrideEnum {
     ONE = "ONE",
     TWO = "TWO",
@@ -75,6 +81,17 @@ interface OptionalClass {
   prop2: string;
 }
 
+interface OptionalTest_Prop1 {
+  omega_a: string;
+  omega_b: number;
+}
+
+interface OptionalTest_ReturnType {
+  omega_1: OptionalTest_Prop1 | null;
+  omega_2: string | null;
+  omega_3: OptionalTest_CategoryType | null[];
+}
+
 interface OverrideClass {
   prop1: string;
   prop2: string;
@@ -104,5 +121,5 @@ interface UnionTest_ReturnType {
 }
 
 
-export { EnumInClass, EnumOutput, NamedArgsSingleEnum, NamedArgsSingleEnumList, OverrideEnum, TestEnum, Blah, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, ModifiedOutput, NamedArgsSingleClass, OptionalClass, OverrideClass, TestClassAlias, TestClassWithEnum, TestOutputClass, UnionTest_ReturnType }
+export { EnumInClass, EnumOutput, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalTest_CategoryType, OverrideEnum, TestEnum, Blah, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, ModifiedOutput, NamedArgsSingleClass, OptionalClass, OptionalTest_Prop1, OptionalTest_ReturnType, OverrideClass, TestClassAlias, TestClassWithEnum, TestOutputClass, UnionTest_ReturnType }
 
