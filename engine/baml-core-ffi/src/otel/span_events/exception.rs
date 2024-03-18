@@ -8,6 +8,7 @@ use super::partial_types::{Apply, PartialLogSchema};
 
 #[derive(Default)]
 pub(crate) struct Exception {
+  ts_ms: u64,
   error_code: i32,
   message: Option<String>,
   traceback: Option<String>,
@@ -15,7 +16,11 @@ pub(crate) struct Exception {
 
 impl Exception {
   pub fn event(error_code: i32, message: Option<&str>, traceback: Option<&str>) -> Result<()> {
-    baml_event_def!(Exception, error_code, message, traceback);
+    let ts_ms = std::time::SystemTime::now()
+      .duration_since(std::time::UNIX_EPOCH)
+      .unwrap()
+      .as_millis() as u64;
+    baml_event_def!(Exception, error_code, message, traceback, ts_ms);
     Ok(())
   }
 }
@@ -24,6 +29,15 @@ impl Visit for Exception {
   fn record_debug(&mut self, field: &tracing::field::Field, _value: &dyn std::fmt::Debug) {
     // By defaul invalid
     panic!("unexpected field name: {}", field.name());
+  }
+
+  fn record_u64(&mut self, field: &tracing::field::Field, value: u64) {
+    match field.name() {
+      "ts_ms" => self.ts_ms = value,
+      name => {
+        panic!("unexpected field name: {}", name);
+      }
+    }
   }
 
   fn record_i64(&mut self, field: &tracing::field::Field, value: i64) {
@@ -58,5 +72,10 @@ where
       traceback: event.traceback,
       ..Default::default()
     });
+
+    if self.context.latency_ms < 0 {
+      let ts = event.ts_ms as i128;
+      self.context.latency_ms += ts;
+    }
   }
 }
