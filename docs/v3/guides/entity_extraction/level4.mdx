@@ -10,13 +10,19 @@ description: Using adapters to extract additional reasoning from the LLM
 
 ## Overview
 
-A common prompting strategy to improve results is to use **Self-Generated Chain of Thought** (CoT), which uses natural language statements like "Let's think step by step" to encourage the model to generate reasoning steps. This has shown to significantly improve results in some cases.
+A common prompting strategy to improve results is to use **Self-Generated Chain
+of Thought** (CoT), which uses natural language statements like "Let's think
+step by step" to encourage the model to generate reasoning steps. This has shown
+to significantly improve results in some cases.
 
-In this section, we will add a "reasoning step" to our AI function so the LLM can generate its chain of thought before outputting our desired `OrderInfo`.
+In this section, we will add a "reasoning step" to our AI function so the LLM
+can generate its chain of thought before outputting our desired `OrderInfo`.
 
 ## Adding a reasoning step
+
 There are two ways of doing this:
-#### 1. Have the LLM generate free-form text indicating its thought process before it writes the JSON object.
+
+### 1. Have the LLM generate free-form text indicating its thought process before it writes the JSON object.
 Example:
 ```text LLM Output with CoT
 If we think step by step, we can see that

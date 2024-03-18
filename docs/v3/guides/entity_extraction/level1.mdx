@@ -37,6 +37,7 @@ class OrderInfo {
 }
 ```
 
+The code snippet you provided is declaring the AI function signature for a function called `GetOrderInfo`. This function takes an input of type `Email` and outputs an `OrderInfo`. By defining this function signature in your BAML file, you are essentially setting up the structure for how the AI function will operate and what kind of data it will expect as input and output.
 Then declare the AI function signature
 ```rust baml_src/main.baml
 function GetOrderInfo {
@@ -125,6 +126,8 @@ JSON:
 
 Our VSCode extension automatically generates a python **baml_client** to access and call your functions. All fully type-safe. Verify that if you add the wrong input you do see an error.
 
+<CodeGroup>
+
 ```python
 from baml_client import baml as b
 # Import your generated Email model. 
@@ -141,9 +144,9 @@ async def main():
   ))
 
   # This is all fully typed for you:
-  if order_info is not None and order_info.cost is not None and order_info.cost > 1000:
+  if order_info.cost > 1000:
       print("You spent a lot of money!")
-  elif order_info is not None and order_info.cost is not None and order_info.cost > 500:
+  elif order_info.cost > 500:
       print("You spent a chunk of money!")
   else:
       print("You spent a little money!")
@@ -151,6 +154,32 @@ async def main():
 if __name__ == "__main__":
   asyncio.run(main())
 ```
+
+```typescript
+import b from '@/baml_client'
+import { Email } from '@/baml_client/baml_types'
+
+const main = async () => {
+  const order_info = await b.GetOrderInfo({
+      subject="Order #1234",
+      body="Your order has been shipped. It will arrive on 1st Jan 2022. Product: iPhone 13. Cost: $999.99"
+  });
+
+  if (order_info.cost > 1000) {
+    console.log("You spent a lot of money!")
+  } else if (order_info.cost > 500) {
+    console.log("You spent a chunk of money!")
+  } else {
+    console.log("You spent a little money!")
+  }
+};
+
+if (require.main === module) {
+  main();
+}
+```
+
+</CodeGroup>
 
 Note that you may get some errors testing other cases. We'll discuss how to make this more resilient in the next tutorial.
 

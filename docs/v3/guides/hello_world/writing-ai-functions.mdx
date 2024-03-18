@@ -1,9 +1,11 @@
 ---
 title: "Writing AI functions"
 ---
+
 <Warning>
-  Before writing BAML, read the entirety of the Hello World example. This is
-  important for understanding BAML project architectures
+Please read "Writing AI functions", "Testing AI functions", and "BAML Project
+Structure" to get started - the rest of the documentation will only make sense
+if you've read all three articles!
 </Warning>
 
 ### Pre-requisites
@@ -15,11 +17,17 @@ The starting project structure will look like this:
 
 ## Overview
 
-Before you call an LLM, ask yourself what kind of input or output youre expecting. If you want the LLM to generate text, then you probably want a string, but if you're trying to get it to collect user details, you may want it to return a complex type like `UserDetails`.
+Before you call an LLM, ask yourself what kind of input or output youre
+expecting. If you want the LLM to generate text, then you probably want a
+string, but if you're trying to get it to collect user details, you may want it
+to return a complex type like `UserDetails`.
 
-Thinking this way can help you decompose large complex prompts into smaller, more measurable functions, and will also help you build more complex workflows and agents.
+Thinking this way can help you decompose large complex prompts into smaller,
+more measurable functions, and will also help you build more complex workflows
+and agents.
 
-To get us started using BAML, we'll start with writing a simple AI function that extracts verbs from a sentence and show more examples with increasing complexity.
+We'll start with a simple function to extract verbs from a sentence, and then
+build on that to learn how BAML can modify more complex and powerful functions.
 
 # Implementing an AI function
 
@@ -28,7 +36,7 @@ To get us started using BAML, we'll start with writing a simple AI function that
 First we will define a function of the following signature in BAML:
 `ExtractVerbs(input: string) -> string[]`
 
-Here's the BAML equivalent, which you can add to your main.baml file (or any other file under baml_src):
+Here's the BAML equivalent, which you can add to your `main.baml`:
 
 ```rust baml_src/main.baml
 function ExtractVerbs {
@@ -37,21 +45,12 @@ function ExtractVerbs {
     output string[]
 }
 ```
+ 
 
-Every [BAML function](/v3/syntax/function) has a strictly typed input and output. The input and output can be either a **primitive type** (string, number, boolean) or a [complex type](/v3/syntax/type) (think unions, lists, or even custom pydantic models)
-
-To ensure the baml compiler generates your Python / TS code, you'll also need to add a `generator` block to your main.baml file:
-
-```rust
-generator MyGenerator{
-  language "python"
-  // This is where the generated baml-client will be written to
-  project_root "../"
-  test_command "poetry run python -m pytest"
-  install_command "poetry add baml@latest"
-  package_version_command "poetry show baml"
-}
-```
+Every [BAML function](/v3/syntax/function) has a strictly typed input and
+output. The input and output can be either a **primitive type** (string, number,
+boolean) or a [complex type](/v3/syntax/type) (think unions, lists, or even
+custom pydantic models)
 
 ## 2. Implement the function using a prompt
 
