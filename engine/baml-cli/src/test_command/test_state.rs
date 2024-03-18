@@ -1,6 +1,6 @@
 use baml_lib::internal_baml_parser_database::ParserDatabase;
 use colored::*;
-use log::info;
+use log::{debug, info};
 use std::{collections::HashMap, ops::Deref, str::FromStr};
 
 use super::ipc_comms::{LogSchema, MessageData, Template, TestCaseStatus, ValueType};
@@ -297,10 +297,10 @@ impl RunState {
                 };
 
                 let state = if let Some(x) = self.tests.get_mut(&key) {
-                    info!("Updating test state for {:?} {:?}", key, x);
+                    debug!("Updating test state for {:?}", x);
                     x
                 } else {
-                    info!("Unable to find test state for {:?}", key);
+                    debug!("Unable to find test state for {:?}", key);
                     return None;
                 };
                 *state = new_state;
@@ -336,10 +336,6 @@ impl RunState {
                     }
                 }
                 .and_then(|spec| {
-                    info!(
-                        "Updating log test state for {:?} {:?}",
-                        spec, log.context.tags
-                    );
                     let state = self.tests.get_mut(&spec);
                     if let Some(state) = state {
                         if let TestState::Finished(state) = state {

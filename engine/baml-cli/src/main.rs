@@ -135,14 +135,13 @@ pub(crate) fn main() {
         .format(|buf, record| {
             let level = record.level();
             let message = format!("{}", record.args());
-            let now = chrono::Local::now().format("%M:%S%.3f");
             match level {
-                log::Level::Info => writeln!(buf, "{now} {} {}", NAME.dimmed(), message.dimmed()),
-                log::Level::Warn => writeln!(buf, "{now} {} {}", NAME.dimmed(), message.yellow()),
+                log::Level::Info => writeln!(buf, "{} {}", NAME.dimmed(), message.dimmed()),
+                log::Level::Warn => writeln!(buf, "{} {}", NAME.dimmed(), message.yellow()),
                 log::Level::Error => {
-                    writeln!(buf, "{now} {} {}", "ERROR:".red().bold(), message.red())
+                    writeln!(buf, "{} {}", "ERROR:".red().bold(), message.red())
                 }
-                _ => writeln!(buf, "{now} {} {}: {}", NAME.dimmed(), level, message),
+                _ => writeln!(buf, "{} {}: {}", NAME.dimmed(), level, message),
             }
         })
         .init();

@@ -114,9 +114,6 @@ where
     id: &tracing::span::Id,
     ctx: tracing_subscriber::layer::Context<'_, S>,
   ) {
-    let now = chrono::Local::now().format("%M:%S%.3f");
-    println!("{now} Starting span: {:?}", id);
-
     // Get all parents
     let span = ctx.span(id).unwrap();
     let mut parents = vec![];
@@ -198,8 +195,6 @@ where
   }
 
   fn on_event(&self, event: &tracing::Event<'_>, ctx: tracing_subscriber::layer::Context<'_, S>) {
-    // let now = chrono::Local::now().format("%M:%S%.3f");
-    // println!("{now} Event: {:?}", event.metadata().name());
     if let Some(span_id) = ctx.current_span().id() {
       if let Some(span) = ctx.span(span_id) {
         if let Err(e) = parse_event(event, &span) {
@@ -217,8 +212,6 @@ where
   }
 
   fn on_close(&self, id: tracing::span::Id, ctx: tracing_subscriber::layer::Context<'_, S>) {
-    let now = chrono::Local::now().format("%M:%S%.3f");
-    println!("{now} Closing span: {:?}", id);
     let span = ctx.span(&id).unwrap();
     let mut extension = span.extensions_mut();
     let schema = match extension.get_mut::<partial_types::PartialLogSchema>() {
@@ -233,10 +226,7 @@ where
         for schema in log_schema {
           // Submit to a background thread that will send the log schema to the server
           match self.config.submit(schema) {
-            Ok(_) => {
-              let now = chrono::Local::now().format("%M:%S%.3f");
-              println!("{now} Submitted log schema");
-            }
+            Ok(_) => {}
             Err(e) => {
               println!("Error submitting log schema: {:?}", e);
             }
@@ -252,8 +242,6 @@ where
 
 impl Drop for BamlEventSubscriber<'_> {
   fn drop(&mut self) {
-    let now = chrono::Local::now().format("%M:%S%.3f");
-    println!("{now} Dropping BamlEventSubscriber");
     match self.config.stop() {
       Ok(_) => {}
       Err(e) => {

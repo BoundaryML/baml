@@ -20,11 +20,7 @@ const getGuard = (): BamlScopeGuard | undefined => {
 const tracer = new BamlNodeTracer();
 
 process.on('exit', (code) => {
-  const now = Date.now();
-  console.log(`${now} Flushing tracer: ${code}`);
   tracer.flush();
-  const now12 = Date.now();
-  console.log(`${now12} Done tracer: ${code}`);
 });
 
 // Automatically start the tracer

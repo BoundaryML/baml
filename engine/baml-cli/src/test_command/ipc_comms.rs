@@ -8,7 +8,6 @@ pub(crate) fn handle_message(message: &str) -> Option<MessageData> {
         return None;
     }
     // Parse the message as json
-    info!("Received message: {}", message);
     match serde_json::from_str::<MessageData>(message) {
         Ok(data) => Some(data),
         Err(e) => {

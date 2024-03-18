@@ -75,16 +75,4 @@ class BamlTestRunner extends TestRunner {
   }
 }
 
-process.on("beforeExit", () => {
-  let now = new Date();
-  console.log(`${now} beforeExit`);
-  BamlTracer.flush();
-  now = new Date();
-  console.log(`${now} Done flush`);
-});
-
-process.on("exit", () => {
-  console.log("exit");
-});
-
 export default BamlTestRunner;

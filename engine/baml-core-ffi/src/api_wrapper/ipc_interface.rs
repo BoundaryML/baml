@@ -53,8 +53,6 @@ impl TcpIPCChannel {
   }
 
   fn send<T: Serialize>(&mut self, name: &str, data: &T) -> Result<()> {
-    let now = chrono::Local::now().format("%M:%S%.3f");
-    println!("{now} Sending message: {} {}", name, json!(data));
     let message = json!({
       "name": name,
       "data": data,
