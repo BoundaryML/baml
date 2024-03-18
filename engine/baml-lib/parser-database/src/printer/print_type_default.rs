@@ -162,7 +162,7 @@ fn print_union(item: &UnionType) -> String {
         .iter()
         .map(|member| print_type(member))
         .collect();
-    member_types.join(" | ")
+    format!("({})", member_types.join(" | "))
 }
 
 fn parse_field_type(json_input: &Value) -> Result<FieldType, serde_json::Error> {
