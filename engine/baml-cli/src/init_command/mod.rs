@@ -69,11 +69,8 @@ pub fn init_command(no_prompt: bool) -> Result<(), CliError> {
                 .ok_or_else(|| "'scripts' section is not an object".to_string())?;
 
             // Only update if "baml-test-script" is not already present to avoid unnecessary writes
-            if !scripts_section.contains_key("baml-test-script") {
-                scripts_section.insert(
-                    "baml-test-script".to_owned(),
-                    Value::String("jest".to_owned()),
-                );
+            if !scripts_section.contains_key("baml-test") {
+                scripts_section.insert("baml-test".to_owned(), Value::String("jest".to_owned()));
                 fs::write(
                     &package_json_path,
                     serde_json::to_string_pretty(&package_json)?,
