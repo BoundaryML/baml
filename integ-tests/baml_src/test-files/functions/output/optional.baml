@@ -24,8 +24,13 @@ function OptionalTest_Function {
 impl<llm, OptionalTest_Function> v1 {
   client GPT35
   prompt #"
+    
+
     Return a JSON blob with this schema: 
     {#print_type(output)}
+
+    Here's a list of values you can use for
+    {#print_enum(OptionalTest_CategoryType)}
 
     JSON:
   "#

@@ -6,7 +6,7 @@ class OverrideClass {
 function FnTestClassOverride {
   input string
   output OverrideClass
-} 
+}
 
 impl<llm, FnTestClassOverride> v1 {
   client GPT35

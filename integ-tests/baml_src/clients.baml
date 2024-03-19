@@ -4,7 +4,7 @@ client<llm> GPT4 {
     model gpt-4
     api_key env.OPENAI_API_KEY
   }
-}
+} 
 
 client<llm> GPT4Turbo {
   provider baml-openai-chat
@@ -12,7 +12,7 @@ client<llm> GPT4Turbo {
     model gpt-4-1106-preview
     api_key env.OPENAI_API_KEY
   }
-}
+} 
 
 client<llm> GPT35 {
   provider baml-openai-chat
