@@ -1,3 +1,4 @@
+use core::hash;
 /// File to convert types to baml code.
 use std::path::PathBuf;
 
@@ -60,10 +61,54 @@ impl WithLoader<Vec<LanguageConfig>> for LanguageConfig {
         project_root: &PathBuf,
         writer: &mut Writer,
     ) -> Result<Vec<LanguageConfig>, CliError> {
+        let mut has_python = false;
+        let mut has_typescript = false;
+
+        // Iterate upwards, starting from the project root all the way to the root dir
+        for p in project_root
+            .clone()
+            .canonicalize()
+            .unwrap_or(project_root.clone())
+            .ancestors()
+        {
+            let Ok(dir) = std::fs::read_dir(p) else {
+                continue;
+            };
+            let files = dir
+                .into_iter()
+                .filter_map(|entry| entry.ok())
+                .filter_map(|entry| entry.file_name().into_string().ok())
+                .collect::<Vec<_>>();
+
+            has_python = has_python
+                || files
+                    .iter()
+                    .any(|f| f == "pyproject.toml" || f.ends_with(".py"));
+            has_typescript = has_typescript
+                || files
+                    .iter()
+                    .any(|f| f == "package.json" || f.ends_with(".ts") || f.ends_with(".js"));
+
+            // If we know we're going to suggest both, exit
+            if has_python && has_typescript {
+                break;
+            }
+
+            // If we reach the root of a git repo (or worktree, or submodule), exit
+            if std::fs::metadata(p.join(".git")).is_ok() {
+                break;
+            }
+        }
+
+        let default_selection = if has_python || has_typescript {
+            [has_python, has_typescript]
+        } else {
+            [true, true]
+        };
         let languages = get_multi_selection_or_default(
             "What language(s) do you want to use with BAML?",
             &["Python", "TypeScript"],
-            &[true, false],
+            &default_selection,
             no_prompt,
         )?;
 
