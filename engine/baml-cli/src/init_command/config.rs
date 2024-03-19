@@ -89,11 +89,11 @@ impl WithLoader<ProjectConfig> for ProjectConfig {
                 let ts_dep_updates = match l {
                     LanguageConfig::TypeScript(_ts_config) => {
                         writer.write_fmt(format_args!(
-                            "\nAdding Jest dev dependencies required for Typescript...\n",
+                            "\nAdding Jest and @boundaryml/baml-core dependencies required for Typescript...\n",
                         ))?;
 
                         let add_jest_deps_command =
-                            install_command.clone() + " jest ts-jest @types/jest -D";
+                            install_command.clone() + " jest ts-jest @types/jest -D && " + &install_command.clone() + " @boundaryml/baml-core";
 
                         writer.write_fmt(format_args!("\n{}\n", add_jest_deps_command.dimmed()))?;
 
@@ -107,7 +107,7 @@ impl WithLoader<ProjectConfig> for ProjectConfig {
                                 if !e.status.success() {
                                     Err(CliError::StringError(format!(
                                         "{}{}{}",
-                                        "Failed to add typescript Jest dependencies!"
+                                        "Failed to add typescript dependencies!"
                                             .normal()
                                             .red(),
                                         match String::from_utf8_lossy(&e.stdout) {

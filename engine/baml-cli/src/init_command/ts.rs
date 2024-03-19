@@ -71,9 +71,10 @@ impl WithLanguage for TypeScriptConfig {
 impl WithLanguage for PackageManager {
     fn test_command<T: AsRef<str>>(&self, prefix: Option<T>) -> String {
         let res = match self {
-            PackageManager::Yarn => "yarn test".into(),
-            PackageManager::Pnpm => "pnpm test --".into(),
-            PackageManager::Npm => "npm test --".into(),
+            // The baml-test is a script we automatically add to the package.json that just runs jest
+            PackageManager::Yarn => "yarn baml-test".into(),
+            PackageManager::Pnpm => "pnpm baml-test --".into(),
+            PackageManager::Npm => "npm run baml-test --".into(),
         };
 
         prefix
