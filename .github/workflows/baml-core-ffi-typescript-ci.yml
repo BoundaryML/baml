@@ -13,12 +13,6 @@ permissions:
       - canary
     tags-ignore:
       - "**"
-    paths-ignore:
-      - "**/*.md"
-      - LICENSE
-      - "**/*.gitignore"
-      - .editorconfig
-      - docs/**
     paths:
       - engine/**
       - .github/workflows/baml-core-ffi-typescript-ci.yml
