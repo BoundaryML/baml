@@ -51,11 +51,14 @@ mod tests {
     type TestResult = anyhow::Result<()>;
 
     #[test]
-    fn test_prefixed_npm_list() -> TestResult {
+    fn infisical_run_npm_list() -> TestResult {
         assert_eq!(
             extract_client_version(
                 "infisical run -- npm list @boundaryml/baml-client",
-                "sandbox-npm@1.0.0 /home/sam/sandbox-npm\n└── @boundaryml/baml-core@1.0.3"
+                "
+sandbox-npm@1.0.0 /home/sam/sandbox-npm
+└── @boundaryml/baml-core@1.0.3
+"
             )?,
             "1.0.3"
         );
@@ -63,11 +66,14 @@ mod tests {
     }
 
     #[test]
-    fn test_npm_list() -> TestResult {
+    fn npm_list() -> TestResult {
         assert_eq!(
             extract_client_version(
                 "npm list @boundaryml/baml-client",
-                "sandbox-npm@1.0.0 /home/sam/sandbox-npm\n└── @boundaryml/baml-core@1.0.3"
+                "
+sandbox-npm@1.0.0 /home/sam/sandbox-npm
+└── @boundaryml/baml-core@1.0.3
+"
             )?,
             "1.0.3"
         );
@@ -75,11 +81,15 @@ mod tests {
     }
 
     #[test]
-    fn test_yarn_list() -> TestResult {
+    fn yarn_list() -> TestResult {
         assert_eq!(
             extract_client_version(
                 "yarn list @boundaryml/baml-client",
-                "yarn list v1.22.22\n└─ @boundaryml/baml-core@1.0.3\nDone in 0.07s."
+                "
+yarn list v1.22.22
+└─ @boundaryml/baml-core@1.0.3
+Done in 0.07s.
+"
             )?,
             "1.0.3"
         );
@@ -87,11 +97,18 @@ mod tests {
     }
 
     #[test]
-    fn test_pnpm_list() -> TestResult {
+    fn pnpm_list() -> TestResult {
         assert_eq!(
             extract_client_version(
                 "pnpm list @boundaryml/baml-client",
-                "Legend: production dependency, optional only, dev only\n\nsandbox-pnpm@1.0.0 /home/sam/sandbox-pnpm\n\ndependencies:\n@boundaryml/baml-core 1.0.3"
+                "
+Legend: production dependency, optional only, dev only
+
+sandbox-pnpm@1.0.0 /home/sam/sandbox-pnpm
+
+dependencies:
+@boundaryml/baml-core 1.0.3
+"
             )?,
             "1.0.3"
         );
@@ -99,7 +116,7 @@ mod tests {
     }
 
     #[test]
-    fn test_pip_show() -> TestResult {
+    fn pip_show() -> TestResult {
         assert_eq!(
             extract_client_version(
                 "pip show baml",
@@ -114,15 +131,15 @@ License:
 Location: /home/sam/.local/lib/python3.10/site-packages
 Requires: aiohttp, anthropic, colorama, coloredlogs, json5, openai, opentelemetry-api, opentelemetry-instrumentation, opentelemetry-sdk, packaging, pydantic, pytest, pytest-asyncio, python-dotenv, regex, tenacity, typeguard, types-regex, types-requests
 Required-by:
-                "
+"
             )?,
-            "1.0.3"
+            "0.14.1"
         );
         Ok(())
     }
 
     #[test]
-    fn test_poetry_show() -> TestResult {
+    fn poetry_show() -> TestResult {
         assert_eq!(
             extract_client_version(
                 "poetry show baml",
@@ -151,14 +168,15 @@ dependencies
  - typeguard >=4.0.0
  - types-regex >=2023.10.3.0,<2024.0.0.0
  - types-requests >=2.28.11
-                "
+"
             )?,
-            "1.0.3"
+            "0.14.1"
         );
         Ok(())
     }
 }
 
+/// This is redundant with GeneratorLanguage.parse_version
 fn extract_client_version(package_version_command: &str, output: &str) -> Result<String, CliError> {
     let package_version_command = shellwords::split(package_version_command)
         .map_err(|e| CliError::StringError(e.to_string()))?;
@@ -193,6 +211,7 @@ fn extract_client_version(package_version_command: &str, output: &str) -> Result
     })?;
 
     let Some(version) = version_re.find(version_line) else {
+        log::info!("version_line: {:?}", version_line);
         return Err(CliError::StringError(format!(
             "{} Error: {}",
             "Failed!".red(),
@@ -203,6 +222,7 @@ fn extract_client_version(package_version_command: &str, output: &str) -> Result
     Ok(version.as_str().to_string())
 }
 
+/// This is redundant with GeneratorLanguage.parse_version
 pub fn get_client_version(
     project_root: &str,
     package_version_command: &str,
@@ -308,12 +328,7 @@ pub fn check_for_updates(baml_dir_override: &Option<String>) -> Result<CheckedVe
             match get_client_version(
                 gen.project_root.to_str().unwrap(),
                 gen.package_version_command.as_str(),
-            )
-            .and_then(|v| {
-                gen.language
-                    .parse_version(v.as_str())
-                    .map_err(|e| CliError::StringError(e.to_string()))
-            }) {
+            ) {
                 Ok(current_version) => {
                     let recommended_update = recommended_update(&current_version, &latest_version);
 
