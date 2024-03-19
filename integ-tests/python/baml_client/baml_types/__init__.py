@@ -26,6 +26,7 @@ from ..__do_not_import.functions.fx_fntestclassoverride import IFnTestClassOverr
 from ..__do_not_import.functions.fx_fntestenumoverride import IFnTestEnumOverride, IFnTestEnumOverrideOutput, IFnTestEnumOverrideStream
 from ..__do_not_import.functions.fx_fntestnamedargssingleenum import IFnTestNamedArgsSingleEnum, IFnTestNamedArgsSingleEnumOutput, IFnTestNamedArgsSingleEnumStream
 from ..__do_not_import.functions.fx_fntestoutputadapter import IFnTestOutputAdapter, IFnTestOutputAdapterOutput, IFnTestOutputAdapterStream
+from ..__do_not_import.functions.fx_optionaltest_function import IOptionalTest_Function, IOptionalTest_FunctionOutput, IOptionalTest_FunctionStream
 from ..__do_not_import.functions.fx_prompttest import IPromptTest, IPromptTestOutput, IPromptTestStream
 from ..__do_not_import.functions.fx_testfnnamedargssinglebool import ITestFnNamedArgsSingleBool, ITestFnNamedArgsSingleBoolOutput, ITestFnNamedArgsSingleBoolStream
 from ..__do_not_import.functions.fx_testfnnamedargssingleclass import ITestFnNamedArgsSingleClass, ITestFnNamedArgsSingleClassOutput, ITestFnNamedArgsSingleClassStream
@@ -44,13 +45,8 @@ from ..__do_not_import.types.classes.cls_classoptionaloutput2 import ClassOption
 from ..__do_not_import.types.classes.cls_modifiedoutput import ModifiedOutput
 from ..__do_not_import.types.classes.cls_namedargssingleclass import NamedArgsSingleClass
 from ..__do_not_import.types.classes.cls_optionalclass import OptionalClass
-<<<<<<< HEAD
-||||||| parent of 8a198b3 (fix: print ClassType | null types correctly)
-from ..__do_not_import.types.classes.cls_optionaltest_returntype import OptionalTest_ReturnType
-=======
 from ..__do_not_import.types.classes.cls_optionaltest_prop1 import OptionalTest_Prop1
 from ..__do_not_import.types.classes.cls_optionaltest_returntype import OptionalTest_ReturnType
->>>>>>> 8a198b3 (fix: print ClassType | null types correctly)
 from ..__do_not_import.types.classes.cls_overrideclass import OverrideClass
 from ..__do_not_import.types.classes.cls_testclassalias import TestClassAlias
 from ..__do_not_import.types.classes.cls_testclasswithenum import TestClassWithEnum
@@ -131,6 +127,9 @@ __all__ = [
     'IFnTestOutputAdapter',
     'IFnTestOutputAdapterOutput',
     'IFnTestOutputAdapterStream',
+    'IOptionalTest_Function',
+    'IOptionalTest_FunctionOutput',
+    'IOptionalTest_FunctionStream',
     'IPromptTest',
     'IPromptTestOutput',
     'IPromptTestStream',
@@ -169,14 +168,9 @@ __all__ = [
     'NamedArgsSingleEnum',
     'NamedArgsSingleEnumList',
     'OptionalClass',
-<<<<<<< HEAD
-||||||| parent of 8a198b3 (fix: print ClassType | null types correctly)
-    'OptionalTest_ReturnType',
-=======
     'OptionalTest_CategoryType',
     'OptionalTest_Prop1',
     'OptionalTest_ReturnType',
->>>>>>> 8a198b3 (fix: print ClassType | null types correctly)
     'OverrideClass',
     'OverrideEnum',
     'TestClassAlias',

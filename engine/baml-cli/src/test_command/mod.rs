@@ -170,12 +170,21 @@ pub fn run(
             }
 
             let generator = match &command.generator {
-                Some(generator_name) => config
+                Some(generator_name) => match config
                     .generators
                     .iter()
                     .find(|(f, _)| &f.name == generator_name)
                     .map(|(f, _)| f)
-                    .unwrap_or_else(|| panic!("Generator {} not found", generator_name)),
+                {
+                    Some(generator) => generator,
+                    None => {
+                        return Err(format!(
+                            "Generator {} not found",
+                            generator_name.to_string().red()
+                        )
+                        .into())
+                    }
+                },
                 None => config
                     .generators
                     .iter()

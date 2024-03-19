@@ -31,3 +31,35 @@ async def test_dependent_tomato(FnEnumOutputImpl: IFnEnumOutputStream, baml_ipc_
 
         await stream.get_final_response()
 
+@baml.FnEnumOutput.test(stream=True)
+async def test_open_bronze(FnEnumOutputImpl: IFnEnumOutputStream, baml_ipc_channel: BaseIPCChannel):
+    def to_str(item: Any) -> str:
+        if isinstance(item, str):
+            return item
+        return dumps(item)
+
+    content = to_str("pick the first one")
+    deserializer = Deserializer[str](str) # type: ignore
+    param = deserializer.from_string(content)
+    async with FnEnumOutputImpl(param) as stream:
+        async for response in stream.parsed_stream:
+            baml_ipc_channel.send("partial_response", response.json())
+
+        await stream.get_final_response()
+
+@baml.FnEnumOutput.test(stream=True)
+async def test_zestful_lavender(FnEnumOutputImpl: IFnEnumOutputStream, baml_ipc_channel: BaseIPCChannel):
+    def to_str(item: Any) -> str:
+        if isinstance(item, str):
+            return item
+        return dumps(item)
+
+    content = to_str("pick the last one")
+    deserializer = Deserializer[str](str) # type: ignore
+    param = deserializer.from_string(content)
+    async with FnEnumOutputImpl(param) as stream:
+        async for response in stream.parsed_stream:
+            baml_ipc_channel.send("partial_response", response.json())
+
+        await stream.get_final_response()
+

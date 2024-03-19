@@ -59,5 +59,5 @@ class IPCChannel(BaseIPCChannel):
     def send(self, name: str, data: T) -> None:
         message = json.dumps(
             {"name": name, "data": data}, default=custom_serializer
-        ).encode("utf-8")
-        connect_to_server(self._host, self._port).sendall(message)
+        ).encode("utf-8") + b"<BAML_END_MSG>\n"
+        self._socket.sendall(message)

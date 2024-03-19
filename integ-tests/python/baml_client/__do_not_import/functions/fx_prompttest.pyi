@@ -17,7 +17,7 @@ import pytest
 from contextlib import contextmanager
 from unittest import mock
 
-ImplName = typing.Literal["claude_chat", "claude_chat_with_chat_msgs", "openai_chat", "openai_chat_with_chat_msgs"]
+ImplName = typing.Literal["claude_chat", "claude_chat_with_chat_msgs", "claude_chat_with_chat_msgs_no_system", "openai_chat", "openai_chat_with_chat_msgs", "openai_chat_with_chat_msgs_no_system"]
 
 T = typing.TypeVar("T", bound=typing.Callable[..., typing.Any])
 CLS = typing.TypeVar("CLS", bound=type)

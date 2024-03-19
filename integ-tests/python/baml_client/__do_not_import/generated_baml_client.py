@@ -30,6 +30,7 @@ from .functions.fx_fntestclassoverride import BAMLFnTestClassOverride
 from .functions.fx_fntestenumoverride import BAMLFnTestEnumOverride
 from .functions.fx_fntestnamedargssingleenum import BAMLFnTestNamedArgsSingleEnum
 from .functions.fx_fntestoutputadapter import BAMLFnTestOutputAdapter
+from .functions.fx_optionaltest_function import BAMLOptionalTest_Function
 from .functions.fx_prompttest import BAMLPromptTest
 from .functions.fx_testfnnamedargssinglebool import BAMLTestFnNamedArgsSingleBool
 from .functions.fx_testfnnamedargssingleclass import BAMLTestFnNamedArgsSingleClass
@@ -68,6 +69,7 @@ class BAMLClient:
     FnTestEnumOverride = BAMLFnTestEnumOverride
     FnTestNamedArgsSingleEnum = BAMLFnTestNamedArgsSingleEnum
     FnTestOutputAdapter = BAMLFnTestOutputAdapter
+    OptionalTest_Function = BAMLOptionalTest_Function
     PromptTest = BAMLPromptTest
     TestFnNamedArgsSingleBool = BAMLTestFnNamedArgsSingleBool
     TestFnNamedArgsSingleClass = BAMLTestFnNamedArgsSingleClass

@@ -31,3 +31,19 @@ async def test_skinny_lime(UnionTest_FunctionImpl: IUnionTest_FunctionStream, ba
 
         await stream.get_final_response()
 
+@baml.UnionTest_Function.test(stream=True)
+async def test_warm_gold(UnionTest_FunctionImpl: IUnionTest_FunctionStream, baml_ipc_channel: BaseIPCChannel):
+    def to_str(item: Any) -> str:
+        if isinstance(item, str):
+            return item
+        return dumps(item)
+
+    content = to_str("noop")
+    deserializer = Deserializer[Union[str, bool]](Union[str, bool]) # type: ignore
+    param = deserializer.from_string(content)
+    async with UnionTest_FunctionImpl(param) as stream:
+        async for response in stream.parsed_stream:
+            baml_ipc_channel.send("partial_response", response.json())
+
+        await stream.get_final_response()
+
