@@ -124,14 +124,14 @@ def test_enum_from_string_with_extra_text_after() -> None:
     res = deserializer.from_string('"ONE - The description of an enum value"')
     assert res == Category.ONE
 
-    res = deserializer.from_string('"ONE - is the answer, not TWO"')
-    assert res == Category.ONE
+    with pytest.raises(Exception):
+        deserializer.from_string('"ONE - is the answer, not TWO"')
 
-    res = deserializer.from_string('"ONE. is the answer, not TWO"')
-    assert res == Category.ONE
+    with pytest.raises(Exception):
+        deserializer.from_string('"ONE. is the answer, not TWO"')
 
-    res = deserializer.from_string('"ONE: is the answer, not TWO"')
-    assert res == Category.ONE
+    with pytest.raises(Exception):
+        deserializer.from_string('"ONE: is the answer, not TWO"')
 
 
 @register_deserializer(

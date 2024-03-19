@@ -4,12 +4,12 @@ import { RawWrapper } from "./raw_wrapper/raw_wrapper";
 import { JSONSchema7 } from "json-schema";
 
 // Taken from https://github.com/sindresorhus/escape-string-regexp/blob/main/index.js
-const regex_escape = (s: string) => s .replace(/[|\\{}()[\]^$+*?.]/g, '\\$&') .replace(/-/g, '\\x2d');
+const regex_escape = (s: string) => s.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&').replace(/-/g, '\\x2d');
 
 const count_occurrences = (text: string, searchTerm: string) => {
     const re = new RegExp(`\\b${regex_escape(searchTerm)}\\b`, 'g');
 
-    return [...text.matchAll(re)].length;
+    return (text.match(re) || []).length;
 }
 
 class EnumDeserializer<T extends Record<string, string>> extends BaseDeserializer<keyof T> {
@@ -142,25 +142,21 @@ class EnumDeserializer<T extends Record<string, string>> extends BaseDeserialize
 
         const find_most_common = (contents: string, aliases: Array<[string, keyof T]>): keyof T | undefined => {
             let most_freq_match = undefined;
-            for (const [alias, value] of aliases) {
-                const match = {
-                    alias,
-                    value,
-                    count: count_occurrences(contents, alias),
-                    matches_with_count: 1,
-                };
+            const matches = aliases.map(([alias, value]) => {
+                const count = count_occurrences(contents, alias);
+                const firstIndex = contents.indexOf(alias);
+                return { alias, value, count, firstIndex };
+            }).filter(match => match.count > 0);
 
-                if (most_freq_match === undefined || match.count > most_freq_match.count) {
-                    most_freq_match = match;
-                } else if (match.count === most_freq_match.count) {
-                    most_freq_match.matches_with_count++;
-                }
+            // Sort by count descending, then by firstIndex ascending
+            matches.sort((a, b) => b.count - a.count || a.firstIndex - b.firstIndex);
+
+            // If there are multiple matches with the same count, don't return anything
+            if (matches.length > 1 && matches[0].count === matches[1].count) {
+                return undefined;
             }
-            if (most_freq_match !== undefined) {
-                if (most_freq_match.matches_with_count === 1) {
-                    return most_freq_match.value;
-                }
-            }
+
+            return matches.length > 0 ? matches[0].value : undefined;
         };
 
         const most_common = find_most_common(parsed.toLowerCase(), [...this.aliases()]);
@@ -174,7 +170,7 @@ class EnumDeserializer<T extends Record<string, string>> extends BaseDeserialize
             return Result.from_value(most_common2);
         }
 
-        diagnostics.pushUnknownError(`Unknown enum value: ${parsed}`);
+        diagnostics.pushUnknownError(`Unknown enum value: ${parsed}. Expected one of ${[...this.values.values(), ...this.value_names_by_alias.keys()].map(a => `"${a.toString()}"`).join(', ')}`);
         diagnostics.popScope(false);
         return Result.failed();
     }

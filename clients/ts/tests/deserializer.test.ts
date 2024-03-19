@@ -116,7 +116,7 @@ describe("Enum Deserializer", () => {
 
     test("test_enum_alias_from_string", () => {
         const deserializer = new Deserializer<Category>(schema, { $ref: "#/definitions/Category" });
-        deserializer.overload('Category', {'uno': Category.ONE, 'deux': Category.TWO});
+        deserializer.overload('Category', { 'uno': Category.ONE, 'deux': Category.TWO });
 
         expect(deserializer.coerce("uno")).toBe(Category.ONE);
         expect(deserializer.coerce("uno is the output")).toBe(Category.ONE);
@@ -126,7 +126,7 @@ describe("Enum Deserializer", () => {
 
     test("test_enum_alias_from_chain_of_thought", () => {
         const deserializer = new Deserializer<Category>(schema, { $ref: "#/definitions/Category" });
-        deserializer.overload('Category', {'uno': Category.ONE, 'deux': Category.TWO});
+        deserializer.overload('Category', { 'uno': Category.ONE, 'deux': Category.TWO });
 
         expect(deserializer.coerce("chain of thought\n\nsome more reasoning\n\nuno\n")).toBe(Category.ONE);
         expect(deserializer.coerce("chain of thought\n\nsome more reasoning\n\nAnswer: deux\n")).toBe(Category.TWO);
@@ -135,7 +135,7 @@ describe("Enum Deserializer", () => {
     // TODO: handle snake case aliases
     test("test_enum_alias_with_punctuation_from_string", () => {
         const deserializer = new Deserializer<Category>(schema, { $ref: "#/definitions/Category" });
-        deserializer.overload('Category', {'a single item': Category.ONE, 'the:category.is/pair': Category.TWO});
+        deserializer.overload('Category', { 'a single item': Category.ONE, 'the:category.is/pair': Category.TWO });
 
         // people put spaces, dots, slashes, hyphens, underscores in their aliases - we should handle them all
         expect(deserializer.coerce("a single item is the answer")).toBe(Category.ONE);
@@ -146,7 +146,7 @@ describe("Enum Deserializer", () => {
 
     test("test_enum_alias_based_on_max_count", () => {
         const deserializer = new Deserializer<Category>(schema, { $ref: "#/definitions/Category" });
-        deserializer.overload('Category', {'uno': Category.ONE, 'deux': Category.TWO});
+        deserializer.overload('Category', { 'uno': Category.ONE, 'deux': Category.TWO });
 
         expect(() => deserializer.coerce('sorry dave, not sure if the answer is uno or deux')).toThrow();
         expect(deserializer.coerce('the answer is uno: it is clearly uno, definitely not deux')).toBe(Category.ONE);
@@ -157,7 +157,7 @@ describe("Enum Deserializer", () => {
             type: 'array',
             items: { $ref: "#/definitions/Category" }
         });
-        deserializer.overload('Category', {'uno': Category.ONE, 'deux': Category.TWO});
+        deserializer.overload('Category', { 'uno': Category.ONE, 'deux': Category.TWO });
 
         expect(deserializer.coerce('["uno", "deux"]')).toEqual(expect.arrayContaining([Category.ONE, Category.TWO]));
     });
