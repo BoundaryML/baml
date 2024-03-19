@@ -63,6 +63,7 @@ impl GeneratorLanguage {
         }
     }
 
+    /// This is redundant with version_command::get_client_version
     fn client_version(&self, command: &str) -> Option<String> {
         let cmd = format!("{} {}", command, self.package_name());
 
@@ -86,6 +87,7 @@ impl GeneratorLanguage {
             .flatten()
     }
 
+    /// This is redundant with version_command::extract_client_version
     pub fn parse_version(&self, output: &str) -> Result<String> {
         match self {
             Self::Python => {
