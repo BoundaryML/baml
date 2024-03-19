@@ -1,6 +1,6 @@
 mod generate;
 mod json_schema;
-mod repr;
+pub mod repr;
 mod walker;
 
 pub use generate::to_ir;

@@ -15,9 +15,10 @@ enum TestEnum {
   E @description(
     User is excited
   )
+  F @alias("k5") // only alias
   @@alias("Category")
 }
-
+ 
 function FnTestAliasedEnumOutput {
   input string
   output TestEnum

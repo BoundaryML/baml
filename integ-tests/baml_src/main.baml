@@ -24,4 +24,4 @@ generator lang_typescript {
   // dependencies to your language environment
   install_command "npm install"
   package_version_command "npm list"
-} 
+}  

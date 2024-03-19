@@ -101,6 +101,9 @@ const schema: JSONSchema7 = {
         },
         {
           "const": "E"
+        },
+        {
+          "const": "F"
         }
       ]
     },
@@ -867,7 +870,8 @@ registerEnumDeserializer(schema.definitions.TestEnum, {
   "k11: User is sad": "C",
   k44: "D",
   "k44: User is confused": "D",
-  "User is excited": "E"
+  "User is excited": "E",
+  k5: "F"
 });
 
 registerObjectDeserializer(schema.definitions.Blah, {

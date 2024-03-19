@@ -187,7 +187,7 @@ pub struct Node<T> {
 }
 
 /// Implement this for every node in the IR AST, where T is the type of IR node
-pub trait WithRepr<T> {
+pub(crate) trait WithRepr<T> {
     /// Represents block or field attributes - @@ for enums and classes, @ for enum values and class fields
     fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
         NodeAttributes::default()

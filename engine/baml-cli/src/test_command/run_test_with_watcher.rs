@@ -137,7 +137,6 @@ async fn run_and_update_state(
     let stdout_file = File::create(&stdout_file_path)?;
     let stderr_file = File::create(&stderr_file_path)?;
 
-    println!("{}", format!("Running tests using: {:?}", cmd));
     let mut child = cmd
         .envs(runner.env_vars().into_iter())
         .env("BOUNDARY_IPC_PORT", port.to_string())

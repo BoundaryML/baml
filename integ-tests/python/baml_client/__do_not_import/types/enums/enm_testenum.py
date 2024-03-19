@@ -13,10 +13,15 @@ from enum import Enum
 
 @register_deserializer({
   "k1": "A",
+  "k1: User is angry": "A",
   "k22": "B",
+  "k22: User is happy": "B",
   "k11": "C",
+  "k11: User is sad": "C",
   "k44": "D",
-  
+  "k44: User is confused": "D",
+  "User is excited": "E",
+  "k5": "F"
 })
 class TestEnum(str, Enum):
     A = "A"
@@ -24,3 +29,4 @@ class TestEnum(str, Enum):
     C = "C"
     D = "D"
     E = "E"
+    F = "F"

@@ -1,6 +1,5 @@
 @register_deserializer({{{BLOCK_OPEN}}}
-{{#each values}}  {{#if alias}}"{{alias}}": "{{name}}",
-{{/if}}{{/each}}
+{{{alias_pairs}}}
 {{{BLOCK_CLOSE}}})
 class {{name}}(str, Enum):
     {{#if values}}

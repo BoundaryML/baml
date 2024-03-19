@@ -12,7 +12,7 @@ from enum import Enum
 
 
 @register_deserializer({
-    
+
 })
 class NamedArgsSingleEnumList(str, Enum):
     ONE = "ONE"

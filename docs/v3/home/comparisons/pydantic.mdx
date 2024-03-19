@@ -322,12 +322,12 @@ What gets hairy is if you want to change your types.
 
 
 ### Alternatives
-There are libraries like [instructor](https://github.com/jxnl/instructor/tree/main) do provide a great amount of boilerplate (and we are also inspired by them) but you're still:
+There are libraries like [instructor](https://github.com/jxnl/instructor/tree/main) do provide a great amount of boilerplate but you're still:
 
-1. Stuck with OpenAI. You may not be able to switch to your own fine-tuned model easily.
 1. Using prompts that you cannot control. E.g. [a commit may change your results underneath you](https://github.com/jxnl/instructor/commit/1b6d8253c0f7dfdaa6cb1dbdbd37684d192ddecf). 
 1. Using more tokens than you may need to to declare schemas (higher costs and latencies)
 1. **There are no included testing capabilities.**. Developers have to copy-paste JSON blobs everywhere, potentially between their IDEs and other websites. Existing LLM Playgrounds were not made with structured data in mind.
+1. Lack of observability. No automatic tracing of requests.
 
 ## Enter BAML
 The Boundary toolkit helps you iterate seamlessly compared to Pydantic.

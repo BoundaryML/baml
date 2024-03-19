@@ -154,7 +154,7 @@ pub(crate) fn main() {
         Commands::UpdateClient(args) => update_client::update_client(&args.baml_dir),
         Commands::Init(args) => init_command::init_command(args.no_prompt)
             .and_then(|_| builder::build(&None))
-            // Note: the update-client will run on the curr dir but perhaps we want to pass in the baml_src location that baml init got from the user.
+            // Note: double check this runs in the right dir
             .and_then(|_| update_client::update_client(&None))
             .map(|_| {
                 println!(

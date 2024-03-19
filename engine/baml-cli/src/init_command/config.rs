@@ -17,13 +17,13 @@ use super::{
 use crate::shell::build_shell_command;
 
 pub(super) struct ProjectConfig {
-    project_root: PathBuf,
-    generators: Vec<Generator>,
-    clients: Vec<ClientConfig<String>>,
+    pub project_root: PathBuf,
+    pub generators: Vec<Generator>,
+    pub clients: Vec<ClientConfig<String>>,
     #[allow(dead_code)]
     secrets_manager: EnvManager,
     #[allow(dead_code)]
-    languages: Vec<LanguageConfig>,
+    pub languages: Vec<LanguageConfig>,
 }
 
 impl WithLoader<ProjectConfig> for ProjectConfig {
