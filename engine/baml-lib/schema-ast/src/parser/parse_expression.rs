@@ -109,7 +109,7 @@ fn parse_dict_key(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression 
     assert_correct_parser!(token, Rule::dict_key);
 
     let span = diagnostics.span(token.as_span());
-    for current in token.into_inner() {
+    if let Some(current) = token.into_inner().next() {
         return match current.as_rule() {
             Rule::identifier => Expression::Identifier(parse_identifier(current, diagnostics)),
             Rule::quoted_string_literal => Expression::StringValue(

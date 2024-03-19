@@ -221,7 +221,7 @@ where
       }
     };
 
-    match schema.to_final() {
+    match schema.get_final_schema() {
       Ok(log_schema) => {
         for schema in log_schema {
           // Submit to a background thread that will send the log schema to the server

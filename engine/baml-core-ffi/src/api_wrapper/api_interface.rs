@@ -20,7 +20,7 @@ pub(crate) trait BoundaryTestAPI {
     &self,
     payload: T,
   ) -> Result<()>;
-  async fn update_test_case_batch(&self, payload: &Vec<UpdateTestCaseRequest>) -> Result<()>;
+  async fn update_test_case_batch(&self, payload: &[UpdateTestCaseRequest]) -> Result<()>;
   async fn update_test_case(
     &self,
     test_suite: &str,

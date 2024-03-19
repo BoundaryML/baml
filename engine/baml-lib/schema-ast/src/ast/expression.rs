@@ -318,10 +318,7 @@ impl Expression {
     }
 
     pub fn is_env_expression(&self) -> bool {
-        match &self {
-            Self::Identifier(Identifier::ENV(..)) => true,
-            _ => false,
-        }
+        matches!(self, Self::Identifier(Identifier::ENV(..)))
     }
 
     /// Creates a friendly readable representation for a value's type.

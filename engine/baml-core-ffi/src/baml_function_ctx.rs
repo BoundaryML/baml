@@ -88,6 +88,7 @@ impl FunctionCtx {
     }
   }
 
+  #[allow(clippy::type_complexity)]
   fn trace_parameters(
     &self,
     args: serde_json::Value,

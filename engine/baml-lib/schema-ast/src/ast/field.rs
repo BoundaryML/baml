@@ -169,11 +169,7 @@ impl FieldType {
     pub fn is_nullable(&self) -> bool {
         match self {
             FieldType::Identifier(arity, t) => {
-                arity.is_optional()
-                    || match t {
-                        Identifier::Primitive(TypeValue::Null, _) => true,
-                        _ => false,
-                    }
+                arity.is_optional() || matches!(t, Identifier::Primitive(TypeValue::Null, _))
             }
             FieldType::Union(arity, f, ..) => {
                 arity.is_optional() || f.iter().any(|t| t.is_nullable())

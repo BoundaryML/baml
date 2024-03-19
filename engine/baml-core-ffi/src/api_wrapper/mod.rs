@@ -98,6 +98,7 @@ impl APIConfig {
     }
   }
 
+  #[allow(clippy::too_many_arguments)]
   pub(crate) fn copy_from(
     &self,
     base_url: Option<&str>,
@@ -268,20 +269,17 @@ impl BoundaryAPI for APIWrapper {
       APIConfig::Web(config) => config.create_session().await,
     };
 
-    match &result {
-      Ok(response) => {
-        if let Some(dashboard_url) = &response.dashboard_url {
-          let _ = self
-            .ipc
-            .send(ipc_interface::IPCMessage::TestRunMeta(
-              &ipc_interface::TestRunMeta {
-                dashboard_url: dashboard_url.clone(),
-              },
-            ))
-            .await;
-        }
+    if let Ok(response) = &result {
+      if let Some(dashboard_url) = &response.dashboard_url {
+        let _ = self
+          .ipc
+          .send(ipc_interface::IPCMessage::TestRunMeta(
+            &ipc_interface::TestRunMeta {
+              dashboard_url: dashboard_url.clone(),
+            },
+          ))
+          .await;
       }
-      _ => {}
     }
 
     result
@@ -325,7 +323,7 @@ impl BoundaryTestAPI for APIWrapper {
 
   async fn update_test_case_batch(
     &self,
-    payload: &Vec<api_interface::UpdateTestCaseRequest>,
+    payload: &[api_interface::UpdateTestCaseRequest],
   ) -> Result<()> {
     let res = payload
       .iter()

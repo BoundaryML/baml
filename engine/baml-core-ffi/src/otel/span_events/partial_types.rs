@@ -44,7 +44,8 @@ where
 }
 
 impl PartialLogSchema {
-  pub(super) fn to_final(&mut self) -> Result<Vec<LogSchema>> {
+  #[deny(clippy::wrong_self_convention)]
+  pub(super) fn get_final_schema(&mut self) -> Result<Vec<LogSchema>> {
     let project_id = self.project_id.clone();
 
     match &self.event_type {
@@ -52,7 +53,7 @@ impl PartialLogSchema {
         match self.metadata.len() {
           0 => Err(anyhow::anyhow!("No metadata found for llm event")),
           1 => {
-            let (metadata, error) = self.metadata.pop().unwrap().to_final();
+            let (metadata, error) = self.metadata.pop().unwrap().get_final_schema();
             Ok(vec![LogSchema {
               project_id,
               event_type: EventType::FuncLlm,
@@ -74,7 +75,7 @@ impl PartialLogSchema {
             let last_chain_item = last_chain_item.unwrap();
             // Take ownership of each element in `self.metadata`
             while let Some(partial) = self.metadata.pop() {
-              let (metadata, error) = partial.to_final();
+              let (metadata, error) = partial.get_final_schema();
               let mut schema = LogSchema {
                 project_id: project_id.clone(),
                 event_type: EventType::FuncLlm,
@@ -109,10 +110,10 @@ impl PartialLogSchema {
             }
 
             // set the parent and event ids for the first event in the list from self
-            event_list.first_mut().map(|v| {
+            if let Some(v) = event_list.first_mut() {
               v.parent_event_id = self.parent_event_id.clone();
               v.event_id = self.event_id.clone();
-            });
+            }
 
             Ok(event_list)
           }
@@ -139,7 +140,7 @@ impl PartialLogSchema {
 }
 
 impl PartialMetadataType {
-  fn to_final(self) -> (Option<LLMEventSchema>, Option<Error>) {
+  fn get_final_schema(self) -> (Option<LLMEventSchema>, Option<Error>) {
     if self.provider.is_none() {
       return (None, self.error);
     }

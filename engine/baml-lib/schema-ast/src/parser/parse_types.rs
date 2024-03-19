@@ -67,7 +67,7 @@ fn parse_base_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Fiel
         Rule::base_type_without_array
     );
 
-    for current in pair.into_inner() {
+    if let Some(current) = pair.into_inner().next() {
         return match current.as_rule() {
             Rule::identifier => Some(FieldType::Identifier(
                 FieldArity::Required,
@@ -134,7 +134,7 @@ fn parse_dict(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType
 
 fn parse_group(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
     assert_correct_parser!(pair, Rule::group);
-    for current in pair.into_inner() {
+    if let Some(current) = pair.into_inner().next() {
         return parse_field_type(current, diagnostics);
     }
 
