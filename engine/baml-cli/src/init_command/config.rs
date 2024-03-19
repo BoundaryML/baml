@@ -55,24 +55,25 @@ impl WithLoader<ProjectConfig> for ProjectConfig {
         let generators = languages
             .iter()
             .map(|l| -> Result<Generator, CliError> {
-                writer.write_fmt(format_args!("For {}...\n", l.name().green()))?;
+                // Skip this and go with defaults since we seem to be getting it right
+                // writer.write_fmt(format_args!("Setting up {}...\n", l.name().green()))?;
 
                 let install_command = get_value_or_default(
                     "What command do you use to install dependencies?",
                     l.install_command(),
-                    no_prompt,
+                    true, // hardcoded for now.
                 )?;
 
                 let test_command = get_value_or_default(
                     "What command do you use to run tests?",
                     l.test_command(secrets_manager.command_prefix()),
-                    no_prompt,
+                    true,
                 )?;
 
                 let package_version_command = get_value_or_default(
                     "What command do you use to check package versions?",
                     l.package_version_command(),
-                    no_prompt,
+                    true,
                 )?;
 
                 // Convert l.project_root() as relative to project_root
