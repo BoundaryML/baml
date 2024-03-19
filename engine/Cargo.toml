@@ -18,7 +18,7 @@ indoc = "2.0.1"
 # 
 [workspace.package]
 version = "0.14.0-canary.0"
-authors = ["Boundary <cntac@trygloo.com>"]
+authors = ["Boundary <contact@boundaryml.com>"]
 
 description = "BAML Toolchain"
 license-file = "LICENSE"

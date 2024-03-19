@@ -4,10 +4,14 @@ on:
   push:
     branches:
       - canary
-      - log-jest
     tags-ignore:
       - "**"
   pull_request:
+    paths:
+      - "engine/baml-core-ffi/**"
+      - ".github/workflows/baml-core-ffi-typescript-lint.yml"
+    branches:
+      - canary
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true

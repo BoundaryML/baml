@@ -9,7 +9,6 @@ permissions:
 "on":
   push:
     branches:
-      - log-jest
       - canary
     tags-ignore:
       - "**"
@@ -17,7 +16,12 @@ permissions:
       - engine/**
       - .github/workflows/baml-core-ffi-typescript-ci.yml
       - .github/workflows/baml-core-ffi-typescript-lint.yml
-  pull_request: null
+  pull_request:
+    paths:
+      - "engine/baml-core-ffi/**"
+      - ".github/workflows/baml-core-ffi-typescript-lint.yml"
+    branches:
+      - canary
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
