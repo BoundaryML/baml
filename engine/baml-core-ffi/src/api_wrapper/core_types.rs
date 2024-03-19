@@ -300,10 +300,7 @@ impl LogSchema {
               .unwrap_or_else(|_| format!("Failed to serialize output: {:?}", v))
           })
           .ok();
-          match output {
-            Some(output) => Some((output, r#type)),
-            None => None,
-          }
+          output.map(|output| (output, r#type))
         } else {
           None
         };
