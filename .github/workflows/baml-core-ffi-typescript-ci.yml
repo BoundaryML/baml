@@ -89,17 +89,17 @@ jobs:
           #   build: |
           #     yarn build --target armv7-linux-androideabi
           #     ${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip *.node
-          - host: ubuntu-latest
-            target: aarch64-unknown-linux-musl
-            docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-alpine
-            build: |-
-              set -e &&
-              rustup target add aarch64-unknown-linux-musl &&
-              yarn build --target aarch64-unknown-linux-musl &&
-              /aarch64-linux-musl-cross/bin/aarch64-linux-musl-strip *.node
-          - host: windows-latest
-            target: aarch64-pc-windows-msvc
-            build: yarn build --target aarch64-pc-windows-msvc
+          # - host: ubuntu-latest
+          #   target: aarch64-unknown-linux-musl
+          #   docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-alpine
+          #   build: |-
+          #     set -e &&
+          #     rustup target add aarch64-unknown-linux-musl &&
+          #     yarn build --target aarch64-unknown-linux-musl &&
+          #     /aarch64-linux-musl-cross/bin/aarch64-linux-musl-strip *.node
+          # - host: windows-latest
+          #   target: aarch64-pc-windows-msvc
+          #   build: yarn build --target aarch64-pc-windows-msvc
     name: stable - ${{ matrix.settings.target }} - node@18
     runs-on: ${{ matrix.settings.host }}
     steps:
