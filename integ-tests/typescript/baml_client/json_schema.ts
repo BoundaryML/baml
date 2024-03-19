@@ -850,33 +850,65 @@ registerEnumDeserializer(schema.definitions.TestEnum, {
   "k44: User is confused": "D"
 });
 
-registerObjectDeserializer(schema.definitions.Blah, { });
+registerObjectDeserializer(schema.definitions.Blah, {
 
-registerObjectDeserializer(schema.definitions.ClassOptionalFields, { });
+});
 
-registerObjectDeserializer(schema.definitions.ClassOptionalOutput, { });
+registerObjectDeserializer(schema.definitions.ClassOptionalFields, {
 
-registerObjectDeserializer(schema.definitions.ClassOptionalOutput2, { });
+});
 
-registerObjectDeserializer(schema.definitions.ModifiedOutput, { });
+registerObjectDeserializer(schema.definitions.ClassOptionalOutput, {
 
-registerObjectDeserializer(schema.definitions.NamedArgsSingleClass, { });
+});
 
-registerObjectDeserializer(schema.definitions.OptionalClass, { });
+registerObjectDeserializer(schema.definitions.ClassOptionalOutput2, {
 
-registerObjectDeserializer(schema.definitions.OptionalTest_Prop1, { });
+});
 
-registerObjectDeserializer(schema.definitions.OptionalTest_ReturnType, { });
+registerObjectDeserializer(schema.definitions.ModifiedOutput, {
+  "REASONING": "reasoning",
+  "ANSWER": "answer"
+});
 
-registerObjectDeserializer(schema.definitions.OverrideClass, { });
+registerObjectDeserializer(schema.definitions.NamedArgsSingleClass, {
 
-registerObjectDeserializer(schema.definitions.TestClassAlias, { });
+});
 
-registerObjectDeserializer(schema.definitions.TestClassWithEnum, { });
+registerObjectDeserializer(schema.definitions.OptionalClass, {
 
-registerObjectDeserializer(schema.definitions.TestOutputClass, { });
+});
 
-registerObjectDeserializer(schema.definitions.UnionTest_ReturnType, { });
+registerObjectDeserializer(schema.definitions.OptionalTest_Prop1, {
+
+});
+
+registerObjectDeserializer(schema.definitions.OptionalTest_ReturnType, {
+
+});
+
+registerObjectDeserializer(schema.definitions.OverrideClass, {
+
+});
+
+registerObjectDeserializer(schema.definitions.TestClassAlias, {
+  "key-dash": "key",
+  "key21": "key2",
+  "key with space": "key3",
+  "key.with.punctuation/123": "key5"
+});
+
+registerObjectDeserializer(schema.definitions.TestClassWithEnum, {
+
+});
+
+registerObjectDeserializer(schema.definitions.TestOutputClass, {
+
+});
+
+registerObjectDeserializer(schema.definitions.UnionTest_ReturnType, {
+
+});
 
 
 export { schema }

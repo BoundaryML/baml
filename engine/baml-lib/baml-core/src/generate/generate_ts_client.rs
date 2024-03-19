@@ -108,8 +108,43 @@ pub(crate) fn generate_ts(ir: &IntermediateRepr, gen: &Generator) -> std::io::Re
     });
     ir.walk_classes().for_each(|c| {
         file.append(format!(
-            "registerObjectDeserializer(schema.definitions.{}, {{ }});",
+            "registerObjectDeserializer(schema.definitions.{}, {{\n{}\n}});",
             c.elem().name,
+            c.elem()
+                .static_fields
+                .iter()
+                .flat_map(|v| {
+                    let Some(alias) = v.attributes.get("alias") else {
+                        return vec![];
+                    };
+
+                    let Some(description) = v.attributes.get("description") else {
+                        return vec![(alias.to_ts(), &v.elem.name)];
+                    };
+
+                    if let Expression::String(alias_str) = alias {
+                        if let Expression::String(description_str) = description {
+                            return vec![
+                                (alias.to_ts(), &v.elem.name),
+                                (
+                                    format!("\"{}: {}\"", alias_str, description_str),
+                                    &v.elem.name,
+                                ),
+                            ];
+                        }
+                    }
+
+                    vec![
+                        (alias.to_ts(), &v.elem.name),
+                        (
+                            format!("[`${{{}}}: ${{{}}}`]", alias.to_ts(), description.to_ts()),
+                            &v.elem.name,
+                        ),
+                    ]
+                })
+                .map(|(alias, value_name)| format!("  {}: \"{}\"", alias, value_name))
+                .collect::<Vec<_>>()
+                .join(",\n")
         ))
     });
     file.add_export("schema");
