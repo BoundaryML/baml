@@ -1,3 +1,4 @@
+from __future__ import annotations
 import typing
 from typing import Callable, Generator, List, Tuple
 
@@ -79,7 +80,7 @@ class EnumDeserializer(BaseDeserializer[T]):
             )
             return Result.failed()
 
-        def search(contents: str, aliases: Callable[[], List[Tuple[str, T]]]):
+        def search(contents: str, aliases: List[Tuple[str, T]]) -> T | None:
 
             for alias, value in aliases:
                 if alias == contents:
@@ -90,6 +91,8 @@ class EnumDeserializer(BaseDeserializer[T]):
                     return value
                 if contents.endswith(f"\n\n{alias}"):
                     return value
+            
+            return None
         
         value = search(parsed.strip().lower(), list(self.aliases()))
         if value:
@@ -100,7 +103,7 @@ class EnumDeserializer(BaseDeserializer[T]):
             return Result.from_value(value2)
         
 
-        def find_most_common(contents: str, aliases: Callable[[], List[Tuple[str, T]]]):
+        def find_most_common(contents: str, aliases: List[Tuple[str, T]]) -> T | None:
             counts = [
                 (
                     len(re.findall(rf'\b{re.escape(alias)}\b', contents)),
@@ -111,9 +114,7 @@ class EnumDeserializer(BaseDeserializer[T]):
                 if re.search(rf'\b{re.escape(alias)}\b', contents)
             ]
             counts.sort(reverse=True)
-            if len(counts) == 1:
-                return counts[0][2]
-            if len(counts) > 1 and counts[0][0] > counts[1][0]:
+            if len(counts) > 0:
                 return counts[0][2]
             return None
 
