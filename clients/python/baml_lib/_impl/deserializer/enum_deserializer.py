@@ -103,7 +103,7 @@ class EnumDeserializer(BaseDeserializer[T]):
             return Result.from_value(value2)
 
         def find_most_common(contents: str, aliases: List[Tuple[str, T]]) -> T | None:
-            counts =  []
+            counts = []
             for alias, value in aliases:
                 matches = list(re.finditer(rf"\b{re.escape(alias)}\b", contents))
                 if matches:
@@ -111,7 +111,7 @@ class EnumDeserializer(BaseDeserializer[T]):
                     count = len(matches)
                     first_match_index = matches[0].start()
                     counts.append((count, first_match_index, value))
-            
+
             # Sort by frequency (descending) and then by the first match index (ascending)
             counts.sort(key=lambda x: (-x[0], x[1]))
             if counts:
