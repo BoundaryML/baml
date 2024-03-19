@@ -664,11 +664,12 @@ fn process_field(
     function_name: &str,
     impl_name: &str,
 ) -> Vec<AliasedKey> {
+    // This feeds into deserializer.overload; the registerEnumDeserializer counterpart is in generate_ts_client.rs
     match overrides.get(&((*function_name).to_string(), (*impl_name).to_string())) {
         Some(overrides) => {
             if let Some(Expression::String(alias)) = overrides.get("alias") {
                 if let Some(Expression::String(description)) = overrides.get("description") {
-                    // "alias" and "alias: description" and "description"
+                    // "alias" and "alias: description"
                     vec![
                         AliasedKey {
                             key: original_name.to_string(),
@@ -677,10 +678,6 @@ fn process_field(
                         AliasedKey {
                             key: original_name.to_string(),
                             alias: Expression::String(format!("{}: {}", alias, description)),
-                        },
-                        AliasedKey {
-                            key: original_name.to_string(),
-                            alias: Expression::String(description.clone()),
                         },
                     ]
                 } else {

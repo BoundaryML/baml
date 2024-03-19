@@ -840,75 +840,44 @@ registerEnumDeserializer(schema.definitions.OverrideEnum, {
 });
 
 registerEnumDeserializer(schema.definitions.TestEnum, {
-  "k1": "A",
+  k1: "A",
   "k1: User is angry": "A",
-  "k22": "B",
+  k22: "B",
   "k22: User is happy": "B",
-  "k11": "C",
+  k11: "C",
   "k11: User is sad": "C",
-  "k44": "D",
-  "k44: User is confused": "D"
+  k44: "D",
+  "k44: User is confused": "D",
+  "User is excited": "E"
 });
 
-registerObjectDeserializer(schema.definitions.Blah, {
+registerObjectDeserializer(schema.definitions.Blah, { });
 
-});
+registerObjectDeserializer(schema.definitions.ClassOptionalFields, { });
 
-registerObjectDeserializer(schema.definitions.ClassOptionalFields, {
+registerObjectDeserializer(schema.definitions.ClassOptionalOutput, { });
 
-});
+registerObjectDeserializer(schema.definitions.ClassOptionalOutput2, { });
 
-registerObjectDeserializer(schema.definitions.ClassOptionalOutput, {
+registerObjectDeserializer(schema.definitions.ModifiedOutput, { });
 
-});
+registerObjectDeserializer(schema.definitions.NamedArgsSingleClass, { });
 
-registerObjectDeserializer(schema.definitions.ClassOptionalOutput2, {
+registerObjectDeserializer(schema.definitions.OptionalClass, { });
 
-});
+registerObjectDeserializer(schema.definitions.OptionalTest_Prop1, { });
 
-registerObjectDeserializer(schema.definitions.ModifiedOutput, {
-  "REASONING": "reasoning",
-  "ANSWER": "answer"
-});
+registerObjectDeserializer(schema.definitions.OptionalTest_ReturnType, { });
 
-registerObjectDeserializer(schema.definitions.NamedArgsSingleClass, {
+registerObjectDeserializer(schema.definitions.OverrideClass, { });
 
-});
+registerObjectDeserializer(schema.definitions.TestClassAlias, { });
 
-registerObjectDeserializer(schema.definitions.OptionalClass, {
+registerObjectDeserializer(schema.definitions.TestClassWithEnum, { });
 
-});
+registerObjectDeserializer(schema.definitions.TestOutputClass, { });
 
-registerObjectDeserializer(schema.definitions.OptionalTest_Prop1, {
-
-});
-
-registerObjectDeserializer(schema.definitions.OptionalTest_ReturnType, {
-
-});
-
-registerObjectDeserializer(schema.definitions.OverrideClass, {
-
-});
-
-registerObjectDeserializer(schema.definitions.TestClassAlias, {
-  "key-dash": "key",
-  "key21": "key2",
-  "key with space": "key3",
-  "key.with.punctuation/123": "key5"
-});
-
-registerObjectDeserializer(schema.definitions.TestClassWithEnum, {
-
-});
-
-registerObjectDeserializer(schema.definitions.TestOutputClass, {
-
-});
-
-registerObjectDeserializer(schema.definitions.UnionTest_ReturnType, {
-
-});
+registerObjectDeserializer(schema.definitions.UnionTest_ReturnType, { });
 
 
 export { schema }
