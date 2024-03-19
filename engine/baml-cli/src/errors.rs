@@ -107,3 +107,5 @@ impl fmt::Display for CliError {
         }
     }
 }
+
+impl std::error::Error for CliError {}
