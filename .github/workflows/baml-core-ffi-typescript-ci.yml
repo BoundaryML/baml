@@ -163,11 +163,11 @@ jobs:
           options: "--user 0:0 -v ${{ github.workspace }}/engine/.cargo-cache/git/db:/usr/local/cargo/git/db -v ${{ github.workspace }}/engine/.cargo/registry/cache:/usr/local/cargo/registry/cache -v ${{ github.workspace }}/engine/.cargo/registry/index:/usr/local/cargo/registry/index -v ${{ github.workspace }}/engine:/build -w /build/baml-core-ffi"
           run: ${{ matrix.settings.build }}
       - name: Build windows
-        if: !matrix.settings.docker && matrix.settings.target == 'x86_64-pc-windows-msvc'
+        if: ${{!matrix.settings.docker && matrix.settings.target == 'x86_64-pc-windows-msvc'}}
         run: ${{ matrix.settings.build }}
       - name: Build
         run: ${{ matrix.settings.build }} 
-        if: !matrix.settings.docker && matrix.settings.target != 'x86_64-pc-windows-msvc'
+        if: ${{!matrix.settings.docker && matrix.settings.target != 'x86_64-pc-windows-msvc'}}
         shell: bash
       - name: Upload artifact
         uses: actions/upload-artifact@v4
