@@ -94,12 +94,12 @@ fn process_prompt_ast(ctx: &mut Context<'_>, ast: PromptAst) -> (String, Vec<Pro
             (_, Top::WhiteSpace(ws, _)) => {
                 if is_comment {
                     post_white_space = match post_white_space {
-                        Some(existing_ws) => Some(format!("{}{}", existing_ws, ws.to_string())),
+                        Some(existing_ws) => Some(format!("{}{}", existing_ws, ws)),
                         None => Some(ws.to_string()),
                     };
                 } else {
                     prev_white_space = match prev_white_space {
-                        Some(existing_ws) => Some(format!("{}{}", existing_ws, ws.to_string())),
+                        Some(existing_ws) => Some(format!("{}{}", existing_ws, ws)),
                         None => Some(ws.to_string()),
                     };
                 }
@@ -128,7 +128,7 @@ fn process_prompt_ast(ctx: &mut Context<'_>, ast: PromptAst) -> (String, Vec<Pro
                 let replacement = process_code_block(ctx, code_block.to_owned());
                 match replacement {
                     Some(replacement) => {
-                        full_prompt_text.push_str(&format!("{}", replacement.key()));
+                        full_prompt_text.push_str(&replacement.key().to_string());
                         replacers.push(replacement);
                     }
                     None => full_prompt_text.push_str(&format!("{{{}}}", raw_string)),
@@ -171,7 +171,7 @@ fn process_print_enum(ctx: &mut Context<'_>, variable: &Variable) -> bool {
 }
 
 fn process_print_type(_ctx: &mut Context<'_>, _variable: &Variable) -> bool {
-    return true;
+    true
 }
 
 fn process_input(ctx: &mut Context<'_>, variable: &Variable) -> bool {

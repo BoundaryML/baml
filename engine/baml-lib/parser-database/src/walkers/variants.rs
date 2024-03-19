@@ -82,7 +82,7 @@ impl<'db> VariantWalker<'db> {
     }
 
     /// The prompt representation.
-    pub fn to_prompt<'a>(&'a self) -> PromptAst<'a> {
+    pub fn to_prompt(&self) -> PromptAst<'_> {
         self.properties().to_prompt()
     }
 
@@ -108,8 +108,7 @@ impl<'db> VariantWalker<'db> {
         self.walk_function()
             .unwrap()
             .walk_output_args()
-            .map(|f| f.required_enums())
-            .flatten()
+            .flat_map(|f| f.required_enums())
             .collect::<Vec<_>>()
             .into_iter()
     }
@@ -131,8 +130,7 @@ impl<'db> VariantWalker<'db> {
         self.walk_function()
             .unwrap()
             .walk_output_args()
-            .map(|f| f.required_classes())
-            .flatten()
+            .flat_map(|f| f.required_classes())
             .collect::<Vec<_>>()
             .into_iter()
     }

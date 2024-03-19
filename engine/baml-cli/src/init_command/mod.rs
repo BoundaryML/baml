@@ -42,7 +42,7 @@ fn walkthrough(no_prompt: bool) -> Result<ProjectConfig, CliError> {
 }
 
 pub fn init_command(no_prompt: bool) -> Result<(), CliError> {
-    if let Ok(_) = get_baml_src(&None) {
+    if get_baml_src(&None).is_ok() {
         return Err("Already in a baml project".into());
     }
 

@@ -110,9 +110,9 @@ fn print_type(item: &DataType) -> String {
         DataType::Primitive(p) => print_primitive(p),
         DataType::Class(c) => print_class(c),
         DataType::List(l) => print_list(l),
-        DataType::Inline(i) => print_type(&*i.type_meta),
+        DataType::Inline(i) => print_type(&i.type_meta),
         DataType::Union(u) => print_union(u),
-        DataType::Output(o) => print_type(&*o.value),
+        DataType::Output(o) => print_type(&o.value),
         DataType::Enum(e) => print_enum(e),
     }
 }
@@ -177,9 +177,9 @@ fn print_union(item: &UnionType) -> String {
     let member_types: Vec<String> = item
         .members
         .iter()
-        .map(|member| print_type(member))
+        .map(print_type)
         .collect();
-    format!("{}", member_types.join(" | "))
+    member_types.join(" | ").to_string()
 }
 
 fn parse_field_type(json_input: &Value) -> Result<FieldType, serde_json::Error> {

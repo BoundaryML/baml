@@ -98,28 +98,28 @@ pub(crate) fn run(input: &str) -> String {
 
     let response = json!({
         "enums": schema.db.walk_enums().map(|e| json!({
-            "name": StringSpan::new(e.name(), &e.identifier().span()),
+            "name": StringSpan::new(e.name(), e.identifier().span()),
             "jsonSchema": e.json_schema(),
         })).collect::<Vec<_>>(),
         "classes": schema.db.walk_classes().map(|c| json!({
-            "name": StringSpan::new(c.name(), &c.identifier().span()),
+            "name": StringSpan::new(c.name(), c.identifier().span()),
             "jsonSchema": c.json_schema(),
         })).collect::<Vec<_>>(),
         "clients": schema.db.walk_clients().map(|c| json!({
-            "name": StringSpan::new(c.name(), &c.identifier().span()),
+            "name": StringSpan::new(c.name(), c.identifier().span()),
         })).collect::<Vec<_>>(),
         "functions": schema
         .db
         .walk_functions()
         .map(|func| {
             json!({
-                "name": StringSpan::new(func.name(), &func.identifier().span()),
+                "name": StringSpan::new(func.name(), func.identifier().span()),
                 "input": match func.ast_function().input() {
                     ast::FunctionArgs::Named(arg_list) => json!({
                         "arg_type": "named",
                         "values": arg_list.args.iter().map(
                             |(id, arg)| json!({
-                                "name": StringSpan::new(id.name(), &id.span()),
+                                "name": StringSpan::new(id.name(), id.span()),
                                 "type": format!("{}", arg.field_type),
                                 "jsonSchema": arg.field_type.json_schema()
 
@@ -137,7 +137,7 @@ pub(crate) fn run(input: &str) -> String {
                         "arg_type": "named",
                         "values": arg_list.args.iter().map(
                             |(id, arg)| json!({
-                                "name": StringSpan::new(id.name(), &id.span()),
+                                "name": StringSpan::new(id.name(), id.span()),
                                 "type": format!("{}", arg.field_type),
                                 "jsonSchema": arg.field_type.json_schema()
                             })
@@ -153,7 +153,7 @@ pub(crate) fn run(input: &str) -> String {
                     |t| {
                         let props = t.test_case();
                         json!({
-                            "name": StringSpan::new(t.name(), &t.identifier().span()),
+                            "name": StringSpan::new(t.name(), t.identifier().span()),
                             "content": Into::<serde_json::Value>::into(&props.content).to_string(),
                         })
                     }
@@ -168,7 +168,7 @@ pub(crate) fn run(input: &str) -> String {
                         };
                         json!({
                             "type": "llm",
-                            "name": StringSpan::new(i.ast_variant().name(), &i.identifier().span()),
+                            "name": StringSpan::new(i.ast_variant().name(), i.identifier().span()),
                             "prompt_key": {
                                 "start": props.prompt.key_span.start,
                                 "end": props.prompt.key_span.end,
@@ -206,7 +206,7 @@ pub(crate) fn run(input: &str) -> String {
                                     "value": r.1,
                                 })
                             ).collect::<Vec<_>>(),
-                            "client": schema.db.find_client(&props.client.value).map(|c| StringSpan::new(c.name(), &c.identifier().span())).unwrap_or_else(|| StringSpan::new(&props.client.value, &props.client.span)),
+                            "client": schema.db.find_client(&props.client.value).map(|c| StringSpan::new(c.name(), c.identifier().span())).unwrap_or_else(|| StringSpan::new(&props.client.value, &props.client.span)),
 
                         })
                     }
@@ -220,12 +220,12 @@ pub(crate) fn run(input: &str) -> String {
 }
 
 fn print_diagnostics(diagnostics: Vec<MiniError>, response: Option<Value>) -> String {
-    return json!({
+    json!({
         "ok": response.is_some(),
         "diagnostics": diagnostics,
         "response": response,
     })
-    .to_string();
+    .to_string()
 }
 
 #[cfg(test)]

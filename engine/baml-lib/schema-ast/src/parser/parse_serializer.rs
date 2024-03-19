@@ -22,7 +22,7 @@ pub fn parse_serializer(
     for current in pair.into_inner().peekable() {
         match current.as_rule() {
             Rule::BLOCK_OPEN | Rule::BLOCK_CLOSE | Rule::SERIALIZER_KEYWORD => {}
-            Rule::identifier => name = Some(parse_identifier(current.into(), diagnostics)),
+            Rule::identifier => name = Some(parse_identifier(current, diagnostics)),
             Rule::serializer_contents => {
                 let mut pending_value_comment = None;
 
@@ -82,7 +82,7 @@ fn parse_serializer_field(
 
     for current in pair.into_inner() {
         match current.as_rule() {
-            Rule::identifier => name = Some(parse_identifier(current.into(), diagnostics)),
+            Rule::identifier => name = Some(parse_identifier(current, diagnostics)),
             Rule::field_attribute => attributes.push(parse_attribute(current, diagnostics)),
             Rule::trailing_comment => {
                 comment = match (comment, parse_trailing_comment(current)) {

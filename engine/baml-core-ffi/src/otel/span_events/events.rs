@@ -30,9 +30,9 @@ impl From<&str> for SpanEvent {
   }
 }
 
-impl Into<&'static str> for SpanEvent {
-  fn into(self) -> &'static str {
-    match self {
+impl From<SpanEvent> for &'static str {
+  fn from(val: SpanEvent) -> Self {
+    match val {
       SpanEvent::SetTags => "set_tags",
       SpanEvent::InputOutput => "io",
       SpanEvent::LlmPromptTemplate => "llm_prompt_template",
@@ -82,7 +82,7 @@ macro_rules! baml_event_def {
 #[macro_export]
 macro_rules! baml_event {
     ($event_type:ident, $($args:tt),*) => {
-        crate::otel::span_events::$event_type::event(
+        $crate::otel::span_events::$event_type::event(
             $($args),*
         )
     };

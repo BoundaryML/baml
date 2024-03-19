@@ -63,7 +63,7 @@ impl Field {
 
     /// The name of the field
     pub fn name(&self) -> &str {
-        &self.name.name()
+        self.name.name()
     }
 }
 

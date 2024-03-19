@@ -49,7 +49,7 @@ fn parse_string_literal(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expre
         }
         Rule::unquoted_string_literal => {
             let content = contents.as_str().to_string();
-            if content.contains(" ") {
+            if content.contains(' ') {
                 Expression::StringValue(content, span)
             } else {
                 match Identifier::from((content.as_str(), span.clone())) {
@@ -71,7 +71,7 @@ fn parse_dict(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
     for current in token.into_inner() {
         match current.as_rule() {
             Rule::dict_entry => {
-                parse_dict_entry(current, diagnostics).map(|f| entries.push(f));
+                if let Some(f) = parse_dict_entry(current, diagnostics) { entries.push(f) }
             }
             _ => parsing_catch_all(&current, "dictionary key value"),
         }

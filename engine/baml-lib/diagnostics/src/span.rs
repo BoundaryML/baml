@@ -37,7 +37,7 @@ impl Span {
 impl From<(SourceFile, pest::Span<'_>)> for Span {
     fn from((file, s): (SourceFile, pest::Span<'_>)) -> Self {
         Span {
-            file: file,
+            file,
             start: s.start(),
             end: s.end(),
         }

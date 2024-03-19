@@ -37,6 +37,6 @@ where
 {
     /// The name token of the node.
     fn name(&self) -> &str {
-        &self.identifier().name()
+        self.identifier().name()
     }
 }

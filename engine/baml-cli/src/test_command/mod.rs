@@ -2,7 +2,7 @@ use colored::*;
 use std::{path::PathBuf, str::FromStr};
 
 use baml_lib::{
-    internal_baml_core::ast::GeneratorConfig, internal_baml_schema_ast::ast::WithName,
+    internal_baml_schema_ast::ast::WithName,
     Configuration, ValidatedSchema,
 };
 
@@ -32,9 +32,9 @@ impl Filter {
 
         if arg.contains(':') {
             let mut parts = arg.split(':');
-            let function = parts.next().map(|s| s).unwrap_or(Default::default());
-            let r#impl = parts.next().map(|s| s).unwrap_or(Default::default());
-            let test = parts.next().map(|s| s).unwrap_or(Default::default());
+            let function = parts.next().unwrap_or(Default::default());
+            let r#impl = parts.next().unwrap_or(Default::default());
+            let test = parts.next().unwrap_or(Default::default());
 
             if parts.next().is_some() {
                 panic!("Invalid filter: {}", arg);

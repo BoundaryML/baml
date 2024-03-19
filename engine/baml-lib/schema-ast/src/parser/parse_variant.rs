@@ -47,7 +47,7 @@ pub(crate) fn parse_variant_block(
                             ));
                         }
                         Rule::adapter_block => {
-                            parse_adapter(item, None, diagnostics).map(|f| adapters.push(f));
+                            if let Some(f) = parse_adapter(item, None, diagnostics) { adapters.push(f) }
                         }
                         Rule::serializer_block => {
                             serializers.push(parse_serializer(item, None, diagnostics))
@@ -63,7 +63,7 @@ pub(crate) fn parse_variant_block(
                     }
                 }
             }
-            Rule::identifier => name = Some(parse_identifier(current.into(), diagnostics)),
+            Rule::identifier => name = Some(parse_identifier(current, diagnostics)),
             Rule::VARIANT_KEYWORD => {}
             _ => parsing_catch_all(&current, "client"),
         }

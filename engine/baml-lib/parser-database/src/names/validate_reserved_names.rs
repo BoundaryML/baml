@@ -111,16 +111,14 @@ fn validate_name(
                 "Must start with an uppercase letter.",
                 span.clone(),
             ))
+        } else if RESERVED_NAMES.contains(&val.as_str()) {
+            Err(DatamodelError::new_name_error(
+                _type,
+                "This name is reserved.",
+                span.clone(),
+            ))
         } else {
-            if RESERVED_NAMES.contains(&val.as_str()) {
-                Err(DatamodelError::new_name_error(
-                    _type,
-                    "This name is reserved.",
-                    span.clone(),
-                ))
-            } else {
-                Ok(())
-            }
+            Ok(())
         },
     };
 

@@ -51,7 +51,7 @@ pub(crate) fn visit_printer<'db>(
                     f.identifier().span().clone(),
                 ))
             }
-            ("template", Some(val)) => match coerce::string_with_span(&val, ctx.diagnostics) {
+            ("template", Some(val)) => match coerce::string_with_span(val, ctx.diagnostics) {
                 Some((t, span)) => template = Some((dedent(t), span.clone())),
                 None => {}
             },
@@ -118,12 +118,12 @@ pub(crate) fn visit_retry_policy<'db>(
                     f.identifier().span().clone(),
                 ))
             }
-            ("max_retries", Some(val)) => match coerce::integer(&val, ctx.diagnostics) {
+            ("max_retries", Some(val)) => match coerce::integer(val, ctx.diagnostics) {
                 Some(val) => max_reties = Some(val as u32),
                 None => {}
             },
             ("strategy", Some(val)) => {
-                match coerce_map(&val, &coerce::string_with_span, ctx.diagnostics) {
+                match coerce_map(val, &coerce::string_with_span, ctx.diagnostics) {
                     Some(val) => match visit_strategy(f.span(), val, ctx.diagnostics) {
                         Some(val) => strategy = Some(val),
                         None => {}
@@ -280,12 +280,12 @@ pub(crate) fn visit_test_case<'db>(
                     f.identifier().span().clone(),
                 ))
             }
-            ("function", Some(val)) => match coerce::string_with_span(&val, ctx.diagnostics) {
+            ("function", Some(val)) => match coerce::string_with_span(val, ctx.diagnostics) {
                 Some((t, span)) => function_name = Some((t.to_string(), span.clone())),
                 None => {}
             },
             ("input", Some(val)) => test_case = Some(val),
-            ("group", Some(val)) => match coerce::string_with_span(&val, ctx.diagnostics) {
+            ("group", Some(val)) => match coerce::string_with_span(val, ctx.diagnostics) {
                 Some((t, span)) => group = Some((t.to_string(), span.clone())),
                 None => {}
             },

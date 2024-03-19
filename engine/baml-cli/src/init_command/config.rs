@@ -12,7 +12,6 @@ use super::{
     env_setup::EnvManager,
     interact::get_value_or_default,
     traits::{ToBamlSrc, WithLanguage, WithLoader, Writer},
-    ts::PackageManager,
 };
 
 use crate::shell::build_shell_command;
@@ -88,7 +87,7 @@ impl WithLoader<ProjectConfig> for ProjectConfig {
                 };
 
                 let ts_dep_updates = match l {
-                    LanguageConfig::TypeScript(ts_config) => {
+                    LanguageConfig::TypeScript(_ts_config) => {
                         writer.write_fmt(format_args!(
                             "\nAdding Jest dev dependencies required for Typescript...\n",
                         ))?;
@@ -229,8 +228,8 @@ impl ProjectConfig {
             vars
         };
 
-        fn write_files<'a>(
-            dir: &Dir<'a>,
+        fn write_files(
+            dir: &Dir<'_>,
             target_root: &PathBuf,
             template_vars: &HashMap<&str, &str>,
             source_map: &mut HashMap<PathBuf, String>,
@@ -244,7 +243,7 @@ impl ProjectConfig {
                     None
                 }
             }) {
-                source_map.insert(path, replace_vars(&content, &template_vars)?);
+                source_map.insert(path, replace_vars(content, template_vars)?);
             }
             Ok(())
         }
@@ -266,7 +265,7 @@ impl ProjectConfig {
 
             write_files(
                 lang_dir,
-                &l.project_root(),
+                l.project_root(),
                 &template_vars,
                 &mut source_files,
             )?;

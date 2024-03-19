@@ -45,11 +45,7 @@ fn batch_processor(
       Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => (false, false, true),
     };
 
-    let time_trigger = if now.elapsed().as_millis() >= 1000 {
-      true
-    } else {
-      false
-    };
+    let time_trigger = now.elapsed().as_millis() >= 1000;
 
     let should_process_batch = (batch_full || flush || exit || time_trigger) && !batch.is_empty();
 

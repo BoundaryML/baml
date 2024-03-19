@@ -1,4 +1,4 @@
-use internal_baml_diagnostics::SourceFile;
+
 
 use crate::ast::Span;
 use std::fmt;
@@ -191,10 +191,10 @@ impl Into<serde_json::Value> for &Expression {
             Expression::RawStringValue(val) => serde_json::Value::String(val.value().to_string()),
             Expression::Identifier(id) => serde_json::Value::String(id.name().to_string()),
             Expression::Array(vals, _) => {
-                serde_json::Value::Array(vals.into_iter().map(Into::into).collect())
+                serde_json::Value::Array(vals.iter().map(Into::into).collect())
             }
             Expression::Map(vals, _) => serde_json::Value::Object(
-                vals.into_iter()
+                vals.iter()
                     .map(|(k, v)| {
                         let k = Into::<serde_json::Value>::into(k);
                         let k = match k.as_str() {

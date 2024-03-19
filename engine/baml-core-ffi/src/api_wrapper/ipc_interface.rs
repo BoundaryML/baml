@@ -5,7 +5,7 @@ use std::io::{self, Write};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::thread::sleep;
 use std::time::Duration;
-use tracing::info;
+
 
 use super::core_types::{LogSchema, UpdateTestCase};
 

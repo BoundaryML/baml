@@ -49,10 +49,10 @@ pub(super) fn resolve_names(ctx: &mut Context<'_>) {
                     validate_enum_value_name(value, ctx.diagnostics);
                     validate_attribute_identifiers(value, ctx);
 
-                    if !tmp_names.insert(&value.name.name()) {
+                    if !tmp_names.insert(value.name.name()) {
                         ctx.push_error(DatamodelError::new_duplicate_enum_value_error(
-                            &ast_enum.name.name(),
-                            &value.name.name(),
+                            ast_enum.name.name(),
+                            value.name.name(),
                             value.span.clone(),
                         ))
                     }
@@ -75,7 +75,7 @@ pub(super) fn resolve_names(ctx: &mut Context<'_>) {
                         .is_some()
                     {
                         ctx.push_error(DatamodelError::new_duplicate_field_error(
-                            &ast_class.identifier().name(),
+                            ast_class.identifier().name(),
                             field.name(),
                             "class",
                             field.identifier().span().clone(),
@@ -191,9 +191,9 @@ fn duplicate_top_error(existing: &ast::Top, duplicate: &ast::Top) -> DatamodelEr
 }
 
 fn assert_is_not_a_reserved_scalar_type(ident: &ast::Identifier, ctx: &mut Context<'_>) {
-    if StaticType::try_from_str(&ident.name()).is_some() {
+    if StaticType::try_from_str(ident.name()).is_some() {
         ctx.push_error(DatamodelError::new_reserved_scalar_type_error(
-            &ident.name(),
+            ident.name(),
             ident.span().clone(),
         ));
     }
@@ -207,10 +207,10 @@ fn check_for_duplicate_properties<'a>(
 ) {
     tmp_names.clear();
     for arg in props {
-        if !tmp_names.insert(&arg.name.name()) {
+        if !tmp_names.insert(arg.name.name()) {
             ctx.push_error(DatamodelError::new_duplicate_config_key_error(
                 &format!("{} \"{}\"", top.get_type(), top.name()),
-                &arg.name.name(),
+                arg.name.name(),
                 arg.name.span().clone(),
             ));
         }

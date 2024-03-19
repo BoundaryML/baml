@@ -75,23 +75,23 @@ impl DatamodelWarning {
         let prefix = if type_exists {
             format!(
                 "{} `{}` is not used in in the output of function `{}`.",
-                is_enum.then(|| "Enum").unwrap_or("Type"),
+                if is_enum { "Enum" } else { "Type" },
                 type_name,
                 function_name
             )
         } else {
             format!(
                 "{} `{}` does not exist.",
-                is_enum.then(|| "Enum").unwrap_or("Type"),
+                if is_enum { "Enum" } else { "Type" },
                 type_name,
             )
         };
 
         let suggestions = if names.is_empty() {
             if is_enum {
-                format!(" No Enums are used in the output of this function.",)
+                " No Enums are used in the output of this function.".to_string()
             } else {
-                format!(" Did you mean `output`?",)
+                " Did you mean `output`?".to_string()
             }
         } else if close_names.is_empty() {
             // If no names are close enough, suggest nothing or provide a generic message

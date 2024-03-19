@@ -52,7 +52,7 @@ pub(crate) fn parse_config_block(
                     }
                 }
             }
-            Rule::identifier => name = Some(parse_identifier(current.into(), diagnostics)),
+            Rule::identifier => name = Some(parse_identifier(current, diagnostics)),
             Rule::PRINTER_KEYWORD
             | Rule::RETRY_POLICY_KEYWORD
             | Rule::GENERATOR_KEYWORD
@@ -148,7 +148,7 @@ pub(crate) fn parse_key_value(
     for current in pair.into_inner() {
         match current.as_rule() {
             Rule::identifier => {
-                name = Some(parse_identifier(current.into(), diagnostics));
+                name = Some(parse_identifier(current, diagnostics));
             }
             Rule::field_attribute => attributes.push(parse_attribute(current, diagnostics)),
             Rule::expression => value = Some(parse_expression(current, diagnostics)),

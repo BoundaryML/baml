@@ -57,7 +57,7 @@ pub fn flush_tracer() -> Result<()> {
 }
 
 pub fn log_event(name: span_events::SpanEvent, raw_content: serde_json::Value) -> Result<()> {
-  if let Some(_) = event_handler() {
+  if event_handler().is_some() {
     span_events::log_event(name, raw_content)
   } else {
     Ok(())

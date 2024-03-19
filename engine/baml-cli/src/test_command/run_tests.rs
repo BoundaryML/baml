@@ -1,11 +1,11 @@
 use crate::errors::CliError;
-use base64::write;
+
 use serde_json::json;
-use std::fmt::format;
-use std::fs::File;
-use std::io::{self, Read, Write};
+
+
+use std::io::{Write};
 use std::path::PathBuf;
-use tempfile::tempfile;
+
 use tempfile::Builder;
 use uuid::Uuid;
 
@@ -90,7 +90,7 @@ impl TestRunner {
                         test_command.push(format!("--baml-test-config-file={}", baml_temp_path));
                         test_command.push(format!(
                             "--rootDir=\"{}\"",
-                            output_path.to_string_lossy().to_string()
+                            output_path.to_string_lossy()
                         ));
                         test_command.push(format!("--config=\"{}\"", jest_temp_path));
 
@@ -137,7 +137,8 @@ impl TestRunner {
                     test_command.push(format!("{}:{}:{}", function, r#impl, test));
                 });
 
-                let res = match playground_port {
+                
+                match playground_port {
                     Some(port) => run_test_with_forward(
                         self.clone(),
                         output_path.clone(),
@@ -151,8 +152,7 @@ impl TestRunner {
                         state,
                         test_command,
                     ),
-                };
-                res
+                }
             }
         }
     }

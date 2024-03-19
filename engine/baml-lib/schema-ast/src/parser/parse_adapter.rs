@@ -87,7 +87,7 @@ fn parse_field_template_args(
     for item in pair.into_inner() {
         match item.as_rule() {
             Rule::field_type => {
-                parse_field_type(item, diagnostics).map(|f| fields.push(f));
+                if let Some(f) = parse_field_type(item, diagnostics) { fields.push(f) }
             }
             Rule::BLOCK_LEVEL_CATCH_ALL => {
                 diagnostics.push_error(DatamodelError::new_validation_error(

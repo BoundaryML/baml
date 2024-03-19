@@ -161,8 +161,7 @@ impl PartialMetadataType {
           provider: self.provider.unwrap(),
           input: self.input.unwrap(),
           output: self.output,
-        }
-        .into(),
+        },
       ),
       self.error,
     )

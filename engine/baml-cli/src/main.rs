@@ -1,5 +1,5 @@
 use colored::*;
-use log;
+
 use std::io::Write;
 
 mod builder;
@@ -156,18 +156,18 @@ pub(crate) fn main() {
             .and_then(|_| builder::build(&None))
             // Note: the update-client will run on the curr dir but perhaps we want to pass in the baml_src location that baml init got from the user.
             .and_then(|_| update_client::update_client(&None))
-            .and_then(|_| {
+            .map(|_| {
                 println!(
                     "\n{}\n{}\n{}",
                     "BAML Initialized successfully!".green(),
                     "Join the discord! https://discord.gg/yzaTpQ3tdT".cyan(),
                     "Documentation: https://docs.boundaryml.com".cyan()
                 );
-                Ok(())
+                
             }),
         Commands::Test(args) => {
             builder::build(&args.baml_dir).and_then(|(baml_dir, config, schema)| {
-                test_command::run(&args, &baml_dir, &config, schema)
+                test_command::run(args, &baml_dir, &config, schema)
             })
         }
         Commands::Import(args) => {

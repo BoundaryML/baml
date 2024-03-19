@@ -25,7 +25,7 @@ pub(crate) fn process_input(
             validate_variable_path(db, variable, 1, &arg.field_type)?;
             let mut new_path = variable.path.clone();
             new_path[0] = "arg".to_string();
-            return Ok(new_path.join("."));
+            Ok(new_path.join("."))
         }
         ast::FunctionArgs::Named(args) => {
             if variable.path.len() < 2 {
@@ -41,7 +41,7 @@ pub(crate) fn process_input(
             {
                 Some((_, (_, arg))) => {
                     validate_variable_path(db, variable, 2, &arg.field_type)?;
-                    return Ok(variable.path[1..].join("."));
+                    Ok(variable.path[1..].join("."))
                 }
                 None => Err(DatamodelError::new_validation_error(
                     &format!(
@@ -76,8 +76,7 @@ pub(crate) fn process_print_enum(
 
     let candidates = fn_walker
         .walk_output_args()
-        .map(|f| f.required_enums())
-        .flatten()
+        .flat_map(|f| f.required_enums())
         .map(|f| f.name().to_string())
         .collect::<Vec<_>>();
 
@@ -130,8 +129,7 @@ pub(crate) fn process_print_type(
 
     let candidates = fn_walker
         .walk_output_args()
-        .map(|f| f.required_classes())
-        .flatten()
+        .flat_map(|f| f.required_classes())
         .map(|f| f.name().to_string())
         .collect::<Vec<_>>();
 
@@ -182,7 +180,7 @@ fn validate_variable_path(
     let next_path_name = variable.path[next_index].clone();
     match current {
         ast::FieldType::Union(_, ft, _) => match ft
-            .into_iter()
+            .iter()
             .any(|ft| validate_variable_path(db, variable, next_index, ft).is_ok())
         {
             true => Ok(()),
@@ -203,7 +201,7 @@ fn validate_variable_path(
             "List types are not yet indexable in the prompt",
             variable.span.clone(),
         )),
-        ast::FieldType::Identifier(_, idn) => match db.find_type(&idn) {
+        ast::FieldType::Identifier(_, idn) => match db.find_type(idn) {
             Some(Either::Left(cls)) => {
                 match cls
                     .static_fields()

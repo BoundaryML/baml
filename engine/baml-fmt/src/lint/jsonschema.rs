@@ -68,12 +68,12 @@ impl WithJsonSchema for FieldType {
                     });
                 }
 
-                return inner;
+                inner
             }
             FieldType::Dictionary(kv, _) => json!({
                 "type": "object",
                 "additionalProperties": {
-                    "type": (*kv).1.json_schema(),
+                    "type": kv.1.json_schema(),
                 }
             }),
             FieldType::Union(_, t, _) => json!({

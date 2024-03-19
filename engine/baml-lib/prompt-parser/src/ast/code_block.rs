@@ -25,7 +25,7 @@ pub enum CodeBlock {
 }
 
 impl CodeBlock {
-    pub fn as_str<'a>(&'a self) -> &'a str {
+    pub fn as_str(&self) -> &str {
         match self {
             CodeBlock::PrintEnum(printer_block) => printer_block.target.text.as_str(),
             CodeBlock::PrintType(printer_block) => printer_block.target.text.as_str(),
@@ -59,7 +59,7 @@ impl Hash for PrinterBlock {
 
 impl WithSpan for PrinterBlock {
     fn span(&self) -> &Span {
-        &self.target.span()
+        self.target.span()
     }
 }
 

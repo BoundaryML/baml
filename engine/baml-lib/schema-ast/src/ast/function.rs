@@ -48,7 +48,7 @@ impl std::ops::Index<FuncArguementId> for FunctionArg {
 
     fn index(&self, index: FuncArguementId) -> &Self::Output {
         assert_eq!(index, FuncArguementId(0), "FunctionArg only has one arg");
-        &self
+        self
     }
 }
 

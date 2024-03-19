@@ -210,7 +210,7 @@ impl JsScopeGuard {
   #[napi]
   pub fn log_output(&self, result: Option<String>) -> Result<()> {
     match &self.guard {
-      Some(guard) => guard.log_output(result.as_ref().map(|s| s.as_str()).unwrap_or("null")),
+      Some(guard) => guard.log_output(result.as_deref().unwrap_or("null")),
       None => Err(anyhow::anyhow!("Invalid scope guard is used")),
     }
   }

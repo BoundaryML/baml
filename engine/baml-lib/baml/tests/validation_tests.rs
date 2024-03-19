@@ -43,7 +43,7 @@ fn parse_schema_fail_on_diagnostics(
 #[inline(never)] // we want to compile fast
 fn run_validation_test(test_file_path: &str) {
     let file_path = path::Path::new(TESTS_ROOT).join(test_file_path);
-    let text = fs::read_to_string(&file_path.clone()).unwrap();
+    let text = fs::read_to_string(file_path.clone()).unwrap();
     let last_comment_idx = {
         let mut idx = None;
         let newlines = text.char_indices().filter(|(_, c)| *c == '\n');
@@ -83,11 +83,11 @@ fn run_validation_test(test_file_path: &str) {
         (true, Ok(_)) => return, // expected and got a valid schema
         (false, Err(diagnostics)) => {
             // remove the span source file location since it depends on whos running the test
-            let pruned_last_comment_contents = strip_str(&String::from_utf8_lossy(
+            let pruned_last_comment_contents = strip_str(String::from_utf8_lossy(
                 last_comment_contents.lines().collect::<String>().as_bytes(),
             ));
 
-            let pruned_diagnostics = strip_str(&String::from_utf8_lossy(
+            let pruned_diagnostics = strip_str(String::from_utf8_lossy(
                 diagnostics.lines().collect::<String>().as_bytes(),
             ));
 

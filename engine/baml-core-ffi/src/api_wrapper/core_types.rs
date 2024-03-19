@@ -228,7 +228,7 @@ impl LogSchema {
     match self.event_type {
       EventType::FuncLlm => {
         let log = self;
-        let (llm_prompt, llm_raw_output) = match log.metadata.as_ref().and_then(|meta| {
+        let (llm_prompt, llm_raw_output) = match log.metadata.as_ref().map(|meta| {
           // TODO: Swap out template vars
           let input = match &meta.input.prompt.template {
             Template::Single(o) => o.clone(),
@@ -251,23 +251,20 @@ impl LogSchema {
             colored_input = colored_input.replace(k, &replacement);
           });
 
-          let raw_output = match &meta.output {
-            Some(output) => Some(output.raw_text.clone()),
-            None => None,
-          };
+          let raw_output = meta.output.as_ref().map(|output| output.raw_text.clone());
 
-          Some((colored_input, raw_output))
+          (colored_input, raw_output)
         }) {
           Some((llm_prompt, llm_raw_output)) => (Some(llm_prompt), llm_raw_output),
           None => (None, None),
         };
 
-        let err = log.error.as_ref().and_then(|error| match &error.traceback {
-          Some(traceback) => Some(format!("{}\n{}", error.message, traceback)),
-          None => Some(error.message.clone()),
+        let err = log.error.as_ref().map(|error| match &error.traceback {
+          Some(traceback) => format!("{}\n{}", error.message, traceback),
+          None => error.message.clone(),
         });
 
-        let parsed_output = match log.io.output.as_ref().and_then(|output| {
+        let parsed_output = match log.io.output.as_ref().map(|output| {
           let r#type = match &output.r#type.name {
             TypeSchemaName::Single => {
               let fields = output
@@ -277,7 +274,7 @@ impl LogSchema {
                 .map(|(k, v)| format!("{}: {}", k, v))
                 .collect::<Vec<_>>()
                 .join(", ");
-              format!("{}", fields)
+              fields.to_string()
             }
             TypeSchemaName::Multi => {
               let fields = output
@@ -287,7 +284,7 @@ impl LogSchema {
                 .map(|(k, v)| format!("{}: {}", k, v))
                 .collect::<Vec<_>>()
                 .join(", ");
-              format!("{}", fields)
+              fields.to_string()
             }
           };
           let output = match &output.value {
@@ -296,14 +293,14 @@ impl LogSchema {
               .iter()
               .map(|v| serde_json::Value::from_str(v))
               .collect::<Result<Vec<_>, _>>()
-              .map(|v| serde_json::Value::Array(v)),
+              .map(serde_json::Value::Array),
           }
           .map(|v| {
             serde_json::to_string_pretty(&v)
               .unwrap_or_else(|_| format!("Failed to serialize output: {:?}", v))
           })
           .ok();
-          Some((output, Some(r#type)))
+          (output, Some(r#type))
         }) {
           Some((Some(output), Some(r#type))) => Some((output, r#type)),
           _ => None,

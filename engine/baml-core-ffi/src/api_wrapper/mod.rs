@@ -112,11 +112,11 @@ impl APIConfig {
       Self::LocalOnly(config) => config.base_url.as_str(),
       Self::Web(config) => config.base_url.as_str(),
     });
-    let api_key = api_key.or_else(|| match self {
+    let api_key = api_key.or(match self {
       Self::LocalOnly(config) => config.api_key.as_deref(),
       Self::Web(config) => Some(config.api_key.as_str()),
     });
-    let project_id = project_id.or_else(|| match self {
+    let project_id = project_id.or(match self {
       Self::LocalOnly(config) => config.project_id.as_deref(),
       Self::Web(config) => Some(config.project_id.as_str()),
     });

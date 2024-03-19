@@ -182,7 +182,7 @@ pub(crate) fn parse_test_from_json(
         span: span.clone(),
     };
     let mut top = RetryPolicyConfig {
-        name: Identifier::Local(test_name.into(), span.clone()),
+        name: Identifier::Local(test_name, span.clone()),
         documentation: None,
         attributes: vec![],
         fields: vec![test_case, function_name],
@@ -191,7 +191,7 @@ pub(crate) fn parse_test_from_json(
     if let Some(group_name) = group_name {
         top.fields.push(ConfigBlockProperty {
             name: Identifier::Local("group".into(), span.clone()),
-            value: Some(Expression::StringValue(group_name.into(), span.clone())),
+            value: Some(Expression::StringValue(group_name, span.clone())),
             template_args: None,
             attributes: vec![],
             documentation: None,

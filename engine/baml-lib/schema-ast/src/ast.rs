@@ -65,6 +65,12 @@ pub struct SchemaAst {
     pub tops: Vec<Top>,
 }
 
+impl Default for SchemaAst {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SchemaAst {
     pub fn new() -> Self {
         SchemaAst { tops: Vec::new() }
