@@ -36,7 +36,9 @@ jobs:
               yarn build
               strip -x *.node
           - host: windows-latest
-            build: yarn build
+            build: |
+              cpan install Locale::Maketext::Simple
+              yarn build
             target: x86_64-pc-windows-msvc
           # - host: windows-latest
           #   build: |
