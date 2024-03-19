@@ -1,5 +1,3 @@
-
-
 use crate::ast::Span;
 use std::fmt;
 

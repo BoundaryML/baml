@@ -174,11 +174,7 @@ fn print_enum(item: &EnumType) -> String {
 }
 
 fn print_union(item: &UnionType) -> String {
-    let member_types: Vec<String> = item
-        .members
-        .iter()
-        .map(print_type)
-        .collect();
+    let member_types: Vec<String> = item.members.iter().map(print_type).collect();
     member_types.join(" | ").to_string()
 }
 

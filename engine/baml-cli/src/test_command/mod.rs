@@ -1,10 +1,7 @@
 use colored::*;
 use std::{path::PathBuf, str::FromStr};
 
-use baml_lib::{
-    internal_baml_schema_ast::ast::WithName,
-    Configuration, ValidatedSchema,
-};
+use baml_lib::{internal_baml_schema_ast::ast::WithName, Configuration, ValidatedSchema};
 
 use baml_lib::internal_baml_core::configuration::GeneratorLanguage;
 

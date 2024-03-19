@@ -1,6 +1,6 @@
 use baml_lib::internal_baml_parser_database::ParserDatabase;
 use colored::*;
-use log::{debug};
+use log::debug;
 use std::{collections::HashMap, ops::Deref, str::FromStr};
 
 use super::ipc_comms::{LogSchema, MessageData, Template, TestCaseStatus, ValueType};
@@ -305,7 +305,9 @@ impl RunState {
                 };
                 *state = new_state;
 
-                update.error_data.map(|error| (key, format!("{}", error.to_string().red())))
+                update
+                    .error_data
+                    .map(|error| (key, format!("{}", error.to_string().red())))
             }
             MessageData::Log(log) => {
                 // Log messages always come after the test case update
@@ -360,7 +362,8 @@ impl RunState {
                                         colored_input = colored_input.replace(k, &replacement);
                                     });
 
-                                    let raw_output = meta.output.as_ref().map(|output| output.raw_text.clone());
+                                    let raw_output =
+                                        meta.output.as_ref().map(|output| output.raw_text.clone());
 
                                     (colored_input, raw_output)
                                 }) {
@@ -392,12 +395,13 @@ impl RunState {
                                     })
                                 })
                                 .ok();
-                                let r#type = self
-                                    .schema
-                                    .find_function_by_name(&spec.function).map(|f| f.walk_output_args()
-                                                .map(|w| w.ast_arg().1.field_type.to_string())
-                                                .collect::<Vec<_>>()
-                                                .join(", "));
+                                let r#type =
+                                    self.schema.find_function_by_name(&spec.function).map(|f| {
+                                        f.walk_output_args()
+                                            .map(|w| w.ast_arg().1.field_type.to_string())
+                                            .collect::<Vec<_>>()
+                                            .join(", ")
+                                    });
                                 (output, r#type)
                             }) {
                                 Some((Some(output), Some(r#type))) => Some((output, r#type)),

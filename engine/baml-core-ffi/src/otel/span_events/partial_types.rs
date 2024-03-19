@@ -151,18 +151,16 @@ impl PartialMetadataType {
     }
 
     (
-      Some(
-        LLMEventSchema {
-          model_name: self
-            .model_name
-            .as_ref()
-            .map_or("<not-specified>", |v| v.as_str())
-            .to_string(),
-          provider: self.provider.unwrap(),
-          input: self.input.unwrap(),
-          output: self.output,
-        },
-      ),
+      Some(LLMEventSchema {
+        model_name: self
+          .model_name
+          .as_ref()
+          .map_or("<not-specified>", |v| v.as_str())
+          .to_string(),
+        provider: self.provider.unwrap(),
+        input: self.input.unwrap(),
+        output: self.output,
+      }),
       self.error,
     )
   }

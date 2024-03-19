@@ -2,8 +2,7 @@ use crate::errors::CliError;
 
 use serde_json::json;
 
-
-use std::io::{Write};
+use std::io::Write;
 use std::path::PathBuf;
 
 use tempfile::Builder;
@@ -88,10 +87,8 @@ impl TestRunner {
                         let jest_temp_path = jest_file.path().to_str().unwrap().to_string();
 
                         test_command.push(format!("--baml-test-config-file={}", baml_temp_path));
-                        test_command.push(format!(
-                            "--rootDir=\"{}\"",
-                            output_path.to_string_lossy()
-                        ));
+                        test_command
+                            .push(format!("--rootDir=\"{}\"", output_path.to_string_lossy()));
                         test_command.push(format!("--config=\"{}\"", jest_temp_path));
 
                         let res = match playground_port {
@@ -137,7 +134,6 @@ impl TestRunner {
                     test_command.push(format!("{}:{}:{}", function, r#impl, test));
                 });
 
-                
                 match playground_port {
                     Some(port) => run_test_with_forward(
                         self.clone(),

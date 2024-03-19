@@ -86,14 +86,12 @@ pub fn get_client_version(
 
     let version_line_re = if package_version_command.starts_with("conda") {
         // conda's version output has "baml" in the same line
-        Regex::new(r#"(?i)\b(?:baml)\b"#).map_err(|e| {
-            CliError::StringError(format!("{} Error: {}", "Failed!".red(), e))
-        })?
+        Regex::new(r#"(?i)\b(?:baml)\b"#)
+            .map_err(|e| CliError::StringError(format!("{} Error: {}", "Failed!".red(), e)))?
     } else {
         // for other python package managers, they have "version" in the same line
-        Regex::new(r#"(?i)\b(?:version)\b"#).map_err(|e| {
-            CliError::StringError(format!("{} Error: {}", "Failed!".red(), e))
-        })?
+        Regex::new(r#"(?i)\b(?:version)\b"#)
+            .map_err(|e| CliError::StringError(format!("{} Error: {}", "Failed!".red(), e)))?
     };
 
     let Some(version_line) = output.lines().find(|line| version_line_re.is_match(line)) else {
@@ -104,9 +102,8 @@ pub fn get_client_version(
         )));
     };
 
-    let version_re = Regex::new("[0-9][^ ]*").map_err(|e| {
-        CliError::StringError(format!("{} Error: {}", "Failed!".red(), e))
-    })?;
+    let version_re = Regex::new("[0-9][^ ]*")
+        .map_err(|e| CliError::StringError(format!("{} Error: {}", "Failed!".red(), e)))?;
 
     let Some(version) = version_re.find(version_line) else {
         return Err(CliError::StringError(format!(

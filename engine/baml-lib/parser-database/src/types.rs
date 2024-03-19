@@ -513,10 +513,7 @@ fn visit_client<'db>(idx: ClientId, client: &'db ast::Client, ctx: &mut Context<
 
     match (provider, options) {
         (Some(provider), options) => {
-            match (
-                coerce::string_with_span(provider, ctx.diagnostics),
-                options,
-            ) {
+            match (coerce::string_with_span(provider, ctx.diagnostics), options) {
                 (Some(provider), options) => {
                     ctx.types.client_properties.insert(
                         idx,
@@ -596,9 +593,10 @@ fn visit_variant<'db>(idx: VariantConfigId, variant: &'db ast::Variant, ctx: &mu
 
     let prompt = if let Some((prompt, prompt_key_span)) = prompt {
         if let Some(prompt) = prompt.as_raw_string_value() {
-            validate_prompt(ctx, prompt).map(|(cleaned_prompt, replacer)| ((cleaned_prompt, prompt.span(), replacer), prompt_key_span))
-        } else if let Some((prompt, span)) = coerce::string_with_span(prompt, ctx.diagnostics)
-        {
+            validate_prompt(ctx, prompt).map(|(cleaned_prompt, replacer)| {
+                ((cleaned_prompt, prompt.span(), replacer), prompt_key_span)
+            })
+        } else if let Some((prompt, span)) = coerce::string_with_span(prompt, ctx.diagnostics) {
             // warn the user that we are using this without validation.
             ctx.push_warning(DatamodelWarning::new(
                 "To use comments and {#vars} use a block string. #\"...\"# instead.".into(),
@@ -697,7 +695,8 @@ fn visit_variant<'db>(idx: VariantConfigId, variant: &'db ast::Variant, ctx: &mu
                         let impls = if let Some((arr, _)) = adapter.converter.as_array() {
                             Some(
                                 arr.iter()
-                                    .filter_map(|item| coerce::raw_string(item, ctx.diagnostics)).cloned()
+                                    .filter_map(|item| coerce::raw_string(item, ctx.diagnostics))
+                                    .cloned()
                                     .collect::<Vec<_>>(),
                             )
                         } else {

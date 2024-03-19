@@ -118,10 +118,7 @@ impl<'db> FunctionWalker<'db> {
                 (ast::TopId::Variant(id), ast::Top::Variant(impl_))
                     if impl_.function_name().name() == self.name() =>
                 {
-                    Some(VariantWalker {
-                        db: self.db,
-                        id,
-                    })
+                    Some(VariantWalker { db: self.db, id })
                 }
                 _ => None,
             })

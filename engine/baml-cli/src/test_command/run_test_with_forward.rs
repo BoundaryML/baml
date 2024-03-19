@@ -150,8 +150,7 @@ async fn run_and_update_state(
         .stdout(Stdio::from(stdout_file))
         .stderr(Stdio::from(stderr_file))
         .spawn()
-        .unwrap_or_else(|_| panic!("failed to spawn child process {}",
-            shell_command.join(" ")));
+        .unwrap_or_else(|_| panic!("failed to spawn child process {}", shell_command.join(" ")));
 
     // Print state every 2 seconds while pytest is running
     let mut interval = time::interval(time::Duration::from_millis(500));

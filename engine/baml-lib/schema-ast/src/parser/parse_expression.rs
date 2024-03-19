@@ -71,7 +71,9 @@ fn parse_dict(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
     for current in token.into_inner() {
         match current.as_rule() {
             Rule::dict_entry => {
-                if let Some(f) = parse_dict_entry(current, diagnostics) { entries.push(f) }
+                if let Some(f) = parse_dict_entry(current, diagnostics) {
+                    entries.push(f)
+                }
             }
             _ => parsing_catch_all(&current, "dictionary key value"),
         }

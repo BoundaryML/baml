@@ -194,12 +194,9 @@ impl ParserDatabase {
                     .unwrap()
                     .iter()
                     .filter_map(|f| match self.find_type_by_str(f) {
-                        Some(Either::Left(walker)) => Some(
-                            walker
-                                .dependencies()
-                                .iter().cloned()
-                                .collect::<Vec<_>>(),
-                        ),
+                        Some(Either::Left(walker)) => {
+                            Some(walker.dependencies().iter().cloned().collect::<Vec<_>>())
+                        }
                         Some(Either::Right(walker)) => Some(vec![walker.name().to_string()]),
                         _ => panic!("Unknown class `{}`", f),
                     })
@@ -251,9 +248,7 @@ impl ParserDatabase {
                 let input_deps = input
                     .iter()
                     .filter_map(|f| match self.find_type_by_str(f) {
-                        Some(Either::Left(walker)) => {
-                            Some(walker.dependencies().iter().cloned())
-                        }
+                        Some(Either::Left(walker)) => Some(walker.dependencies().iter().cloned()),
                         Some(Either::Right(_)) => None,
                         _ => panic!("Unknown class `{}`", f),
                     })
@@ -263,9 +258,7 @@ impl ParserDatabase {
                 let output_deps = output
                     .iter()
                     .filter_map(|f| match self.find_type_by_str(f) {
-                        Some(Either::Left(walker)) => {
-                            Some(walker.dependencies().iter().cloned())
-                        }
+                        Some(Either::Left(walker)) => Some(walker.dependencies().iter().cloned()),
                         Some(Either::Right(_)) => None,
                         _ => panic!("Unknown class `{}`", f),
                     })

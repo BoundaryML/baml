@@ -47,7 +47,9 @@ pub(crate) fn parse_variant_block(
                             ));
                         }
                         Rule::adapter_block => {
-                            if let Some(f) = parse_adapter(item, None, diagnostics) { adapters.push(f) }
+                            if let Some(f) = parse_adapter(item, None, diagnostics) {
+                                adapters.push(f)
+                            }
                         }
                         Rule::serializer_block => {
                             serializers.push(parse_serializer(item, None, diagnostics))

@@ -163,7 +163,6 @@ pub(crate) fn main() {
                     "Join the discord! https://discord.gg/yzaTpQ3tdT".cyan(),
                     "Documentation: https://docs.boundaryml.com".cyan()
                 );
-                
             }),
         Commands::Test(args) => {
             builder::build(&args.baml_dir).and_then(|(baml_dir, config, schema)| {

@@ -44,7 +44,9 @@ fn parse_union(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
     for current in pair.into_inner() {
         match current.as_rule() {
             Rule::base_type => {
-                if let Some(f) = parse_base_type(current, diagnostics) { types.push(f) }
+                if let Some(f) = parse_base_type(current, diagnostics) {
+                    types.push(f)
+                }
             }
             _ => unreachable_rule!(current, Rule::union),
         }
@@ -111,7 +113,9 @@ fn parse_dict(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType
     for current in pair.into_inner() {
         match current.as_rule() {
             Rule::field_type => {
-                if let Some(f) = parse_field_type(current, diagnostics) { fields.push(f) }
+                if let Some(f) = parse_field_type(current, diagnostics) {
+                    fields.push(f)
+                }
             }
             _ => unreachable_rule!(current, Rule::dict),
         }
@@ -147,7 +151,9 @@ fn parse_tuple(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
     for current in pair.into_inner() {
         match current.as_rule() {
             Rule::field_type => {
-                if let Some(f) = parse_field_type(current, diagnostics) { fields.push(f) }
+                if let Some(f) = parse_field_type(current, diagnostics) {
+                    fields.push(f)
+                }
             }
             _ => unreachable_rule!(current, Rule::tuple),
         }

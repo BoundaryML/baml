@@ -6,7 +6,6 @@ use std::net::{TcpStream, ToSocketAddrs};
 use std::thread::sleep;
 use std::time::Duration;
 
-
 use super::core_types::{LogSchema, UpdateTestCase};
 
 // Assuming _PartialDict and BaseModel structures are analogous to some serde-serializable Rust structs
