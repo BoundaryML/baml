@@ -7,7 +7,7 @@ readme = "README.md"
 
 ## This project has 3 main root modules
 [[tool.poetry.packages]]
-include = "app"
+include = "src"
 from = "."
 
 # Users must add this if the output dir is not the same as the root dir
@@ -22,11 +22,14 @@ from = "."
 [tool.poetry.dependencies]
 python = "^3.8"
 mypy = "^1.5.1"
-openai = "0.28.1"
 pytest-asyncio = "^0.21.1"
 baml = {path = "../../../clients/python", develop = true}
+uvicorn = {extras = ["standard"], version = "^0.28.0"}
+fastapi = "^0.110.0"
 
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+

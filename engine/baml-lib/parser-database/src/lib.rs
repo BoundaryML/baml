@@ -45,7 +45,7 @@ use internal_baml_schema_ast::ast::{SchemaAst, WithIdentifier, WithName, WithSpa
 pub use printer::WithStaticRenames;
 pub use types::{
     ContantDelayStrategy, DynamicStringAttributes, ExponentialBackoffStrategy, PrinterType,
-    PromptRepr, PromptVariable, RetryPolicy, RetryPolicyStrategy, StaticStringAttributes,
+    PromptAst, PromptVariable, RetryPolicy, RetryPolicyStrategy, StaticStringAttributes,
     StaticType, ToStringAttributes,
 };
 
@@ -80,6 +80,12 @@ pub struct ParserDatabase {
     types: Types,
 }
 
+impl Default for ParserDatabase {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ParserDatabase {
     /// Create a new, empty ParserDatabase.
     pub fn new() -> Self {
@@ -97,7 +103,7 @@ impl ParserDatabase {
     }
 
     /// See the docs on [ParserDatabase](/struct.ParserDatabase.html).
-    pub fn validate(&mut self, mut diag: &mut Diagnostics) -> Result<(), Diagnostics> {
+    pub fn validate(&mut self, diag: &mut Diagnostics) -> Result<(), Diagnostics> {
         diag.to_result()?;
 
         let mut ctx = Context::new(
@@ -105,7 +111,7 @@ impl ParserDatabase {
             &mut self.interner,
             &mut self.names,
             &mut self.types,
-            &mut diag,
+            diag,
         );
 
         // First pass: resolve names.
@@ -145,7 +151,7 @@ impl ParserDatabase {
             .collect::<Vec<_>>();
 
         default_impl.iter().for_each(|(fid, impl_name, span)| {
-            self.types.function.get_mut(&fid).unwrap().default_impl =
+            self.types.function.get_mut(fid).unwrap().default_impl =
                 Some((impl_name.clone(), span.clone()))
         })
     }
@@ -176,7 +182,7 @@ impl ParserDatabase {
             let removed = deps
                 .iter()
                 .filter(|(_, v)| v.1 == 0)
-                .map(|(k, _)| k.clone())
+                .map(|(k, _)| *k)
                 .collect::<Vec<_>>();
             deps.retain(|(_, v)| v.1 > 0);
             for cls in removed {
@@ -188,13 +194,9 @@ impl ParserDatabase {
                     .unwrap()
                     .iter()
                     .filter_map(|f| match self.find_type_by_str(f) {
-                        Some(Either::Left(walker)) => Some(
-                            walker
-                                .dependencies()
-                                .iter()
-                                .map(|f| f.clone())
-                                .collect::<Vec<_>>(),
-                        ),
+                        Some(Either::Left(walker)) => {
+                            Some(walker.dependencies().iter().cloned().collect::<Vec<_>>())
+                        }
                         Some(Either::Right(walker)) => Some(vec![walker.name().to_string()]),
                         _ => panic!("Unknown class `{}`", f),
                     })
@@ -246,9 +248,7 @@ impl ParserDatabase {
                 let input_deps = input
                     .iter()
                     .filter_map(|f| match self.find_type_by_str(f) {
-                        Some(Either::Left(walker)) => {
-                            Some(walker.dependencies().iter().map(|f| f.clone()))
-                        }
+                        Some(Either::Left(walker)) => Some(walker.dependencies().iter().cloned()),
                         Some(Either::Right(_)) => None,
                         _ => panic!("Unknown class `{}`", f),
                     })
@@ -258,9 +258,7 @@ impl ParserDatabase {
                 let output_deps = output
                     .iter()
                     .filter_map(|f| match self.find_type_by_str(f) {
-                        Some(Either::Left(walker)) => {
-                            Some(walker.dependencies().iter().map(|f| f.clone()))
-                        }
+                        Some(Either::Left(walker)) => Some(walker.dependencies().iter().cloned()),
                         Some(Either::Right(_)) => None,
                         _ => panic!("Unknown class `{}`", f),
                     })
@@ -306,7 +304,7 @@ impl ParserDatabase {
                     PromptVariable::Enum(blk) => {
                         // Ensure the prompt has an enum path that works.
                         match types::post_prompt::process_print_enum(
-                            self, variant, fn_walker, &blk, diag,
+                            self, variant, fn_walker, blk, diag,
                         ) {
                             Ok(result) => {
                                 output_replacers.insert(blk.to_owned(), result);
@@ -320,7 +318,7 @@ impl ParserDatabase {
                     }
                     PromptVariable::Type(blk) => {
                         // Ensure the prompt has an enum path that works.
-                        match types::post_prompt::process_print_type(self, variant, fn_walker, &blk)
+                        match types::post_prompt::process_print_type(self, variant, fn_walker, blk)
                         {
                             Ok(result) => {
                                 output_replacers.insert(blk.to_owned(), result);
@@ -345,7 +343,7 @@ impl ParserDatabase {
                     // We should just ensure that atleast one of the input or output replacers is used.
                     if input_replacers.is_empty() {
                         diag.push_warning(DatamodelWarning::prompt_variable_unused(
-                            "Never uses {#input}",
+                            "Expected prompt to use {#input}",
                             span.clone(),
                         ));
                     }
@@ -353,7 +351,7 @@ impl ParserDatabase {
                     // TODO: We should ensure every enum the class uses is used here.
                     if output_replacers.is_empty() {
                         diag.push_warning(DatamodelWarning::prompt_variable_unused(
-                            "Never uses {#print_type(..)} or {#print_enum(..)}",
+                            "Expected prompt to use {#print_type(..)} or {#print_enum(..)} but none was found",
                             span.clone(),
                         ));
                     }

@@ -209,7 +209,6 @@ export function startServer(options?: LSOptions): void {
   }
 
   connection.onDidChangeWatchedFiles(async (params) => {
-    console.log('onDidChangeWatchedFiles ' + JSON.stringify(params, null, 2))
     params.changes.forEach((change) => {
       const uri = change.uri
       const languageExtension = getLanguageExtension(uri)

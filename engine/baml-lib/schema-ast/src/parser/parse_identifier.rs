@@ -12,7 +12,7 @@ use super::helpers::Pair;
 pub fn parse_identifier(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Identifier {
     assert_correct_parser!(pair, Rule::identifier);
 
-    for inner in pair.into_inner() {
+    if let Some(inner) = pair.into_inner().next() {
         return match inner.as_rule() {
             Rule::path_identifier => parse_path_identifier(inner, diagnostics),
             Rule::single_word => parse_single_word(inner, diagnostics),

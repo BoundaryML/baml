@@ -123,14 +123,14 @@ pub struct VariantProperties {
 }
 
 /// The representation of a prompt.
-pub enum PromptRepr<'a> {
+pub enum PromptAst<'a> {
     /// For single string prompts
-    /// Prompt + Any used input replacers
-    String(String, Vec<String>),
+    /// Prompt + Any used input replacers (key, val)
+    String(String, Vec<(String, String)>),
 
     /// For prompts with multiple parts
-    /// ChatBlock + Prompt + Any used input replacers
-    Chat(Vec<(Option<&'a ChatBlock>, String)>, Vec<String>),
+    /// ChatBlock + Prompt + Any used input replacers (key, val)
+    Chat(Vec<(Option<&'a ChatBlock>, String)>, Vec<(String, String)>),
 }
 
 impl VariantProperties {
@@ -142,7 +142,7 @@ impl VariantProperties {
         })
     }
 
-    pub fn to_prompt<'a>(&'a self) -> PromptRepr<'a> {
+    pub fn to_prompt(&self) -> PromptAst<'_> {
         let (input, output, chats) = &self.replacers;
 
         // Replace all the inputs with the input replacers
@@ -153,21 +153,21 @@ impl VariantProperties {
                 // Only add the input if it's used in the prompt
                 let key = k.key();
                 if prompt.contains(&key) {
-                    used_inputs.push(val.clone());
-                    prompt.replace(&key, &format!("{{{}}}", val))
+                    used_inputs.push((key.clone(), val.clone()));
+                    prompt
                 } else {
                     prompt
                 }
             });
         // Replace all the outputs with the output replacers
         let prompt = output.iter().fold(prompt, |prompt, (k, val)| {
-            prompt.replace(&k.key(), &format!("{}", val))
+            prompt.replace(&k.key(), &val.to_string())
         });
 
         used_inputs.sort();
 
         if chats.is_empty() {
-            PromptRepr::String(prompt, used_inputs)
+            PromptAst::String(prompt, used_inputs)
         } else {
             // Split the prompt into parts based on the chat blocks.
             let mut last_idx = 0;
@@ -194,7 +194,7 @@ impl VariantProperties {
             }
 
             // Each chat block owns a part of the prompt. until the next chat block.
-            PromptRepr::Chat(
+            PromptAst::Chat(
                 parts
                     .iter()
                     .enumerate()
@@ -230,7 +230,7 @@ pub struct ClientProperties {
 #[derive(Debug, Clone)]
 pub struct TestCase {
     pub function: (String, Span),
-    pub content: RawString,
+    pub content: Expression,
     pub group: Option<(String, Span)>,
 }
 
@@ -411,7 +411,7 @@ fn visit_function<'db>(idx: FunctionId, function: &'db ast::Function, ctx: &mut 
                     ));
                 }
                 default_impl = match &field.value {
-                    Some(val) => coerce::string_with_span(&val, ctx.diagnostics)
+                    Some(val) => coerce::string_with_span(val, ctx.diagnostics)
                         .map(|(v, span)| (v.to_string(), span.clone())),
                     None => None,
                 }
@@ -475,7 +475,7 @@ fn visit_client<'db>(idx: ClientId, client: &'db ast::Client, ctx: &mut Context<
                 match field.value.as_ref() {
                     Some(ast::Expression::Map(map, span)) => {
                         map.iter().for_each(|(key, value)| {
-                            if let Some(key) = coerce::string(key, &mut ctx.diagnostics) {
+                            if let Some(key) = coerce::string(key, ctx.diagnostics) {
                                 options.push((key.to_string(), value.clone()));
                             } else {
                                 ctx.push_error(DatamodelError::new_validation_error(
@@ -501,7 +501,7 @@ fn visit_client<'db>(idx: ClientId, client: &'db ast::Client, ctx: &mut Context<
         });
 
     let retry_policy = match retry_policy {
-        Some(retry_policy) => match coerce::string_with_span(retry_policy, &mut ctx.diagnostics) {
+        Some(retry_policy) => match coerce::string_with_span(retry_policy, ctx.diagnostics) {
             Some((retry_policy, span)) => Some((retry_policy.to_string(), span.clone())),
             _ => {
                 // Errors are handled by coerce.
@@ -513,10 +513,7 @@ fn visit_client<'db>(idx: ClientId, client: &'db ast::Client, ctx: &mut Context<
 
     match (provider, options) {
         (Some(provider), options) => {
-            match (
-                coerce::string_with_span(provider, &mut ctx.diagnostics),
-                options,
-            ) {
+            match (coerce::string_with_span(provider, ctx.diagnostics), options) {
                 (Some(provider), options) => {
                     ctx.types.client_properties.insert(
                         idx,
@@ -585,12 +582,7 @@ fn visit_variant<'db>(idx: VariantConfigId, variant: &'db ast::Variant, ctx: &mu
         });
 
     let client = if let Some((client, client_key_span)) = client {
-        if let Some(client) = coerce::string_with_span(client, &mut ctx.diagnostics) {
-            Some((client, client_key_span))
-        } else {
-            // Errors are handled by coerce.
-            None
-        }
+        coerce::string_with_span(client, ctx.diagnostics).map(|client| (client, client_key_span))
     } else {
         ctx.push_error(DatamodelError::new_validation_error(
             "Missing `client` field in impl<llm>",
@@ -601,14 +593,10 @@ fn visit_variant<'db>(idx: VariantConfigId, variant: &'db ast::Variant, ctx: &mu
 
     let prompt = if let Some((prompt, prompt_key_span)) = prompt {
         if let Some(prompt) = prompt.as_raw_string_value() {
-            match validate_prompt(ctx, prompt) {
-                Some((cleaned_prompt, replacer)) => {
-                    Some(((cleaned_prompt, prompt.span(), replacer), prompt_key_span))
-                }
-                None => None,
-            }
-        } else if let Some((prompt, span)) = coerce::string_with_span(prompt, &mut ctx.diagnostics)
-        {
+            validate_prompt(ctx, prompt).map(|(cleaned_prompt, replacer)| {
+                ((cleaned_prompt, prompt.span(), replacer), prompt_key_span)
+            })
+        } else if let Some((prompt, span)) = coerce::string_with_span(prompt, ctx.diagnostics) {
             // warn the user that we are using this without validation.
             ctx.push_warning(DatamodelWarning::new(
                 "To use comments and {#vars} use a block string. #\"...\"# instead.".into(),
@@ -708,7 +696,7 @@ fn visit_variant<'db>(idx: VariantConfigId, variant: &'db ast::Variant, ctx: &mu
                             Some(
                                 arr.iter()
                                     .filter_map(|item| coerce::raw_string(item, ctx.diagnostics))
-                                    .map(|raw| raw.clone())
+                                    .cloned()
                                     .collect::<Vec<_>>(),
                             )
                         } else {
@@ -827,19 +815,19 @@ pub struct DynamicFieldId(u32);
 
 impl From<SerializerFieldId> for DynamicFieldId {
     fn from(id: SerializerFieldId) -> Self {
-        DynamicFieldId(id.0 as u32)
+        DynamicFieldId(id.0)
     }
 }
 
 impl From<FieldId> for DynamicFieldId {
     fn from(id: FieldId) -> Self {
-        DynamicFieldId(id.0 as u32)
+        DynamicFieldId(id.0)
     }
 }
 
 impl From<EnumValueId> for DynamicFieldId {
     fn from(id: EnumValueId) -> Self {
-        DynamicFieldId(id.0 as u32)
+        DynamicFieldId(id.0)
     }
 }
 
@@ -849,18 +837,18 @@ pub struct StaticFieldId(u32);
 
 impl From<SerializerFieldId> for StaticFieldId {
     fn from(id: SerializerFieldId) -> Self {
-        StaticFieldId(id.0 as u32)
+        StaticFieldId(id.0)
     }
 }
 
 impl From<FieldId> for StaticFieldId {
     fn from(id: FieldId) -> Self {
-        StaticFieldId(id.0 as u32)
+        StaticFieldId(id.0)
     }
 }
 
 impl From<EnumValueId> for StaticFieldId {
     fn from(id: EnumValueId) -> Self {
-        StaticFieldId(id.0 as u32)
+        StaticFieldId(id.0)
     }
 }

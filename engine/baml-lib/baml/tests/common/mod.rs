@@ -54,7 +54,7 @@ pub(crate) fn expect_error(schema: &str, expectation: &expect_test::Expect) {
     match baml_lib::parse_and_validate_schema(&path, vec![SourceFile::from((path.clone(), schema))])
     {
         Ok(_) => panic!("Expected a validation error, but the schema is valid."),
-        Err(err) => assert_eq!(err.errors().get(0).unwrap().message(), expectation.data()),
+        Err(err) => assert_eq!(err.errors().first().unwrap().message(), expectation.data()),
     }
 }
 

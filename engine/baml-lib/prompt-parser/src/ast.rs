@@ -21,6 +21,12 @@ pub struct PromptAst {
     pub tops: Vec<Top>,
 }
 
+impl Default for PromptAst {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PromptAst {
     pub fn new() -> Self {
         PromptAst { tops: Vec::new() }

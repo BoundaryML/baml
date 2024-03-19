@@ -109,7 +109,7 @@ impl<'db> EnumValueWalker<'db> {
 
 impl<'db> WithName for EnumValueWalker<'db> {
     fn name(&self) -> &str {
-        &self.r#enum().ast_enum()[self.id.1].name()
+        self.r#enum().ast_enum()[self.id.1].name()
     }
 }
 

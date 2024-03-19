@@ -4,6 +4,9 @@
       "path": "engine"
     },
     {
+      "path": "integ-tests"
+    },
+    {
       "name": "typescript",
       "path": "typescript"
     },
@@ -35,13 +38,18 @@
     }
   ],
   "settings": {
+    "rust-analyzer.procMacro.ignored": {
+      "napi-derive": ["napi"]
+    },
     "editor.formatOnSaveMode": "file",
     "editor.formatOnSave": true,
-    "editor.defaultFormatter": "esbenp.prettier-vscode",
     "[rust]": {
-      "editor.defaultFormatter": "rust-lang.rust-analyzer"
+      "editor.defaultFormatter": "rust-lang.rust-analyzer",
+      "editor.formatOnSave": true
     },
-    "python.defaultInterpreterPath": "python3",
+    "[python]": {
+      "editor.defaultFormatter": "ms-python.black-formatter"
+    },
     "mypy.enabled": false,
     "editor.tabSize": 2,
     "git.openDiffOnClick": true,
@@ -50,6 +58,7 @@
       "titleBar.activeBackground": "#8B0002",
       "titleBar.activeForeground": "#FFFBFB"
     },
+    "python.analysis.typeCheckingMode": "strict"
   },
   "extensions": {
     "recommendations": [

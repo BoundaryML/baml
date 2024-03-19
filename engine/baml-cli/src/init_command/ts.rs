@@ -48,7 +48,7 @@ impl WithLoader<TypeScriptConfig> for TypeScriptConfig {
     }
 }
 
-enum PackageManager {
+pub(super) enum PackageManager {
     Yarn,
     Pnpm,
     Npm,
@@ -108,7 +108,7 @@ impl WithLoader<PackageManager> for PackageManager {
         match get_selection_or_default(
             "Which package manager do you use:",
             &package_managers,
-            default_package_manager(&ts_project_root),
+            default_package_manager(ts_project_root),
             no_prompt,
         )? {
             0 => Ok(PackageManager::Yarn),

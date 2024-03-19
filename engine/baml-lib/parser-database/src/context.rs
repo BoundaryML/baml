@@ -136,7 +136,7 @@ impl<'db> Context<'db> {
                 .filter(|(_, a)| a.name.name() == name)
             {
                 diagnostics.push_error(DatamodelError::new_duplicate_attribute_error(
-                    &attr.name.name(),
+                    attr.name.name(),
                     attr.span.clone(),
                 ));
                 assert!(self.attributes.unused_attributes.remove(&idx));
@@ -199,7 +199,7 @@ impl<'db> Context<'db> {
         for attribute_id in &self.attributes.unused_attributes {
             let attribute = &self.ast[*attribute_id];
             diagnostics.push_error(DatamodelError::new_attribute_not_known_error(
-                &attribute.name.name(),
+                attribute.name.name(),
                 attribute.span.clone(),
             ))
         }

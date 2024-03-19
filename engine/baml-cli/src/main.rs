@@ -1,5 +1,5 @@
 use colored::*;
-use log;
+
 use std::io::Write;
 
 mod builder;
@@ -82,6 +82,10 @@ pub struct TestArgs {
     /// Specifies a port for the test playground. Hidden from help text.
     #[arg(long, hide = true)]
     playground_port: Option<u16>,
+
+    /// Specify which generator (and therefore language) you want to use to run the tests.
+    #[arg(long, short = 'g')]
+    generator: Option<String>,
 }
 
 impl fmt::Display for TestAction {
@@ -134,7 +138,9 @@ pub(crate) fn main() {
             match level {
                 log::Level::Info => writeln!(buf, "{} {}", NAME.dimmed(), message.dimmed()),
                 log::Level::Warn => writeln!(buf, "{} {}", NAME.dimmed(), message.yellow()),
-                log::Level::Error => writeln!(buf, "{} {}", "ERROR:".red().bold(), message.red()),
+                log::Level::Error => {
+                    writeln!(buf, "{} {}", "ERROR:".red().bold(), message.red())
+                }
                 _ => writeln!(buf, "{} {}: {}", NAME.dimmed(), level, message),
             }
         })
@@ -147,22 +153,20 @@ pub(crate) fn main() {
         Commands::Build(args) => builder::build(&args.baml_dir).map(|_| ()),
         Commands::UpdateClient(args) => update_client::update_client(&args.baml_dir),
         Commands::Init(args) => init_command::init_command(args.no_prompt)
-            .and_then(|_| builder::build(&None).map(|_| ()))
-            // Note: the update-client will run on the curr dir but perhaps we want to pass in the baml_src location that baml init got from the user.
-            .and_then(|_| update_client::update_client(&None).map(|_| ()))
-            .and_then(|_| {
+            .and_then(|_| builder::build(&None))
+            // Note: double check this runs in the right dir
+            .and_then(|_| update_client::update_client(&None))
+            .map(|_| {
                 println!(
                     "\n{}\n{}\n{}",
                     "BAML Initialized successfully!".green(),
                     "Join the discord! https://discord.gg/yzaTpQ3tdT".cyan(),
                     "Documentation: https://docs.boundaryml.com".cyan()
                 );
-                Ok(())
-            })
-            .map(|_| ()),
+            }),
         Commands::Test(args) => {
             builder::build(&args.baml_dir).and_then(|(baml_dir, config, schema)| {
-                test_command::run(&args, &baml_dir, &config, schema)
+                test_command::run(args, &baml_dir, &config, schema)
             })
         }
         Commands::Import(args) => {

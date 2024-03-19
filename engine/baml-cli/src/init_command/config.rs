@@ -14,14 +14,16 @@ use super::{
     traits::{ToBamlSrc, WithLanguage, WithLoader, Writer},
 };
 
+use crate::shell::build_shell_command;
+
 pub(super) struct ProjectConfig {
-    project_root: PathBuf,
-    generators: Vec<Generator>,
-    clients: Vec<ClientConfig<String>>,
+    pub project_root: PathBuf,
+    pub generators: Vec<Generator>,
+    pub clients: Vec<ClientConfig<String>>,
     #[allow(dead_code)]
     secrets_manager: EnvManager,
     #[allow(dead_code)]
-    languages: Vec<LanguageConfig>,
+    pub languages: Vec<LanguageConfig>,
 }
 
 impl WithLoader<ProjectConfig> for ProjectConfig {
@@ -52,28 +54,90 @@ impl WithLoader<ProjectConfig> for ProjectConfig {
         let generators = languages
             .iter()
             .map(|l| -> Result<Generator, CliError> {
-                writer.write_fmt(format_args!("For {}...\n", l.name().green()))?;
+                // Skip this and go with defaults since we seem to be getting it right
+                // writer.write_fmt(format_args!("Setting up {}...\n", l.name().green()))?;
 
                 let install_command = get_value_or_default(
                     "What command do you use to install dependencies?",
                     l.install_command(),
-                    no_prompt,
+                    true, // hardcoded for now.
                 )?;
 
                 let test_command = get_value_or_default(
                     "What command do you use to run tests?",
                     l.test_command(secrets_manager.command_prefix()),
-                    no_prompt,
+                    true,
                 )?;
 
                 let package_version_command = get_value_or_default(
                     "What command do you use to check package versions?",
                     l.package_version_command(),
-                    no_prompt,
+                    true,
                 )?;
 
                 // Convert l.project_root() as relative to project_root
-                let relative_project_root = l.project_root().strip_prefix(project_root).unwrap();
+                let relative_project_root_res = l.project_root().strip_prefix(project_root);
+                // strip prefix fails if the user chose
+                // the default project root ./
+                // and a child dir for the language, like "python", which has no ./ prefix.
+                // So we just ignore it and use the language root as is.
+                let relative_project_root = match relative_project_root_res {
+                    Ok(p) => p,
+                    Err(_e) => l.project_root().as_path(),
+                };
+
+                let ts_dep_updates = match l {
+                    LanguageConfig::TypeScript(_ts_config) => {
+                        writer.write_fmt(format_args!(
+                            "\nAdding Jest dev dependencies required for Typescript...\n",
+                        ))?;
+
+                        let add_jest_deps_command =
+                            install_command.clone() + " jest ts-jest @types/jest -D";
+
+                        writer.write_fmt(format_args!("\n{}\n", add_jest_deps_command.dimmed()))?;
+
+                        let cmd = shellwords::split(&add_jest_deps_command)
+                            .map_err(|e| CliError::StringError(e.to_string()))?;
+
+                        let mut cmd = build_shell_command(cmd);
+                        cmd.output()
+                            .map_err(|e| CliError::StringError(e.to_string()))
+                            .and_then(|e| {
+                                if !e.status.success() {
+                                    Err(CliError::StringError(format!(
+                                        "{}{}{}",
+                                        "Failed to add typescript Jest dependencies!"
+                                            .normal()
+                                            .red(),
+                                        match String::from_utf8_lossy(&e.stdout) {
+                                            s if s.is_empty() => "".into(),
+                                            s => format!("\n{}", s.trim()),
+                                        },
+                                        match String::from_utf8_lossy(&e.stderr) {
+                                            s if s.is_empty() => "".into(),
+                                            s => format!("\n{}", s.trim()),
+                                        }
+                                    )))
+                                } else {
+                                    println!(
+                                        "{}",
+                                        String::from_utf8_lossy(&e.stdout)
+                                            .lines()
+                                            .map(|l| format!("  {}", l))
+                                            .collect::<Vec<String>>()
+                                            .join("\n")
+                                            .to_string()
+                                            .dimmed()
+                                    );
+                                    Ok(())
+                                }
+                            })
+                    }
+                    _ => Ok(()),
+                };
+
+                ts_dep_updates?;
 
                 Ok(Generator::new(
                     l.name(),
@@ -164,8 +228,8 @@ impl ProjectConfig {
             vars
         };
 
-        fn write_files<'a>(
-            dir: &Dir<'a>,
+        fn write_files(
+            dir: &Dir<'_>,
             target_root: &PathBuf,
             template_vars: &HashMap<&str, &str>,
             source_map: &mut HashMap<PathBuf, String>,
@@ -179,7 +243,7 @@ impl ProjectConfig {
                     None
                 }
             }) {
-                source_map.insert(path, replace_vars(&content, &template_vars)?);
+                source_map.insert(path, replace_vars(content, template_vars)?);
             }
             Ok(())
         }
@@ -201,7 +265,7 @@ impl ProjectConfig {
 
             write_files(
                 lang_dir,
-                &l.project_root(),
+                l.project_root(),
                 &template_vars,
                 &mut source_files,
             )?;

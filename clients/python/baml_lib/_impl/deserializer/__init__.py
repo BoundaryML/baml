@@ -1,5 +1,5 @@
-from .base_deserialzier import ITypeDefinition
-from .deserialzier import Deserializer
+from .base_deserializer import ITypeDefinition
+from .deserializer import Deserializer
 from .exports import register_deserializer
 from .diagnostics import DeserializerException
 

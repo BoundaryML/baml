@@ -107,7 +107,7 @@ impl From<(&str, Span)> for Identifier {
     fn from((s, span): (&str, Span)) -> Self {
         match s {
             s if s.starts_with("env.") => Identifier::ENV(s[4..].to_string(), span),
-            s if s.contains(".") => Identifier::Ref(
+            s if s.contains('.') => Identifier::Ref(
                 RefIdentifier {
                     path: s.split('.').map(|s| s.to_string()).collect::<Vec<_>>()
                         [..s.split('.').count() - 1]

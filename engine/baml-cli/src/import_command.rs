@@ -127,7 +127,6 @@ pub fn run(
                         let field_name = match &fields {
                             Value::Object(x) => Ok(x
                                 .keys()
-                                .into_iter()
                                 .enumerate()
                                 .map(|(i, x)| (x.to_string(), value[i].to_string()))
                                 .collect::<Vec<(String, String)>>()),

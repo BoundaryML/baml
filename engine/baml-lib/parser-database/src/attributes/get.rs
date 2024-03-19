@@ -9,7 +9,7 @@ pub(super) fn visit_get_attribute(attributes: &mut DynamicStringAttributes, ctx:
                 match &code.language {
                     Some((language, span)) => {
                         if !attributes.add_code(
-                            ctx.interner.intern(&language),
+                            ctx.interner.intern(language),
                             ctx.interner.intern(code.value()),
                         ) {
                             ctx.push_error(DatamodelError::new_validation_error(

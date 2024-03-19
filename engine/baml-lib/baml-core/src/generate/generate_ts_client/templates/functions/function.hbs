@@ -34,11 +34,44 @@ function create{{name}}Instance(): I{{name}} & {{name}}Function {
       }
       return impl;
     },
-    registerImpl: (name: {{name}}Impls, impl: {{name}}Impl) => {
+    registerImpl: (name: {{name}}Impls, cb: I{{name}}) => {
       if (registry[name]) {
         throw new Error(`Implementation for {{name}} with name ${name} already exists`);
       }
-      registry[name] = impl;
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"{{name}}",
+          /* returnType */ "{{return_type}}",
+          /* paramters */ [
+            {{#if params.positional}}
+            [
+              "{{params.name}}",
+              "{{params.type}}"
+            ]
+            {{else}}
+            {{#each params.values as |v|}}
+            [
+              "{{v.name}}",
+              "{{v.type}}"
+            ]{{#unless @last}},{{/unless}}
+            {{/each}}
+            {{/if}}
+          ],
+          /* arg_type */ {{#if params.positional}}'positional'{{else}}'named'{{/if}},
+          /* cb */ async (
+          {{#if params.positional}}
+          {{params.name}}: {{params.type}}
+          {{else}}
+          params: {
+            {{#each params.values as |v|}}{{v.name}}: {{v.type}}{{#unless @last}}, {{/unless}}{{/each}}
+          }
+          {{/if}}
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb({{#if params.positional}}{{params.name}}{{else}}params{{/if}});
+        })
+      };
     },
     validate: () => {
       {{#if impls}}

@@ -1,6 +1,6 @@
 import typing
 
-from .base_deserialzier import (
+from .base_deserializer import (
     BaseDeserializer,
     CheckLutFn,
     RawWrapper,

@@ -6,16 +6,18 @@ mod field_type;
 mod function;
 mod r#impl;
 mod intermediate_repr;
+mod retry_policy;
 mod template;
+mod test_case;
 mod ts_language_features;
 
 use crate::configuration::Generator;
 
 use super::{
     dir_writer::WithFileContent,
-    ir::{IntermediateRepr, WithJsonSchema},
+    ir::{Expression, IntermediateRepr, WithJsonSchema},
 };
-use ts_language_features::get_file_collector;
+use ts_language_features::{get_file_collector, ToTypeScript};
 
 pub(crate) fn generate_ts(ir: &IntermediateRepr, gen: &Generator) -> std::io::Result<()> {
     let mut collector = get_file_collector();
@@ -26,38 +28,117 @@ pub(crate) fn generate_ts(ir: &IntermediateRepr, gen: &Generator) -> std::io::Re
     ir.walk_functions().for_each(|f| {
         f.walk_impls().for_each(|i| {
             i.write(&mut collector);
-        })
+        });
+        f.walk_tests().for_each(|t| {
+            t.write(&mut collector);
+        });
     });
+
+    {
+        let clients = collector.start_file(".", "client", false);
+        clients.append(
+            r#"
+    import { loadEnvVars } from '@boundaryml/baml-core';
+    loadEnvVars();
+            "#
+            .to_string(),
+        );
+        collector.finish_file();
+    }
+
     ir.walk_clients().for_each(|c| c.write(&mut collector));
+    ir.walk_retry_policies()
+        .for_each(|r| r.write(&mut collector));
 
     let file = collector.start_file("./", "json_schema", false);
     file.add_import("json-schema", "JSONSchema7", None, false);
     file.add_import(
-        "@boundaryml/baml_client/baml_lib/deserializer/deserializer",
+        "@boundaryml/baml-core/deserializer/deserializer",
         "registerEnumDeserializer",
         None,
         false,
     );
     file.add_import(
-        "@boundaryml/baml_client/baml_lib/deserializer/deserializer",
+        "@boundaryml/baml-core/deserializer/deserializer",
         "registerObjectDeserializer",
         None,
         false,
     );
     file.append(format!(
         "const schema: JSONSchema7 = {};",
-        ir.json_schema().to_string()
+        serde_json::to_string_pretty(&ir.json_schema())?,
     ));
     ir.walk_enums().for_each(|e| {
+        let alias_value_name_pairs = e
+            .elem()
+            .values
+            .iter()
+            .flat_map(|v| -> Vec<(String, &String)> {
+                if let Some(Expression::String(alias)) = v.attributes.get("alias") {
+                    if let Some(Expression::String(description)) = v.attributes.get("description") {
+                        // "alias" and "alias: description"
+                        return vec![
+                            (alias.to_string(), &v.elem.0),
+                            (format!("\"{}: {}\"", alias, description), &v.elem.0),
+                        ];
+                    }
+
+                    return vec![(alias.to_string(), &v.elem.0)];
+                } else if let Some(Expression::String(description)) =
+                    v.attributes.get("description")
+                {
+                    // "description"
+                    return vec![(format!("\"{}\"", description), &v.elem.0)];
+                }
+                vec![]
+            })
+            .map(|(alias, value_name)| format!("  {}: \"{}\"", alias, value_name))
+            .collect::<Vec<_>>();
         file.append(format!(
-            "registerEnumDeserializer(schema.definitions.{}, {{ }});",
+            "registerEnumDeserializer(schema.definitions.{}, {{\n{}\n}});",
             e.elem().name,
+            alias_value_name_pairs.join(",\n")
         ))
     });
     ir.walk_classes().for_each(|c| {
         file.append(format!(
-            "registerObjectDeserializer(schema.definitions.{}, {{ }});",
+            "registerObjectDeserializer(schema.definitions.{}, {{\n{}\n}});",
             c.elem().name,
+            c.elem()
+                .static_fields
+                .iter()
+                .flat_map(|v| {
+                    let Some(alias) = v.attributes.get("alias") else {
+                        return vec![];
+                    };
+
+                    let Some(description) = v.attributes.get("description") else {
+                        return vec![(alias.to_ts(), &v.elem.name)];
+                    };
+
+                    if let Expression::String(alias_str) = alias {
+                        if let Expression::String(description_str) = description {
+                            return vec![
+                                (alias.to_ts(), &v.elem.name),
+                                (
+                                    format!("\"{}: {}\"", alias_str, description_str),
+                                    &v.elem.name,
+                                ),
+                            ];
+                        }
+                    }
+
+                    vec![
+                        (alias.to_ts(), &v.elem.name),
+                        (
+                            format!("[`${{{}}}: ${{{}}}`]", alias.to_ts(), description.to_ts()),
+                            &v.elem.name,
+                        ),
+                    ]
+                })
+                .map(|(alias, value_name)| format!("  {}: \"{}\"", alias, value_name))
+                .collect::<Vec<_>>()
+                .join(",\n")
         ))
     });
     file.add_export("schema");

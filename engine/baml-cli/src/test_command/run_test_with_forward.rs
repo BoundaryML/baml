@@ -6,7 +6,7 @@ use std::{
 };
 
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
+    io::{self, AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
     sync::Mutex,
     time,
@@ -14,41 +14,75 @@ use tokio::{
 
 use crate::{errors::CliError, shell::build_shell_command};
 
-use super::{ipc_comms, test_state::RunState};
+use super::{ipc_comms, run_tests::TestRunner, test_state::RunState};
 
 async fn handle_connection(
     mut stream: TcpStream,
     state: Arc<Mutex<RunState>>,
     forward_port: u16,
 ) -> tokio::io::Result<()> {
-    let mut buffer = String::new();
-    // Read message from Python test
-    let n = stream.read_to_string(&mut buffer).await?;
-    if n == 0 {
-        return Ok(());
-    }
-    let promise = forward_to_port(forward_port, &buffer);
+    let mut buffer = Vec::new();
+    let mut read_buf = [0u8; 1024]; // Adjust buffer size as needed
 
-    // buffer may have multiple messages in it, so we need to split it
-    // on the message separator <END_MSG>\n
-    let messages = buffer.split("<END_MSG>\n");
-    let mut state = state.lock().await;
-    for message in messages {
-        if message.is_empty() {
-            continue;
+    loop {
+        let n = stream.read(&mut read_buf).await?;
+        if n == 0 {
+            // End of stream
+            break;
         }
-        if let Some(message) = ipc_comms::handle_message(message) {
-            state.add_message(message);
+
+        // Append this chunk to the buffer
+        buffer.extend_from_slice(&read_buf[..n]);
+
+        // Convert buffer to string for processing (assuming UTF-8 encoded data)
+        let buffer_str = match String::from_utf8(buffer.clone()) {
+            Ok(s) => s,
+            Err(_) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Stream data is not valid UTF-8",
+                ));
+            }
+        };
+
+        // Split based on the message separator and collect into a Vec for iteration
+        let mut messages: Vec<&str> = buffer_str.split("<BAML_END_MSG>").collect();
+
+        // If the last message is incomplete (doesn't end with our separator),
+        // it will be processed in the next chunk. Remove it from processing now.
+        let incomplete_message = if buffer_str.ends_with("<BAML_END_MSG>") {
+            ""
         } else {
-            _ = promise.await;
-            return Err(tokio::io::Error::new(
-                tokio::io::ErrorKind::InvalidData,
-                format!("Failed to parse message: {}", message),
-            ));
-        }
-    }
-    _ = promise.await;
+            messages.pop().unwrap_or("")
+        };
 
+        {
+            // Lock state for update
+            let mut state = state.lock().await;
+
+            for message in messages {
+                let message = message.trim();
+                if message.is_empty() {
+                    continue;
+                }
+                let promise = forward_to_port(forward_port, message);
+
+                if let Some(message) = ipc_comms::handle_message(message) {
+                    state.add_message(message);
+                    _ = promise.await;
+                } else {
+                    _ = promise.await;
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("Failed to parse message: {}", message),
+                    ));
+                }
+            }
+        }
+
+        // Prepare buffer for next read, preserving the incomplete message if there is one
+        buffer = incomplete_message.as_bytes().to_vec();
+    }
     Ok(())
 }
 
@@ -58,7 +92,9 @@ async fn start_server() -> std::io::Result<(TcpListener, u16)> {
     Ok((listener, port))
 }
 
-async fn run_pytest_and_update_state(
+async fn run_and_update_state(
+    runner: TestRunner,
+    language_root_dir: std::path::PathBuf,
     state: Arc<Mutex<RunState>>,
     mut shell_command: Vec<String>,
     forward_port: u16,
@@ -75,14 +111,9 @@ async fn run_pytest_and_update_state(
         }
     });
 
-    // Append args to pytest to enable IPC
-    // println!("Running pytest with args: {:?}", cmd);
-    // cmd.arg("--pytest-baml-ipc");
-    // cmd.arg(format!("{}", port));
-    shell_command.push("--pytest-baml-ipc".into());
-    shell_command.push(format!("{}", port));
+    runner.add_ipc_to_command(&mut shell_command, port);
 
-    let mut cmd = build_shell_command(shell_command);
+    let mut cmd = build_shell_command(shell_command.clone());
 
     // We don't need this - too noisy. We can append to stdout logs later or print it if there was an error.
     // println!(
@@ -111,11 +142,15 @@ async fn run_pytest_and_update_state(
     let stdout_file = File::create(&stdout_file_path)?;
     let stderr_file = File::create(&stderr_file_path)?;
 
+    println!("{}", format!("Running tests using: {:?}", &cmd,));
     let mut child = cmd
+        .envs(runner.env_vars().into_iter())
+        .current_dir(language_root_dir)
+        .env("BOUNDARY_IPC_PORT", port.to_string())
         .stdout(Stdio::from(stdout_file))
         .stderr(Stdio::from(stderr_file))
         .spawn()
-        .expect("failed to spawn pytest");
+        .unwrap_or_else(|_| panic!("failed to spawn child process {}", shell_command.join(" ")));
 
     // Print state every 2 seconds while pytest is running
     let mut interval = time::interval(time::Duration::from_millis(500));
@@ -144,17 +179,15 @@ async fn run_pytest_and_update_state(
                 // But we could also get exit code 1 from other things like infisical CLI being absent, or python not being found.
                 let stderr_content = tokio::fs::read_to_string(&stderr_file_path).await?;
                 let stdout_content = tokio::fs::read_to_string(&stdout_file_path).await?;
-                if ![0, 1].contains(&code) {
+                if code >= 2 {
                     println!(
                         "\n####### STDOUT Logs for this test ########\n{}",
-                        stdout_content
+                        stdout_content.bright_red().bold()
                     );
-                    if !stderr_content.is_empty() {
-                        println!(
-                            "\n####### STDERR Logs for this test ########\n{}",
-                            stderr_content
-                        );
-                    }
+                    println!(
+                        "\n####### STDERR Logs for this test ########\n{}",
+                        stderr_content.bright_red().bold()
+                    );
 
                     println!(
                         "{}",
@@ -175,14 +208,26 @@ async fn run_pytest_and_update_state(
                 }
 
                 // if stderr is not empty and exit code is 1, we also have an issue
-                if code == 1 && !stderr_content.is_empty() {
+                if code == 1 && (!stderr_content.is_empty() || !stdout_content.is_empty()) {
                     // Don't say the test failed since the exit code 1 may just be pytest saying some tests failed.
+                    // print stdout
+                    println!(
+                        "\n####### STDOUT Logs for this test ########\n{}",
+                        stdout_content.bright_red().bold()
+                    );
                     println!("{}", stderr_content.bright_red().bold());
+                    println!(
+                        "{}",
+                        "Some tests failed or there was a problem running the tests."
+                            .bright_red()
+                            .bold()
+                    );
                     println!(
                         "\n{}\n{}",
                         stdout_file_path.display().to_string().dimmed(),
                         stderr_file_path.display().to_string().dimmed()
                     );
+                    std::process::exit(code);
                 }
             }
             output
@@ -197,6 +242,8 @@ async fn run_pytest_and_update_state(
 }
 
 pub(crate) fn run_test_with_forward(
+    runner: TestRunner,
+    language_root_dir: std::path::PathBuf,
     state: RunState,
     shell_command: Vec<String>,
     forward_port: u16,
@@ -205,7 +252,9 @@ pub(crate) fn run_test_with_forward(
 
     let state = Arc::new(Mutex::new(state));
 
-    rt.block_on(run_pytest_and_update_state(
+    rt.block_on(run_and_update_state(
+        runner,
+        language_root_dir,
         state,
         shell_command,
         forward_port,
@@ -213,9 +262,11 @@ pub(crate) fn run_test_with_forward(
     .map_err(|e| format!("Failed to run pytest: {}", e).into())
 }
 
-async fn forward_to_port(port: u16, message: &String) -> tokio::io::Result<()> {
+async fn forward_to_port(port: u16, message: &str) -> tokio::io::Result<()> {
     const HOST: &str = "127.0.0.1";
     // Forward message to the port.
     let mut stream = TcpStream::connect(format!("{}:{}", HOST, port)).await?;
-    stream.write_all(message.as_bytes()).await
+    stream.write_all(message.as_bytes()).await?;
+    stream.write_all(b"<BAML_END_MSG>\n").await?;
+    stream.flush().await
 }

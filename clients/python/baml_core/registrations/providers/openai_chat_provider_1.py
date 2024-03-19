@@ -5,7 +5,6 @@ from .openai_helper_1 import to_error_code
 
 import typing
 
-
 from baml_core.provider_manager import (
     LLMChatMessage,
     LLMChatProvider,
@@ -26,8 +25,8 @@ def _to_chat_completion_messages(msg: LLMChatMessage) -> ChatCompletionMessagePa
 @register_llm_provider("baml-openai-chat", "baml-azure-chat")
 @typing.final
 class OpenAIChatProvider(LLMChatProvider):
-    __kwargs: typing.Dict[str, typing.Any]
-    _client: AsyncClient
+    __request_args: typing.Dict[str, typing.Any]
+    __client_args: typing.Dict[str, typing.Any]
 
     def __init__(
         self, *, options: typing.Dict[str, typing.Any], **kwargs: typing.Any
@@ -44,32 +43,48 @@ class OpenAIChatProvider(LLMChatProvider):
             ),
             **kwargs,
         )
+        self.__client_args = {
+            "timeout": options.pop("request_timeout", options.pop("timeout", 60 * 3)),
+            "api_key": options["api_key"],
+        }
+
+        if options.pop("max_retries", None) is not None:
+            raise ValueError("Use a BAML RetryPolicy instead of passing in max_retries")
 
         if options.get("api_type") == "azure" or options.get("azure_endpoint"):
-            # We still need to map from the 0.x API to the 1.x API. People may use either of these:
-            # api_key / api_key
-            # api_version / api_version
-            # api_base / azure_endpoint
-
-            self._client = AsyncAzureOpenAI(
-                api_key=options["api_key"],
+            self.__client_args.update(
                 api_version=options["api_version"],
                 azure_endpoint=options.get("api_base") or options["azure_endpoint"],
             )
-        else:
-            self._client = AsyncOpenAI(api_key=options["api_key"])
+
+        # Build up the actual request args, which don't include any of these.
         options.pop("api_key", None)
         options.pop("api_version", None)
         options.pop("api_base", None)
         options.pop("api_type", None)
         options.pop("azure_endpoint", None)
-        timeout = options.get("timeout") or options.get("request_timeout") or None
-        if options.pop("request_timeout", None) is not None:
-            self._client.timeout = timeout
+
         options["model"] = options.get("model", None) or options.pop("engine", None)
 
-        self.__kwargs = options
-        self._set_args(**self.__kwargs)
+        self.__request_args = options
+        self._set_args(**self.__request_args)
+
+    def __create_client(self) -> AsyncClient:
+        options = self.__client_args.copy()
+        timeout = options.get("timeout", 60 * 3)
+        if options.get("api_type") == "azure" or options.get("azure_endpoint"):
+            # We still need to map from the 0.x API to the 1.x API. People may use either of these:
+            # api_key / api_key
+            # api_version / api_version
+            # api_base / azure_endpoint
+            return AsyncAzureOpenAI(
+                api_key=options["api_key"],
+                api_version=options["api_version"],
+                azure_endpoint=options.get("api_base") or options["azure_endpoint"],
+                timeout=timeout,
+            )
+        else:
+            return AsyncOpenAI(api_key=options["api_key"], timeout=timeout)
 
     def _to_error_code(self, e: Exception) -> typing.Optional[int]:
         return to_error_code(e)
@@ -78,9 +93,11 @@ class OpenAIChatProvider(LLMChatProvider):
         pass
 
     async def _run_chat(self, messages: typing.List[LLMChatMessage]) -> LLMResponse:
-        response: ChatCompletion = await self._client.chat.completions.create(
+        # Instantiate the client everytime to prevent event-loop errors
+        client = self.__create_client()
+        response: ChatCompletion = await client.chat.completions.create(
             messages=list(map(_to_chat_completion_messages, messages)),
-            **self.__kwargs,
+            **self.__request_args,
         )
         assert isinstance(
             response, ChatCompletion
@@ -121,9 +138,10 @@ class OpenAIChatProvider(LLMChatProvider):
     async def _stream_chat(
         self, messages: typing.List[LLMChatMessage]
     ) -> typing.AsyncIterator[LLMResponse]:
-        response = await self._client.chat.completions.create(
+        client = self.__create_client()
+        response = await client.chat.completions.create(
             messages=list(map(_to_chat_completion_messages, messages)),
-            **self.__kwargs,
+            **self.__request_args,
             stream=True,
         )
 

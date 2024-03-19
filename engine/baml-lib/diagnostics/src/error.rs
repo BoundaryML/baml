@@ -4,8 +4,8 @@ use crate::{
     pretty_print::{pretty_print, DiagnosticColorer},
     Span,
 };
-use std::{borrow::Cow, ops::Index};
 use std::iter::Iterator;
+use std::{borrow::Cow, ops::Index};
 
 #[derive(Debug, Clone)]
 pub struct DatamodelError {
@@ -50,7 +50,7 @@ where
     let filtered_names = name_distances
         .iter()
         .filter(|&&(dist, _)| dist <= THRESHOLD)
-        .map(|&(_, idx)| options.index(idx.into()).as_ref());
+        .map(|&(_, idx)| options.index(idx).as_ref());
 
     // Return either a limited or full set of filtered names
     match max_return {
@@ -58,7 +58,6 @@ where
         None => filtered_names.collect(),
     }
 }
-
 
 impl DatamodelError {
     pub(crate) fn new(message: impl Into<Cow<'static, str>>, span: Span) -> Self {
@@ -389,14 +388,14 @@ impl DatamodelError {
         let prefix = if type_exists {
             format!(
                 "{} `{}` is not used in in the output of function `{}`.",
-                is_enum.then(|| "Enum").unwrap_or("Type"),
+                if is_enum { "Enum" } else { "Type" },
                 type_name,
                 function_name
             )
         } else {
             format!(
                 "{} `{}` does not exist.",
-                is_enum.then(|| "Enum").unwrap_or("Type"),
+                if is_enum { "Enum" } else { "Type" },
                 type_name,
             )
         };
@@ -404,9 +403,9 @@ impl DatamodelError {
         let close_names = sort_by_match(type_name, &names, Some(3));
         let suggestions = if names.is_empty() {
             if is_enum {
-                format!(" No Enums are used in the output of this function.",)
+                " No Enums are used in the output of this function.".to_string()
             } else {
-                format!(" Did you mean `output`?",)
+                " Did you mean `output`?".to_string()
             }
         } else if close_names.is_empty() {
             // If no names are close enough, suggest nothing or provide a generic message
@@ -496,10 +495,10 @@ impl DatamodelError {
         for<'a> &'a I: IntoIterator<Item = &'a T>,
     {
         let close_names = sort_by_match(property_name, &alternatives, None);
-    
+
         Self::new(match close_names.len() {
             0 => format!("Property not known: \"{property_name}\".",),
-            1 => 
+            1 =>
                 format!(
                     "Property not known: \"{property_name}\". Did you mean this: \"{close_name}\"?",
                     close_name = close_names[0]

@@ -2,7 +2,7 @@ import typing
 
 from pydantic import BaseModel
 
-from .base_deserialzier import (
+from .base_deserializer import (
     BaseDeserializer,
     CheckLutFn,
     ITypeDefinition,

@@ -68,11 +68,11 @@
     },
 
     {
-      "group": "Hello World (REQUIRED)",
+      "group": "Hello World",
       "pages": [
-        "v3/guides/hello_world/level1",
-        "v3/guides/hello_world/level1-b",
-        "v3/guides/hello_world/level0"
+        "v3/guides/hello_world/writing-ai-functions",
+        "v3/guides/hello_world/testing-ai-functions",
+        "v3/guides/hello_world/baml-project-structure"
       ]
     },
     {

@@ -1,6 +1,6 @@
 use baml_lib::internal_baml_parser_database::ParserDatabase;
 use colored::*;
-use log::info;
+use log::debug;
 use std::{collections::HashMap, ops::Deref, str::FromStr};
 
 use super::ipc_comms::{LogSchema, MessageData, Template, TestCaseStatus, ValueType};
@@ -261,7 +261,7 @@ impl RunState {
                 None
             }
             MessageData::UpdateTestCase(update) => {
-                // update.test_case_arg_name is of form "<test>[<function>-<impl>]"
+                // update.test_case_arg_name is of form "test_<test>[<function>-<impl>]"
                 let mut parts = update.test_case_arg_name.split('[');
                 let test = parts.next().unwrap();
                 // Strip leading "test_"
@@ -297,22 +297,23 @@ impl RunState {
                 };
 
                 let state = if let Some(x) = self.tests.get_mut(&key) {
+                    debug!("Updating test state for {:?}", x);
                     x
                 } else {
-                    info!("Unable to find test state for {:?}", key);
+                    debug!("Unable to find test state for {:?}", key);
                     return None;
                 };
                 *state = new_state;
 
-                match update.error_data {
-                    Some(error) => Some((key, format!("{}", error.to_string().red()))),
-                    None => None,
-                }
+                update
+                    .error_data
+                    .map(|error| (key, format!("{}", error.to_string().red())))
             }
             MessageData::Log(log) => {
                 // Log messages always come after the test case update
                 {
                     let test_name = log.context.tags.get("test_case_arg_name");
+                    println!("Test name: {:?}", test_name);
                     if let Some(test_name) = test_name {
                         let mut parts = test_name.split('[');
                         let test = parts.next().unwrap();
@@ -338,7 +339,7 @@ impl RunState {
                     if let Some(state) = state {
                         if let TestState::Finished(state) = state {
                             let (llm_prompt, llm_raw_output) =
-                                match log.metadata.as_ref().and_then(|meta| {
+                                match log.metadata.as_ref().map(|meta| {
                                     // TODO: Swap out template vars
                                     let input = match &meta.input.prompt.template {
                                         Template::Single(o) => o.clone(),
@@ -361,12 +362,10 @@ impl RunState {
                                         colored_input = colored_input.replace(k, &replacement);
                                     });
 
-                                    let raw_output = match &meta.output {
-                                        Some(output) => Some(output.raw_text.clone()),
-                                        None => None,
-                                    };
+                                    let raw_output =
+                                        meta.output.as_ref().map(|output| output.raw_text.clone());
 
-                                    Some((colored_input, raw_output))
+                                    (colored_input, raw_output)
                                 }) {
                                     Some((llm_prompt, llm_raw_output)) => {
                                         (Some(llm_prompt), llm_raw_output)
@@ -374,21 +373,21 @@ impl RunState {
                                     None => (None, None),
                                 };
 
-                            let err = log.error.as_ref().and_then(|error| match &error.traceback {
+                            let err = log.error.as_ref().map(|error| match &error.traceback {
                                 Some(traceback) => {
-                                    Some(format!("{}\n{}", error.message, traceback))
+                                    format!("{}\n{}", error.message, traceback)
                                 }
-                                None => Some(error.message.clone()),
+                                None => error.message.clone(),
                             });
 
-                            let parsed_output = match log.io.output.as_ref().and_then(|output| {
+                            let parsed_output = match log.io.output.as_ref().map(|output| {
                                 let output = match &output.value {
                                     ValueType::String(s) => serde_json::Value::from_str(s),
                                     ValueType::List(l) => l
                                         .iter()
                                         .map(|v| serde_json::Value::from_str(v))
                                         .collect::<Result<Vec<_>, _>>()
-                                        .map(|v| serde_json::Value::Array(v)),
+                                        .map(serde_json::Value::Array),
                                 }
                                 .map(|v| {
                                     serde_json::to_string_pretty(&v).unwrap_or_else(|_| {
@@ -396,18 +395,14 @@ impl RunState {
                                     })
                                 })
                                 .ok();
-                                let r#type = self
-                                    .schema
-                                    .find_function_by_name(&spec.function)
-                                    .and_then(|f| {
-                                        Some(
-                                            f.walk_output_args()
-                                                .map(|w| w.ast_arg().1.field_type.to_string())
-                                                .collect::<Vec<_>>()
-                                                .join(", "),
-                                        )
+                                let r#type =
+                                    self.schema.find_function_by_name(&spec.function).map(|f| {
+                                        f.walk_output_args()
+                                            .map(|w| w.ast_arg().1.field_type.to_string())
+                                            .collect::<Vec<_>>()
+                                            .join(", ")
                                     });
-                                Some((output, r#type))
+                                (output, r#type)
                             }) {
                                 Some((Some(output), Some(r#type))) => Some((output, r#type)),
                                 _ => None,
@@ -457,6 +452,8 @@ impl RunState {
                             if !res.is_empty() {
                                 return Some((spec, res));
                             }
+                        } else {
+                            println!("Test state is not finished: {:?} {:?}", spec, state);
                         }
                     }
                     None

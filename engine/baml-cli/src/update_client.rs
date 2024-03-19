@@ -8,7 +8,7 @@ pub fn update_client(baml_dir: &Option<String>) -> Result<(), CliError> {
 
     let cwd = std::env::current_dir().unwrap().canonicalize().unwrap();
 
-    config
+    let errors: Vec<_> = config
         .generators
         .iter()
         .map(|(gen, _)| {
@@ -48,7 +48,9 @@ pub fn update_client(baml_dir: &Option<String>) -> Result<(), CliError> {
                     if !e.status.success() {
                         Err(CliError::StringError(format!(
                             "{}{}{}",
-                            "Failed!".normal().red(),
+                            "Failed to add/update 'baml' python dependency!"
+                                .normal()
+                                .red(),
                             match String::from_utf8_lossy(&e.stdout) {
                                 s if s.is_empty() => "".into(),
                                 s => format!("\n{}", s.trim()),
@@ -75,16 +77,11 @@ pub fn update_client(baml_dir: &Option<String>) -> Result<(), CliError> {
                 })
         })
         .filter_map(|e| e.err())
-        .for_each(|e| {
-            println!(
-                "{}",
-                e.to_string()
-                    .lines()
-                    .map(|l| format!("  {}", l))
-                    .collect::<Vec<String>>()
-                    .join("\n")
-            )
-        });
+        .collect();
+
+    if !errors.is_empty() {
+        return Err(CliError::StringError(errors[0].to_string()));
+    }
 
     Ok(())
 }

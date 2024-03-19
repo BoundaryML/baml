@@ -1,0 +1,9 @@
+{
+  "input": {
+    "myArg": {
+      "key": "one",
+      "key_two": false,
+      "key_three": 5
+    }
+  }
+}

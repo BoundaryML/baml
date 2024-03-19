@@ -39,7 +39,8 @@ def to_anthropic_message(msg: LLMChatMessage) -> MessageParam:  # type: ignore
 @register_llm_provider("baml-anthropic-chat")
 @typing.final
 class AnthropicChatProvider(LLMChatProvider):
-    __kwargs: typing.Dict[str, typing.Any]
+    __caller_kwargs: typing.Dict[str, typing.Any]
+    __client_kwargs: typing.Dict[str, typing.Any]
 
     def _to_error_code(self, e: Exception) -> typing.Optional[int]:
         if isinstance(e, anthropic.APIStatusError):
@@ -86,7 +87,6 @@ class AnthropicChatProvider(LLMChatProvider):
         self._ensure_option_defaults(options, "max_retries", 0)
         client_kwargs = {k: options.pop(k) for k in client_arg_names if k in options}
 
-        self.__client = anthropic.AsyncAnthropic(**client_kwargs)
         self.__client_kwargs = client_kwargs
         self.__caller_kwargs = options
         self._set_args(**self.__caller_kwargs, **self.__client_kwargs)
@@ -96,6 +96,9 @@ class AnthropicChatProvider(LLMChatProvider):
     ) -> None:
         if key not in options:
             options[key] = default_value
+
+    def __create_client(self) -> anthropic.AsyncAnthropic:
+        return anthropic.AsyncAnthropic(**self.__client_kwargs)
 
     def _prepare_message_handling(
         self, messages: typing.List[LLMChatMessage]
@@ -132,7 +135,7 @@ class AnthropicChatProvider(LLMChatProvider):
         if system_message:
             messages_kwargs["system"] = system_message
 
-        response = await self.__client.messages.create(
+        response = await self.__create_client().messages.create(
             **messages_kwargs,
         )
 
@@ -174,9 +177,9 @@ class AnthropicChatProvider(LLMChatProvider):
             messages_kwargs["system"] = system_message
 
         if parse_version(version=anthropic.__version__) < parse_version("0.16.0"):
-            messages_api = self.__client.beta.messages  # type: ignore
+            messages_api = self.__create_client().beta.messages  # type: ignore
         else:
-            messages_api = self.__client.messages
+            messages_api = self.__create_client().messages
         async with messages_api.stream(
             **messages_kwargs,
         ) as stream:

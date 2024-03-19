@@ -96,7 +96,7 @@ Extract this info from the email in JSON format:
 JSON:
 ```
 <Note>
-This is a similar format OpenAI uses to render schemas, with the description as "// Description" on top of each field.
+This is similar to the format OpenAI uses to render schemas, with the description as "// Description" on top of each field.
 </Note>
 
 The [BAML deserializer](/v3/syntax/prompt_engineering/type-deserializer) is smart enough to map each field in your object back to the original property name, so you can still use `order_info.id` in your python code.
@@ -128,7 +128,9 @@ After the optionals are added, **print_type(output)** will now append `| null` t
 
 ## Calling your function
 
-Nothing has changed here! You can still call your function in Python using the generated BAML client as before:
+Now that `cost` might be null, we need to handle that:
+
+<CodeGroup>
 
 ```python
 from baml_client import baml as b
@@ -141,12 +143,46 @@ async def main():
       body="Your order has been shipped. It will arrive on 1st Jan 2022. Product: iPhone 13. Cost: $999.99"
   ))
 
-  if order_info is not None and order_info.cost is not None and order_info.cost > 500:
+  if order_info.cost is None:
+      print("No cost found")
+  elif order_info.cost > 1000:
       print("You spent a lot of money!")
+  elif order_info.cost > 500:
+      print("You spent a chunk of money!")
+  else:
+      print("You spent a little money!")
 
 if __name__ == "__main__":
   asyncio.run(main())
 ```
+
+```typescript
+import b from '@/baml_client'
+import { Email } from '@/baml_client/baml_types'
+
+const main = async () => {
+  const order_info = await b.GetOrderInfo({
+      subject="Order #1234",
+      body="Your order has been shipped. It will arrive on 1st Jan 2022. Product: iPhone 13. Cost: $999.99"
+  });
+
+  if (order_info.cost === null) {
+    console.log("No cost found")
+  if (order_info.cost > 1000) {
+    console.log("You spent a lot of money!")
+  } else if (order_info.cost > 500) {
+    console.log("You spent a chunk of money!")
+  } else {
+    console.log("You spent a little money!")
+  }
+};
+
+if (require.main === module) {
+  main();
+}
+```
+
+</CodeGroup>
 
 ## Full code
 [Check it out!](https://github.com/BoundaryML/baml-examples/blob/main/extraction-guide/baml_src/main.baml)
@@ -155,12 +191,17 @@ if __name__ == "__main__":
 
 In this tutorial we learned:
 
-1. How to use [@alias and @description](/v3/syntax/prompt_engineering/class#property-attributes) to modify what `print_type` renders
+1. How to use [@alias and
+    @description](/v3/syntax/prompt_engineering/class#property-attributes) to modify
+    what `print_type` renders
 1. How to use [optionals](/v3/syntax/type#optional) to handle missing data
 
-We recommend learning more about how to dynamically serialize the input using [computed properties](/v3/syntax/class#computed-properties). Specifically for serializing a string[] into a prompt.
+We recommend learning more about how to dynamically serialize the input using
+[computed properties](/v3/syntax/class#computed-properties). Specifically for
+serializing a string[] into a prompt.
 
-Want more resiliency? Take a look at adding [**retry policies**](/v3/syntax/client/retry) and fallbacks to your BAML LLM Client.
+Want more resiliency? Take a look at adding [**retry
+policies**](/v3/syntax/client/retry) and fallbacks to your BAML LLM Client.
 
 ## Next steps
 

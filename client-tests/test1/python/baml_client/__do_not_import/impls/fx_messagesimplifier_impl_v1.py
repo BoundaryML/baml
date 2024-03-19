@@ -40,6 +40,7 @@ Output:\
 """
 
 __input_replacers = {
+    "{arg}",
     "{arg}"
 }
 

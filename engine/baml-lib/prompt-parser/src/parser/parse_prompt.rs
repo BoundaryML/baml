@@ -52,20 +52,20 @@ pub fn parse_prompt(
                                     inner,
                                     &mut top_level_definitions,
                                     &mut diagnostics,
-                                    &raw_string,
+                                    raw_string,
                                     &mut num_chat_blocks,
                                 ),
                                 Rule::comment_block => handle_comment_block(
                                     inner,
                                     &mut top_level_definitions,
                                     &diagnostics,
-                                    &raw_string,
+                                    raw_string,
                                 ),
                                 Rule::prompt_text => handle_prompt_text(
                                     inner,
                                     &mut top_level_definitions,
                                     &diagnostics,
-                                    &raw_string,
+                                    raw_string,
                                 ),
                                 Rule::dangling_code_block => {
                                     diagnostics.push_error(DatamodelError::new_parser_error(
@@ -186,7 +186,7 @@ fn handle_print_block(
 ) {
     assert_correct_parser!(current, Rule::print_block);
 
-    let _block_span = &raw_string.to_raw_span(current.as_span().clone());
+    let _block_span = &raw_string.to_raw_span(current.as_span());
     let mut printer_type = None;
     let mut argument = vec![];
     let mut template_span = None;
@@ -209,7 +209,7 @@ fn handle_print_block(
                 }
             },
             Rule::template_args => {
-                template_span = Some(raw_string.to_raw_span(current.as_span().clone()));
+                template_span = Some(raw_string.to_raw_span(current.as_span()));
                 for current in current.into_inner() {
                     match current.as_rule() {
                         Rule::identifier => {
@@ -268,7 +268,7 @@ fn handle_print_block(
         (None, Some(arg)) => {
             diagnostics.push_error(DatamodelError::new_parser_error(
                 format!("Did you mean print_type({0}) or print_enum({0})?", arg.0),
-                raw_string.to_raw_span(current.as_span().clone()),
+                raw_string.to_raw_span(current.as_span()),
             ));
             None
         }
@@ -281,14 +281,14 @@ fn handle_print_block(
                         false => "type",
                     }
                 ),
-                raw_string.to_raw_span(current.as_span().clone()),
+                raw_string.to_raw_span(current.as_span()),
             ));
             None
         }
         (None, None) => {
             diagnostics.push_error(DatamodelError::new_parser_error(
                 "Missing argument. Did you mean print_type(SomeType)?".into(),
-                raw_string.to_raw_span(current.as_span().clone()),
+                raw_string.to_raw_span(current.as_span()),
             ));
             None
         }
@@ -319,7 +319,7 @@ fn parse_arg_list(
                 Rule::identifier => {
                     arguments.push((
                         inner.as_str().to_string(),
-                        raw_string.to_raw_span(inner.as_span().clone()),
+                        raw_string.to_raw_span(inner.as_span()),
                     ));
                 }
                 Rule::WHITESPACE => {}
@@ -339,7 +339,7 @@ fn handle_chat_block(
 ) {
     assert_correct_parser!(current, Rule::chat_block);
 
-    let _block_span = &raw_string.to_raw_span(current.as_span().clone());
+    let _block_span = &raw_string.to_raw_span(current.as_span());
     let mut arguments = vec![];
 
     for current in current.clone().into_inner() {
@@ -366,7 +366,7 @@ fn handle_chat_block(
         diagnostics.push_error(DatamodelError::new_parser_error(
             "Expected exactly one argument for role. e.g. {#chat(user)} or {#chat(system)}"
                 .to_string(),
-            raw_string.to_raw_span(current.as_span().clone()),
+            raw_string.to_raw_span(current.as_span()),
         ));
     }
 
@@ -431,7 +431,7 @@ fn handle_comment_block(
 
     // handle comment block
     top_level_definitions.push(Top::CommentBlock(CommentBlock {
-        span: raw_string.to_raw_span(pair.as_span().clone()),
+        span: raw_string.to_raw_span(pair.as_span()),
         block: pair.as_str().to_string(),
     }));
 }
@@ -450,7 +450,7 @@ fn handle_prompt_text(
         .count();
 
     if trailing_whitespace > 0 && content.len() > trailing_whitespace {
-        let span = raw_string.to_raw_span(pair.as_span().clone());
+        let span = raw_string.to_raw_span(pair.as_span());
         let start = span.start;
         let end = span.end - trailing_whitespace;
         top_level_definitions.push(Top::PromptText(PromptText {
@@ -465,7 +465,7 @@ fn handle_prompt_text(
         // handle empty lines
         top_level_definitions.push(Top::WhiteSpace(
             content.to_string(),
-            raw_string.to_raw_span(pair.as_span().clone()),
+            raw_string.to_raw_span(pair.as_span()),
         ));
     } else {
         // handle prompt text

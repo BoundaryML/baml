@@ -4,8 +4,6 @@ use crate::{errors::CliError, init_command::interact::get_multi_selection_or_def
 
 use super::traits::{ToBamlSrc, WithLoader, Writer};
 
-
-
 pub(super) struct ClientConfig<T: AsRef<str>> {
     pub comment: Option<String>,
     pub name: T,
@@ -25,14 +23,14 @@ client<llm> {} {{
   }}
 }}
         "#,
-            self.comment.as_ref()
-                .map(|c| 
+            self.comment
+                .as_ref()
+                .map(|c|
                     // Prefix each line of the comment with a `//`
                     c.trim().lines()
                         .map(|l| format!("// {}", l.trim()))
                         .collect::<Vec<String>>()
-                        .join("\n")
-                )
+                        .join("\n"))
                 .unwrap_or_default(),
             self.name.as_ref(),
             self.provider.as_ref(),
@@ -41,20 +39,26 @@ client<llm> {} {{
                 .map(|(k, v)| format!("    {} {}", k, v))
                 .collect::<Vec<String>>()
                 .join("\n")
-        ).trim().into()
+        )
+        .trim()
+        .into()
     }
 }
 
 impl<T: AsRef<str> + From<&'static str>> WithLoader<Vec<ClientConfig<T>>> for ClientConfig<T> {
-    fn from_dialoguer(no_prompt: bool, _: &PathBuf, _writer: &mut Writer) -> Result<Vec<ClientConfig<T>>, CliError> {
+    fn from_dialoguer(
+        no_prompt: bool,
+        _: &PathBuf,
+        _writer: &mut Writer,
+    ) -> Result<Vec<ClientConfig<T>>, CliError> {
         const CLIENT_PROVIDERS: [&str; 3] = ["OpenAI", "OpenAI (Azure)", "Anthropic"];
 
         let providers = get_multi_selection_or_default(
             "What llm provider do you want to use?",
-            &CLIENT_PROVIDERS, 
+            &CLIENT_PROVIDERS,
             &[true],
-            no_prompt)?;
-
+            no_prompt,
+        )?;
 
         Ok(providers
             .iter()
@@ -103,8 +107,10 @@ fn openai_azure_clients<T: From<&'static str> + AsRef<str>>() -> Vec<ClientConfi
         provider: "baml-azure-chat".into(),
         name: "Azure".into(),
         params: vec![
-            ("model", "env.OPENAI_AZURE_MODEL_NAME"),
-            ("api_key", "env.OPENAI_AZURE_API_KEY"),
+            ("model", "gpt-35-turbo"),
+            ("api_version", "2023-12-01-preview"),
+            ("api_key", "env.AZURE_OPENAI_API_KEY"),
+            ("azure_endpoint", "env.AZURE_OPENAI_ENDPOINT"),
         ],
     }]
 }
@@ -113,7 +119,7 @@ fn anthropic_clients<T: From<&'static str> + AsRef<str>>() -> Vec<ClientConfig<T
     vec![
         ClientConfig {
             comment: None,
-            provider: "baml-anthropic".into(),
+            provider: "baml-anthropic-chat".into(),
             name: "Claude".into(),
             params: vec![
                 ("model_name", "claude-2.1"),
@@ -122,7 +128,7 @@ fn anthropic_clients<T: From<&'static str> + AsRef<str>>() -> Vec<ClientConfig<T
         },
         ClientConfig {
             comment: None,
-            provider: "baml-anthropic".into(),
+            provider: "baml-anthropic-chat".into(),
             name: "ClaudeInstant".into(),
             params: vec![
                 ("model_name", "claude-instant-1.2"),

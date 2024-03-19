@@ -25,6 +25,8 @@ textwrap = "0.16.0"
 either = "1.6.1"
 strsim = "0.10.0"
 semver = "1.0.20"
+regex = "1.10.3"
+shellwords = "1.1.0"
 
 
 [dev-dependencies]

@@ -24,7 +24,7 @@ pub(crate) fn parse_function(
     for current in pair.into_inner() {
         match current.as_rule() {
             Rule::FUNCTION_KEYWORD | Rule::BLOCK_OPEN | Rule::BLOCK_CLOSE => {}
-            Rule::identifier => name = Some(parse_identifier(current.into(), diagnostics)),
+            Rule::identifier => name = Some(parse_identifier(current, diagnostics)),
             Rule::function_contents => {
                 let mut pending_field_comment: Option<Pair<'_>> = None;
 
@@ -108,7 +108,7 @@ pub(crate) fn parse_function(
         (Some(name), _, _) => Err(DatamodelError::new_model_validation_error(
             "This function declaration is invalid. It is missing an input or output field.",
             "function",
-            &name.name(),
+            name.name(),
             diagnostics.span(pair_span),
         )),
         _ => Err(DatamodelError::new_model_validation_error(
@@ -208,10 +208,10 @@ fn parse_function_field_type(
         }
     }
 
-    return Err(DatamodelError::new_validation_error(
+    Err(DatamodelError::new_validation_error(
         "Missing function field type",
         span,
-    ));
+    ))
 }
 
 fn parse_function_arg(

@@ -71,7 +71,7 @@ impl<'db> FunctionWalker<'db> {
         match self.ast_function().input() {
             ast::FunctionArgs::Named(_) => None,
             ast::FunctionArgs::Unnamed(_) => {
-                if position == 0 as u32 {
+                if position == 0_u32 {
                     Some(ArgWalker {
                         db: self.db,
                         id: (self.id, true, FuncArguementId(position)),
@@ -118,10 +118,7 @@ impl<'db> FunctionWalker<'db> {
                 (ast::TopId::Variant(id), ast::Top::Variant(impl_))
                     if impl_.function_name().name() == self.name() =>
                 {
-                    Some(VariantWalker {
-                        db: self.db,
-                        id: id,
-                    })
+                    Some(VariantWalker { db: self.db, id })
                 }
                 _ => None,
             })

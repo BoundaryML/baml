@@ -8,7 +8,11 @@ pub(crate) fn handle_message(message: &str) -> Option<MessageData> {
     }
     // Parse the message as json
     match serde_json::from_str::<MessageData>(message) {
-        Ok(data) => Some(data),
+        Ok(data) => {
+            // let now = chrono::Utc::now().format("%M:%S%.3f");
+            // println!("{now} Received message: {:?}", data);
+            Some(data)
+        }
         Err(e) => {
             log::error!("Failed to parse message: {}\n{}", e, message);
             None
@@ -36,7 +40,7 @@ pub(crate) struct TestRunMeta {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub(crate) struct UpdateTestCase {
-    project_id: String,
+    project_id: Option<String>,
     test_cycle_id: String,
     test_dataset_name: String,
     test_case_definition_name: String,
@@ -47,7 +51,7 @@ pub(crate) struct UpdateTestCase {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub(crate) struct LogSchema {
-    project_id: String,
+    project_id: Option<String>,
     event_type: EventType,
     root_event_id: String,
     event_id: String,

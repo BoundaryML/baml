@@ -61,7 +61,7 @@ pub trait WithStaticRenames<'db>: WithName {
             _ => None,
         };
         let base_alias = defaults.and_then(|a| *a.alias());
-        base_alias.and_then(|id| Some(db[id].to_string()))
+        base_alias.map(|id| db[id].to_string())
     }
 
     /// Overrides for local names.
@@ -89,8 +89,8 @@ pub trait WithStaticRenames<'db>: WithName {
     fn skip(&'db self, variant: &VariantWalker<'db>) -> bool {
         let (overrides, defaults) = self.get_attributes(variant);
 
-        let override_alias = overrides.and_then(|o| o.skip().clone());
-        let base_alias = defaults.and_then(|a| a.skip().clone());
+        let override_alias = overrides.and_then(|o| *o.skip());
+        let base_alias = defaults.and_then(|a| *a.skip());
         match (override_alias, base_alias) {
             (Some(id), _) => id,
             (None, Some(id)) => id,

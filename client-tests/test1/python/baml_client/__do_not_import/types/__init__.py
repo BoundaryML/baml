@@ -7,6 +7,7 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
+from .classes.cls_basicclass import BasicClass
 from .classes.cls_classifyresponse import ClassifyResponse
 from .classes.cls_conversation import Conversation
 from .classes.cls_empty import Empty
@@ -14,9 +15,14 @@ from .classes.cls_haiku import Haiku
 from .classes.cls_hi import Hi
 from .classes.cls_improvedresponse import ImprovedResponse
 from .classes.cls_message import Message
+from .classes.cls_optionalobject import OptionalObject
+from .classes.cls_optionaltest_prop1 import OptionalTest_Prop1
+from .classes.cls_optionaltest_returntype import OptionalTest_ReturnType
 from .classes.cls_proposedmessage import ProposedMessage
+from .enums.enm_categories import Categories
 from .enums.enm_emptyenum import EmptyEnum
 from .enums.enm_messagesender import MessageSender
+from .enums.enm_optionaltest_categorytype import OptionalTest_CategoryType
 from .enums.enm_sentiment import Sentiment
 from .enums.enm_tool import Tool
 
@@ -24,6 +30,8 @@ from .enums.enm_tool import Tool
 
 
 __all__ = [
+    'BasicClass',
+    'Categories',
     'ClassifyResponse',
     'Conversation',
     'Empty',
@@ -33,6 +41,10 @@ __all__ = [
     'ImprovedResponse',
     'Message',
     'MessageSender',
+    'OptionalObject',
+    'OptionalTest_CategoryType',
+    'OptionalTest_Prop1',
+    'OptionalTest_ReturnType',
     'ProposedMessage',
     'Sentiment',
     'Tool'

@@ -2,8 +2,8 @@ from enum import Enum
 import typing
 
 from pydantic import BaseModel
-from .base_deserialzier import BaseDeserializer
-from .primitive_deserialzier import PrimitiveDeserializer, NoneDeserializer
+from .base_deserializer import BaseDeserializer
+from .primitive_deserializer import PrimitiveDeserializer, NoneDeserializer
 from .enum_deserializer import EnumDeserializer
 from .object_deserializer import ObjectDeserializer
 

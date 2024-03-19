@@ -19,7 +19,7 @@ class ImprovedResponse {
     improved_response string? 
     field Sentiment
 } 
-
+ 
  
 function MaybePolishText {
     input ProposedMessage
@@ -45,7 +45,7 @@ function MaybePolishText {
 // }
  
 impl<llm, MaybePolishText> v1 {
-    client Anthropic
+    client AZURE_GPT4
 
 
 
@@ -143,4 +143,4 @@ impl<llm, MaybePolishText> v3 {
 
         
 //     "#
-// }
+// } 

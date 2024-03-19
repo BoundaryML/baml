@@ -142,16 +142,24 @@ DELIVERED
 JSON:
 ```
 
-And that's it! Try running a test and tweaking the prompt to get the best performance by adding aliases and property descriptions back in!
+And that's it! Try running a test and tweaking the prompt to get the best
+performance by adding aliases and property descriptions back in!
 
-The main point of this is that you just need to add all the available types into your prompt so the LLM is able to give you the desired output type. BAML gives you all the tools to be able to do that, without being too forceful about it. E.g. if you wanted you could write things out manually to test, and then migrate things to print_type and print_enum once you get the hang of things.
+The main point of this is that you just need to add all the available types into
+your prompt so the LLM is able to give you the desired output type. BAML gives
+you all the tools to be able to do that, without being too forceful about it.
+E.g. if you wanted you could write things out manually to test, and then migrate
+things to print_type and print_enum once you get the hang of things.
 
 ## Conclusion
-In this tutorial we learned about
-1. Complex nested types and how print_type works with them
-1. Combining classes and enums together
 
-Note that we do have `Unions` `int` and `bool`, types that aren't mentioned here. Follow our [syntax docs](/v3/syntax/type) for more information.
+In this tutorial we learned about
+
+1. Complex nested types and how print_type works with them
+2. Combining classes and enums together
+
+Note that we do have `Unions`, `int` and `bool`, types that aren't mentioned
+here. Follow our [syntax docs](/v3/syntax/type) for more information.
 
 ## Next steps
 We will now learn how to do a chain-of-thought prompting strategy.

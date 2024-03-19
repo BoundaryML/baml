@@ -1,5 +1,9 @@
-import BamlClient from './baml_client';
-import * as BamlClientTypes from './baml_client/types';
+import { FireBamlEvent } from "./ffi_layer";
+import dotenv from 'dotenv';
+const setTags = FireBamlEvent.tags;
 
-export { BamlClientTypes as Types };
-export default BamlClient;
+const loadEnvVars = () => {
+  dotenv.config();
+}
+
+export { setTags, loadEnvVars };

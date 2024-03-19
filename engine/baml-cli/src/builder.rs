@@ -27,7 +27,7 @@ pub fn build(
         &baml_dir,
         src_files
             .iter()
-            .map(|path| SourceFile::from((path.clone(), std::fs::read_to_string(&path).unwrap())))
+            .map(|path| SourceFile::from((path.clone(), std::fs::read_to_string(path).unwrap())))
             .collect::<Vec<_>>(),
     )?;
 

@@ -25,7 +25,7 @@ pub(crate) fn get_baml_src(baml_dir: &Option<String>) -> Result<PathBuf, CliErro
         None => match default_baml_dir() {
             Ok(dir) => dir,
             Err(err) => {
-                return Err(err.into());
+                return Err(err);
             }
         },
     };
@@ -65,10 +65,10 @@ pub(crate) fn get_src_files(baml_dir: &PathBuf) -> Result<Vec<PathBuf>, CliError
     } else {
         &glob_pattern
     };
-    let entries = glob::glob(&glob_pattern)?;
+    let entries = glob::glob(glob_pattern)?;
     let mut paths = Vec::new();
 
-    let valid_extensions = vec!["baml", "json"];
+    let valid_extensions = ["baml", "json"];
     for entry in entries {
         match entry {
             Ok(path) => {

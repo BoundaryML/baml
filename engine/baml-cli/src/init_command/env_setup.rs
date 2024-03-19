@@ -15,7 +15,7 @@ pub(super) enum EnvManager {
 }
 
 impl EnvManager {
-    pub fn command_prefix<'a>(&'a self) -> Option<&'a str> {
+    pub fn command_prefix(&self) -> Option<&str> {
         match self {
             EnvManager::Infisical => Some("infisical run --"),
             EnvManager::Doppler => Some("doppler run --"),

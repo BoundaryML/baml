@@ -1,10 +1,10 @@
 use crate::{builder::get_src_dir, shell::build_shell_command, update::UPDATE_CHANNEL};
 use crate::{errors::CliError, OutputType};
-use clap;
+
 use colored::Colorize;
-use log;
+
 use regex::Regex;
-use serde;
+
 use std::path::PathBuf;
 
 #[derive(Debug, serde::Deserialize)]
@@ -34,7 +34,7 @@ pub struct GeneratorVersion {
     pub name: String,
     pub dir: PathBuf,
     pub language: String,
-    pub current_version: String,
+    pub current_version: Option<String>,
     pub latest_version: Option<String>,
     pub recommended_update: Option<String>,
 }
@@ -86,14 +86,12 @@ pub fn get_client_version(
 
     let version_line_re = if package_version_command.starts_with("conda") {
         // conda's version output has "baml" in the same line
-        Regex::new(r#"(?i)\b(?:baml)\b"#).map_err(|e| {
-            CliError::StringError(format!("{} Error: {}", "Failed!".red(), e.to_string()))
-        })?
+        Regex::new(r#"(?i)\b(?:baml)\b"#)
+            .map_err(|e| CliError::StringError(format!("{} Error: {}", "Failed!".red(), e)))?
     } else {
         // for other python package managers, they have "version" in the same line
-        Regex::new(r#"(?i)\b(?:version)\b"#).map_err(|e| {
-            CliError::StringError(format!("{} Error: {}", "Failed!".red(), e.to_string()))
-        })?
+        Regex::new(r#"(?i)\b(?:version)\b"#)
+            .map_err(|e| CliError::StringError(format!("{} Error: {}", "Failed!".red(), e)))?
     };
 
     let Some(version_line) = output.lines().find(|line| version_line_re.is_match(line)) else {
@@ -104,9 +102,8 @@ pub fn get_client_version(
         )));
     };
 
-    let version_re = Regex::new("[0-9][^ ]*").map_err(|e| {
-        CliError::StringError(format!("{} Error: {}", "Failed!".red(), e.to_string()))
-    })?;
+    let version_re = Regex::new("[0-9][^ ]*")
+        .map_err(|e| CliError::StringError(format!("{} Error: {}", "Failed!".red(), e)))?;
 
     let Some(version) = version_re.find(version_line) else {
         return Err(CliError::StringError(format!(
@@ -172,26 +169,45 @@ pub fn check_for_updates(baml_dir_override: &Option<String>) -> Result<CheckedVe
 
     if let Ok((_, (config, _))) = get_src_dir(baml_dir_override) {
         for (gen, _) in config.generators {
-            // every generator's client type needs to get attached to the output
-            let current_version = get_client_version(
-                gen.project_root.to_str().unwrap(),
-                gen.package_version_command.as_str(),
-            )?;
             let latest_version = match gen.language.as_str() {
                 "python" => latest_versions.py_client.clone(),
                 "typescript" => latest_versions.ts_client.clone(),
                 _ => None,
             };
-            let recommended_update = recommended_update(&current_version, &latest_version);
 
-            ret.generators.push(GeneratorVersion {
-                name: gen.name,
-                dir: gen.project_root.canonicalize()?,
-                language: gen.language.as_str().to_string(),
-                current_version: current_version,
-                latest_version: latest_version,
-                recommended_update: recommended_update,
-            });
+            match get_client_version(
+                gen.project_root.to_str().unwrap(),
+                gen.package_version_command.as_str(),
+            )
+            .and_then(|v| {
+                gen.language
+                    .parse_version(v.as_str())
+                    .map_err(|e| CliError::StringError(e.to_string()))
+            }) {
+                Ok(current_version) => {
+                    let recommended_update = recommended_update(&current_version, &latest_version);
+
+                    ret.generators.push(GeneratorVersion {
+                        name: gen.name,
+                        dir: gen.project_root.canonicalize()?,
+                        language: gen.language.as_str().to_string(),
+                        current_version: Some(current_version),
+                        latest_version,
+                        recommended_update,
+                    });
+                }
+                Err(e) => {
+                    log::warn!("Failed to get version for {}: {}", gen.name, e);
+                    ret.generators.push(GeneratorVersion {
+                        name: gen.name,
+                        dir: gen.project_root.canonicalize()?,
+                        language: gen.language.as_str().to_string(),
+                        current_version: None,
+                        latest_version,
+                        recommended_update: None,
+                    });
+                }
+            }
         }
     }
 
@@ -243,11 +259,19 @@ pub fn run(args: &VersionArgs) -> Result<(), CliError> {
                 } in generators.iter()
                 {
                     println!(
-                        "{} {current_version} via {} {}",
+                        "{} {} via {} {}",
                         format!("{language} client").cyan(),
+                        current_version
+                            .as_ref()
+                            .map_or("(not_installed)".to_string(), |v| v.to_string()),
                         format!("generator {name}").cyan(),
                         recommended_update.as_ref().map_or(
-                            "(up-to-date)".to_string(),
+                            if current_version.is_none() {
+                                "(run `baml update-client` to install)"
+                            } else {
+                                "(up-to-date)"
+                            }
+                            .to_string(),
                             |latest| format!("(update recommended: {})", latest.green())
                         )
                     );

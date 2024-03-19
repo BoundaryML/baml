@@ -1,7 +1,7 @@
 use baml_lib::internal_baml_core::LockFileWrapper;
 use colored::*;
 use log::{info, warn};
-use semver;
+
 use serde::{Deserialize, Serialize};
 
 use crate::{command::run_command_with_error, errors::CliError};
@@ -131,7 +131,7 @@ fn impl_update() -> Result<(), CliError> {
 
 fn is_installed_from_brew() -> bool {
     std::process::Command::new("brew")
-        .args(&["list", "baml"])
+        .args(["list", "baml"])
         .output()
         .map(|o| o.status.success())
         .ok()
@@ -158,5 +158,5 @@ fn update_shell_install() -> Result<(), CliError> {
         "https://raw.githubusercontent.com/BoundaryML/homebrew-baml/main/install-baml.sh";
 
     let command = ["-c", "curl", "-fsS", INSTALL_SCRIPT, "|", "sh"];
-    run_command_with_error("sh", &command, "install command")
+    run_command_with_error("sh", command, "install command")
 }

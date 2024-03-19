@@ -1,5 +1,8 @@
+import { loadEnvVars } from "@boundaryml/baml-core"
 import * as f from "./function"
 import "./impls"
+
+loadEnvVars()
 
 const BamlClient = {
   {{#each functions as |f|}}

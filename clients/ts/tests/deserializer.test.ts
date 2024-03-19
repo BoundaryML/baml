@@ -1,5 +1,5 @@
 import { JSONSchema7 } from "json-schema";
-import { Deserializer, registerObjectDeserializer } from "../src/baml_lib/deserializer/deserializer";
+import { Deserializer, registerObjectDeserializer } from "../src/deserializer/deserializer";
 import { Category } from "./test_helpers";
 
 
@@ -53,6 +53,8 @@ describe("Enum Deserializer", () => {
             $ref: "#/definitions/Category"
         });
         expect(deserializer.coerce("ONE")).toBe(Category.ONE);
+        expect(deserializer.coerce("one")).toBe(Category.ONE);
+        expect(() => deserializer.coerce("citronella")).toThrow();
     });
 
     test("enum_from_str_w_quotes", () => {
@@ -67,7 +69,7 @@ describe("Enum Deserializer", () => {
 
     test("enum_with_text_before", () => {
         const deserializer = new Deserializer<Category>(schema, { $ref: "#/definitions/Category" });
-        expect(() => deserializer.coerce("The output is: ONE")).toThrow();
+        expect(deserializer.coerce("The output is: ONE")).toBe(Category.ONE);
     });
 
     test("enum_from_enum_list_single", () => {
@@ -107,9 +109,57 @@ describe("Enum Deserializer", () => {
     test("test_enum_from_string_with_extra_text_after", () => {
         const deserializer = new Deserializer<Category>(schema, { $ref: "#/definitions/Category" });
         expect(deserializer.coerce("ONE is the output")).toBe(Category.ONE);
-        expect(deserializer.coerce("ONE - is the answer, not TWO")).toBe(Category.ONE);
-        expect(deserializer.coerce("ONE. is the answer, not TWO")).toBe(Category.ONE);
-        expect(deserializer.coerce("ONE: is the answer, not TWO")).toBe(Category.ONE);
+        expect(() => deserializer.coerce("ONE - is the answer, not TWO")).toThrow();
+        expect(() => deserializer.coerce("ONE. is the answer, not TWO")).toThrow();
+        expect(() => deserializer.coerce("ONE: is the answer, not TWO")).toThrow();
+    });
+
+    test("test_enum_alias_from_string", () => {
+        const deserializer = new Deserializer<Category>(schema, { $ref: "#/definitions/Category" });
+        deserializer.overload('Category', { 'uno': Category.ONE, 'deux': Category.TWO });
+
+        expect(deserializer.coerce("uno")).toBe(Category.ONE);
+        expect(deserializer.coerce("uno is the output")).toBe(Category.ONE);
+        expect(deserializer.coerce("deux")).toBe(Category.TWO);
+        expect(deserializer.coerce("deux is the output")).toBe(Category.TWO);
+    });
+
+    test("test_enum_alias_from_chain_of_thought", () => {
+        const deserializer = new Deserializer<Category>(schema, { $ref: "#/definitions/Category" });
+        deserializer.overload('Category', { 'uno': Category.ONE, 'deux': Category.TWO });
+
+        expect(deserializer.coerce("chain of thought\n\nsome more reasoning\n\nuno\n")).toBe(Category.ONE);
+        expect(deserializer.coerce("chain of thought\n\nsome more reasoning\n\nAnswer: deux\n")).toBe(Category.TWO);
+    });
+
+    // TODO: handle snake case aliases
+    test("test_enum_alias_with_punctuation_from_string", () => {
+        const deserializer = new Deserializer<Category>(schema, { $ref: "#/definitions/Category" });
+        deserializer.overload('Category', { 'a single item': Category.ONE, 'the:category.is/pair': Category.TWO });
+
+        // people put spaces, dots, slashes, hyphens, underscores in their aliases - we should handle them all
+        expect(deserializer.coerce("a single item is the answer")).toBe(Category.ONE);
+        expect(deserializer.coerce("a-single-item is the answer")).toBe(Category.ONE);
+        expect(deserializer.coerce("the category is pair")).toBe(Category.TWO);
+        expect(deserializer.coerce("the_category_is_pair")).toBe(Category.TWO);
+    });
+
+    test("test_enum_alias_based_on_max_count", () => {
+        const deserializer = new Deserializer<Category>(schema, { $ref: "#/definitions/Category" });
+        deserializer.overload('Category', { 'uno': Category.ONE, 'deux': Category.TWO });
+
+        expect(() => deserializer.coerce('sorry dave, not sure if the answer is uno or deux')).toThrow();
+        expect(deserializer.coerce('the answer is uno: it is clearly uno, definitely not deux')).toBe(Category.ONE);
+    });
+
+    test("test_enum_alias_list_from_string", () => {
+        const deserializer = new Deserializer<Category[]>(schema, {
+            type: 'array',
+            items: { $ref: "#/definitions/Category" }
+        });
+        deserializer.overload('Category', { 'uno': Category.ONE, 'deux': Category.TWO });
+
+        expect(deserializer.coerce('["uno", "deux"]')).toEqual(expect.arrayContaining([Category.ONE, Category.TWO]));
     });
 
     // test("test_enum_aliases_from_string_with_extra_text", () => {

@@ -45,7 +45,7 @@ export enum EventType {
 }
 
 export const clientEventLogSchema = z.object({
-  project_id: z.string(),
+  project_id: z.string().optional().nullable(),
   root_event_id: z.string().uuid(),
   event_id: z.string().uuid(),
   event_type: z.nativeEnum(EventType),

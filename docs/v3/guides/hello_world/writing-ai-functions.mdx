@@ -1,0 +1,152 @@
+---
+title: "Writing AI functions"
+---
+
+<Warning>
+Please read "Writing AI functions", "Testing AI functions", and "BAML Project
+Structure" to get started - the rest of the documentation will only make sense
+if you've read all three articles!
+</Warning>
+
+### Pre-requisites
+
+Follow the [installation](/v3/home/installation) instructions and run **baml init** in a new project.
+
+The starting project structure will look like this:
+<img src="/images/v3/baml_init.png" />
+
+## Overview
+
+Before you call an LLM, ask yourself what kind of input or output youre
+expecting. If you want the LLM to generate text, then you probably want a
+string, but if you're trying to get it to collect user details, you may want it
+to return a complex type like `UserDetails`.
+
+Thinking this way can help you decompose large complex prompts into smaller,
+more measurable functions, and will also help you build more complex workflows
+and agents.
+
+We'll start with a simple function to extract verbs from a sentence, and then
+build on that to learn how BAML can modify more complex and powerful functions.
+
+# Implementing an AI function
+
+## 1. Define AI functions and models in BAML files
+
+First we will define a function of the following signature in BAML:
+`ExtractVerbs(input: string) -> string[]`
+
+Here's the BAML equivalent, which you can add to your `main.baml`:
+
+```rust baml_src/main.baml
+function ExtractVerbs {
+    input string
+    /// list of verbs
+    output string[]
+}
+```
+ 
+
+Every [BAML function](/v3/syntax/function) has a strictly typed input and
+output. The input and output can be either a **primitive type** (string, number,
+boolean) or a [complex type](/v3/syntax/type) (think unions, lists, or even
+custom pydantic models)
+
+## 2. Implement the function using a prompt
+
+To implement the function we need two things:
+
+1. An LLM client that defines which LLM to call and with which params.
+2. The actual prompt.
+
+<Steps>
+<Step title="Define the LLM client">
+To implement a client we can just define one like this in a BAML file. Learn more about [clients](/v3/syntax/client) and non-openai chat providers.
+
+<Tip>
+If you used `baml init` you should already have a **clients.baml** file with the client below
+</Tip>
+
+```rust baml_src/clients.baml
+client<llm> GPT4 {
+  provider baml-openai-chat
+  options {
+    model gpt-4 
+    api_key env.OPENAI_API_KEY
+  }
+}
+```
+<Tip>
+Use any parameters available to that model, like temperature etc, by adding them to the options block. You can also use environment variables to store secrets like API keys.
+</Tip>
+</Step>
+<Step title="Define a prompt">
+Next we can create the prompt by **implementing** the function using an LLM.
+In BAML we provide helper utilities to inject the [input variables](/v3/syntax/prompt_engineering/variables) into the prompt, and also get the LLM to return the right output type. You always get full-view of the whole prompt string, without any magic.
+
+```rust
+impl<llm, ExtractVerbs> version1 {
+  client GPT4
+  prompt #"
+    Extract the verbs from this INPUT:
+ 
+    INPUT:
+    ---
+    {#input}
+    ---
+    {// this is a comment inside a prompt! //}
+    Return a {#print_type(output)}.
+
+    Response:
+  "#
+}
+```
+
+In VSCode you can click on **"Open Playground"** on top of the impl or prompt to see the full prompt:
+
+<img src="/images/v3/open_playground.png" />
+
+<img src="/images/v3/extractverbs_playground.png" />
+
+In here you'll notice how our language automatically dedents strings, injects variables into the prompt, and supports comments that will be stripped from the actual prompt. See our [syntax guide](/v3/syntax/strings) for more information on basic string / comment syntax.
+
+We will explain more how **print_type** works in later tutorials.
+
+</Step>
+</Steps>
+
+## 3. Use the function in your Python / TS code
+
+Our VSCode extension automatically generates a python **baml_client** to access and call your functions.
+
+```python main.py
+from baml_client import baml as b
+import asyncio
+
+async def main():
+  verb_list = await b.ExtractVerbs(
+    "This is a paragraph"
+  )
+
+  if len(verb_list) == 1:
+      print("There is 1 verb in this paragraph")
+  else:
+      print(f"There are {len(verb_list)} verb(s) in this paragraph")
+
+if __name__ == "__main__":
+  asyncio.run(main())
+```
+
+<Accordion title="What are these awaits or async things?">
+  The BAML client exports async versions of your functions, so you can parallelize things easily if you need to. To run async functions sequentially you can easily just wrap them in the `asyncio.run(....)`. 
+  
+  Let us know if you want synchronous versions of your functions instead!
+</Accordion>
+
+## Show me the code
+[Here it is!](https://github.com/BoundaryML/baml-examples/tree/main/hello-world) Clone the repo to get syntax highlighting.
+
+## Further reading
+- Continue on to the Testing + Extraction tutorials!
+- See other types of [function signatures](/v3/syntax/function) possible in BAML.
+- Learn more about [prompt variables](/v3/syntax/prompt_engineering/variables).

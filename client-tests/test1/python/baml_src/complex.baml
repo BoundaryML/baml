@@ -18,7 +18,7 @@ class ClassifyResponse {
       return f'You can use the following tools: {self.tool} {json.dumps(self.pretty_message2)}'
     "#
   )
-  
+   
     
   pretty_message2 string @get(
     python#"

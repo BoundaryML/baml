@@ -1,0 +1,31 @@
+[package]
+edition = "2021"
+name = "baml-ffi"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+license-file.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+napi = { version = "2", features = ["serde-json", "anyhow", "async"] }
+napi-derive = "2"
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing = "0.1.40"
+colored = "2.1.0"
+hostname = "0.3.1"
+reqwest = { version = "0.11.24", features = ["json"] }
+uuid = { version = "1.7.0", features = ["v4"] }
+tracing-subscriber = "0.3.18"
+envy = "0.4.2"
+openssl = { version = ">=0", features = ["vendored"] }
+chrono = "0.4.35"
+
+[build-dependencies]
+napi-build = "2"

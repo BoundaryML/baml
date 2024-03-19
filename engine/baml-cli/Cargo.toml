@@ -29,6 +29,8 @@ tokio = {version = "1.35.1", features = ["full"] }
 openssl = { version = ">=0", features = [ "vendored" ] }
 walkdir = "2.4.0"
 regex = "1.10.3"
+tempfile = "3.10.1"
+uuid = { version = "1.7.0", features= ["v4"] }
 
 [dev-dependencies]
 base64 = "0.13.0"
@@ -36,3 +38,4 @@ dissimilar = "1.0.4"
 expect-test = "1.1.0"
 indoc.workspace = true
 either = "1.8.1"
+
