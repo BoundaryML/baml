@@ -23,6 +23,7 @@ from .functions.fx_messagesimplifier import BAMLMessageSimplifier
 from .functions.fx_namedfunc import BAMLNamedfunc
 from .functions.fx_optionalfunc import BAMLOptionalFunc
 from .functions.fx_optionalnamedfunc import BAMLOptionalNamedFunc
+from .functions.fx_optionaltest_function import BAMLOptionalTest_Function
 from .functions.fx_stringfunc import BAMLStringFunc
 from baml_core.otel import add_message_transformer_hook, flush_trace_logs
 from baml_core.provider_manager import LLMManager
@@ -42,6 +43,7 @@ class BAMLClient:
     Namedfunc = BAMLNamedfunc
     OptionalFunc = BAMLOptionalFunc
     OptionalNamedFunc = BAMLOptionalNamedFunc
+    OptionalTest_Function = BAMLOptionalTest_Function
     StringFunc = BAMLStringFunc
     AZURE_DEFAULT = AZURE_DEFAULT
     AZURE_GPT4 = AZURE_GPT4

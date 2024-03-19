@@ -16,10 +16,13 @@ from .classes.cls_hi import Hi
 from .classes.cls_improvedresponse import ImprovedResponse
 from .classes.cls_message import Message
 from .classes.cls_optionalobject import OptionalObject
+from .classes.cls_optionaltest_prop1 import OptionalTest_Prop1
+from .classes.cls_optionaltest_returntype import OptionalTest_ReturnType
 from .classes.cls_proposedmessage import ProposedMessage
 from .enums.enm_categories import Categories
 from .enums.enm_emptyenum import EmptyEnum
 from .enums.enm_messagesender import MessageSender
+from .enums.enm_optionaltest_categorytype import OptionalTest_CategoryType
 from .enums.enm_sentiment import Sentiment
 from .enums.enm_tool import Tool
 
@@ -39,6 +42,9 @@ __all__ = [
     'Message',
     'MessageSender',
     'OptionalObject',
+    'OptionalTest_CategoryType',
+    'OptionalTest_Prop1',
+    'OptionalTest_ReturnType',
     'ProposedMessage',
     'Sentiment',
     'Tool'

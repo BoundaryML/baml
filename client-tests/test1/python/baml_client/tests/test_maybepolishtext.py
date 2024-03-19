@@ -30,3 +30,4 @@ async def test_homeless_salmon(MaybePolishTextImpl: IMaybePolishTextStream, baml
             baml_ipc_channel.send("partial_response", response.json())
 
         await stream.get_final_response()
+

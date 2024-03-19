@@ -69,41 +69,35 @@ pub(crate) fn generate_ts(ir: &IntermediateRepr, gen: &Generator) -> std::io::Re
         serde_json::to_string_pretty(&ir.json_schema())?,
     ));
     ir.walk_enums().for_each(|e| {
+        let alias_value_name_pairs = e
+            .elem()
+            .values
+            .iter()
+            .flat_map(|v| -> Vec<(String, &String)> {
+                if let Some(Expression::String(alias)) = v.attributes.get("alias") {
+                    if let Some(Expression::String(description)) = v.attributes.get("description") {
+                        // "alias" and "alias: description"
+                        return vec![
+                            (alias.to_string(), &v.elem.0),
+                            (format!("\"{}: {}\"", alias, description), &v.elem.0),
+                        ];
+                    }
+
+                    return vec![(alias.to_string(), &v.elem.0)];
+                } else if let Some(Expression::String(description)) =
+                    v.attributes.get("description")
+                {
+                    // "description"
+                    return vec![(format!("\"{}\"", description), &v.elem.0)];
+                }
+                vec![]
+            })
+            .map(|(alias, value_name)| format!("  {}: \"{}\"", alias, value_name))
+            .collect::<Vec<_>>();
         file.append(format!(
             "registerEnumDeserializer(schema.definitions.{}, {{\n{}\n}});",
             e.elem().name,
-            e.elem()
-                .values
-                .iter()
-                .flat_map(|v| {
-                    let Some(alias) = v.attributes.get("alias") else {
-                        return vec![];
-                    };
-
-                    let Some(description) = v.attributes.get("description") else {
-                        return vec![(alias.to_ts(), &v.elem.0)];
-                    };
-
-                    if let Expression::String(alias_str) = alias {
-                        if let Expression::String(description_str) = description {
-                            return vec![
-                                (alias.to_ts(), &v.elem.0),
-                                (format!("\"{}: {}\"", alias_str, description_str), &v.elem.0),
-                            ];
-                        }
-                    }
-
-                    vec![
-                        (alias.to_ts(), &v.elem.0),
-                        (
-                            format!("[`${{{}}}: ${{{}}}`]", alias.to_ts(), description.to_ts()),
-                            &v.elem.0,
-                        ),
-                    ]
-                })
-                .map(|(alias, value_name)| format!("  {}: \"{}\"", alias, value_name))
-                .collect::<Vec<_>>()
-                .join(",\n")
+            alias_value_name_pairs.join(",\n")
         ))
     });
     ir.walk_classes().for_each(|c| {

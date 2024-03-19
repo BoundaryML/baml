@@ -19,4 +19,5 @@ from .fx_maybepolishtext_impl_v2 import v2 as unused_fx_maybepolishtext_impl_v2
 from .fx_maybepolishtext_impl_v3 import v3 as unused_fx_maybepolishtext_impl_v3
 from .fx_messagesimplifier_impl_v1 import v1 as unused_fx_messagesimplifier_impl_v1
 from .fx_namedfunc_impl_version import version as unused_fx_namedfunc_impl_version
+from .fx_optionaltest_function_impl_v1 import v1 as unused_fx_optionaltest_function_impl_v1
 from .fx_stringfunc_impl_v1 import v1 as unused_fx_stringfunc_impl_v1
