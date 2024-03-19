@@ -24,6 +24,7 @@ reqwest = { version = "0.11.24", features = ["json"] }
 uuid = { version = "1.7.0", features = ["v4"] }
 tracing-subscriber = "0.3.18"
 envy = "0.4.2"
+openssl = { version = ">=0", features = ["vendored"] }
 chrono = "0.4.35"
 
 [build-dependencies]
