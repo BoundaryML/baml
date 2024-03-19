@@ -4,8 +4,6 @@ use crate::{errors::CliError, init_command::interact::get_multi_selection_or_def
 
 use super::traits::{ToBamlSrc, WithLoader, Writer};
 
-
-
 pub(super) struct ClientConfig<T: AsRef<str>> {
     pub comment: Option<String>,
     pub name: T,
@@ -25,14 +23,14 @@ client<llm> {} {{
   }}
 }}
         "#,
-            self.comment.as_ref()
-                .map(|c| 
+            self.comment
+                .as_ref()
+                .map(|c|
                     // Prefix each line of the comment with a `//`
                     c.trim().lines()
                         .map(|l| format!("// {}", l.trim()))
                         .collect::<Vec<String>>()
-                        .join("\n")
-                )
+                        .join("\n"))
                 .unwrap_or_default(),
             self.name.as_ref(),
             self.provider.as_ref(),
@@ -41,20 +39,26 @@ client<llm> {} {{
                 .map(|(k, v)| format!("    {} {}", k, v))
                 .collect::<Vec<String>>()
                 .join("\n")
-        ).trim().into()
+        )
+        .trim()
+        .into()
     }
 }
 
 impl<T: AsRef<str> + From<&'static str>> WithLoader<Vec<ClientConfig<T>>> for ClientConfig<T> {
-    fn from_dialoguer(no_prompt: bool, _: &PathBuf, _writer: &mut Writer) -> Result<Vec<ClientConfig<T>>, CliError> {
+    fn from_dialoguer(
+        no_prompt: bool,
+        _: &PathBuf,
+        _writer: &mut Writer,
+    ) -> Result<Vec<ClientConfig<T>>, CliError> {
         const CLIENT_PROVIDERS: [&str; 3] = ["OpenAI", "OpenAI (Azure)", "Anthropic"];
 
         let providers = get_multi_selection_or_default(
             "What llm provider do you want to use?",
-            &CLIENT_PROVIDERS, 
+            &CLIENT_PROVIDERS,
             &[true],
-            no_prompt)?;
-
+            no_prompt,
+        )?;
 
         Ok(providers
             .iter()

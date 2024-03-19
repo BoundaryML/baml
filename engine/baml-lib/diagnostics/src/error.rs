@@ -4,8 +4,8 @@ use crate::{
     pretty_print::{pretty_print, DiagnosticColorer},
     Span,
 };
-use std::{borrow::Cow, ops::Index};
 use std::iter::Iterator;
+use std::{borrow::Cow, ops::Index};
 
 #[derive(Debug, Clone)]
 pub struct DatamodelError {
@@ -58,7 +58,6 @@ where
         None => filtered_names.collect(),
     }
 }
-
 
 impl DatamodelError {
     pub(crate) fn new(message: impl Into<Cow<'static, str>>, span: Span) -> Self {
@@ -496,10 +495,10 @@ impl DatamodelError {
         for<'a> &'a I: IntoIterator<Item = &'a T>,
     {
         let close_names = sort_by_match(property_name, &alternatives, None);
-    
+
         Self::new(match close_names.len() {
             0 => format!("Property not known: \"{property_name}\".",),
-            1 => 
+            1 =>
                 format!(
                     "Property not known: \"{property_name}\". Did you mean this: \"{close_name}\"?",
                     close_name = close_names[0]

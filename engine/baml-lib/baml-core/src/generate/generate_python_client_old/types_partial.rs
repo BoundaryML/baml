@@ -1,5 +1,3 @@
-
-
 use internal_baml_schema_ast::ast::{FieldType, FunctionArg, Identifier, TypeValue};
 
 use super::{file::File, traits::WithPartial, traits::WithToCode};

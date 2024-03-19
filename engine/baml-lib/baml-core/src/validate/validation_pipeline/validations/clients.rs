@@ -1,6 +1,5 @@
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning};
 
-
 use crate::validate::validation_pipeline::context::Context;
 
 pub(super) fn validate(ctx: &mut Context<'_>) {

@@ -155,7 +155,7 @@ fn print_list(item: &ListType) -> String {
             } else {
                 print_type(inner_type)
             }
-        },
+        }
         DataType::Enum(t) => {
             if t.optional {
                 format!("({})", print_type(inner_type))
