@@ -1,4 +1,3 @@
-#[allow(clippy::blocks_in_conditions)]
 use colored::*;
 use std::{collections::HashMap, str::FromStr};
 
@@ -229,7 +228,8 @@ impl LogSchema {
     match self.event_type {
       EventType::FuncLlm => {
         let log = self;
-        let (llm_prompt, llm_raw_output) = match log.metadata.as_ref().map(|meta| {
+
+        let (llm_prompt, llm_raw_output) = if let Some(meta) = log.metadata.as_ref() {
           // TODO: Swap out template vars
           let input = match &meta.input.prompt.template {
             Template::Single(o) => o.clone(),
@@ -254,10 +254,9 @@ impl LogSchema {
 
           let raw_output = meta.output.as_ref().map(|output| output.raw_text.clone());
 
-          (colored_input, raw_output)
-        }) {
-          Some((llm_prompt, llm_raw_output)) => (Some(llm_prompt), llm_raw_output),
-          None => (None, None),
+          (Some(colored_input), raw_output)
+        } else {
+          (None, None)
         };
 
         let err = log.error.as_ref().map(|error| match &error.traceback {
@@ -265,7 +264,7 @@ impl LogSchema {
           None => error.message.clone(),
         });
 
-        let parsed_output = match log.io.output.as_ref().map(|output| {
+        let parsed_output = if let Some(output) = log.io.output.as_ref() {
           let r#type = match &output.r#type.name {
             TypeSchemaName::Single => {
               let fields = output
@@ -301,10 +300,12 @@ impl LogSchema {
               .unwrap_or_else(|_| format!("Failed to serialize output: {:?}", v))
           })
           .ok();
-          (output, Some(r#type))
-        }) {
-          Some((Some(output), Some(r#type))) => Some((output, r#type)),
-          _ => None,
+          match output {
+            Some(output) => Some((output, r#type)),
+            None => None,
+          }
+        } else {
+          None
         };
 
         let res = match (llm_prompt, llm_raw_output, err, parsed_output) {
