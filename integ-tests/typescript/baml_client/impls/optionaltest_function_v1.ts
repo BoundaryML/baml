@@ -13,6 +13,8 @@ import { Deserializer } from '@boundaryml/baml-core/deserializer/deserializer';
 
 
 const prompt_template = `\
+
+
 Return a JSON blob with this schema: 
 ({
   "omega_1": {
@@ -22,6 +24,13 @@ Return a JSON blob with this schema:
   "omega_2": string | null,
   "omega_3": ("OptionalTest_CategoryType as string" | null)[]
 } | null)[]
+
+Here's a list of values you can use for
+OptionalTest_CategoryType
+---
+Aleph
+Beta
+Gamma
 
 JSON:\
 `;
