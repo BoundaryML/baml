@@ -11,6 +11,7 @@ export const enum TestCaseStatus {
   Cancelled = 4,
   ExpectedFailure = 5,
 }
+export function isAvailable(): boolean
 export class BamlTracer {
   constructor()
   start(): void

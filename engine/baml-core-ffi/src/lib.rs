@@ -351,3 +351,8 @@ impl JsScopeGuard {
     self.guard = None;
   }
 }
+
+#[napi]
+pub fn is_available() -> bool {
+  true
+}

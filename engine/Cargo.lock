@@ -140,6 +140,7 @@ dependencies = [
 name = "baml"
 version = "0.14.0-canary.0"
 dependencies = [
+ "anyhow",
  "baml-lib",
  "base64 0.13.1",
  "check-latest",
@@ -156,7 +157,6 @@ dependencies = [
  "include_dir",
  "indoc",
  "log",
- "openssl",
  "regex",
  "reqwest",
  "semver",
@@ -181,7 +181,6 @@ dependencies = [
  "napi",
  "napi-build",
  "napi-derive",
- "openssl",
  "reqwest",
  "serde",
  "serde_json",

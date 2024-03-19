@@ -8,7 +8,7 @@ description.workspace = true
 license-file.workspace = true
 
 [dependencies]
-baml-lib = { path = "../baml-lib/baml"}
+baml-lib = { path = "../baml-lib/baml" }
 base64 = "0.13.0"
 check-latest = "1.0.2"
 chrono = "0.4.31"
@@ -18,19 +18,19 @@ console = "0.15.8"
 dialoguer = "0.11.0"
 env_logger = "0.10.0"
 glob = "0.3.1"
-include_dir = {version = "0.7.3", features = ["glob"] }
+include_dir = { version = "0.7.3", features = ["glob"] }
 log = "0.4.20"
-reqwest = "0.11.22"
+reqwest = { version = "0.11.22", features = ["native-tls-vendored"] }
 semver = "1.0.20"
 serde.workspace = true
 serde_json.workspace = true
 shellwords = "1.1.0"
-tokio = {version = "1.35.1", features = ["full"] }
-openssl = { version = ">=0", features = [ "vendored" ] }
+tokio = { version = "1.35.1", features = ["full"] }
 walkdir = "2.4.0"
 regex = "1.10.3"
 tempfile = "3.10.1"
-uuid = { version = "1.7.0", features= ["v4"] }
+uuid = { version = "1.7.0", features = ["v4"] }
+anyhow.workspace = true
 
 [dev-dependencies]
 base64 = "0.13.0"
@@ -38,4 +38,3 @@ dissimilar = "1.0.4"
 expect-test = "1.1.0"
 indoc.workspace = true
 either = "1.8.1"
-
