@@ -119,9 +119,7 @@ class AnthropicProvider(LLMChatProvider):
         prompt_tokens = await client.count_tokens(prompt)
         response = typing.cast(
             anthropic.types.Completion,
-            await client.completions.create(
-                prompt=prompt, **self.__caller_kwargs
-            ),
+            await client.completions.create(prompt=prompt, **self.__caller_kwargs),
         )
         output_tokens = await client.count_tokens(response.completion)
 

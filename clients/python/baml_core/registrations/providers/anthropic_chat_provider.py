@@ -100,7 +100,6 @@ class AnthropicChatProvider(LLMChatProvider):
     def __create_client(self) -> anthropic.AsyncAnthropic:
         return anthropic.AsyncAnthropic(**self.__client_kwargs)
 
-
     def _prepare_message_handling(
         self, messages: typing.List[LLMChatMessage]
     ) -> typing.Tuple[typing.Optional[str], typing.Dict[str, typing.Any]]:

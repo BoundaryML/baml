@@ -2,7 +2,7 @@ import pytest
 from baml_core.logger import logger
 from baml_lib import baml_init
 from .pytest_baml import BamlPytestPlugin
-from asyncio import get_event_loop
+
 
 def pytest_addoption(parser: pytest.Parser) -> None:
     # To be deprecated in favor of baml-ipc
@@ -65,4 +65,3 @@ def pytest_configure(config: pytest.Config) -> None:
         ),
         "pytest_baml",
     )
-

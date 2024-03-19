@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import List, Optional
-from baml_lib._impl.deserializer import Deserializer, DeserializerException, register_deserializer
+from baml_lib._impl.deserializer import Deserializer, register_deserializer
 from enum import Enum
 import pytest
 import json
@@ -136,16 +136,19 @@ def test_enum_from_string_with_extra_text_after() -> None:
 
 
 @register_deserializer(
-    aliases={"k1": "ONE",
-            "k1: The description of enum value une": "ONE",
-            "k-2-3.1_1": "TWO", 
-            "k-2-3.1_1: The description of enum value deux": "TWO",
-            "NUMBER_THREE": "THREE"}
+    aliases={
+        "k1": "ONE",
+        "k1: The description of enum value une": "ONE",
+        "k-2-3.1_1": "TWO",
+        "k-2-3.1_1: The description of enum value deux": "TWO",
+        "NUMBER_THREE": "THREE",
+    }
 )
 class CategoryWithAlias(str, Enum):
     ONE = "ONE"
     TWO = "TWO"
     THREE = "THREE"
+
 
 def test_enum_aliases() -> None:
     deserializer = Deserializer[CategoryWithAlias](CategoryWithAlias)
@@ -159,6 +162,7 @@ def test_enum_aliases() -> None:
     res = deserializer.from_string("NUMBER_THREE")
     assert res == CategoryWithAlias.THREE
 
+
 def test_enum_aliases_with_punctuation() -> None:
     deserializer = Deserializer[CategoryWithAlias](CategoryWithAlias)
 
@@ -170,6 +174,7 @@ def test_enum_aliases_with_punctuation() -> None:
 
     res = deserializer.from_string("number three")
     assert res == CategoryWithAlias.THREE
+
 
 def test_enum_aliases_with_extra_text() -> None:
     deserializer = Deserializer[CategoryWithAlias](CategoryWithAlias)
@@ -187,6 +192,7 @@ def test_enum_aliases_with_extra_text() -> None:
     # trailing period
     res = deserializer.from_string("k-2-3.1_1. The description of enum value deux")
     assert res == CategoryWithAlias.TWO
+
 
 def test_enum_aliases_from_multiple_aliases() -> None:
     deserializer = Deserializer[CategoryWithAlias](CategoryWithAlias)
@@ -206,6 +212,7 @@ def test_enum_aliases_from_multiple_aliases() -> None:
     res = deserializer.from_string("k-2-3.1_1. is the description of k-2-3.1_1, not k1")
     assert res == CategoryWithAlias.TWO
 
+
 def test_enum_aliases_from_punctuation() -> None:
     deserializer = Deserializer[CategoryWithAlias](CategoryWithAlias)
 
@@ -215,10 +222,15 @@ def test_enum_aliases_from_punctuation() -> None:
     res = deserializer.from_string("k.2.3.1.1")
     assert res == CategoryWithAlias.TWO
 
+
 def test_enum_list_from_string_with_aliases() -> None:
     deserializer = Deserializer[List[CategoryWithAlias]](List[CategoryWithAlias])
     res = deserializer.from_string('["k1", "k-2-3.1_1", "NUMBER_THREE"]')
-    assert res == [CategoryWithAlias.ONE, CategoryWithAlias.TWO, CategoryWithAlias.THREE]
+    assert res == [
+        CategoryWithAlias.ONE,
+        CategoryWithAlias.TWO,
+        CategoryWithAlias.THREE,
+    ]
 
 
 @register_deserializer({})

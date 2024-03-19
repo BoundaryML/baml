@@ -5,7 +5,6 @@ from .openai_helper_1 import to_error_code
 
 import typing
 
-import asyncio 
 from baml_core.provider_manager import (
     LLMChatMessage,
     LLMChatProvider,
@@ -46,7 +45,7 @@ class OpenAIChatProvider(LLMChatProvider):
         )
         self.__client_args = {
             "timeout": options.pop("request_timeout", options.pop("timeout", 60 * 3)),
-            "api_key": options["api_key"]
+            "api_key": options["api_key"],
         }
 
         if options.pop("max_retries", None) is not None:
@@ -64,16 +63,15 @@ class OpenAIChatProvider(LLMChatProvider):
         options.pop("api_base", None)
         options.pop("api_type", None)
         options.pop("azure_endpoint", None)
-      
+
         options["model"] = options.get("model", None) or options.pop("engine", None)
-        
+
         self.__request_args = options
         self._set_args(**self.__request_args)
 
-
     def __create_client(self) -> AsyncClient:
-        options = self.__client_args.copy()   
-        timeout = options.get("timeout", 60 * 3)     
+        options = self.__client_args.copy()
+        timeout = options.get("timeout", 60 * 3)
         if options.get("api_type") == "azure" or options.get("azure_endpoint"):
             # We still need to map from the 0.x API to the 1.x API. People may use either of these:
             # api_key / api_key
@@ -83,12 +81,10 @@ class OpenAIChatProvider(LLMChatProvider):
                 api_key=options["api_key"],
                 api_version=options["api_version"],
                 azure_endpoint=options.get("api_base") or options["azure_endpoint"],
-                timeout=timeout
+                timeout=timeout,
             )
         else:
             return AsyncOpenAI(api_key=options["api_key"], timeout=timeout)
-
-        
 
     def _to_error_code(self, e: Exception) -> typing.Optional[int]:
         return to_error_code(e)

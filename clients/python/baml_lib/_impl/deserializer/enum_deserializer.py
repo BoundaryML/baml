@@ -1,6 +1,6 @@
 from __future__ import annotations
 import typing
-from typing import Callable, Generator, List, Tuple
+from typing import Generator, List, Tuple
 
 from enum import Enum
 import re
@@ -50,38 +50,35 @@ class EnumDeserializer(BaseDeserializer[T]):
             enm=self.__enm,
             aliases=_aliases,
         )
-    
-    def aliases(self) -> Generator[Tuple[str, T], None, None]: 
+
+    def aliases(self) -> Generator[Tuple[str, T], None, None]:
         for item in self.__enm:
             yield item.name.lower(), item
         for alias, value_name in self.__value_aliases.items():
             yield alias.lower(), self.__enm(value_name)
-    
-    def normalized_aliases(self) -> Generator[Tuple[str, T], None, None]: 
+
+    def normalized_aliases(self) -> Generator[Tuple[str, T], None, None]:
         for item in self.__enm:
             yield item.name.lower(), item
         for alias, value_name in self.__value_aliases.items():
-            yield re.sub('[^a-zA-Z0-9]+', ' ', alias.lower()), self.__enm(value_name)
-    
+            yield re.sub("[^a-zA-Z0-9]+", " ", alias.lower()), self.__enm(value_name)
+
     def coerce(
         self,
         raw: RawWrapper,
         diagnostics: Diagnostics,
         from_lut: CheckLutFn[T],
     ) -> Result[T]:
-        expected = [item.name for item in self.__enm] + [f"{k} ({v})" for k, v in self.__value_aliases.items()]
+        expected = [item.name for item in self.__enm] + [
+            f"{k} ({v})" for k, v in self.__value_aliases.items()
+        ]
 
         parsed = raw.as_smart_str(inner=True)
         if parsed is None:
-            diagnostics.push_enum_error(
-                self.__enm.__name__,
-                parsed,
-                expected
-            )
+            diagnostics.push_enum_error(self.__enm.__name__, parsed, expected)
             return Result.failed()
 
         def search(contents: str, aliases: List[Tuple[str, T]]) -> T | None:
-
             for alias, value in aliases:
                 if alias == contents:
                     return value
@@ -91,27 +88,25 @@ class EnumDeserializer(BaseDeserializer[T]):
                     return value
                 if contents.endswith(f"\n\n{alias}"):
                     return value
-            
+
             return None
-        
+
         value = search(parsed.strip().lower(), list(self.aliases()))
         if value:
             return Result.from_value(value)
 
-        value2 = search(re.sub('[^a-zA-Z0-9]+', ' ',parsed.strip().lower()), list(self.normalized_aliases()))
+        value2 = search(
+            re.sub("[^a-zA-Z0-9]+", " ", parsed.strip().lower()),
+            list(self.normalized_aliases()),
+        )
         if value2:
             return Result.from_value(value2)
-        
 
         def find_most_common(contents: str, aliases: List[Tuple[str, T]]) -> T | None:
             counts = [
-                (
-                    len(re.findall(rf'\b{re.escape(alias)}\b', contents)),
-                    alias,
-                    value
-                )
+                (len(re.findall(rf"\b{re.escape(alias)}\b", contents)), alias, value)
                 for alias, value in aliases
-                if re.search(rf'\b{re.escape(alias)}\b', contents)
+                if re.search(rf"\b{re.escape(alias)}\b", contents)
             ]
             counts.sort(reverse=True)
             if len(counts) > 0:
@@ -122,13 +117,12 @@ class EnumDeserializer(BaseDeserializer[T]):
         if most_common:
             return Result.from_value(most_common)
 
-        most_common2 = find_most_common(re.sub('[^a-zA-Z0-9]+', ' ',parsed.strip().lower()), list(self.normalized_aliases()))
+        most_common2 = find_most_common(
+            re.sub("[^a-zA-Z0-9]+", " ", parsed.strip().lower()),
+            list(self.normalized_aliases()),
+        )
         if most_common2:
             return Result.from_value(most_common2)
 
-        diagnostics.push_enum_error(
-            self.__enm.__name__,
-            parsed,
-            expected
-        )
+        diagnostics.push_enum_error(self.__enm.__name__, parsed, expected)
         return Result.failed()
