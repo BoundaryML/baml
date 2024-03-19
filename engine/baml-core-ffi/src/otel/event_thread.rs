@@ -15,7 +15,6 @@ async fn process_batch_async(api_config: &APIWrapper, batch: Vec<LogSchema>) {
 }
 
 fn process_batch(rt: &Runtime, api_config: &APIWrapper, batch: Vec<LogSchema>) {
-  println!("Processing batch of {} logs", batch.len());
   rt.block_on(process_batch_async(api_config, batch));
 }
 
@@ -56,11 +55,6 @@ fn batch_processor(
 
     // Send events every 1 second or when the batch is full
     if should_process_batch {
-      println!(
-        "Trigger hit: {} or {}ms",
-        batch.len(),
-        now.elapsed().as_millis()
-      );
       process_batch(&rt, api_config, std::mem::take(&mut batch));
     }
 
@@ -165,13 +159,11 @@ impl BatchProcessor {
   }
 
   pub fn stop(&mut self) -> Result<()> {
-    println!("Stopping batch processor");
     let join_handle = match self.join_handle.take() {
       Some(handle) => handle,
       None => return Ok(()), // Already stopped
     };
 
-    println!("Sending stop signal");
     self
       .tx
       .lock()
@@ -196,11 +188,8 @@ impl BatchProcessor {
 
 impl Drop for BatchProcessor {
   fn drop(&mut self) {
-    println!("Dropping batch processor");
     match self.stop() {
-      Ok(_) => {
-        println!("Done! Stopped batch processor");
-      }
+      Ok(_) => {}
       Err(e) => println!("Error stopping BatchProcessor: {:?}", e),
     }
   }

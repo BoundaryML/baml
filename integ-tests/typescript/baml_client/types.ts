@@ -118,6 +118,7 @@ interface TestOutputClass {
 interface UnionTest_ReturnType {
   prop1: string | boolean;
   prop2: number | boolean[];
+  prop3: number[] | boolean[];
 }
 
 

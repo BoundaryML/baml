@@ -16,7 +16,8 @@ const prompt_template = `\
 Return a JSON blob with this schema: 
 {
   "prop1": string | bool,
-  "prop2": (float | bool)[]
+  "prop2": (float | bool)[],
+  "prop3": float[] | bool[]
 }
 
 JSON:\

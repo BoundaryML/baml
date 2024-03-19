@@ -59,8 +59,17 @@ impl TcpIPCChannel {
     })
     .to_string()
       + "<BAML_END_MSG>\n";
+    // %m:%s.%3N time
+    // let now = chrono::Local::now().format("%H:%M:%S%.3f");
+    // println!("{now} Sending message: {}", name);
     self.socket.write_all(message.as_bytes())?;
-    self.socket.flush().map_err(|e| e.into())
+    // println!("{now} Sent message: {}", name);
+    self
+      .socket
+      .flush()
+      .map_err(|e| anyhow::format_err!("Failed to flush message: {}", e))?;
+    // println!("{now} Flushed message: {}", name);
+    Ok(())
   }
 }
 

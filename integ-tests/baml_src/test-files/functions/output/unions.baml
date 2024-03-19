@@ -1,6 +1,7 @@
 class UnionTest_ReturnType {
   prop1 string | bool
   prop2 (float | bool)[]
+  prop3 (float[] | bool[])
 }
 
 function UnionTest_Function {

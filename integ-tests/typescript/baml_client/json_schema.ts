@@ -408,11 +408,30 @@ const schema: JSONSchema7 = {
               }
             ]
           }
+        },
+        "prop3": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "title": "float[]"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "boolean"
+              },
+              "title": "bool[]"
+            }
+          ]
         }
       },
       "required": [
         "prop1",
-        "prop2"
+        "prop2",
+        "prop3"
       ]
     },
     "FnClassOptional_input": {

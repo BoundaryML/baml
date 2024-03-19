@@ -21,28 +21,64 @@ async fn handle_connection(
     mut stream: TcpStream,
     state: Arc<Mutex<RunState>>,
 ) -> tokio::io::Result<()> {
-    let mut buffer = String::new();
-    // Read message from Python test
-    let n = stream.read_to_string(&mut buffer).await?;
-    if n == 0 {
-        return Ok(());
-    }
-    // buffer may have multiple messages in it, so we need to split it
-    // on the message separator <BAML_END_MSG>\n
-    let messages = buffer.split("<BAML_END_MSG>\n");
-    let mut state = state.lock().await;
-    for message in messages {
-        if message.is_empty() {
-            continue;
+    let mut buffer = Vec::new();
+    let mut read_buf = [0u8; 1024]; // Adjust buffer size as needed
+
+    loop {
+        let n = stream.read(&mut read_buf).await?;
+        if n == 0 {
+            // End of stream
+            break;
         }
-        if let Some(message) = ipc_comms::handle_message(message) {
-            state.add_message(message);
+
+        // Append this chunk to the buffer
+        buffer.extend_from_slice(&read_buf[..n]);
+
+        // Convert buffer to string for processing (assuming UTF-8 encoded data)
+        let buffer_str = match String::from_utf8(buffer.clone()) {
+            Ok(s) => s,
+            Err(_) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Stream data is not valid UTF-8",
+                ));
+            }
+        };
+
+        // Split based on the message separator and collect into a Vec for iteration
+        let mut messages: Vec<&str> = buffer_str.split("<BAML_END_MSG>").collect();
+
+        // If the last message is incomplete (doesn't end with our separator),
+        // it will be processed in the next chunk. Remove it from processing now.
+        let incomplete_message = if buffer_str.ends_with("<BAML_END_MSG>") {
+            ""
         } else {
-            return Err(tokio::io::Error::new(
-                tokio::io::ErrorKind::InvalidData,
-                format!("Failed to parse message: {}", message),
-            ));
+            messages.pop().unwrap_or("")
+        };
+
+        {
+            // Lock state for update
+            let mut state = state.lock().await;
+
+            for message in messages {
+                let message = message.trim();
+                if message.is_empty() {
+                    continue;
+                }
+
+                if let Some(message) = ipc_comms::handle_message(message) {
+                    state.add_message(message);
+                } else {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("Failed to parse message: {}", message),
+                    ));
+                }
+            }
         }
+
+        // Prepare buffer for next read, preserving the incomplete message if there is one
+        buffer = incomplete_message.as_bytes().to_vec();
     }
     Ok(())
 }

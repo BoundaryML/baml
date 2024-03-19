@@ -8,7 +8,11 @@ pub(crate) fn handle_message(message: &str) -> Option<MessageData> {
     }
     // Parse the message as json
     match serde_json::from_str::<MessageData>(message) {
-        Ok(data) => Some(data),
+        Ok(data) => {
+            // let now = chrono::Utc::now().format("%M:%S%.3f");
+            // println!("{now} Received message: {:?}", data);
+            Some(data)
+        }
         Err(e) => {
             log::error!("Failed to parse message: {}\n{}", e, message);
             None

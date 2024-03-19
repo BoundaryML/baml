@@ -562,6 +562,7 @@ function isUnionTest_ReturnType(obj: any): obj is UnionTest_ReturnType {
     typeof obj === "object"
     && ("prop1" in obj && ((typeof obj.prop1 === 'string') || (typeof obj.prop1 === 'boolean')))
     && ("prop2" in obj && (Array.isArray(obj.prop2) && obj.prop2.every((x: any) => (typeof x === 'number') || (typeof x === 'boolean'))))
+    && ("prop3" in obj && ((Array.isArray(obj.prop3) && obj.prop3.every((x: any) => typeof x === 'number')) || (Array.isArray(obj.prop3) && obj.prop3.every((x: any) => typeof x === 'boolean'))))
   );
 }
 
@@ -570,6 +571,7 @@ class InternalUnionTest_ReturnType implements UnionTest_ReturnType {
   private constructor(private data: {
     prop1: string | boolean,
     prop2: number | boolean[],
+    prop3: number[] | boolean[],
   }, private raw: UnionTest_ReturnType) {}
 
   static from(data: UnionTest_ReturnType): InternalUnionTest_ReturnType {
@@ -590,6 +592,14 @@ if (typeof x === 'boolean') {
   return x;
 }
 })(x)),
+      prop3: ((x) => {
+if (Array.isArray(x) && x.every((x: any) => typeof x === 'number')) {
+  return x.map(x => x);
+}
+if (Array.isArray(x) && x.every((x: any) => typeof x === 'boolean')) {
+  return x.map(x => x);
+}
+})(data.prop3),
     }, data);
   }
 
@@ -598,6 +608,9 @@ if (typeof x === 'boolean') {
   }
   get prop2(): number | boolean[] {
     return this.data.prop2;
+  }
+  get prop3(): number[] | boolean[] {
+    return this.data.prop3;
   }
 
 
