@@ -19,7 +19,7 @@ generator lang_typescript {
   project_root "../typescript"
   // This command is used by "baml test" to run tests
   // defined in the playground
-  test_command "infisical run -- npm test -- --runInBand"
+  test_command "infisical run -- npm test -- "
   // This command is used by "baml update-client" to install
   // dependencies to your language environment
   install_command "npm install"
