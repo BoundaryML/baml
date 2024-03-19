@@ -20,18 +20,13 @@
   "napi": {
     "name": "baml-core-ffi",
     "triples": {
-      "defaults": true,
+      "defaults": false,
       "additional": [
-        "x86_64-unknown-linux-musl",
+        "x86_64-unknown-linux-gnu",
         "aarch64-unknown-linux-gnu",
-        "i686-pc-windows-msvc",
-        "armv7-unknown-linux-gnueabihf",
         "aarch64-apple-darwin",
-        "aarch64-linux-android",
-        "x86_64-unknown-freebsd",
-        "aarch64-unknown-linux-musl",
-        "aarch64-pc-windows-msvc",
-        "armv7-linux-androideabi"
+        "x86_64-pc-windows-msvc",
+        "x86_64-apple-darwin"
       ]
     }
   },
@@ -45,7 +40,7 @@
   "scripts": {
     "artifacts": "napi artifacts",
     "bench": "node -r @swc-node/register benchmark/bench.ts",
-    "build": "napi build --platform --release --pipe \"prettier -w\" --js false",
+    "build": "napi build --platform --release --pipe \"prettier -w\"",
     "build:debug": "napi build --platform --pipe \"prettier -w\" --js false",
     "format": "run-p format:prettier format:rs format:toml",
     "format:prettier": "prettier . -w",
