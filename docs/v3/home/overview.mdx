@@ -58,7 +58,7 @@ impl<llm, ExtractResume> version1 {
 The BAML compiler generates all the parsing boilerplate you need. No need to parse with `json.loads` ever again.
 
 <CodeGroup>
-```python
+```python Python
 from baml_client import baml as b
 
 async def main():
@@ -70,7 +70,7 @@ in Computer Science, 2020""")
   assert resume.name == "John Doe"
 ```
 
-```typescript
+```typescript TypeScript
 import b from "@/baml_client";
 
 const main = async () => {
