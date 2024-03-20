@@ -96,7 +96,7 @@ client<llm> GPT35Client {
 
 <CodeGroup>
 
-```python
+```python Python
 from baml_client import baml as b
 from baml_client.baml_types import Sentiment
 
@@ -112,7 +112,7 @@ async def pipeline(arg: str) -> str:
 
 ```
 
-```typescript
+```typescript TypeScript
 import b from "@/baml_client";
 import { Sentiment } from '@/baml_client/types'
 
@@ -146,11 +146,11 @@ function GetSentiment {
 Alternatively, you can also directly call a specific implementation:
 
 <CodeGroup>
-```python
+```python Python
 await b.GetSentiment.get_impl('my_version').run(arg)
 ```
 
-```typescript
+```typescript TypeScript
 await b.GetSentiment.getImpl('my_version').run(arg)
 ```
 </CodeGroup>
