@@ -17,7 +17,7 @@ indoc = "2.0.1"
 
 # 
 [workspace.package]
-version = "0.14.0-canary.3"
+version = "0.14.0-canary.4"
 authors = ["Boundary <contact@boundaryml.com>"]
 
 description = "BAML Toolchain"
