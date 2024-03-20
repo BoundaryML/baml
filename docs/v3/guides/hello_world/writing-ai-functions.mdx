@@ -115,27 +115,46 @@ We will explain more how **print_type** works in later tutorials.
 </Step>
 </Steps>
 
-## 3. Use the function in your Python / TS code
+## 3. Use the function in your application
 
-Our VSCode extension automatically generates a python **baml_client** to access and call your functions.
+Our VSCode extension automatically generates a **baml_client** in your language of choice - either Python or TypeScript - to access and call your functions.
 
-```python main.py
+<CodeGroup>
+
+```python
 from baml_client import baml as b
 import asyncio
 
 async def main():
-  verb_list = await b.ExtractVerbs(
-    "This is a paragraph"
-  )
+  verb_list = await b.ExtractVerbs("This is a paragraph")
 
   if len(verb_list) == 1:
       print("There is 1 verb in this paragraph")
   else:
-      print(f"There are {len(verb_list)} verb(s) in this paragraph")
+      print(f"There are {len(verb_list)} verbs in this paragraph")
 
 if __name__ == "__main__":
   asyncio.run(main())
 ```
+
+```typescript
+import b from "@/baml_client";
+
+const main = async () => {
+  const verb_list = await b.ExtractVerbs("This is a paragraph")
+  if (verb_list.length === 1) {
+    console.log("There is 1 verb in this paragraph")
+  } else {
+    console.log(`There are ${verb_list.length} verbs in this paragraph`)
+  }
+};
+
+if (require.main === module) {
+  main();
+}
+```
+
+</CodeGroup>
 
 <Accordion title="What are these awaits or async things?">
   The BAML client exports async versions of your functions, so you can parallelize things easily if you need to. To run async functions sequentially you can easily just wrap them in the `asyncio.run(....)`. 

@@ -185,7 +185,7 @@ Union[Optional[int], List[str], MyClass]
 ```
 
 ```typescript TypeScript Equivalent
-(number | undefined) | string[] | MyClass
+(number | null) | string[] | MyClass
 ```
 
 </CodeGroup>
@@ -235,7 +235,7 @@ Optional[List[Union[Optional[int], List[str], MyClass]]]
 ```
 
 ```typescript TypeScript Equivalent
-((number | undefined) | string[] | MyClass)[] | undefined
+((number | null) | string[] | MyClass)[]
 ```
 
 </CodeGroup>

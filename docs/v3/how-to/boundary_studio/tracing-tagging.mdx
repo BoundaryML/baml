@@ -2,6 +2,10 @@
 title: "Tracing and tagging functions"
 ---
 
+<Warning>
+    TypeScript support for tracing is still in closed alpha - please contact us if you would like to use it!
+</Warning>
+
 BAML allows you to trace any function with the **@trace** decorator.
 This will make the function's input and output show up in the Boundary dashboard. This works for any python function you define yourself. BAML LLM functions (or any other function declared in a .baml file) are already traced by default. Logs are only sent to the Dashboard if you setup your environment variables correctly.
 

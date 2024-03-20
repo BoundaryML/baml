@@ -110,7 +110,11 @@ To run a specific test case in a test group
 pytest -m baml_test -k 'test_group_name and test_case_name'
 ```
 
-### UnitTest an AI Function
+### Unit Test an AI Function
+
+<Warning>
+    TypeScript support for testing is still in closed alpha - please contact us if you would like to use it!
+</Warning>
 
 <CodeGroup>
 
@@ -151,7 +155,11 @@ class TestHappyUser:
 
 </CodeGroup>
 
-### Integration Tests (Test a pipeline calling multiple functions)
+### Integration Tests (test a pipeline calling multiple functions)
+
+<Warning>
+    TypeScript support for testing is still in closed alpha - please contact us if you would like to use it!
+</Warning>
 
 <CodeGroup>
 
@@ -231,7 +239,7 @@ async def test_sentiments(ClassifySentimentImpl: IClassifySentiment, test_case):
     assert response == test_case["expected_output"]
 ```
 
-### Grouping Tests by input type
+### Grouping Tests by Input Type
 
 Alternatively, you can group things together logically by defining one test case or test class per input type your testing. In our case, we'll split up all Positive sentiments into their own group.
 

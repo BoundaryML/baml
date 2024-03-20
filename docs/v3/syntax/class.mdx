@@ -2,7 +2,7 @@
 title: "class"
 ---
 
-Classes consist of a name, and a list of properties and their [types](/v3/syntax/type).
+Classes consist of a name, a list of properties, and their [types](/v3/syntax/type).
 In the context of LLMs, classes describe the type of the variables you can inject into prompts and extract out from the response. In python, classes are represented by [pydantic](https://pydantic-docs.helpmanual.io/) models.
 
 <CodeGroup>
@@ -135,8 +135,6 @@ You can also chain computed properties together.
 
 ```rust BAML
 class Foo {
-  ...
-
   full_name_upper string @get(python#"
     return self.full_name.upper()
   "#, typescript#"
@@ -146,8 +144,6 @@ class Foo {
 ```
 
 ```python Python Equivalent
-...
-
     @property
     def full_name_upper(self) -> str:
       return self.full_name.upper()
@@ -165,7 +161,7 @@ class Foo {
 
 ## Inheritance
 
-Not supported. Like rust, we take the stance that [composition > inheritance](https://www.digitalocean.com/community/tutorials/composition-vs-inheritance).
+Not supported. Like rust, we take the stance that [composition is better than inheritance](https://www.digitalocean.com/community/tutorials/composition-vs-inheritance).
 
 ## aliases, descriptions
 Classes support aliases, descriptions, and other kinds of attributes. See the [prompt engineering docs](./prompt_engineering/class)

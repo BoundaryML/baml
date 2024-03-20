@@ -4,7 +4,7 @@ title: Parsing and Deserialization
 
 Baml uses a custom `Deserializer` to parse a string into the desired type. **You don't have to do anything to enable to deserializer, it comes built in.**
 
-Instead of doing the following, you can rely on baml to do the parsing for you.
+Instead of doing the following, you can rely on BAML to do the parsing for you.
 
 ```python
 # Example parsing code you might be writing today
@@ -41,20 +41,42 @@ the rules we use to parse each type.
 
 ## Error handling
 
-All parsing errors are handled by the `Deserializer` and will raise a `DeserializationError`.
+All parsing errors are handled by the `Deserializer` and will raise a `DeserializerException`.
+
+<CodeGroup>
 
 ```python
-
 from baml_client import baml as b
-from baml_client import DeserializationError
+from baml_client import DeserializerException
 
 try:
   response = await b.SomeAIFunction(query="I want to buy a car")
-except DeserializationError as e:
+except DeserializerException as e:
   # The parser was not able read the response as the expected type
   print(e)
-
 ```
+
+```typescript
+import b, { DeserializerException } from "@/baml_client";
+
+const main = async () => {
+  try {
+    await b.ClassifyMessage("I want to cancel my order");
+  } catch (e) {
+    if (e instanceof DeserializerException) {
+      // The parser was not able read the response as the expected type
+      console.log(e);
+    }
+    throw e;
+  }
+};
+
+if (require.main === module) {
+  main();
+}
+```
+
+</CodeGroup>
 
 ## Primitive Types
 
@@ -77,7 +99,7 @@ If the type is optional, the parser will attempt to parse the value as the type,
 ### Union (|)
 
 Unions are parsed in left to right order. The first type that successfully parses the value will be returned.
-If no types are able to parse the value, a `DeserializationError` will be raised.
+If no types are able to parse the value, a `DeserializerException` will be raised.
 
 ### List/Array ([])
 

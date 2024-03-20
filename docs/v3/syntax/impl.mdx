@@ -53,8 +53,7 @@ Not supported yet.
 `{#input}` and `{#print_enum(Sentiment)}` are template variables injected into the prompt. See [Prompt Engineering](/v3/syntax/prompt-engineering) for more details.
 </Info>
 
-```rust
-// In baml_src/my_file.baml
+```rust baml_src/my_file.baml
 impl<llm, GetSentiment> my_version {
     client GPT35Client
     prompt #"
@@ -83,7 +82,7 @@ enum Sentiment {
     Neutral
 }
 
-// Use openai's GPT-3.5 turbo model
+// Use OpenAI's GPT-3.5 turbo model
 client<llm> GPT35Client {
     provider baml-openai-chat
     options {
@@ -93,38 +92,68 @@ client<llm> GPT35Client {
 ```
 
 </Step>
-<Step title="Calling in application logic">
-<Tabs>
-<Tab title="Calling in python">
+<Step title="Using the generated code">
+
+<CodeGroup>
 
 ```python
-# Import the generated client
 from baml_client import baml as b
-# Import the generated Sentiment enum
 from baml_client.baml_types import Sentiment
 
-async def pipeline(arg: str) -> str: # Call the get sentiment function
-sentiment = await b.GetSentiment(arg)
+async def pipeline(arg: str) -> str:
+    sentiment = await b.GetSentiment(arg)
 
     if sentiment == Sentiment.Positive:
         return "I'm glad you're having a good day!"
     elif sentiment == Sentiment.Negative:
         return "I'm sorry to hear that."
     else:
-        return "I see its just a normal day for you."
+        return "I see it's just a normal day for you."
 
 ```
 
-</Tab>
-<Tab title="Using a specific impl">
+```typescript
+import b from "@/baml_client";
+import { Sentiment } from '@/baml_client/types'
 
+const pipeline = async (arg: string): string => {
+  const category = await b.GetSentiment(arg);
+  if (sentiment === Sentiment.Positive) {
+    return "I'm glad you're having a good day!"
+  } else if (sentiment === Sentiment.Negative) {
+    return "I'm sorry to hear that."
+  } else {
+    return "I see it's just a normal day for you."
+  }
+};
+```
+
+</CodeGroup>
+</Step>
+
+<Step title="Calling a specific implementation of a function">
+
+If you provide multiple implementations of a given function in BAML (e.g. `impl<llm, Fn> my_version` and `impl<llm, Fn> dev_version`), you can specify which should be used by default:
+
+```rust BAML
+function GetSentiment {
+    input string
+    output Sentiment
+    default_impl my_version
+}
+```
+
+Alternatively, you can also directly call a specific implementation:
+
+<CodeGroup>
 ```python
-# Use the specific version of the prompt we defined.
-sentiment = await b.GetSentiment.get_impl(
-    'my_version').run(arg)
+await b.GetSentiment.get_impl('my_version').run(arg)
 ```
 
-</Tab>
-</Tabs>
+```typescript
+await b.GetSentiment.getImpl('my_version').run(arg)
+```
+</CodeGroup>
+
 </Step>
 </Steps>
