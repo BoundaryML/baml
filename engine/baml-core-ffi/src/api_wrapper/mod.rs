@@ -74,7 +74,7 @@ impl APIConfig {
   pub fn default() -> Self {
     let config = Config::from_env().unwrap();
 
-    match (&config.api_key, &config.project_id) {
+    match (&config.secret, &config.project_id) {
       (Some(api_key), Some(project_id)) => Self::Web(CompleteAPIConfig {
         log_level: config.log_level != LogLevel::None,
         base_url: config.base_url,
@@ -88,7 +88,7 @@ impl APIConfig {
       _ => Self::LocalOnly(PartialAPIConfig {
         log_level: config.log_level != LogLevel::None,
         base_url: config.base_url,
-        api_key: config.api_key,
+        api_key: config.secret,
         project_id: config.project_id,
         stage: config.stage,
         sessions_id: config.sessions_id,

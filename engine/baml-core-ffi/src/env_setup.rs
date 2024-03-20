@@ -69,7 +69,7 @@ impl<'de> Deserialize<'de> for LogLevel {
 pub struct Config {
   #[serde(default = "default_base_url")]
   pub base_url: String,
-  pub api_key: Option<String>,
+  pub secret: Option<String>,
   pub project_id: Option<String>,
   #[serde(default = "default_sessions_id")]
   pub sessions_id: String,
