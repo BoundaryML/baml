@@ -168,7 +168,7 @@ jobs:
         if: ${{!matrix.settings.docker && matrix.settings.target == 'x86_64-pc-windows-msvc'}}
         run: ${{ matrix.settings.build }}
       - name: Build
-        run: ${{ matrix.settings.build }} 
+        run: ${{ matrix.settings.build }}
         if: ${{!matrix.settings.docker && matrix.settings.target != 'x86_64-pc-windows-msvc'}}
         shell: bash
       - name: Upload artifact
@@ -473,11 +473,14 @@ jobs:
       - test-macOS-windows-binding
       - test-linux-x64-gnu-binding
       - test-linux-aarch64-gnu-binding
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - name: Setup node
         uses: actions/setup-node@v4
         with:
+          registry-url: "https://registry.npmjs.org"
           node-version: 18
           cache: yarn
           cache-dependency-path: engine/baml-core-ffi/yarn.lock
@@ -500,11 +503,8 @@ jobs:
             exit 1
           fi
       - name: Publish pre-release
-        run: |
-          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> ~/.npmrc
-          npm config set provenance true
-          npm publish --tag next --access public
-  
+        run: npm publish --tag next --access public
+
   publish:
     permissions:
       contents: write
@@ -520,11 +520,14 @@ jobs:
       - test-macOS-windows-binding
       - test-linux-x64-gnu-binding
       - test-linux-aarch64-gnu-binding
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - name: Setup node
         uses: actions/setup-node@v4
         with:
+          registry-url: "https://registry.npmjs.org"
           node-version: 18
           cache: yarn
           cache-dependency-path: engine/baml-core-ffi/yarn.lock
@@ -548,6 +551,4 @@ jobs:
           fi
       - name: Publish
         run: |
-          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> ~/.npmrc
-          npm config set provenance true
           npm publish --tag next --access public

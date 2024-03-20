@@ -1,6 +1,6 @@
 {
   "name": "@boundaryml/baml-core",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,6 +17,9 @@
     "test": "jest",
     "build": "tsc"
   },
+  "files": [
+    "dist/**"
+  ],
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"
@@ -39,7 +42,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.18.0",
-    "@boundaryml/baml-core-ffi": "link:../../engine/baml-core-ffi",
+    "@boundaryml/baml-core-ffi": "*",
     "dotenv": "^16.4.5",
     "json-schema": "^0.4.0",
     "openai": "^4.25.0",

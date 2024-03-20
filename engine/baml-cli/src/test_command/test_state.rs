@@ -313,7 +313,6 @@ impl RunState {
                 // Log messages always come after the test case update
                 {
                     let test_name = log.context.tags.get("test_case_arg_name");
-                    println!("Test name: {:?}", test_name);
                     if let Some(test_name) = test_name {
                         let mut parts = test_name.split('[');
                         let test = parts.next().unwrap();

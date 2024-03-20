@@ -3,7 +3,10 @@
   "version": "0.14.0-canary.3",
   "description": "Template project for writing node package with napi-rs",
   "main": "index.js",
-  "repository": "https://github.com/BoundaryML/baml",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BoundaryML/baml.git"
+  },
   "license": "MIT",
   "keywords": [
     "napi-rs",
