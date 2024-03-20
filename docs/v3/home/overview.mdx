@@ -57,17 +57,35 @@ impl<llm, ExtractResume> version1 {
 
 The BAML compiler generates all the parsing boilerplate you need. No need to parse with `json.loads` ever again.
 
-```python app.py
+<CodeGroup>
+```python
 from baml_client import baml as b
 
 async def main():
   resume = await b.ExtractResume(resume_text="""John Doe
 Python, Rust
-University of California, Berkeley, B.S. 
+University of California, Berkeley, B.S.
 in Computer Science, 2020""")
 
   assert resume.name == "John Doe"
 ```
+
+```typescript
+import b from "@/baml_client";
+
+const main = async () => {
+  const verb_list = await b.ExtractVerbs({
+    resume: `John Doe
+Python, Rust
+University of California, Berkeley, B.S.
+in Computer Science, 2020
+`
+  });
+
+  assert resume.name === 'John Doe';
+};
+```
+</CodeGroup>
 
 BAML can be deployed to any container, with only a single package dependency required (`e.g. pip install baml`). 
 {/* [Learn more](/v3/home/deployment) */}
@@ -80,7 +98,7 @@ BAML can be deployed to any container, with only a single package dependency req
 
 Start by [installing BAML](/v3/home/installation) and reading our [Hello World Tutorial](/v3/guides/hello_world/level0). 
 
-Learning a new language may seem daunting, but it takes < 10 minutes to get started. 
+Learning a new language may seem daunting, but it takes less than 10 minutes to get started. 
 
 The VSCode extension provides auto-compiling on save, a realtime preview of the full prompt, syntax highlighting and great errors — every syntax error recommends a fix. 
 

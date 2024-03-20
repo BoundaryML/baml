@@ -135,8 +135,6 @@ from baml_client import baml as b
 from baml_client.baml_types import Email
 import asyncio
 
-# You can call a specific version using
-# b.GetOrderInfoV1.get_impl("version1").run(Email(...). Otherwise it will use the default_impl in the function definition.
 async def main():
   order_info = await b.GetOrderInfo(Email(
       subject="Order #1234",
@@ -184,9 +182,11 @@ if (require.main === module) {
 Note that you may get some errors testing other cases. We'll discuss how to make this more resilient in the next tutorial.
 
 ## Full code
+
 [Check it out!](https://github.com/BoundaryML/baml-examples/blob/main/extraction-guide/baml_src/main.baml)
 
 ## Conclusion
+
 In this tutorial we learned:
 1. Basic entity extraction tasks
 1. [print_type(..)](/v3/syntax/prompt_engineering/class) prompt engineering utility

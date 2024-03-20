@@ -1,9 +1,8 @@
 ---
-title: The BAML Project structure
+title: BAML Project Structure
 ---
 
 A BAML project has the following structure:
-
 
 ```bash
 .
@@ -29,17 +28,35 @@ A BAML project has the following structure:
 
 ```
 
-1. **baml_src** is the directory where you write your BAML files with the AI function declarations, prompts, retry policies, etc. It also contains [generator](/v3/syntax/generator) blocks which configure how and where to transpile your BAML code.
-2. **baml_client** is the directory where the generated python or TS client code lives. This is the code that you import into your python or TS program like this:
+1. `baml_src/` is the directory where you write your BAML files with the AI
+   function declarations, prompts, retry policies, etc. It also contains
+   [generator](/v3/syntax/generator) blocks which configure how and where to
+   transpile your BAML code.
+
+2. `baml_client/` is the directory where BAML will generate code, and where you'll
+   import the generated code from.
+
+<CodeGroup>
 
 ```python
 from baml_client import baml as b
 
-...
 await b.YourAIFunction()
 ```
 
-3. **baml_src/\_\_tests\_\_/** are where your unit tests live. The `.json` files store the test inputs that can be loaded, deleted, created, and ran using the BAML VSCode extension. You can also write programmatic python/TS tests anywhere you like. See [here](/v3/syntax/function-testing) for more information.
+```typescript
+import b from "@/baml_client";
+
+await b.YourAIFunction();
+```
+
+</CodeGroup>
+
+3. `baml_src/__tests__/` are where your unit tests live. The `.json` files
+   store the test inputs that can be loaded, deleted, created, and ran using
+   the BAML VSCode extension. You can also write programmatic python/TS tests
+   anywhere you like. See [here](/v3/syntax/function-testing) for more
+   information.
 
 <Warning>
   **You should never edit any files inside baml_client directory** as the whole
@@ -56,4 +73,7 @@ await b.YourAIFunction()
 
 ### imports
 
-BAML by default has global imports. Every entity declared in any `.baml` file is available to all other `.baml` files under the same `baml_src` directory. You **can** have multiple `baml_src` directories, but no promises on how the VSCode extension will behave (yet).
+BAML by default has global imports. Every entity declared in any `.baml` file
+is available to all other `.baml` files under the same `baml_src` directory.
+You **can** have multiple `baml_src` directories, but no promises on how the
+VSCode extension will behave (yet).

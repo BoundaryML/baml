@@ -28,7 +28,7 @@ function unchanged.
 See the "generated python code" tab to see how to call the function in python.
 ### Single Argument with Primitive Type
 
-```rust Baml
+```rust BAMl
 function GetSentiment {
     // In the case of a single argument, you can specify the
     // type directly.
@@ -37,18 +37,28 @@ function GetSentiment {
 }
 ```
 
-```python Using Generated Python Code
+<CodeGroup>
+
+```python Python Usage
 from baml_client import baml as b
 
 # GetSentiment is a function defined in the baml file
 # response is a string
-response = await b.GetSentiment(["I love this movie"])
+response = await b.GetSentiment(["I love this movie", "it is amazing"])
 ```
+
+```typescript TypeScript Usage
+import b from "@/baml_client";
+
+const response = await b.GetSentiment(["I love this movie", "it is amazing"]);
+```
+
+</CodeGroup>
 
 
 ### Class argument
 
-```rust Baml
+```rust BAML
 class CustomerInfo {
     name: string
     age: int
@@ -63,7 +73,9 @@ function SummarizeCustomerDetails {
 }
 ```
 
-```python Using Generated Python client
+<CodeGroup>
+
+```python Python Usage
 from baml_client import baml as b
 # Import the CustomerInfo pydantic model we generated
 from baml_client.baml_types import CustomerInfo
@@ -72,12 +84,22 @@ response = await b.SummarizeCustomerDetails(
     CustomerInfo(name="John", age=30, address="123 Main St"))
 ```
 
+```typescript TypeScript Usage
+import b from "@/baml_client";
+
+const response = await b.SummarizeCustomerDetails({
+    name: "John",
+    age: 30,
+    address: "123 Main St",
+});
+```
+
+</CodeGroup>
+
 
 ### Named-arguments (multiple arguments)
 
-
-
-```rust Baml
+```rust BAML
 enum Color {
     Red
     Green
@@ -92,14 +114,24 @@ function GetSentiment {
 }
 ```
 
-```python Using Generated Python Code
+<CodeGroup>
+
+```python Python Usage
 from baml_client import baml as b
 
 # Since GetSentiment has multiple arguments, each
 # argument is passed in as a named argument.
 # response is List[Color]
-response = await b.GetSentiment(
-    query="I love this movie", millis=1000)
+response = await b.GetSentiment(query="I love this movie", millis=1000)
 ```
 
+```typescript TypeScript Usage
+import b from "@/baml_client";
 
+const response = await b.GetSentiment({
+    query: "I love this movie",
+    millis: 1000,
+});
+```
+
+</CodeGroup>

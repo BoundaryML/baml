@@ -10,6 +10,7 @@
     "./deserializer": "./dist/deserializer/index.js",
     "./ffi_layer": "./dist/ffi_layer.js",
     "./deserializer/deserializer": "./dist/deserializer/deserializer.js",
+    "./deserializer/diagnostics": "./dist/deserializer/diagnostics.js",
     "./baml_test_runner": "./dist/baml_test_runner/index.js"
   },
   "scripts": {
