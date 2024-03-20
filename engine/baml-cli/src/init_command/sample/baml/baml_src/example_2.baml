@@ -23,9 +23,6 @@ impl<llm, ClassifyMessage> level1 {
     message: {#input.message}
     ---
 
-    Output json format:
-    {#print_type(output)}
-
-    JSON:
+    JSON array of categories that match:
   "#
 }
