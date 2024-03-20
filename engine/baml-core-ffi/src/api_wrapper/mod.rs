@@ -199,7 +199,7 @@ impl CompleteAPIConfig {
     let url = format!("{}/{}", self.base_url, path);
     let response = client
       .post(&url)
-      .header("Authorization ", format!("Bearer {}", self.api_key))
+      .header("Authorization", format!("Bearer {}", self.api_key))
       .header("Content-Type", "application/json")
       .json(body)
       .send()
