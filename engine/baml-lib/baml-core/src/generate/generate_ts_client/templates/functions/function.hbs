@@ -93,7 +93,7 @@ function create{{name}}Instance(): I{{name}} & {{name}}Function {
   }) => {
   {{/if}}
     {{#if default_impl}}
-    return wrapper.getImpl('{{default_impl}}').run(params);
+    return wrapper.getImpl('{{default_impl}}').run({{#if params.positional}}{{params.name}}{{else}}params{{/if}});
     {{else}}
     throw new Error('No implementation for {{name}}');
     {{/if}}
