@@ -48,9 +48,7 @@ pub fn update_client(baml_dir: &Option<String>) -> Result<(), CliError> {
                     if !e.status.success() {
                         Err(CliError::StringError(format!(
                             "{}{}{}",
-                            "Failed to add/update 'baml' python dependency!"
-                                .normal()
-                                .red(),
+                            "Failed to add/update baml dependency!".normal().red(),
                             match String::from_utf8_lossy(&e.stdout) {
                                 s if s.is_empty() => "".into(),
                                 s => format!("\n{}", s.trim()),
