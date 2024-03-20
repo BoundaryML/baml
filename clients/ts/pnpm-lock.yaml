@@ -1,4 +1,4 @@
-lockfileVersion: '6.1'
+lockfileVersion: '6.0'
 
 settings:
   autoInstallPeers: true
@@ -9,7 +9,7 @@ dependencies:
     specifier: ^0.18.0
     version: 0.18.0
   '@boundaryml/baml-core-ffi':
-    specifier: 0.14.0-canary.3
+    specifier: '*'
     version: 0.14.0-canary.3
   dotenv:
     specifier: ^16.4.5
