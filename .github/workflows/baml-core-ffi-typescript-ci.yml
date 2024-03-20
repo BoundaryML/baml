@@ -551,4 +551,4 @@ jobs:
           fi
       - name: Publish
         run: |
-          npm publish --tag next --access public
+          npm publish --access public
