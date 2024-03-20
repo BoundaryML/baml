@@ -14,5 +14,6 @@ export default defineConfig({
   format: ["cjs", "esm"],
   minify: false,
   sourcemap: false,
-  // external: ["jest-resolve/build/default_resolver"]
+  // TODO: this didnt do anythin
+  // external: ["@boundaryml/baml-core-ffi"]
 });

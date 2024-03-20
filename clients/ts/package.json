@@ -1,6 +1,6 @@
 {
   "name": "@boundaryml/baml-core",
-  "version": "0.0.2-canary.2",
+  "version": "0.0.2-canary.5",
   "description": "",
   "exports": {
     ".": {
@@ -31,7 +31,8 @@
     "./baml_test_runner": {
       "import": "./dist/baml_test_runner/index.mjs",
       "require": "./dist/baml_test_runner/index.js",
-      "types": "./dist/baml_test_runner/index.d.ts"
+      "types": "./dist/baml_test_runner/index.d.ts",
+      "default": "./dist/baml_test_runner/index.js"
     }
   },
   "scripts": {
