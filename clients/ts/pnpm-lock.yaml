@@ -12,7 +12,7 @@ dependencies:
     specifier: 1.0.0-beta.11
     version: 1.0.0-beta.11
   '@boundaryml/baml-core-ffi':
-    specifier: '*'
+    specifier: 0.14.1
     version: 0.14.1
   dotenv:
     specifier: ^16.4.5
