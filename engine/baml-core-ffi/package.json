@@ -1,6 +1,6 @@
 {
   "name": "@boundaryml/baml-core-ffi",
-  "version": "0.14.1",
+  "version": "0.14.2",
   "description": "Template project for writing node package with napi-rs",
   "main": "index.js",
   "repository": {
