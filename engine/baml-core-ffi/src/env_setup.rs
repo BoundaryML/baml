@@ -83,7 +83,7 @@ pub struct Config {
 }
 
 fn default_base_url() -> String {
-  "https://api.boundary.com".to_string()
+  "https://app.boundaryml.com".to_string()
 }
 
 fn default_sessions_id() -> String {
