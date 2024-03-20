@@ -45,15 +45,7 @@ class OpenAIClient extends LLMChatProvider {
         });
 
         if (api_type === "azure") {
-            this.client = new OpenAI({
-                apiKey: api_key,
-                organization,
-                baseURL: base_url ?? `https://${engine}.openai.azure.com/openai/deployments/${model}`,
-                timeout,
-                maxRetries: max_retries ?? 0,
-                defaultQuery: api_version ? { 'api_version': api_version } : undefined,
-                defaultHeaders: { 'api-key': api_key }
-            });
+            throw new Error("Azure API is not supported. Use `baml-azure-chat` instead");
         } else {
             this.client = new OpenAI({
                 apiKey: api_key,
@@ -124,12 +116,6 @@ class OpenAIClient extends LLMChatProvider {
 }
 
 clientManager.registerProvider("baml-openai-chat", {
-    createClient: (name: string, options: LLMBaseProviderArgs): LLMChatProvider => {
-        return new OpenAIClient(options);
-    },
-});
-
-clientManager.registerProvider("baml-azure-chat", {
     createClient: (name: string, options: LLMBaseProviderArgs): LLMChatProvider => {
         return new OpenAIClient(options);
     },
