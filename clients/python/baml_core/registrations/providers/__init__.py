@@ -4,6 +4,7 @@ from .anthropic_chat_provider import AnthropicChatProvider
 import openai
 from packaging.version import parse as parse_version
 from .fallback_provider import FallbackProvider
+from .round_robin_provider import RoundRobinProvider
 
 if parse_version(version=openai.__version__) < parse_version("1.0.0"):
     from .openai_chat_provider import OpenAIChatProvider
@@ -14,9 +15,10 @@ else:
 
 
 __all__ = [
-    "FallbackProvider",
     "AnthropicProvider",
     "AnthropicChatProvider",
+    "FallbackProvider",
     "OpenAIChatProvider",
     "OpenAICompletionProvider",
+    "RoundRobinProvider",
 ]

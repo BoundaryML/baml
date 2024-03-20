@@ -17,14 +17,14 @@ class _LLMManager:
         self, *, name: str, provider: str, **kwargs: typing.Any
     ) -> AbstractLLMProvider:
         if name in self.__llms:
-            raise ValueError(f"LLM with {name} already exists")
+            raise ValueError(f"client<llm> {repr(name)} already exists")
         self.__llms[name] = llm_provider_factory(provider=provider, **kwargs)
         return self.__llms[name]
 
     def get_llm(self, name: str) -> AbstractLLMProvider:
         if name not in self.__llms:
             raise ValueError(
-                f"LLM {name} not found. You can use one of {self.__llms.keys()}"
+                f"client<llm> {repr(name)} not found. You can use one of {list(self.__llms.keys())}"
             )
         return self.__llms[name]
 

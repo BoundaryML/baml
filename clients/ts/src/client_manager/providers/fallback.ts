@@ -2,11 +2,17 @@ import { clientManager } from "../client_manager";
 import { LLMException, ProviderErrorCode } from "../errors";
 import { LLMBaseProvider, LLMBaseProviderArgs, LLMChatMessage, LLMResponse } from "../llm_base_provider";
 
-class FallbackClient extends LLMBaseProvider {
-    private fallbackNames: string[];
+// NOTE(sam): on_status_code is commented out b/c I don't think we should support it
+interface FallbackStrategyEntry {
+    client: string;
+    // on_status_code?: number[];
+}
 
-    constructor(params: LLMBaseProviderArgs & {
-        strategy?: {client: string}[]
+class FallbackClient extends LLMBaseProvider {
+    private fallbackClients: FallbackStrategyEntry[];
+
+    constructor(readonly name: string, params: LLMBaseProviderArgs & {
+        strategy?: (string | FallbackStrategyEntry)[]
     }) {
         const {
             strategy,
@@ -18,22 +24,24 @@ class FallbackClient extends LLMBaseProvider {
         }
 
         super(rest);
-        this.fallbackNames = strategy.map((s) => s.client);
-    }
+        if (!strategy) {
+            throw new Error(`client<llm> ${this.name}: expected a strategy consisting of a list of clients, but none provided`);
+        }
 
+        if (strategy.length === 0) {
+            throw new Error(`client<llm> ${this.name}: expected strategy to contain at least one client, but contained zero`);
+        }
 
-    private fallbacks(): LLMBaseProvider[] {
-        return this.fallbackNames.map((name) => clientManager.getClient(name));
+        this.fallbackClients = strategy.map((s) => typeof s === "string" ? { client: s } : s);
     }
 
     private async try_fallback(fn: (fallback: LLMBaseProvider) => Promise<LLMResponse>): Promise<LLMResponse> {
-        const fallbacks = this.fallbacks();
-        for (let i = 0; i < fallbacks.length; i++) {
-            const fallback = fallbacks[i];
+        for (let i = 0; i < this.fallbackClients.length; i++) {
+            const fallback = clientManager.getClient(this.fallbackClients[i].client);
             try {
                 return await fn(fallback);
             } catch (e) {
-                if (i === fallbacks.length - 1) {
+                if (i === this.fallbackClients.length - 1) {
                     throw e;
                 }
             }
@@ -64,6 +72,6 @@ class FallbackClient extends LLMBaseProvider {
 
 clientManager.registerProvider("baml-fallback", {
     createClient: (name: string, options: LLMBaseProviderArgs): LLMBaseProvider => {
-        return new FallbackClient(options);
+        return new FallbackClient(name, options);
     },
 });

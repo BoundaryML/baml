@@ -22,7 +22,7 @@ class ClientManager {
     createClient(name: string, provider: string, options: LLMBaseProviderArgs): LLMBaseProvider {
         const provider_ = this.providers.get(provider);
         if (!provider_) {
-            throw new Error(`Provider ${provider} not found`);
+            throw new Error(`Provider '${provider}' not found`);
         }
         const client = provider_.createClient(name, { ...options, provider });
         this.clients.set(name, client);

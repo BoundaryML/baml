@@ -45,6 +45,8 @@ import './fntestoutputadapter_v1';
 
 import './optionaltest_function_v1';
 
+import './prompttest_bird_chat';
+
 import './prompttest_claude_chat';
 
 import './prompttest_claude_chat_with_chat_msgs';

@@ -29,3 +29,57 @@ client<llm> Claude {
     api_key env.ANTHROPIC_API_KEY
   }
 }
+
+client<llm> Resilient_SimpleSyntax {
+  provider baml-fallback
+  options {
+    strategy [
+      GPT4Turbo
+      GPT35
+      Claude
+    ]
+  }
+}
+
+client<llm> Resilient_ComplexSyntax {
+  provider baml-fallback
+  options {
+    strategy [
+      {
+        client GPT4Turbo
+      }
+      {
+        client GPT35
+      }
+      {
+        client Claude
+      }
+    ]
+  }
+}
+
+client<llm> Lottery_SimpleSyntax {
+  provider baml-round-robin
+  options {
+    start 0
+    strategy [
+      GPT35
+      Claude
+    ]
+  }
+}
+
+client<llm> Lottery_ComplexSyntax {
+  provider baml-round-robin
+  options {
+    start 0
+    strategy [
+      {
+        client GPT35
+      }
+      {
+        client Claude
+      }
+    ]
+  }
+}

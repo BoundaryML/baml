@@ -71,7 +71,7 @@ function createFnClassOptionalInstance(): IFnClassOptional & FnClassOptionalFunc
   };
 
   const impl = async (arg: OptionalClass | null) => {
-    return wrapper.getImpl('v1').run(params);
+    return wrapper.getImpl('v1').run(arg);
   };
 
   Object.assign(impl, wrapper);
@@ -142,7 +142,7 @@ function createFnClassOptional2Instance(): IFnClassOptional2 & FnClassOptional2F
   };
 
   const impl = async (arg: ClassOptionalFields) => {
-    return wrapper.getImpl('v1').run(params);
+    return wrapper.getImpl('v1').run(arg);
   };
 
   Object.assign(impl, wrapper);
@@ -213,7 +213,7 @@ function createFnClassOptionalOutputInstance(): IFnClassOptionalOutput & FnClass
   };
 
   const impl = async (arg: string) => {
-    return wrapper.getImpl('v1').run(params);
+    return wrapper.getImpl('v1').run(arg);
   };
 
   Object.assign(impl, wrapper);
@@ -284,7 +284,7 @@ function createFnClassOptionalOutput2Instance(): IFnClassOptionalOutput2 & FnCla
   };
 
   const impl = async (arg: string) => {
-    return wrapper.getImpl('v1').run(params);
+    return wrapper.getImpl('v1').run(arg);
   };
 
   Object.assign(impl, wrapper);
@@ -355,7 +355,7 @@ function createFnEnumListOutputInstance(): IFnEnumListOutput & FnEnumListOutputF
   };
 
   const impl = async (arg: string) => {
-    return wrapper.getImpl('v1').run(params);
+    return wrapper.getImpl('v1').run(arg);
   };
 
   Object.assign(impl, wrapper);
@@ -426,7 +426,7 @@ function createFnEnumOutputInstance(): IFnEnumOutput & FnEnumOutputFunction {
   };
 
   const impl = async (arg: string) => {
-    return wrapper.getImpl('v1').run(params);
+    return wrapper.getImpl('v1').run(arg);
   };
 
   Object.assign(impl, wrapper);
@@ -574,7 +574,7 @@ function createFnOutputBoolInstance(): IFnOutputBool & FnOutputBoolFunction {
   };
 
   const impl = async (arg: string) => {
-    return wrapper.getImpl('v1').run(params);
+    return wrapper.getImpl('v1').run(arg);
   };
 
   Object.assign(impl, wrapper);
@@ -645,7 +645,7 @@ function createFnOutputClassInstance(): IFnOutputClass & FnOutputClassFunction {
   };
 
   const impl = async (arg: string) => {
-    return wrapper.getImpl('v1').run(params);
+    return wrapper.getImpl('v1').run(arg);
   };
 
   Object.assign(impl, wrapper);
@@ -716,7 +716,7 @@ function createFnOutputClassListInstance(): IFnOutputClassList & FnOutputClassLi
   };
 
   const impl = async (arg: string) => {
-    return wrapper.getImpl('v1').run(params);
+    return wrapper.getImpl('v1').run(arg);
   };
 
   Object.assign(impl, wrapper);
@@ -787,7 +787,7 @@ function createFnOutputClassWithEnumInstance(): IFnOutputClassWithEnum & FnOutpu
   };
 
   const impl = async (arg: string) => {
-    return wrapper.getImpl('v1').run(params);
+    return wrapper.getImpl('v1').run(arg);
   };
 
   Object.assign(impl, wrapper);
@@ -858,7 +858,7 @@ function createFnOutputStringListInstance(): IFnOutputStringList & FnOutputStrin
   };
 
   const impl = async (arg: string) => {
-    return wrapper.getImpl('v1').run(params);
+    return wrapper.getImpl('v1').run(arg);
   };
 
   Object.assign(impl, wrapper);
@@ -929,7 +929,7 @@ function createFnStringOptionalInstance(): IFnStringOptional & FnStringOptionalF
   };
 
   const impl = async (arg: string | null) => {
-    return wrapper.getImpl('v1').run(params);
+    return wrapper.getImpl('v1').run(arg);
   };
 
   Object.assign(impl, wrapper);
@@ -1000,7 +1000,7 @@ function createFnTestAliasedEnumOutputInstance(): IFnTestAliasedEnumOutput & FnT
   };
 
   const impl = async (arg: string) => {
-    return wrapper.getImpl('v1').run(params);
+    return wrapper.getImpl('v1').run(arg);
   };
 
   Object.assign(impl, wrapper);
@@ -1071,7 +1071,7 @@ function createFnTestClassAliasInstance(): IFnTestClassAlias & FnTestClassAliasF
   };
 
   const impl = async (arg: string) => {
-    return wrapper.getImpl('v1').run(params);
+    return wrapper.getImpl('v1').run(arg);
   };
 
   Object.assign(impl, wrapper);
@@ -1142,7 +1142,7 @@ function createFnTestClassOverrideInstance(): IFnTestClassOverride & FnTestClass
   };
 
   const impl = async (arg: string) => {
-    return wrapper.getImpl('v1').run(params);
+    return wrapper.getImpl('v1').run(arg);
   };
 
   Object.assign(impl, wrapper);
@@ -1213,7 +1213,7 @@ function createFnTestEnumOverrideInstance(): IFnTestEnumOverride & FnTestEnumOve
   };
 
   const impl = async (arg: string) => {
-    return wrapper.getImpl('v1').run(params);
+    return wrapper.getImpl('v1').run(arg);
   };
 
   Object.assign(impl, wrapper);
@@ -1361,7 +1361,7 @@ function createFnTestOutputAdapterInstance(): IFnTestOutputAdapter & FnTestOutpu
   };
 
   const impl = async (arg: string) => {
-    return wrapper.getImpl('v1').run(params);
+    return wrapper.getImpl('v1').run(arg);
   };
 
   Object.assign(impl, wrapper);
@@ -1432,7 +1432,7 @@ function createOptionalTest_FunctionInstance(): IOptionalTest_Function & Optiona
   };
 
   const impl = async (arg: string) => {
-    return wrapper.getImpl('v1').run(params);
+    return wrapper.getImpl('v1').run(arg);
   };
 
   Object.assign(impl, wrapper);
@@ -1444,7 +1444,7 @@ const OptionalTest_Function = createOptionalTest_FunctionInstance();
 
 type IPromptTest = (arg: string) => Promise<string>
 
-type PromptTestImpls = 'claude_chat' | 'claude_chat_with_chat_msgs' | 'claude_chat_with_chat_msgs_no_system' | 'openai_chat' | 'openai_chat_with_chat_msgs' | 'openai_chat_with_chat_msgs_no_system';
+type PromptTestImpls = 'bird_chat' | 'claude_chat' | 'claude_chat_with_chat_msgs' | 'claude_chat_with_chat_msgs_no_system' | 'openai_chat' | 'openai_chat_with_chat_msgs' | 'openai_chat_with_chat_msgs_no_system';
 
 interface PromptTestImpl {
     run: IPromptTest;
@@ -1493,7 +1493,7 @@ function createPromptTestInstance(): IPromptTest & PromptTestFunction {
       };
     },
     validate: () => {
-      const targets = ['claude_chat', 'claude_chat_with_chat_msgs', 'claude_chat_with_chat_msgs_no_system', 'openai_chat', 'openai_chat_with_chat_msgs', 'openai_chat_with_chat_msgs_no_system'];
+      const targets = ['bird_chat', 'claude_chat', 'claude_chat_with_chat_msgs', 'claude_chat_with_chat_msgs_no_system', 'openai_chat', 'openai_chat_with_chat_msgs', 'openai_chat_with_chat_msgs_no_system'];
       const impls = Object.keys(registry);
       const missing = targets.filter(t => !impls.includes(t));
       if (missing.length > 0) {
@@ -1503,7 +1503,7 @@ function createPromptTestInstance(): IPromptTest & PromptTestFunction {
   };
 
   const impl = async (arg: string) => {
-    return wrapper.getImpl('claude_chat').run(params);
+    return wrapper.getImpl('claude_chat').run(arg);
   };
 
   Object.assign(impl, wrapper);
@@ -2265,7 +2265,7 @@ function createUnionTest_FunctionInstance(): IUnionTest_Function & UnionTest_Fun
   };
 
   const impl = async (arg: string | boolean) => {
-    return wrapper.getImpl('v1').run(params);
+    return wrapper.getImpl('v1').run(arg);
   };
 
   Object.assign(impl, wrapper);

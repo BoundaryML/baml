@@ -25,6 +25,9 @@ describe('test_case:powerful_coffee', () => {
   });
 
   describe('function:PromptTest', () => {
+    test('impl:bird_chat', async () => {
+      await test_fn('bird_chat');
+    }, 60000);
     test('impl:claude_chat', async () => {
       await test_fn('claude_chat');
     }, 60000);
