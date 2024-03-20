@@ -1,22 +1,44 @@
 {
   "name": "@boundaryml/baml-core",
-  "version": "0.0.1",
+  "version": "0.0.2-canary.2",
   "description": "",
-  "main": "dist/index.js",
-  "module": "dist/index.mjs",
-  "types": "dist/index.d.ts",
   "exports": {
-    ".": "./dist/index.js",
-    "./client_manager": "./dist/client_manager/index.js",
-    "./deserializer": "./dist/deserializer/index.js",
-    "./ffi_layer": "./dist/ffi_layer.js",
-    "./deserializer/deserializer": "./dist/deserializer/deserializer.js",
-    "./deserializer/diagnostics": "./dist/deserializer/diagnostics.js",
-    "./baml_test_runner": "./dist/baml_test_runner/index.js"
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./client_manager": {
+      "import": "./dist/client_manager/index.mjs",
+      "require": "./dist/client_manager/index.js",
+      "types": "./dist/client_manager/index.d.ts"
+    },
+    "./ffi_layer": {
+      "import": "./dist/ffi_layer.mjs",
+      "require": "./dist/ffi_layer.js",
+      "types": "./dist/ffi_layer.d.ts"
+    },
+    "./deserializer/deserializer": {
+      "import": "./dist/deserializer/deserializer.mjs",
+      "require": "./dist/deserializer/deserializer.js",
+      "types": "./dist/deserializer/deserializer.d.ts"
+    },
+    "./deserializer/diagnostics": {
+      "import": "./dist/deserializer/diagnostics.mjs",
+      "require": "./dist/deserializer/diagnostics.js",
+      "types": "./dist/deserializer/diagnostics.d.ts"
+    },
+    "./baml_test_runner": {
+      "import": "./dist/baml_test_runner/index.mjs",
+      "require": "./dist/baml_test_runner/index.js",
+      "types": "./dist/baml_test_runner/index.d.ts"
+    }
   },
   "scripts": {
     "test": "jest",
-    "build": "tsup && tsc -p tsconfig.build.json"
+    "clean": "rm -rf dist",
+    "build": "pnpm clean && tsc -p tsconfig.build.json && tsup",
+    "tsc-thing": "tsc -p tsconfig.build.json"
   },
   "files": [
     "dist/**"
@@ -35,8 +57,6 @@
     "@types/node": "^20.11.21",
     "@types/string-format": "^2.0.3",
     "install": "^0.13.0",
-    "jest": "^29.7.0",
-    "jest-runner": "^29.7.0",
     "ts-jest": "^29.1.2",
     "ts-node": "^10.9.2",
     "tsup": "^8.0.2",
@@ -50,6 +70,7 @@
     "json-schema": "^0.4.0",
     "openai": "^4.25.0",
     "string-format": "^2.0.0",
+    "jest-runner": "^29.7.0",
     "xregexp": "^5.1.1"
   }
 }

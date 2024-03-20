@@ -2,10 +2,7 @@
   // This tsconfig just checks the compilation is accurate since
   // tsup seems to miss some type errors.
   "extends": "./tsconfig.json",
-  "exclude": [
-    "node_modules",
-    "**/*.test.ts"
-  ],
+  "exclude": ["node_modules", "**/*.test.ts"],
   "compilerOptions": {
     "noEmit": true,
     "emitDeclarationOnly": false
