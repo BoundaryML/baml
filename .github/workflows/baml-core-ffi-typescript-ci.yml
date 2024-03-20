@@ -8,14 +8,12 @@ permissions:
   id-token: write
 "on":
   push:
+    paths:
+      - "engine/.bumpversion.cfg"
     branches:
       - canary
-    tags-ignore:
-      - "**"
-    paths:
-      - engine/**
-      - .github/workflows/baml-core-ffi-typescript-ci.yml
-      - .github/workflows/baml-core-ffi-typescript-lint.yml
+    tags:
+      - "release/baml-cli/v*.*.*"
   pull_request:
     paths:
       - "engine/baml-core-ffi/**"
@@ -460,20 +458,20 @@ jobs:
   #           set -e
   #           yarn test
   #           ls -la
-  publish:
+  pre-release:
+    permissions:
+      contents: write
+    environment: nightly
+    if: github.ref == 'refs/heads/canary'
     defaults:
       run:
         working-directory: engine/baml-core-ffi
     name: Publish
     runs-on: ubuntu-latest
     needs:
-      # - build-freebsd
       - test-macOS-windows-binding
       - test-linux-x64-gnu-binding
-      # - test-linux-x64-musl-binding
       - test-linux-aarch64-gnu-binding
-      # - test-linux-aarch64-musl-binding
-      # - test-linux-arm-gnueabihf-binding
     steps:
       - uses: actions/checkout@v4
       - name: Setup node
@@ -493,20 +491,62 @@ jobs:
       - name: List packages
         run: ls -R ./npm
         shell: bash
+      - name: Valdiate
+        run: |
+          VERSION=$(cat engine/.bumpversion.cfg | grep "current_version =" | cut -d '=' -f 2 | sed 's/[", ]//g')
+          if [[ ! $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+-canary\.[0-9]+$ ]]; then
+            echo "Version ($VERSION) is not a pre-release build"
+            exit 1
+          fi
       - name: Publish
         run: |
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> ~/.npmrc
           npm config set provenance true
-          if git log -1 --pretty=%B | grep "^[0-9]\+\.[0-9]\+\.[0-9]\+$";
-          then
-            echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
-            npm publish --access public
-          elif git log -1 --pretty=%B | grep "^[0-9]\+\.[0-9]\+\.[0-9]\+";
-          then
-            echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
-            npm publish --tag next --access public
-          else
-            echo "Not a release, skipping publish"
+          npm publish --tag next --access public
+  
+  publish:
+    permissions:
+      contents: write
+      pull-requests: write
+    environment: release
+    if: startsWith(github.ref, 'refs/tags/release/')
+    defaults:
+      run:
+        working-directory: engine/baml-core-ffi
+    name: Publish
+    runs-on: ubuntu-latest
+    needs:
+      - test-macOS-windows-binding
+      - test-linux-x64-gnu-binding
+      - test-linux-aarch64-gnu-binding
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: yarn
+          cache-dependency-path: engine/baml-core-ffi/yarn.lock
+      - name: Install dependencies
+        run: yarn install
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: engine/baml-core-ffi/artifacts
+      - name: Move artifacts
+        run: yarn artifacts
+      - name: List packages
+        run: ls -R ./npm
+        shell: bash
+      - name: Valdiate
+        run: |
+          VERSION=$(cat engine/.bumpversion.cfg | grep "current_version =" | cut -d '=' -f 2 | sed 's/[", ]//g')
+          if [[ ! $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Version ($VERSION) is not a release build"
+            exit 1
           fi
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> ~/.npmrc
+          npm config set provenance true
+          npm publish --tag next --access public
