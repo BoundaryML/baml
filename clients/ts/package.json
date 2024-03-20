@@ -1,6 +1,6 @@
 {
   "name": "@boundaryml/baml-core",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,6 +17,9 @@
     "test": "jest",
     "build": "tsc"
   },
+  "files": [
+    "dist/**"
+  ],
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"
