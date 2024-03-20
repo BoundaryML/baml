@@ -84,9 +84,9 @@ impl WithLanguage for PackageManager {
 
     fn install_command(&self) -> String {
         match self {
-            PackageManager::Yarn => "yarn add".into(),
-            PackageManager::Pnpm => "pnpm add".into(),
-            PackageManager::Npm => "npm install".into(),
+            PackageManager::Yarn => "yarn add @boundaryml/baml-core".into(),
+            PackageManager::Pnpm => "pnpm add @boundaryml/baml-core".into(),
+            PackageManager::Npm => "npm install @boundaryml/baml-core".into(),
         }
     }
 
