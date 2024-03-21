@@ -252,7 +252,11 @@ where
 
     match schema.get_final_schema() {
       Ok(log_schema) => {
-        for schema in log_schema {
+        for mut schema in log_schema {
+          schema.context.tags.insert(
+            "baml.version".into(),
+            concat!("ffi:", env!("CARGO_PKG_VERSION")).into(),
+          );
           // Submit to a background thread that will send the log schema to the server
           match self.config.submit(schema) {
             Ok(_) => {}
