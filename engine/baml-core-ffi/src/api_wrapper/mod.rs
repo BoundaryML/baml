@@ -206,7 +206,7 @@ impl CompleteAPIConfig {
     let response = response.send().await?;
     if !response.status().is_success() {
       let status = response.status();
-      if let Some(body) = response.text().await.ok() {
+      if let Ok(body) = response.text().await {
         return Err(anyhow::anyhow!(
           "Failed to send request to {} {status}:\n{}",
           url,
