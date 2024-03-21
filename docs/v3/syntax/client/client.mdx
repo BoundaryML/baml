@@ -28,13 +28,14 @@ client<CLIENT_TYPE> Name {
 
 ## Providers
 
-BAML libraries ship with the following providers (you can can also write your own!):
+BAML ships with the following providers (you can can also write your own!):
 
 - LLM client providers
-  - `baml-openai-chat`
-  - `baml-openai-completion`
+  - `baml-anthropic`
   - `baml-azure-chat`
   - `baml-azure-completion`
+  - `baml-openai-chat`
+  - `baml-openai-completion`
 - Composite client providers
   - `baml-fallback`
   - `baml-round-robin`
@@ -44,7 +45,7 @@ away the differences between these two types of LLMs by putting that logic in
 the clients.
 
 You can call a chat client with a single completion prompt and it will
-automatically map it to a chat prompt and similarly you can call a completion
+automatically map it to a chat prompt. Similarly you can call a completion
 client with multiple chat prompts and it will automatically map it to a
 completion prompt.
 
@@ -57,7 +58,9 @@ Provider names:
 - `baml-azure-chat`
 - `baml-azure-completion`
 
-You must pick the right provider for the type of model you are using. For example, if you are using a GPT-3 model, you must use a `chat` provider, but if you're using the instruct model, you must use a `completion` provider.
+You must pick the right provider for the type of model you are using. For
+example, if you are using a GPT-3 model, you must use a `chat` provider, but if
+you're using the instruct model, you must use a `completion` provider.
 
 You can see all models supported by OpenAI [here](https://platform.openai.com/docs/models).
 
