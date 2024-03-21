@@ -55,8 +55,9 @@ class RoundRobinClient extends LLMBaseProvider {
         // NB: in other languages, this should be an atomic get-and-increment operation, but in the
         // context of (1) the use case and (2) that Node is single-threaded (i.e. function calls are
         // never interleaved aka function calls are atomic), this is fine.
-        const clientIndex = this.clientIndex++;
-        return clientManager.getClient(this.clients[clientIndex % this.clients.length].client);
+        const clientIndex = this.clientIndex;
+        this.clientIndex = (this.clientIndex + 1) % this.clients.length;
+        return clientManager.getClient(this.clients[clientIndex].client);
     }
 
     async run_prompt_once(prompt: string): Promise<LLMResponse> {
