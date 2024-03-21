@@ -4,7 +4,7 @@ use super::{
     Rule,
 };
 use crate::{assert_correct_parser, ast::*, unreachable_rule};
-use internal_baml_diagnostics::Diagnostics;
+use internal_baml_diagnostics::{DatamodelWarning, Diagnostics};
 
 pub(crate) fn parse_expression(
     token: Pair<'_>,
@@ -48,7 +48,17 @@ fn parse_string_literal(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expre
             Expression::StringValue(contents.as_str().to_string(), span)
         }
         Rule::unquoted_string_literal => {
-            let content = contents.as_str().to_string();
+            let raw_content = contents.as_str();
+            // If the content starts or ends with a space, trim it
+            let content = raw_content.trim().to_string();
+            // If its trimmed put a warning
+            if content.len() != raw_content.len() {
+                diagnostics.push_warning(DatamodelWarning::new(
+                    "Trailing or leading whitespace trimmed. If you meant to include it, please wrap the string with \"...\"".into(),
+                    span.clone(),
+                ))
+            }
+
             if content.contains(' ') {
                 Expression::StringValue(content, span)
             } else {
