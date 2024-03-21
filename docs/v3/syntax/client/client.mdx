@@ -28,9 +28,26 @@ client<CLIENT_TYPE> Name {
 
 ## Providers
 
-BAML libraries ship with some providers, but you can also write your own. There are two primary types of LLMs: chat and completion. BAML Clients abstract away the differences between these two types of LLMs by putting that logic into the provider.
+BAML ships with the following providers (you can can also write your own!):
 
-You can call a chat client with a single completion prompt and it will automatically map it to a chat prompt and similarly you can call a completion client with multiple chat prompts and it will automatically map it to a completion prompt.
+- LLM client providers
+  - `baml-anthropic`
+  - `baml-azure-chat`
+  - `baml-azure-completion`
+  - `baml-openai-chat`
+  - `baml-openai-completion`
+- Composite client providers
+  - `baml-fallback`
+  - `baml-round-robin`
+
+There are two primary types of LLM clients: chat and completion. BAML abstracts
+away the differences between these two types of LLMs by putting that logic in
+the clients.
+
+You can call a chat client with a single completion prompt and it will
+automatically map it to a chat prompt. Similarly you can call a completion
+client with multiple chat prompts and it will automatically map it to a
+completion prompt.
 
 ### OpenAI/Azure
 
@@ -41,7 +58,9 @@ Provider names:
 - `baml-azure-chat`
 - `baml-azure-completion`
 
-You must pick the right provider for the type of model you are using. For example, if you are using a GPT-3 model, you must use a `chat` provider, but if you're using the instruct model, you must use a `completion` provider.
+You must pick the right provider for the type of model you are using. For
+example, if you are using a GPT-3 model, you must use a `chat` provider, but if
+you're using the instruct model, you must use a `completion` provider.
 
 You can see all models supported by OpenAI [here](https://platform.openai.com/docs/models).
 
@@ -104,7 +123,47 @@ client<llm> MyClient {
 
 ### Fallback
 
-The provider helps with reseliency by allowing you to specify strategies for re-running failed requests. See [Fallbacks/Redundancy](/v3/syntax/client/redundancy) for more information.
+The `baml-fallback` provider allows you to define a resilient client, by
+specifying strategies for re-running failed requests. See
+[Fallbacks/Redundancy](/v3/syntax/client/redundancy) for more information.
+
+### Round Robin
+
+The `baml-round-robin` provider allows you to load-balance your requests across
+multiple clients. Here's an example:
+
+```rust
+client<llm> MyClient {
+  provider baml-round-robin
+  options {
+    strategy [
+      MyGptClient
+      MyAnthropicClient
+    ]
+  }
+}
+```
+
+This will alternate between `MyGptClient` and `MyAnthropicClient` for successive
+requests, starting from a randomly selected client (so that if you run multiple
+instances of your application, they won't all start with the same client).
+
+If you want to control which client is used for the first request, you can specify
+a `start` index, which tells BAML to start with the client at index `start`, like
+so:
+
+```rust
+client<llm> MyClient {
+  provider baml-round-robin
+  options {
+    start 1
+    strategy [
+      MyGptClient
+      MyAnthropicClient
+    ]
+  }
+}
+```
 
 ### Creating your own (Advanced)
 
