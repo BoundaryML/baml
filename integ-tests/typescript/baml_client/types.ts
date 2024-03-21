@@ -66,6 +66,12 @@ interface ClassOptionalOutput2 {
   prop3: Blah | null;
 }
 
+interface DynamicPropsClass {
+  prop1: string;
+  prop2: string;
+  prop3: number;
+}
+
 interface ModifiedOutput {
   reasoning: string;
   answer: string;
@@ -98,6 +104,11 @@ interface OverrideClass {
   prop2: string;
 }
 
+interface SomeClass2 {
+  prop1: string;
+  prop2: string;
+}
+
 interface TestClassAlias {
   key: string;
   key2: string;
@@ -123,5 +134,5 @@ interface UnionTest_ReturnType {
 }
 
 
-export { EnumInClass, EnumOutput, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalTest_CategoryType, OverrideEnum, TestEnum, Blah, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, ModifiedOutput, NamedArgsSingleClass, OptionalClass, OptionalTest_Prop1, OptionalTest_ReturnType, OverrideClass, TestClassAlias, TestClassWithEnum, TestOutputClass, UnionTest_ReturnType }
+export { EnumInClass, EnumOutput, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalTest_CategoryType, OverrideEnum, TestEnum, Blah, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, DynamicPropsClass, ModifiedOutput, NamedArgsSingleClass, OptionalClass, OptionalTest_Prop1, OptionalTest_ReturnType, OverrideClass, SomeClass2, TestClassAlias, TestClassWithEnum, TestOutputClass, UnionTest_ReturnType }
 

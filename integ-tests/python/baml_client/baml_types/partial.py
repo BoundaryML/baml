@@ -11,12 +11,14 @@ from ..__do_not_import.types.partial.classes.cls_blah import PartialBlah
 from ..__do_not_import.types.partial.classes.cls_classoptionalfields import PartialClassOptionalFields
 from ..__do_not_import.types.partial.classes.cls_classoptionaloutput import PartialClassOptionalOutput
 from ..__do_not_import.types.partial.classes.cls_classoptionaloutput2 import PartialClassOptionalOutput2
+from ..__do_not_import.types.partial.classes.cls_dynamicpropsclass import PartialDynamicPropsClass
 from ..__do_not_import.types.partial.classes.cls_modifiedoutput import PartialModifiedOutput
 from ..__do_not_import.types.partial.classes.cls_namedargssingleclass import PartialNamedArgsSingleClass
 from ..__do_not_import.types.partial.classes.cls_optionalclass import PartialOptionalClass
 from ..__do_not_import.types.partial.classes.cls_optionaltest_prop1 import PartialOptionalTest_Prop1
 from ..__do_not_import.types.partial.classes.cls_optionaltest_returntype import PartialOptionalTest_ReturnType
 from ..__do_not_import.types.partial.classes.cls_overrideclass import PartialOverrideClass
+from ..__do_not_import.types.partial.classes.cls_someclass2 import PartialSomeClass2
 from ..__do_not_import.types.partial.classes.cls_testclassalias import PartialTestClassAlias
 from ..__do_not_import.types.partial.classes.cls_testclasswithenum import PartialTestClassWithEnum
 from ..__do_not_import.types.partial.classes.cls_testoutputclass import PartialTestOutputClass
@@ -30,12 +32,14 @@ __all__ = [
     'PartialClassOptionalFields',
     'PartialClassOptionalOutput',
     'PartialClassOptionalOutput2',
+    'PartialDynamicPropsClass',
     'PartialModifiedOutput',
     'PartialNamedArgsSingleClass',
     'PartialOptionalClass',
     'PartialOptionalTest_Prop1',
     'PartialOptionalTest_ReturnType',
     'PartialOverrideClass',
+    'PartialSomeClass2',
     'PartialTestClassAlias',
     'PartialTestClassWithEnum',
     'PartialTestOutputClass',

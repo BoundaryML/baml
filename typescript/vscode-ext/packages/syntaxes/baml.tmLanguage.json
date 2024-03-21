@@ -12,7 +12,8 @@
         { "include": "#type_alias" },
         { "include": "#function" },
         { "include": "#impl_declaration" },
-        { "include": "#language_block_string" }
+        { "include": "#language_block_python" },
+        { "include": "#language_block_ts" }
       ]
     },
     "comment": {
@@ -157,7 +158,8 @@
       },
       "patterns": [
         { "include": "#comment" },
-        { "include": "#language_block_string" },
+        { "include": "#language_block_python" },
+        { "include": "#language_block_ts" },
         { "include": "#key_value" },
         { "include": "#string_unquoted" },
         { "include": "#block_string_pair" },
@@ -172,7 +174,9 @@
     "property_assignment_expression": {
       "patterns": [
         { "include": "#key_null_pair" },
-        { "include": "#language_block_string" },
+        { "include": "#language_block_python" },
+        { "include": "#language_block_ts" },
+
         { "include": "#block_string_pair" },
 
         { "include": "#key_value" },
@@ -200,7 +204,9 @@
         { "include": "#key_value" },
         { "include": "#key_null_pair" },
         { "include": "#key_string_pair" },
-        { "include": "#language_block_string" },
+        { "include": "#language_block_python" },
+        { "include": "#language_block_ts" },
+
         { "include": "#block_string_pair" },
         { "include": "#key_quoted_string_pair" },
         { "include": "#key_number_pair" },
@@ -209,8 +215,8 @@
         { "include": "#key_custom_string_pair" }
       ]
     },
-    "language_block_string": {
-      "begin": "(\\w+)(#{1,3}\")",
+    "language_block_python": {
+      "begin": "(python)(#{1,3}\")",
       "beginCaptures": {
         "1": { "name": "comment.line" },
         "2": { "name": "string.quoted" }
@@ -223,6 +229,23 @@
       "patterns": [
         {
           "include": "source.python"
+        }
+      ]
+    },
+    "language_block_ts": {
+      "begin": "(typescript)(#{1,3}\")",
+      "beginCaptures": {
+        "1": { "name": "comment.line" },
+        "2": { "name": "string.quoted" }
+      },
+      "end": "\\s*(\"{1,3}#)",
+      "endCaptures": {
+        "1": { "name": "string.quoted" }
+      },
+      "contentName": "source.ts.embedded",
+      "patterns": [
+        {
+          "include": "source.ts"
         }
       ]
     },
@@ -256,7 +279,10 @@
       "name": "comment.line.double-slash.baml",
       "patterns": [
         {
-          "include": "#language_block_string"
+          "include": "#language_block_python"
+        },
+        {
+          "include": "#language_block_ts"
         }
       ]
     },
