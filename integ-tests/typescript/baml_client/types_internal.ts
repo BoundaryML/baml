@@ -6,7 +6,7 @@
 /* eslint-disable */
 
 
-import { Blah, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, EnumInClass, EnumOutput, ModifiedOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalClass, OptionalTest_CategoryType, OptionalTest_Prop1, OptionalTest_ReturnType, OverrideClass, OverrideEnum, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass, UnionTest_ReturnType } from './types';
+import { Blah, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, DynamicPropsClass, EnumInClass, EnumOutput, ModifiedOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalClass, OptionalTest_CategoryType, OptionalTest_Prop1, OptionalTest_ReturnType, OverrideClass, OverrideEnum, SomeClass2, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass, UnionTest_ReturnType } from './types';
 
 
 // Function to check if a value is a member of the EnumInClass enum
@@ -186,6 +186,58 @@ class InternalClassOptionalOutput2 implements ClassOptionalOutput2 {
     return this.data.prop3;
   }
 
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
+// Function to validate if an object is a DynamicPropsClass object
+function isDynamicPropsClass(obj: any): obj is DynamicPropsClass {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("prop1" in obj && (typeof obj.prop1 === 'string'))
+    && ("prop2" in obj && (typeof obj.prop2 === 'string'))
+    && ("prop3" in obj && (typeof obj.prop3 === 'number'))
+  );
+}
+
+
+class InternalDynamicPropsClass implements DynamicPropsClass {
+  private constructor(private data: {
+    prop1: string,
+    prop2: string,
+    prop3: number,
+  }, private raw: DynamicPropsClass) {}
+
+  static from(data: DynamicPropsClass): InternalDynamicPropsClass {
+    return new InternalDynamicPropsClass({
+      prop1: data.prop1,
+      prop2: data.prop2,
+      prop3: data.prop3,
+    }, data);
+  }
+
+  get prop1(): string {
+    return this.data.prop1;
+  }
+  get prop2(): string {
+    return this.data.prop2;
+  }
+  get prop3(): number {
+    return this.data.prop3;
+  }
+
+  get display(): string {
+    // TODO: Implement
+    for (let i = 0; i < 10; i++) {
+  console.log(i)
+}
+
+
+return this.prop1 + this.prop2
+  }
 
   toJSON(): string {
     return JSON.stringify(this.raw, null, 2);
@@ -426,6 +478,43 @@ class InternalOverrideClass implements OverrideClass {
   }
 }
 
+// Function to validate if an object is a SomeClass2 object
+function isSomeClass2(obj: any): obj is SomeClass2 {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("prop1" in obj && (typeof obj.prop1 === 'string'))
+    && ("prop2" in obj && (typeof obj.prop2 === 'string'))
+  );
+}
+
+
+class InternalSomeClass2 implements SomeClass2 {
+  private constructor(private data: {
+    prop1: string,
+    prop2: string,
+  }, private raw: SomeClass2) {}
+
+  static from(data: SomeClass2): InternalSomeClass2 {
+    return new InternalSomeClass2({
+      prop1: data.prop1,
+      prop2: data.prop2,
+    }, data);
+  }
+
+  get prop1(): string {
+    return this.data.prop1;
+  }
+  get prop2(): string {
+    return this.data.prop2;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
 // Function to validate if an object is a TestClassAlias object
 function isTestClassAlias(obj: any): obj is TestClassAlias {
   return (
@@ -620,5 +709,5 @@ if (Array.isArray(x) && x.every((x: any) => typeof x === 'boolean')) {
 }
 
 
-export { InternalBlah, InternalClassOptionalFields, InternalClassOptionalOutput, InternalClassOptionalOutput2, InternalModifiedOutput, InternalNamedArgsSingleClass, InternalOptionalClass, InternalOptionalTest_Prop1, InternalOptionalTest_ReturnType, InternalOverrideClass, InternalTestClassAlias, InternalTestClassWithEnum, InternalTestOutputClass, InternalUnionTest_ReturnType }
+export { InternalBlah, InternalClassOptionalFields, InternalClassOptionalOutput, InternalClassOptionalOutput2, InternalDynamicPropsClass, InternalModifiedOutput, InternalNamedArgsSingleClass, InternalOptionalClass, InternalOptionalTest_Prop1, InternalOptionalTest_ReturnType, InternalOverrideClass, InternalSomeClass2, InternalTestClassAlias, InternalTestClassWithEnum, InternalTestOutputClass, InternalUnionTest_ReturnType }
 

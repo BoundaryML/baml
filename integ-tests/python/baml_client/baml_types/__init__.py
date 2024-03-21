@@ -42,12 +42,14 @@ from ..__do_not_import.types.classes.cls_blah import Blah
 from ..__do_not_import.types.classes.cls_classoptionalfields import ClassOptionalFields
 from ..__do_not_import.types.classes.cls_classoptionaloutput import ClassOptionalOutput
 from ..__do_not_import.types.classes.cls_classoptionaloutput2 import ClassOptionalOutput2
+from ..__do_not_import.types.classes.cls_dynamicpropsclass import DynamicPropsClass
 from ..__do_not_import.types.classes.cls_modifiedoutput import ModifiedOutput
 from ..__do_not_import.types.classes.cls_namedargssingleclass import NamedArgsSingleClass
 from ..__do_not_import.types.classes.cls_optionalclass import OptionalClass
 from ..__do_not_import.types.classes.cls_optionaltest_prop1 import OptionalTest_Prop1
 from ..__do_not_import.types.classes.cls_optionaltest_returntype import OptionalTest_ReturnType
 from ..__do_not_import.types.classes.cls_overrideclass import OverrideClass
+from ..__do_not_import.types.classes.cls_someclass2 import SomeClass2
 from ..__do_not_import.types.classes.cls_testclassalias import TestClassAlias
 from ..__do_not_import.types.classes.cls_testclasswithenum import TestClassWithEnum
 from ..__do_not_import.types.classes.cls_testoutputclass import TestOutputClass
@@ -68,6 +70,7 @@ __all__ = [
     'ClassOptionalFields',
     'ClassOptionalOutput',
     'ClassOptionalOutput2',
+    'DynamicPropsClass',
     'EnumInClass',
     'EnumOutput',
     'IFnClassOptional',
@@ -173,6 +176,7 @@ __all__ = [
     'OptionalTest_ReturnType',
     'OverrideClass',
     'OverrideEnum',
+    'SomeClass2',
     'TestClassAlias',
     'TestClassWithEnum',
     'TestEnum',

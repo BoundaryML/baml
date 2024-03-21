@@ -47,4 +47,6 @@ const BamlClient = {
 
 export default BamlClient
 
+export { DeserializerException } from "@boundaryml/baml-core/deserializer/diagnostics"
+
 

@@ -11,12 +11,14 @@ from .classes.cls_blah import Blah
 from .classes.cls_classoptionalfields import ClassOptionalFields
 from .classes.cls_classoptionaloutput import ClassOptionalOutput
 from .classes.cls_classoptionaloutput2 import ClassOptionalOutput2
+from .classes.cls_dynamicpropsclass import DynamicPropsClass
 from .classes.cls_modifiedoutput import ModifiedOutput
 from .classes.cls_namedargssingleclass import NamedArgsSingleClass
 from .classes.cls_optionalclass import OptionalClass
 from .classes.cls_optionaltest_prop1 import OptionalTest_Prop1
 from .classes.cls_optionaltest_returntype import OptionalTest_ReturnType
 from .classes.cls_overrideclass import OverrideClass
+from .classes.cls_someclass2 import SomeClass2
 from .classes.cls_testclassalias import TestClassAlias
 from .classes.cls_testclasswithenum import TestClassWithEnum
 from .classes.cls_testoutputclass import TestOutputClass
@@ -37,6 +39,7 @@ __all__ = [
     'ClassOptionalFields',
     'ClassOptionalOutput',
     'ClassOptionalOutput2',
+    'DynamicPropsClass',
     'EnumInClass',
     'EnumOutput',
     'ModifiedOutput',
@@ -49,6 +52,7 @@ __all__ = [
     'OptionalTest_ReturnType',
     'OverrideClass',
     'OverrideEnum',
+    'SomeClass2',
     'TestClassAlias',
     'TestClassWithEnum',
     'TestEnum',
