@@ -1,7 +1,8 @@
 import test from 'ava'
 
-import { isAvailable } from '../index'
+import { version } from '../index'
+import * as pkg from '../package.json'
 
 test('sync function from native code', (t) => {
-  t.is(isAvailable(), true)
+  t.is(version(), pkg.version)
 })

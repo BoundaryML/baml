@@ -201,9 +201,23 @@ impl CompleteAPIConfig {
       .post(&url)
       .header("Authorization", format!("Bearer {}", self.api_key))
       .header("Content-Type", "application/json")
-      .json(body)
-      .send()
-      .await?;
+      .json(body);
+
+    let response = response.send().await?;
+    if !response.status().is_success() {
+      let status = response.status();
+      if let Ok(body) = response.text().await {
+        return Err(anyhow::anyhow!(
+          "Failed to send request to {} {status}:\n{}",
+          url,
+          body
+        ));
+      }
+      return Err(anyhow::anyhow!(
+        "Failed to send request to {}: {status}",
+        url
+      ));
+    }
     let parsed = response.json().await?;
     Ok(parsed)
   }
@@ -305,7 +319,7 @@ impl BoundaryTestAPI for APIWrapper {
         "test_cycle_id": self.config.session_id(),
         "test_dataset_name": suite_name,
         // Deprecated (exists legacy api reason)
-        "test_case_definition_name": "test",
+        "test_name": "test",
         "test_case_args": [{"name": test_name}],
       })
     });

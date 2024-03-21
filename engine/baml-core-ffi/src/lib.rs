@@ -353,6 +353,6 @@ impl JsScopeGuard {
 }
 
 #[napi]
-pub fn is_available() -> bool {
-  true
+pub fn version() -> String {
+  env!("CARGO_PKG_VERSION").to_string()
 }

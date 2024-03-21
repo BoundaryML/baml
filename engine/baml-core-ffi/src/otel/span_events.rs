@@ -53,7 +53,16 @@ where
   S: Subscriber,
   S: for<'lookup> tracing_subscriber::registry::LookupSpan<'lookup>,
 {
-  let event_name = event.metadata().name();
+  let event_name = event.metadata().name().strip_prefix("baml_");
+  let event_name = match event_name {
+    Some(name) => name,
+    None => {
+      return Err(anyhow::anyhow!(
+        "Invalid event name: {}",
+        event.metadata().name()
+      ))
+    }
+  };
   match SpanEvent::from(event_name) {
     SpanEvent::SetTags => record_and_apply!(SetTags, event, span),
     SpanEvent::InputOutput => record_and_apply!(IOEvent, event, span),
@@ -108,6 +117,26 @@ impl<S> Layer<S> for BamlEventSubscriber<'static>
 where
   S: Subscriber + for<'lookup> tracing_subscriber::registry::LookupSpan<'lookup>,
 {
+  fn register_callsite(
+    &self,
+    metadata: &'static tracing::Metadata<'static>,
+  ) -> tracing::subscriber::Interest {
+    if metadata.name().starts_with("baml_") {
+      tracing::subscriber::Interest::always()
+    } else {
+      tracing::subscriber::Interest::never()
+    }
+  }
+
+  fn enabled(
+    &self,
+    metadata: &tracing::Metadata<'_>,
+    _ctx: tracing_subscriber::layer::Context<'_, S>,
+  ) -> bool {
+    (metadata.is_span() && metadata.name() == "baml_event")
+      || (metadata.is_event() && metadata.name().starts_with("baml_"))
+  }
+
   fn on_new_span(
     &self,
     attrs: &tracing::span::Attributes<'_>,

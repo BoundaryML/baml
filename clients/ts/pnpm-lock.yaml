@@ -94,45 +94,45 @@ packages:
       - encoding
     dev: false
 
-  /@azure-rest/core-client@1.3.0:
-    resolution: {integrity: sha512-OmAB+qbWZJk4p9+aqF3zM3J3J371RTdz1gRvz4uxl/+MGLKfKBMzZqVkAUIY8h1qzux4ypozCiRPJ3wdWyPDUg==}
+  /@azure-rest/core-client@1.3.1:
+    resolution: {integrity: sha512-wyFZjWCZeHX7qiQRalDYHwRzgU/2wYuOCxnQjmCKy+Qt+KQZ12KlqM8DQcKi080yDrA94nx1HPA9695pc+p3lA==}
     engines: {node: '>=18.0.0'}
     dependencies:
-      '@azure/abort-controller': 2.1.0
-      '@azure/core-auth': 1.7.0
-      '@azure/core-rest-pipeline': 1.15.0
-      '@azure/core-tracing': 1.1.0
-      '@azure/core-util': 1.8.0
+      '@azure/abort-controller': 2.1.1
+      '@azure/core-auth': 1.7.1
+      '@azure/core-rest-pipeline': 1.15.1
+      '@azure/core-tracing': 1.1.1
+      '@azure/core-util': 1.8.1
       tslib: 2.6.2
     transitivePeerDependencies:
       - supports-color
     dev: false
 
-  /@azure/abort-controller@2.1.0:
-    resolution: {integrity: sha512-SYtcG13aiV7znycu6plCClWUzD9BBtfnsbIxT89nkkRvQRB4n0kuZyJJvJ7hqdKOn7x7YoGKZ9lVStLJpLnOFw==}
+  /@azure/abort-controller@2.1.1:
+    resolution: {integrity: sha512-NhzeNm5zu2fPlwGXPUjzsRCRuPx5demaZyNcyNYJDqpa/Sbxzvo/RYt9IwUaAOnDW5+r7J9UOE6f22TQnb9nhQ==}
     engines: {node: '>=18.0.0'}
     dependencies:
       tslib: 2.6.2
     dev: false
 
-  /@azure/core-auth@1.7.0:
-    resolution: {integrity: sha512-OuDVn9z2LjyYbpu6e7crEwSipa62jX7/ObV/pmXQfnOG8cHwm363jYtg3FSX3GB1V7jsIKri1zgq7mfXkFk/qw==}
+  /@azure/core-auth@1.7.1:
+    resolution: {integrity: sha512-dyeQwvgthqs/SlPVQbZQetpslXceHd4i5a7M/7z/lGEAVwnSluabnQOjF2/dk/hhWgMISusv1Ytp4mQ8JNy62A==}
     engines: {node: '>=18.0.0'}
     dependencies:
-      '@azure/abort-controller': 2.1.0
-      '@azure/core-util': 1.8.0
+      '@azure/abort-controller': 2.1.1
+      '@azure/core-util': 1.8.1
       tslib: 2.6.2
     dev: false
 
-  /@azure/core-rest-pipeline@1.15.0:
-    resolution: {integrity: sha512-6kBQwE75ZVlOjBbp0/PX0fgNLHxoMDxHe3aIPV/RLVwrIDidxTbsHtkSbPNTkheMset3v9s1Z08XuMNpWRK/7w==}
+  /@azure/core-rest-pipeline@1.15.1:
+    resolution: {integrity: sha512-ZxS6i3eHxh86u+1eWZJiYywoN2vxvsSoAUx60Mny8cZ4nTwvt7UzVVBJO+m2PW2KIJfNiXMt59xBa59htOWL4g==}
     engines: {node: '>=18.0.0'}
     dependencies:
-      '@azure/abort-controller': 2.1.0
-      '@azure/core-auth': 1.7.0
-      '@azure/core-tracing': 1.1.0
-      '@azure/core-util': 1.8.0
-      '@azure/logger': 1.1.0
+      '@azure/abort-controller': 2.1.1
+      '@azure/core-auth': 1.7.1
+      '@azure/core-tracing': 1.1.1
+      '@azure/core-util': 1.8.1
+      '@azure/logger': 1.1.1
       http-proxy-agent: 7.0.2
       https-proxy-agent: 7.0.4
       tslib: 2.6.2
@@ -140,30 +140,30 @@ packages:
       - supports-color
     dev: false
 
-  /@azure/core-sse@2.1.0:
-    resolution: {integrity: sha512-wH5FEaaAYxfCtkbJQ07BjLhIpjyuVutaDbMvtsFmOfkQHZGNf+3VMMaFAkQG2S2qGaIahkLxOzp/zJ3KEqATYw==}
+  /@azure/core-sse@2.1.1:
+    resolution: {integrity: sha512-serdWoBPogo/1r2JwDc+/wEflCri/d7DNy7IOh6iU9dCxlpbi8PrZEUFj33kl9KnGd0TzM6qniPJOYJ7VLj6Vg==}
     engines: {node: '>=18.0.0'}
     dependencies:
       tslib: 2.6.2
     dev: false
 
-  /@azure/core-tracing@1.1.0:
-    resolution: {integrity: sha512-MVeJvGHB4jmF7PeHhyr72vYJsBJ3ff1piHikMgRaabPAC4P3rxhf9fm42I+DixLysBunskJWhsDQD2A+O+plkQ==}
+  /@azure/core-tracing@1.1.1:
+    resolution: {integrity: sha512-qPbYhN1pE5XQ2jPKIHP33x8l3oBu1UqIWnYqZZ3OYnYjzY0xqIHjn49C+ptsPD9yC7uyWI9Zm7iZUZLs2R4DhQ==}
     engines: {node: '>=18.0.0'}
     dependencies:
       tslib: 2.6.2
     dev: false
 
-  /@azure/core-util@1.8.0:
-    resolution: {integrity: sha512-w8NrGnrlGDF7fj36PBnJhGXDK2Y3kpTOgL7Ksb5snEHXq/3EAbKYOp1yqme0yWCUlSDq5rjqvxSBAJmsqYac3w==}
+  /@azure/core-util@1.8.1:
+    resolution: {integrity: sha512-L3voj0StUdJ+YKomvwnTv7gHzguJO+a6h30pmmZdRprJCM+RJlGMPxzuh4R7lhQu1jNmEtaHX5wvTgWLDAmbGQ==}
     engines: {node: '>=18.0.0'}
     dependencies:
-      '@azure/abort-controller': 2.1.0
+      '@azure/abort-controller': 2.1.1
       tslib: 2.6.2
     dev: false
 
-  /@azure/logger@1.1.0:
-    resolution: {integrity: sha512-BnfkfzVEsrgbVCtqq0RYRMePSH2lL/cgUUR5sYRF4yNN10zJZq/cODz0r89k3ykY83MqeM3twR292a3YBNgC3w==}
+  /@azure/logger@1.1.1:
+    resolution: {integrity: sha512-/+4TtokaGgC+MnThdf6HyIH9Wrjp+CnCn3Nx3ggevN7FFjjNyjqg0yLlc2i9S+Z2uAzI8GYOo35Nzb1MhQ89MA==}
     engines: {node: '>=18.0.0'}
     dependencies:
       tslib: 2.6.2
@@ -173,12 +173,12 @@ packages:
     resolution: {integrity: sha512-OXS27xkG1abiGf5VZUKnkJKr1VCo8+6EUrTGW5aSVjc5COqX8jAUqVAOZsQVCHBdtWYSBULlZkc0ncKMTRQAiQ==}
     engines: {node: '>=18.0.0'}
     dependencies:
-      '@azure-rest/core-client': 1.3.0
-      '@azure/core-auth': 1.7.0
-      '@azure/core-rest-pipeline': 1.15.0
-      '@azure/core-sse': 2.1.0
-      '@azure/core-util': 1.8.0
-      '@azure/logger': 1.1.0
+      '@azure-rest/core-client': 1.3.1
+      '@azure/core-auth': 1.7.1
+      '@azure/core-rest-pipeline': 1.15.1
+      '@azure/core-sse': 2.1.1
+      '@azure/core-util': 1.8.1
+      '@azure/logger': 1.1.1
       tslib: 2.6.2
     transitivePeerDependencies:
       - supports-color

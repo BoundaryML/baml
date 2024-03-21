@@ -1,0 +1,186 @@
+diff --git a/engine/baml-core-ffi/index.js b/engine/baml-core-ffi/index.js
+index f8c56127..73c18945 100644
+--- a/engine/baml-core-ffi/index.js
++++ b/engine/baml-core-ffi/index.js
+@@ -32,10 +32,10 @@ switch (platform) {
+   case 'android':
+     switch (arch) {
+       case 'arm64':
+-        localFileExisted = existsSync(join(__dirname, 'baml-core-ffi.android-arm64.node'))
++        localFileExisted = existsSync(join('${BAML_REPO_PATH}', 'baml-core-ffi.android-arm64.node'))
+         try {
+           if (localFileExisted) {
+-            nativeBinding = require('./baml-core-ffi.android-arm64.node')
++            nativeBinding = require('${BAML_REPO_PATH}/baml-core-ffi.android-arm64.node')
+           } else {
+             nativeBinding = require('@boundaryml/baml-core-ffi-android-arm64')
+           }
+@@ -44,10 +44,10 @@ switch (platform) {
+         }
+         break
+       case 'arm':
+-        localFileExisted = existsSync(join(__dirname, 'baml-core-ffi.android-arm-eabi.node'))
++        localFileExisted = existsSync(join('${BAML_REPO_PATH}', 'baml-core-ffi.android-arm-eabi.node'))
+         try {
+           if (localFileExisted) {
+-            nativeBinding = require('./baml-core-ffi.android-arm-eabi.node')
++            nativeBinding = require('${BAML_REPO_PATH}/baml-core-ffi.android-arm-eabi.node')
+           } else {
+             nativeBinding = require('@boundaryml/baml-core-ffi-android-arm-eabi')
+           }
+@@ -62,10 +62,10 @@ switch (platform) {
+   case 'win32':
+     switch (arch) {
+       case 'x64':
+-        localFileExisted = existsSync(join(__dirname, 'baml-core-ffi.win32-x64-msvc.node'))
++        localFileExisted = existsSync(join('${BAML_REPO_PATH}', 'baml-core-ffi.win32-x64-msvc.node'))
+         try {
+           if (localFileExisted) {
+-            nativeBinding = require('./baml-core-ffi.win32-x64-msvc.node')
++            nativeBinding = require('${BAML_REPO_PATH}/baml-core-ffi.win32-x64-msvc.node')
+           } else {
+             nativeBinding = require('@boundaryml/baml-core-ffi-win32-x64-msvc')
+           }
+@@ -74,10 +74,10 @@ switch (platform) {
+         }
+         break
+       case 'ia32':
+-        localFileExisted = existsSync(join(__dirname, 'baml-core-ffi.win32-ia32-msvc.node'))
++        localFileExisted = existsSync(join('${BAML_REPO_PATH}', 'baml-core-ffi.win32-ia32-msvc.node'))
+         try {
+           if (localFileExisted) {
+-            nativeBinding = require('./baml-core-ffi.win32-ia32-msvc.node')
++            nativeBinding = require('${BAML_REPO_PATH}/baml-core-ffi.win32-ia32-msvc.node')
+           } else {
+             nativeBinding = require('@boundaryml/baml-core-ffi-win32-ia32-msvc')
+           }
+@@ -86,10 +86,10 @@ switch (platform) {
+         }
+         break
+       case 'arm64':
+-        localFileExisted = existsSync(join(__dirname, 'baml-core-ffi.win32-arm64-msvc.node'))
++        localFileExisted = existsSync(join('${BAML_REPO_PATH}', 'baml-core-ffi.win32-arm64-msvc.node'))
+         try {
+           if (localFileExisted) {
+-            nativeBinding = require('./baml-core-ffi.win32-arm64-msvc.node')
++            nativeBinding = require('${BAML_REPO_PATH}/baml-core-ffi.win32-arm64-msvc.node')
+           } else {
+             nativeBinding = require('@boundaryml/baml-core-ffi-win32-arm64-msvc')
+           }
+@@ -102,10 +102,10 @@ switch (platform) {
+     }
+     break
+   case 'darwin':
+-    localFileExisted = existsSync(join(__dirname, 'baml-core-ffi.darwin-universal.node'))
++    localFileExisted = existsSync(join('${BAML_REPO_PATH}', 'baml-core-ffi.darwin-universal.node'))
+     try {
+       if (localFileExisted) {
+-        nativeBinding = require('./baml-core-ffi.darwin-universal.node')
++        nativeBinding = require('${BAML_REPO_PATH}/baml-core-ffi.darwin-universal.node')
+       } else {
+         nativeBinding = require('@boundaryml/baml-core-ffi-darwin-universal')
+       }
+@@ -113,10 +113,10 @@ switch (platform) {
+     } catch {}
+     switch (arch) {
+       case 'x64':
+-        localFileExisted = existsSync(join(__dirname, 'baml-core-ffi.darwin-x64.node'))
++        localFileExisted = existsSync(join('${BAML_REPO_PATH}', 'baml-core-ffi.darwin-x64.node'))
+         try {
+           if (localFileExisted) {
+-            nativeBinding = require('./baml-core-ffi.darwin-x64.node')
++            nativeBinding = require('${BAML_REPO_PATH}/baml-core-ffi.darwin-x64.node')
+           } else {
+             nativeBinding = require('@boundaryml/baml-core-ffi-darwin-x64')
+           }
+@@ -125,10 +125,10 @@ switch (platform) {
+         }
+         break
+       case 'arm64':
+-        localFileExisted = existsSync(join(__dirname, 'baml-core-ffi.darwin-arm64.node'))
++        localFileExisted = existsSync(join('${BAML_REPO_PATH}', 'baml-core-ffi.darwin-arm64.node'))
+         try {
+           if (localFileExisted) {
+-            nativeBinding = require('./baml-core-ffi.darwin-arm64.node')
++            nativeBinding = require('${BAML_REPO_PATH}/baml-core-ffi.darwin-arm64.node')
+           } else {
+             nativeBinding = require('@boundaryml/baml-core-ffi-darwin-arm64')
+           }
+@@ -144,10 +144,10 @@ switch (platform) {
+     if (arch !== 'x64') {
+       throw new Error(`Unsupported architecture on FreeBSD: ${arch}`)
+     }
+-    localFileExisted = existsSync(join(__dirname, 'baml-core-ffi.freebsd-x64.node'))
++    localFileExisted = existsSync(join('${BAML_REPO_PATH}', 'baml-core-ffi.freebsd-x64.node'))
+     try {
+       if (localFileExisted) {
+-        nativeBinding = require('./baml-core-ffi.freebsd-x64.node')
++        nativeBinding = require('${BAML_REPO_PATH}/baml-core-ffi.freebsd-x64.node')
+       } else {
+         nativeBinding = require('@boundaryml/baml-core-ffi-freebsd-x64')
+       }
+@@ -159,10 +159,10 @@ switch (platform) {
+     switch (arch) {
+       case 'x64':
+         if (isMusl()) {
+-          localFileExisted = existsSync(join(__dirname, 'baml-core-ffi.linux-x64-musl.node'))
++          localFileExisted = existsSync(join('${BAML_REPO_PATH}', 'baml-core-ffi.linux-x64-musl.node'))
+           try {
+             if (localFileExisted) {
+-              nativeBinding = require('./baml-core-ffi.linux-x64-musl.node')
++              nativeBinding = require('${BAML_REPO_PATH}/baml-core-ffi.linux-x64-musl.node')
+             } else {
+               nativeBinding = require('@boundaryml/baml-core-ffi-linux-x64-musl')
+             }
+@@ -170,10 +170,10 @@ switch (platform) {
+             loadError = e
+           }
+         } else {
+-          localFileExisted = existsSync(join(__dirname, 'baml-core-ffi.linux-x64-gnu.node'))
++          localFileExisted = existsSync(join('${BAML_REPO_PATH}', 'baml-core-ffi.linux-x64-gnu.node'))
+           try {
+             if (localFileExisted) {
+-              nativeBinding = require('./baml-core-ffi.linux-x64-gnu.node')
++              nativeBinding = require('${BAML_REPO_PATH}/baml-core-ffi.linux-x64-gnu.node')
+             } else {
+               nativeBinding = require('@boundaryml/baml-core-ffi-linux-x64-gnu')
+             }
+@@ -184,10 +184,10 @@ switch (platform) {
+         break
+       case 'arm64':
+         if (isMusl()) {
+-          localFileExisted = existsSync(join(__dirname, 'baml-core-ffi.linux-arm64-musl.node'))
++          localFileExisted = existsSync(join('${BAML_REPO_PATH}', 'baml-core-ffi.linux-arm64-musl.node'))
+           try {
+             if (localFileExisted) {
+-              nativeBinding = require('./baml-core-ffi.linux-arm64-musl.node')
++              nativeBinding = require('${BAML_REPO_PATH}/baml-core-ffi.linux-arm64-musl.node')
+             } else {
+               nativeBinding = require('@boundaryml/baml-core-ffi-linux-arm64-musl')
+             }
+@@ -195,10 +195,10 @@ switch (platform) {
+             loadError = e
+           }
+         } else {
+-          localFileExisted = existsSync(join(__dirname, 'baml-core-ffi.linux-arm64-gnu.node'))
++          localFileExisted = existsSync(join('${BAML_REPO_PATH}', 'baml-core-ffi.linux-arm64-gnu.node'))
+           try {
+             if (localFileExisted) {
+-              nativeBinding = require('./baml-core-ffi.linux-arm64-gnu.node')
++              nativeBinding = require('${BAML_REPO_PATH}/baml-core-ffi.linux-arm64-gnu.node')
+             } else {
+               nativeBinding = require('@boundaryml/baml-core-ffi-linux-arm64-gnu')
+             }
+@@ -208,10 +208,10 @@ switch (platform) {
+         }
+         break
+       case 'arm':
+-        localFileExisted = existsSync(join(__dirname, 'baml-core-ffi.linux-arm-gnueabihf.node'))
++        localFileExisted = existsSync(join('${BAML_REPO_PATH}', 'baml-core-ffi.linux-arm-gnueabihf.node'))
+         try {
+           if (localFileExisted) {
+-            nativeBinding = require('./baml-core-ffi.linux-arm-gnueabihf.node')
++            nativeBinding = require('${BAML_REPO_PATH}/baml-core-ffi.linux-arm-gnueabihf.node')
+           } else {
+             nativeBinding = require('@boundaryml/baml-core-ffi-linux-arm-gnueabihf')
+           }
