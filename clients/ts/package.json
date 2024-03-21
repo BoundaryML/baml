@@ -1,6 +1,6 @@
 {
   "name": "@boundaryml/baml-core",
-  "version": "0.0.2-canary.5",
+  "version": "0.0.2-canary.6",
   "description": "",
   "exports": {
     ".": {
@@ -9,30 +9,30 @@
       "types": "./dist/index.d.ts"
     },
     "./client_manager": {
-      "import": "./dist/client_manager/index.mjs",
-      "require": "./dist/client_manager/index.js",
-      "types": "./dist/client_manager/index.d.ts"
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
     },
     "./ffi_layer": {
-      "import": "./dist/ffi_layer.mjs",
-      "require": "./dist/ffi_layer.js",
-      "types": "./dist/ffi_layer.d.ts"
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
     },
     "./deserializer/deserializer": {
-      "import": "./dist/deserializer/deserializer.mjs",
-      "require": "./dist/deserializer/deserializer.js",
-      "types": "./dist/deserializer/deserializer.d.ts"
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
     },
     "./deserializer/diagnostics": {
-      "import": "./dist/deserializer/diagnostics.mjs",
-      "require": "./dist/deserializer/diagnostics.js",
-      "types": "./dist/deserializer/diagnostics.d.ts"
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
     },
     "./baml_test_runner": {
-      "import": "./dist/baml_test_runner/index.mjs",
-      "require": "./dist/baml_test_runner/index.js",
-      "types": "./dist/baml_test_runner/index.d.ts",
-      "default": "./dist/baml_test_runner/index.js"
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     }
   },
   "scripts": {

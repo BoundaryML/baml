@@ -5,15 +5,14 @@ const isProduction = process.env.NODE_ENV === "production";
 export default defineConfig({
   clean: true,
   dts: true,
-  entry: ["src/index.ts",
-    "src/deserializer/deserializer.ts",
-    "src/client_manager/index.ts",
-    "src/ffi_layer.ts",
-    "src/baml_test_runner/index.ts",
-    "src/deserializer/diagnostics.ts"],
+  // we can't split them into chunks yet cause the ffi_layer.ts gets initialized in each dependent chunk and messes up the tracing state. Until that is fixed we just bundle it up into one file, and set fake export paths in the package.json pretending we have many different directories.
+  entry: ["src/index.ts"],
   format: ["cjs", "esm"],
   minify: false,
   sourcemap: false,
+  splitting: false,
+  // cjsInterop: true,
+
   // TODO: this didnt do anythin
   // external: ["@boundaryml/baml-core-ffi"]
 });
