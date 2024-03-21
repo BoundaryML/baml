@@ -3,6 +3,7 @@ use napi::tokio::runtime::Runtime;
 use std::{
   sync::mpsc::{Receiver, Sender, TryRecvError},
   time::Duration,
+  vec,
 };
 
 use crate::api_wrapper::{api_interface::BoundaryAPI, core_types::LogSchema, APIWrapper};
@@ -10,7 +11,12 @@ use crate::api_wrapper::{api_interface::BoundaryAPI, core_types::LogSchema, APIW
 async fn process_batch_async(api_config: &APIWrapper, batch: Vec<LogSchema>) {
   for work in batch {
     api_config.pretty_print(&work);
-    let _ = api_config.log_schema(&work).await;
+    match api_config.log_schema(&work).await {
+      Ok(_) => {}
+      Err(e) => {
+        println!("Error sending log schema: {:?}", e);
+      }
+    }
   }
 }
 

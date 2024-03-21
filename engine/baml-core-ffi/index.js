@@ -234,10 +234,10 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { TestCaseStatus, BamlTracer, BamlTester, BamlScopeGuard, isAvailable } = nativeBinding
+const { TestCaseStatus, BamlTracer, BamlTester, BamlScopeGuard, version } = nativeBinding
 
 module.exports.TestCaseStatus = TestCaseStatus
 module.exports.BamlTracer = BamlTracer
 module.exports.BamlTester = BamlTester
 module.exports.BamlScopeGuard = BamlScopeGuard
-module.exports.isAvailable = isAvailable
+module.exports.version = version

@@ -57,17 +57,17 @@ macro_rules! baml_event_def {
     ($event_type:ident, $($args:tt),*) => {
         {
             static EVENT_NAME: &str = match super::events::SpanEvent::$event_type {
-                super::events::SpanEvent::SetTags => "set_tags",
-                super::events::SpanEvent::InputOutput => "io",
-                super::events::SpanEvent::LlmPromptTemplate => "llm_prompt_template",
-                super::events::SpanEvent::LlmRequestCacheHit => "llm_request_cache_hit",
-                super::events::SpanEvent::LlmRequestStart => "llm_request_start",
-                super::events::SpanEvent::LlmRequestError => "llm_request_error",
-                super::events::SpanEvent::LlmRequestArgs => "llm_request_args",
-                super::events::SpanEvent::LlmRequestEnd => "llm_request_end",
-                super::events::SpanEvent::Variant => "variant",
-                super::events::SpanEvent::Exception => "exception",
-                super::events::SpanEvent::Unknown => "unknown",
+                super::events::SpanEvent::SetTags => "baml_set_tags",
+                super::events::SpanEvent::InputOutput => "baml_io",
+                super::events::SpanEvent::LlmPromptTemplate => "baml_llm_prompt_template",
+                super::events::SpanEvent::LlmRequestCacheHit => "baml_llm_request_cache_hit",
+                super::events::SpanEvent::LlmRequestStart => "baml_llm_request_start",
+                super::events::SpanEvent::LlmRequestError => "baml_llm_request_error",
+                super::events::SpanEvent::LlmRequestArgs => "baml_llm_request_args",
+                super::events::SpanEvent::LlmRequestEnd => "baml_llm_request_end",
+                super::events::SpanEvent::Variant => "baml_variant",
+                super::events::SpanEvent::Exception => "baml_exception",
+                super::events::SpanEvent::Unknown => "baml_unknown",
             };
         super::events::event!(
             name: EVENT_NAME,

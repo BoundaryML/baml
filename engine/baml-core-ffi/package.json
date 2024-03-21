@@ -44,7 +44,7 @@
     "artifacts": "napi artifacts",
     "bench": "node -r @swc-node/register benchmark/bench.ts",
     "build": "napi build --platform --release --pipe \"prettier -w\"",
-    "build:debug": "napi build --platform --pipe \"prettier -w\" --js false",
+    "build:debug": "BAML_REPO_PATH=$(pwd) napi build --platform --pipe \"prettier -w\" && git apply index.patch && sed -i '' 's|${BAML_REPO_PATH}|'$(pwd)'|g' index.js",
     "format": "run-p format:prettier format:rs format:toml",
     "format:prettier": "prettier . -w",
     "format:toml": "taplo format",
