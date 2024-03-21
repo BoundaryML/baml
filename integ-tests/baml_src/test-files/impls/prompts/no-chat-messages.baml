@@ -17,3 +17,11 @@ impl<llm, PromptTest> openai_chat {
     Tell me a haiku about {#input}
   "#
 }
+
+impl<llm, PromptTest> bird_chat {
+  client Lottery_ComplexSyntax
+  //client Lottery_SimpleSyntax
+  prompt #"
+    Tell me about your maker, then give me a haiku about {#input}
+  "#
+}

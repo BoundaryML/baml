@@ -32,6 +32,24 @@ const GPT4Turbo = clientManager.createClient('GPT4Turbo', 'baml-openai-chat', {
     api_key: process.env.OPENAI_API_KEY
 });
 
+const Lottery_ComplexSyntax = clientManager.createClient('Lottery_ComplexSyntax', 'baml-round-robin', {
+    start: 0,
+    strategy: [{ "client": "GPT35" }, { "client": "Claude" }]
+});
 
-export { Claude, GPT35, GPT4, GPT4Turbo }
+const Lottery_SimpleSyntax = clientManager.createClient('Lottery_SimpleSyntax', 'baml-round-robin', {
+    start: 0,
+    strategy: ["GPT35", "Claude"]
+});
+
+const Resilient_ComplexSyntax = clientManager.createClient('Resilient_ComplexSyntax', 'baml-fallback', {
+    strategy: [{ "client": "GPT4Turbo" }, { "client": "GPT35" }, { "client": "Claude" }]
+});
+
+const Resilient_SimpleSyntax = clientManager.createClient('Resilient_SimpleSyntax', 'baml-fallback', {
+    strategy: ["GPT4Turbo", "GPT35", "Claude"]
+});
+
+
+export { Claude, GPT35, GPT4, GPT4Turbo, Lottery_ComplexSyntax, Lottery_SimpleSyntax, Resilient_ComplexSyntax, Resilient_SimpleSyntax }
 

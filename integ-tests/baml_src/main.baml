@@ -5,7 +5,7 @@ generator lang_python {
   project_root "../python"
   // This command is used by "baml test" to run tests
   // defined in the playground
-  test_command "infisical run -- poetry run pytest"
+  test_command "poetry run pytest -s"
   // This command is used by "baml update-client" to install
   // dependencies to your language environment
   install_command "poetry add baml@latest"
@@ -19,9 +19,10 @@ generator lang_typescript {
   project_root "../typescript"
   // This command is used by "baml test" to run tests
   // defined in the playground
-  test_command "infisical run -- npm test -- "
+  //test_command "infisical run -- npm test -- "
+  test_command "npm test -- "
   // This command is used by "baml update-client" to install
   // dependencies to your language environment
   install_command "npm install"
   package_version_command "npm list"
-}  
+}

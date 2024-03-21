@@ -11,6 +11,10 @@ from .clients.client_claude import Claude
 from .clients.client_gpt35 import GPT35
 from .clients.client_gpt4 import GPT4
 from .clients.client_gpt4turbo import GPT4Turbo
+from .clients.client_lottery_complexsyntax import Lottery_ComplexSyntax
+from .clients.client_lottery_simplesyntax import Lottery_SimpleSyntax
+from .clients.client_resilient_complexsyntax import Resilient_ComplexSyntax
+from .clients.client_resilient_simplesyntax import Resilient_SimpleSyntax
 from .functions.fx_fnclassoptional import BAMLFnClassOptional
 from .functions.fx_fnclassoptional2 import BAMLFnClassOptional2
 from .functions.fx_fnclassoptionaloutput import BAMLFnClassOptionalOutput
@@ -85,6 +89,10 @@ class BAMLClient:
     GPT35 = GPT35
     GPT4 = GPT4
     GPT4Turbo = GPT4Turbo
+    Lottery_ComplexSyntax = Lottery_ComplexSyntax
+    Lottery_SimpleSyntax = Lottery_SimpleSyntax
+    Resilient_ComplexSyntax = Resilient_ComplexSyntax
+    Resilient_SimpleSyntax = Resilient_SimpleSyntax
 
     def __init__(self):
         LLMManager.validate()
