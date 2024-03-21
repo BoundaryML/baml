@@ -78,9 +78,4 @@ impl<llm, Foo> FooImpl3 {
 }
 
 
-// warning: Trailing or leading whitespace trimmed. If you meant to include it, please wrap the string with "..."
-//   -->  variants/prompt/valid_prompt.baml:59
-//    | 
-// 58 |   // Include a trailing space
-// 59 |   client MyClient 
-//    | 
+

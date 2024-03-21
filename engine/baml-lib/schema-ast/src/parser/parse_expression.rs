@@ -51,13 +51,13 @@ fn parse_string_literal(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expre
             let raw_content = contents.as_str();
             // If the content starts or ends with a space, trim it
             let content = raw_content.trim().to_string();
-            // If its trimmed put a warning
-            if content.len() != raw_content.len() {
-                diagnostics.push_warning(DatamodelWarning::new(
-                    "Trailing or leading whitespace trimmed. If you meant to include it, please wrap the string with \"...\"".into(),
-                    span.clone(),
-                ))
-            }
+            // // If its trimmed put a warning
+            // if content.len() != raw_content.len() {
+            //     diagnostics.push_warning(DatamodelWarning::new(
+            //         "Trailing or leading whitespace trimmed. If you meant to include it, please wrap the string with \"...\"".into(),
+            //         span.clone(),
+            //     ))
+            // }
 
             if content.contains(' ') {
                 Expression::StringValue(content, span)
