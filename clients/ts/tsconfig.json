@@ -1,14 +1,6 @@
 {
-  "include": [
-    "next-env.d.ts",
-    "src/**/*.ts",
-    "src/**/*.tsx",
-    "tsup.config.ts"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist"
-  ],
+  "include": ["next-env.d.ts", "src/**/*.ts", "src/**/*.tsx", "tsup.config.ts"],
+  "exclude": ["node_modules", "dist"],
   "compilerOptions": {
     "allowSyntheticDefaultImports": true,
     "isolatedModules": false,
@@ -21,6 +13,7 @@
     "outDir": "dist",
     "skipLibCheck": true,
     "strict": true
+
     // "types": ["node", "jest", "ts-jest", "ts-node"]
   },
   "ts-node": {
