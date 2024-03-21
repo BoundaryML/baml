@@ -54,6 +54,7 @@ const LatestVersions = z.object({
       current_version: z.string(),
       latest_version: z.string().nullable(),
       recommended_update: z.string().nullable(),
+      language: z.string(),
     }),
   ),
   vscode: z.object({
@@ -157,6 +158,18 @@ const checkForUpdates = async ({ showIfNoUpdates }: { showIfNoUpdates: boolean }
           }
         })
     }
+
+    telemetry.sendTelemetryEvent({
+      event: 'baml.checkForUpdates',
+      properties: {
+        is_typescript: latestVersions.generators.find((g) => g.language === 'typescript'),
+        is_python: latestVersions.generators.find((g) => g.language === 'python'),
+        baml_check: latestVersions,
+        updateAvailable: !!update,
+        vscodeUpdateAvailable: shouldUpdateVscode,
+      },
+
+    })
   } catch (e) {
     console.error('Failed to check for updates', e)
   }
