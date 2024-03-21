@@ -12,7 +12,4 @@ export default defineConfig({
   sourcemap: false,
   splitting: false,
   // cjsInterop: true,
-
-  // TODO: this didnt do anythin
-  // external: ["@boundaryml/baml-core-ffi"]
 });
