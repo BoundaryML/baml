@@ -12,8 +12,8 @@ dependencies:
     specifier: 1.0.0-beta.11
     version: 1.0.0-beta.11
   '@boundaryml/baml-core-ffi':
-    specifier: 0.14.1
-    version: 0.14.1
+    specifier: 0.15.0
+    version: 0.15.0
   dotenv:
     specifier: ^16.4.5
     version: 16.4.5
@@ -481,8 +481,8 @@ packages:
     resolution: {integrity: sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==}
     dev: true
 
-  /@boundaryml/baml-core-ffi-darwin-arm64@0.14.1:
-    resolution: {integrity: sha512-m3IrytxDrHtDHnZi0GtYqTMBO/3KGScybbuH1x8FVsmnDiZGZMwkgK4iCx94ktW8BmYhaRHDXvOMsIJQ9wU1dQ==}
+  /@boundaryml/baml-core-ffi-darwin-arm64@0.15.0:
+    resolution: {integrity: sha512-kf5z+JraiNBJ3nwtXDYSqt58AxibJQjo56hUYWJI4KNj0Phh/TeFok3pfPcq2nwUegWtRZf3Qqs3Gg73cg8aLA==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [darwin]
@@ -490,8 +490,8 @@ packages:
     dev: false
     optional: true
 
-  /@boundaryml/baml-core-ffi-darwin-x64@0.14.1:
-    resolution: {integrity: sha512-5vJpTWIvAZA/mvGo5Kn+zZ2RFvg6hFeTf0tB41i6daJwKG1mV16RLVeC/G+6vqsvAG1ZfQuwgkFw4F2O7GQpUw==}
+  /@boundaryml/baml-core-ffi-darwin-x64@0.15.0:
+    resolution: {integrity: sha512-uLXn7bc4VCaJ9fdIsxEtxEX0AZudUTQ9OBi24uIeCnTeugCSBQQdsbu02VNZPAHJK7CbHx+nSVqLaBPzRu7zyA==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [darwin]
@@ -499,8 +499,8 @@ packages:
     dev: false
     optional: true
 
-  /@boundaryml/baml-core-ffi-linux-arm64-gnu@0.14.1:
-    resolution: {integrity: sha512-DvjaTfS67J/+LdYEtI53AApCCnip35Jn4/KJWLvzGoxalewnMP2mh2qPp3Dga8nVoFeuBa+48VDVHZt6T/RDjA==}
+  /@boundaryml/baml-core-ffi-linux-arm64-gnu@0.15.0:
+    resolution: {integrity: sha512-9iCuozs5NgKkLnNICoHzVhdajtgGZKZTPwTOtFd1iK2IzVdkoydh1snq3788Vlop7QBsNwGodJGf+7E3kgVeOA==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [linux]
@@ -508,8 +508,8 @@ packages:
     dev: false
     optional: true
 
-  /@boundaryml/baml-core-ffi-linux-x64-gnu@0.14.1:
-    resolution: {integrity: sha512-jERO8LNfFHAlZ4oWow5H9ied6dVMUjNx9hGC0kTT1KBbOSKv0ydOUnbs6X1tskhOTyL/51+nbErEwiFOS1qLZA==}
+  /@boundaryml/baml-core-ffi-linux-x64-gnu@0.15.0:
+    resolution: {integrity: sha512-szYNGWfVfwVwinkDnhATGeh/cG4H1+rYTP1ecvK0S6WcYICkMPQU3CZ0KWbojOfM6Pfk1aquAhbn5m1DI93RCQ==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [linux]
@@ -517,8 +517,8 @@ packages:
     dev: false
     optional: true
 
-  /@boundaryml/baml-core-ffi-win32-x64-msvc@0.14.1:
-    resolution: {integrity: sha512-JfMKx7YAmsizxUKXroBimGCSLS+KWfMv3ejFxrXMxFj3SbStpUsF28OTBxq3a2r8KV7McYK1d1WZ1cvfPW35wg==}
+  /@boundaryml/baml-core-ffi-win32-x64-msvc@0.15.0:
+    resolution: {integrity: sha512-Ab+tz4dCbAneM8wfdzgnZC8JeSZIoKAzPc5Bt70nRo77IHdCqMH071LD3zPRT5tTeQZux11ZkXes2JqUcB6W8Q==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [win32]
@@ -526,15 +526,15 @@ packages:
     dev: false
     optional: true
 
-  /@boundaryml/baml-core-ffi@0.14.1:
-    resolution: {integrity: sha512-NvZlxWb1yGmLUT9pVs3nv2rRtgoSWGmTAbzDrvfEcLEQFFP8eJBDL4Fady1OAfAaFhdRA8SkUIpiGs1DwJme2A==}
+  /@boundaryml/baml-core-ffi@0.15.0:
+    resolution: {integrity: sha512-vjgAJWTZCYY46BWkgWgIa/fiXzAmCv95mLsUcr3amHOyUB5axL/nsOBcdG/QzwCyUA6a8F1Cois661yHqbPzvw==}
     engines: {node: '>= 10'}
     optionalDependencies:
-      '@boundaryml/baml-core-ffi-darwin-arm64': 0.14.1
-      '@boundaryml/baml-core-ffi-darwin-x64': 0.14.1
-      '@boundaryml/baml-core-ffi-linux-arm64-gnu': 0.14.1
-      '@boundaryml/baml-core-ffi-linux-x64-gnu': 0.14.1
-      '@boundaryml/baml-core-ffi-win32-x64-msvc': 0.14.1
+      '@boundaryml/baml-core-ffi-darwin-arm64': 0.15.0
+      '@boundaryml/baml-core-ffi-darwin-x64': 0.15.0
+      '@boundaryml/baml-core-ffi-linux-arm64-gnu': 0.15.0
+      '@boundaryml/baml-core-ffi-linux-x64-gnu': 0.15.0
+      '@boundaryml/baml-core-ffi-win32-x64-msvc': 0.15.0
     dev: false
 
   /@cspotcode/source-map-support@0.8.1:
