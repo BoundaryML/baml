@@ -28,9 +28,25 @@ client<CLIENT_TYPE> Name {
 
 ## Providers
 
-BAML libraries ship with some providers, but you can also write your own. There are two primary types of LLMs: chat and completion. BAML Clients abstract away the differences between these two types of LLMs by putting that logic into the provider.
+BAML libraries ship with the following providers (you can can also write your own!):
 
-You can call a chat client with a single completion prompt and it will automatically map it to a chat prompt and similarly you can call a completion client with multiple chat prompts and it will automatically map it to a completion prompt.
+- LLM client providers
+  - `baml-openai-chat`
+  - `baml-openai-completion`
+  - `baml-azure-chat`
+  - `baml-azure-completion`
+- Composite client providers
+  - `baml-fallback`
+  - `baml-round-robin`
+
+There are two primary types of LLM clients: chat and completion. BAML abstracts
+away the differences between these two types of LLMs by putting that logic in
+the clients.
+
+You can call a chat client with a single completion prompt and it will
+automatically map it to a chat prompt and similarly you can call a completion
+client with multiple chat prompts and it will automatically map it to a
+completion prompt.
 
 ### OpenAI/Azure
 
