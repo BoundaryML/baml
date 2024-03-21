@@ -123,7 +123,47 @@ client<llm> MyClient {
 
 ### Fallback
 
-The provider helps with reseliency by allowing you to specify strategies for re-running failed requests. See [Fallbacks/Redundancy](/v3/syntax/client/redundancy) for more information.
+The `baml-fallback` provider allows you to define a resilient client, by
+specifying strategies for re-running failed requests. See
+[Fallbacks/Redundancy](/v3/syntax/client/redundancy) for more information.
+
+### Round Robin
+
+The `baml-round-robin` provider allows you to load-balance your requests across
+multiple clients. Here's an example:
+
+```rust
+client<llm> MyClient {
+  provider baml-round-robin
+  options {
+    strategy [
+      MyGptClient
+      MyAnthropicClient
+    ]
+  }
+}
+```
+
+This will alternate between `MyGptClient` and `MyAnthropicClient` for successive
+requests, starting from a randomly selected client (so that if you run multiple
+instances of your application, they won't all start with the same client).
+
+If you want to control which client is used for the first request, you can specify
+a `start` index, which tells BAML to start with the client at index `start`, like
+so:
+
+```rust
+client<llm> MyClient {
+  provider baml-round-robin
+  options {
+    start 1
+    strategy [
+      MyGptClient
+      MyAnthropicClient
+    ]
+  }
+}
+```
 
 ### Creating your own (Advanced)
 
