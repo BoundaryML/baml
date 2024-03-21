@@ -160,7 +160,7 @@ const checkForUpdates = async ({ showIfNoUpdates }: { showIfNoUpdates: boolean }
     }
 
     telemetry.sendTelemetryEvent({
-      event: 'baml.vscode.checkForUpdates',
+      event: 'baml.checkForUpdates',
       properties: {
         is_typescript: latestVersions.generators.find((g) => g.language === 'typescript'),
         is_python: latestVersions.generators.find((g) => g.language === 'python'),
