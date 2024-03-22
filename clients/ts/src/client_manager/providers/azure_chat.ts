@@ -51,9 +51,11 @@ class AzureOpenAIClient extends LLMChatProvider {
             ...rest
         });
 
-        this.client = new OpenAIClient(new AzureKeyCredential(api_key), {
-            baseUrl: base_url,
-            endpoint: endpoint ?? azure_endpoint,
+        const passedEndpoint = endpoint ?? azure_endpoint;
+
+        this.client = new OpenAIClient(passedEndpoint ?? base_url, {
+            key: api_key,
+        }, {
             apiVersion: api_version,
         });
 
