@@ -162,7 +162,7 @@ jobs:
             Mac: Apple Silicon: `${{ steps.hash.outputs.darwin_arm_hash }}`
             Windows: `${{ steps.hash.outputs.windows_hash }}`
       - name: Trigger homebrew-baml update
-        uses: peter-evans/repository-dispatch@v2
+        uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.HOMEBREW_BAML_PAT }}
           repository: boundaryml/homebrew-baml
@@ -249,7 +249,7 @@ jobs:
             Windows: `${{ steps.hash.outputs.windows_hash }}`
 
       - name: Trigger homebrew-baml update
-        uses: peter-evans/repository-dispatch@v2
+        uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.HOMEBREW_BAML_PAT }}
           repository: boundaryml/homebrew-baml
