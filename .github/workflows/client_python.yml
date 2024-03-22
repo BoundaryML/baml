@@ -97,7 +97,7 @@ jobs:
           echo "whl_hash=$(shasum -a 256 clients/python/dist/gloo_lib-$VERSION-py3-none-any.whl | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
 
       - name: Pre-release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: "unstable/py_client/v${{ steps.hash.outputs.version }}"
           files: |
@@ -154,7 +154,7 @@ jobs:
           echo "whl_hash=$(shasum -a 256 clients/python/dist/gloo_lib-$VERSION-py3-none-any.whl | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
 
       - name: Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: "release/py_client/v${{ steps.hash.outputs.version }}"
           files: |

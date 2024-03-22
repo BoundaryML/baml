@@ -151,7 +151,7 @@ jobs:
           echo "vsix_hash=$(shasum -a 256 typescript/vscode-ext/packages/baml-${echo $VERSION | cut -d '-' -f 1}.vsix | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
 
       - name: Pre-release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: "unstable/vscode_ext/v${{ steps.hash.outputs.version }}"
           files: |
@@ -230,7 +230,7 @@ jobs:
           echo "vsix_hash=$(shasum -a 256 typescript/vscode-ext/packages/baml-${echo $VERSION | cut -d '-' -f 1}.vsix | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
 
       - name: Pre-release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: "unstable/vscode_ext/v${{ steps.hash.outputs.version }}"
           files: |

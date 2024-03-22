@@ -145,7 +145,7 @@ jobs:
           echo "full_version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: "unstable/cli/v${{ steps.hash.outputs.version }}"
           files: |
@@ -231,7 +231,7 @@ jobs:
           echo "full_version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           name: "Cli: ${{ steps.hash.outputs.version }}"
           tag_name: "release/baml-cli/v${{ steps.hash.outputs.version }}"
