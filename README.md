@@ -28,16 +28,18 @@ Supporting Tools
 
 Calling LLMs in your code is frustrating:
 
-  * your code uses types everywhere: classes, enums, and arrays
-  * but LLMs speak English, not types.
+- your code uses types everywhere: classes, enums, and arrays
+- but LLMs speak English, not types.
 
 BAML makes calling LLMs easy by taking a schema-first approach:
 
-  * define schemas for your inputs and outputs,
-  * define prompt templates using these schemas, and
-  * compile your schemas and templates into a Python/TS client.
+- define schemas for your inputs and outputs,
+- define prompt templates using these schemas, and
+- compile your schemas and templates into a Python/TS client.
 
 We've seen this pattern before plenty of times: [protobuf] and [OpenAPI] for RPCs, [Prisma] and [SQLAlchemy] for databases. BAML brings this pattern to LLMs.
+
+[Show me some BAML code](#show-me-the-code)!
 
 [protobuf]: https://protobuf.dev
 [OpenAPI]: https://github.com/OpenAPITools/openapi-generator
@@ -61,49 +63,61 @@ and have built a wide array of tools to give you a great developer experience:
 <table>
 
 <tr>
-<td width="33%" style="vertical-align: top">
+<td width="50%" style="vertical-align: top">
 
-## Works for
+## Use cases
 
-✅ Function calling
+✅ Function calling ([code](#function-calling))<br />_Using tools_
 
-✅ Classification (e.g. taking a customer message and getting their intent)
+✅ Classification ([code](#classification))<br />_Getting intent from a customer message_
 
-✅ Extraction (e.g. OCRing a resume, then extracting `Skill.PYTHON: Level.PROFICIENT` from it)
+✅ Extraction ([code](#show-me-the-code))<br />_Extracting a Resume data model from unstructed text_
 
-✅ Agents (examples coming soon, but reach out <a href="https://discord.gg/ENtBB6kkXH">Boundary's Discord</a> if you want to do this before we publish them)
+✅ Agents <br />
+_Orchestrating multiple prompts to achieve a goal_
 
-</td>
-<td width="33%" style="vertical-align: top">
-
-## Supports
-
-✅ Many LLM providers (OpenAI, Azure, Anthropic, or bring-your-own, e.g. Mistral)
-
-✅ Comparing multiple prompts / LLM providers
-
-✅ Streaming partial jsons (Python works! TS support coming soon)
-
-✅ Robust LLM calling: retry policies, fallback strategies, round-robin selection
-
-✅ Multiple chat roles
-
-🚧 Images (In progress!)
+🚧 Images<br />
+_Coming soon_
 
 </td>
-<td width="33%" style="vertical-align: top">
+<td width="50%" style="vertical-align: top">
 
-## Prompt engineering techniques supported natively
+## Prompt Examples
 
-✅ Chain of thought
+✅ Chain of thought ([code](#chain-of-thought))<br />
+_Using techniques like reasoning_
 
-✅ Multi-shot
+✅ Multi-shot ([code](#multi-shot))<br/>
+_Adding examples to the prompt_
 
-✅ Symbol tuning
+✅ Symbol tuning ([code](#symbol-tuning))<br/>
+_Using symbolic names for data-types_
+
+✅ Multiple chat roles ([code](#comparing-multiple-prompts--llms))<br />
+_Use system / assistant / whatever you want. We standardize it for all models_
+
 </td>
 </tr>
 </table>
 
+## Developer experience
+
+✅ Type-safe guarantee<br />
+_The LLM will return your data model, or we'll raise an exception_
+
+✅ Fast iteration loops ([code](#comparing-multiple-prompts--llms))<br />
+_Compare multiple prompts / LLM providers in VSCode_
+
+🚧 Streaming partial jsons ([code](#streaming))<br />
+✅ Python
+🚧 Typescript<br />
+_BAML parses incomplete jsons as it come in_
+
+✅ LLM Robustness for production ([code](#robust-llm-calls))<br />
+_Retry policies, Fallback strategies, Round-robin selection_
+
+✅ Many LLM providers<br />
+_OpenAI, Azure, Anthropic out-of-the-box. Reach out to get beta access for Mistral and more_
 
 ## Show me the code...
 
@@ -169,6 +183,8 @@ client<llm> GPT4Client {
 
 ### Use your BAML function in your Python/Typescript app
 
+#### Python
+
 ```python
 # baml_client is auto
 from baml_client import baml as b
@@ -188,6 +204,8 @@ async def get_resume(file_names: typing.List[str]) -> typing.List[Resume]:
       resumes.append(resume)
   return resumes
 ```
+
+#### Typescript
 
 ```typescript
 // The baml_client library is auto generated with the `baml build` command.
@@ -222,7 +240,7 @@ function ExtractResume {
   input (resume_text: string)
   output Resume
   // Declare which impl is the default one my python/ts code calls
-  default_impl "version1"
+  default_impl version1
 }
 
 // My original impl
