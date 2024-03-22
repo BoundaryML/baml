@@ -78,7 +78,7 @@ jobs:
           cargo test --locked --release --target x86_64-unknown-linux-gnu
 
       - name: Add artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.platform.name }}
           path: engine/target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }}
