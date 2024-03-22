@@ -43,7 +43,7 @@ jobs:
         run: cargo build --release --all-features
         working-directory: engine/baml-schema-wasm
 
-      - uses: pnpm/action-setup@v2
+      - uses: pnpm/action-setup@v3
         with:
           version: 8
           package_json_file: typescript/package.json
@@ -162,7 +162,7 @@ jobs:
             Full Version: ${{ steps.hash.outputs.full_version }}
             VSIX: ${{ steps.hash.outputs.vsix_hash }}
 
-      - uses: pnpm/action-setup@v2
+      - uses: pnpm/action-setup@v3
         with:
           version: 8
           package_json_file: typescript/package.json
@@ -241,7 +241,7 @@ jobs:
             Full Version: ${{ steps.hash.outputs.full_version }}
             VSIX: ${{ steps.hash.outputs.vsix_hash }}
 
-      - uses: pnpm/action-setup@v2
+      - uses: pnpm/action-setup@v3
         with:
           version: 8
           package_json_file: typescript/package.json
