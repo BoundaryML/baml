@@ -58,29 +58,40 @@ and have built a wide array of tools to give you a great developer experience:
 
 </p>
 
+<table>
+
+<tr>
+<td width="33%" style="vertical-align: top">
+
 ## Works for
 
 ✅ Function calling
 
-✅ Classification (i.e. taking a customer message and getting their intent)
+✅ Classification (e.g. taking a customer message and getting their intent)
 
-✅ Extraction (i.e. OCRing a resume then parsing into a specific `Resume` class)
+✅ Extraction (e.g. OCRing a resume, then extracting `Skill.PYTHON: Level.PROFICIENT` from it)
 
 ✅ Agents (examples coming soon, but reach out <a href="https://discord.gg/ENtBB6kkXH">Boundary's Discord</a> if you want to do this before we publish them)
 
+</td>
+<td width="33%" style="vertical-align: top">
+
 ## Supports
 
-✅ Many LLM providers (openai, azure, anthropic + bring your own like mistral)
+✅ Many LLM providers (OpenAI, Azure, Anthropic, or bring-your-own, e.g. Mistral)
 
 ✅ Comparing multiple prompts / LLM providers
 
 ✅ Streaming partial jsons (Python works! TS support coming soon)
 
-✅ LLM Robustness: Retries, Falling back on a different model, Round-robin
+✅ Robust LLM calling: retry policies, fallback strategies, round-robin selection
 
 ✅ Multiple chat roles
 
 🚧 Images (In progress!)
+
+</td>
+<td width="33%" style="vertical-align: top">
 
 ## Prompt engineering techniques supported natively
 
@@ -89,6 +100,10 @@ and have built a wide array of tools to give you a great developer experience:
 ✅ Multi-shot
 
 ✅ Symbol tuning
+</td>
+</tr>
+</table>
+
 
 ## Show me the code...
 
@@ -262,8 +277,7 @@ client<llm> ClaudeClient {
 ## Classification
 
 ```rust
-// This will be available as an enum in your
-// python and typescript code as well via baml_client.
+// This will be available as an enum in your Python and Typescript code.
 enum Category {
     Refund
     CancelOrder
@@ -294,6 +308,40 @@ impl<llm, ClassifyMessage> version1 {
 ```
 
 ## Function Calling
+
+```rust
+class GithubCreateReleaseParams {
+  owner string
+  repo string
+  tag_name string
+  target_commitish string
+  name string
+  body string
+  draft bool
+  prerelease bool
+}
+
+function BuildGithubCreateReleaseParams {
+  input string
+  output GithubCreateReleaseParams
+}
+
+impl<llm, BuildGithubCreateReleaseParams> v1 {
+  client GPT35
+  prompt #"
+    Given the following release instructions, craft a JSON payload matching
+    the schema that describes the release that should be created:
+
+    Instructions
+    {#input}
+
+    Schema:
+    {#print_type(output)}
+
+    JSON:
+  "#
+}
+```
 
 ## Agents
 
