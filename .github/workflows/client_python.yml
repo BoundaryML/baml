@@ -60,7 +60,7 @@ jobs:
         working-directory: clients/python
 
       - name: Create artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: python-client
           path: clients/python/dist
