@@ -114,25 +114,25 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Get artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: baml-vscode.vsix
           path: typescript/vscode-ext/packages
 
       - name: Get artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: baml-out
           path: typescript/vscode-ext/packages/vscode/out
 
       - name: Get artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: language-server
           path: typescript/vscode-ext/packages/language-server/out
 
       - name: Get artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: vscode-playground
           path: typescript/vscode-ext/packages/web-panel/dist
@@ -198,25 +198,25 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Get artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: baml-vscode.vsix
           path: typescript/vscode-ext/packages/
 
       - name: Get artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: baml-out
           path: typescript/vscode-ext/packages/vscode/out
 
       - name: Get artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: language-server
           path: typescript/vscode-ext/packages/language-server/out
 
       - name: Get artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: vscode-playground
           path: typescript/vscode-ext/packages/web-panel/dist
