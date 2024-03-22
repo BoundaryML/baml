@@ -28,16 +28,18 @@ Supporting Tools
 
 Calling LLMs in your code is frustrating:
 
-  * your code uses types everywhere: classes, enums, and arrays
-  * but LLMs speak English, not types.
+- your code uses types everywhere: classes, enums, and arrays
+- but LLMs speak English, not types.
 
 BAML makes calling LLMs easy by taking a schema-first approach:
 
-  * define schemas for your inputs and outputs,
-  * define prompt templates using these schemas, and
-  * compile your schemas and templates into a Python/TS client.
+- define schemas for your inputs and outputs,
+- define prompt templates using these schemas, and
+- compile your schemas and templates into a Python/TS client.
 
 We've seen this pattern before plenty of times: [protobuf] and [OpenAPI] for RPCs, [Prisma] and [SQLAlchemy] for databases. BAML brings this pattern to LLMs.
+
+[Show me some BAML code](#show-me-the-code)!
 
 [protobuf]: https://protobuf.dev
 [OpenAPI]: https://github.com/OpenAPITools/openapi-generator
@@ -58,37 +60,64 @@ and have built a wide array of tools to give you a great developer experience:
 
 </p>
 
-## Works for
+<table>
 
-✅ Function calling
+<tr>
+<td width="50%" style="vertical-align: top">
 
-✅ Classification (i.e. taking a customer message and getting their intent)
+## Use cases
 
-✅ Extraction (i.e. OCRing a resume then parsing into a specific `Resume` class)
+✅ Function calling ([code](#function-calling))<br />_Using tools_
 
-✅ Agents (examples coming soon, but reach out <a href="https://discord.gg/ENtBB6kkXH">Boundary's Discord</a> if you want to do this before we publish them)
+✅ Classification ([code](#classification))<br />_Getting intent from a customer message_
 
-## Supports
+✅ Extraction ([code](#show-me-the-code))<br />_Extracting a Resume data model from unstructed text_
 
-✅ Many LLM providers (openai, azure, anthropic + bring your own like mistral)
+✅ Agents <br />
+_Orchestrating multiple prompts to achieve a goal_
 
-✅ Comparing multiple prompts / LLM providers
+🚧 Images<br />
+_Coming soon_
 
-✅ Streaming partial jsons (Python works! TS support coming soon)
+</td>
+<td width="50%" style="vertical-align: top">
 
-✅ LLM Robustness: Retries, Falling back on a different model, Round-robin
+## Prompt Examples
 
-✅ Multiple chat roles
+✅ Chain of thought ([code](#chain-of-thought))<br />
+_Using techniques like reasoning_
 
-🚧 Images (In progress!)
+✅ Multi-shot ([code](#multi-shot))<br/>
+_Adding examples to the prompt_
 
-## Prompt engineering techniques supported natively
+✅ Symbol tuning ([code](#symbol-tuning))<br/>
+_Using symbolic names for data-types_
 
-✅ Chain of thought
+✅ Multiple chat roles ([code](#comparing-multiple-prompts--llms))<br />
+_Use system / assistant / whatever you want. We standardize it for all models_
 
-✅ Multi-shot
+</td>
+</tr>
+</table>
 
-✅ Symbol tuning
+## Developer experience
+
+✅ Type-safe guarantee<br />
+_The LLM will return your data model, or we'll raise an exception_
+
+✅ Fast iteration loops ([code](#comparing-multiple-prompts--llms))<br />
+_Compare multiple prompts / LLM providers in VSCode_
+
+🚧 Streaming partial jsons ([code](#streaming))<br />
+✅ Python
+🚧 Typescript<br />
+_BAML parses incomplete jsons as it come in_
+
+✅ LLM Robustness for production ([code](#robust-llm-calls))<br />
+_Retry policies, Fallback strategies, Round-robin selection_
+
+✅ Many LLM providers<br />
+_OpenAI, Azure, Anthropic out-of-the-box. Reach out to get beta access for Mistral and more_
 
 ## Show me the code...
 
@@ -154,6 +183,8 @@ client<llm> GPT4Client {
 
 ### Use your BAML function in your Python/Typescript app
 
+#### Python
+
 ```python
 # baml_client is auto
 from baml_client import baml as b
@@ -173,6 +204,8 @@ async def get_resume(file_names: typing.List[str]) -> typing.List[Resume]:
       resumes.append(resume)
   return resumes
 ```
+
+#### Typescript
 
 ```typescript
 // The baml_client library is auto generated with the `baml build` command.
@@ -207,7 +240,7 @@ function ExtractResume {
   input (resume_text: string)
   output Resume
   // Declare which impl is the default one my python/ts code calls
-  default_impl "version1"
+  default_impl version1
 }
 
 // My original impl
@@ -262,8 +295,7 @@ client<llm> ClaudeClient {
 ## Classification
 
 ```rust
-// This will be available as an enum in your
-// python and typescript code as well via baml_client.
+// This will be available as an enum in your Python and Typescript code.
 enum Category {
     Refund
     CancelOrder
@@ -294,6 +326,40 @@ impl<llm, ClassifyMessage> version1 {
 ```
 
 ## Function Calling
+
+```rust
+class GithubCreateReleaseParams {
+  owner string
+  repo string
+  tag_name string
+  target_commitish string
+  name string
+  body string
+  draft bool
+  prerelease bool
+}
+
+function BuildGithubCreateReleaseParams {
+  input string
+  output GithubCreateReleaseParams
+}
+
+impl<llm, BuildGithubCreateReleaseParams> v1 {
+  client GPT35
+  prompt #"
+    Given the following release instructions, craft a JSON payload matching
+    the schema that describes the release that should be created:
+
+    Instructions
+    {#input}
+
+    Schema:
+    {#print_type(output)}
+
+    JSON:
+  "#
+}
+```
 
 ## Agents
 
