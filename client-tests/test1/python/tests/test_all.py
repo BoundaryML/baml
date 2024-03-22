@@ -19,6 +19,7 @@ async def some_nested_trace1():
         ProposedMessage(thread=Conversation(thread=[]), generated_response="france"),
     ) as stream:
         async for x in stream.parsed_stream:
+
             print(f"streaming: {x.delta}")
 
             count += 1
@@ -70,11 +71,9 @@ async def test_logic() -> typing.Any:
 
     except Exception as e:
         print(f"error: {e}")
-  
 
     await some_nested_trace1()
     await some_nested_trace2()
-   
 
 
 # print(f"final: {result.value.model_dump_json()}")

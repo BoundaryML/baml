@@ -92,9 +92,9 @@ impl WithLanguage for PackageManager {
 
     fn package_version_command(&self) -> String {
         match self {
-            PackageManager::Npm => "npm list".into(),
-            PackageManager::Yarn => "yarn list".into(),
-            PackageManager::Pnpm => "pnpm list".into(),
+            PackageManager::Npm => "npm list @boundaryml/baml-core".into(),
+            PackageManager::Yarn => "yarn list @boundaryml/baml-core".into(),
+            PackageManager::Pnpm => "pnpm list @boundaryml/baml-core".into(),
         }
     }
 }
