@@ -37,30 +37,7 @@ client<llm> GPT35 {
 }
 ```
 
-## Conditions for fallback
-
-By default, the fallback is triggered on any error.
-
-However, you can customize this behavior for each client in the strategy (except the first).
-
-```rust
-client<llm> MySafeClient {
-    provider baml-fallback
-    options {
-      // First try GPT4 client, if it fails, try GPT35 client.
-      strategy [
-        GPT4,
-        {
-          // If GPT4 fails with a 429, 500, 503 try AZUREGPT4
-          on_status_code [429, 500, 503]
-          client AZUREGPT4
-        },
-        // As a last resort, always try GPT35
-        GPT35
-      ]
-  }
-}
-```
+Fallbacks are triggered on any error.
 
 Errors codes are:
 | Name | Error Code |

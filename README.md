@@ -26,18 +26,29 @@ Supporting Tools
 
 <p>
 
-Prompt engineering is painful because:
+Calling LLMs in your code is frustrating:
 
-1. The rest of software uses data models/types (classes, enums, arrays, etc.), not english
-2. English is not precise
+  * your code uses types everywhere: classes, enums, and arrays
+  * but LLMs speak English, not types.
 
-BAML solves that problem by building prompts using a schema-first approach — where you primarily prompt engineer using data models. [See an example]().
+BAML makes calling LLMs easy by taking a schema-first approach:
 
-BAML works natively with
+  * define schemas for your inputs and outputs,
+  * define prompt templates using these schemas, and
+  * compile your schemas and templates into a Python/TS client.
+
+We've seen this pattern before plenty of times: [protobuf] and [OpenAPI] for RPCs, [Prisma] and [SQLAlchemy] for databases. BAML brings this pattern to LLMs.
+
+[protobuf]: https://protobuf.dev
+[OpenAPI]: https://github.com/OpenAPITools/openapi-generator
+[Prisma]: https://www.prisma.io/
+[SQLAlchemy]: https://www.sqlalchemy.org/
+
+We can generate clients in
 <img src="https://img.shields.io/badge/Python-3.8+-default?logo=python" />
 <img src="https://img.shields.io/badge/Typescript-Node_18+-default?logo=typescript" />
 
-Our language comes with the following tools:
+and have built a wide array of tools to give you a great developer experience:
 
 | BAML Tooling                            | Capabilities                                                                                                              |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
@@ -288,7 +299,32 @@ impl<llm, ClassifyMessage> version1 {
 
 Examples coming soon! Reach out <a href="https://discord.gg/ENtBB6kkXH">Boundary's Discord</a> if you want to do this before we publish them.
 
-## LLM Robustness
+## Robust LLM calls
+
+We make it easy to add [retry policies] to your LLM calls (and also provide other [resilience strategies]):
+
+[retry policies]: https://docs.boundaryml.com/v3/syntax/client/retry
+[resilience strategies]: https://docs.boundaryml.com/v3/syntax/client/client#fallback
+
+```rust
+client<llm> GPT4Client {
+  provider "baml-openai-chat"
+  retry_policy SimpleRetryPolicy
+  options {
+    model "gpt-4"
+    api_key env.OPENAI_API_KEY
+  }
+}
+
+retry_policy SimpleRetryPolicy {
+    max_retries 5
+    strategy {
+      type exponential_backoff
+      delay_ms 300
+      multiplier 1.5
+    }
+}
+```
 
 ## Chain-of-thought
 
