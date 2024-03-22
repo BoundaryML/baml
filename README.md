@@ -17,16 +17,16 @@
 
 Supporting Tools
 
-<a href="https://docs.boundaryml.com/v3/home/installation"><img src="https://img.shields.io/badge/BAML_Compiler-Mac_Windows_Linux-default?logo=rust" /></a>
-<a href="https://marketplace.visualstudio.com/items?itemName=gloo.baml"><img src="https://img.shields.io/badge/BAML_Extension-Testing_&_Live_Prompt_Preview-orange?logo=visualstudiocode" /></a>
-<a href="https://app.boundaryml.com"><img src="https://img.shields.io/badge/Boundary_Studio-Observability_for_BAML-orange" /></a>
+<a href="https://docs.boundaryml.com/v3/home/installation"><img src="https://img.shields.io/badge/BAML_Compiler-0.14.0-purple?logo=rust" /></a>
+<a href="https://marketplace.visualstudio.com/items?itemName=gloo.baml"><img src="https://img.shields.io/badge/BAML_Extension-Testing_&_Live_Prompt_Preview-purple?logo=visualstudiocode" /></a>
+<a href="https://app.boundaryml.com"><img src="https://img.shields.io/badge/Boundary_Studio-Observability_for_BAML-purple" /></a>
 
 <hr />
 </div>
 
 <p>
 
-Prompt engineering sucks because:
+Prompt engineering is painful because:
 
 1. The rest of software uses data models/types (classes, enums, arrays, etc.), not english
 2. English is not precise
@@ -55,7 +55,7 @@ Our language comes with the following tools:
 
 ✅ Extraction (i.e. OCRing a resume then parsing into a specific `Resume` class)
 
-✅ Agents (examples pending, but reach out <a href="https://discord.gg/ENtBB6kkXH">Boundary's Discord</a> if you want to do this before we publish them)
+✅ Agents (examples coming soon, but reach out <a href="https://discord.gg/ENtBB6kkXH">Boundary's Discord</a> if you want to do this before we publish them)
 
 ## Supports
 
@@ -65,7 +65,7 @@ Our language comes with the following tools:
 
 ✅ Streaming partial jsons (Python works! TS support coming soon)
 
-✅ Retry policies + Falling back on a different model when things
+✅ LLM Robustness: Retries, Falling back on a different model, Round-robin
 
 ✅ Multiple chat roles
 
@@ -75,7 +75,7 @@ Our language comes with the following tools:
 
 ✅ Chain of thought
 
-✅ Reasoning
+✅ Multi-shot
 
 ✅ Symbol tuning
 
@@ -144,8 +144,7 @@ client<llm> GPT4Client {
 ### Use your BAML function in your Python/Typescript app
 
 ```python
-# The baml_client library is auto generated with the `baml build` command.
-# Its usable w/o any dependency on baml.
+# baml_client is auto
 from baml_client import baml as b
 # BAML also auto generates types for all your data models.
 from baml_client.baml_types import Resume
@@ -249,9 +248,27 @@ client<llm> ClaudeClient {
 
 <img src="docs/images/v3/testing_2.gif" />
 
-##
+## Classification
+
+## Function Calling
+
+## Agents
+
+Examples coming soon! Reach out <a href="https://discord.gg/ENtBB6kkXH">Boundary's Discord</a> if you want to do this before we publish them.
+
+## LLM Robustness
+
+## Chain-of-thought
+
+## Multi-shot
+
+## Symbol-tuning
+
+## Streaming
 
 Streaming partial JSONs
+
+## Observability
 
 Most AI engineers use LLMs to get structured outputs (e.g. a json schema) from unstructured inputs (strings). For example, to extract a resume from a chunk of text.
 
