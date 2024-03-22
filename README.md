@@ -250,6 +250,38 @@ client<llm> ClaudeClient {
 
 ## Classification
 
+```rust
+// This will be available as an enum in your
+// python and typescript code as well via baml_client.
+enum Category {
+    Refund
+    CancelOrder
+    TechnicalSupport
+    AccountIssue
+    Question
+}
+
+function ClassifyMessage {
+  input string
+  output Category
+}
+
+impl<llm, ClassifyMessage> version1 {
+  client GPT4
+  prompt #"
+    Classify the following INPUT into ONE
+    of the following Intents:
+
+    {// print_enum is a macro provided by BAML //}
+    {#print_enum(Category)}
+
+    INPUT: {#input}
+
+    Response:
+  "#
+}
+```
+
 ## Function Calling
 
 ## Agents
@@ -260,13 +292,117 @@ Examples coming soon! Reach out <a href="https://discord.gg/ENtBB6kkXH">Boundary
 
 ## Chain-of-thought
 
+To do planning with BAML, just tell the LLM what planning steps to do. BAML will automatically find your data objects and convert them automatically.
+
+```rust
+impl<llm, GetOrderInfo> version1 {
+  client GPT4
+  prompt #"
+    Given the email below:
+
+    Email Subject: {#input.subject}
+    Email Body: {#input.body}
+
+    Extract this info from the email in JSON format:
+    {#print_type(output)}
+
+    Schema definitions:
+    {#print_enum(OrderStatus)}
+
+    Before you output the JSON, please explain your
+    reasoning step-by-step. Here is an example on how to do this:
+    'If we think step by step we can see that ...
+     therefore the output JSON is:
+    {
+      ... the json schema ...
+    }'
+  "#
+}
+```
+
 ## Multi-shot
+
+To add examples into your prompt with BAML, you can use a second parameter:
+
+```rust
+function DoSomething {
+  input (my_data: int, examples: string)
+  output string
+}
+
+impl<llm, DoSomething> v1 {
+  client GPT4
+  prompt #"
+    Given DATA do something cool!
+
+    DATA: {#input.my_data}
+
+    Examples:
+    {#input.examples}
+  "#
+}
+```
 
 ## Symbol-tuning
 
+Sometimes using abstract names as "symbols" (e.g. k1, k2, k3…) allows the LLM to focus on your rules better.
+
+- [research paper](https://arxiv.org/abs/2305.08298)
+- Also used by OpenAI for their [content moderation](https://openai.com/blog/using-gpt-4-for-content-moderation).
+
+```rust
+// Enums will still be available as Category.Refund
+// BAML will auto convert k1 --> Category.Refund for you :)
+enum Category {
+    Refund @alias("k1")
+    @description("Customer wants to refund a product")
+
+    CancelOrder @alias("k2")
+    @description("Customer wants to cancel an order")
+
+    TechnicalSupport @alias("k3")
+    @description("Customer needs help with a technical issue unrelated to account creation or login")
+
+    AccountIssue @alias("k4")
+    @description("Specifically relates to account-login or account-creation")
+
+    Question @alias("k5")
+    @description("Customer has a question")
+
+    // Skip this category for the LLM
+    Bug @skip
+}
+
+// whenever you now use:
+// {#print_enum(Category)}
+// BAML will substitute in the alias and description automatically
+// and parse anything the LLM returns into the appropriate type
+```
+
 ## Streaming
 
-Streaming partial JSONs
+BAML is able to offer streaming for partial jsons out of the box. No changes to BAML files, just call a different python function (TS support coming soon).
+
+```python
+async def main():
+    async with b.ExtractResume.stream(resume_text="...") as stream:
+        async for output in stream.parsed_stream:
+            if output.is_parseable:
+              # name is None | str (in case we haven't gotten the name field in the response yet.)
+              name = output.parsed.name
+              print(f"streaming: {output.parsed.model_dump_json()}")
+
+            # You can also get the current delta. This will always be present.
+            print(f"streaming: {output.delta}")
+
+        # Resume type
+        final_output = await stream.get_final_response()
+        if final_output.has_value:
+            print(f"final response: {final_output.value}")
+        else:
+            # A parsing error likely occurred.
+            print(f"final resopnse didnt have a value")
+```
 
 ## Observability
 
