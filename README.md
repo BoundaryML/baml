@@ -383,7 +383,7 @@ enum Category {
 
 ## Comparing multiple prompts / llms
 
-In BAML you do this by declaring multiple `impls`.
+In BAML you do this by declaring multiple `impls`. The VSCode Extension will also let you run the tests side by side.
 
 ```rust
 // Same signature as above
@@ -438,10 +438,6 @@ client<llm> ClaudeClient {
   }
 }
 ```
-
-### Test them both
-
-<img src="docs/images/v3/testing_2.gif" />
 
 ## Streaming
 
