@@ -17,8 +17,9 @@
 
 Supporting Tools
 
-<a href="https://docs.boundaryml.com/v3/home/installation"><img src="https://img.shields.io/badge/BAML_Compiler-0.14.0-purple?logo=rust" /></a>
-<a href="https://marketplace.visualstudio.com/items?itemName=gloo.baml"><img src="https://img.shields.io/badge/BAML_Extension-Testing_&_Live_Prompt_Preview-purple?logo=visualstudiocode" /></a>
+<a href="https://docs.boundaryml.com/v3/home/installation"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FBoundaryML%2Fhomebrew-baml%2Fmain%2Fversion.json&query=cli&label=BAML%20Compiler&color=purple" /></a>
+<a href="https://marketplace.visualstudio.com/items?itemName=gloo.baml"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FBoundaryML%2Fhomebrew-baml%2Fmain%2Fversion.json&query=vscode&logo=visualstudiocode&label=VSCode%20Extension&color=purple
+" /></a>
 <a href="https://app.boundaryml.com"><img src="https://img.shields.io/badge/Boundary_Studio-Observability_for_BAML-purple" /></a>
 
 <hr />
@@ -52,11 +53,11 @@ We can generate clients in
 
 and have built a wide array of tools to give you a great developer experience:
 
-| BAML Tooling                            | Capabilities                                                                                                              |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| BAML Compiler                           | Transpiles BAML code to a native Python / Typescript library <br />(you only need it for development, never for releases) |
-| VSCode Extension                        | Syntax highlighting for BAML files<br /> Real-time prompt preview <br /> Testing UI                                       |
-| Boundary Studio <br />(not open source) | Type-safe observability <br />Labeling                                                                                    |
+| BAML Tooling                                                                              | Capabilities                                                                                                              |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| BAML Compiler [install](#installation)                                                    | Transpiles BAML code to a native Python / Typescript library <br />(you only need it for development, never for releases) |
+| VSCode Extension [install](https://marketplace.visualstudio.com/items?itemName=gloo.baml) | Syntax highlighting for BAML files<br /> Real-time prompt preview <br /> Testing UI                                       |
+| Boundary Studio [open](https://app.boundaryml.com)<br />(not open source)                 | Type-safe observability <br />Labeling                                                                                    |
 
 </p>
 
@@ -79,13 +80,51 @@ _Compare multiple prompts / LLM providers in VSCode_
 🚧 Streaming partial jsons ([code](#streaming))<br />
 ✅ Python
 🚧 Typescript<br />
-_BAML parses incomplete jsons as it come in_
+_BAML parses incomplete jsons as they come in_
 
 ✅ LLM Robustness for production ([code](#robust-llm-calls))<br />
 _Retry policies, Fallback strategies, Round-robin selection_
 
 ✅ Many LLM providers<br />
 _OpenAI, Azure, Anthropic out-of-the-box. Reach out to get beta access for Mistral and more_
+
+## Installation
+
+### Download the BAML Compiler
+
+Mac:
+
+```bash
+brew install boundaryml/baml/baml
+```
+
+Linux:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/BoundaryML/homebrew-baml/main/install-baml.sh | bash
+```
+
+Windows (with [Scoop](https://scoop.sh/)):
+
+```
+scoop bucket add baml-bucket https://github.com/boundaryml/homebrew-baml
+scoop install baml
+```
+
+### Download VSCode extension
+
+Search for "BAML" or [Click here](https://marketplace.visualstudio.com/items?itemName=gloo.BAML)
+
+> If you are using python, enable typechecking in VSCode’s settings.json:
+>
+> "python.analysis.typecheckingMode": "basic"
+
+### Add BAML to any existing project
+
+```bash
+cd my_project
+baml init
+```
 
 ## Show me the code...
 
@@ -472,10 +511,11 @@ Analyze, label, and trace each request in [Boundary Studio](https://app.boundary
 
 ### Resources
 
+- [Discord](https://discord.gg/ENtBB6kkXH) - Come ask us anything! We hold office hours most days.
 - Documentation - [Learn BAML](https://docs.boundaryml.com/v3/guides/hello_world/writing-ai-functions)
 - Documentation - [BAML Syntax Reference](https://docs.boundaryml.com/v3/syntax/generator)
 - Documentation - [Prompt engineering tips](https://docs.boundaryml.com/v3/syntax/generator)
-- [Discord](https://discord.gg/ENtBB6kkXH) - Come ask us anything! We hold office hours most days.
+- [Boundary Studio](https://app.boundaryml.com) - Observability and more
 
 ## FAQ
 
@@ -503,7 +543,7 @@ BAML files are only used to generate Python or Typescript code. You don’t need
 
 ### Is BAML secure?
 
-Your BAML-generated code never talks to our servers. We don’t proxy LLM APIs -- you call them directly from your machine. We only publish traces to our servers if you enable it explicitly.
+Your BAML-generated code never talks to our servers. We don’t proxy LLM APIs -- you call them directly from your machine. We only publish traces to our servers if you enable Boundary Studio explicitly.
 
 ### How do you make money?
 
@@ -532,3 +572,7 @@ Note that this security address should be used only for undisclosed vulnerabilit
 <hr />
 
 Made with ❤️ by Boundary
+
+HQ in Seattle, WA
+
+P.S. We're hiring for software engineers. [Email us](founders@boundaryml.com) or reach out on [discord](https://discord.gg/ENtBB6kkXH)!
