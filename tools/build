@@ -1,0 +1,128 @@
+#!/usr/bin/env /bin/sh
+
+set -eu
+
+show_help() {
+  cat <<EOF
+Usage: build [options]
+
+Options:
+    --help      Display this help message and exit.
+    --watch     Watch dependencies and rebuild on demand.
+EOF
+}
+
+_help_mode=0
+_watch_mode=0
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --help)
+            _help_mode=1
+            shift
+            ;;
+        --watch)
+            _watch_mode=1
+            shift
+            ;;
+        --) # End of all options
+            shift
+            break
+            ;;
+        *) # No more options
+            break
+            ;;
+    esac
+done
+
+if [ "$_help_mode" -eq 1 ]; then
+    show_help
+    exit 0
+fi
+
+# Display the status of flags
+if [ "$_watch_mode" -eq 1 ]; then
+    echo "Interactive mode is enabled."
+else
+    echo "Interactive mode is not enabled."
+fi
+
+cd "$1"
+_repo_root="$(git rev-parse --show-toplevel)"
+_path="$(pwd | sed "s|^${_repo_root}||")"
+echo "Building in REPO${_path}"
+
+case "$_path" in
+
+  /engine/baml-core-ffi | /engine/baml-core-ffi/*)
+    if [ "$_watch_mode" -eq 1 ]; then
+      npx nodemon \
+        --verbose \
+        --ext js,ts \
+        --ignore index.d.ts \
+        --exec 'yarn build'
+    else
+      yarn build
+    fi
+    ;;
+
+  /engine | /engine/* )
+    if [ "$_watch_mode" -eq 1 ]; then
+      npx nodemon \
+        --verbose \
+        --ext rs,hb,hbs \
+        --ignore index.d.ts \
+        --exec 'yarn build'
+    else
+      cargo build
+    fi
+    ;;
+
+  /clients/python | /clients/python/* )
+    if [ "$_watch_mode" -eq 1 ]; then
+      npx nodemon \
+        --ext py \
+        --exec 'poetry run mypy . && poetry run ruff check && poetry run ruff format'
+    else
+      poetry run mypy . && poetry run ruff check && poetry run ruff format
+    fi
+    ;;
+
+  /clients/ts | /clients/ts/* )
+    if [ "$_watch_mode" -eq 1 ]; then
+      npx nodemon \
+        --verbose \
+        --ext js,ts \
+        --ignore '**/dist' \
+        --ignore '**/node_modules' \
+        --exec 'pnpm build'
+    else
+      pnpm build
+    fi
+    ;;
+
+  /typescript | /typescript/* )
+    # This also consume schanges to baml-schema-wasm
+    if [ "$_watch_mode" -eq 1 ]; then
+      # nodemon config in typescript/nodemon.json
+      npx nodemon \
+        --verbose \
+        --ext js,ts,rs,hb,hbs
+        --watch "${_repo_root}/baml-lib" \
+        --watch "${_repo_root}/baml-fmt" \
+        --watch "${_repo_root}/baml-schema-wasm" \
+        --ignore '**/dist' \
+        --ignore '**/node_modules' \
+        --ignore '**/out' \
+        --exec 'pnpm build'
+    else
+      pnpm build
+    fi
+    ;;
+
+  *)
+    echo "Nothing to build in repo root"
+    ;;
+
+esac
+
