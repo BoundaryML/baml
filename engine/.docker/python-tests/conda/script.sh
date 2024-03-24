@@ -10,6 +10,9 @@ set -x
 
 conda activate envbaml
 
+# baml init -n requires a python file to auto-detect its a python project
+touch main.py
+
 baml init -n
 
 # Go back to the main environment

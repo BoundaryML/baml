@@ -62,21 +62,43 @@ pub fn init_command(no_prompt: bool) -> Result<(), CliError> {
             let mut package_json: Value = serde_json::from_str(&package_json_content)
                 .map_err(|e| format!("Failed to parse package.json: {}", e))?;
 
-            let scripts_section = package_json
-                .get_mut("scripts")
-                .ok_or_else(|| "No 'scripts' section in package.json".to_string())?
-                .as_object_mut()
-                .ok_or_else(|| "'scripts' section is not an object".to_string())?;
+            let updated_scripts = match package_json.get_mut("scripts") {
+                Some(scripts) => {
+                    if let Some(scripts) = scripts.as_object_mut() {
+                        if !scripts.contains_key("baml-test") {
+                            scripts
+                                .insert("baml-test".to_owned(), Value::String("jest".to_owned()));
+                            true
+                        } else {
+                            false
+                        }
+                    } else {
+                        println!("'scripts' section in package.json is not an object. Ensure there is a `\"baml-test\": \"jest\"` entry in the 'scripts' section of your package.json");
+                        false
+                    }
+                }
+                None => {
+                    package_json.as_object_mut().unwrap().insert(
+                        "scripts".to_owned(),
+                        Value::Object({
+                            let mut scripts = serde_json::Map::new();
+                            scripts
+                                .insert("baml-test".to_owned(), Value::String("jest".to_owned()));
+                            scripts
+                        }),
+                    );
+                    true
+                }
+            };
 
-            // Only update if "baml-test-script" is not already present to avoid unnecessary writes
-            if !scripts_section.contains_key("baml-test") {
-                scripts_section.insert("baml-test".to_owned(), Value::String("jest".to_owned()));
+            if updated_scripts {
                 fs::write(
                     &package_json_path,
                     serde_json::to_string_pretty(&package_json)?,
                 )
                 .map_err(|e| format!("Failed to write to package.json: {}", e))?;
             }
+
             Ok(())
         }
         _ => Ok(()),

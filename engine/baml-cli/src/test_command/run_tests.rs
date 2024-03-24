@@ -25,6 +25,7 @@ impl TestRunner {
     pub fn run<T: AsRef<str>>(
         &self,
         state: RunState,
+        langauge_root_dir: &PathBuf,
         output_path: &PathBuf,
         test_command: T,
         // function, test, impl
@@ -94,14 +95,14 @@ impl TestRunner {
                         let res = match playground_port {
                             Some(port) => run_test_with_forward(
                                 self.clone(),
-                                output_path.clone(),
+                                langauge_root_dir.clone(),
                                 state,
                                 test_command,
                                 port,
                             ),
                             None => run_test_with_watcher(
                                 self.clone(),
-                                output_path.clone(),
+                                langauge_root_dir.clone(),
                                 state,
                                 test_command,
                             ),
@@ -119,12 +120,6 @@ impl TestRunner {
                         eprintln!("{}: {}", jest_error_message, e);
                         Err(CliError::StringError(jest_error_message.to_string()))
                     }
-                    _ => {
-                        let general_error_message =
-                            "Failed to create temporary files for jest and baml test config";
-                        eprintln!("{}", general_error_message);
-                        Err(CliError::StringError(general_error_message.to_string()))
-                    }
                 }
             }
             TestRunner::Pytest => {
@@ -137,14 +132,14 @@ impl TestRunner {
                 match playground_port {
                     Some(port) => run_test_with_forward(
                         self.clone(),
-                        output_path.clone(),
+                        langauge_root_dir.clone(),
                         state,
                         test_command,
                         port,
                     ),
                     None => run_test_with_watcher(
                         self.clone(),
-                        output_path.clone(),
+                        langauge_root_dir.clone(),
                         state,
                         test_command,
                     ),

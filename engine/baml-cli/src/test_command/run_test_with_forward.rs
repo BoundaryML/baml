@@ -83,6 +83,13 @@ async fn handle_connection(
         // Prepare buffer for next read, preserving the incomplete message if there is one
         buffer = incomplete_message.as_bytes().to_vec();
     }
+
+    let res = state.lock().await.validate();
+
+    if let Err(e) = res {
+        return Err(io::Error::new(io::ErrorKind::Other, e));
+    }
+
     Ok(())
 }
 
@@ -259,7 +266,7 @@ pub(crate) fn run_test_with_forward(
         shell_command,
         forward_port,
     ))
-    .map_err(|e| format!("Failed to run pytest: {}", e).into())
+    .map_err(|e| format!("Failed to run tests!\n{}", e).into())
 }
 
 async fn forward_to_port(port: u16, message: &str) -> tokio::io::Result<()> {

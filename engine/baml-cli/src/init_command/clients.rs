@@ -107,8 +107,7 @@ fn openai_azure_clients<T: From<&'static str> + AsRef<str>>() -> Vec<ClientConfi
         provider: "baml-azure-chat".into(),
         name: "Azure".into(),
         params: vec![
-            ("model", "gpt-35-turbo"),
-            ("api_version", "2023-12-01-preview"),
+            ("model", "env.AZURE_OPENAI_DEPLOYMENT_NAME"),
             ("api_key", "env.AZURE_OPENAI_API_KEY"),
             ("azure_endpoint", "env.AZURE_OPENAI_ENDPOINT"),
         ],

@@ -54,56 +54,59 @@ impl WithLanguage for LanguageConfig {
     }
 }
 
+fn find_folder_with(base_path: &str, patterns: &[&str]) -> Option<String> {
+    for pattern in patterns {
+        let full_pattern = format!("{}/{}", base_path, pattern);
+        for entry in glob::glob(&full_pattern).expect("Failed to read glob pattern") {
+            match entry {
+                Ok(path) => {
+                    if path.is_file() {
+                        return Some(path.to_string_lossy().into_owned());
+                    }
+                }
+                Err(e) => println!("Error while reading path: {:?}", e),
+            }
+        }
+    }
+    None
+}
+
 impl WithLoader<Vec<LanguageConfig>> for LanguageConfig {
     fn from_dialoguer(
         no_prompt: bool,
         project_root: &PathBuf,
         writer: &mut Writer,
     ) -> Result<Vec<LanguageConfig>, CliError> {
-        let mut has_python = false;
-        let mut has_typescript = false;
-
-        // Iterate upwards, starting from the project root all the way to the root dir
-        for p in project_root
-            .clone()
-            .canonicalize()
-            .unwrap_or(project_root.clone())
-            .ancestors()
-        {
-            let Ok(dir) = std::fs::read_dir(p) else {
-                continue;
-            };
-            let files = dir
-                .into_iter()
-                .filter_map(|entry| entry.ok())
-                .filter_map(|entry| entry.file_name().into_string().ok())
-                .collect::<Vec<_>>();
-
-            has_python = has_python
-                || files
-                    .iter()
-                    .any(|f| f == "pyproject.toml" || f.ends_with(".py"));
-            has_typescript = has_typescript
-                || files
-                    .iter()
-                    .any(|f| f == "package.json" || f.ends_with(".ts") || f.ends_with(".js"));
-
-            // If we know we're going to suggest both, exit
-            if has_python && has_typescript {
-                break;
-            }
-
-            // If we reach the root of a git repo (or worktree, or submodule), exit
-            if std::fs::metadata(p.join(".git")).is_ok() {
-                break;
-            }
-        }
-
-        let default_selection = if has_python || has_typescript {
-            [has_python, has_typescript]
-        } else {
-            [true, true]
+        let project_root_str = match project_root.canonicalize() {
+            Ok(p) => p,
+            Err(_) => project_root.clone(),
         };
+        let project_root_str = project_root_str.to_string_lossy();
+        let has_python = find_folder_with(
+            project_root_str.as_ref(),
+            &[
+                "**/*.py",
+                "**/requirements.txt",
+                "**/Pipfile",
+                "**/setup.py",
+                "**/pyproject.toml",
+                "**/.python-version",
+            ],
+        )
+        .is_some();
+        let has_typescript = find_folder_with(
+            project_root_str.as_ref(),
+            &[
+                "**/*.ts",
+                "**/package.json",
+                "**/tsconfig.json",
+                "**/yarn.lock",
+                "**/package-lock.json",
+            ],
+        )
+        .is_some();
+
+        let default_selection = [has_python, has_typescript];
         let languages = get_multi_selection_or_default(
             "What language(s) do you want to use with BAML?",
             &["Python", "TypeScript"],
@@ -111,7 +114,22 @@ impl WithLoader<Vec<LanguageConfig>> for LanguageConfig {
             no_prompt,
         )?;
 
-        writer.write_fmt(format_args!("\nGreat choice!\n"))?;
+        if languages.is_empty() {
+            if no_prompt {
+                return Err(CliError::StringError(
+                    r#"Failed to detect any Python or Typescript project. 
+                    
+`baml init` command must be run within an existing Python or TypeScript project directory. It cannot be run in a new or empty directory. Please navigate to a valid project directory or initialize a new project using the appropriate tools for Python or TypeScript before running `baml init`.
+                    "#.into(),
+                ));
+            }
+
+            return Err(CliError::StringError("No language selected.".into()));
+        }
+
+        if !no_prompt {
+            writer.write_fmt(format_args!("\nGreat choice!\n"))?;
+        }
 
         languages
             .iter()
@@ -158,8 +176,8 @@ impl ToBamlSrc for Generator {
             r#"
 generator lang_{} {{
   language {}
-  // This is where your non-baml source code located
-  // (relative directory where pyproject.toml, package.json, etc. lives)
+  // This is where your baml_client will be generated
+  // Usually the root of your source code relative to this file
   project_root "{}"
   // This command is used by "baml test" to run tests
   // defined in the playground
