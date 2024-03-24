@@ -64,7 +64,11 @@ class OpenAIChatProvider(LLMChatProvider):
         options.pop("api_type", None)
         options.pop("azure_endpoint", None)
 
-        options["model"] = options.get("model", None) or options.pop("engine", None) or options.pop("deployment_name", None)
+        options["model"] = (
+            options.get("model", None)
+            or options.pop("engine", None)
+            or options.pop("deployment_name", None)
+        )
 
         self.__request_args = options
         self._set_args(**self.__request_args)
