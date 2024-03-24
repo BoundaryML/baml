@@ -7,6 +7,8 @@ set -x
 
 baml init -n
 
+cat baml_src/main.baml > $CAPTURE_DIR/baml_init_stdout.log
+
 # Check if the venv has baml installed (python -m baml_version)
 . venv/bin/activate && python -m baml_version
 deactivate

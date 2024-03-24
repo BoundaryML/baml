@@ -7,6 +7,7 @@ infisical run --env=test -- python3 -m pytest e2e_tests.py -s -v
 
 import subprocess
 import os
+from typing import List, Tuple
 import pytest
 
 CWD = os.path.dirname(os.path.realpath(__file__))
@@ -32,8 +33,8 @@ def openai_key():
     return os.environ.get("OPENAI_API_KEY", "sk-unset-openai-key")
 
 
-def get_test_cases():
-    test_groups = []
+def get_test_cases() -> List[Tuple[str, str]]:
+    test_groups: List[Tuple[str, str]] = []
     for test_dir in os.listdir(os.path.join(CWD, ".docker")):
         test_dir_path = os.path.join(CWD, ".docker", test_dir)
         if os.path.isdir(test_dir_path) and test_dir_path.endswith("-tests"):

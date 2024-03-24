@@ -227,6 +227,12 @@ async fn run_and_update_state(
         }
     }
 
+    let res = state.lock().await.validate();
+
+    if let Err(e) = res {
+        return Err(io::Error::new(io::ErrorKind::Other, e));
+    }
+
     Ok(())
 }
 
@@ -245,5 +251,7 @@ pub(crate) fn run_test_with_watcher(
         state,
         shell_command,
     ))
-    .map_err(|e| format!("Failed to run tests: {}", e).into())
+    .map_err(|e| CliError::StringError(format!("Failed to run tests!\n{}", e)))?;
+
+    Ok(())
 }

@@ -5,6 +5,9 @@ set -e
 # Echo each command
 set -x
 
+# baml init -n requires a python file to auto-detect its a python project
+touch main.py
+
 baml init -n
 
 # Run the command and write stdout and stderr to different files

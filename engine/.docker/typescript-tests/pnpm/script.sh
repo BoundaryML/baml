@@ -5,7 +5,7 @@ set -e
 # Echo each command
 set -x
 
-baml init -n
+RUST_BACKTRACE=1 baml init -n
 
 cat baml_src/main.baml > $CAPTURE_DIR/baml_init_stdout.log
 

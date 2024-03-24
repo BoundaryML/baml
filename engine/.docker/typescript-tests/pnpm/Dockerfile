@@ -16,14 +16,16 @@ RUN chmod +x /usr/src/test.sh
 COPY --from=baml_builder /baml_source_code/target/release/baml /usr/tools/baml
 ENV PATH="/usr/tools:${PATH}"
 
+RUN npm install -g pnpm
+
 # Initialize a new Node.js project
-RUN yarn init -y
+RUN pnpm init
 
 # Install TypeScript and other dependencies
-RUN yarn add typescript -D
-RUN yarn add @types/node -D
+RUN pnpm add typescript -D
+RUN pnpm add @types/node -D
 
-RUN yarn install
+RUN pnpm install
 
 # Copy your source files into the Docker image
 COPY . .

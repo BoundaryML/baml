@@ -64,7 +64,11 @@ class OpenAIChatProvider(LLMChatProvider):
         options.pop("api_type", None)
         options.pop("azure_endpoint", None)
 
-        options["model"] = options.get("model", None) or options.pop("engine", None)
+        options["model"] = (
+            options.get("model", None)
+            or options.pop("engine", None)
+            or options.pop("deployment_name", None)
+        )
 
         self.__request_args = options
         self._set_args(**self.__request_args)
@@ -79,7 +83,7 @@ class OpenAIChatProvider(LLMChatProvider):
             # api_base / azure_endpoint
             return AsyncAzureOpenAI(
                 api_key=options["api_key"],
-                api_version=options["api_version"],
+                api_version=options.get("api_version"),
                 azure_endpoint=options.get("api_base") or options["azure_endpoint"],
                 timeout=timeout,
             )

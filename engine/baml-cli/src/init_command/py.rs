@@ -74,6 +74,13 @@ impl WithLanguage for PackageManager {
             }
             PackageManager::Poetry => "poetry run pytest".into(),
             PackageManager::Venv(env_path) => {
+                // TODO: Use the best command for each os:
+                // - POSIX (bash/zsh): . venv/bin/activate
+                // - POSIX (fish): . venv/bin/activate.fish
+                // - POSIX (csh/tcsh): . venv/bin/activate.csh
+                // - POSIT (powershell): venv\Scripts\Activate.ps1
+                // - Windows (cmd.ext): venv\Scripts\activate.bat
+                // - Windows (powershell): venv\Scripts\Activate.ps1
                 format!(". {}/bin/activate && python -m pytest", env_path)
             }
             PackageManager::Conda(name) => {

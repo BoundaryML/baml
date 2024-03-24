@@ -7,6 +7,7 @@ set -x
 
 baml init -n
 
+cat baml_src/main.baml > $CAPTURE_DIR/baml_init_stdout.log
 
 # Run the command and write stdout and stderr to different files
 baml test run > $CAPTURE_DIR/baml_test_stdout.log 2> $CAPTURE_DIR/baml_test_stderr.log

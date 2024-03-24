@@ -115,6 +115,25 @@ impl RunState {
         }
     }
 
+    pub(crate) fn validate(&self) -> Result<(), String> {
+        // Every test should have a state that is not Queued
+
+        let errors: Vec<_> = self
+            .tests
+            .iter()
+            .filter(|(_, state)| matches!(state, TestState::Queued))
+            .collect();
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(format!(
+                "Unexpected error! Please report a bug on our github.\nThe following tests are still queued: {:?}",
+                errors.iter().map(|(spec, _)| spec).collect::<Vec<_>>()
+            ))
+        }
+    }
+
     pub(crate) fn sync(&mut self) -> Option<String> {
         let mut additional = HashMap::new();
         let messages = std::mem::take(&mut self.messages);

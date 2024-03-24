@@ -169,6 +169,13 @@ pub fn run(
                 return Err("No generators are available".into());
             }
 
+            if selected_tests.is_empty() {
+                if num_tests == 0 {
+                    return Err("No tests found".into());
+                }
+                return Err("No tests selected".into());
+            }
+
             let generator = match &command.generator {
                 Some(generator_name) => match config
                     .generators
@@ -223,6 +230,7 @@ pub fn run(
             // Run the tests
             test_runner.run(
                 state,
+                &generator.project_root,
                 &test_dir,
                 &generator.test_command,
                 &selected_tests,
