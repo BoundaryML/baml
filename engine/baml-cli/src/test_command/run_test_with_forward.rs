@@ -1,5 +1,6 @@
 use colored::*;
 use std::{
+    borrow::Borrow,
     fs::{self, File},
     process::Stdio,
     sync::Arc,
@@ -12,7 +13,9 @@ use tokio::{
     time,
 };
 
-use crate::{errors::CliError, shell::build_shell_command};
+use crate::{
+    errors::CliError, shell::build_shell_command, test_command::test_state::on_finish_test,
+};
 
 use super::{ipc_comms, run_tests::TestRunner, test_state::RunState};
 
@@ -82,12 +85,6 @@ async fn handle_connection(
 
         // Prepare buffer for next read, preserving the incomplete message if there is one
         buffer = incomplete_message.as_bytes().to_vec();
-    }
-
-    let res = state.lock().await.validate();
-
-    if let Err(e) = res {
-        return Err(io::Error::new(io::ErrorKind::Other, e));
     }
 
     Ok(())
@@ -181,71 +178,19 @@ async fn run_and_update_state(
     // 2, 3, 4 https://docs.pytest.org/en/latest/reference/exit-codes.html
     match child.wait_with_output() {
         Ok(output) => {
-            if let Some(code) = output.status.code() {
-                // Pytest exits with 1 even if it ran fine but had some tests failing (we should suppress this via a pytest plugin) so we don't mark as failure on exit code 1
-                // But we could also get exit code 1 from other things like infisical CLI being absent, or python not being found.
-                let stderr_content = tokio::fs::read_to_string(&stderr_file_path).await?;
-                let stdout_content = tokio::fs::read_to_string(&stdout_file_path).await?;
-                if code >= 2 {
-                    println!(
-                        "\n####### STDOUT Logs for this test ########\n{}",
-                        stdout_content.bright_red().bold()
-                    );
-                    println!(
-                        "\n####### STDERR Logs for this test ########\n{}",
-                        stderr_content.bright_red().bold()
-                    );
-
-                    println!(
-                        "{}",
-                        format!(
-                            "Testing failed with exit code {}. Output logs were printed above this line.",
-                            code
-                        )
-                        .bright_red()
-                        .bold()
-                    );
-                    println!(
-                        "\n{}\n{}",
-                        stdout_file_path.display().to_string().dimmed(),
-                        stderr_file_path.display().to_string().dimmed()
-                    );
-                    // exit the process
-                    std::process::exit(code);
-                }
-
-                // if stderr is not empty and exit code is 1, we also have an issue
-                if code == 1 && (!stderr_content.is_empty() || !stdout_content.is_empty()) {
-                    // Don't say the test failed since the exit code 1 may just be pytest saying some tests failed.
-                    // print stdout
-                    println!(
-                        "\n####### STDOUT Logs for this test ########\n{}",
-                        stdout_content.bright_red().bold()
-                    );
-                    println!("{}", stderr_content.bright_red().bold());
-                    println!(
-                        "{}",
-                        "Some tests failed or there was a problem running the tests."
-                            .bright_red()
-                            .bold()
-                    );
-                    println!(
-                        "\n{}\n{}",
-                        stdout_file_path.display().to_string().dimmed(),
-                        stderr_file_path.display().to_string().dimmed()
-                    );
-                    std::process::exit(code);
-                }
-            }
-            output
+            on_finish_test(
+                output,
+                state.lock().await.borrow(),
+                stdout_file_path,
+                stderr_file_path,
+            )
+            .await
         }
         Err(e) => {
             eprintln!("Failed to execute command: {}", e);
             return Err(e);
         }
-    };
-
-    Ok(())
+    }
 }
 
 pub(crate) fn run_test_with_forward(
