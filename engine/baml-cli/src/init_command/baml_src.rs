@@ -1,5 +1,6 @@
 /// File to convert types to baml code.
 use std::path::PathBuf;
+use dunce::canonicalize;
 
 use crate::errors::CliError;
 
@@ -77,7 +78,7 @@ impl WithLoader<Vec<LanguageConfig>> for LanguageConfig {
         project_root: &PathBuf,
         writer: &mut Writer,
     ) -> Result<Vec<LanguageConfig>, CliError> {
-        let project_root_str = match project_root.canonicalize() {
+        let project_root_str = match canonicalize(project_root) {
             Ok(p) => p,
             Err(_) => project_root.clone(),
         };

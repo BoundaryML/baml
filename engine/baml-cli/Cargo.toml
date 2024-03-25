@@ -32,6 +32,7 @@ tempfile = "3.10.1"
 uuid = { version = "1.7.0", features = ["v4"] }
 anyhow.workspace = true
 json_comments = "0.2.2"
+dunce = "1.0.4"
 
 [dev-dependencies]
 base64 = "0.13.0"

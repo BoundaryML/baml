@@ -1,5 +1,6 @@
 use colored::*;
 use std::{path::PathBuf, str::FromStr};
+use dunce::canonicalize;
 
 use baml_lib::{internal_baml_schema_ast::ast::WithName, Configuration, ValidatedSchema};
 
@@ -213,7 +214,7 @@ pub fn run(
                 )
             );
 
-            let test_dir = generator.output_path.canonicalize().map_err(|e| {
+            let test_dir = canonicalize(generator.output_path.clone()).map_err(|e| {
                 format!(
                     "Directory Error: {}: {}",
                     generator.output_path.display(),
