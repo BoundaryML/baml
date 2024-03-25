@@ -7,72 +7,56 @@
 
 ## BAML: A programming language to get structured data from LLMs</h2>
 
-<div>
+## Resources
+
 <a href="https://discord.gg/ENtBB6kkXH"><img src="https://img.shields.io/discord/1119368998161752075.svg?logo=discord&label=Discord%20Community" /></a>
 <a href="https://twitter.com/intent/follow?screen_name=boundaryml"><img src="https://img.shields.io/twitter/follow/boundaryml?style=social"></a>
 
-<a href="https://docs.boundaryml.com/v3/guides/hello_world/writing-ai-functions"><img src="https://img.shields.io/badge/Docs-Language_Tour-blue?logo=readthedocs" /></a>
-<a href="https://docs.boundaryml.com/v3/syntax/generator"><img src="https://img.shields.io/badge/Docs-Syntax_Reference-blue?logo=readthedocs" /></a>
-<a href="https://docs.boundaryml.com/v3/how-to/overview"><img src="https://img.shields.io/badge/Docs-Prompt_Engineering_Tips-blue?logo=readthedocs" /></a>
+- [Discord Office Hours](https://discord.gg/ENtBB6kkXH) - Come ask us anything! We hold office hours most days (9am - 12pm PST).
+- Documentation - [Learn BAML](https://docs.boundaryml.com/v3/guides/hello_world/writing-ai-functions)
+- Documentation - [BAML Syntax Reference](https://docs.boundaryml.com/v3/syntax/generator)
+- Documentation - [Prompt engineering tips](https://docs.boundaryml.com/v3/syntax/generator)
+- [Boundary Studio](https://app.boundaryml.com) - Observability and more
 
-Supporting Tools
-
-<a href="https://docs.boundaryml.com/v3/home/installation"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FBoundaryML%2Fhomebrew-baml%2Fmain%2Fversion.json&query=cli&label=BAML%20Compiler&color=purple" /></a>
-<a href="https://marketplace.visualstudio.com/items?itemName=gloo.baml"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FBoundaryML%2Fhomebrew-baml%2Fmain%2Fversion.json&query=vscode&logo=visualstudiocode&label=VSCode%20Extension&color=purple
-" /></a>
-<a href="https://app.boundaryml.com"><img src="https://img.shields.io/badge/Boundary_Studio-Observability_for_BAML-purple" /></a>
-
-<hr />
-</div>
-
-<p>
+## Motivation
 
 Calling LLMs in your code is frustrating:
 
 - your code uses types everywhere: classes, enums, and arrays
-- but LLMs speak English, not types.
+- but LLMs speak English, not types
 
-BAML makes calling LLMs easy by taking a schema-first approach:
+BAML makes calling LLMs easy by taking a type-first approach that lives fully in your codebase:
 
-- define schemas for your inputs and outputs,
-- define prompt templates using these schemas, and
-- compile your schemas and templates into a Python/TS client.
+1. Define types for your inputs and outputs in BAML files
+2. Define prompt templates using these types in BAML
+3. Define retries and fallbacks in BAML
+4. Use a generated Python/Typescript client to call LLMs with those types and templates
 
-We've seen this pattern before plenty of times: [protobuf] and [OpenAPI] for RPCs, [Prisma] and [SQLAlchemy] for databases. BAML brings this pattern to LLMs.
+We were inspired by similar patterns for type safety: [protobuf] and [OpenAPI] for RPCs, [Prisma] and [SQLAlchemy] for databases.
 
-[Show me some BAML code](#show-me-the-code)!
+BAML guarantees type safety for LLMs and comes with tools to give you a great developer experience:
+
+Jump to [BAML code](#show-me-the-code) or read how we [provide type safety without additional LLM calls](#flexible-parsing).
 
 [protobuf]: https://protobuf.dev
 [OpenAPI]: https://github.com/OpenAPITools/openapi-generator
 [Prisma]: https://www.prisma.io/
 [SQLAlchemy]: https://www.sqlalchemy.org/
 
-We can generate clients in
-<img src="https://img.shields.io/badge/Python-3.8+-default?logo=python" />
-<img src="https://img.shields.io/badge/Typescript-Node_18+-default?logo=typescript" />
+<img src="docs/images/v3/prompt_view.gif" />
 
-and have built a wide array of tools to give you a great developer experience:
-
-| BAML Tooling                                                                              | Capabilities                                                                                                              |
-| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| BAML Compiler [install](#installation)                                                    | Transpiles BAML code to a native Python / Typescript library <br />(you only need it for development, never for releases) |
-| VSCode Extension [install](https://marketplace.visualstudio.com/items?itemName=gloo.baml) | Syntax highlighting for BAML files<br /> Real-time prompt preview <br /> Testing UI                                       |
-| Boundary Studio [open](https://app.boundaryml.com)<br />(not open source)                 | Type-safe observability <br />Labeling                                                                                    |
+| BAML Tooling                                                                              | Capabilities                                                                                                                                                                                                                                                                                                                       |
+| ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| BAML Compiler [install](#installation)                                                    | Transpiles BAML code to a native Python / Typescript library <br />(you only need it for development, never for releases)<br />Works on Mac, Windows, Linux <br /><img src="https://img.shields.io/badge/Python-3.8+-default?logo=python" /><img src="https://img.shields.io/badge/Typescript-Node_18+-default?logo=typescript" /> |
+| VSCode Extension [install](https://marketplace.visualstudio.com/items?itemName=gloo.baml) | Syntax highlighting for BAML files<br /> Real-time prompt preview <br /> Testing UI                                                                                                                                                                                                                                                |
+| Boundary Studio [open](https://app.boundaryml.com)<br />(not open source)                 | Type-safe observability <br />Labeling                                                                                                                                                                                                                                                                                             |
 
 </p>
-
-| Use Cases                                                                                            | Prompt Examples                                                                                                                                        |
-| ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| ✅ Function calling ([code](#function-calling))<br />_Using tools_                                   | ✅ Chain of thought ([code](#chain-of-thought))<br />_Using techniques like reasoning_                                                                 |
-| ✅ Classification ([code](#classification))<br />_Getting intent from a customer message_            | ✅ Multi-shot ([code](#multi-shot))<br/>_Adding examples to the prompt_                                                                                |
-| ✅ Extraction ([code](#show-me-the-code))<br />_Extracting a Resume data model from unstructed text_ | ✅ Symbol tuning ([code](#symbol-tuning))<br/>_Using symbolic names for data-types_                                                                    |
-| ✅ Agents <br />_Orchestrating multiple prompts to achieve a goal_                                   | ✅ Multiple chat roles ([code](#comparing-multiple-prompts--llms))<br />_Use system / assistant / whatever you want. We standardize it for all models_ |
-| 🚧 Images<br />_Coming soon_                                                                         |                                                                                                                                                        |
 
 ## Developer experience
 
 ✅ Type-safe guarantee<br />
-_The LLM will return your data model, or we'll raise an exception_
+_The LLM will return your data model, or we'll raise an exception. We use [Flexible Parsing](#flexible-parsing)_
 
 ✅ Fast iteration loops ([code](#comparing-multiple-prompts--llms))<br />
 _Compare multiple prompts / LLM providers in VSCode_
@@ -88,9 +72,20 @@ _Retry policies, Fallback strategies, Round-robin selection_
 ✅ Many LLM providers<br />
 _OpenAI, Azure, Anthropic out-of-the-box. Reach out to get beta access for Mistral and more_
 
+✅ Comments in prompts ([code])(#comments)<br />
+_Your future self will thank you_
+
+| Use Cases                                                                                            | Prompt Examples                                                                                                                                        |
+| ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| ✅ Function calling ([code](#function-calling))<br />_Using tools_                                   | ✅ Chain of thought ([code](#chain-of-thought))<br />_Using techniques like reasoning_                                                                 |
+| ✅ Classification ([code](#classification))<br />_Getting intent from a customer message_            | ✅ Multi-shot ([code](#multi-shot))<br/>_Adding examples to the prompt_                                                                                |
+| ✅ Extraction ([code](#show-me-the-code))<br />_Extracting a Resume data model from unstructed text_ | ✅ Symbol tuning ([code](#symbol-tuning))<br/>_Using symbolic names for data-types_                                                                    |
+| ✅ Agents <br />_Orchestrating multiple prompts to achieve a goal_                                   | ✅ Multiple chat roles ([code](#comparing-multiple-prompts--llms))<br />_Use system / assistant / whatever you want. We standardize it for all models_ |
+| 🚧 Images<br />_Coming soon_                                                                         |                                                                                                                                                        |
+
 ## Installation
 
-### Download the BAML Compiler
+### 1. Download the BAML Compiler
 
 Mac:
 
@@ -111,7 +106,7 @@ scoop bucket add baml-bucket https://github.com/boundaryml/homebrew-baml
 scoop install baml
 ```
 
-### Download VSCode extension
+### 2. Download VSCode extension
 
 Search for "BAML" or [Click here](https://marketplace.visualstudio.com/items?itemName=gloo.BAML)
 
@@ -119,7 +114,7 @@ Search for "BAML" or [Click here](https://marketplace.visualstudio.com/items?ite
 >
 > "python.analysis.typecheckingMode": "basic"
 
-### Add BAML to any existing project
+### 3. Add BAML to any existing project
 
 ```bash
 cd my_project
@@ -133,29 +128,39 @@ baml init
 ```rust
 // extract_resume.baml
 
-// 1. Define the data model.
+// 1. Define the type for the output
 class Resume {
   name string
+  // Use an array to get multiple education histories
   education Education[]
 }
 
+// A nested class
 class Education {
   university string
   start_year int
+  // @description injects context into the prompt about this field
   end_year int? @description("unset if still in school")
 }
 
 // 2. Define the function signature
+// This function takes in a single paramater
+// Outputs a Resume type
 function ExtractResume {
   input (resume_text: string)
   output Resume
 }
 
-// 3. Write an implementation of ExtractResume
+// 3. Use an llm to implement ExtractResume.
+// We'll name this impl 'version1'.
 impl<llm, ExtractResume> version1 {
   client GPT4Client
   // BAML will automatically dedent and strip the
-  // prompt for you.
+  // prompt for you. You can see the prompt fully
+  // in the VSCode preview (including whitespace).
+
+  // We provide some macros like {#input} and {#print_type}
+  // to use the types you defined above.
   prompt #"
     Extract the resume from:
     ###
@@ -163,21 +168,16 @@ impl<llm, ExtractResume> version1 {
     ###
 
     Output JSON Schema:
-    {//
-      This is macro for injecting your data model
-      And yes, this is a comment in the prompt.
-      Scroll down to see what it looks like with
-      BAML syntax highlighting.
-    //}
     {#print_type(output)}
   "#
 }
 
-// You can define clients either in the same file or different files.
+// Define a reuseable client for an LLM
 client<llm> GPT4Client {
   provider "baml-openai-chat"
   options {
     model "gpt-4"
+    // Use an API key safely!
     api_key env.OPENAI_API_KEY
     // temperature 0.5 // Is 0 by default
   }
@@ -205,7 +205,7 @@ from baml_client.baml_types import Resume
 async def get_resume(resume_url: str) -> Resume:
   resume_text = await load_resume(resume_url)
 
-  # Call the generated BAML function
+  # Call the generated BAML function (this uses 'version1' by default)
   resume = await b.ExtractResume(resume_text=resume_text)
 
   # Not required, BAML already guarantees this!
@@ -224,9 +224,9 @@ import { Resume } from "@/baml_client/types";
 
 function getResume(resumeUrl: string): Promise<Resume> {
   const resume_text = await loadResume(resumeUrl);
-  // Call the BAML function
+  // Call the BAML function (this uses 'version1' by default)
   // This will raise an exception if we don't find
-  // a Resume types.
+  // a Resume type.
   return b.ExtractResume({ resumeText: content });
 }
 ```
@@ -245,16 +245,19 @@ enum Category {
 
 function ClassifyMessage {
   input string
+  // Could have used Category[] for multi-label
   output Category
 }
 
 impl<llm, ClassifyMessage> version1 {
   client GPT4
+
+  // BAML also provides a {#print_enum} macro in addition to
+  // {#input} or {#print_type}.
   prompt #"
     Classify the following INPUT into ONE
     of the following Intents:
 
-    {// print_enum is a macro provided by BAML //}
     {#print_enum(Category)}
 
     INPUT: {#input}
@@ -265,6 +268,8 @@ impl<llm, ClassifyMessage> version1 {
 ```
 
 ## Function Calling
+
+With BAML, this is just a simple extraction task!
 
 ```rust
 class GithubCreateReleaseParams {
@@ -278,21 +283,61 @@ class GithubCreateReleaseParams {
   prerelease bool
 }
 
-function BuildGithubCreateReleaseParams {
+function BuildGithubApiCall {
   input string
   output GithubCreateReleaseParams
 }
 
-impl<llm, BuildGithubCreateReleaseParams> v1 {
+impl<llm, BuildGithubApiCall> v1 {
   client GPT35
   prompt #"
-    Given the following release instructions, craft a JSON payload matching
-    the schema that describes the release that should be created:
+    Given the user query, extract the right details:
 
     Instructions
     {#input}
 
-    Schema:
+    Output JSON Schema:
+    {#print_type(output)}
+
+    JSON:
+  "#
+}
+```
+
+If you wanted to call multiple functions you can combine enums with classes. Almost 0 changes to the prompt.
+
+```diff
++ enum Intent {
++  CreateRelease
++  CreatePullRequest
++ }
++
++ class GithubCreatePullRequestParams {
++   ...
++ }
++
++ class Action {
++   tag Intent
++   data GithubCreateReleaseParams | GithubCreatePullRequestParams
++ }
+
+ function BuildGithubApiCall {
+  input string
+-  output GithubCreateReleaseParams
++  output Action
+ }
+
+impl<llm, BuildGithubApiCall> v1 {
+  client GPT35
+  prompt #"
+    Given the user query, extract the right details:
+
+    Instructions
+    {#input}
+
++   {#print_enum(Intent)}
+
+    Output JSON Schema:
     {#print_type(output)}
 
     JSON:
@@ -302,7 +347,21 @@ impl<llm, BuildGithubCreateReleaseParams> v1 {
 
 ## Agents
 
-Examples coming soon! Reach out <a href="https://discord.gg/ENtBB6kkXH">Boundary's Discord</a> if you want to do this before we publish them.
+With BAML you combine AI functions with regular code to create powerful agents. That means you can do everything purely in python or typescript!
+
+```python
+from baml_client import baml as b
+from baml_client.baml_types import Intent
+
+async def handle_message(msg: str) -> None:
+    intent = await b.GetIntent(msg)
+    if
+
+```
+
+<details>
+<summary>Supporting BAML code</summary>
+</details>
 
 ## Robust LLM calls
 
@@ -509,13 +568,91 @@ Analyze, label, and trace each request in [Boundary Studio](https://app.boundary
 
 <img src="docs/images/v3/pipeline_view.png" width="80%" alt="Boundary Studio">
 
-### Resources
+## Flexible Parsing
 
-- [Discord](https://discord.gg/ENtBB6kkXH) - Come ask us anything! We hold office hours most days.
-- Documentation - [Learn BAML](https://docs.boundaryml.com/v3/guides/hello_world/writing-ai-functions)
-- Documentation - [BAML Syntax Reference](https://docs.boundaryml.com/v3/syntax/generator)
-- Documentation - [Prompt engineering tips](https://docs.boundaryml.com/v3/syntax/generator)
-- [Boundary Studio](https://app.boundaryml.com) - Observability and more
+> "be conservative in what you send, be liberal in what you accept". The principle is also known as Postel's law, after Jon Postel, who used the wording in an early specification of TCP.
+>
+> In other words, programs that send messages to other machines (or to other programs on the same machine) should conform completely to the specifications, but programs that receive messages should accept non-conformant input as long as the meaning is clear. [[1]](https://en.wikipedia.org/wiki/Robustness_principle#:~:text=It%20is%20often%20reworded%20as,an%20early%20specification%20of%20TCP.)
+
+LLMs are prone to producing non-conformant outputs. Instead of wasting tokens and time getting the prompt perfect to your needs, we built a parser that handles many of these scenarios for you. The parser uses 0 LLMs, instead relies on the types you define in BAML.
+
+### Example of flexible parsing
+
+<details open>
+
+<summary>BAML Data model</summary>
+
+```typescript
+class Quote {
+  author string @alias("name")
+  quote string[] @description("in lower case")
+}
+```
+
+</details>
+
+<details open>
+
+<summary>Raw LLM Output</summary>
+
+<pre>
+The principal you were talking about is Postel's Law by Jon Postel. 
+
+Your answer in the schema you requested is:
+```json
+{
+   "name": "Jon Postel",
+   "quote": "be conservative in what you send, be liberal in what you accept"
+}
+```
+</pre>
+
+</details>
+
+<details open>
+
+<summary>What BAML parsed as</summary>
+
+```json
+{
+  "author": "Jon Postel",
+  "quote": ["be conservative in what you send, be liberal in what you accept"]
+}
+```
+
+</details>
+
+<details open>
+<summary>What the parser did</summary>
+
+1. Stripped all the prefix and suffix text around the object
+
+```json
+{
+  "name": "Jon Postel",
+  "quote": "be conservative in what you send, be liberal in what you accept"
+}
+```
+
+2. Replaced the alias `name` --> `author`
+
+```json
+{
+  "author": "Jon Postel",
+  "quote": "be conservative in what you send, be liberal in what you accept"
+}
+```
+
+3. Converted `quote` from `string` -> `string[]`
+
+```json
+{
+  "author": "Jon Postel",
+  "quote": ["be conservative in what you send, be liberal in what you accept"]
+}
+```
+
+</details>
 
 ## FAQ
 
