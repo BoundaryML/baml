@@ -50,7 +50,7 @@ fi
 cd "$1"
 _repo_root="$(git rev-parse --show-toplevel)"
 _path="$(pwd | sed "s|^${_repo_root}||")"
-echo "Building in REPO${_path}"
+echo "Building in REPO${_path} (cwd: $(pwd))"
 
 case "$_path" in
 
@@ -59,6 +59,7 @@ case "$_path" in
       npx nodemon \
         --verbose \
         --ext js,ts \
+        --ignore index.js \
         --ignore index.d.ts \
         --exec 'yarn build'
     else
