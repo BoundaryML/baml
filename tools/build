@@ -72,8 +72,7 @@ case "$_path" in
       npx nodemon \
         --verbose \
         --ext rs,hb,hbs \
-        --ignore index.d.ts \
-        --exec 'yarn build'
+        --exec 'cargo build'
     else
       cargo build
     fi
