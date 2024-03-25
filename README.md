@@ -72,7 +72,7 @@ _Retry policies, Fallback strategies, Round-robin selection_
 ✅ Many LLM providers<br />
 _OpenAI, Azure, Anthropic out-of-the-box. Reach out to get beta access for Mistral and more_
 
-✅ Comments in prompts ([code])(#comments)<br />
+✅ Comments in prompts ([code](#comments-in-prompts))<br />
 _Your future self will thank you_
 
 | Use Cases                                                                                            | Prompt Examples                                                                                                                                        |
@@ -567,6 +567,29 @@ async def main():
 Analyze, label, and trace each request in [Boundary Studio](https://app.boundaryml.com).
 
 <img src="docs/images/v3/pipeline_view.png" width="80%" alt="Boundary Studio">
+
+## Comments in prompts
+
+You can add prompts in comments wrapped around `{// comment //}`.
+
+```rust
+#"
+    Hello world.
+    {// this won't show up in the prompt! //}
+    Please {// 'please' works best, don't ask.. //} enter your name:
+"#
+```
+
+Comments can be multiline
+
+```rust
+#"
+    {//
+        some giant
+        comment
+    //}
+"#
+```
 
 ## Flexible Parsing
 
