@@ -1,5 +1,5 @@
 use std::path::{Component, PathBuf};
-
+use dunce::canonicalize;
 use baml_lib::{parse_configuration, Configuration, Diagnostics};
 
 use crate::errors::CliError;
@@ -29,7 +29,7 @@ pub(crate) fn get_baml_src(baml_dir: &Option<String>) -> Result<PathBuf, CliErro
             }
         },
     };
-    let abs_src_dir = src_dir.canonicalize();
+    let abs_src_dir = canonicalize(src_dir.clone());
 
     if let Err(_) = abs_src_dir {
         return Err(format!("Directory not found {}", src_dir.to_string_lossy()).into());
@@ -52,7 +52,7 @@ pub(crate) fn get_src_dir(
     };
     let config = parse_configuration(&baml_dir, main_baml, &main_baml_contents)?;
 
-    let cwd = std::env::current_dir().unwrap().canonicalize().unwrap();
+    let cwd = canonicalize(std::env::current_dir().unwrap()).unwrap();
 
     Ok((relative_path(cwd, baml_dir), config))
 }

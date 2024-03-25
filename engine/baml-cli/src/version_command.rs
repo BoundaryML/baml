@@ -2,6 +2,7 @@ use crate::{builder::get_src_dir, shell::build_shell_command, update::UPDATE_CHA
 use crate::{errors::CliError, OutputType};
 
 use colored::Colorize;
+use dunce::canonicalize;
 
 use regex::Regex;
 
@@ -235,9 +236,9 @@ pub fn get_client_version(
     // NOTE(sam): no idea why this has to start in the cwd; this is copied from update_client.rs
     // according to vbv@ this had to be done for _some_ reason, so just preserving it as closely as i can
     // per aaron@ there's some Windows slash MacOS funniness going on here
-    let cwd = std::env::current_dir()?.canonicalize()?;
+    let cwd = canonicalize(std::env::current_dir()?)?;
     let project_root = cwd.join(project_root);
-    let project_root = project_root.canonicalize().map_err(|e| {
+    let project_root = canonicalize(project_root.clone()).map_err(|e| {
         CliError::StringError(format!(
             "{}\nDirectory error: {}:\n{}",
             "Failed!".red(),
@@ -334,7 +335,7 @@ pub fn check_for_updates(baml_dir_override: &Option<String>) -> Result<CheckedVe
 
                     ret.generators.push(GeneratorVersion {
                         name: gen.name,
-                        dir: gen.project_root.canonicalize()?,
+                        dir: canonicalize(gen.project_root)?,
                         language: gen.language.as_str().to_string(),
                         current_version: Some(current_version),
                         latest_version,
@@ -345,7 +346,7 @@ pub fn check_for_updates(baml_dir_override: &Option<String>) -> Result<CheckedVe
                     log::warn!("Failed to get version for {}: {}", gen.name, e);
                     ret.generators.push(GeneratorVersion {
                         name: gen.name,
-                        dir: gen.project_root.canonicalize()?,
+                        dir: canonicalize(gen.project_root)?,
                         language: gen.language.as_str().to_string(),
                         current_version: None,
                         latest_version,

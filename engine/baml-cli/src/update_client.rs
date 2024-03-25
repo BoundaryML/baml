@@ -1,4 +1,5 @@
 use colored::Colorize;
+use dunce::canonicalize;
 
 use crate::{builder::get_src_dir, errors::CliError, shell::build_shell_command};
 
@@ -6,7 +7,7 @@ pub fn update_client(baml_dir: &Option<String>) -> Result<(), CliError> {
     let (_, (config, mut diagnostics)) = get_src_dir(baml_dir)?;
     diagnostics.to_result()?;
 
-    let cwd = std::env::current_dir().unwrap().canonicalize().unwrap();
+    let cwd = canonicalize(std::env::current_dir().unwrap()).unwrap();
 
     let errors: Vec<_> = config
         .generators
@@ -30,7 +31,7 @@ pub fn update_client(baml_dir: &Option<String>) -> Result<(), CliError> {
 
             // Get the project_root relative to cwd.
             let project_root = cwd.join(&gen.project_root);
-            let project_root = project_root.canonicalize().map_err(|e| {
+            let project_root = canonicalize(project_root).map_err(|e| {
                 CliError::StringError(format!(
                     "{}\nDirectory error: {}:\n{}",
                     "Failed!".red(),
@@ -48,7 +49,7 @@ pub fn update_client(baml_dir: &Option<String>) -> Result<(), CliError> {
                     if !e.status.success() {
                         Err(CliError::StringError(format!(
                             "{}{}{}",
-                            "Failed to add/update baml dependency!".normal().red(),
+                            "Failed to add/update baml dependency to the project! Try re-running the install command manually or run `baml update-client`".normal().red(),
                             match String::from_utf8_lossy(&e.stdout) {
                                 s if s.is_empty() => "".into(),
                                 s => format!("\n{}", s.trim()),
