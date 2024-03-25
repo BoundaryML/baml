@@ -171,7 +171,7 @@ pub fn run(
 
             if selected_tests.is_empty() {
                 if num_tests == 0 {
-                    return Err("No tests found".into());
+                    return Err("No tests declared".into());
                 }
                 return Err("No tests selected".into());
             }

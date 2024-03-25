@@ -1,5 +1,6 @@
 use colored::*;
 use std::{
+    borrow::Borrow,
     fs::{self, File},
     io::{self, Write},
     process::Stdio,
@@ -13,7 +14,9 @@ use tokio::{
     time,
 };
 
-use crate::{errors::CliError, shell::build_shell_command};
+use crate::{
+    errors::CliError, shell::build_shell_command, test_command::test_state::on_finish_test,
+};
 
 use super::{ipc_comms, run_tests::TestRunner, test_state::RunState};
 
@@ -176,64 +179,13 @@ async fn run_and_update_state(
 
     // Optionally, you can handle the output after the subprocess has finished
     let output = child.wait_with_output()?;
-    if let Some(code) = output.status.code() {
-        // Open the stderr file and check if it has any content
-        let stderr_content = tokio::fs::read_to_string(&stderr_file_path).await?;
-        let stdout_content = tokio::fs::read_to_string(&stdout_file_path).await?;
-        // Pytest exits with 1 even if it ran fine but had some tests failing (we should suppress this via a pytest plugin) so we dont mark as failure
-        // But we could also get exit code 1 from other things like infisical CLI being absent, or python not being found.
-        // so check the stderr for any other issues.
-        if ![0, 1].contains(&code) {
-            println!("\n####### STDOUT Logs ########\n{}", stdout_content);
-            if !stderr_content.is_empty() {
-                println!("\n####### STDERR Logs ########\n{}", stderr_content);
-            }
-
-            println!(
-                "{}",
-                format!(
-                    "Testing failed with exit code {}. Output logs were printed above this line.",
-                    code
-                )
-            );
-            println!(
-                "{}\n{}",
-                stdout_file_path.display().to_string().dimmed(),
-                stderr_file_path.display().to_string().dimmed()
-            );
-        }
-
-        // if stderr is not empty and exit code is 1, we also have an issue
-        if code == 1 && (!stderr_content.is_empty() || !stdout_content.is_empty()) {
-            // Don't say the test failed since the exit code 1 may just be pytest saying some tests failed.
-            // print stdout
-            println!(
-                "\n####### STDOUT Logs for this test ########\n{}",
-                stdout_content
-            );
-            println!(
-                "{}",
-                "Some tests failed or there was a problem running the tests."
-                    .bright_red()
-                    .bold()
-            );
-            println!("{}", stderr_content.bright_red().bold());
-
-            println!(
-                "\n{}\n{}",
-                stdout_file_path.display().to_string().dimmed(),
-                stderr_file_path.display().to_string().dimmed()
-            );
-        }
-    }
-
-    let res = state.lock().await.validate();
-
-    if let Err(e) = res {
-        return Err(io::Error::new(io::ErrorKind::Other, e));
-    }
-
-    Ok(())
+    on_finish_test(
+        output,
+        state.lock().await.borrow(),
+        stdout_file_path,
+        stderr_file_path,
+    )
+    .await
 }
 
 pub(crate) fn run_test_with_watcher(

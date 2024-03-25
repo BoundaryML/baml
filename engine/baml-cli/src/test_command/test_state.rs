@@ -3,6 +3,8 @@ use colored::*;
 use log::debug;
 use std::{collections::HashMap, ops::Deref, str::FromStr};
 
+use crate::errors::CliError;
+
 use super::ipc_comms::{LogSchema, MessageData, Template, TestCaseStatus, ValueType};
 
 #[derive(Debug)]
@@ -121,15 +123,17 @@ impl RunState {
         let errors: Vec<_> = self
             .tests
             .iter()
-            .filter(|(_, state)| matches!(state, TestState::Queued))
+            .filter(|(_, state)| {
+                matches!(state, TestState::Queued) || matches!(state, TestState::Running)
+            })
             .collect();
 
         if errors.is_empty() {
             Ok(())
         } else {
             Err(format!(
-                "Unexpected error! Please report a bug on our github.\nThe following tests are still queued: {:?}",
-                errors.iter().map(|(spec, _)| spec).collect::<Vec<_>>()
+                "Unexpected error! Please report a bug on our github.\nThe following tests are still pending: {}",
+                errors.iter().map(|(spec, _)| format!("\t{}:{}:{}", spec.function, spec.r#impl, spec.test)).collect::<Vec<_>>().join("\n")
             ))
         }
     }
@@ -481,6 +485,54 @@ impl RunState {
                 // Test CLI doesn't use partial data
                 None
             }
+        }
+    }
+}
+
+pub(crate) async fn on_finish_test(
+    output: std::process::Output,
+    state: &RunState,
+    stdout_file_path: std::path::PathBuf,
+    stderr_file_path: std::path::PathBuf,
+) -> Result<(), std::io::Error> {
+    let validated = state.validate();
+    let status_code = output.status.code();
+    let should_pipe_logs = match status_code {
+        Some(0) => false,
+        Some(_) => validated.is_err(),
+        None => true,
+    };
+
+    if should_pipe_logs {
+        let stdout_content = tokio::fs::read_to_string(&stdout_file_path).await?;
+        let stderr_content = tokio::fs::read_to_string(&stderr_file_path).await?;
+        println!(
+            "\n####### STDOUT Logs for this test ########\n{}",
+            stdout_content.bright_red().bold()
+        );
+        println!(
+            "\n####### STDERR Logs for this test ########\n{}",
+            stderr_content.bright_red().bold()
+        );
+    }
+
+    match validated {
+        Ok(_) => {
+            if let Some(code) = status_code {
+                if code == 0 {
+                    Ok(())
+                } else {
+                    Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        format!("Testing failed with exit code {}", code),
+                    ))
+                }
+            } else {
+                Ok(())
+            }
+        }
+        Err(e) => {
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, e));
         }
     }
 }
