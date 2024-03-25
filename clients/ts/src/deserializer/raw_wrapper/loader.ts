@@ -21,7 +21,7 @@ export function fromValue(val: any, diagnostics: Diagnostics): RawWrapper {
         }
     }
     if (typeof val === 'string') {
-        const strVal = val;
+        const strVal = val.trim();
 
         if (strVal.toLowerCase() === "true") {
             return new RawBaseWrapper(true);
@@ -49,7 +49,16 @@ export function fromValue(val: any, diagnostics: Diagnostics): RawWrapper {
                 parsedObj = parsed;
             }
         } catch (e) {
-            // Handle error
+            try {
+                const parsed = JSON.parse(makeStringRobustForJson(strVal));
+                if (Array.isArray(parsed)) {
+                    parsedList = parsed;
+                } else if (parsed !== null && typeof parsed === 'object') {
+                    parsedObj = parsed;
+                }
+            } catch (e) {
+                // Do nothing
+            }
         }
 
         if (parsedList !== undefined) {
@@ -106,7 +115,7 @@ export function fromValue(val: any, diagnostics: Diagnostics): RawWrapper {
             }
         }
 
-        return new RawStringWrapper(strVal, asObj, asList, asInner);
+        return new RawStringWrapper(val, asObj, asList, asInner);
     }
     if (Array.isArray(val)) {
         return new ListRawWrapper(val.map(item => fromValue(item, diagnostics)));
@@ -123,4 +132,39 @@ export function fromValue(val: any, diagnostics: Diagnostics): RawWrapper {
     diagnostics.toException();
 
     throw new Error("[unreachable] Unsupported type: " + typeof val);
+}
+
+function makeStringRobustForJson(s: string): string {
+    let inString = false;
+    let escapeCount = 0;
+    let result: string[] = [];
+
+    for (const char of s) {
+        // Check for the quote character
+        if (char === '"') {
+            // If preceded by an odd number of backslashes, it's an escaped quote and doesn't toggle the string state
+            if (escapeCount % 2 === 0) {
+                inString = !inString;
+                escapeCount = 0;  // Reset escape sequence counter after a non-escaped quote
+            }
+            // If it's an escaped quote, just reset the counter but don't add to it
+        } else if (char === '\\') {
+            // Increment escape sequence counter if we're in a string
+            if (inString) {
+                escapeCount += 1;
+            }
+        } else {
+            // Any other character resets the escape sequence counter
+            escapeCount = 0;
+        }
+
+        // When inside a string, escape the newline characters
+        if (inString && char === '\n') {
+            result.push('\\n');
+        } else {
+            result.push(char);
+        }
+    }
+
+    return result.join('');
 }

@@ -217,6 +217,16 @@ describe("Object Deserializer", () => {
         expect(deserializer.coerce('{"foo": "[\\"bar\\"]"}')).toEqual({ foo: JSON.stringify(["bar"], undefined, 2) });
     });
 
+    test("obj_from_str_with_newlines", () => {
+        const deserializer = new Deserializer<BasicObj>(schema, { $ref: "#/definitions/BasicObj" });
+        expect(deserializer.coerce('{"foo": "[\\"ba\nr\\"]"}')).toEqual({ foo: JSON.stringify("[\"ba\nr\"]", undefined, 2) });
+    });
+
+    test("obj_from_str_with_newlines_with_quotes", () => {
+        const deserializer = new Deserializer<BasicObj>(schema, { $ref: "#/definitions/BasicObj" });
+        expect(deserializer.coerce('{"foo": "[\\"ba\\nr\\"]"}')).toEqual({ foo: JSON.stringify(["ba\nr"], undefined, 2) });
+    })
+
     test("obj_from_str_with_nested_json_string", () => {
         const deserializer = new Deserializer<BasicObj>(schema, { $ref: "#/definitions/BasicObj" });
         expect(deserializer.coerce('{"foo": "{\\"foo\\": [\\"bar\\"]}"}')).toEqual({ foo: '{\n  "foo": [\n    "bar"\n  ]\n}' });
