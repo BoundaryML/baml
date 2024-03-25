@@ -113,7 +113,7 @@ with lines"
         keys.add(key)
         if key == "test":
             assert isinstance(v, DictRawWrapper)
-            assert v.as_self()['key'] == "value\nAs an amazing person\nwith lines"
+            assert v.as_self()["key"] == "value\nAs an amazing person\nwith lines"
         elif key == "test2":
             assert isinstance(v, ListRawWrapper)
     assert len(keys) == 2, keys
@@ -143,10 +143,11 @@ As an amazing person
         keys.add(key)
         if key == "test":
             assert isinstance(v, DictRawWrapper)
-            assert v.as_self()['key'] == "value\"\nAs an amazing person\n\" with lines"
+            assert v.as_self()["key"] == 'value"\nAs an amazing person\n" with lines'
         elif key == "test2":
             assert isinstance(v, ListRawWrapper)
     assert len(keys) == 2, keys
+
 
 def test_object_with_newlines_with_quotes_and_good_newlines() -> None:
     item = """
@@ -172,7 +173,7 @@ As an amazing person
         keys.add(key)
         if key == "test":
             assert isinstance(v, DictRawWrapper)
-            assert v.as_self()['key'] == "va\nlue\"\nAs an amazing person\n\" with lines"
+            assert v.as_self()["key"] == 'va\nlue"\nAs an amazing person\n" with lines'
         elif key == "test2":
             assert isinstance(v, ListRawWrapper)
     assert len(keys) == 2, keys
