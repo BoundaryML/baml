@@ -138,7 +138,7 @@ dependencies = [
 
 [[package]]
 name = "baml"
-version = "0.16.0-canary.0"
+version = "0.16.0"
 dependencies = [
  "anyhow",
  "baml-lib",
@@ -172,7 +172,7 @@ dependencies = [
 
 [[package]]
 name = "baml-ffi"
-version = "0.16.0-canary.0"
+version = "0.16.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -192,7 +192,7 @@ dependencies = [
 
 [[package]]
 name = "baml-fmt"
-version = "0.16.0-canary.0"
+version = "0.16.0"
 dependencies = [
  "baml-lib",
  "base64 0.13.1",
@@ -212,7 +212,7 @@ dependencies = [
 
 [[package]]
 name = "baml-lib"
-version = "0.16.0-canary.0"
+version = "0.16.0"
 dependencies = [
  "base64 0.13.1",
  "dissimilar",
@@ -226,7 +226,7 @@ dependencies = [
 
 [[package]]
 name = "baml-schema-build"
-version = "0.16.0-canary.0"
+version = "0.16.0"
 dependencies = [
  "baml-fmt",
  "wasm-bindgen",
@@ -981,7 +981,7 @@ checksum = "1e186cfbae8084e513daff4240b4797e342f988cecda4fb6c939150f96315fd8"
 
 [[package]]
 name = "internal-baml-core"
-version = "0.16.0-canary.0"
+version = "0.16.0"
 dependencies = [
  "anyhow",
  "base64 0.13.1",
@@ -1011,7 +1011,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-diagnostics"
-version = "0.16.0-canary.0"
+version = "0.16.0"
 dependencies = [
  "colored",
  "indoc",
@@ -1022,7 +1022,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-parser-database"
-version = "0.16.0-canary.0"
+version = "0.16.0"
 dependencies = [
  "colored",
  "either",
@@ -1043,7 +1043,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-prompt-parser"
-version = "0.16.0-canary.0"
+version = "0.16.0"
 dependencies = [
  "internal-baml-diagnostics",
  "internal-baml-schema-ast",
@@ -1055,7 +1055,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-schema-ast"
-version = "0.16.0-canary.0"
+version = "0.16.0"
 dependencies = [
  "either",
  "internal-baml-diagnostics",
