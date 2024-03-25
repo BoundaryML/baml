@@ -88,6 +88,96 @@ def test_hidden_object() -> None:
     assert len(keys) == 2, keys
 
 
+def test_object_with_newlines_1() -> None:
+    item = """
+    {
+        "test": {
+            "key": "value
+As an amazing person
+with lines"
+        },
+        "test2": [
+        ]    
+    }
+    """
+
+    d = Diagnostics(item)
+    parsed = from_string(item, d)
+    assert isinstance(parsed, DictRawWrapper), parsed
+
+    keys: typing.Set[str] = set()
+    for k, v in parsed.as_dict():
+        assert isinstance(k, RawStringWrapper), k
+        key = k.as_str(inner=True)
+        assert key is not None, k
+        keys.add(key)
+        if key == "test":
+            assert isinstance(v, DictRawWrapper)
+            assert v.as_self()['key'] == "value\nAs an amazing person\nwith lines"
+        elif key == "test2":
+            assert isinstance(v, ListRawWrapper)
+    assert len(keys) == 2, keys
+
+
+def test_object_with_newlines_with_quotes() -> None:
+    item = """
+    {
+        "test": {
+            "key": "value\\"
+As an amazing person
+\\" with lines"
+        },
+        "test2": [
+        ]    
+    }
+    """
+
+    d = Diagnostics(item)
+    parsed = from_string(item, d)
+    assert isinstance(parsed, DictRawWrapper), parsed
+    keys: typing.Set[str] = set()
+    for k, v in parsed.as_dict():
+        assert isinstance(k, RawStringWrapper), k
+        key = k.as_str(inner=True)
+        assert key is not None, k
+        keys.add(key)
+        if key == "test":
+            assert isinstance(v, DictRawWrapper)
+            assert v.as_self()['key'] == "value\"\nAs an amazing person\n\" with lines"
+        elif key == "test2":
+            assert isinstance(v, ListRawWrapper)
+    assert len(keys) == 2, keys
+
+def test_object_with_newlines_with_quotes_and_good_newlines() -> None:
+    item = """
+    {
+        "test": {
+            "key": "va\\nlue\\"
+As an amazing person
+\\" with lines"
+        },
+        "test2": [
+        ]    
+    }
+    """
+
+    d = Diagnostics(item)
+    parsed = from_string(item, d)
+    assert isinstance(parsed, DictRawWrapper), parsed
+    keys: typing.Set[str] = set()
+    for k, v in parsed.as_dict():
+        assert isinstance(k, RawStringWrapper), k
+        key = k.as_str(inner=True)
+        assert key is not None, k
+        keys.add(key)
+        if key == "test":
+            assert isinstance(v, DictRawWrapper)
+            assert v.as_self()['key'] == "va\nlue\"\nAs an amazing person\n\" with lines"
+        elif key == "test2":
+            assert isinstance(v, ListRawWrapper)
+    assert len(keys) == 2, keys
+
+
 def test_hidden_list() -> None:
     item = """
     ```json

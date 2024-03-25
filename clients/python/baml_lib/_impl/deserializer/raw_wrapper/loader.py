@@ -22,7 +22,7 @@ def __from_value(val: typing.Any, diagnostics: Diagnostics) -> RawWrapper:
     if isinstance(val, float):
         return RawBaseWrapper(val)
     if isinstance(val, str):
-        str_val = val
+        str_val = val.strip()
 
         if str_val.lower() == "true":
             return RawBaseWrapper(True)
@@ -40,7 +40,12 @@ def __from_value(val: typing.Any, diagnostics: Diagnostics) -> RawWrapper:
             try:
                 parsed_list = typing.cast(typing.List[typing.Any], json.loads(str_val))
             except ValueError:
-                parsed_list = None
+                try:
+                    parsed_list = typing.cast(typing.List[typing.Any], 
+                        json.loads(make_string_robust_for_json(str_val)),
+                    )
+                except ValueError:
+                    parsed_list = None
             if parsed_list is not None:
                 return ListRawWrapper(
                     [
@@ -55,7 +60,13 @@ def __from_value(val: typing.Any, diagnostics: Diagnostics) -> RawWrapper:
                     typing.Mapping[typing.Any, typing.Any], json.loads(str_val)
                 )
             except ValueError:
-                parsed_obj = None
+                try:
+                    parsed_obj = typing.cast(
+                        typing.Mapping[typing.Any, typing.Any],
+                        json.loads(make_string_robust_for_json(str_val)),
+                    )
+                except ValueError:
+                    parsed_obj = None
             if parsed_obj is not None:
                 return DictRawWrapper(
                     {
@@ -88,7 +99,7 @@ def __from_value(val: typing.Any, diagnostics: Diagnostics) -> RawWrapper:
                 as_list = __from_value(result[0], diagnostics=diagnostics)
 
         return RawStringWrapper(
-            str_val, as_obj=as_obj, as_list=as_list, as_inner=as_inner
+            val, as_obj=as_obj, as_list=as_list, as_inner=as_inner
         )
     if isinstance(val, (list, tuple)):
         return ListRawWrapper(
@@ -110,3 +121,32 @@ def __from_value(val: typing.Any, diagnostics: Diagnostics) -> RawWrapper:
     diagnostics.to_exception()
 
     raise Exception("[unreachable] Unsupported type: {}".format(type(val)))
+
+def make_string_robust_for_json(s: str) -> str:
+    in_string = False
+    escape_count = 0
+    result: typing.List[str] = []
+    
+    for char in s:
+        # Check for the quote character
+        if char == '"':
+            # If preceded by an odd number of backslashes, it's an escaped quote and doesn't toggle the string state
+            if escape_count % 2 == 0:
+                in_string = not in_string
+                escape_count = 0  # Reset escape sequence counter after a non-escaped quote
+            # If it's an escaped quote, just reset the counter but don't add to it
+        elif char == '\\':
+            # Increment escape sequence counter if we're in a string
+            if in_string:
+                escape_count += 1
+        else:
+            # Any other character resets the escape sequence counter
+            escape_count = 0
+
+        # When inside a string, escape the newline characters
+        if in_string and char == '\n':
+            result.append('\\n')
+        else:
+            result.append(char)
+    
+    return ''.join(result)
