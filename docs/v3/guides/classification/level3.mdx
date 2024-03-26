@@ -1,9 +1,7 @@
 ---
 title: "3: Using prompting strategies - Chain of Thought"
-description: Using adapters to extract additional reasoning from the LLM
+description: Use reasoning steps to improve performance
 ---
-
-Note this is an early alpha feature. Please take a look at the [extraction](../entity_extraction/level4.mdx) on how to do chain of thought without using adapters.
 
 ### Prerequisites
 
@@ -17,85 +15,15 @@ In this section, we will add a "reasoning step" to our AI function so the LLM ca
 
 ### Adding a reasoning step
 
-Note how our function signature we declared in BAML is currently:
-`ClassifyMessage(input: string) -> Category`
+Simply add instructions to the LLM to explain why it chose the answer.
 
-If we ask the LLM to "think step by step" before writing the Category string (like "TechnicalSupport" or "AccountIssue"), we will have a bad time parsing the Category information out, since it will be mixed with the reasoning steps. It will be even harder if we've added @aliases to our Categories.
-
-Example LLM output with Chain of Thought:
-
-```text
-If we think step by step, then we can see that ....
-so that means the likely Category is k1
-
-k1
-```
-
-Instead of trying to parse this output with hacks, we can have the LLM produce this JSON structure, so we can parse things out easily. Lets call this type **CategoryWithReasoning**.
-
-```typescript desired LLM JSON output
-{
-  "reasoning_steps": "If we think step by step, then ... so that means the Category is ...",
-  // Note: could be alias used in BAML like "k1"
-  "Category": "TechnicalSupport"
-}
-```
-
-So we basically want our original function to go from:
-`ClassifyMessage(input: string) -> Category`
-
-to
-
-`ClassifyMessage(input: string) -> CategoryWithReasoning`
-
-But if we change the function's output to be of this type now we have to change our python code... which isn't ideal! **Our business logic shouldn't care about the reasoning step -- that should be an AI function implementation detail.**
-
-To fix this, we will write an **adapter** that adds a post-LLM-processing step to our AI function that allows us to change the LLM output to `CategoryWithReasoning` and provides a way to map from `CategoryWithReasoning` -> `Category`. This way, we can keep our original function signature and python code.
-
-## Writing an output adapter for ClassifyCategory
-
-Remember the output adapter will do two things, in this order:
-
-1. Allow the LLM impl to output `CategoryWithReasoning` even though our function signature returns `Category`
-2. Provide a way to **map from the adapted output type to the original** BAML function output type.
-
-<Steps>
-<Step title="Declare CategoryWithReasoning">
-Add a BAML [class](/v3/syntax/class) that represents this type
+Example prompt:
 
 ```rust
-class CategoryWithReasoning {
-  reasoning_steps string @description(#"
-    Some clues and reasoning steps to help the user
-    understand why the category was chosen.
-  "#)
-  category Category @alias(chosen_category) @description(#"
-    The category identifier or name.
-  "#)
-}
-```
 
-</Step>
-<Step title="Adapt the LLM impl's output">
-Declare an **adapter** for our impl that indicates what output we are expecting back from the LLM.
-
-```rust
 impl<llm, ClassifyMessage> version3 {
   client GPT4
 
-adapter<CategoryWithReasoning, output> python#" # some python code
-"#
-
-prompt #"
-...
-"#
-}
-```
-
-Now we must use another BAML utility in our prompt to actually print out the json schema of **CategoryWithReasoning**. Here is the new prompt, which now returns a JSON output rather than a single string representing an Category. It uses the utility function [print_type(..)](/v3/syntax/prompt_engineering/class)
-
-```rust
-  ...
   prompt #"
     Classify the following INPUT into the best Category.
 
@@ -103,92 +31,12 @@ Now we must use another BAML utility in our prompt to actually print out the jso
 
     INPUT: {#input}
 
-    Output in this JSON format:
-    {#print_type(output)}
-    JSON:
+    Before you choose the answer, please provide some reasoning steps as to why it matches.
+
+    Write the answer in the last line.
   "#
-```
-
-The **output** inside **print_type(..)** is actually the adapter output -- `CategoryWithReasoning` now. The BAML compiler is smart enough to know the LLM prompt's `output` has been adapted.
-
-BAML will now render this prompt (assuming there are no aliases or descriptions on the Category enum):
-
-```text
-Classify the following INPUT into the best Category.
-
-Category
----
-Refund
-CancelOrder
-TechnicalSupport
-AccountIssue
-Question
-
-INPUT: {arg}
-
-Output in this JSON format:
-{
-  // Some clues and reasoning steps to help the user
-  // understand why the category was chosen.
-  "reasoning_steps": string,
-  // The category identifier or name.
-  "chosen_category": "Category as string"
-}
-
-JSON:
-```
-
-<Tip>
-  `print_type` also supports `@alias` and `@description`. See the
-  [print_type](/v3/syntax/prompt_engineering/class) docs for more info.
-</Tip>
-
-</Step>
-
-<Step title="Implement the adapter" >
-
-<Warning>Adapters are not supported in TypeScript right now.</Warning>
-
-Note that the adapter takes a `python` code block. Use this to transform CategoryWithReasoning to Category.
-
-```rust
-impl<llm, ClassifyMessage> version3 {
-  ...
-
-adapter<CategoryWithReasoning, output> python#"
-  return arg.Category
-"#
-...
 }
 ```
 
-This will get converted into this python function at compile time:
-
-```python
-def adapter(arg: CategoryWithReasoning) -> Category:
-  return arg.category
-```
-
-</Step>
-<Step title="In summary">
-
-<img src="/images/v3/adapter_classify.png" />
-
-</Step>
-
-</Steps>
-
-At this point you will now be able to do Chain-of-thought reasoning without having to refactor your code.
-
-## Show me the code
-The full code for these tutorials are found [here](https://github.com/BoundaryML/baml-examples/tree/main/classification-guide)
-
-## Conclusion
-
-Congrats! Adapters are a powerful way of transforming LLM outputs to try out different prompting strategies without worrying about having to refactor business logic. That said, they can be hard to get started, reach out on discord if you need help!
-
-Now you should be familiar with:
-
-- adapters
-- [print_type(..)](/v3/syntax/prompt_engineering/class)
-- [@alias and @description](/v3/syntax/prompt_engineering/class#property-attributes) for print_type
+### Why this works
+BAML's flexible parser detects enums in LLM outputs, even when the enums are interleaved with other text. No need to add any other complex logic or write your own parsing.
