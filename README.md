@@ -18,6 +18,11 @@
 - Documentation - [Prompt engineering tips](https://docs.boundaryml.com/v3/syntax/generator)
 - [Boundary Studio](https://app.boundaryml.com) - Observability and more
 
+#### Starter projects
+
+- [NextJS 14](https://github.com/BoundaryML/baml-examples/tree/main/nextjs-starter)
+- [FastAPI](https://github.com/BoundaryML/baml-examples/tree/main/fastapi-starter)
+
 ## Motivation
 
 Calling LLMs in your code is frustrating:
@@ -120,6 +125,11 @@ Search for "BAML" or [Click here](https://marketplace.visualstudio.com/items?ite
 cd my_project
 baml init
 ```
+
+### 4. OR use these starter projects:
+
+- [NextJS 14](https://github.com/BoundaryML/baml-examples/tree/main/nextjs-starter)
+- [FastAPI](https://github.com/BoundaryML/baml-examples/tree/main/fastapi-starter)
 
 ## Show me the code...
 
