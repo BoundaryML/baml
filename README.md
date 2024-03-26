@@ -20,8 +20,8 @@
 
 #### Starter projects
 
-- [NextJS 14](https://github.com/BoundaryML/baml-examples/tree/main/nextjs-starter)
-- [FastAPI](https://github.com/BoundaryML/baml-examples/tree/main/fastapi-starter)
+- [BAML + NextJS 14 + Streaming](https://github.com/BoundaryML/baml-examples/tree/main/nextjs-starter)
+- [BAML + FastAPI + Streaming](https://github.com/BoundaryML/baml-examples/tree/main/fastapi-starter)
 
 ## Motivation
 
@@ -41,7 +41,7 @@ We were inspired by similar patterns for type safety: [protobuf] and [OpenAPI] f
 
 BAML guarantees type safety for LLMs and comes with tools to give you a great developer experience:
 
-Jump to [BAML code](#show-me-the-code) or read how we provide type safety without additional LLM calls using [Flexible Parsing](#flexible-parsing).
+Jump to [BAML code](#show-me-the-code) or how [Flexible Parsing](#flexible-parsing) works without additional LLM calls.
 
 [protobuf]: https://protobuf.dev
 [OpenAPI]: https://github.com/OpenAPITools/openapi-generator
@@ -66,10 +66,10 @@ _The LLM will return your data model, or we'll raise an exception. We use [Flexi
 ✅ Fast iteration loops ([code](#comparing-multiple-prompts--llms))<br />
 _Compare multiple prompts / LLM providers in VSCode_
 
-🚧 Streaming partial jsons ([code](#streaming))<br />
+Streaming partial jsons ([code](#streaming))<br />
 ✅ Python
 🚧 Typescript<br />
-_BAML parses incomplete jsons as they come in_
+_BAML fills in incomplete jsons as they come in_
 
 ✅ LLM Robustness for production ([code](#robust-llm-calls))<br />
 _Retry policies, Fallback strategies, Round-robin selection_
@@ -80,13 +80,13 @@ _OpenAI, Azure, Anthropic out-of-the-box. Reach out to get beta access for Mistr
 ✅ Comments in prompts ([code](#comments-in-prompts))<br />
 _Your future self will thank you_
 
-| Use Cases                                                                                            | Prompt Examples                                                                                                                                        |
-| ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| ✅ Function calling ([code](#function-calling))<br />_Using tools_                                   | ✅ Chain of thought ([code](#chain-of-thought))<br />_Using techniques like reasoning_                                                                 |
-| ✅ Classification ([code](#classification))<br />_Getting intent from a customer message_            | ✅ Multi-shot ([code](#multi-shot))<br/>_Adding examples to the prompt_                                                                                |
-| ✅ Extraction ([code](#show-me-the-code))<br />_Extracting a Resume data model from unstructed text_ | ✅ Symbol tuning ([code](#symbol-tuning))<br/>_Using symbolic names for data-types_                                                                    |
-| ✅ Agents <br />_Orchestrating multiple prompts to achieve a goal_                                   | ✅ Multiple chat roles ([code](#comparing-multiple-prompts--llms))<br />_Use system / assistant / whatever you want. We standardize it for all models_ |
-| 🚧 Images<br />_Coming soon_                                                                         |                                                                                                                                                        |
+| Use Cases                                                                                            | Prompt Examples                                                                                                                                |
+| ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| ✅ Function calling ([code](#function-calling))<br />_Using tools_                                   | ✅ Chain of thought ([code](#chain-of-thought))<br />_Using techniques like reasoning_                                                         |
+| ✅ Classification ([code](#classification))<br />_Getting intent from a customer message_            | ✅ Multi-shot ([code](#multi-shot))<br/>_Adding examples to the prompt_                                                                        |
+| ✅ Extraction ([code](#show-me-the-code))<br />_Extracting a Resume data model from unstructed text_ | ✅ Symbol tuning ([code](#symbol-tuning))<br/>_Using symbolic names for data-types_                                                            |
+| ✅ Agents <br />_Orchestrating multiple prompts to achieve a goal_                                   | ✅ Chat roles ([code](#chat-roles-system-vs-user-message))<br />_Use system / assistant / whatever you want. We standardize it for all models_ |
+| 🚧 Images<br />_Coming soon_                                                                         |                                                                                                                                                |
 
 ## Installation
 
@@ -183,6 +183,7 @@ impl<llm, ExtractResume> version1 {
 }
 
 // Define a reuseable client for an LLM
+// that can be used in any impl
 client<llm> GPT4Client {
   provider "baml-openai-chat"
   options {
@@ -363,48 +364,81 @@ With BAML you combine AI functions with regular code to create powerful agents. 
 from baml_client import baml as b
 from baml_client.baml_types import Intent
 
-async def handle_message(msg: str) -> None:
-    intent = await b.GetIntent(msg)
-    if
+async def handle_message(msg: str) -> str:
+    # Determine what the user is trying to do
+    intent = await b.ClassifyMessage(msg)
+    if intent == Intent.AccountBalance:
+      # Get the balance, requires no more AI functions
+      balance = await some_remote_api(...)
+      return f'Your balance is: {balance}'
+    if intent == Intent.ShowPlot:
+      # Call another AI function with some additional context
+      plot_query = await b.GetPlotQuery(
+        table_defs=load_table_defintions(), query=msg)
 
+      # Run the query, then return a plot
+      response = await some_query_executor(plot_query)
+      return response.to_plot_html()
+    ...
 ```
 
 <details>
 <summary>Supporting BAML code</summary>
+
+```rust
+enum Intent {
+  AccountBalance
+  ShowPlot
+  Other
+}
+
+function ClassifyMessage {
+  input string
+  output Intent
+}
+
+function GetPlotQuery {
+  input (table_defs: string, query: string)
+  output string
+}
+
+// Impls of prompts pending
+```
+
 </details>
 
 ## Robust LLM calls
 
-We make it easy to add [retry policies] to your LLM calls (and also provide other [resilience strategies]):
+We make it easy to add [retry policies] to your LLM calls (and also provide other [resilience strategies]). Your python / typescript interfaces for functions using the `GPT4Client` are completely unimpacted.
 
 [retry policies]: https://docs.boundaryml.com/v3/syntax/client/retry
 [resilience strategies]: https://docs.boundaryml.com/v3/syntax/client/client#fallback
 
-```rust
-client<llm> GPT4Client {
-  provider "baml-openai-chat"
-  retry_policy SimpleRetryPolicy
-  options {
-    model "gpt-4"
-    api_key env.OPENAI_API_KEY
-  }
-}
-
-retry_policy SimpleRetryPolicy {
-    max_retries 5
-    strategy {
-      type exponential_backoff
-      delay_ms 300
-      multiplier 1.5
+```diff
+  client<llm> GPT4Client {
+    provider "baml-openai-chat"
++   retry_policy SimpleRetryPolicy
+    options {
+      model "gpt-4"
+      api_key env.OPENAI_API_KEY
     }
-}
+  }
+
++ retry_policy SimpleRetryPolicy {
++     max_retries 5
++     strategy {
++       type exponential_backoff
++       delay_ms 300
++       multiplier 1.5
++     }
++ }
 ```
 
 ## Chain-of-thought
 
-To do planning with BAML, just tell the LLM what planning steps to do. BAML will automatically find your data objects and convert them automatically.
+To do planning with BAML, just tell the LLM what planning steps to do. Thanks to [Flexible Parsing](#flexible-parsing), BAML will automatically find your data objects and convert them automatically.
 
-```rust
+```diff
 impl<llm, GetOrderInfo> version1 {
   client GPT4
   prompt #"
@@ -419,24 +453,24 @@ impl<llm, GetOrderInfo> version1 {
     Schema definitions:
     {#print_enum(OrderStatus)}
 
-    Before you output the JSON, please explain your
-    reasoning step-by-step. Here is an example on how to do this:
-    'If we think step by step we can see that ...
-     therefore the output JSON is:
-    {
-      ... the json schema ...
-    }'
++    Before you output the JSON, please explain your
++    reasoning step-by-step. Here is an example on how to do this:
++    'If we think step by step we can see that ...
++     therefore the output JSON is:
++    {
++      ... the json schema ...
++    }'
   "#
 }
 ```
 
 ## Multi-shot
 
-To add examples into your prompt with BAML, you can use a second parameter:
+To add examples into your prompt with BAML, you can use a multiple parameters:
 
-```rust
+```diff
 function DoSomething {
-  input (my_data: int, examples: string)
++  input (my_data: int, examples: string)
   output string
 }
 
@@ -447,8 +481,8 @@ impl<llm, DoSomething> v1 {
 
     DATA: {#input.my_data}
 
-    Examples:
-    {#input.examples}
++    Examples:
++    {#input.examples}
   "#
 }
 ```
@@ -481,6 +515,7 @@ enum Category {
 
     // Skip this category for the LLM
     Bug @skip
+
 }
 
 // whenever you now use:
@@ -493,59 +528,79 @@ enum Category {
 
 In BAML you do this by declaring multiple `impls`. The VSCode Extension will also let you run the tests side by side.
 
-```rust
-// Same signature as above
-function ExtractResume {
-  input (resume_text: string)
-  output Resume
-  // Declare which impl is the default one my python/ts code calls
-  default_impl version1
-}
+```diff
+  // Same signature as above
+  function ExtractResume {
+    input (resume_text: string)
+    output Resume
++   // Declare which impl is the default one my python/ts code calls
++   default_impl version1
+  }
 
 // My original impl
 impl<llm, ExtractResume> version1 {
-  client GPT4Client
+  ...
+}
+
++ // My new and super improved impl
++ impl<llm, ExtractResume> with_claude {
++   // Since resumes are faily easy, i'll try claude here
++   client ClaudeClient
++   prompt #"
++     {#chat(system)}
++     You are an expert tech recruiter.
++     Extract the resume from TEXT.
++
++     {#chat(user)}
++     TEXT
++     ###
++     {#input.resume_text}
++     ###
++
++     {#chat(assistant)}
++     Output JSON Schema:
++     {#print_type(output)}
++   "#
++ }
++
++ // another client definition
++ client<llm> ClaudeClient {
++   provider "baml-anthropic-chat"
++   options {
++     model "claude-3-haiku-20240307"
++     api_key env.ANTHROPIC_API_KEY
++   }
++ }
+```
+
+## Chat Roles (system vs user message)
+
+Instead of using arrays of `{"role": string, "content": string}`, BAML uses a `{#chat(role)}` macro that auto converts prompts into multiple messages. Everything from after the `{#chat(role)}` to either the next `{#chat(role)}` or the end is included as the content.
+
+VSCode will give you a live preview of exactly how it will be split.
+
+```diff
+impl<llm, BuildGithubApiCall> v1 {
+  client GPT35
   prompt #"
-    Extract the resume from:
-    ###
-    {#input.resume_text}
-    ###
++   {#chat(system)}
+    Given the user query, extract the right details:
+
++   {#chat(user)}
+    {#input}
+
++   {#chat(assitant)}
+    {#print_enum(Intent)}
 
     Output JSON Schema:
     {#print_type(output)}
+
+    JSON:
   "#
-}
-
-// My new and super improved impl
-impl<llm, ExtractResume> with_chat_roles {
-  // Since resumes are faily easy, i'll try claude here
-  client ClaudeClient
-  prompt #"
-    {#chat(system)}
-    You are an expert tech recruiter.
-    Extract the resume from TEXT.
-
-    {#chat(user)}
-    TEXT
-    ###
-    {#input.resume_text}
-    ###
-
-    {#chat(assistant)}
-    Output JSON Schema:
-    {#print_type(output)}
-  "#
-}
-
-// another client definition
-client<llm> ClaudeClient {
-  provider "baml-anthropic-chat"
-  options {
-    model "claude-3-haiku-20240307"
-    api_key env.ANTHROPIC_API_KEY
-  }
 }
 ```
+
+> Once we finish adding loops and conditionals, you'll be able to add `{#chat(role)}` dynamically based on inputs and clients as well!
 
 ## Streaming
 
@@ -695,6 +750,16 @@ We started building SDKs for TypeScript and Python (and even experimented with Y
 
 <img src="https://imgs.xkcd.com/comics/standards.png" />
 
+### Why not use Pydantic / Instructor or Langchain?
+
+Here’s our detailed comparison vs [Pydantic and other frameworks](https://docs.boundaryml.com/v3/home/comparisons/pydantic).
+TL;DR: BAML is more than just a data-modeling library like Pydantic.
+
+1. Everything is typesafe
+2. The prompt is also never hidden from you
+3. It comes with an integrated playground
+4. can support any model
+
 ### Does BAML use LLMs to generate code?
 
 No, BAML uses a custom-built compiler. Takes just a few milliseconds!
@@ -720,16 +785,6 @@ Your BAML-generated code never talks to our servers. We don’t proxy LLM APIs -
 BAML and the VSCode extension will always be 100% free and open-source.
 
 Our paid capabilities only start if you use Boundary Studio, which focuses on Monitoring, Collecting Feedback, and Improving your AI pipelines. Contact us for pricing details at [contact@boundaryml.com](mailto:contact@boundaryml.com?subject=I'd%20love%20to%20learn%20more%20about%20boundary).
-
-### Why not use Pydantic / Instructor or Langchain?
-
-Here’s our detailed comparison vs [Pydantic and other frameworks](https://docs.boundaryml.com/v3/home/comparisons/pydantic).
-TL;DR: BAML is more than just a data-modeling library like Pydantic.
-
-1. Everything is typesafe
-2. The prompt is also never hidden from you
-3. It comes with an integrated playground
-4. can support any model
 
 ## Security
 
