@@ -74,25 +74,37 @@ pub(crate) fn generate_ts(ir: &IntermediateRepr, gen: &Generator) -> std::io::Re
             .values
             .iter()
             .flat_map(|v| -> Vec<(String, &String)> {
-                if let Some(Expression::String(alias)) = v.attributes.get("alias") {
-                    if let Some(Expression::String(description)) = v.attributes.get("description") {
+                let alias = v.attributes.get("alias");
+                let description = v.attributes.get("description");
+                match (alias, description) {
+                    (Some(Expression::String(alias)), Some(Expression::String(description))) => {
                         // "alias" and "alias: description"
-                        return vec![
-                            (alias.to_string(), &v.elem.0),
-                            (format!("\"{}: {}\"", alias, description), &v.elem.0),
-                        ];
+                        vec![
+                            (format!("{}", alias.to_string()), &v.elem.0),
+                            (format!("{}: {}", alias, description), &v.elem.0),
+                        ]
                     }
-
-                    return vec![(alias.to_string(), &v.elem.0)];
-                } else if let Some(Expression::String(description)) =
-                    v.attributes.get("description")
-                {
-                    // "description"
-                    return vec![(format!("\"{}\"", description), &v.elem.0)];
+                    (Some(Expression::String(alias)), None) => {
+                        // "alias"
+                        vec![(format!("{}", alias.to_string()), &v.elem.0)]
+                    }
+                    (None, Some(Expression::String(description))) => {
+                        // "description"
+                        vec![
+                            (format!("{}: {}", v.elem.0, description), &v.elem.0),
+                            (format!("{}", description), &v.elem.0),
+                        ]
+                    }
+                    _ => vec![],
                 }
-                vec![]
             })
-            .map(|(alias, value_name)| format!("  {}: \"{}\"", alias, value_name))
+            .map(|(alias, value_name)| {
+                format!(
+                    "  \"{}\": \"{}\"",
+                    alias.replace("\n", "\\n").replace("\"", "\\\""),
+                    value_name
+                )
+            })
             .collect::<Vec<_>>();
         file.append(format!(
             "registerEnumDeserializer(schema.definitions.{}, {{\n{}\n}});",

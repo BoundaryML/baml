@@ -44,6 +44,7 @@ const enum TestEnum {
     D = "D",
     E = "E",
     F = "F",
+    G = "G",
 }
 
 interface Blah {

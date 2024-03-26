@@ -26,11 +26,15 @@ Classify the user input into the following category
 Category
 ---
 k1: User is angry
-k22: User is happy
+k22: Another super long
+description
+with multiple lines
 k11: User is sad
 k44: User is confused
 E: User is excited
 k5
+k6: User is bored
+With a long description
 ---
 
 input: {arg}

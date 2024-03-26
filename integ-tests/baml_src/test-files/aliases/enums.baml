@@ -16,6 +16,12 @@ enum TestEnum {
     User is excited
   )
   F @alias("k5") // only alias
+  
+  G @alias("k6") @description(#"
+    User is bored
+    With a long description
+  "#)
+
   @@alias("Category")
 }
  
@@ -26,6 +32,15 @@ function FnTestAliasedEnumOutput {
 
 impl<llm, FnTestAliasedEnumOutput> v1 {
   client GPT35
+
+  override TestEnum {
+    B @description(#"
+      Another super long
+      description
+      with multiple lines
+    "#)
+  }
+
   prompt #"
     Classify the user input into the following category
      

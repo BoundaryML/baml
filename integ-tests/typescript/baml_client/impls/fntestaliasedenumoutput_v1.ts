@@ -18,11 +18,15 @@ Classify the user input into the following category
 Category
 ---
 k1: User is angry
-k22: User is happy
+k22: Another super long
+description
+with multiple lines
 k11: User is sad
 k44: User is confused
 E: User is excited
 k5
+k6: User is bored
+With a long description
 ---
 
 input: {//BAML_CLIENT_REPLACE_ME_MAGIC_input//}
@@ -32,6 +36,9 @@ Category ID:\
 
 const deserializer = new Deserializer<TestEnum>(schema, {
   $ref: '#/definitions/FnTestAliasedEnumOutput_output'
+});
+deserializer.overload("TestEnum", {
+  "Another super long\ndescription\nwith multiple lines": "B",
 });
 
 FnTestAliasedEnumOutput.registerImpl('v1', async (
