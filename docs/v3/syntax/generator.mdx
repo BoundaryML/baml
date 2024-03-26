@@ -22,9 +22,10 @@ generator MyGenerator{
 | Property            | Description                                      | Options                           | Default                                        |
 | ------------------- | ------------------------------------------------ | --------------------------------- | ---------------------------------------------- |
 | language            | The language of the generated client             | python                            |                                                |
-| pkg_manager         | The package manager of the generated client      | pip, pip3, poetry                 | automatically picks the best match (see below) |
-| output              | The output directory of the generated code       | any relative path from `baml_src` | `../`                                          |
-| python_setup_prefix | The prefix for setting up the python environment | string                            | empty unless poetry, then `poetry run`         |
+| project_root         | The directory where we'll output the generated baml_client     |                  | ../ |
+| test_command              | What `baml test` uses to run your playground tests      |  |                                           |
+| install_command | The command for setting up the environment with all dependencies. `baml update` calls this | string                            |         |
+| package_version_command | The command to get the version of the baml package | string |
 
 ## Example generators
 

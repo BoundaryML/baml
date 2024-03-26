@@ -20,9 +20,8 @@ can generate its chain of thought before outputting our desired `OrderInfo`.
 
 ## Adding a reasoning step
 
-There are two ways of doing this:
+To add a reasoning step, instruct the LLM generate free-form text indicating its thought process before it writes the JSON object.
 
-### 1. Have the LLM generate free-form text indicating its thought process before it writes the JSON object.
 Example:
 ```text LLM Output with CoT
 If we think step by step, we can see that
@@ -72,13 +71,10 @@ impl<llm, GetOrderInfo> version1 {
 The example given can literally be the actual prompt. Using `{ ... the json schema ...}` tells the model you're just explaining how to do things. It's just english instructions after all. We also don't show the full step-by-step reasoning as an example and truncate it with `...`. This can still work fine. You can make this as detailed as you want, but this lets the model know the general structure of the output.
 
 #### Why this works
-Unlike the classification tutorial for CoT, adding CoT here is easier because the BAML deserializer can recognize the start and end of a JSON block (as opposed to a free-form string), and can strip out all unecessary free-form text.
-
-### 2. Use an adapter to generate the CoT
-You can still use an adapter if you'd like however. See [the Adapter tutorial](../classification/level3) for how to do this.
+Adding CoT is easy because the BAML deserializer can recognize the start and end of a JSON block (as opposed to a free-form string), and can strip out all unecessary free-form text.
 
 ## See the code
-[Here it is!](https://github.com/BoundaryML/baml-examples/tree/main/extraction-guide)
+[Here it is!](https://github.com/BoundaryML/baml-examples/blob/main/tutorials/baml_src/extraction-guide/chain_of_thought.baml)
 
 ## Conclusion
 In this tutorial we've learned how to try different prompting strategies. Let us know what other tutorials you'd like to see. More advanced content will be coming soon!
