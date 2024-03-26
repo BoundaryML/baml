@@ -36,7 +36,7 @@ We were inspired by similar patterns for type safety: [protobuf] and [OpenAPI] f
 
 BAML guarantees type safety for LLMs and comes with tools to give you a great developer experience:
 
-Jump to [BAML code](#show-me-the-code) or read how we [provide type safety without additional LLM calls](#flexible-parsing).
+Jump to [BAML code](#show-me-the-code) or read how we provide type safety without additional LLM calls using [Flexible Parsing](#flexible-parsing).
 
 [protobuf]: https://protobuf.dev
 [OpenAPI]: https://github.com/OpenAPITools/openapi-generator
