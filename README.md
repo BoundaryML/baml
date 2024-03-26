@@ -20,7 +20,7 @@
 
 #### Starter projects
 
-- [BAML + NextJS 14 + Streaming](https://github.com/BoundaryML/baml-examples/tree/main/nextjs-starter)
+- [BAML + NextJS 14](https://github.com/BoundaryML/baml-examples/tree/main/nextjs-starter)
 - [BAML + FastAPI + Streaming](https://github.com/BoundaryML/baml-examples/tree/main/fastapi-starter)
 
 ## Motivation
