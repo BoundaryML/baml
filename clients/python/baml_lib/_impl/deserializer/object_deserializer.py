@@ -99,6 +99,41 @@ class ObjectDeserializer(BaseDeserializer[T]):
             if parsed.has_value:
                 items[key] = parsed.as_value
 
+        # Check if all required keys are present.
+        missing_keys = []
+        for key, meta in self.__fields.items():
+            def is_optional(meta: ITypeDefinition) -> bool:
+                if meta["type"] == "Optional":
+                    return True
+                if meta["type"] == "Union":
+                    for c in meta["choices"]:
+                        if is_optional(c):
+                            return True
+                return False
+            
+            def is_list(meta: ITypeDefinition) -> bool:
+                if meta["type"] == "List":
+                    return True
+                if meta["type"] == "Union":
+                    for c in meta["choices"]:
+                        if is_list(c):
+                            return True
+                if meta["type"] == "Optional":
+                    return is_list(meta["item"])
+                return False
+
+            if items.get(key) is None:
+                if not is_optional(meta):
+                    if is_list(meta):
+                        items[key] = []
+                    else:
+                        missing_keys.append(key)
+        
+        if missing_keys:
+            diagnostics.push_missing_keys_error(missing_keys)
+            diagnostics.pop_scope(errors_as_warnings=False)
+            return Result.failed()
+
         try:
             parsed_item = self.__model(**items)
             return Result.from_value(parsed_item)
