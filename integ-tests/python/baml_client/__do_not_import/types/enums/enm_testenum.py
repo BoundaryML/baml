@@ -20,8 +20,11 @@ from enum import Enum
   "k11: User is sad": "C",
   "k44": "D",
   "k44: User is confused": "D",
+  "E: User is excited": "E",
   "User is excited": "E",
-  "k5": "F"
+  "k5": "F",
+  "k6": "G",
+  "k6: User is bored\nWith a long description": "G"
 })
 class TestEnum(str, Enum):
     A = "A"
@@ -30,3 +33,4 @@ class TestEnum(str, Enum):
     D = "D"
     E = "E"
     F = "F"
+    G = "G"
