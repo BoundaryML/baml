@@ -469,14 +469,16 @@ def test_list_object_from_string() -> None:
     res = deserializer.from_string(json.dumps(test_obj))
     assert res == [BasicClass(a=1, b="hello"), BasicClass(a=2, b="world")]
 
+
 @register_deserializer({})
 class BasicClass4(BaseModel):
     a: int
     b: List[str]
 
+
 def test_list_object_from_string_with_other_text() -> None:
     deserializer = Deserializer[List[BasicClass4]](List[BasicClass4])
     # This should pass even though b is not a list in the string.
     test_obj = [{"a": 1, "b": "hello"}, {"a": 2}]
-    res = deserializer.from_string(f'The output is: {json.dumps(test_obj)}')
+    res = deserializer.from_string(f"The output is: {json.dumps(test_obj)}")
     assert res == [BasicClass4(a=1, b=["hello"]), BasicClass4(a=2, b=[])]

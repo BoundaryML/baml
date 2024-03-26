@@ -102,6 +102,7 @@ class ObjectDeserializer(BaseDeserializer[T]):
         # Check if all required keys are present.
         missing_keys = []
         for key, meta in self.__fields.items():
+
             def is_optional(meta: ITypeDefinition) -> bool:
                 if meta["type"] == "Optional":
                     return True
@@ -110,7 +111,7 @@ class ObjectDeserializer(BaseDeserializer[T]):
                         if is_optional(c):
                             return True
                 return False
-            
+
             def is_list(meta: ITypeDefinition) -> bool:
                 if meta["type"] == "List":
                     return True
@@ -128,7 +129,7 @@ class ObjectDeserializer(BaseDeserializer[T]):
                         items[key] = []
                     else:
                         missing_keys.append(key)
-        
+
         if missing_keys:
             diagnostics.push_missing_keys_error(missing_keys)
             diagnostics.pop_scope(errors_as_warnings=False)

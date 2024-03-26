@@ -79,7 +79,9 @@ class Diagnostics:
         self.__push_warning(DeserializerWarning(self.__scope, message))
 
     def push_missing_keys_error(self, keys: typing.List[str]) -> None:
-        self.__push_error(DeserializerError(self.__scope, f"Missing keys: {', '.join(keys)}"))
+        self.__push_error(
+            DeserializerError(self.__scope, f"Missing keys: {', '.join(keys)}")
+        )
 
     def push_enum_error(
         self, enum_name: str, value: typing.Any, expected: typing.List[str]
