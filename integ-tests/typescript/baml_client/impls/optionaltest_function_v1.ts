@@ -9,6 +9,7 @@
 import { GPT35 } from '../client';
 import { OptionalTest_Function } from '../function';
 import { schema } from '../json_schema';
+import { LLMResponseStream } from '@boundaryml/baml-core/client_manager';
 import { Deserializer } from '@boundaryml/baml-core/deserializer/deserializer';
 
 
@@ -39,19 +40,38 @@ const deserializer = new Deserializer<OptionalTest_ReturnType | null[]>(schema, 
   $ref: '#/definitions/OptionalTest_Function_output'
 });
 
-OptionalTest_Function.registerImpl('v1', async (
+const v1 = async (
   arg: string
 ): Promise<OptionalTest_ReturnType | null[]> => {
   
-    const result = await GPT35.run_prompt_template(
-      prompt_template,
-      [],
-      {
-      }
-    );
+  const result = await GPT35.run_prompt_template(
+    prompt_template,
+    [],
+    {
+    }
+  );
 
-    return deserializer.coerce(result.generated);
-  }
-);
+  return deserializer.coerce(result.generated);
+};
+
+const v1_stream = async (
+  arg: string
+): LLMResponseStream<OptionalTest_ReturnType | null[]> => {
+  
+  const stream = GPT35.run_prompt_template_stream(
+    prompt_template,
+    [],
+    {
+    }
+  );
+
+  return new LLMResponseStream<OptionalTest_ReturnType | null[]>(
+    stream,
+    (partial) => null,
+    deserializer.coerce,
+  );
+};
+
+OptionalTest_Function.registerImpl('v1', v1, v1_stream);
 
 

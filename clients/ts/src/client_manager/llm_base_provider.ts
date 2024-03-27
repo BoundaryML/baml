@@ -110,6 +110,10 @@ abstract class LLMBaseProvider extends BaseProvider {
     [key: string]: any
   }): Promise<LLMResponse>;
 
+  protected abstract run_chat_template_stream(prompt: LLMChatMessage | LLMChatMessage[], template_args: Iterable<string>, params: {
+    [key: string]: any
+  }): AsyncIterable<LLMResponse>;
+
 
   protected start_run(prompt: Prompt) {
     FireBamlEvent.llmStart({

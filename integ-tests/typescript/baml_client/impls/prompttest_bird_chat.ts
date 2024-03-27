@@ -9,6 +9,7 @@
 import { Lottery_ComplexSyntax } from '../client';
 import { PromptTest } from '../function';
 import { schema } from '../json_schema';
+import { LLMResponseStream } from '@boundaryml/baml-core/client_manager';
 import { Deserializer } from '@boundaryml/baml-core/deserializer/deserializer';
 
 
@@ -20,22 +21,44 @@ const deserializer = new Deserializer<string>(schema, {
   $ref: '#/definitions/PromptTest_output'
 });
 
-PromptTest.registerImpl('bird_chat', async (
+const bird_chat = async (
   arg: string
 ): Promise<string> => {
   
-    const result = await Lottery_ComplexSyntax.run_prompt_template(
-      prompt_template,
-      [
-        "{//BAML_CLIENT_REPLACE_ME_MAGIC_input//}",
-      ],
-      {
-        "{//BAML_CLIENT_REPLACE_ME_MAGIC_input//}": arg,
-      }
-    );
+  const result = await Lottery_ComplexSyntax.run_prompt_template(
+    prompt_template,
+    [
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input//}",
+    ],
+    {
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input//}": arg,
+    }
+  );
 
-    return deserializer.coerce(result.generated);
-  }
-);
+  return deserializer.coerce(result.generated);
+};
+
+const bird_chat_stream = async (
+  arg: string
+): LLMResponseStream<string> => {
+  
+  const stream = Lottery_ComplexSyntax.run_prompt_template_stream(
+    prompt_template,
+    [
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input//}",
+    ],
+    {
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input//}": arg,
+    }
+  );
+
+  return new LLMResponseStream<string>(
+    stream,
+    (partial) => null,
+    deserializer.coerce,
+  );
+};
+
+PromptTest.registerImpl('bird_chat', bird_chat, bird_chat_stream);
 
 

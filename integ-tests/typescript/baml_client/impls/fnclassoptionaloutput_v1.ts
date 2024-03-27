@@ -9,6 +9,7 @@
 import { GPT35 } from '../client';
 import { FnClassOptionalOutput } from '../function';
 import { schema } from '../json_schema';
+import { LLMResponseStream } from '@boundaryml/baml-core/client_manager';
 import { Deserializer } from '@boundaryml/baml-core/deserializer/deserializer';
 
 
@@ -29,22 +30,44 @@ const deserializer = new Deserializer<ClassOptionalOutput | null>(schema, {
   $ref: '#/definitions/FnClassOptionalOutput_output'
 });
 
-FnClassOptionalOutput.registerImpl('v1', async (
+const v1 = async (
   arg: string
 ): Promise<ClassOptionalOutput | null> => {
   
-    const result = await GPT35.run_prompt_template(
-      prompt_template,
-      [
-        "{//BAML_CLIENT_REPLACE_ME_MAGIC_input//}",
-      ],
-      {
-        "{//BAML_CLIENT_REPLACE_ME_MAGIC_input//}": arg,
-      }
-    );
+  const result = await GPT35.run_prompt_template(
+    prompt_template,
+    [
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input//}",
+    ],
+    {
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input//}": arg,
+    }
+  );
 
-    return deserializer.coerce(result.generated);
-  }
-);
+  return deserializer.coerce(result.generated);
+};
+
+const v1_stream = async (
+  arg: string
+): LLMResponseStream<ClassOptionalOutput | null> => {
+  
+  const stream = GPT35.run_prompt_template_stream(
+    prompt_template,
+    [
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input//}",
+    ],
+    {
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input//}": arg,
+    }
+  );
+
+  return new LLMResponseStream<ClassOptionalOutput | null>(
+    stream,
+    (partial) => null,
+    deserializer.coerce,
+  );
+};
+
+FnClassOptionalOutput.registerImpl('v1', v1, v1_stream);
 
 

@@ -79,10 +79,12 @@ class AzureOpenAIClient extends LLMChatProvider {
     }
 
     protected async chat_impl(prompt: LLMChatMessage[]): Promise<LLMResponse> {
-        const response = await this.client.getChatCompletions(this.deployment, prompt.map((chat) => ({
-            role: chat.role as 'user',
-            content: chat.content,
-        })),
+        const response = await this.client.getChatCompletions(
+            this.deployment,
+            prompt.map((chat) => ({
+                role: chat.role as 'user',
+                content: chat.content,
+            })),
             {
                 ...this.params,
                 n: 1,
@@ -102,12 +104,50 @@ class AzureOpenAIClient extends LLMChatProvider {
             generated: message,
             model_name: this.deployment,
             meta: {
-                finish_reason: choice.finishReason,
+                finishReason: choice.finishReason,
                 prompt_tokens: response.usage?.promptTokens,
                 output_tokens: response.usage?.completionTokens,
                 total_tokens: response.usage?.totalTokens,
             }
         }
+    }
+
+    protected stream_impl(prompts: LLMChatMessage[]): AsyncIterable<LLMResponse> {
+        const stream = this.client.streamChatCompletions(
+            this.deployment,
+            prompts.map(({role, content}) => ({
+                role: role === "user" || role === "assistant" ? role : "system",
+                content,
+            })),
+            {
+                ...this.params,
+                n: 1,
+            });
+        return {
+            async *[Symbol.asyncIterator](): AsyncIterableIterator<LLMResponse> {
+                let last_chunk = null;
+                let finishReason: string | null = null;
+
+                for await (const chunk of await stream) {
+                    last_chunk = chunk;
+
+                    finishReason = chunk.choices[0]?.finishReason || null;
+
+                    yield {
+                        generated: chunk.choices[0]?.delta?.content || '',
+                        model_name: "<unknown-stream-model>",
+                        meta: {
+                            baml_is_complete: last_chunk.choices[0]?.finishReason === "stop",
+                            finish_reason: finishReason,
+                            // NB: OpenAI does not currently provide token usage data for streams
+                            prompt_tokens: null,
+                            output_tokens: null,
+                            total_tokens: null,
+                        },
+                    };
+                }
+            }
+        };
     }
 }
 

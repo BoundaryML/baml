@@ -9,6 +9,7 @@
 import { GPT35 } from '../client';
 import { FnTestClassOverride } from '../function';
 import { schema } from '../json_schema';
+import { LLMResponseStream } from '@boundaryml/baml-core/client_manager';
 import { Deserializer } from '@boundaryml/baml-core/deserializer/deserializer';
 
 
@@ -30,19 +31,38 @@ deserializer.overload("OverrideClass", {
   "prop-two": "prop2",
 });
 
-FnTestClassOverride.registerImpl('v1', async (
+const v1 = async (
   arg: string
 ): Promise<OverrideClass> => {
   
-    const result = await GPT35.run_prompt_template(
-      prompt_template,
-      [],
-      {
-      }
-    );
+  const result = await GPT35.run_prompt_template(
+    prompt_template,
+    [],
+    {
+    }
+  );
 
-    return deserializer.coerce(result.generated);
-  }
-);
+  return deserializer.coerce(result.generated);
+};
+
+const v1_stream = async (
+  arg: string
+): LLMResponseStream<OverrideClass> => {
+  
+  const stream = GPT35.run_prompt_template_stream(
+    prompt_template,
+    [],
+    {
+    }
+  );
+
+  return new LLMResponseStream<OverrideClass>(
+    stream,
+    (partial) => null,
+    deserializer.coerce,
+  );
+};
+
+FnTestClassOverride.registerImpl('v1', v1, v1_stream);
 
 

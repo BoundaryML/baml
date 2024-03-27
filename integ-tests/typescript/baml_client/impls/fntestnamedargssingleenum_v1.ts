@@ -9,6 +9,7 @@
 import { GPT35 } from '../client';
 import { FnTestNamedArgsSingleEnum } from '../function';
 import { schema } from '../json_schema';
+import { LLMResponseStream } from '@boundaryml/baml-core/client_manager';
 import { Deserializer } from '@boundaryml/baml-core/deserializer/deserializer';
 
 
@@ -21,25 +22,50 @@ const deserializer = new Deserializer<string>(schema, {
   $ref: '#/definitions/FnTestNamedArgsSingleEnum_output'
 });
 
-FnTestNamedArgsSingleEnum.registerImpl('v1', async (
+const v1 = async (
   args: {
     myArg: NamedArgsSingleEnum
   }
 ): Promise<string> => {
-    const myArg = args.myArg as NamedArgsSingleEnum;
+  const myArg = args.myArg as NamedArgsSingleEnum;
   
-    const result = await GPT35.run_prompt_template(
-      prompt_template,
-      [
-        "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg//}",
-      ],
-      {
-        "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg//}": myArg,
-      }
-    );
+  const result = await GPT35.run_prompt_template(
+    prompt_template,
+    [
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg//}",
+    ],
+    {
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg//}": myArg,
+    }
+  );
 
-    return deserializer.coerce(result.generated);
+  return deserializer.coerce(result.generated);
+};
+
+const v1_stream = async (
+  args: {
+    myArg: NamedArgsSingleEnum
   }
-);
+): LLMResponseStream<string> => {
+  const myArg = args.myArg as NamedArgsSingleEnum;
+  
+  const stream = GPT35.run_prompt_template_stream(
+    prompt_template,
+    [
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg//}",
+    ],
+    {
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg//}": myArg,
+    }
+  );
+
+  return new LLMResponseStream<string>(
+    stream,
+    (partial) => null,
+    deserializer.coerce,
+  );
+};
+
+FnTestNamedArgsSingleEnum.registerImpl('v1', v1, v1_stream);
 
 

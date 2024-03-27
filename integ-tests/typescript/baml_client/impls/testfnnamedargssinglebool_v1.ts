@@ -9,6 +9,7 @@
 import { GPT35 } from '../client';
 import { TestFnNamedArgsSingleBool } from '../function';
 import { schema } from '../json_schema';
+import { LLMResponseStream } from '@boundaryml/baml-core/client_manager';
 import { Deserializer } from '@boundaryml/baml-core/deserializer/deserializer';
 
 
@@ -20,25 +21,50 @@ const deserializer = new Deserializer<string>(schema, {
   $ref: '#/definitions/TestFnNamedArgsSingleBool_output'
 });
 
-TestFnNamedArgsSingleBool.registerImpl('v1', async (
+const v1 = async (
   args: {
     myBool: boolean
   }
 ): Promise<string> => {
-    const myBool = args.myBool;
+  const myBool = args.myBool;
   
-    const result = await GPT35.run_prompt_template(
-      prompt_template,
-      [
-        "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myBool//}",
-      ],
-      {
-        "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myBool//}": myBool,
-      }
-    );
+  const result = await GPT35.run_prompt_template(
+    prompt_template,
+    [
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myBool//}",
+    ],
+    {
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myBool//}": myBool,
+    }
+  );
 
-    return deserializer.coerce(result.generated);
+  return deserializer.coerce(result.generated);
+};
+
+const v1_stream = async (
+  args: {
+    myBool: boolean
   }
-);
+): LLMResponseStream<string> => {
+  const myBool = args.myBool;
+  
+  const stream = GPT35.run_prompt_template_stream(
+    prompt_template,
+    [
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myBool//}",
+    ],
+    {
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myBool//}": myBool,
+    }
+  );
+
+  return new LLMResponseStream<string>(
+    stream,
+    (partial) => null,
+    deserializer.coerce,
+  );
+};
+
+TestFnNamedArgsSingleBool.registerImpl('v1', v1, v1_stream);
 
 

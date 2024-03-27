@@ -9,6 +9,7 @@
 import { GPT35 } from '../client';
 import { FnOutputClassWithEnum } from '../function';
 import { schema } from '../json_schema';
+import { LLMResponseStream } from '@boundaryml/baml-core/client_manager';
 import { Deserializer } from '@boundaryml/baml-core/deserializer/deserializer';
 
 
@@ -33,19 +34,38 @@ const deserializer = new Deserializer<TestClassWithEnum>(schema, {
   $ref: '#/definitions/FnOutputClassWithEnum_output'
 });
 
-FnOutputClassWithEnum.registerImpl('v1', async (
+const v1 = async (
   arg: string
 ): Promise<TestClassWithEnum> => {
   
-    const result = await GPT35.run_prompt_template(
-      prompt_template,
-      [],
-      {
-      }
-    );
+  const result = await GPT35.run_prompt_template(
+    prompt_template,
+    [],
+    {
+    }
+  );
 
-    return deserializer.coerce(result.generated);
-  }
-);
+  return deserializer.coerce(result.generated);
+};
+
+const v1_stream = async (
+  arg: string
+): LLMResponseStream<TestClassWithEnum> => {
+  
+  const stream = GPT35.run_prompt_template_stream(
+    prompt_template,
+    [],
+    {
+    }
+  );
+
+  return new LLMResponseStream<TestClassWithEnum>(
+    stream,
+    (partial) => null,
+    deserializer.coerce,
+  );
+};
+
+FnOutputClassWithEnum.registerImpl('v1', v1, v1_stream);
 
 

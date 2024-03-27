@@ -9,6 +9,7 @@
 import { GPT35 } from '../client';
 import { TestFnNamedArgsSingleFloat } from '../function';
 import { schema } from '../json_schema';
+import { LLMResponseStream } from '@boundaryml/baml-core/client_manager';
 import { Deserializer } from '@boundaryml/baml-core/deserializer/deserializer';
 
 
@@ -20,25 +21,50 @@ const deserializer = new Deserializer<string>(schema, {
   $ref: '#/definitions/TestFnNamedArgsSingleFloat_output'
 });
 
-TestFnNamedArgsSingleFloat.registerImpl('v1', async (
+const v1 = async (
   args: {
     myFloat: number
   }
 ): Promise<string> => {
-    const myFloat = args.myFloat;
+  const myFloat = args.myFloat;
   
-    const result = await GPT35.run_prompt_template(
-      prompt_template,
-      [
-        "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myFloat//}",
-      ],
-      {
-        "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myFloat//}": myFloat,
-      }
-    );
+  const result = await GPT35.run_prompt_template(
+    prompt_template,
+    [
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myFloat//}",
+    ],
+    {
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myFloat//}": myFloat,
+    }
+  );
 
-    return deserializer.coerce(result.generated);
+  return deserializer.coerce(result.generated);
+};
+
+const v1_stream = async (
+  args: {
+    myFloat: number
   }
-);
+): LLMResponseStream<string> => {
+  const myFloat = args.myFloat;
+  
+  const stream = GPT35.run_prompt_template_stream(
+    prompt_template,
+    [
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myFloat//}",
+    ],
+    {
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myFloat//}": myFloat,
+    }
+  );
+
+  return new LLMResponseStream<string>(
+    stream,
+    (partial) => null,
+    deserializer.coerce,
+  );
+};
+
+TestFnNamedArgsSingleFloat.registerImpl('v1', v1, v1_stream);
 
 

@@ -51,6 +51,26 @@ abstract class LLMChatProvider extends LLMBaseProvider {
     return this.chat_with_telemetry(filled_prompts);
   }
 
+  run_chat_template_stream(prompt: LLMChatMessage | LLMChatMessage[], template_args: Array<string>, params: {
+    [key: string]: any
+  }): AsyncIterable<LLMResponse> {
+    const prompts = Array.isArray(prompt) ? prompt : [prompt];
+    const updates = template_args.map((arg): [string, string] => [arg, `${params[arg]}`]);
+
+    const filled_prompts = prompts.map((prompt) => {
+      let content = prompt.content;
+      updates.forEach(([arg, value]) => {
+        content = content.replaceAll(arg, value);
+      });
+      return {
+        role: prompt.role,
+        content,
+      }
+    });
+    return this.stream_impl(filled_prompts);
+  }
+
+
   private async chat_with_telemetry(prompt: LLMChatMessage[]): Promise<LLMResponse> {
     try {
       const result = await this.chat_impl(prompt);
@@ -63,6 +83,9 @@ abstract class LLMChatProvider extends LLMBaseProvider {
 
   /// Method to be implemented by the derived class
   protected abstract chat_impl(prompt: LLMChatMessage[]): Promise<LLMResponse>;
+
+  /// Method to be implemented by the derived class
+  protected abstract stream_impl(prompts: LLMChatMessage[]): AsyncIterable<LLMResponse>;
 }
 
 export { LLMChatProvider, LLMChatProviderArgs };

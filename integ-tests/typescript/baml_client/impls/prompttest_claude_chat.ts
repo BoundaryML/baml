@@ -9,6 +9,7 @@
 import { Claude } from '../client';
 import { PromptTest } from '../function';
 import { schema } from '../json_schema';
+import { LLMResponseStream } from '@boundaryml/baml-core/client_manager';
 import { Deserializer } from '@boundaryml/baml-core/deserializer/deserializer';
 
 
@@ -20,22 +21,44 @@ const deserializer = new Deserializer<string>(schema, {
   $ref: '#/definitions/PromptTest_output'
 });
 
-PromptTest.registerImpl('claude_chat', async (
+const claude_chat = async (
   arg: string
 ): Promise<string> => {
   
-    const result = await Claude.run_prompt_template(
-      prompt_template,
-      [
-        "{//BAML_CLIENT_REPLACE_ME_MAGIC_input//}",
-      ],
-      {
-        "{//BAML_CLIENT_REPLACE_ME_MAGIC_input//}": arg,
-      }
-    );
+  const result = await Claude.run_prompt_template(
+    prompt_template,
+    [
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input//}",
+    ],
+    {
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input//}": arg,
+    }
+  );
 
-    return deserializer.coerce(result.generated);
-  }
-);
+  return deserializer.coerce(result.generated);
+};
+
+const claude_chat_stream = async (
+  arg: string
+): LLMResponseStream<string> => {
+  
+  const stream = Claude.run_prompt_template_stream(
+    prompt_template,
+    [
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input//}",
+    ],
+    {
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input//}": arg,
+    }
+  );
+
+  return new LLMResponseStream<string>(
+    stream,
+    (partial) => null,
+    deserializer.coerce,
+  );
+};
+
+PromptTest.registerImpl('claude_chat', claude_chat, claude_chat_stream);
 
 

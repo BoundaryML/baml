@@ -1,4 +1,6 @@
-import { ChatCompletionCreateParams } from "openai/resources/chat/completions";
+import { Completion } from "openai/resources";
+import { Stream } from "openai/streaming";
+import { ChatCompletion, ChatCompletionChunk, ChatCompletionCreateParams } from "openai/resources/chat/completions";
 import { clientManager } from "../client_manager";
 import { APIError, OpenAI, OpenAIError } from "openai";
 import { LLMChatProvider } from "../llm_chat_provider";
@@ -112,6 +114,42 @@ class OpenAIClient extends LLMChatProvider {
                 total_tokens: response.usage?.total_tokens,
             }
         }
+    }
+
+    protected stream_impl(prompts: LLMChatMessage[]): AsyncIterable<LLMResponse> {
+        const stream = this.client.chat.completions.create({
+            messages: prompts.map(({role, content}) => ({
+                role: role === "user" || role === "assistant" ? role : "system",
+                content,
+            })),
+            stream: true,
+            ...this.params,
+        });
+        return {
+            async *[Symbol.asyncIterator](): AsyncIterableIterator<LLMResponse> {
+                let last_chunk = null;
+                let finish_reason: string | null = null;
+
+                for await (const chunk of (await stream as Stream<ChatCompletionChunk>)) {
+                    last_chunk = chunk;
+
+                    finish_reason = chunk.choices[0]?.finish_reason || null;
+
+                    yield {
+                        generated: chunk.choices[0]?.delta?.content || '',
+                        model_name: chunk.model ||  "<unknown-stream-model>",
+                        meta: {
+                            baml_is_complete: last_chunk.choices[0]?.finish_reason === "stop",
+                            finish_reason,
+                            // NB: OpenAI does not currently provide token usage data for streams
+                            prompt_tokens: null,
+                            output_tokens: null,
+                            total_tokens: null,
+                        },
+                    };
+                }
+            }
+        };
     }
 }
 

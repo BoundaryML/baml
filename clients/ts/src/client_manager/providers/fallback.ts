@@ -68,6 +68,10 @@ class FallbackClient extends LLMBaseProvider {
     protected to_error_code_impl(err: unknown): number | undefined {
         return undefined
     }
+
+    run_chat_template_stream(prompt: LLMChatMessage | LLMChatMessage[], template_args: Iterable<string>, params: { [key: string]: any; }): AsyncIterable<LLMResponse> {
+        throw new Error("unimplemented")
+    }
 }
 
 clientManager.registerProvider("baml-fallback", {

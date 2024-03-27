@@ -10,6 +10,7 @@ import { GPT35 } from '../client';
 import { TestFnNamedArgsSingleClass } from '../function';
 import { schema } from '../json_schema';
 import { InternalNamedArgsSingleClass } from '../types_internal';
+import { LLMResponseStream } from '@boundaryml/baml-core/client_manager';
 import { Deserializer } from '@boundaryml/baml-core/deserializer/deserializer';
 
 
@@ -24,31 +25,62 @@ const deserializer = new Deserializer<string>(schema, {
   $ref: '#/definitions/TestFnNamedArgsSingleClass_output'
 });
 
-TestFnNamedArgsSingleClass.registerImpl('v1', async (
+const v1 = async (
   args: {
     myArg: NamedArgsSingleClass
   }
 ): Promise<string> => {
-    const myArg = InternalNamedArgsSingleClass.from(args.myArg);
+  const myArg = InternalNamedArgsSingleClass.from(args.myArg);
   
-    const result = await GPT35.run_prompt_template(
-      prompt_template,
-      [
-        "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg.key//}",
-      
-        "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg.key_three//}",
-      
-        "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg.key_two//}",
-      ],
-      {
-        "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg.key//}": myArg.key,
-        "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg.key_three//}": myArg.key_three,
-        "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg.key_two//}": myArg.key_two,
-      }
-    );
+  const result = await GPT35.run_prompt_template(
+    prompt_template,
+    [
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg.key//}",
+    
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg.key_three//}",
+    
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg.key_two//}",
+    ],
+    {
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg.key//}": myArg.key,
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg.key_three//}": myArg.key_three,
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg.key_two//}": myArg.key_two,
+    }
+  );
 
-    return deserializer.coerce(result.generated);
+  return deserializer.coerce(result.generated);
+};
+
+const v1_stream = async (
+  args: {
+    myArg: NamedArgsSingleClass
   }
-);
+): LLMResponseStream<string> => {
+  const myArg = InternalNamedArgsSingleClass.from(args.myArg);
+  
+  const stream = GPT35.run_prompt_template_stream(
+    prompt_template,
+    [
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg.key//}",
+    
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg.key_three//}",
+    
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg.key_two//}",
+    ],
+    {
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg.key//}": myArg.key,
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg.key_three//}": myArg.key_three,
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myArg.key_two//}": myArg.key_two,
+    }
+  );
+
+  return new LLMResponseStream<string>(
+    stream,
+    (partial) => null,
+    deserializer.coerce,
+  );
+};
+
+TestFnNamedArgsSingleClass.registerImpl('v1', v1, v1_stream);
 
 

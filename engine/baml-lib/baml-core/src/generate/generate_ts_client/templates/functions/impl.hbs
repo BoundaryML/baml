@@ -27,7 +27,7 @@ deserializer.overload("{{o.category}}", {
 });
 {{/each}}
 
-{{function.name}}.registerImpl('{{name}}', async (
+const {{name}} = async (
 {{#if function.params.positional}}
   {{function.params.name}}: {{function.params.type}}
 {{else}}
@@ -40,22 +40,59 @@ deserializer.overload("{{o.category}}", {
   {{!-- const {{function.params.name}} = {{function.params.name}}; --}}
   {{else}}
   {{#each function.params.values as |v|}}
-    const {{v.name}} = {{{v.expr}}};
+  const {{v.name}} = {{{v.expr}}};
   {{/each}}
   {{/if}}
   
-    const result = await {{client}}.run_{{#if is_chat}}chat{{else}}prompt{{/if}}_template(
-      prompt_template,
-      [{{#each inputs as |input key|}}
-        "{{key}}",
-      {{/each}}],
-      {
-        {{#each inputs as |input key|}}
-        "{{key}}": {{input}},
-        {{/each}}
-      }
-    );
+  const result = await {{client}}.run_{{#if is_chat}}chat{{else}}prompt{{/if}}_template(
+    prompt_template,
+    [{{#each inputs as |input key|}}
+      "{{key}}",
+    {{/each}}],
+    {
+      {{#each inputs as |input key|}}
+      "{{key}}": {{input}},
+      {{/each}}
+    }
+  );
 
-    return deserializer.coerce(result.generated);
+  return deserializer.coerce(result.generated);
+};
+
+const {{name}}_stream = async (
+{{#if function.params.positional}}
+  {{function.params.name}}: {{function.params.type}}
+{{else}}
+  {{function.params.name}}: {
+    {{#each function.params.values as |v|}}{{v.name}}: {{v.type}}{{#unless @last}}, {{/unless}}{{/each}}
   }
-);
+{{/if}}
+): LLMResponseStream<{{function.return_type}}> => {
+  {{#if function.params.positional}}
+  {{!-- const {{function.params.name}} = {{function.params.name}}; --}}
+  {{else}}
+  {{#each function.params.values as |v|}}
+  const {{v.name}} = {{{v.expr}}};
+  {{/each}}
+  {{/if}}
+  
+  const stream = {{client}}.run_{{#if is_chat}}chat{{else}}prompt{{/if}}_template_stream(
+    prompt_template,
+    [{{#each inputs as |input key|}}
+      "{{key}}",
+    {{/each}}],
+    {
+      {{#each inputs as |input key|}}
+      "{{key}}": {{input}},
+      {{/each}}
+    }
+  );
+
+  return new LLMResponseStream<{{function.return_type}}>(
+    stream,
+    (partial) => null,
+    deserializer.coerce,
+  );
+};
+
+{{function.name}}.registerImpl('{{name}}', {{name}}, {{name}}_stream);

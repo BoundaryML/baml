@@ -72,6 +72,7 @@ case "$_path" in
       npx nodemon \
         --verbose \
         --ext rs,hb,hbs \
+        --ignore 'target' \
         --exec 'cargo build'
     else
       cargo build
@@ -98,6 +99,17 @@ case "$_path" in
         --exec 'pnpm build'
     else
       pnpm build
+    fi
+    ;;
+
+  /integ-tests | /integ-tests/* )
+    if [ "$_watch_mode" -eq 1 ]; then
+      npx nodemon \
+        --verbose \
+        --watch "${_repo_root}/engine/target/debug/baml" \
+        --exec "${_repo_root}/engine/target/debug/baml build"
+    else
+      "${_repo_root}/engine/target/debug/baml" build
     fi
     ;;
 

@@ -9,6 +9,7 @@
 import { GPT35 } from '../client';
 import { FnNamedArgsSingleStringOptional } from '../function';
 import { schema } from '../json_schema';
+import { LLMResponseStream } from '@boundaryml/baml-core/client_manager';
 import { Deserializer } from '@boundaryml/baml-core/deserializer/deserializer';
 
 
@@ -20,25 +21,50 @@ const deserializer = new Deserializer<string>(schema, {
   $ref: '#/definitions/FnNamedArgsSingleStringOptional_output'
 });
 
-FnNamedArgsSingleStringOptional.registerImpl('v1', async (
+const v1 = async (
   args: {
     myString: string | null
   }
 ): Promise<string> => {
-    const myString = (args.myString === null || args.myString === undefined) ? null : args.myString;
+  const myString = (args.myString === null || args.myString === undefined) ? null : args.myString;
   
-    const result = await GPT35.run_prompt_template(
-      prompt_template,
-      [
-        "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myString//}",
-      ],
-      {
-        "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myString//}": myString,
-      }
-    );
+  const result = await GPT35.run_prompt_template(
+    prompt_template,
+    [
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myString//}",
+    ],
+    {
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myString//}": myString,
+    }
+  );
 
-    return deserializer.coerce(result.generated);
+  return deserializer.coerce(result.generated);
+};
+
+const v1_stream = async (
+  args: {
+    myString: string | null
   }
-);
+): LLMResponseStream<string> => {
+  const myString = (args.myString === null || args.myString === undefined) ? null : args.myString;
+  
+  const stream = GPT35.run_prompt_template_stream(
+    prompt_template,
+    [
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myString//}",
+    ],
+    {
+      "{//BAML_CLIENT_REPLACE_ME_MAGIC_input.myString//}": myString,
+    }
+  );
+
+  return new LLMResponseStream<string>(
+    stream,
+    (partial) => null,
+    deserializer.coerce,
+  );
+};
+
+FnNamedArgsSingleStringOptional.registerImpl('v1', v1, v1_stream);
 
 

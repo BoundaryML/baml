@@ -9,6 +9,7 @@
 import { GPT35 } from '../client';
 import { FnOutputBool } from '../function';
 import { schema } from '../json_schema';
+import { LLMResponseStream } from '@boundaryml/baml-core/client_manager';
 import { Deserializer } from '@boundaryml/baml-core/deserializer/deserializer';
 
 
@@ -20,19 +21,38 @@ const deserializer = new Deserializer<boolean>(schema, {
   $ref: '#/definitions/FnOutputBool_output'
 });
 
-FnOutputBool.registerImpl('v1', async (
+const v1 = async (
   arg: string
 ): Promise<boolean> => {
   
-    const result = await GPT35.run_prompt_template(
-      prompt_template,
-      [],
-      {
-      }
-    );
+  const result = await GPT35.run_prompt_template(
+    prompt_template,
+    [],
+    {
+    }
+  );
 
-    return deserializer.coerce(result.generated);
-  }
-);
+  return deserializer.coerce(result.generated);
+};
+
+const v1_stream = async (
+  arg: string
+): LLMResponseStream<boolean> => {
+  
+  const stream = GPT35.run_prompt_template_stream(
+    prompt_template,
+    [],
+    {
+    }
+  );
+
+  return new LLMResponseStream<boolean>(
+    stream,
+    (partial) => null,
+    deserializer.coerce,
+  );
+};
+
+FnOutputBool.registerImpl('v1', v1, v1_stream);
 
 
