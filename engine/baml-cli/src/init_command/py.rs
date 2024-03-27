@@ -50,6 +50,7 @@ enum PackageManager {
     Venv(String),
     // Name of the conda environment
     Conda(String),
+    Pipenv(String),
 }
 
 impl WithLanguage for PythonConfig {
@@ -112,6 +113,7 @@ impl WithLanguage for PackageManager {
             PackageManager::Conda(name) => {
                 format!("conda run -n {} pip install --upgrade baml", name)
             }
+            PackageManager::Pipenv(_) => "pipenv shell && pipenv install --upgrade baml".into(),
         }
     }
 
@@ -122,6 +124,7 @@ impl WithLanguage for PackageManager {
             PackageManager::Poetry => "poetry show baml".into(),
             PackageManager::Venv(path) => format!(". {}/bin/activate && pip show baml", path),
             PackageManager::Conda(name) => format!("conda list -n {} baml", name),
+            PackageManager::Pip(_) => "pipenv run pip show baml".into(),
         }
     }
 }
@@ -142,6 +145,7 @@ impl WithLoader<PackageManager> for PackageManager {
             "venv",
             "virtualenv",
             "conda",
+            "pipenv",
             "other",
         ];
 
@@ -174,6 +178,7 @@ impl WithLoader<PackageManager> for PackageManager {
                 )?;
                 Ok(PackageManager::Conda(env_name))
             }
+            6 => Ok(PackageManager::Pipenv(python_path.into())),
             _ => Err(CliError::StringError(
                 "Unsupported, see docs for manual setup".into(),
             )),
@@ -200,6 +205,10 @@ fn default_package_manager(project_root: &PathBuf, python_path: &str) -> usize {
     // Check if pip3 is installed
     if is_pip3().is_some() {
         return 1;
+    }
+
+    if is_pipenv().is_some() {
+        return 6;
     }
 
     0
@@ -295,6 +304,14 @@ fn is_pip3() -> Option<(&'static str, &'static str)> {
     // Check if pip3 is installed
     match std::process::Command::new("pip3").arg("--version").output() {
         Ok(_) => Some(("pip3", "pip3")),
+        Err(_) => None,
+    }
+}
+
+fn is_pipenv() -> Option<(&'static str, &'static str)> {
+    // Check if pipenv is installed
+    match std::process::Command::new("pipenv").arg("--version").output() {
+        Ok(_) => Some(("pipenv", "pipenv")),
         Err(_) => None,
     }
 }
