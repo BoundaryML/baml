@@ -88,6 +88,7 @@ class OllamaChatProvider(LLMChatProvider):
         )
 
         text = response["message"]
+
         return LLMResponse(
             generated=text["content"],
             model_name=response["model"],
