@@ -76,7 +76,7 @@ fn venv_script(env_path: &str, cmd: &str) -> String {
         "csh" | "tcsh" => format!("source {env_path}/bin/activate.csh"),
         _ => {
             if cfg!(windows) {
-                format!("{env_path}\\Scripts\\Activate.ps1")
+                format!("{env_path}\\Scripts\\activate")
             // Assuming PowerShell as a default for Windows
             } else {
                 format!(". {env_path}/bin/activate") // Defaulting to bash/zsh for Unix-like systems
