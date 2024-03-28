@@ -30,16 +30,19 @@ class MinRepro<T> implements AsyncIterable<Partial<T>> {
 const testCompilation = async () => {
 
   async function* events(): AsyncGenerator<LLMResponse> {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
     yield {
       generated: "llm1",
       model_name: "model",
       meta: {},
     }
+    await new Promise((resolve) => setTimeout(resolve, 2000));
     yield {
       generated: "llm2",
       model_name: "model",
       meta: {},
     }
+    await new Promise((resolve) => setTimeout(resolve, 2000));
     yield {
       generated: "llm3",
       model_name: "model",
@@ -73,7 +76,9 @@ const main = async () => {
   let i = 0;
   for await (const result of stream) {
     if (i++ > 5) break;
-    console.log(JSON.stringify(result, null, 2));
+    if (result.is_parseable) {
+      console.log(JSON.stringify(result.parsed, null, 2));
+    }
   }
 
   const final = await stream.getFinalResponse();

@@ -2,8 +2,15 @@ import { FireBamlEvent } from "../ffi_layer";
 import { BaseProvider } from "./base_provider";
 import { LLMResponse } from "./llm_base_provider";
 
-// DO NOT LAND: back out the "| null" bit
-class LLMResponseStream<T> implements AsyncIterable<Partial<T> | null> {
+type PartialValue<T> = { delta: string } & ({
+  is_parseable: true,
+  parsed: Partial<T>,
+} | {
+  is_parseable: false,
+  parsed: null,
+});
+
+class LLMResponseStream<T> implements AsyncIterable<PartialValue<T>> {
   #stream: AsyncIterable<LLMResponse>;
   #accumulated_content: string = "";
   #lastReceived: LLMResponse | null = null;
@@ -17,12 +24,12 @@ class LLMResponseStream<T> implements AsyncIterable<Partial<T> | null> {
     this.#stream = stream;
   }
 
-  [Symbol.asyncIterator](): AsyncIterator<Partial<T> | null> {
+  [Symbol.asyncIterator](): AsyncIterator<PartialValue<T>> {
     const iterator = this.stream[Symbol.asyncIterator]();
 
     // TODO: begin tracing
     return {
-      next: async (): Promise<IteratorResult<Partial<T> | null>> => {
+      next: async (): Promise<IteratorResult<PartialValue<T>>> => {
         try {
           // TODO: what happens if an error occurs during any single stream event?
           const { value, done } = await iterator.next();
@@ -30,7 +37,27 @@ class LLMResponseStream<T> implements AsyncIterable<Partial<T> | null> {
           if (!done) {
             this.#lastReceived = value;
             this.#accumulated_content += value.generated;
-            return { value: this.partialDeserialize(this.#accumulated_content), done: false };
+
+            const parsed = this.partialDeserialize(this.#accumulated_content);
+            if (parsed === null) {
+              return {
+                value: {
+                  delta: value.generated,
+                  is_parseable: false,
+                  parsed,
+                },
+                done: false,
+              };
+            } else {
+              return {
+                value: {
+                  delta: value.generated,
+                  is_parseable: true,
+                  parsed,
+                },
+                done: false,
+              };
+            }
           }
 
           // TODO: end tracing
