@@ -9,7 +9,7 @@
 import { GPT35 } from '../client';
 import { FnTestAliasedEnumOutput } from '../function';
 import { schema } from '../json_schema';
-import { LLMResponseStream } from '@boundaryml/baml-core/client_manager';
+import { LLMResponseStream } from '@boundaryml/baml-core';
 import { Deserializer } from '@boundaryml/baml-core/deserializer/deserializer';
 
 
@@ -52,7 +52,7 @@ const v1 = async (
   return deserializer.coerce(result.generated);
 };
 
-const v1_stream = async (
+const v1_stream = (
   arg: string
 ): LLMResponseStream<TestEnum> => {
   
@@ -68,8 +68,11 @@ const v1_stream = async (
 
   return new LLMResponseStream<TestEnum>(
     stream,
-    (partial) => null,
-    deserializer.coerce,
+    (partial: string) => {
+      console.log(`>>> partial >>>\n${partial}'\n<<< partial <<<`)
+      return null
+    },
+    (final: string) => deserializer.coerce(final),
   );
 };
 

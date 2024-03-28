@@ -7,13 +7,14 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..clients.client_gpt35 import GPT35
+from ..clients.client_claude import Claude
 from ..functions.fx_optionaltest_function import BAMLOptionalTest_Function
 from ..types.classes.cls_optionaltest_prop1 import OptionalTest_Prop1
 from ..types.classes.cls_optionaltest_returntype import OptionalTest_ReturnType
 from ..types.enums.enm_optionaltest_categorytype import OptionalTest_CategoryType
 from ..types.partial.classes.cls_optionaltest_prop1 import PartialOptionalTest_Prop1
 from ..types.partial.classes.cls_optionaltest_returntype import PartialOptionalTest_ReturnType
+from baml_core.provider_manager.llm_provider_base import LLMChatMessage
 from baml_core.provider_manager.llm_response import LLMResponse
 from baml_core.stream import AsyncStream
 from baml_lib._impl.deserializer import Deserializer
@@ -22,12 +23,13 @@ from typing import List, Optional
 
 import typing
 # Impl: v1
-# Client: GPT35
+# Client: Claude
 # An implementation of OptionalTest_Function.
 
-__prompt_template = """\
-
-
+__prompt_template: List[LLMChatMessage] = [
+{
+    "role": "user",
+    "content": """\
 Return a JSON blob with this schema: 
 ({
   "omega_1": {
@@ -47,6 +49,9 @@ Gamma
 
 JSON:\
 """
+}
+
+]
 
 __input_replacers = {
 }
@@ -66,14 +71,14 @@ __partial_deserializer = Deserializer[List[Optional[OptionalTest_ReturnType]]](L
 
 
 async def v1(arg: str, /) -> List[Optional[OptionalTest_ReturnType]]:
-    response = await GPT35.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
+    response = await Claude.run_chat_template(__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
     deserialized = __deserializer.from_string(response.generated)
     return deserialized
 
 
 def v1_stream(arg: str, /) -> AsyncStream[List[Optional[OptionalTest_ReturnType]], List[Optional[OptionalTest_ReturnType]]]:
     def run_prompt() -> typing.AsyncIterator[LLMResponse]:
-        raw_stream = GPT35.run_prompt_template_stream(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
+        raw_stream = Claude.run_chat_template_stream(__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
         return raw_stream
     stream = AsyncStream(stream_cb=run_prompt, partial_deserializer=__partial_deserializer, final_deserializer=__deserializer)
     return stream

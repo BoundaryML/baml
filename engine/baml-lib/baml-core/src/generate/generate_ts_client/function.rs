@@ -70,6 +70,7 @@ impl WithFileContent<TSLanguageFeatures> for Walker<'_, &Function> {
             super::template::Template::Function,
             &function_content,
         ));
+        file.add_import("@boundaryml/baml-core", "LLMResponseStream", None, false);
         file.add_import(
             "@boundaryml/baml-core/ffi_layer",
             "FireBamlEvent",

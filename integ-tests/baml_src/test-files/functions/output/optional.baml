@@ -22,9 +22,9 @@ function OptionalTest_Function {
 }
 
 impl<llm, OptionalTest_Function> v1 {
-  client GPT35
+  client Claude
   prompt #"
-    
+    {#chat(user)}
 
     Return a JSON blob with this schema: 
     {#print_type(output)}

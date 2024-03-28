@@ -12,7 +12,7 @@ const loadEnvVars = () => {
 
 export { setTags, loadEnvVars };
 export { Deserializer, registerEnumDeserializer, registerObjectDeserializer } from "./deserializer/deserializer";
-export { clientManager, ConstantDelayRetryPolicy, ExponentialBackoffRetryPolicy } from "./client_manager";
+export { clientManager, ConstantDelayRetryPolicy, ExponentialBackoffRetryPolicy, LLMResponse, LLMResponseStream } from "./client_manager";
 export { trace, traceAsync, FireBamlEvent, BamlTracer } from "./ffi_layer";
 export { DeserializerException, DeserializerError, LLMException };
 

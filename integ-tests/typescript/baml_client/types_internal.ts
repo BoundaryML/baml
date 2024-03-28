@@ -414,7 +414,7 @@ class InternalOptionalTest_ReturnType implements OptionalTest_ReturnType {
   private constructor(private data: {
     omega_1: OptionalTest_Prop1 | null,
     omega_2: string | null,
-    omega_3: OptionalTest_CategoryType | null[],
+    omega_3: (OptionalTest_CategoryType | null)[],
   }, private raw: OptionalTest_ReturnType) {}
 
   static from(data: OptionalTest_ReturnType): InternalOptionalTest_ReturnType {
@@ -431,7 +431,7 @@ class InternalOptionalTest_ReturnType implements OptionalTest_ReturnType {
   get omega_2(): string | null {
     return this.data.omega_2;
   }
-  get omega_3(): OptionalTest_CategoryType | null[] {
+  get omega_3(): (OptionalTest_CategoryType | null)[] {
     return this.data.omega_3;
   }
 
@@ -659,7 +659,7 @@ function isUnionTest_ReturnType(obj: any): obj is UnionTest_ReturnType {
 class InternalUnionTest_ReturnType implements UnionTest_ReturnType {
   private constructor(private data: {
     prop1: string | boolean,
-    prop2: number | boolean[],
+    prop2: (number | boolean)[],
     prop3: number[] | boolean[],
   }, private raw: UnionTest_ReturnType) {}
 
@@ -695,7 +695,7 @@ if (Array.isArray(x) && x.every((x: any) => typeof x === 'boolean')) {
   get prop1(): string | boolean {
     return this.data.prop1;
   }
-  get prop2(): number | boolean[] {
+  get prop2(): (number | boolean)[] {
     return this.data.prop2;
   }
   get prop3(): number[] | boolean[] {

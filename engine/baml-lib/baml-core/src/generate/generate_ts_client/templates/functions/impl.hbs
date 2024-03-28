@@ -59,7 +59,7 @@ const {{name}} = async (
   return deserializer.coerce(result.generated);
 };
 
-const {{name}}_stream = async (
+const {{name}}_stream = (
 {{#if function.params.positional}}
   {{function.params.name}}: {{function.params.type}}
 {{else}}
@@ -90,8 +90,11 @@ const {{name}}_stream = async (
 
   return new LLMResponseStream<{{function.return_type}}>(
     stream,
-    (partial) => null,
-    deserializer.coerce,
+    (partial: string) => {
+      console.log(`>>> partial >>>\n${partial}'\n<<< partial <<<`)
+      return null
+    },
+    (final: string) => deserializer.coerce(final),
   );
 };
 

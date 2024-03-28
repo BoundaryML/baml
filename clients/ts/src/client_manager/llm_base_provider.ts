@@ -110,6 +110,12 @@ abstract class LLMBaseProvider extends BaseProvider {
     [key: string]: any
   }): Promise<LLMResponse>;
 
+  run_prompt_template_stream(prompt: LLMChatMessage | LLMChatMessage[], template_args: Iterable<string>, params: {
+    [key: string]: any
+  }): AsyncIterable<LLMResponse> {
+    throw new Error("Please use {#chat(system)} in your prompt; streaming is only supported for chat prompts.")
+  }
+
   protected abstract run_chat_template_stream(prompt: LLMChatMessage | LLMChatMessage[], template_args: Iterable<string>, params: {
     [key: string]: any
   }): AsyncIterable<LLMResponse>;

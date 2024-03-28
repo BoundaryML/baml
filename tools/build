@@ -61,9 +61,10 @@ case "$_path" in
         --ext js,ts \
         --ignore index.js \
         --ignore index.d.ts \
-        --exec 'yarn build'
+        --exec 'yarn build; date'
     else
       yarn build
+      date
     fi
     ;;
 
@@ -73,9 +74,10 @@ case "$_path" in
         --verbose \
         --ext rs,hb,hbs \
         --ignore 'target' \
-        --exec 'cargo build'
+        --exec 'cargo build; date'
     else
       cargo build
+      date
     fi
     ;;
 
@@ -86,19 +88,22 @@ case "$_path" in
         --exec 'poetry run mypy . && poetry run ruff check && poetry run ruff format'
     else
       poetry run mypy . && poetry run ruff check && poetry run ruff format
+      date
     fi
     ;;
 
   /clients/ts | /clients/ts/* )
+    pnpm link "${_repo_root}/engine/baml-core-ffi"
     if [ "$_watch_mode" -eq 1 ]; then
       npx nodemon \
         --verbose \
         --ext js,ts \
         --ignore '**/dist' \
         --ignore '**/node_modules' \
-        --exec 'pnpm build'
+        --exec 'pnpm build; date'
     else
       pnpm build
+      date
     fi
     ;;
 
@@ -107,9 +112,10 @@ case "$_path" in
       npx nodemon \
         --verbose \
         --watch "${_repo_root}/engine/target/debug/baml" \
-        --exec "${_repo_root}/engine/target/debug/baml build"
+        --exec "${_repo_root}/engine/target/debug/baml build; date"
     else
       "${_repo_root}/engine/target/debug/baml" build
+      date
     fi
     ;;
 
@@ -126,9 +132,10 @@ case "$_path" in
         --ignore '**/dist' \
         --ignore '**/node_modules' \
         --ignore '**/out' \
-        --exec 'pnpm build'
+        --exec 'pnpm build; date'
     else
       pnpm build
+      date
     fi
     ;;
 

@@ -45,7 +45,12 @@ pub(super) fn to_internal_type(r#type: &FieldType) -> String {
     match r#type {
         FieldType::Class(name) => format!("Internal{}", name),
         FieldType::Enum(name) => name.clone(),
-        FieldType::List(inner) => format!("{}[]", to_internal_type(inner)),
+        FieldType::List(inner) => match inner.as_ref() {
+            FieldType::Union(_) | FieldType::Optional(_) => {
+                format!("({})[]", to_internal_type(inner))
+            }
+            _ => format!("{}[]", to_internal_type(inner)),
+        },
         FieldType::Map(key, value) => {
             format!(
                 "{{ [key: {}]: {} }}",

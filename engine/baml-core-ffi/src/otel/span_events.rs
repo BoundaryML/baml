@@ -236,7 +236,7 @@ where
         );
       }
     } else {
-      println!("No span id found for event: {:?}", event.metadata().name());
+      println!("No span id found for event: {:?}", event);
     }
   }
 

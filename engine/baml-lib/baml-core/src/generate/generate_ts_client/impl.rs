@@ -5,7 +5,7 @@ use crate::generate::{
     generate_ts_client::{field_type::to_parse_expression, ts_language_features::ToTypeScript},
     ir::{Function, FunctionArgs, Impl, Prompt, Walker},
 };
-use std::collections::HashMap;
+use std::{any::Any, collections::HashMap};
 
 use super::{
     template::render_with_hbs,
@@ -27,12 +27,14 @@ impl WithFileContent<TSLanguageFeatures> for Walker<'_, (&Function, &Impl)> {
         let file = collector.start_file(self.file_dir(), self.file_name(), false);
         file.add_import("../client", impl_.elem.client.clone(), None, false);
         file.add_import("../function", function.elem.name.clone(), None, false);
-        file.add_import(
-            "@boundaryml/baml-core/client_manager",
-            "LLMResponseStream",
-            None,
-            false,
-        );
+        // need to import every constituent type to the file
+        //file.add_import(
+        //    "../types",
+        //    &function.elem.output.elem.to_string(),
+        //    None,
+        //    false,
+        //);
+        file.add_import("@boundaryml/baml-core", "LLMResponseStream", None, false);
         file.add_import(
             "@boundaryml/baml-core/deserializer/deserializer",
             "Deserializer",

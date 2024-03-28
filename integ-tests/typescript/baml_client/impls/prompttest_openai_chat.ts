@@ -9,7 +9,7 @@
 import { GPT35 } from '../client';
 import { PromptTest } from '../function';
 import { schema } from '../json_schema';
-import { LLMResponseStream } from '@boundaryml/baml-core/client_manager';
+import { LLMResponseStream } from '@boundaryml/baml-core';
 import { Deserializer } from '@boundaryml/baml-core/deserializer/deserializer';
 
 
@@ -38,7 +38,7 @@ const openai_chat = async (
   return deserializer.coerce(result.generated);
 };
 
-const openai_chat_stream = async (
+const openai_chat_stream = (
   arg: string
 ): LLMResponseStream<string> => {
   
@@ -54,8 +54,11 @@ const openai_chat_stream = async (
 
   return new LLMResponseStream<string>(
     stream,
-    (partial) => null,
-    deserializer.coerce,
+    (partial: string) => {
+      console.log(`>>> partial >>>\n${partial}'\n<<< partial <<<`)
+      return null
+    },
+    (final: string) => deserializer.coerce(final),
   );
 };
 

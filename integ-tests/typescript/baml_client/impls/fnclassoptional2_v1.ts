@@ -10,7 +10,7 @@ import { GPT35 } from '../client';
 import { FnClassOptional2 } from '../function';
 import { schema } from '../json_schema';
 import { InternalClassOptionalFields } from '../types_internal';
-import { LLMResponseStream } from '@boundaryml/baml-core/client_manager';
+import { LLMResponseStream } from '@boundaryml/baml-core';
 import { Deserializer } from '@boundaryml/baml-core/deserializer/deserializer';
 
 
@@ -41,7 +41,7 @@ const v1 = async (
   return deserializer.coerce(result.generated);
 };
 
-const v1_stream = async (
+const v1_stream = (
   arg: ClassOptionalFields
 ): LLMResponseStream<string> => {
   
@@ -57,8 +57,11 @@ const v1_stream = async (
 
   return new LLMResponseStream<string>(
     stream,
-    (partial) => null,
-    deserializer.coerce,
+    (partial: string) => {
+      console.log(`>>> partial >>>\n${partial}'\n<<< partial <<<`)
+      return null
+    },
+    (final: string) => deserializer.coerce(final),
   );
 };
 

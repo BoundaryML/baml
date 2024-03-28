@@ -6,17 +6,17 @@
 /* eslint-disable */
 
 
-import { GPT35 } from '../client';
+import { Claude } from '../client';
 import { OptionalTest_Function } from '../function';
 import { schema } from '../json_schema';
-import { LLMResponseStream } from '@boundaryml/baml-core/client_manager';
+import { LLMResponseStream } from '@boundaryml/baml-core';
 import { Deserializer } from '@boundaryml/baml-core/deserializer/deserializer';
 
 
-const prompt_template = `\
-
-
-Return a JSON blob with this schema: 
+const prompt_template = [
+  {
+    role: "user",
+    content: `Return a JSON blob with this schema: 
 ({
   "omega_1": {
     "omega_a": string,
@@ -33,8 +33,10 @@ Aleph
 Beta
 Gamma
 
-JSON:\
-`;
+JSON:`
+  }
+];
+
 
 const deserializer = new Deserializer<OptionalTest_ReturnType | null[]>(schema, {
   $ref: '#/definitions/OptionalTest_Function_output'
@@ -44,7 +46,7 @@ const v1 = async (
   arg: string
 ): Promise<OptionalTest_ReturnType | null[]> => {
   
-  const result = await GPT35.run_prompt_template(
+  const result = await Claude.run_chat_template(
     prompt_template,
     [],
     {
@@ -54,11 +56,11 @@ const v1 = async (
   return deserializer.coerce(result.generated);
 };
 
-const v1_stream = async (
+const v1_stream = (
   arg: string
 ): LLMResponseStream<OptionalTest_ReturnType | null[]> => {
   
-  const stream = GPT35.run_prompt_template_stream(
+  const stream = Claude.run_chat_template_stream(
     prompt_template,
     [],
     {
@@ -67,8 +69,11 @@ const v1_stream = async (
 
   return new LLMResponseStream<OptionalTest_ReturnType | null[]>(
     stream,
-    (partial) => null,
-    deserializer.coerce,
+    (partial: string) => {
+      console.log(`>>> partial >>>\n${partial}'\n<<< partial <<<`)
+      return null
+    },
+    (final: string) => deserializer.coerce(final),
   );
 };
 

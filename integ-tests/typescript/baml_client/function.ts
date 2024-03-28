@@ -7,36 +7,43 @@
 
 
 import { ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, EnumOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalClass, OptionalTest_ReturnType, OverrideClass, OverrideEnum, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass, UnionTest_ReturnType } from './types';
+import { LLMResponseStream } from '@boundaryml/baml-core';
 import { FireBamlEvent, traceAsync } from '@boundaryml/baml-core/ffi_layer';
 
 
+// BAML function signature
 type IFnClassOptional = (arg: OptionalClass | null) => Promise<string>
 
-type FnClassOptionalImpls = 'v1';
+// BAML function stream signature
+type IFnClassOptionalStream = (arg: OptionalClass | null) => LLMResponseStream<string>
+
+type FnClassOptionalImplKey = 'v1';
 
 interface FnClassOptionalImpl {
+    name: FnClassOptionalImplKey;
     run: IFnClassOptional;
-    name: FnClassOptionalImpls;
+    stream: IFnClassOptionalStream;
 }
 
 interface FnClassOptionalFunction {
-  registerImpl: (name: FnClassOptionalImpls, impl: FnClassOptionalImpl) => void;
-  getImpl: (name: FnClassOptionalImpls) => FnClassOptionalImpl;
+  stream: IFnClassOptionalStream;
+  registerImpl: (name: FnClassOptionalImplKey, cb: IFnClassOptional, stream_cb: IFnClassOptionalStream) => void;
+  getImpl: (name: FnClassOptionalImplKey) => FnClassOptionalImpl;
 }
 
 function createFnClassOptionalInstance(): IFnClassOptional & FnClassOptionalFunction {
 
-  const registry: Record<FnClassOptionalImpls, FnClassOptionalImpl> = {}
+  const registry: Record<FnClassOptionalImplKey, FnClassOptionalImpl> = {}
 
   const wrapper: FnClassOptionalFunction = {
-    getImpl: (name: FnClassOptionalImpls) => {
+    getImpl: (name: FnClassOptionalImplKey) => {
       const impl = registry[name];
       if (!impl) {
         throw new Error(`No implementation for FnClassOptional with name ${name}`);
       }
       return impl;
     },
-    registerImpl: (name: FnClassOptionalImpls, cb: IFnClassOptional) => {
+    registerImpl: (name: FnClassOptionalImplKey, cb: IFnClassOptional, stream_cb: IFnClassOptionalStream) => {
       if (registry[name]) {
         throw new Error(`Implementation for FnClassOptional with name ${name} already exists`);
       }
@@ -57,7 +64,8 @@ function createFnClassOptionalInstance(): IFnClassOptional & FnClassOptionalFunc
         ) => {
           FireBamlEvent.variant(name);
           return await cb(arg);
-        })
+        }),
+        stream: stream_cb,
       };
     },
     validate: () => {
@@ -75,39 +83,50 @@ function createFnClassOptionalInstance(): IFnClassOptional & FnClassOptionalFunc
   };
 
   Object.assign(impl, wrapper);
+  Object.assign(impl, {
+    stream: (arg) => {
+      return wrapper.getImpl('v1').stream(arg);
+    }
+  })
 
-  return impl as  IFnClassOptional & FnClassOptionalFunction;
+  return impl as IFnClassOptional & FnClassOptionalFunction;
 }
 
 const FnClassOptional = createFnClassOptionalInstance();
 
+// BAML function signature
 type IFnClassOptional2 = (arg: ClassOptionalFields) => Promise<string>
 
-type FnClassOptional2Impls = 'v1';
+// BAML function stream signature
+type IFnClassOptional2Stream = (arg: ClassOptionalFields) => LLMResponseStream<string>
+
+type FnClassOptional2ImplKey = 'v1';
 
 interface FnClassOptional2Impl {
+    name: FnClassOptional2ImplKey;
     run: IFnClassOptional2;
-    name: FnClassOptional2Impls;
+    stream: IFnClassOptional2Stream;
 }
 
 interface FnClassOptional2Function {
-  registerImpl: (name: FnClassOptional2Impls, impl: FnClassOptional2Impl) => void;
-  getImpl: (name: FnClassOptional2Impls) => FnClassOptional2Impl;
+  stream: IFnClassOptional2Stream;
+  registerImpl: (name: FnClassOptional2ImplKey, cb: IFnClassOptional2, stream_cb: IFnClassOptional2Stream) => void;
+  getImpl: (name: FnClassOptional2ImplKey) => FnClassOptional2Impl;
 }
 
 function createFnClassOptional2Instance(): IFnClassOptional2 & FnClassOptional2Function {
 
-  const registry: Record<FnClassOptional2Impls, FnClassOptional2Impl> = {}
+  const registry: Record<FnClassOptional2ImplKey, FnClassOptional2Impl> = {}
 
   const wrapper: FnClassOptional2Function = {
-    getImpl: (name: FnClassOptional2Impls) => {
+    getImpl: (name: FnClassOptional2ImplKey) => {
       const impl = registry[name];
       if (!impl) {
         throw new Error(`No implementation for FnClassOptional2 with name ${name}`);
       }
       return impl;
     },
-    registerImpl: (name: FnClassOptional2Impls, cb: IFnClassOptional2) => {
+    registerImpl: (name: FnClassOptional2ImplKey, cb: IFnClassOptional2, stream_cb: IFnClassOptional2Stream) => {
       if (registry[name]) {
         throw new Error(`Implementation for FnClassOptional2 with name ${name} already exists`);
       }
@@ -128,7 +147,8 @@ function createFnClassOptional2Instance(): IFnClassOptional2 & FnClassOptional2F
         ) => {
           FireBamlEvent.variant(name);
           return await cb(arg);
-        })
+        }),
+        stream: stream_cb,
       };
     },
     validate: () => {
@@ -146,39 +166,50 @@ function createFnClassOptional2Instance(): IFnClassOptional2 & FnClassOptional2F
   };
 
   Object.assign(impl, wrapper);
+  Object.assign(impl, {
+    stream: (arg) => {
+      return wrapper.getImpl('v1').stream(arg);
+    }
+  })
 
-  return impl as  IFnClassOptional2 & FnClassOptional2Function;
+  return impl as IFnClassOptional2 & FnClassOptional2Function;
 }
 
 const FnClassOptional2 = createFnClassOptional2Instance();
 
+// BAML function signature
 type IFnClassOptionalOutput = (arg: string) => Promise<ClassOptionalOutput | null>
 
-type FnClassOptionalOutputImpls = 'v1';
+// BAML function stream signature
+type IFnClassOptionalOutputStream = (arg: string) => LLMResponseStream<ClassOptionalOutput | null>
+
+type FnClassOptionalOutputImplKey = 'v1';
 
 interface FnClassOptionalOutputImpl {
+    name: FnClassOptionalOutputImplKey;
     run: IFnClassOptionalOutput;
-    name: FnClassOptionalOutputImpls;
+    stream: IFnClassOptionalOutputStream;
 }
 
 interface FnClassOptionalOutputFunction {
-  registerImpl: (name: FnClassOptionalOutputImpls, impl: FnClassOptionalOutputImpl) => void;
-  getImpl: (name: FnClassOptionalOutputImpls) => FnClassOptionalOutputImpl;
+  stream: IFnClassOptionalOutputStream;
+  registerImpl: (name: FnClassOptionalOutputImplKey, cb: IFnClassOptionalOutput, stream_cb: IFnClassOptionalOutputStream) => void;
+  getImpl: (name: FnClassOptionalOutputImplKey) => FnClassOptionalOutputImpl;
 }
 
 function createFnClassOptionalOutputInstance(): IFnClassOptionalOutput & FnClassOptionalOutputFunction {
 
-  const registry: Record<FnClassOptionalOutputImpls, FnClassOptionalOutputImpl> = {}
+  const registry: Record<FnClassOptionalOutputImplKey, FnClassOptionalOutputImpl> = {}
 
   const wrapper: FnClassOptionalOutputFunction = {
-    getImpl: (name: FnClassOptionalOutputImpls) => {
+    getImpl: (name: FnClassOptionalOutputImplKey) => {
       const impl = registry[name];
       if (!impl) {
         throw new Error(`No implementation for FnClassOptionalOutput with name ${name}`);
       }
       return impl;
     },
-    registerImpl: (name: FnClassOptionalOutputImpls, cb: IFnClassOptionalOutput) => {
+    registerImpl: (name: FnClassOptionalOutputImplKey, cb: IFnClassOptionalOutput, stream_cb: IFnClassOptionalOutputStream) => {
       if (registry[name]) {
         throw new Error(`Implementation for FnClassOptionalOutput with name ${name} already exists`);
       }
@@ -199,7 +230,8 @@ function createFnClassOptionalOutputInstance(): IFnClassOptionalOutput & FnClass
         ) => {
           FireBamlEvent.variant(name);
           return await cb(arg);
-        })
+        }),
+        stream: stream_cb,
       };
     },
     validate: () => {
@@ -217,39 +249,50 @@ function createFnClassOptionalOutputInstance(): IFnClassOptionalOutput & FnClass
   };
 
   Object.assign(impl, wrapper);
+  Object.assign(impl, {
+    stream: (arg) => {
+      return wrapper.getImpl('v1').stream(arg);
+    }
+  })
 
-  return impl as  IFnClassOptionalOutput & FnClassOptionalOutputFunction;
+  return impl as IFnClassOptionalOutput & FnClassOptionalOutputFunction;
 }
 
 const FnClassOptionalOutput = createFnClassOptionalOutputInstance();
 
+// BAML function signature
 type IFnClassOptionalOutput2 = (arg: string) => Promise<ClassOptionalOutput2 | null>
 
-type FnClassOptionalOutput2Impls = 'v1';
+// BAML function stream signature
+type IFnClassOptionalOutput2Stream = (arg: string) => LLMResponseStream<ClassOptionalOutput2 | null>
+
+type FnClassOptionalOutput2ImplKey = 'v1';
 
 interface FnClassOptionalOutput2Impl {
+    name: FnClassOptionalOutput2ImplKey;
     run: IFnClassOptionalOutput2;
-    name: FnClassOptionalOutput2Impls;
+    stream: IFnClassOptionalOutput2Stream;
 }
 
 interface FnClassOptionalOutput2Function {
-  registerImpl: (name: FnClassOptionalOutput2Impls, impl: FnClassOptionalOutput2Impl) => void;
-  getImpl: (name: FnClassOptionalOutput2Impls) => FnClassOptionalOutput2Impl;
+  stream: IFnClassOptionalOutput2Stream;
+  registerImpl: (name: FnClassOptionalOutput2ImplKey, cb: IFnClassOptionalOutput2, stream_cb: IFnClassOptionalOutput2Stream) => void;
+  getImpl: (name: FnClassOptionalOutput2ImplKey) => FnClassOptionalOutput2Impl;
 }
 
 function createFnClassOptionalOutput2Instance(): IFnClassOptionalOutput2 & FnClassOptionalOutput2Function {
 
-  const registry: Record<FnClassOptionalOutput2Impls, FnClassOptionalOutput2Impl> = {}
+  const registry: Record<FnClassOptionalOutput2ImplKey, FnClassOptionalOutput2Impl> = {}
 
   const wrapper: FnClassOptionalOutput2Function = {
-    getImpl: (name: FnClassOptionalOutput2Impls) => {
+    getImpl: (name: FnClassOptionalOutput2ImplKey) => {
       const impl = registry[name];
       if (!impl) {
         throw new Error(`No implementation for FnClassOptionalOutput2 with name ${name}`);
       }
       return impl;
     },
-    registerImpl: (name: FnClassOptionalOutput2Impls, cb: IFnClassOptionalOutput2) => {
+    registerImpl: (name: FnClassOptionalOutput2ImplKey, cb: IFnClassOptionalOutput2, stream_cb: IFnClassOptionalOutput2Stream) => {
       if (registry[name]) {
         throw new Error(`Implementation for FnClassOptionalOutput2 with name ${name} already exists`);
       }
@@ -270,7 +313,8 @@ function createFnClassOptionalOutput2Instance(): IFnClassOptionalOutput2 & FnCla
         ) => {
           FireBamlEvent.variant(name);
           return await cb(arg);
-        })
+        }),
+        stream: stream_cb,
       };
     },
     validate: () => {
@@ -288,39 +332,50 @@ function createFnClassOptionalOutput2Instance(): IFnClassOptionalOutput2 & FnCla
   };
 
   Object.assign(impl, wrapper);
+  Object.assign(impl, {
+    stream: (arg) => {
+      return wrapper.getImpl('v1').stream(arg);
+    }
+  })
 
-  return impl as  IFnClassOptionalOutput2 & FnClassOptionalOutput2Function;
+  return impl as IFnClassOptionalOutput2 & FnClassOptionalOutput2Function;
 }
 
 const FnClassOptionalOutput2 = createFnClassOptionalOutput2Instance();
 
+// BAML function signature
 type IFnEnumListOutput = (arg: string) => Promise<EnumOutput[]>
 
-type FnEnumListOutputImpls = 'v1';
+// BAML function stream signature
+type IFnEnumListOutputStream = (arg: string) => LLMResponseStream<EnumOutput[]>
+
+type FnEnumListOutputImplKey = 'v1';
 
 interface FnEnumListOutputImpl {
+    name: FnEnumListOutputImplKey;
     run: IFnEnumListOutput;
-    name: FnEnumListOutputImpls;
+    stream: IFnEnumListOutputStream;
 }
 
 interface FnEnumListOutputFunction {
-  registerImpl: (name: FnEnumListOutputImpls, impl: FnEnumListOutputImpl) => void;
-  getImpl: (name: FnEnumListOutputImpls) => FnEnumListOutputImpl;
+  stream: IFnEnumListOutputStream;
+  registerImpl: (name: FnEnumListOutputImplKey, cb: IFnEnumListOutput, stream_cb: IFnEnumListOutputStream) => void;
+  getImpl: (name: FnEnumListOutputImplKey) => FnEnumListOutputImpl;
 }
 
 function createFnEnumListOutputInstance(): IFnEnumListOutput & FnEnumListOutputFunction {
 
-  const registry: Record<FnEnumListOutputImpls, FnEnumListOutputImpl> = {}
+  const registry: Record<FnEnumListOutputImplKey, FnEnumListOutputImpl> = {}
 
   const wrapper: FnEnumListOutputFunction = {
-    getImpl: (name: FnEnumListOutputImpls) => {
+    getImpl: (name: FnEnumListOutputImplKey) => {
       const impl = registry[name];
       if (!impl) {
         throw new Error(`No implementation for FnEnumListOutput with name ${name}`);
       }
       return impl;
     },
-    registerImpl: (name: FnEnumListOutputImpls, cb: IFnEnumListOutput) => {
+    registerImpl: (name: FnEnumListOutputImplKey, cb: IFnEnumListOutput, stream_cb: IFnEnumListOutputStream) => {
       if (registry[name]) {
         throw new Error(`Implementation for FnEnumListOutput with name ${name} already exists`);
       }
@@ -341,7 +396,8 @@ function createFnEnumListOutputInstance(): IFnEnumListOutput & FnEnumListOutputF
         ) => {
           FireBamlEvent.variant(name);
           return await cb(arg);
-        })
+        }),
+        stream: stream_cb,
       };
     },
     validate: () => {
@@ -359,39 +415,50 @@ function createFnEnumListOutputInstance(): IFnEnumListOutput & FnEnumListOutputF
   };
 
   Object.assign(impl, wrapper);
+  Object.assign(impl, {
+    stream: (arg) => {
+      return wrapper.getImpl('v1').stream(arg);
+    }
+  })
 
-  return impl as  IFnEnumListOutput & FnEnumListOutputFunction;
+  return impl as IFnEnumListOutput & FnEnumListOutputFunction;
 }
 
 const FnEnumListOutput = createFnEnumListOutputInstance();
 
+// BAML function signature
 type IFnEnumOutput = (arg: string) => Promise<EnumOutput>
 
-type FnEnumOutputImpls = 'v1';
+// BAML function stream signature
+type IFnEnumOutputStream = (arg: string) => LLMResponseStream<EnumOutput>
+
+type FnEnumOutputImplKey = 'v1';
 
 interface FnEnumOutputImpl {
+    name: FnEnumOutputImplKey;
     run: IFnEnumOutput;
-    name: FnEnumOutputImpls;
+    stream: IFnEnumOutputStream;
 }
 
 interface FnEnumOutputFunction {
-  registerImpl: (name: FnEnumOutputImpls, impl: FnEnumOutputImpl) => void;
-  getImpl: (name: FnEnumOutputImpls) => FnEnumOutputImpl;
+  stream: IFnEnumOutputStream;
+  registerImpl: (name: FnEnumOutputImplKey, cb: IFnEnumOutput, stream_cb: IFnEnumOutputStream) => void;
+  getImpl: (name: FnEnumOutputImplKey) => FnEnumOutputImpl;
 }
 
 function createFnEnumOutputInstance(): IFnEnumOutput & FnEnumOutputFunction {
 
-  const registry: Record<FnEnumOutputImpls, FnEnumOutputImpl> = {}
+  const registry: Record<FnEnumOutputImplKey, FnEnumOutputImpl> = {}
 
   const wrapper: FnEnumOutputFunction = {
-    getImpl: (name: FnEnumOutputImpls) => {
+    getImpl: (name: FnEnumOutputImplKey) => {
       const impl = registry[name];
       if (!impl) {
         throw new Error(`No implementation for FnEnumOutput with name ${name}`);
       }
       return impl;
     },
-    registerImpl: (name: FnEnumOutputImpls, cb: IFnEnumOutput) => {
+    registerImpl: (name: FnEnumOutputImplKey, cb: IFnEnumOutput, stream_cb: IFnEnumOutputStream) => {
       if (registry[name]) {
         throw new Error(`Implementation for FnEnumOutput with name ${name} already exists`);
       }
@@ -412,7 +479,8 @@ function createFnEnumOutputInstance(): IFnEnumOutput & FnEnumOutputFunction {
         ) => {
           FireBamlEvent.variant(name);
           return await cb(arg);
-        })
+        }),
+        stream: stream_cb,
       };
     },
     validate: () => {
@@ -430,41 +498,54 @@ function createFnEnumOutputInstance(): IFnEnumOutput & FnEnumOutputFunction {
   };
 
   Object.assign(impl, wrapper);
+  Object.assign(impl, {
+    stream: (arg) => {
+      return wrapper.getImpl('v1').stream(arg);
+    }
+  })
 
-  return impl as  IFnEnumOutput & FnEnumOutputFunction;
+  return impl as IFnEnumOutput & FnEnumOutputFunction;
 }
 
 const FnEnumOutput = createFnEnumOutputInstance();
 
+// BAML function signature
 type IFnNamedArgsSingleStringOptional = (args: {
-  myString: string | null
+  myString: string | null, 
 }) => Promise<string>
 
-type FnNamedArgsSingleStringOptionalImpls = 'v1';
+// BAML function stream signature
+type IFnNamedArgsSingleStringOptionalStream = (args: {
+  myString: string | null, 
+}) => Promise<string>
+
+type FnNamedArgsSingleStringOptionalImplKey = 'v1';
 
 interface FnNamedArgsSingleStringOptionalImpl {
+    name: FnNamedArgsSingleStringOptionalImplKey;
     run: IFnNamedArgsSingleStringOptional;
-    name: FnNamedArgsSingleStringOptionalImpls;
+    stream: IFnNamedArgsSingleStringOptionalStream;
 }
 
 interface FnNamedArgsSingleStringOptionalFunction {
-  registerImpl: (name: FnNamedArgsSingleStringOptionalImpls, impl: FnNamedArgsSingleStringOptionalImpl) => void;
-  getImpl: (name: FnNamedArgsSingleStringOptionalImpls) => FnNamedArgsSingleStringOptionalImpl;
+  stream: IFnNamedArgsSingleStringOptionalStream;
+  registerImpl: (name: FnNamedArgsSingleStringOptionalImplKey, cb: IFnNamedArgsSingleStringOptional, stream_cb: IFnNamedArgsSingleStringOptionalStream) => void;
+  getImpl: (name: FnNamedArgsSingleStringOptionalImplKey) => FnNamedArgsSingleStringOptionalImpl;
 }
 
 function createFnNamedArgsSingleStringOptionalInstance(): IFnNamedArgsSingleStringOptional & FnNamedArgsSingleStringOptionalFunction {
 
-  const registry: Record<FnNamedArgsSingleStringOptionalImpls, FnNamedArgsSingleStringOptionalImpl> = {}
+  const registry: Record<FnNamedArgsSingleStringOptionalImplKey, FnNamedArgsSingleStringOptionalImpl> = {}
 
   const wrapper: FnNamedArgsSingleStringOptionalFunction = {
-    getImpl: (name: FnNamedArgsSingleStringOptionalImpls) => {
+    getImpl: (name: FnNamedArgsSingleStringOptionalImplKey) => {
       const impl = registry[name];
       if (!impl) {
         throw new Error(`No implementation for FnNamedArgsSingleStringOptional with name ${name}`);
       }
       return impl;
     },
-    registerImpl: (name: FnNamedArgsSingleStringOptionalImpls, cb: IFnNamedArgsSingleStringOptional) => {
+    registerImpl: (name: FnNamedArgsSingleStringOptionalImplKey, cb: IFnNamedArgsSingleStringOptional, stream_cb: IFnNamedArgsSingleStringOptionalStream) => {
       if (registry[name]) {
         throw new Error(`Implementation for FnNamedArgsSingleStringOptional with name ${name} already exists`);
       }
@@ -487,7 +568,8 @@ function createFnNamedArgsSingleStringOptionalInstance(): IFnNamedArgsSingleStri
         ) => {
           FireBamlEvent.variant(name);
           return await cb(params);
-        })
+        }),
+        stream: stream_cb,
       };
     },
     validate: () => {
@@ -507,39 +589,50 @@ function createFnNamedArgsSingleStringOptionalInstance(): IFnNamedArgsSingleStri
   };
 
   Object.assign(impl, wrapper);
+  Object.assign(impl, {
+    stream: (params) => {
+      return wrapper.getImpl('v1').stream(params);
+    }
+  })
 
-  return impl as  IFnNamedArgsSingleStringOptional & FnNamedArgsSingleStringOptionalFunction;
+  return impl as IFnNamedArgsSingleStringOptional & FnNamedArgsSingleStringOptionalFunction;
 }
 
 const FnNamedArgsSingleStringOptional = createFnNamedArgsSingleStringOptionalInstance();
 
+// BAML function signature
 type IFnOutputBool = (arg: string) => Promise<boolean>
 
-type FnOutputBoolImpls = 'v1';
+// BAML function stream signature
+type IFnOutputBoolStream = (arg: string) => LLMResponseStream<boolean>
+
+type FnOutputBoolImplKey = 'v1';
 
 interface FnOutputBoolImpl {
+    name: FnOutputBoolImplKey;
     run: IFnOutputBool;
-    name: FnOutputBoolImpls;
+    stream: IFnOutputBoolStream;
 }
 
 interface FnOutputBoolFunction {
-  registerImpl: (name: FnOutputBoolImpls, impl: FnOutputBoolImpl) => void;
-  getImpl: (name: FnOutputBoolImpls) => FnOutputBoolImpl;
+  stream: IFnOutputBoolStream;
+  registerImpl: (name: FnOutputBoolImplKey, cb: IFnOutputBool, stream_cb: IFnOutputBoolStream) => void;
+  getImpl: (name: FnOutputBoolImplKey) => FnOutputBoolImpl;
 }
 
 function createFnOutputBoolInstance(): IFnOutputBool & FnOutputBoolFunction {
 
-  const registry: Record<FnOutputBoolImpls, FnOutputBoolImpl> = {}
+  const registry: Record<FnOutputBoolImplKey, FnOutputBoolImpl> = {}
 
   const wrapper: FnOutputBoolFunction = {
-    getImpl: (name: FnOutputBoolImpls) => {
+    getImpl: (name: FnOutputBoolImplKey) => {
       const impl = registry[name];
       if (!impl) {
         throw new Error(`No implementation for FnOutputBool with name ${name}`);
       }
       return impl;
     },
-    registerImpl: (name: FnOutputBoolImpls, cb: IFnOutputBool) => {
+    registerImpl: (name: FnOutputBoolImplKey, cb: IFnOutputBool, stream_cb: IFnOutputBoolStream) => {
       if (registry[name]) {
         throw new Error(`Implementation for FnOutputBool with name ${name} already exists`);
       }
@@ -560,7 +653,8 @@ function createFnOutputBoolInstance(): IFnOutputBool & FnOutputBoolFunction {
         ) => {
           FireBamlEvent.variant(name);
           return await cb(arg);
-        })
+        }),
+        stream: stream_cb,
       };
     },
     validate: () => {
@@ -578,39 +672,50 @@ function createFnOutputBoolInstance(): IFnOutputBool & FnOutputBoolFunction {
   };
 
   Object.assign(impl, wrapper);
+  Object.assign(impl, {
+    stream: (arg) => {
+      return wrapper.getImpl('v1').stream(arg);
+    }
+  })
 
-  return impl as  IFnOutputBool & FnOutputBoolFunction;
+  return impl as IFnOutputBool & FnOutputBoolFunction;
 }
 
 const FnOutputBool = createFnOutputBoolInstance();
 
+// BAML function signature
 type IFnOutputClass = (arg: string) => Promise<TestOutputClass>
 
-type FnOutputClassImpls = 'v1';
+// BAML function stream signature
+type IFnOutputClassStream = (arg: string) => LLMResponseStream<TestOutputClass>
+
+type FnOutputClassImplKey = 'v1';
 
 interface FnOutputClassImpl {
+    name: FnOutputClassImplKey;
     run: IFnOutputClass;
-    name: FnOutputClassImpls;
+    stream: IFnOutputClassStream;
 }
 
 interface FnOutputClassFunction {
-  registerImpl: (name: FnOutputClassImpls, impl: FnOutputClassImpl) => void;
-  getImpl: (name: FnOutputClassImpls) => FnOutputClassImpl;
+  stream: IFnOutputClassStream;
+  registerImpl: (name: FnOutputClassImplKey, cb: IFnOutputClass, stream_cb: IFnOutputClassStream) => void;
+  getImpl: (name: FnOutputClassImplKey) => FnOutputClassImpl;
 }
 
 function createFnOutputClassInstance(): IFnOutputClass & FnOutputClassFunction {
 
-  const registry: Record<FnOutputClassImpls, FnOutputClassImpl> = {}
+  const registry: Record<FnOutputClassImplKey, FnOutputClassImpl> = {}
 
   const wrapper: FnOutputClassFunction = {
-    getImpl: (name: FnOutputClassImpls) => {
+    getImpl: (name: FnOutputClassImplKey) => {
       const impl = registry[name];
       if (!impl) {
         throw new Error(`No implementation for FnOutputClass with name ${name}`);
       }
       return impl;
     },
-    registerImpl: (name: FnOutputClassImpls, cb: IFnOutputClass) => {
+    registerImpl: (name: FnOutputClassImplKey, cb: IFnOutputClass, stream_cb: IFnOutputClassStream) => {
       if (registry[name]) {
         throw new Error(`Implementation for FnOutputClass with name ${name} already exists`);
       }
@@ -631,7 +736,8 @@ function createFnOutputClassInstance(): IFnOutputClass & FnOutputClassFunction {
         ) => {
           FireBamlEvent.variant(name);
           return await cb(arg);
-        })
+        }),
+        stream: stream_cb,
       };
     },
     validate: () => {
@@ -649,39 +755,50 @@ function createFnOutputClassInstance(): IFnOutputClass & FnOutputClassFunction {
   };
 
   Object.assign(impl, wrapper);
+  Object.assign(impl, {
+    stream: (arg) => {
+      return wrapper.getImpl('v1').stream(arg);
+    }
+  })
 
-  return impl as  IFnOutputClass & FnOutputClassFunction;
+  return impl as IFnOutputClass & FnOutputClassFunction;
 }
 
 const FnOutputClass = createFnOutputClassInstance();
 
+// BAML function signature
 type IFnOutputClassList = (arg: string) => Promise<TestOutputClass[]>
 
-type FnOutputClassListImpls = 'v1';
+// BAML function stream signature
+type IFnOutputClassListStream = (arg: string) => LLMResponseStream<TestOutputClass[]>
+
+type FnOutputClassListImplKey = 'v1';
 
 interface FnOutputClassListImpl {
+    name: FnOutputClassListImplKey;
     run: IFnOutputClassList;
-    name: FnOutputClassListImpls;
+    stream: IFnOutputClassListStream;
 }
 
 interface FnOutputClassListFunction {
-  registerImpl: (name: FnOutputClassListImpls, impl: FnOutputClassListImpl) => void;
-  getImpl: (name: FnOutputClassListImpls) => FnOutputClassListImpl;
+  stream: IFnOutputClassListStream;
+  registerImpl: (name: FnOutputClassListImplKey, cb: IFnOutputClassList, stream_cb: IFnOutputClassListStream) => void;
+  getImpl: (name: FnOutputClassListImplKey) => FnOutputClassListImpl;
 }
 
 function createFnOutputClassListInstance(): IFnOutputClassList & FnOutputClassListFunction {
 
-  const registry: Record<FnOutputClassListImpls, FnOutputClassListImpl> = {}
+  const registry: Record<FnOutputClassListImplKey, FnOutputClassListImpl> = {}
 
   const wrapper: FnOutputClassListFunction = {
-    getImpl: (name: FnOutputClassListImpls) => {
+    getImpl: (name: FnOutputClassListImplKey) => {
       const impl = registry[name];
       if (!impl) {
         throw new Error(`No implementation for FnOutputClassList with name ${name}`);
       }
       return impl;
     },
-    registerImpl: (name: FnOutputClassListImpls, cb: IFnOutputClassList) => {
+    registerImpl: (name: FnOutputClassListImplKey, cb: IFnOutputClassList, stream_cb: IFnOutputClassListStream) => {
       if (registry[name]) {
         throw new Error(`Implementation for FnOutputClassList with name ${name} already exists`);
       }
@@ -702,7 +819,8 @@ function createFnOutputClassListInstance(): IFnOutputClassList & FnOutputClassLi
         ) => {
           FireBamlEvent.variant(name);
           return await cb(arg);
-        })
+        }),
+        stream: stream_cb,
       };
     },
     validate: () => {
@@ -720,39 +838,50 @@ function createFnOutputClassListInstance(): IFnOutputClassList & FnOutputClassLi
   };
 
   Object.assign(impl, wrapper);
+  Object.assign(impl, {
+    stream: (arg) => {
+      return wrapper.getImpl('v1').stream(arg);
+    }
+  })
 
-  return impl as  IFnOutputClassList & FnOutputClassListFunction;
+  return impl as IFnOutputClassList & FnOutputClassListFunction;
 }
 
 const FnOutputClassList = createFnOutputClassListInstance();
 
+// BAML function signature
 type IFnOutputClassWithEnum = (arg: string) => Promise<TestClassWithEnum>
 
-type FnOutputClassWithEnumImpls = 'v1';
+// BAML function stream signature
+type IFnOutputClassWithEnumStream = (arg: string) => LLMResponseStream<TestClassWithEnum>
+
+type FnOutputClassWithEnumImplKey = 'v1';
 
 interface FnOutputClassWithEnumImpl {
+    name: FnOutputClassWithEnumImplKey;
     run: IFnOutputClassWithEnum;
-    name: FnOutputClassWithEnumImpls;
+    stream: IFnOutputClassWithEnumStream;
 }
 
 interface FnOutputClassWithEnumFunction {
-  registerImpl: (name: FnOutputClassWithEnumImpls, impl: FnOutputClassWithEnumImpl) => void;
-  getImpl: (name: FnOutputClassWithEnumImpls) => FnOutputClassWithEnumImpl;
+  stream: IFnOutputClassWithEnumStream;
+  registerImpl: (name: FnOutputClassWithEnumImplKey, cb: IFnOutputClassWithEnum, stream_cb: IFnOutputClassWithEnumStream) => void;
+  getImpl: (name: FnOutputClassWithEnumImplKey) => FnOutputClassWithEnumImpl;
 }
 
 function createFnOutputClassWithEnumInstance(): IFnOutputClassWithEnum & FnOutputClassWithEnumFunction {
 
-  const registry: Record<FnOutputClassWithEnumImpls, FnOutputClassWithEnumImpl> = {}
+  const registry: Record<FnOutputClassWithEnumImplKey, FnOutputClassWithEnumImpl> = {}
 
   const wrapper: FnOutputClassWithEnumFunction = {
-    getImpl: (name: FnOutputClassWithEnumImpls) => {
+    getImpl: (name: FnOutputClassWithEnumImplKey) => {
       const impl = registry[name];
       if (!impl) {
         throw new Error(`No implementation for FnOutputClassWithEnum with name ${name}`);
       }
       return impl;
     },
-    registerImpl: (name: FnOutputClassWithEnumImpls, cb: IFnOutputClassWithEnum) => {
+    registerImpl: (name: FnOutputClassWithEnumImplKey, cb: IFnOutputClassWithEnum, stream_cb: IFnOutputClassWithEnumStream) => {
       if (registry[name]) {
         throw new Error(`Implementation for FnOutputClassWithEnum with name ${name} already exists`);
       }
@@ -773,7 +902,8 @@ function createFnOutputClassWithEnumInstance(): IFnOutputClassWithEnum & FnOutpu
         ) => {
           FireBamlEvent.variant(name);
           return await cb(arg);
-        })
+        }),
+        stream: stream_cb,
       };
     },
     validate: () => {
@@ -791,39 +921,50 @@ function createFnOutputClassWithEnumInstance(): IFnOutputClassWithEnum & FnOutpu
   };
 
   Object.assign(impl, wrapper);
+  Object.assign(impl, {
+    stream: (arg) => {
+      return wrapper.getImpl('v1').stream(arg);
+    }
+  })
 
-  return impl as  IFnOutputClassWithEnum & FnOutputClassWithEnumFunction;
+  return impl as IFnOutputClassWithEnum & FnOutputClassWithEnumFunction;
 }
 
 const FnOutputClassWithEnum = createFnOutputClassWithEnumInstance();
 
+// BAML function signature
 type IFnOutputStringList = (arg: string) => Promise<string[]>
 
-type FnOutputStringListImpls = 'v1';
+// BAML function stream signature
+type IFnOutputStringListStream = (arg: string) => LLMResponseStream<string[]>
+
+type FnOutputStringListImplKey = 'v1';
 
 interface FnOutputStringListImpl {
+    name: FnOutputStringListImplKey;
     run: IFnOutputStringList;
-    name: FnOutputStringListImpls;
+    stream: IFnOutputStringListStream;
 }
 
 interface FnOutputStringListFunction {
-  registerImpl: (name: FnOutputStringListImpls, impl: FnOutputStringListImpl) => void;
-  getImpl: (name: FnOutputStringListImpls) => FnOutputStringListImpl;
+  stream: IFnOutputStringListStream;
+  registerImpl: (name: FnOutputStringListImplKey, cb: IFnOutputStringList, stream_cb: IFnOutputStringListStream) => void;
+  getImpl: (name: FnOutputStringListImplKey) => FnOutputStringListImpl;
 }
 
 function createFnOutputStringListInstance(): IFnOutputStringList & FnOutputStringListFunction {
 
-  const registry: Record<FnOutputStringListImpls, FnOutputStringListImpl> = {}
+  const registry: Record<FnOutputStringListImplKey, FnOutputStringListImpl> = {}
 
   const wrapper: FnOutputStringListFunction = {
-    getImpl: (name: FnOutputStringListImpls) => {
+    getImpl: (name: FnOutputStringListImplKey) => {
       const impl = registry[name];
       if (!impl) {
         throw new Error(`No implementation for FnOutputStringList with name ${name}`);
       }
       return impl;
     },
-    registerImpl: (name: FnOutputStringListImpls, cb: IFnOutputStringList) => {
+    registerImpl: (name: FnOutputStringListImplKey, cb: IFnOutputStringList, stream_cb: IFnOutputStringListStream) => {
       if (registry[name]) {
         throw new Error(`Implementation for FnOutputStringList with name ${name} already exists`);
       }
@@ -844,7 +985,8 @@ function createFnOutputStringListInstance(): IFnOutputStringList & FnOutputStrin
         ) => {
           FireBamlEvent.variant(name);
           return await cb(arg);
-        })
+        }),
+        stream: stream_cb,
       };
     },
     validate: () => {
@@ -862,39 +1004,50 @@ function createFnOutputStringListInstance(): IFnOutputStringList & FnOutputStrin
   };
 
   Object.assign(impl, wrapper);
+  Object.assign(impl, {
+    stream: (arg) => {
+      return wrapper.getImpl('v1').stream(arg);
+    }
+  })
 
-  return impl as  IFnOutputStringList & FnOutputStringListFunction;
+  return impl as IFnOutputStringList & FnOutputStringListFunction;
 }
 
 const FnOutputStringList = createFnOutputStringListInstance();
 
+// BAML function signature
 type IFnStringOptional = (arg: string | null) => Promise<string>
 
-type FnStringOptionalImpls = 'v1';
+// BAML function stream signature
+type IFnStringOptionalStream = (arg: string | null) => LLMResponseStream<string>
+
+type FnStringOptionalImplKey = 'v1';
 
 interface FnStringOptionalImpl {
+    name: FnStringOptionalImplKey;
     run: IFnStringOptional;
-    name: FnStringOptionalImpls;
+    stream: IFnStringOptionalStream;
 }
 
 interface FnStringOptionalFunction {
-  registerImpl: (name: FnStringOptionalImpls, impl: FnStringOptionalImpl) => void;
-  getImpl: (name: FnStringOptionalImpls) => FnStringOptionalImpl;
+  stream: IFnStringOptionalStream;
+  registerImpl: (name: FnStringOptionalImplKey, cb: IFnStringOptional, stream_cb: IFnStringOptionalStream) => void;
+  getImpl: (name: FnStringOptionalImplKey) => FnStringOptionalImpl;
 }
 
 function createFnStringOptionalInstance(): IFnStringOptional & FnStringOptionalFunction {
 
-  const registry: Record<FnStringOptionalImpls, FnStringOptionalImpl> = {}
+  const registry: Record<FnStringOptionalImplKey, FnStringOptionalImpl> = {}
 
   const wrapper: FnStringOptionalFunction = {
-    getImpl: (name: FnStringOptionalImpls) => {
+    getImpl: (name: FnStringOptionalImplKey) => {
       const impl = registry[name];
       if (!impl) {
         throw new Error(`No implementation for FnStringOptional with name ${name}`);
       }
       return impl;
     },
-    registerImpl: (name: FnStringOptionalImpls, cb: IFnStringOptional) => {
+    registerImpl: (name: FnStringOptionalImplKey, cb: IFnStringOptional, stream_cb: IFnStringOptionalStream) => {
       if (registry[name]) {
         throw new Error(`Implementation for FnStringOptional with name ${name} already exists`);
       }
@@ -915,7 +1068,8 @@ function createFnStringOptionalInstance(): IFnStringOptional & FnStringOptionalF
         ) => {
           FireBamlEvent.variant(name);
           return await cb(arg);
-        })
+        }),
+        stream: stream_cb,
       };
     },
     validate: () => {
@@ -933,39 +1087,50 @@ function createFnStringOptionalInstance(): IFnStringOptional & FnStringOptionalF
   };
 
   Object.assign(impl, wrapper);
+  Object.assign(impl, {
+    stream: (arg) => {
+      return wrapper.getImpl('v1').stream(arg);
+    }
+  })
 
-  return impl as  IFnStringOptional & FnStringOptionalFunction;
+  return impl as IFnStringOptional & FnStringOptionalFunction;
 }
 
 const FnStringOptional = createFnStringOptionalInstance();
 
+// BAML function signature
 type IFnTestAliasedEnumOutput = (arg: string) => Promise<TestEnum>
 
-type FnTestAliasedEnumOutputImpls = 'v1';
+// BAML function stream signature
+type IFnTestAliasedEnumOutputStream = (arg: string) => LLMResponseStream<TestEnum>
+
+type FnTestAliasedEnumOutputImplKey = 'v1';
 
 interface FnTestAliasedEnumOutputImpl {
+    name: FnTestAliasedEnumOutputImplKey;
     run: IFnTestAliasedEnumOutput;
-    name: FnTestAliasedEnumOutputImpls;
+    stream: IFnTestAliasedEnumOutputStream;
 }
 
 interface FnTestAliasedEnumOutputFunction {
-  registerImpl: (name: FnTestAliasedEnumOutputImpls, impl: FnTestAliasedEnumOutputImpl) => void;
-  getImpl: (name: FnTestAliasedEnumOutputImpls) => FnTestAliasedEnumOutputImpl;
+  stream: IFnTestAliasedEnumOutputStream;
+  registerImpl: (name: FnTestAliasedEnumOutputImplKey, cb: IFnTestAliasedEnumOutput, stream_cb: IFnTestAliasedEnumOutputStream) => void;
+  getImpl: (name: FnTestAliasedEnumOutputImplKey) => FnTestAliasedEnumOutputImpl;
 }
 
 function createFnTestAliasedEnumOutputInstance(): IFnTestAliasedEnumOutput & FnTestAliasedEnumOutputFunction {
 
-  const registry: Record<FnTestAliasedEnumOutputImpls, FnTestAliasedEnumOutputImpl> = {}
+  const registry: Record<FnTestAliasedEnumOutputImplKey, FnTestAliasedEnumOutputImpl> = {}
 
   const wrapper: FnTestAliasedEnumOutputFunction = {
-    getImpl: (name: FnTestAliasedEnumOutputImpls) => {
+    getImpl: (name: FnTestAliasedEnumOutputImplKey) => {
       const impl = registry[name];
       if (!impl) {
         throw new Error(`No implementation for FnTestAliasedEnumOutput with name ${name}`);
       }
       return impl;
     },
-    registerImpl: (name: FnTestAliasedEnumOutputImpls, cb: IFnTestAliasedEnumOutput) => {
+    registerImpl: (name: FnTestAliasedEnumOutputImplKey, cb: IFnTestAliasedEnumOutput, stream_cb: IFnTestAliasedEnumOutputStream) => {
       if (registry[name]) {
         throw new Error(`Implementation for FnTestAliasedEnumOutput with name ${name} already exists`);
       }
@@ -986,7 +1151,8 @@ function createFnTestAliasedEnumOutputInstance(): IFnTestAliasedEnumOutput & FnT
         ) => {
           FireBamlEvent.variant(name);
           return await cb(arg);
-        })
+        }),
+        stream: stream_cb,
       };
     },
     validate: () => {
@@ -1004,39 +1170,50 @@ function createFnTestAliasedEnumOutputInstance(): IFnTestAliasedEnumOutput & FnT
   };
 
   Object.assign(impl, wrapper);
+  Object.assign(impl, {
+    stream: (arg) => {
+      return wrapper.getImpl('v1').stream(arg);
+    }
+  })
 
-  return impl as  IFnTestAliasedEnumOutput & FnTestAliasedEnumOutputFunction;
+  return impl as IFnTestAliasedEnumOutput & FnTestAliasedEnumOutputFunction;
 }
 
 const FnTestAliasedEnumOutput = createFnTestAliasedEnumOutputInstance();
 
+// BAML function signature
 type IFnTestClassAlias = (arg: string) => Promise<TestClassAlias>
 
-type FnTestClassAliasImpls = 'v1';
+// BAML function stream signature
+type IFnTestClassAliasStream = (arg: string) => LLMResponseStream<TestClassAlias>
+
+type FnTestClassAliasImplKey = 'v1';
 
 interface FnTestClassAliasImpl {
+    name: FnTestClassAliasImplKey;
     run: IFnTestClassAlias;
-    name: FnTestClassAliasImpls;
+    stream: IFnTestClassAliasStream;
 }
 
 interface FnTestClassAliasFunction {
-  registerImpl: (name: FnTestClassAliasImpls, impl: FnTestClassAliasImpl) => void;
-  getImpl: (name: FnTestClassAliasImpls) => FnTestClassAliasImpl;
+  stream: IFnTestClassAliasStream;
+  registerImpl: (name: FnTestClassAliasImplKey, cb: IFnTestClassAlias, stream_cb: IFnTestClassAliasStream) => void;
+  getImpl: (name: FnTestClassAliasImplKey) => FnTestClassAliasImpl;
 }
 
 function createFnTestClassAliasInstance(): IFnTestClassAlias & FnTestClassAliasFunction {
 
-  const registry: Record<FnTestClassAliasImpls, FnTestClassAliasImpl> = {}
+  const registry: Record<FnTestClassAliasImplKey, FnTestClassAliasImpl> = {}
 
   const wrapper: FnTestClassAliasFunction = {
-    getImpl: (name: FnTestClassAliasImpls) => {
+    getImpl: (name: FnTestClassAliasImplKey) => {
       const impl = registry[name];
       if (!impl) {
         throw new Error(`No implementation for FnTestClassAlias with name ${name}`);
       }
       return impl;
     },
-    registerImpl: (name: FnTestClassAliasImpls, cb: IFnTestClassAlias) => {
+    registerImpl: (name: FnTestClassAliasImplKey, cb: IFnTestClassAlias, stream_cb: IFnTestClassAliasStream) => {
       if (registry[name]) {
         throw new Error(`Implementation for FnTestClassAlias with name ${name} already exists`);
       }
@@ -1057,7 +1234,8 @@ function createFnTestClassAliasInstance(): IFnTestClassAlias & FnTestClassAliasF
         ) => {
           FireBamlEvent.variant(name);
           return await cb(arg);
-        })
+        }),
+        stream: stream_cb,
       };
     },
     validate: () => {
@@ -1075,39 +1253,50 @@ function createFnTestClassAliasInstance(): IFnTestClassAlias & FnTestClassAliasF
   };
 
   Object.assign(impl, wrapper);
+  Object.assign(impl, {
+    stream: (arg) => {
+      return wrapper.getImpl('v1').stream(arg);
+    }
+  })
 
-  return impl as  IFnTestClassAlias & FnTestClassAliasFunction;
+  return impl as IFnTestClassAlias & FnTestClassAliasFunction;
 }
 
 const FnTestClassAlias = createFnTestClassAliasInstance();
 
+// BAML function signature
 type IFnTestClassOverride = (arg: string) => Promise<OverrideClass>
 
-type FnTestClassOverrideImpls = 'v1';
+// BAML function stream signature
+type IFnTestClassOverrideStream = (arg: string) => LLMResponseStream<OverrideClass>
+
+type FnTestClassOverrideImplKey = 'v1';
 
 interface FnTestClassOverrideImpl {
+    name: FnTestClassOverrideImplKey;
     run: IFnTestClassOverride;
-    name: FnTestClassOverrideImpls;
+    stream: IFnTestClassOverrideStream;
 }
 
 interface FnTestClassOverrideFunction {
-  registerImpl: (name: FnTestClassOverrideImpls, impl: FnTestClassOverrideImpl) => void;
-  getImpl: (name: FnTestClassOverrideImpls) => FnTestClassOverrideImpl;
+  stream: IFnTestClassOverrideStream;
+  registerImpl: (name: FnTestClassOverrideImplKey, cb: IFnTestClassOverride, stream_cb: IFnTestClassOverrideStream) => void;
+  getImpl: (name: FnTestClassOverrideImplKey) => FnTestClassOverrideImpl;
 }
 
 function createFnTestClassOverrideInstance(): IFnTestClassOverride & FnTestClassOverrideFunction {
 
-  const registry: Record<FnTestClassOverrideImpls, FnTestClassOverrideImpl> = {}
+  const registry: Record<FnTestClassOverrideImplKey, FnTestClassOverrideImpl> = {}
 
   const wrapper: FnTestClassOverrideFunction = {
-    getImpl: (name: FnTestClassOverrideImpls) => {
+    getImpl: (name: FnTestClassOverrideImplKey) => {
       const impl = registry[name];
       if (!impl) {
         throw new Error(`No implementation for FnTestClassOverride with name ${name}`);
       }
       return impl;
     },
-    registerImpl: (name: FnTestClassOverrideImpls, cb: IFnTestClassOverride) => {
+    registerImpl: (name: FnTestClassOverrideImplKey, cb: IFnTestClassOverride, stream_cb: IFnTestClassOverrideStream) => {
       if (registry[name]) {
         throw new Error(`Implementation for FnTestClassOverride with name ${name} already exists`);
       }
@@ -1128,7 +1317,8 @@ function createFnTestClassOverrideInstance(): IFnTestClassOverride & FnTestClass
         ) => {
           FireBamlEvent.variant(name);
           return await cb(arg);
-        })
+        }),
+        stream: stream_cb,
       };
     },
     validate: () => {
@@ -1146,39 +1336,50 @@ function createFnTestClassOverrideInstance(): IFnTestClassOverride & FnTestClass
   };
 
   Object.assign(impl, wrapper);
+  Object.assign(impl, {
+    stream: (arg) => {
+      return wrapper.getImpl('v1').stream(arg);
+    }
+  })
 
-  return impl as  IFnTestClassOverride & FnTestClassOverrideFunction;
+  return impl as IFnTestClassOverride & FnTestClassOverrideFunction;
 }
 
 const FnTestClassOverride = createFnTestClassOverrideInstance();
 
+// BAML function signature
 type IFnTestEnumOverride = (arg: string) => Promise<OverrideEnum>
 
-type FnTestEnumOverrideImpls = 'v1';
+// BAML function stream signature
+type IFnTestEnumOverrideStream = (arg: string) => LLMResponseStream<OverrideEnum>
+
+type FnTestEnumOverrideImplKey = 'v1';
 
 interface FnTestEnumOverrideImpl {
+    name: FnTestEnumOverrideImplKey;
     run: IFnTestEnumOverride;
-    name: FnTestEnumOverrideImpls;
+    stream: IFnTestEnumOverrideStream;
 }
 
 interface FnTestEnumOverrideFunction {
-  registerImpl: (name: FnTestEnumOverrideImpls, impl: FnTestEnumOverrideImpl) => void;
-  getImpl: (name: FnTestEnumOverrideImpls) => FnTestEnumOverrideImpl;
+  stream: IFnTestEnumOverrideStream;
+  registerImpl: (name: FnTestEnumOverrideImplKey, cb: IFnTestEnumOverride, stream_cb: IFnTestEnumOverrideStream) => void;
+  getImpl: (name: FnTestEnumOverrideImplKey) => FnTestEnumOverrideImpl;
 }
 
 function createFnTestEnumOverrideInstance(): IFnTestEnumOverride & FnTestEnumOverrideFunction {
 
-  const registry: Record<FnTestEnumOverrideImpls, FnTestEnumOverrideImpl> = {}
+  const registry: Record<FnTestEnumOverrideImplKey, FnTestEnumOverrideImpl> = {}
 
   const wrapper: FnTestEnumOverrideFunction = {
-    getImpl: (name: FnTestEnumOverrideImpls) => {
+    getImpl: (name: FnTestEnumOverrideImplKey) => {
       const impl = registry[name];
       if (!impl) {
         throw new Error(`No implementation for FnTestEnumOverride with name ${name}`);
       }
       return impl;
     },
-    registerImpl: (name: FnTestEnumOverrideImpls, cb: IFnTestEnumOverride) => {
+    registerImpl: (name: FnTestEnumOverrideImplKey, cb: IFnTestEnumOverride, stream_cb: IFnTestEnumOverrideStream) => {
       if (registry[name]) {
         throw new Error(`Implementation for FnTestEnumOverride with name ${name} already exists`);
       }
@@ -1199,7 +1400,8 @@ function createFnTestEnumOverrideInstance(): IFnTestEnumOverride & FnTestEnumOve
         ) => {
           FireBamlEvent.variant(name);
           return await cb(arg);
-        })
+        }),
+        stream: stream_cb,
       };
     },
     validate: () => {
@@ -1217,41 +1419,54 @@ function createFnTestEnumOverrideInstance(): IFnTestEnumOverride & FnTestEnumOve
   };
 
   Object.assign(impl, wrapper);
+  Object.assign(impl, {
+    stream: (arg) => {
+      return wrapper.getImpl('v1').stream(arg);
+    }
+  })
 
-  return impl as  IFnTestEnumOverride & FnTestEnumOverrideFunction;
+  return impl as IFnTestEnumOverride & FnTestEnumOverrideFunction;
 }
 
 const FnTestEnumOverride = createFnTestEnumOverrideInstance();
 
+// BAML function signature
 type IFnTestNamedArgsSingleEnum = (args: {
-  myArg: NamedArgsSingleEnum
+  myArg: NamedArgsSingleEnum, 
 }) => Promise<string>
 
-type FnTestNamedArgsSingleEnumImpls = 'v1';
+// BAML function stream signature
+type IFnTestNamedArgsSingleEnumStream = (args: {
+  myArg: NamedArgsSingleEnum, 
+}) => Promise<string>
+
+type FnTestNamedArgsSingleEnumImplKey = 'v1';
 
 interface FnTestNamedArgsSingleEnumImpl {
+    name: FnTestNamedArgsSingleEnumImplKey;
     run: IFnTestNamedArgsSingleEnum;
-    name: FnTestNamedArgsSingleEnumImpls;
+    stream: IFnTestNamedArgsSingleEnumStream;
 }
 
 interface FnTestNamedArgsSingleEnumFunction {
-  registerImpl: (name: FnTestNamedArgsSingleEnumImpls, impl: FnTestNamedArgsSingleEnumImpl) => void;
-  getImpl: (name: FnTestNamedArgsSingleEnumImpls) => FnTestNamedArgsSingleEnumImpl;
+  stream: IFnTestNamedArgsSingleEnumStream;
+  registerImpl: (name: FnTestNamedArgsSingleEnumImplKey, cb: IFnTestNamedArgsSingleEnum, stream_cb: IFnTestNamedArgsSingleEnumStream) => void;
+  getImpl: (name: FnTestNamedArgsSingleEnumImplKey) => FnTestNamedArgsSingleEnumImpl;
 }
 
 function createFnTestNamedArgsSingleEnumInstance(): IFnTestNamedArgsSingleEnum & FnTestNamedArgsSingleEnumFunction {
 
-  const registry: Record<FnTestNamedArgsSingleEnumImpls, FnTestNamedArgsSingleEnumImpl> = {}
+  const registry: Record<FnTestNamedArgsSingleEnumImplKey, FnTestNamedArgsSingleEnumImpl> = {}
 
   const wrapper: FnTestNamedArgsSingleEnumFunction = {
-    getImpl: (name: FnTestNamedArgsSingleEnumImpls) => {
+    getImpl: (name: FnTestNamedArgsSingleEnumImplKey) => {
       const impl = registry[name];
       if (!impl) {
         throw new Error(`No implementation for FnTestNamedArgsSingleEnum with name ${name}`);
       }
       return impl;
     },
-    registerImpl: (name: FnTestNamedArgsSingleEnumImpls, cb: IFnTestNamedArgsSingleEnum) => {
+    registerImpl: (name: FnTestNamedArgsSingleEnumImplKey, cb: IFnTestNamedArgsSingleEnum, stream_cb: IFnTestNamedArgsSingleEnumStream) => {
       if (registry[name]) {
         throw new Error(`Implementation for FnTestNamedArgsSingleEnum with name ${name} already exists`);
       }
@@ -1274,7 +1489,8 @@ function createFnTestNamedArgsSingleEnumInstance(): IFnTestNamedArgsSingleEnum &
         ) => {
           FireBamlEvent.variant(name);
           return await cb(params);
-        })
+        }),
+        stream: stream_cb,
       };
     },
     validate: () => {
@@ -1294,39 +1510,50 @@ function createFnTestNamedArgsSingleEnumInstance(): IFnTestNamedArgsSingleEnum &
   };
 
   Object.assign(impl, wrapper);
+  Object.assign(impl, {
+    stream: (params) => {
+      return wrapper.getImpl('v1').stream(params);
+    }
+  })
 
-  return impl as  IFnTestNamedArgsSingleEnum & FnTestNamedArgsSingleEnumFunction;
+  return impl as IFnTestNamedArgsSingleEnum & FnTestNamedArgsSingleEnumFunction;
 }
 
 const FnTestNamedArgsSingleEnum = createFnTestNamedArgsSingleEnumInstance();
 
+// BAML function signature
 type IFnTestOutputAdapter = (arg: string) => Promise<string>
 
-type FnTestOutputAdapterImpls = 'v1';
+// BAML function stream signature
+type IFnTestOutputAdapterStream = (arg: string) => LLMResponseStream<string>
+
+type FnTestOutputAdapterImplKey = 'v1';
 
 interface FnTestOutputAdapterImpl {
+    name: FnTestOutputAdapterImplKey;
     run: IFnTestOutputAdapter;
-    name: FnTestOutputAdapterImpls;
+    stream: IFnTestOutputAdapterStream;
 }
 
 interface FnTestOutputAdapterFunction {
-  registerImpl: (name: FnTestOutputAdapterImpls, impl: FnTestOutputAdapterImpl) => void;
-  getImpl: (name: FnTestOutputAdapterImpls) => FnTestOutputAdapterImpl;
+  stream: IFnTestOutputAdapterStream;
+  registerImpl: (name: FnTestOutputAdapterImplKey, cb: IFnTestOutputAdapter, stream_cb: IFnTestOutputAdapterStream) => void;
+  getImpl: (name: FnTestOutputAdapterImplKey) => FnTestOutputAdapterImpl;
 }
 
 function createFnTestOutputAdapterInstance(): IFnTestOutputAdapter & FnTestOutputAdapterFunction {
 
-  const registry: Record<FnTestOutputAdapterImpls, FnTestOutputAdapterImpl> = {}
+  const registry: Record<FnTestOutputAdapterImplKey, FnTestOutputAdapterImpl> = {}
 
   const wrapper: FnTestOutputAdapterFunction = {
-    getImpl: (name: FnTestOutputAdapterImpls) => {
+    getImpl: (name: FnTestOutputAdapterImplKey) => {
       const impl = registry[name];
       if (!impl) {
         throw new Error(`No implementation for FnTestOutputAdapter with name ${name}`);
       }
       return impl;
     },
-    registerImpl: (name: FnTestOutputAdapterImpls, cb: IFnTestOutputAdapter) => {
+    registerImpl: (name: FnTestOutputAdapterImplKey, cb: IFnTestOutputAdapter, stream_cb: IFnTestOutputAdapterStream) => {
       if (registry[name]) {
         throw new Error(`Implementation for FnTestOutputAdapter with name ${name} already exists`);
       }
@@ -1347,7 +1574,8 @@ function createFnTestOutputAdapterInstance(): IFnTestOutputAdapter & FnTestOutpu
         ) => {
           FireBamlEvent.variant(name);
           return await cb(arg);
-        })
+        }),
+        stream: stream_cb,
       };
     },
     validate: () => {
@@ -1365,39 +1593,50 @@ function createFnTestOutputAdapterInstance(): IFnTestOutputAdapter & FnTestOutpu
   };
 
   Object.assign(impl, wrapper);
+  Object.assign(impl, {
+    stream: (arg) => {
+      return wrapper.getImpl('v1').stream(arg);
+    }
+  })
 
-  return impl as  IFnTestOutputAdapter & FnTestOutputAdapterFunction;
+  return impl as IFnTestOutputAdapter & FnTestOutputAdapterFunction;
 }
 
 const FnTestOutputAdapter = createFnTestOutputAdapterInstance();
 
+// BAML function signature
 type IOptionalTest_Function = (arg: string) => Promise<OptionalTest_ReturnType | null[]>
 
-type OptionalTest_FunctionImpls = 'v1';
+// BAML function stream signature
+type IOptionalTest_FunctionStream = (arg: string) => LLMResponseStream<OptionalTest_ReturnType | null[]>
+
+type OptionalTest_FunctionImplKey = 'v1';
 
 interface OptionalTest_FunctionImpl {
+    name: OptionalTest_FunctionImplKey;
     run: IOptionalTest_Function;
-    name: OptionalTest_FunctionImpls;
+    stream: IOptionalTest_FunctionStream;
 }
 
 interface OptionalTest_FunctionFunction {
-  registerImpl: (name: OptionalTest_FunctionImpls, impl: OptionalTest_FunctionImpl) => void;
-  getImpl: (name: OptionalTest_FunctionImpls) => OptionalTest_FunctionImpl;
+  stream: IOptionalTest_FunctionStream;
+  registerImpl: (name: OptionalTest_FunctionImplKey, cb: IOptionalTest_Function, stream_cb: IOptionalTest_FunctionStream) => void;
+  getImpl: (name: OptionalTest_FunctionImplKey) => OptionalTest_FunctionImpl;
 }
 
 function createOptionalTest_FunctionInstance(): IOptionalTest_Function & OptionalTest_FunctionFunction {
 
-  const registry: Record<OptionalTest_FunctionImpls, OptionalTest_FunctionImpl> = {}
+  const registry: Record<OptionalTest_FunctionImplKey, OptionalTest_FunctionImpl> = {}
 
   const wrapper: OptionalTest_FunctionFunction = {
-    getImpl: (name: OptionalTest_FunctionImpls) => {
+    getImpl: (name: OptionalTest_FunctionImplKey) => {
       const impl = registry[name];
       if (!impl) {
         throw new Error(`No implementation for OptionalTest_Function with name ${name}`);
       }
       return impl;
     },
-    registerImpl: (name: OptionalTest_FunctionImpls, cb: IOptionalTest_Function) => {
+    registerImpl: (name: OptionalTest_FunctionImplKey, cb: IOptionalTest_Function, stream_cb: IOptionalTest_FunctionStream) => {
       if (registry[name]) {
         throw new Error(`Implementation for OptionalTest_Function with name ${name} already exists`);
       }
@@ -1418,7 +1657,8 @@ function createOptionalTest_FunctionInstance(): IOptionalTest_Function & Optiona
         ) => {
           FireBamlEvent.variant(name);
           return await cb(arg);
-        })
+        }),
+        stream: stream_cb,
       };
     },
     validate: () => {
@@ -1436,39 +1676,50 @@ function createOptionalTest_FunctionInstance(): IOptionalTest_Function & Optiona
   };
 
   Object.assign(impl, wrapper);
+  Object.assign(impl, {
+    stream: (arg) => {
+      return wrapper.getImpl('v1').stream(arg);
+    }
+  })
 
-  return impl as  IOptionalTest_Function & OptionalTest_FunctionFunction;
+  return impl as IOptionalTest_Function & OptionalTest_FunctionFunction;
 }
 
 const OptionalTest_Function = createOptionalTest_FunctionInstance();
 
+// BAML function signature
 type IPromptTest = (arg: string) => Promise<string>
 
-type PromptTestImpls = 'bird_chat' | 'claude_chat' | 'claude_chat_with_chat_msgs' | 'claude_chat_with_chat_msgs_no_system' | 'openai_chat' | 'openai_chat_with_chat_msgs' | 'openai_chat_with_chat_msgs_no_system';
+// BAML function stream signature
+type IPromptTestStream = (arg: string) => LLMResponseStream<string>
+
+type PromptTestImplKey = 'bird_chat' | 'claude_chat' | 'claude_chat_with_chat_msgs' | 'claude_chat_with_chat_msgs_no_system' | 'openai_chat' | 'openai_chat_with_chat_msgs' | 'openai_chat_with_chat_msgs_no_system';
 
 interface PromptTestImpl {
+    name: PromptTestImplKey;
     run: IPromptTest;
-    name: PromptTestImpls;
+    stream: IPromptTestStream;
 }
 
 interface PromptTestFunction {
-  registerImpl: (name: PromptTestImpls, impl: PromptTestImpl) => void;
-  getImpl: (name: PromptTestImpls) => PromptTestImpl;
+  stream: IPromptTestStream;
+  registerImpl: (name: PromptTestImplKey, cb: IPromptTest, stream_cb: IPromptTestStream) => void;
+  getImpl: (name: PromptTestImplKey) => PromptTestImpl;
 }
 
 function createPromptTestInstance(): IPromptTest & PromptTestFunction {
 
-  const registry: Record<PromptTestImpls, PromptTestImpl> = {}
+  const registry: Record<PromptTestImplKey, PromptTestImpl> = {}
 
   const wrapper: PromptTestFunction = {
-    getImpl: (name: PromptTestImpls) => {
+    getImpl: (name: PromptTestImplKey) => {
       const impl = registry[name];
       if (!impl) {
         throw new Error(`No implementation for PromptTest with name ${name}`);
       }
       return impl;
     },
-    registerImpl: (name: PromptTestImpls, cb: IPromptTest) => {
+    registerImpl: (name: PromptTestImplKey, cb: IPromptTest, stream_cb: IPromptTestStream) => {
       if (registry[name]) {
         throw new Error(`Implementation for PromptTest with name ${name} already exists`);
       }
@@ -1489,7 +1740,8 @@ function createPromptTestInstance(): IPromptTest & PromptTestFunction {
         ) => {
           FireBamlEvent.variant(name);
           return await cb(arg);
-        })
+        }),
+        stream: stream_cb,
       };
     },
     validate: () => {
@@ -1507,41 +1759,54 @@ function createPromptTestInstance(): IPromptTest & PromptTestFunction {
   };
 
   Object.assign(impl, wrapper);
+  Object.assign(impl, {
+    stream: (arg) => {
+      return wrapper.getImpl('claude_chat').stream(arg);
+    }
+  })
 
-  return impl as  IPromptTest & PromptTestFunction;
+  return impl as IPromptTest & PromptTestFunction;
 }
 
 const PromptTest = createPromptTestInstance();
 
+// BAML function signature
 type ITestFnNamedArgsSingleBool = (args: {
-  myBool: boolean
+  myBool: boolean, 
 }) => Promise<string>
 
-type TestFnNamedArgsSingleBoolImpls = 'v1';
+// BAML function stream signature
+type ITestFnNamedArgsSingleBoolStream = (args: {
+  myBool: boolean, 
+}) => Promise<string>
+
+type TestFnNamedArgsSingleBoolImplKey = 'v1';
 
 interface TestFnNamedArgsSingleBoolImpl {
+    name: TestFnNamedArgsSingleBoolImplKey;
     run: ITestFnNamedArgsSingleBool;
-    name: TestFnNamedArgsSingleBoolImpls;
+    stream: ITestFnNamedArgsSingleBoolStream;
 }
 
 interface TestFnNamedArgsSingleBoolFunction {
-  registerImpl: (name: TestFnNamedArgsSingleBoolImpls, impl: TestFnNamedArgsSingleBoolImpl) => void;
-  getImpl: (name: TestFnNamedArgsSingleBoolImpls) => TestFnNamedArgsSingleBoolImpl;
+  stream: ITestFnNamedArgsSingleBoolStream;
+  registerImpl: (name: TestFnNamedArgsSingleBoolImplKey, cb: ITestFnNamedArgsSingleBool, stream_cb: ITestFnNamedArgsSingleBoolStream) => void;
+  getImpl: (name: TestFnNamedArgsSingleBoolImplKey) => TestFnNamedArgsSingleBoolImpl;
 }
 
 function createTestFnNamedArgsSingleBoolInstance(): ITestFnNamedArgsSingleBool & TestFnNamedArgsSingleBoolFunction {
 
-  const registry: Record<TestFnNamedArgsSingleBoolImpls, TestFnNamedArgsSingleBoolImpl> = {}
+  const registry: Record<TestFnNamedArgsSingleBoolImplKey, TestFnNamedArgsSingleBoolImpl> = {}
 
   const wrapper: TestFnNamedArgsSingleBoolFunction = {
-    getImpl: (name: TestFnNamedArgsSingleBoolImpls) => {
+    getImpl: (name: TestFnNamedArgsSingleBoolImplKey) => {
       const impl = registry[name];
       if (!impl) {
         throw new Error(`No implementation for TestFnNamedArgsSingleBool with name ${name}`);
       }
       return impl;
     },
-    registerImpl: (name: TestFnNamedArgsSingleBoolImpls, cb: ITestFnNamedArgsSingleBool) => {
+    registerImpl: (name: TestFnNamedArgsSingleBoolImplKey, cb: ITestFnNamedArgsSingleBool, stream_cb: ITestFnNamedArgsSingleBoolStream) => {
       if (registry[name]) {
         throw new Error(`Implementation for TestFnNamedArgsSingleBool with name ${name} already exists`);
       }
@@ -1564,7 +1829,8 @@ function createTestFnNamedArgsSingleBoolInstance(): ITestFnNamedArgsSingleBool &
         ) => {
           FireBamlEvent.variant(name);
           return await cb(params);
-        })
+        }),
+        stream: stream_cb,
       };
     },
     validate: () => {
@@ -1584,41 +1850,54 @@ function createTestFnNamedArgsSingleBoolInstance(): ITestFnNamedArgsSingleBool &
   };
 
   Object.assign(impl, wrapper);
+  Object.assign(impl, {
+    stream: (params) => {
+      return wrapper.getImpl('v1').stream(params);
+    }
+  })
 
-  return impl as  ITestFnNamedArgsSingleBool & TestFnNamedArgsSingleBoolFunction;
+  return impl as ITestFnNamedArgsSingleBool & TestFnNamedArgsSingleBoolFunction;
 }
 
 const TestFnNamedArgsSingleBool = createTestFnNamedArgsSingleBoolInstance();
 
+// BAML function signature
 type ITestFnNamedArgsSingleClass = (args: {
-  myArg: NamedArgsSingleClass
+  myArg: NamedArgsSingleClass, 
 }) => Promise<string>
 
-type TestFnNamedArgsSingleClassImpls = 'v1';
+// BAML function stream signature
+type ITestFnNamedArgsSingleClassStream = (args: {
+  myArg: NamedArgsSingleClass, 
+}) => Promise<string>
+
+type TestFnNamedArgsSingleClassImplKey = 'v1';
 
 interface TestFnNamedArgsSingleClassImpl {
+    name: TestFnNamedArgsSingleClassImplKey;
     run: ITestFnNamedArgsSingleClass;
-    name: TestFnNamedArgsSingleClassImpls;
+    stream: ITestFnNamedArgsSingleClassStream;
 }
 
 interface TestFnNamedArgsSingleClassFunction {
-  registerImpl: (name: TestFnNamedArgsSingleClassImpls, impl: TestFnNamedArgsSingleClassImpl) => void;
-  getImpl: (name: TestFnNamedArgsSingleClassImpls) => TestFnNamedArgsSingleClassImpl;
+  stream: ITestFnNamedArgsSingleClassStream;
+  registerImpl: (name: TestFnNamedArgsSingleClassImplKey, cb: ITestFnNamedArgsSingleClass, stream_cb: ITestFnNamedArgsSingleClassStream) => void;
+  getImpl: (name: TestFnNamedArgsSingleClassImplKey) => TestFnNamedArgsSingleClassImpl;
 }
 
 function createTestFnNamedArgsSingleClassInstance(): ITestFnNamedArgsSingleClass & TestFnNamedArgsSingleClassFunction {
 
-  const registry: Record<TestFnNamedArgsSingleClassImpls, TestFnNamedArgsSingleClassImpl> = {}
+  const registry: Record<TestFnNamedArgsSingleClassImplKey, TestFnNamedArgsSingleClassImpl> = {}
 
   const wrapper: TestFnNamedArgsSingleClassFunction = {
-    getImpl: (name: TestFnNamedArgsSingleClassImpls) => {
+    getImpl: (name: TestFnNamedArgsSingleClassImplKey) => {
       const impl = registry[name];
       if (!impl) {
         throw new Error(`No implementation for TestFnNamedArgsSingleClass with name ${name}`);
       }
       return impl;
     },
-    registerImpl: (name: TestFnNamedArgsSingleClassImpls, cb: ITestFnNamedArgsSingleClass) => {
+    registerImpl: (name: TestFnNamedArgsSingleClassImplKey, cb: ITestFnNamedArgsSingleClass, stream_cb: ITestFnNamedArgsSingleClassStream) => {
       if (registry[name]) {
         throw new Error(`Implementation for TestFnNamedArgsSingleClass with name ${name} already exists`);
       }
@@ -1641,7 +1920,8 @@ function createTestFnNamedArgsSingleClassInstance(): ITestFnNamedArgsSingleClass
         ) => {
           FireBamlEvent.variant(name);
           return await cb(params);
-        })
+        }),
+        stream: stream_cb,
       };
     },
     validate: () => {
@@ -1661,41 +1941,54 @@ function createTestFnNamedArgsSingleClassInstance(): ITestFnNamedArgsSingleClass
   };
 
   Object.assign(impl, wrapper);
+  Object.assign(impl, {
+    stream: (params) => {
+      return wrapper.getImpl('v1').stream(params);
+    }
+  })
 
-  return impl as  ITestFnNamedArgsSingleClass & TestFnNamedArgsSingleClassFunction;
+  return impl as ITestFnNamedArgsSingleClass & TestFnNamedArgsSingleClassFunction;
 }
 
 const TestFnNamedArgsSingleClass = createTestFnNamedArgsSingleClassInstance();
 
+// BAML function signature
 type ITestFnNamedArgsSingleEnumList = (args: {
-  myArg: NamedArgsSingleEnumList[]
+  myArg: NamedArgsSingleEnumList[], 
 }) => Promise<string>
 
-type TestFnNamedArgsSingleEnumListImpls = 'v1';
+// BAML function stream signature
+type ITestFnNamedArgsSingleEnumListStream = (args: {
+  myArg: NamedArgsSingleEnumList[], 
+}) => Promise<string>
+
+type TestFnNamedArgsSingleEnumListImplKey = 'v1';
 
 interface TestFnNamedArgsSingleEnumListImpl {
+    name: TestFnNamedArgsSingleEnumListImplKey;
     run: ITestFnNamedArgsSingleEnumList;
-    name: TestFnNamedArgsSingleEnumListImpls;
+    stream: ITestFnNamedArgsSingleEnumListStream;
 }
 
 interface TestFnNamedArgsSingleEnumListFunction {
-  registerImpl: (name: TestFnNamedArgsSingleEnumListImpls, impl: TestFnNamedArgsSingleEnumListImpl) => void;
-  getImpl: (name: TestFnNamedArgsSingleEnumListImpls) => TestFnNamedArgsSingleEnumListImpl;
+  stream: ITestFnNamedArgsSingleEnumListStream;
+  registerImpl: (name: TestFnNamedArgsSingleEnumListImplKey, cb: ITestFnNamedArgsSingleEnumList, stream_cb: ITestFnNamedArgsSingleEnumListStream) => void;
+  getImpl: (name: TestFnNamedArgsSingleEnumListImplKey) => TestFnNamedArgsSingleEnumListImpl;
 }
 
 function createTestFnNamedArgsSingleEnumListInstance(): ITestFnNamedArgsSingleEnumList & TestFnNamedArgsSingleEnumListFunction {
 
-  const registry: Record<TestFnNamedArgsSingleEnumListImpls, TestFnNamedArgsSingleEnumListImpl> = {}
+  const registry: Record<TestFnNamedArgsSingleEnumListImplKey, TestFnNamedArgsSingleEnumListImpl> = {}
 
   const wrapper: TestFnNamedArgsSingleEnumListFunction = {
-    getImpl: (name: TestFnNamedArgsSingleEnumListImpls) => {
+    getImpl: (name: TestFnNamedArgsSingleEnumListImplKey) => {
       const impl = registry[name];
       if (!impl) {
         throw new Error(`No implementation for TestFnNamedArgsSingleEnumList with name ${name}`);
       }
       return impl;
     },
-    registerImpl: (name: TestFnNamedArgsSingleEnumListImpls, cb: ITestFnNamedArgsSingleEnumList) => {
+    registerImpl: (name: TestFnNamedArgsSingleEnumListImplKey, cb: ITestFnNamedArgsSingleEnumList, stream_cb: ITestFnNamedArgsSingleEnumListStream) => {
       if (registry[name]) {
         throw new Error(`Implementation for TestFnNamedArgsSingleEnumList with name ${name} already exists`);
       }
@@ -1718,7 +2011,8 @@ function createTestFnNamedArgsSingleEnumListInstance(): ITestFnNamedArgsSingleEn
         ) => {
           FireBamlEvent.variant(name);
           return await cb(params);
-        })
+        }),
+        stream: stream_cb,
       };
     },
     validate: () => {
@@ -1738,41 +2032,54 @@ function createTestFnNamedArgsSingleEnumListInstance(): ITestFnNamedArgsSingleEn
   };
 
   Object.assign(impl, wrapper);
+  Object.assign(impl, {
+    stream: (params) => {
+      return wrapper.getImpl('v1').stream(params);
+    }
+  })
 
-  return impl as  ITestFnNamedArgsSingleEnumList & TestFnNamedArgsSingleEnumListFunction;
+  return impl as ITestFnNamedArgsSingleEnumList & TestFnNamedArgsSingleEnumListFunction;
 }
 
 const TestFnNamedArgsSingleEnumList = createTestFnNamedArgsSingleEnumListInstance();
 
+// BAML function signature
 type ITestFnNamedArgsSingleFloat = (args: {
-  myFloat: number
+  myFloat: number, 
 }) => Promise<string>
 
-type TestFnNamedArgsSingleFloatImpls = 'v1';
+// BAML function stream signature
+type ITestFnNamedArgsSingleFloatStream = (args: {
+  myFloat: number, 
+}) => Promise<string>
+
+type TestFnNamedArgsSingleFloatImplKey = 'v1';
 
 interface TestFnNamedArgsSingleFloatImpl {
+    name: TestFnNamedArgsSingleFloatImplKey;
     run: ITestFnNamedArgsSingleFloat;
-    name: TestFnNamedArgsSingleFloatImpls;
+    stream: ITestFnNamedArgsSingleFloatStream;
 }
 
 interface TestFnNamedArgsSingleFloatFunction {
-  registerImpl: (name: TestFnNamedArgsSingleFloatImpls, impl: TestFnNamedArgsSingleFloatImpl) => void;
-  getImpl: (name: TestFnNamedArgsSingleFloatImpls) => TestFnNamedArgsSingleFloatImpl;
+  stream: ITestFnNamedArgsSingleFloatStream;
+  registerImpl: (name: TestFnNamedArgsSingleFloatImplKey, cb: ITestFnNamedArgsSingleFloat, stream_cb: ITestFnNamedArgsSingleFloatStream) => void;
+  getImpl: (name: TestFnNamedArgsSingleFloatImplKey) => TestFnNamedArgsSingleFloatImpl;
 }
 
 function createTestFnNamedArgsSingleFloatInstance(): ITestFnNamedArgsSingleFloat & TestFnNamedArgsSingleFloatFunction {
 
-  const registry: Record<TestFnNamedArgsSingleFloatImpls, TestFnNamedArgsSingleFloatImpl> = {}
+  const registry: Record<TestFnNamedArgsSingleFloatImplKey, TestFnNamedArgsSingleFloatImpl> = {}
 
   const wrapper: TestFnNamedArgsSingleFloatFunction = {
-    getImpl: (name: TestFnNamedArgsSingleFloatImpls) => {
+    getImpl: (name: TestFnNamedArgsSingleFloatImplKey) => {
       const impl = registry[name];
       if (!impl) {
         throw new Error(`No implementation for TestFnNamedArgsSingleFloat with name ${name}`);
       }
       return impl;
     },
-    registerImpl: (name: TestFnNamedArgsSingleFloatImpls, cb: ITestFnNamedArgsSingleFloat) => {
+    registerImpl: (name: TestFnNamedArgsSingleFloatImplKey, cb: ITestFnNamedArgsSingleFloat, stream_cb: ITestFnNamedArgsSingleFloatStream) => {
       if (registry[name]) {
         throw new Error(`Implementation for TestFnNamedArgsSingleFloat with name ${name} already exists`);
       }
@@ -1795,7 +2102,8 @@ function createTestFnNamedArgsSingleFloatInstance(): ITestFnNamedArgsSingleFloat
         ) => {
           FireBamlEvent.variant(name);
           return await cb(params);
-        })
+        }),
+        stream: stream_cb,
       };
     },
     validate: () => {
@@ -1815,41 +2123,54 @@ function createTestFnNamedArgsSingleFloatInstance(): ITestFnNamedArgsSingleFloat
   };
 
   Object.assign(impl, wrapper);
+  Object.assign(impl, {
+    stream: (params) => {
+      return wrapper.getImpl('v1').stream(params);
+    }
+  })
 
-  return impl as  ITestFnNamedArgsSingleFloat & TestFnNamedArgsSingleFloatFunction;
+  return impl as ITestFnNamedArgsSingleFloat & TestFnNamedArgsSingleFloatFunction;
 }
 
 const TestFnNamedArgsSingleFloat = createTestFnNamedArgsSingleFloatInstance();
 
+// BAML function signature
 type ITestFnNamedArgsSingleInt = (args: {
-  myInt: number
+  myInt: number, 
 }) => Promise<string>
 
-type TestFnNamedArgsSingleIntImpls = 'v1';
+// BAML function stream signature
+type ITestFnNamedArgsSingleIntStream = (args: {
+  myInt: number, 
+}) => Promise<string>
+
+type TestFnNamedArgsSingleIntImplKey = 'v1';
 
 interface TestFnNamedArgsSingleIntImpl {
+    name: TestFnNamedArgsSingleIntImplKey;
     run: ITestFnNamedArgsSingleInt;
-    name: TestFnNamedArgsSingleIntImpls;
+    stream: ITestFnNamedArgsSingleIntStream;
 }
 
 interface TestFnNamedArgsSingleIntFunction {
-  registerImpl: (name: TestFnNamedArgsSingleIntImpls, impl: TestFnNamedArgsSingleIntImpl) => void;
-  getImpl: (name: TestFnNamedArgsSingleIntImpls) => TestFnNamedArgsSingleIntImpl;
+  stream: ITestFnNamedArgsSingleIntStream;
+  registerImpl: (name: TestFnNamedArgsSingleIntImplKey, cb: ITestFnNamedArgsSingleInt, stream_cb: ITestFnNamedArgsSingleIntStream) => void;
+  getImpl: (name: TestFnNamedArgsSingleIntImplKey) => TestFnNamedArgsSingleIntImpl;
 }
 
 function createTestFnNamedArgsSingleIntInstance(): ITestFnNamedArgsSingleInt & TestFnNamedArgsSingleIntFunction {
 
-  const registry: Record<TestFnNamedArgsSingleIntImpls, TestFnNamedArgsSingleIntImpl> = {}
+  const registry: Record<TestFnNamedArgsSingleIntImplKey, TestFnNamedArgsSingleIntImpl> = {}
 
   const wrapper: TestFnNamedArgsSingleIntFunction = {
-    getImpl: (name: TestFnNamedArgsSingleIntImpls) => {
+    getImpl: (name: TestFnNamedArgsSingleIntImplKey) => {
       const impl = registry[name];
       if (!impl) {
         throw new Error(`No implementation for TestFnNamedArgsSingleInt with name ${name}`);
       }
       return impl;
     },
-    registerImpl: (name: TestFnNamedArgsSingleIntImpls, cb: ITestFnNamedArgsSingleInt) => {
+    registerImpl: (name: TestFnNamedArgsSingleIntImplKey, cb: ITestFnNamedArgsSingleInt, stream_cb: ITestFnNamedArgsSingleIntStream) => {
       if (registry[name]) {
         throw new Error(`Implementation for TestFnNamedArgsSingleInt with name ${name} already exists`);
       }
@@ -1872,7 +2193,8 @@ function createTestFnNamedArgsSingleIntInstance(): ITestFnNamedArgsSingleInt & T
         ) => {
           FireBamlEvent.variant(name);
           return await cb(params);
-        })
+        }),
+        stream: stream_cb,
       };
     },
     validate: () => {
@@ -1892,41 +2214,54 @@ function createTestFnNamedArgsSingleIntInstance(): ITestFnNamedArgsSingleInt & T
   };
 
   Object.assign(impl, wrapper);
+  Object.assign(impl, {
+    stream: (params) => {
+      return wrapper.getImpl('v1').stream(params);
+    }
+  })
 
-  return impl as  ITestFnNamedArgsSingleInt & TestFnNamedArgsSingleIntFunction;
+  return impl as ITestFnNamedArgsSingleInt & TestFnNamedArgsSingleIntFunction;
 }
 
 const TestFnNamedArgsSingleInt = createTestFnNamedArgsSingleIntInstance();
 
+// BAML function signature
 type ITestFnNamedArgsSingleString = (args: {
-  myString: string
+  myString: string, 
 }) => Promise<string>
 
-type TestFnNamedArgsSingleStringImpls = 'v1';
+// BAML function stream signature
+type ITestFnNamedArgsSingleStringStream = (args: {
+  myString: string, 
+}) => Promise<string>
+
+type TestFnNamedArgsSingleStringImplKey = 'v1';
 
 interface TestFnNamedArgsSingleStringImpl {
+    name: TestFnNamedArgsSingleStringImplKey;
     run: ITestFnNamedArgsSingleString;
-    name: TestFnNamedArgsSingleStringImpls;
+    stream: ITestFnNamedArgsSingleStringStream;
 }
 
 interface TestFnNamedArgsSingleStringFunction {
-  registerImpl: (name: TestFnNamedArgsSingleStringImpls, impl: TestFnNamedArgsSingleStringImpl) => void;
-  getImpl: (name: TestFnNamedArgsSingleStringImpls) => TestFnNamedArgsSingleStringImpl;
+  stream: ITestFnNamedArgsSingleStringStream;
+  registerImpl: (name: TestFnNamedArgsSingleStringImplKey, cb: ITestFnNamedArgsSingleString, stream_cb: ITestFnNamedArgsSingleStringStream) => void;
+  getImpl: (name: TestFnNamedArgsSingleStringImplKey) => TestFnNamedArgsSingleStringImpl;
 }
 
 function createTestFnNamedArgsSingleStringInstance(): ITestFnNamedArgsSingleString & TestFnNamedArgsSingleStringFunction {
 
-  const registry: Record<TestFnNamedArgsSingleStringImpls, TestFnNamedArgsSingleStringImpl> = {}
+  const registry: Record<TestFnNamedArgsSingleStringImplKey, TestFnNamedArgsSingleStringImpl> = {}
 
   const wrapper: TestFnNamedArgsSingleStringFunction = {
-    getImpl: (name: TestFnNamedArgsSingleStringImpls) => {
+    getImpl: (name: TestFnNamedArgsSingleStringImplKey) => {
       const impl = registry[name];
       if (!impl) {
         throw new Error(`No implementation for TestFnNamedArgsSingleString with name ${name}`);
       }
       return impl;
     },
-    registerImpl: (name: TestFnNamedArgsSingleStringImpls, cb: ITestFnNamedArgsSingleString) => {
+    registerImpl: (name: TestFnNamedArgsSingleStringImplKey, cb: ITestFnNamedArgsSingleString, stream_cb: ITestFnNamedArgsSingleStringStream) => {
       if (registry[name]) {
         throw new Error(`Implementation for TestFnNamedArgsSingleString with name ${name} already exists`);
       }
@@ -1949,7 +2284,8 @@ function createTestFnNamedArgsSingleStringInstance(): ITestFnNamedArgsSingleStri
         ) => {
           FireBamlEvent.variant(name);
           return await cb(params);
-        })
+        }),
+        stream: stream_cb,
       };
     },
     validate: () => {
@@ -1969,41 +2305,54 @@ function createTestFnNamedArgsSingleStringInstance(): ITestFnNamedArgsSingleStri
   };
 
   Object.assign(impl, wrapper);
+  Object.assign(impl, {
+    stream: (params) => {
+      return wrapper.getImpl('v1').stream(params);
+    }
+  })
 
-  return impl as  ITestFnNamedArgsSingleString & TestFnNamedArgsSingleStringFunction;
+  return impl as ITestFnNamedArgsSingleString & TestFnNamedArgsSingleStringFunction;
 }
 
 const TestFnNamedArgsSingleString = createTestFnNamedArgsSingleStringInstance();
 
+// BAML function signature
 type ITestFnNamedArgsSingleStringArray = (args: {
-  myStringArray: string[]
+  myStringArray: string[], 
 }) => Promise<string>
 
-type TestFnNamedArgsSingleStringArrayImpls = 'v1';
+// BAML function stream signature
+type ITestFnNamedArgsSingleStringArrayStream = (args: {
+  myStringArray: string[], 
+}) => Promise<string>
+
+type TestFnNamedArgsSingleStringArrayImplKey = 'v1';
 
 interface TestFnNamedArgsSingleStringArrayImpl {
+    name: TestFnNamedArgsSingleStringArrayImplKey;
     run: ITestFnNamedArgsSingleStringArray;
-    name: TestFnNamedArgsSingleStringArrayImpls;
+    stream: ITestFnNamedArgsSingleStringArrayStream;
 }
 
 interface TestFnNamedArgsSingleStringArrayFunction {
-  registerImpl: (name: TestFnNamedArgsSingleStringArrayImpls, impl: TestFnNamedArgsSingleStringArrayImpl) => void;
-  getImpl: (name: TestFnNamedArgsSingleStringArrayImpls) => TestFnNamedArgsSingleStringArrayImpl;
+  stream: ITestFnNamedArgsSingleStringArrayStream;
+  registerImpl: (name: TestFnNamedArgsSingleStringArrayImplKey, cb: ITestFnNamedArgsSingleStringArray, stream_cb: ITestFnNamedArgsSingleStringArrayStream) => void;
+  getImpl: (name: TestFnNamedArgsSingleStringArrayImplKey) => TestFnNamedArgsSingleStringArrayImpl;
 }
 
 function createTestFnNamedArgsSingleStringArrayInstance(): ITestFnNamedArgsSingleStringArray & TestFnNamedArgsSingleStringArrayFunction {
 
-  const registry: Record<TestFnNamedArgsSingleStringArrayImpls, TestFnNamedArgsSingleStringArrayImpl> = {}
+  const registry: Record<TestFnNamedArgsSingleStringArrayImplKey, TestFnNamedArgsSingleStringArrayImpl> = {}
 
   const wrapper: TestFnNamedArgsSingleStringArrayFunction = {
-    getImpl: (name: TestFnNamedArgsSingleStringArrayImpls) => {
+    getImpl: (name: TestFnNamedArgsSingleStringArrayImplKey) => {
       const impl = registry[name];
       if (!impl) {
         throw new Error(`No implementation for TestFnNamedArgsSingleStringArray with name ${name}`);
       }
       return impl;
     },
-    registerImpl: (name: TestFnNamedArgsSingleStringArrayImpls, cb: ITestFnNamedArgsSingleStringArray) => {
+    registerImpl: (name: TestFnNamedArgsSingleStringArrayImplKey, cb: ITestFnNamedArgsSingleStringArray, stream_cb: ITestFnNamedArgsSingleStringArrayStream) => {
       if (registry[name]) {
         throw new Error(`Implementation for TestFnNamedArgsSingleStringArray with name ${name} already exists`);
       }
@@ -2026,7 +2375,8 @@ function createTestFnNamedArgsSingleStringArrayInstance(): ITestFnNamedArgsSingl
         ) => {
           FireBamlEvent.variant(name);
           return await cb(params);
-        })
+        }),
+        stream: stream_cb,
       };
     },
     validate: () => {
@@ -2046,41 +2396,54 @@ function createTestFnNamedArgsSingleStringArrayInstance(): ITestFnNamedArgsSingl
   };
 
   Object.assign(impl, wrapper);
+  Object.assign(impl, {
+    stream: (params) => {
+      return wrapper.getImpl('v1').stream(params);
+    }
+  })
 
-  return impl as  ITestFnNamedArgsSingleStringArray & TestFnNamedArgsSingleStringArrayFunction;
+  return impl as ITestFnNamedArgsSingleStringArray & TestFnNamedArgsSingleStringArrayFunction;
 }
 
 const TestFnNamedArgsSingleStringArray = createTestFnNamedArgsSingleStringArrayInstance();
 
+// BAML function signature
 type ITestFnNamedArgsSingleStringList = (args: {
-  myArg: string[]
+  myArg: string[], 
 }) => Promise<string>
 
-type TestFnNamedArgsSingleStringListImpls = 'v1';
+// BAML function stream signature
+type ITestFnNamedArgsSingleStringListStream = (args: {
+  myArg: string[], 
+}) => Promise<string>
+
+type TestFnNamedArgsSingleStringListImplKey = 'v1';
 
 interface TestFnNamedArgsSingleStringListImpl {
+    name: TestFnNamedArgsSingleStringListImplKey;
     run: ITestFnNamedArgsSingleStringList;
-    name: TestFnNamedArgsSingleStringListImpls;
+    stream: ITestFnNamedArgsSingleStringListStream;
 }
 
 interface TestFnNamedArgsSingleStringListFunction {
-  registerImpl: (name: TestFnNamedArgsSingleStringListImpls, impl: TestFnNamedArgsSingleStringListImpl) => void;
-  getImpl: (name: TestFnNamedArgsSingleStringListImpls) => TestFnNamedArgsSingleStringListImpl;
+  stream: ITestFnNamedArgsSingleStringListStream;
+  registerImpl: (name: TestFnNamedArgsSingleStringListImplKey, cb: ITestFnNamedArgsSingleStringList, stream_cb: ITestFnNamedArgsSingleStringListStream) => void;
+  getImpl: (name: TestFnNamedArgsSingleStringListImplKey) => TestFnNamedArgsSingleStringListImpl;
 }
 
 function createTestFnNamedArgsSingleStringListInstance(): ITestFnNamedArgsSingleStringList & TestFnNamedArgsSingleStringListFunction {
 
-  const registry: Record<TestFnNamedArgsSingleStringListImpls, TestFnNamedArgsSingleStringListImpl> = {}
+  const registry: Record<TestFnNamedArgsSingleStringListImplKey, TestFnNamedArgsSingleStringListImpl> = {}
 
   const wrapper: TestFnNamedArgsSingleStringListFunction = {
-    getImpl: (name: TestFnNamedArgsSingleStringListImpls) => {
+    getImpl: (name: TestFnNamedArgsSingleStringListImplKey) => {
       const impl = registry[name];
       if (!impl) {
         throw new Error(`No implementation for TestFnNamedArgsSingleStringList with name ${name}`);
       }
       return impl;
     },
-    registerImpl: (name: TestFnNamedArgsSingleStringListImpls, cb: ITestFnNamedArgsSingleStringList) => {
+    registerImpl: (name: TestFnNamedArgsSingleStringListImplKey, cb: ITestFnNamedArgsSingleStringList, stream_cb: ITestFnNamedArgsSingleStringListStream) => {
       if (registry[name]) {
         throw new Error(`Implementation for TestFnNamedArgsSingleStringList with name ${name} already exists`);
       }
@@ -2103,7 +2466,8 @@ function createTestFnNamedArgsSingleStringListInstance(): ITestFnNamedArgsSingle
         ) => {
           FireBamlEvent.variant(name);
           return await cb(params);
-        })
+        }),
+        stream: stream_cb,
       };
     },
     validate: () => {
@@ -2123,41 +2487,54 @@ function createTestFnNamedArgsSingleStringListInstance(): ITestFnNamedArgsSingle
   };
 
   Object.assign(impl, wrapper);
+  Object.assign(impl, {
+    stream: (params) => {
+      return wrapper.getImpl('v1').stream(params);
+    }
+  })
 
-  return impl as  ITestFnNamedArgsSingleStringList & TestFnNamedArgsSingleStringListFunction;
+  return impl as ITestFnNamedArgsSingleStringList & TestFnNamedArgsSingleStringListFunction;
 }
 
 const TestFnNamedArgsSingleStringList = createTestFnNamedArgsSingleStringListInstance();
 
+// BAML function signature
 type ITestFnNamedArgsSyntax = (args: {
-  var: string, var_with_underscores: string
+  var: string, var_with_underscores: string, 
 }) => Promise<string>
 
-type TestFnNamedArgsSyntaxImpls = never;
+// BAML function stream signature
+type ITestFnNamedArgsSyntaxStream = (args: {
+  var: string, var_with_underscores: string, 
+}) => Promise<string>
+
+type TestFnNamedArgsSyntaxImplKey = never;
 
 interface TestFnNamedArgsSyntaxImpl {
+    name: TestFnNamedArgsSyntaxImplKey;
     run: ITestFnNamedArgsSyntax;
-    name: TestFnNamedArgsSyntaxImpls;
+    stream: ITestFnNamedArgsSyntaxStream;
 }
 
 interface TestFnNamedArgsSyntaxFunction {
-  registerImpl: (name: TestFnNamedArgsSyntaxImpls, impl: TestFnNamedArgsSyntaxImpl) => void;
-  getImpl: (name: TestFnNamedArgsSyntaxImpls) => TestFnNamedArgsSyntaxImpl;
+  stream: ITestFnNamedArgsSyntaxStream;
+  registerImpl: (name: TestFnNamedArgsSyntaxImplKey, cb: ITestFnNamedArgsSyntax, stream_cb: ITestFnNamedArgsSyntaxStream) => void;
+  getImpl: (name: TestFnNamedArgsSyntaxImplKey) => TestFnNamedArgsSyntaxImpl;
 }
 
 function createTestFnNamedArgsSyntaxInstance(): ITestFnNamedArgsSyntax & TestFnNamedArgsSyntaxFunction {
 
-  const registry: Record<TestFnNamedArgsSyntaxImpls, TestFnNamedArgsSyntaxImpl> = {}
+  const registry: Record<TestFnNamedArgsSyntaxImplKey, TestFnNamedArgsSyntaxImpl> = {}
 
   const wrapper: TestFnNamedArgsSyntaxFunction = {
-    getImpl: (name: TestFnNamedArgsSyntaxImpls) => {
+    getImpl: (name: TestFnNamedArgsSyntaxImplKey) => {
       const impl = registry[name];
       if (!impl) {
         throw new Error(`No implementation for TestFnNamedArgsSyntax with name ${name}`);
       }
       return impl;
     },
-    registerImpl: (name: TestFnNamedArgsSyntaxImpls, cb: ITestFnNamedArgsSyntax) => {
+    registerImpl: (name: TestFnNamedArgsSyntaxImplKey, cb: ITestFnNamedArgsSyntax, stream_cb: ITestFnNamedArgsSyntaxStream) => {
       if (registry[name]) {
         throw new Error(`Implementation for TestFnNamedArgsSyntax with name ${name} already exists`);
       }
@@ -2184,7 +2561,8 @@ function createTestFnNamedArgsSyntaxInstance(): ITestFnNamedArgsSyntax & TestFnN
         ) => {
           FireBamlEvent.variant(name);
           return await cb(params);
-        })
+        }),
+        stream: stream_cb,
       };
     },
     validate: () => {
@@ -2198,39 +2576,50 @@ function createTestFnNamedArgsSyntaxInstance(): ITestFnNamedArgsSyntax & TestFnN
   };
 
   Object.assign(impl, wrapper);
+  Object.assign(impl, {
+    stream: (params) => {
+      throw new Error('No implementation for TestFnNamedArgsSyntax');
+    }
+  })
 
-  return impl as  ITestFnNamedArgsSyntax & TestFnNamedArgsSyntaxFunction;
+  return impl as ITestFnNamedArgsSyntax & TestFnNamedArgsSyntaxFunction;
 }
 
 const TestFnNamedArgsSyntax = createTestFnNamedArgsSyntaxInstance();
 
+// BAML function signature
 type IUnionTest_Function = (arg: string | boolean) => Promise<UnionTest_ReturnType>
 
-type UnionTest_FunctionImpls = 'v1';
+// BAML function stream signature
+type IUnionTest_FunctionStream = (arg: string | boolean) => LLMResponseStream<UnionTest_ReturnType>
+
+type UnionTest_FunctionImplKey = 'v1';
 
 interface UnionTest_FunctionImpl {
+    name: UnionTest_FunctionImplKey;
     run: IUnionTest_Function;
-    name: UnionTest_FunctionImpls;
+    stream: IUnionTest_FunctionStream;
 }
 
 interface UnionTest_FunctionFunction {
-  registerImpl: (name: UnionTest_FunctionImpls, impl: UnionTest_FunctionImpl) => void;
-  getImpl: (name: UnionTest_FunctionImpls) => UnionTest_FunctionImpl;
+  stream: IUnionTest_FunctionStream;
+  registerImpl: (name: UnionTest_FunctionImplKey, cb: IUnionTest_Function, stream_cb: IUnionTest_FunctionStream) => void;
+  getImpl: (name: UnionTest_FunctionImplKey) => UnionTest_FunctionImpl;
 }
 
 function createUnionTest_FunctionInstance(): IUnionTest_Function & UnionTest_FunctionFunction {
 
-  const registry: Record<UnionTest_FunctionImpls, UnionTest_FunctionImpl> = {}
+  const registry: Record<UnionTest_FunctionImplKey, UnionTest_FunctionImpl> = {}
 
   const wrapper: UnionTest_FunctionFunction = {
-    getImpl: (name: UnionTest_FunctionImpls) => {
+    getImpl: (name: UnionTest_FunctionImplKey) => {
       const impl = registry[name];
       if (!impl) {
         throw new Error(`No implementation for UnionTest_Function with name ${name}`);
       }
       return impl;
     },
-    registerImpl: (name: UnionTest_FunctionImpls, cb: IUnionTest_Function) => {
+    registerImpl: (name: UnionTest_FunctionImplKey, cb: IUnionTest_Function, stream_cb: IUnionTest_FunctionStream) => {
       if (registry[name]) {
         throw new Error(`Implementation for UnionTest_Function with name ${name} already exists`);
       }
@@ -2251,7 +2640,8 @@ function createUnionTest_FunctionInstance(): IUnionTest_Function & UnionTest_Fun
         ) => {
           FireBamlEvent.variant(name);
           return await cb(arg);
-        })
+        }),
+        stream: stream_cb,
       };
     },
     validate: () => {
@@ -2269,8 +2659,13 @@ function createUnionTest_FunctionInstance(): IUnionTest_Function & UnionTest_Fun
   };
 
   Object.assign(impl, wrapper);
+  Object.assign(impl, {
+    stream: (arg) => {
+      return wrapper.getImpl('v1').stream(arg);
+    }
+  })
 
-  return impl as  IUnionTest_Function & UnionTest_FunctionFunction;
+  return impl as IUnionTest_Function & UnionTest_FunctionFunction;
 }
 
 const UnionTest_Function = createUnionTest_FunctionInstance();

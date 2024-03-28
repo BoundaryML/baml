@@ -35,11 +35,11 @@ pub(crate) fn generate_ts(ir: &IntermediateRepr, gen: &Generator) -> std::io::Re
     });
 
     {
-        let clients = collector.start_file(".", "client", false);
-        clients.append(
+        let client_file = collector.start_file(".", "client", false);
+        client_file.append(
             r#"
-    import { loadEnvVars } from '@boundaryml/baml-core';
-    loadEnvVars();
+import { loadEnvVars } from '@boundaryml/baml-core';
+loadEnvVars();
             "#
             .to_string(),
         );
