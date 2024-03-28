@@ -66,6 +66,27 @@ impl WithLanguage for PythonConfig {
     }
 }
 
+fn venv_script(env_path: &str, cmd: &str) -> String {
+    let shell_path = std::env::var("SHELL").unwrap_or_default();
+    let shell = shell_path.split('/').last().unwrap_or("");
+
+    let activate_command = match shell {
+        "bash" | "zsh" => format!(". {env_path}/bin/activate"),
+        "fish" => format!(". {env_path}/bin/activate.fish"),
+        "csh" | "tcsh" => format!("source {env_path}/bin/activate.csh"),
+        _ => {
+            if cfg!(windows) {
+                format!("{env_path}\\Scripts\\Activate.ps1")
+            // Assuming PowerShell as a default for Windows
+            } else {
+                format!(". {env_path}/bin/activate") // Defaulting to bash/zsh for Unix-like systems
+            }
+        }
+    };
+
+    format!("{activate_command} && {cmd}")
+}
+
 impl WithLanguage for PackageManager {
     fn test_command<T: AsRef<str>>(&self, prefix: Option<T>) -> String {
         let res = match self {
@@ -73,16 +94,7 @@ impl WithLanguage for PackageManager {
                 format!("{} -m pytest", py_path)
             }
             PackageManager::Poetry => "poetry run pytest".into(),
-            PackageManager::Venv(env_path) => {
-                // TODO: Use the best command for each os:
-                // - POSIX (bash/zsh): . venv/bin/activate
-                // - POSIX (fish): . venv/bin/activate.fish
-                // - POSIX (csh/tcsh): . venv/bin/activate.csh
-                // - POSIT (powershell): venv\Scripts\Activate.ps1
-                // - Windows (cmd.ext): venv\Scripts\activate.bat
-                // - Windows (powershell): venv\Scripts\Activate.ps1
-                format!(". {}/bin/activate && python -m pytest", env_path)
-            }
+            PackageManager::Venv(env_path) => venv_script(env_path, "python -m pytest"),
             PackageManager::Conda(name) => {
                 format!("conda run -n {} pytest", name)
             }
@@ -90,11 +102,7 @@ impl WithLanguage for PackageManager {
 
         match (prefix, self) {
             (Some(p), PackageManager::Venv(env_path)) => {
-                format!(
-                    "{env_path} && {} python -m pytest",
-                    p.as_ref(),
-                    env_path = env_path
-                )
+                format!("{env_path} && {} python -m pytest", p.as_ref(),)
             }
             (Some(p), _) => format!("{} {}", p.as_ref(), res),
             (None, _) => res,
@@ -106,9 +114,7 @@ impl WithLanguage for PackageManager {
             PackageManager::Pip(_) => "pip install --upgrade baml".into(),
             PackageManager::Pip3(_) => "pip3 install --upgrade baml".into(),
             PackageManager::Poetry => "poetry add baml@latest".into(),
-            PackageManager::Venv(env_path) => {
-                format!(". {}/bin/activate && pip install --upgrade baml", env_path)
-            }
+            PackageManager::Venv(env_path) => venv_script(env_path, "pip install --upgrade baml"),
             PackageManager::Conda(name) => {
                 format!("conda run -n {} pip install --upgrade baml", name)
             }
@@ -120,7 +126,7 @@ impl WithLanguage for PackageManager {
             PackageManager::Pip(_) => "pip show baml".into(),
             PackageManager::Pip3(_) => "pip3 show baml".into(),
             PackageManager::Poetry => "poetry show baml".into(),
-            PackageManager::Venv(path) => format!(". {}/bin/activate && pip show baml", path),
+            PackageManager::Venv(path) => venv_script(path, "pip show baml"),
             PackageManager::Conda(name) => format!("conda list -n {} baml", name),
         }
     }
