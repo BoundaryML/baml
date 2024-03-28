@@ -26,7 +26,7 @@ def _to_chat_completion_messages(msg: LLMChatMessage) -> ollama.Message:  # type
 @register_llm_provider("baml-ollama-chat")
 @typing.final
 class OllamaChatProvider(LLMChatProvider):
-    __client: ollama.AsyncClient  # type: ignore
+    __client_host: str
     __kwargs: typing.Dict[str, typing.Any]
 
     def __init__(
@@ -43,15 +43,9 @@ class OllamaChatProvider(LLMChatProvider):
             **kwargs,
         )
 
-        client_kwargs: typing.Dict[str, typing.Any] = {}
-        if "host" in options:
-            client_kwargs["host"] = options.pop("host")
-        if "follow_redirects" in options:
-            client_kwargs["follow_redirects"] = options.pop("follow_redirects")
-        self.__client = ollama.AsyncClient(**client_kwargs)
-
+        self.__client_host = options.pop("host", "http://localhost:11434")
         self.__kwargs = {}
-        for params in ["model", "format", "options"]:
+        for params in ["model", "format", "options", "keep_alive"]:
             if params in options:
                 self.__kwargs[params] = options.pop(params)
 
@@ -66,7 +60,8 @@ class OllamaChatProvider(LLMChatProvider):
     async def _stream_chat(
         self, messages: typing.List[LLMChatMessage]
     ) -> typing.AsyncIterator[LLMResponse]:
-        stream: typing.AsyncIterator[ollama.ChatResponse] = await self.__client.chat(  # type: ignore
+        client = ollama.AsyncClient(host=self.__client_host)
+        stream: typing.AsyncIterator[ollama.ChatResponse] = await client.chat(  # type: ignore
             messages=list(map(_to_chat_completion_messages, messages)),
             **self.__kwargs,
             stream=True,
@@ -86,7 +81,8 @@ class OllamaChatProvider(LLMChatProvider):
         pass
 
     async def _run_chat(self, messages: typing.List[LLMChatMessage]) -> LLMResponse:
-        response: ollama.ChatResponse = await self.__client.chat(  # type: ignore
+        client = ollama.AsyncClient(host=self.__client_host)
+        response: ollama.ChatResponse = await client.chat(  # type: ignore
             messages=list(map(_to_chat_completion_messages, messages)),
             **self.__kwargs,
         )
