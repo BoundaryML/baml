@@ -1,4 +1,4 @@
-import json5 as json  # type: ignore
+import json5 as json
 import regex as re
 import typing
 from .raw_wrapper import RawWrapper

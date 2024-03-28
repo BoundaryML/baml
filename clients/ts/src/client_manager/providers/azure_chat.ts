@@ -1,7 +1,7 @@
-import { clientManager } from "../client_manager.js";
+import { clientManager } from "../client_manager";
 import { OpenAIClient, AzureKeyCredential, GetChatCompletionsOptions } from "@azure/openai";
-import { LLMChatProvider } from "../llm_chat_provider.js";
-import { LLMChatMessage, LLMResponse, LLMBaseProviderArgs } from "../llm_base_provider.js";
+import { LLMChatProvider } from "../llm_chat_provider";
+import { LLMChatMessage, LLMResponse, LLMBaseProviderArgs } from "../llm_base_provider";
 
 class AzureOpenAIClient extends LLMChatProvider {
     private client: OpenAIClient;
