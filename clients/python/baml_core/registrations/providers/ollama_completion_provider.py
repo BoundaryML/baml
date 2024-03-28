@@ -12,7 +12,7 @@ from baml_core.provider_manager import (
 @register_llm_provider("baml-ollama-completion")
 @typing.final
 class OllamaCompletionProvider(LLMProvider):
-    __client: ollama.AsyncClient  # type: ignore
+    __client_host: str
     __kwargs: typing.Dict[str, typing.Any]
 
     def __init__(
@@ -20,13 +20,7 @@ class OllamaCompletionProvider(LLMProvider):
     ) -> None:
         super().__init__(**kwargs)
 
-        client_kwargs: typing.Dict[str, typing.Any] = {}
-        if "host" in options:
-            client_kwargs["host"] = options.pop("host")
-        if "follow_redirects" in options:
-            client_kwargs["follow_redirects"] = options.pop("follow_redirects")
-        self.__client = ollama.AsyncClient(**client_kwargs)
-
+        self.__client_host = options.pop("host", "http://localhost:11434")
         self.__kwargs = {}
         for params in [
             "model",
@@ -36,6 +30,7 @@ class OllamaCompletionProvider(LLMProvider):
             "template",
             "context",
             "raw",
+            "keep_alive",
         ]:
             if params in options:
                 self.__kwargs[params] = options.pop(params)
@@ -49,9 +44,10 @@ class OllamaCompletionProvider(LLMProvider):
         return None
 
     async def _stream(self, prompt: str) -> typing.AsyncIterator[LLMResponse]:
+        client = ollama.AsyncClient(host=self.__client_host)
         response: typing.AsyncIterator[  # type: ignore
             ollama.GenerateResponse
-        ] = await self.__client.generate(
+        ] = await client.generate(
             prompt=prompt,
             **self.__kwargs,
             stream=True,
@@ -71,7 +67,8 @@ class OllamaCompletionProvider(LLMProvider):
         pass
 
     async def _run(self, prompt: str) -> LLMResponse:
-        response: ollama.GenerateResponse = await self.__client.generate(  # type: ignore
+        client = ollama.AsyncClient(host=self.__client_host)
+        response: ollama.GenerateResponse = await client.generate(  # type: ignore
             prompt=prompt,
             **self.__kwargs,
         )
