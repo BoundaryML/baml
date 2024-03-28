@@ -1,5 +1,5 @@
 import typing
-import ollama
+import ollama  # type: ignore
 
 
 from baml_core.provider_manager import (
@@ -10,18 +10,23 @@ from baml_core.provider_manager import (
 )
 
 
-def _to_chat_completion_messages(msg: LLMChatMessage) -> ollama.Message:
-    role = typing.cast(typing.Literal["user", "assistant", "system"], msg['role']) if msg['role'] in ["user", "assistant", "system"] else "system"
+def _to_chat_completion_messages(msg: LLMChatMessage) -> ollama.Message:  # type: ignore
+    role = (
+        typing.cast(typing.Literal["user", "assistant", "system"], msg["role"])
+        if msg["role"] in ["user", "assistant", "system"]
+        else "system"
+    )
     return {
         "content": msg["content"],
         "role": role,
         "images": None,
     }
 
+
 @register_llm_provider("baml-ollama-chat")
 @typing.final
 class OllamaChatProvider(LLMChatProvider):
-    __client: ollama.AsyncClient
+    __client: ollama.AsyncClient  # type: ignore
     __kwargs: typing.Dict[str, typing.Any]
 
     def __init__(
@@ -45,12 +50,11 @@ class OllamaChatProvider(LLMChatProvider):
             client_kwargs["follow_redirects"] = options.pop("follow_redirects")
         self.__client = ollama.AsyncClient(**client_kwargs)
 
-
         self.__kwargs = {}
         for params in ["model", "format", "options"]:
             if params in options:
                 self.__kwargs[params] = options.pop(params)
-        
+
         # All options should be consumed
         if options:
             raise ValueError(f"Unknown options: {options} for OllamaChatProvider")
@@ -58,9 +62,11 @@ class OllamaChatProvider(LLMChatProvider):
 
     def _to_error_code(self, error: Exception) -> typing.Optional[int]:
         return None
-    
-    async def _stream_chat(self, messages: typing.List[LLMChatMessage]) -> typing.AsyncIterator[LLMResponse]:
-        stream: typing.AsyncIterator[ollama.ChatResponse] = await self.__client.chat(
+
+    async def _stream_chat(
+        self, messages: typing.List[LLMChatMessage]
+    ) -> typing.AsyncIterator[LLMResponse]:
+        stream: typing.AsyncIterator[ollama.ChatResponse] = await self.__client.chat(  # type: ignore
             messages=list(map(_to_chat_completion_messages, messages)),
             **self.__kwargs,
             stream=True,
@@ -68,10 +74,10 @@ class OllamaChatProvider(LLMChatProvider):
 
         async for response in stream:
             yield LLMResponse(
-                generated=response['message']["content"],
-                model_name=response['model'],
+                generated=response["message"]["content"],
+                model_name=response["model"],
                 meta=dict(
-                    baml_is_complete=response['done'],
+                    baml_is_complete=response["done"],
                     logprobs=None,
                 ),
             )
@@ -80,20 +86,18 @@ class OllamaChatProvider(LLMChatProvider):
         pass
 
     async def _run_chat(self, messages: typing.List[LLMChatMessage]) -> LLMResponse:
-        response: ollama.ChatResponse = await self.__client.chat(
+        response: ollama.ChatResponse = await self.__client.chat(  # type: ignore
             messages=list(map(_to_chat_completion_messages, messages)),
             **self.__kwargs,
         )
-        
 
-        text = response['message']
-        finish_reason = response["done"]
+        text = response["message"]
 
         return LLMResponse(
             generated=text["content"],
-            model_name=response['model'],
+            model_name=response["model"],
             meta=dict(
-                baml_is_complete=response['done'],
+                baml_is_complete=response["done"],
                 logprobs=None,
             ),
         )

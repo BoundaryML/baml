@@ -1,5 +1,5 @@
 import typing
-import ollama
+import ollama  # type: ignore
 
 
 from baml_core.provider_manager import (
@@ -9,11 +9,10 @@ from baml_core.provider_manager import (
 )
 
 
-
 @register_llm_provider("baml-ollama-completion")
 @typing.final
 class OllamaCompletionProvider(LLMProvider):
-    __client: ollama.AsyncClient
+    __client: ollama.AsyncClient  # type: ignore
     __kwargs: typing.Dict[str, typing.Any]
 
     def __init__(
@@ -29,10 +28,18 @@ class OllamaCompletionProvider(LLMProvider):
         self.__client = ollama.AsyncClient(**client_kwargs)
 
         self.__kwargs = {}
-        for params in ["model", "format", "options", "system", "template", "context", "raw"]:
+        for params in [
+            "model",
+            "format",
+            "options",
+            "system",
+            "template",
+            "context",
+            "raw",
+        ]:
             if params in options:
                 self.__kwargs[params] = options.pop(params)
-        
+
         # All options should be consumed
         if options:
             raise ValueError(f"Unknown options: {options} for OllamaCompletionProvider")
@@ -40,9 +47,11 @@ class OllamaCompletionProvider(LLMProvider):
 
     def _to_error_code(self, error: Exception) -> typing.Optional[int]:
         return None
-    
+
     async def _stream(self, prompt: str) -> typing.AsyncIterator[LLMResponse]:
-        response: typing.AsyncIterator[ollama.GenerateResponse] = await self.__client.generate(
+        response: typing.AsyncIterator[
+            ollama.GenerateResponse
+        ] = await self.__client.generate(  # type: ignore
             prompt=prompt,
             **self.__kwargs,
             stream=True,
@@ -50,10 +59,10 @@ class OllamaCompletionProvider(LLMProvider):
 
         async for message in response:
             yield LLMResponse(
-                generated=message['response'],
-                model_name=message['model'],
+                generated=message["response"],
+                model_name=message["model"],
                 meta=dict(
-                    baml_is_complete=message['done'],
+                    baml_is_complete=message["done"],
                     logprobs=None,
                 ),
             )
@@ -62,19 +71,18 @@ class OllamaCompletionProvider(LLMProvider):
         pass
 
     async def _run(self, prompt: str) -> LLMResponse:
-        response: ollama.GenerateResponse = await self.__client.generate(
+        response: ollama.GenerateResponse = await self.__client.generate(  # type: ignore
             prompt=prompt,
             **self.__kwargs,
         )
-        
 
-        text = response['response']
+        text = response["response"]
 
         return LLMResponse(
             generated=text,
-            model_name=response['model'],
+            model_name=response["model"],
             meta=dict(
-                baml_is_complete=response['done'],
+                baml_is_complete=response["done"],
                 logprobs=None,
             ),
         )
