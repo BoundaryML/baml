@@ -13,6 +13,7 @@ from .clients.client_gpt4 import GPT4
 from .clients.client_gpt4turbo import GPT4Turbo
 from .clients.client_lottery_complexsyntax import Lottery_ComplexSyntax
 from .clients.client_lottery_simplesyntax import Lottery_SimpleSyntax
+from .clients.client_ollama import Ollama
 from .clients.client_resilient_complexsyntax import Resilient_ComplexSyntax
 from .clients.client_resilient_simplesyntax import Resilient_SimpleSyntax
 from .functions.fx_fnclassoptional import BAMLFnClassOptional
@@ -91,6 +92,7 @@ class BAMLClient:
     GPT4Turbo = GPT4Turbo
     Lottery_ComplexSyntax = Lottery_ComplexSyntax
     Lottery_SimpleSyntax = Lottery_SimpleSyntax
+    Ollama = Ollama
     Resilient_ComplexSyntax = Resilient_ComplexSyntax
     Resilient_SimpleSyntax = Resilient_SimpleSyntax
 

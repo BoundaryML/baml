@@ -53,6 +53,8 @@ import './prompttest_claude_chat_with_chat_msgs';
 
 import './prompttest_claude_chat_with_chat_msgs_no_system';
 
+import './prompttest_ollama_chat';
+
 import './prompttest_openai_chat';
 
 import './prompttest_openai_chat_with_chat_msgs';
