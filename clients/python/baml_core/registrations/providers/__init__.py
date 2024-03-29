@@ -13,6 +13,12 @@ else:
     from .openai_chat_provider_1 import OpenAIChatProvider
     from .openai_completion_provider_1 import OpenAICompletionProvider
 
+try:
+    from .ollama_chat_provider import OllamaChatProvider
+    from .ollama_completion_provider import OllamaCompletionProvider
+except ImportError:
+    OllamaChatProvider = None
+    OllamaCompletionProvider = None
 
 __all__ = [
     "AnthropicProvider",
@@ -21,4 +27,6 @@ __all__ = [
     "OpenAIChatProvider",
     "OpenAICompletionProvider",
     "RoundRobinProvider",
+    "OllamaChatProvider",
+    "OllamaCompletionProvider",
 ]

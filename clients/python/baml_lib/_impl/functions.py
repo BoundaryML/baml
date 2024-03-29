@@ -89,8 +89,7 @@ class CB(typing.Generic[RET], typing.Protocol):
 
     def __call__(
         self, *args: typing.Any, **kwargs: typing.Any
-    ) -> typing.Awaitable[RET]:
-        ...
+    ) -> typing.Awaitable[RET]: ...
 
 
 class STREAM_CB(typing.Generic[RET2, PARTIAL_RET], typing.Protocol):
@@ -100,8 +99,7 @@ class STREAM_CB(typing.Generic[RET2, PARTIAL_RET], typing.Protocol):
 
     def __call__(
         self, *args: typing.Any, **kwargs: typing.Any
-    ) -> AsyncStream[RET2, PARTIAL_RET]:
-        ...
+    ) -> AsyncStream[RET2, PARTIAL_RET]: ...
 
 
 class BAMLImpl(typing.Generic[RET, PARTIAL_RET]):

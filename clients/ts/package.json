@@ -68,10 +68,11 @@
     "@azure/openai": "1.0.0-beta.11",
     "@boundaryml/baml-core-ffi": "0.15.0",
     "dotenv": "^16.4.5",
+    "jest-runner": "^29.7.0",
     "json-schema": "^0.4.0",
+    "ollama": "^0.5.0",
     "openai": "^4.25.0",
     "string-format": "^2.0.0",
-    "jest-runner": "^29.7.0",
     "xregexp": "^5.1.1"
   }
 }

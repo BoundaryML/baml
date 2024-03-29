@@ -36,6 +36,8 @@ BAML ships with the following providers (you can can also write your own!):
   - `baml-azure-completion`
   - `baml-openai-chat`
   - `baml-openai-completion`
+  - `baml-ollama-chat`
+  - `baml-ollama-completion` (only for python)
 - Composite client providers
   - `baml-fallback`
   - `baml-round-robin`
@@ -117,6 +119,30 @@ client<llm> MyClient {
   options {
     model claude-2
     max_tokens_to_sample 300
+  }
+}
+```
+
+### Ollama
+
+- BAML Python Client >= 0.18.0
+- BAML Typescript Client >= 0.0.6
+
+Provider names:
+
+- `baml-ollama-chat`
+- `baml-ollama-completion` (only for python)
+
+Accepts any options as defined by [Ollama SDK](https://github.com/ollama/ollama/blob/main/docs/api.md#generate-a-chat-completion).
+
+```rust
+client<llm> MyClient {
+  provider baml-ollama-chat
+  options {
+    model mistral
+    options {
+      temperature 0
+    }
   }
 }
 ```
