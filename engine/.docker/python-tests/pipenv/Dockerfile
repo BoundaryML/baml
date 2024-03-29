@@ -5,15 +5,14 @@ WORKDIR /myapp
 # Install pipenv
 RUN pip install pipenv
 
-# Set up environment variables for testing
+# Testing binaries
 ENV CAPTURE_DIR="/usr/src/logs"
+ENV BAML_TEST_LOGS="/usr/src/logs/baml_test"
 RUN mkdir -p /usr/src/logs
-
-# Copy the test script into the image
 COPY script.sh /usr/src/test.sh
 RUN chmod +x /usr/src/test.sh
-
-# Install baml
-RUN pipenv install baml
+# Copy the compiled binary from the builder stage
+COPY --from=baml_builder /baml_source_code/target/release/baml /usr/tools/baml
+ENV PATH="/usr/tools:${PATH}"
 
 CMD ["/usr/src/test.sh"]

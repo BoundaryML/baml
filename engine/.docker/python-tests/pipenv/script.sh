@@ -11,8 +11,7 @@ pipenv --python 3.8
 # baml init -n requires a python file to auto-detect its a python project
 touch main.py
 
-# Initialize the project with baml
-pipenv run baml init -n
+baml init -n
 
 # Check that pipenv environment has baml
 pipenv run python -m baml_version
