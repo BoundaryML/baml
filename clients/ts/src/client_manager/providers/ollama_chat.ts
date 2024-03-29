@@ -9,7 +9,7 @@ class OllamaChatAIClient extends LLMChatProvider {
 
   constructor(params: LLMBaseProviderArgs) {
     const {
-      host,
+      host = "http://localhost:11434",
       options,
       format,
       model,
@@ -59,24 +59,33 @@ class OllamaChatAIClient extends LLMChatProvider {
   }
 
   protected async chat_impl(prompt: LLMChatMessage[]): Promise<LLMResponse> {
-    const response = await this.client.chat({
-      messages: prompt.map((chat) => ({
-        role: this.to_ollama_role(chat.role),
-        content: chat.content,
-      })),
-      ...this.params,
-      stream: false
-    })
+    try {
+      console.log(JSON.stringify(prompt, null, 2), JSON.stringify(this.params, null, 2));
+      const response = await this.client.chat({
+        messages: prompt.map((chat) => ({
+          role: this.to_ollama_role(chat.role),
+          content: chat.content,
+        })),
+        ...this.params,
+        stream: false
+      })
 
-    return {
-      generated: response.message.content,
-      model_name: response.model,
-      meta: {
-        finish_reason: response.done ? "stop" : "interrupted",
-        prompt_tokens: response.prompt_eval_count,
-        output_tokens: response.eval_count,
-        total_tokens: response.prompt_eval_count + response.eval_count,
+      console.log(JSON.stringify(response, null, 2));
+
+      return {
+        generated: response.message.content,
+        model_name: response.model,
+        meta: {
+          finish_reason: response.done ? "stop" : "interrupted",
+          prompt_tokens: (response.prompt_eval_count ?? 0), // llama2 doesnt actually return this key
+          output_tokens: response.eval_count ?? 0,
+          total_tokens: (response.prompt_eval_count ?? 0) + (response.eval_count ?? 0),
+        }
       }
+    } catch (err) {
+      console.log("errroor!!")
+      console.log(JSON.stringify(err, null, 2));
+      throw err;
     }
   }
 }

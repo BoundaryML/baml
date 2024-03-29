@@ -42,6 +42,10 @@ const Lottery_SimpleSyntax = clientManager.createClient('Lottery_SimpleSyntax', 
     strategy: ["GPT35", "Claude"]
 });
 
+const Ollama = clientManager.createClient('Ollama', 'baml-ollama-chat', {
+    model: "llama2"
+});
+
 const Resilient_ComplexSyntax = clientManager.createClient('Resilient_ComplexSyntax', 'baml-fallback', {
     strategy: [{ "client": "GPT4Turbo" }, { "client": "GPT35" }, { "client": "Claude" }]
 });
@@ -51,5 +55,5 @@ const Resilient_SimpleSyntax = clientManager.createClient('Resilient_SimpleSynta
 });
 
 
-export { Claude, GPT35, GPT4, GPT4Turbo, Lottery_ComplexSyntax, Lottery_SimpleSyntax, Resilient_ComplexSyntax, Resilient_SimpleSyntax }
+export { Claude, GPT35, GPT4, GPT4Turbo, Lottery_ComplexSyntax, Lottery_SimpleSyntax, Ollama, Resilient_ComplexSyntax, Resilient_SimpleSyntax }
 
