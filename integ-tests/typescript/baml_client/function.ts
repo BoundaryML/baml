@@ -8,7 +8,7 @@
 
 import { ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, EnumOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalClass, OptionalTest_ReturnType, OverrideClass, OverrideEnum, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass, UnionTest_ReturnType } from './types';
 import { LLMResponseStream } from '@boundaryml/baml-core';
-import { FireBamlEvent, traceAsync } from '@boundaryml/baml-core/ffi_layer';
+import { FireBamlEvent, trace, traceAsync, traceStream } from '@boundaryml/baml-core/ffi_layer';
 
 
 // BAML function signature
@@ -52,7 +52,7 @@ function createFnClassOptionalInstance(): IFnClassOptional & FnClassOptionalFunc
         run: traceAsync(
           /* functionName */"FnClassOptional",
           /* returnType */ "string",
-          /* paramters */ [
+          /* parameters */ [
             [
               "arg",
               "OptionalClass | null"
@@ -65,7 +65,24 @@ function createFnClassOptionalInstance(): IFnClassOptional & FnClassOptionalFunc
           FireBamlEvent.variant(name);
           return await cb(arg);
         }),
-        stream: stream_cb,
+        stream: traceStream(
+        // stream: trace(
+          /* functionName */"FnClassOptional",
+          /* returnType */ "string",
+          /* parameters */ [
+            [
+              "arg",
+              "OptionalClass | null"
+            ]
+          ],
+          /* arg_type */ 'positional',
+          /* cb */ (
+          arg: OptionalClass | null
+        ) => {
+          FireBamlEvent.variant(name);
+          FireBamlEvent.tags({stream: true});
+          return stream_cb(arg);
+        }),
       };
     },
     validate: () => {
@@ -135,7 +152,7 @@ function createFnClassOptional2Instance(): IFnClassOptional2 & FnClassOptional2F
         run: traceAsync(
           /* functionName */"FnClassOptional2",
           /* returnType */ "string",
-          /* paramters */ [
+          /* parameters */ [
             [
               "arg",
               "ClassOptionalFields"
@@ -148,7 +165,24 @@ function createFnClassOptional2Instance(): IFnClassOptional2 & FnClassOptional2F
           FireBamlEvent.variant(name);
           return await cb(arg);
         }),
-        stream: stream_cb,
+        stream: traceStream(
+        // stream: trace(
+          /* functionName */"FnClassOptional2",
+          /* returnType */ "string",
+          /* parameters */ [
+            [
+              "arg",
+              "ClassOptionalFields"
+            ]
+          ],
+          /* arg_type */ 'positional',
+          /* cb */ (
+          arg: ClassOptionalFields
+        ) => {
+          FireBamlEvent.variant(name);
+          FireBamlEvent.tags({stream: true});
+          return stream_cb(arg);
+        }),
       };
     },
     validate: () => {
@@ -218,7 +252,7 @@ function createFnClassOptionalOutputInstance(): IFnClassOptionalOutput & FnClass
         run: traceAsync(
           /* functionName */"FnClassOptionalOutput",
           /* returnType */ "ClassOptionalOutput | null",
-          /* paramters */ [
+          /* parameters */ [
             [
               "arg",
               "string"
@@ -231,7 +265,24 @@ function createFnClassOptionalOutputInstance(): IFnClassOptionalOutput & FnClass
           FireBamlEvent.variant(name);
           return await cb(arg);
         }),
-        stream: stream_cb,
+        stream: traceStream(
+        // stream: trace(
+          /* functionName */"FnClassOptionalOutput",
+          /* returnType */ "ClassOptionalOutput | null",
+          /* parameters */ [
+            [
+              "arg",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'positional',
+          /* cb */ (
+          arg: string
+        ) => {
+          FireBamlEvent.variant(name);
+          FireBamlEvent.tags({stream: true});
+          return stream_cb(arg);
+        }),
       };
     },
     validate: () => {
@@ -301,7 +352,7 @@ function createFnClassOptionalOutput2Instance(): IFnClassOptionalOutput2 & FnCla
         run: traceAsync(
           /* functionName */"FnClassOptionalOutput2",
           /* returnType */ "ClassOptionalOutput2 | null",
-          /* paramters */ [
+          /* parameters */ [
             [
               "arg",
               "string"
@@ -314,7 +365,24 @@ function createFnClassOptionalOutput2Instance(): IFnClassOptionalOutput2 & FnCla
           FireBamlEvent.variant(name);
           return await cb(arg);
         }),
-        stream: stream_cb,
+        stream: traceStream(
+        // stream: trace(
+          /* functionName */"FnClassOptionalOutput2",
+          /* returnType */ "ClassOptionalOutput2 | null",
+          /* parameters */ [
+            [
+              "arg",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'positional',
+          /* cb */ (
+          arg: string
+        ) => {
+          FireBamlEvent.variant(name);
+          FireBamlEvent.tags({stream: true});
+          return stream_cb(arg);
+        }),
       };
     },
     validate: () => {
@@ -384,7 +452,7 @@ function createFnEnumListOutputInstance(): IFnEnumListOutput & FnEnumListOutputF
         run: traceAsync(
           /* functionName */"FnEnumListOutput",
           /* returnType */ "EnumOutput[]",
-          /* paramters */ [
+          /* parameters */ [
             [
               "arg",
               "string"
@@ -397,7 +465,24 @@ function createFnEnumListOutputInstance(): IFnEnumListOutput & FnEnumListOutputF
           FireBamlEvent.variant(name);
           return await cb(arg);
         }),
-        stream: stream_cb,
+        stream: traceStream(
+        // stream: trace(
+          /* functionName */"FnEnumListOutput",
+          /* returnType */ "EnumOutput[]",
+          /* parameters */ [
+            [
+              "arg",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'positional',
+          /* cb */ (
+          arg: string
+        ) => {
+          FireBamlEvent.variant(name);
+          FireBamlEvent.tags({stream: true});
+          return stream_cb(arg);
+        }),
       };
     },
     validate: () => {
@@ -467,7 +552,7 @@ function createFnEnumOutputInstance(): IFnEnumOutput & FnEnumOutputFunction {
         run: traceAsync(
           /* functionName */"FnEnumOutput",
           /* returnType */ "EnumOutput",
-          /* paramters */ [
+          /* parameters */ [
             [
               "arg",
               "string"
@@ -480,7 +565,24 @@ function createFnEnumOutputInstance(): IFnEnumOutput & FnEnumOutputFunction {
           FireBamlEvent.variant(name);
           return await cb(arg);
         }),
-        stream: stream_cb,
+        stream: traceStream(
+        // stream: trace(
+          /* functionName */"FnEnumOutput",
+          /* returnType */ "EnumOutput",
+          /* parameters */ [
+            [
+              "arg",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'positional',
+          /* cb */ (
+          arg: string
+        ) => {
+          FireBamlEvent.variant(name);
+          FireBamlEvent.tags({stream: true});
+          return stream_cb(arg);
+        }),
       };
     },
     validate: () => {
@@ -554,7 +656,7 @@ function createFnNamedArgsSingleStringOptionalInstance(): IFnNamedArgsSingleStri
         run: traceAsync(
           /* functionName */"FnNamedArgsSingleStringOptional",
           /* returnType */ "string",
-          /* paramters */ [
+          /* parameters */ [
             [
               "myString",
               "string | null"
@@ -569,7 +671,26 @@ function createFnNamedArgsSingleStringOptionalInstance(): IFnNamedArgsSingleStri
           FireBamlEvent.variant(name);
           return await cb(params);
         }),
-        stream: stream_cb,
+        stream: traceStream(
+        // stream: trace(
+          /* functionName */"FnNamedArgsSingleStringOptional",
+          /* returnType */ "string",
+          /* parameters */ [
+            [
+              "myString",
+              "string | null"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ (
+          params: {
+            myString: string | null
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          FireBamlEvent.tags({stream: true});
+          return stream_cb(params);
+        }),
       };
     },
     validate: () => {
@@ -641,7 +762,7 @@ function createFnOutputBoolInstance(): IFnOutputBool & FnOutputBoolFunction {
         run: traceAsync(
           /* functionName */"FnOutputBool",
           /* returnType */ "boolean",
-          /* paramters */ [
+          /* parameters */ [
             [
               "arg",
               "string"
@@ -654,7 +775,24 @@ function createFnOutputBoolInstance(): IFnOutputBool & FnOutputBoolFunction {
           FireBamlEvent.variant(name);
           return await cb(arg);
         }),
-        stream: stream_cb,
+        stream: traceStream(
+        // stream: trace(
+          /* functionName */"FnOutputBool",
+          /* returnType */ "boolean",
+          /* parameters */ [
+            [
+              "arg",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'positional',
+          /* cb */ (
+          arg: string
+        ) => {
+          FireBamlEvent.variant(name);
+          FireBamlEvent.tags({stream: true});
+          return stream_cb(arg);
+        }),
       };
     },
     validate: () => {
@@ -724,7 +862,7 @@ function createFnOutputClassInstance(): IFnOutputClass & FnOutputClassFunction {
         run: traceAsync(
           /* functionName */"FnOutputClass",
           /* returnType */ "TestOutputClass",
-          /* paramters */ [
+          /* parameters */ [
             [
               "arg",
               "string"
@@ -737,7 +875,24 @@ function createFnOutputClassInstance(): IFnOutputClass & FnOutputClassFunction {
           FireBamlEvent.variant(name);
           return await cb(arg);
         }),
-        stream: stream_cb,
+        stream: traceStream(
+        // stream: trace(
+          /* functionName */"FnOutputClass",
+          /* returnType */ "TestOutputClass",
+          /* parameters */ [
+            [
+              "arg",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'positional',
+          /* cb */ (
+          arg: string
+        ) => {
+          FireBamlEvent.variant(name);
+          FireBamlEvent.tags({stream: true});
+          return stream_cb(arg);
+        }),
       };
     },
     validate: () => {
@@ -807,7 +962,7 @@ function createFnOutputClassListInstance(): IFnOutputClassList & FnOutputClassLi
         run: traceAsync(
           /* functionName */"FnOutputClassList",
           /* returnType */ "TestOutputClass[]",
-          /* paramters */ [
+          /* parameters */ [
             [
               "arg",
               "string"
@@ -820,7 +975,24 @@ function createFnOutputClassListInstance(): IFnOutputClassList & FnOutputClassLi
           FireBamlEvent.variant(name);
           return await cb(arg);
         }),
-        stream: stream_cb,
+        stream: traceStream(
+        // stream: trace(
+          /* functionName */"FnOutputClassList",
+          /* returnType */ "TestOutputClass[]",
+          /* parameters */ [
+            [
+              "arg",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'positional',
+          /* cb */ (
+          arg: string
+        ) => {
+          FireBamlEvent.variant(name);
+          FireBamlEvent.tags({stream: true});
+          return stream_cb(arg);
+        }),
       };
     },
     validate: () => {
@@ -890,7 +1062,7 @@ function createFnOutputClassWithEnumInstance(): IFnOutputClassWithEnum & FnOutpu
         run: traceAsync(
           /* functionName */"FnOutputClassWithEnum",
           /* returnType */ "TestClassWithEnum",
-          /* paramters */ [
+          /* parameters */ [
             [
               "arg",
               "string"
@@ -903,7 +1075,24 @@ function createFnOutputClassWithEnumInstance(): IFnOutputClassWithEnum & FnOutpu
           FireBamlEvent.variant(name);
           return await cb(arg);
         }),
-        stream: stream_cb,
+        stream: traceStream(
+        // stream: trace(
+          /* functionName */"FnOutputClassWithEnum",
+          /* returnType */ "TestClassWithEnum",
+          /* parameters */ [
+            [
+              "arg",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'positional',
+          /* cb */ (
+          arg: string
+        ) => {
+          FireBamlEvent.variant(name);
+          FireBamlEvent.tags({stream: true});
+          return stream_cb(arg);
+        }),
       };
     },
     validate: () => {
@@ -973,7 +1162,7 @@ function createFnOutputStringListInstance(): IFnOutputStringList & FnOutputStrin
         run: traceAsync(
           /* functionName */"FnOutputStringList",
           /* returnType */ "string[]",
-          /* paramters */ [
+          /* parameters */ [
             [
               "arg",
               "string"
@@ -986,7 +1175,24 @@ function createFnOutputStringListInstance(): IFnOutputStringList & FnOutputStrin
           FireBamlEvent.variant(name);
           return await cb(arg);
         }),
-        stream: stream_cb,
+        stream: traceStream(
+        // stream: trace(
+          /* functionName */"FnOutputStringList",
+          /* returnType */ "string[]",
+          /* parameters */ [
+            [
+              "arg",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'positional',
+          /* cb */ (
+          arg: string
+        ) => {
+          FireBamlEvent.variant(name);
+          FireBamlEvent.tags({stream: true});
+          return stream_cb(arg);
+        }),
       };
     },
     validate: () => {
@@ -1056,7 +1262,7 @@ function createFnStringOptionalInstance(): IFnStringOptional & FnStringOptionalF
         run: traceAsync(
           /* functionName */"FnStringOptional",
           /* returnType */ "string",
-          /* paramters */ [
+          /* parameters */ [
             [
               "arg",
               "string | null"
@@ -1069,7 +1275,24 @@ function createFnStringOptionalInstance(): IFnStringOptional & FnStringOptionalF
           FireBamlEvent.variant(name);
           return await cb(arg);
         }),
-        stream: stream_cb,
+        stream: traceStream(
+        // stream: trace(
+          /* functionName */"FnStringOptional",
+          /* returnType */ "string",
+          /* parameters */ [
+            [
+              "arg",
+              "string | null"
+            ]
+          ],
+          /* arg_type */ 'positional',
+          /* cb */ (
+          arg: string | null
+        ) => {
+          FireBamlEvent.variant(name);
+          FireBamlEvent.tags({stream: true});
+          return stream_cb(arg);
+        }),
       };
     },
     validate: () => {
@@ -1139,7 +1362,7 @@ function createFnTestAliasedEnumOutputInstance(): IFnTestAliasedEnumOutput & FnT
         run: traceAsync(
           /* functionName */"FnTestAliasedEnumOutput",
           /* returnType */ "TestEnum",
-          /* paramters */ [
+          /* parameters */ [
             [
               "arg",
               "string"
@@ -1152,7 +1375,24 @@ function createFnTestAliasedEnumOutputInstance(): IFnTestAliasedEnumOutput & FnT
           FireBamlEvent.variant(name);
           return await cb(arg);
         }),
-        stream: stream_cb,
+        stream: traceStream(
+        // stream: trace(
+          /* functionName */"FnTestAliasedEnumOutput",
+          /* returnType */ "TestEnum",
+          /* parameters */ [
+            [
+              "arg",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'positional',
+          /* cb */ (
+          arg: string
+        ) => {
+          FireBamlEvent.variant(name);
+          FireBamlEvent.tags({stream: true});
+          return stream_cb(arg);
+        }),
       };
     },
     validate: () => {
@@ -1222,7 +1462,7 @@ function createFnTestClassAliasInstance(): IFnTestClassAlias & FnTestClassAliasF
         run: traceAsync(
           /* functionName */"FnTestClassAlias",
           /* returnType */ "TestClassAlias",
-          /* paramters */ [
+          /* parameters */ [
             [
               "arg",
               "string"
@@ -1235,7 +1475,24 @@ function createFnTestClassAliasInstance(): IFnTestClassAlias & FnTestClassAliasF
           FireBamlEvent.variant(name);
           return await cb(arg);
         }),
-        stream: stream_cb,
+        stream: traceStream(
+        // stream: trace(
+          /* functionName */"FnTestClassAlias",
+          /* returnType */ "TestClassAlias",
+          /* parameters */ [
+            [
+              "arg",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'positional',
+          /* cb */ (
+          arg: string
+        ) => {
+          FireBamlEvent.variant(name);
+          FireBamlEvent.tags({stream: true});
+          return stream_cb(arg);
+        }),
       };
     },
     validate: () => {
@@ -1305,7 +1562,7 @@ function createFnTestClassOverrideInstance(): IFnTestClassOverride & FnTestClass
         run: traceAsync(
           /* functionName */"FnTestClassOverride",
           /* returnType */ "OverrideClass",
-          /* paramters */ [
+          /* parameters */ [
             [
               "arg",
               "string"
@@ -1318,7 +1575,24 @@ function createFnTestClassOverrideInstance(): IFnTestClassOverride & FnTestClass
           FireBamlEvent.variant(name);
           return await cb(arg);
         }),
-        stream: stream_cb,
+        stream: traceStream(
+        // stream: trace(
+          /* functionName */"FnTestClassOverride",
+          /* returnType */ "OverrideClass",
+          /* parameters */ [
+            [
+              "arg",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'positional',
+          /* cb */ (
+          arg: string
+        ) => {
+          FireBamlEvent.variant(name);
+          FireBamlEvent.tags({stream: true});
+          return stream_cb(arg);
+        }),
       };
     },
     validate: () => {
@@ -1388,7 +1662,7 @@ function createFnTestEnumOverrideInstance(): IFnTestEnumOverride & FnTestEnumOve
         run: traceAsync(
           /* functionName */"FnTestEnumOverride",
           /* returnType */ "OverrideEnum",
-          /* paramters */ [
+          /* parameters */ [
             [
               "arg",
               "string"
@@ -1401,7 +1675,24 @@ function createFnTestEnumOverrideInstance(): IFnTestEnumOverride & FnTestEnumOve
           FireBamlEvent.variant(name);
           return await cb(arg);
         }),
-        stream: stream_cb,
+        stream: traceStream(
+        // stream: trace(
+          /* functionName */"FnTestEnumOverride",
+          /* returnType */ "OverrideEnum",
+          /* parameters */ [
+            [
+              "arg",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'positional',
+          /* cb */ (
+          arg: string
+        ) => {
+          FireBamlEvent.variant(name);
+          FireBamlEvent.tags({stream: true});
+          return stream_cb(arg);
+        }),
       };
     },
     validate: () => {
@@ -1475,7 +1766,7 @@ function createFnTestNamedArgsSingleEnumInstance(): IFnTestNamedArgsSingleEnum &
         run: traceAsync(
           /* functionName */"FnTestNamedArgsSingleEnum",
           /* returnType */ "string",
-          /* paramters */ [
+          /* parameters */ [
             [
               "myArg",
               "NamedArgsSingleEnum"
@@ -1490,7 +1781,26 @@ function createFnTestNamedArgsSingleEnumInstance(): IFnTestNamedArgsSingleEnum &
           FireBamlEvent.variant(name);
           return await cb(params);
         }),
-        stream: stream_cb,
+        stream: traceStream(
+        // stream: trace(
+          /* functionName */"FnTestNamedArgsSingleEnum",
+          /* returnType */ "string",
+          /* parameters */ [
+            [
+              "myArg",
+              "NamedArgsSingleEnum"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ (
+          params: {
+            myArg: NamedArgsSingleEnum
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          FireBamlEvent.tags({stream: true});
+          return stream_cb(params);
+        }),
       };
     },
     validate: () => {
@@ -1562,7 +1872,7 @@ function createFnTestOutputAdapterInstance(): IFnTestOutputAdapter & FnTestOutpu
         run: traceAsync(
           /* functionName */"FnTestOutputAdapter",
           /* returnType */ "string",
-          /* paramters */ [
+          /* parameters */ [
             [
               "arg",
               "string"
@@ -1575,7 +1885,24 @@ function createFnTestOutputAdapterInstance(): IFnTestOutputAdapter & FnTestOutpu
           FireBamlEvent.variant(name);
           return await cb(arg);
         }),
-        stream: stream_cb,
+        stream: traceStream(
+        // stream: trace(
+          /* functionName */"FnTestOutputAdapter",
+          /* returnType */ "string",
+          /* parameters */ [
+            [
+              "arg",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'positional',
+          /* cb */ (
+          arg: string
+        ) => {
+          FireBamlEvent.variant(name);
+          FireBamlEvent.tags({stream: true});
+          return stream_cb(arg);
+        }),
       };
     },
     validate: () => {
@@ -1645,7 +1972,7 @@ function createOptionalTest_FunctionInstance(): IOptionalTest_Function & Optiona
         run: traceAsync(
           /* functionName */"OptionalTest_Function",
           /* returnType */ "OptionalTest_ReturnType | null[]",
-          /* paramters */ [
+          /* parameters */ [
             [
               "arg",
               "string"
@@ -1658,7 +1985,24 @@ function createOptionalTest_FunctionInstance(): IOptionalTest_Function & Optiona
           FireBamlEvent.variant(name);
           return await cb(arg);
         }),
-        stream: stream_cb,
+        stream: traceStream(
+        // stream: trace(
+          /* functionName */"OptionalTest_Function",
+          /* returnType */ "OptionalTest_ReturnType | null[]",
+          /* parameters */ [
+            [
+              "arg",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'positional',
+          /* cb */ (
+          arg: string
+        ) => {
+          FireBamlEvent.variant(name);
+          FireBamlEvent.tags({stream: true});
+          return stream_cb(arg);
+        }),
       };
     },
     validate: () => {
@@ -1728,7 +2072,7 @@ function createPromptTestInstance(): IPromptTest & PromptTestFunction {
         run: traceAsync(
           /* functionName */"PromptTest",
           /* returnType */ "string",
-          /* paramters */ [
+          /* parameters */ [
             [
               "arg",
               "string"
@@ -1741,7 +2085,24 @@ function createPromptTestInstance(): IPromptTest & PromptTestFunction {
           FireBamlEvent.variant(name);
           return await cb(arg);
         }),
-        stream: stream_cb,
+        stream: traceStream(
+        // stream: trace(
+          /* functionName */"PromptTest",
+          /* returnType */ "string",
+          /* parameters */ [
+            [
+              "arg",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'positional',
+          /* cb */ (
+          arg: string
+        ) => {
+          FireBamlEvent.variant(name);
+          FireBamlEvent.tags({stream: true});
+          return stream_cb(arg);
+        }),
       };
     },
     validate: () => {
@@ -1815,7 +2176,7 @@ function createTestFnNamedArgsSingleBoolInstance(): ITestFnNamedArgsSingleBool &
         run: traceAsync(
           /* functionName */"TestFnNamedArgsSingleBool",
           /* returnType */ "string",
-          /* paramters */ [
+          /* parameters */ [
             [
               "myBool",
               "boolean"
@@ -1830,7 +2191,26 @@ function createTestFnNamedArgsSingleBoolInstance(): ITestFnNamedArgsSingleBool &
           FireBamlEvent.variant(name);
           return await cb(params);
         }),
-        stream: stream_cb,
+        stream: traceStream(
+        // stream: trace(
+          /* functionName */"TestFnNamedArgsSingleBool",
+          /* returnType */ "string",
+          /* parameters */ [
+            [
+              "myBool",
+              "boolean"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ (
+          params: {
+            myBool: boolean
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          FireBamlEvent.tags({stream: true});
+          return stream_cb(params);
+        }),
       };
     },
     validate: () => {
@@ -1906,7 +2286,7 @@ function createTestFnNamedArgsSingleClassInstance(): ITestFnNamedArgsSingleClass
         run: traceAsync(
           /* functionName */"TestFnNamedArgsSingleClass",
           /* returnType */ "string",
-          /* paramters */ [
+          /* parameters */ [
             [
               "myArg",
               "NamedArgsSingleClass"
@@ -1921,7 +2301,26 @@ function createTestFnNamedArgsSingleClassInstance(): ITestFnNamedArgsSingleClass
           FireBamlEvent.variant(name);
           return await cb(params);
         }),
-        stream: stream_cb,
+        stream: traceStream(
+        // stream: trace(
+          /* functionName */"TestFnNamedArgsSingleClass",
+          /* returnType */ "string",
+          /* parameters */ [
+            [
+              "myArg",
+              "NamedArgsSingleClass"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ (
+          params: {
+            myArg: NamedArgsSingleClass
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          FireBamlEvent.tags({stream: true});
+          return stream_cb(params);
+        }),
       };
     },
     validate: () => {
@@ -1997,7 +2396,7 @@ function createTestFnNamedArgsSingleEnumListInstance(): ITestFnNamedArgsSingleEn
         run: traceAsync(
           /* functionName */"TestFnNamedArgsSingleEnumList",
           /* returnType */ "string",
-          /* paramters */ [
+          /* parameters */ [
             [
               "myArg",
               "NamedArgsSingleEnumList[]"
@@ -2012,7 +2411,26 @@ function createTestFnNamedArgsSingleEnumListInstance(): ITestFnNamedArgsSingleEn
           FireBamlEvent.variant(name);
           return await cb(params);
         }),
-        stream: stream_cb,
+        stream: traceStream(
+        // stream: trace(
+          /* functionName */"TestFnNamedArgsSingleEnumList",
+          /* returnType */ "string",
+          /* parameters */ [
+            [
+              "myArg",
+              "NamedArgsSingleEnumList[]"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ (
+          params: {
+            myArg: NamedArgsSingleEnumList[]
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          FireBamlEvent.tags({stream: true});
+          return stream_cb(params);
+        }),
       };
     },
     validate: () => {
@@ -2088,7 +2506,7 @@ function createTestFnNamedArgsSingleFloatInstance(): ITestFnNamedArgsSingleFloat
         run: traceAsync(
           /* functionName */"TestFnNamedArgsSingleFloat",
           /* returnType */ "string",
-          /* paramters */ [
+          /* parameters */ [
             [
               "myFloat",
               "number"
@@ -2103,7 +2521,26 @@ function createTestFnNamedArgsSingleFloatInstance(): ITestFnNamedArgsSingleFloat
           FireBamlEvent.variant(name);
           return await cb(params);
         }),
-        stream: stream_cb,
+        stream: traceStream(
+        // stream: trace(
+          /* functionName */"TestFnNamedArgsSingleFloat",
+          /* returnType */ "string",
+          /* parameters */ [
+            [
+              "myFloat",
+              "number"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ (
+          params: {
+            myFloat: number
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          FireBamlEvent.tags({stream: true});
+          return stream_cb(params);
+        }),
       };
     },
     validate: () => {
@@ -2179,7 +2616,7 @@ function createTestFnNamedArgsSingleIntInstance(): ITestFnNamedArgsSingleInt & T
         run: traceAsync(
           /* functionName */"TestFnNamedArgsSingleInt",
           /* returnType */ "string",
-          /* paramters */ [
+          /* parameters */ [
             [
               "myInt",
               "number"
@@ -2194,7 +2631,26 @@ function createTestFnNamedArgsSingleIntInstance(): ITestFnNamedArgsSingleInt & T
           FireBamlEvent.variant(name);
           return await cb(params);
         }),
-        stream: stream_cb,
+        stream: traceStream(
+        // stream: trace(
+          /* functionName */"TestFnNamedArgsSingleInt",
+          /* returnType */ "string",
+          /* parameters */ [
+            [
+              "myInt",
+              "number"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ (
+          params: {
+            myInt: number
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          FireBamlEvent.tags({stream: true});
+          return stream_cb(params);
+        }),
       };
     },
     validate: () => {
@@ -2270,7 +2726,7 @@ function createTestFnNamedArgsSingleStringInstance(): ITestFnNamedArgsSingleStri
         run: traceAsync(
           /* functionName */"TestFnNamedArgsSingleString",
           /* returnType */ "string",
-          /* paramters */ [
+          /* parameters */ [
             [
               "myString",
               "string"
@@ -2285,7 +2741,26 @@ function createTestFnNamedArgsSingleStringInstance(): ITestFnNamedArgsSingleStri
           FireBamlEvent.variant(name);
           return await cb(params);
         }),
-        stream: stream_cb,
+        stream: traceStream(
+        // stream: trace(
+          /* functionName */"TestFnNamedArgsSingleString",
+          /* returnType */ "string",
+          /* parameters */ [
+            [
+              "myString",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ (
+          params: {
+            myString: string
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          FireBamlEvent.tags({stream: true});
+          return stream_cb(params);
+        }),
       };
     },
     validate: () => {
@@ -2361,7 +2836,7 @@ function createTestFnNamedArgsSingleStringArrayInstance(): ITestFnNamedArgsSingl
         run: traceAsync(
           /* functionName */"TestFnNamedArgsSingleStringArray",
           /* returnType */ "string",
-          /* paramters */ [
+          /* parameters */ [
             [
               "myStringArray",
               "string[]"
@@ -2376,7 +2851,26 @@ function createTestFnNamedArgsSingleStringArrayInstance(): ITestFnNamedArgsSingl
           FireBamlEvent.variant(name);
           return await cb(params);
         }),
-        stream: stream_cb,
+        stream: traceStream(
+        // stream: trace(
+          /* functionName */"TestFnNamedArgsSingleStringArray",
+          /* returnType */ "string",
+          /* parameters */ [
+            [
+              "myStringArray",
+              "string[]"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ (
+          params: {
+            myStringArray: string[]
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          FireBamlEvent.tags({stream: true});
+          return stream_cb(params);
+        }),
       };
     },
     validate: () => {
@@ -2452,7 +2946,7 @@ function createTestFnNamedArgsSingleStringListInstance(): ITestFnNamedArgsSingle
         run: traceAsync(
           /* functionName */"TestFnNamedArgsSingleStringList",
           /* returnType */ "string",
-          /* paramters */ [
+          /* parameters */ [
             [
               "myArg",
               "string[]"
@@ -2467,7 +2961,26 @@ function createTestFnNamedArgsSingleStringListInstance(): ITestFnNamedArgsSingle
           FireBamlEvent.variant(name);
           return await cb(params);
         }),
-        stream: stream_cb,
+        stream: traceStream(
+        // stream: trace(
+          /* functionName */"TestFnNamedArgsSingleStringList",
+          /* returnType */ "string",
+          /* parameters */ [
+            [
+              "myArg",
+              "string[]"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ (
+          params: {
+            myArg: string[]
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          FireBamlEvent.tags({stream: true});
+          return stream_cb(params);
+        }),
       };
     },
     validate: () => {
@@ -2543,7 +3056,7 @@ function createTestFnNamedArgsSyntaxInstance(): ITestFnNamedArgsSyntax & TestFnN
         run: traceAsync(
           /* functionName */"TestFnNamedArgsSyntax",
           /* returnType */ "string",
-          /* paramters */ [
+          /* parameters */ [
             [
               "var",
               "string"
@@ -2562,7 +3075,30 @@ function createTestFnNamedArgsSyntaxInstance(): ITestFnNamedArgsSyntax & TestFnN
           FireBamlEvent.variant(name);
           return await cb(params);
         }),
-        stream: stream_cb,
+        stream: traceStream(
+        // stream: trace(
+          /* functionName */"TestFnNamedArgsSyntax",
+          /* returnType */ "string",
+          /* parameters */ [
+            [
+              "var",
+              "string"
+            ],
+            [
+              "var_with_underscores",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ (
+          params: {
+            var: string, var_with_underscores: string
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          FireBamlEvent.tags({stream: true});
+          return stream_cb(params);
+        }),
       };
     },
     validate: () => {
@@ -2628,7 +3164,7 @@ function createUnionTest_FunctionInstance(): IUnionTest_Function & UnionTest_Fun
         run: traceAsync(
           /* functionName */"UnionTest_Function",
           /* returnType */ "UnionTest_ReturnType",
-          /* paramters */ [
+          /* parameters */ [
             [
               "arg",
               "string | boolean"
@@ -2641,7 +3177,24 @@ function createUnionTest_FunctionInstance(): IUnionTest_Function & UnionTest_Fun
           FireBamlEvent.variant(name);
           return await cb(arg);
         }),
-        stream: stream_cb,
+        stream: traceStream(
+        // stream: trace(
+          /* functionName */"UnionTest_Function",
+          /* returnType */ "UnionTest_ReturnType",
+          /* parameters */ [
+            [
+              "arg",
+              "string | boolean"
+            ]
+          ],
+          /* arg_type */ 'positional',
+          /* cb */ (
+          arg: string | boolean
+        ) => {
+          FireBamlEvent.variant(name);
+          FireBamlEvent.tags({stream: true});
+          return stream_cb(arg);
+        }),
       };
     },
     validate: () => {

@@ -50,12 +50,12 @@ const testCompilation = async () => {
     }
   }
   
-  const llm = new LLMResponseStream<string | null[]>(events(), (partial: string) => null, (final: string) => final);
+  //const llm = new LLMResponseStream<string | null[]>(events(), (partial: string) => { throw Error("cannot parse partial") }, (final: string) => final);
 
-  console.log("testing compile");
-  for await (const result of llm) {
-    console.log(JSON.stringify(result, null, 2));
-  }
+  //console.log("testing compile");
+  //for await (const result of llm) {
+  //  console.log(JSON.stringify(result, null, 2));
+  //}
 };
 
 const main = async () => {
@@ -86,7 +86,7 @@ const main = async () => {
 }
 const nonstreamed = async () => {
   //const result = await b.OptionalTest_Function.stream("Hello, World!");
-  const result = b.OptionalTest_Function.getImpl("v1").run("Hello, World!");
+  const result = await b.OptionalTest_Function.getImpl("v1").run("Hello, World!");
   console.log(JSON.stringify(result, null, 2));
 }
 

@@ -62,10 +62,7 @@ const claude_chat_with_chat_msgs_stream = (
 
   return new LLMResponseStream<string>(
     stream,
-    (partial: string) => {
-      console.log(`>>> partial >>>\n${partial}'\n<<< partial <<<`)
-      return null
-    },
+    (partial: string) => deserializer.coerce(partial),
     (final: string) => deserializer.coerce(final),
   );
 };

@@ -55,10 +55,7 @@ const v1_stream = (
 
   return new LLMResponseStream<UnionTest_ReturnType>(
     stream,
-    (partial: string) => {
-      console.log(`>>> partial >>>\n${partial}'\n<<< partial <<<`)
-      return null
-    },
+    (partial: string) => deserializer.coerce(partial),
     (final: string) => deserializer.coerce(final),
   );
 };
