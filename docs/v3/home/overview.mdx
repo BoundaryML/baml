@@ -1,18 +1,16 @@
 ---
-title: What is Boundary?
+title: What is BAML?
 "og:description": Boundary is the test-driven toolkit for AI engineers.
 "og:image": https://mintlify.s3-us-west-1.amazonaws.com/gloo/images/v3/AITeam.png
 "twitter:image": https://mintlify.s3-us-west-1.amazonaws.com/gloo/images/v3/AITeam.png
 ---
 
-Most AI engineers use LLMs to get structured outputs (e.g. a json schema) from unstructured inputs (strings). For example, to extract a resume from a chunk of text.
 
-Existing LLM python libraries aren't powerful enough nor can they support easy testing capabilities (see our comparisons section) -- so we decided to build a compiler.
+# BAML
 
-## Introducing BAML + The first VSCode LLM Playground
+BAML is a config file format for declaring LLM functions that you can then use in TypeScript or Python.
 
-**BAML** (Basically, A Made-Up Language) is a lightweight programming language to define AI functions with structured inputs and outputs using natural language.
-
+With BAML you can Classify or Extract any structured data using Anthropic, OpenAI or local models (using Ollama)
 
 BAML comes with a **VSCode Playground**, which allows you to test prompts instantly with any LLM, without ever leaving VSCode.
 
