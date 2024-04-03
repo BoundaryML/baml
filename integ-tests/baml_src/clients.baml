@@ -30,6 +30,13 @@ client<llm> Claude {
   }
 }
 
+client<llm> Ollama {
+  provider baml-ollama-chat
+  options {
+    model llama2
+  }
+}
+
 client<llm> Resilient_SimpleSyntax {
   provider baml-fallback
   options {
@@ -39,7 +46,7 @@ client<llm> Resilient_SimpleSyntax {
       Claude
     ]
   }
-}
+} 
 
 client<llm> Resilient_ComplexSyntax {
   provider baml-fallback

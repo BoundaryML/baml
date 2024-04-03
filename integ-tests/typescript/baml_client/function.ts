@@ -1444,7 +1444,7 @@ const OptionalTest_Function = createOptionalTest_FunctionInstance();
 
 type IPromptTest = (arg: string) => Promise<string>
 
-type PromptTestImpls = 'bird_chat' | 'claude_chat' | 'claude_chat_with_chat_msgs' | 'claude_chat_with_chat_msgs_no_system' | 'openai_chat' | 'openai_chat_with_chat_msgs' | 'openai_chat_with_chat_msgs_no_system';
+type PromptTestImpls = 'bird_chat' | 'claude_chat' | 'claude_chat_with_chat_msgs' | 'claude_chat_with_chat_msgs_no_system' | 'ollama_chat' | 'openai_chat' | 'openai_chat_with_chat_msgs' | 'openai_chat_with_chat_msgs_no_system';
 
 interface PromptTestImpl {
     run: IPromptTest;
@@ -1493,7 +1493,7 @@ function createPromptTestInstance(): IPromptTest & PromptTestFunction {
       };
     },
     validate: () => {
-      const targets = ['bird_chat', 'claude_chat', 'claude_chat_with_chat_msgs', 'claude_chat_with_chat_msgs_no_system', 'openai_chat', 'openai_chat_with_chat_msgs', 'openai_chat_with_chat_msgs_no_system'];
+      const targets = ['bird_chat', 'claude_chat', 'claude_chat_with_chat_msgs', 'claude_chat_with_chat_msgs_no_system', 'ollama_chat', 'openai_chat', 'openai_chat_with_chat_msgs', 'openai_chat_with_chat_msgs_no_system'];
       const impls = Object.keys(registry);
       const missing = targets.filter(t => !impls.includes(t));
       if (missing.length > 0) {

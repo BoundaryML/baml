@@ -5,7 +5,11 @@
   </picture>
 </a>
 
-## BAML: A programming language to get structured data from LLMs</h2>
+# BAML
+
+BAML is a config file format for declaring LLM functions that you can then use in TypeScript or Python.
+
+With BAML you can Classify or Extract any structured data using Anthropic, OpenAI or local models (using Ollama)
 
 ## Resources
 
@@ -32,14 +36,16 @@ Calling LLMs in your code is frustrating:
 
 BAML makes calling LLMs easy by taking a type-first approach that lives fully in your codebase:
 
-1. Define types for your inputs and outputs in BAML files
-2. Define prompt templates using these types in BAML
-3. Define retries and fallbacks in BAML
-4. Use a generated Python/Typescript client to call LLMs with those types and templates
+1. Define what your LLM output type is in a .baml file, with rich syntax to describe any field (even enum values)
+2. Declare your prompt in the .baml config using those types
+3. Add additional LLM config like retries or redundancy
+4. Transpile the .baml files to a callable Python or TS function with a type-safe interface. (VSCode extension does this for you automatically).
 
 We were inspired by similar patterns for type safety: [protobuf] and [OpenAPI] for RPCs, [Prisma] and [SQLAlchemy] for databases.
 
 BAML guarantees type safety for LLMs and comes with tools to give you a great developer experience:
+
+<img src="docs/images/v3/prompt_view.gif" />
 
 Jump to [BAML code](#show-me-the-code) or how [Flexible Parsing](#flexible-parsing) works without additional LLM calls.
 
@@ -47,8 +53,6 @@ Jump to [BAML code](#show-me-the-code) or how [Flexible Parsing](#flexible-parsi
 [OpenAPI]: https://github.com/OpenAPITools/openapi-generator
 [Prisma]: https://www.prisma.io/
 [SQLAlchemy]: https://www.sqlalchemy.org/
-
-<img src="docs/images/v3/prompt_view.gif" />
 
 | BAML Tooling                                                                              | Capabilities                                                                                                                                                                                                                                                                                                                       |
 | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -744,9 +748,9 @@ Your answer in the schema you requested is:
 
 ## FAQ
 
-### Why make a new programming language?
+### Why make a new language?
 
-We started building SDKs for TypeScript and Python (and even experimented with YAML), and it worked, but they weren't fun. Writing software should be fun, not frustrating. We set out to build the best developer experience for AI. No boilerplate, dead-simple syntax, great errors, auto-complete.
+We started building SDKs for TypeScript and Python (and even experimented with YAML), and it worked, but they weren't fun, and were too slow to iterate in. Having powerful prompt configuration that could be run using a VSCode extension made for a better DX than writing python scripts to test things. Less boilerplate, dead-simple syntax, great errors, and auto-complete.
 
 <img src="https://imgs.xkcd.com/comics/standards.png" />
 

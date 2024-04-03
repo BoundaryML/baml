@@ -124,7 +124,7 @@ impl RunState {
             .tests
             .iter()
             .filter(|(_, state)| {
-                matches!(state, TestState::Queued) || matches!(state, TestState::Running)
+                matches!(state, TestState::Queued | TestState::Running | TestState::Cancelled)
             })
             .collect();
 
