@@ -1,5 +1,5 @@
 schema = {
-    SOI ~ (interface_declaration | old_function_declaration | variant_block | config_block | enum_declaration | type_alias | arbitrary_block | comment_block | raw_string_literal | empty_lines | CATCH_ALL)* ~ EOI
+    SOI ~ (interface_declaration | template_declaration | function_declaration | old_function_declaration | variant_block | config_block | enum_declaration | type_alias | arbitrary_block | comment_block | raw_string_literal | empty_lines | CATCH_ALL)* ~ EOI
 }
 
 // a block definition without a keyword. Is not valid. Just acts as a catch for the parser to display a nice error.
@@ -36,6 +36,18 @@ class_contents = {
 // ######################################
 // Interface blocks are configs which only have types as values.
 // ######################################
+ARROW                = { "->" }
+function_declaration = {
+    FUNCTION_KEYWORD ~ identifier ~ named_argument_list ~ ARROW? ~ field_type? ~ BLOCK_OPEN ~ function_contents ~ BLOCK_CLOSE
+}
+
+template_declaration = {
+    TEMPLATE_KEYWORD ~ identifier ~ named_argument_list? ~ raw_string_literal
+}
+
+function_contents = {
+    (key_value | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
+}
 
 old_function_declaration = {
     FUNCTION_KEYWORD ~ identifier ~ BLOCK_OPEN ~ old_function_contents ~ BLOCK_CLOSE
@@ -54,7 +66,8 @@ old_function_contents = {
     (input_field_declaration | output_field_declaration | (key_value ~ NEWLINE) | (block_attribute ~ NEWLINE) | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
 }
 
-named_argument = { identifier ~ ":" ~ field_type? }
+colon          = { ":" }
+named_argument = { identifier ~ ((":" ~ field_type) | colon)? }
 // Be forgiving and allow trailing comma
 named_argument_list = { "(" ~ named_argument? ~ ("," ~ named_argument)* ~ ","? ~ ")" }
 
@@ -214,7 +227,7 @@ NEWLINE     = _{ "\n" | "\r\n" | "\r" }
 empty_lines = @{ (WHITESPACE* ~ NEWLINE)+ }
 
 // the any part is to not crash on comments next to an open block, see test `parse_comments_without_crasing_or_loosing_info`
-BLOCK_OPEN  = { "{" ~ (!NEWLINE ~ ANY)* ~ NEWLINE }
+BLOCK_OPEN  = { "{" }
 BLOCK_CLOSE = { "}" }
 
 BLOCK_LEVEL_CATCH_ALL = { !BLOCK_CLOSE ~ CATCH_ALL }
@@ -224,6 +237,7 @@ TYPE_KEYWORD     = { "type" }
 ENUM_KEYWORD     = { "enum" }
 CLASS_KEYWORD    = { "class" }
 FUNCTION_KEYWORD = { "function" }
+TEMPLATE_KEYWORD = { "template" }
 
 empty_template_args = ${ "<" ~ ">" }
 template_args       =  { empty_template_args | ("<" ~ expression ~ ("," ~ expression)* ~ ">") }

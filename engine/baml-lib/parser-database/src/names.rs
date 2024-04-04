@@ -88,6 +88,15 @@ pub(super) fn resolve_names(ctx: &mut Context<'_>) {
             (_, ast::Top::Class(_)) => {
                 unreachable!("Encountered impossible class declaration during parsing")
             }
+            (ast::TopId::Function(_function_id), ast::Top::FunctionOld(ast_function)) => {
+                validate_function_name(ast_function, ctx.diagnostics);
+                validate_attribute_identifiers(ast_function, ctx);
+
+                &mut names.tops
+            }
+            (_, ast::Top::FunctionOld(_)) => {
+                unreachable!("Encountered impossible function declaration during parsing")
+            }
             (ast::TopId::Function(_function_id), ast::Top::Function(ast_function)) => {
                 validate_function_name(ast_function, ctx.diagnostics);
                 validate_attribute_identifiers(ast_function, ctx);

@@ -11,6 +11,7 @@ pub enum Top {
     // A class declaration
     Class(Class),
     // A function declaration
+    FunctionOld(Function),
     Function(Function),
 
     // Clients to run
@@ -33,6 +34,7 @@ impl Top {
             // Top::CompositeType(_) => "composite type",
             Top::Enum(_) => "enum",
             Top::Class(_) => "class",
+            Top::FunctionOld(_) => "function[deprecated]",
             Top::Function(_) => "function",
             Top::Client(m) if m.is_llm() => "client<llm>",
             Top::Client(_) => "client<?>",
@@ -60,6 +62,7 @@ impl Top {
 
     pub fn as_function(&self) -> Option<&Function> {
         match self {
+            Top::FunctionOld(func) => Some(func),
             Top::Function(func) => Some(func),
             _ => None,
         }
@@ -101,7 +104,7 @@ impl WithIdentifier for Top {
             // Top::CompositeType(ct) => &ct.name,
             Top::Enum(x) => x.identifier(),
             Top::Class(x) => x.identifier(),
-            Top::Function(x) => x.identifier(),
+            Top::Function(x) | Top::FunctionOld(x) => x.identifier(),
             Top::Client(x) => x.identifier(),
             Top::Variant(x) => x.identifier(),
             Top::Generator(x) => x.identifier(),
@@ -115,7 +118,7 @@ impl WithSpan for Top {
         match self {
             Top::Enum(en) => en.span(),
             Top::Class(class) => class.span(),
-            Top::Function(func) => func.span(),
+            Top::Function(func) | Top::FunctionOld(func) => func.span(),
             Top::Client(client) => client.span(),
             Top::Variant(variant) => variant.span(),
             Top::Generator(gen) => gen.span(),

@@ -26,6 +26,7 @@ impl_coercions! {
     string_with_span : "string" => (&'a str, &'a ast::Span);
     constant_with_span : "constant" => (&'a str, &'a ast::Span);
     raw_string: "raw_string" => &'a ast::RawString;
+    template_string: "template_string" => &'a ast::RawString;
     boolean : "boolean" => bool;
     integer : "numeric" => i64;
     float : "float" => f64;
@@ -52,6 +53,10 @@ pub mod coerce_opt {
     }
 
     pub fn raw_string<'a>(expr: &'a ast::Expression) -> Option<&'a RawString> {
+        expr.as_raw_string_value()
+    }
+
+    pub fn template_string<'a>(expr: &'a ast::Expression) -> Option<&'a RawString> {
         expr.as_raw_string_value()
     }
 

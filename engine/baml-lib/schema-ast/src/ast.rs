@@ -282,6 +282,7 @@ fn top_idx_to_top_id(top_idx: usize, top: &Top) -> TopId {
     match top {
         Top::Enum(_) => TopId::Enum(EnumId(top_idx as u32)),
         Top::Class(_) => TopId::Class(ClassId(top_idx as u32)),
+        Top::FunctionOld(_) => TopId::Function(FunctionId(top_idx as u32)),
         Top::Function(_) => TopId::Function(FunctionId(top_idx as u32)),
         Top::Client(_) => TopId::Client(ClientId(top_idx as u32)),
         Top::Generator(_) => TopId::Generator(GeneratorConfigId(top_idx as u32)),

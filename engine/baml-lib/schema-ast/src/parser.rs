@@ -10,6 +10,7 @@ mod parse_expression;
 mod parse_field;
 mod parse_function;
 mod parse_identifier;
+mod parse_old_function;
 mod parse_schema;
 mod parse_serializer;
 mod parse_template_args;

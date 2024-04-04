@@ -33,6 +33,10 @@ pub(super) fn resolve_types(ctx: &mut Context<'_>) {
             (_, ast::Top::Enum(enm)) => visit_enum(enm, ctx),
             (ast::TopId::Class(idx), ast::Top::Class(model)) => visit_class(idx, model, ctx),
             (_, ast::Top::Class(_)) => unreachable!("Class misconfigured"),
+            (ast::TopId::Function(idx), ast::Top::FunctionOld(function)) => {
+                visit_old_function(idx, function, ctx)
+            }
+            (_, ast::Top::FunctionOld(_)) => unreachable!("Function misconfigured"),
             (ast::TopId::Function(idx), ast::Top::Function(function)) => {
                 visit_function(idx, function, ctx)
             }
@@ -300,6 +304,8 @@ pub struct ExponentialBackoffStrategy {
 pub struct FunctionType {
     pub default_impl: Option<(String, Span)>,
     pub dependencies: (HashSet<String>, HashSet<String>),
+    pub prompt: Option<RawString>,
+    pub client: Option<(String, Span)>,
 }
 
 #[derive(Debug, Default)]
@@ -399,6 +405,90 @@ fn visit_function<'db>(idx: FunctionId, function: &'db ast::Function, ctx: &mut 
         .map(|f| f.name().to_string())
         .collect::<HashSet<_>>();
 
+    let mut prompt = None;
+    let mut client = None;
+    function
+        .iter_fields()
+        .for_each(|(_idx, field)| match field.name() {
+            "prompt" => {
+                if field.template_args.is_some() {
+                    ctx.push_error(DatamodelError::new_validation_error(
+                        "Template args are not allowed in `prompt`.",
+                        field.span().clone(),
+                    ));
+                }
+                prompt = match &field.value {
+                    Some(val) => coerce::template_string(val, ctx.diagnostics).map(|v| v),
+                    None => None,
+                }
+            }
+            "client" => {
+                if field.template_args.is_some() {
+                    ctx.push_error(DatamodelError::new_validation_error(
+                        "Template args are not allowed in `client`.",
+                        field.span().clone(),
+                    ));
+                }
+                client = match &field.value {
+                    Some(val) => coerce::string_with_span(val, ctx.diagnostics)
+                        .map(|(v, span)| (v.to_string(), span.clone())),
+                    None => None,
+                }
+            }
+            config => ctx.push_error(DatamodelError::new_validation_error(
+                &format!("Unknown field `{}` in function", config),
+                field.span().clone(),
+            )),
+        });
+
+    match (prompt, client) {
+        (Some(prompt), Some(client)) => {
+            ctx.types.function.insert(
+                idx,
+                FunctionType {
+                    default_impl: None,
+                    dependencies: (input_deps, output_deps),
+                    prompt: Some(prompt.clone()),
+                    client: Some(client),
+                },
+            );
+        }
+        (Some(_), None) => {
+            ctx.push_error(DatamodelError::new_validation_error(
+                "Missing `client` field in function. Add to the block:\n```\nclient GPT4\n```",
+                function.identifier().span().clone(),
+            ));
+        }
+        (None, Some(_)) => {
+            ctx.push_error(DatamodelError::new_validation_error(
+                "Missing `prompt` field in function. Add to the block:\n```\nprompt #\"...\"#\n```",
+                function.identifier().span().clone(),
+            ));
+        }
+        (None, None) => {
+            ctx.push_error(DatamodelError::new_validation_error(
+                "Missing `prompt` and `client` fields in function. Add to the block:\n```\nclient GPT4\nprompt #\"...\"#\n```",
+                function.identifier().span().clone(),
+            ));
+        }
+    }
+}
+
+fn visit_old_function<'db>(idx: FunctionId, function: &'db ast::Function, ctx: &mut Context<'db>) {
+    let input_deps = function
+        .input()
+        .flat_idns()
+        .iter()
+        .map(|f| f.name().to_string())
+        .collect::<HashSet<_>>();
+
+    let output_deps = function
+        .output()
+        .flat_idns()
+        .iter()
+        .map(|f| f.name().to_string())
+        .collect::<HashSet<_>>();
+
     let mut default_impl = None;
     function
         .iter_fields()
@@ -427,6 +517,8 @@ fn visit_function<'db>(idx: FunctionId, function: &'db ast::Function, ctx: &mut 
         FunctionType {
             default_impl,
             dependencies: (input_deps, output_deps),
+            prompt: None,
+            client: None,
         },
     );
 }

@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use super::{
     parse_class::parse_class, parse_config, parse_enum::parse_enum, parse_function::parse_function,
-    parse_test::parse_test_from_json, BAMLParser, Rule,
+    parse_old_function::parse_old_function, parse_test::parse_test_from_json, BAMLParser, Rule,
 };
 use crate::{ast::*, parser::parse_variant};
 use internal_baml_diagnostics::{DatamodelError, Diagnostics, SourceFile};
@@ -70,9 +70,15 @@ pub fn parse_schema(
                             _ => unreachable!(),
                         };
                     }
-                    Rule::old_function_declaration => {
+                    Rule::function_declaration => {
                         match parse_function(current, pending_block_comment.take(), &mut diagnostics) {
                             Ok(function) => top_level_definitions.push(Top::Function(function)),
+                            Err(e) => diagnostics.push_error(e),
+                        }
+                    },
+                    Rule::old_function_declaration => {
+                        match parse_old_function(current, pending_block_comment.take(), &mut diagnostics) {
+                            Ok(function) => top_level_definitions.push(Top::FunctionOld(function)),
                             Err(e) => diagnostics.push_error(e),
                         }
                     },
