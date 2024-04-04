@@ -8,6 +8,7 @@ use serde_json::json;
 use crate::generate::generate_python_client_old::file::clean_file_name;
 
 use super::{
+    client,
     file::File,
     template::render_template,
     traits::{JsonHelper, WithToCode, WithWritePythonString},
@@ -170,8 +171,27 @@ impl WithWritePythonString for FunctionWalker<'_> {
 
             // May need to do some fancy stuff
             fc.start_py_file("impls", impl_name);
-            // let json = self.json(fc.last_file());
-            // render_template(super::template::HSTemplate::Variant, fc.last_file(), json);
+
+            fc.last_file().add_import(
+                &format!("..functions.{}", self.file_name()),
+                &format!("BAML{}", self.name()),
+            );
+            let client = self.client().unwrap();
+            fc.last_file()
+                .add_import(&format!("..clients.{}", client.file_name()), client.name());
+
+            let json = json!({
+                "name": "default",
+                "function": self.json(fc.last_file()),
+                "prompt": self.jinja_prompt().value().replace(r#"""""#, r#"\"\"\""#),
+                "client": client.name(),
+            });
+
+            render_template(
+                super::template::HSTemplate::DefaultVariant,
+                fc.last_file(),
+                json,
+            );
             fc.complete_file();
         }
     }
