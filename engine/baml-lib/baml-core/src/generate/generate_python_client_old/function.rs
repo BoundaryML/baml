@@ -1,4 +1,4 @@
-use internal_baml_parser_database::walkers::{ArgWalker, EnumWalker, Walker};
+use internal_baml_parser_database::walkers::{ArgWalker, EnumWalker, FunctionWalker, Walker};
 use internal_baml_schema_ast::ast::{
     FieldType, FunctionArg, FunctionId, Identifier, WithDocumentation, WithName,
 };
@@ -92,15 +92,22 @@ impl JsonHelper for ArgWalker<'_> {
     }
 }
 
-impl JsonHelper for Walker<'_, FunctionId> {
+impl JsonHelper for FunctionWalker<'_> {
     fn json(&self, f: &mut File) -> serde_json::Value {
-        let mut impls = self
-            .walk_variants()
-            .map(|v| v.name().to_string())
-            .collect::<Vec<_>>();
-        impls.sort();
+        let impls = if self.is_old_function() {
+            let mut impls = self
+                .walk_variants()
+                .map(|v| v.name().to_string())
+                .collect::<Vec<_>>();
+            impls.sort();
+            impls
+        } else {
+            // New function logic
+            vec!["default".into()]
+        };
+
         let mut inputs = self.walk_input_args().collect::<Vec<_>>();
-        inputs.sort_by(|a, b| a.is_optional().cmp(&b.is_optional()));
+        inputs.sort_by(|a, b| a.name().cmp(&b.name()));
 
         json!({
             "name": self.ast_function().name(),
@@ -130,7 +137,7 @@ fn is_enum<'a>(
     return false;
 }
 
-impl WithWritePythonString for Walker<'_, FunctionId> {
+impl WithWritePythonString for FunctionWalker<'_> {
     fn file_name(&self) -> String {
         format!("fx_{}", clean_file_name(self.name()))
     }
@@ -152,5 +159,20 @@ impl WithWritePythonString for Walker<'_, FunctionId> {
             json,
         );
         fc.complete_file();
+
+        if !self.is_old_function() {
+            let impl_name = format!("fx_{}_impl_default", clean_file_name(self.name()));
+
+            fc.start_py_file("impls", "__init__.py");
+            fc.last_file()
+                .add_line(format!("from .{0} import default as unused_{0}", impl_name,));
+            fc.complete_file();
+
+            // May need to do some fancy stuff
+            fc.start_py_file("impls", impl_name);
+            // let json = self.json(fc.last_file());
+            // render_template(super::template::HSTemplate::Variant, fc.last_file(), json);
+            fc.complete_file();
+        }
     }
 }

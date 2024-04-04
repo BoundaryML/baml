@@ -110,7 +110,8 @@ pub(crate) fn run(input: &str) -> String {
         })).collect::<Vec<_>>(),
         "functions": schema
         .db
-        .walk_functions()
+        .walk_old_functions()
+        .chain(schema.db.walk_new_functions())
         .map(|func| {
             json!({
                 "name": StringSpan::new(func.name(), func.identifier().span()),

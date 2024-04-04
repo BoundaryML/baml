@@ -79,7 +79,8 @@ impl IntermediateRepr {
                 .map(|e| e.node(db))
                 .collect::<Result<Vec<_>>>()?,
             functions: db
-                .walk_functions()
+                .walk_old_functions()
+                .chain(db.walk_new_functions())
                 .map(|e| e.node(db))
                 .collect::<Result<Vec<_>>>()?,
             clients: db
@@ -354,7 +355,7 @@ impl WithRepr<EnumValue> for EnumValueWalker<'_> {
 
         attributes.meta = to_ir_attributes(db, self.get_default_attributes());
 
-        for r#fn in db.walk_functions() {
+        for r#fn in db.walk_old_functions() {
             for r#impl in r#fn.walk_variants() {
                 let node_attributes = to_ir_attributes(db, self.get_override(&r#impl));
 
@@ -381,7 +382,7 @@ impl WithRepr<Enum> for EnumWalker<'_> {
 
         attributes.meta = to_ir_attributes(db, self.get_default_attributes());
 
-        for r#fn in db.walk_functions() {
+        for r#fn in db.walk_old_functions() {
             for r#impl in r#fn.walk_variants() {
                 let node_attributes =
                     to_ir_attributes(db, r#impl.find_serializer_attributes(self.name()));
@@ -420,7 +421,7 @@ impl WithRepr<Field> for FieldWalker<'_> {
 
         attributes.meta = to_ir_attributes(db, self.get_default_attributes());
 
-        for r#fn in db.walk_functions() {
+        for r#fn in db.walk_old_functions() {
             for r#impl in r#fn.walk_variants() {
                 let node_attributes = to_ir_attributes(db, self.get_override(&r#impl));
                 if !node_attributes.is_empty() {
@@ -458,7 +459,7 @@ impl WithRepr<Class> for ClassWalker<'_> {
 
         attributes.meta = to_ir_attributes(db, self.get_default_attributes());
 
-        for r#fn in db.walk_functions() {
+        for r#fn in db.walk_old_functions() {
             for r#impl in r#fn.walk_variants() {
                 let node_attributes =
                     to_ir_attributes(db, r#impl.find_serializer_attributes(self.name()));
@@ -724,12 +725,17 @@ impl WithRepr<Function> for FunctionWalker<'_> {
             }?,
             default_impl: self.metadata().default_impl.as_ref().map(|f| f.0.clone()),
             impls: {
-                let mut impls = self
-                    .walk_variants()
-                    .map(|e| e.node(db))
-                    .collect::<Result<Vec<_>>>()?;
-                impls.sort_by(|a, b| a.elem.name.cmp(&&b.elem.name));
-                impls
+                if self.is_old_function() {
+                    let mut impls = self
+                        .walk_variants()
+                        .map(|e| e.node(db))
+                        .collect::<Result<Vec<_>>>()?;
+                    impls.sort_by(|a, b| a.elem.name.cmp(&&b.elem.name));
+                    impls
+                } else {
+                    // TODO: @hellovai
+                    vec![]
+                }
             },
             tests: self
                 .walk_tests()

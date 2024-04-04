@@ -60,9 +60,15 @@ impl Top {
         }
     }
 
-    pub fn as_function(&self) -> Option<&Function> {
+    pub fn as_function_old(&self) -> Option<&Function> {
         match self {
             Top::FunctionOld(func) => Some(func),
+            _ => None,
+        }
+    }
+
+    pub fn as_function(&self) -> Option<&Function> {
+        match self {
             Top::Function(func) => Some(func),
             _ => None,
         }

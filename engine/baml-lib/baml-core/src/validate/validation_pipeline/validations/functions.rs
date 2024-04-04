@@ -6,7 +6,7 @@ use crate::validate::validation_pipeline::context::Context;
 use super::common::validate_type_exists;
 
 pub(super) fn validate(ctx: &mut Context<'_>) {
-    for func in ctx.db.walk_functions() {
+    for func in ctx.db.walk_old_functions() {
         for args in func.walk_input_args().chain(func.walk_output_args()) {
             let arg = args.ast_arg();
             validate_type_exists(ctx, &arg.1.field_type)
@@ -44,5 +44,34 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
                 }
             }
         }
+    }
+
+    let clients = ctx
+        .db
+        .walk_clients()
+        .map(|c| c.name().to_string())
+        .collect::<Vec<_>>();
+    for func in ctx.db.walk_new_functions() {
+        for args in func.walk_input_args().chain(func.walk_output_args()) {
+            let arg = args.ast_arg();
+            validate_type_exists(ctx, &arg.1.field_type)
+        }
+
+        // Ensure the client is correct.
+        match func.client() {
+            Some(_) => {}
+            None => {
+                let client = func.metadata().client.as_ref().unwrap();
+                ctx.push_error(DatamodelError::not_found_error(
+                    "Client",
+                    &client.0,
+                    client.1.clone(),
+                    clients.clone(),
+                ))
+            }
+        }
+
+        // TODO: @sxlijin do any validation on the prompt.
+        let _prompt = func.jinja_prompt();
     }
 }
