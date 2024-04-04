@@ -73,5 +73,10 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
 
         // TODO: @sxlijin do any validation on the prompt.
         let _prompt = func.jinja_prompt();
+        /*
+         1. Check if its valid jinja
+         2. Check what input variables are used in the prompt
+         3. Confirm those input variables exist
+        */
     }
 }
