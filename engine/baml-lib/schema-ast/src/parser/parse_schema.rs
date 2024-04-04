@@ -70,7 +70,7 @@ pub fn parse_schema(
                             _ => unreachable!(),
                         };
                     }
-                    Rule::function_declaration => {
+                    Rule::old_function_declaration => {
                         match parse_function(current, pending_block_comment.take(), &mut diagnostics) {
                             Ok(function) => top_level_definitions.push(Top::Function(function)),
                             Err(e) => diagnostics.push_error(e),

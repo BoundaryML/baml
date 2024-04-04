@@ -25,7 +25,7 @@ pub(crate) fn parse_function(
         match current.as_rule() {
             Rule::FUNCTION_KEYWORD | Rule::BLOCK_OPEN | Rule::BLOCK_CLOSE => {}
             Rule::identifier => name = Some(parse_identifier(current, diagnostics)),
-            Rule::function_contents => {
+            Rule::old_function_contents => {
                 let mut pending_field_comment: Option<Pair<'_>> = None;
 
                 for item in current.into_inner() {
