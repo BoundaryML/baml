@@ -1,8 +1,7 @@
 import { getWasmError, isWasmPanic, WasmPanic } from './error/panic'
 
-const packageJson = require('../../../../package.json') // eslint-disable-line
 
-import { languageWasm } from '.'
+// import { languageWasm } from '.'
 
 /* eslint-disable @typescript-eslint/no-unsafe-member-access,@typescript-eslint/no-unsafe-return */
 
@@ -10,25 +9,17 @@ import { languageWasm } from '.'
  * Lookup version. This is the version of the the generated language-wasm package.
  * Matches the version of the baml cli.
  */
-export function getVersion(): string {
-  return languageWasm.version()
-}
+// export function getVersion(): string {
+//   // return languageWasm.version()
+// }
 
-/**
- * Gets Engines Version from package.json, dependencies, `@Baml/language-wasm`
- * @returns Something like `2.26.0-23.9b816b3aa13cc270074f172f30d6eda8a8ce867d`
- */
-export function getEnginesVersion(): string {
-  return packageJson.dependencies['@Baml/language-wasm']
-}
-
-/**
- * Gets CLI Version from package.json, Baml, cliVersion
- * @returns Something like `2.27.0-dev.50`
- */
-export function getCliVersion(): string {
-  return languageWasm.version()
-}
+// /**
+//  * Gets CLI Version from package.json, Baml, cliVersion
+//  * @returns Something like `2.27.0-dev.50`
+//  */
+// export function getCliVersion(): string {
+//   // return languageWasm.version()
+// }
 
 export function handleWasmError(e: Error, cmd: string, onError?: (errorMessage: string) => void) {
   const getErrorMessage = () => {

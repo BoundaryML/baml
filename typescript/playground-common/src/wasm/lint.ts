@@ -1,5 +1,6 @@
 import { ParserDatabase } from '@baml/common'
-import { languageWasm } from '.'
+// import { languageWasm } from '.'
+import { lint as wasmLint } from "@gloo-ai/baml-schema-wasm-web";
 import { handleFormatPanic, handleWasmError } from './internals'
 
 type LintResponse = {
@@ -35,11 +36,11 @@ export default function lint(input: LinterInput, onError?: (errorMessage: string
     if (process.env.FORCE_PANIC_baml_SCHEMA) {
       handleFormatPanic(() => {
         console.debug('Triggering a Rust panic...')
-        languageWasm.debug_panic()
+        // languageWasm.debug_panic()
       })
     }
 
-    const result = languageWasm.lint(JSON.stringify(input))
+    const result = wasmLint(JSON.stringify(input))
     const parsed = JSON.parse(result) as LintResponse
     // console.log(`lint result ${JSON.stringify(JSON.parse(result), null, 2)}`)
     return parsed

@@ -1,13 +1,10 @@
 {
-  "name": "@gloo-ai/baml-schema-wasm",
+  "name": "@gloo-ai/baml-schema-wasm-web",
   "version": "0.1.0",
   "description": "The WASM package for baml-fmt",
-  "main": "./dist/baml_schema_build.js",
+  "main": "./dist/src/baml_schema_build.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "clean": "rimraf ./dist",
-    "build": "bash ./scripts/build.sh",
-    "update-wasm": "bash ./scripts/build.sh"
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",

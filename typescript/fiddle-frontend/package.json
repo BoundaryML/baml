@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@baml/playground-common": "workspace:*",
+    "@gloo-ai/baml-schema-wasm-web": "workspace:*",
     "@codemirror/lang-rust": "^6.0.1",
     "@hookform/resolvers": "^3.3.4",
     "@radix-ui/react-dialog": "^1.0.5",

@@ -2,16 +2,19 @@
   "name": "@gloo-ai/baml-schema-wasm-node",
   "version": "0.1.0",
   "description": "The WASM package for baml-fmt",
-  "main": "./dist/src/baml_schema_build.js",
+  "main": "./dist/baml_schema_build.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "clean": "rimraf ./dist",
+    "build": "bash ./scripts/build.sh",
+    "update-wasm": "bash ./scripts/build.sh"
   },
   "repository": {
     "type": "git",
     "url": "",
     "directory": "baml-schema-wasm"
   },
-  "author": "Prisma",
+  "author": "BAML",
   "license": "Apache-2.0",
-  "homepage": "https://github.com/prisma/prisma-engines"
+  "homepage": ""
 }

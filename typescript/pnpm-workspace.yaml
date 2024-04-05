@@ -1,6 +1,8 @@
 packages:
   - 'vscode-ext/packages/*'
   - 'vscode-ext/packages'
-  - 'baml-schema-wasm'
+  - 'baml-schema-wasm-node'
+  - 'baml-schema-wasm-web'
   - 'common'
+  - 'playground-common'
   - 'fiddle-frontend'

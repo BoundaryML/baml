@@ -8,4 +8,4 @@ cargo build --release
 # engines dir
 cd ..
 echo "Path is: $(pwd)"
-bash ./baml-schema-wasm/scripts/update-schema-wasm.sh
+bash ./baml-schema-wasm/scripts/update-schema-wasm.sh node

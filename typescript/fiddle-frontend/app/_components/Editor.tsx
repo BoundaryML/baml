@@ -6,6 +6,7 @@ import { vscodeDark } from '@uiw/codemirror-theme-vscode'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { useEffect, useRef } from 'react'
 import { ASTProvider, FunctionSelector, FunctionPanel, CustomErrorBoundary } from '@baml/playground-common'
+import { Button } from '@/components/ui/button'
 
 const extensions = [rust(), EditorView.lineWrapping]
 const defaultMainBaml = `
@@ -85,10 +86,57 @@ export const Editor = () => {
   )
 }
 
+type LintResponse = {
+  diagnostics: LinterError[]
+} & (
+  | { ok: false }
+  | {
+      ok: true
+      response: any
+    }
+)
+
+export interface LinterError {
+  start: number
+  end: number
+  text: string
+  is_warning: boolean
+  source_file: string
+}
+
+export interface LinterSourceFile {
+  path: string
+  content: string
+}
+
+export interface LinterInput {
+  root_path: string
+  files: LinterSourceFile[]
+}
+
 const PlaygroundView = () => {
   return (
     <>
       <CustomErrorBoundary>
+        <Button
+          onClick={async () => {
+            const lint = await import('@gloo-ai/baml-schema-wasm-web').then((m) => m.lint)
+            const linterInput: LinterInput = {
+              root_path: 'root',
+              files: [
+                {
+                  path: 'path',
+                  content: defaultMainBaml,
+                },
+              ],
+            }
+            console.info(`Linting ${linterInput.files.length} files in ${linterInput.root_path}`)
+            const res = lint(JSON.stringify(linterInput))
+            console.log(`res ${JSON.stringify(res, null, 2)}`)
+          }}
+        >
+          Lint things
+        </Button>
         <ASTProvider>
           <div className="absolute z-10 flex flex-col items-end gap-1 right-1 top-2 text-end">
             {/* <TestToggle /> */}
