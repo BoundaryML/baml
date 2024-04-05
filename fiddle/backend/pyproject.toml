@@ -4,14 +4,16 @@ version = "0.1.0"
 description = ""
 authors = ["None"]
 readme = "README.md"
-packages = [{ include = "." }]
+packages = [
+    { include = "app", from = "." }
+]
 
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = "^3.9"
 baml = "^0.17.1"
-flask = "^3.0.2"
-flask-cors = "^4.0.0"
+fastapi = "^0.110.0"
+uvicorn = {extras = ["standard"], version = "^0.29.0"}
 
 [build-system]
 requires = ["poetry-core"]

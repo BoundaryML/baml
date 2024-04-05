@@ -1,0 +1,51 @@
+{
+  // "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", "tsup.config.ts"],
+  // "exclude": ["node_modules", "dist"],
+
+  // "compilerOptions": {
+  //   "isolatedModules": true,
+  //   "lib": ["dom", "dom.iterable", "esnext"],
+  //   "moduleResolution": "node",
+  //   "declarationMap": true,
+  //   "target": "ES2021",
+
+  //   "declaration": true,
+  //   "outDir": "dist",
+  //   "skipLibCheck": true,
+  //   "jsx": "react-jsx",
+  //   "strict": true,
+  //   "allowSyntheticDefaultImports": true,
+  //   "allowJs": false,
+  //   "baseUrl": ".",
+  //   "paths": {
+  //     "@/*": ["./src/*"]
+  //   }
+  //   // "types": ["node", "jest", "ts-jest", "ts-node"]
+  // },
+  // "ts-node": {
+  //   "esm": true
+  // }
+  "compilerOptions": {
+    "target": "esnext",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "useDefineForClassFields": true,
+    "allowJs": false,
+    "skipLibCheck": true,
+    "esModuleInterop": false,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "module": "esnext",
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["./src"],
+  "exclude": ["node_modules", "dist"]
+}

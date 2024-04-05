@@ -1,21 +1,21 @@
 from datetime import datetime as dt
-from flask import Flask, jsonify, request
-import flask_cors
+from fastapi import FastAPI
 import os
 import subprocess as sp
 import pprint
 
-app = Flask(__name__)
-flask_cors.CORS(app)
+app = FastAPI()
+# app = Flask(__name__)
+# flask_cors.CORS(app)
 
 fiddle_dir = os.environ.get("FIDDLE_DIR", "/tmp/sam-fiddle")
 
-@app.route("/")
+@app.get("/")
 def hello_world():
     return "<p>Hello, World!</p>"
 
 #@flask_cors.cross_origin(["http://localhost:8000/", "http://localhost:3000/"]) 
-@app.route("/fiddle", methods = ['POST'])
+@app.post("/fiddle")
 def fiddle():
     if os.path.exists(fiddle_dir):
         os.rename(fiddle_dir, f"{fiddle_dir}_{dt.now().strftime('%Y-%m-%d_%H-%M-%S')}")
@@ -62,4 +62,4 @@ def fiddle():
 
 if __name__ == '__main__':
     os.makedirs("/tmp/baml", exist_ok=True)
-    app.run(host="0.0.0.0", port=8000)
+    # app.run(host="0.0.0.0", port=8000)

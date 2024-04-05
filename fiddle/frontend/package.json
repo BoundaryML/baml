@@ -11,6 +11,7 @@
     "@types/node": "^16.18.91",
     "@types/react": "^18.2.73",
     "@types/react-dom": "^18.2.23",
+    "@uiw/react-codemirror": "^4.21.25",
     "react": "^18.2.0",
     "react-console-emulator": "^5.0.2",
     "react-dom": "^18.2.0",
