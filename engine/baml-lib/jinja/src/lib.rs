@@ -2,36 +2,10 @@ use anyhow;
 use log;
 use minijinja;
 use serde_json;
-use std::collections::HashMap;
 
-// TODO:
-
-struct PromptContext {
-    client: PromptClient,
-    output_schema: String,
-    // we can also make env accessible top-level in the future
-    env: HashMap<String, String>,
-}
-
-struct PromptClient {
-    name: String,
-    provider: String,
-}
-
-pub struct RenderError {
+struct RenderError {
     error: minijinja::Error,
 }
-
-//impl std::error::Error for RenderError {}
-/*
-
-we want to inject
-- ctx.client
-- ctx.output_schema
-- env.DEV_MODE (all envvars)
--
-
-*/
 
 fn render_minijinja(template: &str, json: &serde_json::Value) -> Result<String, minijinja::Error> {
     let mut env = minijinja::Environment::new();
