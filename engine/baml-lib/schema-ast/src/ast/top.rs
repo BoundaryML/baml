@@ -1,6 +1,6 @@
 use super::{
     traits::WithSpan, Class, Client, Configuration, Enum, Function, GeneratorConfig, Identifier,
-    Span, Variant, WithIdentifier,
+    Span, TemplateString, Variant, WithIdentifier,
 };
 
 /// Enum for distinguishing between top-level entries
@@ -20,6 +20,8 @@ pub enum Top {
     // Variant to run
     Variant(Variant),
 
+    TemplateString(TemplateString),
+
     // Abritrary config (things with names and key-value pairs where keys are known)
     Config(Configuration),
 
@@ -34,10 +36,11 @@ impl Top {
             // Top::CompositeType(_) => "composite type",
             Top::Enum(_) => "enum",
             Top::Class(_) => "class",
-            Top::FunctionOld(_) => "function[deprecated]",
+            Top::FunctionOld(_) => "function[deprecated signature]",
             Top::Function(_) => "function",
             Top::Client(m) if m.is_llm() => "client<llm>",
             Top::Client(_) => "client<?>",
+            Top::TemplateString(_) => "template_string",
             Top::Variant(v) if v.is_llm() => "impl<llm>",
             Top::Variant(_) => "impl<?>",
             Top::Generator(_) => "generator",
@@ -95,6 +98,13 @@ impl Top {
         }
     }
 
+    pub fn as_template_string(&self) -> Option<&TemplateString> {
+        match self {
+            Top::TemplateString(t) => Some(t),
+            _ => None,
+        }
+    }
+
     pub fn as_configurations(&self) -> Option<&Configuration> {
         match self {
             Top::Config(config) => Some(config),
@@ -112,6 +122,7 @@ impl WithIdentifier for Top {
             Top::Class(x) => x.identifier(),
             Top::Function(x) | Top::FunctionOld(x) => x.identifier(),
             Top::Client(x) => x.identifier(),
+            Top::TemplateString(x) => x.identifier(),
             Top::Variant(x) => x.identifier(),
             Top::Generator(x) => x.identifier(),
             Top::Config(x) => x.identifier(),
@@ -125,6 +136,7 @@ impl WithSpan for Top {
             Top::Enum(en) => en.span(),
             Top::Class(class) => class.span(),
             Top::Function(func) | Top::FunctionOld(func) => func.span(),
+            Top::TemplateString(template) => template.span(),
             Top::Client(client) => client.span(),
             Top::Variant(variant) => variant.span(),
             Top::Generator(gen) => gen.span(),

@@ -101,20 +101,26 @@ fn run_validation_test(test_file_path: &str) {
         (false, Ok(_)) => String::new(), // expected diagnostics, got none
     };
 
-    if std::env::var("UPDATE_EXPECT").is_ok() {
+    if std::env::var("UPDATE_EXPECT")
+        .map(|s| s == "1")
+        .unwrap_or(false)
+    {
         let mut file = fs::File::create(&file_path).unwrap(); // truncate
 
         let schema = last_comment_idx
             .map(|idx| &source_file.as_str()[..idx])
-            .unwrap_or(source_file.as_str());
+            .unwrap_or(source_file.as_str())
+            .trim();
         file.write_all(schema.as_bytes()).unwrap();
 
-        file.write_all(b"\n").unwrap();
+        if !diagnostics.is_empty() {
+            file.write_all(b"\n\n").unwrap();
 
-        for line in diagnostics.lines() {
-            // remove colored chars
-            let line = strip_str(line);
-            writeln!(file, "// {line}").unwrap();
+            for line in diagnostics.lines() {
+                // remove colored chars
+                let line = strip_str(line);
+                writeln!(file, "// {line}").unwrap();
+            }
         }
         return;
     }

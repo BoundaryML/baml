@@ -132,7 +132,7 @@ fn parse_dict_key(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression 
     unreachable!("Encountered impossible dict key during parsing")
 }
 
-fn parse_raw_string(token: Pair<'_>, diagnostics: &mut Diagnostics) -> RawString {
+pub(super) fn parse_raw_string(token: Pair<'_>, diagnostics: &mut Diagnostics) -> RawString {
     assert_correct_parser!(token, Rule::raw_string_literal);
 
     let mut language = None;

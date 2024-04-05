@@ -14,6 +14,7 @@ mod parse_old_function;
 mod parse_schema;
 mod parse_serializer;
 mod parse_template_args;
+mod parse_template_string;
 mod parse_test;
 mod parse_types;
 mod parse_variant;

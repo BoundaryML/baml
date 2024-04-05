@@ -2,7 +2,8 @@ use std::path::PathBuf;
 
 use super::{
     parse_class::parse_class, parse_config, parse_enum::parse_enum, parse_function::parse_function,
-    parse_old_function::parse_old_function, parse_test::parse_test_from_json, BAMLParser, Rule,
+    parse_old_function::parse_old_function, parse_template_string::parse_template_string,
+    parse_test::parse_test_from_json, BAMLParser, Rule,
 };
 use crate::{ast::*, parser::parse_variant};
 use internal_baml_diagnostics::{DatamodelError, Diagnostics, SourceFile};
@@ -99,6 +100,12 @@ pub fn parse_schema(
                             &mut diagnostics,
                         ) {
                             Ok(config) => top_level_definitions.push(Top::Variant(config)),
+                            Err(e) => diagnostics.push_error(e),
+                        }
+                    }
+                    Rule::template_declaration => {
+                        match parse_template_string(current, pending_block_comment.take(), &mut diagnostics) {
+                            Ok(template) => top_level_definitions.push(Top::TemplateString(template)),
                             Err(e) => diagnostics.push_error(e),
                         }
                     }

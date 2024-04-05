@@ -33,6 +33,10 @@ pub(super) fn resolve_types(ctx: &mut Context<'_>) {
             (_, ast::Top::Enum(enm)) => visit_enum(enm, ctx),
             (ast::TopId::Class(idx), ast::Top::Class(model)) => visit_class(idx, model, ctx),
             (_, ast::Top::Class(_)) => unreachable!("Class misconfigured"),
+            (ast::TopId::TemplateString(idx), ast::Top::TemplateString(template_string)) => {
+                visit_template_string(idx, template_string, ctx)
+            }
+            (_, ast::Top::TemplateString(_)) => unreachable!("TemplateString misconfigured"),
             (ast::TopId::Function(idx), ast::Top::FunctionOld(function)) => {
                 visit_old_function(idx, function, ctx)
             }
@@ -308,6 +312,12 @@ pub struct FunctionType {
     pub client: Option<(String, Span)>,
 }
 
+#[derive(Debug, Clone)]
+pub struct TemplateStringProperties {
+    pub inputs: Vec<(String, Span)>,
+    pub uses: Vec<ast::TemplateStringId>,
+}
+
 #[derive(Debug, Default)]
 pub(super) struct Types {
     pub(super) enum_attributes: HashMap<ast::EnumId, EnumAttributes>,
@@ -320,6 +330,8 @@ pub(super) struct Types {
     pub(super) retry_policies: HashMap<ast::ConfigurationId, RetryPolicy>,
     pub(super) printers: HashMap<ast::ConfigurationId, PrinterType>,
     pub(super) test_cases: HashMap<ast::ConfigurationId, TestCase>,
+    pub(super) template_strings:
+        HashMap<either::Either<ast::TemplateStringId, ast::FunctionId>, TemplateStringProperties>,
 }
 
 impl Types {
@@ -370,6 +382,13 @@ impl Types {
             None => either::Either::Left(value_id.into()),
         }
     }
+}
+
+fn visit_template_string<'db>(
+    _idx: ast::TemplateStringId,
+    _template_string: &'db ast::TemplateString,
+    _ctx: &mut Context<'db>,
+) {
 }
 
 fn visit_enum<'db>(_enm: &'db ast::Enum, _ctx: &mut Context<'db>) {}
