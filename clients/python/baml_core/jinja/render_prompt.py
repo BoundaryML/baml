@@ -1,57 +1,18 @@
-from typing import Dict, Any
+from baml_pyo3 import RenderData
 import baml_pyo3
 
 
-class PromptClient:
-    name: str
-    provider: str
-
-    def __init__(self, name: str = "", provider: str = ""):
-        self.name = name
-        self.provider = provider
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "name": self.name,
-            "provider": self.provider,
-        }
+def render_prompt(prompt_template: str, args: RenderData) -> str:
+    return baml_pyo3.render_prompt(prompt_template, args)
 
 
-class PromptContext:
-    client: PromptClient
-    output_schema: str
-    # we can also make env accessible top-level in the future
-    env: Dict[str, str]
-
-    def __init__(
-        self,
-        client: PromptClient = PromptClient(),
-        output_schema: str = "",
-        env: Dict[str, str] = {},
-    ):
-        self.client = client
-        self.output_schema = output_schema
-        self.env = env
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "client": self.client.to_dict(),
-            "output_schema": self.output_schema,
-            "env": self.env,
-        }
-
-
-def render_prompt(
-    prompt_template: str, params: Dict[str, Any], ctx: PromptContext
-) -> str:
-    return baml_pyo3.render_prompt(prompt_template, {**params, "ctx": ctx.to_dict()})
+__all__ = ["render_prompt", "RenderData"]
 
 
 if __name__ == "__main__":
-    print("starting wasm test")
-    rendered = render_prompt(
-        "Hello {{name} more wtf",
-        {
+    print("Demonstrating render_prompt")
+    args = RenderData(
+        args={
             "name": "world",
             "foo": {
                 "bar": "baz",
@@ -71,6 +32,14 @@ if __name__ == "__main__":
                 ],
             },
         },
-        PromptContext(),
+        ctx=RenderData.ctx(
+            client=RenderData.client(name="gpt4", provider="openai"),
+            output_schema="",
+            env={"LANG": "en_US.UTF-8"},
+        ),
+        template_string_vars={},
+    )
+    rendered = render_prompt(
+        "{{ctx.env.LANG}}: Hello {{name}}, it's a good day today!", args
     )
     print("Rendered", rendered)

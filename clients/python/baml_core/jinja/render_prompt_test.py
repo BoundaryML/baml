@@ -1,44 +1,17 @@
 import pytest
 
-from baml_core import (
-    render_prompt,
-    PromptClient,
-    PromptContext,
-)
+from baml_core import render_prompt, RenderData
 
 
 def test_success() -> None:
-    rendered = render_prompt(
-        "Hello {{name}} -{{ ctx.client.provider }}",
-        {
-            "name": "world",
-            "foo": {
-                "bar": "baz",
-                "buzz": [
-                    1,
-                    2,
-                    3,
-                    {
-                        "a": "b",
-                        "c": "d",
-                        "x": None,
-                    },
-                    5,
-                    6,
-                    7,
-                ],
-            },
-        },
-        PromptContext(client=PromptClient(name="gpt4", provider="openai")),
+    ctx = RenderData.ctx(
+        client=RenderData.client(name="gpt4", provider="openai"), output_schema="",
+        env={"LANG": "en_US.UTF-8"},
     )
-    assert rendered == "Hello world -openai"
-
-
-def test_bad_params() -> None:
-    with pytest.raises(RuntimeError) as e:
-        render_prompt(
-            "Hello {{name}",
-            {
+    rendered = render_prompt(
+        "{{ ctx.env.LANG }}: Hello {{name}} -{{ ctx.client.provider }}",
+        RenderData(
+            args={
                 "name": "world",
                 "foo": {
                     "bar": "baz",
@@ -57,7 +30,44 @@ def test_bad_params() -> None:
                     ],
                 },
             },
-            PromptContext(),
+            ctx=ctx,
+            template_string_vars={},
+        ),
+    )
+    assert rendered == "en_US.UTF-8: Hello world -openai"
+
+
+def test_bad_params() -> None:
+    with pytest.raises(RuntimeError) as e:
+        render_prompt(
+            "Hello {{name}",
+            RenderData(
+                args={
+                    "name": "world",
+                    "foo": {
+                        "bar": "baz",
+                        "buzz": [
+                            1,
+                            2,
+                            3,
+                            {
+                                "a": "b",
+                                "c": "d",
+                                "x": None,
+                            },
+                            5,
+                            6,
+                            7,
+                        ],
+                    },
+                },
+                ctx=RenderData.ctx(
+                    client=RenderData.client(name="gpt4", provider="openai"),
+                    output_schema="",
+                    env={},
+                ),
+                template_string_vars={},
+            ),
         )
     assert (
         "Error occurred while rendering prompt: syntax error: unexpected `}}`, expected end of variable block (in prompt:1)"
@@ -69,27 +79,34 @@ def test_bad_template() -> None:
     with pytest.raises(TypeError) as e:
         render_prompt(
             "Hello {{name}}",
-            {
-                "name": "world",
-                "foo": {
-                    "bar": "baz",
-                    "buzz": [
-                        1,
-                        2,
-                        3,
-                        {
-                            "a": "b",
-                            "y": PromptClient(),
-                            "c": "d",
-                            "x": None,
-                        },
-                        5,
-                        PromptClient(),
-                        7,
-                    ],
+            RenderData(
+                args={
+                    "name": "world",
+                    "foo": {
+                        "bar": "baz",
+                        "buzz": [
+                            0,
+                            1,
+                            2,
+                            {
+                                "a": "b",
+                                "y": object(),
+                                "c": "d",
+                                "x": None,
+                            },
+                            4,
+                            object(),
+                            6,
+                        ],
+                    },
                 },
-            },
-            PromptContext(),
+                ctx=RenderData.ctx(
+                    client=RenderData.client(name="gpt4", provider="openai"),
+                    output_schema="",
+                    env={},
+                ),
+                template_string_vars={},
+            ),
         )
-    assert "params.foo.buzz.3.y: unsupported type" in str(e.value)
-    assert "params.foo.buzz.5: unsupported type" in str(e.value)
+    assert "args.foo.buzz.3.y: unsupported type" in str(e.value)
+    assert "args.foo.buzz.5: unsupported type" in str(e.value)

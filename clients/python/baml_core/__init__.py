@@ -1,8 +1,7 @@
 from .cache_manager import CacheManager
 from .jinja.render_prompt import (
     render_prompt,
-    PromptClient,
-    PromptContext,
+    RenderData,
 )
 from .provider_manager import (
     LLMManager,
@@ -18,8 +17,7 @@ from .registrations import providers, caches  # noqa: F401
 
 __all__ = [
     "render_prompt",
-    "PromptClient",
-    "PromptContext",
+    "RenderData",
     "LLMException",
     "CacheManager",
     "LLMManager",

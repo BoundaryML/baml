@@ -241,6 +241,7 @@ version = "0.1.0"
 dependencies = [
  "internal-baml-jinja",
  "pyo3",
+ "pythonize",
  "serde",
  "serde_json",
 ]
@@ -1611,6 +1612,7 @@ dependencies = [
  "pyo3-build-config",
  "pyo3-ffi",
  "pyo3-macros",
+ "serde",
  "unindent",
 ]
 
@@ -1621,6 +1623,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "650dca34d463b6cdbdb02b1d71bfd6eb6b6816afc708faebb3bac1380ff4aef7"
 dependencies = [
  "once_cell",
+ "python3-dll-a",
  "target-lexicon",
 ]
 
@@ -1657,6 +1660,25 @@ dependencies = [
  "pyo3-build-config",
  "quote",
  "syn 2.0.52",
+]
+
+[[package]]
+name = "python3-dll-a"
+version = "0.2.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d5f07cd4412be8fa09a721d40007c483981bbe072cd6a21f2e83e04ec8f8343f"
+dependencies = [
+ "cc",
+]
+
+[[package]]
+name = "pythonize"
+version = "0.21.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d0664248812c38cc55a4ed07f88e4df516ce82604b93b1ffdc041aa77a6cb3c"
+dependencies = [
+ "pyo3",
+ "serde",
 ]
 
 [[package]]

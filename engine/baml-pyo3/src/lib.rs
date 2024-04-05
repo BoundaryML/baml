@@ -1,11 +1,15 @@
 use internal_baml_jinja;
 use pyo3::exceptions::{PyRuntimeError, PyTypeError};
 use pyo3::prelude::{
-    pyfunction, pymodule, wrap_pyfunction, Bound, PyAnyMethods, PyDictMethods, PyModule, PyResult,
+    pyclass, pyfunction, pymethods, pymodule, wrap_pyfunction, Bound, PyAnyMethods, PyDictMethods,
+    PyModule, PyResult,
 };
-use pyo3::types::{PyDict, PyList};
+use pyo3::types::{PyAny, PyDict, PyList};
 use pyo3::{PyObject, Python};
+use pythonize::depythonize_bound;
+use serde::Serialize;
 use serde_json::json;
+use std::collections::HashMap;
 
 struct SerializationError {
     position: Vec<String>,
@@ -124,15 +128,86 @@ fn pyobject_to_json(any: PyObject) -> Result<serde_json::Value, Vec<Serializatio
     })
 }
 
+#[derive(Clone, Debug, Serialize)]
+#[pyclass]
+struct RenderData_Client {
+    name: String,
+    provider: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[pyclass]
+struct RenderData_Context {
+    client: RenderData_Client,
+    output_schema: String,
+    env: HashMap<String, String>,
+}
+
+#[pymethods]
+impl RenderData_Context {
+    fn set_env(&mut self, key: String, value: String) {
+        self.env.insert(key, value);
+    }
+}
+
+#[derive(Clone, Debug)]
+#[pyclass]
+struct RenderData {
+    args: PyObject,
+    ctx: RenderData_Context,
+    template_string_vars: HashMap<String, String>,
+}
+
+#[pymethods]
+impl RenderData {
+    #[new]
+    fn new(
+        args: PyObject,
+        ctx: RenderData_Context,
+        template_string_vars: PyObject,
+    ) -> PyResult<Self> {
+        Python::with_gil(|py| {
+            Ok(RenderData {
+                args: args,
+                ctx: ctx,
+                template_string_vars: depythonize_bound(template_string_vars.into_bound(py))?,
+            })
+        })
+    }
+
+    #[staticmethod]
+    fn ctx(
+        client: RenderData_Client,
+        output_schema: String,
+        env: PyObject,
+    ) -> PyResult<RenderData_Context> {
+        Python::with_gil(|py| {
+            Ok(RenderData_Context {
+                client: client,
+                output_schema: output_schema,
+                env: depythonize_bound(env.into_bound(py))?,
+            })
+        })
+    }
+
+    #[staticmethod]
+    fn client(name: String, provider: String) -> RenderData_Client {
+        RenderData_Client {
+            name: name,
+            provider: provider,
+        }
+    }
+}
+
 #[pyfunction]
-fn render_prompt(template: String, params: PyObject) -> PyResult<String> {
-    let params = match pyobject_to_json(params) {
-        Ok(params) => params,
+fn render_prompt(template: String, context: RenderData) -> PyResult<String> {
+    let render_args = match pyobject_to_json(context.args) {
+        Ok(render_args) => render_args,
         Err(errors) => {
             let messages = errors
                 .into_iter()
                 .map(|SerializationError { position, message }| {
-                    format!("params.{}: {message}", position.join("."))
+                    format!("args.{}: {message}", position.join("."))
                 })
                 .collect::<Vec<String>>();
 
@@ -147,7 +222,23 @@ fn render_prompt(template: String, params: PyObject) -> PyResult<String> {
             }
         }
     };
-    let rendered = internal_baml_jinja::render_template(&template, &params);
+    let serde_json::Value::Object(mut render_args) = render_args else {
+        return Err(PyTypeError::new_err(
+            "args must be convertible to a JSON object",
+        ));
+    };
+    match serde_json::to_value(context.ctx) {
+        Ok(ctx_value) => {
+            render_args.insert("ctx".to_string(), ctx_value);
+        }
+        Err(err) => {
+            return Err(PyTypeError::new_err(format!(
+                "Failed to build 'ctx' contents for rendering: {err:#}"
+            )));
+        }
+    }
+    let rendered =
+        internal_baml_jinja::render_template(&template, &serde_json::Value::Object(render_args));
 
     match rendered {
         Ok(s) => Ok(s),
@@ -158,6 +249,9 @@ fn render_prompt(template: String, params: PyObject) -> PyResult<String> {
 #[pymodule]
 fn baml_pyo3(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(render_prompt, m)?)?;
+    m.add_class::<RenderData>()?;
+    m.add_class::<RenderData_Client>()?;
+    m.add_class::<RenderData_Context>()?;
     Ok(())
 }
 

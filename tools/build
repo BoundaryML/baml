@@ -80,18 +80,6 @@ case "$_path" in
     fi
     ;;
 
-  /engine/baml-pyo3 | /engine/baml-pyo3/* )
-    if [ "$_watch_mode" -eq 1 ]; then
-      echo "WARNING: watch mode not implemented"
-    fi
-
-    cwd="$(pwd)"
-    command="maturin develop"
-    cd "${_repo_root}/clients/python"
-    poetry run
-    ;;
-
-
   # Subdirectories of engine must be matched before this line
   /engine | /engine/* )
     if [ "$_test_mode" -eq 1 ]; then
@@ -116,7 +104,7 @@ case "$_path" in
     command="${command} && poetry run mypy ."
     command="${command} && poetry run ruff check"
     command="${command} && poetry run ruff format"
-    #command='poetry run -- python -m baml_core.jinja.render_prompt'
+    command="${command} && poetry run -- python -m baml_core.jinja.render_prompt"
     if [ "$_test_mode" -eq 1 ]; then
       command="${command} && poetry run -- pytest baml_core"
     fi
@@ -124,7 +112,8 @@ case "$_path" in
     if [ "$_watch_mode" -eq 1 ]; then
       npx nodemon \
         --verbose \
-        --ext py \
+        --ext py,pyi,rs \
+        --watch "${_repo_root}/engine/baml-pyo3" \
         --watch . \
         --exec "${command}"
     else
