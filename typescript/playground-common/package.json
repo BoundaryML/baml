@@ -2,9 +2,6 @@
   "name": "@baml/playground-common",
   "version": "1.0.12",
   "description": "",
-  "main": "dist/index.js",
-  "module": "dist/index.mjs",
-  "types": "dist/index.d.ts",
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -16,16 +13,26 @@
     "clean": "rimraf .turbo node_modules dist",
     "prep-test": "pnpm run clean && pnpm install"
   },
+  "sideEffects": false,
   "exports": {
-    ".": {
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    }
+    ".": "./src/index.ts",
+    "./*": [
+      "./src/*.ts",
+      "./src/*.tsx",
+      "./src/*/index.ts"
+    ]
   },
   "files": [
-    "dist/**"
+    "src"
   ],
+  "typesVersions": {
+    "*": {
+      "*": [
+        "src/*",
+        "src/*/index"
+      ]
+    }
+  },
   "devDependencies": {
     "@githubocto/tailwind-vscode": "^1.0.5",
     "@types/node": "^20.4.9",

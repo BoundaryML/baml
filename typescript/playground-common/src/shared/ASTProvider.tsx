@@ -1,4 +1,4 @@
-import CustomErrorBoundary from '@/utils/ErrorFallback'
+import CustomErrorBoundary from '../utils/ErrorFallback'
 import { ParserDatabase, TestState } from '@baml/common'
 import { VSCodeButton } from '@vscode/webview-ui-toolkit/react'
 import React, { PropsWithChildren, createContext, useCallback, useEffect, useMemo, useState } from 'react'

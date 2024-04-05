@@ -1,5 +1,5 @@
 {
-  "name": "frontend",
+  "name": "@baml/prompt-fiddle-next",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -10,8 +10,10 @@
   },
   "dependencies": {
     "@baml/playground-common": "workspace:*",
-    "@gloo-ai/baml-schema-wasm-web": "workspace:*",
     "@codemirror/lang-rust": "^6.0.1",
+    "@codemirror/state": "^6.4.1",
+    "@codemirror/view": "^6.26.1",
+    "@gloo-ai/baml-schema-wasm-web": "workspace:*",
     "@hookform/resolvers": "^3.3.4",
     "@radix-ui/react-dialog": "^1.0.5",
     "@radix-ui/react-label": "^2.0.2",

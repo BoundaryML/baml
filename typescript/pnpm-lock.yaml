@@ -91,6 +91,12 @@ importers:
       '@codemirror/lang-rust':
         specifier: ^6.0.1
         version: 6.0.1
+      '@codemirror/state':
+        specifier: ^6.4.1
+        version: 6.4.1
+      '@codemirror/view':
+        specifier: ^6.26.1
+        version: 6.26.1
       '@gloo-ai/baml-schema-wasm-web':
         specifier: workspace:*
         version: link:../baml-schema-wasm-web

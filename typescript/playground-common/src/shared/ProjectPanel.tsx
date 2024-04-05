@@ -1,8 +1,8 @@
 import { useContext, useState } from 'react'
 import { ASTContext } from './ASTProvider'
 import { VSCodeButton } from '@vscode/webview-ui-toolkit/react'
-import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogTrigger } from '../components/ui/dialog'
+import { Button } from '../components/ui/button'
 
 const ProjectPanel: React.FC<{ onClick?: () => void }> = ({ onClick }) => {
   const { projects, selectedProjectId, setSelection } = useContext(ASTContext)
@@ -39,7 +39,7 @@ export const ProjectToggle = () => {
   return (
     <Dialog open={show} onOpenChange={setShow}>
       <DialogTrigger asChild={true}>
-        <Button variant="outline" className="p-1 text-xs w-fit h-fit border-vscode-textSeparator-foreground truncate">
+        <Button variant="outline" className="p-1 text-xs truncate w-fit h-fit border-vscode-textSeparator-foreground">
           {selectedProjectId?.split('/').at(-2) ?? 'Project'}
         </Button>
       </DialogTrigger>

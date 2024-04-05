@@ -122,10 +122,10 @@ const PlaygroundView = () => {
           onClick={async () => {
             const lint = await import('@gloo-ai/baml-schema-wasm-web').then((m) => m.lint)
             const linterInput: LinterInput = {
-              root_path: 'root',
+              root_path: 'baml_src',
               files: [
                 {
-                  path: 'path',
+                  path: 'path/main.baml',
                   content: defaultMainBaml,
                 },
               ],

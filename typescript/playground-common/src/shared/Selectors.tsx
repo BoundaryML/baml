@@ -2,16 +2,16 @@ import { VSCodeDropdown, VSCodeLink, VSCodeOption } from '@vscode/webview-ui-too
 import { useSelections } from './hooks'
 import { useContext, useState } from 'react'
 import { ASTContext } from './ASTProvider'
-import { vscode } from '@/utils/vscode'
+import { vscode } from '../utils/vscode'
 import Link from './Link'
 import TypeComponent from './TypeComponent'
 import { ProjectToggle } from './ProjectPanel'
-import { Command, CommandInput, CommandEmpty, CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
+import { Command, CommandInput, CommandEmpty, CommandGroup, CommandItem, CommandList } from '../components/ui/command'
+import { Popover, PopoverTrigger, PopoverContent } from '../components/ui/popover'
+import { cn } from '../lib/utils'
+import { Button } from '../components/ui/button'
 import { ChevronsUpDown, Check } from 'lucide-react'
-import SearchBarWithSelector from '@/lib/searchbar'
+import SearchBarWithSelector from '../lib/searchbar'
 
 const FunctionDropdown: React.FC = () => {
   const [open, setOpen] = useState(false)
@@ -21,18 +21,20 @@ const FunctionDropdown: React.FC = () => {
   } = useContext(ASTContext)
 
   const { func } = useSelections()
-  const value = func?.name.value;
+  const value = func?.name.value
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
-          variant='ghost'
+          variant="ghost"
           aria-expanded={open}
           className="w-[250px] sm:w-[450px] justify-between flex hover:bg-primary/90 hover:text-foreground"
         >
-          <span className="min-w-[200px] sm:min-w-[400px] truncate w-full text-left">{value ?? "Select a function..."}</span>
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          <span className="min-w-[200px] sm:min-w-[400px] truncate w-full text-left">
+            {value ?? 'Select a function...'}
+          </span>
+          <ChevronsUpDown className="w-4 h-4 ml-2 opacity-50 shrink-0" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-1/3 min-w-[400px] p-0">
@@ -46,7 +48,6 @@ const FunctionDropdown: React.FC = () => {
       </PopoverContent>
     </Popover>
   )
-
 }
 
 export const FunctionSelector: React.FC = () => {
@@ -80,8 +81,7 @@ export const FunctionSelector: React.FC = () => {
       </div>
       {func && (
         <div className="flex flex-row items-center gap-0 text-xs">
-          <span className='text-muted-foreground pr-1'>Fn signature</span>
-          (
+          <span className="pr-1 text-muted-foreground">Fn signature</span>(
           {func.input.arg_type === 'positional' ? (
             <div className="flex flex-row gap-1">
               arg: <TypeComponent typeString={func.input.type} />

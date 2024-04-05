@@ -14,7 +14,7 @@ import { useMemo, useState } from 'react'
 import Link from './Link'
 import TypeComponent from './TypeComponent'
 import { ArgType } from '@baml/common/src/parser_db'
-import { Table, TableHead } from '@/components/ui/table'
+import { Table, TableHead } from '../components/ui/table'
 import clsx from 'clsx'
 
 type Impl = ParserDatabase['functions'][0]['impls'][0]
@@ -126,7 +126,6 @@ const Snippet: React.FC<{ text: string }> = ({ text }) => {
 const ImplPanel: React.FC<{ impl: Impl }> = ({ impl }) => {
   const { func } = useImplCtx(impl.name.value)
 
-
   const implPrompt = useMemo(() => {
     if (impl.has_v2) {
       return impl.prompt_v2.prompt
@@ -164,14 +163,20 @@ const ImplPanel: React.FC<{ impl: Impl }> = ({ impl }) => {
                 <Link item={impl.client} />
               </div>
             </div>
-            {typeof implPrompt === 'string' ? <Snippet text={implPrompt} /> : <div className='flex flex-col gap-2'>
-              {implPrompt.map(({ role, content }, index) => (
-                <div className='flex flex-col'>
-                  <div className='text-xs'><span className='text-muted-foreground'>Role:</span> <span className='font-bold'>{role}</span></div>
-                  <Snippet key={index} text={content} />
-                </div>
-              ))}
-            </div>}
+            {typeof implPrompt === 'string' ? (
+              <Snippet text={implPrompt} />
+            ) : (
+              <div className="flex flex-col gap-2">
+                {implPrompt.map(({ role, content }, index) => (
+                  <div className="flex flex-col">
+                    <div className="text-xs">
+                      <span className="text-muted-foreground">Role:</span> <span className="font-bold">{role}</span>
+                    </div>
+                    <Snippet key={index} text={content} />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </VSCodePanelView>

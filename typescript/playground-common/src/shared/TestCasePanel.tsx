@@ -1,8 +1,8 @@
 /// Content once a function has been selected.
 
-import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { vscode } from '@/utils/vscode'
+import { Button } from '../components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
+import { vscode } from '../utils/vscode'
 import { ParserDatabase, StringSpan, TestRequest } from '@baml/common'
 import Form, { getDefaultRegistry } from '@rjsf/core'
 import {
@@ -26,7 +26,7 @@ import { ChangeEvent, FocusEvent, useCallback, useContext, useEffect, useMemo, u
 import { ASTContext } from './ASTProvider'
 import TypeComponent from './TypeComponent'
 import { useSelections } from './hooks'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip'
 
 const testSchema: RJSFSchema = {
   title: 'Test form',

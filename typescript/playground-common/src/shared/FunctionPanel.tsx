@@ -1,6 +1,6 @@
 /// Content once a function has been selected.
 
-import { Separator } from '@/components/ui/separator'
+import { Separator } from '../components/ui/separator'
 import { TestCaseSelector } from './Selectors'
 import { useSelections } from './hooks'
 import { VSCodeDivider, VSCodePanels } from '@vscode/webview-ui-toolkit/react'
@@ -11,11 +11,11 @@ import { ASTContext } from './ASTProvider'
 import TypeComponent from './TypeComponent'
 import { Allotment } from 'allotment'
 import TestResultPanel from './TestResultOutcomes'
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
-import { Button } from '@/components/ui/button'
+import { ScrollArea, ScrollBar } from '../components/ui/scroll-area'
+import { Button } from '../components/ui/button'
 import { FlaskConical } from 'lucide-react'
 import clsx from 'clsx'
-import { TooltipProvider } from '@/components/ui/tooltip'
+import { TooltipProvider } from '../components/ui/tooltip'
 
 const FunctionPanel: React.FC = () => {
   const {

@@ -39,12 +39,13 @@
     "moduleResolution": "node",
     "resolveJsonModule": true,
     "isolatedModules": true,
+    "incremental": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["./src/*"]
-    }
+    "baseUrl": "."
+    // "paths": {
+    //   "@/*": ["./src/*"]
+    // }
   },
   "include": ["./src"],
   "exclude": ["node_modules", "dist"]

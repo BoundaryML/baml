@@ -9,7 +9,7 @@
       "dependsOn": ["^watch"],
       "outputs": ["dist/**"]
     },
-    "@gloo-ai/baml-schema-wasm#build": {
+    "@gloo-ai/baml-schema-wasm-node#build": {
       "dependsOn": ["^build"],
       "inputs": ["../../engine/**/*.rs", "../../engine/**/*.toml"],
       "outputs": ["dist/**"]
@@ -22,8 +22,16 @@
       "dependsOn": ["^build"],
       "outputs": ["dist/**"]
     },
+    "@baml/prompt-fiddle-next": {
+      "dependsOn": ["@baml/playground-common#build", "@gloo-ai/baml-schema-wasm-web#build"],
+      "outputs": ["dist/**"]
+    },
+    "@baml/playground-common#build": {
+      "dependsOn": ["@baml/common#build"],
+      "outputs": ["dist/**"]
+    },
     "@gloo-ai/baml-language-server#build": {
-      "dependsOn": ["@gloo-ai/baml-schema-wasm#build"],
+      "dependsOn": ["@gloo-ai/baml-schema-wasm-node#build"],
       "outputs": ["out/**"],
       "cache": false
     },
