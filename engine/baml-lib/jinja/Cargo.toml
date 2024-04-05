@@ -1,0 +1,26 @@
+[package]
+name = "internal-baml-jinja"
+edition = "2021"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+license-file.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# TODO: disable imports, etc
+minijinja = { version = "1.0.16", default-features = false, features = [
+  "builtins",
+  "debug",
+  "preserve_order",
+  "json",
+] }
+anyhow.workspace = true
+indexmap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+log = "0.4.14"
+
+[dev-dependencies]
+env_logger = "0.11.3"

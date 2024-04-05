@@ -7,20 +7,6 @@ use internal_baml_schema_ast::ast::WithName;
 mod print_enum_default;
 mod print_type_default;
 
-#[cfg(feature = "use-pyo3")]
-use pyo3::Python;
-#[cfg(feature = "use-pyo3")]
-mod enum_printer;
-#[cfg(feature = "use-pyo3")]
-mod printer;
-#[cfg(feature = "use-pyo3")]
-mod type_printer;
-
-#[cfg(feature = "use-pyo3")]
-use enum_printer::setup_printer as setup_enum_printer;
-#[cfg(feature = "use-pyo3")]
-use type_printer::setup_printer as setup_type_printer;
-
 use crate::{
     interner::StringId,
     types::{StaticStringAttributes, ToStringAttributes},
@@ -129,28 +115,6 @@ pub trait WithSerialize: WithSerializeableContent {
     ) -> Result<String, DatamodelError>;
 }
 
-#[cfg(feature = "use-pyo3")]
-pub fn serialize_with_printer(
-    is_enum: bool,
-    printer: Option<String>,
-    json: serde_json::Value,
-) -> Result<String, String> {
-    pyo3::prepare_freethreaded_python();
-
-    Python::with_gil(|py| {
-        let printer = if is_enum {
-            setup_enum_printer(py, printer.as_deref())
-                .map_err(|e| format!("Failed to create enum printer: {}", e))?
-        } else {
-            setup_type_printer(py, printer.as_deref())
-                .map_err(|e| format!("Failed to create type printer: {}", e))?
-        };
-
-        printer.print(py, json)
-    })
-}
-
-#[cfg(not(feature = "use-pyo3"))]
 pub fn serialize_with_printer(
     is_enum: bool,
     template: Option<String>,

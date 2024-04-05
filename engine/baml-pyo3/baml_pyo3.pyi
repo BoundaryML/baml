@@ -1,0 +1,3 @@
+from typing import Any, Dict
+
+def render_prompt(prompt_template: str, params: Dict[str, Any]) -> str: ...

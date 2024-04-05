@@ -6,6 +6,7 @@ members = [
   "baml-fmt",
   "baml-schema-wasm",
   "baml-core-ffi",
+  "baml-pyo3",
 ]
 
 [workspace.dependencies]
@@ -15,7 +16,6 @@ serde = { version = "1", features = ["derive"] }
 indexmap = { version = "2.1.0", features = ["serde"] }
 indoc = "2.0.1"
 
-# 
 [workspace.package]
 version = "0.18.0-canary.0"
 authors = ["Boundary <contact@boundaryml.com>"]
