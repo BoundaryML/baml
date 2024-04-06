@@ -1,3 +1,5 @@
+// 🔴🔴🔴 Note this doesnt actually do anything. It's jsut so we have type completion. Consuming packages dictate the style.
+
 import type { Config } from "tailwindcss"
 const ui = require('@baml/playground-common/tailwind')
 

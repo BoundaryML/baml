@@ -9,13 +9,13 @@ import ImplPanel from './ImplPanel'
 import { useContext, useEffect, useState } from 'react'
 import { ASTContext } from './ASTProvider'
 import TypeComponent from './TypeComponent'
-import { Allotment } from 'allotment'
 import TestResultPanel from './TestResultOutcomes'
 import { ScrollArea, ScrollBar } from '../components/ui/scroll-area'
 import { Button } from '../components/ui/button'
 import { FlaskConical } from 'lucide-react'
 import clsx from 'clsx'
 import { TooltipProvider } from '../components/ui/tooltip'
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/ui/resizable'
 
 const FunctionPanel: React.FC = () => {
   const {
@@ -44,9 +44,10 @@ const FunctionPanel: React.FC = () => {
             'basis-[85%]': showTests && !(results.length > 0),
           })}
         >
-          <Allotment className="h-full">
+          {/* <Allotment className="h-full"> */}
+          <ResizablePanelGroup direction="horizontal" className="h-full">
             {impl && (
-              <Allotment.Pane className="px-0" minSize={200}>
+              <ResizablePanel defaultSize={50} className="px-0">
                 <div className="relative h-full">
                   <ScrollArea type="always" className="flex w-full h-full pr-3 ">
                     <VSCodePanels
@@ -64,15 +65,18 @@ const FunctionPanel: React.FC = () => {
                     </VSCodePanels>
                   </ScrollArea>
                 </div>
-              </Allotment.Pane>
+              </ResizablePanel>
             )}
-            <Allotment.Pane className="pl-2 pr-0.5" minSize={200} visible={showTests}>
+            <ResizableHandle withHandle={true} />
+            <ResizablePanel minSize={50} className="pl-2 pr-0.5" hidden={!showTests}>
+              {/* <Allotment.Pane className="pl-2 pr-0.5" minSize={200} visible={showTests}> */}
               <div className="flex flex-col h-full overflow-y-scroll overflow-x-clip">
                 {/* On windows this scroll area extends beyond the wanted width, so we just use a normal scrollbar here vs using ScrollArea*/}
                 <TestCasePanel func={func} />
               </div>
-            </Allotment.Pane>
-          </Allotment>
+            </ResizablePanel>
+          </ResizablePanelGroup>
+          {/* </Allotment> */}
         </div>
         <div
           className={clsx('py-2 border-t h-fit border-vscode-textSeparator-foreground', {

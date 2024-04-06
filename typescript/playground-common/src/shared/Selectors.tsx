@@ -29,7 +29,7 @@ const FunctionDropdown: React.FC = () => {
         <Button
           variant="ghost"
           aria-expanded={open}
-          className="w-[250px] sm:w-[450px] justify-between flex hover:bg-primary/90 hover:text-foreground"
+          className="w-[250px] sm:w-[450px] justify-between flex hover:bg-secondary hover:text-foreground"
         >
           <span className="min-w-[200px] sm:min-w-[400px] truncate w-full text-left">
             {value ?? 'Select a function...'}

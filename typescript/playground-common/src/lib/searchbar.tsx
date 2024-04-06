@@ -46,14 +46,14 @@ const SearchBarWithSelector: React.FC<{
   }, [handleKeyDown])
 
   return (
-    <div className="flex flex-col gap-4 p-4 bg-primary/90 text-primary-foreground">
+    <div className="flex flex-col gap-4 p-4 bg-background text-foreground">
       <Input
         placeholder="Search..."
         value={searchTerm}
         onChange={(e) => setSearchTerm(e.target.value)}
         // Additional TailwindCSS classes can be applied if necessary
       />
-      <div className="flex flex-col gap-2 overflow-x-hidden overflow-y-scroll max-h-96">
+      <div className="flex flex-col gap-2 overflow-x-hidden overflow-y-auto max-h-96">
         {filteredOptions.length === 0 ? (
           <div>No options found</div>
         ) : (
@@ -63,7 +63,7 @@ const SearchBarWithSelector: React.FC<{
             <div
               key={option.value}
               className={cn(
-                'cursor-pointer',
+                'cursor-pointer w-full',
                 'py-0.5 px-1 rounded-md',
                 highlightedIndex === index ? 'bg-secondary text-secondary-foreground' : '',
               )}

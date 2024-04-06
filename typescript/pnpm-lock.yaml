@@ -139,6 +139,9 @@ importers:
       next:
         specifier: 14.1.4
         version: 14.1.4(react-dom@18.2.0)(react@18.2.0)
+      next-themes:
+        specifier: ^0.3.0
+        version: 0.3.0(react-dom@18.2.0)(react@18.2.0)
       react:
         specifier: ^18
         version: 18.2.0
@@ -161,6 +164,9 @@ importers:
         specifier: ^3.22.4
         version: 3.22.4
     devDependencies:
+      '@githubocto/tailwind-vscode':
+        specifier: ^1.0.5
+        version: 1.0.5(tailwindcss@3.4.1)
       '@types/node':
         specifier: ^20
         version: 20.4.9
@@ -287,6 +293,9 @@ importers:
       react-error-boundary:
         specifier: ^4.0.11
         version: 4.0.11(react@18.2.0)
+      react-resizable-panels:
+        specifier: ^2.0.16
+        version: 2.0.16(react-dom@18.2.0)(react@18.2.0)
       react18-json-view:
         specifier: ^0.2.7
         version: 0.2.7(react@18.2.0)
@@ -8247,6 +8256,16 @@ packages:
   /natural-compare@1.4.0:
     resolution: {integrity: sha512-OWND8ei3VtNC9h7V60qff3SVobHr996CTwgxubgyQYEpg290h9J0buyECNNJexkFm5sOajh5G116RYA1c8ZMSw==}
     dev: true
+
+  /next-themes@0.3.0(react-dom@18.2.0)(react@18.2.0):
+    resolution: {integrity: sha512-/QHIrsYpd6Kfk7xakK4svpDI5mmXP0gfvCoJdGpZQ2TOrQZmsW0QxjaiLn8wbIKjtm4BTSqLoix4lxYYOnLJ/w==}
+    peerDependencies:
+      react: ^16.8 || ^17 || ^18
+      react-dom: ^16.8 || ^17 || ^18
+    dependencies:
+      react: 18.2.0
+      react-dom: 18.2.0(react@18.2.0)
+    dev: false
 
   /next@14.1.4(react-dom@18.2.0)(react@18.2.0):
     resolution: {integrity: sha512-1WTaXeSrUwlz/XcnhGTY7+8eiaFvdet5z9u3V2jb+Ek1vFo0VhHKSAIJvDWfQpttWjnyw14kBeq28TPq7bTeEQ==}

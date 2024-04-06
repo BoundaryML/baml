@@ -1,3 +1,5 @@
+@import './colors.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -5,13 +7,19 @@
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --foreground: 222.2 47.4% 11.2%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 222.2 47.4% 11.2%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 47.4% 11.2%;
 
     --primary: 222.2 47.4% 11.2%;
     --primary-foreground: 210 40% 98%;
@@ -19,50 +27,48 @@
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222.2 47.4% 11.2%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-
     --accent: 210 40% 96.1%;
     --accent-foreground: 222.2 47.4% 11.2%;
 
-    --destructive: 0 84.2% 60.2%;
+    --destructive: 0 100% 50%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --ring: 215 20.2% 65.1%;
 
     --radius: 0.5rem;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    --background: 224 71% 4%;
+    --foreground: 213 31% 91%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --muted: 223 47% 11%;
+    --muted-foreground: 215.4 16.3% 56.9%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
+    --accent: 216 34% 17%;
     --accent-foreground: 210 40% 98%;
 
-    --destructive: 0 62.8% 30.6%;
+    --popover: 224 71% 4%;
+    --popover-foreground: 215 20.2% 65.1%;
+
+    --border: 216 34% 17%;
+    --input: 216 34% 17%;
+
+    --card: 224 71% 4%;
+    --card-foreground: 213 31% 91%;
+
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 1.2%;
+
+    --secondary: 222.2 47.4% 11.2%;
+    --secondary-foreground: 210 40% 98%;
+
+    --destructive: 0 63% 31%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --ring: 216 34% 17%;
+
+    --radius: 0.5rem;
   }
 }
 
@@ -73,4 +79,202 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* controls dropdown styling on rsjf */
+.form-control {
+  @apply bg-vscode-input-background text-vscode-input-foreground rounded-sm;
+}
+
+.array-item {
+  @apply text-xs text-vscode-descriptionForeground w-full;
+}
+
+.field-array {
+  @apply w-full;
+}
+
+/* .checkbox {
+  @apply bg-vscode-checkbox-background text-vscode-checkbox-foreground flex flex-row items-center gap-x-1;
+} */
+
+.array-item-list {
+  @apply divide-y divide-vscode-textSeparator-foreground w-full;
+}
+
+/* .array-item-remove::after {
+  content: 'Remove';
+} */
+
+/* Standard ANSI colors */
+.ansi-black-fg {
+  color: var(--vscode-terminal-ansiBlack);
+}
+.ansi-red-fg {
+  color: var(--vscode-terminal-ansiRed);
+}
+.ansi-green-fg {
+  color: var(--vscode-terminal-ansiGreen);
+}
+.ansi-yellow-fg {
+  color: var(--vscode-terminal-ansiYellow);
+}
+.ansi-blue-fg {
+  color: var(--vscode-terminal-ansiBlue);
+}
+.ansi-magenta-fg {
+  color: var(--vscode-terminal-ansiMagenta);
+}
+.ansi-cyan-fg {
+  color: var(--vscode-terminal-ansiCyan);
+}
+.ansi-white-fg {
+  color: var(--vscode-terminal-ansiWhite);
+}
+
+.ansi-black-bg {
+  background-color: var(--vscode-terminal-ansiBlack);
+}
+.ansi-red-bg {
+  background-color: var(--vscode-terminal-ansiRed);
+}
+.ansi-green-bg {
+  background-color: var(--vscode-terminal-ansiGreen);
+}
+.ansi-yellow-bg {
+  background-color: var(--vscode-terminal-ansiYellow);
+}
+.ansi-blue-bg {
+  background-color: var(--vscode-terminal-ansiBlue);
+}
+.ansi-magenta-bg {
+  background-color: var(--vscode-terminal-ansiMagenta);
+}
+.ansi-cyan-bg {
+  background-color: var(--vscode-terminal-ansiCyan);
+}
+.ansi-white-bg {
+  background-color: var(--vscode-terminal-ansiWhite);
+}
+
+/* Bright ANSI colors */
+.ansi-bright-black-fg {
+  color: var(--vscode-terminal-ansiBrightBlack);
+}
+.ansi-bright-red-fg {
+  color: var(--vscode-terminal-ansiBrightRed);
+}
+.ansi-bright-green-fg {
+  color: var(--vscode-terminal-ansiBrightGreen);
+}
+.ansi-bright-yellow-fg {
+  color: var(--vscode-terminal-ansiBrightYellow);
+}
+.ansi-bright-blue-fg {
+  color: var(--vscode-terminal-ansiBrightBlue);
+}
+.ansi-bright-magenta-fg {
+  color: var(--vscode-terminal-ansiBrightMagenta);
+}
+.ansi-bright-cyan-fg {
+  color: var(--vscode-terminal-ansiBrightCyan);
+}
+.ansi-bright-white-fg {
+  color: var(--vscode-terminal-ansiBrightWhite);
+}
+
+.ansi-bright-black-bg {
+  background-color: var(--vscode-terminal-ansiBrightBlack);
+}
+.ansi-bright-red-bg {
+  background-color: var(--vscode-terminal-ansiBrightRed);
+}
+.ansi-bright-green-bg {
+  background-color: var(--vscode-terminal-ansiBrightGreen);
+}
+.ansi-bright-yellow-bg {
+  background-color: var(--vscode-terminal-ansiBrightYellow);
+}
+.ansi-bright-blue-bg {
+  background-color: var(--vscode-terminal-ansiBrightBlue);
+}
+.ansi-bright-magenta-bg {
+  background-color: var(--vscode-terminal-ansiBrightMagenta);
+}
+.ansi-bright-cyan-bg {
+  background-color: var(--vscode-terminal-ansiBrightCyan);
+}
+.ansi-bright-white-bg {
+  background-color: var(--vscode-terminal-ansiBrightWhite);
+}
+
+/* Dimmed ANSI colors using opacity */
+.ansi-dim-black {
+  color: var(--vscode-terminal-ansiBlack);
+  opacity: 0.3;
+}
+.ansi-dim-red {
+  color: var(--vscode-terminal-ansiRed);
+  opacity: 0.3;
+}
+.ansi-dim-green {
+  color: var(--vscode-terminal-ansiGreen);
+  opacity: 0.3;
+}
+.ansi-dim-yellow {
+  color: var(--vscode-terminal-ansiYellow);
+  opacity: 0.3;
+}
+.ansi-dim-blue {
+  color: var(--vscode-terminal-ansiBlue);
+  opacity: 0.3;
+}
+.ansi-dim-magenta {
+  color: var(--vscode-terminal-ansiMagenta);
+  opacity: 0.3;
+}
+.ansi-dim-cyan {
+  color: var(--vscode-terminal-ansiCyan);
+  opacity: 0.3;
+}
+.ansi-dim-white {
+  color: var(--vscode-terminal-ansiWhite);
+  opacity: 0.3;
+}
+
+.ansi-dim {
+  opacity: 0.4;
+}
+
+.ansi-dim-black-bg {
+  background-color: var(--vscode-terminal-ansiBlack);
+  opacity: 0.3;
+}
+.ansi-dim-red-bg {
+  background-color: var(--vscode-terminal-ansiRed);
+  opacity: 0.3;
+}
+.ansi-dim-green-bg {
+  background-color: var(--vscode-terminal-ansiGreen);
+  opacity: 0.3;
+}
+.ansi-dim-yellow-bg {
+  background-color: var(--vscode-terminal-ansiYellow);
+  opacity: 0.3;
+}
+.ansi-dim-blue-bg {
+  background-color: var(--vscode-terminal-ansiBlue);
+  opacity: 0.3;
+}
+.ansi-dim-magenta-bg {
+  background-color: var(--vscode-terminal-ansiMagenta);
+  opacity: 0.3;
+}
+.ansi-dim-cyan-bg {
+  background-color: var(--vscode-terminal-ansiCyan);
+  opacity: 0.3;
+}
+.ansi-dim-white-bg {
+  background-color: var(--vscode-terminal-ansiWhite);
+  opacity: 0.3;
 }

@@ -4,9 +4,10 @@ import CodeMirror, { EditorView, useCodeMirror } from '@uiw/react-codemirror'
 import { rust } from '@codemirror/lang-rust'
 import { vscodeDark } from '@uiw/codemirror-theme-vscode'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ASTProvider, FunctionSelector, FunctionPanel, CustomErrorBoundary } from '@baml/playground-common'
 import { Button } from '@/components/ui/button'
+// import '../colors.css'
 
 const extensions = [rust(), EditorView.lineWrapping]
 const defaultMainBaml = `
@@ -57,27 +58,80 @@ impl<llm, ExtractVerbs> version1 {
 `
 
 export const Editor = () => {
+  const [value, setValue] = useState(defaultMainBaml)
+
+  useEffect(() => {
+    const handleKeyDown = (event: any) => {
+      // Check if either Ctrl+S or Command+S is pressed
+      if ((event.ctrlKey || event.metaKey) && (event.key === 's' || event.keyCode === 83)) {
+        event.preventDefault()
+        // Place your custom save logic here
+        console.log('Custom save action triggered')
+      }
+    }
+
+    // Add the event listener
+    window.addEventListener('keydown', handleKeyDown)
+
+    // Remove the event listener on cleanup
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [])
+
+  useEffect(() => {
+    const lintWithWasm = async () => {
+      const lint = await import('@gloo-ai/baml-schema-wasm-web').then((m) => m.lint)
+      const linterInput: LinterInput = {
+        root_path: 'project/baml_src',
+        files: [
+          {
+            path: 'path/main.baml',
+            content: value,
+          },
+        ],
+      }
+      console.info(`Linting ${linterInput.files.length} files in ${linterInput.root_path}`)
+      const res = lint(JSON.stringify(linterInput))
+      const parsedRes = JSON.parse(res)
+      console.log(`res ${JSON.stringify(res, null, 2)}`)
+      const BamlDB = new Map<string, any>()
+      // res is of type ParserDB
+      BamlDB.set('baml_src', res)
+
+      if (parsedRes.ok) {
+        window.postMessage({
+          command: 'setDb',
+          content: [['project/baml_src', parsedRes.response]],
+        })
+      }
+    }
+    lintWithWasm()
+  }, [value])
+
   return (
     <>
-      <ResizablePanelGroup className="min-h-[200px] w-full rounded-lg border" direction="horizontal">
+      <ResizablePanelGroup className="min-h-[200px] w-full rounded-lg border overflow-clip" direction="horizontal">
         <ResizablePanel defaultSize={50}>
           <div className="flex w-full h-full">
             <CodeMirror
-              value={defaultMainBaml}
+              value={value}
               extensions={extensions}
               theme={vscodeDark}
               height="100%"
               width="100%"
               maxWidth="100%"
               style={{ width: '100%', height: '100%' }}
+              onChange={async (val, viewUpdate) => {
+                setValue(val)
+              }}
             />
-            {/* <div ref={editor} />; */}
           </div>
         </ResizablePanel>
         <ResizableHandle withHandle />
 
         <ResizablePanel defaultSize={50}>
-          <div className="flex items-center justify-center h-full">
+          <div className="flex flex-row h-full ">
             <PlaygroundView />
           </div>
         </ResizablePanel>
@@ -118,25 +172,6 @@ const PlaygroundView = () => {
   return (
     <>
       <CustomErrorBoundary>
-        <Button
-          onClick={async () => {
-            const lint = await import('@gloo-ai/baml-schema-wasm-web').then((m) => m.lint)
-            const linterInput: LinterInput = {
-              root_path: 'baml_src',
-              files: [
-                {
-                  path: 'path/main.baml',
-                  content: defaultMainBaml,
-                },
-              ],
-            }
-            console.info(`Linting ${linterInput.files.length} files in ${linterInput.root_path}`)
-            const res = lint(JSON.stringify(linterInput))
-            console.log(`res ${JSON.stringify(res, null, 2)}`)
-          }}
-        >
-          Lint things
-        </Button>
         <ASTProvider>
           <div className="absolute z-10 flex flex-col items-end gap-1 right-1 top-2 text-end">
             {/* <TestToggle /> */}
