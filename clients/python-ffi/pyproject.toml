@@ -1,3 +1,10 @@
+[project]
+name = "baml_ffi"
+version = "0.1.0"
+description = "BAML python bindings (pyproject.toml)"
+authors = ["Boundary <contact@boundaryml.com>"]
+readme = "README.md"
+
 [build-system]
 requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
