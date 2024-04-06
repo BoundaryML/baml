@@ -2,7 +2,6 @@
 name = "baml_ffi"
 version = "0.1.0"
 description = "BAML python bindings (pyproject.toml)"
-authors = ["Boundary <contact@boundaryml.com>"]
 readme = "README.md"
 
 [build-system]
