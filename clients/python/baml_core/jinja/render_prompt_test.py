@@ -5,7 +5,8 @@ from baml_core import render_prompt, RenderData
 
 def test_success() -> None:
     ctx = RenderData.ctx(
-        client=RenderData.client(name="gpt4", provider="openai"), output_schema="",
+        client=RenderData.client(name="gpt4", provider="openai"),
+        output_schema="",
         env={"LANG": "en_US.UTF-8"},
     )
     rendered = render_prompt(

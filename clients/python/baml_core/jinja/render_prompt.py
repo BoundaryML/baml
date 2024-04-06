@@ -1,9 +1,9 @@
-from baml_pyo3 import RenderData
-import baml_pyo3
+from baml_core_ffi import RenderData
+import baml_core_ffi
 
 
 def render_prompt(prompt_template: str, args: RenderData) -> str:
-    return baml_pyo3.render_prompt(prompt_template, args)
+    return baml_core_ffi.render_prompt(prompt_template, args)
 
 
 __all__ = ["render_prompt", "RenderData"]
