@@ -47,7 +47,7 @@ jobs:
         with:
           target: ${{ matrix._.target }}
           command: build
-          args: --release --out dist --manifest-path engine/baml-pyo3/Cargo.toml
+          args: --release --out dist --manifest-path clients/python-ffi/Cargo.toml
           sccache: "true"
           manylinux: ${{ matrix._.runs_on == 'ubuntu-latest' && 'auto' || null }}
 
