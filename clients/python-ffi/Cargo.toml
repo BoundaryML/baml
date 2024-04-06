@@ -7,7 +7,7 @@ description = "BAML python bindings (Cargo.toml)"
 license-file = "LICENSE"
 
 [lib]
-name = "baml_ffi"
+name = "baml_core_ffi"
 crate-type = ["cdylib"]
 
 [dependencies]

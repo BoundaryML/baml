@@ -1,5 +1,5 @@
 [project]
-name = "baml_ffi"
+name = "baml_core_ffi"
 version = "0.1.0"
 description = "BAML python bindings (pyproject.toml)"
 readme = "README.md"
