@@ -12,48 +12,48 @@ jobs:
   build:
     strategy:
       matrix:
-        - runs_on: ubuntu-latest
-          target: x86_64
-          name: x86_64-unknown-linux-gnu
+        _:
+          - runs_on: ubuntu-latest
+            target: x86_64
+            name: x86_64-unknown-linux-gnu
 
-        - runs_on: ubuntu-latest
-          platform: linux
-          target: aarch64
-          name: aarch64-unknown-linux-gnu
+          - runs_on: ubuntu-latest
+            target: aarch64
+            name: aarch64-unknown-linux-gnu
 
-        - runs_on: macos-latest
-          target: x86_64
-          name: x86_64-apple-darwin
+          - runs_on: macos-latest
+            target: x86_64
+            name: x86_64-apple-darwin
 
-        - runs_on: macos-latest
-          target: aarch64
-          name: aarch64-apple-darwin
+          - runs_on: macos-latest
+            target: aarch64
+            name: aarch64-apple-darwin
 
-        - runs_on: windows-latest
-          target: x64
-          name: x86_64-pc-windows-msvc
+          - runs_on: windows-latest
+            target: x64
+            name: x86_64-pc-windows-msvc
 
-    runs-on: ${{ matrix.runs_on }}
+    runs-on: ${{ matrix._.runs_on }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.10"
-          architecture: ${{ matrix.runs_on == 'windows-latest' ? 'x64' : null }}
+          architecture: ${{ matrix._.runs_on == 'windows-latest' && 'x64' || null }}
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
-          target: ${{ matrix.target }}
+          target: ${{ matrix._.target }}
           command: build
           args: --release --out dist --manifest-path engine/baml-pyo3/Cargo.toml
           sccache: "true"
-          manylinux: ${{ matrix.platform == "linux" ? "auto" : null }}
+          manylinux: ${{ matrix._.runs_on == 'ubuntu-latest' && 'auto' || null }}
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.name }}
+          name: wheels-${{ matrix._.name }}
           path: dist
 
   #release:
