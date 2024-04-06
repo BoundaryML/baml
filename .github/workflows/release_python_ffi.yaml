@@ -1,4 +1,4 @@
-name: Release: clients/python-ffi
+name: Release clients/python-ffi
 
 on:
   push:
