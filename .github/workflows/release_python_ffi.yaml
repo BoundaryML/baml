@@ -55,6 +55,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: wheels-${{ matrix._.name }}
+          path: dist
 
   publish:
     runs-on: ubuntu-latest
@@ -62,7 +63,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
 
-      - run: mkdir dist && mv wheels-*/* dist
+      - run: cd dist && mv wheels-*/* .
 
       - name: Publish package to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
