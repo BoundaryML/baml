@@ -1,9 +1,9 @@
-name: maturin
+name: Release: clients/python-ffi
 
 on:
   push:
     branches:
-      - sam/maturin
+      - sam/maturin2
 
 permissions:
   contents: read
