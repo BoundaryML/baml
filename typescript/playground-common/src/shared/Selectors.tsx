@@ -29,11 +29,9 @@ const FunctionDropdown: React.FC = () => {
         <Button
           variant="ghost"
           aria-expanded={open}
-          className="w-[250px] sm:w-[450px] justify-between flex hover:bg-secondary hover:text-foreground"
+          className="max-w-[300px] justify-between flex hover:bg-secondary hover:text-foreground"
         >
-          <span className="min-w-[200px] sm:min-w-[400px] truncate w-full text-left">
-            {value ?? 'Select a function...'}
-          </span>
+          <span className="w-full text-left truncate">{value ?? 'Select a function...'}</span>
           <ChevronsUpDown className="w-4 h-4 ml-2 opacity-50 shrink-0" />
         </Button>
       </PopoverTrigger>
