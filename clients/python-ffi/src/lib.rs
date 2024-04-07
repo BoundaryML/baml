@@ -247,7 +247,7 @@ fn render_prompt(template: String, context: RenderData) -> PyResult<String> {
 }
 
 #[pymodule]
-fn baml_pyo3(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn baml_core_ffi(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(render_prompt, m)?)?;
     m.add_class::<RenderData>()?;
     m.add_class::<RenderData_Client>()?;

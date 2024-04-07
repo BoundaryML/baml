@@ -11,11 +11,11 @@
       "path": "typescript"
     },
     {
-      "name": "Python Client",
+      "name": "clients/python (Python client)",
       "path": "clients/python"
     },
     {
-      "name": "TS Client",
+      "name": "clients/ts (TS client)",
       "path": "clients/ts"
     },
     {
