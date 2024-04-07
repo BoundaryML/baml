@@ -1,8 +1,6 @@
 use super::{
     helpers::{parsing_catch_all, Pair},
-    parse_attribute::parse_attribute,
     parse_comments::*,
-    parse_config::parse_key_value,
     parse_expression::parse_raw_string,
     parse_identifier::parse_identifier,
     Rule,
@@ -17,7 +15,7 @@ pub(crate) fn parse_template_string(
 ) -> Result<TemplateString, DatamodelError> {
     let pair_span = pair.as_span();
     let mut name: Option<Identifier> = None;
-    let mut attributes: Vec<Attribute> = Vec::new();
+    let attributes: Vec<Attribute> = Vec::new();
     let mut input = None;
     let mut value = None;
 

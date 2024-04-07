@@ -1,5 +1,10 @@
-use anyhow;
-use log;
+mod evaluate_type;
+mod get_vars;
+
+use std::collections::HashMap;
+
+use anyhow::Result;
+use get_vars::Dependencies;
 use minijinja;
 use serde_json;
 
@@ -7,11 +12,16 @@ struct RenderError {
     error: minijinja::Error,
 }
 
-fn render_minijinja(template: &str, json: &serde_json::Value) -> Result<String, minijinja::Error> {
+fn get_env<'a>() -> minijinja::Environment<'a> {
     let mut env = minijinja::Environment::new();
     env.set_debug(true);
     env.set_trim_blocks(true);
     env.set_lstrip_blocks(true);
+    env
+}
+
+fn render_minijinja(template: &str, json: &serde_json::Value) -> Result<String, minijinja::Error> {
+    let mut env = get_env();
 
     env.add_template("prompt", template)?;
     let tmpl = env.get_template("prompt")?;
@@ -41,10 +51,13 @@ pub fn render_template(template: &str, json: &serde_json::Value) -> anyhow::Resu
 
 #[cfg(test)]
 mod tests {
+
+    use crate::get_vars::{FunctionCall, ParameterizedValue};
+
     use super::*;
 
     use env_logger;
-    use std::sync::Once;
+    use std::{collections::BTreeMap, sync::Once, vec};
 
     static INIT: Once = Once::new();
 

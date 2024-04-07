@@ -385,10 +385,11 @@ impl Types {
 }
 
 fn visit_template_string<'db>(
-    _idx: ast::TemplateStringId,
-    _template_string: &'db ast::TemplateString,
-    _ctx: &mut Context<'db>,
+    idx: ast::TemplateStringId,
+    template_string: &'db ast::TemplateString,
+    ctx: &mut Context<'db>,
 ) {
+    // TODO: @hellovai validate the template string.
 }
 
 fn visit_enum<'db>(_enm: &'db ast::Enum, _ctx: &mut Context<'db>) {}
