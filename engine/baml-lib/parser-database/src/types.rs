@@ -314,8 +314,11 @@ pub struct FunctionType {
 
 #[derive(Debug, Clone)]
 pub struct TemplateStringProperties {
-    pub inputs: Vec<(String, Span)>,
-    pub uses: Vec<ast::TemplateStringId>,
+    // Not all template strings have names (e.g. function prompt)
+    pub name: Option<String>,
+    pub type_dependencies: HashSet<String>,
+    /// This is dedented and trimmed.
+    pub template: String,
 }
 
 #[derive(Debug, Default)]
@@ -389,7 +392,24 @@ fn visit_template_string<'db>(
     template_string: &'db ast::TemplateString,
     ctx: &mut Context<'db>,
 ) {
-    // TODO: @hellovai validate the template string.
+    ctx.types.template_strings.insert(
+        either::Left(idx),
+        TemplateStringProperties {
+            name: Some(template_string.name().to_string()),
+            type_dependencies: template_string
+                .input()
+                .map(|f| f.flat_idns())
+                .unwrap_or_default()
+                .iter()
+                .map(|f| f.name().to_string())
+                .collect::<HashSet<_>>(),
+            template: template_string
+                .value()
+                .as_raw_string_value()
+                .map(|v| v.value().to_string())
+                .unwrap(),
+        },
+    );
 }
 
 fn visit_enum<'db>(_enm: &'db ast::Enum, _ctx: &mut Context<'db>) {}
@@ -467,9 +487,18 @@ fn visit_function<'db>(idx: FunctionId, function: &'db ast::Function, ctx: &mut 
                 idx,
                 FunctionType {
                     default_impl: None,
-                    dependencies: (input_deps, output_deps),
+                    dependencies: (input_deps.clone(), output_deps),
                     prompt: Some(prompt.clone()),
                     client: Some(client),
+                },
+            );
+
+            ctx.types.template_strings.insert(
+                either::Right(idx),
+                TemplateStringProperties {
+                    name: None,
+                    type_dependencies: input_deps,
+                    template: prompt.value().to_string(),
                 },
             );
         }

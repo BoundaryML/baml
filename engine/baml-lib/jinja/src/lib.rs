@@ -1,16 +1,11 @@
 mod evaluate_type;
 mod get_vars;
 
-use std::collections::HashMap;
-
-use anyhow::Result;
-use get_vars::Dependencies;
+use evaluate_type::get_variable_types;
 use minijinja;
 use serde_json;
 
-struct RenderError {
-    error: minijinja::Error,
-}
+pub use evaluate_type::{PredefinedTypes, Type, TypeError};
 
 fn get_env<'a>() -> minijinja::Environment<'a> {
     let mut env = minijinja::Environment::new();
@@ -18,6 +13,51 @@ fn get_env<'a>() -> minijinja::Environment<'a> {
     env.set_trim_blocks(true);
     env.set_lstrip_blocks(true);
     env
+}
+
+#[derive(Debug)]
+pub struct ValidationError {
+    pub errors: Vec<TypeError>,
+    pub parsing_errors: Option<minijinja::Error>,
+}
+
+impl std::fmt::Display for ValidationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        for err in &self.errors {
+            writeln!(f, "{}", err)?;
+        }
+        Ok(())
+    }
+}
+
+impl std::error::Error for ValidationError {}
+
+pub fn validate_template(
+    name: &str,
+    template: &str,
+    types: &mut PredefinedTypes,
+) -> Result<(), ValidationError> {
+    let parsed =
+        match minijinja::machinery::parse(template, name, Default::default(), Default::default()) {
+            Ok(parsed) => parsed,
+            Err(err) => {
+                return Err(ValidationError {
+                    errors: vec![],
+                    parsing_errors: Some(err),
+                });
+            }
+        };
+
+    let errs = get_variable_types(&parsed, types);
+
+    if errs.is_empty() {
+        Ok(())
+    } else {
+        Err(ValidationError {
+            errors: errs,
+            parsing_errors: None,
+        })
+    }
 }
 
 fn render_minijinja(template: &str, json: &serde_json::Value) -> Result<String, minijinja::Error> {
@@ -52,12 +92,10 @@ pub fn render_template(template: &str, json: &serde_json::Value) -> anyhow::Resu
 #[cfg(test)]
 mod tests {
 
-    use crate::get_vars::{FunctionCall, ParameterizedValue};
-
     use super::*;
 
     use env_logger;
-    use std::{collections::BTreeMap, sync::Once, vec};
+    use std::sync::Once;
 
     static INIT: Once = Once::new();
 

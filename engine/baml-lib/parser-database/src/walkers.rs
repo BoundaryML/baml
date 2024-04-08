@@ -12,6 +12,7 @@ mod configuration;
 mod r#enum;
 mod field;
 mod function;
+mod template_string;
 mod variants;
 
 pub use client::*;
@@ -23,6 +24,8 @@ use internal_baml_schema_ast::ast::{Identifier, TopId, WithName};
 pub use r#class::*;
 pub use r#enum::*;
 pub use variants::*;
+
+use self::template_string::TemplateStringWalker;
 
 /// A generic walker. Only walkers intantiated with a concrete ID type (`I`) are useful.
 #[derive(Clone, Copy)]
@@ -198,6 +201,17 @@ impl<'db> crate::ParserDatabase {
         self.ast()
             .iter_tops()
             .filter_map(|(top_id, _)| top_id.as_class_id())
+            .map(move |top_id| Walker {
+                db: self,
+                id: top_id,
+            })
+    }
+
+    /// Walk all template strings in the schema.
+    pub fn walk_templates(&self) -> impl Iterator<Item = TemplateStringWalker<'_>> {
+        self.ast()
+            .iter_tops()
+            .filter_map(|(top_id, _)| top_id.as_template_string_id())
             .map(move |top_id| Walker {
                 db: self,
                 id: top_id,

@@ -136,7 +136,7 @@ impl PredefinedTypes {
         Self {
             functions: HashMap::new(),
             classes: HashMap::from([(
-                "LoopVar".into(),
+                "jinja::loop".into(),
                 HashMap::from([
                     ("index".into(), Type::Int),
                     ("index0".into(), Type::Int),
@@ -317,7 +317,12 @@ impl PredefinedTypes {
         if val.is_none() {
             return (
                 Type::Unknown,
-                vec![TypeError::new_invalid_type(&expr.expr, func, span)],
+                vec![TypeError::new_invalid_type(
+                    &expr.expr,
+                    &Type::Unknown,
+                    func,
+                    span,
+                )],
             );
         }
         let (ret, args) = val.unwrap();

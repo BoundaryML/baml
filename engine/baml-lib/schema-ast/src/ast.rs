@@ -274,6 +274,13 @@ impl TopId {
         }
     }
 
+    pub fn as_template_string_id(self) -> Option<TemplateStringId> {
+        match self {
+            TopId::TemplateString(id) => Some(id),
+            _ => None,
+        }
+    }
+
     pub fn as_retry_policy_id(self) -> Option<ConfigurationId> {
         match self {
             TopId::Config((id, "retry_policy")) => Some(id),

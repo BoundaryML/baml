@@ -102,6 +102,10 @@ impl RawString {
         &self.inner_value
     }
 
+    pub fn raw_value(&self) -> &str {
+        &self.raw_value
+    }
+
     pub fn to_raw_span(&self, span: pest::Span<'_>) -> Span {
         let start_idx = span.start();
         let end_idx = span.end();

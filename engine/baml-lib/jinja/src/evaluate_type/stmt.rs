@@ -24,21 +24,18 @@ fn track_walk<'a>(node: &ast::Stmt<'a>, state: &mut PredefinedTypes) {
                 state.errors_mut().extend(iter_type.err().unwrap());
                 Type::Unknown
             } else {
-                iter_type.unwrap()
+                match iter_type.unwrap() {
+                    Type::List(t) => *t,
+                    Type::Map(k, _) => *k,
+                    _ => Type::Unknown,
+                }
             };
 
             let filter_type = stmt.filter_expr.as_ref().map(|x| evaluate_type(x, state));
 
             state.start_scope();
             match &stmt.target {
-                ast::Expr::Var(var) => state.add_variable(
-                    var.id,
-                    match iter_type {
-                        Type::List(t) => *t,
-                        Type::Map(k, _) => *k,
-                        _ => Type::Unknown,
-                    },
-                ),
+                ast::Expr::Var(var) => state.add_variable(var.id, iter_type),
                 ast::Expr::List(list) => match iter_type {
                     Type::List(t) => {
                         list.items.iter().for_each(|x| {
@@ -73,13 +70,18 @@ fn track_walk<'a>(node: &ast::Stmt<'a>, state: &mut PredefinedTypes) {
                     }
                     _ => {}
                 },
-                _ => {}
+                _ => {
+                    state.errors_mut().push(TypeError {
+                        message: "Not a sequence".to_string(),
+                        span: stmt.span(),
+                    });
+                }
             }
 
             // We need to set some variables here
 
             state.start_scope();
-            state.add_variable("loop", Type::ClassRef("LoopVar".into()));
+            state.add_variable("loop", Type::ClassRef("jinja::loop".into()));
             stmt.body.iter().for_each(|x| track_walk(x, state));
             state.end_scope();
             state.start_scope();

@@ -83,8 +83,7 @@ fn tracker_visit_expr<'a>(
             "items" => {
                 let inner = tracker_visit_expr(expr.expr.as_ref().unwrap(), state, types);
                 match inner {
-                    Type::Map(k, v) => Type::Tuple(vec![*k, *v]),
-                    Type::List(t) => *t,
+                    Type::Map(k, v) => Type::List(Box::new(Type::Tuple(vec![*k, *v]))),
                     _ => Type::Unknown,
                 }
             }
@@ -107,9 +106,10 @@ fn tracker_visit_expr<'a>(
                     }
                     t
                 }
-                _ => {
+                t => {
                     state.errors.push(TypeError::new_invalid_type(
                         &expr.expr,
+                        t,
                         "class",
                         expr.span(),
                     ));
@@ -146,9 +146,10 @@ fn tracker_visit_expr<'a>(
                     state.errors.extend(res.1);
                     res.0
                 }
-                _ => {
+                t => {
                     state.errors.push(TypeError::new_invalid_type(
                         &expr.expr,
+                        &t,
                         "function",
                         expr.span(),
                     ));

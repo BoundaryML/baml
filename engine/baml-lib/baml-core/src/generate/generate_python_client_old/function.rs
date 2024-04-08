@@ -183,7 +183,7 @@ impl WithWritePythonString for FunctionWalker<'_> {
             let json = json!({
                 "name": "default",
                 "function": self.json(fc.last_file()),
-                "prompt": self.jinja_prompt().value().replace(r#"""""#, r#"\"\"\""#),
+                "prompt": self.jinja_prompt().replace(r#"""""#, r#"\"\"\""#),
                 "client": client.name(),
             });
 

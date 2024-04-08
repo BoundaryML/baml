@@ -7,22 +7,39 @@ mod types;
 
 use std::{collections::HashMap, fmt::Debug};
 
-use minijinja::machinery::{
-    ast::{self, Expr},
-    Span,
-};
+use minijinja::machinery::{ast::Expr, Span};
 
-use pretty_print::pretty_print;
+pub use self::types::Type;
 
-use self::types::{PredefinedTypes, Type};
+pub use self::types::PredefinedTypes;
+
+pub use self::stmt::get_variable_types;
 
 #[derive(Debug, Clone)]
-struct TypeError {
+pub struct TypeError {
     message: String,
     span: Span,
 }
 
+// Implementing the Display trait for TypeError.
+impl std::fmt::Display for TypeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{} at {:?}", self.message, self.span)
+    }
+}
+
+// Implementing the Error trait for TypeError.
+impl std::error::Error for TypeError {}
+
 impl TypeError {
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+
+    pub fn span(&self) -> Span {
+        self.span
+    }
+
     fn new_unresolved_variable(name: &str, span: Span) -> Self {
         Self {
             message: format!("Variable '{}' is not defined", name),
@@ -74,11 +91,12 @@ impl TypeError {
         }
     }
 
-    fn new_invalid_type(expr: &Expr, expected: &str, span: Span) -> Self {
+    fn new_invalid_type(expr: &Expr, got: &Type, expected: &str, span: Span) -> Self {
         Self {
             message: format!(
-                "'{}' is not a {}",
+                "'{}' is a {}, expected {}",
                 pretty_print::pretty_print(expr),
+                got.name(),
                 expected
             ),
             span,

@@ -151,9 +151,11 @@ impl<'db> FunctionWalker<'db> {
     }
 
     /// The prompt for the function
-    pub fn jinja_prompt(self) -> &'db RawString {
+    pub fn jinja_prompt(self) -> &'db str {
         assert_eq!(self.id.0, true, "Only new functions have prompts");
-        self.metadata().prompt.as_ref().unwrap()
+        self.db.types.template_strings[&Either::Right(self.function_id())]
+            .template
+            .as_str()
     }
 
     /// The client for the function
@@ -168,11 +170,6 @@ impl<'db> FunctionWalker<'db> {
 pub type ArgWalker<'db> = super::Walker<'db, (ast::FunctionId, bool, FuncArguementId)>;
 
 impl<'db> ArgWalker<'db> {
-    /// The name of the function.
-    pub fn name(self) -> &'db str {
-        self.ast_function().name()
-    }
-
     /// The ID of the function in the db
     pub fn function_id(self) -> ast::FunctionId {
         self.id.0
@@ -198,10 +195,14 @@ impl<'db> ArgWalker<'db> {
         }
     }
 
+    /// The name of the type.
+    pub fn field_type(self) -> &'db ast::FieldType {
+        &self.ast_arg().1.field_type
+    }
+
     /// The name of the function.
     pub fn is_optional(self) -> bool {
-        let (_, arg) = self.ast_arg();
-        arg.field_type.is_nullable()
+        self.field_type().is_nullable()
     }
 
     /// The name of the function.
@@ -226,6 +227,12 @@ impl<'db> ArgWalker<'db> {
                 Some(Either::Right(_enm)) => None,
                 None => None,
             })
+    }
+}
+
+impl WithIdentifier for ArgWalker<'_> {
+    fn identifier(&self) -> &ast::Identifier {
+        self.ast_arg().0.unwrap()
     }
 }
 

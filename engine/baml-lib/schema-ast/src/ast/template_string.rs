@@ -49,6 +49,10 @@ impl TemplateString {
     pub fn value(&self) -> &Expression {
         &self.value
     }
+
+    pub fn input(&self) -> Option<&FunctionArgs> {
+        self.input.as_ref()
+    }
 }
 
 impl WithIdentifier for TemplateString {
