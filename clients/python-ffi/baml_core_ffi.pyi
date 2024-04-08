@@ -1,8 +1,10 @@
-from typing import Any, Dict
+from typing import Any, Dict, List, Tuple
 
 class RenderData_Client: ...
 
 class RenderData_Context: ...
+
+class TemplateStringMacro: ...
 
 class RenderData:
     def __new__(cls,
@@ -19,5 +21,8 @@ class RenderData:
 
     @staticmethod
     def client(name: str, provider: str) -> RenderData_Client: ...
+
+    @staticmethod
+    def template_string_macro(name: str, args: List[Tuple[str, str]], template: str) -> TemplateStringMacro: ...
 
 def render_prompt(prompt_template: str, render_context: RenderData) -> str: ...

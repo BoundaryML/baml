@@ -7,7 +7,7 @@ use pyo3::prelude::{
 use pyo3::types::{PyAny, PyDict, PyList};
 use pyo3::{PyObject, Python};
 use pythonize::depythonize_bound;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
 
@@ -150,12 +150,20 @@ impl RenderData_Context {
     }
 }
 
+#[derive(Clone, Debug, Deserialize)]
+#[pyclass]
+struct TemplateStringMacro {
+    name: String,
+    args: Vec<(String, String)>,
+    template: String,
+}
+
 #[derive(Clone, Debug)]
 #[pyclass]
 struct RenderData {
     args: PyObject,
     ctx: RenderData_Context,
-    template_string_vars: HashMap<String, String>,
+    template_string_macros: Vec<TemplateStringMacro>,
 }
 
 #[pymethods]
@@ -164,13 +172,13 @@ impl RenderData {
     fn new(
         args: PyObject,
         ctx: RenderData_Context,
-        template_string_vars: PyObject,
+        template_string_macros: PyObject,
     ) -> PyResult<Self> {
         Python::with_gil(|py| {
             Ok(RenderData {
                 args: args,
                 ctx: ctx,
-                template_string_vars: depythonize_bound(template_string_vars.into_bound(py))?,
+                template_string_macros: depythonize_bound(template_string_macros.into_bound(py))?,
             })
         })
     }
@@ -197,6 +205,35 @@ impl RenderData {
             provider: provider,
         }
     }
+
+    #[staticmethod]
+    fn template_string_macro(
+        name: String,
+        args: PyObject,
+        template: String,
+    ) -> PyResult<TemplateStringMacro> {
+        Python::with_gil(|py| {
+            Ok(TemplateStringMacro {
+                name: name,
+                args: args.extract(py)?,
+                template: template,
+            })
+        })
+    }
+}
+
+#[pyclass]
+struct RenderedChatMessage {
+    #[pyo3(get)]
+    role: String,
+
+    #[pyo3(get)]
+    message: String,
+}
+
+enum RenderedPrompt {
+    Completion { message: String },
+    Chat { messages: Vec<RenderedChatMessage> },
 }
 
 #[pyfunction]
