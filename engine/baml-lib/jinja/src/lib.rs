@@ -87,7 +87,7 @@ fn render_minijinja(
     args: serde_json::Map<String, serde_json::Value>,
     ctx: RenderContext,
     template_string_macros: Vec<TemplateStringMacro>,
-) -> Result<String, minijinja::Error> {
+) -> Result<RenderedPrompt, minijinja::Error> {
     let mut env = get_env();
 
     let template = template_string_macros
@@ -111,9 +111,44 @@ fn render_minijinja(
 
     env.add_template("prompt", &template)?;
     env.add_global("ctx", minijinja::Value::from_serializable(&ctx));
+    env.add_global(
+        "_",
+        context! {
+            chat => minijinja::Value::from_function(|role: String| {
+                format!("BAML_CHAT_ROLE_MAGIC_STRING_DELIMITER:start:{role}:end:BAML_CHAT_ROLE_MAGIC_STRING_DELIMITER")
+            })
+        },
+    );
     let tmpl = env.get_template("prompt")?;
 
-    tmpl.render(minijinja::Value::from_serializable(&args))
+    let rendered = tmpl.render(minijinja::Value::from_serializable(&args))?;
+
+    if !rendered.contains("BAML_CHAT_ROLE_MAGIC_STRING_DELIMITER") {
+        return Ok(RenderedPrompt::Completion(rendered));
+    }
+
+    let mut chat_messages = vec![];
+    let mut role = "system";
+
+    for chunk in rendered
+        .trim()
+        .split("BAML_CHAT_ROLE_MAGIC_STRING_DELIMITER")
+    {
+        if chunk.starts_with(":start:") && chunk.ends_with(":end:") {
+            role = chunk
+                .strip_prefix(":start:")
+                .unwrap_or(chunk)
+                .strip_suffix(":end:")
+                .unwrap_or(chunk);
+        } else {
+            chat_messages.push(RenderedChatMessage {
+                role: role.to_string(),
+                message: chunk.trim().to_string(),
+            });
+        }
+    }
+
+    Ok(RenderedPrompt::Chat(chat_messages))
 }
 
 #[derive(Debug, PartialEq)]
@@ -137,11 +172,7 @@ pub fn render_template(
     let rendered = render_minijinja(template, args, ctx, template_string_macros);
 
     match rendered {
-        Ok(s) => Ok(RenderedPrompt::Completion(s)),
-        // Ok(s) => Ok(RenderedPrompt::Chat(vec![RenderedChatMessage {
-        //     role: "system".to_string(),
-        //     message: s,
-        // }])),
+        Ok(r) => Ok(r),
         Err(err) => {
             let mut minijinja_err = "".to_string();
             minijinja_err += &format!("{err:#}");
@@ -184,7 +215,10 @@ mod render_tests {
         };
 
         let rendered = render_template(
-            "Hello, {{ name }}!",
+            "system instructions {{_.chat(\"magic assistant\")}}
+            
+            
+            Hello, {{ name }}!",
             args,
             RenderContext {
                 client: RenderContext_Client {
