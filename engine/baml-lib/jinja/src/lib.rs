@@ -79,11 +79,11 @@ enum RenderedPrompt {
     Chat { messages: Vec<RenderedChatMessage> },
 }
 
-pub fn render_template(template: &str, json: &serde_json::Value) -> anyhow::Result<RenderedPrompt> {
+pub fn render_template(template: &str, json: &serde_json::Value) -> anyhow::Result<String> {
     let rendered = render_minijinja(template, json);
 
     match rendered {
-        Ok(s) => Ok(RenderedPrompt::Completion { message: s }),
+        Ok(s) => Ok(s),
         Err(err) => {
             let mut minijinja_err = "".to_string();
             minijinja_err += &format!("{err:#}");
