@@ -32,10 +32,16 @@ def test_success() -> None:
                 },
             },
             ctx=ctx,
-            template_string_vars={},
+            template_string_macros=[
+                RenderData.template_string_macro(
+                    name="latin",
+                    args=[],
+                    template="lorem ipsum dolor",
+                )
+            ],
         ),
     )
-    assert rendered == "en_US.UTF-8: Hello world -openai"
+    assert rendered == ("completion", "en_US.UTF-8: Hello world -openai")
 
 
 def test_bad_params() -> None:
@@ -67,7 +73,7 @@ def test_bad_params() -> None:
                     output_schema="",
                     env={},
                 ),
-                template_string_vars={},
+                template_string_macros=[],
             ),
         )
     assert (
@@ -106,7 +112,7 @@ def test_bad_template() -> None:
                     output_schema="",
                     env={},
                 ),
-                template_string_vars={},
+                template_string_macros=[],
             ),
         )
     assert "args.foo.buzz.3.y: unsupported type" in str(e.value)

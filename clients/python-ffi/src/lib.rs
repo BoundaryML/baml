@@ -6,7 +6,7 @@ use pyo3::prelude::{
 };
 use pyo3::types::{PyAny, PyDict, PyList};
 use pyo3::{PyObject, Python};
-use pythonize::depythonize_bound;
+use pythonize::{depythonize_bound, pythonize};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
@@ -172,13 +172,16 @@ impl RenderData {
     fn new(
         args: PyObject,
         ctx: RenderData_Context,
-        template_string_macros: PyObject,
+        template_string_macros: &PyList,
     ) -> PyResult<Self> {
         Python::with_gil(|py| {
             Ok(RenderData {
                 args: args,
                 ctx: ctx,
-                template_string_macros: depythonize_bound(template_string_macros.into_bound(py))?,
+                template_string_macros: template_string_macros
+                    .iter()
+                    .map(|item| item.extract::<TemplateStringMacro>())
+                    .collect::<PyResult<Vec<TemplateStringMacro>>>()?,
             })
         })
     }
@@ -222,7 +225,7 @@ impl RenderData {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 #[pyclass]
 struct RenderedChatMessage {
     #[pyo3(get)]
@@ -232,15 +235,17 @@ struct RenderedChatMessage {
     message: String,
 }
 
-#[derive(Clone, Debug)]
-#[pyclass]
-enum RenderedPrompt {
-    Completion { message: String },
-    Chat { messages: Vec<RenderedChatMessage> },
+impl From<internal_baml_jinja::RenderedChatMessage> for RenderedChatMessage {
+    fn from(chat_message: internal_baml_jinja::RenderedChatMessage) -> Self {
+        RenderedChatMessage {
+            role: chat_message.role,
+            message: chat_message.message,
+        }
+    }
 }
 
 #[pyfunction]
-fn render_prompt(template: String, context: RenderData) -> PyResult<String> {
+fn render_prompt(template: String, context: RenderData) -> PyResult<PyObject> {
     let render_args = match pyobject_to_json(context.args) {
         Ok(render_args) => render_args,
         Err(errors) => {
@@ -281,7 +286,20 @@ fn render_prompt(template: String, context: RenderData) -> PyResult<String> {
         internal_baml_jinja::render_template(&template, &serde_json::Value::Object(render_args));
 
     match rendered {
-        Ok(s) => Ok(s),
+        Ok(internal_baml_jinja::RenderedPrompt::Completion(s)) => {
+            Ok(Python::with_gil(|py| pythonize(py, &("completion", s)))?)
+        }
+        Ok(internal_baml_jinja::RenderedPrompt::Chat(chat)) => Ok(Python::with_gil(|py| {
+            pythonize(
+                py,
+                &(
+                    "chat",
+                    chat.into_iter()
+                        .map(RenderedChatMessage::from)
+                        .collect::<Vec<_>>(),
+                ),
+            )
+        })?),
         Err(err) => Err(PyRuntimeError::new_err(format!("{err:#}"))),
     }
 }
@@ -293,7 +311,6 @@ fn baml_core_ffi(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<RenderData_Client>()?;
     m.add_class::<RenderData_Context>()?;
     m.add_class::<RenderedChatMessage>()?;
-    m.add_class::<RenderedPrompt>()?;
     m.add_class::<TemplateStringMacro>()?;
     Ok(())
 }
