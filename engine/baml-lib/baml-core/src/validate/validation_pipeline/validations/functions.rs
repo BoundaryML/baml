@@ -3,7 +3,7 @@ use std::error::Error;
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span};
 use internal_baml_jinja::{TypeError, ValidationError};
 use internal_baml_parser_database::walkers::to_type;
-use internal_baml_schema_ast::ast::{WithName, WithSpan};
+use internal_baml_schema_ast::ast::{WithIdentifier, WithName, WithSpan};
 
 use crate::validate::validation_pipeline::context::Context;
 
@@ -60,6 +60,51 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
     ctx.db.walk_templates().for_each(|t| {
         t.add_to_types(&mut defined_types);
     });
+
+    // Validate template strings
+    for template in ctx.db.walk_templates() {
+        let prompt = match template.template_raw() {
+            Some(p) => p,
+            None => {
+                ctx.push_error(DatamodelError::new_validation_error(
+                    "Template string must be a raw string literal.",
+                    template.identifier().span().clone(),
+                ));
+                continue;
+            }
+        };
+
+        defined_types.start_scope();
+        match internal_baml_jinja::validate_template(
+            template.name(),
+            prompt.raw_value(),
+            &mut defined_types,
+        ) {
+            Ok(_) => {}
+            Err(e) => {
+                let pspan = prompt.span();
+                if let Some(e) = e.parsing_errors {
+                    // ctx.push_error(DatamodelError::new_validation_error(
+                    //     &format!("Error parsing jinja template: {}", e),
+                    //     e.line(),
+                    // ))
+                } else {
+                    e.errors.iter().for_each(|t| {
+                        let span = t.span();
+                        let span = Span::new(
+                            pspan.file.clone(),
+                            pspan.start + span.start_offset as usize,
+                            pspan.start + span.end_offset as usize,
+                        );
+                        ctx.push_warning(DatamodelWarning::new(t.message().to_string(), span))
+                    })
+                }
+            }
+        }
+        defined_types.end_scope();
+        defined_types.errors_mut().clear();
+    }
+
     for func in ctx.db.walk_new_functions() {
         for args in func.walk_input_args().chain(func.walk_output_args()) {
             let arg = args.ast_arg();
@@ -116,10 +161,5 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
         }
         defined_types.end_scope();
         defined_types.errors_mut().clear();
-        /*
-         1. Check if its valid jinja
-         2. Check what input variables are used in the prompt
-         3. Confirm those input variables exist
-        */
     }
 }

@@ -19,6 +19,11 @@ impl<'db> TemplateStringWalker<'db> {
         &self.db.types.template_strings[&Either::Left(self.id)]
     }
 
+    /// The value of the template string.
+    pub fn template_raw(self) -> Option<&'db ast::RawString> {
+        self.ast_node().value.as_raw_string_value()
+    }
+
     /// Dedented and trimmed template string.
     pub fn template_string(self) -> &'db str {
         &self.metadata().template
