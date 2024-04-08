@@ -1,6 +1,6 @@
 use either::Either;
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Diagnostics};
-use internal_baml_prompt_parser::ast::{PrinterBlock, Variable};
+use internal_baml_prompt_parser::ast::{PrinterBlock, Variable, WithSpan};
 use internal_baml_schema_ast::ast::{self, WithName};
 
 use crate::{
@@ -99,7 +99,7 @@ pub(crate) fn process_print_enum(
                     variable.span.clone(),
                 ));
             }
-            enum_walker.serialize(&walker, blk)
+            enum_walker.serialize(fn_walker.db, Some(&walker), Some(blk), blk.span())
         }
         Some(Either::Left(_)) => Err(DatamodelError::new_validation_error(
             "Expected enum, found class",
@@ -124,7 +124,7 @@ pub(crate) fn process_print_type(
 ) -> Result<String, DatamodelError> {
     let variable = &blk.target;
     if variable.text == "output" {
-        return fn_walker.serialize(&walker, blk);
+        return fn_walker.serialize(fn_walker.db, Some(&walker), Some(blk), blk.span());
     }
 
     let candidates = fn_walker
@@ -140,7 +140,7 @@ pub(crate) fn process_print_type(
                 f.required_classes()
                     .any(|idn| idn.name() == cls_walker.name())
             }) {
-                true => cls_walker.serialize(&walker, blk),
+                true => cls_walker.serialize(fn_walker.db, Some(&walker), Some(blk), blk.span()),
                 false => Err(DatamodelError::type_not_used_in_prompt_error(
                     false,
                     true,

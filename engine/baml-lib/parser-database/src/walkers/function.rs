@@ -8,7 +8,7 @@ use crate::{
     ast::{self, WithName},
     printer::{serialize_with_printer, WithSerializeableContent},
     types::FunctionType,
-    WithSerialize,
+    ParserDatabase, WithSerialize,
 };
 
 use super::{ClassWalker, ClientWalker, ConfigurationWalker, EnumWalker, VariantWalker, Walker};
@@ -237,22 +237,33 @@ impl WithIdentifier for ArgWalker<'_> {
 }
 
 impl<'db> WithSerializeableContent for ArgWalker<'db> {
-    fn serialize_data(&self, variant: &VariantWalker<'_>) -> serde_json::Value {
+    fn serialize_data(
+        &self,
+        variant: Option<&VariantWalker<'_>>,
+        db: &'_ ParserDatabase,
+    ) -> serde_json::Value {
         json!({
             "rtype": "inline",
-            "value": (self.db, &self.ast_arg().1.field_type).serialize_data(variant)
+            "value": (self.db, &self.ast_arg().1.field_type).serialize_data(variant, db)
         })
     }
 }
 
 impl<'db> WithSerializeableContent for FunctionWalker<'db> {
-    fn serialize_data(&self, variant: &VariantWalker<'_>) -> serde_json::Value {
-        if let Some((idx, _)) = variant.properties().output_adapter {
-            let adapter = &variant.ast_variant()[idx];
+    fn serialize_data(
+        &self,
+        variant: Option<&VariantWalker<'_>>,
+        db: &'_ ParserDatabase,
+    ) -> serde_json::Value {
+        if let Some((idx, _)) = variant
+            .map(|v| v.properties().output_adapter.as_ref())
+            .flatten()
+        {
+            let adapter = &variant.unwrap().ast_variant()[*idx];
 
             return json!({
                 "rtype": "output",
-                "value": (self.db, &adapter.from).serialize_data(variant)
+                "value": (self.db, &adapter.from).serialize_data(variant, db)
             });
         }
 
@@ -260,7 +271,7 @@ impl<'db> WithSerializeableContent for FunctionWalker<'db> {
         json!({
             "rtype": "output",
             "value": self.walk_output_args()
-                        .map(|f| f.serialize_data(variant))
+                        .map(|f| f.serialize_data(variant, db))
                         .next()
                         .unwrap_or(serde_json::Value::Null)
         })
@@ -270,10 +281,12 @@ impl<'db> WithSerializeableContent for FunctionWalker<'db> {
 impl<'db> WithSerialize for FunctionWalker<'db> {
     fn serialize(
         &self,
-        variant: &VariantWalker<'_>,
-        block: &internal_baml_prompt_parser::ast::PrinterBlock,
+        db: &'_ ParserDatabase,
+        variant: Option<&VariantWalker<'_>>,
+        block: Option<&internal_baml_prompt_parser::ast::PrinterBlock>,
+        span: &internal_baml_diagnostics::Span,
     ) -> Result<String, internal_baml_diagnostics::DatamodelError> {
-        let printer_template = match &block.printer {
+        let printer_template = match &block.map(|b| b.printer.as_ref()).flatten() {
             Some((p, _)) => self
                 .db
                 .find_printer(p)
@@ -281,11 +294,11 @@ impl<'db> WithSerialize for FunctionWalker<'db> {
             _ => None,
         };
         // Eventually we should validate what parameters are in meta.
-        match serialize_with_printer(false, printer_template, self.serialize_data(variant)) {
+        match serialize_with_printer(false, printer_template, self.serialize_data(variant, db)) {
             Ok(val) => Ok(val),
             Err(e) => Err(DatamodelError::new_validation_error(
                 &format!("Error serializing output for {}\n{}", self.name(), e),
-                block.span().clone(),
+                span.clone(),
             )),
         }
     }

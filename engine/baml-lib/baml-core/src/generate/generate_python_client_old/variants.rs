@@ -96,7 +96,7 @@ impl<'db> JsonHelper for VariantWalker<'db> {
                 let matches = match self.db.find_type_by_str(v.name()) {
                     Some(Either::Left(cls)) => {
                         cls.static_fields().filter_map(|f| {
-                            let (overrides, _) = f.get_attributes(self);
+                            let (overrides, _) = f.get_attributes(Some(self));
                             match overrides.and_then(|o| Some(o.alias())) {
                                 Some(Some(id)) => {
                                     Some(json!({
@@ -112,7 +112,7 @@ impl<'db> JsonHelper for VariantWalker<'db> {
                     },
                     Some(Either::Right(enm)) => {
                         enm.values().filter_map(|f| {
-                            let (overrides, _) = f.get_attributes(self);
+                            let (overrides, _) = f.get_attributes(Some(self));
                             match overrides.and_then(|o| Some(o.alias())) {
                                 Some(Some(id)) => {
                                     Some(json!({

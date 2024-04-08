@@ -8,6 +8,7 @@ use crate::{
     printer::{serialize_with_printer, WithSerialize, WithSerializeableContent, WithStaticRenames},
     types::ToStringAttributes,
     walkers::Walker,
+    ParserDatabase,
 };
 
 use super::VariantWalker;
@@ -48,11 +49,15 @@ impl<'db> WithIdentifier for EnumWalker<'db> {
 }
 
 impl<'db> WithSerializeableContent for EnumWalker<'db> {
-    fn serialize_data(&self, variant: &VariantWalker<'_>) -> serde_json::Value {
+    fn serialize_data(
+        &self,
+        variant: Option<&VariantWalker<'_>>,
+        db: &'_ ParserDatabase,
+    ) -> serde_json::Value {
         json!({
-            "name": self.alias(variant),
-            "meta": self.meta(variant),
-            "values": self.values().filter(|f| !f.skip(variant)).map(|f| f.serialize_data(variant)).collect::<Vec<_>>(),
+            "name": self.alias(variant, db),
+            "meta": self.meta(variant, db),
+            "values": self.values().filter(|f| !f.skip(variant)).map(|f| f.serialize_data(variant, db)).collect::<Vec<_>>(),
         })
     }
 }
@@ -74,10 +79,12 @@ impl<'db> WithStaticRenames<'db> for EnumWalker<'db> {
 impl<'db> WithSerialize for EnumWalker<'db> {
     fn serialize(
         &self,
-        variant: &VariantWalker<'_>,
-        block: &PrinterBlock,
+        db: &'_ ParserDatabase,
+        variant: Option<&VariantWalker<'_>>,
+        block: Option<&internal_baml_prompt_parser::ast::PrinterBlock>,
+        span: &internal_baml_diagnostics::Span,
     ) -> Result<String, DatamodelError> {
-        let printer_template = match &block.printer {
+        let printer_template = match block.map(|b| b.printer.as_ref()).flatten() {
             Some((p, _)) => self
                 .db
                 .find_printer(p)
@@ -86,11 +93,11 @@ impl<'db> WithSerialize for EnumWalker<'db> {
         };
         // let printer = self.db.find_printer(&block.printer);
         // Eventually we should validate what parameters are in meta.
-        match serialize_with_printer(true, printer_template, self.serialize_data(variant)) {
+        match serialize_with_printer(true, printer_template, self.serialize_data(variant, db)) {
             Ok(val) => Ok(val),
             Err(e) => Err(DatamodelError::new_validation_error(
                 &format!("Error serializing enum: {}\n{}", self.name(), e),
-                block.span().clone(),
+                span.clone(),
             )),
         }
     }
@@ -114,10 +121,14 @@ impl<'db> WithName for EnumValueWalker<'db> {
 }
 
 impl<'db> WithSerializeableContent for EnumValueWalker<'db> {
-    fn serialize_data(&self, variant: &VariantWalker<'_>) -> serde_json::Value {
+    fn serialize_data(
+        &self,
+        variant: Option<&VariantWalker<'_>>,
+        db: &'_ ParserDatabase,
+    ) -> serde_json::Value {
         json!({
-            "name": self.alias(variant),
-            "meta": self.meta(variant),
+            "name": self.alias(variant, db),
+            "meta": self.meta(variant, db),
             "skip": self.skip(variant),
         })
     }

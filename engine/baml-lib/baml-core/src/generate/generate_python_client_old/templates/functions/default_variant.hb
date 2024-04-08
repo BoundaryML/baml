@@ -13,7 +13,9 @@ __deserializer = Deserializer[{{function.return.0.type}}]({{function.return.0.ty
 # Add a deserializer that handles stream responses, which are all Partial types
 __partial_deserializer = Deserializer[{{function.return.0.type_partial}}]({{function.return.0.type_partial}})  # type: ignore
 
-__output_schema = ""
+__output_schema = """
+{{output_schema}}
+""".strip()
 
 __template_macros = [
 {{#each template_macros}}

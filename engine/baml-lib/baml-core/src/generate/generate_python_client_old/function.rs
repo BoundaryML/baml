@@ -1,6 +1,10 @@
-use internal_baml_parser_database::walkers::{ArgWalker, EnumWalker, FunctionWalker, Walker};
+use internal_baml_parser_database::{
+    walkers::{ArgWalker, EnumWalker, FunctionWalker, Walker},
+    WithSerialize,
+};
 use internal_baml_schema_ast::ast::{
     FieldType, FunctionArg, FunctionArgs, FunctionId, Identifier, WithDocumentation, WithName,
+    WithSpan,
 };
 
 use serde_json::json;
@@ -104,7 +108,7 @@ impl JsonHelper for FunctionWalker<'_> {
             impls
         } else {
             // New function logic
-            vec!["default".into()]
+            vec!["default_config".into()]
         };
 
         let mut inputs = self.walk_input_args().collect::<Vec<_>>();
@@ -162,11 +166,17 @@ impl WithWritePythonString for FunctionWalker<'_> {
         fc.complete_file();
 
         if !self.is_old_function() {
-            let impl_name = format!("fx_{}_impl_default", clean_file_name(self.name()));
+            let impl_name = format!(
+                "fx_{}_impl_{}",
+                clean_file_name(self.name()),
+                "default_config"
+            );
 
             fc.start_py_file("impls", "__init__.py");
-            fc.last_file()
-                .add_line(format!("from .{0} import default as unused_{0}", impl_name,));
+            fc.last_file().add_line(format!(
+                "from .{0} import {1} as unused_{0}",
+                impl_name, "default_config"
+            ));
             fc.complete_file();
 
             // May need to do some fancy stuff
@@ -188,7 +198,7 @@ impl WithWritePythonString for FunctionWalker<'_> {
                 "function": self.json(fc.last_file()),
                 "prompt": self.jinja_prompt().replace(r#"""""#, r#"\"\"\""#),
                 "client": client.name(),
-                "output_schema": "<TODO>",
+                "output_schema": self.serialize(self.db, None, None, self.identifier().span()).unwrap(),
                 "template_macros": self.db.walk_templates().map(|t| json!({
                     "name": t.name().to_string(),
                     "args": match t.ast_node().input() {

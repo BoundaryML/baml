@@ -77,7 +77,11 @@ impl<'db> WithName for FieldWalker<'db> {
 }
 
 impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
-    fn serialize_data(&self, variant: &VariantWalker<'_>) -> serde_json::Value {
+    fn serialize_data(
+        &self,
+        variant: Option<&VariantWalker<'_>>,
+        db: &'_ ParserDatabase,
+    ) -> serde_json::Value {
         match self.1 {
             FieldType::Tuple(..) | FieldType::Dictionary(..) => json!({
                 "rtype": "unsupported",
@@ -86,12 +90,12 @@ impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
             FieldType::Union(arity, fts, _) => json!({
                 "rtype": "union",
                 "optional": arity.is_optional(),
-                "options": fts.iter().map(|ft| (self.0, ft).serialize_data(variant)).collect::<Vec<_>>(),
+                "options": fts.iter().map(|ft| (self.0, ft).serialize_data(variant, db)).collect::<Vec<_>>(),
             }),
             FieldType::List(ft, dims, _) => json!({
                 "rtype": "list",
                 "dims": dims,
-                "inner": (self.0, ft.deref()).serialize_data(variant),
+                "inner": (self.0, ft.deref()).serialize_data(variant, db),
             }),
             FieldType::Identifier(arity, Identifier::Primitive(name, ..)) => {
                 json!({
@@ -110,7 +114,7 @@ impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
             FieldType::Identifier(arity, Identifier::Local(name, ..)) => {
                 match self.0.find_type_by_str(name) {
                     Some(either::Either::Left(cls)) => {
-                        let mut class_type = cls.serialize_data(variant);
+                        let mut class_type = cls.serialize_data(variant, db);
                         let Some(obj) = class_type.as_object_mut() else {
                             return class_type;
                         };
@@ -121,7 +125,7 @@ impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
                         json!({
                             "rtype": "enum",
                             "optional": arity.is_optional(),
-                            "name": enm.alias(variant),
+                            "name": enm.alias(variant, db),
                         })
                     }
                     None => json!({
@@ -136,11 +140,15 @@ impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
 }
 
 impl<'db> WithSerializeableContent for FieldWalker<'db> {
-    fn serialize_data(&self, variant: &VariantWalker<'_>) -> serde_json::Value {
+    fn serialize_data(
+        &self,
+        variant: Option<&VariantWalker<'_>>,
+        db: &'_ ParserDatabase,
+    ) -> serde_json::Value {
         json!({
-            "name": self.alias(variant),
-            "meta": self.meta(variant),
-            "type_meta": (self.db, self.r#type()).serialize_data(variant),
+            "name": self.alias(variant, db),
+            "meta": self.meta(variant, db),
+            "type_meta": (self.db, self.r#type()).serialize_data(variant, db),
         })
     }
 }
