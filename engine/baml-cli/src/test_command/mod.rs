@@ -137,12 +137,12 @@ pub fn run(
                     .collect::<Vec<_>>()
             } else {
                 num_tests += 1;
-                if matches_filters(function, "defaul", test, &includes, &excludes) {
+                if matches_filters(function, "default_config", test, &includes, &excludes) {
                     num_selected_tests += 1;
                     vec![(
                         function.to_string(),
                         test.to_string(),
-                        "default".to_string(),
+                        "default_config".to_string(),
                     )]
                 } else {
                     vec![]

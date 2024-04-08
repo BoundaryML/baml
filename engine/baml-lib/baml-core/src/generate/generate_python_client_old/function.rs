@@ -184,7 +184,7 @@ impl WithWritePythonString for FunctionWalker<'_> {
                 .add_import("baml_core.jinja.render_prompt", "RenderData");
 
             let json = json!({
-                "name": "default",
+                "name": "default_config",
                 "function": self.json(fc.last_file()),
                 "prompt": self.jinja_prompt().replace(r#"""""#, r#"\"\"\""#),
                 "client": client.name(),
