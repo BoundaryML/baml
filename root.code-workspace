@@ -15,6 +15,10 @@
       "path": "clients/python"
     },
     {
+      "name": "clients/python-ffi (pyo3 client)",
+      "path": "clients/python-ffi"
+    },
+    {
       "name": "clients/ts (TS client)",
       "path": "clients/ts"
     },

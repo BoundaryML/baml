@@ -69,5 +69,3 @@ jobs:
       # it is pinned to this filename, so renaming this file is not safe!!: release_python_ffi.yaml
       - name: Publish package to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          skip-existing: true
