@@ -25,7 +25,7 @@ class RenderData:
     @staticmethod
     def template_string_macro(name: str, args: List[Tuple[str, str]], template: str) -> TemplateStringMacro: ...
 
-class ChatMessage:
+class RenderedChatMessage:
     @property
     def role(self) -> str: ...
 
@@ -34,5 +34,5 @@ class ChatMessage:
 
 def render_prompt(prompt_template: str, render_context: RenderData) -> Union[
         Tuple[Literal["completion"], str],
-        Tuple[Literal["chat"], List[ChatMessage]]
+        Tuple[Literal["chat"], List[RenderedChatMessage]]
     ]: ...

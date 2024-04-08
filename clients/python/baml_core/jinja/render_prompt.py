@@ -4,7 +4,7 @@ from baml_core_ffi import (
     RenderData,
     RenderData_Client,
     RenderData_Context,
-    RenderedChatMessage as ChatMessage,
+    RenderedChatMessage,
     TemplateStringMacro,
 )
 
@@ -12,7 +12,7 @@ from baml_core_ffi import (
 def render_prompt(
     prompt_template: str, render_context: RenderData
 ) -> Union[
-    Tuple[Literal["completion"], str], Tuple[Literal["chat"], List[ChatMessage]]
+    Tuple[Literal["completion"], str], Tuple[Literal["chat"], List[RenderedChatMessage]]
 ]:
     return render_prompt_ffi(prompt_template, render_context)
 
@@ -22,6 +22,7 @@ __all__ = [
     "RenderData",
     "RenderData_Client",
     "RenderData_Context",
+    "RenderedChatMessage",
     "TemplateStringMacro",
 ]
 

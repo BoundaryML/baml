@@ -294,6 +294,7 @@ fn baml_core_ffi(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<RenderData_Context>()?;
     m.add_class::<RenderedChatMessage>()?;
     m.add_class::<RenderedPrompt>()?;
+    m.add_class::<TemplateStringMacro>()?;
     Ok(())
 }
 

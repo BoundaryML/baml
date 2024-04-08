@@ -21,6 +21,7 @@ __all__ = [
     "RenderData",
     "RenderData_Client",
     "RenderData_Context",
+    "RenderedChatMessage",
     "TemplateStringMacro",
     "LLMException",
     "CacheManager",
