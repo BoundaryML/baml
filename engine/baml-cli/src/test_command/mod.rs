@@ -1,6 +1,6 @@
 use colored::*;
-use std::{path::PathBuf, str::FromStr};
 use dunce::canonicalize;
+use std::{path::PathBuf, str::FromStr};
 
 use baml_lib::{internal_baml_schema_ast::ast::WithName, Configuration, ValidatedSchema};
 
@@ -121,19 +121,33 @@ pub fn run(
             let funcwalker = test_case.walk_function();
             let function = funcwalker.name();
             let test = test_case.name();
-            funcwalker
-                .walk_variants()
-                .filter_map(|variant| {
-                    let r#impl = variant.name();
-                    num_tests += 1;
-                    if matches_filters(function, r#impl, test, &includes, &excludes) {
-                        num_selected_tests += 1;
-                        Some((function.to_string(), test.to_string(), r#impl.to_string()))
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>()
+            if funcwalker.is_old_function() {
+                funcwalker
+                    .walk_variants()
+                    .filter_map(|variant| {
+                        let r#impl = variant.name();
+                        num_tests += 1;
+                        if matches_filters(function, r#impl, test, &includes, &excludes) {
+                            num_selected_tests += 1;
+                            Some((function.to_string(), test.to_string(), r#impl.to_string()))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>()
+            } else {
+                num_tests += 1;
+                if matches_filters(function, "defaul", test, &includes, &excludes) {
+                    num_selected_tests += 1;
+                    vec![(
+                        function.to_string(),
+                        test.to_string(),
+                        "default".to_string(),
+                    )]
+                } else {
+                    vec![]
+                }
+            }
         })
         .collect::<Vec<_>>();
 

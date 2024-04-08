@@ -39,10 +39,15 @@ impl ConfigurationWalker<'_> {
 
     /// If adapters are not present we can stream
     pub fn is_streaming_supported(&self) -> bool {
-        !self
-            .walk_function()
-            .walk_variants()
-            .any(|v| v.properties().output_adapter.is_some())
+        let func = self.walk_function();
+
+        if func.is_old_function() {
+            !func
+                .walk_variants()
+                .any(|v| v.properties().output_adapter.is_some())
+        } else {
+            true
+        }
     }
 }
 

@@ -152,7 +152,7 @@ class RoundRobinProvider(AbstractLLMProvider):
         # We _should_ use '(await self._choose_provider()).run_prompt_stream(prompt)'
         # here, but we have to use getattr because the inheritance hierarchy for
         # python providers is f'd up
-        async for r in getattr((await self._choose_provider()), "run_prompt_stream")(
+        async for r in (await self._choose_provider()).run_prompt_stream(
             prompt
         ):
             yield r
@@ -177,7 +177,7 @@ class RoundRobinProvider(AbstractLLMProvider):
         # We _should_ use '(await self._choose_provider()).run_chat_stream(prompt)'
         # here, but we have to use getattr because the inheritance hierarchy for
         # python providers is f'd up
-        async for r in getattr((await self._choose_provider()), "run_chat_stream")(
+        async for r in (await self._choose_provider()).run_chat_stream(
             *messages
         ):
             yield r
@@ -193,4 +193,8 @@ class RoundRobinProvider(AbstractLLMProvider):
             replacers=replacers,
             params=params,
         ):
+            yield r
+    
+    async def _run_jinja_template_internal_stream(self, *, jinja_template: str, args: Dict[str, Any], output_schema: str, template_macros: List[TemplateStringMacro]) -> AsyncIterator[LLMResponse]:
+        async for r in (await self._choose_provider()).run_jinja_template_stream(jinja_template=jinja_template, args=args, output_schema=output_schema, template_macros=template_macros):
             yield r

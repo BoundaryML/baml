@@ -145,6 +145,26 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
 
     @typing.final
     @typechecked
+    async def run_jinja_template_stream(
+        self,
+        *,
+        jinja_template: str,
+        # Params for the jinja template
+        args: typing.Dict[str, typing.Any],
+        output_schema: str,
+        # Other template macros
+        template_macros: typing.List[TemplateStringMacro],
+    ) -> typing.AsyncIterator[LLMResponse]:
+        async for r in self._run_jinja_template_internal_stream(
+            jinja_template=jinja_template,
+            args=args,
+            template_macros=template_macros,
+            output_schema=output_schema,
+        ):
+            yield r
+
+    @typing.final
+    @typechecked
     async def run_prompt_template(
         self,
         *,
@@ -210,10 +230,24 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
 
     @typing.final
     @typechecked
+    async def run_prompt_stream(self, prompt: str) -> typing.AsyncIterator[LLMResponse]:
+        async for r in self._run_prompt_internal_stream(prompt=prompt):
+            yield r
+
+    @typing.final
+    @typechecked
     async def run_chat(
         self, *messages: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]]
     ) -> LLMResponse:
         return await self._run_chat_internal(*messages)
+
+    @typing.final
+    @typechecked
+    async def run_chat_stream(
+        self, *messages: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]]
+    ) -> typing.AsyncIterator[LLMResponse]:
+        async for r in self._run_chat_internal_stream(*messages):
+            yield r
 
     #
     # Internal API
@@ -230,7 +264,26 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def _run_prompt_internal(self, prompt: str) -> LLMResponse:
+    def _run_jinja_template_internal_stream(
+        self,
+        *,
+        jinja_template: str,
+        args: typing.Dict[str, typing.Any],
+        output_schema: str,
+        template_macros: typing.List[TemplateStringMacro],
+    ) -> typing.AsyncIterator[LLMResponse]:
+        pass
+
+    @abc.abstractmethod
+    async def _run_prompt_internal(self, *, prompt: str) -> LLMResponse:
+        pass
+
+    @abc.abstractmethod
+    def _run_prompt_internal_stream(
+        self,
+        *,
+        prompt: str,
+    ) -> typing.AsyncIterator[LLMResponse]:
         pass
 
     @abc.abstractmethod
@@ -257,6 +310,13 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
     async def _run_chat_internal(
         self, *messages: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]]
     ) -> LLMResponse:
+        pass
+
+    @abc.abstractmethod
+    def _run_chat_internal_stream(
+        self,
+        *messages: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]]
+    ) -> typing.AsyncIterator[LLMResponse]:
         pass
 
     @abc.abstractmethod
