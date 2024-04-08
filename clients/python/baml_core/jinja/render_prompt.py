@@ -2,7 +2,10 @@ from typing import Literal, List, Tuple, Union
 from baml_core_ffi import (
     render_prompt as render_prompt_ffi,
     RenderData,
+    RenderData_Client,
+    RenderData_Context,
     RenderedChatMessage as ChatMessage,
+    TemplateStringMacro,
 )
 
 
@@ -14,7 +17,13 @@ def render_prompt(
     return render_prompt_ffi(prompt_template, render_context)
 
 
-__all__ = ["render_prompt", "RenderData"]
+__all__ = [
+    "render_prompt",
+    "RenderData",
+    "RenderData_Client",
+    "RenderData_Context",
+    "TemplateStringMacro",
+]
 
 
 if __name__ == "__main__":
