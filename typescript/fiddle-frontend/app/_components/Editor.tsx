@@ -1,56 +1,57 @@
 'use client'
 
 import CodeMirror, { EditorView, useCodeMirror } from '@uiw/react-codemirror'
-import { rust } from '@codemirror/lang-rust'
 import { BAML } from '@baml/codemirror-lang'
 import { vscodeDark } from '@uiw/codemirror-theme-vscode'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
-import parser from '@baml/codemirror-lang'
 import { useEffect, useRef, useState } from 'react'
 import { ASTProvider, FunctionSelector, FunctionPanel, CustomErrorBoundary } from '@baml/playground-common'
-import { completeFromList } from '@codemirror/autocomplete'
-import { Button } from '@/components/ui/button'
-// import '../colors.css'
+import { linter, Diagnostic } from '@codemirror/lint'
 
-// import { LRLanguage, LanguageSupport } from '@codemirror/language'
+async function bamlLinter(view: EditorView): Promise<Diagnostic[]> {
+  const lint = await import('@gloo-ai/baml-schema-wasm-web').then((m) => m.lint)
+  const linterInput: LinterInput = {
+    root_path: 'project/baml_src',
+    files: [
+      {
+        path: 'path/main.baml',
+        content: view.state.doc.toString(),
+      },
+    ],
+  }
+  console.info(`Linting ${linterInput.files.length} files in ${linterInput.root_path}`)
+  const res = lint(JSON.stringify(linterInput))
+  const parsedRes = JSON.parse(res) as LintResponse
+  console.log(`res ${JSON.stringify(res, null, 2)}`)
+  const BamlDB = new Map<string, any>()
+  // res is of type ParserDB
+  BamlDB.set('baml_src', res)
 
-// let parserWithMetadata = parser.configure({
-//   props: [
-//     styleTags({
-//       Identifier: t.variableName,
-//       Boolean: t.bool,
-//       String: t.string,
-//       LineComment: t.lineComment,
-//       '( )': t.paren,
-//     }),
-//     indentNodeProp.add({
-//       Application: (context) => context.column(context.node.from) + context.unit,
-//     }),
-//     foldNodeProp.add({
-//       Application: foldInside,
-//     }),
-//   ],
-// })
-// const bamlLanguage = LRLanguage.define({
-//   parser: parserWithMetadata,
-//   languageData: {
-//     commentTokens: { line: '#' },
-//   },
-// })
+  if (parsedRes.ok) {
+    window.postMessage({
+      command: 'setDb',
+      content: [['project/baml_src', parsedRes.response]],
+    })
+  }
 
-// export const exampleCompletion = exampleLanguage.data.of({
-//   autocomplete: completeFromList([
-//     { label: 'defun', type: 'keyword' },
-//     { label: 'defvar', type: 'keyword' },
-//     { label: 'let', type: 'keyword' },
-//     { label: 'cons', type: 'function' },
-//     { label: 'car', type: 'function' },
-//     { label: 'cdr', type: 'function' },
-//   ]),
-// })
-// return new LanguageSupport(exampleLanguage, [exampleCompletion])
+  return parsedRes.diagnostics.map((d) => {
+    return {
+      from: d.start,
+      to: d.end,
+      message: d.text,
+      severity: d.is_warning ? 'warning' : 'error',
+    }
+  })
+}
 
-const extensions = [BAML(), EditorView.lineWrapping]
+const extensions = [
+  BAML(),
+  EditorView.lineWrapping,
+  linter(bamlLinter, {
+    delay: 200,
+    // needsRefresh: (view) => ,
+  }),
+]
 const defaultMainBaml = `
 generator lang_python {
   language python
@@ -121,32 +122,7 @@ export const Editor = () => {
   }, [])
 
   useEffect(() => {
-    const lintWithWasm = async () => {
-      const lint = await import('@gloo-ai/baml-schema-wasm-web').then((m) => m.lint)
-      const linterInput: LinterInput = {
-        root_path: 'project/baml_src',
-        files: [
-          {
-            path: 'path/main.baml',
-            content: value,
-          },
-        ],
-      }
-      console.info(`Linting ${linterInput.files.length} files in ${linterInput.root_path}`)
-      const res = lint(JSON.stringify(linterInput))
-      const parsedRes = JSON.parse(res)
-      console.log(`res ${JSON.stringify(res, null, 2)}`)
-      const BamlDB = new Map<string, any>()
-      // res is of type ParserDB
-      BamlDB.set('baml_src', res)
-
-      if (parsedRes.ok) {
-        window.postMessage({
-          command: 'setDb',
-          content: [['project/baml_src', parsedRes.response]],
-        })
-      }
-    }
+    const lintWithWasm = async () => {}
     lintWithWasm()
   }, [value])
 

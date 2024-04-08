@@ -9,11 +9,12 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@baml/playground-common": "workspace:*",
     "@baml/codemirror-lang": "workspace:*",
+    "@baml/playground-common": "workspace:*",
     "@codemirror/autocomplete": "^6.15.0",
     "@codemirror/lang-rust": "^6.0.1",
     "@codemirror/language": "^6.10.1",
+    "@codemirror/lint": "^6.5.0",
     "@codemirror/state": "^6.4.1",
     "@codemirror/view": "^6.26.1",
     "@gloo-ai/baml-schema-wasm-web": "workspace:*",
