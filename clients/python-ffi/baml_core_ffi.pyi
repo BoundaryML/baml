@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, Literal, List, Tuple, Union
 
 class RenderData_Client: ...
 
@@ -10,7 +10,7 @@ class RenderData:
     def __new__(cls,
                 args: Dict[str, Any],
                 ctx: RenderData_Context,
-                template_string_vars: Dict[str, str]
+                template_string_macros: Dict[str, str]
                 ) -> "RenderData": ...
 
     @staticmethod
@@ -25,4 +25,14 @@ class RenderData:
     @staticmethod
     def template_string_macro(name: str, args: List[Tuple[str, str]], template: str) -> TemplateStringMacro: ...
 
-def render_prompt(prompt_template: str, render_context: RenderData) -> str: ...
+class ChatMessage:
+    @property
+    def role(self) -> str: ...
+
+    @property
+    def message(self) -> str: ...
+
+def render_prompt(prompt_template: str, render_context: RenderData) -> Union[
+        Tuple[Literal["completion"], str],
+        Tuple[Literal["chat"], List[ChatMessage]]
+    ]: ...
