@@ -159,59 +159,87 @@ pub(crate) fn run(input: &str) -> String {
                         })
                     }
                 ).collect::<Vec<_>>(),
-                "impls": func.walk_variants().map(
-                    |i| {
-                        let props = i.properties();
-                        let prompt = props.to_prompt();
-                        let is_chat = match &prompt {
-                            PromptAst::Chat(..) => true,
-                            _ => false,
-                        };
-                        json!({
-                            "type": "llm",
-                            "name": StringSpan::new(i.ast_variant().name(), i.identifier().span()),
-                            "prompt_key": {
-                                "start": props.prompt.key_span.start,
-                                "end": props.prompt.key_span.end,
-                                "source_file": props.prompt.key_span.file.path(),
-                            },
-                            "has_v2": true,
-                            // Passed for legacy reasons
-                            "prompt": props.prompt.value,
-                            // This is the new value to use
-                            "prompt_v2": {
-                                "is_chat": is_chat,
-                                "prompt": match &prompt {
-                                    PromptAst::Chat(parts, _) => {
-                                        json!(parts.iter().map(|(ctx, text)| {
-                                            json!({
-                                                "role": ctx.map(|c| c.role.0.as_str()).unwrap_or("system"),
-                                                "content": text,
-                                            })
-                                        }).collect::<Vec<_>>())
-                                    },
-                                    PromptAst::String(content, _) => {
-                                        json!(content)
+                "impls":
+                if func.is_old_function() {
+                    func.walk_variants().map(
+                        |i| {
+                            let props = i.properties();
+                            let prompt = props.to_prompt();
+                            let is_chat = match &prompt {
+                                PromptAst::Chat(..) => true,
+                                _ => false,
+                            };
+                            json!({
+                                "type": "llm",
+                                "name": StringSpan::new(i.ast_variant().name(), i.identifier().span()),
+                                "prompt_key": {
+                                    "start": props.prompt.key_span.start,
+                                    "end": props.prompt.key_span.end,
+                                    "source_file": props.prompt.key_span.file.path(),
+                                },
+                                "has_v2": true,
+                                // Passed for legacy reasons
+                                "prompt": props.prompt.value,
+                                // This is the new value to use
+                                "prompt_v2": {
+                                    "is_chat": is_chat,
+                                    "prompt": match &prompt {
+                                        PromptAst::Chat(parts, _) => {
+                                            json!(parts.iter().map(|(ctx, text)| {
+                                                json!({
+                                                    "role": ctx.map(|c| c.role.0.as_str()).unwrap_or("system"),
+                                                    "content": text,
+                                                })
+                                            }).collect::<Vec<_>>())
+                                        },
+                                        PromptAst::String(content, _) => {
+                                            json!(content)
+                                        },
                                     },
                                 },
-                            },
-                            "input_replacers": props.replacers.0.iter().map(
-                                |r| json!({
-                                    "key": r.0.key(),
-                                    "value": r.1,
-                                })
-                            ).collect::<Vec<_>>(),
-                            "output_replacers": props.replacers.1.iter().map(
-                                |r| json!({
-                                    "key": r.0.key(),
-                                    "value": r.1,
-                                })
-                            ).collect::<Vec<_>>(),
-                            "client": schema.db.find_client(&props.client.value).map(|c| StringSpan::new(c.name(), c.identifier().span())).unwrap_or_else(|| StringSpan::new(&props.client.value, &props.client.span)),
+                                "input_replacers": props.replacers.0.iter().map(
+                                    |r| json!({
+                                        "key": r.0.key(),
+                                        "value": r.1,
+                                    })
+                                ).collect::<Vec<_>>(),
+                                "output_replacers": props.replacers.1.iter().map(
+                                    |r| json!({
+                                        "key": r.0.key(),
+                                        "value": r.1,
+                                    })
+                                ).collect::<Vec<_>>(),
+                                "client": schema.db.find_client(&props.client.value).map(|c| StringSpan::new(c.name(), c.identifier().span())).unwrap_or_else(|| StringSpan::new(&props.client.value, &props.client.span)),
 
+                            })
+                        }
+                    ).collect::<Vec<_>>()
+                } else {
+                    let prompt = func.metadata().prompt.as_ref().unwrap();
+                    let (client_name, client_span) = func.metadata().client.as_ref().unwrap();
+                    vec![
+                        json!({
+                            "type": "llm",
+                            "name": StringSpan::new("default_config", func.identifier().span()),
+                            "prompt_key": {
+                                "start": prompt.span().start,
+                                "end": prompt.span().end,
+                                "source_file": func.span().file.path(),
+                            },
+                            "has_v2": false,
+                            // We can use just "prompt" as its the new template now.
+                            "prompt": prompt.value(),
+                            // Passed for legacy reasons
+                            "prompt_v2": null,
+                            // This is the newly rendered prompt with the test case and client substituted in.
+                            // TODO: @sxlijin call render_prompt here based on the test case and client.
+                            "rendered_prompt": null,
+                            "input_replacers": [],
+                            "output_replacers": [],
+                            "client": schema.db.find_client(client_name).map(|c| StringSpan::new(c.name(), c.identifier().span())).unwrap_or_else(|| StringSpan::new(client_name, client_span)),
                         })
-                    }
-                ).collect::<Vec<_>>(),
+                    ]
+                },
             })
         })
         .collect::<Vec<_>>()

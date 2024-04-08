@@ -1,7 +1,6 @@
 use either::Either;
 use internal_baml_diagnostics::DatamodelError;
-use internal_baml_prompt_parser::ast::WithSpan;
-use internal_baml_schema_ast::ast::{FuncArguementId, Identifier, RawString, WithIdentifier};
+use internal_baml_schema_ast::ast::{FuncArguementId, Identifier, WithIdentifier, WithSpan};
 use serde_json::json;
 
 use crate::{
@@ -227,6 +226,12 @@ impl<'db> ArgWalker<'db> {
                 Some(Either::Right(_enm)) => None,
                 None => None,
             })
+    }
+}
+
+impl WithSpan for FunctionWalker<'_> {
+    fn span(&self) -> &internal_baml_diagnostics::Span {
+        self.ast_function().span()
     }
 }
 
