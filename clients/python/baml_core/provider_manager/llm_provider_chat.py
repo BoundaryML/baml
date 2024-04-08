@@ -1,7 +1,11 @@
 import abc
 import json
+import os
 import typing
+from baml_core_ffi import TemplateStringMacro
 from typeguard import typechecked
+
+from baml_core.jinja.render_prompt import render_prompt, RenderData
 
 
 from ..errors.llm_exc import LLMException, ProviderErrorCode
@@ -98,6 +102,40 @@ class LLMChatProvider(AbstractLLMProvider):
             return await self.__run_chat_with_telemetry(messages)
         except Exception as e:
             self._raise_error(e)
+
+    @typing.final
+    async def _run_jinja_template_internal(
+        self,
+        *,
+        jinja_template: str,
+        args: typing.Dict[str, typing.Any],
+        output_schema: str,
+        template_macros: typing.List[TemplateStringMacro],
+    ) -> LLMResponse:
+        prompt = render_prompt(
+            jinja_template,
+            RenderData(
+                args=args,
+                ctx=RenderData.ctx(
+                    client=self.client,
+                    output_schema=output_schema,
+                    env=os.environ.copy(),
+                ),
+                template_string_macros=template_macros,
+            ),
+        )
+
+        if prompt[0] == "chat":
+            return await self._run_chat_internal(
+                list(
+                    map(
+                        lambda x: LLMChatMessage(role=x.role, content=x.message),
+                        prompt[1],
+                    )
+                )
+            )
+        else:
+            return await self._run_prompt_internal(prompt[1])
 
     @typing.final
     async def _run_chat_template_internal_stream(

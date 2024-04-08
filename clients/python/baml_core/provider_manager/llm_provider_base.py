@@ -3,6 +3,7 @@ import json
 import traceback
 import typing
 import aiohttp
+from baml_core_ffi import RenderData_Client, TemplateStringMacro
 from pydantic import BaseModel
 from typeguard import typechecked
 
@@ -15,6 +16,7 @@ from ..services.api_types import CacheRequest, LLMChat
 from ..otel.helper import try_serialize
 from ..otel.provider import create_event
 from .llm_response import LLMResponse
+from ..jinja.render_prompt import RenderData, render_prompt
 
 
 class BaseProvider(abc.ABC):
@@ -105,7 +107,15 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
         self.__client_args = {}
         self.__redactions = redactions or []
         self.__retry_policy = retry_policy
+        # This is optional due to backwards compatibility
+        self.__render_client = RenderData.client(
+            name=kwargs.pop("client_name", "<unknown>"), provider=provider
+        )
         assert not kwargs, f"Unhandled provider settings: {', '.join(kwargs.keys())}"
+
+    @property
+    def client(self) -> RenderData_Client:
+        return self.__render_client
 
     @property
     def provider(self) -> str:
@@ -114,6 +124,25 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
     #
     # Public API
     #
+    @typing.final
+    @typechecked
+    async def run_jinja_template(
+        self,
+        *,
+        jinja_template: str,
+        # Params for the jinja template
+        args: typing.Dict[str, typing.Any],
+        output_schema: str,
+        # Other template macros
+        template_macros: typing.List[TemplateStringMacro],
+    ) -> LLMResponse:
+        return await self._run_jinja_template_internal(
+            jinja_template=jinja_template,
+            args=args,
+            template_macros=template_macros,
+            output_schema=output_schema,
+        )
+
     @typing.final
     @typechecked
     async def run_prompt_template(
@@ -189,6 +218,17 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
     #
     # Internal API
     #
+    @abc.abstractmethod
+    async def _run_jinja_template_internal(
+        self,
+        *,
+        jinja_template: str,
+        args: typing.Dict[str, typing.Any],
+        output_schema: str,
+        template_macros: typing.List[TemplateStringMacro],
+    ) -> LLMResponse:
+        pass
+
     @abc.abstractmethod
     async def _run_prompt_internal(self, prompt: str) -> LLMResponse:
         pass

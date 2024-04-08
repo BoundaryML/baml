@@ -4,7 +4,7 @@
   "mypy.configFile": "mypy.ini",
   "mypy.runUsingActiveInterpreter": true,
   "[python]": {
-    "editor.defaultFormatter": "charliermarsh.ruff"
+    "editor.defaultFormatter": "ms-python.black-formatter"
   },
   "python.defaultInterpreterPath": "${workspacePath}/.venv/bin/python",
   "python.analysis.inlayHints.callArgumentNames": "partial",

@@ -1,6 +1,8 @@
 import abc
 import json
+import os
 import typing
+from baml_core_ffi import RenderData, TemplateStringMacro, render_prompt
 from typeguard import typechecked
 from ..otel.provider import create_event
 from .llm_response import LLMResponse
@@ -28,6 +30,40 @@ class LLMProvider(AbstractLLMProvider):
     ) -> None:
         super().__init__(**kwargs)
         self.__chat_to_prompt = chat_to_prompt
+
+    @typing.final
+    async def _run_jinja_template_internal(
+        self,
+        *,
+        jinja_template: str,
+        args: typing.Dict[str, typing.Any],
+        output_schema: str,
+        template_macros: typing.List[TemplateStringMacro],
+    ) -> LLMResponse:
+        prompt = render_prompt(
+            jinja_template,
+            RenderData(
+                args=args,
+                ctx=RenderData.ctx(
+                    client=self.client,
+                    output_schema=output_schema,
+                    env=os.environ.copy(),
+                ),
+                template_string_macros=template_macros,
+            ),
+        )
+
+        if prompt[0] == "chat":
+            return await self._run_chat_internal(
+                list(
+                    map(
+                        lambda x: LLMChatMessage(role=x.role, content=x.message),
+                        prompt[1],
+                    )
+                )
+            )
+        else:
+            return await self._run_prompt_internal(prompt[1])
 
     @typing.final
     @typechecked

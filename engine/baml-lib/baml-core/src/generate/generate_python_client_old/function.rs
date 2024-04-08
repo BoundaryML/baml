@@ -1,6 +1,6 @@
 use internal_baml_parser_database::walkers::{ArgWalker, EnumWalker, FunctionWalker, Walker};
 use internal_baml_schema_ast::ast::{
-    FieldType, FunctionArg, FunctionId, Identifier, WithDocumentation, WithName,
+    FieldType, FunctionArg, FunctionArgs, FunctionId, Identifier, WithDocumentation, WithName,
 };
 
 use serde_json::json;
@@ -180,11 +180,28 @@ impl WithWritePythonString for FunctionWalker<'_> {
             fc.last_file()
                 .add_import(&format!("..clients.{}", client.file_name()), client.name());
 
+            fc.last_file()
+                .add_import("baml_core.jinja.render_prompt", "RenderData");
+
             let json = json!({
                 "name": "default",
                 "function": self.json(fc.last_file()),
                 "prompt": self.jinja_prompt().replace(r#"""""#, r#"\"\"\""#),
                 "client": client.name(),
+                "output_schema": "<TODO>",
+                "template_macros": self.db.walk_templates().map(|t| json!({
+                    "name": t.name().to_string(),
+                    "args": match t.ast_node().input() {
+                        Some(FunctionArgs::Named(list)) => {
+                            list.args.iter().map(|(idn, field_type)| json!({
+                                "name": idn.name(),
+                                "type": field_type.to_py_string(fc.last_file()),
+                            })).collect::<Vec<_>>()
+                        },
+                        _ => vec![],
+                    },
+                    "template": t.template_string().replace(r#"""""#, r#"\"\"\""#),
+            })).collect::<Vec<_>>(),
             });
 
             render_template(

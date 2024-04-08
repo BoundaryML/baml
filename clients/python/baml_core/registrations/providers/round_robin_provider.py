@@ -3,6 +3,8 @@ import asyncio
 import typing
 from typing import Any, AsyncIterator, Dict, List, Optional, Union
 
+from baml_core_ffi import TemplateStringMacro
+
 from baml_core.provider_manager import (
     register_llm_provider,
     LLMResponse,
@@ -97,6 +99,21 @@ class RoundRobinProvider(AbstractLLMProvider):
             self.__provider_index = (self.__provider_index + 1) % len(self.__providers)
         client_name = self.__providers[provider_index % len(self.__providers)]
         return LLMManager.get_llm(client_name)
+
+    async def _run_jinja_template_internal(
+        self,
+        *,
+        jinja_template: str,
+        args: Dict[str, Any],
+        template_macros: List[TemplateStringMacro],
+        output_schema: str,
+    ) -> LLMResponse:
+        return await (await self._choose_provider()).run_jinja_template(
+            jinja_template=jinja_template,
+            args=args,
+            template_macros=template_macros,
+            output_schema=output_schema,
+        )
 
     async def _run_prompt_internal(self, prompt: str) -> LLMResponse:
         return await (await self._choose_provider()).run_prompt(prompt)
