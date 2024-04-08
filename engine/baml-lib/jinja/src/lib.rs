@@ -3,7 +3,10 @@ mod get_vars;
 
 use evaluate_type::get_variable_types;
 use minijinja;
+use minijinja::context;
+use serde::Serialize;
 use serde_json;
+use std::collections::HashMap;
 
 pub use evaluate_type::{PredefinedTypes, Type, TypeError};
 
@@ -60,13 +63,57 @@ pub fn validate_template(
     }
 }
 
-fn render_minijinja(template: &str, json: &serde_json::Value) -> Result<String, minijinja::Error> {
+#[derive(Clone, Debug, Serialize)]
+pub struct RenderContext_Client {
+    pub name: String,
+    pub provider: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct RenderContext {
+    pub client: RenderContext_Client,
+    pub output_schema: String,
+    pub env: HashMap<String, String>,
+}
+
+pub struct TemplateStringMacro {
+    pub name: String,
+    pub args: Vec<(String, String)>,
+    pub template: String,
+}
+
+fn render_minijinja(
+    template: &str,
+    args: serde_json::Map<String, serde_json::Value>,
+    ctx: RenderContext,
+    template_string_macros: Vec<TemplateStringMacro>,
+) -> Result<String, minijinja::Error> {
     let mut env = get_env();
 
-    env.add_template("prompt", template)?;
+    let template = template_string_macros
+        .into_iter()
+        .map(|tsm| {
+            format!(
+                "{{% macro {name}({args}) %}}{template}{{% endmacro %}}",
+                name = tsm.name,
+                args = tsm
+                    .args
+                    .into_iter()
+                    .map(|(name, _type)| name)
+                    .collect::<Vec<String>>()
+                    .join(", "),
+                template = tsm.template,
+            )
+        })
+        .chain(std::iter::once(template.to_string()))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    env.add_template("prompt", &template)?;
+    env.add_global("ctx", minijinja::Value::from_serializable(&ctx));
     let tmpl = env.get_template("prompt")?;
 
-    tmpl.render(minijinja::Value::from_serializable(&json))
+    tmpl.render(minijinja::Value::from_serializable(&args))
 }
 
 #[derive(Debug, PartialEq)]
@@ -81,8 +128,13 @@ pub enum RenderedPrompt {
     Chat(Vec<RenderedChatMessage>),
 }
 
-pub fn render_template(template: &str, json: &serde_json::Value) -> anyhow::Result<RenderedPrompt> {
-    let rendered = render_minijinja(template, json);
+pub fn render_template(
+    template: &str,
+    args: serde_json::Map<String, serde_json::Value>,
+    ctx: RenderContext,
+    template_string_macros: Vec<TemplateStringMacro>,
+) -> anyhow::Result<RenderedPrompt> {
+    let rendered = render_minijinja(template, args, ctx, template_string_macros);
 
     match rendered {
         Ok(s) => Ok(RenderedPrompt::Completion(s)),
@@ -106,7 +158,7 @@ pub fn render_template(template: &str, json: &serde_json::Value) -> anyhow::Resu
 }
 
 #[cfg(test)]
-mod tests {
+mod render_tests {
 
     use super::*;
 
@@ -125,10 +177,30 @@ mod tests {
     fn rendering_succeeds() -> anyhow::Result<()> {
         setup_logging();
 
-        let rendered =
-            render_template("Hello, {{ name }}!", &serde_json::json!({"name": "world"}))?;
+        let serde_json::Value::Object(args) = serde_json::json!({
+            "name": "world"
+        }) else {
+            anyhow::bail!("args must be convertible to a JSON object");
+        };
 
-        assert_eq!(rendered, RenderedPrompt::Completion("Hello, world!".into()));
+        let rendered = render_template(
+            "Hello, {{ name }}!",
+            args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                },
+                output_schema: "output[]".to_string(),
+                env: HashMap::new(),
+            },
+            vec![],
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Completion("Hello, world!".to_string())
+        );
 
         Ok(())
     }
@@ -137,8 +209,26 @@ mod tests {
     fn rendering_fails() -> anyhow::Result<()> {
         setup_logging();
 
+        let serde_json::Value::Object(args) = serde_json::json!({
+            "name": "world"
+        }) else {
+            anyhow::bail!("args must be convertible to a JSON object");
+        };
+
         // rendering should fail: template contains '{{ name }' (missing '}' at the end)
-        let rendered = render_template("Hello, {{ name }!", &serde_json::json!({"name": "world"}));
+        let rendered = render_template(
+            "Hello, {{ name }!",
+            args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                },
+                output_schema: "output[]".to_string(),
+                env: HashMap::new(),
+            },
+            vec![],
+        );
 
         match rendered {
             Ok(_) => {

@@ -246,7 +246,12 @@ impl From<internal_baml_jinja::RenderedChatMessage> for RenderedChatMessage {
 
 #[pyfunction]
 fn render_prompt(template: String, context: RenderData) -> PyResult<PyObject> {
-    let render_args = match pyobject_to_json(context.args) {
+    let RenderData {
+        args,
+        ctx,
+        template_string_macros,
+    } = context;
+    let render_args = match pyobject_to_json(args) {
         Ok(render_args) => render_args,
         Err(errors) => {
             let messages = errors
@@ -267,23 +272,31 @@ fn render_prompt(template: String, context: RenderData) -> PyResult<PyObject> {
             }
         }
     };
-    let serde_json::Value::Object(mut render_args) = render_args else {
+    let serde_json::Value::Object(render_args) = render_args else {
         return Err(PyTypeError::new_err(
             "args must be convertible to a JSON object",
         ));
     };
-    match serde_json::to_value(context.ctx) {
-        Ok(ctx_value) => {
-            render_args.insert("ctx".to_string(), ctx_value);
-        }
-        Err(err) => {
-            return Err(PyTypeError::new_err(format!(
-                "Failed to build 'ctx' contents for rendering: {err:#}"
-            )));
-        }
-    }
-    let rendered =
-        internal_baml_jinja::render_template(&template, &serde_json::Value::Object(render_args));
+    let rendered = internal_baml_jinja::render_template(
+        &template,
+        render_args,
+        internal_baml_jinja::RenderContext {
+            client: internal_baml_jinja::RenderContext_Client {
+                name: ctx.client.name,
+                provider: ctx.client.provider,
+            },
+            output_schema: ctx.output_schema,
+            env: ctx.env,
+        },
+        template_string_macros
+            .into_iter()
+            .map(|t| internal_baml_jinja::TemplateStringMacro {
+                name: t.name,
+                args: t.args,
+                template: t.template,
+            })
+            .collect::<Vec<_>>(),
+    );
 
     match rendered {
         Ok(internal_baml_jinja::RenderedPrompt::Completion(s)) => {

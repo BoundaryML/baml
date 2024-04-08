@@ -112,6 +112,7 @@ case "$_path" in
     if [ "$_watch_mode" -eq 1 ]; then
       npx nodemon \ #--verbose \
         --ext py,pyi,rs \
+        --watch "${_repo_root}/engine/baml-lib/jinja" \
         --watch "${_repo_root}/clients/python-ffi" \
         --watch . \
         --exec "${command}"

@@ -49,15 +49,16 @@ if __name__ == "__main__":
         ),
         template_string_macros=[
             RenderData.template_string_macro(
-                name="foo",
+                name="farewell",
                 args=[
-                    ("bar", "string"),
+                    ("name", "string"),
                 ],
-                template="foo {{bar}}",
+                template="goodbye {{name}}",
             )
         ],
     )
     rendered = render_prompt(
-        "{{ctx.env.LANG}}: Hello {{name}}, it's a good day today!", args
+        "{{ctx.env.LANG}}: Hello {{name}}, it's a good day today!\n\n{{farewell(name)}}",
+        args,
     )
     print("Rendered", rendered)
