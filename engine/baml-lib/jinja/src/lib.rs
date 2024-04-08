@@ -69,11 +69,21 @@ fn render_minijinja(template: &str, json: &serde_json::Value) -> Result<String, 
     tmpl.render(minijinja::Value::from_serializable(&json))
 }
 
-pub fn render_template(template: &str, json: &serde_json::Value) -> anyhow::Result<String> {
+struct RenderedChatMessage {
+    role: String,
+    message: String,
+}
+
+enum RenderedPrompt {
+    Completion { message: String },
+    Chat { messages: Vec<RenderedChatMessage> },
+}
+
+pub fn render_template(template: &str, json: &serde_json::Value) -> anyhow::Result<RenderedPrompt> {
     let rendered = render_minijinja(template, json);
 
     match rendered {
-        Ok(s) => Ok(s),
+        Ok(s) => Ok(RenderedPrompt::Completion { message: s }),
         Err(err) => {
             let mut minijinja_err = "".to_string();
             minijinja_err += &format!("{err:#}");

@@ -222,6 +222,7 @@ impl RenderData {
     }
 }
 
+#[derive(Clone, Debug)]
 #[pyclass]
 struct RenderedChatMessage {
     #[pyo3(get)]
@@ -231,6 +232,8 @@ struct RenderedChatMessage {
     message: String,
 }
 
+#[derive(Clone, Debug)]
+#[pyclass]
 enum RenderedPrompt {
     Completion { message: String },
     Chat { messages: Vec<RenderedChatMessage> },
@@ -289,6 +292,8 @@ fn baml_core_ffi(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<RenderData>()?;
     m.add_class::<RenderData_Client>()?;
     m.add_class::<RenderData_Context>()?;
+    m.add_class::<RenderedChatMessage>()?;
+    m.add_class::<RenderedPrompt>()?;
     Ok(())
 }
 

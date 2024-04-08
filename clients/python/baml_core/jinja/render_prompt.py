@@ -1,5 +1,18 @@
-from typing import List, Tuple
-from baml_core_ffi import render_prompt, RenderData
+from typing import Literal, List, Tuple, Union
+from baml_core_ffi import (
+    render_prompt as render_prompt_ffi,
+    RenderData,
+    RenderedChatMessage as ChatMessage,
+)
+
+
+def render_prompt(
+    prompt_template: str, render_context: RenderData
+) -> Union[
+    Tuple[Literal["completion"], str], Tuple[Literal["chat"], List[ChatMessage]]
+]:
+    return render_prompt_ffi(prompt_template, render_context)
+
 
 __all__ = ["render_prompt", "RenderData"]
 

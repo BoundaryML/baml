@@ -10,7 +10,7 @@ class RenderData:
     def __new__(cls,
                 args: Dict[str, Any],
                 ctx: RenderData_Context,
-                template_string_macros: Dict[str, str]
+                template_string_macros: List[TemplateStringMacro]
                 ) -> "RenderData": ...
 
     @staticmethod
