@@ -69,11 +69,13 @@ fn render_minijinja(template: &str, json: &serde_json::Value) -> Result<String, 
     tmpl.render(minijinja::Value::from_serializable(&json))
 }
 
+#[derive(Debug, PartialEq)]
 pub struct RenderedChatMessage {
     pub role: String,
     pub message: String,
 }
 
+#[derive(Debug, PartialEq)]
 pub enum RenderedPrompt {
     Completion(String),
     Chat(Vec<RenderedChatMessage>),
@@ -126,7 +128,7 @@ mod tests {
         let rendered =
             render_template("Hello, {{ name }}!", &serde_json::json!({"name": "world"}))?;
 
-        assert_eq!(rendered, "Hello, world!");
+        assert_eq!(rendered, RenderedPrompt::Completion("Hello, world!".into()));
 
         Ok(())
     }
