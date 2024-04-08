@@ -1,11 +1,5 @@
 from typing import List, Tuple
-from baml_core_ffi import RenderData
-import baml_core_ffi
-
-
-def render_prompt(prompt_template: str, args: RenderData) -> str:
-    return baml_core_ffi.render_prompt(prompt_template, args)
-
+from baml_core_ffi import render_prompt, RenderData
 
 __all__ = ["render_prompt", "RenderData"]
 
