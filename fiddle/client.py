@@ -2,17 +2,21 @@ import pprint
 import requests
 
 payload = {
-  "files": {
-    "main.baml": open('inputs/main.baml').read(),
-    "__tests__/ExtractVerbs/red_aardvark.json":
-          open('inputs/test_case.json').read(),
-  },
+  "files": [
+    {"name": "baml_src/main.baml", "content": open('inputs/main.baml').read()},
+    {"name": "baml_src/__tests__/ExtractVerbs/red_aardvark.json", "content": open('inputs/test_case.json').read()},
+  ],
 }
 
 response = requests.post(
     'http://localhost:8000/fiddle',
     json=payload,
+    stream=True,
 )
 
-print(f'Status Code: {response.status_code}')
-print(f'Response Body: {pprint.pprint(response.json())}')
+if response.encoding is None:
+    response.encoding = 'utf-8'
+
+for line in response.iter_lines(decode_unicode=True):
+    if line:  # filter out keep-alive new lines
+        print(line)

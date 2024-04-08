@@ -5,11 +5,11 @@ generator lang_python {
   project_root ".."
   // This command is used by "baml test" to run tests
   // defined in the playground
-  test_command "poetry run pytest -s"
+  test_command "python -m pytest -s"
   // This command is used by "baml update-client" to install
   // dependencies to your language environment
-  install_command "poetry add baml@latest"
-  package_version_command "poetry show baml"
+  install_command "pip install baml@latest"
+  package_version_command "pip show baml"
 }
 
 function ExtractVerbs {

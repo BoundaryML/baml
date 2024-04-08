@@ -53,6 +53,8 @@ RUN curl -fsSL https://raw.githubusercontent.com/BoundaryML/homebrew-baml/main/i
   sed "s/sudo//" | \
   bash
 
+RUN pip install baml pytest
+
 WORKDIR $PYSETUP_PATH
 COPY app $PYSETUP_PATH/app
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
