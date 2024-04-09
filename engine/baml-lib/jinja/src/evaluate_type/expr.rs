@@ -13,8 +13,6 @@ fn tracker_visit_expr<'a>(
     state: &mut ScopeTracker<'a>,
     types: &PredefinedTypes,
 ) -> Type {
-    // println!("Visiting: {:?}", expr);
-
     match expr {
         ast::Expr::Var(var) => match types.resolve(var.id) {
             Some(t) => t,

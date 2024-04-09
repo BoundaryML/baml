@@ -33,6 +33,8 @@ impl PartialEq for Type {
             (Self::Unknown, Self::Unknown) => true,
             (Self::Unknown, _) => true,
             (_, Self::Unknown) => true,
+            (Self::Number, Self::Int | Self::Float) => true,
+            (Self::Int | Self::Float, Self::Number) => true,
             (Self::List(l0), Self::List(r0)) => l0 == r0,
             (Self::Map(l0, l1), Self::Map(r0, r1)) => l0 == r0 && l1 == r1,
             (Self::Union(l0), Self::Union(r0)) => l0 == r0,
