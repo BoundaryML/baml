@@ -1,6 +1,6 @@
 baml fiddle
 
-docker build -t fiddle .
+docker build -t fiddle . --platform linux/amd64
 docker run -p 8000:8000 fiddle
 
 ## Run without docker
@@ -9,6 +9,8 @@ First activate the virutal environment in fiddle/ dir
 (create virtualenv if not available: `virtualenv .`)
 `source bin/activate`
 
+Then do the following steps:
+
 ### Install deps
 
 `pip install baml pytest python-dotenv`
@@ -16,7 +18,14 @@ First activate the virutal environment in fiddle/ dir
 `cd backend`
 `uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload`
 
+Now the server will have access to a python env that has `baml` python package installed.
+
 ## Test command
+
+Run this from the same virtualenv you created in fiddle/
+`python client.py`
+
+OR you can try to use curl:
 
 ```
 curl -X POST "http://localhost:8000/fiddle" \

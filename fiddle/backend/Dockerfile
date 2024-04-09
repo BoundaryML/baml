@@ -49,11 +49,18 @@ RUN apt-get update \
     && apt-get install --no-install-recommends -y \
     curl
 
-RUN curl -fsSL https://raw.githubusercontent.com/BoundaryML/homebrew-baml/main/install-baml.sh | \
-  sed "s/sudo//" | \
-  bash
+RUN curl -fsSL -o install-baml.sh https://raw.githubusercontent.com/BoundaryML/homebrew-baml/main/install-baml.sh
+
+RUN chmod +x install-baml.sh
+
+# replace the sudo
+RUN sed -i 's/sudo //g' install-baml.sh
+
+RUN TERM=xterm bash ./install-baml.sh
 
 RUN pip install baml pytest
+
+RUN baml version
 
 WORKDIR $PYSETUP_PATH
 COPY app $PYSETUP_PATH/app

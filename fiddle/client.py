@@ -8,15 +8,30 @@ payload = {
   ],
 }
 
-response = requests.post(
-    'http://localhost:8000/fiddle',
-    json=payload,
-    stream=True,
-)
+prod_url = "https://prompt-fiddle.fly.dev"
+local_url = "http://localhost:8000"
 
-if response.encoding is None:
-    response.encoding = 'utf-8'
+try:
+    response = requests.post(
+        f'{prod_url}/fiddle',
+        json=payload,  # Ensure 'payload' is defined before this line
+        stream=True,
+    )
+    response.raise_for_status()  # Raises an HTTPError if the response status code is 4XX or 5XX
 
-for line in response.iter_lines(decode_unicode=True):
-    if line:  # filter out keep-alive new lines
-        print(line)
+    if response.encoding is None:
+        response.encoding = 'utf-8'
+
+    for line in response.iter_lines(decode_unicode=True):
+        if line:  # Filter out keep-alive new lines
+            print(line)
+            #pass
+
+except requests.exceptions.HTTPError as e:
+    print(f"HTTP Error: {e}")
+except requests.exceptions.ConnectionError as e:
+    print(f"Error Connecting: {e}")
+except requests.exceptions.Timeout as e:
+    print(f"Timeout Error: {e}")
+except requests.exceptions.RequestException as e:
+    print(f"Unexpected Error: {e}")

@@ -11,6 +11,7 @@
   "dependencies": {
     "@baml/codemirror-lang": "workspace:*",
     "@baml/playground-common": "workspace:*",
+    "@baml/common": "workspace:*",
     "@codemirror/autocomplete": "^6.15.0",
     "@codemirror/lang-rust": "^6.0.1",
     "@codemirror/language": "^6.10.1",
@@ -20,6 +21,7 @@
     "@gloo-ai/baml-schema-wasm-web": "workspace:*",
     "@hookform/resolvers": "^3.3.4",
     "@lezer/highlight": "^1.2.0",
+    "@microsoft/fetch-event-source": "^2.0.1",
     "@radix-ui/react-dialog": "^1.0.5",
     "@radix-ui/react-label": "^2.0.2",
     "@radix-ui/react-menubar": "^1.0.4",

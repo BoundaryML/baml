@@ -122,6 +122,9 @@ importers:
       '@baml/codemirror-lang':
         specifier: workspace:*
         version: link:../codemirror-lang-baml
+      '@baml/common':
+        specifier: workspace:*
+        version: link:../common
       '@baml/playground-common':
         specifier: workspace:*
         version: link:../playground-common
@@ -152,6 +155,9 @@ importers:
       '@lezer/highlight':
         specifier: ^1.2.0
         version: 1.2.0
+      '@microsoft/fetch-event-source':
+        specifier: ^2.0.1
+        version: 2.0.1
       '@radix-ui/react-dialog':
         specifier: ^1.0.5
         version: 1.0.5(@types/react-dom@18.2.24)(@types/react@18.2.74)(react-dom@18.2.0)(react@18.2.0)
@@ -2283,6 +2289,10 @@ packages:
     resolution: {integrity: sha512-ReWYncndjV3c8D8iq9tp7NcFNc1vbVHvcBFPME2nNFKNbS1XCesYZGlIlf3ot5EmuOXPlrzUHOWzQ2vFpIkqDg==}
     dependencies:
       exenv-es6: 1.1.1
+    dev: false
+
+  /@microsoft/fetch-event-source@2.0.1:
+    resolution: {integrity: sha512-W6CLUJ2eBMw3Rec70qrsEW0jOm/3twwJv21mrmj2yORiaVmVYGS4sSS5yUwvQc1ZlDLYGPnClVWmUUMagKNsfA==}
     dev: false
 
   /@next/env@14.1.4:
