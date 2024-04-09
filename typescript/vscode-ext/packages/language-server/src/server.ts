@@ -484,17 +484,19 @@ export function startServer(options?: LSOptions): void {
       return codeLenses
     }
 
-    const functionNames = db.functions.filter((x) => x.name.source_file === docFsPath).map((f) => f.name)
-    const position: Position = document.positionAt(0)
-    functionNames.forEach((name) => {
-      const range = Range.create(document.positionAt(name.start), document.positionAt(name.end))
+    for (const fn of db.functions) {
+      if (fn.name.source_file !== docFsPath) {
+        continue;
+      }
+
+      const range = Range.create(document.positionAt(fn.name.start), document.positionAt(fn.name.end))
       const command: Command = {
         title: '▶️ Open Playground',
         command: 'baml.openBamlPanel',
         arguments: [
           {
             projectId: baml_dir?.fsPath || '',
-            functionName: name.value,
+            functionName: fn.name.value,
             showTests: true,
           },
         ],
@@ -503,55 +505,48 @@ export function startServer(options?: LSOptions): void {
         range,
         command,
       })
-    })
 
-    const implNames = db.functions
-      .flatMap((f) =>
-        f.impls.map((i) => {
-          return {
-            value: i.name.value,
-            start: i.name.start,
-            end: i.name.end,
-            source_file: i.name.source_file,
-            prompt_key: i.prompt_key,
-            function: f.name.value,
+      switch (fn.syntax) {
+        case "Version2":
+          continue;
+        
+        case "Version1":
+          for (const impl of fn.impls) {
+            codeLenses.push({
+              range: Range.create(document.positionAt(impl.name.start), document.positionAt(impl.name.end)),
+              command: {
+                title: '▶️ Open Playground',
+                command: 'baml.openBamlPanel',
+                arguments: [
+                  {
+                    projectId: baml_dir?.fsPath || '',
+                    functionName: fn.name.value,
+                    implName: impl.name.value,
+                    showTests: true,
+                  },
+                ],
+              },
+            })
+            codeLenses.push({
+              range: Range.create(document.positionAt(impl.prompt_key.start), document.positionAt(impl.prompt_key.end)),
+              command: {
+                title: '▶️ Open Live Preview',
+                command: 'baml.openBamlPanel',
+                arguments: [
+                  {
+                    projectId: baml_dir?.fsPath || '',
+                    functionName: fn.name.value,
+                    implName: impl.name.value,
+                    showTests: false,
+                  },
+                ],
+              },
+            })
           }
-        }),
-      )
-      .filter((x) => x.source_file === docFsPath)
+          break;
 
-    implNames.forEach((name) => {
-      codeLenses.push({
-        range: Range.create(document.positionAt(name.start), document.positionAt(name.end)),
-        command: {
-          title: '▶️ Open Playground',
-          command: 'baml.openBamlPanel',
-          arguments: [
-            {
-              projectId: baml_dir?.fsPath || '',
-              functionName: name.function,
-              implName: name.value,
-              showTests: true,
-            },
-          ],
-        },
-      })
-      codeLenses.push({
-        range: Range.create(document.positionAt(name.prompt_key.start), document.positionAt(name.prompt_key.end)),
-        command: {
-          title: '▶️ Open Live Preview',
-          command: 'baml.openBamlPanel',
-          arguments: [
-            {
-              projectId: baml_dir?.fsPath || '',
-              functionName: name.function,
-              implName: name.value,
-              showTests: false,
-            },
-          ],
-        },
-      })
-    })
+      }
+    }
 
     const testCases = db.functions
       .flatMap((f) =>

@@ -20,7 +20,7 @@ import pytest
 from contextlib import contextmanager
 from unittest import mock
 
-ImplName = type(None)
+ImplName = typing.Literal["v1"]
 
 T = typing.TypeVar("T", bound=typing.Callable[..., typing.Any])
 CLS = typing.TypeVar("CLS", bound=type)

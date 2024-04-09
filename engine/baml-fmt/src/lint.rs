@@ -12,7 +12,10 @@ use jsonschema::WithJsonSchema;
 
 use baml_lib::{
     internal_baml_diagnostics::{DatamodelError, DatamodelWarning},
-    internal_baml_parser_database::{walkers::FunctionWalker, PromptAst},
+    internal_baml_parser_database::{
+        walkers::{FunctionWalker, VariantWalker},
+        PromptAst,
+    },
     internal_baml_schema_ast::ast::{self, WithIdentifier, WithName, WithSpan},
     SourceFile, ValidatedSchema,
 };
@@ -111,61 +114,10 @@ pub(crate) fn run(input: &str) -> String {
         "clients": schema.db.walk_clients().map(|c| json!({
             "name": StringSpan::new(c.name(), c.identifier().span()),
         })).collect::<Vec<_>>(),
-        "functions": schema
-        .db
-        .walk_old_functions()
-        .chain(schema.db.walk_new_functions())
-        .map(|func| {
-            json!({
-                "name": StringSpan::new(func.name(), func.identifier().span()),
-                "input": match func.ast_function().input() {
-                    ast::FunctionArgs::Named(arg_list) => json!({
-                        "arg_type": "named",
-                        "values": arg_list.args.iter().map(
-                            |(id, arg)| json!({
-                                "name": StringSpan::new(id.name(), id.span()),
-                                "type": format!("{}", arg.field_type),
-                                "jsonSchema": arg.field_type.json_schema()
-
-                            })
-                        ).collect::<Vec<_>>(),
-                    }),
-                    ast::FunctionArgs::Unnamed(arg) => json!({
-                        "arg_type": "positional",
-                        "type": format!("{}", arg.field_type),
-                        "jsonSchema": arg.field_type.json_schema()
-                    }),
-                },
-                "output": match func.ast_function().output() {
-                    ast::FunctionArgs::Named(arg_list) => json!({
-                        "arg_type": "named",
-                        "values": arg_list.args.iter().map(
-                            |(id, arg)| json!({
-                                "name": StringSpan::new(id.name(), id.span()),
-                                "type": format!("{}", arg.field_type),
-                                "jsonSchema": arg.field_type.json_schema()
-                            })
-                        ).collect::<Vec<_>>(),
-                    }),
-                    ast::FunctionArgs::Unnamed(arg) => json!({
-                        "arg_type": "positional",
-                        "type": format!("{}", arg.field_type),
-                        "jsonSchema": arg.field_type.json_schema()
-                    }),
-                },
-                "test_cases": func.walk_tests().map(
-                    |t| {
-                        let props = t.test_case();
-                        json!({
-                            "name": StringSpan::new(t.name(), t.identifier().span()),
-                            "content": Into::<serde_json::Value>::into(&props.content).to_string(),
-                        })
-                    }
-                ).collect::<Vec<_>>(),
-                "impls": preview_impl(&schema, func),
-            })
-        })
-        .collect::<Vec<_>>()
+        "functions": std::iter::empty()
+            .chain(schema.db.walk_old_functions().map(|f| serialize_function(&schema, f, SFunctionSyntax::Version1)))
+            .chain(schema.db.walk_new_functions().map(|f| serialize_function(&schema, f, SFunctionSyntax::Version2)))
+            .collect::<Vec<_>>(),
     });
 
     print_diagnostics(mini_errors, Some(response))
@@ -189,10 +141,82 @@ impl From<&baml_lib::internal_baml_diagnostics::Span> for Span {
     }
 }
 
+#[derive(Serialize)]
+enum SFunctionSyntax {
+    Version1, // "impl<llm, ClassifyResume>"
+    Version2, // functions and impls are collapsed into a single function Name(args) -> Output {...}
+}
+
+#[derive(Serialize)]
+struct SFunction {
+    name: StringSpan,
+    input: serde_json::Value,
+    output: serde_json::Value,
+    test_cases: Vec<serde_json::Value>,
+    impls: Vec<Impl>,
+    syntax: SFunctionSyntax,
+}
+
+fn serialize_function(
+    schema: &ValidatedSchema,
+    func: FunctionWalker,
+    syntax: SFunctionSyntax,
+) -> SFunction {
+    SFunction {
+        name: StringSpan::new(func.name(), func.identifier().span()),
+        input: match func.ast_function().input() {
+            ast::FunctionArgs::Named(arg_list) => json!({
+                "arg_type": "named",
+                "values": arg_list.args.iter().map(
+                    |(id, arg)| json!({
+                        "name": StringSpan::new(id.name(), id.span()),
+                        "type": format!("{}", arg.field_type),
+                        "jsonSchema": arg.field_type.json_schema()
+
+                    })
+                ).collect::<Vec<_>>(),
+            }),
+            ast::FunctionArgs::Unnamed(arg) => json!({
+                "arg_type": "positional",
+                "type": format!("{}", arg.field_type),
+                "jsonSchema": arg.field_type.json_schema()
+            }),
+        },
+        output: match func.ast_function().output() {
+            ast::FunctionArgs::Named(arg_list) => json!({
+                "arg_type": "named",
+                "values": arg_list.args.iter().map(
+                    |(id, arg)| json!({
+                        "name": StringSpan::new(id.name(), id.span()),
+                        "type": format!("{}", arg.field_type),
+                        "jsonSchema": arg.field_type.json_schema()
+                    })
+                ).collect::<Vec<_>>(),
+            }),
+            ast::FunctionArgs::Unnamed(arg) => json!({
+                "arg_type": "positional",
+                "type": format!("{}", arg.field_type),
+                "jsonSchema": arg.field_type.json_schema()
+            }),
+        },
+        test_cases: func
+            .walk_tests()
+            .map(|t| {
+                let props = t.test_case();
+                json!({
+                    "name": StringSpan::new(t.name(), t.identifier().span()),
+                    "content": Into::<serde_json::Value>::into(&props.content).to_string(),
+                })
+            })
+            .collect::<Vec<_>>(),
+        impls: serialize_impls(&schema, func),
+        syntax: syntax,
+    }
+}
+
 // keep in sync with typescript/common/src/parser_db.ts
 #[derive(Serialize)]
-#[serde(tag = "type")]
-// JSON is { "type": "completion", "completion": "..." }
+#[serde(tag = "type")] // JSON is { "type": "completion", "completion": "..." }
 enum PromptPreview {
     Completion { completion: String },
     Chat { chat: Vec<RenderedChatMessage> },
@@ -206,19 +230,34 @@ struct Impl {
     prompt_key: Span,
     prompt: PromptPreview,
     client: StringSpan,
+    input_replacers: Vec<(String, String)>,
+    output_replacers: Vec<(String, String)>,
 }
 
-fn preview_impl(schema: &ValidatedSchema, func: FunctionWalker) -> Vec<Impl> {
+fn apply_replacers(variant: VariantWalker, mut content: String) -> String {
+    let (input_replacers, output_replacers, _) = &variant.properties().replacers;
+    for (input_var, input_replacement) in input_replacers {
+        content = content.replace(&input_var.key(), &format!("{{{input_replacement}}}"));
+    }
+    for (output_var, output_replacement) in output_replacers {
+        content = content.replace(&output_var.key(), &format!("{output_replacement}"));
+    }
+    content
+}
+
+fn serialize_impls(schema: &ValidatedSchema, func: FunctionWalker) -> Vec<Impl> {
     if func.is_old_function() {
         func.walk_variants()
             .map(|i| {
                 let props = i.properties();
+                log::info! {"replacers: {:#?}", props.replacers};
+                let (input_replacers, output_replacers, _) = &props.replacers;
                 Impl {
                     name: StringSpan::new(i.ast_variant().name(), i.identifier().span()),
                     prompt_key: (&props.prompt.key_span).into(),
                     prompt: match props.to_prompt() {
-                        PromptAst::String(content, _) => PromptPreview::Completion {
-                            completion: content.clone(),
+                        PromptAst::String(mut content, _) => PromptPreview::Completion {
+                            completion: apply_replacers(i, content.clone()),
                         },
                         PromptAst::Chat(parts, _) => PromptPreview::Chat {
                             chat: parts
@@ -228,7 +267,7 @@ fn preview_impl(schema: &ValidatedSchema, func: FunctionWalker) -> Vec<Impl> {
                                         .map(|c| c.role.0.as_str())
                                         .unwrap_or("system")
                                         .to_string(),
-                                    message: text.to_string(),
+                                    message: apply_replacers(i, text.clone()),
                                 })
                                 .collect::<Vec<_>>(),
                         },
@@ -240,6 +279,8 @@ fn preview_impl(schema: &ValidatedSchema, func: FunctionWalker) -> Vec<Impl> {
                         .unwrap_or_else(|| {
                             StringSpan::new(&props.client.value, &props.client.span)
                         }),
+                    input_replacers: vec![],
+                    output_replacers: vec![],
                 }
             })
             .collect::<Vec<_>>()
@@ -303,6 +344,8 @@ fn preview_impl(schema: &ValidatedSchema, func: FunctionWalker) -> Vec<Impl> {
                 },
             },
             client: client,
+            input_replacers: vec![],
+            output_replacers: vec![],
         }]
     }
 }

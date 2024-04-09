@@ -56,14 +56,15 @@ class IBAMLClassifyTool(BaseBAMLFunction[ClassifyResponse, PartialClassifyRespon
         super().__init__(
             "ClassifyTool",
             IClassifyTool,
-            [],
+            ["v1"],
         )
 
     async def __call__(self, *args, **kwargs) -> ClassifyResponse:
-        raise NotImplementedError("No impls defined")
+        return await self.get_impl("v1").run(*args, **kwargs)
     
     def stream(self, *args, **kwargs) -> AsyncStream[ClassifyResponse, PartialClassifyResponse]:
-        raise NotImplementedError("No impls defined")
+        res = self.get_impl("v1").stream(*args, **kwargs)
+        return res
 
 BAMLClassifyTool = IBAMLClassifyTool()
 

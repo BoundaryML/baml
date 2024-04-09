@@ -63,6 +63,8 @@ export type Impl = {
       type: "Error"
       error: string
     }
+  input_replacers: [string, string][],
+  output_replacers: [string, string][],
 };
 
 interface SFunction {
@@ -75,4 +77,5 @@ interface SFunction {
     // For now this is json.
     content: string
   }[]
+  syntax: "Version1" | "Version2"
 }

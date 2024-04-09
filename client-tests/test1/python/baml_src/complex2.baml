@@ -2,14 +2,18 @@ function BClassifyTool(query: string, context: string) -> ClassifyResponse {
     client AZURE_GPT4
 
     prompt #"
-        {{ query }
+        {{ _.chat("system")}}
+
+        {{ query }}
+
+        {{ _.chat("user")}}
 
         UserContext:
         
         {{ context }}
   
         Use this output format:
-        {{ ctx.output_schema }}
+        {{ ctx.client.provider }}
 
         JSON:
     "#

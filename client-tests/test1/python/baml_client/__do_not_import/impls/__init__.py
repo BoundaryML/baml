@@ -12,6 +12,7 @@
 from .fx_bclassifytool_impl_default_config import default_config as unused_fx_bclassifytool_impl_default_config
 from .fx_booleanfunc_impl_v1 import v1 as unused_fx_booleanfunc_impl_v1
 from .fx_classfunc_impl_version import version as unused_fx_classfunc_impl_version
+from .fx_classifytool_impl_v1 import v1 as unused_fx_classifytool_impl_v1
 from .fx_enumfunc_impl_version import version as unused_fx_enumfunc_impl_version
 from .fx_intfunc_impl_v1 import v1 as unused_fx_intfunc_impl_v1
 from .fx_maybepolishtext_impl_v1 import v1 as unused_fx_maybepolishtext_impl_v1

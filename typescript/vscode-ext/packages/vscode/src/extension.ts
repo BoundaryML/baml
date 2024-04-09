@@ -14,8 +14,9 @@ const diagnosticsCollection = vscode.languages.createDiagnosticCollection('baml'
 const LANG_NAME = 'Baml'
 
 export function activate(context: vscode.ExtensionContext) {
-  const baml_config = vscode.workspace.getConfiguration('baml')
+  console.log("BAML extension activating")
 
+  vscode.workspace.getConfiguration('baml')
 
   const bamlPlaygroundCommand = vscode.commands.registerCommand(
     'baml.openBamlPanel',
@@ -74,8 +75,8 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate(): void {
+  console.log("BAML extension deactivating")
   testExecutor.close()
-  console.log('deactivate')
   plugins.forEach((plugin) => {
     if (plugin.deactivate) {
       void plugin.deactivate()

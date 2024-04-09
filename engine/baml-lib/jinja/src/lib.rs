@@ -82,6 +82,8 @@ pub struct TemplateStringMacro {
     pub template: String,
 }
 
+const MAGIC_CHAT_ROLE_DELIMITER: &'static str = "BAML_CHAT_ROLE_MAGIC_STRING_DELIMITER";
+
 fn render_minijinja(
     template: &str,
     args: serde_json::Map<String, serde_json::Value>,
@@ -132,7 +134,7 @@ fn render_minijinja(
         "_",
         context! {
             chat => minijinja::Value::from_function(|role: String| {
-                format!("BAML_CHAT_ROLE_MAGIC_STRING_DELIMITER:start:{role}:end:BAML_CHAT_ROLE_MAGIC_STRING_DELIMITER")
+                format!("{MAGIC_CHAT_ROLE_DELIMITER}:baml-start-baml:{role}:baml-end-baml:{MAGIC_CHAT_ROLE_DELIMITER}")
             })
         },
     );
@@ -140,26 +142,27 @@ fn render_minijinja(
 
     let rendered = tmpl.render(minijinja::Value::from_serializable(&args))?;
 
-    if !rendered.contains("BAML_CHAT_ROLE_MAGIC_STRING_DELIMITER") {
+    if !rendered.contains(MAGIC_CHAT_ROLE_DELIMITER) {
         return Ok(RenderedPrompt::Completion(rendered));
     }
 
     let mut chat_messages = vec![];
-    let mut role = "system";
+    let mut role = None;
 
-    for chunk in rendered
-        .trim()
-        .split("BAML_CHAT_ROLE_MAGIC_STRING_DELIMITER")
-    {
-        if chunk.starts_with(":start:") && chunk.ends_with(":end:") {
-            role = chunk
-                .strip_prefix(":start:")
-                .unwrap_or(chunk)
-                .strip_suffix(":end:")
-                .unwrap_or(chunk);
+    for chunk in rendered.split(MAGIC_CHAT_ROLE_DELIMITER) {
+        if chunk.starts_with(":baml-start-baml:") && chunk.ends_with(":baml-end-baml:") {
+            role = Some(
+                chunk
+                    .strip_prefix(":baml-start-baml:")
+                    .unwrap_or(chunk)
+                    .strip_suffix(":baml-end-baml:")
+                    .unwrap_or(chunk),
+            );
+        } else if role.is_none() && chunk.is_empty() {
+            // If there's only whitespace before the first `_.chat()` directive, we discard that chunk
         } else {
             chat_messages.push(RenderedChatMessage {
-                role: role.to_string(),
+                role: role.unwrap_or("system").to_string(),
                 message: chunk.trim().to_string(),
             });
         }
@@ -222,7 +225,7 @@ mod render_tests {
     }
 
     #[test]
-    fn rendering_succeeds() -> anyhow::Result<()> {
+    fn render_chat() -> anyhow::Result<()> {
         setup_logging();
 
         let serde_json::Value::Object(args) = serde_json::json!({
@@ -288,7 +291,100 @@ mod render_tests {
     }
 
     #[test]
-    fn rendering_fails() -> anyhow::Result<()> {
+    fn render_completion() -> anyhow::Result<()> {
+        setup_logging();
+
+        let serde_json::Value::Object(args) = serde_json::json!({
+            "haiku_subject": "sakura"
+        }) else {
+            anyhow::bail!("args must be convertible to a JSON object");
+        };
+
+        let rendered = render_prompt(
+            "
+                You are an assistant that always responds
+                in a very excited way with emojis
+                and also outputs this word 4 times
+                after giving a response: {{ haiku_subject }}
+            ",
+            args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                },
+                output_schema: "iambic pentameter".to_string(),
+                env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
+            },
+            vec![],
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Completion(
+                vec![
+                    "You are an assistant that always responds",
+                    "in a very excited way with emojis",
+                    "and also outputs this word 4 times",
+                    "after giving a response: sakura",
+                ]
+                .join("\n")
+            )
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn render_chat_starts_with_system() -> anyhow::Result<()> {
+        setup_logging();
+
+        let serde_json::Value::Object(args) = serde_json::json!({
+            "haiku_subject": "sakura"
+        }) else {
+            anyhow::bail!("args must be convertible to a JSON object");
+        };
+
+        let rendered = render_prompt(
+            "
+                {{ _.chat(\"system\") }}
+
+                You are an assistant that always responds
+                in a very excited way with emojis
+                and also outputs this word 4 times
+                after giving a response: {{ haiku_subject }}
+            ",
+            args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                },
+                output_schema: "iambic pentameter".to_string(),
+                env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
+            },
+            vec![],
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Chat(vec![RenderedChatMessage {
+                role: "system".to_string(),
+                message: vec![
+                    "You are an assistant that always responds",
+                    "in a very excited way with emojis",
+                    "and also outputs this word 4 times",
+                    "after giving a response: sakura",
+                ]
+                .join("\n")
+            },])
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn render_malformed_jinja() -> anyhow::Result<()> {
         setup_logging();
 
         let serde_json::Value::Object(args) = serde_json::json!({
