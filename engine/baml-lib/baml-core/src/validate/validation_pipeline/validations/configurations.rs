@@ -1,4 +1,4 @@
-use internal_baml_diagnostics::DatamodelError;
+use internal_baml_diagnostics::{DatamodelError, DatamodelWarning};
 
 use crate::validate::validation_pipeline::context::Context;
 
@@ -13,7 +13,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
         // Ensure that the test case name is valid.
         let case = config.test_case();
         if ctx.db.find_function_by_name(&case.function.0).is_none() {
-            ctx.push_error(DatamodelError::new_type_not_found_error(
+            ctx.push_warning(DatamodelWarning::new_type_not_found_error(
                 &case.function.0,
                 ctx.db.valid_function_names(),
                 case.function.1.clone(),

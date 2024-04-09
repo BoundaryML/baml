@@ -22,7 +22,11 @@ pub struct DatamodelError {
 ///
 /// # Returns
 /// A vector of strings from `options` that are similar to `name`, sorted by similarity.
-fn sort_by_match<'a, I, T>(name: &str, options: &'a I, max_return: Option<usize>) -> Vec<&'a str>
+pub(super) fn sort_by_match<'a, I, T>(
+    name: &str,
+    options: &'a I,
+    max_return: Option<usize>,
+) -> Vec<&'a str>
 where
     I: Index<usize, Output = T> + 'a,
     &'a I: IntoIterator<Item = &'a T>,

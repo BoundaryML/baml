@@ -1,4 +1,5 @@
 use crate::{
+    error::sort_by_match,
     pretty_print::{pretty_print, DiagnosticColorer},
     Span,
 };
@@ -30,6 +31,34 @@ impl DatamodelWarning {
             "Warning validating field `{}` in {} `{}`: {}",
             field, "model", model, message
         );
+
+        Self::new(msg, span)
+    }
+
+    pub fn new_type_not_found_error(
+        type_name: &str,
+        names: Vec<String>,
+        span: Span,
+    ) -> DatamodelWarning {
+        let close_names = sort_by_match(type_name, &names, Some(10));
+
+        let msg = if close_names.is_empty() {
+            // If no names are close enough, suggest nothing or provide a generic message
+            format!("Type `{}` does not exist.", type_name)
+        } else if close_names.len() == 1 {
+            // If there's only one close name, suggest it
+            format!(
+                "Type `{}` does not exist. Did you mean `{}`?",
+                type_name, close_names[0]
+            )
+        } else {
+            // If there are multiple close names, suggest them all
+            let suggestions = close_names.join("`, `");
+            format!(
+                "Type `{}` does not exist. Did you mean one of these: `{}`?",
+                type_name, suggestions
+            )
+        };
 
         Self::new(msg, span)
     }
