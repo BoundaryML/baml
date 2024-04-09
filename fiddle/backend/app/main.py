@@ -93,7 +93,7 @@ async def generator(output_queue: asyncio.Queue):
         if output is None:  # None is the signal to stop
             break
         source, line = output
-        yield f"data: {source}: {line}\n\n"
+        yield f"data: <BAML_{source}>: {line}\n\n"
 
 async def stream_subprocess_and_port_output(command, cwd, output_queue: asyncio.Queue):
     # Initialize the server to listen on an available port

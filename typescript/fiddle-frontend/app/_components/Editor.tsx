@@ -22,6 +22,7 @@ import {
 import { atom, useAtom } from 'jotai'
 import { atomWithStorage } from 'jotai/utils'
 import { atomStore } from './JotaiProvider'
+import Link from 'next/link'
 
 type EditorFile = {
   path: string
@@ -48,9 +49,7 @@ async function bamlLinter(view: EditorView): Promise<Diagnostic[]> {
   console.info(`Linting ${linterInput.files.length} files in ${linterInput.root_path}`)
   const res = lint(JSON.stringify(linterInput))
   const parsedRes = JSON.parse(res) as LintResponse
-  console.log(`res ${JSON.stringify(res, null, 2)}`)
   const BamlDB = new Map<string, any>()
-  // res is of type ParserDB
   BamlDB.set('baml_src', res)
 
   if (parsedRes.ok) {
@@ -112,12 +111,6 @@ impl<llm, ExtractVerbs> version1 {
 
     Response:
   "#
-}
-`
-
-const defaultTestFile = `
-{
-  "input": "Lou and Jim Whittaker built the Rainier climbing culture Rainier from scratch. There were no outfitters anywhere near the mountain, so they took over a building and made their own store. There was nowhere to get a beer after a summit day, so they built Whittaker’s Bunkhouse bar and hotel to serve guests with more than 30 rooms. There was nowhere to throw a party after a successful trip, so Lou bought a 12-foot-by-six-foot barrel from a company that made pickles and built a hot tub that could hold 18 naked people during big celebrations."
 }
 `
 
@@ -254,8 +247,6 @@ class TestState {
         })
     } catch (e) {
       console.error(e)
-
-      // outputChannel.appendLine(JSON.stringify(e, null, 2))
     }
   }
 
@@ -374,6 +365,8 @@ type SaveTestRequest = {
 }
 
 const serverBaseURL = 'http://localhost:8000'
+const prodBaseURL = 'https://prompt-fiddle.fly.dev'
+const baseUrl = prodBaseURL
 const RunTestButton = () => {
   const [data, setData] = useState<string | null>(null)
   const [functionsAndTests, setFunctionsAndTests] = useAtom(functionsAndTestsAtom)
@@ -391,7 +384,7 @@ const RunTestButton = () => {
       testState.initializeTestCases({
         functions: testRequest.functions,
       })
-      await fetchEventSource(`${serverBaseURL}/fiddle`, {
+      await fetchEventSource(`${baseUrl}/fiddle`, {
         method: 'POST',
 
         body: JSON.stringify({
@@ -417,23 +410,15 @@ const RunTestButton = () => {
           }
         },
         onmessage(event) {
-          console.log('Message received')
-          console.log(event.data)
-          // only send messages that have PORT: , and don't include the PORT: part
-          if (event.data.includes('PORT:')) {
-            const messageWithoutPort = event.data.replace('PORT: ', '')
+          // TODO: fix these
+          if (event.data.includes('<BAML_PORT>:')) {
+            const messageWithoutPort = event.data.replace('<BAML_PORT>: ', '')
 
             testState.handleMessage(messageWithoutPort)
-            //  setData((currentData) => currentData + messageWithoutPort)
           } else {
-            //  window.postMessage({ command: 'test-stdout', content: event.data })
+            const msg = event.data.replaceAll('<BAML_STDOUT>:', '')
+            window.postMessage({ command: 'test-stdout', content: msg })
           }
-
-          // testState.handleMessage(event.data)
-
-          // setData((currentData) => currentData + (event.data ?? ''))
-          //const parsedData = JSON.parse(event.data)
-          //setData((currentData) => [...currentData, parsedData])
         },
         onclose() {
           console.log('Connection closed by the server')
@@ -452,8 +437,6 @@ const RunTestButton = () => {
   useEffect(() => {
     const listener = async (event: any) => {
       const { command, data } = event.data
-
-      console.log('received eventtt ' + JSON.stringify(event) + JSON.stringify(event.data))
 
       switch (command) {
         case 'receiveData':
@@ -491,10 +474,6 @@ const RunTestButton = () => {
               }),
             )
           }
-
-          // const testFileContent: { input: any } = {
-          //   input: testInputContent,
-          // }
           console.log('before setting functions and tests', functionsAndTests)
           const newTestCase = {
             name: {
@@ -538,22 +517,12 @@ const RunTestButton = () => {
               return func // Return unmodified function
             })
           })
-
-          console.log('after setting functions and tests', functionsAndTests)
-
-          console.log('Saving test data to:', filePath)
-
-          // localStorage.setItem(filePath, JSON.stringify(testInputContent))
           break
 
         case 'removeTest':
-          // Remove test data from localStorage
-          // localStorage.removeItem(removePath)
-          console.log('remove test ' + JSON.stringify(data), functionsAndTests)
           const { root_path: removeRootPath, funcName: removeFuncName, testCaseName: removeTestCaseName } = data
 
           const removePath = `${removeRootPath}/__tests__/${removeFuncName}/${removeTestCaseName.value}.json`
-          console.log('Removing test data from:', removePath)
           setFunctionsAndTests((prev) => {
             return prev.map((func) => {
               // Check if this is the function from which to remove the test
@@ -574,9 +543,6 @@ const RunTestButton = () => {
             })
           })
           break
-
-        // Add more cases as needed for other commands
-
         case 'runTest':
           const testRequest: { root_path: string; tests: TestRequest } = event.data.data
 
@@ -589,8 +555,6 @@ const RunTestButton = () => {
               }),
             }))
           })
-
-          console.log('testfiles', testFiles)
 
           const updatedEditorFiles = editorFiles
             // map to replace the content of existing files with the same name
@@ -607,7 +571,7 @@ const RunTestButton = () => {
           fetchData(finalEditorFiles, testRequest.tests)
           break
         default:
-          console.log(`Unhandled command: ${command}`)
+        //console.log(`Unhandled command: ${command}`)
       }
     }
 
@@ -617,31 +581,7 @@ const RunTestButton = () => {
     }
   }, [JSON.stringify(functionsAndTests), JSON.stringify(parserDb)])
 
-  useEffect(() => {
-    const listener = (event: MessageEvent) => {
-      if (event.data.command === 'test-stdout') {
-        setData((currentData) => currentData + event.data.content)
-      }
-    }
-    window.addEventListener('message', listener)
-    return () => {
-      window.removeEventListener('message', listener)
-    }
-  }, [])
-
-  return (
-    <>
-      <Button
-        onClick={async () => {
-          console.log('Running test')
-          // fetchData()
-        }}
-      >
-        Run Test
-      </Button>
-      <>{data && <pre>{JSON.stringify(data, null, 2)}</pre>}</>
-    </>
-  )
+  return <></>
 }
 
 type LintResponse = {
@@ -682,12 +622,9 @@ const PlaygroundView = () => {
     const newParserDb = { ...parserDb }
 
     if (newParserDb.functions.length > 0) {
-      console.log('modifying functions array')
-
       functionsAndTests.forEach((func) => {
         const existingFunc = newParserDb.functions.find((f) => f.name.value === func.name.value)
         if (existingFunc) {
-          console.log('test cases', func.test_cases)
           existingFunc.test_cases = func.test_cases
         } else {
           // can happen if you reload and linter hasnt run.
@@ -695,7 +632,6 @@ const PlaygroundView = () => {
         }
       })
     }
-    console.log('newParserDb', newParserDb)
     window.postMessage({
       command: 'setDb',
       content: [[`${baml_dir}`, newParserDb]],
@@ -708,7 +644,7 @@ const PlaygroundView = () => {
         <ASTProvider>
           <div className="absolute z-10 flex flex-col items-end gap-1 right-1 top-2 text-end">
             {/* <TestToggle /> */}
-            {/* <VSCodeLink href="https://docs.boundaryml.com">Docs</VSCodeLink> */}
+            <Link href="https://docs.boundaryml.com">Docs</Link>
           </div>
           <div className="flex flex-col gap-2 px-2 pb-4">
             <FunctionSelector />
