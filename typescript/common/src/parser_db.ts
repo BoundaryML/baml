@@ -59,6 +59,9 @@ export type Impl = {
         role: string
         message: string
       }[]
+    } | {
+      type: "Error"
+      error: string
     }
 };
 

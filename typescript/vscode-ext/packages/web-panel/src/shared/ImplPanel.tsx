@@ -91,11 +91,14 @@ const CodeLine: React.FC<{ line: string; number: number; showWhitespace: boolean
   )
 }
 
-const Snippet: React.FC<{ text: string }> = ({ text }) => {
+const Snippet: React.FC<{ text: string, type?: "preview" | "error" }> = ({ text, type = "preview" } ) => {
   const [showWhitespace, setShowWhitespace] = useState(true)
   const [wrapText, setWrapText] = useState(true)
 
-  const lines = text.split('\n')
+  const preStyle = 
+    type === "preview"
+           ? ["w-full", "p-1", "text-xs", "bg-vscode-input-background", "text-vscode-textPreformat-foreground"]
+           : ["w-full", "p-1", "text-xs", "bg-vscode-statusBarItem-errorBackground", "text-vscode-textPreformat-foreground"];
   return (
     <div className="w-full p-1 overflow-hidden rounded-lg bg-vscode-input-background">
       <div className="flex flex-row justify-end gap-2 text-xs">
@@ -112,8 +115,8 @@ const Snippet: React.FC<{ text: string }> = ({ text }) => {
           Whitespace
         </VSCodeCheckbox>
       </div>
-      <pre className="w-full p-1 text-xs bg-vscode-input-background text-vscode-textPreformat-foreground">
-        {lines.map((line, index) => (
+      <pre className={preStyle.join(" ")}>
+        {text.split('\n').map((line, index) => (
           <CodeLine key={index} line={line} number={index + 1} showWhitespace={showWhitespace} wrapText={wrapText} />
         ))}
       </pre>
@@ -134,6 +137,8 @@ const PromptPreview: React.FC<{ prompt: Impl['prompt'] }> = ({prompt}) => {
                 </div>
               ))}
             </div>);
+    case "Error":
+      return <Snippet type="error" text={prompt.error} />
   }
 }
 

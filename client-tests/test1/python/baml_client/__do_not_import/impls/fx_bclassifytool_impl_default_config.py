@@ -24,7 +24,7 @@ import typing
 # An implementation of BClassifyTool.
 
 __prompt_template = """\
-{{ query }}
+{{ query }
 
 UserContext:
 

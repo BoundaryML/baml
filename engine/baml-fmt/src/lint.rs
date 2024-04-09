@@ -193,9 +193,10 @@ impl From<&baml_lib::internal_baml_diagnostics::Span> for Span {
 #[derive(Serialize)]
 #[serde(tag = "type")]
 // JSON is { "type": "completion", "completion": "..." }
-enum RenderedPrompt {
+enum PromptPreview {
     Completion { completion: String },
     Chat { chat: Vec<RenderedChatMessage> },
+    Error { error: String },
 }
 
 // keep in sync with typescript/common/src/parser_db.ts
@@ -203,7 +204,7 @@ enum RenderedPrompt {
 struct Impl {
     name: StringSpan,
     prompt_key: Span,
-    prompt: RenderedPrompt,
+    prompt: PromptPreview,
     client: StringSpan,
 }
 
@@ -216,10 +217,10 @@ fn preview_impl(schema: &ValidatedSchema, func: FunctionWalker) -> Vec<Impl> {
                     name: StringSpan::new(i.ast_variant().name(), i.identifier().span()),
                     prompt_key: (&props.prompt.key_span).into(),
                     prompt: match props.to_prompt() {
-                        PromptAst::String(content, _) => RenderedPrompt::Completion {
+                        PromptAst::String(content, _) => PromptPreview::Completion {
                             completion: content.clone(),
                         },
-                        PromptAst::Chat(parts, _) => RenderedPrompt::Chat {
+                        PromptAst::Chat(parts, _) => PromptPreview::Chat {
                             chat: parts
                                 .iter()
                                 .map(|(ctx, text)| RenderedChatMessage {
@@ -284,23 +285,22 @@ fn preview_impl(schema: &ValidatedSchema, func: FunctionWalker) -> Vec<Impl> {
                 env: HashMap::new(),
             },
             vec![],
-        )
-        .map_or_else(
-            |err| internal_baml_jinja::RenderedPrompt::Completion(format!("{err:#}")),
-            |rendered| rendered,
         );
         vec![Impl {
             name: StringSpan::new("default_impl", func.identifier().span()),
             prompt_key: prompt.span().into(),
             prompt: match rendered {
-                internal_baml_jinja::RenderedPrompt::Completion(completion) => {
-                    RenderedPrompt::Completion {
+                Ok(internal_baml_jinja::RenderedPrompt::Completion(completion)) => {
+                    PromptPreview::Completion {
                         completion: completion,
                     }
                 }
-                internal_baml_jinja::RenderedPrompt::Chat(chat) => {
-                    RenderedPrompt::Chat { chat: chat }
+                Ok(internal_baml_jinja::RenderedPrompt::Chat(chat)) => {
+                    PromptPreview::Chat { chat: chat }
                 }
+                Err(err) => PromptPreview::Error {
+                    error: format!("{err:#}"),
+                },
             },
             client: client,
         }]

@@ -2,7 +2,7 @@ function BClassifyTool(query: string, context: string) -> ClassifyResponse {
     client AZURE_GPT4
 
     prompt #"
-        {{ query }}
+        {{ query }
 
         UserContext:
         
