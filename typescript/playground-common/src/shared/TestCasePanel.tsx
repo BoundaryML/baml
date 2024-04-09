@@ -551,11 +551,11 @@ const EditTestCaseForm = ({
 
   // TODO, actually fix this for named args
   const formData = useMemo(() => {
-    if (testCase === undefined) return {}
+    if (testCase === undefined) return null
     try {
       return JSON.parse(testCase?.content)
     } catch (e) {
-      console.log('Error parsing data\n' + JSON.stringify(testCase), e)
+      console.warn('Error parsing data, will default to string\n' + JSON.stringify(testCase), e)
       return testCase?.content ?? 'null'
     }
   }, [testCase?.content])

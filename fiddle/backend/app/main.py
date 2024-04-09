@@ -6,7 +6,7 @@ from fastapi.responses import StreamingResponse
 import subprocess
 import asyncio
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 from dotenv import load_dotenv
 from uuid import uuid4
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,12 +20,29 @@ origins = [
 
 load_dotenv()
 
+
+# class TestImplementation(BaseModel):
+#     name: str
+
+class Test(BaseModel):
+    name: str
+    impls: List[str]
+
+class Function(BaseModel):
+    name: str
+    tests: List[Test]
+    run_all_available_tests: Optional[bool] = False
+
+class TestRequest(BaseModel):
+    functions: List[Function]
+
 class FileModel(BaseModel):
     name: str
     content: str
 
-class FiddleRequest(BaseModel):
+class RunTests(BaseModel):
     files: List[FileModel]
+    testRequest: TestRequest
 
 
 app = FastAPI()
@@ -39,6 +56,22 @@ app.add_middleware(
 )
 
 fiddle_dir = os.environ.get("FIDDLE_DIR", "/tmp/fiddle")
+
+generator_block = """\
+generator lang_python {
+  language python
+  // This is where your non-baml source code located
+  // (relative directory where pyproject.toml, package.json, etc. lives)
+  project_root ".."
+  // This command is used by "baml test" to run tests
+  // defined in the playground
+  test_command "pytest -s"
+  // This command is used by "baml update-client" to install
+  // dependencies to your language environment
+  install_command "poetry add baml@latest"
+  package_version_command "poetry show baml"
+}
+"""
 
 async def process_output(process):
     async for line in process.stdout:
@@ -129,11 +162,14 @@ def hello_world():
 
 
 @app.post("/fiddle")
-async def fiddle(request: FiddleRequest, tmpdir: str = Depends(create_temp_files) ):
+async def fiddle(request: RunTests, tmpdir: str = Depends(create_temp_files) ):
     files = request.files
-    print(files)    
+    test_request = request.testRequest
+    print(request)
     
     for file in files:
+        if "main.baml" in file.name:
+            file.content = generator_block + file.content
         # Ensure the directory path exists
         file_directory = os.path.join(tmpdir, os.path.dirname(file.name))
         os.makedirs(file_directory, exist_ok=True)  # Create any directories in the path
@@ -143,6 +179,7 @@ async def fiddle(request: FiddleRequest, tmpdir: str = Depends(create_temp_files
         with open(file_path, "w") as f:
             f.write(file.content)
 
+    await asyncio.sleep(1.0)
     # Use asyncio subprocess for non-blocking call
     process = await asyncio.create_subprocess_shell(
         "baml build", cwd=tmpdir, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
@@ -155,7 +192,26 @@ async def fiddle(request: FiddleRequest, tmpdir: str = Depends(create_temp_files
         raise HTTPException(status_code=400, detail="BAML build failed")
     
     output_queue = asyncio.Queue()
-    test_command = "baml test run --playground-port {port}"
+    if test_request:
+        selected_tests = [
+            f"-i {fn.name}:{impl}:{test.name}"
+            for fn in test_request.functions
+            for test in fn.tests
+            for impl in test.impls
+        ]
+
+        is_single_function = len(test_request.functions) == 1
+        test_filter = (
+            f"-i {test_request.functions[0].name}:"
+            if is_single_function and test_request.functions[0].run_all_available_tests
+            else " ".join(selected_tests)
+        )
+    else:
+        test_filter = ""
+
+    # Modify the test_command to include test_filter
+    test_command = f"baml test {test_filter} run --playground-port {{port}}"
+    
     streaming_gen = generator(output_queue)
     asyncio.create_task(stream_subprocess_and_port_output(test_command, tmpdir, output_queue))
    

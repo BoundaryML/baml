@@ -4,7 +4,7 @@ import CodeMirror, { EditorView, useCodeMirror } from '@uiw/react-codemirror'
 import { BAML } from '@baml/codemirror-lang'
 import { vscodeDark } from '@uiw/codemirror-theme-vscode'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ASTProvider, FunctionSelector, FunctionPanel, CustomErrorBoundary } from '@baml/playground-common'
 import { linter, Diagnostic } from '@codemirror/lint'
 import { Button } from '@/components/ui/button'
@@ -17,15 +17,30 @@ import {
   TestState as TestStateType,
   getFullTestName,
   ParserDatabase,
+  StringSpan,
 } from '@baml/common'
+import { atom, useAtom } from 'jotai'
+import { atomWithStorage } from 'jotai/utils'
+import { atomStore } from './JotaiProvider'
+
+type EditorFile = {
+  path: string
+  content: string
+}
+
+const functionsAndTestsAtom = atomWithStorage<ParserDatabase['functions']>('parserdb_functions', [])
+const baml_dir = 'baml_src'
+const currentParserDbAtom = atom<ParserDatabase | null>(null)
+const currentEditorFilesAtom = atom<EditorFile[]>([])
 
 async function bamlLinter(view: EditorView): Promise<Diagnostic[]> {
+  // const [parserDb, setParserDb] = useAtom(currentParserDbAtom)
   const lint = await import('@gloo-ai/baml-schema-wasm-web').then((m) => m.lint)
   const linterInput: LinterInput = {
-    root_path: 'project/baml_src',
+    root_path: `${baml_dir}`,
     files: [
       {
-        path: 'project/baml_src/main.baml',
+        path: `${baml_dir}/main.baml`,
         content: view.state.doc.toString(),
       },
     ],
@@ -40,23 +55,13 @@ async function bamlLinter(view: EditorView): Promise<Diagnostic[]> {
 
   if (parsedRes.ok) {
     const newParserDb: ParserDatabase = { ...parsedRes.response }
-    // console.log('newParserDb', newParserDb)
-    if (newParserDb.functions.length > 0) {
-      console.log('modifying functions array')
-      newParserDb.functions[0].test_cases.push({
-        name: {
-          start: 0,
-          end: 0,
-          value: 'test1',
-          source_file: 'baml_src/__tests__/ExtractVerbs/test1.json',
-        },
-        content: defaultTestFile,
-      })
-    }
-    console.log('newParserDb', newParserDb)
-    window.postMessage({
-      command: 'setDb',
-      content: [['project/baml_src', newParserDb]],
+    atomStore.set(currentParserDbAtom, newParserDb)
+    atomStore.set(currentEditorFilesAtom, (prev) => {
+      const updatedFile: EditorFile = {
+        path: `${baml_dir}/main.baml`,
+        content: view.state.doc.toString(),
+      }
+      return prev.filter((f) => f.path !== f.path).concat(updatedFile)
     })
   }
 
@@ -79,20 +84,6 @@ const extensions = [
   }),
 ]
 const defaultMainBaml = `
-generator lang_python {
-  language python
-  // This is where your non-baml source code located
-  // (relative directory where pyproject.toml, package.json, etc. lives)
-  project_root ".."
-  // This command is used by "baml test" to run tests
-  // defined in the playground
-  test_command "pytest -s"
-  // This command is used by "baml update-client" to install
-  // dependencies to your language environment
-  install_command "poetry add baml@latest"
-  package_version_command "poetry show baml"
-}
-
 function ExtractVerbs {
     input string
     /// list of verbs
@@ -138,24 +129,14 @@ export const Editor = () => {
       // Check if either Ctrl+S or Command+S is pressed
       if ((event.ctrlKey || event.metaKey) && (event.key === 's' || event.keyCode === 83)) {
         event.preventDefault()
-        // Place your custom save logic here
         console.log('Custom save action triggered')
       }
     }
-
-    // Add the event listener
     window.addEventListener('keydown', handleKeyDown)
-
-    // Remove the event listener on cleanup
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
   }, [])
-
-  useEffect(() => {
-    const lintWithWasm = async () => {}
-    lintWithWasm()
-  }, [value])
 
   return (
     <>
@@ -382,94 +363,278 @@ class TestState {
   }
 }
 
+type SaveTestRequest = {
+  root_path: string
+  funcName: string
+  testCaseName: string | StringSpan
+  params: {
+    type: string
+    value: any
+  }
+}
+
 const serverBaseURL = 'http://localhost:8000'
 const RunTestButton = () => {
   const [data, setData] = useState<string | null>(null)
+  const [functionsAndTests, setFunctionsAndTests] = useAtom(functionsAndTestsAtom)
+  const [parserDb, setParserDb] = useAtom(currentParserDbAtom)
+  const [editorFiles, setEditorFiles] = useAtom(currentEditorFilesAtom)
 
-  const fetchData = async () => {
-    const testState = new TestState()
+  const fetchData = useCallback(
+    async (editorFiles: EditorFile[], testRequest: TestRequest) => {
+      console.log('Calling backend' + JSON.stringify(editorFiles))
+      const testState = new TestState()
 
-    testState.setTestStateListener((testResults) => {
-      window.postMessage({ command: 'test-results', content: testResults })
-    })
-    testState.initializeTestCases({
-      functions: [
-        {
-          name: 'ExtractVerbs',
-          tests: [
-            {
-              name: 'test1',
-              impls: ['version1'],
-            },
-          ],
+      testState.setTestStateListener((testResults) => {
+        window.postMessage({ command: 'test-results', content: testResults })
+      })
+      testState.initializeTestCases({
+        functions: testRequest.functions,
+      })
+      await fetchEventSource(`${serverBaseURL}/fiddle`, {
+        method: 'POST',
+
+        body: JSON.stringify({
+          files: editorFiles.map((f) => {
+            return {
+              name: f.path,
+              content: f.content,
+            }
+          }),
+          testRequest: testRequest,
+        }),
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
         },
-      ],
-    })
-    await fetchEventSource(`${serverBaseURL}/fiddle`, {
-      method: 'POST',
+        async onopen(res) {
+          if (res.ok && res.status === 200) {
+            console.log('Connection made ', res)
+          } else if (res.status >= 400 && res.status < 500 && res.status !== 429) {
+            console.log('Client side error ', res)
+            const result = await res.text()
+            console.log('stream result:', result)
+          }
+        },
+        onmessage(event) {
+          console.log('Message received')
+          console.log(event.data)
+          // only send messages that have PORT: , and don't include the PORT: part
+          if (event.data.includes('PORT:')) {
+            const messageWithoutPort = event.data.replace('PORT: ', '')
 
-      body: JSON.stringify({
-        files: [
-          {
-            name: 'baml_src/main.baml',
-            content: defaultMainBaml,
-          },
-          {
-            name: 'baml_src/__tests__/ExtractVerbs/test1.json',
-            content: defaultTestFile,
-          },
-        ],
-      }),
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'text/event-stream',
-      },
-      async onopen(res) {
-        if (res.ok && res.status === 200) {
-          console.log('Connection made ', res)
-        } else if (res.status >= 400 && res.status < 500 && res.status !== 429) {
-          console.log('Client side error ', res)
-          const result = await res.text()
-          console.log('stream result:', result)
-        }
-      },
-      onmessage(event) {
-        console.log('Message received')
-        console.log(event.data)
-        // only send messages that have PORT: , and don't include the PORT: part
-        if (event.data.includes('PORT:')) {
-          const messageWithoutPort = event.data.replace('PORT: ', '')
+            testState.handleMessage(messageWithoutPort)
+            //  setData((currentData) => currentData + messageWithoutPort)
+          } else {
+            //  window.postMessage({ command: 'test-stdout', content: event.data })
+          }
 
-          testState.handleMessage(messageWithoutPort)
-          //  setData((currentData) => currentData + messageWithoutPort)
-        } else {
-          //  window.postMessage({ command: 'test-stdout', content: event.data })
-        }
+          // testState.handleMessage(event.data)
 
-        // testState.handleMessage(event.data)
+          // setData((currentData) => currentData + (event.data ?? ''))
+          //const parsedData = JSON.parse(event.data)
+          //setData((currentData) => [...currentData, parsedData])
+        },
+        onclose() {
+          console.log('Connection closed by the server')
+          testState.setExitCode(0) // unsure if both onerror and this get called yet.
+        },
+        onerror(err) {
+          console.error('Error in event source', err)
+          testState.setExitCode(5)
+          throw err // rethrow to stop the event source
+        },
+      })
+    },
+    [JSON.stringify(editorFiles)],
+  )
+  // Setup message event listener to handle commands
+  useEffect(() => {
+    const listener = async (event: any) => {
+      const { command, data } = event.data
 
-        // setData((currentData) => currentData + (event.data ?? ''))
-        //const parsedData = JSON.parse(event.data)
-        //setData((currentData) => [...currentData, parsedData])
-      },
-      onclose() {
-        console.log('Connection closed by the server')
-        testState.setExitCode(0) // unsure if both onerror and this get called yet.
-      },
-      onerror(err) {
-        console.error('Error in event source', err)
-        testState.setExitCode(5)
-        throw err // rethrow to stop the event source
-      },
-    })
-  }
+      console.log('received eventtt ' + JSON.stringify(event) + JSON.stringify(event.data))
+
+      switch (command) {
+        case 'receiveData':
+          // Example of showing received information, adapt as necessary
+          // alert(data.text)
+          break
+
+        case 'saveTest':
+          const saveTestRequest = data as SaveTestRequest
+          // Save test data to localStorage
+          const { root_path, funcName, testCaseName, params } = saveTestRequest
+          const fileName: string = typeof testCaseName === 'string' ? `${testCaseName}.json` : 'default.json' // Simplified fileName logic
+          const filePath = `${root_path}/__tests__/${funcName}/${fileName}`
+
+          let testInputContent: any
+          if (params.type === 'positional') {
+            try {
+              testInputContent = JSON.parse(params.value)
+            } catch (e) {
+              testInputContent = params.value
+            }
+          } else {
+            testInputContent = Object.fromEntries(
+              saveTestRequest.params.value.map((kv: { name: any; value: any }) => {
+                if (kv.value === undefined || kv.value === null || kv.value === '') {
+                  return [kv.name, null]
+                }
+                let parsed: any
+                try {
+                  parsed = JSON.parse(kv.value)
+                } catch (e) {
+                  parsed = kv.value
+                }
+                return [kv.name, parsed]
+              }),
+            )
+          }
+
+          // const testFileContent: { input: any } = {
+          //   input: testInputContent,
+          // }
+          console.log('before setting functions and tests', functionsAndTests)
+          const newTestCase = {
+            name: {
+              start: 0,
+              end: 0,
+              value: typeof testCaseName === 'string' ? testCaseName : testCaseName.value,
+              source_file: filePath,
+            },
+            content: testInputContent,
+          }
+
+          setFunctionsAndTests((current) => {
+            // If current is empty or does not contain the function, add a new entry
+            if (!current.some((func) => (typeof func.name === 'string' ? func.name : func.name.value) === funcName)) {
+              // find it from parserDb
+
+              const existingFunc = parserDb?.functions.find((f) => {
+                const parserDbFuncName = typeof f.name === 'string' ? f.name : f.name.value
+                return parserDbFuncName === funcName
+              })
+              if (existingFunc) {
+                return current.concat({
+                  ...existingFunc,
+                  test_cases: [newTestCase],
+                })
+              }
+            }
+
+            // If the function exists, update its test cases
+            return current.map((func) => {
+              const currFuncName = typeof func.name === 'string' ? func.name : func.name.value
+              if (currFuncName === funcName) {
+                // Update existing function's test cases
+                return {
+                  ...func,
+                  test_cases: func.test_cases
+                    .filter((test) => test.name !== testCaseName) // Remove existing test case with the same name
+                    .concat([newTestCase]), // Add the new test case
+                }
+              }
+              return func // Return unmodified function
+            })
+          })
+
+          console.log('after setting functions and tests', functionsAndTests)
+
+          console.log('Saving test data to:', filePath)
+
+          // localStorage.setItem(filePath, JSON.stringify(testInputContent))
+          break
+
+        case 'removeTest':
+          // Remove test data from localStorage
+          // localStorage.removeItem(removePath)
+          console.log('remove test ' + JSON.stringify(data), functionsAndTests)
+          const { root_path: removeRootPath, funcName: removeFuncName, testCaseName: removeTestCaseName } = data
+
+          const removePath = `${removeRootPath}/__tests__/${removeFuncName}/${removeTestCaseName.value}.json`
+          console.log('Removing test data from:', removePath)
+          setFunctionsAndTests((prev) => {
+            return prev.map((func) => {
+              // Check if this is the function from which to remove the test
+              const currFuncName = typeof func.name === 'string' ? func.name : func.name.value
+              if (currFuncName === removeFuncName) {
+                // Filter out the test case to be removed
+                const updatedTestCases = func.test_cases.filter((test) => {
+                  const testName = typeof test.name === 'string' ? test.name : test.name.value
+                  return testName !== removeTestCaseName.value
+                })
+
+                // Return the function with the updated list of test cases
+                return { ...func, test_cases: updatedTestCases }
+              }
+
+              // Return all other functions unmodified
+              return func
+            })
+          })
+          break
+
+        // Add more cases as needed for other commands
+
+        case 'runTest':
+          const testRequest: { root_path: string; tests: TestRequest } = event.data.data
+
+          const testFiles: EditorFile[] = functionsAndTests.flatMap((f) => {
+            const testFnDir = `${baml_dir}/__tests__/${f.name.value}`
+            return f.test_cases.map((test) => ({
+              path: `${testFnDir}/${test.name.value}.json`,
+              content: JSON.stringify({
+                input: test.content,
+              }),
+            }))
+          })
+
+          console.log('testfiles', testFiles)
+
+          const updatedEditorFiles = editorFiles
+            // map to replace the content of existing files with the same name
+            .map((ef) => {
+              const newFile = testFiles.find((tf) => tf.path === ef.path)
+              return newFile ? newFile : ef
+            })
+
+          // Identifying missing files to be added
+          const missingFiles = testFiles.filter((tf) => !editorFiles.some((ef) => ef.path === tf.path))
+
+          // Combine updated and missing files for the final list
+          const finalEditorFiles = [...updatedEditorFiles, ...missingFiles]
+          fetchData(finalEditorFiles, testRequest.tests)
+          break
+        default:
+          console.log(`Unhandled command: ${command}`)
+      }
+    }
+
+    window.addEventListener('message', listener)
+    return () => {
+      window.removeEventListener('message', listener)
+    }
+  }, [JSON.stringify(functionsAndTests), JSON.stringify(parserDb)])
+
+  useEffect(() => {
+    const listener = (event: MessageEvent) => {
+      if (event.data.command === 'test-stdout') {
+        setData((currentData) => currentData + event.data.content)
+      }
+    }
+    window.addEventListener('message', listener)
+    return () => {
+      window.removeEventListener('message', listener)
+    }
+  }, [])
 
   return (
     <>
       <Button
         onClick={async () => {
           console.log('Running test')
-          fetchData()
+          // fetchData()
         }}
       >
         Run Test
@@ -508,6 +673,35 @@ export interface LinterInput {
 }
 
 const PlaygroundView = () => {
+  const [parserDb, setParserDb] = useAtom(currentParserDbAtom)
+  const [functionsAndTests, setFunctionsAndTests] = useAtom(functionsAndTestsAtom)
+  useEffect(() => {
+    if (!parserDb) {
+      return
+    }
+    const newParserDb = { ...parserDb }
+
+    if (newParserDb.functions.length > 0) {
+      console.log('modifying functions array')
+
+      functionsAndTests.forEach((func) => {
+        const existingFunc = newParserDb.functions.find((f) => f.name.value === func.name.value)
+        if (existingFunc) {
+          console.log('test cases', func.test_cases)
+          existingFunc.test_cases = func.test_cases
+        } else {
+          // can happen if you reload and linter hasnt run.
+          console.error(`Function ${JSON.stringify(func.name)} not found in parserDb`)
+        }
+      })
+    }
+    console.log('newParserDb', newParserDb)
+    window.postMessage({
+      command: 'setDb',
+      content: [[`${baml_dir}`, newParserDb]],
+    })
+  }, [JSON.stringify(parserDb), JSON.stringify(functionsAndTests)])
+
   return (
     <>
       <CustomErrorBoundary>

@@ -155,7 +155,7 @@ export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
 
   useEffect(() => {
     const fn = (event: any) => {
-      console.log('event.data', event.data)
+      // console.log('event.data', event.data)
       const command = event.data.command
       const messageContent = event.data.content
 
@@ -169,10 +169,6 @@ export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
         }
         case 'setDb': {
           console.log('parser db updated', messageContent)
-          console.log(
-            projects,
-            messageContent.map((p: any) => ({ root_dir: p[0], db: p[1] })),
-          )
           setProjects(messageContent.map((p: any) => ({ root_dir: p[0], db: p[1] })))
           break
         }
