@@ -64,8 +64,8 @@ fn tracker_visit_expr<'a>(
                 ast::BinOpKind::Lte => Type::Bool,
                 ast::BinOpKind::Gte => Type::Bool,
                 ast::BinOpKind::Concat => Type::String,
-                ast::BinOpKind::ScAnd => todo!(),
-                ast::BinOpKind::ScOr => todo!(),
+                ast::BinOpKind::ScAnd => Type::Bool,
+                ast::BinOpKind::ScOr => Type::Bool,
             }
         }
         ast::Expr::IfExpr(expr) => {
