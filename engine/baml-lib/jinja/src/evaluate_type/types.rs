@@ -134,22 +134,52 @@ pub struct PredefinedTypes {
 impl PredefinedTypes {
     pub fn default() -> Self {
         Self {
-            functions: HashMap::new(),
-            classes: HashMap::from([(
-                "jinja::loop".into(),
-                HashMap::from([
-                    ("index".into(), Type::Int),
-                    ("index0".into(), Type::Int),
-                    ("revindex".into(), Type::Int),
-                    ("revindex0".into(), Type::Int),
-                    ("first".into(), Type::Bool),
-                    ("last".into(), Type::Bool),
-                    ("length".into(), Type::Int),
-                    ("depth".into(), Type::Int),
-                    ("depth0".into(), Type::Int),
-                ]),
+            functions: HashMap::from([(
+                "baml::Chat".into(),
+                (Type::String, vec![("role".into(), Type::String)]),
             )]),
-            variables: HashMap::new(),
+            classes: HashMap::from([
+                (
+                    "baml::Client".into(),
+                    HashMap::from([
+                        ("name".into(), Type::String),
+                        ("provider".into(), Type::String),
+                    ]),
+                ),
+                (
+                    "baml::Context".into(),
+                    HashMap::from([
+                        ("output_schema".into(), Type::String),
+                        ("client".into(), Type::ClassRef("baml::Client".into())),
+                        (
+                            "env".into(),
+                            Type::Map(Box::new(Type::String), Box::new(Type::String)),
+                        ),
+                    ]),
+                ),
+                (
+                    "baml::BuiltIn".into(),
+                    HashMap::from([("chat".into(), Type::FunctionRef("baml::Chat".into()))]),
+                ),
+                (
+                    "jinja::loop".into(),
+                    HashMap::from([
+                        ("index".into(), Type::Int),
+                        ("index0".into(), Type::Int),
+                        ("revindex".into(), Type::Int),
+                        ("revindex0".into(), Type::Int),
+                        ("first".into(), Type::Bool),
+                        ("last".into(), Type::Bool),
+                        ("length".into(), Type::Int),
+                        ("depth".into(), Type::Int),
+                        ("depth0".into(), Type::Int),
+                    ]),
+                ),
+            ]),
+            variables: HashMap::from([
+                ("ctx".into(), Type::ClassRef("baml::Context".into())),
+                ("_".into(), Type::ClassRef("baml::BuiltIn".into())),
+            ]),
             scopes: Vec::new(),
             errors: Vec::new(),
         }
