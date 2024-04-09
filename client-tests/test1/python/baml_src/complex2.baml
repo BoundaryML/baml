@@ -13,7 +13,7 @@ function BClassifyTool(query: string, context: string) -> ClassifyResponse {
         {{ context }}
   
         Use this output format:
-        {{ ctx.client.provider }}
+        {{ ctx.output_schema }}
 
         JSON:
     "#

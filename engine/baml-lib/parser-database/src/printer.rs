@@ -131,6 +131,7 @@ pub trait WithSerialize: WithSerializeableContent {
     ) -> Result<String, DatamodelError>;
 }
 
+/// print_type, print_enum implementation
 pub fn serialize_with_printer(
     is_enum: bool,
     template: Option<String>,

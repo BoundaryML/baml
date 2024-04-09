@@ -13,6 +13,7 @@ use jsonschema::WithJsonSchema;
 use baml_lib::{
     internal_baml_diagnostics::{DatamodelError, DatamodelWarning},
     internal_baml_parser_database::{
+        serialize_with_printer,
         walkers::{FunctionWalker, VariantWalker},
         PromptAst,
     },
@@ -256,7 +257,7 @@ fn serialize_impls(schema: &ValidatedSchema, func: FunctionWalker) -> Vec<Impl> 
                     name: StringSpan::new(i.ast_variant().name(), i.identifier().span()),
                     prompt_key: (&props.prompt.key_span).into(),
                     prompt: match props.to_prompt() {
-                        PromptAst::String(mut content, _) => PromptPreview::Completion {
+                        PromptAst::String(content, _) => PromptPreview::Completion {
                             completion: apply_replacers(i, content.clone()),
                         },
                         PromptAst::Chat(parts, _) => PromptPreview::Chat {
@@ -306,7 +307,14 @@ fn serialize_impls(schema: &ValidatedSchema, func: FunctionWalker) -> Vec<Impl> 
             ast::FunctionArgs::Named(arg_list) => {
                 format!("DO NOT LAND - failed to render output schema")
             }
-            ast::FunctionArgs::Unnamed(arg) => format!("{:#}", arg.field_type),
+            ast::FunctionArgs::Unnamed(arg) => format!(
+                "{:#}",
+                serialize_with_printer(true, Some("".to_string()), arg.field_type.json_schema())
+                    .map_or_else(
+                        |err| format!("{{ failed to render output schema: \"{:#}\" }}", err),
+                        |result| result,
+                    )
+            ),
         };
 
         let rendered = render_prompt(
