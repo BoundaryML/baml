@@ -239,7 +239,7 @@ impl From<internal_baml_jinja::RenderedChatMessage> for RenderedChatMessage {
     fn from(chat_message: internal_baml_jinja::RenderedChatMessage) -> Self {
         RenderedChatMessage {
             role: chat_message.role,
-            message: chat_message.content,
+            message: chat_message.message,
         }
     }
 }

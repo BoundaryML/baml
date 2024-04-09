@@ -1,7 +1,9 @@
 #![allow(dead_code)]
 
-use internal_baml_jinja::{render_prompt, RenderContext, RenderContext_Client};
-use serde::Deserialize;
+use internal_baml_jinja::{
+    render_prompt, RenderContext, RenderContext_Client, RenderedChatMessage,
+};
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 mod jsonschema;
@@ -9,13 +11,13 @@ mod jsonschema;
 use jsonschema::WithJsonSchema;
 
 use baml_lib::{
-    internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span},
+    internal_baml_diagnostics::{DatamodelError, DatamodelWarning},
     internal_baml_parser_database::{walkers::FunctionWalker, PromptAst},
     internal_baml_schema_ast::ast::{self, WithIdentifier, WithName, WithSpan},
     SourceFile, ValidatedSchema,
 };
 
-#[derive(serde::Serialize)]
+#[derive(Serialize)]
 pub struct StringSpan {
     value: String,
     start: usize,
@@ -24,7 +26,7 @@ pub struct StringSpan {
 }
 
 impl StringSpan {
-    pub fn new(value: &str, span: &Span) -> Self {
+    pub fn new(value: &str, span: &baml_lib::internal_baml_diagnostics::Span) -> Self {
         Self {
             value: value.to_string(),
             start: span.start,
@@ -34,7 +36,7 @@ impl StringSpan {
     }
 }
 
-#[derive(serde::Serialize)]
+#[derive(Serialize)]
 pub struct MiniError {
     start: usize,
     end: usize,
@@ -169,64 +171,77 @@ pub(crate) fn run(input: &str) -> String {
     print_diagnostics(mini_errors, Some(response))
 }
 
-fn preview_impl(schema: &ValidatedSchema, func: FunctionWalker) -> Vec<serde_json::Value> {
-    if func.is_old_function() {
-        func.walk_variants().map(
-                        |i| {
-                            let props = i.properties();
-                            let prompt = props.to_prompt();
-                            let is_chat = match &prompt {
-                                PromptAst::Chat(..) => true,
-                                _ => false,
-                            };
-                            json!({
-                                "type": "llm",
-                                "name": StringSpan::new(i.ast_variant().name(), i.identifier().span()),
-                                "prompt_key": {
-                                    "start": props.prompt.key_span.start,
-                                    "end": props.prompt.key_span.end,
-                                    "source_file": props.prompt.key_span.file.path(),
-                                },
-                                "has_v2": true,
-                                // Passed for legacy reasons
-                                "prompt": props.prompt.value,
-                                // This is the new value to use
-                                "prompt_v2": {
-                                    "is_chat": is_chat,
-                                    "prompt": match &prompt {
-                                        PromptAst::Chat(parts, _) => {
-                                            json!(parts.iter().map(|(ctx, text)| {
-                                                json!({
-                                                    "role": ctx.map(|c| c.role.0.as_str()).unwrap_or("system"),
-                                                    "content": text,
-                                                })
-                                            }).collect::<Vec<_>>())
-                                        },
-                                        PromptAst::String(content, _) => {
-                                            json!(content)
-                                        },
-                                    },
-                                },
-                                "input_replacers": props.replacers.0.iter().map(
-                                    |r| json!({
-                                        "key": r.0.key(),
-                                        "value": r.1,
-                                    })
-                                ).collect::<Vec<_>>(),
-                                "output_replacers": props.replacers.1.iter().map(
-                                    |r| json!({
-                                        "key": r.0.key(),
-                                        "value": r.1,
-                                    })
-                                ).collect::<Vec<_>>(),
-                                "client": schema.db
-                                    .find_client(&props.client.value)
-                                    .map(|c| StringSpan::new(c.name(), c.identifier().span()))
-                                    .unwrap_or_else(|| StringSpan::new(&props.client.value, &props.client.span)),
+// keep in sync with typescript/common/src/parser_db.ts
+#[derive(Serialize)]
+struct Span {
+    start: usize,
+    end: usize,
+    source_file: String,
+}
 
-                            })
-                        }
-                    ).collect::<Vec<_>>()
+impl From<&baml_lib::internal_baml_diagnostics::Span> for Span {
+    fn from(span: &baml_lib::internal_baml_diagnostics::Span) -> Self {
+        Self {
+            start: span.start,
+            end: span.end,
+            source_file: span.file.path(),
+        }
+    }
+}
+
+// keep in sync with typescript/common/src/parser_db.ts
+#[derive(Serialize)]
+#[serde(tag = "type")]
+// JSON is { "type": "completion", "completion": "..." }
+enum RenderedPrompt {
+    Completion { completion: String },
+    Chat { chat: Vec<RenderedChatMessage> },
+}
+
+// keep in sync with typescript/common/src/parser_db.ts
+#[derive(Serialize)]
+struct Impl {
+    name: StringSpan,
+    prompt_key: Span,
+    prompt: RenderedPrompt,
+    client: StringSpan,
+}
+
+fn preview_impl(schema: &ValidatedSchema, func: FunctionWalker) -> Vec<Impl> {
+    if func.is_old_function() {
+        func.walk_variants()
+            .map(|i| {
+                let props = i.properties();
+                Impl {
+                    name: StringSpan::new(i.ast_variant().name(), i.identifier().span()),
+                    prompt_key: (&props.prompt.key_span).into(),
+                    prompt: match props.to_prompt() {
+                        PromptAst::String(content, _) => RenderedPrompt::Completion {
+                            completion: content.clone(),
+                        },
+                        PromptAst::Chat(parts, _) => RenderedPrompt::Chat {
+                            chat: parts
+                                .iter()
+                                .map(|(ctx, text)| RenderedChatMessage {
+                                    role: ctx
+                                        .map(|c| c.role.0.as_str())
+                                        .unwrap_or("system")
+                                        .to_string(),
+                                    message: text.to_string(),
+                                })
+                                .collect::<Vec<_>>(),
+                        },
+                    },
+                    client: schema
+                        .db
+                        .find_client(&props.client.value)
+                        .map(|c| StringSpan::new(c.name(), c.identifier().span()))
+                        .unwrap_or_else(|| {
+                            StringSpan::new(&props.client.value, &props.client.span)
+                        }),
+                }
+            })
+            .collect::<Vec<_>>()
     } else {
         let prompt = func.metadata().prompt.as_ref().unwrap();
         let (client_name, client_span) = func.metadata().client.as_ref().unwrap();
@@ -267,7 +282,6 @@ fn preview_impl(schema: &ValidatedSchema, func: FunctionWalker) -> Vec<serde_jso
                 },
                 output_schema: output_schema,
                 env: HashMap::new(),
-                //env: std::env::vars().collect::<HashMap<String, String>>(),
             },
             vec![],
         )
@@ -275,37 +289,21 @@ fn preview_impl(schema: &ValidatedSchema, func: FunctionWalker) -> Vec<serde_jso
             |err| internal_baml_jinja::RenderedPrompt::Completion(format!("{err:#}")),
             |rendered| rendered,
         );
-        let rendered = match rendered {
-            internal_baml_jinja::RenderedPrompt::Completion(s) => json!({
-                "is_chat": false,
-                "prompt": s,
-            }),
-            internal_baml_jinja::RenderedPrompt::Chat(chat) => json!({
-                "is_chat": true,
-                "prompt": chat,
-            }),
-        };
-        log::info!(">================== rendered: {:#}", rendered);
-        vec![json!({
-            "type": "llm",
-            "name": StringSpan::new("default_impl", func.identifier().span()),
-            "prompt_key": {
-                "start": prompt.span().start,
-                "end": prompt.span().end,
-                "source_file": func.span().file.path(),
+        vec![Impl {
+            name: StringSpan::new("default_impl", func.identifier().span()),
+            prompt_key: prompt.span().into(),
+            prompt: match rendered {
+                internal_baml_jinja::RenderedPrompt::Completion(completion) => {
+                    RenderedPrompt::Completion {
+                        completion: completion,
+                    }
+                }
+                internal_baml_jinja::RenderedPrompt::Chat(chat) => {
+                    RenderedPrompt::Chat { chat: chat }
+                }
             },
-            "version": 3,
-            // We can use just "prompt" as its the new template now.
-            "prompt": prompt.value(),
-            // Passed for legacy reasons
-            "has_v2": true,
-            "prompt_v2": rendered,
-            // This is the newly rendered prompt with the test case and client substituted in.
-            // TODO: @sxlijin call render_prompt here based on the test case and client.
-            "input_replacers": [],
-            "output_replacers": [],
-            "client": client,
-        })]
+            client: client,
+        }]
     }
 }
 

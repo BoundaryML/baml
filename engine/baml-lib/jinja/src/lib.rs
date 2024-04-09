@@ -160,7 +160,7 @@ fn render_minijinja(
         } else {
             chat_messages.push(RenderedChatMessage {
                 role: role.to_string(),
-                content: chunk.trim().to_string(),
+                message: chunk.trim().to_string(),
             });
         }
     }
@@ -171,10 +171,10 @@ fn render_minijinja(
 #[derive(Debug, PartialEq, Serialize)]
 pub struct RenderedChatMessage {
     pub role: String,
-    pub content: String,
+    pub message: String,
 }
 
-#[derive(Debug, PartialEq, Serialize)]
+#[derive(Debug, PartialEq)]
 pub enum RenderedPrompt {
     Completion(String),
     Chat(Vec<RenderedChatMessage>),
@@ -264,7 +264,7 @@ mod render_tests {
             RenderedPrompt::Chat(vec![
                 RenderedChatMessage {
                     role: "system".to_string(),
-                    content: vec![
+                    message: vec![
                         "You are an assistant that always responds",
                         "in a very excited way with emojis",
                         "and also outputs this word 4 times",
@@ -274,7 +274,7 @@ mod render_tests {
                 },
                 RenderedChatMessage {
                     role: "john doe".to_string(),
-                    content: vec![
+                    message: vec![
                         "Tell me a haiku about sakura in iambic pentameter.",
                         "",
                         "End the haiku with a line about your maker, openai.",
