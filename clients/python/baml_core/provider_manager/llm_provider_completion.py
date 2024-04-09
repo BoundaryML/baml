@@ -170,13 +170,17 @@ class LLMProvider(AbstractLLMProvider):
 
     @typing.final
     @typechecked
-    async def _run_chat_internal_stream(self, *messages: LLMChatMessage | typing.List[LLMChatMessage]) -> typing.AsyncIterator[LLMResponse]:
+    async def _run_chat_internal_stream(
+        self, *messages: LLMChatMessage | typing.List[LLMChatMessage]
+    ) -> typing.AsyncIterator[LLMResponse]:
         if len(messages) == 1 and isinstance(messages[0], list):
             chats = messages[0]
         else:
             chats = typing.cast(typing.List[LLMChatMessage], messages)
 
-        async for msg in self._run_prompt_internal_stream(prompt=self.__chat_to_prompt(chats)):
+        async for msg in self._run_prompt_internal_stream(
+            prompt=self.__chat_to_prompt(chats)
+        ):
             yield msg
 
     async def __stream_with_telemetry(

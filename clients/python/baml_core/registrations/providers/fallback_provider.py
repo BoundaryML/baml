@@ -251,8 +251,15 @@ class FallbackProvider(AbstractLLMProvider):
             params=params,
         ):
             yield r
-    
-    async def _run_jinja_template_internal_stream(self, *, jinja_template: str, args: typing.Dict[str, typing.Any], output_schema: str, template_macros: typing.List[TemplateStringMacro]) -> typing.AsyncIterator[LLMResponse]:
+
+    async def _run_jinja_template_internal_stream(
+        self,
+        *,
+        jinja_template: str,
+        args: typing.Dict[str, typing.Any],
+        output_schema: str,
+        template_macros: typing.List[TemplateStringMacro],
+    ) -> typing.AsyncIterator[LLMResponse]:
         async for r in self._stream_strategy(
             "run_jinja_template_stream",
             jinja_template=jinja_template,

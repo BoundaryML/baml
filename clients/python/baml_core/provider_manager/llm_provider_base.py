@@ -314,8 +314,7 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
 
     @abc.abstractmethod
     def _run_chat_internal_stream(
-        self,
-        *messages: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]]
+        self, *messages: typing.Union[LLMChatMessage, typing.List[LLMChatMessage]]
     ) -> typing.AsyncIterator[LLMResponse]:
         pass
 

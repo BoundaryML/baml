@@ -277,6 +277,7 @@ fn render_prompt(template: String, context: RenderData) -> PyResult<PyObject> {
             "args must be convertible to a JSON object",
         ));
     };
+
     let rendered = internal_baml_jinja::render_template(
         &template,
         render_args,

@@ -175,7 +175,9 @@ class LLMChatProvider(AbstractLLMProvider):
                 yield r
 
     @typing.final
-    async def _run_chat_internal_stream(self, *messages: LLMChatMessage | typing.List[LLMChatMessage]) -> typing.AsyncIterator[LLMResponse]:
+    async def _run_chat_internal_stream(
+        self, *messages: LLMChatMessage | typing.List[LLMChatMessage]
+    ) -> typing.AsyncIterator[LLMResponse]:
         if len(messages) == 1 and isinstance(messages[0], list):
             chat_message = messages[0]
         else:
@@ -184,8 +186,12 @@ class LLMChatProvider(AbstractLLMProvider):
             yield response
 
     @typing.final
-    async def _run_prompt_internal_stream(self, *, prompt: str) -> typing.AsyncIterator[LLMResponse]:
-        async for response in self._run_chat_internal_stream(self.__prompt_to_chat(prompt)):
+    async def _run_prompt_internal_stream(
+        self, *, prompt: str
+    ) -> typing.AsyncIterator[LLMResponse]:
+        async for response in self._run_chat_internal_stream(
+            self.__prompt_to_chat(prompt)
+        ):
             yield response
 
     @typing.final

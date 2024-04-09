@@ -4,44 +4,57 @@ from baml_core import render_prompt, RenderData
 
 
 def test_success() -> None:
-    ctx = RenderData.ctx(
-        client=RenderData.client(name="gpt4", provider="openai"),
-        output_schema="",
-        env={"LANG": "en_US.UTF-8"},
-    )
     rendered = render_prompt(
-        "{{ ctx.env.LANG }}: Hello {{name}} -{{ ctx.client.provider }}",
+        """
+            You are an assistant that always responds
+            in a very excited way with emojis
+            and also outputs this word 4 times
+            after giving a response: {{ haiku_subject }}
+            
+            {{ _.chat(ctx.env.ROLE) }}
+            
+            Tell me a haiku about {{ haiku_subject }} in {{ ctx.output_schema }}.
+
+            Before the haiku, include the following: "{{ latin() }}".
+            
+            After the haiku, tell me about your maker, {{ ctx.client.provider }}.
+        """,
         RenderData(
-            args={
-                "name": "world",
-                "foo": {
-                    "bar": "baz",
-                    "buzz": [
-                        1,
-                        2,
-                        3,
-                        {
-                            "a": "b",
-                            "c": "d",
-                            "x": None,
-                        },
-                        5,
-                        6,
-                        7,
-                    ],
-                },
-            },
-            ctx=ctx,
+            args={"haiku_subject": "sakura"},
+            ctx=RenderData.ctx(
+                client=RenderData.client(name="gpt4", provider="openai"),
+                output_schema="iambic pentameter",
+                env={"ROLE": "john doe"},
+            ),
             template_string_macros=[
                 RenderData.template_string_macro(
                     name="latin",
                     args=[],
-                    template="lorem ipsum dolor",
+                    template='{{ "lorem ipsum dolor sit amet" | upper }}',
                 )
             ],
         ),
     )
-    assert rendered == ("completion", "en_US.UTF-8: Hello world -openai")
+    assert rendered == (
+        "chat",
+        [
+            {
+                "role": "system",
+                "message": "You are an assistant that always responds\n"
+                "in a very excited way with emojis\n"
+                "and also outputs this word 4 times\n"
+                "after giving a response: sakura",
+            },
+            {
+                "role": "john doe",
+                "message": "Tell me a haiku about sakura in iambic pentameter.\n"
+                "\n"
+                'Before the haiku, include the following: "LOREM IPSUM DOLOR SIT AMET".\n'
+                "\n"
+                "After the haiku, tell me about your maker, openai.",
+            },
+        ],
+    )
 
 
 def test_bad_params() -> None:
@@ -54,17 +67,17 @@ def test_bad_params() -> None:
                     "foo": {
                         "bar": "baz",
                         "buzz": [
+                            0,
                             1,
                             2,
-                            3,
                             {
                                 "a": "b",
                                 "c": "d",
                                 "x": None,
                             },
+                            4,
                             5,
                             6,
-                            7,
                         ],
                     },
                 },

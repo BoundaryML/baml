@@ -90,6 +90,23 @@ fn render_minijinja(
 ) -> Result<RenderedPrompt, minijinja::Error> {
     let mut env = get_env();
 
+    // dedent
+    let whitespace_length = template
+        .split('\n')
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| line.chars().take_while(|c| c.is_whitespace()).count())
+        .min()
+        .unwrap_or(0);
+    let template = template
+        .split('\n')
+        .map(|line| line.chars().skip(whitespace_length).collect::<String>())
+        .collect::<Vec<String>>()
+        .join("\n");
+
+    // trim
+    let template = template.trim();
+
+    // inject macros
     let template = template_string_macros
         .into_iter()
         .map(|tsm| {
@@ -209,31 +226,62 @@ mod render_tests {
         setup_logging();
 
         let serde_json::Value::Object(args) = serde_json::json!({
-            "name": "world"
+            "haiku_subject": "sakura"
         }) else {
             anyhow::bail!("args must be convertible to a JSON object");
         };
 
         let rendered = render_template(
-            "system instructions {{_.chat(\"magic assistant\")}}
+            "
+                    
+
+                    You are an assistant that always responds
+                    in a very excited way with emojis
+                    and also outputs this word 4 times
+                    after giving a response: {{ haiku_subject }}
+                    
+                    {{ _.chat(ctx.env.ROLE) }}
+                    
+                    Tell me a haiku about {{ haiku_subject }} in {{ ctx.output_schema }}.
+
+                    End the haiku with a line about your maker, {{ ctx.client.provider }}.
             
-            
-            Hello, {{ name }}!",
+            ",
             args,
             RenderContext {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
                 },
-                output_schema: "output[]".to_string(),
-                env: HashMap::new(),
+                output_schema: "iambic pentameter".to_string(),
+                env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
             },
             vec![],
         )?;
 
         assert_eq!(
             rendered,
-            RenderedPrompt::Completion("Hello, world!".to_string())
+            RenderedPrompt::Chat(vec![
+                RenderedChatMessage {
+                    role: "system".to_string(),
+                    message: vec![
+                        "You are an assistant that always responds",
+                        "in a very excited way with emojis",
+                        "and also outputs this word 4 times",
+                        "after giving a response: sakura",
+                    ]
+                    .join("\n")
+                },
+                RenderedChatMessage {
+                    role: "john doe".to_string(),
+                    message: vec![
+                        "Tell me a haiku about sakura in iambic pentameter.",
+                        "",
+                        "End the haiku with a line about your maker, openai.",
+                    ]
+                    .join("\n")
+                }
+            ])
         );
 
         Ok(())
