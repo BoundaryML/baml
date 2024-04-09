@@ -2,7 +2,13 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { ThemeProvider } from './_components/ThemeProvider'
-import Providers from './_components/JotaiProvider'
+import JotaiProvider from './_components/JotaiProvider'
+import { PHProvider } from './_components/PosthogProvider'
+import dynamic from 'next/dynamic'
+
+const PostHogPageView = dynamic(() => import('./PostHogPageView'), {
+  ssr: false,
+})
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -18,11 +24,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={inter.className}>
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={true} disableTransitionOnChange={true}>
-          <Providers>{children}</Providers>
-        </ThemeProvider>
-      </body>
+      <PHProvider>
+        <body className={inter.className}>
+          <PostHogPageView />
+          <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={true} disableTransitionOnChange={true}>
+            <JotaiProvider>{children}</JotaiProvider>
+          </ThemeProvider>
+        </body>
+      </PHProvider>
     </html>
   )
 }
