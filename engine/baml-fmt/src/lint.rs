@@ -15,7 +15,7 @@ use baml_lib::{
     internal_baml_parser_database::{
         serialize_with_printer,
         walkers::{FunctionWalker, VariantWalker},
-        PromptAst,
+        PromptAst, WithSerialize,
     },
     internal_baml_schema_ast::ast::{self, WithIdentifier, WithName, WithSpan},
     SourceFile, ValidatedSchema,
@@ -305,7 +305,19 @@ fn serialize_impls(schema: &ValidatedSchema, func: FunctionWalker) -> Vec<Impl> 
             ast::FunctionArgs::Named(arg_list) => {
                 format!("DO NOT LAND - failed to render output schema")
             }
-            ast::FunctionArgs::Unnamed(arg) => format!("{:#}", arg.field_type),
+            ast::FunctionArgs::Unnamed(arg) => format!(
+                "{:#}",
+                match schema
+                    .db
+                    .walk_classes()
+                    .find(|c| c.name() == format!("{:#}", arg.field_type))
+                {
+                    Some(c) => c
+                        .serialize(&schema.db, None, None, arg.field_type.span())
+                        .unwrap_or(arg.field_type.to_string()),
+                    None => arg.field_type.to_string(),
+                }
+            ),
         };
 
         let rendered = render_prompt(

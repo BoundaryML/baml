@@ -156,7 +156,7 @@ case "$_path" in
       npx nodemon \
         --verbose \
         --ext js,ts,tsx,rs,hb,hbs,toml \
-        --watch "${_repo_root}/engine/baml-fmt" \
+        --watch "${_repo_root}/engine" \
         --watch "${_repo_root}/engine/jinja" \
         --watch "${_repo_root}/typescript" \
         --ignore '**/dist' \
