@@ -305,13 +305,7 @@ fn serialize_impls(schema: &ValidatedSchema, func: FunctionWalker) -> Vec<Impl> 
             ast::FunctionArgs::Named(arg_list) => {
                 format!("DO NOT LAND - failed to render output schema")
             }
-            ast::FunctionArgs::Unnamed(arg) => format!(
-                "{:#}",
-                serialize_with_printer(false, None, arg.field_type.json_schema()).map_or_else(
-                    |err| format!("{{ failed to render output schema: \"{:#}\" }}", err),
-                    |result| result,
-                )
-            ),
+            ast::FunctionArgs::Unnamed(arg) => format!("{:#}", arg.field_type),
         };
 
         let rendered = render_prompt(
