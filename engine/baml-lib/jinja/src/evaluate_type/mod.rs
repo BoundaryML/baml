@@ -5,6 +5,7 @@ mod test_expr;
 mod test_stmt;
 mod types;
 
+use std::ops::Index;
 use std::{collections::HashMap, fmt::Debug};
 
 use minijinja::machinery::{ast::Expr, Span};
@@ -31,6 +32,43 @@ impl std::fmt::Display for TypeError {
 // Implementing the Error trait for TypeError.
 impl std::error::Error for TypeError {}
 
+fn sort_by_match<'a, I, T>(name: &str, options: &'a I, max_return: Option<usize>) -> Vec<&'a str>
+where
+    I: Index<usize, Output = T> + 'a,
+    &'a I: IntoIterator<Item = &'a T>,
+    T: AsRef<str> + 'a,
+{
+    // The maximum allowed distance for a string to be considered similar.
+    const THRESHOLD: usize = 20;
+
+    // Calculate distances and sort names by distance
+    let mut name_distances = options
+        .into_iter()
+        .enumerate()
+        .map(|(idx, n)| {
+            (
+                // Case insensitive comparison
+                strsim::osa_distance(&n.as_ref().to_lowercase(), &name.to_lowercase()),
+                idx,
+            )
+        })
+        .collect::<Vec<_>>();
+
+    name_distances.sort_by_key(|k| k.0);
+
+    // Filter names based on the threshold
+    let filtered_names = name_distances
+        .iter()
+        .filter(|&&(dist, _)| dist <= THRESHOLD)
+        .map(|&(_, idx)| options.index(idx).as_ref());
+
+    // Return either a limited or full set of filtered names
+    match max_return {
+        Some(max) => filtered_names.take(max).collect(),
+        None => filtered_names.collect(),
+    }
+}
+
 impl TypeError {
     pub fn message(&self) -> &str {
         &self.message
@@ -40,11 +78,28 @@ impl TypeError {
         self.span
     }
 
-    fn new_unresolved_variable(name: &str, span: Span) -> Self {
-        Self {
-            message: format!("Variable '{}' is not defined", name),
-            span,
-        }
+    fn new_unresolved_variable(name: &str, span: Span, options: Vec<String>) -> Self {
+        let close_names = sort_by_match(name, &options, Some(3));
+
+        let message = if close_names.is_empty() {
+            // If no names are close enough, suggest nothing or provide a generic message
+            format!("Variable `{}` does not exist.", name)
+        } else if close_names.len() == 1 {
+            // If there's only one close name, suggest it
+            format!(
+                "Variable `{}` does not exist. Did you mean `{}`?",
+                name, close_names[0]
+            )
+        } else {
+            // If there are multiple close names, suggest them all
+            let suggestions = close_names.join("`, `");
+            format!(
+                "Variable `{}` does not exist. Did you mean one of these: `{}`?",
+                name, suggestions
+            )
+        };
+
+        Self { message, span }
     }
 
     fn new_wrong_arg_type(
@@ -143,16 +198,12 @@ impl TypeError {
     }
 }
 
-struct ScopeTracker<'a> {
-    variable_types: HashMap<&'a str, Type>,
+struct ScopeTracker {
     errors: Vec<TypeError>,
 }
 
-impl<'a> ScopeTracker<'a> {
+impl ScopeTracker {
     fn new() -> Self {
-        Self {
-            variable_types: HashMap::new(),
-            errors: Vec::new(),
-        }
+        Self { errors: Vec::new() }
     }
 }

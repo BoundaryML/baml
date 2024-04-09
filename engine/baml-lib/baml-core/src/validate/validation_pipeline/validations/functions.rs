@@ -4,6 +4,7 @@ use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span};
 use internal_baml_jinja::{TypeError, ValidationError};
 use internal_baml_parser_database::walkers::to_type;
 use internal_baml_schema_ast::ast::{WithIdentifier, WithName, WithSpan};
+use serde::de;
 
 use crate::validate::validation_pipeline::context::Context;
 
@@ -75,6 +76,13 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
         };
 
         defined_types.start_scope();
+        if let Some(internal_baml_schema_ast::ast::FunctionArgs::Named(p)) =
+            template.ast_node().input()
+        {
+            p.args.iter().for_each(|(name, t)| {
+                defined_types.add_variable(name.name(), to_type(&t.field_type))
+            });
+        }
         match internal_baml_jinja::validate_template(
             template.name(),
             prompt.raw_value(),
@@ -125,7 +133,6 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
             }
         }
 
-        // TODO: @sxlijin do any validation on the prompt.
         let prompt = func.metadata().prompt.as_ref().unwrap();
         defined_types.start_scope();
         func.walk_input_args().for_each(|arg| {

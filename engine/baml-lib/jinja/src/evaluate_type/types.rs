@@ -134,6 +134,23 @@ pub struct PredefinedTypes {
 }
 
 impl PredefinedTypes {
+    pub fn variable_names(&self) -> Vec<String> {
+        self.variables
+            .keys()
+            .chain(self.scopes.iter().flat_map(|s| match s {
+                Scope::CodeBlock(vars) => vars.keys(),
+                Scope::Branch(on_true, on_false, cond) => {
+                    if *cond {
+                        on_true.keys()
+                    } else {
+                        on_false.keys()
+                    }
+                }
+            }))
+            .map(|k| k.to_string())
+            .collect()
+    }
+
     pub fn default() -> Self {
         Self {
             functions: HashMap::from([(

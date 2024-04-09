@@ -10,16 +10,18 @@ use super::{
 
 fn tracker_visit_expr<'a>(
     expr: &ast::Expr<'a>,
-    state: &mut ScopeTracker<'a>,
+    state: &mut ScopeTracker,
     types: &PredefinedTypes,
 ) -> Type {
     match expr {
         ast::Expr::Var(var) => match types.resolve(var.id) {
             Some(t) => t,
             None => {
-                state
-                    .errors
-                    .push(TypeError::new_unresolved_variable(var.id, var.span()));
+                state.errors.push(TypeError::new_unresolved_variable(
+                    var.id,
+                    var.span(),
+                    types.variable_names(),
+                ));
                 Type::Unknown
             }
         },
