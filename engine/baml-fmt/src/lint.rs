@@ -251,8 +251,6 @@ fn serialize_impls(schema: &ValidatedSchema, func: FunctionWalker) -> Vec<Impl> 
         func.walk_variants()
             .map(|i| {
                 let props = i.properties();
-                log::info! {"replacers: {:#?}", props.replacers};
-                let (input_replacers, output_replacers, _) = &props.replacers;
                 Impl {
                     name: StringSpan::new(i.ast_variant().name(), i.identifier().span()),
                     prompt_key: (&props.prompt.key_span).into(),
@@ -309,11 +307,10 @@ fn serialize_impls(schema: &ValidatedSchema, func: FunctionWalker) -> Vec<Impl> 
             }
             ast::FunctionArgs::Unnamed(arg) => format!(
                 "{:#}",
-                serialize_with_printer(true, Some("".to_string()), arg.field_type.json_schema())
-                    .map_or_else(
-                        |err| format!("{{ failed to render output schema: \"{:#}\" }}", err),
-                        |result| result,
-                    )
+                serialize_with_printer(false, None, arg.field_type.json_schema()).map_or_else(
+                    |err| format!("{{ failed to render output schema: \"{:#}\" }}", err),
+                    |result| result,
+                )
             ),
         };
 
