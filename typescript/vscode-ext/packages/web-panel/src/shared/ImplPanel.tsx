@@ -126,9 +126,12 @@ const Snippet: React.FC<{ text: string }> = ({ text }) => {
 const ImplPanel: React.FC<{ impl: Impl }> = ({ impl }) => {
   const { func } = useImplCtx(impl.name.value)
 
+  console.log(">============ Rendering ImplPanel =============<")
+
 
   const implPrompt = useMemo(() => {
     if (impl.has_v2) {
+      console.log(`impl version: ${impl.version}`)
       return impl.prompt_v2.prompt
     } else {
       let prompt = impl.prompt

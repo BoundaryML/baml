@@ -54,9 +54,11 @@ export type Impl = {
 } & (
     {
       has_v2?: false
+      version?: 1
       prompt: string
     } | {
       has_v2: true
+      version: 2
       prompt_v2: {
         is_chat: false,
         prompt: string
@@ -67,6 +69,20 @@ export type Impl = {
           content: string
         }[]
       }
+    } | {
+      has_v2: true
+      version: 3
+      prompt_v2: {
+        is_chat: false,
+        prompt: string
+      } | {
+        is_chat: true,
+        prompt: {
+          role: string
+          content: string
+        }[]
+      }
+      
     }
   )
 

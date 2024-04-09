@@ -8,77 +8,73 @@
 # fmt: off
 
 from ..clients.client_azure_gpt4 import AZURE_GPT4
-from ..functions.fx_classifytool import BAMLClassifyTool
+from ..functions.fx_bclassifytool import BAMLBClassifyTool
 from ..types.classes.cls_classifyresponse import ClassifyResponse
 from ..types.enums.enm_tool import Tool
 from ..types.partial.classes.cls_classifyresponse import PartialClassifyResponse
+from baml_core.jinja.render_prompt import RenderData
 from baml_core.provider_manager.llm_response import LLMResponse
 from baml_core.stream import AsyncStream
 from baml_lib._impl.deserializer import Deserializer
 
 
 import typing
-# Impl: v1
+# Impl: default_config
 # Client: AZURE_GPT4
-# An implementation of ClassifyTool.
+# An implementation of BClassifyTool.
 
 __prompt_template = """\
-
-{query}
+{{ query }}
 
 UserContext:
-{context}
 
-tool
----
-k1: Use this tool if the user is asking to compute something
-k2: Use this tool if the user is asking to draw something
-k3: Use this tool if the user is asking to generate text 
+{{ context }}
 
 Use this output format:
-{
-  // Any number of tools the user may want to use
-  "tool": "tool as string"[],
-  // This is the assistance reponse
-  "foo": string
-}
+{{ ctx.output_schema }}
 
 JSON:\
 """
 
-__input_replacers = {
-    "{context}",
-    "{query}"
-}
-
-
 # We ignore the type here because baml does some type magic to make this work
 # for inline SpecialForms like Optional, Union, List.
 __deserializer = Deserializer[ClassifyResponse](ClassifyResponse)  # type: ignore
-__deserializer.overload("ClassifyResponse", {"foo": "assistant_response"})
 
 # Add a deserializer that handles stream responses, which are all Partial types
 __partial_deserializer = Deserializer[PartialClassifyResponse](PartialClassifyResponse)  # type: ignore
-__partial_deserializer.overload("ClassifyResponse", {"foo": "assistant_response"})
+
+__output_schema = """
+{
+  // Any number of tools the user may want to use
+  &quot;tool&quot;: &quot;tools as string&quot;[],
+  &quot;assistant_response&quot;: string
+}
+""".strip()
+
+__template_macros = [
+]
 
 
-
-
-
-
-
-async def v1(*, query: str, context: str) -> ClassifyResponse:
-    response = await AZURE_GPT4.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(query=query, context=context))
+async def default_config(*, context: str, query: str) -> ClassifyResponse:
+    response = await AZURE_GPT4.run_jinja_template(
+        jinja_template=__prompt_template,
+        output_schema=__output_schema, template_macros=__template_macros,
+        args=dict(context=context, query=query)
+    )
     deserialized = __deserializer.from_string(response.generated)
     return deserialized
 
 
-def v1_stream(*, query: str, context: str
+def default_config_stream(*, context: str, query: str
 ) -> AsyncStream[ClassifyResponse, PartialClassifyResponse]:
     def run_prompt() -> typing.AsyncIterator[LLMResponse]:
-        raw_stream = AZURE_GPT4.run_prompt_template_stream(template=__prompt_template, replacers=__input_replacers, params=dict(query=query, context=context))
+        raw_stream = AZURE_GPT4.run_jinja_template_stream(
+            jinja_template=__prompt_template,
+            output_schema=__output_schema, template_macros=__template_macros,
+            args=dict(context=context, query=query)
+        )
         return raw_stream
     stream = AsyncStream(stream_cb=run_prompt, partial_deserializer=__partial_deserializer, final_deserializer=__deserializer)
     return stream
 
-BAMLClassifyTool.register_impl("v1")(v1, v1_stream)
+BAMLBClassifyTool.register_impl("default_config")(default_config, default_config_stream)

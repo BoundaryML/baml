@@ -42,36 +42,3 @@ enum Tool {
   @alias(k3)
   @description(Use this tool if the user is asking to generate text)
 }
- 
-impl<llm, ClassifyTool> v1 {
-    client AZURE_GPT4
-
-    override Tool {
-      @@alias(tool)
-    }
-
-    override ClassifyResponse {
-      assistant_response @alias(foo)
-      @description(#"
-        This is the assistance reponse
-      "#)
-    }           
-
-    prompt #"
-        
-        {#input.query}
- 
-        UserContext:
-        {#input.context}
-  
-        {#print_enum(Tool)} 
-
-        Use this output format:
-        {#print_type(output)}
-
-        JSON:
-    "#
-
-}  
-  
-  

@@ -195,6 +195,7 @@ dependencies = [
 name = "baml-fmt"
 version = "0.18.0-canary.0"
 dependencies = [
+ "anyhow",
  "baml-lib",
  "base64 0.13.1",
  "colored",

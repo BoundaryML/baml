@@ -82,7 +82,7 @@ export class WebPanelView {
         // Panel title
         'BAML Playground',
         // The editor column the panel should be displayed in
-        ViewColumn.Beside,
+        process.env.VSCODE_DEBUG_MODE === "true" ? ViewColumn.Two : ViewColumn.Beside,
         // Extra panel configurations
         {
           // Enable JavaScript in the webview

@@ -17,7 +17,7 @@ export function activate(context: vscode.ExtensionContext) {
   const baml_config = vscode.workspace.getConfiguration('baml')
 
 
-  const bamlPlygroundCommand = vscode.commands.registerCommand(
+  const bamlPlaygroundCommand = vscode.commands.registerCommand(
     'baml.openBamlPanel',
     (args?: { projectId?: string; functionName?: string; implName?: string; showTests?: boolean }) => {
       const projectId = args?.projectId
@@ -48,7 +48,7 @@ export function activate(context: vscode.ExtensionContext) {
     },
   )
 
-  context.subscriptions.push(bamlPlygroundCommand)
+  context.subscriptions.push(bamlPlaygroundCommand)
   context.subscriptions.push(
     vscode.languages.registerCodeLensProvider({ scheme: 'file', language: 'python' }, glooLens),
   )
@@ -66,6 +66,11 @@ export function activate(context: vscode.ExtensionContext) {
   })
 
   testExecutor.start()
+
+  if (process.env.VSCODE_DEBUG_MODE === "true") {
+    console.log(`vscode env: ${JSON.stringify(process.env, null, 2)}`)
+    vscode.commands.executeCommand('baml.openBamlPanel')
+  }
 }
 
 export function deactivate(): void {

@@ -1,17 +1,18 @@
 #![allow(dead_code)]
 
+use internal_baml_jinja::{render_prompt, RenderContext, RenderContext_Client};
 use serde::Deserialize;
 use serde_json::{json, Value};
-use std::{path::PathBuf, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 mod jsonschema;
 
 use jsonschema::WithJsonSchema;
 
 use baml_lib::{
     internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span},
-    internal_baml_parser_database::PromptAst,
+    internal_baml_parser_database::{walkers::FunctionWalker, PromptAst},
     internal_baml_schema_ast::ast::{self, WithIdentifier, WithName, WithSpan},
-    SourceFile,
+    SourceFile, ValidatedSchema,
 };
 
 #[derive(serde::Serialize)]
@@ -159,9 +160,18 @@ pub(crate) fn run(input: &str) -> String {
                         })
                     }
                 ).collect::<Vec<_>>(),
-                "impls":
-                if func.is_old_function() {
-                    func.walk_variants().map(
+                "impls": preview_impl(&schema, func),
+            })
+        })
+        .collect::<Vec<_>>()
+    });
+
+    print_diagnostics(mini_errors, Some(response))
+}
+
+fn preview_impl(schema: &ValidatedSchema, func: FunctionWalker) -> Vec<serde_json::Value> {
+    if func.is_old_function() {
+        func.walk_variants().map(
                         |i| {
                             let props = i.properties();
                             let prompt = props.to_prompt();
@@ -209,43 +219,94 @@ pub(crate) fn run(input: &str) -> String {
                                         "value": r.1,
                                     })
                                 ).collect::<Vec<_>>(),
-                                "client": schema.db.find_client(&props.client.value).map(|c| StringSpan::new(c.name(), c.identifier().span())).unwrap_or_else(|| StringSpan::new(&props.client.value, &props.client.span)),
+                                "client": schema.db
+                                    .find_client(&props.client.value)
+                                    .map(|c| StringSpan::new(c.name(), c.identifier().span()))
+                                    .unwrap_or_else(|| StringSpan::new(&props.client.value, &props.client.span)),
 
                             })
                         }
                     ).collect::<Vec<_>>()
-                } else {
-                    let prompt = func.metadata().prompt.as_ref().unwrap();
-                    let (client_name, client_span) = func.metadata().client.as_ref().unwrap();
-                    vec![
-                        json!({
-                            "type": "llm",
-                            "name": StringSpan::new("default_config", func.identifier().span()),
-                            "prompt_key": {
-                                "start": prompt.span().start,
-                                "end": prompt.span().end,
-                                "source_file": func.span().file.path(),
-                            },
-                            "has_v2": false,
-                            // We can use just "prompt" as its the new template now.
-                            "prompt": prompt.value(),
-                            // Passed for legacy reasons
-                            "prompt_v2": null,
-                            // This is the newly rendered prompt with the test case and client substituted in.
-                            // TODO: @sxlijin call render_prompt here based on the test case and client.
-                            "rendered_prompt": null,
-                            "input_replacers": [],
-                            "output_replacers": [],
-                            "client": schema.db.find_client(client_name).map(|c| StringSpan::new(c.name(), c.identifier().span())).unwrap_or_else(|| StringSpan::new(client_name, client_span)),
-                        })
-                    ]
-                },
-            })
-        })
-        .collect::<Vec<_>>()
-    });
+    } else {
+        let prompt = func.metadata().prompt.as_ref().unwrap();
+        let (client_name, client_span) = func.metadata().client.as_ref().unwrap();
+        let client_walker = schema.db.find_client(client_name);
 
-    print_diagnostics(mini_errors, Some(response))
+        let client = client_walker
+            .map(|c| StringSpan::new(c.name(), c.identifier().span()))
+            .unwrap_or_else(|| StringSpan::new(client_name, client_span));
+        let args = func
+            .walk_tests()
+            .nth(0)
+            .map(
+                |t| match Into::<serde_json::Value>::into(&t.test_case().content) {
+                    serde_json::Value::Object(map) => map,
+                    _ => serde_json::Map::new(),
+                },
+            )
+            .unwrap_or(serde_json::Map::new());
+        let output_schema = match func.ast_function().output() {
+            ast::FunctionArgs::Named(arg_list) => {
+                format!("DO NOT LAND - failed to render output schema")
+            }
+            ast::FunctionArgs::Unnamed(arg) => format!("{:#}", arg.field_type),
+        };
+
+        let rendered = render_prompt(
+            prompt.value(),
+            args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: client_walker
+                        .map(|c| c.name().to_string())
+                        .unwrap_or(client_name.to_string()),
+                    provider: client_walker
+                        .map(|c| c.properties().provider.0.clone())
+                        // TODO(sam): how are fallback/round-robin clients represented here?
+                        .unwrap_or("???".to_string()),
+                },
+                output_schema: output_schema,
+                env: HashMap::new(),
+                //env: std::env::vars().collect::<HashMap<String, String>>(),
+            },
+            vec![],
+        )
+        .map_or_else(
+            |err| internal_baml_jinja::RenderedPrompt::Completion(format!("{err:#}")),
+            |rendered| rendered,
+        );
+        let rendered = match rendered {
+            internal_baml_jinja::RenderedPrompt::Completion(s) => json!({
+                "is_chat": false,
+                "prompt": s,
+            }),
+            internal_baml_jinja::RenderedPrompt::Chat(chat) => json!({
+                "is_chat": true,
+                "prompt": chat,
+            }),
+        };
+        log::info!(">================== rendered: {:#}", rendered);
+        vec![json!({
+            "type": "llm",
+            "name": StringSpan::new("default_impl", func.identifier().span()),
+            "prompt_key": {
+                "start": prompt.span().start,
+                "end": prompt.span().end,
+                "source_file": func.span().file.path(),
+            },
+            "version": 3,
+            // We can use just "prompt" as its the new template now.
+            "prompt": prompt.value(),
+            // Passed for legacy reasons
+            "has_v2": true,
+            "prompt_v2": rendered,
+            // This is the newly rendered prompt with the test case and client substituted in.
+            // TODO: @sxlijin call render_prompt here based on the test case and client.
+            "input_replacers": [],
+            "output_replacers": [],
+            "client": client,
+        })]
+    }
 }
 
 fn print_diagnostics(diagnostics: Vec<MiniError>, response: Option<Value>) -> String {

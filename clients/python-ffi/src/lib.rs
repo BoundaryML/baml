@@ -239,7 +239,7 @@ impl From<internal_baml_jinja::RenderedChatMessage> for RenderedChatMessage {
     fn from(chat_message: internal_baml_jinja::RenderedChatMessage) -> Self {
         RenderedChatMessage {
             role: chat_message.role,
-            message: chat_message.message,
+            message: chat_message.content,
         }
     }
 }
@@ -278,7 +278,7 @@ fn render_prompt(template: String, context: RenderData) -> PyResult<PyObject> {
         ));
     };
 
-    let rendered = internal_baml_jinja::render_template(
+    let rendered = internal_baml_jinja::render_prompt(
         &template,
         render_args,
         internal_baml_jinja::RenderContext {

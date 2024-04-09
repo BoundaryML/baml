@@ -160,7 +160,7 @@ fn render_minijinja(
         } else {
             chat_messages.push(RenderedChatMessage {
                 role: role.to_string(),
-                message: chunk.trim().to_string(),
+                content: chunk.trim().to_string(),
             });
         }
     }
@@ -168,19 +168,19 @@ fn render_minijinja(
     Ok(RenderedPrompt::Chat(chat_messages))
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize)]
 pub struct RenderedChatMessage {
     pub role: String,
-    pub message: String,
+    pub content: String,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize)]
 pub enum RenderedPrompt {
     Completion(String),
     Chat(Vec<RenderedChatMessage>),
 }
 
-pub fn render_template(
+pub fn render_prompt(
     template: &str,
     args: serde_json::Map<String, serde_json::Value>,
     ctx: RenderContext,
@@ -231,7 +231,7 @@ mod render_tests {
             anyhow::bail!("args must be convertible to a JSON object");
         };
 
-        let rendered = render_template(
+        let rendered = render_prompt(
             "
                     
 
@@ -264,7 +264,7 @@ mod render_tests {
             RenderedPrompt::Chat(vec![
                 RenderedChatMessage {
                     role: "system".to_string(),
-                    message: vec![
+                    content: vec![
                         "You are an assistant that always responds",
                         "in a very excited way with emojis",
                         "and also outputs this word 4 times",
@@ -274,7 +274,7 @@ mod render_tests {
                 },
                 RenderedChatMessage {
                     role: "john doe".to_string(),
-                    message: vec![
+                    content: vec![
                         "Tell me a haiku about sakura in iambic pentameter.",
                         "",
                         "End the haiku with a line about your maker, openai.",
@@ -298,7 +298,7 @@ mod render_tests {
         };
 
         // rendering should fail: template contains '{{ name }' (missing '}' at the end)
-        let rendered = render_template(
+        let rendered = render_prompt(
             "Hello, {{ name }!",
             args,
             RenderContext {

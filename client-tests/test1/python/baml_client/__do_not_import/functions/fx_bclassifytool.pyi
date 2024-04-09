@@ -7,8 +7,9 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..types.classes.cls_basicclass import BasicClass
-from ..types.partial.classes.cls_basicclass import PartialBasicClass
+from ..types.classes.cls_classifyresponse import ClassifyResponse
+from ..types.enums.enm_tool import Tool
+from ..types.partial.classes.cls_classifyresponse import PartialClassifyResponse
 from baml_core.stream import AsyncStream
 from typing import Callable, Protocol, runtime_checkable
 
@@ -19,85 +20,85 @@ import pytest
 from contextlib import contextmanager
 from unittest import mock
 
-ImplName = typing.Literal["version"]
+ImplName = typing.Literal["default_config"]
 
 T = typing.TypeVar("T", bound=typing.Callable[..., typing.Any])
 CLS = typing.TypeVar("CLS", bound=type)
 
 
-INamedfuncOutput = str
+IBClassifyToolOutput = ClassifyResponse
 
 @runtime_checkable
-class INamedfunc(Protocol):
+class IBClassifyTool(Protocol):
     """
     This is the interface for a function.
 
     Args:
-        address: str
-        name: BasicClass
+        context: str
+        query: str
 
     Returns:
-        str
+        ClassifyResponse
     """
 
-    async def __call__(self, *, address: str, name: BasicClass) -> str:
+    async def __call__(self, *, context: str, query: str) -> ClassifyResponse:
         ...
 
    
 
 @runtime_checkable
-class INamedfuncStream(Protocol):
+class IBClassifyToolStream(Protocol):
     """
     This is the interface for a stream function.
 
     Args:
-        address: str
-        name: BasicClass
+        context: str
+        query: str
 
     Returns:
-        AsyncStream[str, str]
+        AsyncStream[ClassifyResponse, PartialClassifyResponse]
     """
 
-    def __call__(self, *, address: str, name: BasicClass
-) -> AsyncStream[str, str]:
+    def __call__(self, *, context: str, query: str
+) -> AsyncStream[ClassifyResponse, PartialClassifyResponse]:
         ...
-class BAMLNamedfuncImpl:
-    async def run(self, *, address: str, name: BasicClass) -> str:
+class BAMLBClassifyToolImpl:
+    async def run(self, *, context: str, query: str) -> ClassifyResponse:
         ...
     
-    def stream(self, *, address: str, name: BasicClass
-) -> AsyncStream[str, str]:
+    def stream(self, *, context: str, query: str
+) -> AsyncStream[ClassifyResponse, PartialClassifyResponse]:
         ...
 
-class IBAMLNamedfunc:
+class IBAMLBClassifyTool:
     def register_impl(
         self, name: ImplName
-    ) -> typing.Callable[[INamedfunc, INamedfuncStream], None]:
+    ) -> typing.Callable[[IBClassifyTool, IBClassifyToolStream], None]:
         ...
 
-    async def __call__(self, *, address: str, name: BasicClass) -> str:
+    async def __call__(self, *, context: str, query: str) -> ClassifyResponse:
         ...
 
-    def stream(self, *, address: str, name: BasicClass
-) -> AsyncStream[str, str]:
+    def stream(self, *, context: str, query: str
+) -> AsyncStream[ClassifyResponse, PartialClassifyResponse]:
         ...
 
-    def get_impl(self, name: ImplName) -> BAMLNamedfuncImpl:
+    def get_impl(self, name: ImplName) -> BAMLBClassifyToolImpl:
         ...
 
     @contextmanager
     def mock(self) -> typing.Generator[mock.AsyncMock, None, None]:
         """
-        Utility for mocking the NamedfuncInterface.
+        Utility for mocking the BClassifyToolInterface.
 
         Usage:
             ```python
             # All implementations are mocked.
 
             async def test_logic() -> None:
-                with baml.Namedfunc.mock() as mocked:
+                with baml.BClassifyTool.mock() as mocked:
                     mocked.return_value = ...
-                    result = await NamedfuncImpl(...)
+                    result = await BClassifyToolImpl(...)
                     assert mocked.called
             ```
         """
@@ -107,7 +108,7 @@ class IBAMLNamedfunc:
     def test(self, test_function: T) -> T:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the NamedfuncInterface.
+        the BClassifyToolInterface.
 
         Args:
             test_function : T
@@ -117,9 +118,9 @@ class IBAMLNamedfunc:
             ```python
             # All implementations will be tested.
 
-            @baml.Namedfunc.test
-            async def test_logic(NamedfuncImpl: INamedfunc) -> None:
-                result = await NamedfuncImpl(...)
+            @baml.BClassifyTool.test
+            async def test_logic(BClassifyToolImpl: IBClassifyTool) -> None:
+                result = await BClassifyToolImpl(...)
             ```
         """
         ...
@@ -128,7 +129,7 @@ class IBAMLNamedfunc:
     def test(self, *, exclude_impl: typing.Iterable[ImplName] = [], stream: bool = False) -> pytest.MarkDecorator:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the NamedfuncInterface.
+        the BClassifyToolInterface.
 
         Args:
             exclude_impl : Iterable[ImplName]
@@ -140,17 +141,17 @@ class IBAMLNamedfunc:
             ```python
             # All implementations except the given impl will be tested.
 
-            @baml.Namedfunc.test(exclude_impl=["implname"])
-            async def test_logic(NamedfuncImpl: INamedfunc) -> None:
-                result = await NamedfuncImpl(...)
+            @baml.BClassifyTool.test(exclude_impl=["implname"])
+            async def test_logic(BClassifyToolImpl: IBClassifyTool) -> None:
+                result = await BClassifyToolImpl(...)
             ```
 
             ```python
             # Streamable version of the test function.
 
-            @baml.Namedfunc.test(stream=True)
-            async def test_logic(NamedfuncImpl: INamedfuncStream) -> None:
-                async for result in NamedfuncImpl(...):
+            @baml.BClassifyTool.test(stream=True)
+            async def test_logic(BClassifyToolImpl: IBClassifyToolStream) -> None:
+                async for result in BClassifyToolImpl(...):
                     ...
             ```
         """
@@ -160,7 +161,7 @@ class IBAMLNamedfunc:
     def test(self, test_class: typing.Type[CLS]) -> typing.Type[CLS]:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the NamedfuncInterface.
+        the BClassifyToolInterface.
 
         Args:
             test_class : Type[CLS]
@@ -170,14 +171,14 @@ class IBAMLNamedfunc:
         ```python
         # All implementations will be tested in every test method.
 
-        @baml.Namedfunc.test
+        @baml.BClassifyTool.test
         class TestClass:
-            def test_a(self, NamedfuncImpl: INamedfunc) -> None:
+            def test_a(self, BClassifyToolImpl: IBClassifyTool) -> None:
                 ...
-            def test_b(self, NamedfuncImpl: INamedfunc) -> None:
+            def test_b(self, BClassifyToolImpl: IBClassifyTool) -> None:
                 ...
         ```
         """
         ...
 
-BAMLNamedfunc: IBAMLNamedfunc
+BAMLBClassifyTool: IBAMLBClassifyTool

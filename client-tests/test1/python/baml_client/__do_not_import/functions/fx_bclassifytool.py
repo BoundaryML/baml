@@ -15,10 +15,10 @@ from baml_lib._impl.functions import BaseBAMLFunction
 from typing import AsyncIterator, Callable, Protocol, runtime_checkable
 
 
-IClassifyToolOutput = ClassifyResponse
+IBClassifyToolOutput = ClassifyResponse
 
 @runtime_checkable
-class IClassifyTool(Protocol):
+class IBClassifyTool(Protocol):
     """
     This is the interface for a function.
 
@@ -36,7 +36,7 @@ class IClassifyTool(Protocol):
    
 
 @runtime_checkable
-class IClassifyToolStream(Protocol):
+class IBClassifyToolStream(Protocol):
     """
     This is the interface for a stream function.
 
@@ -51,20 +51,21 @@ class IClassifyToolStream(Protocol):
     def __call__(self, *, context: str, query: str
 ) -> AsyncStream[ClassifyResponse, PartialClassifyResponse]:
         ...
-class IBAMLClassifyTool(BaseBAMLFunction[ClassifyResponse, PartialClassifyResponse]):
+class IBAMLBClassifyTool(BaseBAMLFunction[ClassifyResponse, PartialClassifyResponse]):
     def __init__(self) -> None:
         super().__init__(
-            "ClassifyTool",
-            IClassifyTool,
-            [],
+            "BClassifyTool",
+            IBClassifyTool,
+            ["default_config"],
         )
 
     async def __call__(self, *args, **kwargs) -> ClassifyResponse:
-        raise NotImplementedError("No impls defined")
+        return await self.get_impl("").run(*args, **kwargs)
     
     def stream(self, *args, **kwargs) -> AsyncStream[ClassifyResponse, PartialClassifyResponse]:
-        raise NotImplementedError("No impls defined")
+        res = self.get_impl("").stream(*args, **kwargs)
+        return res
 
-BAMLClassifyTool = IBAMLClassifyTool()
+BAMLBClassifyTool = IBAMLBClassifyTool()
 
-__all__ = [ "BAMLClassifyTool" ]
+__all__ = [ "BAMLBClassifyTool" ]

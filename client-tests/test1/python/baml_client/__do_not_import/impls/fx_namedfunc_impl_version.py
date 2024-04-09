@@ -46,16 +46,16 @@ __partial_deserializer = Deserializer[str](str)  # type: ignore
 
 
 
-async def version(*, name: BasicClass, address: str) -> str:
-    response = await AZURE_GPT4.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(name=name, address=address))
+async def version(*, address: str, name: BasicClass) -> str:
+    response = await AZURE_GPT4.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(address=address, name=name))
     deserialized = __deserializer.from_string(response.generated)
     return deserialized
 
 
-def version_stream(*, name: BasicClass, address: str
+def version_stream(*, address: str, name: BasicClass
 ) -> AsyncStream[str, str]:
     def run_prompt() -> typing.AsyncIterator[LLMResponse]:
-        raw_stream = AZURE_GPT4.run_prompt_template_stream(template=__prompt_template, replacers=__input_replacers, params=dict(name=name, address=address))
+        raw_stream = AZURE_GPT4.run_prompt_template_stream(template=__prompt_template, replacers=__input_replacers, params=dict(address=address, name=name))
         return raw_stream
     stream = AsyncStream(stream_cb=run_prompt, partial_deserializer=__partial_deserializer, final_deserializer=__deserializer)
     return stream
