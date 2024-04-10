@@ -3,7 +3,7 @@
   "pipeline": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**"]
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
     },
     "watch": {
       "dependsOn": ["^watch"],
@@ -22,9 +22,9 @@
       "dependsOn": ["^build"],
       "outputs": ["dist/**"]
     },
-    "@baml/prompt-fiddle-next": {
+    "fiddle-frontend": {
       "dependsOn": ["@baml/playground-common#build", "@gloo-ai/baml-schema-wasm-web#build"],
-      "outputs": ["dist/**"]
+      "outputs": [".next/**", "!.next/cache/**"]
     },
     "@baml/playground-common#build": {
       "dependsOn": ["@baml/common#build"],

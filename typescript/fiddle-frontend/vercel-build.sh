@@ -20,7 +20,7 @@ npm add -g tsup
 
 echo "Path: $(pwd)"
 
-turbo build --filter=@baml/prompt-fiddle-next
+turbo build --filter=fiddle-frontend
 echo "Path2: $(pwd)"
 
 ls -l
