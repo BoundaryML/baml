@@ -15,3 +15,4 @@ turbo build --filter=@baml/prompt-fiddle-next
 echo "Path2: $(pwd)"
 
 ls -l
+ls -l /vercel/output
