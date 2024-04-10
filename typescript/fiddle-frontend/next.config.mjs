@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: ['@baml/playground-common'],
+  transpilePackages: ['@baml/playground-common', '@gloo-ai/baml-schema-wasm-web', '@baml/common'],
   webpack(config, { isServer, dev }) {
     config.experiments = {
       ...config.experiments,
