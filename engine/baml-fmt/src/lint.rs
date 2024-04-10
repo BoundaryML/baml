@@ -13,7 +13,6 @@ use jsonschema::WithJsonSchema;
 use baml_lib::{
     internal_baml_diagnostics::{DatamodelError, DatamodelWarning},
     internal_baml_parser_database::{
-        serialize_with_printer,
         walkers::{FunctionWalker, VariantWalker},
         PromptAst, WithSerialize,
     },
@@ -325,25 +324,38 @@ fn serialize_impls(schema: &ValidatedSchema, func: FunctionWalker) -> Vec<Impl> 
                         let class_schema = c
                             .serialize(&schema.db, None, None, c.identifier().span())
                             .unwrap_or(format!("{:#}", arg.field_type));
-                        let enum_schemas = c
+                        let mut enum_schemas = c
                             .required_enums()
                             // TODO(sam) - if enum serialization fails, then we do not surface the error to the user.
                             // That is bad!!!!!!!
                             .filter_map(|e| {
-                                e.serialize(&schema.db, None, None, e.identifier().span())
-                                    .ok()
+                                match e.serialize(&schema.db, None, None, e.identifier().span()) {
+                                    Ok(enum_schema) => Some((e.name().to_string(), enum_schema)),
+                                    Err(_) => None,
+                                }
                             })
+                            .collect::<Vec<_>>();
+                        // Enforce a stable order on enum schemas. Without this, the order is actually unstable, and the order can ping-pong
+                        // when the vscode ext re-renders the live preview
+                        enum_schemas.sort_by_key(|(name, _)| name.to_string());
+                        let enum_schemas = enum_schemas
+                            .into_iter()
+                            .map(|(_, enum_schema)| enum_schema)
                             .collect::<Vec<_>>();
 
                         let enum_schemas = match enum_schemas.len() {
                             0 => "".to_string(),
                             1 => format!(
                                 "\n\nUse this enum for the output:\n{}",
-                                enum_schemas.join("\n\n")
+                                enum_schemas.join("")
                             ),
                             _ => format!(
-                                "\n\nUse these enums for the output:\n\n{}",
-                                enum_schemas.join("\n\n")
+                                "\n\nUse these enums for the output:\n{}",
+                                enum_schemas
+                                    .into_iter()
+                                    .map(|enum_schema| format!("{enum_schema}\n---"))
+                                    .collect::<Vec<_>>()
+                                    .join("\n\n")
                             ),
                         };
 
