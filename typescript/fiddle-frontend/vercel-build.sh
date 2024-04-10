@@ -9,5 +9,9 @@ which cargo
 
 npm add -g tsup
 
+echo "Path: $(pwd)"
+
 turbo build --filter=@baml/prompt-fiddle-next
-pnpm run build
+echo "Path2: $(pwd)"
+
+ls -l
