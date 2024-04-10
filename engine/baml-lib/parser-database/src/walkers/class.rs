@@ -158,18 +158,16 @@ impl<'db> WithSerialize for ClassWalker<'db> {
     fn output_schema(
         &self,
         db: &'_ ParserDatabase,
-        variant: Option<&VariantWalker<'_>>,
-        block: Option<&internal_baml_prompt_parser::ast::PrinterBlock>,
         span: &internal_baml_diagnostics::Span,
     ) -> Result<String, internal_baml_diagnostics::DatamodelError> {
-        let class_schema = self.serialize(db, variant, block, span)?;
+        let class_schema = self.serialize(db, None, None, span)?;
 
         let mut enum_schemas = self
             .required_enums()
             // TODO(sam) - if enum serialization fails, then we do not surface the error to the user.
             // That is bad!!!!!!!
             .filter_map(
-                |e| match e.serialize(&db, variant, block, e.identifier().span()) {
+                |e| match e.serialize(&db, None, None, e.identifier().span()) {
                     Ok(enum_schema) => Some((e.name().to_string(), enum_schema)),
                     Err(_) => None,
                 },

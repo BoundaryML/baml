@@ -113,7 +113,7 @@ class LLMChatProvider(AbstractLLMProvider):
         output_schema: str,
         template_macros: typing.List[TemplateStringMacro],
     ) -> LLMResponse:
-        prompt = render_prompt(
+        rendered = render_prompt(
             jinja_template,
             RenderData(
                 args=args,
@@ -126,17 +126,16 @@ class LLMChatProvider(AbstractLLMProvider):
             ),
         )
 
-        if prompt[0] == "chat":
+        prompt_type, prompt = rendered
+        if prompt_type == "chat":
             return await self._run_chat_internal(
-                list(
-                    map(
-                        lambda x: LLMChatMessage(role=x.role, content=x.message),
-                        prompt[1],
-                    )
-                )
+                [
+                    LLMChatMessage(role=chat.role, content=chat.message)
+                    for chat in prompt
+                ]
             )
         else:
-            return await self._run_prompt_internal(prompt[1])
+            return await self._run_prompt_internal(prompt)
 
     @typing.final
     async def _run_jinja_template_internal_stream(

@@ -4,8 +4,8 @@ use pyo3::prelude::{
     pyclass, pyfunction, pymethods, pymodule, wrap_pyfunction, Bound, PyAnyMethods, PyDictMethods,
     PyModule, PyResult,
 };
-use pyo3::types::{PyAny, PyDict, PyList};
-use pyo3::{PyObject, Python};
+use pyo3::types::{PyDict, PyList, PyTuple};
+use pyo3::{Py, PyObject, Python};
 use pythonize::{depythonize_bound, pythonize};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -225,7 +225,7 @@ impl RenderData {
     }
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[pyclass]
 struct RenderedChatMessage {
     #[pyo3(get)]
@@ -233,6 +233,23 @@ struct RenderedChatMessage {
 
     #[pyo3(get)]
     message: String,
+}
+
+// Implemented for testing purposes
+#[pymethods]
+impl RenderedChatMessage {
+    #[new]
+    fn new(role: String, message: String) -> Self {
+        RenderedChatMessage { role, message }
+    }
+
+    fn __repr__(&self) -> String {
+        format!("{self:#?}")
+    }
+
+    fn __eq__(&self, other: &Self) -> bool {
+        self == other
+    }
 }
 
 impl From<internal_baml_jinja::RenderedChatMessage> for RenderedChatMessage {
@@ -303,17 +320,20 @@ fn render_prompt(template: String, context: RenderData) -> PyResult<PyObject> {
         Ok(internal_baml_jinja::RenderedPrompt::Completion(s)) => {
             Ok(Python::with_gil(|py| pythonize(py, &("completion", s)))?)
         }
-        Ok(internal_baml_jinja::RenderedPrompt::Chat(chat)) => Ok(Python::with_gil(|py| {
-            pythonize(
+        Ok(internal_baml_jinja::RenderedPrompt::Chat(messages)) => Python::with_gil(|py| {
+            let messages = messages
+                .into_iter()
+                .map(|message| Py::new(py, RenderedChatMessage::from(message)))
+                .collect::<PyResult<Vec<_>>>()?;
+            Ok(PyTuple::new_bound(
                 py,
-                &(
-                    "chat",
-                    chat.into_iter()
-                        .map(RenderedChatMessage::from)
-                        .collect::<Vec<_>>(),
-                ),
+                vec![
+                    pythonize(py, "chat")?,
+                    PyList::new_bound(py, messages).into(),
+                ],
             )
-        })?),
+            .into())
+        }),
         Err(err) => Err(PyRuntimeError::new_err(format!("{err:#}"))),
     }
 }

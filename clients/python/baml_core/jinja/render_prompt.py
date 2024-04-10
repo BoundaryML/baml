@@ -58,7 +58,7 @@ if __name__ == "__main__":
         ],
     )
     rendered = render_prompt(
-        "{{ctx.env.LANG}}: Hello {{name}}, it's a good day today!\n\n{{farewell(name)}}",
+        '{{ _.chat("system") }} {{ctx.env.LANG}}: Hello {{name}}, it\'s a good day today!\n\n{{farewell(name)}}',
         args,
     )
-    print("Rendered", rendered)
+    print("Rendered", help(rendered[1][0]))

@@ -54,7 +54,7 @@ impl WithJsonSchema for FieldType {
                 Identifier::Local(name, _) => json!({
                     "$ref": format!("#/definitions/{}", name),
                 }),
-                _ => panic!("Not implemented"),
+                _ => panic!("json_schema() for this field type not implemented"),
             },
             FieldType::List(item, dims, _) => {
                 let mut inner = json!({

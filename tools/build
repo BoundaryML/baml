@@ -155,7 +155,6 @@ case "$_path" in
     if [ "$_watch_mode" -eq 1 ]; then
       # nodemon config in typescript/nodemon.json
       npx nodemon \
-        --verbose \
         --ext js,ts,tsx,rs,hb,hbs,toml \
         --watch "${_repo_root}/engine" \
         --watch "${_repo_root}/engine/jinja" \

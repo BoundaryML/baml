@@ -300,30 +300,6 @@ fn serialize_impls(schema: &ValidatedSchema, func: FunctionWalker) -> Vec<Impl> 
                 },
             )
             .unwrap_or(serde_json::Map::new());
-        let output_schema = match func.ast_function().output() {
-            ast::FunctionArgs::Named(arg_list) => {
-                // TODO(sam): handle multiple named args in... a return type?
-                format!("{{{{ Failed to render output schema: multiple named return types }}}}")
-            }
-            ast::FunctionArgs::Unnamed(arg) => {
-                let identifiers = arg
-                    .field_type
-                    .flat_idns()
-                    .iter()
-                    .map(|i| i.name())
-                    .collect::<Vec<_>>();
-                let class = schema
-                    .db
-                    .walk_classes()
-                    // TODO(sam): this does the wrong thing on functions that return a union
-                    .find(|c| identifiers.contains(&c.name()));
-
-                match class {
-                    None => format!("{:#}", arg.field_type),
-                    Some(c) => c.output_schema(&schema.db, None, None, c.identifier().span()),
-                }
-            }
-        };
 
         let rendered = render_prompt(
             prompt.value(),
@@ -338,13 +314,15 @@ fn serialize_impls(schema: &ValidatedSchema, func: FunctionWalker) -> Vec<Impl> 
                         // TODO(sam): how are fallback/round-robin clients represented here?
                         .unwrap_or("???".to_string()),
                 },
-                output_schema: output_schema,
+                output_schema: func
+                    .output_schema(&schema.db, func.identifier().span())
+                    .unwrap_or(format!("{{{{ output schema for {} }}}}", func.name())),
                 env: HashMap::new(),
             },
             vec![],
         );
         vec![Impl {
-            name: StringSpan::new("default_impl", func.identifier().span()),
+            name: StringSpan::new("default_config", func.identifier().span()),
             prompt_key: prompt.span().into(),
             prompt: match rendered {
                 Ok(internal_baml_jinja::RenderedPrompt::Completion(completion)) => {

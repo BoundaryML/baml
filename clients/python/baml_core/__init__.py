@@ -1,6 +1,9 @@
 from .cache_manager import CacheManager
 from .jinja.render_prompt import (
     render_prompt,
+    RenderedChatMessage,
+    RenderData_Client,
+    RenderData_Context,
     RenderData,
     TemplateStringMacro,
 )

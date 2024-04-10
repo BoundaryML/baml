@@ -373,7 +373,7 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
             create_event(
                 "llm_request_start",
                 {
-                    "chat_prompt": list(map(lambda x: json.dumps(x), prompt)),
+                    "chat_prompt": list(map(json.dumps, prompt)),
                     "provider": self.provider,
                 },
             )

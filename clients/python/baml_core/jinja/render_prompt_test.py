@@ -1,6 +1,6 @@
 import pytest
 
-from baml_core import render_prompt, RenderData
+from baml_core import render_prompt, RenderData, RenderedChatMessage
 
 
 def test_success() -> None:
@@ -38,21 +38,21 @@ def test_success() -> None:
     assert rendered == (
         "chat",
         [
-            {
-                "role": "system",
-                "message": "You are an assistant that always responds\n"
+            RenderedChatMessage(
+                role="system",
+                message="You are an assistant that always responds\n"
                 "in a very excited way with emojis\n"
                 "and also outputs this word 4 times\n"
                 "after giving a response: sakura",
-            },
-            {
-                "role": "john doe",
-                "message": "Tell me a haiku about sakura in iambic pentameter.\n"
+            ),
+            RenderedChatMessage(
+                role="john doe",
+                message="Tell me a haiku about sakura in iambic pentameter.\n"
                 "\n"
                 'Before the haiku, include the following: "LOREM IPSUM DOLOR SIT AMET".\n'
                 "\n"
                 "After the haiku, tell me about your maker, openai.",
-            },
+            ),
         ],
     )
 

@@ -134,8 +134,6 @@ pub trait WithSerialize: WithSerializeableContent {
     fn output_schema(
         &self,
         db: &'_ ParserDatabase,
-        variant: Option<&VariantWalker<'_>>,
-        block: Option<&PrinterBlock>,
         span: &internal_baml_diagnostics::Span,
     ) -> Result<String, DatamodelError>;
 }

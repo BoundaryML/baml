@@ -49,10 +49,26 @@ __deserializer = Deserializer[ReviewAnalysis](ReviewAnalysis)  # type: ignore
 __partial_deserializer = Deserializer[PartialReviewAnalysis](PartialReviewAnalysis)  # type: ignore
 
 __output_schema = """
+Use this output format:
 {
-  &quot;sentiment&quot;: &quot;sentiment as string&quot;,
-  &quot;helpfulness&quot;: &quot;helpful as string&quot;
+  "sentiment": "sentiment as string",
+  "helpfulness": "helpful as string"
 }
+
+Use these enums for the output:
+helpful
+---
+very helpful
+somewhat helpful
+not helpful
+---
+
+sentiment
+---
+Happy
+Neutral
+Sad
+---
 """.strip()
 
 __template_macros = [
