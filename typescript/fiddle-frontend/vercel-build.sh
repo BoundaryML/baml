@@ -10,3 +10,4 @@ which cargo
 npm add -g tsup
 
 turbo build --filter=@baml/prompt-fiddle-next
+pnpm run build
