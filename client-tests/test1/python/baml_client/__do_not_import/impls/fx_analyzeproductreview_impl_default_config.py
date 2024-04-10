@@ -8,10 +8,11 @@
 # fmt: off
 
 from ..clients.client_azure_gpt4 import AZURE_GPT4
-from ..functions.fx_bclassifytool import BAMLBClassifyTool
-from ..types.classes.cls_classifyresponse import ClassifyResponse
-from ..types.enums.enm_tool import Tool
-from ..types.partial.classes.cls_classifyresponse import PartialClassifyResponse
+from ..functions.fx_analyzeproductreview import BAMLAnalyzeProductReview
+from ..types.classes.cls_reviewanalysis import ReviewAnalysis
+from ..types.enums.enm_reviewhelpfulness import ReviewHelpfulness
+from ..types.enums.enm_reviewsentiment import ReviewSentiment
+from ..types.partial.classes.cls_reviewanalysis import PartialReviewAnalysis
 from baml_core.jinja.render_prompt import RenderData
 from baml_core.provider_manager.llm_response import LLMResponse
 from baml_core.stream import AsyncStream
@@ -21,20 +22,20 @@ from baml_lib._impl.deserializer import Deserializer
 import typing
 # Impl: default_config
 # Client: AZURE_GPT4
-# An implementation of BClassifyTool.
+# An implementation of AnalyzeProductReview.
 
 __prompt_template = """\
 {{ _.chat("system")}}
 
-{{ query }}
+You are a customer feedback analysis assistant.
+Your job is classify the sentiment of and determine how helpful product reviews are.
 
 {{ _.chat("user")}}
 
-UserContext:
+Analyze the sentiment and helpfulness of the following product review:
 
-{{ context }}
+> {{ product_review }}
 
-Use this output format:
 {{ ctx.output_schema }}
 
 JSON:\
@@ -42,16 +43,15 @@ JSON:\
 
 # We ignore the type here because baml does some type magic to make this work
 # for inline SpecialForms like Optional, Union, List.
-__deserializer = Deserializer[ClassifyResponse](ClassifyResponse)  # type: ignore
+__deserializer = Deserializer[ReviewAnalysis](ReviewAnalysis)  # type: ignore
 
 # Add a deserializer that handles stream responses, which are all Partial types
-__partial_deserializer = Deserializer[PartialClassifyResponse](PartialClassifyResponse)  # type: ignore
+__partial_deserializer = Deserializer[PartialReviewAnalysis](PartialReviewAnalysis)  # type: ignore
 
 __output_schema = """
 {
-  // Any number of tools the user may want to use
-  &quot;tool&quot;: &quot;tools as string&quot;[],
-  &quot;assistant_response&quot;: string
+  &quot;sentiment&quot;: &quot;sentiment as string&quot;,
+  &quot;helpfulness&quot;: &quot;helpful as string&quot;
 }
 """.strip()
 
@@ -59,26 +59,26 @@ __template_macros = [
 ]
 
 
-async def default_config(*, context: str, query: str) -> ClassifyResponse:
+async def default_config(*, product_review: str) -> ReviewAnalysis:
     response = await AZURE_GPT4.run_jinja_template(
         jinja_template=__prompt_template,
         output_schema=__output_schema, template_macros=__template_macros,
-        args=dict(context=context, query=query)
+        args=dict(product_review=product_review)
     )
     deserialized = __deserializer.from_string(response.generated)
     return deserialized
 
 
-def default_config_stream(*, context: str, query: str
-) -> AsyncStream[ClassifyResponse, PartialClassifyResponse]:
+def default_config_stream(*, product_review: str
+) -> AsyncStream[ReviewAnalysis, PartialReviewAnalysis]:
     def run_prompt() -> typing.AsyncIterator[LLMResponse]:
         raw_stream = AZURE_GPT4.run_jinja_template_stream(
             jinja_template=__prompt_template,
             output_schema=__output_schema, template_macros=__template_macros,
-            args=dict(context=context, query=query)
+            args=dict(product_review=product_review)
         )
         return raw_stream
     stream = AsyncStream(stream_cb=run_prompt, partial_deserializer=__partial_deserializer, final_deserializer=__deserializer)
     return stream
 
-BAMLBClassifyTool.register_impl("default_config")(default_config, default_config_stream)
+BAMLAnalyzeProductReview.register_impl("default_config")(default_config, default_config_stream)

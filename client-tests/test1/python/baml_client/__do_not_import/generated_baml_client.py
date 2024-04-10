@@ -13,7 +13,7 @@ from .clients.client_azure_gpt4 import AZURE_GPT4
 from .clients.client_azure_yes_no import AZURE_YES_NO
 from .clients.client_large_response import LARGE_RESPONSE
 from .clients.client_resilientgpt4 import ResilientGPT4
-from .functions.fx_bclassifytool import BAMLBClassifyTool
+from .functions.fx_analyzeproductreview import BAMLAnalyzeProductReview
 from .functions.fx_booleanfunc import BAMLBooleanFunc
 from .functions.fx_classfunc import BAMLClassFunc
 from .functions.fx_classifytool import BAMLClassifyTool
@@ -33,7 +33,7 @@ from typing import Callable, List, Optional
 
 
 class BAMLClient:
-    BClassifyTool = BAMLBClassifyTool
+    AnalyzeProductReview = BAMLAnalyzeProductReview
     BooleanFunc = BAMLBooleanFunc
     ClassFunc = BAMLClassFunc
     ClassifyTool = BAMLClassifyTool

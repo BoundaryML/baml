@@ -17,9 +17,12 @@ from .classes.cls_improvedresponse import ImprovedResponse
 from .classes.cls_message import Message
 from .classes.cls_optionalobject import OptionalObject
 from .classes.cls_proposedmessage import ProposedMessage
+from .classes.cls_reviewanalysis import ReviewAnalysis
 from .enums.enm_categories import Categories
 from .enums.enm_emptyenum import EmptyEnum
 from .enums.enm_messagesender import MessageSender
+from .enums.enm_reviewhelpfulness import ReviewHelpfulness
+from .enums.enm_reviewsentiment import ReviewSentiment
 from .enums.enm_sentiment import Sentiment
 from .enums.enm_tool import Tool
 
@@ -40,6 +43,9 @@ __all__ = [
     'MessageSender',
     'OptionalObject',
     'ProposedMessage',
+    'ReviewAnalysis',
+    'ReviewHelpfulness',
+    'ReviewSentiment',
     'Sentiment',
     'Tool'
 ]

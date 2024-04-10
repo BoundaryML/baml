@@ -7,7 +7,7 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..__do_not_import.functions.fx_bclassifytool import IBClassifyTool, IBClassifyToolOutput, IBClassifyToolStream
+from ..__do_not_import.functions.fx_analyzeproductreview import IAnalyzeProductReview, IAnalyzeProductReviewOutput, IAnalyzeProductReviewStream
 from ..__do_not_import.functions.fx_booleanfunc import IBooleanFunc, IBooleanFuncOutput, IBooleanFuncStream
 from ..__do_not_import.functions.fx_classfunc import IClassFunc, IClassFuncOutput, IClassFuncStream
 from ..__do_not_import.functions.fx_classifytool import IClassifyTool, IClassifyToolOutput, IClassifyToolStream
@@ -29,9 +29,12 @@ from ..__do_not_import.types.classes.cls_improvedresponse import ImprovedRespons
 from ..__do_not_import.types.classes.cls_message import Message
 from ..__do_not_import.types.classes.cls_optionalobject import OptionalObject
 from ..__do_not_import.types.classes.cls_proposedmessage import ProposedMessage
+from ..__do_not_import.types.classes.cls_reviewanalysis import ReviewAnalysis
 from ..__do_not_import.types.enums.enm_categories import Categories
 from ..__do_not_import.types.enums.enm_emptyenum import EmptyEnum
 from ..__do_not_import.types.enums.enm_messagesender import MessageSender
+from ..__do_not_import.types.enums.enm_reviewhelpfulness import ReviewHelpfulness
+from ..__do_not_import.types.enums.enm_reviewsentiment import ReviewSentiment
 from ..__do_not_import.types.enums.enm_sentiment import Sentiment
 from ..__do_not_import.types.enums.enm_tool import Tool
 
@@ -47,9 +50,9 @@ __all__ = [
     'EmptyEnum',
     'Haiku',
     'Hi',
-    'IBClassifyTool',
-    'IBClassifyToolOutput',
-    'IBClassifyToolStream',
+    'IAnalyzeProductReview',
+    'IAnalyzeProductReviewOutput',
+    'IAnalyzeProductReviewStream',
     'IBooleanFunc',
     'IBooleanFuncOutput',
     'IBooleanFuncStream',
@@ -88,6 +91,9 @@ __all__ = [
     'MessageSender',
     'OptionalObject',
     'ProposedMessage',
+    'ReviewAnalysis',
+    'ReviewHelpfulness',
+    'ReviewSentiment',
     'Sentiment',
     'Tool'
 ]

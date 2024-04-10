@@ -17,6 +17,7 @@ from .classes.cls_improvedresponse import PartialImprovedResponse
 from .classes.cls_message import PartialMessage
 from .classes.cls_optionalobject import PartialOptionalObject
 from .classes.cls_proposedmessage import PartialProposedMessage
+from .classes.cls_reviewanalysis import PartialReviewAnalysis
 
 
 
@@ -31,5 +32,6 @@ __all__ = [
     'PartialImprovedResponse',
     'PartialMessage',
     'PartialOptionalObject',
-    'PartialProposedMessage'
+    'PartialProposedMessage',
+    'PartialReviewAnalysis'
 ]

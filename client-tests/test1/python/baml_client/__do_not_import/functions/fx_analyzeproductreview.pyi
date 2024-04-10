@@ -7,9 +7,10 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..types.classes.cls_classifyresponse import ClassifyResponse
-from ..types.enums.enm_tool import Tool
-from ..types.partial.classes.cls_classifyresponse import PartialClassifyResponse
+from ..types.classes.cls_reviewanalysis import ReviewAnalysis
+from ..types.enums.enm_reviewhelpfulness import ReviewHelpfulness
+from ..types.enums.enm_reviewsentiment import ReviewSentiment
+from ..types.partial.classes.cls_reviewanalysis import PartialReviewAnalysis
 from baml_core.stream import AsyncStream
 from typing import Callable, Protocol, runtime_checkable
 
@@ -26,79 +27,77 @@ T = typing.TypeVar("T", bound=typing.Callable[..., typing.Any])
 CLS = typing.TypeVar("CLS", bound=type)
 
 
-IBClassifyToolOutput = ClassifyResponse
+IAnalyzeProductReviewOutput = ReviewAnalysis
 
 @runtime_checkable
-class IBClassifyTool(Protocol):
+class IAnalyzeProductReview(Protocol):
     """
     This is the interface for a function.
 
     Args:
-        context: str
-        query: str
+        product_review: str
 
     Returns:
-        ClassifyResponse
+        ReviewAnalysis
     """
 
-    async def __call__(self, *, context: str, query: str) -> ClassifyResponse:
+    async def __call__(self, *, product_review: str) -> ReviewAnalysis:
         ...
 
    
 
 @runtime_checkable
-class IBClassifyToolStream(Protocol):
+class IAnalyzeProductReviewStream(Protocol):
     """
     This is the interface for a stream function.
 
     Args:
-        context: str
-        query: str
+        product_review: str
 
     Returns:
-        AsyncStream[ClassifyResponse, PartialClassifyResponse]
+        AsyncStream[ReviewAnalysis, PartialReviewAnalysis]
     """
 
-    def __call__(self, *, context: str, query: str
-) -> AsyncStream[ClassifyResponse, PartialClassifyResponse]:
+    def __call__(self, *, product_review: str
+) -> AsyncStream[ReviewAnalysis, PartialReviewAnalysis]:
         ...
-class BAMLBClassifyToolImpl:
-    async def run(self, *, context: str, query: str) -> ClassifyResponse:
+class BAMLAnalyzeProductReviewImpl:
+    async def run(self, *, product_review: str) -> ReviewAnalysis:
         ...
     
-    def stream(self, *, context: str, query: str
-) -> AsyncStream[ClassifyResponse, PartialClassifyResponse]:
+    def stream(self, *, product_review: str
+) -> AsyncStream[ReviewAnalysis, PartialReviewAnalysis]:
         ...
 
-class IBAMLBClassifyTool:
+class IBAMLAnalyzeProductReview:
     def register_impl(
         self, name: ImplName
-    ) -> typing.Callable[[IBClassifyTool, IBClassifyToolStream], None]:
+    ) -> typing.Callable[[IAnalyzeProductReview, IAnalyzeProductReviewStream], None]:
         ...
 
-    async def __call__(self, *, context: str, query: str) -> ClassifyResponse:
+    async def __call__(self, *, product_review: str) -> ReviewAnalysis:
         ...
 
-    def stream(self, *, context: str, query: str
-) -> AsyncStream[ClassifyResponse, PartialClassifyResponse]:
+    def stream(self, *, product_review: str
+) -> AsyncStream[ReviewAnalysis, PartialReviewAnalysis]:
         ...
 
-    def get_impl(self, name: ImplName) -> BAMLBClassifyToolImpl:
+    def get_impl(self, name: ImplName) -> BAMLAnalyzeProductReviewImpl:
         ...
 
     @contextmanager
     def mock(self) -> typing.Generator[mock.AsyncMock, None, None]:
         """
-        Utility for mocking the BClassifyToolInterface.
+        Utility for mocking the AnalyzeProductReviewInterface.
 
         Usage:
             ```python
             # All implementations are mocked.
 
             async def test_logic() -> None:
-                with baml.BClassifyTool.mock() as mocked:
+                with baml.AnalyzeProductReview.mock() as mocked:
                     mocked.return_value = ...
-                    result = await BClassifyToolImpl(...)
+                    result = await AnalyzeProductReviewImpl(...)
                     assert mocked.called
             ```
         """
@@ -108,7 +107,7 @@ class IBAMLBClassifyTool:
     def test(self, test_function: T) -> T:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the BClassifyToolInterface.
+        the AnalyzeProductReviewInterface.
 
         Args:
             test_function : T
@@ -118,9 +117,9 @@ class IBAMLBClassifyTool:
             ```python
             # All implementations will be tested.
 
-            @baml.BClassifyTool.test
-            async def test_logic(BClassifyToolImpl: IBClassifyTool) -> None:
-                result = await BClassifyToolImpl(...)
+            @baml.AnalyzeProductReview.test
+            async def test_logic(AnalyzeProductReviewImpl: IAnalyzeProductReview) -> None:
+                result = await AnalyzeProductReviewImpl(...)
             ```
         """
         ...
@@ -129,7 +128,7 @@ class IBAMLBClassifyTool:
     def test(self, *, exclude_impl: typing.Iterable[ImplName] = [], stream: bool = False) -> pytest.MarkDecorator:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the BClassifyToolInterface.
+        the AnalyzeProductReviewInterface.
 
         Args:
             exclude_impl : Iterable[ImplName]
@@ -141,17 +140,17 @@ class IBAMLBClassifyTool:
             ```python
             # All implementations except the given impl will be tested.
 
-            @baml.BClassifyTool.test(exclude_impl=["implname"])
-            async def test_logic(BClassifyToolImpl: IBClassifyTool) -> None:
-                result = await BClassifyToolImpl(...)
+            @baml.AnalyzeProductReview.test(exclude_impl=["implname"])
+            async def test_logic(AnalyzeProductReviewImpl: IAnalyzeProductReview) -> None:
+                result = await AnalyzeProductReviewImpl(...)
             ```
 
             ```python
             # Streamable version of the test function.
 
-            @baml.BClassifyTool.test(stream=True)
-            async def test_logic(BClassifyToolImpl: IBClassifyToolStream) -> None:
-                async for result in BClassifyToolImpl(...):
+            @baml.AnalyzeProductReview.test(stream=True)
+            async def test_logic(AnalyzeProductReviewImpl: IAnalyzeProductReviewStream) -> None:
+                async for result in AnalyzeProductReviewImpl(...):
                     ...
             ```
         """
@@ -161,7 +160,7 @@ class IBAMLBClassifyTool:
     def test(self, test_class: typing.Type[CLS]) -> typing.Type[CLS]:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the BClassifyToolInterface.
+        the AnalyzeProductReviewInterface.
 
         Args:
             test_class : Type[CLS]
@@ -171,14 +170,14 @@ class IBAMLBClassifyTool:
         ```python
         # All implementations will be tested in every test method.
 
-        @baml.BClassifyTool.test
+        @baml.AnalyzeProductReview.test
         class TestClass:
-            def test_a(self, BClassifyToolImpl: IBClassifyTool) -> None:
+            def test_a(self, AnalyzeProductReviewImpl: IAnalyzeProductReview) -> None:
                 ...
-            def test_b(self, BClassifyToolImpl: IBClassifyTool) -> None:
+            def test_b(self, AnalyzeProductReviewImpl: IAnalyzeProductReview) -> None:
                 ...
         ```
         """
         ...
 
-BAMLBClassifyTool: IBAMLBClassifyTool
+BAMLAnalyzeProductReview: IBAMLAnalyzeProductReview
