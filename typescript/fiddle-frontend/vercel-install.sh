@@ -11,4 +11,4 @@ cargo update -p wasm-bindgen
 cargo install -f wasm-bindgen-cli@0.2.87
 
 cargo build
-cd ../typescript/fiddle-frontend
+cd ../../typescript/fiddle-frontend
