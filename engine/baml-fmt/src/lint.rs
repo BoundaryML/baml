@@ -303,21 +303,45 @@ fn serialize_impls(schema: &ValidatedSchema, func: FunctionWalker) -> Vec<Impl> 
             .unwrap_or(serde_json::Map::new());
         let output_schema = match func.ast_function().output() {
             ast::FunctionArgs::Named(arg_list) => {
-                format!("DO NOT LAND - failed to render output schema")
+                // TODO(sam): handle multiple named args in... a return type?
+                format!("{{{{ Failed to render output schema: multiple named return types }}}}")
             }
-            ast::FunctionArgs::Unnamed(arg) => format!(
-                "{:#}",
-                match schema
+            ast::FunctionArgs::Unnamed(arg) => {
+                let identifiers = arg
+                    .field_type
+                    .flat_idns()
+                    .iter()
+                    .map(|i| i.name())
+                    .collect::<Vec<_>>();
+                let class = schema
                     .db
                     .walk_classes()
-                    .find(|c| c.name() == format!("{:#}", arg.field_type))
-                {
-                    Some(c) => c
-                        .serialize(&schema.db, None, None, arg.field_type.span())
-                        .unwrap_or(arg.field_type.to_string()),
-                    None => arg.field_type.to_string(),
+                    // TODO(sam): this does the wrong thing on functions that return a union
+                    .find(|c| identifiers.contains(&c.name()));
+
+                match class {
+                    None => format!("{:#}", arg.field_type),
+                    Some(c) => {
+                        let class_schema = c
+                            .serialize(&schema.db, None, None, c.identifier().span())
+                            .unwrap_or(format!("{:#}", arg.field_type));
+                        let enum_schemas = c
+                            .required_enums()
+                            // TODO(sam) - if enum serialization fails, then we do not surface the error to the user.
+                            // That is bad!!!!!!!
+                            .filter_map(|e| {
+                                e.serialize(&schema.db, None, None, e.identifier().span())
+                                    .ok()
+                            })
+                            .collect::<Vec<_>>();
+
+                        format!(
+                            "Use this output format:\n{class_schema}\n\nUse these enums in the output:\n\n{}",
+                            enum_schemas.join("\n\n")
+                        )
+                    }
                 }
-            ),
+            }
         };
 
         let rendered = render_prompt(
