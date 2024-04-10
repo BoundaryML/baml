@@ -307,4 +307,17 @@ impl<'db> WithSerialize for FunctionWalker<'db> {
             )),
         }
     }
+
+    fn output_schema(
+        &self,
+        _db: &'_ ParserDatabase,
+        _variant: Option<&VariantWalker<'_>>,
+        _block: Option<&internal_baml_prompt_parser::ast::PrinterBlock>,
+        span: &internal_baml_diagnostics::Span,
+    ) -> Result<String, internal_baml_diagnostics::DatamodelError> {
+        Err(DatamodelError::new_validation_error(
+            "Not implemented",
+            span.clone(),
+        ))
+    }
 }

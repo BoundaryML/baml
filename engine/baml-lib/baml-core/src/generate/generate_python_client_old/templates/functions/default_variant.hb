@@ -14,7 +14,7 @@ __deserializer = Deserializer[{{function.return.0.type}}]({{function.return.0.ty
 __partial_deserializer = Deserializer[{{function.return.0.type_partial}}]({{function.return.0.type_partial}})  # type: ignore
 
 __output_schema = """
-{{output_schema}}
+{{{output_schema}}}
 """.strip()
 
 __template_macros = [

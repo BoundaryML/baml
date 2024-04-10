@@ -154,4 +154,54 @@ impl<'db> WithSerialize for ClassWalker<'db> {
             )),
         }
     }
+
+    fn output_schema(
+        &self,
+        db: &'_ ParserDatabase,
+        variant: Option<&VariantWalker<'_>>,
+        block: Option<&internal_baml_prompt_parser::ast::PrinterBlock>,
+        span: &internal_baml_diagnostics::Span,
+    ) -> Result<String, internal_baml_diagnostics::DatamodelError> {
+        let class_schema = self.serialize(db, variant, block, span)?;
+
+        let mut enum_schemas = self
+            .required_enums()
+            // TODO(sam) - if enum serialization fails, then we do not surface the error to the user.
+            // That is bad!!!!!!!
+            .filter_map(
+                |e| match e.serialize(&db, variant, block, e.identifier().span()) {
+                    Ok(enum_schema) => Some((e.name().to_string(), enum_schema)),
+                    Err(_) => None,
+                },
+            )
+            .collect::<Vec<_>>();
+        // Enforce a stable order on enum schemas. Without this, the order is actually unstable, and the order can ping-pong
+        // when the vscode ext re-renders the live preview
+        enum_schemas.sort_by_key(|(name, _)| name.to_string());
+        let enum_schemas = enum_schemas
+            .into_iter()
+            .map(|(_, enum_schema)| enum_schema)
+            .collect::<Vec<_>>();
+
+        let enum_schemas = match enum_schemas.len() {
+            0 => "".to_string(),
+            1 => format!(
+                "\n\nUse this enum for the output:\n{}",
+                enum_schemas.join("")
+            ),
+            _ => format!(
+                "\n\nUse these enums for the output:\n{}",
+                enum_schemas
+                    .into_iter()
+                    .map(|enum_schema| format!("{enum_schema}\n---"))
+                    .collect::<Vec<_>>()
+                    .join("\n\n")
+            ),
+        };
+
+        Ok(format!(
+            "Use this output format:\n{}{}",
+            class_schema, enum_schemas
+        ))
+    }
 }

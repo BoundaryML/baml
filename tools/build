@@ -137,7 +137,8 @@ case "$_path" in
     fi
     ;;
 
-  /integ-tests | /integ-tests/* )
+  /integ-tests | /integ-tests/* | \
+  /client-tests | /client-tests/* )
     if [ "$_watch_mode" -eq 1 ]; then
       npx nodemon \
         --verbose \

@@ -198,7 +198,7 @@ impl WithWritePythonString for FunctionWalker<'_> {
                 "function": self.json(fc.last_file()),
                 "prompt": self.jinja_prompt().replace(r#"""""#, r#"\"\"\""#),
                 "client": client.name(),
-                "output_schema": self.serialize(self.db, None, None, self.identifier().span()).unwrap(),
+                "output_schema": self.output_schema(self.db, None, None, self.identifier().span()).unwrap(),
                 "template_macros": self.db.walk_templates().map(|t| json!({
                     "name": t.name().to_string(),
                     "args": match t.ast_node().input() {

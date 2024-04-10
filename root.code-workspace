@@ -1,6 +1,9 @@
 {
   "folders": [
     {
+      "path": ".github"
+    },
+    {
       "path": "engine"
     },
     {
@@ -27,15 +30,12 @@
       "path": "docs"
     },
     {
-      "name": "Release Tools",
+      "name": "release (Release Tools)",
       "path": "release"
     },
     {
-      "name": "test1/python",
+      "name": "client-tests/test1/python",
       "path": "client-tests/test1/python"
-    },
-    {
-      "path": ".github"
     },
     {
       "path": "client-tests/test2"

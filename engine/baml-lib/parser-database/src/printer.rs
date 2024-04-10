@@ -129,6 +129,15 @@ pub trait WithSerialize: WithSerializeableContent {
         block: Option<&PrinterBlock>,
         span: &internal_baml_diagnostics::Span,
     ) -> Result<String, DatamodelError>;
+
+    /// For generating ctx.output_schema
+    fn output_schema(
+        &self,
+        db: &'_ ParserDatabase,
+        variant: Option<&VariantWalker<'_>>,
+        block: Option<&PrinterBlock>,
+        span: &internal_baml_diagnostics::Span,
+    ) -> Result<String, DatamodelError>;
 }
 
 /// print_type, print_enum implementation

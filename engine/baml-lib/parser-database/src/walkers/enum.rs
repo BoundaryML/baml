@@ -101,6 +101,16 @@ impl<'db> WithSerialize for EnumWalker<'db> {
             )),
         }
     }
+
+    fn output_schema(
+        &self,
+        db: &'_ ParserDatabase,
+        variant: Option<&VariantWalker<'_>>,
+        block: Option<&internal_baml_prompt_parser::ast::PrinterBlock>,
+        span: &internal_baml_diagnostics::Span,
+    ) -> Result<String, internal_baml_diagnostics::DatamodelError> {
+        self.serialize(db, variant, block, span)
+    }
 }
 
 impl<'db> EnumValueWalker<'db> {
