@@ -335,10 +335,19 @@ fn serialize_impls(schema: &ValidatedSchema, func: FunctionWalker) -> Vec<Impl> 
                             })
                             .collect::<Vec<_>>();
 
-                        format!(
-                            "Use this output format:\n{class_schema}\n\nUse these enums in the output:\n\n{}",
-                            enum_schemas.join("\n\n")
-                        )
+                        let enum_schemas = match enum_schemas.len() {
+                            0 => "".to_string(),
+                            1 => format!(
+                                "\n\nUse this enum for the output:\n{}",
+                                enum_schemas.join("\n\n")
+                            ),
+                            _ => format!(
+                                "\n\nUse these enums for the output:\n\n{}",
+                                enum_schemas.join("\n\n")
+                            ),
+                        };
+
+                        format!("Use this output format:\n{}{}", class_schema, enum_schemas)
                     }
                 }
             }
