@@ -103,3 +103,4 @@ $RECYCLE.BIN/
 tmp/
 # Used for mypy stubs
 clients/python/out/*
+.vercel

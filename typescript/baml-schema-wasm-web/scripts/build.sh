@@ -4,7 +4,7 @@ set -euo pipefail
 
 cd ../../engine/baml-schema-wasm
 # maybe use dev and not --release?
-cargo build --release
+cargo build
 # engines dir
 cd ..
 echo "Path is: $(pwd)"
