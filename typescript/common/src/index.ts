@@ -56,3 +56,4 @@ function getFullTestName(testName: string, impl: string, fnName: string) {
 export { type ParserDatabase, getFullTestName }
 export { clientEventLogSchema, type ClientEventLog } from './schemav2'
 export { type StringSpan } from './parser_db'
+export { type SFunction, type Impl, type SClass, type SEnum } from './parser_db'

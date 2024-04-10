@@ -23,7 +23,6 @@ import type { TextDocument } from 'vscode-languageserver-textdocument'
 import { fullDocumentRange } from './ast'
 import lint, { LinterInput } from './wasm/lint'
 import { FileCache } from '../file/fileCache'
-import generate_test_file, { GenerateResponse } from './wasm/generate_test_file'
 import { ParserDatabase, TestRequest } from '@baml/common'
 import { URI } from 'vscode-uri'
 
@@ -58,26 +57,6 @@ import {
 } from './ast'
 import { Range, Uri } from 'vscode'
 
-export function handleGenerateTestFile(
-  documents: { path: string; doc: TextDocument }[],
-  linterInput: LinterInput,
-  test_request: TestRequest,
-  onError?: (errorMessage: string) => void,
-): GenerateResponse {
-  let result = generate_test_file(
-    {
-      ...linterInput,
-      test_request: test_request,
-    },
-    (errorMessage: string) => {
-      if (onError) {
-        onError(errorMessage)
-      }
-    },
-  )
-
-  return result
-}
 export function handleDiagnosticsRequest(
   rootPath: URI,
   documents: { path: string; doc: TextDocument }[],

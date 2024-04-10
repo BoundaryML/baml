@@ -1,6 +1,9 @@
 {
   "folders": [
     {
+      "path": "fiddle"
+    },
+    {
       "path": "engine"
     },
     {

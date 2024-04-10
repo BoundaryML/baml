@@ -35,7 +35,7 @@ fn register_panic_hook() {
 //     baml_fmt::format(&schema, &params)
 // }
 
-/// Docs: https://prisma.github.io/prisma-engines/doc/prisma_fmt/fn.get_config.html
+/// Docs: <add docs>
 // #[wasm_bindgen]
 // pub fn get_config(params: String) -> Result<String, JsError> {
 //     register_panic_hook();
@@ -104,7 +104,7 @@ pub fn version() -> String {
 #[wasm_bindgen]
 pub fn debug_panic() {
     register_panic_hook();
-    panic!("This is the panic triggered by `prisma_fmt::debug_panic()`");
+    panic!("This is the panic triggered by `baml_fmt::debug_panic()`");
 }
 
 #[wasm_bindgen]
