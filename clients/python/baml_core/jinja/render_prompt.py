@@ -61,4 +61,4 @@ if __name__ == "__main__":
         '{{ _.chat("system") }} {{ctx.env.LANG}}: Hello {{name}}, it\'s a good day today!\n\n{{farewell(name)}}',
         args,
     )
-    print("Rendered", help(rendered[1][0]))
+    print("Rendered", rendered)

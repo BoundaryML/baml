@@ -130,6 +130,7 @@ fn pyobject_to_json(any: PyObject) -> Result<serde_json::Value, Vec<Serializatio
 
 #[derive(Clone, Debug, Serialize)]
 #[pyclass]
+#[allow(non_camel_case_types)]
 struct RenderData_Client {
     name: String,
     provider: String,
@@ -137,6 +138,7 @@ struct RenderData_Client {
 
 #[derive(Clone, Debug, Serialize)]
 #[pyclass]
+#[allow(non_camel_case_types)]
 struct RenderData_Context {
     client: RenderData_Client,
     output_schema: String,
