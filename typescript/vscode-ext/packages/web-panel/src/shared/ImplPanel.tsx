@@ -14,7 +14,6 @@ import { useMemo, useState } from 'react'
 import Link from './Link'
 import TypeComponent from './TypeComponent'
 import { Impl } from '@baml/common/src/parser_db'
-import { Table, TableHead } from '@/components/ui/table'
 import clsx from 'clsx'
 
 const Whitespace: React.FC<{ char: 'space' | 'tab' }> = ({ char }) => (

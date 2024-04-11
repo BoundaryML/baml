@@ -13,11 +13,8 @@ import {
 import { useMemo, useState } from 'react'
 import Link from './Link'
 import TypeComponent from './TypeComponent'
-import { ArgType } from '@baml/common/src/parser_db'
-import { Table, TableHead } from '../components/ui/table'
+import { Impl } from '@baml/common/src/parser_db'
 import clsx from 'clsx'
-
-type Impl = ParserDatabase['functions'][0]['impls'][0]
 
 const Whitespace: React.FC<{ char: 'space' | 'tab' }> = ({ char }) => (
   <span className="opacity-50 text-vscode-descriptionForeground">{char === 'space' ? <>&middot;</> : <>&rarr;</>}</span>
@@ -93,11 +90,14 @@ const CodeLine: React.FC<{ line: string; number: number; showWhitespace: boolean
   )
 }
 
-const Snippet: React.FC<{ text: string }> = ({ text }) => {
+const Snippet: React.FC<{ text: string, type?: "preview" | "error" }> = ({ text, type = "preview" } ) => {
   const [showWhitespace, setShowWhitespace] = useState(true)
   const [wrapText, setWrapText] = useState(true)
 
-  const lines = text.split('\n')
+  const preStyle = 
+    type === "preview"
+           ? ["w-full", "p-1", "text-xs", "bg-vscode-input-background", "text-vscode-textPreformat-foreground"]
+           : ["w-full", "p-1", "text-xs", "bg-vscode-statusBarItem-errorBackground", "text-vscode-textPreformat-foreground"];
   return (
     <div className="w-full p-1 overflow-hidden rounded-lg bg-vscode-input-background">
       <div className="flex flex-row justify-end gap-2 text-xs">
@@ -114,8 +114,8 @@ const Snippet: React.FC<{ text: string }> = ({ text }) => {
           Whitespace
         </VSCodeCheckbox>
       </div>
-      <pre className="w-full p-1 text-xs bg-vscode-input-background text-vscode-textPreformat-foreground">
-        {lines.map((line, index) => (
+      <pre className={preStyle.join(" ")}>
+        {text.split('\n').map((line, index) => (
           <CodeLine key={index} line={line} number={index + 1} showWhitespace={showWhitespace} wrapText={wrapText} />
         ))}
       </pre>
@@ -123,23 +123,26 @@ const Snippet: React.FC<{ text: string }> = ({ text }) => {
   )
 }
 
+const PromptPreview: React.FC<{ prompt: Impl['prompt'] }> = ({prompt}) => {
+  switch (prompt.type) {
+    case "Completion":
+      return <Snippet text={prompt.completion} />
+    case "Chat":
+      return (<div className='flex flex-col gap-2'>
+              {prompt.chat.map(({ role, message }, index: number) => (
+                <div className='flex flex-col'>
+                  <div className='text-xs'><span className='text-muted-foreground'>Role:</span> <span className='font-bold'>{role}</span></div>
+                  <Snippet key={index} text={message} />
+                </div>
+              ))}
+            </div>);
+    case "Error":
+      return <Snippet type="error" text={prompt.error} />
+  }
+}
+
 const ImplPanel: React.FC<{ impl: Impl }> = ({ impl }) => {
   const { func } = useImplCtx(impl.name.value)
-
-  const implPrompt = useMemo(() => {
-    if (impl.has_v2) {
-      return impl.prompt_v2.prompt
-    } else {
-      let prompt = impl.prompt
-      impl.input_replacers.forEach(({ key, value }) => {
-        prompt = prompt.replaceAll(key, `{${value}}`)
-      })
-      impl.output_replacers.forEach(({ key, value }) => {
-        prompt = prompt.replaceAll(key, value)
-      })
-      return prompt
-    }
-  }, [impl])
 
   if (!func) return null
 
@@ -163,20 +166,7 @@ const ImplPanel: React.FC<{ impl: Impl }> = ({ impl }) => {
                 <Link item={impl.client} />
               </div>
             </div>
-            {typeof implPrompt === 'string' ? (
-              <Snippet text={implPrompt} />
-            ) : (
-              <div className="flex flex-col gap-2">
-                {implPrompt.map(({ role, content }, index) => (
-                  <div className="flex flex-col">
-                    <div className="text-xs">
-                      <span className="text-muted-foreground">Role:</span> <span className="font-bold">{role}</span>
-                    </div>
-                    <Snippet key={index} text={content} />
-                  </div>
-                ))}
-              </div>
-            )}
+            <PromptPreview prompt={impl.prompt}/>
           </div>
         </div>
       </VSCodePanelView>
