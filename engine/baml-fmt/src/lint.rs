@@ -233,6 +233,7 @@ struct Impl {
     prompt_key: Span,
     prompt: PromptPreview,
     client: StringSpan,
+    client_options: Vec<String>,
     input_replacers: Vec<(String, String)>,
     output_replacers: Vec<(String, String)>,
 }
@@ -248,12 +249,16 @@ fn apply_replacers(variant: VariantWalker, mut content: String) -> String {
     content
 }
 
-/// Returns details about the first non-strategy client in the function's client.
-/// The returned span always references the `client FooClient` reference in the function body.
-fn get_first_non_strategy_client(
+/// Returns details about the selected non-strategy client which is used in the function's `client`.
+///
+/// If no client is specified, or none matches the filter, the first non-strategy client is returned.
+///
+/// The returned span always points to the `client FooClient` reference in the function body.
+fn choose_client(
     schema: &ValidatedSchema,
     func: FunctionWalker,
-) -> anyhow::Result<(StringSpan, RenderContext_Client)> {
+    client_filter: Option<String>,
+) -> anyhow::Result<(StringSpan, RenderContext_Client, Vec<String>)> {
     let (client_or_strategy, client_span) = func.metadata().client.as_ref().ok_or(
         anyhow::anyhow!("function {} does not have a client", func.name()),
     )?;
@@ -262,10 +267,17 @@ fn get_first_non_strategy_client(
         .find_client(client_or_strategy)
         .ok_or(anyhow::anyhow!("client {} not found", client_or_strategy))?
         .flat_clients();
-    let client = clients.get(0).ok_or(anyhow::anyhow!(
-        "failed to resolve client {}",
-        client_or_strategy
-    ))?;
+
+    let client = match clients
+        .iter()
+        .find(|c| Some(c.name()) == client_filter.as_deref())
+    {
+        Some(c) => c,
+        None => clients.get(0).ok_or(anyhow::anyhow!(
+            "failed to resolve client {}",
+            client_or_strategy
+        ))?,
+    };
 
     Ok((
         StringSpan::new(
@@ -280,6 +292,7 @@ fn get_first_non_strategy_client(
             name: client.name().to_string(),
             provider: client.properties().provider.0.clone(),
         },
+        clients.iter().map(|c| c.name().to_string()).collect(),
     ))
 }
 
@@ -315,6 +328,7 @@ fn serialize_impls(schema: &ValidatedSchema, func: FunctionWalker) -> Vec<Impl> 
                         .unwrap_or_else(|| {
                             StringSpan::new(&props.client.value, &props.client.span)
                         }),
+                    client_options: vec![],
                     input_replacers: vec![],
                     output_replacers: vec![],
                 }
@@ -322,13 +336,14 @@ fn serialize_impls(schema: &ValidatedSchema, func: FunctionWalker) -> Vec<Impl> 
             .collect::<Vec<_>>()
     } else {
         let prompt = func.metadata().prompt.as_ref().unwrap();
-        let (client_span, client_ctx) = get_first_non_strategy_client(schema, func).unwrap_or((
-            StringSpan::new("{{{{ error resolving client }}}}", func.identifier().span()),
-            RenderContext_Client {
-                name: "{{{{ error rendering ctx.client.name }}}}".to_string(),
-                provider: "{{{{ error rendering ctx.client.provider }}}}".to_string(),
-            },
-        ));
+        let (client_span, client_ctx, client_options) = choose_client(schema, func, None)
+            .unwrap_or((
+                StringSpan::new("{{{{ error resolving client }}}}", func.identifier().span()),
+                RenderContext_Client {
+                    name: "{{{{ error rendering ctx.client.name }}}}".to_string(),
+                    provider: "{{{{ error rendering ctx.client.provider }}}}".to_string(),
+                },
+            ));
         let args = func
             .walk_tests()
             .nth(0)
@@ -369,6 +384,7 @@ fn serialize_impls(schema: &ValidatedSchema, func: FunctionWalker) -> Vec<Impl> 
                 },
             },
             client: client_span,
+            client_options: client_options,
             input_replacers: vec![],
             output_replacers: vec![],
         }]
