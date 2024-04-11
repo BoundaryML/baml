@@ -343,6 +343,7 @@ fn serialize_impls(schema: &ValidatedSchema, func: FunctionWalker) -> Vec<Impl> 
                     name: "{{{{ error rendering ctx.client.name }}}}".to_string(),
                     provider: "{{{{ error rendering ctx.client.provider }}}}".to_string(),
                 },
+                vec![],
             ));
         let args = func
             .walk_tests()
