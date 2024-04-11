@@ -3,8 +3,9 @@
 set -euo pipefail
 
 cd ../../engine/baml-schema-wasm
+# maybe use dev and not --release?
 cargo build
 # engines dir
 cd ..
 echo "Path is: $(pwd)"
-bash ./baml-schema-wasm/scripts/update-schema-wasm.sh
+bash ./baml-schema-wasm/scripts/update-schema-wasm.sh web

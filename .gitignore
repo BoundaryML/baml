@@ -1,6 +1,7 @@
 # Created by https://www.toptal.com/developers/gitignore/api/visualstudiocode,macos,windows,linux
 # Edit at https://www.toptal.com/developers/gitignore?templates=visualstudiocode,macos,windows,linux
 
+.env.development.local
 ### Linux ###
 *~
 
@@ -16,7 +17,7 @@
 # .nfs files are created when an open file is removed but is still being accessed
 .nfs*
 
-### macOS ###
+### macOS ####
 # General
 .DS_Store
 .AppleDouble
@@ -103,3 +104,4 @@ $RECYCLE.BIN/
 tmp/
 # Used for mypy stubs
 clients/python/out/*
+.vercel

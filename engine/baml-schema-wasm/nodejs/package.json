@@ -1,5 +1,5 @@
 {
-  "name": "@gloo-ai/baml-schema-wasm",
+  "name": "@gloo-ai/baml-schema-wasm-node",
   "version": "0.1.0",
   "description": "The WASM package for baml-fmt",
   "main": "./dist/src/baml_schema_build.js",

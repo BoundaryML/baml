@@ -5,21 +5,21 @@ export interface ParserDatabase {
   clients: SClient[]
 }
 
-interface SClient {
+export interface SClient {
   name: StringSpan
 }
 
-interface SClass {
-  name: StringSpan
-  jsonSchema: Record<string, any>
-}
-
-interface SEnum {
+export interface SClass {
   name: StringSpan
   jsonSchema: Record<string, any>
 }
 
-interface Span {
+export interface SEnum {
+  name: StringSpan
+  jsonSchema: Record<string, any>
+}
+
+export interface Span {
   start: number
   end: number
   source_file: string
@@ -67,7 +67,7 @@ export type Impl = {
   output_replacers: [string, string][],
 };
 
-interface SFunction {
+export interface SFunction {
   name: StringSpan
   input: ArgType
   output: ArgType

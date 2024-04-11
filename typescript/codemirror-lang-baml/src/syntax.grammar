@@ -1,0 +1,77 @@
+@top Baml { Decl* }
+
+Decl { ClassDecl | EnumDecl | FunctionDecl }
+
+ClassDecl { "class" IdentifierDecl "{" (BlockAttribute | ClassField)* "}" }
+
+ClassField {
+  IdentifierDecl TypeExpr FieldAttribute*
+}
+TypeExpr { ComplexTypeExpr | UnionTypeExpr }
+ComplexTypeExpr {
+  "(" UnionTypeExpr ")" |
+  SimpleTypeExpr
+}
+ListTypeExpr { ComplexTypeExpr"[]" }
+OptionalTypeExpr { ComplexTypeExpr"?" }
+SimpleTypeExpr { ListTypeExpr | OptionalTypeExpr | IdentifierDecl }
+UnionTypeExpr { TypeExpr!TypeUnion"|"TypeExpr }
+
+@precedence {
+  TypeUnion @left
+}
+
+EnumDecl { "enum" IdentifierDecl "{" (BlockAttribute | EnumValueDecl)* "}" }
+EnumValueDecl { IdentifierDecl FieldAttribute* }
+
+FieldAttribute {
+  "@" IdentifierDecl "(" LiteralDecl? ")"
+}
+
+BlockAttribute {
+  "@@" IdentifierDecl "(" LiteralDecl? ")"
+}
+
+FunctionDecl {
+  "function" IdentifierDecl "(" FunctionArgs ")" "->" TypeExpr
+  "{" TupleValue* "}"
+}
+FunctionArgs { (FunctionArg ",")* FunctionArg? }
+FunctionArg {
+  IdentifierDecl ":" TypeExpr
+}
+TupleValue { IdentifierDecl ValueExpr }
+
+ValueExpr { LiteralDecl | PromptExpr }
+
+@tokens {
+
+  IdentifierDecl { $[A-Za-z0-9]+ }
+
+  LiteralDecl {
+    '"' char* '"' | // strings
+    $[A-Za-z0-9]+ // raw strings, ints
+    // floats not yet supported
+  }
+
+  promptChar { whitespace | char }
+  char { $[\u{20}\u{21}\u{23}-\u{5b}\u{5d}-\u{10ffff}] | "\\" esc }
+  esc  { $["\\\/bfnrt] | "u" hex hex hex hex }
+  hex  { $[0-9a-fA-F] }
+  whitespace { $[ \n\r\t] }
+  
+  TrailingComment { "//"$[^\\n]* }
+  MultilineComment { "{//"(char|whitespace)*"//}" }
+
+  "{" "}" "[" "]"
+}
+
+@skip {
+  whitespace | MultilineComment | TrailingComment 
+}
+
+@skip {} {
+  PromptExpr { '#"' (promptChar)* '"#'}
+}
+
+@detectDelim

@@ -63,9 +63,7 @@ export const columns: ColumnDef<TestResult & { span?: StringSpan }>[] = [
             <div className="flex flex-row items-center gap-1 text-center w-fit">
               <div className="underline">
                 {row.original.span ? (
-                  <Link item={row.original.span} display={row.original.testName}>
-                    {row.original.testName}
-                  </Link>
+                  <Link item={row.original.span} display={row.original.testName}></Link>
                 ) : (
                   <>{row.original.testName}</>
                 )}
@@ -106,7 +104,12 @@ export const columns: ColumnDef<TestResult & { span?: StringSpan }>[] = [
     }),
     cell: ({ getValue }) => {
       const val = getValue<{
-        status: TestStatus; render?: string; error?: string; raw?: string; url?: string, partial_output: {
+        status: TestStatus
+        render?: string
+        error?: string
+        raw?: string
+        url?: string
+        partial_output: {
           raw?: string
           parsed?: string
         }
