@@ -5,6 +5,7 @@ import { ThemeProvider } from './_components/ThemeProvider'
 import JotaiProvider from './_components/JotaiProvider'
 import { PHProvider } from './_components/PosthogProvider'
 import dynamic from 'next/dynamic'
+import { Toaster } from '@/components/ui/toaster'
 
 const PostHogPageView = dynamic(() => import('./PostHogPageView'), {
   ssr: false,
@@ -28,6 +29,8 @@ export default function RootLayout({
         <body className={inter.className}>
           <PostHogPageView />
           <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={true} disableTransitionOnChange={true}>
+            <Toaster />
+
             <JotaiProvider>{children}</JotaiProvider>
           </ThemeProvider>
         </body>

@@ -1,6 +1,7 @@
 import Image from 'next/image'
 import dynamic from 'next/dynamic'
 import { EditorFile, loadUrl } from './actions'
+import { BAMLProject, exampleProjects } from '@/lib/exampleProjects'
 const Editor = dynamic(() => import('./_components/Editor'), { ssr: false })
 
 type SearchParams = {
@@ -39,12 +40,7 @@ impl<llm, ExtractVerbs> version1 {
 }
 `
 export default async function Home({ searchParams }: { searchParams: SearchParams }) {
-  let data: EditorFile[] = [
-    {
-      path: 'baml_src/main.baml',
-      content: defaultMainBaml,
-    },
-  ]
+  let data: BAMLProject = exampleProjects[0]
   if (searchParams?.id) {
     data = await loadUrl(searchParams.id)
   }
@@ -52,7 +48,7 @@ export default async function Home({ searchParams }: { searchParams: SearchParam
   return (
     <main className="flex flex-col items-center justify-between min-h-screen">
       <div className="z-10 items-center justify-between w-screen h-screen font-mono text-sm overflow-clip lg:flex">
-        <Editor files={data} />
+        <Editor project={data} />
       </div>
     </main>
   )

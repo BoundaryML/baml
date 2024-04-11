@@ -27,7 +27,9 @@ import Link from 'next/link'
 import { atomWithHash } from '@/lib/atomWithHashBase64'
 import { createUrl, updateUrl } from '../actions'
 import { useFormStatus } from 'react-dom'
+import { toast } from 'sonner'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { BAMLProject } from '@/lib/exampleProjects'
 type EditorFile = {
   path: string
   content: string
@@ -40,16 +42,7 @@ const functionsAndTestsAtom = atomWithStorage<ParserDatabase['functions']>(
 )
 const baml_dir = 'baml_src'
 const currentParserDbAtom = atom<ParserDatabase | null>(null)
-const currentEditorFilesAtom = atomWithStorage<EditorFile[]>(
-  'files',
-  [
-    {
-      path: 'baml_src/main.baml',
-      content: `erwe`,
-    },
-  ],
-  sessionStore as any,
-)
+const currentEditorFilesAtom = atomWithStorage<EditorFile[]>('files', [], sessionStore as any)
 
 async function bamlLinter(view: EditorView): Promise<Diagnostic[]> {
   const lint = await import('@gloo-ai/baml-schema-wasm-web').then((m) => m.lint)
@@ -115,75 +108,94 @@ export const EditorContainer = () => {
   const [loading, setLoading] = useState(false)
   const [functionsAndTests, setFunctionsAndTests] = useAtom(functionsAndTestsAtom)
   return (
-    <>
-      <Button
-        disabled={loading}
-        onClick={async () => {
-          setLoading(true)
-          const allEditorFiles = generateAllEditorFiles(editorFiles, functionsAndTests)
-          if (searchParams.get('id')) {
-            console.log('URL already exists')
-            await updateUrl(searchParams.get('id')!, allEditorFiles)
-          } else {
-            const url = await createUrl(allEditorFiles)
-            console.log('URL:', url)
-            const updatedSearchParams = new URLSearchParams({
-              id: url,
-            })
-            router.push(pathname + '?' + updatedSearchParams.toString())
-          }
-          setLoading(false)
-          setUrl(url)
-        }}
-      >
-        Share
-      </Button>
-      {url && <div>URL: {url}</div>}
-      <ResizablePanelGroup className="min-h-[200px] w-full rounded-lg border overflow-clip" direction="horizontal">
-        <ResizablePanel defaultSize={50}>
-          <div className="flex w-full h-full">
-            <CodeMirror
-              value={editorFiles[0].content}
-              extensions={extensions}
-              theme={vscodeDark}
-              height="100%"
-              width="100%"
-              maxWidth="100%"
-              style={{ width: '100%', height: '100%' }}
-              onChange={async (val, viewUpdate) => {
-                setEditorFiles((prev) => {
-                  prev = prev as EditorFile[] // because of jotai jsonstorage this becomes a promise or a normal object and this isnt a promise.
-                  const updatedFile: EditorFile = {
-                    path: `${baml_dir}/main.baml`,
-                    content: val,
-                  }
-                  return prev.filter((f) => f.path !== f.path).concat(updatedFile)
+    <div className="flex flex-col w-full h-full">
+      <div>
+        <Button
+          variant={'outline'}
+          disabled={loading}
+          onClick={async () => {
+            setLoading(true)
+            try {
+              const allEditorFiles = generateAllEditorFiles(editorFiles, functionsAndTests)
+              let urlId = new URLSearchParams(window.location.search).get('id')
+              console.log('existing url', urlId)
+              if (!urlId) {
+                urlId = await createUrl(allEditorFiles)
+                console.log('URL:', urlId)
+                const updatedSearchParams = new URLSearchParams({
+                  id: urlId,
                 })
-              }}
-            />
-          </div>
-        </ResizablePanel>
-        <ResizableHandle withHandle />
-        <RunTestButton />
+                router.replace(pathname + '?' + updatedSearchParams.toString(), { scroll: false })
+              }
 
-        <ResizablePanel defaultSize={50}>
-          <div className="flex flex-row h-full bg-vscode-panel-background">
-            <PlaygroundView />
-          </div>
-        </ResizablePanel>
-      </ResizablePanelGroup>
-    </>
+              navigator.clipboard.writeText(`${pathname}?id=${urlId}`)
+              toast('URL copied to clipboard')
+            } catch (e) {
+              toast('Failed to generate URL')
+              console.error(e)
+            } finally {
+              setLoading(false)
+            }
+            // setUrl(url)
+          }}
+        >
+          Share
+        </Button>
+      </div>
+
+      {url && <div>URL: {url}</div>}
+      <div className="flex flex-row w-full h-full">
+        <ResizablePanelGroup className="min-h-[200px] w-full rounded-lg border overflow-clip" direction="horizontal">
+          <ResizablePanel defaultSize={50}>
+            <div className="flex w-full h-full">
+              <CodeMirror
+                value={editorFiles[0].content}
+                extensions={extensions}
+                theme={vscodeDark}
+                height="100%"
+                width="100%"
+                maxWidth="100%"
+                style={{ width: '100%', height: '100%' }}
+                onChange={async (val, viewUpdate) => {
+                  setEditorFiles((prev) => {
+                    prev = prev as EditorFile[] // because of jotai jsonstorage this becomes a promise or a normal object and this isnt a promise.
+                    const updatedFile: EditorFile = {
+                      path: `${baml_dir}/main.baml`,
+                      content: val,
+                    }
+                    return prev.filter((f) => f.path !== f.path).concat(updatedFile)
+                  })
+
+                  router.replace(pathname)
+                }}
+              />
+            </div>
+          </ResizablePanel>
+          <ResizableHandle withHandle />
+          <RunTestButton />
+
+          <ResizablePanel defaultSize={50}>
+            <div className="flex flex-row h-full bg-vscode-panel-background">
+              <PlaygroundView />
+            </div>
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      </div>
+    </div>
   )
 }
 
-export const Editor = ({ files }: { files: EditorFile[] }) => {
+export const Editor = ({ project }: { project: BAMLProject }) => {
   const searchParams = useSearchParams()
 
-  // useHydrateAtoms([[currentEditorFilesAtom, files]])
+  useHydrateAtoms([
+    [currentEditorFilesAtom as any, project.files],
+    [functionsAndTestsAtom as any, project.functionsWithTests],
+  ]) // any cause sessionStorage screws types up somehow
 
   return (
     <>
-      {searchParams.get('id') && <DummyHydrate files={files} />}
+      {/* {searchParams.get('id') && <DummyHydrate files={files} />} */}
       <EditorContainer />
     </>
   )
@@ -531,7 +543,6 @@ const RunTestButton = () => {
               }),
             )
           }
-          console.log('before setting functions and tests', functionsAndTests)
           const newTestCase = {
             name: {
               start: 0,
