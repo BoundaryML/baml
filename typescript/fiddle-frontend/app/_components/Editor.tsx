@@ -18,24 +18,40 @@ import {
   getFullTestName,
   ParserDatabase,
   StringSpan,
+  SFunction,
 } from '@baml/common'
 import { atom, useAtom } from 'jotai'
-import { atomWithStorage } from 'jotai/utils'
-import { atomStore } from './JotaiProvider'
+import { atomWithStorage, useHydrateAtoms } from 'jotai/utils'
+import { atomStore, sessionStore } from './JotaiProvider'
 import Link from 'next/link'
-
+import { atomWithHash } from '@/lib/atomWithHashBase64'
+import { createUrl, updateUrl } from '../actions'
+import { useFormStatus } from 'react-dom'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 type EditorFile = {
   path: string
   content: string
 }
 
-const functionsAndTestsAtom = atomWithStorage<ParserDatabase['functions']>('parserdb_functions', [])
+const functionsAndTestsAtom = atomWithStorage<ParserDatabase['functions']>(
+  'parserdb_functions',
+  [],
+  sessionStore as any,
+)
 const baml_dir = 'baml_src'
 const currentParserDbAtom = atom<ParserDatabase | null>(null)
-const currentEditorFilesAtom = atom<EditorFile[]>([])
+const currentEditorFilesAtom = atomWithStorage<EditorFile[]>(
+  'files',
+  [
+    {
+      path: 'baml_src/main.baml',
+      content: `erwe`,
+    },
+  ],
+  sessionStore as any,
+)
 
 async function bamlLinter(view: EditorView): Promise<Diagnostic[]> {
-  // const [parserDb, setParserDb] = useAtom(currentParserDbAtom)
   const lint = await import('@gloo-ai/baml-schema-wasm-web').then((m) => m.lint)
   const linterInput: LinterInput = {
     root_path: `${baml_dir}`,
@@ -55,13 +71,6 @@ async function bamlLinter(view: EditorView): Promise<Diagnostic[]> {
   if (parsedRes.ok) {
     const newParserDb: ParserDatabase = { ...parsedRes.response }
     atomStore.set(currentParserDbAtom, newParserDb)
-    atomStore.set(currentEditorFilesAtom, (prev) => {
-      const updatedFile: EditorFile = {
-        path: `${baml_dir}/main.baml`,
-        content: view.state.doc.toString(),
-      }
-      return prev.filter((f) => f.path !== f.path).concat(updatedFile)
-    })
   }
 
   return parsedRes.diagnostics.map((d) => {
@@ -82,40 +91,12 @@ const extensions = [
     // needsRefresh: (view) => ,
   }),
 ]
-const defaultMainBaml = `
-function ExtractVerbs {
-    input string
-    /// list of verbs
-    output string[]
-}
 
-client<llm> GPT4 {
-  provider baml-openai-chat
-  options {
-    model gpt-4 
-    api_key env.OPENAI_API_KEY
-  }
-}
-
-impl<llm, ExtractVerbs> version1 {
-  client GPT4
-  prompt #"
-    Extract the verbs from this INPUT:
- 
-    INPUT:
-    ---
-    {#input}
-    ---
-    {// this is a comment inside a prompt! //}
-    Return a {#print_type(output)}.
-
-    Response:
-  "#
-}
-`
-
-export const Editor = () => {
-  const [value, setValue] = useState(defaultMainBaml)
+export const EditorContainer = () => {
+  const [editorFiles, setEditorFiles] = useAtom(currentEditorFilesAtom)
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
 
   useEffect(() => {
     const handleKeyDown = (event: any) => {
@@ -130,14 +111,39 @@ export const Editor = () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
   }, [])
-
+  const [url, setUrl] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [functionsAndTests, setFunctionsAndTests] = useAtom(functionsAndTestsAtom)
   return (
     <>
+      <Button
+        disabled={loading}
+        onClick={async () => {
+          setLoading(true)
+          const allEditorFiles = generateAllEditorFiles(editorFiles, functionsAndTests)
+          if (searchParams.get('id')) {
+            console.log('URL already exists')
+            await updateUrl(searchParams.get('id')!, allEditorFiles)
+          } else {
+            const url = await createUrl(allEditorFiles)
+            console.log('URL:', url)
+            const updatedSearchParams = new URLSearchParams({
+              id: url,
+            })
+            router.push(pathname + '?' + updatedSearchParams.toString())
+          }
+          setLoading(false)
+          setUrl(url)
+        }}
+      >
+        Share
+      </Button>
+      {url && <div>URL: {url}</div>}
       <ResizablePanelGroup className="min-h-[200px] w-full rounded-lg border overflow-clip" direction="horizontal">
         <ResizablePanel defaultSize={50}>
           <div className="flex w-full h-full">
             <CodeMirror
-              value={value}
+              value={editorFiles[0].content}
               extensions={extensions}
               theme={vscodeDark}
               height="100%"
@@ -145,7 +151,13 @@ export const Editor = () => {
               maxWidth="100%"
               style={{ width: '100%', height: '100%' }}
               onChange={async (val, viewUpdate) => {
-                setValue(val)
+                setEditorFiles((prev) => {
+                  const updatedFile: EditorFile = {
+                    path: `${baml_dir}/main.baml`,
+                    content: val,
+                  }
+                  return prev.filter((f) => f.path !== f.path).concat(updatedFile)
+                })
               }}
             />
           </div>
@@ -161,6 +173,24 @@ export const Editor = () => {
       </ResizablePanelGroup>
     </>
   )
+}
+
+export const Editor = ({ files }: { files: EditorFile[] }) => {
+  const searchParams = useSearchParams()
+
+  // useHydrateAtoms([[currentEditorFilesAtom, files]])
+
+  return (
+    <>
+      {searchParams.get('id') && <DummyHydrate files={files} />}
+      <EditorContainer />
+    </>
+  )
+}
+
+export const DummyHydrate = ({ files }: { files: EditorFile[] }) => {
+  useHydrateAtoms([[currentEditorFilesAtom as any, files]]) // any cause sessionStorage screws types up somehow
+  return <></>
 }
 
 interface UpdateTestCaseEvent {
@@ -367,6 +397,32 @@ type SaveTestRequest = {
 const serverBaseURL = 'http://localhost:8000'
 const prodBaseURL = 'https://prompt-fiddle.fly.dev'
 const baseUrl = prodBaseURL
+
+function generateAllEditorFiles(editorFiles: EditorFile[], functionsAndTests: ParserDatabase['functions']) {
+  const testFiles: EditorFile[] = functionsAndTests.flatMap((f) => {
+    const testFnDir = `${baml_dir}/__tests__/${f.name.value}`
+    return f.test_cases.map((test) => ({
+      path: `${testFnDir}/${test.name.value}.json`,
+      content: JSON.stringify({
+        input: test.content,
+      }),
+    }))
+  })
+
+  const updatedEditorFiles = editorFiles
+    // map to replace the content of existing files with the same name
+    .map((ef) => {
+      const newFile = testFiles.find((tf) => tf.path === ef.path)
+      return newFile ? newFile : ef
+    })
+
+  // Identifying missing files to be added
+  const missingFiles = testFiles.filter((tf) => !editorFiles.some((ef) => ef.path === tf.path))
+
+  // Combine updated and missing files for the final list
+  return [...updatedEditorFiles, ...missingFiles]
+}
+
 const RunTestButton = () => {
   const [data, setData] = useState<string | null>(null)
   const [functionsAndTests, setFunctionsAndTests] = useAtom(functionsAndTestsAtom)
@@ -486,6 +542,7 @@ const RunTestButton = () => {
           }
 
           setFunctionsAndTests((current) => {
+            current = current as SFunction[]
             // If current is empty or does not contain the function, add a new entry
             if (!current.some((func) => (typeof func.name === 'string' ? func.name : func.name.value) === funcName)) {
               // find it from parserDb
@@ -522,9 +579,8 @@ const RunTestButton = () => {
         case 'removeTest':
           const { root_path: removeRootPath, funcName: removeFuncName, testCaseName: removeTestCaseName } = data
 
-          const removePath = `${removeRootPath}/__tests__/${removeFuncName}/${removeTestCaseName.value}.json`
           setFunctionsAndTests((prev) => {
-            return prev.map((func) => {
+            return (prev as SFunction[]).map((func) => {
               // Check if this is the function from which to remove the test
               const currFuncName = typeof func.name === 'string' ? func.name : func.name.value
               if (currFuncName === removeFuncName) {
@@ -545,33 +601,10 @@ const RunTestButton = () => {
           break
         case 'runTest':
           const testRequest: { root_path: string; tests: TestRequest } = event.data.data
-
-          const testFiles: EditorFile[] = functionsAndTests.flatMap((f) => {
-            const testFnDir = `${baml_dir}/__tests__/${f.name.value}`
-            return f.test_cases.map((test) => ({
-              path: `${testFnDir}/${test.name.value}.json`,
-              content: JSON.stringify({
-                input: test.content,
-              }),
-            }))
-          })
-
-          const updatedEditorFiles = editorFiles
-            // map to replace the content of existing files with the same name
-            .map((ef) => {
-              const newFile = testFiles.find((tf) => tf.path === ef.path)
-              return newFile ? newFile : ef
-            })
-
-          // Identifying missing files to be added
-          const missingFiles = testFiles.filter((tf) => !editorFiles.some((ef) => ef.path === tf.path))
-
-          // Combine updated and missing files for the final list
-          const finalEditorFiles = [...updatedEditorFiles, ...missingFiles]
+          const finalEditorFiles = generateAllEditorFiles(editorFiles, functionsAndTests)
           fetchData(finalEditorFiles, testRequest.tests)
           break
         default:
-        //console.log(`Unhandled command: ${command}`)
       }
     }
 
