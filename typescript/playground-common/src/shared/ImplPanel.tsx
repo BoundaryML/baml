@@ -91,15 +91,14 @@ const CodeLine: React.FC<{ line: string; number: number; showWhitespace: boolean
 }
 
 const Snippet: React.FC<{ text: string, type?: "preview" | "error" }> = ({ text, type = "preview" } ) => {
-  const [showWhitespace, setShowWhitespace] = useState(true)
+  const [showWhitespace, setShowWhitespace] = useState(false)
   const [wrapText, setWrapText] = useState(true)
 
-  const preStyle = 
-    type === "preview"
-           ? ["w-full", "p-1", "text-xs", "bg-vscode-input-background", "text-vscode-textPreformat-foreground"]
-           : ["w-full", "p-1", "text-xs", "bg-vscode-statusBarItem-errorBackground", "text-vscode-textPreformat-foreground"];
+  const bgStyle = type === "error" ? "bg-vscode-inputValidation-errorBackground" : "bg-vscode-input-background";
+  const divStyle = ["r-full", "p-1", "overflow-hidden", "rounded-lg", bgStyle];
+  const preStyle = ["w-full", "p-1", "text-xs"];
   return (
-    <div className="w-full p-1 overflow-hidden rounded-lg bg-vscode-input-background">
+    <div className={divStyle.join(" ")}>
       <div className="flex flex-row justify-end gap-2 text-xs">
         <VSCodeCheckbox
           checked={wrapText}
@@ -141,18 +140,22 @@ const PromptPreview: React.FC<{ prompt: Impl['prompt'] }> = ({prompt}) => {
   }
 }
 
-const ImplPanel: React.FC<{ impl: Impl }> = ({ impl }) => {
+const ImplPanel: React.FC<{ impl: Impl, showTab: boolean }> = ({ impl, showTab }) => {
   const { func } = useImplCtx(impl.name.value)
 
   if (!func) return null
 
   return (
     <>
-      <VSCodePanelTab key={`tab-${impl.name.value}`} id={`tab-${func.name.value}-${impl.name.value}`}>
-        <div className="flex flex-row gap-1">
-          <span>{impl.name.value}</span>
-        </div>
-      </VSCodePanelTab>
+      {
+        showTab && (
+          <VSCodePanelTab key={`tab-${impl.name.value}`} id={`tab-${func.name.value}-${impl.name.value}`}>
+            <div className="flex flex-row gap-1">
+              <span>{impl.name.value}</span>
+            </div>
+          </VSCodePanelTab>
+        )
+      }
       <VSCodePanelView key={`view-${impl.name.value}`} id={`view-${func.name.value}-${impl.name.value}`}>
         <div className="flex flex-col w-full gap-2">
           <div className="flex flex-col gap-1">

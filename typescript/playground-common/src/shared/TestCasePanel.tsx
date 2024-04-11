@@ -1,5 +1,6 @@
 /// Content once a function has been selected.
 
+import jsf from "json-schema-faker"
 import { Button } from '../components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
 import { vscode } from '../utils/vscode'
@@ -27,22 +28,6 @@ import { ASTContext } from './ASTProvider'
 import TypeComponent from './TypeComponent'
 import { useSelections } from './hooks'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip'
-
-const testSchema: RJSFSchema = {
-  title: 'Test form',
-  type: 'object',
-  properties: {
-    name: {
-      type: 'string',
-    },
-    age: {
-      type: 'number',
-    },
-  },
-}
-const {
-  templates: { BaseInputTemplate, FieldTemplate, ButtonTemplates },
-} = getDefaultRegistry()
 
 function MyBaseInputTemplate(props: BaseInputTemplateProps) {
   const {
@@ -98,8 +83,6 @@ function MyBaseInputTemplate(props: BaseInputTemplateProps) {
 
   const length = Object.keys(registry.rootSchema?.definitions ?? {}).length
 
-  const isSingleStringField = length === 0 && schema.type === 'string'
-
   const input =
     inputProps.type === 'number' || inputProps.type === 'integer' ? (
       <input
@@ -121,7 +104,7 @@ function MyBaseInputTemplate(props: BaseInputTemplateProps) {
       <textarea
         id={id}
         name={id}
-        rows={isSingleStringField ? 15 : 5}
+        rows={Math.max(1, inputValue.split('\n').map((line: string) => Math.max(1, line.length / 42)).reduce((a: number, b: number) => a + b, 0))}
         className="w-[90%] px-1 rounded-sm bg-vscode-input-background text-vscode-input-foreground"
         readOnly={readonly}
         disabled={disabled}
@@ -551,7 +534,16 @@ const EditTestCaseForm = ({
 
   // TODO, actually fix this for named args
   const formData = useMemo(() => {
-    if (testCase === undefined) return null
+    if (testCase === undefined) {
+      jsf.option({
+        alwaysFakeOptionals: true,
+        minItems: 2,
+        maxItems: 2,
+      })
+      const fakeData = jsf.generate(schema)
+      console.log("making fake data")
+      return fakeData;
+    }
     try {
       return JSON.parse(testCase?.content)
     } catch (e) {
