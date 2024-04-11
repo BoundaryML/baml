@@ -74,7 +74,7 @@ export interface SFunction {
   impls: Impl[]
   test_cases: {
     name: StringSpan
-    // For now this is json.
+    // For now this is a JSON.parse-able string
     content: string
   }[]
   syntax: "Version1" | "Version2"

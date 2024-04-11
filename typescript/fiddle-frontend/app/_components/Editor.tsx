@@ -452,7 +452,7 @@ function generateAllEditorFiles(editorFiles: EditorFile[], functionsAndTests: Pa
 
 const RunTestButton = () => {
   const [data, setData] = useState<string | null>(null)
-  const [functionsAndTests, setFunctionsAndTests] = useAtom(functionsAndTestsAtom)
+  const [functionsAndTestsJotai, setFunctionsAndTestsJotai] = useAtom(functionsAndTestsAtom)
   const [parserDb, setParserDb] = useAtom(currentParserDbAtom)
   const [editorFiles, setEditorFiles] = useAtom(currentEditorFilesAtom)
 
@@ -518,13 +518,24 @@ const RunTestButton = () => {
   )
   // Setup message event listener to handle commands
   useEffect(() => {
+    let shadowedState = { functionsAndTests: functionsAndTestsJotai };
     const listener = async (event: any) => {
       const { command, data } = event.data
+      console.log('running command', { event, command, data })
 
       switch (command) {
         case 'receiveData':
           // Example of showing received information, adapt as necessary
           // alert(data.text)
+          break
+
+        case 'commandSequence':
+          console.log("received command sequence", data)
+          for (const subcommand of data) {
+            console.log("received command in sequence", subcommand)
+            await listener({data: subcommand})
+
+          }
           break
 
         case 'saveTest':
@@ -567,7 +578,7 @@ const RunTestButton = () => {
             content: testInputContent,
           }
 
-          setFunctionsAndTests((current) => {
+          shadowedState.functionsAndTests = ((current) => {
             current = current as SFunction[]
             // If current is empty or does not contain the function, add a new entry
             if (!current.some((func) => (typeof func.name === 'string' ? func.name : func.name.value) === funcName)) {
@@ -599,13 +610,13 @@ const RunTestButton = () => {
               }
               return func // Return unmodified function
             })
-          })
+          })(shadowedState.functionsAndTests)
           break
 
         case 'removeTest':
           const { root_path: removeRootPath, funcName: removeFuncName, testCaseName: removeTestCaseName } = data
 
-          setFunctionsAndTests((prev) => {
+          shadowedState.functionsAndTests = ((prev) => {
             return (prev as SFunction[]).map((func) => {
               // Check if this is the function from which to remove the test
               const currFuncName = typeof func.name === 'string' ? func.name : func.name.value
@@ -623,22 +634,27 @@ const RunTestButton = () => {
               // Return all other functions unmodified
               return func
             })
-          })
+          })(shadowedState.functionsAndTests)
           break
         case 'runTest':
           const testRequest: { root_path: string; tests: TestRequest } = event.data.data
-          const finalEditorFiles = generateAllEditorFiles(editorFiles, functionsAndTests)
+          const finalEditorFiles = generateAllEditorFiles(editorFiles, shadowedState.functionsAndTests)
           fetchData(finalEditorFiles, testRequest.tests)
           break
         default:
       }
     }
 
-    window.addEventListener('message', listener)
+    const eventListener = async (event: any) => {
+      await listener(event);
+      setFunctionsAndTestsJotai(shadowedState.functionsAndTests);
+    };
+
+    window.addEventListener('message', eventListener)
     return () => {
-      window.removeEventListener('message', listener)
+      window.removeEventListener('message', eventListener)
     }
-  }, [JSON.stringify(functionsAndTests), JSON.stringify(parserDb)])
+  }, [JSON.stringify(functionsAndTestsJotai), JSON.stringify(parserDb)])
 
   return <></>
 }

@@ -1,6 +1,7 @@
 /// Content once a function has been selected.
 
-import jsf from "json-schema-faker"
+import { uniqueNamesGenerator, Config, adjectives, colors, animals } from 'unique-names-generator'
+import jsf from 'json-schema-faker'
 import { Button } from '../components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
 import { vscode } from '../utils/vscode'
@@ -23,7 +24,7 @@ import {
 import validator from '@rjsf/validator-ajv8'
 import { VSCodeButton, VSCodeProgressRing, VSCodeTextArea, VSCodeTextField } from '@vscode/webview-ui-toolkit/react'
 import { Copy, Edit2, FileJson2, Play, PlusIcon, X } from 'lucide-react'
-import { ChangeEvent, FocusEvent, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import React, { ChangeEvent, FocusEvent, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { ASTContext } from './ASTProvider'
 import TypeComponent from './TypeComponent'
 import { useSelections } from './hooks'
@@ -104,7 +105,13 @@ function MyBaseInputTemplate(props: BaseInputTemplateProps) {
       <textarea
         id={id}
         name={id}
-        rows={Math.max(1, inputValue.split('\n').map((line: string) => Math.max(1, line.length / 42)).reduce((a: number, b: number) => a + b, 0))}
+        rows={Math.max(
+          1,
+          inputValue
+            .split('\n')
+            .map((line: string) => Math.max(1, line.length / 42))
+            .reduce((a: number, b: number) => a + b, 0),
+        )}
         className="w-[90%] px-1 rounded-sm bg-vscode-input-background text-vscode-input-foreground"
         readOnly={readonly}
         disabled={disabled}
@@ -281,55 +288,228 @@ const uiSchema: UiSchema = {
   },
 }
 
-type Func = ParserDatabase['functions'][0]
+type Func = ParserDatabase['functions'][number]
+type TestCase = Func['test_cases'][number] & {
+  saved: boolean
+};
+
+const TestCasePanelEntry: React.FC<{ func: Func; test_case: TestCase }> = ({ func, test_case }) => {
+  const { impl, input_json_schema } = useSelections()
+  const { root_path, test_results } = useContext(ASTContext)
+  return (
+    <div key={test_case.name.value} className="py-1 group">
+      <div className="flex flex-row items-center justify-between">
+        <div className="flex flex-row items-center justify-center gap-x-1">
+          <Button
+            variant={'ghost'}
+            size={'icon'}
+            className="p-1 rounded-md w-fit h-fit bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground"
+            disabled={impl === undefined || test_results?.run_status === 'RUNNING'}
+            onClick={() => {
+              const runTestRequest: TestRequest = {
+                functions: [
+                  {
+                    name: func.name.value,
+                    tests: [
+                      {
+                        name: test_case.name.value,
+                        impls: impl ? [impl.name.value] : [],
+                      },
+                    ],
+                  },
+                ],
+              }
+              if (test_case.saved) {
+                vscode.postMessage({
+                  command: 'runTest',
+                  data: {
+                    root_path,
+                    tests: runTestRequest,
+                  },
+                })
+              } else {
+                vscode.postMessage({
+                  command: 'commandSequence',
+                  data: [{
+                    command: 'saveTest',
+                    data: {
+                      root_path,
+                      funcName: func.name.value,
+                      testCaseName: test_case.name, // a stringspan or string
+                      params: getTestParams(func, test_case),
+                    },
+                  }, {
+                    command: 'runTest',
+                    data: {
+                      root_path,
+                      tests: runTestRequest,
+                    },
+                  }],
+                })
+              }
+            }}
+          >
+            <Play size={10} />
+          </Button>
+          {/* IDK why it doesnt truncate. Probably cause of the allotment */}
+          <div className="flex w-full flex-nowrap">
+            <span className="h-[24px] max-w-[120px] text-center align-middle overflow-hidden flex-1 truncate">
+              {test_case.saved ? test_case.name.value : `save and run: ${test_case.name.value}`}
+            </span>
+            <div className="hidden gap-x-1 group-hover:flex">
+              <EditTestCaseForm
+                testCase={test_case}
+                schema={input_json_schema}
+                func={func}
+                getTestParams={(t) => getTestParams(func, t)}
+              >
+                <Button
+                  variant={'ghost'}
+                  size="icon"
+                  className="p-1 w-fit h-fit hover:bg-vscode-button-secondaryHoverBackground"
+                >
+                  <Edit2 className="w-3 h-3 text-vscode-descriptionForeground" />
+                </Button>
+              </EditTestCaseForm>
+              <Tooltip delayDuration={100}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={'ghost'}
+                    size={'icon'}
+                    className="p-1 w-fit h-fit text-vscode-descriptionForeground hover:bg-vscode-button-secondaryHoverBackground"
+                    onClick={() => {
+                      vscode.postMessage({ command: 'jumpToFile', data: test_case.name })
+                    }}
+                  >
+                    <FileJson2 size={14} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent className="flex flex-col gap-y-1">Open test file</TooltipContent>
+              </Tooltip>
+              <Tooltip delayDuration={100}>
+                <TooltipTrigger>
+                  <EditTestCaseForm
+                    testCase={test_case}
+                    schema={input_json_schema}
+                    func={func}
+                    getTestParams={(t) => getTestParams(func, t)}
+                    duplicate
+                  >
+                    <Button
+                      variant={'ghost'}
+                      size="icon"
+                      className="p-1 w-fit h-fit hover:bg-vscode-button-secondaryHoverBackground"
+                    >
+                      <Copy size={12} />
+                    </Button>
+                  </EditTestCaseForm>
+                </TooltipTrigger>
+                <TooltipContent className="flex flex-col gap-y-1">Duplicate</TooltipContent>
+              </Tooltip>
+            </div>
+          </div>
+        </div>
+        <Button
+          variant={'ghost'}
+          size={'icon'}
+          className="p-1 w-fit h-fit text-vscode-input-foreground"
+          onClick={() => {
+            vscode.postMessage({
+              command: 'removeTest',
+              data: {
+                root_path,
+                funcName: func.name.value,
+                testCaseName: test_case.name,
+              },
+            })
+          }}
+        >
+          <X size={10} />
+        </Button>
+      </div>
+      <EditTestCaseForm
+        testCase={test_case}
+        schema={input_json_schema}
+        func={func}
+        getTestParams={(t) => getTestParams(func, t)}
+      >
+        <Button
+          variant={'ghost'}
+          className="items-start justify-start w-full px-1 py-1 text-left hover:bg-vscode-button-secondaryHoverBackground h-fit"
+        >
+          <TestCaseCard content={test_case.content} testCaseName={test_case.name.value} />
+        </Button>
+      </EditTestCaseForm>
+    </div>
+  )
+}
+
+const getTestParams = (func: Func, testCase: Func['test_cases'][number]) => {
+  if (func.input.arg_type === 'positional') {
+    return {
+      type: 'positional',
+      value: testCase.content,
+    }
+  } else {
+    // sort of a hack, means the test file was just initialized since input: null is the default
+    if (testCase.content === 'null') {
+      return {
+        type: 'named',
+        value: func.input.values.map(({ name }) => ({
+          name: name.value,
+          value: null,
+        })),
+      }
+    }
+    let parsed = JSON.parse(testCase.content)
+    let contentMap = new Map<string, string>()
+    if (typeof parsed === 'object') {
+      contentMap = new Map(
+        Object.entries(parsed).map(([k, v]) => {
+          if (typeof v === 'string') return [k, v]
+          return [k, JSON.stringify(v, null, 2)]
+        }),
+      )
+    }
+    return {
+      type: 'named',
+      value: func.input.values.map(({ name }) => ({
+        name: name.value,
+        value: contentMap.get(name.value) ?? null,
+      })),
+    }
+  }
+}
+
+const autoGenTestCase = (func: Func, input_json_schema: any): TestCase => {
+
+  return {
+    name: {
+      ...func.name,
+      value: uniqueNamesGenerator({
+        dictionaries: [adjectives, colors, animals],
+        separator: '_',
+        length: 2,
+      }) as string,
+    },
+    content: jsf.generate(input_json_schema),
+    saved: false,
+  }
+};
 
 const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
   const { impl, input_json_schema } = useSelections()
 
   const [filter, setFilter] = useState<string>('')
+  // This should be re-generated when this test case is saved
   const test_cases = useMemo(() => {
-    if (!filter) return func.test_cases
-    return func.test_cases.filter(
-      (test_case) => test_case.name.value.includes(filter) || test_case.content.includes(filter),
-    )
-  }, [filter, func.test_cases])
-
-  const getTestParams = (testCase: Func['test_cases'][0]) => {
-    if (func.input.arg_type === 'positional') {
-      return {
-        type: 'positional',
-        value: testCase.content,
-      }
-    } else {
-      // sort of a hack, means the test file was just initialized since input: null is the default
-      if (testCase.content === 'null') {
-        return {
-          type: 'named',
-          value: func.input.values.map(({ name }) => ({
-            name: name.value,
-            value: null,
-          })),
-        }
-      }
-      let parsed = JSON.parse(testCase.content)
-      let contentMap = new Map<string, string>()
-      if (typeof parsed === 'object') {
-        contentMap = new Map(
-          Object.entries(parsed).map(([k, v]) => {
-            if (typeof v === 'string') return [k, v]
-            return [k, JSON.stringify(v, null, 2)]
-          }),
-        )
-      }
-      return {
-        type: 'named',
-        value: func.input.values.map(({ name }) => ({
-          name: name.value,
-          value: contentMap.get(name.value) ?? null,
-        })),
-      }
+    let test_cases = func.test_cases.map((t) => ({ ...t, saved: true }))
+    if (filter) {
+      test_cases = test_cases.filter((test_case) => test_case.name.value.includes(filter) || test_case.content.includes(filter))
     }
-  }
+    return [autoGenTestCase(func, input_json_schema), ...test_cases]
+  }, [filter, func])
+
   const { root_path, test_results } = useContext(ASTContext)
 
   return (
@@ -384,131 +564,19 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
       </div>
       <div className="flex flex-col py-2 divide-y gap-y-1 divide-vscode-textSeparator-foreground">
         {/* <pre>{JSON.stringify(input_json_schema, null, 2)}</pre> */}
-        <EditTestCaseForm testCase={undefined} schema={input_json_schema} func={func} getTestParams={getTestParams}>
+        <EditTestCaseForm
+          testCase={undefined}
+          schema={input_json_schema}
+          func={func}
+          getTestParams={(t) => getTestParams(func, t)}
+        >
           <Button className="flex flex-row text-sm gap-x-2 bg-vscode-dropdown-background text-vscode-dropdown-foreground hover:opacity-90 hover:bg-vscode-dropdown-background">
             <PlusIcon size={16} />
             <div>Add test case</div>
           </Button>
         </EditTestCaseForm>
-        {test_cases.map((test_case) => (
-          <div key={test_case.name.value} className="py-1 group">
-            <div className="flex flex-row items-center justify-between">
-              <div className="flex flex-row items-center justify-center gap-x-1">
-                <Button
-                  variant={'ghost'}
-                  size={'icon'}
-                  className="p-1 rounded-md w-fit h-fit bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground"
-                  disabled={impl === undefined || test_results?.run_status === 'RUNNING'}
-                  onClick={() => {
-                    const runTestRequest: TestRequest = {
-                      functions: [
-                        {
-                          name: func.name.value,
-                          tests: [
-                            {
-                              name: test_case.name.value,
-                              impls: impl ? [impl.name.value] : [],
-                            },
-                          ],
-                        },
-                      ],
-                    }
-                    vscode.postMessage({
-                      command: 'runTest',
-                      data: {
-                        root_path,
-                        tests: runTestRequest,
-                      },
-                    })
-                  }}
-                >
-                  <Play size={10} />
-                </Button>
-                {/* IDK why it doesnt truncate. Probably cause of the allotment */}
-                <div className="flex w-full flex-nowrap">
-                  <span className="h-[24px] max-w-[120px] text-center align-middle overflow-hidden flex-1 truncate">
-                    {test_case.name.value}
-                  </span>
-                  <div className="hidden gap-x-1 group-hover:flex">
-                    <EditTestCaseForm
-                      testCase={test_case}
-                      schema={input_json_schema}
-                      func={func}
-                      getTestParams={getTestParams}
-                    >
-                      <Button
-                        variant={'ghost'}
-                        size="icon"
-                        className="p-1 w-fit h-fit hover:bg-vscode-button-secondaryHoverBackground"
-                      >
-                        <Edit2 className="w-3 h-3 text-vscode-descriptionForeground" />
-                      </Button>
-                    </EditTestCaseForm>
-                    <Tooltip delayDuration={100}>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant={'ghost'}
-                          size={'icon'}
-                          className="p-1 w-fit h-fit text-vscode-descriptionForeground hover:bg-vscode-button-secondaryHoverBackground"
-                          onClick={() => {
-                            vscode.postMessage({ command: 'jumpToFile', data: test_case.name })
-                          }}
-                        >
-                          <FileJson2 size={14} />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent className="flex flex-col gap-y-1">Open test file</TooltipContent>
-                    </Tooltip>
-                    <Tooltip delayDuration={100}>
-                      <TooltipTrigger>
-                        <EditTestCaseForm
-                          testCase={test_case}
-                          schema={input_json_schema}
-                          func={func}
-                          getTestParams={getTestParams}
-                          duplicate
-                        >
-                          <Button
-                            variant={'ghost'}
-                            size="icon"
-                            className="p-1 w-fit h-fit hover:bg-vscode-button-secondaryHoverBackground"
-                          >
-                            <Copy size={12} />
-                          </Button>
-                        </EditTestCaseForm>
-                      </TooltipTrigger>
-                      <TooltipContent className="flex flex-col gap-y-1">Duplicate</TooltipContent>
-                    </Tooltip>
-                  </div>
-                </div>
-              </div>
-              <Button
-                variant={'ghost'}
-                size={'icon'}
-                className="p-1 w-fit h-fit text-vscode-input-foreground"
-                onClick={() => {
-                  vscode.postMessage({
-                    command: 'removeTest',
-                    data: {
-                      root_path,
-                      funcName: func.name.value,
-                      testCaseName: test_case.name,
-                    },
-                  })
-                }}
-              >
-                <X size={10} />
-              </Button>
-            </div>
-            <EditTestCaseForm testCase={test_case} schema={input_json_schema} func={func} getTestParams={getTestParams}>
-              <Button
-                variant={'ghost'}
-                className="items-start justify-start w-full px-1 py-1 text-left hover:bg-vscode-button-secondaryHoverBackground h-fit"
-              >
-                <TestCaseCard content={test_case.content} testCaseName={test_case.name.value} />
-              </Button>
-            </EditTestCaseForm>
-          </div>
+        {test_cases.map((t) => (
+          <TestCasePanelEntry func={func} test_case={t} />
         ))}
       </div>
     </>
@@ -541,8 +609,8 @@ const EditTestCaseForm = ({
         maxItems: 2,
       })
       const fakeData = jsf.generate(schema)
-      console.log("making fake data")
-      return fakeData;
+      console.log('making fake data')
+      return fakeData
     }
     try {
       return JSON.parse(testCase?.content)

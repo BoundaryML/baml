@@ -94,7 +94,8 @@
     "react-resizable-panels": "^2.0.16",
     "react18-json-view": "^0.2.7",
     "tailwind-merge": "^2.0.0",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwindcss-animate": "^1.0.7",
+    "unique-names-generator": "^4.7.1"
   },
   "peerDependencies": {
     "@gloo-ai/baml-schema-wasm-web": "*"
