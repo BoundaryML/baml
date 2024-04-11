@@ -152,6 +152,7 @@ export const EditorContainer = () => {
               style={{ width: '100%', height: '100%' }}
               onChange={async (val, viewUpdate) => {
                 setEditorFiles((prev) => {
+                  prev = prev as EditorFile[] // because of jotai jsonstorage this becomes a promise or a normal object and this isnt a promise.
                   const updatedFile: EditorFile = {
                     path: `${baml_dir}/main.baml`,
                     content: val,
