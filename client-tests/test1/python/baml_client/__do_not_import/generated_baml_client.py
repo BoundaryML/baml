@@ -18,6 +18,7 @@ from .functions.fx_booleanfunc import BAMLBooleanFunc
 from .functions.fx_classfunc import BAMLClassFunc
 from .functions.fx_classifytool import BAMLClassifyTool
 from .functions.fx_enumfunc import BAMLEnumFunc
+from .functions.fx_haikualpha import BAMLHaikuAlpha
 from .functions.fx_intfunc import BAMLIntFunc
 from .functions.fx_maybepolishtext import BAMLMaybePolishText
 from .functions.fx_messagesimplifier import BAMLMessageSimplifier
@@ -38,6 +39,7 @@ class BAMLClient:
     ClassFunc = BAMLClassFunc
     ClassifyTool = BAMLClassifyTool
     EnumFunc = BAMLEnumFunc
+    HaikuAlpha = BAMLHaikuAlpha
     IntFunc = BAMLIntFunc
     MaybePolishText = BAMLMaybePolishText
     MessageSimplifier = BAMLMessageSimplifier

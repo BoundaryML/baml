@@ -12,6 +12,7 @@ from ..__do_not_import.functions.fx_booleanfunc import IBooleanFunc, IBooleanFun
 from ..__do_not_import.functions.fx_classfunc import IClassFunc, IClassFuncOutput, IClassFuncStream
 from ..__do_not_import.functions.fx_classifytool import IClassifyTool, IClassifyToolOutput, IClassifyToolStream
 from ..__do_not_import.functions.fx_enumfunc import IEnumFunc, IEnumFuncOutput, IEnumFuncStream
+from ..__do_not_import.functions.fx_haikualpha import IHaikuAlpha, IHaikuAlphaOutput, IHaikuAlphaStream
 from ..__do_not_import.functions.fx_intfunc import IIntFunc, IIntFuncOutput, IIntFuncStream
 from ..__do_not_import.functions.fx_maybepolishtext import IMaybePolishText, IMaybePolishTextOutput, IMaybePolishTextStream
 from ..__do_not_import.functions.fx_messagesimplifier import IMessageSimplifier, IMessageSimplifierOutput, IMessageSimplifierStream
@@ -65,6 +66,9 @@ __all__ = [
     'IEnumFunc',
     'IEnumFuncOutput',
     'IEnumFuncStream',
+    'IHaikuAlpha',
+    'IHaikuAlphaOutput',
+    'IHaikuAlphaStream',
     'IIntFunc',
     'IIntFuncOutput',
     'IIntFuncStream',

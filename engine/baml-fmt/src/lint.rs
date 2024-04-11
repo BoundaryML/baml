@@ -29,9 +29,12 @@ pub struct StringSpan {
 }
 
 impl StringSpan {
-    pub fn new(value: &str, span: &baml_lib::internal_baml_diagnostics::Span) -> Self {
+    pub fn new<S: Into<String>>(
+        value: S,
+        span: &baml_lib::internal_baml_diagnostics::Span,
+    ) -> Self {
         Self {
-            value: value.to_string(),
+            value: value.into(),
             start: span.start,
             end: span.end,
             source_file: span.file.path(),
@@ -245,6 +248,41 @@ fn apply_replacers(variant: VariantWalker, mut content: String) -> String {
     content
 }
 
+/// Returns details about the first non-strategy client in the function's client.
+/// The returned span always references the `client FooClient` reference in the function body.
+fn get_first_non_strategy_client(
+    schema: &ValidatedSchema,
+    func: FunctionWalker,
+) -> anyhow::Result<(StringSpan, RenderContext_Client)> {
+    let (client_or_strategy, client_span) = func.metadata().client.as_ref().ok_or(
+        anyhow::anyhow!("function {} does not have a client", func.name()),
+    )?;
+    let clients = schema
+        .db
+        .find_client(client_or_strategy)
+        .ok_or(anyhow::anyhow!("client {} not found", client_or_strategy))?
+        .flat_clients();
+    let client = clients.get(0).ok_or(anyhow::anyhow!(
+        "failed to resolve client {}",
+        client_or_strategy
+    ))?;
+
+    Ok((
+        StringSpan::new(
+            if client_or_strategy == client.name() {
+                client.name().to_string()
+            } else {
+                format!("{} (via {})", client.name(), client_or_strategy)
+            },
+            client_span,
+        ),
+        RenderContext_Client {
+            name: client.name().to_string(),
+            provider: client.properties().provider.0.clone(),
+        },
+    ))
+}
+
 fn serialize_impls(schema: &ValidatedSchema, func: FunctionWalker) -> Vec<Impl> {
     if func.is_old_function() {
         func.walk_variants()
@@ -284,12 +322,13 @@ fn serialize_impls(schema: &ValidatedSchema, func: FunctionWalker) -> Vec<Impl> 
             .collect::<Vec<_>>()
     } else {
         let prompt = func.metadata().prompt.as_ref().unwrap();
-        let (client_name, client_span) = func.metadata().client.as_ref().unwrap();
-        let client_walker = schema.db.find_client(client_name);
-
-        let client = client_walker
-            .map(|c| StringSpan::new(c.name(), c.identifier().span()))
-            .unwrap_or_else(|| StringSpan::new(client_name, client_span));
+        let (client_span, client_ctx) = get_first_non_strategy_client(schema, func).unwrap_or((
+            StringSpan::new("{{{{ error resolving client }}}}", func.identifier().span()),
+            RenderContext_Client {
+                name: "{{{{ error rendering ctx.client.name }}}}".to_string(),
+                provider: "{{{{ error rendering ctx.client.provider }}}}".to_string(),
+            },
+        ));
         let args = func
             .walk_tests()
             .nth(0)
@@ -305,15 +344,7 @@ fn serialize_impls(schema: &ValidatedSchema, func: FunctionWalker) -> Vec<Impl> 
             prompt.value(),
             args,
             RenderContext {
-                client: RenderContext_Client {
-                    name: client_walker
-                        .map(|c| c.name().to_string())
-                        .unwrap_or(client_name.to_string()),
-                    provider: client_walker
-                        .map(|c| c.properties().provider.0.clone())
-                        // TODO(sam): how are fallback/round-robin clients represented here?
-                        .unwrap_or("???".to_string()),
-                },
+                client: client_ctx,
                 output_schema: func
                     .output_schema(&schema.db, func.identifier().span())
                     .unwrap_or(format!("{{{{ output schema for {} }}}}", func.name())),
@@ -337,7 +368,7 @@ fn serialize_impls(schema: &ValidatedSchema, func: FunctionWalker) -> Vec<Impl> 
                     error: format!("{err:#}"),
                 },
             },
-            client: client,
+            client: client_span,
             input_replacers: vec![],
             output_replacers: vec![],
         }]

@@ -9,6 +9,7 @@
 
 
 
+from .fx_haikualpha_impl_default_config import default_config as unused_fx_haikualpha_impl_default_config
 from .fx_analyzeproductreview_impl_default_config import default_config as unused_fx_analyzeproductreview_impl_default_config
 from .fx_booleanfunc_impl_v1 import v1 as unused_fx_booleanfunc_impl_v1
 from .fx_classfunc_impl_version import version as unused_fx_classfunc_impl_version
