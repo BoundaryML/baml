@@ -52,6 +52,7 @@ export default async function Home({ searchParams }: { searchParams: SearchParam
       data = await loadUrl(searchParams.id)
     }
   }
+  console.log(data)
   return (
     <main className="flex flex-col items-center justify-between min-h-screen font-sans">
       <div className="z-10 items-center justify-between w-screen h-screen text-sm overflow-clip lg:flex">

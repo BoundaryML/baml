@@ -107,12 +107,12 @@ export const EditorContainer = ({ project }: { project: BAMLProject }) => {
   }, [])
 
   useEffect(() => {
-    if (project.files.length > 0) {
+    if (project && project?.files?.length > 0) {
+      console.log('resetting editor files')
       setEditorFiles(project.files)
     }
   }, [project.id])
 
-  const [url, setUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [functionsAndTests, setFunctionsAndTests] = useAtom(functionsAndTestsAtom)
   return (
@@ -128,16 +128,20 @@ export const EditorContainer = ({ project }: { project: BAMLProject }) => {
             onClick={async () => {
               setLoading(true)
               try {
-                const allEditorFiles = generateAllEditorFiles(editorFiles, functionsAndTests)
-                let urlId = searchParams.get('id')
+                let urlId = window.location.search.split('id=')[1]
                 console.log('existing url', urlId)
                 if (!urlId) {
-                  urlId = await createUrl(allEditorFiles)
+                  urlId = await createUrl({
+                    ...project,
+                    files: editorFiles,
+                    functionsWithTests: functionsAndTests,
+                  })
                   console.log('URL:', urlId)
                   const updatedSearchParams = new URLSearchParams({
                     id: urlId,
                   })
-                  router.replace(pathname + '?' + updatedSearchParams.toString(), { scroll: false })
+                  window.history.replaceState(null, '', pathname + '?' + updatedSearchParams.toString())
+                  // router.replace(pathname + '?' + updatedSearchParams.toString(), { scroll: false })
                 }
 
                 navigator.clipboard.writeText(`${pathname}?id=${urlId}`)
@@ -148,7 +152,6 @@ export const EditorContainer = ({ project }: { project: BAMLProject }) => {
               } finally {
                 setLoading(false)
               }
-              // setUrl(url)
             }}
           >
             Share
@@ -161,13 +164,12 @@ export const EditorContainer = ({ project }: { project: BAMLProject }) => {
         </div>
       </div>
 
-      {url && <div>URL: {url}</div>}
       <div className="flex flex-row w-full h-full">
         <ResizablePanelGroup className="min-h-[200px] w-full rounded-lg border overflow-clip" direction="horizontal">
           <ResizablePanel defaultSize={50}>
             <div className="flex w-full h-full" key={project.id}>
               <CodeMirror
-                value={editorFiles[0].content}
+                value={editorFiles[0]?.content ?? ''}
                 extensions={extensions}
                 theme={vscodeDark}
                 height="100%"
@@ -184,7 +186,8 @@ export const EditorContainer = ({ project }: { project: BAMLProject }) => {
                     return prev.filter((f) => f.path !== f.path).concat(updatedFile)
                   })
 
-                  router.replace(pathname)
+                  window.history.replaceState(null, '', pathname)
+                  //router.replace(pathname)
                 }}
               />
             </div>
@@ -204,10 +207,12 @@ export const EditorContainer = ({ project }: { project: BAMLProject }) => {
 }
 
 export const Editor = ({ project }: { project: BAMLProject }) => {
-  useHydrateAtoms([
-    [currentEditorFilesAtom as any, project.files],
-    [functionsAndTestsAtom as any, project.functionsWithTests],
-  ]) // any cause sessionStorage screws types up somehow
+  // useHydrateAtoms([
+  //   [currentEditorFilesAtom as any, project.files],
+  //   [functionsAndTestsAtom as any, project.functionsWithTests],
+  // ]) // any cause sessionStorage screws types up somehow
+
+  console.log('resetting = editor')
 
   return (
     <>

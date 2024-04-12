@@ -10,11 +10,11 @@ export type EditorFile = {
 
 }
 
-export async function createUrl(editorFiles: EditorFile[]): Promise<string> {
+export async function createUrl(project: BAMLProject): Promise<string> {
   const urlId = nanoid()
-  console.log(editorFiles)
+  console.log(project)
 
-  const user = await kv.set(urlId, editorFiles);
+  const user = await kv.set(urlId, project);
   return urlId;
 }
 
