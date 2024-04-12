@@ -64,7 +64,8 @@
       "titleBar.activeBackground": "#8B0002",
       "titleBar.activeForeground": "#FFFBFB"
     },
-    "python.analysis.typeCheckingMode": "strict"
+    "python.analysis.typeCheckingMode": "strict",
+    "editor.colorDecoratorsLimit": 2000
   },
   "extensions": {
     "recommendations": [

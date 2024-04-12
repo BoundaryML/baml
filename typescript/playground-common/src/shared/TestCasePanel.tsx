@@ -23,7 +23,7 @@ import {
 } from '@rjsf/utils'
 import validator from '@rjsf/validator-ajv8'
 import { VSCodeButton, VSCodeProgressRing, VSCodeTextArea, VSCodeTextField } from '@vscode/webview-ui-toolkit/react'
-import { Copy, Edit2, FileJson2, Play, PlusIcon, X } from 'lucide-react'
+import { Copy, Edit2, FileJson2, Save, Play, PlusIcon, Trash2 } from 'lucide-react'
 import React, { ChangeEvent, FocusEvent, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { ASTContext } from './ASTProvider'
 import TypeComponent from './TypeComponent'
@@ -349,12 +349,23 @@ const TestCasePanelEntry: React.FC<{ func: Func; test_case: TestCase }> = ({ fun
               }
             }}
           >
-            <Play size={10} />
+            {test_case.saved ? (
+              <Play size={10}/>
+            ) : (
+              <div className="flex flex-row">
+                <Save size={10} className="text-vscode-gitDecoration-modifiedResourceForeground"/>
+                <Play size={10} className="text-vscode-gitDecoration-modifiedResourceForeground"/>
+              </div>
+            )}
           </Button>
           {/* IDK why it doesnt truncate. Probably cause of the allotment */}
           <div className="flex w-full flex-nowrap">
-            <span className="h-[24px] max-w-[120px] text-center align-middle overflow-hidden flex-1 truncate">
-              {test_case.saved ? test_case.name.value : `save and run: ${test_case.name.value}`}
+            <span className={
+              test_case.saved 
+              ? "h-[24px] max-w-[120px] text-center align-middle overflow-hidden flex-1 truncate"
+              : "h-[24px] max-w-[120px] text-center align-middle overflow-hidden flex-1 truncate text-vscode-gitDecoration-modifiedResourceForeground"
+            }>
+              {test_case.name.value}
             </span>
             <div className="hidden gap-x-1 group-hover:flex">
               <EditTestCaseForm
@@ -424,7 +435,7 @@ const TestCasePanelEntry: React.FC<{ func: Func; test_case: TestCase }> = ({ fun
             })
           }}
         >
-          <X size={10} />
+          <Trash2 size={10} />
         </Button>
       </div>
       <EditTestCaseForm
@@ -437,7 +448,7 @@ const TestCasePanelEntry: React.FC<{ func: Func; test_case: TestCase }> = ({ fun
           variant={'ghost'}
           className="items-start justify-start w-full px-1 py-1 text-left hover:bg-vscode-button-secondaryHoverBackground h-fit"
         >
-          <TestCaseCard content={test_case.content} testCaseName={test_case.name.value} />
+          <TestCaseCard test_case={test_case} />
         </Button>
       </EditTestCaseForm>
     </div>
@@ -575,6 +586,12 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
             <div>Add test case</div>
           </Button>
         </EditTestCaseForm>
+
+        {
+          test_cases.some((t) => !t.saved) && (
+            <div className="rounded-md w-fit font-sans">We've automatically created a test case for you! Click the button to save and run.</div>
+          )
+        }
         {test_cases.map((t) => (
           <TestCasePanelEntry func={func} test_case={t} />
         ))}
@@ -693,12 +710,12 @@ const EditTestCaseForm = ({
   )
 }
 
-const TestCaseCard: React.FC<{ testCaseName: string; content: string }> = ({ testCaseName, content }) => {
+const TestCaseCard: React.FC<{ test_case: TestCase }> = ({ test_case }) => {
   return (
     <div className="flex flex-col max-w-full gap-2 text-xs text-left text-vscode-descriptionForeground">
-      <div className="break-all">
-        {content.substring(0, 120)}
-        {content.length > 120 && '...'}
+      <div className={ test_case.saved ? "break-all" : "break-all text-vscode-gitDecoration-modifiedResourceForeground"}>
+        {test_case.content.substring(0, 120)}
+        {test_case.content.length > 120 && '...'}
       </div>
     </div>
   )
