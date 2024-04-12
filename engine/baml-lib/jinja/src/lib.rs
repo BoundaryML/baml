@@ -5,7 +5,7 @@ use evaluate_type::get_variable_types;
 use minijinja;
 use minijinja::context;
 use serde::Serialize;
-use serde_json;
+use serde_json::{self, map::Iter};
 use std::collections::HashMap;
 
 pub use evaluate_type::{PredefinedTypes, Type, TypeError};
@@ -84,11 +84,11 @@ pub struct TemplateStringMacro {
 
 const MAGIC_CHAT_ROLE_DELIMITER: &'static str = "BAML_CHAT_ROLE_MAGIC_STRING_DELIMITER";
 
-fn render_minijinja(
+fn render_minijinja<T: Serialize>(
     template: &str,
-    args: serde_json::Map<String, serde_json::Value>,
-    ctx: RenderContext,
-    template_string_macros: Vec<TemplateStringMacro>,
+    args: &T,
+    ctx: &RenderContext,
+    template_string_macros: &[TemplateStringMacro],
 ) -> Result<RenderedPrompt, minijinja::Error> {
     let mut env = get_env();
 
@@ -113,13 +113,13 @@ fn render_minijinja(
         .into_iter()
         .map(|tsm| {
             format!(
-                "{{% macro {name}({args}) %}}{template}{{% endmacro %}}",
+                "{{% macro {name}({template_args}) %}}{template}{{% endmacro %}}",
                 name = tsm.name,
-                args = tsm
+                template_args = tsm
                     .args
-                    .into_iter()
-                    .map(|(name, _type)| name)
-                    .collect::<Vec<String>>()
+                    .iter()
+                    .map(|(name, _)| name.as_str())
+                    .collect::<Vec<_>>()
                     .join(", "),
                 template = tsm.template,
             )
@@ -140,7 +140,7 @@ fn render_minijinja(
     );
     let tmpl = env.get_template("prompt")?;
 
-    let rendered = tmpl.render(minijinja::Value::from_serializable(&args))?;
+    let rendered = tmpl.render(minijinja::Value::from_serializable(args))?;
 
     if !rendered.contains(MAGIC_CHAT_ROLE_DELIMITER) {
         return Ok(RenderedPrompt::Completion(rendered));
@@ -171,7 +171,7 @@ fn render_minijinja(
     Ok(RenderedPrompt::Chat(chat_messages))
 }
 
-#[derive(Debug, PartialEq, Serialize)]
+#[derive(Debug, PartialEq, Serialize, Clone)]
 pub struct RenderedChatMessage {
     pub role: String,
     pub message: String,
@@ -183,11 +183,11 @@ pub enum RenderedPrompt {
     Chat(Vec<RenderedChatMessage>),
 }
 
-pub fn render_prompt(
+pub fn render_prompt<T: Serialize>(
     template: &str,
-    args: serde_json::Map<String, serde_json::Value>,
-    ctx: RenderContext,
-    template_string_macros: Vec<TemplateStringMacro>,
+    args: &T,
+    ctx: &RenderContext,
+    template_string_macros: &[TemplateStringMacro],
 ) -> anyhow::Result<RenderedPrompt> {
     let rendered = render_minijinja(template, args, ctx, template_string_macros);
 
@@ -250,8 +250,8 @@ mod render_tests {
                     End the haiku with a line about your maker, {{ ctx.client.provider }}.
             
             ",
-            args,
-            RenderContext {
+            &args,
+            &RenderContext {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
@@ -259,7 +259,7 @@ mod render_tests {
                 output_schema: "iambic pentameter".to_string(),
                 env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
             },
-            vec![],
+            &vec![],
         )?;
 
         assert_eq!(
@@ -307,8 +307,8 @@ mod render_tests {
                 and also outputs this word 4 times
                 after giving a response: {{ haiku_subject }}
             ",
-            args,
-            RenderContext {
+            &args,
+            &RenderContext {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
@@ -316,7 +316,7 @@ mod render_tests {
                 output_schema: "iambic pentameter".to_string(),
                 env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
             },
-            vec![],
+            &vec![],
         )?;
 
         assert_eq!(
@@ -354,8 +354,8 @@ mod render_tests {
                 and also outputs this word 4 times
                 after giving a response: {{ haiku_subject }}
             ",
-            args,
-            RenderContext {
+            &args,
+            &RenderContext {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
@@ -363,7 +363,7 @@ mod render_tests {
                 output_schema: "iambic pentameter".to_string(),
                 env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
             },
-            vec![],
+            &vec![],
         )?;
 
         assert_eq!(
@@ -396,8 +396,8 @@ mod render_tests {
         // rendering should fail: template contains '{{ name }' (missing '}' at the end)
         let rendered = render_prompt(
             "Hello, {{ name }!",
-            args,
-            RenderContext {
+            &args,
+            &RenderContext {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
@@ -405,7 +405,7 @@ mod render_tests {
                 output_schema: "output[]".to_string(),
                 env: HashMap::new(),
             },
-            vec![],
+            &vec![],
         );
 
         match rendered {

@@ -12,6 +12,28 @@ export const enum TestCaseStatus {
   ExpectedFailure = 5,
 }
 export function version(): string
+export class NapiChatMessage {
+  role(): string
+  message(): string
+}
+export class NapiRenderedPrompt {
+  isCompletion(): boolean
+  isChat(): boolean
+  chatMessages(): Array<NapiChatMessage>
+  completion(): string
+}
+export class NapiClient {
+  constructor(name: string, provider: string)
+}
+export class NapiRenderer {
+  constructor(template: string, outputSchema: string)
+  addTemplateString(name: string, argNames: Array<string>, argTypes: Array<string>, template: string): void
+  /**
+   * Render the prompt with the given arguments
+   * These elements are all dynamic and must be passed in by the caller
+   */
+  render(args: Record<string, any>, client: NapiClient, env: Record<string, string>): NapiRenderedPrompt
+}
 export class BamlTracer {
   constructor()
   start(): void

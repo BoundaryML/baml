@@ -32,7 +32,7 @@ class RoundRobinClient extends LLMBaseProvider {
             throw new Error(`client<llm> ${this.name}: expected strategy to contain at least one client, but contained zero`);
         }
 
-        this.clients = strategy.map((s) => typeof s === 'string' ? {client: s} : s);
+        this.clients = strategy.map((s) => typeof s === 'string' ? { client: s } : s);
         // Start from a random provider, so that if multiple processes are started at the same time,
         // they don't all start from the same provider.
         if (start === 'random') {
@@ -58,6 +58,10 @@ class RoundRobinClient extends LLMBaseProvider {
         const clientIndex = this.clientIndex;
         this.clientIndex = (this.clientIndex + 1) % this.clients.length;
         return clientManager.getClient(this.clients[clientIndex].client);
+    }
+
+    async run_jinja_template_once(jinja_template: string, args: { [key: string]: any; }, output_schema: string, template_macros: any[]): Promise<LLMResponse> {
+        return this.choose_provider().run_jinja_template(jinja_template, args, output_schema, template_macros);
     }
 
     async run_prompt_once(prompt: string): Promise<LLMResponse> {

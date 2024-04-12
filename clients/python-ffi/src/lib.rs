@@ -299,8 +299,8 @@ fn render_prompt(template: String, context: RenderData) -> PyResult<PyObject> {
 
     let rendered = internal_baml_jinja::render_prompt(
         &template,
-        render_args,
-        internal_baml_jinja::RenderContext {
+        &render_args,
+        &internal_baml_jinja::RenderContext {
             client: internal_baml_jinja::RenderContext_Client {
                 name: ctx.client.name,
                 provider: ctx.client.provider,
@@ -308,7 +308,7 @@ fn render_prompt(template: String, context: RenderData) -> PyResult<PyObject> {
             output_schema: ctx.output_schema,
             env: ctx.env,
         },
-        template_string_macros
+        &template_string_macros
             .into_iter()
             .map(|t| internal_baml_jinja::TemplateStringMacro {
                 name: t.name,

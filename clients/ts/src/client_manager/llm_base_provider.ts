@@ -1,3 +1,4 @@
+import { NapiClient } from "@boundaryml/baml-core-ffi";
 import { FireBamlEvent } from "../ffi_layer";
 import { BaseProvider } from "./base_provider";
 import { RetryPolicy } from "./retry_policy"
@@ -43,13 +44,14 @@ function redact(value: any): any {
 }
 
 abstract class LLMBaseProvider extends BaseProvider {
-  private provider: string;
-  private retry_policy: RetryPolicy;
+  private readonly provider: string;
+  private readonly retry_policy: RetryPolicy;
   private redactions: string[];
   private client_args: { [key: string]: any };
+  protected readonly napi_client: NapiClient;
 
   constructor(args: LLMBaseProviderArgs) {
-    const { provider, retry_policy, redactions = [], ...rest } = args;
+    const { provider, retry_policy, redactions = [], client_name = '<unknown>', ...rest } = args;
     if (Object.keys(rest).length) {
       throw new Error(`Unknown arguments: ${Object.keys(rest).join(', ')}`);
     }
@@ -64,18 +66,42 @@ abstract class LLMBaseProvider extends BaseProvider {
     this.retry_policy = retry_policy;
     this.redactions = redactions;
     this.client_args = {};
+    this.napi_client = new NapiClient(
+      client_name,
+      provider
+    );
   }
 
   protected set_args(args: { [key: string]: any }) {
     this.client_args = Object.fromEntries(Object.entries(args).map(([k, v]) => [k, redact(v)]));
   }
 
+  async run_jinja_template(
+    jinja_template: string,
+    args: { [key: string]: any },
+    output_schema: string,
+    template_macros: any[]
+  ): Promise<LLMResponse> {
+    if (this.retry_policy) {
+      return await this.retry_policy.run(() => this.run_jinja_template_once(jinja_template, args, output_schema, template_macros));
+    }
+
+    return await this.run_jinja_template_once(jinja_template, args, output_schema, template_macros);
+  }
+  protected abstract run_jinja_template_once(
+    jinja_template: string,
+    args: { [key: string]: any },
+    output_schema: string,
+    template_macros: any[]
+  ): Promise<LLMResponse>;
+
+
   async run_prompt(prompt: string): Promise<LLMResponse> {
     if (this.retry_policy) {
       return await this.retry_policy.run(() => this.run_prompt_once(prompt));
     }
     return await this.run_prompt_once(prompt);
-   }
+  }
   protected abstract run_prompt_once(prompt: string): Promise<LLMResponse>;
 
   async run_chat(prompt: LLMChatMessage | LLMChatMessage[]): Promise<LLMResponse> {

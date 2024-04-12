@@ -180,6 +180,7 @@ dependencies = [
  "colored",
  "envy",
  "hostname",
+ "internal-baml-jinja",
  "napi",
  "napi-build",
  "napi-derive",

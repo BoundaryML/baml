@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use internal_baml_jinja::{
-    render_prompt, RenderContext, RenderContext_Client, RenderedChatMessage,
+    render_prompt, RenderContext, RenderContext_Client, RenderedChatMessage, TemplateStringMacro,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -105,6 +105,23 @@ pub(crate) fn run(input: &str) -> String {
         return print_diagnostics(mini_errors, None);
     }
 
+    let template_string_macros = schema
+        .db
+        .walk_templates()
+        .map(|w| TemplateStringMacro {
+            name: w.name().to_string(),
+            args: w.ast_node().input().map_or(vec![], |args| match args {
+                ast::FunctionArgs::Named(list) => list
+                    .args
+                    .iter()
+                    .map(|(idn, _)| (idn.name().to_string(), "<not set>".into()))
+                    .collect(),
+                _ => vec![],
+            }),
+            template: w.template_string().to_string(),
+        })
+        .collect::<Vec<_>>();
+
     let response = json!({
         "enums": schema.db.walk_enums().map(|e| json!({
             "name": StringSpan::new(e.name(), e.identifier().span()),
@@ -118,8 +135,8 @@ pub(crate) fn run(input: &str) -> String {
             "name": StringSpan::new(c.name(), c.identifier().span()),
         })).collect::<Vec<_>>(),
         "functions": std::iter::empty()
-            .chain(schema.db.walk_old_functions().map(|f| serialize_function(&schema, f, SFunctionSyntax::Version1)))
-            .chain(schema.db.walk_new_functions().map(|f| serialize_function(&schema, f, SFunctionSyntax::Version2)))
+            .chain(schema.db.walk_old_functions().map(|f| serialize_function(&schema, f, SFunctionSyntax::Version1, &template_string_macros)))
+            .chain(schema.db.walk_new_functions().map(|f| serialize_function(&schema, f, SFunctionSyntax::Version2, &template_string_macros)))
             .collect::<Vec<_>>(),
     });
 
@@ -164,6 +181,7 @@ fn serialize_function(
     schema: &ValidatedSchema,
     func: FunctionWalker,
     syntax: SFunctionSyntax,
+    template_string_macros: &[TemplateStringMacro],
 ) -> SFunction {
     SFunction {
         name: StringSpan::new(func.name(), func.identifier().span()),
@@ -212,7 +230,7 @@ fn serialize_function(
                 })
             })
             .collect::<Vec<_>>(),
-        impls: serialize_impls(&schema, func),
+        impls: serialize_impls(&schema, func, template_string_macros),
         syntax: syntax,
     }
 }
@@ -296,7 +314,11 @@ fn choose_client(
     ))
 }
 
-fn serialize_impls(schema: &ValidatedSchema, func: FunctionWalker) -> Vec<Impl> {
+fn serialize_impls(
+    schema: &ValidatedSchema,
+    func: FunctionWalker,
+    template_string_macros: &[TemplateStringMacro],
+) -> Vec<Impl> {
     if func.is_old_function() {
         func.walk_variants()
             .map(|i| {
@@ -356,18 +378,18 @@ fn serialize_impls(schema: &ValidatedSchema, func: FunctionWalker) -> Vec<Impl> 
             )
             .unwrap_or(serde_json::Map::new());
 
-        let rendered = render_prompt(
-            prompt.value(),
-            args,
-            RenderContext {
-                client: client_ctx,
-                output_schema: func
-                    .output_schema(&schema.db, func.identifier().span())
-                    .unwrap_or(format!("{{{{ output schema for {} }}}}", func.name())),
-                env: HashMap::new(),
-            },
-            vec![],
-        );
+        let render_ctx = RenderContext {
+            client: client_ctx,
+            output_schema: func
+                .output_schema(&schema.db, func.identifier().span())
+                .unwrap_or(format!(
+                    "{{{{ Unable to generate ctx.output_schema for {} }}}}",
+                    func.name()
+                )),
+            env: HashMap::new(),
+        };
+
+        let rendered = render_prompt(prompt.value(), &args, &render_ctx, &template_string_macros);
         vec![Impl {
             name: StringSpan::new("default_config", func.identifier().span()),
             prompt_key: prompt.span().into(),

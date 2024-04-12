@@ -126,16 +126,15 @@ class LLMChatProvider(AbstractLLMProvider):
             ),
         )
 
-        prompt_type, prompt = rendered
-        if prompt_type == "chat":
+        if rendered[0] == "chat":
             return await self._run_chat_internal(
                 [
                     LLMChatMessage(role=chat.role, content=chat.message)
-                    for chat in prompt
+                    for chat in rendered[1]
                 ]
             )
         else:
-            return await self._run_prompt_internal(prompt)
+            return await self._run_prompt_internal(rendered[1])
 
     @typing.final
     async def _run_jinja_template_internal_stream(
