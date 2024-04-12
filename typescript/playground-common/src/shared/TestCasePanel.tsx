@@ -1,26 +1,14 @@
 /// Content once a function has been selected.
 
+import { UiSchema, } from '@rjsf/utils'
+
 import { uniqueNamesGenerator, Config, adjectives, colors, animals } from 'unique-names-generator'
-import jsf from 'json-schema-faker'
+import { JSONSchemaFaker as jsf } from 'json-schema-faker'
 import { Button } from '../components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
 import { vscode } from '../utils/vscode'
 import { ParserDatabase, StringSpan, TestRequest } from '@baml/common'
 import Form, { getDefaultRegistry } from '@rjsf/core'
-import {
-  ArrayFieldTemplateItemType,
-  ArrayFieldTitleProps,
-  BaseInputTemplateProps,
-  FieldTemplateProps,
-  IconButtonProps,
-  ObjectFieldTemplateProps,
-  RJSFSchema,
-  UiSchema,
-  ariaDescribedByIds,
-  examplesId,
-  getInputProps,
-  titleId,
-} from '@rjsf/utils'
 import validator from '@rjsf/validator-ajv8'
 import { VSCodeButton, VSCodeProgressRing, VSCodeTextArea, VSCodeTextField } from '@vscode/webview-ui-toolkit/react'
 import { Copy, Edit2, FileJson2, Save, Play, PlusIcon, Trash2 } from 'lucide-react'
@@ -29,251 +17,7 @@ import { ASTContext } from './ASTProvider'
 import TypeComponent from './TypeComponent'
 import { useSelections } from './hooks'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip'
-
-function MyBaseInputTemplate(props: BaseInputTemplateProps) {
-  const {
-    id,
-    name, // remove this from ...rest
-    value,
-    readonly,
-    disabled,
-    autofocus,
-    onBlur,
-    onFocus,
-    onChange,
-    onChangeOverride,
-    options,
-    schema,
-    uiSchema,
-    formContext,
-    registry,
-    rawErrors,
-    type,
-    hideLabel, // remove this from ...rest
-    hideError, // remove this from ...rest
-    ...rest
-  } = props
-
-  // Note: since React 15.2.0 we can't forward unknown element attributes, so we
-  // exclude the "options" and "schema" ones here.
-  if (!id) {
-    console.log('No id for', props)
-    throw new Error(`no id for props ${JSON.stringify(props)}`)
-  }
-  const inputProps = {
-    ...rest,
-    ...getInputProps(schema, type, options),
-  }
-
-  let inputValue
-  if (inputProps.type === 'number' || inputProps.type === 'integer') {
-    inputValue = value || value === 0 ? value : ''
-  } else {
-    inputValue = value == null ? '' : value
-  }
-
-  const _onChange = useCallback(
-    ({ target: { value } }: ChangeEvent<HTMLInputElement>) => onChange(value === '' ? options.emptyValue : value),
-    [onChange, options],
-  )
-  const _onBlur = useCallback(({ target: { value } }: FocusEvent<HTMLInputElement>) => onBlur(id, value), [onBlur, id])
-  const _onFocus = useCallback(
-    ({ target: { value } }: FocusEvent<HTMLInputElement>) => onFocus(id, value),
-    [onFocus, id],
-  )
-
-  const length = Object.keys(registry.rootSchema?.definitions ?? {}).length
-
-  const input =
-    inputProps.type === 'number' || inputProps.type === 'integer' ? (
-      <input
-        id={id}
-        name={id}
-        className="max-w-[100px] rounded-sm bg-vscode-input-background text-vscode-input-foreground"
-        readOnly={readonly}
-        disabled={disabled}
-        autoFocus={autofocus}
-        value={inputValue}
-        {...inputProps}
-        list={schema.examples ? examplesId(id) : undefined}
-        onChange={onChangeOverride || _onChange}
-        onBlur={_onBlur}
-        onFocus={_onFocus}
-        aria-describedby={ariaDescribedByIds(id, !!schema.examples)}
-      />
-    ) : (
-      <textarea
-        id={id}
-        name={id}
-        rows={Math.max(
-          1,
-          inputValue
-            .split('\n')
-            .map((line: string) => Math.max(1, line.length / 42))
-            .reduce((a: number, b: number) => a + b, 0),
-        )}
-        className="w-[90%] px-1 rounded-sm bg-vscode-input-background text-vscode-input-foreground"
-        readOnly={readonly}
-        disabled={disabled}
-        autoFocus={autofocus}
-        value={inputValue}
-        {...inputProps}
-        // list={schema.examples ? examplesId(id) : undefined}
-        onChange={(onChangeOverride as any) || _onChange}
-        onBlur={_onBlur as any}
-        onFocus={_onFocus as any}
-        aria-describedby={ariaDescribedByIds(id, !!schema.examples)}
-      />
-    )
-
-  return (
-    <div className="flex flex-col w-full gap-y-1">
-      {input}
-      {Array.isArray(schema.examples) && (
-        <datalist key={`datalist_${id}`} id={examplesId(id)}>
-          {(schema.examples as string[])
-            .concat(schema.default && !schema.examples.includes(schema.default) ? ([schema.default] as string[]) : [])
-            .map((example: any) => {
-              return <option key={example} value={example} />
-            })}
-        </datalist>
-      )}
-    </div>
-  )
-}
-
-// function MyFieldTemplate(props: FieldTemplateProps) {
-//   return <FieldTemplate {...props} classNames="  gap-x-2" />
-// }
-
-function MyFieldTemplate(props: FieldTemplateProps) {
-  const { id, classNames, style, label, displayLabel, help, required, hidden, description, errors, children } = props
-
-  if (hidden) {
-    return <div className="hidden">{children}</div>
-  }
-
-  return (
-    <div className={classNames + ' ml-2 w-full'} style={style}>
-      <>
-        {props.schema.type === 'boolean' ? null : (
-          <label htmlFor={id} className="flex flex-row items-center gap-x-3">
-            <div className={props.schema.type === 'object' ? ' font-bold text-sm' : ' text-xs'}>
-              {label.split('-').at(-1)}
-            </div>
-            <div className={'text-vscode-textSeparator-foreground'}>
-              {props.schema.type}
-              {required ? '*' : null}
-            </div>
-          </label>
-        )}
-      </>
-
-      {description}
-      <div className="flex flex-row items-center w-full">{children}</div>
-      {errors}
-      {help}
-    </div>
-  )
-}
-
-function MyObjectTemplate(props: ObjectFieldTemplateProps) {
-  return (
-    <div className="w-full">
-      {/* <div className="py-2">{props.title}</div> */}
-      {props.description}
-      <div className="flex flex-col w-full py-1 gap-y-2">
-        {props.properties.map((element) => (
-          <div className="w-full property-wrapper text-vscode-input-foreground">{element.content}</div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function AddButton(props: IconButtonProps) {
-  const { icon, iconType, ...btnProps } = props
-  return (
-    <Button
-      variant="ghost"
-      size="icon"
-      {...btnProps}
-      className="flex flex-row items-center p-1 text-xs w-fit h-fit gap-x-2 hover:bg-vscode-descriptionForeground"
-    >
-      <PlusIcon size={16} /> <div>Add item</div>
-    </Button>
-  )
-}
-
-function RemoveButton(props: IconButtonProps) {
-  const { icon, iconType, ...btnProps } = props
-  return (
-    <div className="flex w-fit h-fit">
-      <Button
-        {...btnProps}
-        size={'icon'}
-        className="!flex flex-col !px-0 !py-0 bg-red-700 h-fit !max-w-[48px] ml-auto"
-        style={{
-          flex: 'none',
-        }}
-      >
-        <X size={12} />
-      </Button>
-    </div>
-  )
-}
-
-function SubmitButton(props: IconButtonProps) {
-  const { icon, iconType, ...btnProps } = props
-  return (
-    <div className="flex items-end justify-end w-full ml-auto h-fit">
-      <Button
-        {...btnProps}
-        className="px-3 py-2 rounded-none bg-vscode-button-background text-vscode-button-foreground w-fit h-fit hover:bg-vscode-button-background hover:opacity-75"
-        style={{
-          flex: 'none',
-        }}
-      >
-        Submit
-      </Button>
-    </div>
-  )
-}
-
-function ArrayFieldItemTemplate(props: ArrayFieldTemplateItemType) {
-  const { children, className } = props
-  return (
-    <div className="relative ">
-      <div className={`${className} ml-0 py-1 text-xs text-vscode-descriptionForeground`}>{children}</div>
-      {props.hasRemove && (
-        <div className="absolute top-0 flex ml-auto right-4 w-fit h-fit">
-          <Button
-            onClick={props.onDropIndexClick(props.index)}
-            disabled={props.disabled || props.readonly}
-            size={'icon'}
-            className="p-1 bg-transparent w-fit h-fit hover:bg-red-700"
-            style={{
-              flex: 'none',
-            }}
-          >
-            <X size={12} />
-          </Button>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function ArrayFieldTitleTemplate(props: ArrayFieldTitleProps) {
-  const { title, idSchema } = props
-  const id = titleId(idSchema)
-  return null
-  // return (
-  //   <div id={id} className="text-xs">
-  //     {title}
-  //   </div>
-  // )
-}
+import { TEMPLATES } from "./TestCaseEditor/JsonEditorTemplates"
 
 const uiSchema: UiSchema = {
   'ui:submitButtonOptions': {
@@ -291,10 +35,16 @@ const uiSchema: UiSchema = {
 type Func = ParserDatabase['functions'][number]
 type TestCase = Func['test_cases'][number] & {
   saved: boolean
-};
+}
+
 
 const TestCasePanelEntry: React.FC<{ func: Func; test_case: TestCase }> = ({ func, test_case }) => {
   const { impl, input_json_schema } = useSelections()
+  if (input_json_schema) {
+    input_json_schema.definitions = Object.fromEntries(
+      Object.entries(input_json_schema.definitions as object).map(([k, v]) => [k, {...v, title: k}])
+    )
+  }
   const { root_path, test_results } = useContext(ASTContext)
   return (
     <div key={test_case.name.value} className="py-1 group">
@@ -484,7 +234,7 @@ const getTestParams = (func: Func, testCase: Func['test_cases'][number]) => {
     }
     return {
       type: 'named',
-      value: func.input.values.map(({ name }) => ({
+      value: func.input.values.map(({ name } : {name: StringSpan }) => ({
         name: name.value,
         value: contentMap.get(name.value) ?? null,
       })),
@@ -503,7 +253,7 @@ const autoGenTestCase = (func: Func, input_json_schema: any): TestCase => {
         length: 2,
       }) as string,
     },
-    content: jsf.generate(input_json_schema),
+    content: JSON.stringify(jsf.generate(input_json_schema)),
     saved: false,
   }
 };
@@ -514,11 +264,15 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
   const [filter, setFilter] = useState<string>('')
   // This should be re-generated when this test case is saved
   const test_cases = useMemo(() => {
+    console.log("input json schema", JSON.stringify(input_json_schema, null, 2))
     let test_cases = func.test_cases.map((t) => ({ ...t, saved: true }))
     if (filter) {
       test_cases = test_cases.filter((test_case) => test_case.name.value.includes(filter) || test_case.content.includes(filter))
     }
-    return [autoGenTestCase(func, input_json_schema), ...test_cases]
+    if (test_cases.length === 0) {
+      return [autoGenTestCase(func, input_json_schema)]
+    }
+    return test_cases
   }, [filter, func])
 
   const { root_path, test_results } = useContext(ASTContext)
@@ -668,18 +422,7 @@ const EditTestCaseForm = ({
           formData={formData}
           validator={validator}
           uiSchema={uiSchema}
-          templates={{
-            BaseInputTemplate: MyBaseInputTemplate,
-            FieldTemplate: MyFieldTemplate,
-            ObjectFieldTemplate: MyObjectTemplate,
-            ButtonTemplates: {
-              AddButton,
-              // RemoveButton,
-              SubmitButton,
-            },
-            ArrayFieldTitleTemplate: ArrayFieldTitleTemplate,
-            ArrayFieldItemTemplate: ArrayFieldItemTemplate,
-          }}
+          templates={TEMPLATES}
           onSubmit={(data) => {
             vscode.postMessage({
               command: 'saveTest',
