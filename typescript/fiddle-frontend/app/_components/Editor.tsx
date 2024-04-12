@@ -117,12 +117,13 @@ export const EditorContainer = ({ project }: { project: BAMLProject }) => {
   const [functionsAndTests, setFunctionsAndTests] = useAtom(functionsAndTestsAtom)
   return (
     // firefox wont apply the background color for some reason so we forcefully set it.
-    <div className="flex font-sans flex-col w-full h-full bg-background dark:bg-[#000010]">
-      <div className="flex justify-between">
-        <div className="pt-1 text-lg">{project.name}</div>
-        <div className="flex flex-row gap-x-2 item-center">
+    <div className="flex-col w-full h-full font-sans pl-2flex bg-background dark:bg-vscode-panel-background">
+      <div className="flex justify-between border-b-[1px] border-vscode-panel-border h-[40px]">
+        <div className="pt-1 pl-4 text-lg font-semibold text-foreground">{project.name}</div>
+        <div className="flex flex-row justify-center gap-x-1 item-center">
           <Button
-            variant={'outline'}
+            variant={'ghost'}
+            className="h-full py-1"
             disabled={loading}
             onClick={async () => {
               setLoading(true)
@@ -154,7 +155,7 @@ export const EditorContainer = ({ project }: { project: BAMLProject }) => {
           </Button>
 
           {/* <TestToggle /> */}
-          <Button variant={'secondary'} asChild>
+          <Button variant={'ghost'} className="h-full py-1" asChild>
             <Link href="https://docs.boundaryml.com">Docs</Link>
           </Button>
         </div>
@@ -518,7 +519,7 @@ const RunTestButton = () => {
   )
   // Setup message event listener to handle commands
   useEffect(() => {
-    let shadowedState = { functionsAndTests: functionsAndTestsJotai };
+    let shadowedState = { functionsAndTests: functionsAndTestsJotai }
     const listener = async (event: any) => {
       const { command, data } = event.data
       console.log('running command', { event, command, data })
@@ -530,11 +531,10 @@ const RunTestButton = () => {
           break
 
         case 'commandSequence':
-          console.log("received command sequence", data)
+          console.log('received command sequence', data)
           for (const subcommand of data) {
-            console.log("received command in sequence", subcommand)
-            await listener({data: subcommand})
-
+            console.log('received command in sequence', subcommand)
+            await listener({ data: subcommand })
           }
           break
 
@@ -646,9 +646,9 @@ const RunTestButton = () => {
     }
 
     const eventListener = async (event: any) => {
-      await listener(event);
-      setFunctionsAndTestsJotai(shadowedState.functionsAndTests);
-    };
+      await listener(event)
+      setFunctionsAndTestsJotai(shadowedState.functionsAndTests)
+    }
 
     window.addEventListener('message', eventListener)
     return () => {
