@@ -1,6 +1,6 @@
 /// Content once a function has been selected.
 
-import { UiSchema, } from '@rjsf/utils'
+import { UiSchema } from '@rjsf/utils'
 
 import { uniqueNamesGenerator, Config, adjectives, colors, animals } from 'unique-names-generator'
 import { JSONSchemaFaker as jsf } from 'json-schema-faker'
@@ -17,7 +17,7 @@ import { ASTContext } from './ASTProvider'
 import TypeComponent from './TypeComponent'
 import { useSelections } from './hooks'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip'
-import { TEMPLATES } from "./TestCaseEditor/JsonEditorTemplates"
+import { TEMPLATES } from './TestCaseEditor/JsonEditorTemplates'
 
 const uiSchema: UiSchema = {
   'ui:submitButtonOptions': {
@@ -37,12 +37,11 @@ type TestCase = Func['test_cases'][number] & {
   saved: boolean
 }
 
-
 const TestCasePanelEntry: React.FC<{ func: Func; test_case: TestCase }> = ({ func, test_case }) => {
   const { impl, input_json_schema } = useSelections()
   if (input_json_schema) {
     input_json_schema.definitions = Object.fromEntries(
-      Object.entries(input_json_schema.definitions as object).map(([k, v]) => [k, {...v, title: k}])
+      Object.entries(input_json_schema.definitions as object).map(([k, v]) => [k, { ...v, title: k }]),
     )
   }
   const { root_path, test_results } = useContext(ASTContext)
@@ -80,41 +79,46 @@ const TestCasePanelEntry: React.FC<{ func: Func; test_case: TestCase }> = ({ fun
               } else {
                 vscode.postMessage({
                   command: 'commandSequence',
-                  data: [{
-                    command: 'saveTest',
-                    data: {
-                      root_path,
-                      funcName: func.name.value,
-                      testCaseName: test_case.name, // a stringspan or string
-                      params: getTestParams(func, test_case),
+                  data: [
+                    {
+                      command: 'saveTest',
+                      data: {
+                        root_path,
+                        funcName: func.name.value,
+                        testCaseName: test_case.name, // a stringspan or string
+                        params: getTestParams(func, test_case),
+                      },
                     },
-                  }, {
-                    command: 'runTest',
-                    data: {
-                      root_path,
-                      tests: runTestRequest,
+                    {
+                      command: 'runTest',
+                      data: {
+                        root_path,
+                        tests: runTestRequest,
+                      },
                     },
-                  }],
+                  ],
                 })
               }
             }}
           >
             {test_case.saved ? (
-              <Play size={10}/>
+              <Play size={10} />
             ) : (
               <div className="flex flex-row">
-                <Save size={10} className="text-vscode-gitDecoration-modifiedResourceForeground"/>
-                <Play size={10} className="text-vscode-gitDecoration-modifiedResourceForeground"/>
+                <Save size={10} className="text-vscode-gitDecoration-modifiedResourceForeground" />
+                <Play size={10} className="text-vscode-gitDecoration-modifiedResourceForeground" />
               </div>
             )}
           </Button>
           {/* IDK why it doesnt truncate. Probably cause of the allotment */}
           <div className="flex w-full flex-nowrap">
-            <span className={
-              test_case.saved 
-              ? "h-[24px] max-w-[120px] text-center align-middle overflow-hidden flex-1 truncate"
-              : "h-[24px] max-w-[120px] text-center align-middle overflow-hidden flex-1 truncate text-vscode-gitDecoration-modifiedResourceForeground"
-            }>
+            <span
+              className={
+                test_case.saved
+                  ? 'h-[24px] max-w-[120px] text-center align-middle overflow-hidden flex-1 truncate'
+                  : 'h-[24px] max-w-[120px] text-center align-middle overflow-hidden flex-1 truncate text-vscode-gitDecoration-modifiedResourceForeground'
+              }
+            >
               {test_case.name.value}
             </span>
             <div className="hidden gap-x-1 group-hover:flex">
@@ -234,7 +238,7 @@ const getTestParams = (func: Func, testCase: Func['test_cases'][number]) => {
     }
     return {
       type: 'named',
-      value: func.input.values.map(({ name } : {name: StringSpan }) => ({
+      value: func.input.values.map(({ name }: { name: StringSpan }) => ({
         name: name.value,
         value: contentMap.get(name.value) ?? null,
       })),
@@ -243,7 +247,6 @@ const getTestParams = (func: Func, testCase: Func['test_cases'][number]) => {
 }
 
 const autoGenTestCase = (func: Func, input_json_schema: any): TestCase => {
-
   return {
     name: {
       ...func.name,
@@ -256,7 +259,7 @@ const autoGenTestCase = (func: Func, input_json_schema: any): TestCase => {
     content: JSON.stringify(jsf.generate(input_json_schema)),
     saved: false,
   }
-};
+}
 
 const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
   const { impl, input_json_schema } = useSelections()
@@ -264,10 +267,12 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
   const [filter, setFilter] = useState<string>('')
   // This should be re-generated when this test case is saved
   const test_cases = useMemo(() => {
-    console.log("input json schema", JSON.stringify(input_json_schema, null, 2))
+    console.log('input json schema', JSON.stringify(input_json_schema, null, 2))
     let test_cases = func.test_cases.map((t) => ({ ...t, saved: true }))
     if (filter) {
-      test_cases = test_cases.filter((test_case) => test_case.name.value.includes(filter) || test_case.content.includes(filter))
+      test_cases = test_cases.filter(
+        (test_case) => test_case.name.value.includes(filter) || test_case.content.includes(filter),
+      )
     }
     if (test_cases.length === 0) {
       return [autoGenTestCase(func, input_json_schema)]
@@ -341,11 +346,11 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
           </Button>
         </EditTestCaseForm>
 
-        {
-          test_cases.some((t) => !t.saved) && (
-            <div className="rounded-md w-fit font-sans">We've automatically created a test case for you! Click the button to save and run.</div>
-          )
-        }
+        {test_cases.some((t) => !t.saved) && (
+          <div className="font-sans rounded-md w-fit">
+            We've automatically created a test case for you! Click the button to save and run.
+          </div>
+        )}
         {test_cases.map((t) => (
           <TestCasePanelEntry func={func} test_case={t} />
         ))}
@@ -386,7 +391,7 @@ const EditTestCaseForm = ({
     try {
       return JSON.parse(testCase?.content)
     } catch (e) {
-      console.warn('Error parsing data, will default to string\n' + JSON.stringify(testCase), e)
+      console.debug('Error parsing data, will default to string\n' + JSON.stringify(testCase), e)
       return testCase?.content ?? 'null'
     }
   }, [testCase?.content])
@@ -456,7 +461,7 @@ const EditTestCaseForm = ({
 const TestCaseCard: React.FC<{ test_case: TestCase }> = ({ test_case }) => {
   return (
     <div className="flex flex-col max-w-full gap-2 text-xs text-left text-vscode-descriptionForeground">
-      <div className={ test_case.saved ? "break-all" : "break-all text-vscode-gitDecoration-modifiedResourceForeground"}>
+      <div className={test_case.saved ? 'break-all' : 'break-all text-vscode-gitDecoration-modifiedResourceForeground'}>
         {test_case.content.substring(0, 120)}
         {test_case.content.length > 120 && '...'}
       </div>

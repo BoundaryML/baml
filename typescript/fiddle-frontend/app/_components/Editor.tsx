@@ -31,6 +31,7 @@ import { toast } from 'sonner'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { BAMLProject, exampleProjects } from '@/lib/exampleProjects'
 import { Card, CardContent } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 type EditorFile = {
   path: string
   content: string
@@ -47,14 +48,10 @@ const currentEditorFilesAtom = atomWithStorage<EditorFile[]>('files', [], sessio
 
 async function bamlLinter(view: EditorView): Promise<Diagnostic[]> {
   const lint = await import('@gloo-ai/baml-schema-wasm-web').then((m) => m.lint)
+  const currentFiles = atomStore.get(currentEditorFilesAtom) as EditorFile[]
   const linterInput: LinterInput = {
     root_path: `${baml_dir}`,
-    files: [
-      {
-        path: `${baml_dir}/main.baml`,
-        content: view.state.doc.toString(),
-      },
-    ],
+    files: currentFiles,
   }
   console.info(`Linting ${linterInput.files.length} files in ${linterInput.root_path}`)
   const res = lint(JSON.stringify(linterInput))
@@ -129,22 +126,22 @@ export const EditorContainer = ({ project }: { project: BAMLProject }) => {
               setLoading(true)
               try {
                 let urlId = window.location.search.split('id=')[1]
-                console.log('existing url', urlId)
                 if (!urlId) {
                   urlId = await createUrl({
                     ...project,
                     files: editorFiles,
                     functionsWithTests: functionsAndTests,
                   })
-                  console.log('URL:', urlId)
                   const updatedSearchParams = new URLSearchParams({
                     id: urlId,
                   })
-                  window.history.replaceState(null, '', pathname + '?' + updatedSearchParams.toString())
+                  const newUrl = `${window.location.origin}${pathname}?${updatedSearchParams}`
+                  window.history.replaceState(null, '', newUrl)
                   // router.replace(pathname + '?' + updatedSearchParams.toString(), { scroll: false })
                 }
 
-                navigator.clipboard.writeText(`${pathname}?id=${urlId}`)
+                console.log('pathname', pathname)
+                navigator.clipboard.writeText(`${window.location.origin}${pathname}?id=${urlId}`)
                 toast('URL copied to clipboard')
               } catch (e) {
                 toast('Failed to generate URL')
@@ -168,32 +165,11 @@ export const EditorContainer = ({ project }: { project: BAMLProject }) => {
         <ResizablePanelGroup className="min-h-[200px] w-full rounded-lg border overflow-clip" direction="horizontal">
           <ResizablePanel defaultSize={50}>
             <div className="flex w-full h-full" key={project.id}>
-              <CodeMirror
-                value={editorFiles[0]?.content ?? ''}
-                extensions={extensions}
-                theme={vscodeDark}
-                height="100%"
-                width="100%"
-                maxWidth="100%"
-                style={{ width: '100%', height: '100%' }}
-                onChange={async (val, viewUpdate) => {
-                  setEditorFiles((prev) => {
-                    prev = prev as EditorFile[] // because of jotai jsonstorage this becomes a promise or a normal object and this isnt a promise.
-                    const updatedFile: EditorFile = {
-                      path: `${baml_dir}/main.baml`,
-                      content: val,
-                    }
-                    return prev.filter((f) => f.path !== f.path).concat(updatedFile)
-                  })
-
-                  window.history.replaceState(null, '', pathname)
-                  //router.replace(pathname)
-                }}
-              />
+              <CodeBlockWithTabs />
             </div>
           </ResizablePanel>
           <ResizableHandle withHandle className="bg-vscode-contrastActiveBorder" />
-          <RunTestButton />
+          {/* <RunTestButton /> */}
 
           <ResizablePanel defaultSize={50}>
             <div className="flex flex-row h-full bg-vscode-panel-background">
@@ -202,6 +178,86 @@ export const EditorContainer = ({ project }: { project: BAMLProject }) => {
           </ResizablePanel>
         </ResizablePanelGroup>
       </div>
+    </div>
+  )
+}
+
+export interface CodeBlockWithTabsProps {
+  files: EditorFile[]
+  className?: string
+}
+
+export const CodeBlockWithTabs = () => {
+  const [editorFiles, setEditorFiles] = useAtom(currentEditorFilesAtom)
+  const [activeFile, setActiveFile] = useState<EditorFile>(editorFiles[0])
+
+  const pathname = usePathname()
+
+  useEffect(() => {
+    if (!activeFile) {
+      setActiveFile(editorFiles[0])
+    }
+  }, [JSON.stringify(editorFiles)])
+
+  return (
+    <div className="w-full">
+      <div className="border-border flex h-fit gap-x-3 overflow-clip rounded-t-lg border-x-[1px] border-t-[1px]  px-3 py-1">
+        {editorFiles.map((file) => (
+          <Button
+            variant={'ghost'}
+            key={file.path}
+            onClick={() => setActiveFile(file)}
+            className={`${
+              activeFile?.path === file.path
+                ? '  border-b-[2px] border-b-blue-400 bg-background text-blue-500 hover:bg-vscode-selection-background hover:text-blue-500'
+                : 'hover:text-black/80 bg-background text-gray-500 hover:bg-vscode-selection-background hover:text-gray-5=400'
+            }  h-[30px] rounded-b-none rounded-tl-lg  border-r-0 px-1 text-sm  font-medium`}
+          >
+            {file.path.replace(`${baml_dir}/`, '')}
+          </Button>
+        ))}
+      </div>
+      <>
+        <CodeMirror
+          key={activeFile?.path}
+          value={activeFile?.content ?? ''}
+          extensions={extensions}
+          theme={vscodeDark}
+          height="100%"
+          width="100%"
+          maxWidth="100%"
+          style={{ width: '100%', height: '100%' }}
+          onChange={async (val, viewUpdate) => {
+            setEditorFiles((prev) => {
+              const files = prev as EditorFile[] // because of jotai jsonstorage this becomes a promise or a normal object and this isnt a promise.
+              const fileIndex = files.findIndex((file) => file.path === activeFile.path)
+              const updatedFile: EditorFile = {
+                path: activeFile.path,
+                content: val,
+              }
+
+              // Update the file in place if it exists
+              if (fileIndex !== -1) {
+                files[fileIndex] = updatedFile
+              } else {
+                files.push(updatedFile)
+              }
+
+              // Return a new array to ensure React state update triggers re-render.
+              return [...files]
+            })
+            window.history.replaceState(null, '', pathname)
+          }}
+        />
+        {/* <pre
+          className={cn(
+            'border-border 2xl:max-h-[800px] 2xl:min-w-[600px] md:max-h-[600px] md:min-w-[500px] overflow-y-auto rounded-md rounded-t-none border-x-[1px] border-b-[1px] bg-white p-1 text-left text-xs md:text-sm',
+            className,
+          )}
+        >
+         
+        </pre> */}
+      </>
     </div>
   )
 }

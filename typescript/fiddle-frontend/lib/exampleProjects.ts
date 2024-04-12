@@ -76,6 +76,12 @@ impl<llm, ExtractVerbs> version1 {
 }
 `
       },
+      {
+        path: 'baml_src/clients.baml',
+        content: `
+// testing
+        `
+      }
     ]
   },
   {

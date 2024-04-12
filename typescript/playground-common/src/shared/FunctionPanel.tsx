@@ -28,25 +28,27 @@ const FunctionPanel: React.FC = () => {
   const { test_results } = useSelections()
   const results = test_results ?? []
 
-  let impls = (<div/>);
+  let impls = <div />
   if (!impl) {
-    impls = (<div/>);
+    impls = <div />
   } else if (func.impls.length === 1) {
-    impls = (<ImplPanel showTab={false} impl={func.impls[0]} />);
+    impls = <ImplPanel showTab={false} impl={func.impls[0]} />
   } else {
-    impls = (<VSCodePanels
-      activeid={`tab-${func.name.value}-${impl.name.value}`}
-      onChange={(e) => {
-        const selected: string | undefined = (e.target as any)?.activetab?.id
-        if (selected && selected.startsWith(`tab-${func.name.value}-`)) {
-          setSelection(undefined, undefined, selected.split('-', 3)[2], undefined, undefined)
-        }
-      }}
-    >
-      {func.impls.map((impl) => (
-        <ImplPanel showTab={true} impl={impl} key={`${func.name.value}-${impl.name.value}`} />
-      ))}
-    </VSCodePanels>);
+    impls = (
+      <VSCodePanels
+        activeid={`tab-${func.name.value}-${impl.name.value}`}
+        onChange={(e) => {
+          const selected: string | undefined = (e.target as any)?.activetab?.id
+          if (selected && selected.startsWith(`tab-${func.name.value}-`)) {
+            setSelection(undefined, undefined, selected.split('-', 3)[2], undefined, undefined)
+          }
+        }}
+      >
+        {func.impls.map((impl) => (
+          <ImplPanel showTab={true} impl={impl} key={`${func.name.value}-${impl.name.value}`} />
+        ))}
+      </VSCodePanels>
+    )
   }
 
   return (
