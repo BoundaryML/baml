@@ -29,7 +29,8 @@ import { createUrl, updateUrl } from '../actions'
 import { useFormStatus } from 'react-dom'
 import { toast } from 'sonner'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { BAMLProject } from '@/lib/exampleProjects'
+import { BAMLProject, exampleProjects } from '@/lib/exampleProjects'
+import { Card, CardContent } from '@/components/ui/card'
 type EditorFile = {
   path: string
   content: string
@@ -85,12 +86,12 @@ const extensions = [
   }),
 ]
 
-export const EditorContainer = () => {
+export const EditorContainer = ({ project }: { project: BAMLProject }) => {
   const [editorFiles, setEditorFiles] = useAtom(currentEditorFilesAtom)
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
-
+  console.log('project ', project)
   useEffect(() => {
     const handleKeyDown = (event: any) => {
       // Check if either Ctrl+S or Command+S is pressed
@@ -104,50 +105,66 @@ export const EditorContainer = () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
   }, [])
+
+  useEffect(() => {
+    if (project.files.length > 0) {
+      setEditorFiles(project.files)
+    }
+  }, [project.id])
+
   const [url, setUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [functionsAndTests, setFunctionsAndTests] = useAtom(functionsAndTestsAtom)
   return (
-    <div className="flex flex-col w-full h-full">
-      <div>
-        <Button
-          variant={'outline'}
-          disabled={loading}
-          onClick={async () => {
-            setLoading(true)
-            try {
-              const allEditorFiles = generateAllEditorFiles(editorFiles, functionsAndTests)
-              let urlId = new URLSearchParams(window.location.search).get('id')
-              console.log('existing url', urlId)
-              if (!urlId) {
-                urlId = await createUrl(allEditorFiles)
-                console.log('URL:', urlId)
-                const updatedSearchParams = new URLSearchParams({
-                  id: urlId,
-                })
-                router.replace(pathname + '?' + updatedSearchParams.toString(), { scroll: false })
-              }
+    // firefox wont apply the background color for some reason so we forcefully set it.
+    <div className="flex font-sans flex-col w-full h-full bg-background dark:bg-[#000010]">
+      <div className="flex justify-between">
+        <div className="pt-1 text-lg">{project.name}</div>
+        <div className="flex flex-row gap-x-2 item-center">
+          <Button
+            variant={'outline'}
+            disabled={loading}
+            onClick={async () => {
+              setLoading(true)
+              try {
+                const allEditorFiles = generateAllEditorFiles(editorFiles, functionsAndTests)
+                let urlId = searchParams.get('id')
+                console.log('existing url', urlId)
+                if (!urlId) {
+                  urlId = await createUrl(allEditorFiles)
+                  console.log('URL:', urlId)
+                  const updatedSearchParams = new URLSearchParams({
+                    id: urlId,
+                  })
+                  router.replace(pathname + '?' + updatedSearchParams.toString(), { scroll: false })
+                }
 
-              navigator.clipboard.writeText(`${pathname}?id=${urlId}`)
-              toast('URL copied to clipboard')
-            } catch (e) {
-              toast('Failed to generate URL')
-              console.error(e)
-            } finally {
-              setLoading(false)
-            }
-            // setUrl(url)
-          }}
-        >
-          Share
-        </Button>
+                navigator.clipboard.writeText(`${pathname}?id=${urlId}`)
+                toast('URL copied to clipboard')
+              } catch (e) {
+                toast('Failed to generate URL')
+                console.error(e)
+              } finally {
+                setLoading(false)
+              }
+              // setUrl(url)
+            }}
+          >
+            Share
+          </Button>
+
+          {/* <TestToggle /> */}
+          <Button variant={'secondary'} asChild>
+            <Link href="https://docs.boundaryml.com">Docs</Link>
+          </Button>
+        </div>
       </div>
 
       {url && <div>URL: {url}</div>}
       <div className="flex flex-row w-full h-full">
         <ResizablePanelGroup className="min-h-[200px] w-full rounded-lg border overflow-clip" direction="horizontal">
           <ResizablePanel defaultSize={50}>
-            <div className="flex w-full h-full">
+            <div className="flex w-full h-full" key={project.id}>
               <CodeMirror
                 value={editorFiles[0].content}
                 extensions={extensions}
@@ -171,7 +188,7 @@ export const EditorContainer = () => {
               />
             </div>
           </ResizablePanel>
-          <ResizableHandle withHandle />
+          <ResizableHandle withHandle className="bg-vscode-contrastActiveBorder" />
           <RunTestButton />
 
           <ResizablePanel defaultSize={50}>
@@ -186,8 +203,6 @@ export const EditorContainer = () => {
 }
 
 export const Editor = ({ project }: { project: BAMLProject }) => {
-  const searchParams = useSearchParams()
-
   useHydrateAtoms([
     [currentEditorFilesAtom as any, project.files],
     [functionsAndTestsAtom as any, project.functionsWithTests],
@@ -195,8 +210,7 @@ export const Editor = ({ project }: { project: BAMLProject }) => {
 
   return (
     <>
-      {/* {searchParams.get('id') && <DummyHydrate files={files} />} */}
-      <EditorContainer />
+      <EditorContainer project={project} />
     </>
   )
 }
@@ -687,10 +701,6 @@ const PlaygroundView = () => {
     <>
       <CustomErrorBoundary>
         <ASTProvider>
-          <div className="absolute z-10 flex flex-col items-end gap-1 right-1 top-2 text-end">
-            {/* <TestToggle /> */}
-            <Link href="https://docs.boundaryml.com">Docs</Link>
-          </div>
           <div className="flex flex-col gap-2 px-2 pb-4">
             <FunctionSelector />
             {/* <Separator className="bg-vscode-textSeparator-foreground" /> */}

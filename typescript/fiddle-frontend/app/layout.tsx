@@ -28,7 +28,7 @@ export default function RootLayout({
       <PHProvider>
         <body className={inter.className}>
           <PostHogPageView />
-          <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={true} disableTransitionOnChange={true}>
+          <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} disableTransitionOnChange={true}>
             <Toaster />
 
             <JotaiProvider>{children}</JotaiProvider>
