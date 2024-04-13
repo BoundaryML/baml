@@ -14,9 +14,8 @@ from typing import Optional
 
 @register_deserializer({ "fixedPhrase": "fix", })
 class LinterOutput(BaseModel):
-    exactPhrase: str
     reason: str
-    severity: str
+    exactPhrase: str
     recommendation: Optional[str] = None
     recommendation_reason: Optional[str] = None
     fix: Optional[str] = None
