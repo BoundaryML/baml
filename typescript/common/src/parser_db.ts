@@ -49,7 +49,11 @@ export type Impl = {
   type: 'llm'
   name: StringSpan
   prompt_key: Span
-  client: StringSpan
+  client: {
+    identifier: StringSpan
+    provider: string
+    model?: string
+  }
   prompt: {
       type: "Completion"
       completion: string     

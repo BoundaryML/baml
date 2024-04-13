@@ -24,6 +24,22 @@ impl<'db> ClientWalker<'db> {
         &self.db.types.client_properties[&self.id]
     }
 
+    /// The provider for the client, e.g. baml-openai-chat
+    pub fn provider(self) -> &'db str {
+        self.properties().provider.0.as_str()
+    }
+
+    /// The model specified for the client, e.g. "gpt-3.5-turbo"
+    pub fn model(self) -> Option<&'db str> {
+        let Some((_, model)) = self.properties().options.iter().find(|(k, _)| k == "model") else {
+            return None;
+        };
+        let Some((model, _)) = model.as_string_value() else {
+            return None;
+        };
+        Some(model)
+    }
+
     /// Returns the list of all non-strategy clients (i.e. flattens fallback/round-robin clients to their constituent clients)
     pub fn flat_clients(self) -> Vec<ClientWalker<'db>> {
         // TODO(sam): how are fallback/round-robin clients represented here?

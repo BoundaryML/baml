@@ -244,14 +244,21 @@ enum PromptPreview {
     Error { error: String },
 }
 
+#[derive(Serialize)]
+struct ImplClient {
+    identifier: StringSpan,
+    provider: String,
+    model: Option<String>,
+}
+
 // keep in sync with typescript/common/src/parser_db.ts
 #[derive(Serialize)]
 struct Impl {
     name: StringSpan,
     prompt_key: Span,
     prompt: PromptPreview,
-    client: StringSpan,
-    client_options: Vec<String>,
+    client: ImplClient,
+    client_list: Vec<String>,
     input_replacers: Vec<(String, String)>,
     output_replacers: Vec<(String, String)>,
 }
@@ -276,7 +283,7 @@ fn choose_client(
     schema: &ValidatedSchema,
     func: FunctionWalker,
     client_filter: Option<String>,
-) -> anyhow::Result<(StringSpan, RenderContext_Client, Vec<String>)> {
+) -> anyhow::Result<(ImplClient, RenderContext_Client, Vec<String>)> {
     let (client_or_strategy, client_span) = func.metadata().client.as_ref().ok_or(
         anyhow::anyhow!("function {} does not have a client", func.name()),
     )?;
@@ -298,14 +305,18 @@ fn choose_client(
     };
 
     Ok((
-        StringSpan::new(
-            if client_or_strategy == client.name() {
-                client.name().to_string()
-            } else {
-                format!("{} (via {})", client.name(), client_or_strategy)
-            },
-            client_span,
-        ),
+        ImplClient {
+            identifier: StringSpan::new(
+                if client_or_strategy == client.name() {
+                    client.name().to_string()
+                } else {
+                    format!("{} (via {})", client.name(), client_or_strategy)
+                },
+                client_span,
+            ),
+            provider: client.provider().to_string(),
+            model: client.model().map(|m| m.to_string()),
+        },
         RenderContext_Client {
             name: client.name().to_string(),
             provider: client.properties().provider.0.clone(),
@@ -323,6 +334,8 @@ fn serialize_impls(
         func.walk_variants()
             .map(|i| {
                 let props = i.properties();
+                let client = schema.db.find_client(&props.client.value);
+
                 Impl {
                     name: StringSpan::new(i.ast_variant().name(), i.identifier().span()),
                     prompt_key: (&props.prompt.key_span).into(),
@@ -343,14 +356,19 @@ fn serialize_impls(
                                 .collect::<Vec<_>>(),
                         },
                     },
-                    client: schema
-                        .db
-                        .find_client(&props.client.value)
-                        .map(|c| StringSpan::new(c.name(), c.identifier().span()))
-                        .unwrap_or_else(|| {
-                            StringSpan::new(&props.client.value, &props.client.span)
-                        }),
-                    client_options: vec![],
+                    client: match client {
+                        Some(c) => ImplClient {
+                            identifier: StringSpan::new(c.name(), c.identifier().span()),
+                            provider: c.provider().to_string(),
+                            model: c.model().map(|m| m.to_string()),
+                        },
+                        None => ImplClient {
+                            identifier: StringSpan::new(&props.client.value, &props.client.span),
+                            provider: "".to_string(),
+                            model: None,
+                        },
+                    },
+                    client_list: vec![],
                     input_replacers: vec![],
                     output_replacers: vec![],
                 }
@@ -360,7 +378,14 @@ fn serialize_impls(
         let prompt = func.metadata().prompt.as_ref().unwrap();
         let (client_span, client_ctx, client_options) = choose_client(schema, func, None)
             .unwrap_or((
-                StringSpan::new("{{{{ error resolving client }}}}", func.identifier().span()),
+                ImplClient {
+                    identifier: StringSpan::new(
+                        "{{{{ error resolving client }}}}",
+                        func.identifier().span(),
+                    ),
+                    provider: "".to_string(),
+                    model: None,
+                },
                 RenderContext_Client {
                     name: "{{{{ error rendering ctx.client.name }}}}".to_string(),
                     provider: "{{{{ error rendering ctx.client.provider }}}}".to_string(),
@@ -407,7 +432,7 @@ fn serialize_impls(
                 },
             },
             client: client_span,
-            client_options: client_options,
+            client_list: client_options,
             input_replacers: vec![],
             output_replacers: vec![],
         }]
