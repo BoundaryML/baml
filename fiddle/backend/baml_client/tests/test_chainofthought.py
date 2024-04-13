@@ -47,3 +47,19 @@ async def test_reasoning_out_of_order(ChainOfThoughtImpl: IChainOfThoughtStream,
 
         await stream.get_final_response()
 
+@baml.ChainOfThought.test(stream=True)
+async def test_test1(ChainOfThoughtImpl: IChainOfThoughtStream, baml_ipc_channel: BaseIPCChannel):
+    def to_str(item: Any) -> str:
+        if isinstance(item, str):
+            return item
+        return dumps(item)
+
+    content = to_str("    Given the email below: fe \n\n    Email Subject: {#input.subject}\n    Email Body: {#input.body}\n\n    Explain the reasoning behind how you extract this info from the email, and then provide the extracted info in JSON format:\n    {#print_type(output)}\n\n    JSON:")
+    deserializer = Deserializer[str](str) # type: ignore
+    param = deserializer.from_string(content)
+    async with ChainOfThoughtImpl(param) as stream:
+        async for response in stream.parsed_stream:
+            baml_ipc_channel.send("partial_response", response.json())
+
+        await stream.get_final_response()
+

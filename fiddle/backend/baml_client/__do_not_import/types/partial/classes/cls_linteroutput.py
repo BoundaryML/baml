@@ -14,9 +14,8 @@ from typing import Optional
 
 @register_deserializer({ "fixedPhrase": "fix", })
 class PartialLinterOutput(BaseModel):
-    exactPhrase: Optional[str] = None
     reason: Optional[str] = None
-    severity: Optional[str] = None
+    exactPhrase: Optional[str] = None
     recommendation: Optional[str] = None
     recommendation_reason: Optional[str] = None
     fix: Optional[str] = None

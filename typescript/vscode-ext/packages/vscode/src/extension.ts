@@ -56,7 +56,9 @@ async function runDiagnostics(): Promise<void> {
 
   console.log("Running diagnostics")
 
-  statusBarItem.text = `$(sync~spin) Running diagnostics...`;
+  statusBarItem.text = `$(sync~spin) Running AI Linter...`;
+  statusBarItem.backgroundColor = '##9333ea';
+  statusBarItem.color = '#ffffff';
   const text = editor.document.getText();
 
   const lintRequest: LintRequest = {
@@ -92,8 +94,9 @@ async function runDiagnostics(): Promise<void> {
           );
 
           if (output.fix) {
-            diagnostic.code = { value: output.fix, target: vscode.Uri.parse('https://example.com') };
+            diagnostic.code = "[linter]" + output.fix;
           }
+          diagnostic.source = rule.ruleName;
 
           diagnostics.push(diagnostic);
           index += phrase.length; // Move index to the end of the current found phrase to continue searching
@@ -114,7 +117,7 @@ async function runDiagnostics(): Promise<void> {
             );
 
             if (output.fix) {
-              diagnostic.code = { value: output.fix, target: vscode.Uri.parse('https://example.com') };
+              diagnostic.code = "[linter]" + output.fix;
             }
             diagnostic.source = rule.ruleName;
 
@@ -129,11 +132,13 @@ async function runDiagnostics(): Promise<void> {
     console.log('Pushing test errorrrr');
 
     console.log('Diagnostics:', diagnostics);
+    diagnosticsCollection.clear();
     diagnosticsCollection.set(editor.document.uri, diagnostics);
   } catch (error) {
     console.error('Failed to run diagnostics:', error);
     vscode.window.showErrorMessage('Failed to run diagnostics');
   }
+  statusBarItem.text = `AI Linter Ready`;
 
   statusBarItem.hide();
 }
@@ -145,9 +150,17 @@ export function activate(context: vscode.ExtensionContext) {
 
   vscode.workspace.getConfiguration('baml')
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-  statusBarItem.text = `$(sync~spin) Ready to run diagnostics`;
+  statusBarItem.text = `AI Linter Ready`;
   statusBarItem.show();
   context.subscriptions.push(statusBarItem);
+
+  const provider = new DiagnosticCodeActionProvider();
+  const selector: vscode.DocumentSelector = { scheme: 'file', language: 'baml' }; // Adjust language as necessary
+  const codeActionProvider = vscode.languages.registerCodeActionsProvider(selector, provider, {
+    providedCodeActionKinds: [vscode.CodeActionKind.QuickFix]
+  });
+
+  context.subscriptions.push(codeActionProvider);
 
   const bamlPlaygroundCommand = vscode.commands.registerCommand(
     'baml.openBamlPanel',
@@ -189,14 +202,12 @@ export function activate(context: vscode.ExtensionContext) {
   vscode.workspace.onDidChangeTextDocument((event) => {
     if (vscode.window.activeTextEditor && event.document === vscode.window.activeTextEditor.document) {
       scheduleDiagnostics();
-      // diagnosticsCollection.set(event.document.uri, [{
-      //   severity: vscode.DiagnosticSeverity.Error,
-      //   range: new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 0)),
-      //   message: 'This is a test error',
-      //   source: LANG_NAME
-      // }]);
+
     }
   }, null, context.subscriptions);
+
+
+
 
 
   plugins.map(async (plugin) => {
@@ -217,6 +228,7 @@ export function activate(context: vscode.ExtensionContext) {
     console.log(`vscode env: ${JSON.stringify(process.env, null, 2)}`)
     vscode.commands.executeCommand('baml.openBamlPanel')
   }
+  runDiagnostics();
 }
 
 export function deactivate(): void {
@@ -230,4 +242,31 @@ export function deactivate(): void {
       void plugin.deactivate()
     }
   })
+}
+
+
+
+class DiagnosticCodeActionProvider implements vscode.CodeActionProvider {
+  public provideCodeActions(document: vscode.TextDocument, range: vscode.Range, context: vscode.CodeActionContext, token: vscode.CancellationToken): vscode.ProviderResult<vscode.CodeAction[]> {
+    const codeActions: vscode.CodeAction[] = [];
+
+    context.diagnostics.forEach(diagnostic => {
+      if (diagnostic.code?.toString().startsWith('[linter]')) {
+        const fixString = diagnostic.code.toString().replace('[linter]', '');
+        const fixAction = new vscode.CodeAction(`Apply fix: ${fixString}`, vscode.CodeActionKind.QuickFix);
+        fixAction.edit = new vscode.WorkspaceEdit();
+        fixAction.diagnostics = [diagnostic];
+        fixAction.isPreferred = true;
+
+
+        const edit = new vscode.TextEdit(diagnostic.range, fixString);
+        fixAction.edit.set(document.uri, [edit]);
+
+        codeActions.push(fixAction);
+      }
+    });
+
+    console.log('Code actions:', codeActions);
+    return codeActions;
+  }
 }

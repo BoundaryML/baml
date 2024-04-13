@@ -7,7 +7,7 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..clients.client_gpt4 import GPT4
+from ..clients.client_gpt4turbo import GPT4Turbo
 from ..functions.fx_chainofthought import BAMLChainOfThought
 from ..types.classes.cls_linteroutput import LinterOutput
 from ..types.partial.classes.cls_linteroutput import PartialLinterOutput
@@ -19,34 +19,33 @@ from typing import List
 
 import typing
 # Impl: version1
-# Client: GPT4
+# Client: GPT4Turbo
 # An implementation of ChainOfThought.
 
 __prompt_template = """\
-You are a powerful AI linter tasked with fixing prompts given to AI models.
+You are a powerful AI linter.
+Given these INSTRUCTIONS below, return a diagnostic if they do not mention reasoning or thinking before outputting the answer. Try to focus on the part of the instructions that mentions the output schema if there are any of those directions
 
-The linting rule is:
-ChainOfThoughtValidation - Ensure that the user's PROMPT asks for reasoning before outputting the answer, like "before outputting your answer, please make sure to think step by step" or "please output your reasoning before you give the answer" or the reasoning step can be in the answer itself, but should be before any other properties (if it is json). Since the user is prompting an LLM model, and they are autoregressive.
+The rest of the text is not applicable to this linting rule. Only apply the linting rule to INSTRUCTIONS. 
 
-The PROMPT is a set of directions written by a user. The user may have made a mistake in the directions, and you need to find and correct them (if possible) according to the rule. Ensure the original intent of the PROMPT is preserved as much as possible.
-
-<PROMPT>
+--------------------
+<INSTRUCTIONS>
 {arg}
-</PROMPT>
+</INSTRUCTIONS>
+--------------------
 
-Output JSON format (only include these fields, and no others):
+
+Output the diagnostic in this JSON format (only include these fields, and no others):
 {
-  // The phrase that the linter matched on. Write it EXACTLY as it appears in the PROMPT. If it's more than 10 words, just match the first 10 words.
-  "exactPhrase": string,
   // Explain why the linting error was raised.
   "reason": string,
-  // 'Error' if it's a major issue, 'Warning' if it's a minor issue that may not cause actual problems.
-  "severity": string,
+  // The phrase that triggered the linter error. Write it EXACTLY as it appears in the PROMPT. If it's more than 10 words, just match the first 10 words.
+  "exactPhrase": string,
   // A human-readable string that explains how to fix the linting error.
   "recommendation": string | null,
   // Explain why the recommendation is the best course of action.
   "recommendation_reason": string | null,
-  // The fix for the linting error. This is a string that can be applied to the source code to fix the linting error. Just output the new string that will replace the spanMatch.
+  // The fix for the linting error. You MUST start at the same location as the original phrase.
   "fixedPhrase": string | null
 }[]
 
@@ -72,14 +71,14 @@ __partial_deserializer = Deserializer[List[LinterOutput]](List[LinterOutput])  #
 
 
 async def version1(arg: str, /) -> List[LinterOutput]:
-    response = await GPT4.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
+    response = await GPT4Turbo.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
     deserialized = __deserializer.from_string(response.generated)
     return deserialized
 
 
 def version1_stream(arg: str, /) -> AsyncStream[List[LinterOutput], List[LinterOutput]]:
     def run_prompt() -> typing.AsyncIterator[LLMResponse]:
-        raw_stream = GPT4.run_prompt_template_stream(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
+        raw_stream = GPT4Turbo.run_prompt_template_stream(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
         return raw_stream
     stream = AsyncStream(stream_cb=run_prompt, partial_deserializer=__partial_deserializer, final_deserializer=__deserializer)
     return stream
