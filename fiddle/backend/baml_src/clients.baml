@@ -9,7 +9,7 @@ client<llm> GPT4 {
 client<llm> GPT4Turbo {
   provider baml-openai-chat
   options {
-    model gpt-4-1106-preview
+    model gpt-4-turbo
     api_key env.OPENAI_API_KEY
   }
 }

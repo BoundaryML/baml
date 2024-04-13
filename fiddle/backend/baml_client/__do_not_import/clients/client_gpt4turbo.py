@@ -17,7 +17,7 @@ GPT4Turbo = LLMManager.add_llm(
     retry_policy=None,
     redactions=["api_key"],
     options=dict(
-        model="gpt-4-1106-preview",
+        model="gpt-4-turbo",
         api_key=environ['OPENAI_API_KEY'],
     ),
 )
