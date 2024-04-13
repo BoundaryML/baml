@@ -1,5 +1,6 @@
 /// Content once a function has been selected.
 
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip'
 import { ParserDatabase, TestResult, TestStatus } from '@baml/common'
 import { useImplCtx, useSelections } from './hooks'
 import {
@@ -15,7 +16,7 @@ import Link from './Link'
 import TypeComponent from './TypeComponent'
 import { Impl } from '@baml/common/src/parser_db'
 import clsx from 'clsx'
-import { Tiktoken, encodingForModel } from "js-tiktoken";
+import { TiktokenEncoding, Tiktoken, TiktokenModel, getEncoding, getEncodingNameForModel } from "js-tiktoken";
 
 
 const Whitespace: React.FC<{ char: 'space' | 'tab' }> = ({ char }) => (
@@ -128,18 +129,57 @@ const CodeLine: React.FC<{
   )
 }
 
-const gpt4Enc = encodingForModel("gpt-4")
+// We need this cache because loading a new encoder for every snippet makes rendering horribly slow
+class TokenEncoderCache {
+  static SUPPORTED_PROVIDERS = ["baml-openai-chat", "baml-openai-completion", "baml-azure-chat", "baml-azure-completion"]
+  static INSTANCE = new TokenEncoderCache()
 
-const Snippet: React.FC<{ text: string, type?: "preview" | "error" }> = ({ text, type = "preview" } ) => {
+  encoders: Map<TiktokenEncoding, Tiktoken>
+
+  private constructor() {
+    this.encoders = new Map()
+  }
+
+  static getEncodingNameForModel(provider: string, model: string): TiktokenEncoding | undefined {
+    if (!TokenEncoderCache.SUPPORTED_PROVIDERS.includes(provider)) return undefined
+
+    // We have to use this try-catch approach because tiktoken does not expose a list of supported models
+    try {
+      return getEncodingNameForModel(model as TiktokenModel)
+    } catch {
+      return undefined
+    }
+  }
+
+  getEncoder(encoding: TiktokenEncoding): Tiktoken {
+    const cached = this.encoders.get(encoding)
+    if (cached) return cached
+
+    const encoder = getEncoding(encoding)
+    this.encoders.set(encoding, encoder)
+    return encoder
+  }
+}
+
+const Snippet: React.FC<{
+  text: string,
+  type?: "preview" | "error",
+  client: Impl['client']
+}> = ({ text, type = "preview", client } ) => {
+  console.log("client snippet", client)
   const [showTokens, setShowTokens] = useState(false)
   const [showWhitespace, setShowWhitespace] = useState(false)
   const [wrapText, setWrapText] = useState(true)
 
-  const [enc, tokens] = useMemo(() => {
-    if (!showTokens) return [undefined, undefined]
+  const encodingName = client.model ? TokenEncoderCache.getEncodingNameForModel(client.provider, client.model) : undefined
 
-    return [gpt4Enc, gpt4Enc.encode(text)]
-  }, [text, showTokens]);
+  const tokenizer = useMemo(() => {
+    if (!showTokens) return undefined
+    if (!encodingName) return undefined 
+
+    const enc = TokenEncoderCache.INSTANCE.getEncoder(encodingName) 
+    return {enc, tokens: enc.encode(text)}
+  }, [text, encodingName, showTokens]);
 
   const divStyle = clsx("r-full", "p-1", "overflow-hidden", "rounded-lg", {
     "bg-vscode-input-background": type === "preview",
@@ -148,13 +188,22 @@ const Snippet: React.FC<{ text: string, type?: "preview" | "error" }> = ({ text,
 
   const header = (
     <div className="flex flex-row justify-end gap-2 text-xs">
-      {showTokens && (<div className="flex-grow r-full ps-2 pt-1.5">Tokens: {(tokens as []).length}</div>)}
-      <VSCodeCheckbox
-        checked={showTokens}
-        onChange={(e) => setShowTokens((e as React.FormEvent<HTMLInputElement>).currentTarget.checked)}
-      >
-        Show Tokens
-      </VSCodeCheckbox>
+      {showTokens && encodingName && tokenizer && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="flex-grow r-full ps-2 pt-1.5">Tokens: {(tokenizer.tokens as []).length}</div>
+          </TooltipTrigger>
+          <TooltipContent className="flex flex-col gap-y-1">Computed using tiktoken for {client.model}</TooltipContent>
+        </Tooltip>
+      )}
+      {encodingName && (
+        <VSCodeCheckbox
+          checked={showTokens}
+          onChange={(e) => setShowTokens((e as React.FormEvent<HTMLInputElement>).currentTarget.checked)}
+        >
+          Show Tokens
+        </VSCodeCheckbox>
+      )}
       <VSCodeCheckbox
         checked={wrapText}
         onChange={(e) => setWrapText((e as React.FormEvent<HTMLInputElement>).currentTarget.checked)}
@@ -170,8 +219,8 @@ const Snippet: React.FC<{ text: string, type?: "preview" | "error" }> = ({ text,
     </div>
   );
 
-  if (showTokens) {
-    const tokenized = Array.from(tokens as number[]).map((token) => (enc as Tiktoken).decode([token]))
+  if (showTokens && tokenizer) {
+    const tokenized = Array.from(tokenizer.tokens as number[]).map((token) => tokenizer.enc.decode([token]))
     const tokenizedLines: [string, number][][] = [[]]
     tokenized.forEach((token, tokenIndex) => {
       const noNewlines = token.split('\n');
@@ -212,26 +261,28 @@ const Snippet: React.FC<{ text: string, type?: "preview" | "error" }> = ({ text,
   }
 }
 
-const PromptPreview: React.FC<{ prompt: Impl['prompt'] }> = ({prompt}) => {
+const PromptPreview: React.FC<{ prompt: Impl['prompt']; client: Impl['client'] }> = ({prompt, client}) => {
   switch (prompt.type) {
     case "Completion":
-      return <Snippet text={prompt.completion} />
+      return <Snippet client={client} text={prompt.completion} />
     case "Chat":
       return (<div className='flex flex-col gap-2'>
               {prompt.chat.map(({ role, message }, index: number) => (
                 <div className='flex flex-col'>
                   <div className='text-xs'><span className='text-muted-foreground'>Role:</span> <span className='font-bold'>{role}</span></div>
-                  <Snippet key={index} text={message} />
+                  <Snippet key={index} client={client} text={message} />
                 </div>
               ))}
             </div>);
     case "Error":
-      return <Snippet type="error" text={prompt.error} />
+      return <Snippet type="error" client={client} text={prompt.error} />
   }
 }
 
 const ImplPanel: React.FC<{ impl: Impl, showTab: boolean }> = ({ impl, showTab }) => {
   const { func } = useImplCtx(impl.name.value)
+
+  console.log("impl.client", impl)
 
   if (!func) return null
 
@@ -259,7 +310,7 @@ const ImplPanel: React.FC<{ impl: Impl, showTab: boolean }> = ({ impl, showTab }
                 <Link item={impl.client.identifier} />
               </div>
             </div>
-            <PromptPreview prompt={impl.prompt}/>
+            <PromptPreview prompt={impl.prompt} client={impl.client}/>
           </div>
         </div>
       </VSCodePanelView>

@@ -163,7 +163,7 @@ const ImplPanel: React.FC<{ impl: Impl }> = ({ impl }) => {
               </span>
               <div className="flex flex-row gap-1">
                 {/* <span className="font-light">Client</span> */}
-                <Link item={impl.client} />
+                <Link item={impl.client.identifier} />
               </div>
             </div>
             <PromptPreview prompt={impl.prompt}/>
