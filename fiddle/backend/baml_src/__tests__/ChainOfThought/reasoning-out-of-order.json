@@ -1,0 +1,3 @@
+{
+  "input": "Given the text below:\n\n{input}\n\nextract this information from it that follows this json schema:\n{\n   sentiment: \"happy\" | \"sad\" | \"ecstatic\"\n   reasoning: string\n}\n\nOutput JSON:"
+}

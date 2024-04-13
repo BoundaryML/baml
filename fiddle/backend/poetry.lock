@@ -199,13 +199,13 @@ tests-no-zope = ["attrs[tests-mypy]", "cloudpickle", "hypothesis", "pympler", "p
 
 [[package]]
 name = "baml"
-version = "0.17.1"
+version = "0.18.0"
 description = ""
 optional = false
 python-versions = "<4.0,>=3.8"
 files = [
-    {file = "baml-0.17.1-py3-none-any.whl", hash = "sha256:0691350a771af0370ba491d2c458e6aaebf91a144f11c58f3bf3d9c08558794c"},
-    {file = "baml-0.17.1.tar.gz", hash = "sha256:0da493464018acc31ad1c83cebaf92fbfc68a178febbe9dcd0f70b6e74ff1b2f"},
+    {file = "baml-0.18.0-py3-none-any.whl", hash = "sha256:5560f5cfc6f2fcb3215952d47cbb22fd4a01a4c85574088f278b858125a52868"},
+    {file = "baml-0.18.0.tar.gz", hash = "sha256:05cd20547f8ed1431f1d2fd27ce34c9b9f4141390efeedf2e0330da50d4e78ba"},
 ]
 
 [package.dependencies]
@@ -214,6 +214,7 @@ anthropic = ">=0.14.0"
 colorama = ">=0.4.6"
 coloredlogs = ">=15.0.1"
 json5 = ">=0.9.10"
+ollama = ">=0.1.8,<0.2.0"
 openai = ">=0.28.1"
 opentelemetry-api = ">=1.15.0"
 opentelemetry-instrumentation = ">=0.34b0"
@@ -881,6 +882,20 @@ files = [
     {file = "multidict-6.0.5-py3-none-any.whl", hash = "sha256:0d63c74e3d7ab26de115c49bffc92cc77ed23395303d496eae515d4204a625e7"},
     {file = "multidict-6.0.5.tar.gz", hash = "sha256:f7e301075edaf50500f0b341543c41194d8df3ae5caf4702f2095f3ca73dd8da"},
 ]
+
+[[package]]
+name = "ollama"
+version = "0.1.8"
+description = "The official Python client for Ollama."
+optional = false
+python-versions = "<4.0,>=3.8"
+files = [
+    {file = "ollama-0.1.8-py3-none-any.whl", hash = "sha256:45916aaf99c6e41a73197e9be8a17ea90290938894ac29d2fa855f55cb70d2e3"},
+    {file = "ollama-0.1.8.tar.gz", hash = "sha256:148a0ff1ce87c904ad8d137f14dda6919f833e83c61457e5e2d449507c43a1bd"},
+]
+
+[package.dependencies]
+httpx = ">=0.27.0,<0.28.0"
 
 [[package]]
 name = "openai"
@@ -2063,4 +2078,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.9"
-content-hash = "a9d29e12362db232a3ebbc3f894a38097d0235daabc609fb32d3d5fa95e415af"
+content-hash = "8e0398d81f3b4aab8b19bc6f9356d9236d3336cebfb517afe7d327f6c0e3100f"
