@@ -6,10 +6,13 @@ from fastapi.responses import StreamingResponse
 import subprocess
 import asyncio
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict
 from dotenv import load_dotenv
 from uuid import uuid4
 from fastapi.middleware.cors import CORSMiddleware
+from baml_client import baml
+from baml_client.baml_types import LinterOutput
+
 
 origins = [
     "http://localhost.tiangolo.com",
@@ -218,6 +221,32 @@ async def fiddle(request: RunTests, tmpdir: str = Depends(create_temp_files) ):
     
     # Corrected to await the streaming function correctly
     return StreamingResponse(streaming_gen, media_type="text/plain")
+
+
+class LintRequest(BaseModel):
+    lintingRules: List[str]
+    promptTemplate: str
+    promptVariables: Dict[str, str]
+
+
+
+
+class LinterRuleOutput(BaseModel):
+    diagnostics: List[LinterOutput]
+    ruleName: str
+
+@app.post("/lint")
+async def lint(request: LintRequest) -> List[LinterRuleOutput]:
+    result1, result2 = await asyncio.gather(
+        baml.Contradictions(request.promptTemplate),
+        baml.ChainOfThought(request.promptTemplate)
+    )
+
+    return [
+        LinterRuleOutput(diagnostics=result1, ruleName="Contradictions"),
+        LinterRuleOutput(diagnostics=result2, ruleName="ChainOfThought")
+    ]
+
 
 #if __name__ == '__main__':
     # os.makedirs("/tmp/baml", exist_ok=True)

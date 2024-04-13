@@ -5,13 +5,13 @@ description = ""
 authors = ["None"]
 readme = "README.md"
 packages = [
-    { include = "app", from = "." }
+    { include = "app", from = "." },
 ]
 
 
 [tool.poetry.dependencies]
 python = "^3.9"
-baml = "^0.17.1"
+baml = "^0.18.0"
 fastapi = "^0.110.0"
 uvicorn = {extras = ["standard"], version = "^0.29.0"}
 python-dotenv = "^1.0.1"

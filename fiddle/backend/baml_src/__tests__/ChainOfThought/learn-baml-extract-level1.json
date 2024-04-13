@@ -1,0 +1,3 @@
+{
+  "input": "Given the email below:\n\nEmail Subject: {#input.subject}\nEmail Body: {#input.body}\n\n Extract this info from the email in JSON format:\n {\n      \"id\": string,\n      \"date\": string,\n      \"product_name\": string,\n      \"cost\": float\n }\n\n JSON:"
+}
