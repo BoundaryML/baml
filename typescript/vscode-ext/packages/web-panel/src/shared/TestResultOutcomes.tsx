@@ -1,4 +1,4 @@
-import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
 import { useSelections } from './hooks'
 import { DataTable } from './TestResults/data-table'
 import { columns } from './TestResults/columns'
@@ -11,13 +11,13 @@ import {
   VSCodeProgressRing,
 } from '@vscode/webview-ui-toolkit/react'
 import { useMemo, useState } from 'react'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Button } from '@/components/ui/button'
+import { ScrollArea } from '../components/ui/scroll-area'
+import { Button } from '../components/ui/button'
 import Link from './Link'
 import { AlertTriangle, Download, ExternalLink, FileWarningIcon } from 'lucide-react'
-import AnsiText from '@/utils/AnsiText'
+import AnsiText from '../utils/AnsiText'
 import Papa from 'papaparse'
-import { vscode } from '@/utils/vscode'
+import { vscode } from '../utils/vscode'
 
 const TestResultPanel = () => {
   const { test_results, test_result_url, test_result_exit_status } = useSelections()

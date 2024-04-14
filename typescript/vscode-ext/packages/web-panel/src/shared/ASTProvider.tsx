@@ -1,4 +1,4 @@
-import CustomErrorBoundary from '@/utils/ErrorFallback'
+import CustomErrorBoundary from '../utils/ErrorFallback'
 import { ParserDatabase, TestState } from '@baml/common'
 import { VSCodeButton } from '@vscode/webview-ui-toolkit/react'
 import React, { PropsWithChildren, createContext, useCallback, useEffect, useMemo, useState } from 'react'
@@ -109,6 +109,7 @@ export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
   const selectedState = useMemo(() => {
     if (selectedProjectId === undefined) return undefined
     let match = projects.find((project) => project.root_dir === selectedProjectId)
+    console.log('selected project id', selectedProjectId, match)
     if (match) {
       let jsonSchema = {
         definitions: Object.fromEntries([
@@ -154,6 +155,7 @@ export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
 
   useEffect(() => {
     const fn = (event: any) => {
+      // console.log('event.data', event.data)
       const command = event.data.command
       const messageContent = event.data.content
 
@@ -164,10 +166,13 @@ export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
           } else {
             setTestLog((prev) => (prev ? prev + messageContent : messageContent))
           }
+          break
         }
         case 'setDb': {
-          console.log('parser db updated', messageContent)
-          setProjects(messageContent.map((p: any) => ({ root_dir: p[0], db: p[1] })))
+          console.log('parser db updated' + JSON.stringify(messageContent))
+          if (messageContent && messageContent !== '') {
+            setProjects(messageContent.map((p: any) => ({ root_dir: p[0], db: p[1] })))
+          }
           break
         }
         case 'rmDb': {
