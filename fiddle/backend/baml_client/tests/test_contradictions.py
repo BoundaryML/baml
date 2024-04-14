@@ -8,7 +8,7 @@
 # fmt: off
 
 from ..__do_not_import.generated_baml_client import baml
-from ..baml_types import IContradictions, IContradictionsStream, LinterOutput
+from ..baml_types import IContradictions, IContradictionsStream, LinterOutput2
 from baml_lib._impl.deserializer import Deserializer
 from json import dumps
 from pytest_baml.ipc_channel import BaseIPCChannel

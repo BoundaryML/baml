@@ -12,6 +12,7 @@ from .clients.client_claudeinstant import ClaudeInstant
 from .clients.client_gpt3 import GPT3
 from .clients.client_gpt4 import GPT4
 from .clients.client_gpt4turbo import GPT4Turbo
+from .functions.fx_ambiguousterm import BAMLAmbiguousTerm
 from .functions.fx_chainofthought import BAMLChainOfThought
 from .functions.fx_contradictions import BAMLContradictions
 from baml_core.otel import add_message_transformer_hook, flush_trace_logs
@@ -22,6 +23,7 @@ from typing import Callable, List, Optional
 
 
 class BAMLClient:
+    AmbiguousTerm = BAMLAmbiguousTerm
     ChainOfThought = BAMLChainOfThought
     Contradictions = BAMLContradictions
     Claude = Claude

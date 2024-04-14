@@ -1,0 +1,3 @@
+{
+  "input": "Given the email here, analyze the sentiment and return a json schema with all fields extracted"
+}

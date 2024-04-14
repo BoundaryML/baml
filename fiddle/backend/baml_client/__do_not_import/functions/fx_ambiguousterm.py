@@ -7,17 +7,17 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..types.classes.cls_linteroutput2 import LinterOutput2
-from ..types.partial.classes.cls_linteroutput2 import PartialLinterOutput2
+from ..types.classes.cls_linteroutput import LinterOutput
+from ..types.partial.classes.cls_linteroutput import PartialLinterOutput
 from baml_core.stream import AsyncStream
 from baml_lib._impl.functions import BaseBAMLFunction
 from typing import AsyncIterator, Callable, List, Protocol, runtime_checkable
 
 
-IContradictionsOutput = List[LinterOutput2]
+IAmbiguousTermOutput = List[LinterOutput]
 
 @runtime_checkable
-class IContradictions(Protocol):
+class IAmbiguousTerm(Protocol):
     """
     This is the interface for a function.
 
@@ -25,16 +25,16 @@ class IContradictions(Protocol):
         arg: str
 
     Returns:
-        List[LinterOutput2]
+        List[LinterOutput]
     """
 
-    async def __call__(self, arg: str, /) -> List[LinterOutput2]:
+    async def __call__(self, arg: str, /) -> List[LinterOutput]:
         ...
 
    
 
 @runtime_checkable
-class IContradictionsStream(Protocol):
+class IAmbiguousTermStream(Protocol):
     """
     This is the interface for a stream function.
 
@@ -42,26 +42,26 @@ class IContradictionsStream(Protocol):
         arg: str
 
     Returns:
-        AsyncStream[List[LinterOutput2], List[LinterOutput2]]
+        AsyncStream[List[LinterOutput], List[LinterOutput]]
     """
 
-    def __call__(self, arg: str, /) -> AsyncStream[List[LinterOutput2], List[LinterOutput2]]:
+    def __call__(self, arg: str, /) -> AsyncStream[List[LinterOutput], List[LinterOutput]]:
         ...
-class IBAMLContradictions(BaseBAMLFunction[List[LinterOutput2], List[LinterOutput2]]):
+class IBAMLAmbiguousTerm(BaseBAMLFunction[List[LinterOutput], List[LinterOutput]]):
     def __init__(self) -> None:
         super().__init__(
-            "Contradictions",
-            IContradictions,
+            "AmbiguousTerm",
+            IAmbiguousTerm,
             ["version1"],
         )
 
-    async def __call__(self, *args, **kwargs) -> List[LinterOutput2]:
+    async def __call__(self, *args, **kwargs) -> List[LinterOutput]:
         return await self.get_impl("version1").run(*args, **kwargs)
     
-    def stream(self, *args, **kwargs) -> AsyncStream[List[LinterOutput2], List[LinterOutput2]]:
+    def stream(self, *args, **kwargs) -> AsyncStream[List[LinterOutput], List[LinterOutput]]:
         res = self.get_impl("version1").stream(*args, **kwargs)
         return res
 
-BAMLContradictions = IBAMLContradictions()
+BAMLAmbiguousTerm = IBAMLAmbiguousTerm()
 
-__all__ = [ "BAMLContradictions" ]
+__all__ = [ "BAMLAmbiguousTerm" ]
