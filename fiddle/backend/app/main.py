@@ -246,11 +246,12 @@ class LinterRuleOutput(BaseModel):
 
 @app.post("/lint")
 async def lint(request: LintRequest) -> List[LinterRuleOutput]:
-    result1, result2, res3, res4 = await asyncio.gather(
+    result1, result2, res3, res4, res5 = await asyncio.gather(
         baml.Contradictions(request.promptTemplate),
         baml.ChainOfThought(request.promptTemplate),
         baml.AmbiguousTerm(request.promptTemplate),
         baml.OffensiveLanguage(request.promptTemplate),
+        baml.ExampleProvider(request.promptTemplate),
     )
 
     res1_outputs = [
@@ -275,6 +276,7 @@ async def lint(request: LintRequest) -> List[LinterRuleOutput]:
         LinterRuleOutput(diagnostics=result2, ruleName="ChainOfThought"),
         LinterRuleOutput(diagnostics=res3, ruleName="AmbiguousTerm"),
         LinterRuleOutput(diagnostics=res4, ruleName="OffensiveLanguage"),
+        LinterRuleOutput(diagnostics=res5, ruleName="ExampleProvider"),
     ]
 
 
