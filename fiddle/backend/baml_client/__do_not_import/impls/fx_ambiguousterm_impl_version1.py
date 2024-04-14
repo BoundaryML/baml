@@ -8,9 +8,9 @@
 # fmt: off
 
 from ..clients.client_gpt4turbo import GPT4Turbo
-from ..functions.fx_contradictions import BAMLContradictions
-from ..types.classes.cls_linteroutput2 import LinterOutput2
-from ..types.partial.classes.cls_linteroutput2 import PartialLinterOutput2
+from ..functions.fx_ambiguousterm import BAMLAmbiguousTerm
+from ..types.classes.cls_linteroutput import LinterOutput
+from ..types.partial.classes.cls_linteroutput import PartialLinterOutput
 from baml_core.provider_manager.llm_response import LLMResponse
 from baml_core.stream import AsyncStream
 from baml_lib._impl.deserializer import Deserializer
@@ -20,24 +20,26 @@ from typing import List
 import typing
 # Impl: version1
 # Client: GPT4Turbo
-# An implementation of Contradictions.
+# An implementation of AmbiguousTerm.
 
 __prompt_template = """\
-Analyze the CONFLICTING STATEMENTS or words in the text in-between the <INSTRUCTIONS> tags and output a set of diagnostics matching the output schema.
+You are a powerful AI linter that catches ambiguous terms and phrases in users' INSTRUCTIONS.
 
-When there is a contradiction or conflicting statement just make an assumption as to what the actual intent is and put that assumption in the "recommendation". The "fix" should incorporate that assumption.
+A term is ambiguous when it is mentioned in the INSTRUCTIONS but there is no previous reference to it. If a synonym is used, you should suggest to use the same word as the previous reference.
 
-DO NOT match on ambiguous terms. Only match on clear contradictions.
-IGNORE optional fields like (id string?)
+You can also catch terms that are nonsensical or out of context. Ignore anything in {hashtag...} tags.
 
+When you run analyze, ignore the properties on these objects like "client GPT4".
+
+--------------------
 <INSTRUCTIONS>
 {arg}
 </INSTRUCTIONS>
+--------------------
 
-Output JSON format (only include these fields, and no others). Explain your reasoning in 2-3 brief sentences before writing out the json:
+
+Output the diagnostic in this JSON format (only include these fields, and no others):
 {
-  // The conflicting statements or words in the text.
-  "conflictingStatements": string[],
   // Explain why the linting error was raised.
   "reason": string,
   // The phrase that triggered the linter error. Write it EXACTLY as it appears in the PROMPT. If it's more than 10 words, just match the first 10 words.
@@ -60,10 +62,10 @@ __input_replacers = {
 
 # We ignore the type here because baml does some type magic to make this work
 # for inline SpecialForms like Optional, Union, List.
-__deserializer = Deserializer[List[LinterOutput2]](List[LinterOutput2])  # type: ignore
+__deserializer = Deserializer[List[LinterOutput]](List[LinterOutput])  # type: ignore
 
 # Add a deserializer that handles stream responses, which are all Partial types
-__partial_deserializer = Deserializer[List[LinterOutput2]](List[LinterOutput2])  # type: ignore
+__partial_deserializer = Deserializer[List[LinterOutput]](List[LinterOutput])  # type: ignore
 
 
 
@@ -71,17 +73,17 @@ __partial_deserializer = Deserializer[List[LinterOutput2]](List[LinterOutput2]) 
 
 
 
-async def version1(arg: str, /) -> List[LinterOutput2]:
+async def version1(arg: str, /) -> List[LinterOutput]:
     response = await GPT4Turbo.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
     deserialized = __deserializer.from_string(response.generated)
     return deserialized
 
 
-def version1_stream(arg: str, /) -> AsyncStream[List[LinterOutput2], List[LinterOutput2]]:
+def version1_stream(arg: str, /) -> AsyncStream[List[LinterOutput], List[LinterOutput]]:
     def run_prompt() -> typing.AsyncIterator[LLMResponse]:
         raw_stream = GPT4Turbo.run_prompt_template_stream(template=__prompt_template, replacers=__input_replacers, params=dict(arg=arg))
         return raw_stream
     stream = AsyncStream(stream_cb=run_prompt, partial_deserializer=__partial_deserializer, final_deserializer=__deserializer)
     return stream
 
-BAMLContradictions.register_impl("version1")(version1, version1_stream)
+BAMLAmbiguousTerm.register_impl("version1")(version1, version1_stream)

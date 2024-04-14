@@ -7,8 +7,8 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..types.classes.cls_linteroutput2 import LinterOutput2
-from ..types.partial.classes.cls_linteroutput2 import PartialLinterOutput2
+from ..types.classes.cls_linteroutput import LinterOutput
+from ..types.partial.classes.cls_linteroutput import PartialLinterOutput
 from baml_core.stream import AsyncStream
 from typing import Callable, List, Protocol, runtime_checkable
 
@@ -25,10 +25,10 @@ T = typing.TypeVar("T", bound=typing.Callable[..., typing.Any])
 CLS = typing.TypeVar("CLS", bound=type)
 
 
-IContradictionsOutput = List[LinterOutput2]
+IAmbiguousTermOutput = List[LinterOutput]
 
 @runtime_checkable
-class IContradictions(Protocol):
+class IAmbiguousTerm(Protocol):
     """
     This is the interface for a function.
 
@@ -36,16 +36,16 @@ class IContradictions(Protocol):
         arg: str
 
     Returns:
-        List[LinterOutput2]
+        List[LinterOutput]
     """
 
-    async def __call__(self, arg: str, /) -> List[LinterOutput2]:
+    async def __call__(self, arg: str, /) -> List[LinterOutput]:
         ...
 
    
 
 @runtime_checkable
-class IContradictionsStream(Protocol):
+class IAmbiguousTermStream(Protocol):
     """
     This is the interface for a stream function.
 
@@ -53,46 +53,46 @@ class IContradictionsStream(Protocol):
         arg: str
 
     Returns:
-        AsyncStream[List[LinterOutput2], List[LinterOutput2]]
+        AsyncStream[List[LinterOutput], List[LinterOutput]]
     """
 
-    def __call__(self, arg: str, /) -> AsyncStream[List[LinterOutput2], List[LinterOutput2]]:
+    def __call__(self, arg: str, /) -> AsyncStream[List[LinterOutput], List[LinterOutput]]:
         ...
-class BAMLContradictionsImpl:
-    async def run(self, arg: str, /) -> List[LinterOutput2]:
+class BAMLAmbiguousTermImpl:
+    async def run(self, arg: str, /) -> List[LinterOutput]:
         ...
     
-    def stream(self, arg: str, /) -> AsyncStream[List[LinterOutput2], List[LinterOutput2]]:
+    def stream(self, arg: str, /) -> AsyncStream[List[LinterOutput], List[LinterOutput]]:
         ...
 
-class IBAMLContradictions:
+class IBAMLAmbiguousTerm:
     def register_impl(
         self, name: ImplName
-    ) -> typing.Callable[[IContradictions, IContradictionsStream], None]:
+    ) -> typing.Callable[[IAmbiguousTerm, IAmbiguousTermStream], None]:
         ...
 
-    async def __call__(self, arg: str, /) -> List[LinterOutput2]:
+    async def __call__(self, arg: str, /) -> List[LinterOutput]:
         ...
 
-    def stream(self, arg: str, /) -> AsyncStream[List[LinterOutput2], List[LinterOutput2]]:
+    def stream(self, arg: str, /) -> AsyncStream[List[LinterOutput], List[LinterOutput]]:
         ...
 
-    def get_impl(self, name: ImplName) -> BAMLContradictionsImpl:
+    def get_impl(self, name: ImplName) -> BAMLAmbiguousTermImpl:
         ...
 
     @contextmanager
     def mock(self) -> typing.Generator[mock.AsyncMock, None, None]:
         """
-        Utility for mocking the ContradictionsInterface.
+        Utility for mocking the AmbiguousTermInterface.
 
         Usage:
             ```python
             # All implementations are mocked.
 
             async def test_logic() -> None:
-                with baml.Contradictions.mock() as mocked:
+                with baml.AmbiguousTerm.mock() as mocked:
                     mocked.return_value = ...
-                    result = await ContradictionsImpl(...)
+                    result = await AmbiguousTermImpl(...)
                     assert mocked.called
             ```
         """
@@ -102,7 +102,7 @@ class IBAMLContradictions:
     def test(self, test_function: T) -> T:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the ContradictionsInterface.
+        the AmbiguousTermInterface.
 
         Args:
             test_function : T
@@ -112,9 +112,9 @@ class IBAMLContradictions:
             ```python
             # All implementations will be tested.
 
-            @baml.Contradictions.test
-            async def test_logic(ContradictionsImpl: IContradictions) -> None:
-                result = await ContradictionsImpl(...)
+            @baml.AmbiguousTerm.test
+            async def test_logic(AmbiguousTermImpl: IAmbiguousTerm) -> None:
+                result = await AmbiguousTermImpl(...)
             ```
         """
         ...
@@ -123,7 +123,7 @@ class IBAMLContradictions:
     def test(self, *, exclude_impl: typing.Iterable[ImplName] = [], stream: bool = False) -> pytest.MarkDecorator:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the ContradictionsInterface.
+        the AmbiguousTermInterface.
 
         Args:
             exclude_impl : Iterable[ImplName]
@@ -135,17 +135,17 @@ class IBAMLContradictions:
             ```python
             # All implementations except the given impl will be tested.
 
-            @baml.Contradictions.test(exclude_impl=["implname"])
-            async def test_logic(ContradictionsImpl: IContradictions) -> None:
-                result = await ContradictionsImpl(...)
+            @baml.AmbiguousTerm.test(exclude_impl=["implname"])
+            async def test_logic(AmbiguousTermImpl: IAmbiguousTerm) -> None:
+                result = await AmbiguousTermImpl(...)
             ```
 
             ```python
             # Streamable version of the test function.
 
-            @baml.Contradictions.test(stream=True)
-            async def test_logic(ContradictionsImpl: IContradictionsStream) -> None:
-                async for result in ContradictionsImpl(...):
+            @baml.AmbiguousTerm.test(stream=True)
+            async def test_logic(AmbiguousTermImpl: IAmbiguousTermStream) -> None:
+                async for result in AmbiguousTermImpl(...):
                     ...
             ```
         """
@@ -155,7 +155,7 @@ class IBAMLContradictions:
     def test(self, test_class: typing.Type[CLS]) -> typing.Type[CLS]:
         """
         Provides a pytest.mark.parametrize decorator to facilitate testing different implementations of
-        the ContradictionsInterface.
+        the AmbiguousTermInterface.
 
         Args:
             test_class : Type[CLS]
@@ -165,14 +165,14 @@ class IBAMLContradictions:
         ```python
         # All implementations will be tested in every test method.
 
-        @baml.Contradictions.test
+        @baml.AmbiguousTerm.test
         class TestClass:
-            def test_a(self, ContradictionsImpl: IContradictions) -> None:
+            def test_a(self, AmbiguousTermImpl: IAmbiguousTerm) -> None:
                 ...
-            def test_b(self, ContradictionsImpl: IContradictions) -> None:
+            def test_b(self, AmbiguousTermImpl: IAmbiguousTerm) -> None:
                 ...
         ```
         """
         ...
 
-BAMLContradictions: IBAMLContradictions
+BAMLAmbiguousTerm: IBAMLAmbiguousTerm

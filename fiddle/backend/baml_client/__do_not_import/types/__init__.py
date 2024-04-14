@@ -8,10 +8,12 @@
 # fmt: off
 
 from .classes.cls_linteroutput import LinterOutput
+from .classes.cls_linteroutput2 import LinterOutput2
 
 
 
 
 __all__ = [
-    'LinterOutput'
+    'LinterOutput',
+    'LinterOutput2'
 ]

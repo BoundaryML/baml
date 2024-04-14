@@ -27,21 +27,26 @@ load_dotenv()
 # class TestImplementation(BaseModel):
 #     name: str
 
+
 class Test(BaseModel):
     name: str
     impls: List[str]
+
 
 class Function(BaseModel):
     name: str
     tests: List[Test]
     run_all_available_tests: Optional[bool] = False
 
+
 class TestRequest(BaseModel):
     functions: List[Function]
+
 
 class FileModel(BaseModel):
     name: str
     content: str
+
 
 class RunTests(BaseModel):
     files: List[FileModel]
@@ -76,11 +81,13 @@ generator lang_python {
 }
 """
 
+
 async def process_output(process):
     async for line in process.stdout:
         yield "STDOUT", line.decode()
     async for line in process.stderr:
         yield "STDERR", line.decode()
+
 
 async def handle_client(reader, writer, output_queue: asyncio.Queue):
     while True:
@@ -90,6 +97,7 @@ async def handle_client(reader, writer, output_queue: asyncio.Queue):
         message = data.decode()
         await output_queue.put(("PORT", message))
 
+
 async def generator(output_queue: asyncio.Queue):
     while True:
         output = await output_queue.get()
@@ -98,38 +106,35 @@ async def generator(output_queue: asyncio.Queue):
         source, line = output
         yield f"data: <BAML_{source}>: {line}\n\n"
 
+
 async def stream_subprocess_and_port_output(command, cwd, output_queue: asyncio.Queue):
     # Initialize the server to listen on an available port
     server = await asyncio.start_server(
-        lambda r, w: handle_client(r, w, output_queue), 
-        '0.0.0.0', 0
+        lambda r, w: handle_client(r, w, output_queue), "0.0.0.0", 0
     )
     port = server.sockets[0].getsockname()[1]
-        # Serve until the subprocess exits
+    # Serve until the subprocess exits
     output_task = None
     try:
-    # Adjust the command to include the dynamically determined port
+        # Adjust the command to include the dynamically determined port
         full_command = command.format(port=port)
         print("running command: ", full_command)
         process = await asyncio.create_subprocess_shell(
-            full_command, 
-            stdout=asyncio.subprocess.PIPE, 
-            stderr=asyncio.subprocess.PIPE, 
+            full_command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
             cwd=cwd,
             shell=True,
-            env=os.environ.copy()
+            env=os.environ.copy(),
         )
-
 
         # Function to forward subprocess output to the queue
         async def forward_output():
             async for source, line in process_output(process):
                 await output_queue.put((source, line))
-            
-        
+
         # Run the forward_output task alongside the server
         output_task = asyncio.create_task(forward_output())
-    
 
         await process.wait()
         print("Process exited---------")
@@ -151,13 +156,14 @@ async def stream_subprocess_and_port_output(command, cwd, output_queue: asyncio.
 
 
 async def create_temp_files():
-    dir_to_use = f'{fiddle_dir}-{uuid4()}'
-    os.makedirs(f'{dir_to_use}', exist_ok=True)
+    dir_to_use = f"{fiddle_dir}-{uuid4()}"
+    os.makedirs(f"{dir_to_use}", exist_ok=True)
     try:
         yield dir_to_use
     finally:
         pass
-        #shutil.rmtree(fiddle_dir)
+        # shutil.rmtree(fiddle_dir)
+
 
 @app.get("/")
 def hello_world():
@@ -165,11 +171,11 @@ def hello_world():
 
 
 @app.post("/fiddle")
-async def fiddle(request: RunTests, tmpdir: str = Depends(create_temp_files) ):
+async def fiddle(request: RunTests, tmpdir: str = Depends(create_temp_files)):
     files = request.files
     test_request = request.testRequest
     print(request)
-    
+
     for file in files:
         if "main.baml" in file.name:
             file.content = generator_block + file.content
@@ -185,7 +191,10 @@ async def fiddle(request: RunTests, tmpdir: str = Depends(create_temp_files) ):
     await asyncio.sleep(1.0)
     # Use asyncio subprocess for non-blocking call
     process = await asyncio.create_subprocess_shell(
-        "baml build", cwd=tmpdir, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        "baml build",
+        cwd=tmpdir,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
     )
     stdout, stderr = await process.communicate()
     print("--------- baml build output ---------")
@@ -193,7 +202,7 @@ async def fiddle(request: RunTests, tmpdir: str = Depends(create_temp_files) ):
     print(stderr.decode())
     if process.returncode != 0:
         raise HTTPException(status_code=400, detail="BAML build failed")
-    
+
     output_queue = asyncio.Queue()
     if test_request:
         selected_tests = [
@@ -214,11 +223,12 @@ async def fiddle(request: RunTests, tmpdir: str = Depends(create_temp_files) ):
 
     # Modify the test_command to include test_filter
     test_command = f"baml test {test_filter} run --playground-port {{port}}"
-    
+
     streaming_gen = generator(output_queue)
-    asyncio.create_task(stream_subprocess_and_port_output(test_command, tmpdir, output_queue))
-   
-    
+    asyncio.create_task(
+        stream_subprocess_and_port_output(test_command, tmpdir, output_queue)
+    )
+
     # Corrected to await the streaming function correctly
     return StreamingResponse(streaming_gen, media_type="text/plain")
 
@@ -229,25 +239,43 @@ class LintRequest(BaseModel):
     promptVariables: Dict[str, str]
 
 
-
-
 class LinterRuleOutput(BaseModel):
     diagnostics: List[LinterOutput]
     ruleName: str
 
+
 @app.post("/lint")
 async def lint(request: LintRequest) -> List[LinterRuleOutput]:
-    result1, result2 = await asyncio.gather(
+    result1, result2, res3 = await asyncio.gather(
         baml.Contradictions(request.promptTemplate),
-        baml.ChainOfThought(request.promptTemplate)
+        baml.ChainOfThought(request.promptTemplate),
+        baml.AmbiguousTerm(request.promptTemplate),
     )
 
+    res1_outputs = [
+        LinterOutput(
+            exactPhrase=item.exactPhrase,
+            recommendation=item.recommendation,
+            fix=item.fix,
+            reason=item.reason,
+        )
+        for item in result1
+    ]
+
+    print(result1)
+    print(result2)
+    print(res3)
+
     return [
-        LinterRuleOutput(diagnostics=result1, ruleName="Contradictions"),
-        LinterRuleOutput(diagnostics=result2, ruleName="ChainOfThought")
+        LinterRuleOutput(
+            diagnostics=res1_outputs,
+            ruleName="Contradictions",
+        ),
+        LinterRuleOutput(diagnostics=result2, ruleName="ChainOfThought"),
+        LinterRuleOutput(diagnostics=res3, ruleName="AmbiguousTerm"),
     ]
 
 
-#if __name__ == '__main__':
-    # os.makedirs("/tmp/baml", exist_ok=True)
-    # app.run(host="0.0.0.0", port=8000)
+# if __name__ == '__main__':
+# os.makedirs("/tmp/baml", exist_ok=True)
+# app.run(host="0.0.0.0", port=8000)
