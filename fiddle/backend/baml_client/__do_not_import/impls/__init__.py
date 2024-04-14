@@ -12,4 +12,5 @@
 from .fx_ambiguousterm_impl_version1 import version1 as unused_fx_ambiguousterm_impl_version1
 from .fx_chainofthought_impl_version1 import version1 as unused_fx_chainofthought_impl_version1
 from .fx_contradictions_impl_version1 import version1 as unused_fx_contradictions_impl_version1
+from .fx_exampleprovider_impl_version1 import version1 as unused_fx_exampleprovider_impl_version1
 from .fx_offensivelanguage_impl_version1 import version1 as unused_fx_offensivelanguage_impl_version1
