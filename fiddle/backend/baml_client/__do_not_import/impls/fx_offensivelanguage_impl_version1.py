@@ -8,7 +8,7 @@
 # fmt: off
 
 from ..clients.client_gpt4turbo import GPT4Turbo
-from ..functions.fx_ambiguousterm import BAMLAmbiguousTerm
+from ..functions.fx_offensivelanguage import BAMLOffensiveLanguage
 from ..types.classes.cls_linteroutput import LinterOutput
 from ..types.partial.classes.cls_linteroutput import PartialLinterOutput
 from baml_core.provider_manager.llm_response import LLMResponse
@@ -20,12 +20,10 @@ from typing import List
 import typing
 # Impl: version1
 # Client: GPT4Turbo
-# An implementation of AmbiguousTerm.
+# An implementation of OffensiveLanguage.
 
 __prompt_template = """\
-You are a powerful AI linter that catches terms or phrases that are nonsensical or out of context. Ignore anything in {hashtag...} tags.
-
-When you run analyze, ignore the properties on these objects like "client GPT4".
+Given the INSTRUCTIONS below, find ways in which the text could be considered offensive or inappropriate. If the text is offensive or inappropriate, return a diagnostic with the information on the offensiveness.
 
 --------------------
 <INSTRUCTIONS>
@@ -82,4 +80,4 @@ def version1_stream(arg: str, /) -> AsyncStream[List[LinterOutput], List[LinterO
     stream = AsyncStream(stream_cb=run_prompt, partial_deserializer=__partial_deserializer, final_deserializer=__deserializer)
     return stream
 
-BAMLAmbiguousTerm.register_impl("version1")(version1, version1_stream)
+BAMLOffensiveLanguage.register_impl("version1")(version1, version1_stream)

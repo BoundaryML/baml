@@ -10,6 +10,7 @@
 from ..__do_not_import.functions.fx_ambiguousterm import IAmbiguousTerm, IAmbiguousTermOutput, IAmbiguousTermStream
 from ..__do_not_import.functions.fx_chainofthought import IChainOfThought, IChainOfThoughtOutput, IChainOfThoughtStream
 from ..__do_not_import.functions.fx_contradictions import IContradictions, IContradictionsOutput, IContradictionsStream
+from ..__do_not_import.functions.fx_offensivelanguage import IOffensiveLanguage, IOffensiveLanguageOutput, IOffensiveLanguageStream
 from ..__do_not_import.types.classes.cls_linteroutput import LinterOutput
 from ..__do_not_import.types.classes.cls_linteroutput2 import LinterOutput2
 
@@ -26,6 +27,9 @@ __all__ = [
     'IContradictions',
     'IContradictionsOutput',
     'IContradictionsStream',
+    'IOffensiveLanguage',
+    'IOffensiveLanguageOutput',
+    'IOffensiveLanguageStream',
     'LinterOutput',
     'LinterOutput2'
 ]
