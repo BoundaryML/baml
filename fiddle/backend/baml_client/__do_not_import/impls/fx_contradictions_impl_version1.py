@@ -23,7 +23,7 @@ import typing
 # An implementation of Contradictions.
 
 __prompt_template = """\
-Analyze the CONFLICTING STATEMENTS or words in the text in-between the <INSTRUCTIONS> tags and output a set of diagnostics matching the output schema.
+Find any CONFLICTING / CONTRADICTING words or phrases in-between the <INSTRUCTIONS> tags and output a set of diagnostics matching the output schema.
 
 When there is a contradiction or conflicting statement just make an assumption as to what the actual intent is and put that assumption in the "recommendation". The "fix" should incorporate that assumption.
 

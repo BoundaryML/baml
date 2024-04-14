@@ -15,6 +15,7 @@ from .clients.client_gpt4turbo import GPT4Turbo
 from .functions.fx_ambiguousterm import BAMLAmbiguousTerm
 from .functions.fx_chainofthought import BAMLChainOfThought
 from .functions.fx_contradictions import BAMLContradictions
+from .functions.fx_offensivelanguage import BAMLOffensiveLanguage
 from baml_core.otel import add_message_transformer_hook, flush_trace_logs
 from baml_core.provider_manager import LLMManager
 from baml_core.services import LogSchema
@@ -26,6 +27,7 @@ class BAMLClient:
     AmbiguousTerm = BAMLAmbiguousTerm
     ChainOfThought = BAMLChainOfThought
     Contradictions = BAMLContradictions
+    OffensiveLanguage = BAMLOffensiveLanguage
     Claude = Claude
     ClaudeInstant = ClaudeInstant
     GPT3 = GPT3

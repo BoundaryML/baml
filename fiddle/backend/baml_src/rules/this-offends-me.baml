@@ -1,14 +1,12 @@
-function AmbiguousTerm {
+function OffensiveLanguage {
   input string
   output LinterOutput[]
 }
 
-impl<llm, AmbiguousTerm> version1 {
+impl<llm, OffensiveLanguage> version1 {
   client GPT4Turbo
   prompt #"
-    You are a powerful AI linter that catches terms or phrases that are nonsensical or out of context. Ignore anything in {hashtag...} tags.
-
-    When you run analyze, ignore the properties on these objects like "client GPT4".
+    Given the INSTRUCTIONS below, find ways in which the text could be considered offensive or inappropriate. If the text is offensive or inappropriate, return a diagnostic with the information on the offensiveness.
 
     --------------------
     <INSTRUCTIONS>
