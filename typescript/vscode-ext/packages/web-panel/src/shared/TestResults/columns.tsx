@@ -1,6 +1,6 @@
 'use client'
 import { CaretSortIcon } from '@radix-ui/react-icons'
-import { Button } from '@/components/ui/button'
+import { Button } from '../../components/ui/button'
 import { StringSpan, TestResult, TestStatus } from '@baml/common'
 import { ColumnDef } from '@tanstack/react-table'
 import { VSCodeLink, VSCodeProgressRing } from '@vscode/webview-ui-toolkit/react'
@@ -9,12 +9,11 @@ import { PropsWithChildren, useMemo, useState } from 'react'
 import JsonView from 'react18-json-view'
 import 'react18-json-view/src/style.css'
 import { parseGlooObject } from '../schemaUtils'
-import { Toggle } from '@/components/ui/toggle'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
+
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '../../components/ui/hover-card'
 import Link from '../Link'
-import { Switch } from '@/components/ui/switch'
-import { Label } from '@/components/ui/label'
+import { Switch } from '../../components/ui/switch'
+import { Label } from '../../components/ui/label'
 
 const TestStatusIcon: React.FC<PropsWithChildren<{ testStatus: TestStatus }>> = ({ testStatus, children }) => {
   return (
