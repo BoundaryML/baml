@@ -1,6 +1,6 @@
 @top Baml { Decl* }
 
-Decl { ClassDecl | EnumDecl | FunctionDecl }
+Decl { ClassDecl | EnumDecl | FunctionDecl | ClientDecl }
 
 ClassDecl { "class" IdentifierDecl "{" (BlockAttribute | ClassField)* "}" }
 
@@ -25,11 +25,11 @@ EnumDecl { "enum" IdentifierDecl "{" (BlockAttribute | EnumValueDecl)* "}" }
 EnumValueDecl { IdentifierDecl FieldAttribute* }
 
 FieldAttribute {
-  "@" IdentifierDecl "(" LiteralDecl? ")"
+  "@" IdentifierDecl AttributeValue
 }
 
 BlockAttribute {
-  "@@" IdentifierDecl "(" LiteralDecl? ")"
+  "@@" IdentifierDecl AttributeValue
 }
 
 FunctionDecl {
@@ -42,19 +42,32 @@ FunctionArg {
 }
 TupleValue { IdentifierDecl ValueExpr }
 
-ValueExpr { LiteralDecl | PromptExpr }
+ValueExpr { LiteralDecl | PromptExpr | "{" TupleValue* "}" }
+
+ClientDecl {
+  "client<llm>" IdentifierDecl "{" TupleValue* "}"
+}
 
 @tokens {
 
-  IdentifierDecl { $[A-Za-z0-9]+ }
+  @precedence {
+    QuotedString, UnquotedAttributeValue
+  }
+
+  IdentifierDecl { $[A-Za-z0-9-_]+ }
 
   LiteralDecl {
     '"' char* '"' | // strings
-    $[A-Za-z0-9]+ // raw strings, ints
+    ![#@{}()[\]<>,' \n\r\t/]+ // unquoted strings
     // floats not yet supported
   }
 
+  QuotedString { '"' char* '"' }
+  UnquotedAttributeValue { ![#@{}()[\]<>,'\n\r\t/]+ }
+
   promptChar { whitespace | char }
+
+  // match all unicode characters except \u0022 " and \u005c \
   char { $[\u{20}\u{21}\u{23}-\u{5b}\u{5d}-\u{10ffff}] | "\\" esc }
   esc  { $["\\\/bfnrt] | "u" hex hex hex hex }
   hex  { $[0-9a-fA-F] }
@@ -72,6 +85,7 @@ ValueExpr { LiteralDecl | PromptExpr }
 
 @skip {} {
   PromptExpr { '#"' (promptChar)* '"#'}
+  AttributeValue { '(' (QuotedString | UnquotedAttributeValue)? ')' }
 }
 
 @detectDelim
