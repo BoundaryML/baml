@@ -5,52 +5,31 @@ import { BAMLProject, exampleProjects } from '@/lib/exampleProjects'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@baml/playground-common/components/ui/separator'
 import { ExampleProjectCard } from './_components/ExampleProjectCard'
+import { redirect } from 'next/dist/server/api-utils'
 const Editor = dynamic(() => import('./_components/Editor'), { ssr: false })
 
 type SearchParams = {
   id: string
 }
 
-const defaultMainBaml = `
-function ExtractVerbs {
-    input string
-    /// list of verbs
-    output string[]
-}
-
-client<llm> GPT4 {
-  provider baml-openai-chat
-  options {
-    model gpt-4 
-    api_key env.OPENAI_API_KEY
-  }
-}
-
-impl<llm, ExtractVerbs> version1 {
-  client GPT4
-  prompt #"
-    Extract the verbs from this INPUT:
- 
-    INPUT:
-    ---
-    {#input}
-    ---
-    {// this is a comment inside a prompt! //}
-    Return a {#print_type(output)}.
-
-    Response:
-  "#
-}
-`
-export default async function Home({ searchParams }: { searchParams: SearchParams }) {
+export default async function Home({
+  searchParams,
+  params,
+}: {
+  searchParams: SearchParams
+  params: { project_id: string }
+}) {
   let data: BAMLProject = exampleProjects[0]
-  if (searchParams?.id) {
-    const exampleProject = exampleProjects.find((p) => p.id === searchParams.id)
+  const id = params.project_id ?? searchParams.id
+  if (id) {
+    const exampleProject = exampleProjects.find((p) => p.id === id)
     if (exampleProject) {
       data = exampleProject
     } else {
-      data = await loadUrl(searchParams.id)
+      data = await loadUrl(id)
     }
+  } else {
+    data = exampleProjects[0]
   }
   console.log(data)
   return (

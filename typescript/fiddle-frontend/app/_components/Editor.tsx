@@ -115,7 +115,7 @@ export const EditorContainer = ({ project }: { project: BAMLProject }) => {
   return (
     // firefox wont apply the background color for some reason so we forcefully set it.
     <div className="flex-col w-full h-full font-sans pl-2flex bg-background dark:bg-vscode-panel-background">
-      <div className="flex justify-between border-b-[1px] border-vscode-panel-border h-[40px]">
+      <div className="flex flex-row gap-x-12 border-b-[1px] border-vscode-panel-border h-[40px]">
         <div className="flex flex-col items-center h-full py-1">
           <Editable text={projectName} placeholder="Write a task name" type="input" childRef={inputRef}>
             <input
@@ -138,7 +138,7 @@ export const EditorContainer = ({ project }: { project: BAMLProject }) => {
             onClick={async () => {
               setLoading(true)
               try {
-                let urlId = window.location.search.split('id=')[1]
+                let urlId = window.location.pathname.split('/')[1]
                 if (!urlId) {
                   urlId = await createUrl({
                     ...project,
@@ -146,16 +146,14 @@ export const EditorContainer = ({ project }: { project: BAMLProject }) => {
                     files: editorFiles,
                     functionsWithTests: functionsAndTests,
                   })
-                  const updatedSearchParams = new URLSearchParams({
-                    id: urlId,
-                  })
-                  const newUrl = `${window.location.origin}${pathname}?${updatedSearchParams}`
+
+                  const newUrl = `${window.location.origin}/${urlId}`
                   window.history.replaceState(null, '', newUrl)
                   // router.replace(pathname + '?' + updatedSearchParams.toString(), { scroll: false })
                 }
 
                 console.log('pathname', pathname)
-                navigator.clipboard.writeText(`${window.location.origin}${pathname}?id=${urlId}`)
+                navigator.clipboard.writeText(`${window.location.origin}/${urlId}`)
                 toast('URL copied to clipboard')
               } catch (e) {
                 toast('Failed to generate URL')
@@ -260,17 +258,9 @@ export const CodeBlockWithTabs = () => {
               // Return a new array to ensure React state update triggers re-render.
               return [...files]
             })
-            window.history.replaceState(null, '', pathname)
+            window.history.replaceState(null, '', '/')
           }}
         />
-        {/* <pre
-          className={cn(
-            'border-border 2xl:max-h-[800px] 2xl:min-w-[600px] md:max-h-[600px] md:min-w-[500px] overflow-y-auto rounded-md rounded-t-none border-x-[1px] border-b-[1px] bg-white p-1 text-left text-xs md:text-sm',
-            className,
-          )}
-        >
-         
-        </pre> */}
       </>
     </div>
   )
