@@ -12,6 +12,7 @@ import { BAML } from '@baml/codemirror-lang'
 import { ParserDatabase } from '@baml/common'
 import { Diagnostic, linter } from '@codemirror/lint'
 import CodeMirror, { EditorView } from '@uiw/react-codemirror'
+import { BAMLProject } from '@/lib/exampleProjects'
 
 type LintResponse = {
   diagnostics: LinterError[]
@@ -76,17 +77,10 @@ const extensions = [
   }),
 ]
 
-export const CodeMirrorEditor = () => {
+export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
   const [editorFiles, setEditorFiles] = useAtom(currentEditorFilesAtom)
-  const [activeFile, setActiveFile] = useState<EditorFile>(editorFiles[0])
-
-  const pathname = usePathname()
-
-  useEffect(() => {
-    if (!activeFile) {
-      setActiveFile(editorFiles[0])
-    }
-  }, [JSON.stringify(editorFiles)])
+  const [activeFile, setActiveFile] = useState<EditorFile>(project.files[0])
+  console.log('project active file', activeFile)
 
   return (
     <div className="w-full">
@@ -108,7 +102,6 @@ export const CodeMirrorEditor = () => {
       </div>
       <>
         <CodeMirror
-          key={activeFile?.path}
           value={activeFile?.content ?? ''}
           extensions={extensions}
           theme={vscodeDark}

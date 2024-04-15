@@ -2,12 +2,13 @@
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { BAMLProject } from '@/lib/exampleProjects'
 import clsx from 'clsx'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams, useSelectedLayoutSegment } from 'next/navigation'
 
 export const ExampleProjectCard = ({ project }: { project: BAMLProject }) => {
-  const searchParams = useSearchParams()
+  // const searchParams = useSearchParams()
   const router = useRouter()
-  const isSelected = searchParams.get('id') === project.id
+  const selectedId = usePathname().replace('/', '')
+  const isSelected = selectedId === project.id || (project.id === 'extract-verbs' && selectedId === '')
   return (
     <Card
       className={clsx(
@@ -15,8 +16,8 @@ export const ExampleProjectCard = ({ project }: { project: BAMLProject }) => {
         [isSelected ? 'border-gray-600 bg-zinc-800' : 'border-transparent'],
       )}
       onClick={() => {
-        router.push('/?id=' + project.id)
-        router.refresh()
+        router.push(`/${project.id}`)
+        // router.refresh()
       }}
     >
       <CardHeader className="px-1 py-4">

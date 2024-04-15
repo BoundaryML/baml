@@ -61,9 +61,9 @@ export const usePlaygroundListener = () => {
           break
 
         case 'commandSequence':
-          console.log('received command sequence', data)
+          // console.log('received command sequence', data)
           for (const subcommand of data) {
-            console.log('received command in sequence', subcommand)
+            // console.log('received command in sequence', subcommand)
             await listener({ data: subcommand })
           }
           break

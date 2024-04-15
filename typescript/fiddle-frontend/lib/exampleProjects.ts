@@ -1,3 +1,4 @@
+import { TestRunOutput } from "@/app/[project_id]/_atoms/atoms";
 import { EditorFile } from "@/app/actions";
 import { ParserDatabase, StringSpan } from "@baml/common";
 
@@ -9,6 +10,7 @@ export type BAMLProject = {
   description: string;
   files: EditorFile[];
   functionsWithTests: ParserDBFunctionTestModel[];
+  testRunOutput?: TestRunOutput;
 };
 
 function stringSpanTest(functionName: string, testName: string): StringSpan {

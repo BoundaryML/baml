@@ -1,7 +1,7 @@
 import { sessionStore } from "@/app/_components/JotaiProvider"
 import { EditorFile } from "@/app/actions"
 import { ParserDBFunctionTestModel } from "@/lib/exampleProjects"
-import { ParserDatabase } from "@baml/common"
+import { ParserDatabase, TestState } from "@baml/common"
 import { atom } from "jotai"
 import { atomWithStorage } from "jotai/utils"
 
@@ -12,3 +12,9 @@ export const functionsAndTestsAtom = atomWithStorage<ParserDBFunctionTestModel[]
   [],
   sessionStore as any,
 )
+export const testRunOutputAtom = atom<TestRunOutput | null>(null)
+
+export type TestRunOutput = {
+  testState: TestState;
+  outputLogs: string[];
+}
