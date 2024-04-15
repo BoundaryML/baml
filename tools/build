@@ -150,6 +150,18 @@ case "$_path" in
     fi
     ;;
 
+  /typescript/codemirror-lang-baml | /typescript/codemirror-lang-baml/* )
+    if [ "$_watch_mode" -eq 1 ]; then
+      npx nodemon \
+        --ext grammar,js,ts,tsx,json \
+        --ignore '**/dist' \
+        --exec 'pnpm prepare; date'
+    else
+      pnpm prepare
+      date
+    fi
+    ;;
+
   /typescript | /typescript/* )
     # This also consume schanges to baml-schema-wasm
     if [ "$_watch_mode" -eq 1 ]; then

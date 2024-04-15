@@ -86,7 +86,8 @@ ClientDecl {
 }
 
 @skip {} {
-  PromptExpr { '#"' (promptChar)* '"#'}
+  PromptExpr { '#"' PromptExprContents '"#'}
+  PromptExprContents { (promptChar)* }
   AttributeValue { '(' (QuotedString | UnquotedAttributeValue)? ')' }
 }
 
