@@ -57,24 +57,26 @@ ClientDecl {
   IdentifierDecl { $[A-Za-z0-9-_]+ }
 
   LiteralDecl {
-    '"' char* '"' | // strings
-    ![#@{}()[\]<>,' \n\r\t/]+ // unquoted strings
-    // floats not yet supported
+    NumericLiteral | QuotedString | UnquotedString
   }
+  NumericLiteral { $[0-9]+ | $[0-9]*'.'$[0-9]+ }
 
-  QuotedString { '"' char* '"' }
-  UnquotedAttributeValue { ![#@{}()[\]<>,'\n\r\t/]+ }
+  QuotedString { '"' QuotedStringChar* '"' }
+  UnquotedString { UnquotedStringChar+ }
+  UnquotedAttributeValue { (UnquotedStringChar | ' ')+ }
 
-  promptChar { whitespace | char }
+  promptChar { ![] }
 
   // match all unicode characters except \u0022 " and \u005c \
-  char { $[\u{20}\u{21}\u{23}-\u{5b}\u{5d}-\u{10ffff}] | "\\" esc }
+  QuotedStringChar { $[\u{20}\u{21}\u{23}-\u{5b}\u{5d}-\u{10ffff}] | "\\" esc }
   esc  { $["\\\/bfnrt] | "u" hex hex hex hex }
   hex  { $[0-9a-fA-F] }
   whitespace { $[ \n\r\t] }
+
+  UnquotedStringChar { ![#@{}()[\]<>,'\n\r\t/ ]}
   
   TrailingComment { "//"$[^\\n]* }
-  MultilineComment { "{//"(char|whitespace)*"//}" }
+  MultilineComment { "{//"![]*"//}" }
 
   "{" "}" "[" "]"
 }
