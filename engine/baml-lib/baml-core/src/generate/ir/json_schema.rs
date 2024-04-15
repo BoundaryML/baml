@@ -2,7 +2,10 @@
 
 use serde_json::json;
 
-use super::{Class, Enum, FieldType, Function, FunctionArgs, IntermediateRepr, TypeValue, Walker};
+use super::{
+    repr::{self},
+    Class, Enum, FieldType, Function, FunctionArgs, IntermediateRepr, TypeValue, Walker,
+};
 
 pub trait WithJsonSchema {
     fn json_schema(&self) -> serde_json::Value;
@@ -16,15 +19,12 @@ impl WithJsonSchema for IntermediateRepr {
         let classes = self
             .walk_classes()
             .map(|c| (c.elem().name.clone(), c.json_schema()));
-        let function_inputs = self.walk_functions().map(|f| {
-            (
-                format!("{}_input", f.elem().name),
-                (f.item, true).json_schema(),
-            )
-        });
+        let function_inputs = self
+            .walk_functions()
+            .map(|f| (format!("{}_input", f.name()), (f.item, true).json_schema()));
         let function_outputs = self.walk_functions().map(|f| {
             (
-                format!("{}_output", f.elem().name),
+                format!("{}_output", f.name()),
                 (f.item, false).json_schema(),
             )
         });
@@ -47,9 +47,15 @@ impl WithJsonSchema for (&Function, bool) {
         let (f, is_input) = self;
 
         let mut res = if *is_input {
-            f.elem.inputs.json_schema()
+            match &f.elem {
+                repr::Function::V1(f) => f.inputs.json_schema(),
+                repr::Function::V2(f) => f.inputs.json_schema(),
+            }
         } else {
-            f.elem.output.elem.json_schema()
+            match &f.elem {
+                repr::Function::V1(f) => f.output.elem.json_schema(),
+                repr::Function::V2(f) => f.output.elem.json_schema(),
+            }
         };
 
         // Add a title field to the schema
@@ -58,7 +64,7 @@ impl WithJsonSchema for (&Function, bool) {
                 "title".to_string(),
                 json!(format!(
                     "{} {}",
-                    f.elem.name,
+                    f.elem.name(),
                     if *is_input { "input" } else { "output" }
                 )),
             );
@@ -91,6 +97,27 @@ impl WithJsonSchema for FunctionArgs {
                 })
             }
         }
+    }
+}
+
+impl WithJsonSchema for Vec<(String, FieldType)> {
+    fn json_schema(&self) -> serde_json::Value {
+        let mut properties = json!({});
+        let mut required_props = vec![];
+        for (name, t) in self.iter() {
+            properties[name.clone()] = t.json_schema();
+            match t {
+                FieldType::Optional(_) => {}
+                _ => {
+                    required_props.push(name.clone());
+                }
+            }
+        }
+        json!({
+            "type": "object",
+            "properties": properties,
+            "required": required_props,
+        })
     }
 }
 

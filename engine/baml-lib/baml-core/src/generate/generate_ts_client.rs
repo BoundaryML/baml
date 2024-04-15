@@ -1,5 +1,6 @@
 mod class;
 mod client;
+mod default_config;
 mod r#enum;
 mod expression;
 mod field_type;
@@ -15,7 +16,7 @@ use crate::configuration::Generator;
 
 use super::{
     dir_writer::WithFileContent,
-    ir::{Expression, IntermediateRepr, WithJsonSchema},
+    ir::{repr, Expression, IntermediateRepr, WithJsonSchema},
 };
 use ts_language_features::{get_file_collector, ToTypeScript};
 
@@ -26,9 +27,15 @@ pub(crate) fn generate_ts(ir: &IntermediateRepr, gen: &Generator) -> std::io::Re
     ir.walk_classes().for_each(|c| c.write(&mut collector));
     ir.walk_functions().for_each(|f| f.write(&mut collector));
     ir.walk_functions().for_each(|f| {
-        f.walk_impls().for_each(|i| {
-            i.write(&mut collector);
-        });
+        match f.walk_impls() {
+            either::Either::Left(impls) => impls.for_each(|i| {
+                i.write(&mut collector);
+            }),
+            either::Either::Right(configs) => configs.for_each(|c| {
+                c.write(&mut collector);
+            }),
+        }
+
         f.walk_tests().for_each(|t| {
             t.write(&mut collector);
         });

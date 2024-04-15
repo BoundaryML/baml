@@ -16,7 +16,12 @@ abstract class LLMChatProvider extends LLMBaseProvider {
     this.prompt_to_chat = prompt_to_chat;
   }
 
-  protected run_jinja_template_once(jinja_template: string, args: { [key: string]: any; }, output_schema: string, template_macros: any[]): Promise<LLMResponse> {
+  protected run_jinja_template_once(jinja_template: string, args: { [key: string]: any; }, output_schema: string, template_macros: {
+    name: string;
+    argNames: string[];
+    argTypes: string[];
+    template: string;
+  }[]): Promise<LLMResponse> {
     let renderer = new NapiRenderer(jinja_template, output_schema);
     template_macros.forEach((macro) => {
       renderer.addTemplateString(macro.name, macro.argNames, macro.argTypes, macro.template);

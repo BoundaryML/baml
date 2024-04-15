@@ -29,6 +29,7 @@ pub(super) enum Template {
     ClassInternal,
     Function,
     Impl,
+    DefaultImpl,
     TestCase,
     Client,
     ExportFile,
@@ -39,8 +40,6 @@ pub(super) fn render_with_hbs<T: serde::Serialize>(template: Template, data: &T)
     reg.register_helper("BLOCK_OPEN", Box::new(BLOCK_OPEN));
     reg.register_helper("BLOCK_CLOSE", Box::new(BLOCK_CLOSE));
     reg.set_strict_mode(true);
-
-    let content = serde_json::to_string(&data).unwrap();
 
     let template = match template {
         Template::Enum => {
@@ -66,6 +65,10 @@ pub(super) fn render_with_hbs<T: serde::Serialize>(template: Template, data: &T)
         Template::Impl => {
             register_partial_file!(reg, "functions", "impl");
             "impl"
+        }
+        Template::DefaultImpl => {
+            register_partial_file!(reg, "functions", "default_impl");
+            "default_impl"
         }
         Template::TestCase => {
             register_partial_file!(reg, "functions", "test_case");

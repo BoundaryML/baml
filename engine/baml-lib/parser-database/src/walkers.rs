@@ -25,7 +25,7 @@ pub use r#class::*;
 pub use r#enum::*;
 pub use variants::*;
 
-use self::template_string::TemplateStringWalker;
+pub use self::template_string::TemplateStringWalker;
 
 /// A generic walker. Only walkers intantiated with a concrete ID type (`I`) are useful.
 #[derive(Clone, Copy)]

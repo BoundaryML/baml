@@ -80,7 +80,12 @@ abstract class LLMBaseProvider extends BaseProvider {
     jinja_template: string,
     args: { [key: string]: any },
     output_schema: string,
-    template_macros: any[]
+    template_macros: {
+      name: string;
+      argNames: string[];
+      argTypes: string[];
+      template: string;
+    }[]
   ): Promise<LLMResponse> {
     if (this.retry_policy) {
       return await this.retry_policy.run(() => this.run_jinja_template_once(jinja_template, args, output_schema, template_macros));
@@ -92,7 +97,12 @@ abstract class LLMBaseProvider extends BaseProvider {
     jinja_template: string,
     args: { [key: string]: any },
     output_schema: string,
-    template_macros: any[]
+    template_macros: {
+      name: string;
+      argNames: string[];
+      argTypes: string[];
+      template: string;
+    }[]
   ): Promise<LLMResponse>;
 
 

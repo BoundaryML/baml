@@ -1,22 +1,60 @@
-use super::{repr, Class, Client, Enum, Function, Impl, RetryPolicy, TestCase, Walker};
+use super::{
+    repr::{self, FunctionConfig},
+    Class, Client, Enum, Function, Impl, RetryPolicy, TestCase, Walker,
+};
 
 impl<'a> Walker<'a, &'a Function> {
-    pub fn walk_impls(&'a self) -> impl Iterator<Item = Walker<'a, (&'a Function, &'a Impl)>> {
-        self.item.elem.impls.iter().map(|i| Walker {
+    pub fn name(&self) -> &str {
+        self.elem().name()
+    }
+
+    pub fn walk_impls(
+        &'a self,
+    ) -> either::Either<
+        impl Iterator<Item = Walker<'a, (&'a Function, &'a Impl)>>,
+        impl Iterator<Item = Walker<'a, (&'a Function, &'a FunctionConfig)>>,
+    > {
+        match &self.item.elem {
+            repr::Function::V1(f) => either::Either::Left(f.impls.iter().map(|i| Walker {
+                db: self.db,
+                item: (self.item, i),
+            })),
+            repr::Function::V2(f) => either::Either::Right(f.configs.iter().map(|c| Walker {
+                db: self.db,
+                item: (self.item, c),
+            })),
+        }
+    }
+
+    pub fn walk_tests(&'a self) -> impl Iterator<Item = Walker<'a, (&'a Function, &'a TestCase)>> {
+        self.tests().iter().map(|i| Walker {
             db: self.db,
             item: (self.item, i),
         })
     }
 
-    pub fn walk_tests(&'a self) -> impl Iterator<Item = Walker<'a, (&'a Function, &'a TestCase)>> {
-        self.item.elem.tests.iter().map(|i| Walker {
-            db: self.db,
-            item: (self.item, i),
-        })
+    fn tests(&self) -> &'a Vec<TestCase> {
+        match &self.item.elem {
+            repr::Function::V1(f) => &f.tests,
+            repr::Function::V2(f) => &f.tests,
+        }
     }
 
     pub fn elem(&self) -> &'a repr::Function {
         &self.item.elem
+    }
+
+    pub fn output(&self) -> &'a repr::FieldType {
+        match &self.item.elem {
+            repr::Function::V1(f) => &f.output.elem,
+            repr::Function::V2(f) => &f.output.elem,
+        }
+    }
+
+    pub fn inputs(
+        &self,
+    ) -> either::Either<&'a repr::FunctionArgs, &'a Vec<(String, repr::FieldType)>> {
+        self.item.elem.inputs()
     }
 }
 
