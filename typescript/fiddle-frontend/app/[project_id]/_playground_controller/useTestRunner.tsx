@@ -98,6 +98,7 @@ export const useTestRunner = () => {
         throw err // rethrow to stop the event source
       },
     })
+    window.history.replaceState(null, '', '/')
   }, [])
 
   return fetchData
