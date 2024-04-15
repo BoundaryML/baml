@@ -48,17 +48,16 @@ ClientDecl {
   "client<llm>" IdentifierDecl "{" TupleValue* "}"
 }
 
+LiteralDecl { NumericLiteral | QuotedString | UnquotedString }
+
 @tokens {
 
   @precedence {
-    QuotedString, UnquotedAttributeValue
+    NumericLiteral, QuotedString, UnquotedString, UnquotedAttributeValue
   }
 
   IdentifierDecl { $[A-Za-z0-9-_]+ }
 
-  LiteralDecl {
-    NumericLiteral | QuotedString | UnquotedString
-  }
   NumericLiteral { $[0-9]+ | $[0-9]*'.'$[0-9]+ }
 
   QuotedString { '"' QuotedStringChar* '"' }
@@ -75,7 +74,7 @@ ClientDecl {
 
   UnquotedStringChar { ![#@{}()[\]<>,'\n\r\t/ ]}
   
-  TrailingComment { "//"$[^\\n]* }
+  TrailingComment { "//" ![\n]* }
   MultilineComment { "{//"![]*"//}" }
 
   "{" "}" "[" "]"

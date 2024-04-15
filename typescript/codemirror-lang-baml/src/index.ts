@@ -1,6 +1,6 @@
 import { parser } from "./syntax.grammar"
 import { LRLanguage, LanguageSupport, StreamLanguage, indentNodeProp, foldNodeProp, foldInside, delimitedIndent, syntaxHighlighting } from "@codemirror/language"
-import { styleTags, tags as t, tagHighlighter } from "@lezer/highlight"
+import { classHighlighter, styleTags, tags as t, tagHighlighter } from "@lezer/highlight"
 import { completeFromList } from "@codemirror/autocomplete";
 import { jinja2 } from "@codemirror/legacy-modes/mode/jinja2";
 import { parseMixed } from "@lezer/common";
@@ -25,19 +25,35 @@ export const BAMLLanguage = LRLanguage.define({
         ClassDecl: foldInside
       }),
       styleTags({
-        //"EnumDecl": t.keyword,
-        "EnumValueDecl/IdentifierDecl": t.literal,
-        "EnumDecl": t.labelName,
+        "EnumDecl": t.keyword,
+        "EnumDecl/IdentifierDecl": t.typeName,
+
         "ClassDecl": t.keyword,
+        "ClassDecl/IdentifierDecl": t.typeName,
+
+        "ClientDecl": t.keyword,
+        "ClientDecl/IdentifierDecl": t.typeName,
+
+        "FunctionDecl": t.keyword,
+        "FunctionDecl/IdentifierDecl": t.typeName,
+
+        "ClassField/IdentifierDecl": t.propertyName,
+        "NumericLiteral": t.number,
+        "QuotedString": t.string,
+        "UnquotedString": t.string,
+        "AttributeValue/UnquotedAttributeValue": t.string,
+        
+        "FieldAttribute/IdentifierDecl": t.operator,
+        "BlockAttribute/IdentifierDecl": t.operator,
+
+        "SimpleTypeExpr/IdentifierDecl": t.typeName,
+
         //"ClassDecl/IdentifierDecl": t.name,
         //"ClassField/IdentifierDecl": t.propertyName,
         //"SimpleTypeExpr/IdentifierDecl": t.name,
         //"PromptExpr": t.string,
-        "FieldAttribute/IdentifierDecl": t.attributeName,
-        "AttributeValue/...": t.attributeValue,
         //"FieldAttribute/LiteralDecl": t.string,
         //"EnumDecl/IdentifierDecl": t.name,
-        //"EnumDecl": t.keyword,
         //"BlockAttribute/...": t.annotation,
         //"BlockAttribute/LiteralDecl": t.string,
         //"EnumValueDecl/IdentifierDecl": t.propertyName,
@@ -53,6 +69,13 @@ export const BAMLLanguage = LRLanguage.define({
         //"UnquotedString": t.literal,
         //"NumericLiteral": t.literal,
         //"LiteralDecl": t.literal,
+        //"EnumValueDecl/IdentifierDecl": t.literal,
+        //"EnumDecl": t.labelName,
+        //"ClassDecl": t.keyword,
+        //"FieldAttribute/IdentifierDecl": t.attributeName,
+        //"AttributeValue/...": t.attributeValue,
+        "TrailingComment": t.comment,
+        "MultilineComment": t.comment,
       })
     ]
   }),
@@ -69,24 +92,5 @@ const exampleCompletion = BAMLLanguage.data.of({
 })
 
 export function BAML() {
-  return new LanguageSupport(BAMLLanguage, [exampleCompletion, syntaxHighlighting(tagHighlighter(
-    [
-      {
-        tag: t.attributeName,
-        class: "text-green-500",
-      },
-      {
-        tag: t.attributeValue,
-        class: "text-green-800",
-      },
-      {
-        tag: t.keyword,
-        class: "text-green-500",
-      },
-      {
-        tag: t.labelName,
-        class: "text-red-500",
-      }
-    ]
-  ))])
+  return new LanguageSupport(BAMLLanguage, [exampleCompletion, syntaxHighlighting(classHighlighter)])
 }
