@@ -31,7 +31,7 @@ const FunctionDropdown: React.FC = () => {
           aria-expanded={open}
           className="max-w-[300px] justify-between flex hover:bg-secondary hover:text-foreground"
         >
-          <span className="w-full text-left truncate">{value ?? 'Select a function...'}</span>
+          <span className="w-full -ml-2 text-left truncate">{value ?? 'Select a function...'}</span>
           <ChevronsUpDown className="w-4 h-4 ml-2 opacity-50 shrink-0" />
         </Button>
       </PopoverTrigger>
@@ -79,7 +79,7 @@ export const FunctionSelector: React.FC = () => {
       </div>
       {func && (
         <div className="flex flex-row items-center gap-0 text-xs">
-          <span className="pr-1 text-muted-foreground">Fn signature</span>(
+          <span className="pl-2 pr-1 text-muted-foreground">Fn signature</span>(
           {func.input.arg_type === 'positional' ? (
             <div className="flex flex-row gap-1">
               arg: <TypeComponent typeString={func.input.type} />
