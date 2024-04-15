@@ -200,12 +200,12 @@ export function activate(context: vscode.ExtensionContext) {
   )
   context.subscriptions.push(diagnosticsCollection)
 
-  vscode.workspace.onDidChangeTextDocument((event) => {
-    if (vscode.window.activeTextEditor && event.document === vscode.window.activeTextEditor.document) {
-      scheduleDiagnostics();
+  // vscode.workspace.onDidChangeTextDocument((event) => {
+  //   if (vscode.window.activeTextEditor && event.document === vscode.window.activeTextEditor.document) {
+  //     scheduleDiagnostics();
 
-    }
-  }, null, context.subscriptions);
+  //   }
+  // }, null, context.subscriptions);
 
 
 
