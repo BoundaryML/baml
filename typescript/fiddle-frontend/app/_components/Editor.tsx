@@ -32,6 +32,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { BAMLProject, exampleProjects } from '@/lib/exampleProjects'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
+import { Editable } from './EditableText'
 type EditorFile = {
   path: string
   content: string
@@ -109,6 +110,8 @@ export const EditorContainer = ({ project }: { project: BAMLProject }) => {
       setEditorFiles(project.files)
     }
   }, [project.id])
+  const [projectName, setProjectName] = useState(project.name)
+  const inputRef = useRef(null)
 
   const [loading, setLoading] = useState(false)
   const [functionsAndTests, setFunctionsAndTests] = useAtom(functionsAndTestsAtom)
@@ -116,7 +119,20 @@ export const EditorContainer = ({ project }: { project: BAMLProject }) => {
     // firefox wont apply the background color for some reason so we forcefully set it.
     <div className="flex-col w-full h-full font-sans pl-2flex bg-background dark:bg-vscode-panel-background">
       <div className="flex justify-between border-b-[1px] border-vscode-panel-border h-[40px]">
-        <div className="pt-1 pl-4 text-lg font-semibold text-foreground">{project.name}</div>
+        <div className="flex flex-col items-center h-full py-1">
+          <Editable text={projectName} placeholder="Write a task name" type="input" childRef={inputRef}>
+            <input
+              className="px-2 text-lg border-none text-foreground"
+              type="text"
+              ref={inputRef}
+              name="task"
+              placeholder="Write a task name"
+              value={projectName}
+              onChange={(e) => setProjectName(e.target.value)}
+            />
+          </Editable>
+        </div>
+
         <div className="flex flex-row justify-center gap-x-1 item-center">
           <Button
             variant={'ghost'}
@@ -129,6 +145,7 @@ export const EditorContainer = ({ project }: { project: BAMLProject }) => {
                 if (!urlId) {
                   urlId = await createUrl({
                     ...project,
+                    name: projectName,
                     files: editorFiles,
                     functionsWithTests: functionsAndTests,
                   })
