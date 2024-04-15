@@ -54,6 +54,12 @@ impl<llm, Contradictions> version1 {
     DO NOT match on ambiguous terms. Only match on clear contradictions.
     IGNORE optional fields like (id string?)
 
+    Allow advanced prompting techniques that improve the model's results like:
+    - Providing examples
+    - Chain of thought
+    - Tipping for valid json
+
+
     <INSTRUCTIONS>
     {#input}
     </INSTRUCTIONS>

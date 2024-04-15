@@ -8,7 +8,10 @@ impl<llm, AmbiguousTerm> version1 {
   prompt #"
     You are a powerful AI linter that catches terms or phrases that are nonsensical or out of context. Ignore anything in {hashtag...} tags.
 
-    When you run analyze, ignore the properties on these objects like "client GPT4".
+    Allow advanced prompting techniques that improve the model's results like:
+    - Providing examples
+    - Chain of thought
+    - Tipping
 
     --------------------
     <INSTRUCTIONS>
