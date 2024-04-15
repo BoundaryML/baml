@@ -1,38 +1,34 @@
 'use client'
 
-import CodeMirror, { EditorView, useCodeMirror } from '@uiw/react-codemirror'
-import { BAML } from '@baml/codemirror-lang'
-import { vscodeDark } from '@uiw/codemirror-theme-vscode'
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { ASTProvider, FunctionSelector, FunctionPanel, CustomErrorBoundary } from '@baml/playground-common'
-import { linter, Diagnostic } from '@codemirror/lint'
 import { Button } from '@/components/ui/button'
-import { fetchEventSource } from '@microsoft/fetch-event-source'
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
+import { BAMLProject } from '@/lib/exampleProjects'
+import { BAML } from '@baml/codemirror-lang'
 import {
-  clientEventLogSchema,
-  TestStatus,
   ClientEventLog,
+  ParserDatabase,
+  SFunction,
+  StringSpan,
   TestRequest,
   TestState as TestStateType,
+  TestStatus,
+  clientEventLogSchema,
   getFullTestName,
-  ParserDatabase,
-  StringSpan,
-  SFunction,
 } from '@baml/common'
+import { ASTProvider, CustomErrorBoundary, FunctionPanel, FunctionSelector } from '@baml/playground-common'
+import { Diagnostic, linter } from '@codemirror/lint'
+import { fetchEventSource } from '@microsoft/fetch-event-source'
+import { vscodeDark } from '@uiw/codemirror-theme-vscode'
+import CodeMirror, { EditorView } from '@uiw/react-codemirror'
 import { atom, useAtom } from 'jotai'
 import { atomWithStorage, useHydrateAtoms } from 'jotai/utils'
-import { atomStore, sessionStore } from './JotaiProvider'
 import Link from 'next/link'
-import { atomWithHash } from '@/lib/atomWithHashBase64'
-import { createUrl, updateUrl } from '../actions'
-import { useFormStatus } from 'react-dom'
-import { toast } from 'sonner'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { BAMLProject, exampleProjects } from '@/lib/exampleProjects'
-import { Card, CardContent } from '@/components/ui/card'
-import { cn } from '@/lib/utils'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
+import { createUrl } from '../actions'
 import { Editable } from './EditableText'
+import { atomStore, sessionStore } from './JotaiProvider'
 type EditorFile = {
   path: string
   content: string
@@ -46,6 +42,7 @@ const functionsAndTestsAtom = atomWithStorage<ParserDatabase['functions']>(
 const baml_dir = 'baml_src'
 const currentParserDbAtom = atom<ParserDatabase | null>(null)
 const currentEditorFilesAtom = atomWithStorage<EditorFile[]>('files', [], sessionStore as any)
+// const projectAtom = atom<BAMLProject | null>((get))
 
 async function bamlLinter(view: EditorView): Promise<Diagnostic[]> {
   const lint = await import('@gloo-ai/baml-schema-wasm-web').then((m) => m.lint)

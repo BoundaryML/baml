@@ -7,14 +7,18 @@ import { revalidatePath } from "next/cache";
 export type EditorFile = {
   path: string;
   content: string;
-
 }
 
 export async function createUrl(project: BAMLProject): Promise<string> {
-  const urlId = nanoid()
+  const urlId = nanoid(6)
   console.log(project)
 
-  const user = await kv.set(urlId, project);
+  const urlResponse = await kv.set(urlId, project, {
+    nx: true,
+  });
+  if (!urlResponse) {
+    throw new Error("Failed to create URL");
+  }
   return urlId;
 }
 
