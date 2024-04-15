@@ -1,11 +1,9 @@
-import Image from 'next/image'
-import dynamic from 'next/dynamic'
-import { EditorFile, loadUrl } from '../actions'
 import { BAMLProject, exampleProjects } from '@/lib/exampleProjects'
-import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@baml/playground-common/components/ui/separator'
+import dynamic from 'next/dynamic'
 import { ExampleProjectCard } from '../_components/ExampleProjectCard'
-const Editor = dynamic(() => import('../_components/Editor'), { ssr: false })
+import { loadUrl } from '../actions'
+const ProjectView = dynamic(() => import('./_components/ProjectView'), { ssr: false })
 
 type SearchParams = {
   id: string
@@ -43,7 +41,7 @@ export default async function Home({
         </div>
         <Separator className="h-full bg-vscode-panel-border" orientation="vertical" />
         <div className="w-screen h-screen dark:bg-black">
-          <Editor project={data} />
+          <ProjectView project={data} />
         </div>
       </div>
     </main>

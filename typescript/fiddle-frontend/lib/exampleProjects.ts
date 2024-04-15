@@ -35,7 +35,7 @@ export const exampleProjects: BAMLProject[] = [
         },
         test_cases: [{
           // the actual object type
-          content: "I am running",
+          content: "I am running and jumping",
           name: stringSpanTest('ExtractVerbs', 'test1'),
         }]
       }
