@@ -149,9 +149,10 @@ export function activate(context: vscode.ExtensionContext) {
   console.log("BAML extension activating")
 
   vscode.workspace.getConfiguration('baml')
-  statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-  statusBarItem.text = `AI Linter Ready`;
-  statusBarItem.show();
+  // TODO: Reactivate linter.
+  // statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+  // statusBarItem.text = `AI Linter Ready`;
+  // statusBarItem.show();
   context.subscriptions.push(statusBarItem);
 
   const provider = new DiagnosticCodeActionProvider();
@@ -228,7 +229,9 @@ export function activate(context: vscode.ExtensionContext) {
     console.log(`vscode env: ${JSON.stringify(process.env, null, 2)}`)
     vscode.commands.executeCommand('baml.openBamlPanel')
   }
-  runDiagnostics();
+
+  // TODO: Reactivate linter.
+  // runDiagnostics();
 }
 
 export function deactivate(): void {
