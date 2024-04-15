@@ -353,7 +353,7 @@ impl<'db> WithSerialize for FunctionWalker<'db> {
 
         Ok(format!(
             "Use this output format:\n{}{}",
-            "class_schema", enum_schemas
+            class_schema, enum_schemas
         ))
     }
 }
