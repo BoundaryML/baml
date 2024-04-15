@@ -69,6 +69,9 @@ export const usePlaygroundListener = () => {
           break
 
         case 'saveTest':
+          // reset the url
+          window.history.replaceState(null, '', '/')
+
           const saveTestRequest = data as SaveTestRequest
           // Save test data to localStorage
           const { root_path, funcName, testCaseName, params } = saveTestRequest
@@ -167,6 +170,8 @@ export const usePlaygroundListener = () => {
           })(shadowedState.functionsAndTests)
           break
         case 'runTest':
+          window.history.replaceState(null, '', '/')
+
           const testRequest: { root_path: string; tests: TestRequest } = event.data.data
           const finalEditorFiles = generateAllEditorFiles(editorFiles, shadowedState.functionsAndTests)
           runTests(finalEditorFiles, testRequest.tests)
