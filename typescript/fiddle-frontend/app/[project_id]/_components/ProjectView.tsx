@@ -104,6 +104,7 @@ const ShareButton = ({ project, projectName }: { project: BAMLProject; projectNa
   const [loading, setLoading] = useState(false)
   const functionsAndTests = useAtomValue(functionsAndTestsAtom)
   const editorFiles = useAtomValue(currentEditorFilesAtom)
+  const runTestOutput = useAtomValue(testRunOutputAtom)
 
   return (
     <Button
@@ -120,6 +121,7 @@ const ShareButton = ({ project, projectName }: { project: BAMLProject; projectNa
               name: projectName,
               files: editorFiles,
               functionsWithTests: functionsAndTests,
+              testRunOutput: runTestOutput ?? undefined,
             })
 
             const newUrl = `${window.location.origin}/${urlId}`
@@ -151,6 +153,7 @@ const PlaygroundView = () => {
   const [parserDb] = useAtom(currentParserDbAtom)
   const [functionsAndTests] = useAtom(functionsAndTestsAtom)
   usePlaygroundListener()
+  const testRunOutput = useAtomValue(testRunOutputAtom)
 
   useEffect(() => {
     if (!parserDb) {
@@ -174,6 +177,19 @@ const PlaygroundView = () => {
       content: [[`${BAML_DIR}`, newParserDb]],
     })
   }, [JSON.stringify(parserDb), JSON.stringify(functionsAndTests)])
+
+  useEffect(() => {
+    if (testRunOutput) {
+      window.postMessage({
+        command: 'test-results',
+        content: testRunOutput.testState,
+      })
+      window.postMessage({
+        command: 'test-stdout',
+        content: testRunOutput.outputLogs.join(''),
+      })
+    }
+  }, [testRunOutput])
 
   return (
     <>
