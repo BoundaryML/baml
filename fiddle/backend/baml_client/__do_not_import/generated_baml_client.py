@@ -16,6 +16,8 @@ from .functions.fx_ambiguousterm import BAMLAmbiguousTerm
 from .functions.fx_chainofthought import BAMLChainOfThought
 from .functions.fx_contradictions import BAMLContradictions
 from .functions.fx_exampleprovider import BAMLExampleProvider
+from .functions.fx_nolargedistance import BAMLNoLargeDistance
+from .functions.fx_notipping import BAMLNoTipping
 from .functions.fx_offensivelanguage import BAMLOffensiveLanguage
 from baml_core.otel import add_message_transformer_hook, flush_trace_logs
 from baml_core.provider_manager import LLMManager
@@ -29,6 +31,8 @@ class BAMLClient:
     ChainOfThought = BAMLChainOfThought
     Contradictions = BAMLContradictions
     ExampleProvider = BAMLExampleProvider
+    NoLargeDistance = BAMLNoLargeDistance
+    NoTipping = BAMLNoTipping
     OffensiveLanguage = BAMLOffensiveLanguage
     Claude = Claude
     ClaudeInstant = ClaudeInstant

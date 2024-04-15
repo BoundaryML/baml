@@ -246,12 +246,14 @@ class LinterRuleOutput(BaseModel):
 
 @app.post("/lint")
 async def lint(request: LintRequest) -> List[LinterRuleOutput]:
-    result1, result2, res3, res4, res5 = await asyncio.gather(
+    result1, result2, res3, res4, res5, res6, res7 = await asyncio.gather(
         baml.Contradictions(request.promptTemplate),
         baml.ChainOfThought(request.promptTemplate),
         baml.AmbiguousTerm(request.promptTemplate),
         baml.OffensiveLanguage(request.promptTemplate),
         baml.ExampleProvider(request.promptTemplate),
+        baml.NoTipping(request.promptTemplate),
+        baml.NoLargeDistance(request.promptTemplate),
     )
 
     res1_outputs = [
@@ -264,6 +266,18 @@ async def lint(request: LintRequest) -> List[LinterRuleOutput]:
         for item in result1
     ]
 
+    res3 = [
+        LinterOutput(
+            exactPhrase=item.exactPhrase,
+            recommendation=item.recommendation,
+            fix=item.fix,
+            reason=item.reason,
+        )
+        for item in res3
+        if item.exactPhrase not in ["impl<llm, ExtractResume2> version1", "client GPT4"]
+    ]
+
+
     print(result1)
     print(result2)
     print(res3)
@@ -273,10 +287,14 @@ async def lint(request: LintRequest) -> List[LinterRuleOutput]:
             diagnostics=res1_outputs,
             ruleName="Contradictions",
         ),
-        LinterRuleOutput(diagnostics=result2, ruleName="ChainOfThought"),
-        LinterRuleOutput(diagnostics=res3, ruleName="AmbiguousTerm"),
         LinterRuleOutput(diagnostics=res4, ruleName="OffensiveLanguage"),
-        LinterRuleOutput(diagnostics=res5, ruleName="ExampleProvider"),
+
+        # LinterRuleOutput(diagnostics=res5, ruleName="ExampleProvider"),
+        # LinterRuleOutput(diagnostics=res3, ruleName="AmbiguousTerm"),
+
+        LinterRuleOutput(diagnostics=result2, ruleName="ChainOfThought"),
+        LinterRuleOutput(diagnostics=res6, ruleName="Tipping"),
+        LinterRuleOutput(diagnostics=res7, ruleName="NoLargeDistance"),
     ]
 
 
