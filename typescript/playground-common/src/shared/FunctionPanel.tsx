@@ -60,7 +60,7 @@ const FunctionPanel: React.FC = () => {
       topPanelSize = 85
     }
   }
-  let testResultId = test_results ? test_results[0].status : ''
+  let testResultId = test_results ? test_results[0]?.status : ''
 
   console.log('testResultId', testResultId, topPanelSize)
   return (
