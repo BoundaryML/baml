@@ -14,6 +14,17 @@ export const useTestRunner = () => {
   const setTestRunOutput = useSetAtom(testRunOutputAtom)
   const fetchData = useCallback(async (editorFiles: EditorFile[], testRequest: TestRequest) => {
     const testState = new TestState()
+    setTestRunOutput((prev) => {
+      return {
+        testState: {
+          results: [],
+          run_status: 'RUNNING',
+          exit_code: undefined,
+          test_url: null,
+        },
+        outputLogs: [],
+      }
+    })
 
     testState.setTestStateListener((testResults) => {
       window.postMessage({ command: 'test-results', content: testResults })

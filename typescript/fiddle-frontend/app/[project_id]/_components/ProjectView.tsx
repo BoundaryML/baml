@@ -217,7 +217,7 @@ const PlaygroundView = () => {
       })
       window.postMessage({
         command: 'test-stdout',
-        content: testRunOutput.outputLogs.join(''),
+        content: testRunOutput.outputLogs.join('\n'),
       })
     }
   }, [testRunOutput])

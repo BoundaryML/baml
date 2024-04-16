@@ -80,14 +80,7 @@ const FunctionPanel: React.FC = () => {
           id={id + showTests.valueOf() + testResultId}
         >
           <ResizablePanel className="flex w-full " defaultSize={topPanelSize}>
-            <div
-              className={clsx('w-full ', {
-                // 'basis-[60%]': showTests && results.length > 0,
-                // 'basis-[100%]': !showTests,
-                // 'basis-[85%]': showTests && !(results.length > 0),
-              })}
-            >
-              {/* <Allotment className="h-full"> */}
+            <div className="w-full">
               <ResizablePanelGroup direction="horizontal" className="h-full">
                 {impl && (
                   <ResizablePanel defaultSize={50} className="px-0">
