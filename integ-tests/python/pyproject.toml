@@ -10,8 +10,12 @@ packages = [{include = "app"}]
 python = "^3.8"
 # Use client in production
 # baml = "^0.14.1"
-baml = {path = "../../clients/python", develop = true}
+baml = {path = "../../clients/python"}
 ruff = "^0.3.3"
+maturin = "^1.5.1"
+
+# After poetry install run this:
+# env -u CONDA_PREFIX poetry run maturin develop --manifest-path ../../clients/python-ffi/Cargo.toml
 
 [build-system]
 requires = ["poetry-core"]
