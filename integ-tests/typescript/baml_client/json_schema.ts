@@ -344,6 +344,47 @@ const schema: JSONSchema7 = {
         "prop2"
       ]
     },
+    "Resume": {
+      "title": "Resume",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "experience": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "education": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "skills": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "name",
+        "email",
+        "phone",
+        "experience",
+        "education",
+        "skills"
+      ]
+    },
     "SomeClass2": {
       "title": "SomeClass2",
       "type": "object",
@@ -475,6 +516,18 @@ const schema: JSONSchema7 = {
         "prop2",
         "prop3"
       ]
+    },
+    "ExtractResume_input": {
+      "type": "object",
+      "properties": {
+        "resume": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "resume"
+      ],
+      "title": "ExtractResume input"
     },
     "FnClassOptional_input": {
       "anyOf": [
@@ -706,6 +759,10 @@ const schema: JSONSchema7 = {
         }
       ],
       "title": "UnionTest_Function input"
+    },
+    "ExtractResume_output": {
+      "$ref": "#/definitions/Resume",
+      "title": "ExtractResume output"
     },
     "FnClassOptional_output": {
       "type": "string",
@@ -958,6 +1015,10 @@ registerObjectDeserializer(schema.definitions.OptionalTest_ReturnType, {
 });
 
 registerObjectDeserializer(schema.definitions.OverrideClass, {
+
+});
+
+registerObjectDeserializer(schema.definitions.Resume, {
 
 });
 

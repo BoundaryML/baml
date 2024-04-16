@@ -12,6 +12,7 @@ import "./impls"
 loadEnvVars()
 
 const BamlClient = {
+  ExtractResume: f.ExtractResume,
   FnClassOptional: f.FnClassOptional,
   FnClassOptional2: f.FnClassOptional2,
   FnClassOptionalOutput: f.FnClassOptionalOutput,

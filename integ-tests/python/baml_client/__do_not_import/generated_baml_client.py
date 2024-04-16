@@ -16,6 +16,7 @@ from .clients.client_lottery_simplesyntax import Lottery_SimpleSyntax
 from .clients.client_ollama import Ollama
 from .clients.client_resilient_complexsyntax import Resilient_ComplexSyntax
 from .clients.client_resilient_simplesyntax import Resilient_SimpleSyntax
+from .functions.fx_extractresume import BAMLExtractResume
 from .functions.fx_fnclassoptional import BAMLFnClassOptional
 from .functions.fx_fnclassoptional2 import BAMLFnClassOptional2
 from .functions.fx_fnclassoptionaloutput import BAMLFnClassOptionalOutput
@@ -55,6 +56,7 @@ from typing import Callable, List, Optional
 
 
 class BAMLClient:
+    ExtractResume = BAMLExtractResume
     FnClassOptional = BAMLFnClassOptional
     FnClassOptional2 = BAMLFnClassOptional2
     FnClassOptionalOutput = BAMLFnClassOptionalOutput

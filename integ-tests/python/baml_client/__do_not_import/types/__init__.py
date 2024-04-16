@@ -18,6 +18,7 @@ from .classes.cls_optionalclass import OptionalClass
 from .classes.cls_optionaltest_prop1 import OptionalTest_Prop1
 from .classes.cls_optionaltest_returntype import OptionalTest_ReturnType
 from .classes.cls_overrideclass import OverrideClass
+from .classes.cls_resume import Resume
 from .classes.cls_someclass2 import SomeClass2
 from .classes.cls_testclassalias import TestClassAlias
 from .classes.cls_testclasswithenum import TestClassWithEnum
@@ -52,6 +53,7 @@ __all__ = [
     'OptionalTest_ReturnType',
     'OverrideClass',
     'OverrideEnum',
+    'Resume',
     'SomeClass2',
     'TestClassAlias',
     'TestClassWithEnum',

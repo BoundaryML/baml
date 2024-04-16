@@ -5,6 +5,8 @@
 // @ts-nocheck
 /* eslint-disable */
 
+import './extractresume_default_config';
+
 import './fnclassoptional_v1';
 
 import './fnclassoptional2_v1';

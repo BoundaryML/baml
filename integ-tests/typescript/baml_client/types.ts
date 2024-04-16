@@ -105,6 +105,15 @@ interface OverrideClass {
   prop2: string;
 }
 
+interface Resume {
+  name: string;
+  email: string;
+  phone: string;
+  experience: string[];
+  education: string[];
+  skills: string[];
+}
+
 interface SomeClass2 {
   prop1: string;
   prop2: string;
@@ -135,5 +144,5 @@ interface UnionTest_ReturnType {
 }
 
 
-export { EnumInClass, EnumOutput, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalTest_CategoryType, OverrideEnum, TestEnum, Blah, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, DynamicPropsClass, ModifiedOutput, NamedArgsSingleClass, OptionalClass, OptionalTest_Prop1, OptionalTest_ReturnType, OverrideClass, SomeClass2, TestClassAlias, TestClassWithEnum, TestOutputClass, UnionTest_ReturnType }
+export { EnumInClass, EnumOutput, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalTest_CategoryType, OverrideEnum, TestEnum, Blah, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, DynamicPropsClass, ModifiedOutput, NamedArgsSingleClass, OptionalClass, OptionalTest_Prop1, OptionalTest_ReturnType, OverrideClass, Resume, SomeClass2, TestClassAlias, TestClassWithEnum, TestOutputClass, UnionTest_ReturnType }
 

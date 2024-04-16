@@ -6,7 +6,7 @@
 /* eslint-disable */
 
 
-import { Blah, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, DynamicPropsClass, EnumInClass, EnumOutput, ModifiedOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalClass, OptionalTest_CategoryType, OptionalTest_Prop1, OptionalTest_ReturnType, OverrideClass, OverrideEnum, SomeClass2, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass, UnionTest_ReturnType } from './types';
+import { Blah, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, DynamicPropsClass, EnumInClass, EnumOutput, ModifiedOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalClass, OptionalTest_CategoryType, OptionalTest_Prop1, OptionalTest_ReturnType, OverrideClass, OverrideEnum, Resume, SomeClass2, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass, UnionTest_ReturnType } from './types';
 
 
 // Function to check if a value is a member of the EnumInClass enum
@@ -478,6 +478,67 @@ class InternalOverrideClass implements OverrideClass {
   }
 }
 
+// Function to validate if an object is a Resume object
+function isResume(obj: any): obj is Resume {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("name" in obj && (typeof obj.name === 'string'))
+    && ("email" in obj && (typeof obj.email === 'string'))
+    && ("phone" in obj && (typeof obj.phone === 'string'))
+    && ("experience" in obj && (Array.isArray(obj.experience) && obj.experience.every((x: any) => typeof x === 'string')))
+    && ("education" in obj && (Array.isArray(obj.education) && obj.education.every((x: any) => typeof x === 'string')))
+    && ("skills" in obj && (Array.isArray(obj.skills) && obj.skills.every((x: any) => typeof x === 'string')))
+  );
+}
+
+
+class InternalResume implements Resume {
+  private constructor(private data: {
+    name: string,
+    email: string,
+    phone: string,
+    experience: string[],
+    education: string[],
+    skills: string[],
+  }, private raw: Resume) {}
+
+  static from(data: Resume): InternalResume {
+    return new InternalResume({
+      name: data.name,
+      email: data.email,
+      phone: data.phone,
+      experience: data.experience.map(x => x),
+      education: data.education.map(x => x),
+      skills: data.skills.map(x => x),
+    }, data);
+  }
+
+  get name(): string {
+    return this.data.name;
+  }
+  get email(): string {
+    return this.data.email;
+  }
+  get phone(): string {
+    return this.data.phone;
+  }
+  get experience(): string[] {
+    return this.data.experience;
+  }
+  get education(): string[] {
+    return this.data.education;
+  }
+  get skills(): string[] {
+    return this.data.skills;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
 // Function to validate if an object is a SomeClass2 object
 function isSomeClass2(obj: any): obj is SomeClass2 {
   return (
@@ -709,5 +770,5 @@ if (Array.isArray(x) && x.every((x: any) => typeof x === 'boolean')) {
 }
 
 
-export { InternalBlah, InternalClassOptionalFields, InternalClassOptionalOutput, InternalClassOptionalOutput2, InternalDynamicPropsClass, InternalModifiedOutput, InternalNamedArgsSingleClass, InternalOptionalClass, InternalOptionalTest_Prop1, InternalOptionalTest_ReturnType, InternalOverrideClass, InternalSomeClass2, InternalTestClassAlias, InternalTestClassWithEnum, InternalTestOutputClass, InternalUnionTest_ReturnType }
+export { InternalBlah, InternalClassOptionalFields, InternalClassOptionalOutput, InternalClassOptionalOutput2, InternalDynamicPropsClass, InternalModifiedOutput, InternalNamedArgsSingleClass, InternalOptionalClass, InternalOptionalTest_Prop1, InternalOptionalTest_ReturnType, InternalOverrideClass, InternalResume, InternalSomeClass2, InternalTestClassAlias, InternalTestClassWithEnum, InternalTestOutputClass, InternalUnionTest_ReturnType }
 

@@ -7,6 +7,7 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
+from ..__do_not_import.functions.fx_extractresume import IExtractResume, IExtractResumeOutput, IExtractResumeStream
 from ..__do_not_import.functions.fx_fnclassoptional import IFnClassOptional, IFnClassOptionalOutput, IFnClassOptionalStream
 from ..__do_not_import.functions.fx_fnclassoptional2 import IFnClassOptional2, IFnClassOptional2Output, IFnClassOptional2Stream
 from ..__do_not_import.functions.fx_fnclassoptionaloutput import IFnClassOptionalOutput, IFnClassOptionalOutputOutput, IFnClassOptionalOutputStream
@@ -49,6 +50,7 @@ from ..__do_not_import.types.classes.cls_optionalclass import OptionalClass
 from ..__do_not_import.types.classes.cls_optionaltest_prop1 import OptionalTest_Prop1
 from ..__do_not_import.types.classes.cls_optionaltest_returntype import OptionalTest_ReturnType
 from ..__do_not_import.types.classes.cls_overrideclass import OverrideClass
+from ..__do_not_import.types.classes.cls_resume import Resume
 from ..__do_not_import.types.classes.cls_someclass2 import SomeClass2
 from ..__do_not_import.types.classes.cls_testclassalias import TestClassAlias
 from ..__do_not_import.types.classes.cls_testclasswithenum import TestClassWithEnum
@@ -73,6 +75,9 @@ __all__ = [
     'DynamicPropsClass',
     'EnumInClass',
     'EnumOutput',
+    'IExtractResume',
+    'IExtractResumeOutput',
+    'IExtractResumeStream',
     'IFnClassOptional',
     'IFnClassOptional2',
     'IFnClassOptional2Output',
@@ -176,6 +181,7 @@ __all__ = [
     'OptionalTest_ReturnType',
     'OverrideClass',
     'OverrideEnum',
+    'Resume',
     'SomeClass2',
     'TestClassAlias',
     'TestClassWithEnum',

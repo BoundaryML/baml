@@ -18,6 +18,7 @@ from ..__do_not_import.types.partial.classes.cls_optionalclass import PartialOpt
 from ..__do_not_import.types.partial.classes.cls_optionaltest_prop1 import PartialOptionalTest_Prop1
 from ..__do_not_import.types.partial.classes.cls_optionaltest_returntype import PartialOptionalTest_ReturnType
 from ..__do_not_import.types.partial.classes.cls_overrideclass import PartialOverrideClass
+from ..__do_not_import.types.partial.classes.cls_resume import PartialResume
 from ..__do_not_import.types.partial.classes.cls_someclass2 import PartialSomeClass2
 from ..__do_not_import.types.partial.classes.cls_testclassalias import PartialTestClassAlias
 from ..__do_not_import.types.partial.classes.cls_testclasswithenum import PartialTestClassWithEnum
@@ -39,6 +40,7 @@ __all__ = [
     'PartialOptionalTest_Prop1',
     'PartialOptionalTest_ReturnType',
     'PartialOverrideClass',
+    'PartialResume',
     'PartialSomeClass2',
     'PartialTestClassAlias',
     'PartialTestClassWithEnum',
