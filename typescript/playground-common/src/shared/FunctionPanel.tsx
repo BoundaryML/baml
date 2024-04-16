@@ -97,7 +97,7 @@ const FunctionPanel: React.FC = () => {
                     </div>
                   </ResizablePanel>
                 )}
-                <ResizableHandle withHandle={true} className="bg-vscode-panel-border" />
+                <ResizableHandle withHandle={false} className="bg-vscode-panel-border" />
                 <ResizablePanel minSize={50} className="pl-2 pr-0.5" hidden={!showTests}>
                   {/* <Allotment.Pane className="pl-2 pr-0.5" minSize={200} visible={showTests}> */}
                   <div className="flex flex-col h-full overflow-y-auto overflow-x-clip">
@@ -110,7 +110,7 @@ const FunctionPanel: React.FC = () => {
               {/* </Allotment> */}
             </div>
           </ResizablePanel>
-          <ResizableHandle withHandle={true} className="bg-vscode-panel-border" />
+          <ResizableHandle withHandle={false} className="bg-vscode-panel-border" />
           <ResizablePanel minSize={10} className="px-0 overflow-y-auto">
             <div
               className={clsx('py-2 border-t h-full border-vscode-textSeparator-foreground', {
