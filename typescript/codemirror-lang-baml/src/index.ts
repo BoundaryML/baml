@@ -1,8 +1,8 @@
 import { parser } from "./syntax.grammar"
 import { vscodeDarkInit } from '@uiw/codemirror-theme-vscode'
-import { LRLanguage, LanguageSupport, StreamLanguage, indentNodeProp, foldNodeProp, foldInside, delimitedIndent, syntaxHighlighting } from "@codemirror/language"
+import { LRLanguage, LanguageSupport, StreamLanguage, indentNodeProp, foldNodeProp, foldInside, delimitedIndent, syntaxHighlighting, continuedIndent, indentOnInput } from "@codemirror/language"
 import { classHighlighter, styleTags, tags as t, tagHighlighter } from "@lezer/highlight"
-import { completeFromList } from "@codemirror/autocomplete";
+import { closeBrackets, completeFromList, snippetCompletion } from "@codemirror/autocomplete";
 import { jinja2 } from "@codemirror/legacy-modes/mode/jinja2";
 import { parseMixed } from "@lezer/common";
 
@@ -16,11 +16,13 @@ export const BAMLLanguage = LRLanguage.define({
       return {
         parser: StreamLanguage.define(jinja2).parser,
       }
-
     }),
     props: [
       indentNodeProp.add({
-        Application: delimitedIndent({ closing: ")", align: false })
+        Decl: delimitedIndent({ closing: "}", align: true }),
+        // not sure the except is doing anything.
+        "PromptExpr": delimitedIndent({ closing: "#\"", align: true }),
+
       }),
       foldNodeProp.add({
         ClassDecl: foldInside
@@ -48,16 +50,21 @@ export const BAMLLanguage = LRLanguage.define({
         "QuotedString": t.string,
         "UnquotedString": t.string,
         "AttributeValue/UnquotedAttributeValue": t.string,
-        
+        'FieldAttribute': t.attributeName,
+
         'FieldAttribute/@': t.attributeName,
         "FieldAttribute/IdentifierDecl": t.attributeName,
         'BlockAttribute/@@': t.attributeName,
         "BlockAttribute/IdentifierDecl": t.attributeName,
 
         "SimpleTypeExpr/IdentifierDecl": t.typeName,
-        
+
         "variable": t.controlKeyword,
-        
+        "PromptExpr": t.string,
+        'PromptExprNonJinja/...': t.string,
+        "PromptExprNonJinja/PromptExprContents/...": t.operator,
+
+
         "TupleValue/IdentifierDecl": t.operator,
 
         "TrailingComment": t.comment,
@@ -66,15 +73,26 @@ export const BAMLLanguage = LRLanguage.define({
     ]
   }),
   languageData: {
-    commentTokens: { line: "//" }
+    commentTokens: { line: "//" },
+    closeBrackets: {
+      brackets: ["(", "[", '"', "#\"", "{",],
+      stringPrefixes: ["#\""],
+      wordChars: ["#", "\""],
+    },
+    snippetCompletion: true,
+
   }
 })
 
 
 const exampleCompletion = BAMLLanguage.data.of({
-  autocomplete: completeFromList([
-    { label: "class", type: "keyword" },
-  ])
+  autocomplete: [
+    //{ label: "class", type: "keyword" },
+    snippetCompletion('@alias(#"${one}"#)', { label: '@alias' }),
+    snippetCompletion('@description(#"${one}"#)', { label: '@description' }),
+    snippetCompletion('prompt #"\n  {{ _.chat("user") }}\n  INPUT:\n  ---\n  {{ your-variable }}\n  ---\n  Response:\n"#', { label: 'prompt #"' }),
+    snippetCompletion('#"${mystring}"#', { label: '#"' }),
+  ],
 })
 
 export const theme = vscodeDarkInit({

@@ -87,7 +87,10 @@ LiteralDecl { NumericLiteral | QuotedString | UnquotedString }
 @skip {} {
   PromptExpr { '#"' PromptExprContents '"#'}
   PromptExprContents { (promptChar)* }
-  AttributeValue { '(' (QuotedString | UnquotedAttributeValue)? ')' }
+  AttributeValue { '(' (QuotedString | UnquotedAttributeValue | PromptExprNonJinja)? ')' }
+  //AttributeValue2 { '(#"' (QuotedString |  )? '"#)' }
+  PromptExprNonJinja { '#"' PromptExprContents '"#'}
+
 }
 
 @detectDelim
