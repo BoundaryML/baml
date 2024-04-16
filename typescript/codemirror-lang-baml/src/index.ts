@@ -87,11 +87,14 @@ export const BAMLLanguage = LRLanguage.define({
 
 const exampleCompletion = BAMLLanguage.data.of({
   autocomplete: [
-    //{ label: "class", type: "keyword" },
     snippetCompletion('@alias(#"${one}"#)', { label: '@alias' }),
-    snippetCompletion('@description(#"${one}"#)', { label: '@description' }),
+    snippetCompletion('@description(#"${}"#)', { label: '@description' }),
+    snippetCompletion("class ${ClassName} {\n  ${property string}\n}", { label: 'class' }),
+    snippetCompletion('enum ${EnumName} {\n  ${ONE}\n  ${TWO}\n}', { label: 'enum' }),
+    snippetCompletion('function MyFunction(${arg: string}) -> ${YourOutputType} {\n  ${client YourClient}\n  prompt #"\n    ${add some instructions}\n  "#\n}', { label: 'function' }),
     snippetCompletion('prompt #"\n  {{ _.chat("user") }}\n  INPUT:\n  ---\n  {{ your-variable }}\n  ---\n  Response:\n"#', { label: 'prompt #"' }),
     snippetCompletion('#"${mystring}"#', { label: '#"' }),
+    snippetCompletion('client<llm> GPT4 {\n  provider baml-openai-chat\n  options {\n    model gpt4  \n}}', { label: 'client<llm> GPT4' }),
   ],
 })
 
