@@ -1,10 +1,10 @@
 'use client'
 import { EditorFile } from '@/app/actions'
 import { Button } from '@baml/playground-common/components/ui/button'
-import { useAtom } from 'jotai'
+import { useAtom, useSetAtom } from 'jotai'
 import { usePathname } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { currentEditorFilesAtom, currentParserDbAtom } from '../_atoms/atoms'
+import { currentEditorFilesAtom, currentParserDbAtom, unsavedChangesAtom } from '../_atoms/atoms'
 import { BAML_DIR } from '@/lib/constants'
 import { atomStore } from '@/app/_components/JotaiProvider'
 import { BAML, theme } from '@baml/codemirror-lang'
@@ -79,7 +79,8 @@ const extensions = [
 export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
   const [editorFiles, setEditorFiles] = useAtom(currentEditorFilesAtom)
   const [activeFile, setActiveFile] = useState<EditorFile>(project.files[0])
-  console.log('project active file', activeFile)
+
+  const setUnsavedChanges = useSetAtom(unsavedChangesAtom)
 
   return (
     <div className="w-full">
@@ -128,6 +129,7 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
               return [...files]
             })
             window.history.replaceState(null, '', '/')
+            setUnsavedChanges(true)
           }}
         />
       </>

@@ -13,6 +13,7 @@ export const functionsAndTestsAtom = atomWithStorage<ParserDBFunctionTestModel[]
   sessionStore as any,
 )
 export const testRunOutputAtom = atom<TestRunOutput | null>(null)
+export const unsavedChangesAtom = atom<boolean>(false);
 
 export type TestRunOutput = {
   testState: TestState;

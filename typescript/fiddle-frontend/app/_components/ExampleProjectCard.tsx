@@ -17,7 +17,7 @@ export const ExampleProjectCard = ({ project }: { project: BAMLProject }) => {
       )}
       onClick={() => {
         router.push(`/${project.id}`)
-        // router.refresh()
+        router.refresh()
       }}
     >
       <CardHeader className="px-1 py-4">

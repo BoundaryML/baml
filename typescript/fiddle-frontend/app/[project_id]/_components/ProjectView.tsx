@@ -15,21 +15,31 @@ import {
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { useHydrateAtoms } from 'jotai/utils'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { useParams, usePathname } from 'next/navigation'
 import { useContext, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Editable } from '../../_components/EditableText'
 import { EditorFile, createUrl } from '../../actions'
-import { currentEditorFilesAtom, currentParserDbAtom, functionsAndTestsAtom, testRunOutputAtom } from '../_atoms/atoms'
+import {
+  currentEditorFilesAtom,
+  currentParserDbAtom,
+  functionsAndTestsAtom,
+  testRunOutputAtom,
+  unsavedChangesAtom,
+} from '../_atoms/atoms'
 import { CodeMirrorEditor } from './CodeMirrorEditor'
 import { usePlaygroundListener } from '../_playground_controller/usePlaygroundListener'
 import { ASTContext } from '@baml/playground-common/shared/ASTProvider'
+import { Badge } from '@/components/ui/badge'
+import { useRouter } from 'next/navigation'
 
 const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
   const setEditorFiles = useSetAtom(currentEditorFilesAtom)
   const setTestRunOutput = useSetAtom(testRunOutputAtom)
   useCommandS()
   const setFunctionsAndTests = useSetAtom(functionsAndTestsAtom)
+  // Tried to use url pathnames for this but nextjs hijacks the pathname state (even the window.location) so we have to manually track unsaved changes in the app.
+  const [unsavedChanges, setUnsavedChanges] = useAtom(unsavedChangesAtom)
 
   useEffect(() => {
     if (project && project?.files?.length > 0) {
@@ -50,7 +60,6 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
       }
     }
   }, [project.id])
-  console.log('project editor files', project.files)
 
   return (
     // firefox wont apply the background color for some reason so we forcefully set it.
@@ -69,7 +78,9 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
             />
           </Editable>
         </div>
-        <ShareButton project={project} projectName={projectName} />
+        <div className="flex flex-row items-center gap-x-2">
+          <ShareButton project={project} projectName={projectName} />
+        </div>
 
         <div className="flex flex-row justify-center gap-x-1 item-center">
           {/* <TestToggle /> */}
@@ -77,6 +88,15 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
             <Link href="https://docs.boundaryml.com">Docs</Link>
           </Button>
         </div>
+        {unsavedChanges ? (
+          <div className="flex flex-row items-center text-muted-foreground">
+            <Badge variant="outline" className="font-light text-red-400">
+              Unsaved changes
+            </Badge>
+          </div>
+        ) : (
+          <></>
+        )}
       </div>
 
       <div className="flex flex-row w-full h-full">
@@ -112,6 +132,8 @@ const ShareButton = ({ project, projectName }: { project: BAMLProject; projectNa
   const functionsAndTests = useAtomValue(functionsAndTestsAtom)
   const editorFiles = useAtomValue(currentEditorFilesAtom)
   const runTestOutput = useAtomValue(testRunOutputAtom)
+  const pathname = usePathname()
+  const setUnsavedChanges = useSetAtom(unsavedChangesAtom)
 
   return (
     <Button
@@ -121,7 +143,8 @@ const ShareButton = ({ project, projectName }: { project: BAMLProject; projectNa
       onClick={async () => {
         setLoading(true)
         try {
-          let urlId = window.location.pathname.split('/')[1]
+          let urlId = pathname.split('/')[1]
+          console.log('urlId', urlId)
           if (!urlId) {
             urlId = await createUrl({
               ...project,
@@ -132,7 +155,8 @@ const ShareButton = ({ project, projectName }: { project: BAMLProject; projectNa
             })
 
             const newUrl = `${window.location.origin}/${urlId}`
-            window.history.replaceState(null, '', newUrl)
+            window.history.replaceState({ ...window.history.state, as: newUrl, url: newUrl }, '', newUrl)
+            setUnsavedChanges(false)
             // router.replace(pathname + '?' + updatedSearchParams.toString(), { scroll: false })
           }
 
@@ -202,7 +226,7 @@ const PlaygroundView = () => {
     <>
       <CustomErrorBoundary>
         <ASTProvider>
-          <TestToggle />
+          {/* <TestToggle /> */}
           <div className="flex flex-col gap-2 px-2 pb-4">
             <FunctionSelector />
             {/* <Separator className="bg-vscode-textSeparator-foreground" /> */}
