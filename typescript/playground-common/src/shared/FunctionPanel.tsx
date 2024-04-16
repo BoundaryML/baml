@@ -98,7 +98,7 @@ const FunctionPanel: React.FC = () => {
                   </ResizablePanel>
                 )}
                 <ResizableHandle withHandle={false} className="bg-vscode-panel-border" />
-                <ResizablePanel minSize={50} className="pl-2 pr-0.5" hidden={!showTests}>
+                <ResizablePanel minSize={30} className="pl-2 pr-0.5" hidden={!showTests}>
                   {/* <Allotment.Pane className="pl-2 pr-0.5" minSize={200} visible={showTests}> */}
                   <div className="flex flex-col h-full overflow-y-auto overflow-x-clip">
                     {/* On windows this scroll area extends beyond the wanted width, so we just use a normal scrollbar here vs using ScrollArea*/}
