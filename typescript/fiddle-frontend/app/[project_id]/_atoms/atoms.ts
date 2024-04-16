@@ -15,6 +15,8 @@ export const functionsAndTestsAtom = atomWithStorage<ParserDBFunctionTestModel[]
 export const testRunOutputAtom = atom<TestRunOutput | null>(null)
 export const unsavedChangesAtom = atom<boolean>(false);
 
+export const activeFileAtom = atom<EditorFile | null>(null);
+
 export type TestRunOutput = {
   testState: TestState;
   outputLogs: string[];

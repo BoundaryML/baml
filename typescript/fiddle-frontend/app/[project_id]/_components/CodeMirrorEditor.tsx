@@ -4,7 +4,7 @@ import { Button } from '@baml/playground-common/components/ui/button'
 import { useAtom, useSetAtom } from 'jotai'
 import { usePathname } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { currentEditorFilesAtom, currentParserDbAtom, unsavedChangesAtom } from '../_atoms/atoms'
+import { activeFileAtom, currentEditorFilesAtom, currentParserDbAtom, unsavedChangesAtom } from '../_atoms/atoms'
 import { BAML_DIR } from '@/lib/constants'
 import { atomStore } from '@/app/_components/JotaiProvider'
 import { BAML, theme } from '@baml/codemirror-lang'
@@ -12,6 +12,7 @@ import { ParserDatabase } from '@baml/common'
 import { Diagnostic, linter } from '@codemirror/lint'
 import CodeMirror, { EditorView } from '@uiw/react-codemirror'
 import { BAMLProject } from '@/lib/exampleProjects'
+import { useHydrateAtoms } from 'jotai/utils'
 
 type LintResponse = {
   diagnostics: LinterError[]
@@ -58,14 +59,16 @@ async function bamlLinter(view: EditorView): Promise<Diagnostic[]> {
     atomStore.set(currentParserDbAtom, newParserDb)
   }
 
-  return parsedRes.diagnostics.map((d) => {
-    return {
-      from: d.start,
-      to: d.end,
-      message: d.text,
-      severity: d.is_warning ? 'warning' : 'error',
-    }
-  })
+  return parsedRes.diagnostics
+    .filter((d) => d.source_file === atomStore.get(activeFileAtom)?.path)
+    .map((d) => {
+      return {
+        from: d.start,
+        to: d.end,
+        message: d.text,
+        severity: d.is_warning ? 'warning' : 'error',
+      }
+    })
 }
 const extensions = [
   BAML(),
@@ -78,7 +81,11 @@ const extensions = [
 
 export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
   const [editorFiles, setEditorFiles] = useAtom(currentEditorFilesAtom)
-  const [activeFile, setActiveFile] = useState<EditorFile>(project.files[0])
+  const [activeFile, setActiveFile] = useAtom(activeFileAtom)
+
+  useEffect(() => {
+    setActiveFile(project.files[0])
+  }, [project.id])
 
   const setUnsavedChanges = useSetAtom(unsavedChangesAtom)
 
