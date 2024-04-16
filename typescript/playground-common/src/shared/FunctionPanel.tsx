@@ -23,11 +23,12 @@ const FunctionPanel: React.FC = () => {
     setSelection,
   } = useContext(ASTContext)
   const { func, impl } = useSelections()
-
-  if (!func) return <div className="flex flex-col">No function selected</div>
   const { test_results } = useSelections()
   const results = test_results ?? []
   const id = useId()
+
+  if (!func)
+    return <div className="flex flex-col">No function selected. Create or select a function to get started</div>
 
   let impls = <div />
   if (!impl) {
