@@ -35,7 +35,6 @@ const uiSchema: UiSchema = {
 type Func = ParserDatabase['functions'][number]
 type TestCase = Func['test_cases'][number]
 
-
 const TestCasePanelEntry: React.FC<{ func: Func; test_case: TestCase }> = ({ func, test_case }) => {
   const { impl, input_json_schema } = useSelections()
   if (input_json_schema) {
@@ -76,7 +75,7 @@ const TestCasePanelEntry: React.FC<{ func: Func; test_case: TestCase }> = ({ fun
               })
             }}
           >
-            <Play size={10}/>
+            <Play size={10} />
           </Button>
           {/* IDK why it doesnt truncate. Probably cause of the allotment */}
           <div className="flex w-full flex-nowrap">
@@ -230,7 +229,9 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
   const test_cases = useMemo(() => {
     let test_cases = func.test_cases
     if (filter) {
-      test_cases = test_cases.filter((test_case) => test_case.name.value.includes(filter) || test_case.content.includes(filter))
+      test_cases = test_cases.filter(
+        (test_case) => test_case.name.value.includes(filter) || test_case.content.includes(filter),
+      )
     }
     return test_cases
   }, [filter, func])
@@ -302,7 +303,7 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
         </EditTestCaseForm>
 
         {test_cases.map((t) => (
-          <TestCasePanelEntry func={func} test_case={t} />
+          <TestCasePanelEntry key={t.name} func={func} test_case={t} />
         ))}
       </div>
     </>
@@ -318,7 +319,7 @@ const EditTestCaseForm = ({
   duplicate,
 }: {
   func: Func
-  testCase: TestCase 
+  testCase: TestCase
   schema: any
   getTestParams: (testCase: TestCase) => void
   children: React.ReactNode
@@ -337,7 +338,9 @@ const EditTestCaseForm = ({
   }, [testCase.content])
 
   const [showForm, setShowForm] = useState(false)
-  const [testName, setTestName] = useState<string | undefined>(duplicate ? `${testCase.name.value}-copy` : testCase.name.value)
+  const [testName, setTestName] = useState<string | undefined>(
+    duplicate ? `${testCase.name.value}-copy` : testCase.name.value,
+  )
 
   return (
     <Dialog open={showForm} onOpenChange={setShowForm}>

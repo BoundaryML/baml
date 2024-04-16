@@ -9,7 +9,7 @@ import { BAML_DIR } from '@/lib/constants'
 import { atomStore } from '@/app/_components/JotaiProvider'
 import { BAML, theme } from '@baml/codemirror-lang'
 import { ParserDatabase } from '@baml/common'
-import { Diagnostic, linter } from '@codemirror/lint'
+import { Diagnostic, linter, lintGutter, openLintPanel } from '@codemirror/lint'
 import CodeMirror, { EditorView } from '@uiw/react-codemirror'
 import { BAMLProject } from '@/lib/exampleProjects'
 import { useHydrateAtoms } from 'jotai/utils'
@@ -73,6 +73,8 @@ async function bamlLinter(view: EditorView): Promise<Diagnostic[]> {
 const extensions = [
   BAML(),
   EditorView.lineWrapping,
+
+  lintGutter({}),
   linter(bamlLinter, {
     delay: 200,
     // needsRefresh: (view) => ,
@@ -119,9 +121,9 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
           onChange={async (val, viewUpdate) => {
             setEditorFiles((prev) => {
               const files = prev as EditorFile[] // because of jotai jsonstorage this becomes a promise or a normal object and this isnt a promise.
-              const fileIndex = files.findIndex((file) => file.path === activeFile.path)
+              const fileIndex = files.findIndex((file) => file.path === activeFile?.path)
               const updatedFile: EditorFile = {
-                path: activeFile.path,
+                path: activeFile?.path,
                 content: val,
               }
 
