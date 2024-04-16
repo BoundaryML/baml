@@ -1,14 +1,13 @@
 'use client'
 import { EditorFile } from '@/app/actions'
 import { Button } from '@baml/playground-common/components/ui/button'
-import { vscodeDark } from '@uiw/codemirror-theme-vscode'
 import { useAtom } from 'jotai'
 import { usePathname } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { currentEditorFilesAtom, currentParserDbAtom } from '../_atoms/atoms'
 import { BAML_DIR } from '@/lib/constants'
 import { atomStore } from '@/app/_components/JotaiProvider'
-import { BAML } from '@baml/codemirror-lang'
+import { BAML, theme } from '@baml/codemirror-lang'
 import { ParserDatabase } from '@baml/common'
 import { Diagnostic, linter } from '@codemirror/lint'
 import CodeMirror, { EditorView } from '@uiw/react-codemirror'
@@ -104,7 +103,7 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
         <CodeMirror
           value={activeFile?.content ?? ''}
           extensions={extensions}
-          theme={vscodeDark}
+          theme={theme}
           height="100%"
           width="100%"
           maxWidth="100%"

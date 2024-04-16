@@ -21,7 +21,8 @@
     "@codemirror/legacy-modes": "^6.4.0",
     "@lezer/common": "^1.2.1",
     "@lezer/highlight": "^1.0.0",
-    "@lezer/lr": "^1.0.0"
+    "@lezer/lr": "^1.0.0",
+    "@uiw/codemirror-theme-vscode": "^4.21.25"
   },
   "devDependencies": {
     "@lezer/generator": "^1.0.0",
