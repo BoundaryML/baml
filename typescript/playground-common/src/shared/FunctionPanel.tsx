@@ -6,7 +6,7 @@ import { useSelections } from './hooks'
 import { VSCodeDivider, VSCodePanels } from '@vscode/webview-ui-toolkit/react'
 import TestCasePanel from './TestCasePanel'
 import ImplPanel from './ImplPanel'
-import { useContext, useEffect, useState } from 'react'
+import { useContext, useEffect, useId, useState } from 'react'
 import { ASTContext } from './ASTProvider'
 import TypeComponent from './TypeComponent'
 import TestResultPanel from './TestResultOutcomes'
@@ -27,6 +27,7 @@ const FunctionPanel: React.FC = () => {
   if (!func) return <div className="flex flex-col">No function selected</div>
   const { test_results } = useSelections()
   const results = test_results ?? []
+  const id = useId()
 
   let impls = <div />
   if (!impl) {
@@ -51,6 +52,17 @@ const FunctionPanel: React.FC = () => {
     )
   }
 
+  let topPanelSize = 100
+  if (showTests) {
+    if (test_results && test_results.length > 0) {
+      topPanelSize = 40
+    } else {
+      topPanelSize = 85
+    }
+  }
+  let testResultId = test_results ? test_results[0].status : ''
+
+  console.log('testResultId', testResultId, topPanelSize)
   return (
     <div
       className="flex flex-col w-full overflow-auto"
@@ -60,45 +72,58 @@ const FunctionPanel: React.FC = () => {
     >
       <TooltipProvider>
         {/* <Allotment vertical> */}
-        <div
-          className={clsx('w-full flex-shrink-0 flex-grow-0', {
-            'basis-[60%]': showTests && results.length > 0,
-            'basis-[100%]': !showTests,
-            'basis-[85%]': showTests && !(results.length > 0),
-          })}
+        <ResizablePanelGroup
+          key={testResultId}
+          direction="vertical"
+          className="h-full"
+          id={id + showTests.valueOf() + testResultId}
         >
-          {/* <Allotment className="h-full"> */}
-          <ResizablePanelGroup direction="horizontal" className="h-full">
-            {impl && (
-              <ResizablePanel defaultSize={50} className="px-0">
-                <div className="relative h-full">
-                  <ScrollArea type="always" className="flex w-full h-full pr-3 ">
-                    {impls}
-                  </ScrollArea>
-                </div>
-              </ResizablePanel>
-            )}
-            <ResizableHandle withHandle={true} className="bg-vscode-panel-border" />
-            <ResizablePanel minSize={50} className="pl-2 pr-0.5" hidden={!showTests}>
-              {/* <Allotment.Pane className="pl-2 pr-0.5" minSize={200} visible={showTests}> */}
-              <div className="flex flex-col h-full overflow-y-auto overflow-x-clip">
-                {/* On windows this scroll area extends beyond the wanted width, so we just use a normal scrollbar here vs using ScrollArea*/}
-                <TestCasePanel func={func} />
+          <ResizablePanel className="flex w-full " defaultSize={topPanelSize}>
+            <div
+              className={clsx('w-full ', {
+                // 'basis-[60%]': showTests && results.length > 0,
+                // 'basis-[100%]': !showTests,
+                // 'basis-[85%]': showTests && !(results.length > 0),
+              })}
+            >
+              {/* <Allotment className="h-full"> */}
+              <ResizablePanelGroup direction="horizontal" className="h-full">
+                {impl && (
+                  <ResizablePanel defaultSize={50} className="px-0">
+                    <div className="relative h-full">
+                      <ScrollArea type="always" className="flex w-full h-full pr-3 ">
+                        {impls}
+                      </ScrollArea>
+                    </div>
+                  </ResizablePanel>
+                )}
+                <ResizableHandle withHandle={true} className="bg-vscode-panel-border" />
+                <ResizablePanel minSize={50} className="pl-2 pr-0.5" hidden={!showTests}>
+                  {/* <Allotment.Pane className="pl-2 pr-0.5" minSize={200} visible={showTests}> */}
+                  <div className="flex flex-col h-full overflow-y-auto overflow-x-clip">
+                    {/* On windows this scroll area extends beyond the wanted width, so we just use a normal scrollbar here vs using ScrollArea*/}
+                    <TestCasePanel func={func} />
+                  </div>
+                </ResizablePanel>
+              </ResizablePanelGroup>
+
+              {/* </Allotment> */}
+            </div>
+          </ResizablePanel>
+          <ResizableHandle withHandle={true} className="bg-vscode-panel-border" />
+          <ResizablePanel minSize={10} className="px-0 overflow-y-auto">
+            <div
+              className={clsx('py-2 border-t h-full border-vscode-textSeparator-foreground', {
+                flex: showTests,
+                hidden: !showTests,
+              })}
+            >
+              <div className="w-full h-full">
+                <TestResultPanel />
               </div>
-            </ResizablePanel>
-          </ResizablePanelGroup>
-          {/* </Allotment> */}
-        </div>
-        <div
-          className={clsx('py-2 border-t h-fit border-vscode-textSeparator-foreground', {
-            flex: showTests,
-            hidden: !showTests,
-          })}
-        >
-          <div className="w-full h-full">
-            <TestResultPanel />
-          </div>
-        </div>
+            </div>
+          </ResizablePanel>
+        </ResizablePanelGroup>
       </TooltipProvider>
     </div>
   )

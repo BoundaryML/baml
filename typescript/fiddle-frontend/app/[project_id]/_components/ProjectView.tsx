@@ -5,18 +5,25 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/componen
 import { useCommandS } from '@/hooks/command-s'
 import { BAML_DIR } from '@/lib/constants'
 import { BAMLProject } from '@/lib/exampleProjects'
-import { ASTProvider, CustomErrorBoundary, FunctionPanel, FunctionSelector } from '@baml/playground-common'
+import {
+  ASTProvider,
+  CustomErrorBoundary,
+  FunctionPanel,
+  FunctionSelector,
+  useSelections,
+} from '@baml/playground-common'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { useHydrateAtoms } from 'jotai/utils'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useEffect, useRef, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Editable } from '../../_components/EditableText'
 import { EditorFile, createUrl } from '../../actions'
 import { currentEditorFilesAtom, currentParserDbAtom, functionsAndTestsAtom, testRunOutputAtom } from '../_atoms/atoms'
 import { CodeMirrorEditor } from './CodeMirrorEditor'
 import { usePlaygroundListener } from '../_playground_controller/usePlaygroundListener'
+import { ASTContext } from '@baml/playground-common/shared/ASTProvider'
 
 const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
   const setEditorFiles = useSetAtom(currentEditorFilesAtom)
@@ -195,6 +202,7 @@ const PlaygroundView = () => {
     <>
       <CustomErrorBoundary>
         <ASTProvider>
+          <TestToggle />
           <div className="flex flex-col gap-2 px-2 pb-4">
             <FunctionSelector />
             {/* <Separator className="bg-vscode-textSeparator-foreground" /> */}
@@ -203,6 +211,21 @@ const PlaygroundView = () => {
         </ASTProvider>
       </CustomErrorBoundary>
     </>
+  )
+}
+
+const TestToggle = () => {
+  const { setSelection } = useContext(ASTContext)
+  const { showTests } = useSelections()
+
+  return (
+    <Button
+      variant="outline"
+      className="p-1 text-xs w-fit h-fit border-vscode-textSeparator-foreground"
+      onClick={() => setSelection(undefined, undefined, undefined, undefined, !showTests)}
+    >
+      {showTests ? 'Hide tests' : 'Show tests'}
+    </Button>
   )
 }
 
