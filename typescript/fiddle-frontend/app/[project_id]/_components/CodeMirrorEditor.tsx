@@ -121,9 +121,13 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
           onChange={async (val, viewUpdate) => {
             setEditorFiles((prev) => {
               const files = prev as EditorFile[] // because of jotai jsonstorage this becomes a promise or a normal object and this isnt a promise.
-              const fileIndex = files.findIndex((file) => file.path === activeFile?.path)
+              if (!activeFile) {
+                return files
+              }
+              const fileIndex = files.findIndex((file) => file.path === activeFile.path)
+
               const updatedFile: EditorFile = {
-                path: activeFile?.path,
+                path: activeFile.path,
                 content: val,
               }
 
