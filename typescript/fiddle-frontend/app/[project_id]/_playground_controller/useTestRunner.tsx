@@ -15,7 +15,6 @@ export const useTestRunner = () => {
   const setTestRunOutput = useSetAtom(testRunOutputAtom)
   const fetchData = useAtomCallback(async (get, set, testRequest: TestRequest) => {
     const editorFiles = await get(currentEditorFilesAtom)
-    console.log('editor files sent', editorFiles)
     const testState = new TestState()
     setTestRunOutput((prev) => {
       return {

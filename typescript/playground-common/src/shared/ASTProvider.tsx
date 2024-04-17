@@ -47,7 +47,7 @@ export const ASTContext = createContext<{
     selectedTestCase: undefined,
     showTests: true,
   },
-  setSelection: () => { },
+  setSelection: () => {},
 })
 
 function useSelectionSetup() {
@@ -109,7 +109,6 @@ export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
   const selectedState = useMemo(() => {
     if (selectedProjectId === undefined) return undefined
     let match = projects.find((project) => project.root_dir === selectedProjectId)
-    console.log('selected project id', selectedProjectId, match)
     if (match) {
       let jsonSchema = {
         definitions: Object.fromEntries([

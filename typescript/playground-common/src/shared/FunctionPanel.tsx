@@ -63,7 +63,6 @@ const FunctionPanel: React.FC = () => {
   }
   let testResultId = test_results ? test_results[0]?.status : ''
 
-  console.log('testResultId', testResultId, topPanelSize)
   return (
     <div
       className="flex flex-col w-full overflow-auto"

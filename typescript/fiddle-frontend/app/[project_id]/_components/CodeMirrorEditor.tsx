@@ -82,8 +82,6 @@ async function bamlLinter(_view: any): Promise<Diagnostic[]> {
         })
         .filter((t): t is [string, string] => t !== undefined),
     )
-    console.log(funcTestSelector)
-    // atomStore.set(functionTestCaseAtom, funcTestSelector)
   }
 
   return parsedRes.diagnostics
@@ -117,13 +115,6 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
   useEffect(() => {
     setActiveFile(project.files[0])
   }, [project.id])
-
-  useEffect(() => {
-    console.log(
-      'editorfiles changed',
-      editorFiles.map((f) => f.path),
-    )
-  }, [JSON.stringify(editorFiles)])
 
   const setUnsavedChanges = useSetAtom(unsavedChangesAtom)
 

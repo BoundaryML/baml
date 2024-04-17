@@ -181,7 +181,6 @@ const PlaygroundView = () => {
       return
     }
     const newParserDb = { ...parserDb }
-    console.log('newParserDb', newParserDb)
 
     window.postMessage({
       command: 'setDb',
