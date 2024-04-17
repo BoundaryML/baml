@@ -126,6 +126,38 @@ const chainOfThoughtTest = {
   }
 };
 
+const chatRolesBaml = `
+// This will be available as an enum in your Python and Typescript code.
+enum Category {
+    Refund
+    CancelOrder
+    TechnicalSupport
+    AccountIssue
+    Question
+}
+
+function ClassifyMessage(input: string) -> Category {
+  client GPT4
+
+  prompt #"
+    {# You can use _.chat("system") to start a system message #}
+    {{ _.chat("system") }}
+
+    Classify the following INPUT into ONE
+    of the following categories:
+
+    {{ ctx.output_schema }}
+
+    {# And _.chat("user") to start a user message #}
+    {{ _.chat("user") }}
+
+    INPUT: {{ input }}
+
+    Response:
+  "#
+}
+`;
+
 const symbolTuningBaml = `
 enum Category {
     Refund @alias("k1")
@@ -210,7 +242,7 @@ export const exampleProjects: BAMLProject[] = [
       {
         path: 'baml_src/__tests__/ExtractNames/test1.json',
         content: JSON.stringify({ input: extractNamesTest }),
-      }
+      },
     ]
   },
   {
@@ -225,7 +257,11 @@ export const exampleProjects: BAMLProject[] = [
       {
         path: 'baml_src/clients.baml',
         content: clientsBaml,
-      }
+      },
+      {
+        path: 'baml_src/__tests__/ClassifyMessage/test1.json',
+        content: JSON.stringify({ input: classifyMessageTest }),
+      },
     ]
   },
   {
@@ -235,12 +271,16 @@ export const exampleProjects: BAMLProject[] = [
     files: [
       {
         path: 'baml_src/main.baml',
-        content: classifyMessageBaml,
+        content: chainOfThoughtBaml,
       },
       {
         path: 'baml_src/clients.baml',
         content: clientsBaml,
-      }
+      },
+      {
+        path: 'baml_src/__tests__/ClassifyMessage/test1.json',
+        content: JSON.stringify({ input: chainOfThoughtTest }),
+      },
     ]
   },
   {
@@ -250,12 +290,16 @@ export const exampleProjects: BAMLProject[] = [
     files: [
       {
         path: 'baml_src/main.baml',
-        content: extractNamesBaml,
+        content: chatRolesBaml,
       },
       {
         path: 'baml_src/clients.baml',
         content: clientsBaml,
-      }
+      },
+      {
+        path: 'baml_src/__tests__/ClassifyMessage/test1.json',
+        content: JSON.stringify({ input: classifyMessageTest }),
+      },
     ]
   },
   {
@@ -270,7 +314,11 @@ export const exampleProjects: BAMLProject[] = [
       {
         path: 'baml_src/clients.baml',
         content: clientsBaml,
-      }
+      },
+      {
+        path: 'baml_src/__tests__/ClassifyMessage/test1.json',
+        content: JSON.stringify({ input: classifyMessageTest }),
+      },
     ]
   },
 ];
