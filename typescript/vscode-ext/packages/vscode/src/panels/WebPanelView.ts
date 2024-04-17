@@ -216,7 +216,11 @@ export class WebPanelView {
             } = message.data
             let fileName;
             if (typeof saveTestRequest.testCaseName === 'string') {
-              fileName = `${saveTestRequest.testCaseName}.json`;
+              if (saveTestRequest.testCaseName.length > 0) {
+                fileName = `${saveTestRequest.testCaseName}.json`;
+              } else {
+                fileName = `${uniqueNamesGenerator(customConfig)}.json`;
+              }
             } else if (saveTestRequest.testCaseName?.source_file) {
               fileName = vscode.Uri.file(saveTestRequest.testCaseName.source_file).path.split('/').pop();
             } else {
