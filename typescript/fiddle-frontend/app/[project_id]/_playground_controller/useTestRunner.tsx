@@ -13,6 +13,7 @@ const baseUrl = prodBaseURL
 export const useTestRunner = () => {
   const setTestRunOutput = useSetAtom(testRunOutputAtom)
   const fetchData = useCallback(async (editorFiles: EditorFile[], testRequest: TestRequest) => {
+    console.log('editor files sent', editorFiles)
     const testState = new TestState()
     setTestRunOutput((prev) => {
       return {

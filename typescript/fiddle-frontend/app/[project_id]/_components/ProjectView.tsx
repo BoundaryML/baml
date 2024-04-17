@@ -32,6 +32,7 @@ import { usePlaygroundListener } from '../_playground_controller/usePlaygroundLi
 import { ASTContext } from '@baml/playground-common/shared/ASTProvider'
 import { Badge } from '@/components/ui/badge'
 import { useRouter } from 'next/navigation'
+import { atomStore, sessionStore } from '@/app/_components/JotaiProvider'
 
 const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
   const setEditorFiles = useSetAtom(currentEditorFilesAtom)
@@ -191,6 +192,7 @@ const PlaygroundView = () => {
       return
     }
     const newParserDb = { ...parserDb }
+    console.log('newParserDb', newParserDb)
 
     if (newParserDb.functions.length > 0) {
       functionsAndTests.forEach((func) => {

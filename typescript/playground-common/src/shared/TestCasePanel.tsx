@@ -39,7 +39,7 @@ type TestCase = Func['test_cases'][number]
 
 const TestCasePanelEntry: React.FC<{ func: Func; test_case: TestCase }> = ({ func, test_case }) => {
   const { impl, input_json_schema, renderedTestCase } = useSelections()
-  const isRendered = renderedTestCase === test_case.name.value;
+  const isRendered = renderedTestCase === test_case.name.value
 
   if (input_json_schema) {
     input_json_schema.definitions = Object.fromEntries(
@@ -87,29 +87,33 @@ const TestCasePanelEntry: React.FC<{ func: Func; test_case: TestCase }> = ({ fun
             <span className="h-[24px] max-w-[120px] text-center align-middle overflow-hidden flex-1 truncate">
               {test_case.name.value}
             </span>
-            {isRendered &&
+            {isRendered && (
               <Badge className="ml-2" variant="default">
-                <div className='flex flex-row gap-x-1 items-center'><Pin size={12} /> Rendered</div>
+                <div className="flex flex-row items-center gap-x-1">
+                  <Pin size={12} /> Rendered
+                </div>
               </Badge>
-            }
+            )}
             <div className="hidden gap-x-1 group-hover:flex">
-              {!isRendered && <Button
-                variant={'ghost'}
-                size="icon"
-                className="p-1 w-fit h-fit hover:bg-vscode-button-secondaryHoverBackground"
-                onClick={() => {
-                  vscode.postMessage({
-                    command: 'selectTestCase',
-                    data: {
-                      root_path,
-                      function_name: func.name.value,
-                      test_name: test_case.name.value,
-                    },
-                  })
-                }}
-              >
-                <Pin size={12} />
-              </Button>}
+              {!isRendered && (
+                <Button
+                  variant={'ghost'}
+                  size="icon"
+                  className="p-1 w-fit h-fit hover:bg-vscode-button-secondaryHoverBackground"
+                  onClick={() => {
+                    vscode.postMessage({
+                      command: 'selectTestCase',
+                      data: {
+                        root_path,
+                        function_name: func.name.value,
+                        test_name: test_case.name.value,
+                      },
+                    })
+                  }}
+                >
+                  <Pin size={12} />
+                </Button>
+              )}
               <EditTestCaseForm
                 testCase={test_case}
                 schema={input_json_schema}
@@ -318,7 +322,7 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
       <div className="flex flex-col py-2 divide-y gap-y-1 divide-vscode-textSeparator-foreground">
         {/* <pre>{JSON.stringify(input_json_schema, null, 2)}</pre> */}
         <EditTestCaseForm
-          testCase={autoGenTestCase(func, input_json_schema)}
+          testCase={undefined}
           schema={input_json_schema}
           func={func}
           getTestParams={(t) => getTestParams(func, t)}
@@ -346,7 +350,7 @@ const EditTestCaseForm = ({
   duplicate,
 }: {
   func: Func
-  testCase: TestCase
+  testCase?: TestCase
   schema: any
   getTestParams: (testCase: TestCase) => void
   children: React.ReactNode
@@ -356,17 +360,20 @@ const EditTestCaseForm = ({
 
   // TODO, actually fix this for named args
   const formData = useMemo(() => {
+    if (testCase === undefined) {
+      return null
+    }
     try {
       return JSON.parse(testCase.content)
     } catch (e) {
       console.warn('Error parsing data, will default to string\n' + JSON.stringify(testCase), e)
       return testCase.content
     }
-  }, [testCase.content])
+  }, [testCase?.content])
 
   const [showForm, setShowForm] = useState(false)
   const [testName, setTestName] = useState<string | undefined>(
-    duplicate ? `${testCase.name.value}-copy` : testCase.name.value,
+    duplicate ? `${testCase?.name.value}-copy` : testCase?.name.value,
   )
 
   return (
@@ -374,7 +381,9 @@ const EditTestCaseForm = ({
       <DialogTrigger asChild={true}>{children}</DialogTrigger>
       <DialogContent className="max-h-screen overflow-y-scroll bg-vscode-editorWidget-background border-vscode-textSeparator-foreground overflow-x-clip">
         <DialogHeader className="flex flex-row items-center gap-x-4">
-          <DialogTitle className="text-xs font-semibold">{duplicate ? 'Duplicate test' : 'Edit test'}</DialogTitle>
+          <DialogTitle className="text-xs font-semibold">
+            {testCase === undefined || duplicate ? 'Duplicate test' : 'Edit test'}
+          </DialogTitle>
 
           <div className="flex flex-row items-center pb-1 gap-x-2">
             {testCase === undefined || duplicate ? (
@@ -428,7 +437,7 @@ const EditTestCaseForm = ({
   )
 }
 
-const TestCaseCard: React.FC<{ test_case: TestCase, isRendered: boolean }> = ({ test_case, isRendered }) => {
+const TestCaseCard: React.FC<{ test_case: TestCase; isRendered: boolean }> = ({ test_case, isRendered }) => {
   return (
     <div className="flex flex-col max-w-full gap-2 text-xs text-left text-vscode-descriptionForeground">
       <div className="break-all">

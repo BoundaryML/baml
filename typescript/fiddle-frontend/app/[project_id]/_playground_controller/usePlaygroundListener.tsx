@@ -72,7 +72,7 @@ export const usePlaygroundListener = () => {
           window.history.replaceState(null, '', '/')
 
           const saveTestRequest = data as SaveTestRequest
-          // Save test data to localStorage
+          console.log('savetestreq', saveTestRequest)
           const { root_path, funcName, testCaseName, params } = saveTestRequest
           const fileName: string = typeof testCaseName === 'string' ? `${testCaseName}.json` : 'default.json' // Simplified fileName logic
           const filePath = `${root_path}/__tests__/${funcName}/${fileName}`
@@ -85,20 +85,22 @@ export const usePlaygroundListener = () => {
               testInputContent = JSON.stringify(params.value)
             }
           } else {
-            testInputContent = JSON.stringify(Object.fromEntries(
-              saveTestRequest.params.value.map((kv: { name: any; value: any }) => {
-                if (kv.value === undefined || kv.value === null || kv.value === '') {
-                  return [kv.name, null]
-                }
-                let parsed: any
-                try {
-                  parsed = JSON.parse(kv.value)
-                } catch (e) {
-                  parsed = kv.value
-                }
-                return [kv.name, parsed]
-              }),
-            ))
+            testInputContent = JSON.stringify(
+              Object.fromEntries(
+                saveTestRequest.params.value.map((kv: { name: any; value: any }) => {
+                  if (kv.value === undefined || kv.value === null || kv.value === '') {
+                    return [kv.name, null]
+                  }
+                  let parsed: any
+                  try {
+                    parsed = JSON.parse(kv.value)
+                  } catch (e) {
+                    parsed = kv.value
+                  }
+                  return [kv.name, parsed]
+                }),
+              ),
+            )
           }
           const newTestCase = {
             name: {
