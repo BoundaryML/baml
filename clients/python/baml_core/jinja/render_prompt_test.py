@@ -125,5 +125,6 @@ def test_bad_template() -> None:
                 template_string_macros=[],
             ),
         )
-    assert "args.foo.buzz.3.y: unsupported type" in str(e.value)
-    assert "args.foo.buzz.5: unsupported type" in str(e.value)
+    e.value
+    assert "{{foo.buzz.3.y}}: unsupported type" in str(e.value)
+    assert "{{foo.buzz.5}}: unsupported type" in str(e.value)
