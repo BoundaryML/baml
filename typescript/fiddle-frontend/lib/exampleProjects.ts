@@ -278,7 +278,7 @@ export const exampleProjects: BAMLProject[] = [
         content: clientsBaml,
       },
       {
-        path: 'baml_src/__tests__/ClassifyMessage/test1.json',
+        path: 'baml_src/__tests__/GetOrderInfo/test1.json',
         content: JSON.stringify({ input: chainOfThoughtTest }),
       },
     ]
