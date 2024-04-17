@@ -1,6 +1,6 @@
 import { VSCodeDropdown, VSCodeLink, VSCodeOption } from '@vscode/webview-ui-toolkit/react'
 import { useSelections } from './hooks'
-import { useContext, useState } from 'react'
+import React, { useContext, useState } from 'react'
 import { ASTContext } from './ASTProvider'
 import { vscode } from '../utils/vscode'
 import Link from './Link'
@@ -12,6 +12,7 @@ import { cn } from '../lib/utils'
 import { Button } from '../components/ui/button'
 import { ChevronsUpDown, Check } from 'lucide-react'
 import SearchBarWithSelector from '../lib/searchbar'
+import { SFunction } from '@baml/common'
 
 const FunctionDropdown: React.FC = () => {
   const [open, setOpen] = useState(false)
@@ -48,6 +49,27 @@ const FunctionDropdown: React.FC = () => {
   )
 }
 
+export const FunctionArgs: React.FC<{func: SFunction}> = ({func}) => {
+  if (func.input.arg_type === 'positional') {
+    return (
+      <div className="flex flex-row gap-1">
+        arg: <TypeComponent typeString={func.input.type} />
+      </div>
+    )
+  }
+  
+  const args = func.input.values;
+  return (
+    <div className="flex flex-row gap-1">
+      {Array.from(args.entries()).map(([i, v]) => (
+        <div key={v.name.value}>
+          {v.name.value}: <TypeComponent typeString={v.type} /> {i < args.length - 1 && ','}
+        </div>
+      ))}
+    </div>
+  )
+};
+
 export const FunctionSelector: React.FC = () => {
   const { func } = useSelections()
 
@@ -79,21 +101,8 @@ export const FunctionSelector: React.FC = () => {
       </div>
       {func && (
         <div className="flex flex-row items-center gap-0 text-xs">
-          <span className="pl-2 pr-1 text-vscode-descriptionForeground">Fn signature</span> <Link item={func.name} />(
-          {func.input.arg_type === 'positional' ? (
-            <div className="flex flex-row gap-1">
-              arg: <TypeComponent typeString={func.input.type} />
-            </div>
-          ) : (
-            <div className="flex flex-row gap-1">
-              {func.input.values.map((v) => (
-                <div key={v.name.value}>
-                  {v.name.value}: <TypeComponent typeString={v.type} />,
-                </div>
-              ))}
-            </div>
-          )}
-          ) {'→'} {func.output.arg_type === 'positional' && <TypeComponent typeString={func.output.type} />}
+          <span className="pl-2 pr-1 text-vscode-descriptionForeground">Fn signature</span> <Link item={func.name} />
+          {'('}<FunctionArgs func={func}/> {') → '} {func.output.arg_type === 'positional' && <TypeComponent typeString={func.output.type} />}
         </div>
       )}
     </div>
