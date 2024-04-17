@@ -83,7 +83,7 @@ const extensions = [
   BAML(),
   EditorView.lineWrapping,
 
-  lintGutter({}),
+  // lintGutter({}),
   linter(bamlLinter, {
     delay: 200,
     // needsRefresh: (update) => {

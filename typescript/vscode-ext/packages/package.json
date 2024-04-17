@@ -74,6 +74,18 @@
           "light": "./baml-logo.png",
           "dark": "./baml-logo.png"
         }
+      },
+      {
+        "id": "baml-jinja",
+        "aliases": [
+          "Jinja baml",
+          "jinja baml"
+        ],
+        "extensions": [
+          ".baml.jinja",
+          ".baml.jinja"
+        ],
+        "configuration": "./language-configuration.json"
       }
     ],
     "grammars": [
@@ -81,6 +93,11 @@
         "language": "baml",
         "scopeName": "source.baml",
         "path": "./syntaxes/baml.tmLanguage.json"
+      },
+      {
+        "language": "baml-jinja",
+        "scopeName": "source.baml-jinja",
+        "path": "./syntaxes/jinja.tmlLanguage.json"
       }
     ],
     "snippets": [
