@@ -6,13 +6,7 @@
 /* eslint-disable */
 
 
-<<<<<<< HEAD
-import { ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, EnumOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalClass, OptionalTest_ReturnType, OverrideClass, OverrideEnum, RaysData, Resume, SearchParams, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass, UnionTest_ReturnType } from './types';
-||||||| parent of 209e3d97 (add examples)
-import { ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, EnumOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalClass, OptionalTest_ReturnType, OverrideClass, OverrideEnum, Resume, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass, UnionTest_ReturnType } from './types';
-=======
-import { Category, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, Email, EnumOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalClass, OptionalTest_ReturnType, OrderInfo, OverrideClass, OverrideEnum, Resume, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass, UnionTest_ReturnType } from './types';
->>>>>>> 209e3d97 (add examples)
+import { Category, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, Email, EnumOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalClass, OptionalTest_ReturnType, OrderInfo, OverrideClass, OverrideEnum, RaysData, Resume, SearchParams, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass, UnionTest_ReturnType } from './types';
 import { FireBamlEvent, traceAsync } from '@boundaryml/baml-core/ffi_layer';
 
 
@@ -1839,7 +1833,6 @@ function createFnTestOutputAdapterInstance(): IFnTestOutputAdapter & FnTestOutpu
 
 const FnTestOutputAdapter = createFnTestOutputAdapterInstance();
 
-<<<<<<< HEAD
 type IGetDataType = (args: {
   text: string
 }) => Promise<RaysData>
@@ -1916,6 +1909,83 @@ function createGetDataTypeInstance(): IGetDataType & GetDataTypeFunction {
 }
 
 const GetDataType = createGetDataTypeInstance();
+
+type IGetOrderInfo = (args: {
+  email: Email
+}) => Promise<OrderInfo>
+
+type GetOrderInfoImpls = 'default_config';
+
+interface GetOrderInfoImpl {
+    run: IGetOrderInfo;
+    name: GetOrderInfoImpls;
+}
+
+interface GetOrderInfoFunction {
+  registerImpl: (name: GetOrderInfoImpls, impl: GetOrderInfoImpl) => void;
+  getImpl: (name: GetOrderInfoImpls) => GetOrderInfoImpl;
+}
+
+function createGetOrderInfoInstance(): IGetOrderInfo & GetOrderInfoFunction {
+
+  const registry: Record<GetOrderInfoImpls, GetOrderInfoImpl> = {}
+
+  const wrapper: GetOrderInfoFunction = {
+    getImpl: (name: GetOrderInfoImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for GetOrderInfo with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: GetOrderInfoImpls, cb: IGetOrderInfo) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for GetOrderInfo with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"GetOrderInfo",
+          /* returnType */ "OrderInfo",
+          /* paramters */ [
+            [
+              "email",
+              "Email"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            email: Email
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for GetOrderInfo: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    email: Email
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IGetOrderInfo & GetOrderInfoFunction;
+}
+
+const GetOrderInfo = createGetOrderInfoInstance();
 
 type IGetQuery = (args: {
   query: string
@@ -1994,86 +2064,6 @@ function createGetQueryInstance(): IGetQuery & GetQueryFunction {
 
 const GetQuery = createGetQueryInstance();
 
-||||||| parent of 209e3d97 (add examples)
-=======
-type IGetOrderInfo = (args: {
-  email: Email
-}) => Promise<OrderInfo>
-
-type GetOrderInfoImpls = 'default_config';
-
-interface GetOrderInfoImpl {
-    run: IGetOrderInfo;
-    name: GetOrderInfoImpls;
-}
-
-interface GetOrderInfoFunction {
-  registerImpl: (name: GetOrderInfoImpls, impl: GetOrderInfoImpl) => void;
-  getImpl: (name: GetOrderInfoImpls) => GetOrderInfoImpl;
-}
-
-function createGetOrderInfoInstance(): IGetOrderInfo & GetOrderInfoFunction {
-
-  const registry: Record<GetOrderInfoImpls, GetOrderInfoImpl> = {}
-
-  const wrapper: GetOrderInfoFunction = {
-    getImpl: (name: GetOrderInfoImpls) => {
-      const impl = registry[name];
-      if (!impl) {
-        throw new Error(`No implementation for GetOrderInfo with name ${name}`);
-      }
-      return impl;
-    },
-    registerImpl: (name: GetOrderInfoImpls, cb: IGetOrderInfo) => {
-      if (registry[name]) {
-        throw new Error(`Implementation for GetOrderInfo with name ${name} already exists`);
-      }
-      registry[name] = {
-        name,
-        run: traceAsync(
-          /* functionName */"GetOrderInfo",
-          /* returnType */ "OrderInfo",
-          /* paramters */ [
-            [
-              "email",
-              "Email"
-            ]
-          ],
-          /* arg_type */ 'named',
-          /* cb */ async (
-          params: {
-            email: Email
-          }
-        ) => {
-          FireBamlEvent.variant(name);
-          return await cb(params);
-        })
-      };
-    },
-    validate: () => {
-      const targets = ['default_config'];
-      const impls = Object.keys(registry);
-      const missing = targets.filter(t => !impls.includes(t));
-      if (missing.length > 0) {
-        throw new Error(`Missing implementations for GetOrderInfo: ${missing.join(', ')}`);
-      }
-    }
-  };
-
-  const impl = async (params : {
-    email: Email
-  }) => {
-    return wrapper.getImpl('default_config').run(params);
-  };
-
-  Object.assign(impl, wrapper);
-
-  return impl as  IGetOrderInfo & GetOrderInfoFunction;
-}
-
-const GetOrderInfo = createGetOrderInfoInstance();
-
->>>>>>> 209e3d97 (add examples)
 type IOptionalTest_Function = (arg: string) => Promise<OptionalTest_ReturnType | null[]>
 
 type OptionalTest_FunctionImpls = 'v1';
@@ -2979,11 +2969,5 @@ function createUnionTest_FunctionInstance(): IUnionTest_Function & UnionTest_Fun
 const UnionTest_Function = createUnionTest_FunctionInstance();
 
 
-<<<<<<< HEAD
-export { ExtractResume, IExtractResume, ExtractResumeFunction, ExtractResume2, IExtractResume2, ExtractResume2Function, FnClassOptional, IFnClassOptional, FnClassOptionalFunction, FnClassOptional2, IFnClassOptional2, FnClassOptional2Function, FnClassOptionalOutput, IFnClassOptionalOutput, FnClassOptionalOutputFunction, FnClassOptionalOutput2, IFnClassOptionalOutput2, FnClassOptionalOutput2Function, FnEnumListOutput, IFnEnumListOutput, FnEnumListOutputFunction, FnEnumOutput, IFnEnumOutput, FnEnumOutputFunction, FnNamedArgsSingleStringOptional, IFnNamedArgsSingleStringOptional, FnNamedArgsSingleStringOptionalFunction, FnOutputBool, IFnOutputBool, FnOutputBoolFunction, FnOutputClass, IFnOutputClass, FnOutputClassFunction, FnOutputClassList, IFnOutputClassList, FnOutputClassListFunction, FnOutputClassWithEnum, IFnOutputClassWithEnum, FnOutputClassWithEnumFunction, FnOutputStringList, IFnOutputStringList, FnOutputStringListFunction, FnStringOptional, IFnStringOptional, FnStringOptionalFunction, FnTestAliasedEnumOutput, IFnTestAliasedEnumOutput, FnTestAliasedEnumOutputFunction, FnTestClassAlias, IFnTestClassAlias, FnTestClassAliasFunction, FnTestClassOverride, IFnTestClassOverride, FnTestClassOverrideFunction, FnTestEnumOverride, IFnTestEnumOverride, FnTestEnumOverrideFunction, FnTestNamedArgsSingleEnum, IFnTestNamedArgsSingleEnum, FnTestNamedArgsSingleEnumFunction, FnTestOutputAdapter, IFnTestOutputAdapter, FnTestOutputAdapterFunction, GetDataType, IGetDataType, GetDataTypeFunction, GetQuery, IGetQuery, GetQueryFunction, OptionalTest_Function, IOptionalTest_Function, OptionalTest_FunctionFunction, PromptTest, IPromptTest, PromptTestFunction, TestFnNamedArgsSingleBool, ITestFnNamedArgsSingleBool, TestFnNamedArgsSingleBoolFunction, TestFnNamedArgsSingleClass, ITestFnNamedArgsSingleClass, TestFnNamedArgsSingleClassFunction, TestFnNamedArgsSingleEnumList, ITestFnNamedArgsSingleEnumList, TestFnNamedArgsSingleEnumListFunction, TestFnNamedArgsSingleFloat, ITestFnNamedArgsSingleFloat, TestFnNamedArgsSingleFloatFunction, TestFnNamedArgsSingleInt, ITestFnNamedArgsSingleInt, TestFnNamedArgsSingleIntFunction, TestFnNamedArgsSingleString, ITestFnNamedArgsSingleString, TestFnNamedArgsSingleStringFunction, TestFnNamedArgsSingleStringArray, ITestFnNamedArgsSingleStringArray, TestFnNamedArgsSingleStringArrayFunction, TestFnNamedArgsSingleStringList, ITestFnNamedArgsSingleStringList, TestFnNamedArgsSingleStringListFunction, TestFnNamedArgsSyntax, ITestFnNamedArgsSyntax, TestFnNamedArgsSyntaxFunction, UnionTest_Function, IUnionTest_Function, UnionTest_FunctionFunction }
-||||||| parent of 209e3d97 (add examples)
-export { ExtractResume, IExtractResume, ExtractResumeFunction, FnClassOptional, IFnClassOptional, FnClassOptionalFunction, FnClassOptional2, IFnClassOptional2, FnClassOptional2Function, FnClassOptionalOutput, IFnClassOptionalOutput, FnClassOptionalOutputFunction, FnClassOptionalOutput2, IFnClassOptionalOutput2, FnClassOptionalOutput2Function, FnEnumListOutput, IFnEnumListOutput, FnEnumListOutputFunction, FnEnumOutput, IFnEnumOutput, FnEnumOutputFunction, FnNamedArgsSingleStringOptional, IFnNamedArgsSingleStringOptional, FnNamedArgsSingleStringOptionalFunction, FnOutputBool, IFnOutputBool, FnOutputBoolFunction, FnOutputClass, IFnOutputClass, FnOutputClassFunction, FnOutputClassList, IFnOutputClassList, FnOutputClassListFunction, FnOutputClassWithEnum, IFnOutputClassWithEnum, FnOutputClassWithEnumFunction, FnOutputStringList, IFnOutputStringList, FnOutputStringListFunction, FnStringOptional, IFnStringOptional, FnStringOptionalFunction, FnTestAliasedEnumOutput, IFnTestAliasedEnumOutput, FnTestAliasedEnumOutputFunction, FnTestClassAlias, IFnTestClassAlias, FnTestClassAliasFunction, FnTestClassOverride, IFnTestClassOverride, FnTestClassOverrideFunction, FnTestEnumOverride, IFnTestEnumOverride, FnTestEnumOverrideFunction, FnTestNamedArgsSingleEnum, IFnTestNamedArgsSingleEnum, FnTestNamedArgsSingleEnumFunction, FnTestOutputAdapter, IFnTestOutputAdapter, FnTestOutputAdapterFunction, OptionalTest_Function, IOptionalTest_Function, OptionalTest_FunctionFunction, PromptTest, IPromptTest, PromptTestFunction, TestFnNamedArgsSingleBool, ITestFnNamedArgsSingleBool, TestFnNamedArgsSingleBoolFunction, TestFnNamedArgsSingleClass, ITestFnNamedArgsSingleClass, TestFnNamedArgsSingleClassFunction, TestFnNamedArgsSingleEnumList, ITestFnNamedArgsSingleEnumList, TestFnNamedArgsSingleEnumListFunction, TestFnNamedArgsSingleFloat, ITestFnNamedArgsSingleFloat, TestFnNamedArgsSingleFloatFunction, TestFnNamedArgsSingleInt, ITestFnNamedArgsSingleInt, TestFnNamedArgsSingleIntFunction, TestFnNamedArgsSingleString, ITestFnNamedArgsSingleString, TestFnNamedArgsSingleStringFunction, TestFnNamedArgsSingleStringArray, ITestFnNamedArgsSingleStringArray, TestFnNamedArgsSingleStringArrayFunction, TestFnNamedArgsSingleStringList, ITestFnNamedArgsSingleStringList, TestFnNamedArgsSingleStringListFunction, TestFnNamedArgsSyntax, ITestFnNamedArgsSyntax, TestFnNamedArgsSyntaxFunction, UnionTest_Function, IUnionTest_Function, UnionTest_FunctionFunction }
-=======
-export { ClassifyMessage, IClassifyMessage, ClassifyMessageFunction, ClassifyMessage2, IClassifyMessage2, ClassifyMessage2Function, ClassifyMessage3, IClassifyMessage3, ClassifyMessage3Function, ExtractNames, IExtractNames, ExtractNamesFunction, ExtractResume, IExtractResume, ExtractResumeFunction, FnClassOptional, IFnClassOptional, FnClassOptionalFunction, FnClassOptional2, IFnClassOptional2, FnClassOptional2Function, FnClassOptionalOutput, IFnClassOptionalOutput, FnClassOptionalOutputFunction, FnClassOptionalOutput2, IFnClassOptionalOutput2, FnClassOptionalOutput2Function, FnEnumListOutput, IFnEnumListOutput, FnEnumListOutputFunction, FnEnumOutput, IFnEnumOutput, FnEnumOutputFunction, FnNamedArgsSingleStringOptional, IFnNamedArgsSingleStringOptional, FnNamedArgsSingleStringOptionalFunction, FnOutputBool, IFnOutputBool, FnOutputBoolFunction, FnOutputClass, IFnOutputClass, FnOutputClassFunction, FnOutputClassList, IFnOutputClassList, FnOutputClassListFunction, FnOutputClassWithEnum, IFnOutputClassWithEnum, FnOutputClassWithEnumFunction, FnOutputStringList, IFnOutputStringList, FnOutputStringListFunction, FnStringOptional, IFnStringOptional, FnStringOptionalFunction, FnTestAliasedEnumOutput, IFnTestAliasedEnumOutput, FnTestAliasedEnumOutputFunction, FnTestClassAlias, IFnTestClassAlias, FnTestClassAliasFunction, FnTestClassOverride, IFnTestClassOverride, FnTestClassOverrideFunction, FnTestEnumOverride, IFnTestEnumOverride, FnTestEnumOverrideFunction, FnTestNamedArgsSingleEnum, IFnTestNamedArgsSingleEnum, FnTestNamedArgsSingleEnumFunction, FnTestOutputAdapter, IFnTestOutputAdapter, FnTestOutputAdapterFunction, GetOrderInfo, IGetOrderInfo, GetOrderInfoFunction, OptionalTest_Function, IOptionalTest_Function, OptionalTest_FunctionFunction, PromptTest, IPromptTest, PromptTestFunction, TestFnNamedArgsSingleBool, ITestFnNamedArgsSingleBool, TestFnNamedArgsSingleBoolFunction, TestFnNamedArgsSingleClass, ITestFnNamedArgsSingleClass, TestFnNamedArgsSingleClassFunction, TestFnNamedArgsSingleEnumList, ITestFnNamedArgsSingleEnumList, TestFnNamedArgsSingleEnumListFunction, TestFnNamedArgsSingleFloat, ITestFnNamedArgsSingleFloat, TestFnNamedArgsSingleFloatFunction, TestFnNamedArgsSingleInt, ITestFnNamedArgsSingleInt, TestFnNamedArgsSingleIntFunction, TestFnNamedArgsSingleString, ITestFnNamedArgsSingleString, TestFnNamedArgsSingleStringFunction, TestFnNamedArgsSingleStringArray, ITestFnNamedArgsSingleStringArray, TestFnNamedArgsSingleStringArrayFunction, TestFnNamedArgsSingleStringList, ITestFnNamedArgsSingleStringList, TestFnNamedArgsSingleStringListFunction, TestFnNamedArgsSyntax, ITestFnNamedArgsSyntax, TestFnNamedArgsSyntaxFunction, UnionTest_Function, IUnionTest_Function, UnionTest_FunctionFunction }
->>>>>>> 209e3d97 (add examples)
+export { ClassifyMessage, IClassifyMessage, ClassifyMessageFunction, ClassifyMessage2, IClassifyMessage2, ClassifyMessage2Function, ClassifyMessage3, IClassifyMessage3, ClassifyMessage3Function, ExtractNames, IExtractNames, ExtractNamesFunction, ExtractResume, IExtractResume, ExtractResumeFunction, ExtractResume2, IExtractResume2, ExtractResume2Function, FnClassOptional, IFnClassOptional, FnClassOptionalFunction, FnClassOptional2, IFnClassOptional2, FnClassOptional2Function, FnClassOptionalOutput, IFnClassOptionalOutput, FnClassOptionalOutputFunction, FnClassOptionalOutput2, IFnClassOptionalOutput2, FnClassOptionalOutput2Function, FnEnumListOutput, IFnEnumListOutput, FnEnumListOutputFunction, FnEnumOutput, IFnEnumOutput, FnEnumOutputFunction, FnNamedArgsSingleStringOptional, IFnNamedArgsSingleStringOptional, FnNamedArgsSingleStringOptionalFunction, FnOutputBool, IFnOutputBool, FnOutputBoolFunction, FnOutputClass, IFnOutputClass, FnOutputClassFunction, FnOutputClassList, IFnOutputClassList, FnOutputClassListFunction, FnOutputClassWithEnum, IFnOutputClassWithEnum, FnOutputClassWithEnumFunction, FnOutputStringList, IFnOutputStringList, FnOutputStringListFunction, FnStringOptional, IFnStringOptional, FnStringOptionalFunction, FnTestAliasedEnumOutput, IFnTestAliasedEnumOutput, FnTestAliasedEnumOutputFunction, FnTestClassAlias, IFnTestClassAlias, FnTestClassAliasFunction, FnTestClassOverride, IFnTestClassOverride, FnTestClassOverrideFunction, FnTestEnumOverride, IFnTestEnumOverride, FnTestEnumOverrideFunction, FnTestNamedArgsSingleEnum, IFnTestNamedArgsSingleEnum, FnTestNamedArgsSingleEnumFunction, FnTestOutputAdapter, IFnTestOutputAdapter, FnTestOutputAdapterFunction, GetDataType, IGetDataType, GetDataTypeFunction, GetOrderInfo, IGetOrderInfo, GetOrderInfoFunction, GetQuery, IGetQuery, GetQueryFunction, OptionalTest_Function, IOptionalTest_Function, OptionalTest_FunctionFunction, PromptTest, IPromptTest, PromptTestFunction, TestFnNamedArgsSingleBool, ITestFnNamedArgsSingleBool, TestFnNamedArgsSingleBoolFunction, TestFnNamedArgsSingleClass, ITestFnNamedArgsSingleClass, TestFnNamedArgsSingleClassFunction, TestFnNamedArgsSingleEnumList, ITestFnNamedArgsSingleEnumList, TestFnNamedArgsSingleEnumListFunction, TestFnNamedArgsSingleFloat, ITestFnNamedArgsSingleFloat, TestFnNamedArgsSingleFloatFunction, TestFnNamedArgsSingleInt, ITestFnNamedArgsSingleInt, TestFnNamedArgsSingleIntFunction, TestFnNamedArgsSingleString, ITestFnNamedArgsSingleString, TestFnNamedArgsSingleStringFunction, TestFnNamedArgsSingleStringArray, ITestFnNamedArgsSingleStringArray, TestFnNamedArgsSingleStringArrayFunction, TestFnNamedArgsSingleStringList, ITestFnNamedArgsSingleStringList, TestFnNamedArgsSingleStringListFunction, TestFnNamedArgsSyntax, ITestFnNamedArgsSyntax, TestFnNamedArgsSyntaxFunction, UnionTest_Function, IUnionTest_Function, UnionTest_FunctionFunction }
 

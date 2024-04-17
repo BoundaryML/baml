@@ -5,14 +5,6 @@
 // @ts-nocheck
 /* eslint-disable */
 
-<<<<<<< HEAD
-const enum DataType {
-    Resume = "Resume",
-    Event = "Event",
-}
-
-||||||| parent of 209e3d97 (add examples)
-=======
 const enum Category {
     Refund = "Refund",
     CancelOrder = "CancelOrder",
@@ -37,7 +29,11 @@ const enum Category3 {
     Question = "Question",
 }
 
->>>>>>> 209e3d97 (add examples)
+const enum DataType {
+    Resume = "Resume",
+    Event = "Event",
+}
+
 const enum EnumInClass {
     ONE = "ONE",
     TWO = "TWO",
@@ -119,7 +115,12 @@ interface DynamicPropsClass {
   prop3: number;
 }
 
-<<<<<<< HEAD
+interface Email {
+  subject: string;
+  body: string;
+  from_address: string;
+}
+
 interface Event {
   title: string;
   date: string;
@@ -127,15 +128,6 @@ interface Event {
   description: string;
 }
 
-||||||| parent of 209e3d97 (add examples)
-=======
-interface Email {
-  subject: string;
-  body: string;
-  from_address: string;
-}
-
->>>>>>> 209e3d97 (add examples)
 interface ModifiedOutput {
   reasoning: string;
   answer: string;
@@ -231,12 +223,6 @@ interface WithReasoning {
   reasoning: string;
 }
 
-<<<<<<< HEAD
 
-export { DataType, EnumInClass, EnumOutput, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalTest_CategoryType, OverrideEnum, Tag, TestEnum, Blah, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, DynamicPropsClass, Event, ModifiedOutput, NamedArgsSingleClass, OptionalClass, OptionalTest_Prop1, OptionalTest_ReturnType, OverrideClass, RaysData, Resume, SearchParams, SomeClass2, TestClassAlias, TestClassWithEnum, TestOutputClass, UnionTest_ReturnType, WithReasoning }
-||||||| parent of 209e3d97 (add examples)
-export { EnumInClass, EnumOutput, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalTest_CategoryType, OverrideEnum, TestEnum, Blah, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, DynamicPropsClass, ModifiedOutput, NamedArgsSingleClass, OptionalClass, OptionalTest_Prop1, OptionalTest_ReturnType, OverrideClass, Resume, SomeClass2, TestClassAlias, TestClassWithEnum, TestOutputClass, UnionTest_ReturnType }
-=======
-export { Category, Category2, Category3, EnumInClass, EnumOutput, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalTest_CategoryType, OrderStatus, OverrideEnum, TestEnum, Blah, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, DynamicPropsClass, Email, ModifiedOutput, NamedArgsSingleClass, OptionalClass, OptionalTest_Prop1, OptionalTest_ReturnType, OrderInfo, OverrideClass, Resume, SomeClass2, TestClassAlias, TestClassWithEnum, TestOutputClass, UnionTest_ReturnType }
->>>>>>> 209e3d97 (add examples)
+export { Category, Category2, Category3, DataType, EnumInClass, EnumOutput, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalTest_CategoryType, OrderStatus, OverrideEnum, Tag, TestEnum, Blah, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, DynamicPropsClass, Email, Event, ModifiedOutput, NamedArgsSingleClass, OptionalClass, OptionalTest_Prop1, OptionalTest_ReturnType, OrderInfo, OverrideClass, RaysData, Resume, SearchParams, SomeClass2, TestClassAlias, TestClassWithEnum, TestOutputClass, UnionTest_ReturnType, WithReasoning }
 

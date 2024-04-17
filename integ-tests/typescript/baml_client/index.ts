@@ -37,13 +37,9 @@ const BamlClient = {
   FnTestEnumOverride: f.FnTestEnumOverride,
   FnTestNamedArgsSingleEnum: f.FnTestNamedArgsSingleEnum,
   FnTestOutputAdapter: f.FnTestOutputAdapter,
-<<<<<<< HEAD
   GetDataType: f.GetDataType,
-  GetQuery: f.GetQuery,
-||||||| parent of 209e3d97 (add examples)
-=======
   GetOrderInfo: f.GetOrderInfo,
->>>>>>> 209e3d97 (add examples)
+  GetQuery: f.GetQuery,
   OptionalTest_Function: f.OptionalTest_Function,
   PromptTest: f.PromptTest,
   TestFnNamedArgsSingleBool: f.TestFnNamedArgsSingleBool,

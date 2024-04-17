@@ -12,20 +12,6 @@ import { JSONSchema7 } from 'json-schema';
 
 const schema: JSONSchema7 = {
   "definitions": {
-<<<<<<< HEAD
-    "DataType": {
-      "title": "DataType",
-      "enum": [
-        {
-          "const": "Resume"
-        },
-        {
-          "const": "Event"
-        }
-      ]
-    },
-||||||| parent of 209e3d97 (add examples)
-=======
     "Category": {
       "title": "Category",
       "enum": [
@@ -86,7 +72,17 @@ const schema: JSONSchema7 = {
         }
       ]
     },
->>>>>>> 209e3d97 (add examples)
+    "DataType": {
+      "title": "DataType",
+      "enum": [
+        {
+          "const": "Resume"
+        },
+        {
+          "const": "Event"
+        }
+      ]
+    },
     "EnumInClass": {
       "title": "EnumInClass",
       "enum": [
@@ -321,7 +317,26 @@ const schema: JSONSchema7 = {
         "prop3"
       ]
     },
-<<<<<<< HEAD
+    "Email": {
+      "title": "Email",
+      "type": "object",
+      "properties": {
+        "subject": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string"
+        },
+        "from_address": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "subject",
+        "body",
+        "from_address"
+      ]
+    },
     "Event": {
       "title": "Event",
       "type": "object",
@@ -346,29 +361,6 @@ const schema: JSONSchema7 = {
         "description"
       ]
     },
-||||||| parent of 209e3d97 (add examples)
-=======
-    "Email": {
-      "title": "Email",
-      "type": "object",
-      "properties": {
-        "subject": {
-          "type": "string"
-        },
-        "body": {
-          "type": "string"
-        },
-        "from_address": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "subject",
-        "body",
-        "from_address"
-      ]
-    },
->>>>>>> 209e3d97 (add examples)
     "ModifiedOutput": {
       "title": "ModifiedOutput",
       "type": "object",
@@ -793,7 +785,6 @@ const schema: JSONSchema7 = {
         "prop3"
       ]
     },
-<<<<<<< HEAD
     "WithReasoning": {
       "title": "WithReasoning",
       "type": "object",
@@ -810,8 +801,6 @@ const schema: JSONSchema7 = {
         "reasoning"
       ]
     },
-||||||| parent of 209e3d97 (add examples)
-=======
     "ClassifyMessage_input": {
       "type": "object",
       "properties": {
@@ -860,7 +849,6 @@ const schema: JSONSchema7 = {
       ],
       "title": "ExtractNames input"
     },
->>>>>>> 209e3d97 (add examples)
     "ExtractResume_input": {
       "type": "object",
       "properties": {
@@ -993,7 +981,6 @@ const schema: JSONSchema7 = {
       "type": "string",
       "title": "FnTestOutputAdapter input"
     },
-<<<<<<< HEAD
     "GetDataType_input": {
       "type": "object",
       "properties": {
@@ -1005,6 +992,18 @@ const schema: JSONSchema7 = {
         "text"
       ],
       "title": "GetDataType input"
+    },
+    "GetOrderInfo_input": {
+      "type": "object",
+      "properties": {
+        "email": {
+          "$ref": "#/definitions/Email"
+        }
+      },
+      "required": [
+        "email"
+      ],
+      "title": "GetOrderInfo input"
     },
     "GetQuery_input": {
       "type": "object",
@@ -1018,21 +1017,6 @@ const schema: JSONSchema7 = {
       ],
       "title": "GetQuery input"
     },
-||||||| parent of 209e3d97 (add examples)
-=======
-    "GetOrderInfo_input": {
-      "type": "object",
-      "properties": {
-        "email": {
-          "$ref": "#/definitions/Email"
-        }
-      },
-      "required": [
-        "email"
-      ],
-      "title": "GetOrderInfo input"
-    },
->>>>>>> 209e3d97 (add examples)
     "OptionalTest_Function_input": {
       "type": "string",
       "title": "OptionalTest_Function input"
@@ -1288,22 +1272,18 @@ const schema: JSONSchema7 = {
       "type": "string",
       "title": "FnTestOutputAdapter output"
     },
-<<<<<<< HEAD
     "GetDataType_output": {
       "$ref": "#/definitions/RaysData",
       "title": "GetDataType output"
+    },
+    "GetOrderInfo_output": {
+      "$ref": "#/definitions/OrderInfo",
+      "title": "GetOrderInfo output"
     },
     "GetQuery_output": {
       "$ref": "#/definitions/SearchParams",
       "title": "GetQuery output"
     },
-||||||| parent of 209e3d97 (add examples)
-=======
-    "GetOrderInfo_output": {
-      "$ref": "#/definitions/OrderInfo",
-      "title": "GetOrderInfo output"
-    },
->>>>>>> 209e3d97 (add examples)
     "OptionalTest_Function_output": {
       "type": "array",
       "items": {
@@ -1368,13 +1348,6 @@ const schema: JSONSchema7 = {
   }
 };
 
-<<<<<<< HEAD
-registerEnumDeserializer(schema.definitions.DataType, {
-
-});
-
-||||||| parent of 209e3d97 (add examples)
-=======
 registerEnumDeserializer(schema.definitions.Category, {
 
 });
@@ -1396,7 +1369,10 @@ registerEnumDeserializer(schema.definitions.Category3, {
   "k5: Customer has a question": "Question"
 });
 
->>>>>>> 209e3d97 (add examples)
+registerEnumDeserializer(schema.definitions.DataType, {
+
+});
+
 registerEnumDeserializer(schema.definitions.EnumInClass, {
 
 });
@@ -1465,18 +1441,14 @@ registerObjectDeserializer(schema.definitions.DynamicPropsClass, {
 
 });
 
-<<<<<<< HEAD
-registerObjectDeserializer(schema.definitions.Event, {
-
-});
-
-||||||| parent of 209e3d97 (add examples)
-=======
 registerObjectDeserializer(schema.definitions.Email, {
 
 });
 
->>>>>>> 209e3d97 (add examples)
+registerObjectDeserializer(schema.definitions.Event, {
+
+});
+
 registerObjectDeserializer(schema.definitions.ModifiedOutput, {
   "REASONING": "reasoning",
   "ANSWER": "answer"

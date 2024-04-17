@@ -12,12 +12,8 @@ from .classes.cls_classoptionalfields import ClassOptionalFields
 from .classes.cls_classoptionaloutput import ClassOptionalOutput
 from .classes.cls_classoptionaloutput2 import ClassOptionalOutput2
 from .classes.cls_dynamicpropsclass import DynamicPropsClass
-<<<<<<< HEAD
-from .classes.cls_event import Event
-||||||| parent of 209e3d97 (add examples)
-=======
 from .classes.cls_email import Email
->>>>>>> 209e3d97 (add examples)
+from .classes.cls_event import Event
 from .classes.cls_modifiedoutput import ModifiedOutput
 from .classes.cls_namedargssingleclass import NamedArgsSingleClass
 from .classes.cls_optionalclass import OptionalClass
@@ -33,15 +29,11 @@ from .classes.cls_testclassalias import TestClassAlias
 from .classes.cls_testclasswithenum import TestClassWithEnum
 from .classes.cls_testoutputclass import TestOutputClass
 from .classes.cls_uniontest_returntype import UnionTest_ReturnType
-<<<<<<< HEAD
 from .classes.cls_withreasoning import WithReasoning
-from .enums.enm_datatype import DataType
-||||||| parent of 209e3d97 (add examples)
-=======
 from .enums.enm_category import Category
 from .enums.enm_category2 import Category2
 from .enums.enm_category3 import Category3
->>>>>>> 209e3d97 (add examples)
+from .enums.enm_datatype import DataType
 from .enums.enm_enuminclass import EnumInClass
 from .enums.enm_enumoutput import EnumOutput
 from .enums.enm_namedargssingleenum import NamedArgsSingleEnum

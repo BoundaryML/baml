@@ -41,13 +41,9 @@ from .functions.fx_fntestclassoverride import BAMLFnTestClassOverride
 from .functions.fx_fntestenumoverride import BAMLFnTestEnumOverride
 from .functions.fx_fntestnamedargssingleenum import BAMLFnTestNamedArgsSingleEnum
 from .functions.fx_fntestoutputadapter import BAMLFnTestOutputAdapter
-<<<<<<< HEAD
 from .functions.fx_getdatatype import BAMLGetDataType
-from .functions.fx_getquery import BAMLGetQuery
-||||||| parent of 209e3d97 (add examples)
-=======
 from .functions.fx_getorderinfo import BAMLGetOrderInfo
->>>>>>> 209e3d97 (add examples)
+from .functions.fx_getquery import BAMLGetQuery
 from .functions.fx_optionaltest_function import BAMLOptionalTest_Function
 from .functions.fx_prompttest import BAMLPromptTest
 from .functions.fx_testfnnamedargssinglebool import BAMLTestFnNamedArgsSingleBool
@@ -93,13 +89,9 @@ class BAMLClient:
     FnTestEnumOverride = BAMLFnTestEnumOverride
     FnTestNamedArgsSingleEnum = BAMLFnTestNamedArgsSingleEnum
     FnTestOutputAdapter = BAMLFnTestOutputAdapter
-<<<<<<< HEAD
     GetDataType = BAMLGetDataType
-    GetQuery = BAMLGetQuery
-||||||| parent of 209e3d97 (add examples)
-=======
     GetOrderInfo = BAMLGetOrderInfo
->>>>>>> 209e3d97 (add examples)
+    GetQuery = BAMLGetQuery
     OptionalTest_Function = BAMLOptionalTest_Function
     PromptTest = BAMLPromptTest
     TestFnNamedArgsSingleBool = BAMLTestFnNamedArgsSingleBool

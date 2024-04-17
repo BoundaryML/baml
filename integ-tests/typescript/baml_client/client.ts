@@ -42,9 +42,8 @@ const Lottery_SimpleSyntax = clientManager.createClient('Lottery_SimpleSyntax', 
     strategy: ["GPT35", "Claude"]
 });
 
-const Ollama = clientManager.createClient('Ollama', 'baml-anthropic-chat', {
-    model: "claude-3-haiku-20240307",
-    api_key: process.env.ANTHROPIC_API_KEY
+const Ollama = clientManager.createClient('Ollama', 'baml-ollama-chat', {
+    model: "llama2"
 });
 
 const Resilient_ComplexSyntax = clientManager.createClient('Resilient_ComplexSyntax', 'baml-fallback', {

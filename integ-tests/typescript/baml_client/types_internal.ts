@@ -6,23 +6,9 @@
 /* eslint-disable */
 
 
-<<<<<<< HEAD
-import { Blah, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, DataType, DynamicPropsClass, EnumInClass, EnumOutput, Event, ModifiedOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalClass, OptionalTest_CategoryType, OptionalTest_Prop1, OptionalTest_ReturnType, OverrideClass, OverrideEnum, RaysData, Resume, SearchParams, SomeClass2, Tag, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass, UnionTest_ReturnType, WithReasoning } from './types';
-||||||| parent of 209e3d97 (add examples)
-import { Blah, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, DynamicPropsClass, EnumInClass, EnumOutput, ModifiedOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalClass, OptionalTest_CategoryType, OptionalTest_Prop1, OptionalTest_ReturnType, OverrideClass, OverrideEnum, Resume, SomeClass2, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass, UnionTest_ReturnType } from './types';
-=======
-import { Blah, Category, Category2, Category3, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, DynamicPropsClass, Email, EnumInClass, EnumOutput, ModifiedOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalClass, OptionalTest_CategoryType, OptionalTest_Prop1, OptionalTest_ReturnType, OrderInfo, OrderStatus, OverrideClass, OverrideEnum, Resume, SomeClass2, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass, UnionTest_ReturnType } from './types';
->>>>>>> 209e3d97 (add examples)
+import { Blah, Category, Category2, Category3, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, DataType, DynamicPropsClass, Email, EnumInClass, EnumOutput, Event, ModifiedOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalClass, OptionalTest_CategoryType, OptionalTest_Prop1, OptionalTest_ReturnType, OrderInfo, OrderStatus, OverrideClass, OverrideEnum, RaysData, Resume, SearchParams, SomeClass2, Tag, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass, UnionTest_ReturnType, WithReasoning } from './types';
 
 
-<<<<<<< HEAD
-// Function to check if a value is a member of the DataType enum
-function isDataType(value: any): value is DataType {
-  return Object.values(DataType).includes(value);
-}
-
-||||||| parent of 209e3d97 (add examples)
-=======
 // Function to check if a value is a member of the Category enum
 function isCategory(value: any): value is Category {
   return Object.values(Category).includes(value);
@@ -38,7 +24,11 @@ function isCategory3(value: any): value is Category3 {
   return Object.values(Category3).includes(value);
 }
 
->>>>>>> 209e3d97 (add examples)
+// Function to check if a value is a member of the DataType enum
+function isDataType(value: any): value is DataType {
+  return Object.values(DataType).includes(value);
+}
+
 // Function to check if a value is a member of the EnumInClass enum
 function isEnumInClass(value: any): value is EnumInClass {
   return Object.values(EnumInClass).includes(value);
@@ -284,7 +274,49 @@ return this.prop1 + this.prop2
   }
 }
 
-<<<<<<< HEAD
+// Function to validate if an object is a Email object
+function isEmail(obj: any): obj is Email {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("subject" in obj && (typeof obj.subject === 'string'))
+    && ("body" in obj && (typeof obj.body === 'string'))
+    && ("from_address" in obj && (typeof obj.from_address === 'string'))
+  );
+}
+
+
+class InternalEmail implements Email {
+  private constructor(private data: {
+    subject: string,
+    body: string,
+    from_address: string,
+  }, private raw: Email) {}
+
+  static from(data: Email): InternalEmail {
+    return new InternalEmail({
+      subject: data.subject,
+      body: data.body,
+      from_address: data.from_address,
+    }, data);
+  }
+
+  get subject(): string {
+    return this.data.subject;
+  }
+  get body(): string {
+    return this.data.body;
+  }
+  get from_address(): string {
+    return this.data.from_address;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
 // Function to validate if an object is a Event object
 function isEvent(obj: any): obj is Event {
   return (
@@ -334,52 +366,6 @@ class InternalEvent implements Event {
   }
 }
 
-||||||| parent of 209e3d97 (add examples)
-=======
-// Function to validate if an object is a Email object
-function isEmail(obj: any): obj is Email {
-  return (
-    obj &&
-    typeof obj === "object"
-    && ("subject" in obj && (typeof obj.subject === 'string'))
-    && ("body" in obj && (typeof obj.body === 'string'))
-    && ("from_address" in obj && (typeof obj.from_address === 'string'))
-  );
-}
-
-
-class InternalEmail implements Email {
-  private constructor(private data: {
-    subject: string,
-    body: string,
-    from_address: string,
-  }, private raw: Email) {}
-
-  static from(data: Email): InternalEmail {
-    return new InternalEmail({
-      subject: data.subject,
-      body: data.body,
-      from_address: data.from_address,
-    }, data);
-  }
-
-  get subject(): string {
-    return this.data.subject;
-  }
-  get body(): string {
-    return this.data.body;
-  }
-  get from_address(): string {
-    return this.data.from_address;
-  }
-
-
-  toJSON(): string {
-    return JSON.stringify(this.raw, null, 2);
-  }
-}
-
->>>>>>> 209e3d97 (add examples)
 // Function to validate if an object is a ModifiedOutput object
 function isModifiedOutput(obj: any): obj is ModifiedOutput {
   return (
@@ -1070,7 +1056,6 @@ function isWithReasoning(obj: any): obj is WithReasoning {
   );
 }
 
-<<<<<<< HEAD
 
 class InternalWithReasoning implements WithReasoning {
   private constructor(private data: {
@@ -1099,10 +1084,5 @@ class InternalWithReasoning implements WithReasoning {
 }
 
 
-export { InternalBlah, InternalClassOptionalFields, InternalClassOptionalOutput, InternalClassOptionalOutput2, InternalDynamicPropsClass, InternalEvent, InternalModifiedOutput, InternalNamedArgsSingleClass, InternalOptionalClass, InternalOptionalTest_Prop1, InternalOptionalTest_ReturnType, InternalOverrideClass, InternalRaysData, InternalResume, InternalSearchParams, InternalSomeClass2, InternalTestClassAlias, InternalTestClassWithEnum, InternalTestOutputClass, InternalUnionTest_ReturnType, InternalWithReasoning }
-||||||| parent of 209e3d97 (add examples)
-export { InternalBlah, InternalClassOptionalFields, InternalClassOptionalOutput, InternalClassOptionalOutput2, InternalDynamicPropsClass, InternalModifiedOutput, InternalNamedArgsSingleClass, InternalOptionalClass, InternalOptionalTest_Prop1, InternalOptionalTest_ReturnType, InternalOverrideClass, InternalResume, InternalSomeClass2, InternalTestClassAlias, InternalTestClassWithEnum, InternalTestOutputClass, InternalUnionTest_ReturnType }
-=======
-export { InternalBlah, InternalClassOptionalFields, InternalClassOptionalOutput, InternalClassOptionalOutput2, InternalDynamicPropsClass, InternalEmail, InternalModifiedOutput, InternalNamedArgsSingleClass, InternalOptionalClass, InternalOptionalTest_Prop1, InternalOptionalTest_ReturnType, InternalOrderInfo, InternalOverrideClass, InternalResume, InternalSomeClass2, InternalTestClassAlias, InternalTestClassWithEnum, InternalTestOutputClass, InternalUnionTest_ReturnType }
->>>>>>> 209e3d97 (add examples)
+export { InternalBlah, InternalClassOptionalFields, InternalClassOptionalOutput, InternalClassOptionalOutput2, InternalDynamicPropsClass, InternalEmail, InternalEvent, InternalModifiedOutput, InternalNamedArgsSingleClass, InternalOptionalClass, InternalOptionalTest_Prop1, InternalOptionalTest_ReturnType, InternalOrderInfo, InternalOverrideClass, InternalRaysData, InternalResume, InternalSearchParams, InternalSomeClass2, InternalTestClassAlias, InternalTestClassWithEnum, InternalTestOutputClass, InternalUnionTest_ReturnType, InternalWithReasoning }
 

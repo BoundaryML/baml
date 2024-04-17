@@ -6,26 +6,14 @@
 /* eslint-disable */
 
 
-<<<<<<< HEAD
 import { Resilient_ComplexSyntax } from '../client';
-||||||| parent of 209e3d97 (add examples)
-import { Ollama } from '../client';
-=======
-import { GPT4 } from '../client';
->>>>>>> 209e3d97 (add examples)
 import { ExtractResume } from '../function';
 import { schema } from '../json_schema';
 import { Deserializer } from '@boundaryml/baml-core/deserializer/deserializer';
 
 
 // Impl: default_config
-<<<<<<< HEAD
 // Client: Resilient_ComplexSyntax
-||||||| parent of 209e3d97 (add examples)
-// Client: Ollama
-=======
-// Client: GPT4
->>>>>>> 209e3d97 (add examples)
 // An implementation for ExtractResume
 
 
@@ -61,13 +49,7 @@ ExtractResume.registerImpl('default_config', async (
     resume: string
   }
 ): Promise<Resume> => {
-<<<<<<< HEAD
     const result = await Resilient_ComplexSyntax.run_jinja_template(
-||||||| parent of 209e3d97 (add examples)
-    const result = await Ollama.run_jinja_template(
-=======
-    const result = await GPT4.run_jinja_template(
->>>>>>> 209e3d97 (add examples)
       prompt_template,
       args,
       output_schema,

@@ -32,13 +32,9 @@ from ..__do_not_import.functions.fx_fntestclassoverride import IFnTestClassOverr
 from ..__do_not_import.functions.fx_fntestenumoverride import IFnTestEnumOverride, IFnTestEnumOverrideOutput, IFnTestEnumOverrideStream
 from ..__do_not_import.functions.fx_fntestnamedargssingleenum import IFnTestNamedArgsSingleEnum, IFnTestNamedArgsSingleEnumOutput, IFnTestNamedArgsSingleEnumStream
 from ..__do_not_import.functions.fx_fntestoutputadapter import IFnTestOutputAdapter, IFnTestOutputAdapterOutput, IFnTestOutputAdapterStream
-<<<<<<< HEAD
 from ..__do_not_import.functions.fx_getdatatype import IGetDataType, IGetDataTypeOutput, IGetDataTypeStream
-from ..__do_not_import.functions.fx_getquery import IGetQuery, IGetQueryOutput, IGetQueryStream
-||||||| parent of 209e3d97 (add examples)
-=======
 from ..__do_not_import.functions.fx_getorderinfo import IGetOrderInfo, IGetOrderInfoOutput, IGetOrderInfoStream
->>>>>>> 209e3d97 (add examples)
+from ..__do_not_import.functions.fx_getquery import IGetQuery, IGetQueryOutput, IGetQueryStream
 from ..__do_not_import.functions.fx_optionaltest_function import IOptionalTest_Function, IOptionalTest_FunctionOutput, IOptionalTest_FunctionStream
 from ..__do_not_import.functions.fx_prompttest import IPromptTest, IPromptTestOutput, IPromptTestStream
 from ..__do_not_import.functions.fx_testfnnamedargssinglebool import ITestFnNamedArgsSingleBool, ITestFnNamedArgsSingleBoolOutput, ITestFnNamedArgsSingleBoolStream
@@ -56,12 +52,8 @@ from ..__do_not_import.types.classes.cls_classoptionalfields import ClassOptiona
 from ..__do_not_import.types.classes.cls_classoptionaloutput import ClassOptionalOutput
 from ..__do_not_import.types.classes.cls_classoptionaloutput2 import ClassOptionalOutput2
 from ..__do_not_import.types.classes.cls_dynamicpropsclass import DynamicPropsClass
-<<<<<<< HEAD
-from ..__do_not_import.types.classes.cls_event import Event
-||||||| parent of 209e3d97 (add examples)
-=======
 from ..__do_not_import.types.classes.cls_email import Email
->>>>>>> 209e3d97 (add examples)
+from ..__do_not_import.types.classes.cls_event import Event
 from ..__do_not_import.types.classes.cls_modifiedoutput import ModifiedOutput
 from ..__do_not_import.types.classes.cls_namedargssingleclass import NamedArgsSingleClass
 from ..__do_not_import.types.classes.cls_optionalclass import OptionalClass
@@ -77,15 +69,11 @@ from ..__do_not_import.types.classes.cls_testclassalias import TestClassAlias
 from ..__do_not_import.types.classes.cls_testclasswithenum import TestClassWithEnum
 from ..__do_not_import.types.classes.cls_testoutputclass import TestOutputClass
 from ..__do_not_import.types.classes.cls_uniontest_returntype import UnionTest_ReturnType
-<<<<<<< HEAD
 from ..__do_not_import.types.classes.cls_withreasoning import WithReasoning
-from ..__do_not_import.types.enums.enm_datatype import DataType
-||||||| parent of 209e3d97 (add examples)
-=======
 from ..__do_not_import.types.enums.enm_category import Category
 from ..__do_not_import.types.enums.enm_category2 import Category2
 from ..__do_not_import.types.enums.enm_category3 import Category3
->>>>>>> 209e3d97 (add examples)
+from ..__do_not_import.types.enums.enm_datatype import DataType
 from ..__do_not_import.types.enums.enm_enuminclass import EnumInClass
 from ..__do_not_import.types.enums.enm_enumoutput import EnumOutput
 from ..__do_not_import.types.enums.enm_namedargssingleenum import NamedArgsSingleEnum
@@ -112,10 +100,7 @@ __all__ = [
     'Email',
     'EnumInClass',
     'EnumOutput',
-<<<<<<< HEAD
     'Event',
-||||||| parent of 209e3d97 (add examples)
-=======
     'IClassifyMessage',
     'IClassifyMessage2',
     'IClassifyMessage2Output',
@@ -128,7 +113,6 @@ __all__ = [
     'IExtractNames',
     'IExtractNamesOutput',
     'IExtractNamesStream',
->>>>>>> 209e3d97 (add examples)
     'IExtractResume',
     'IExtractResume2',
     'IExtractResume2Output',
@@ -192,19 +176,15 @@ __all__ = [
     'IFnTestOutputAdapter',
     'IFnTestOutputAdapterOutput',
     'IFnTestOutputAdapterStream',
-<<<<<<< HEAD
     'IGetDataType',
     'IGetDataTypeOutput',
     'IGetDataTypeStream',
-    'IGetQuery',
-    'IGetQueryOutput',
-    'IGetQueryStream',
-||||||| parent of 209e3d97 (add examples)
-=======
     'IGetOrderInfo',
     'IGetOrderInfoOutput',
     'IGetOrderInfoStream',
->>>>>>> 209e3d97 (add examples)
+    'IGetQuery',
+    'IGetQueryOutput',
+    'IGetQueryStream',
     'IOptionalTest_Function',
     'IOptionalTest_FunctionOutput',
     'IOptionalTest_FunctionStream',

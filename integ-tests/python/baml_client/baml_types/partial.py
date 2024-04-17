@@ -12,12 +12,8 @@ from ..__do_not_import.types.partial.classes.cls_classoptionalfields import Part
 from ..__do_not_import.types.partial.classes.cls_classoptionaloutput import PartialClassOptionalOutput
 from ..__do_not_import.types.partial.classes.cls_classoptionaloutput2 import PartialClassOptionalOutput2
 from ..__do_not_import.types.partial.classes.cls_dynamicpropsclass import PartialDynamicPropsClass
-<<<<<<< HEAD
-from ..__do_not_import.types.partial.classes.cls_event import PartialEvent
-||||||| parent of 209e3d97 (add examples)
-=======
 from ..__do_not_import.types.partial.classes.cls_email import PartialEmail
->>>>>>> 209e3d97 (add examples)
+from ..__do_not_import.types.partial.classes.cls_event import PartialEvent
 from ..__do_not_import.types.partial.classes.cls_modifiedoutput import PartialModifiedOutput
 from ..__do_not_import.types.partial.classes.cls_namedargssingleclass import PartialNamedArgsSingleClass
 from ..__do_not_import.types.partial.classes.cls_optionalclass import PartialOptionalClass
@@ -44,12 +40,8 @@ __all__ = [
     'PartialClassOptionalOutput',
     'PartialClassOptionalOutput2',
     'PartialDynamicPropsClass',
-<<<<<<< HEAD
-    'PartialEvent',
-||||||| parent of 209e3d97 (add examples)
-=======
     'PartialEmail',
->>>>>>> 209e3d97 (add examples)
+    'PartialEvent',
     'PartialModifiedOutput',
     'PartialNamedArgsSingleClass',
     'PartialOptionalClass',
