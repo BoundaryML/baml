@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
-import { useCommandS } from '@/hooks/command-s'
+import { useKeybindingOverrides } from '@/hooks/command-s'
 import { BAML_DIR } from '@/lib/constants'
 import { BAMLProject } from '@/lib/exampleProjects'
 import {
@@ -20,12 +20,7 @@ import { useContext, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Editable } from '../../_components/EditableText'
 import { EditorFile, createUrl } from '../../actions'
-import {
-  currentEditorFilesAtom,
-  currentParserDbAtom,
-  testRunOutputAtom,
-  unsavedChangesAtom,
-} from '../_atoms/atoms'
+import { currentEditorFilesAtom, currentParserDbAtom, testRunOutputAtom, unsavedChangesAtom } from '../_atoms/atoms'
 import { CodeMirrorEditor } from './CodeMirrorEditor'
 import { usePlaygroundListener } from '../_playground_controller/usePlaygroundListener'
 import { ASTContext } from '@baml/playground-common/shared/ASTProvider'
@@ -36,7 +31,7 @@ import { atomStore, sessionStore } from '@/app/_components/JotaiProvider'
 const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
   const setEditorFiles = useSetAtom(currentEditorFilesAtom)
   const setTestRunOutput = useSetAtom(testRunOutputAtom)
-  useCommandS()
+  useKeybindingOverrides()
   // Tried to use url pathnames for this but nextjs hijacks the pathname state (even the window.location) so we have to manually track unsaved changes in the app.
   const [unsavedChanges, setUnsavedChanges] = useAtom(unsavedChangesAtom)
 
