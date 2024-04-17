@@ -31,10 +31,9 @@ client<llm> Claude {
 }
 
 client<llm> Ollama {
-  provider baml-anthropic-chat
+  provider baml-ollama-chat
   options {
-    model claude-3-haiku-20240307
-    api_key env.ANTHROPIC_API_KEY
+    model llama2
   }
 }
 
