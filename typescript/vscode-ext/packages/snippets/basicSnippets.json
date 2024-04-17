@@ -25,31 +25,19 @@
     "body": ["enum ${1:EnumName} {", "\t$0", "}"],
     "description": "Snippet for enum definition"
   },
-  "function (BAML)": {
+  "function (BAML Snippet)": {
     "prefix": "function",
-    "body": ["function ${1:FunctionName} {", "\tinput ${2:InputType}", "\toutput ${3:OutputType}", "\t$0", "}"],
-    "description": "Custom Gloo function snippet"
+    "body": [
+      "function ${1:FunctionName}(${2:arg}:${3:string}) -> ${4:MyOutputType} {",
+      "\tclient ${5:GPT4}",
+      "\tprompt #\"",
+      "\t\tYour prompt here in jinja format",
+      "\t\"#",
+      "}"
+    ],
+    "description": "Custom BAML function snippet"
   },
-  "input block": {
-    "prefix": "input",
-    "body": ["input {", "\t$0", "}"],
-    "description": "Snippet for input block"
-  },
-  "input type": {
-    "prefix": "input",
-    "body": ["input $0"],
-    "description": "Snippet for input type"
-  },
-  "output": {
-    "prefix": "output",
-    "body": ["output {", "\t$0", "}"],
-    "description": "Snippet for @output block"
-  },
-  "output type": {
-    "prefix": "output",
-    "body": ["output $0"],
-    "description": "Snippet for @output type"
-  },
+
   "@skip": {
     "prefix": "@skip",
     "body": ["@skip"],
