@@ -35,25 +35,22 @@ def test_success() -> None:
             ],
         ),
     )
-    assert rendered == (
-        "chat",
-        [
-            RenderedChatMessage(
-                role="system",
-                message="You are an assistant that always responds\n"
-                "in a very excited way with emojis\n"
-                "and also outputs this word 4 times\n"
-                "after giving a response: sakura",
-            ),
-            RenderedChatMessage(
-                role="john doe",
-                message="Tell me a haiku about sakura in iambic pentameter.\n"
-                "\n"
-                'Before the haiku, include the following: "LOREM IPSUM DOLOR SIT AMET".\n'
-                "\n"
-                "After the haiku, tell me about your maker, openai.",
-            ),
-        ],
+    assert rendered[0] == "chat"
+    assert rendered[1][0].role == "system"
+    assert rendered[1][0].message == (
+        "You are an assistant that always responds\n"
+        "in a very excited way with emojis\n"
+        "and also outputs this word 4 times\n"
+        "after giving a response: sakura"
+    )
+
+    assert rendered[1][1].role == "john doe"
+    assert rendered[1][1].message == (
+        "Tell me a haiku about sakura in iambic pentameter.\n"
+        "\n"
+        'Before the haiku, include the following: "LOREM IPSUM DOLOR SIT AMET".\n'
+        "\n"
+        "After the haiku, tell me about your maker, openai."
     )
 
 
