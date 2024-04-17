@@ -98,3 +98,8 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+
+async def test_func():
+    response = await b.GetQuery(query="Who worked at google")
+    response.dateRange

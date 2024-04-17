@@ -12,24 +12,30 @@ from .classes.cls_classoptionalfields import ClassOptionalFields
 from .classes.cls_classoptionaloutput import ClassOptionalOutput
 from .classes.cls_classoptionaloutput2 import ClassOptionalOutput2
 from .classes.cls_dynamicpropsclass import DynamicPropsClass
+from .classes.cls_event import Event
 from .classes.cls_modifiedoutput import ModifiedOutput
 from .classes.cls_namedargssingleclass import NamedArgsSingleClass
 from .classes.cls_optionalclass import OptionalClass
 from .classes.cls_optionaltest_prop1 import OptionalTest_Prop1
 from .classes.cls_optionaltest_returntype import OptionalTest_ReturnType
 from .classes.cls_overrideclass import OverrideClass
+from .classes.cls_raysdata import RaysData
 from .classes.cls_resume import Resume
+from .classes.cls_searchparams import SearchParams
 from .classes.cls_someclass2 import SomeClass2
 from .classes.cls_testclassalias import TestClassAlias
 from .classes.cls_testclasswithenum import TestClassWithEnum
 from .classes.cls_testoutputclass import TestOutputClass
 from .classes.cls_uniontest_returntype import UnionTest_ReturnType
+from .classes.cls_withreasoning import WithReasoning
+from .enums.enm_datatype import DataType
 from .enums.enm_enuminclass import EnumInClass
 from .enums.enm_enumoutput import EnumOutput
 from .enums.enm_namedargssingleenum import NamedArgsSingleEnum
 from .enums.enm_namedargssingleenumlist import NamedArgsSingleEnumList
 from .enums.enm_optionaltest_categorytype import OptionalTest_CategoryType
 from .enums.enm_overrideenum import OverrideEnum
+from .enums.enm_tag import Tag
 from .enums.enm_testenum import TestEnum
 
 
@@ -40,9 +46,11 @@ __all__ = [
     'ClassOptionalFields',
     'ClassOptionalOutput',
     'ClassOptionalOutput2',
+    'DataType',
     'DynamicPropsClass',
     'EnumInClass',
     'EnumOutput',
+    'Event',
     'ModifiedOutput',
     'NamedArgsSingleClass',
     'NamedArgsSingleEnum',
@@ -53,11 +61,15 @@ __all__ = [
     'OptionalTest_ReturnType',
     'OverrideClass',
     'OverrideEnum',
+    'RaysData',
     'Resume',
+    'SearchParams',
     'SomeClass2',
+    'Tag',
     'TestClassAlias',
     'TestClassWithEnum',
     'TestEnum',
     'TestOutputClass',
-    'UnionTest_ReturnType'
+    'UnionTest_ReturnType',
+    'WithReasoning'
 ]

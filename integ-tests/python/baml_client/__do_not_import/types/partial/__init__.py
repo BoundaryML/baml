@@ -12,18 +12,22 @@ from .classes.cls_classoptionalfields import PartialClassOptionalFields
 from .classes.cls_classoptionaloutput import PartialClassOptionalOutput
 from .classes.cls_classoptionaloutput2 import PartialClassOptionalOutput2
 from .classes.cls_dynamicpropsclass import PartialDynamicPropsClass
+from .classes.cls_event import PartialEvent
 from .classes.cls_modifiedoutput import PartialModifiedOutput
 from .classes.cls_namedargssingleclass import PartialNamedArgsSingleClass
 from .classes.cls_optionalclass import PartialOptionalClass
 from .classes.cls_optionaltest_prop1 import PartialOptionalTest_Prop1
 from .classes.cls_optionaltest_returntype import PartialOptionalTest_ReturnType
 from .classes.cls_overrideclass import PartialOverrideClass
+from .classes.cls_raysdata import PartialRaysData
 from .classes.cls_resume import PartialResume
+from .classes.cls_searchparams import PartialSearchParams
 from .classes.cls_someclass2 import PartialSomeClass2
 from .classes.cls_testclassalias import PartialTestClassAlias
 from .classes.cls_testclasswithenum import PartialTestClassWithEnum
 from .classes.cls_testoutputclass import PartialTestOutputClass
 from .classes.cls_uniontest_returntype import PartialUnionTest_ReturnType
+from .classes.cls_withreasoning import PartialWithReasoning
 
 
 
@@ -34,16 +38,20 @@ __all__ = [
     'PartialClassOptionalOutput',
     'PartialClassOptionalOutput2',
     'PartialDynamicPropsClass',
+    'PartialEvent',
     'PartialModifiedOutput',
     'PartialNamedArgsSingleClass',
     'PartialOptionalClass',
     'PartialOptionalTest_Prop1',
     'PartialOptionalTest_ReturnType',
     'PartialOverrideClass',
+    'PartialRaysData',
     'PartialResume',
+    'PartialSearchParams',
     'PartialSomeClass2',
     'PartialTestClassAlias',
     'PartialTestClassWithEnum',
     'PartialTestOutputClass',
-    'PartialUnionTest_ReturnType'
+    'PartialUnionTest_ReturnType',
+    'PartialWithReasoning'
 ]

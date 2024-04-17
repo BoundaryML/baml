@@ -12,6 +12,17 @@ import { JSONSchema7 } from 'json-schema';
 
 const schema: JSONSchema7 = {
   "definitions": {
+    "DataType": {
+      "title": "DataType",
+      "enum": [
+        {
+          "const": "Resume"
+        },
+        {
+          "const": "Event"
+        }
+      ]
+    },
     "EnumInClass": {
       "title": "EnumInClass",
       "enum": [
@@ -81,6 +92,20 @@ const schema: JSONSchema7 = {
         },
         {
           "const": "TWO"
+        }
+      ]
+    },
+    "Tag": {
+      "title": "Tag",
+      "enum": [
+        {
+          "const": "Security"
+        },
+        {
+          "const": "AI"
+        },
+        {
+          "const": "Blockchain"
         }
       ]
     },
@@ -215,6 +240,30 @@ const schema: JSONSchema7 = {
         "prop3"
       ]
     },
+    "Event": {
+      "title": "Event",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "date": {
+          "type": "string"
+        },
+        "location": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "date",
+        "location",
+        "description"
+      ]
+    },
     "ModifiedOutput": {
       "title": "ModifiedOutput",
       "type": "object",
@@ -344,6 +393,31 @@ const schema: JSONSchema7 = {
         "prop2"
       ]
     },
+    "RaysData": {
+      "title": "RaysData",
+      "type": "object",
+      "properties": {
+        "dataType": {
+          "$ref": "#/definitions/DataType"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Resume",
+              "title": "Resume"
+            },
+            {
+              "$ref": "#/definitions/Event",
+              "title": "Event"
+            }
+          ]
+        }
+      },
+      "required": [
+        "dataType",
+        "value"
+      ]
+    },
     "Resume": {
       "title": "Resume",
       "type": "object",
@@ -383,6 +457,77 @@ const schema: JSONSchema7 = {
         "experience",
         "education",
         "skills"
+      ]
+    },
+    "SearchParams": {
+      "title": "SearchParams",
+      "type": "object",
+      "properties": {
+        "dateRange": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "default": null
+        },
+        "location": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "jobTitle": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/WithReasoning",
+              "title": "WithReasoning"
+            },
+            {
+              "type": "null",
+              "title": "null"
+            }
+          ],
+          "default": null
+        },
+        "company": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/WithReasoning",
+              "title": "WithReasoning"
+            },
+            {
+              "type": "null",
+              "title": "null"
+            }
+          ],
+          "default": null
+        },
+        "description": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/WithReasoning"
+          }
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/Tag",
+                "title": "Tag"
+              },
+              {
+                "type": "string",
+                "title": "string"
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "location",
+        "description",
+        "tags"
       ]
     },
     "SomeClass2": {
@@ -517,6 +662,22 @@ const schema: JSONSchema7 = {
         "prop3"
       ]
     },
+    "WithReasoning": {
+      "title": "WithReasoning",
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string"
+        },
+        "reasoning": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value",
+        "reasoning"
+      ]
+    },
     "ExtractResume_input": {
       "type": "object",
       "properties": {
@@ -528,6 +689,18 @@ const schema: JSONSchema7 = {
         "resume"
       ],
       "title": "ExtractResume input"
+    },
+    "ExtractResume2_input": {
+      "type": "object",
+      "properties": {
+        "resume": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "resume"
+      ],
+      "title": "ExtractResume2 input"
     },
     "FnClassOptional_input": {
       "anyOf": [
@@ -636,6 +809,30 @@ const schema: JSONSchema7 = {
     "FnTestOutputAdapter_input": {
       "type": "string",
       "title": "FnTestOutputAdapter input"
+    },
+    "GetDataType_input": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "GetDataType input"
+    },
+    "GetQuery_input": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "title": "GetQuery input"
     },
     "OptionalTest_Function_input": {
       "type": "string",
@@ -764,6 +961,10 @@ const schema: JSONSchema7 = {
       "$ref": "#/definitions/Resume",
       "title": "ExtractResume output"
     },
+    "ExtractResume2_output": {
+      "$ref": "#/definitions/Resume",
+      "title": "ExtractResume2 output"
+    },
     "FnClassOptional_output": {
       "type": "string",
       "title": "FnClassOptional output"
@@ -869,6 +1070,14 @@ const schema: JSONSchema7 = {
       "type": "string",
       "title": "FnTestOutputAdapter output"
     },
+    "GetDataType_output": {
+      "$ref": "#/definitions/RaysData",
+      "title": "GetDataType output"
+    },
+    "GetQuery_output": {
+      "$ref": "#/definitions/SearchParams",
+      "title": "GetQuery output"
+    },
     "OptionalTest_Function_output": {
       "type": "array",
       "items": {
@@ -933,6 +1142,10 @@ const schema: JSONSchema7 = {
   }
 };
 
+registerEnumDeserializer(schema.definitions.DataType, {
+
+});
+
 registerEnumDeserializer(schema.definitions.EnumInClass, {
 
 });
@@ -954,6 +1167,10 @@ registerEnumDeserializer(schema.definitions.OptionalTest_CategoryType, {
 });
 
 registerEnumDeserializer(schema.definitions.OverrideEnum, {
+
+});
+
+registerEnumDeserializer(schema.definitions.Tag, {
 
 });
 
@@ -993,6 +1210,10 @@ registerObjectDeserializer(schema.definitions.DynamicPropsClass, {
 
 });
 
+registerObjectDeserializer(schema.definitions.Event, {
+
+});
+
 registerObjectDeserializer(schema.definitions.ModifiedOutput, {
   "REASONING": "reasoning",
   "ANSWER": "answer"
@@ -1018,7 +1239,15 @@ registerObjectDeserializer(schema.definitions.OverrideClass, {
 
 });
 
+registerObjectDeserializer(schema.definitions.RaysData, {
+
+});
+
 registerObjectDeserializer(schema.definitions.Resume, {
+
+});
+
+registerObjectDeserializer(schema.definitions.SearchParams, {
 
 });
 
@@ -1042,6 +1271,10 @@ registerObjectDeserializer(schema.definitions.TestOutputClass, {
 });
 
 registerObjectDeserializer(schema.definitions.UnionTest_ReturnType, {
+
+});
+
+registerObjectDeserializer(schema.definitions.WithReasoning, {
 
 });
 

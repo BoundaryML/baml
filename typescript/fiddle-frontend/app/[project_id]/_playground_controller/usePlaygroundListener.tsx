@@ -81,12 +81,12 @@ export const usePlaygroundListener = () => {
           let testInputContent: any
           if (params.type === 'positional') {
             try {
-              testInputContent = JSON.parse(params.value)
+              testInputContent = JSON.stringify(JSON.parse(params.value))
             } catch (e) {
-              testInputContent = params.value
+              testInputContent = JSON.stringify(params.value)
             }
           } else {
-            testInputContent = Object.fromEntries(
+            testInputContent = JSON.stringify(Object.fromEntries(
               saveTestRequest.params.value.map((kv: { name: any; value: any }) => {
                 if (kv.value === undefined || kv.value === null || kv.value === '') {
                   return [kv.name, null]
@@ -99,7 +99,7 @@ export const usePlaygroundListener = () => {
                 }
                 return [kv.name, parsed]
               }),
-            )
+            ))
           }
           const newTestCase = {
             name: {

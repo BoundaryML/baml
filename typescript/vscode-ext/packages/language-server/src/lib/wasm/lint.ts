@@ -28,6 +28,8 @@ export interface LinterSourceFile {
 export interface LinterInput {
   root_path: string
   files: LinterSourceFile[]
+  // Function Name -> Test Name
+  selected_tests: Record<string, string>
 }
 
 export default function lint(input: LinterInput, onError?: (errorMessage: string) => void): LintResponse {

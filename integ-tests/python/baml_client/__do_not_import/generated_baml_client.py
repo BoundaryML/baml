@@ -17,6 +17,7 @@ from .clients.client_ollama import Ollama
 from .clients.client_resilient_complexsyntax import Resilient_ComplexSyntax
 from .clients.client_resilient_simplesyntax import Resilient_SimpleSyntax
 from .functions.fx_extractresume import BAMLExtractResume
+from .functions.fx_extractresume2 import BAMLExtractResume2
 from .functions.fx_fnclassoptional import BAMLFnClassOptional
 from .functions.fx_fnclassoptional2 import BAMLFnClassOptional2
 from .functions.fx_fnclassoptionaloutput import BAMLFnClassOptionalOutput
@@ -36,6 +37,8 @@ from .functions.fx_fntestclassoverride import BAMLFnTestClassOverride
 from .functions.fx_fntestenumoverride import BAMLFnTestEnumOverride
 from .functions.fx_fntestnamedargssingleenum import BAMLFnTestNamedArgsSingleEnum
 from .functions.fx_fntestoutputadapter import BAMLFnTestOutputAdapter
+from .functions.fx_getdatatype import BAMLGetDataType
+from .functions.fx_getquery import BAMLGetQuery
 from .functions.fx_optionaltest_function import BAMLOptionalTest_Function
 from .functions.fx_prompttest import BAMLPromptTest
 from .functions.fx_testfnnamedargssinglebool import BAMLTestFnNamedArgsSingleBool
@@ -57,6 +60,7 @@ from typing import Callable, List, Optional
 
 class BAMLClient:
     ExtractResume = BAMLExtractResume
+    ExtractResume2 = BAMLExtractResume2
     FnClassOptional = BAMLFnClassOptional
     FnClassOptional2 = BAMLFnClassOptional2
     FnClassOptionalOutput = BAMLFnClassOptionalOutput
@@ -76,6 +80,8 @@ class BAMLClient:
     FnTestEnumOverride = BAMLFnTestEnumOverride
     FnTestNamedArgsSingleEnum = BAMLFnTestNamedArgsSingleEnum
     FnTestOutputAdapter = BAMLFnTestOutputAdapter
+    GetDataType = BAMLGetDataType
+    GetQuery = BAMLGetQuery
     OptionalTest_Function = BAMLOptionalTest_Function
     PromptTest = BAMLPromptTest
     TestFnNamedArgsSingleBool = BAMLTestFnNamedArgsSingleBool

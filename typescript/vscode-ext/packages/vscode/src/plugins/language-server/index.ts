@@ -385,7 +385,20 @@ const plugin: BamlVSCodePlugin = {
         })
       }),
 
-      vscode.commands.registerCommand('baml.jumpToDefinition', async (args: { sourceFile?: string; name?: string }) => {
+      commands.registerCommand('baml.selectTestCase', async (test_request: {
+        functionName?: string
+        testCaseName?: string
+      }) => {
+        const { functionName, testCaseName } = test_request
+        if (!functionName || !testCaseName) {
+          return
+        }
+
+        console.log('selectTestCase', functionName, testCaseName)
+        await client.sendRequest('selectTestCase', { functionName, testCaseName });
+      }),
+
+      commands.registerCommand('baml.jumpToDefinition', async (args: { sourceFile?: string; name?: string }) => {
         let { sourceFile, name } = args
         if (!sourceFile || !name) {
           return

@@ -4,7 +4,7 @@ import { Button } from '@baml/playground-common/components/ui/button'
 import { useAtom, useSetAtom } from 'jotai'
 import { usePathname } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { activeFileAtom, currentEditorFilesAtom, currentParserDbAtom, unsavedChangesAtom } from '../_atoms/atoms'
+import { activeFileAtom, currentEditorFilesAtom, currentParserDbAtom, functionTestCaseAtom, unsavedChangesAtom } from '../_atoms/atoms'
 import { BAML_DIR } from '@/lib/constants'
 import { atomStore } from '@/app/_components/JotaiProvider'
 import { BAML, theme } from '@baml/codemirror-lang'
@@ -17,12 +17,12 @@ import { useHydrateAtoms } from 'jotai/utils'
 type LintResponse = {
   diagnostics: LinterError[]
 } & (
-  | { ok: false }
-  | {
+    | { ok: false }
+    | {
       ok: true
       response: ParserDatabase
     }
-)
+  )
 
 export interface LinterError {
   start: number
@@ -40,13 +40,17 @@ export interface LinterSourceFile {
 export interface LinterInput {
   root_path: string
   files: LinterSourceFile[]
+  // Function Name -> Test Name
+  selected_tests: Record<string, string>
 }
-async function bamlLinter(view: EditorView): Promise<Diagnostic[]> {
+async function bamlLinter(_view: any): Promise<Diagnostic[]> {
   const lint = await import('@gloo-ai/baml-schema-wasm-web').then((m) => m.lint)
   const currentFiles = atomStore.get(currentEditorFilesAtom) as EditorFile[]
+  const selectedTests = atomStore.get(functionTestCaseAtom) as Record<string, string>;
   const linterInput: LinterInput = {
     root_path: `${BAML_DIR}`,
     files: currentFiles,
+    selected_tests: selectedTests,
   }
   console.info(`Linting ${linterInput.files.length} files in ${linterInput.root_path}`)
   const res = lint(JSON.stringify(linterInput))
@@ -55,8 +59,19 @@ async function bamlLinter(view: EditorView): Promise<Diagnostic[]> {
   BamlDB.set('baml_src', res)
 
   if (parsedRes.ok) {
-    const newParserDb: ParserDatabase = { ...parsedRes.response }
-    atomStore.set(currentParserDbAtom, newParserDb)
+    atomStore.set(currentParserDbAtom, parsedRes.response)
+
+    // Get all the selected tests
+    let funcTestSelector = Object.fromEntries(parsedRes.response.functions.map((f) => {
+      let test_case = Array.from(new Set(f.impls.flatMap(i => i.prompt.test_case).filter((t): t is string => t !== undefined)));
+
+      if (test_case.length > 0) {
+        return [f.name.value, test_case[0]]
+      }
+      return undefined;
+    }).filter((t): t is [string, string] => t !== undefined));
+    console.log(funcTestSelector)
+    // atomStore.set(functionTestCaseAtom, funcTestSelector)
   }
 
   return parsedRes.diagnostics
@@ -99,11 +114,10 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
             variant={'ghost'}
             key={file.path}
             onClick={() => setActiveFile(file)}
-            className={`${
-              activeFile?.path === file.path
-                ? '  border-b-[2px] border-b-blue-400 bg-background text-blue-500 hover:bg-vscode-selection-background hover:text-blue-500'
-                : 'hover:text-black/80 bg-background text-gray-500 hover:bg-vscode-selection-background hover:text-gray-5=400'
-            }  h-[30px] rounded-b-none rounded-tl-lg  border-r-0 px-1 text-sm  font-medium`}
+            className={`${activeFile?.path === file.path
+              ? '  border-b-[2px] border-b-blue-400 bg-background text-blue-500 hover:bg-vscode-selection-background hover:text-blue-500'
+              : 'hover:text-black/80 bg-background text-gray-500 hover:bg-vscode-selection-background hover:text-gray-5=400'
+              }  h-[30px] rounded-b-none rounded-tl-lg  border-r-0 px-1 text-sm  font-medium`}
           >
             {file.path.replace(`${BAML_DIR}/`, '')}
           </Button>
@@ -120,6 +134,9 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
           style={{ width: '100%', height: '100%' }}
           onChange={async (val, viewUpdate) => {
             setEditorFiles((prev) => {
+              if (!activeFile) {
+                return prev
+              }
               const files = prev as EditorFile[] // because of jotai jsonstorage this becomes a promise or a normal object and this isnt a promise.
               if (!activeFile) {
                 return files

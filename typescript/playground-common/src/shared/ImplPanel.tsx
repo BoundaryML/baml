@@ -64,13 +64,16 @@ const renderLine = ({
     if (showWhitespace && new RegExp(`^[${VISIBLE_WHITESPACE}]+$`).test(segment)) {
       return segment.split('').map((char, charIndex) => replaceWhitespace(char, index.toString() + charIndex))
     } else if (new RegExp(`^[${INVISIBLE_CODES}]+$`).test(segment)) {
+      if (segment == '/') {
+        return segment
+      }
       return <InvisibleUtf key={index} text={segment} />
     } else {
       return segment
     }
   })
   return showWhitespace ? (
-    <div className={clsx('flex text-xs inline-block', { 'flex-wrap': wrapText })}>{formattedText}</div>
+    <div className={clsx('flex text-xs', { 'flex-wrap': wrapText })}>{formattedText}</div>
   ) : (
     <>{formattedText}</>
   )
@@ -91,14 +94,17 @@ const CodeLine: React.FC<{
     </span>
   )
 
+  const isTokenized = Array.isArray(line[0]);
+
   if (Array.isArray(line)) {
     return (
       <div>
         {lineNumberSpan}
         {line.map(([token, tokenIndex], index) => (
           <span
-            className={clsx('font-mono text-xs inline-block', TOKEN_BG_STYLES[tokenIndex % TOKEN_BG_STYLES.length], {
-              'whitespace-pre-wrap': wrapText,
+            className={clsx('font-mono text-xs', TOKEN_BG_STYLES[tokenIndex % TOKEN_BG_STYLES.length], {
+              'whitespace-pre-wrap': wrapText || isTokenized,
+              'text-white': isTokenized,
               "after:content-['↵']": index === line.length - 1,
               'after:opacity-50': index === line.length - 1,
             })}
@@ -203,7 +209,7 @@ const Snippet: React.FC<{
           <TooltipTrigger asChild>
             <div className="flex-grow r-full ps-2 pt-1.5">{(tokenizer.tokens as []).length} tokens</div>
           </TooltipTrigger>
-          <TooltipContent className="flex flex-col gap-y-1">Computed using tiktoken for {client.model}</TooltipContent>
+          <TooltipContent className="flex flex-col gap-y-1">Tokenizer {encodingName} for model {client.model}</TooltipContent>
         </Tooltip>
       )}
     </div>
@@ -214,7 +220,7 @@ const Snippet: React.FC<{
     const tokenizedLines: [string, number][][] = [[]]
     tokenized.forEach((token, tokenIndex) => {
       const noNewlines = token.split('\n')
-      ;(tokenizedLines.at(-1) as [string, number][]).push([noNewlines.at(0) as string, tokenIndex])
+        ; (tokenizedLines.at(-1) as [string, number][]).push([noNewlines.at(0) as string, tokenIndex])
       for (let i = 1; i < noNewlines.length; i++) {
         tokenizedLines.push([['', tokenIndex]])
       }
@@ -315,15 +321,19 @@ const ImplPanel: React.FC<{ impl: Impl; showTab: boolean }> = ({ impl, showTab }
       <VSCodePanelView key={`view-${impl.name.value}`} id={`view-${func.name.value}-${impl.name.value}`}>
         <div className="flex flex-col w-full gap-2">
           <div className="flex flex-col gap-1">
-            <div className="flex flex-row items-center justify-between">
+            <div className="flex flex-col items-start">
               <span className="flex gap-1">
-                <b>Prompt</b>
+                <b>Prompt Preview</b>
                 <Link item={impl.name} display="Edit" />
               </span>
               <div className="flex flex-row gap-1">
-                {/* <span className="font-light">Client</span> */}
+                <span className="font-light">Client</span>
                 <Link item={impl.client.identifier} />
               </div>
+              {impl.prompt.test_case && (<div className="flex flex-row gap-1">
+                <span className="font-light">Test Case</span>
+                {impl.prompt.test_case}
+              </div>)}
             </div>
             <PromptPreview prompt={impl.prompt} client={impl.client} />
           </div>

@@ -10,6 +10,27 @@ import b from '../';
 import { FireBamlEvent, traceAsync } from '@boundaryml/baml-core/ffi_layer';
 
 
+describe('test_case:nutty_white', () => {
+  const test_fn = traceAsync('nutty_white', 'null', [['impl', 'string']], 'positional', async (impl) => {
+    FireBamlEvent.tags({
+      'test_dataset_name': 'ExtractResume',
+      'test_case_name': 'test',
+      'test_case_arg_name': `test_nutty_white[ExtractResume-${impl}]`,
+      'test_cycle_id': process.env.BOUNDARY_PROCESS_ID || 'local-run',
+    });
+    const test_case = { "resume": "Vaibhav Gupta\nlinkedin/vaigup\n(972) 400-5279\nvaibhavtheory@gmail.com\nEXPERIENCE\nGoogle,\nSoftware Engineer\nDec 2018-Present\nSeattle, WA\n\u{2022}\nAugmented Reality,\nDepth Team\n\u{2022}\nTechnical Lead for on-device optimizations\n\u{2022}\nOptimized and designed front\nfacing depth algorithm\non Pixel 4\n\u{2022}\nFocus: C++ and SIMD on custom silicon\n\n\nEDUCATION\nUniversity of Texas at Austin\nAug 2012-May 2015\nBachelors of Engineering, Integrated Circuits\nBachelors of Computer Science" };
+    const result = await b.ExtractResume.getImpl(impl).run(
+      test_case
+    );
+  });
+
+  describe('function:ExtractResume', () => {
+    test('impl:default_config', async () => {
+      await test_fn('default_config');
+    }, 60000);
+  });
+});
+
 describe('test_case:working_peach', () => {
   const test_fn = traceAsync('working_peach', 'null', [['impl', 'string']], 'positional', async (impl) => {
     FireBamlEvent.tags({

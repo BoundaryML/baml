@@ -8,6 +8,7 @@
 # fmt: off
 
 from ..__do_not_import.functions.fx_extractresume import IExtractResume, IExtractResumeOutput, IExtractResumeStream
+from ..__do_not_import.functions.fx_extractresume2 import IExtractResume2, IExtractResume2Output, IExtractResume2Stream
 from ..__do_not_import.functions.fx_fnclassoptional import IFnClassOptional, IFnClassOptionalOutput, IFnClassOptionalStream
 from ..__do_not_import.functions.fx_fnclassoptional2 import IFnClassOptional2, IFnClassOptional2Output, IFnClassOptional2Stream
 from ..__do_not_import.functions.fx_fnclassoptionaloutput import IFnClassOptionalOutput, IFnClassOptionalOutputOutput, IFnClassOptionalOutputStream
@@ -27,6 +28,8 @@ from ..__do_not_import.functions.fx_fntestclassoverride import IFnTestClassOverr
 from ..__do_not_import.functions.fx_fntestenumoverride import IFnTestEnumOverride, IFnTestEnumOverrideOutput, IFnTestEnumOverrideStream
 from ..__do_not_import.functions.fx_fntestnamedargssingleenum import IFnTestNamedArgsSingleEnum, IFnTestNamedArgsSingleEnumOutput, IFnTestNamedArgsSingleEnumStream
 from ..__do_not_import.functions.fx_fntestoutputadapter import IFnTestOutputAdapter, IFnTestOutputAdapterOutput, IFnTestOutputAdapterStream
+from ..__do_not_import.functions.fx_getdatatype import IGetDataType, IGetDataTypeOutput, IGetDataTypeStream
+from ..__do_not_import.functions.fx_getquery import IGetQuery, IGetQueryOutput, IGetQueryStream
 from ..__do_not_import.functions.fx_optionaltest_function import IOptionalTest_Function, IOptionalTest_FunctionOutput, IOptionalTest_FunctionStream
 from ..__do_not_import.functions.fx_prompttest import IPromptTest, IPromptTestOutput, IPromptTestStream
 from ..__do_not_import.functions.fx_testfnnamedargssinglebool import ITestFnNamedArgsSingleBool, ITestFnNamedArgsSingleBoolOutput, ITestFnNamedArgsSingleBoolStream
@@ -44,24 +47,30 @@ from ..__do_not_import.types.classes.cls_classoptionalfields import ClassOptiona
 from ..__do_not_import.types.classes.cls_classoptionaloutput import ClassOptionalOutput
 from ..__do_not_import.types.classes.cls_classoptionaloutput2 import ClassOptionalOutput2
 from ..__do_not_import.types.classes.cls_dynamicpropsclass import DynamicPropsClass
+from ..__do_not_import.types.classes.cls_event import Event
 from ..__do_not_import.types.classes.cls_modifiedoutput import ModifiedOutput
 from ..__do_not_import.types.classes.cls_namedargssingleclass import NamedArgsSingleClass
 from ..__do_not_import.types.classes.cls_optionalclass import OptionalClass
 from ..__do_not_import.types.classes.cls_optionaltest_prop1 import OptionalTest_Prop1
 from ..__do_not_import.types.classes.cls_optionaltest_returntype import OptionalTest_ReturnType
 from ..__do_not_import.types.classes.cls_overrideclass import OverrideClass
+from ..__do_not_import.types.classes.cls_raysdata import RaysData
 from ..__do_not_import.types.classes.cls_resume import Resume
+from ..__do_not_import.types.classes.cls_searchparams import SearchParams
 from ..__do_not_import.types.classes.cls_someclass2 import SomeClass2
 from ..__do_not_import.types.classes.cls_testclassalias import TestClassAlias
 from ..__do_not_import.types.classes.cls_testclasswithenum import TestClassWithEnum
 from ..__do_not_import.types.classes.cls_testoutputclass import TestOutputClass
 from ..__do_not_import.types.classes.cls_uniontest_returntype import UnionTest_ReturnType
+from ..__do_not_import.types.classes.cls_withreasoning import WithReasoning
+from ..__do_not_import.types.enums.enm_datatype import DataType
 from ..__do_not_import.types.enums.enm_enuminclass import EnumInClass
 from ..__do_not_import.types.enums.enm_enumoutput import EnumOutput
 from ..__do_not_import.types.enums.enm_namedargssingleenum import NamedArgsSingleEnum
 from ..__do_not_import.types.enums.enm_namedargssingleenumlist import NamedArgsSingleEnumList
 from ..__do_not_import.types.enums.enm_optionaltest_categorytype import OptionalTest_CategoryType
 from ..__do_not_import.types.enums.enm_overrideenum import OverrideEnum
+from ..__do_not_import.types.enums.enm_tag import Tag
 from ..__do_not_import.types.enums.enm_testenum import TestEnum
 
 
@@ -72,10 +81,15 @@ __all__ = [
     'ClassOptionalFields',
     'ClassOptionalOutput',
     'ClassOptionalOutput2',
+    'DataType',
     'DynamicPropsClass',
     'EnumInClass',
     'EnumOutput',
+    'Event',
     'IExtractResume',
+    'IExtractResume2',
+    'IExtractResume2Output',
+    'IExtractResume2Stream',
     'IExtractResumeOutput',
     'IExtractResumeStream',
     'IFnClassOptional',
@@ -135,6 +149,12 @@ __all__ = [
     'IFnTestOutputAdapter',
     'IFnTestOutputAdapterOutput',
     'IFnTestOutputAdapterStream',
+    'IGetDataType',
+    'IGetDataTypeOutput',
+    'IGetDataTypeStream',
+    'IGetQuery',
+    'IGetQueryOutput',
+    'IGetQueryStream',
     'IOptionalTest_Function',
     'IOptionalTest_FunctionOutput',
     'IOptionalTest_FunctionStream',
@@ -181,11 +201,15 @@ __all__ = [
     'OptionalTest_ReturnType',
     'OverrideClass',
     'OverrideEnum',
+    'RaysData',
     'Resume',
+    'SearchParams',
     'SomeClass2',
+    'Tag',
     'TestClassAlias',
     'TestClassWithEnum',
     'TestEnum',
     'TestOutputClass',
-    'UnionTest_ReturnType'
+    'UnionTest_ReturnType',
+    'WithReasoning'
 ]

@@ -79,7 +79,7 @@ export const FunctionSelector: React.FC = () => {
       </div>
       {func && (
         <div className="flex flex-row items-center gap-0 text-xs">
-          <span className="pl-2 pr-1 text-muted-foreground">Fn signature</span>(
+          <span className="pl-2 pr-1 text-vscode-descriptionForeground">Fn signature</span> <Link item={func.name} />(
           {func.input.arg_type === 'positional' ? (
             <div className="flex flex-row gap-1">
               arg: <TypeComponent typeString={func.input.type} />

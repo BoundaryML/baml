@@ -16,6 +16,23 @@ from typing import Any
 
 
 @baml.ExtractResume.test(stream=True)
+async def test_nutty_white(ExtractResumeImpl: IExtractResumeStream, baml_ipc_channel: BaseIPCChannel):
+    def to_str(item: Any) -> str:
+        if isinstance(item, str):
+            return item
+        return dumps(item)
+
+    case = {"resume": "Vaibhav Gupta\nlinkedin/vaigup\n(972) 400-5279\nvaibhavtheory@gmail.com\nEXPERIENCE\nGoogle,\nSoftware Engineer\nDec 2018-Present\nSeattle, WA\n•\nAugmented Reality,\nDepth Team\n•\nTechnical Lead for on-device optimizations\n•\nOptimized and designed front\nfacing depth algorithm\non Pixel 4\n•\nFocus: C++ and SIMD on custom silicon\n\n\nEDUCATION\nUniversity of Texas at Austin\nAug 2012-May 2015\nBachelors of Engineering, Integrated Circuits\nBachelors of Computer Science", }
+    deserializer_resume = Deserializer[str](str) # type: ignore
+    resume = deserializer_resume.from_string(to_str(case["resume"]))
+    async with ExtractResumeImpl(
+        resume=resume
+    ) as stream:
+        async for response in stream.parsed_stream:
+            baml_ipc_channel.send("partial_response", response.json())
+
+        await stream.get_final_response()
+@baml.ExtractResume.test(stream=True)
 async def test_working_peach(ExtractResumeImpl: IExtractResumeStream, baml_ipc_channel: BaseIPCChannel):
     def to_str(item: Any) -> str:
         if isinstance(item, str):

@@ -3,6 +3,7 @@
 use internal_baml_jinja::{
     render_prompt, RenderContext, RenderContext_Client, RenderedChatMessage, TemplateStringMacro,
 };
+use log::info;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
@@ -61,6 +62,8 @@ struct File {
 struct Input {
     root_path: String,
     files: Vec<File>,
+    #[serde(default = "HashMap::new")]
+    selected_tests: HashMap<String, String>,
 }
 
 pub(crate) fn run(input: &str) -> String {
@@ -135,8 +138,8 @@ pub(crate) fn run(input: &str) -> String {
             "name": StringSpan::new(c.name(), c.identifier().span()),
         })).collect::<Vec<_>>(),
         "functions": std::iter::empty()
-            .chain(schema.db.walk_old_functions().map(|f| serialize_function(&schema, f, SFunctionSyntax::Version1, &template_string_macros)))
-            .chain(schema.db.walk_new_functions().map(|f| serialize_function(&schema, f, SFunctionSyntax::Version2, &template_string_macros)))
+            .chain(schema.db.walk_old_functions().map(|f| serialize_function(&schema, f, SFunctionSyntax::Version1, &template_string_macros, input.selected_tests.get(f.name()))))
+            .chain(schema.db.walk_new_functions().map(|f| serialize_function(&schema, f, SFunctionSyntax::Version2, &template_string_macros, input.selected_tests.get(f.name()))))
             .collect::<Vec<_>>(),
     });
 
@@ -182,6 +185,7 @@ fn serialize_function(
     func: FunctionWalker,
     syntax: SFunctionSyntax,
     template_string_macros: &[TemplateStringMacro],
+    selected_test_name: Option<&String>,
 ) -> SFunction {
     SFunction {
         name: StringSpan::new(func.name(), func.identifier().span()),
@@ -230,8 +234,8 @@ fn serialize_function(
                 })
             })
             .collect::<Vec<_>>(),
-        impls: serialize_impls(&schema, func, template_string_macros),
-        syntax: syntax,
+        impls: serialize_impls(&schema, func, template_string_macros, selected_test_name),
+        syntax,
     }
 }
 
@@ -239,9 +243,18 @@ fn serialize_function(
 #[derive(Serialize)]
 #[serde(tag = "type")] // JSON is { "type": "completion", "completion": "..." }
 enum PromptPreview {
-    Completion { completion: String },
-    Chat { chat: Vec<RenderedChatMessage> },
-    Error { error: String },
+    Completion {
+        completion: String,
+        test_case: Option<String>,
+    },
+    Chat {
+        chat: Vec<RenderedChatMessage>,
+        test_case: Option<String>,
+    },
+    Error {
+        error: String,
+        test_case: Option<String>,
+    },
 }
 
 #[derive(Serialize)]
@@ -329,6 +342,7 @@ fn serialize_impls(
     schema: &ValidatedSchema,
     func: FunctionWalker,
     template_string_macros: &[TemplateStringMacro],
+    selected_test_name: Option<&String>,
 ) -> Vec<Impl> {
     if func.is_old_function() {
         func.walk_variants()
@@ -342,8 +356,10 @@ fn serialize_impls(
                     prompt: match props.to_prompt() {
                         PromptAst::String(content, _) => PromptPreview::Completion {
                             completion: apply_replacers(i, content.clone()),
+                            test_case: None,
                         },
                         PromptAst::Chat(parts, _) => PromptPreview::Chat {
+                            test_case: None,
                             chat: parts
                                 .iter()
                                 .map(|(ctx, text)| RenderedChatMessage {
@@ -392,9 +408,15 @@ fn serialize_impls(
                 },
                 vec![],
             ));
-        let args = func
-            .walk_tests()
-            .nth(0)
+
+        let selected_test = (match selected_test_name {
+            Some(name) => func.walk_tests().find(|t| t.name() == name),
+            None => None,
+        })
+        .or(func.walk_tests().nth(0));
+
+        let test_case_name = selected_test.map(|t| t.name().to_string());
+        let args = selected_test
             .map(
                 |t| match Into::<serde_json::Value>::into(&t.test_case().content) {
                     serde_json::Value::Object(map) => map,
@@ -422,13 +444,16 @@ fn serialize_impls(
                 Ok(internal_baml_jinja::RenderedPrompt::Completion(completion)) => {
                     PromptPreview::Completion {
                         completion: completion,
+                        test_case: test_case_name,
                     }
                 }
-                Ok(internal_baml_jinja::RenderedPrompt::Chat(chat)) => {
-                    PromptPreview::Chat { chat: chat }
-                }
+                Ok(internal_baml_jinja::RenderedPrompt::Chat(chat)) => PromptPreview::Chat {
+                    chat: chat,
+                    test_case: test_case_name,
+                },
                 Err(err) => PromptPreview::Error {
                     error: format!("{err:#}"),
+                    test_case: test_case_name,
                 },
             },
             client: client_span,

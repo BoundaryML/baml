@@ -7,7 +7,7 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..clients.client_ollama import Ollama
+from ..clients.client_resilient_complexsyntax import Resilient_ComplexSyntax
 from ..functions.fx_extractresume import BAMLExtractResume
 from ..types.classes.cls_resume import Resume
 from ..types.partial.classes.cls_resume import PartialResume
@@ -19,7 +19,7 @@ from baml_lib._impl.deserializer import Deserializer
 
 import typing
 # Impl: default_config
-# Client: Ollama
+# Client: Resilient_ComplexSyntax
 # An implementation of ExtractResume.
 
 __prompt_template = """\
@@ -59,7 +59,7 @@ __template_macros = [
 
 
 async def default_config(*, resume: str) -> Resume:
-    response = await Ollama.run_jinja_template(
+    response = await Resilient_ComplexSyntax.run_jinja_template(
         jinja_template=__prompt_template,
         output_schema=__output_schema, template_macros=__template_macros,
         args=dict(resume=resume)
@@ -71,7 +71,7 @@ async def default_config(*, resume: str) -> Resume:
 def default_config_stream(*, resume: str
 ) -> AsyncStream[Resume, PartialResume]:
     def run_prompt() -> typing.AsyncIterator[LLMResponse]:
-        raw_stream = Ollama.run_jinja_template_stream(
+        raw_stream = Resilient_ComplexSyntax.run_jinja_template_stream(
             jinja_template=__prompt_template,
             output_schema=__output_schema, template_macros=__template_macros,
             args=dict(resume=resume)

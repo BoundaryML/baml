@@ -11,13 +11,15 @@ import { ParserDatabase, StringSpan, TestRequest } from '@baml/common'
 import Form, { getDefaultRegistry } from '@rjsf/core'
 import validator from '@rjsf/validator-ajv8'
 import { VSCodeButton, VSCodeProgressRing, VSCodeTextArea, VSCodeTextField } from '@vscode/webview-ui-toolkit/react'
-import { Copy, Edit2, FileJson2, Save, Play, PlusIcon, Trash2 } from 'lucide-react'
+import { Copy, Edit2, FileJson2, Save, Play, PlusIcon, Trash2, Pin } from 'lucide-react'
 import React, { ChangeEvent, FocusEvent, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { ASTContext } from './ASTProvider'
 import TypeComponent from './TypeComponent'
 import { useSelections } from './hooks'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip'
 import { TEMPLATES } from './TestCaseEditor/JsonEditorTemplates'
+import JsonView from 'react18-json-view'
+import { Badge } from '../components/ui/badge'
 
 const uiSchema: UiSchema = {
   'ui:submitButtonOptions': {
@@ -36,13 +38,16 @@ type Func = ParserDatabase['functions'][number]
 type TestCase = Func['test_cases'][number]
 
 const TestCasePanelEntry: React.FC<{ func: Func; test_case: TestCase }> = ({ func, test_case }) => {
-  const { impl, input_json_schema } = useSelections()
+  const { impl, input_json_schema, renderedTestCase } = useSelections()
+  const isRendered = renderedTestCase === test_case.name.value;
+
   if (input_json_schema) {
     input_json_schema.definitions = Object.fromEntries(
       Object.entries(input_json_schema.definitions as object).map(([k, v]) => [k, { ...v, title: k }]),
     )
   }
   const { root_path, test_results } = useContext(ASTContext)
+
   return (
     <div key={test_case.name.value} className="py-1 group">
       <div className="flex flex-row items-center justify-between">
@@ -82,7 +87,29 @@ const TestCasePanelEntry: React.FC<{ func: Func; test_case: TestCase }> = ({ fun
             <span className="h-[24px] max-w-[120px] text-center align-middle overflow-hidden flex-1 truncate">
               {test_case.name.value}
             </span>
+            {isRendered &&
+              <Badge className="ml-2" variant="default">
+                <div className='flex flex-row gap-x-1 items-center'><Pin size={12} /> Rendered</div>
+              </Badge>
+            }
             <div className="hidden gap-x-1 group-hover:flex">
+              {!isRendered && <Button
+                variant={'ghost'}
+                size="icon"
+                className="p-1 w-fit h-fit hover:bg-vscode-button-secondaryHoverBackground"
+                onClick={() => {
+                  vscode.postMessage({
+                    command: 'selectTestCase',
+                    data: {
+                      root_path,
+                      function_name: func.name.value,
+                      test_name: test_case.name.value,
+                    },
+                  })
+                }}
+              >
+                <Pin size={12} />
+              </Button>}
               <EditTestCaseForm
                 testCase={test_case}
                 schema={input_json_schema}
@@ -163,7 +190,7 @@ const TestCasePanelEntry: React.FC<{ func: Func; test_case: TestCase }> = ({ fun
           variant={'ghost'}
           className="items-start justify-start w-full px-1 py-1 text-left hover:bg-vscode-button-secondaryHoverBackground h-fit"
         >
-          <TestCaseCard test_case={test_case} />
+          <TestCaseCard test_case={test_case} isRendered={isRendered} />
         </Button>
       </EditTestCaseForm>
     </div>
@@ -401,7 +428,7 @@ const EditTestCaseForm = ({
   )
 }
 
-const TestCaseCard: React.FC<{ test_case: TestCase }> = ({ test_case }) => {
+const TestCaseCard: React.FC<{ test_case: TestCase, isRendered: boolean }> = ({ test_case, isRendered }) => {
   return (
     <div className="flex flex-col max-w-full gap-2 text-xs text-left text-vscode-descriptionForeground">
       <div className="break-all">

@@ -6,14 +6,14 @@
 /* eslint-disable */
 
 
-import { Ollama } from '../client';
+import { Resilient_ComplexSyntax } from '../client';
 import { ExtractResume } from '../function';
 import { schema } from '../json_schema';
 import { Deserializer } from '@boundaryml/baml-core/deserializer/deserializer';
 
 
 // Impl: default_config
-// Client: Ollama
+// Client: Resilient_ComplexSyntax
 // An implementation for ExtractResume
 
 
@@ -49,7 +49,7 @@ ExtractResume.registerImpl('default_config', async (
     resume: string
   }
 ): Promise<Resume> => {
-    const result = await Ollama.run_jinja_template(
+    const result = await Resilient_ComplexSyntax.run_jinja_template(
       prompt_template,
       args,
       output_schema,

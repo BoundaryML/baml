@@ -6,7 +6,7 @@
 /* eslint-disable */
 
 
-import { ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, EnumOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalClass, OptionalTest_ReturnType, OverrideClass, OverrideEnum, Resume, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass, UnionTest_ReturnType } from './types';
+import { ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, EnumOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalClass, OptionalTest_ReturnType, OverrideClass, OverrideEnum, RaysData, Resume, SearchParams, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass, UnionTest_ReturnType } from './types';
 import { FireBamlEvent, traceAsync } from '@boundaryml/baml-core/ffi_layer';
 
 
@@ -86,6 +86,83 @@ function createExtractResumeInstance(): IExtractResume & ExtractResumeFunction {
 }
 
 const ExtractResume = createExtractResumeInstance();
+
+type IExtractResume2 = (args: {
+  resume: string
+}) => Promise<Resume>
+
+type ExtractResume2Impls = 'default_config';
+
+interface ExtractResume2Impl {
+    run: IExtractResume2;
+    name: ExtractResume2Impls;
+}
+
+interface ExtractResume2Function {
+  registerImpl: (name: ExtractResume2Impls, impl: ExtractResume2Impl) => void;
+  getImpl: (name: ExtractResume2Impls) => ExtractResume2Impl;
+}
+
+function createExtractResume2Instance(): IExtractResume2 & ExtractResume2Function {
+
+  const registry: Record<ExtractResume2Impls, ExtractResume2Impl> = {}
+
+  const wrapper: ExtractResume2Function = {
+    getImpl: (name: ExtractResume2Impls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for ExtractResume2 with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: ExtractResume2Impls, cb: IExtractResume2) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for ExtractResume2 with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"ExtractResume2",
+          /* returnType */ "Resume",
+          /* paramters */ [
+            [
+              "resume",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            resume: string
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for ExtractResume2: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    resume: string
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IExtractResume2 & ExtractResume2Function;
+}
+
+const ExtractResume2 = createExtractResume2Instance();
 
 type IFnClassOptional = (arg: OptionalClass | null) => Promise<string>
 
@@ -1448,6 +1525,160 @@ function createFnTestOutputAdapterInstance(): IFnTestOutputAdapter & FnTestOutpu
 
 const FnTestOutputAdapter = createFnTestOutputAdapterInstance();
 
+type IGetDataType = (args: {
+  text: string
+}) => Promise<RaysData>
+
+type GetDataTypeImpls = 'default_config';
+
+interface GetDataTypeImpl {
+    run: IGetDataType;
+    name: GetDataTypeImpls;
+}
+
+interface GetDataTypeFunction {
+  registerImpl: (name: GetDataTypeImpls, impl: GetDataTypeImpl) => void;
+  getImpl: (name: GetDataTypeImpls) => GetDataTypeImpl;
+}
+
+function createGetDataTypeInstance(): IGetDataType & GetDataTypeFunction {
+
+  const registry: Record<GetDataTypeImpls, GetDataTypeImpl> = {}
+
+  const wrapper: GetDataTypeFunction = {
+    getImpl: (name: GetDataTypeImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for GetDataType with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: GetDataTypeImpls, cb: IGetDataType) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for GetDataType with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"GetDataType",
+          /* returnType */ "RaysData",
+          /* paramters */ [
+            [
+              "text",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            text: string
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for GetDataType: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    text: string
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IGetDataType & GetDataTypeFunction;
+}
+
+const GetDataType = createGetDataTypeInstance();
+
+type IGetQuery = (args: {
+  query: string
+}) => Promise<SearchParams>
+
+type GetQueryImpls = 'default_config';
+
+interface GetQueryImpl {
+    run: IGetQuery;
+    name: GetQueryImpls;
+}
+
+interface GetQueryFunction {
+  registerImpl: (name: GetQueryImpls, impl: GetQueryImpl) => void;
+  getImpl: (name: GetQueryImpls) => GetQueryImpl;
+}
+
+function createGetQueryInstance(): IGetQuery & GetQueryFunction {
+
+  const registry: Record<GetQueryImpls, GetQueryImpl> = {}
+
+  const wrapper: GetQueryFunction = {
+    getImpl: (name: GetQueryImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for GetQuery with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: GetQueryImpls, cb: IGetQuery) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for GetQuery with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"GetQuery",
+          /* returnType */ "SearchParams",
+          /* paramters */ [
+            [
+              "query",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            query: string
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for GetQuery: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    query: string
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IGetQuery & GetQueryFunction;
+}
+
+const GetQuery = createGetQueryInstance();
+
 type IOptionalTest_Function = (arg: string) => Promise<OptionalTest_ReturnType | null[]>
 
 type OptionalTest_FunctionImpls = 'v1';
@@ -2353,5 +2584,5 @@ function createUnionTest_FunctionInstance(): IUnionTest_Function & UnionTest_Fun
 const UnionTest_Function = createUnionTest_FunctionInstance();
 
 
-export { ExtractResume, IExtractResume, ExtractResumeFunction, FnClassOptional, IFnClassOptional, FnClassOptionalFunction, FnClassOptional2, IFnClassOptional2, FnClassOptional2Function, FnClassOptionalOutput, IFnClassOptionalOutput, FnClassOptionalOutputFunction, FnClassOptionalOutput2, IFnClassOptionalOutput2, FnClassOptionalOutput2Function, FnEnumListOutput, IFnEnumListOutput, FnEnumListOutputFunction, FnEnumOutput, IFnEnumOutput, FnEnumOutputFunction, FnNamedArgsSingleStringOptional, IFnNamedArgsSingleStringOptional, FnNamedArgsSingleStringOptionalFunction, FnOutputBool, IFnOutputBool, FnOutputBoolFunction, FnOutputClass, IFnOutputClass, FnOutputClassFunction, FnOutputClassList, IFnOutputClassList, FnOutputClassListFunction, FnOutputClassWithEnum, IFnOutputClassWithEnum, FnOutputClassWithEnumFunction, FnOutputStringList, IFnOutputStringList, FnOutputStringListFunction, FnStringOptional, IFnStringOptional, FnStringOptionalFunction, FnTestAliasedEnumOutput, IFnTestAliasedEnumOutput, FnTestAliasedEnumOutputFunction, FnTestClassAlias, IFnTestClassAlias, FnTestClassAliasFunction, FnTestClassOverride, IFnTestClassOverride, FnTestClassOverrideFunction, FnTestEnumOverride, IFnTestEnumOverride, FnTestEnumOverrideFunction, FnTestNamedArgsSingleEnum, IFnTestNamedArgsSingleEnum, FnTestNamedArgsSingleEnumFunction, FnTestOutputAdapter, IFnTestOutputAdapter, FnTestOutputAdapterFunction, OptionalTest_Function, IOptionalTest_Function, OptionalTest_FunctionFunction, PromptTest, IPromptTest, PromptTestFunction, TestFnNamedArgsSingleBool, ITestFnNamedArgsSingleBool, TestFnNamedArgsSingleBoolFunction, TestFnNamedArgsSingleClass, ITestFnNamedArgsSingleClass, TestFnNamedArgsSingleClassFunction, TestFnNamedArgsSingleEnumList, ITestFnNamedArgsSingleEnumList, TestFnNamedArgsSingleEnumListFunction, TestFnNamedArgsSingleFloat, ITestFnNamedArgsSingleFloat, TestFnNamedArgsSingleFloatFunction, TestFnNamedArgsSingleInt, ITestFnNamedArgsSingleInt, TestFnNamedArgsSingleIntFunction, TestFnNamedArgsSingleString, ITestFnNamedArgsSingleString, TestFnNamedArgsSingleStringFunction, TestFnNamedArgsSingleStringArray, ITestFnNamedArgsSingleStringArray, TestFnNamedArgsSingleStringArrayFunction, TestFnNamedArgsSingleStringList, ITestFnNamedArgsSingleStringList, TestFnNamedArgsSingleStringListFunction, TestFnNamedArgsSyntax, ITestFnNamedArgsSyntax, TestFnNamedArgsSyntaxFunction, UnionTest_Function, IUnionTest_Function, UnionTest_FunctionFunction }
+export { ExtractResume, IExtractResume, ExtractResumeFunction, ExtractResume2, IExtractResume2, ExtractResume2Function, FnClassOptional, IFnClassOptional, FnClassOptionalFunction, FnClassOptional2, IFnClassOptional2, FnClassOptional2Function, FnClassOptionalOutput, IFnClassOptionalOutput, FnClassOptionalOutputFunction, FnClassOptionalOutput2, IFnClassOptionalOutput2, FnClassOptionalOutput2Function, FnEnumListOutput, IFnEnumListOutput, FnEnumListOutputFunction, FnEnumOutput, IFnEnumOutput, FnEnumOutputFunction, FnNamedArgsSingleStringOptional, IFnNamedArgsSingleStringOptional, FnNamedArgsSingleStringOptionalFunction, FnOutputBool, IFnOutputBool, FnOutputBoolFunction, FnOutputClass, IFnOutputClass, FnOutputClassFunction, FnOutputClassList, IFnOutputClassList, FnOutputClassListFunction, FnOutputClassWithEnum, IFnOutputClassWithEnum, FnOutputClassWithEnumFunction, FnOutputStringList, IFnOutputStringList, FnOutputStringListFunction, FnStringOptional, IFnStringOptional, FnStringOptionalFunction, FnTestAliasedEnumOutput, IFnTestAliasedEnumOutput, FnTestAliasedEnumOutputFunction, FnTestClassAlias, IFnTestClassAlias, FnTestClassAliasFunction, FnTestClassOverride, IFnTestClassOverride, FnTestClassOverrideFunction, FnTestEnumOverride, IFnTestEnumOverride, FnTestEnumOverrideFunction, FnTestNamedArgsSingleEnum, IFnTestNamedArgsSingleEnum, FnTestNamedArgsSingleEnumFunction, FnTestOutputAdapter, IFnTestOutputAdapter, FnTestOutputAdapterFunction, GetDataType, IGetDataType, GetDataTypeFunction, GetQuery, IGetQuery, GetQueryFunction, OptionalTest_Function, IOptionalTest_Function, OptionalTest_FunctionFunction, PromptTest, IPromptTest, PromptTestFunction, TestFnNamedArgsSingleBool, ITestFnNamedArgsSingleBool, TestFnNamedArgsSingleBoolFunction, TestFnNamedArgsSingleClass, ITestFnNamedArgsSingleClass, TestFnNamedArgsSingleClassFunction, TestFnNamedArgsSingleEnumList, ITestFnNamedArgsSingleEnumList, TestFnNamedArgsSingleEnumListFunction, TestFnNamedArgsSingleFloat, ITestFnNamedArgsSingleFloat, TestFnNamedArgsSingleFloatFunction, TestFnNamedArgsSingleInt, ITestFnNamedArgsSingleInt, TestFnNamedArgsSingleIntFunction, TestFnNamedArgsSingleString, ITestFnNamedArgsSingleString, TestFnNamedArgsSingleStringFunction, TestFnNamedArgsSingleStringArray, ITestFnNamedArgsSingleStringArray, TestFnNamedArgsSingleStringArrayFunction, TestFnNamedArgsSingleStringList, ITestFnNamedArgsSingleStringList, TestFnNamedArgsSingleStringListFunction, TestFnNamedArgsSyntax, ITestFnNamedArgsSyntax, TestFnNamedArgsSyntaxFunction, UnionTest_Function, IUnionTest_Function, UnionTest_FunctionFunction }
 

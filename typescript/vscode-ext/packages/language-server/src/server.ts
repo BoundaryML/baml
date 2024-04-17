@@ -292,7 +292,17 @@ export function startServer(options?: LSOptions): void {
         return
       }
 
-      const response = MessageHandler.handleDiagnosticsRequest(rootPath, srcDocs, showErrorToast)
+      const selectedTests = Object.fromEntries(bamlCache.lastPaserDatabase?.db.functions.map((fn) => {
+        let uniqueTestNames = new Set(fn.impls.flatMap((impl) => impl.prompt.test_case).filter((t): t is string => t !== undefined && t !== null));
+        const testCases = new Array(...uniqueTestNames);
+        let testCaseName = testCases.length > 0 ? testCases[0] : undefined;
+        if (testCaseName === undefined) {
+          return undefined;
+        }
+        return [fn.name.value, testCaseName]
+      }).filter((t): t is [string, string] => t !== undefined) ?? []);
+
+      const response = MessageHandler.handleDiagnosticsRequest(rootPath, srcDocs, selectedTests, showErrorToast)
       for (const [uri, diagnosticList] of response.diagnostics) {
         void connection.sendDiagnostics({ uri, diagnostics: diagnosticList })
       }
@@ -465,7 +475,7 @@ export function startServer(options?: LSOptions): void {
       switch (fn.syntax) {
         case "Version2":
           continue;
-        
+
         case "Version1":
           for (const impl of fn.impls) {
             codeLenses.push({
@@ -570,6 +580,44 @@ export function startServer(options?: LSOptions): void {
       }
     }
   })
+
+  connection.onRequest('selectTestCase', ({ functionName, testCaseName }: {
+    functionName: string;
+    testCaseName: string;
+  }) => {
+    console.log('selectTestCase ' + functionName + ' ' + testCaseName)
+    let lastDb = bamlCache.lastPaserDatabase;
+
+    if (!lastDb) {
+      console.log('No last db found');
+      return
+    }
+
+    const selectedTests = Object.fromEntries(lastDb.db.functions.map((fn) => {
+      let uniqueTestNames = new Set(fn.impls.flatMap((impl) => impl.prompt.test_case).filter((t): t is string => t !== undefined && t !== null));
+      const testCases = new Array(...uniqueTestNames);
+      let testCaseName = testCases.length > 0 ? testCases[0] : undefined;
+      if (testCaseName === undefined) {
+        return undefined;
+      }
+      return [fn.name.value, testCaseName]
+    }).filter((t): t is [string, string] => t !== undefined) ?? []);
+    selectedTests[functionName] = testCaseName;
+
+    const response = MessageHandler.handleDiagnosticsRequest(lastDb.root_path, lastDb.cache.getDocuments(), selectedTests, showErrorToast)
+    for (const [uri, diagnosticList] of response.diagnostics) {
+      void connection.sendDiagnostics({ uri, diagnostics: diagnosticList })
+    }
+
+    bamlCache.addDatabase(lastDb.root_path, response.state)
+    if (response.state) {
+      lastDb.cache.setDB(response.state)
+
+      updateClientDB(lastDb.root_path, response.state)
+    } else {
+      void connection.sendRequest('rm_database', lastDb.root_path)
+    }
+  });
 
   connection.onRequest('getDefinition', ({ sourceFile, name }: { sourceFile: string; name: string }) => {
     const fileCache = bamlCache.getCacheForUri(sourceFile)

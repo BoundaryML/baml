@@ -178,6 +178,14 @@ export class WebPanelView {
             // Code that should run in response to the hello message command
             window.showInformationMessage(text)
             return
+          case 'selectTestCase':
+            console.log('selectTestCase', message.data);
+            const testRequest: { root_path: string; test_name: string, function_name: string } = message.data
+            vscode.commands.executeCommand('baml.selectTestCase', {
+              functionName: testRequest.function_name,
+              testCaseName: testRequest.test_name,
+            })
+            return
           // Add more switch case statements here as more webview message commands
           // are created within the webview context (i.e. inside media/main.js)
           // todo: MULTI TEST

@@ -55,18 +55,20 @@ export type Impl = {
     model?: string
   }
   prompt: {
-      type: "Completion"
-      completion: string     
-    } | {
-      type: "Chat"
-      chat: {
-        role: string
-        message: string
-      }[]
-    } | {
-      type: "Error"
-      error: string
-    }
+    test_case?: string;
+  } & ({
+    type: "Completion"
+    completion: string
+  } | {
+    type: "Chat"
+    chat: {
+      role: string
+      message: string
+    }[]
+  } | {
+    type: "Error"
+    error: string
+  })
   input_replacers: [string, string][],
   output_replacers: [string, string][],
 };

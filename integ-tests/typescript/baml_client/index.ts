@@ -13,6 +13,7 @@ loadEnvVars()
 
 const BamlClient = {
   ExtractResume: f.ExtractResume,
+  ExtractResume2: f.ExtractResume2,
   FnClassOptional: f.FnClassOptional,
   FnClassOptional2: f.FnClassOptional2,
   FnClassOptionalOutput: f.FnClassOptionalOutput,
@@ -32,6 +33,8 @@ const BamlClient = {
   FnTestEnumOverride: f.FnTestEnumOverride,
   FnTestNamedArgsSingleEnum: f.FnTestNamedArgsSingleEnum,
   FnTestOutputAdapter: f.FnTestOutputAdapter,
+  GetDataType: f.GetDataType,
+  GetQuery: f.GetQuery,
   OptionalTest_Function: f.OptionalTest_Function,
   PromptTest: f.PromptTest,
   TestFnNamedArgsSingleBool: f.TestFnNamedArgsSingleBool,

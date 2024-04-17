@@ -20,6 +20,17 @@ export class BamlDirCache {
     }
   }
 
+  public get lastPaserDatabase(): { root_path: URI; db: ParserDatabase, cache: FileCache } | null {
+    if (this.__lastBamlDir) {
+      let cache = this.cache.get(this.__lastBamlDir.toString());
+      let db = this.parserCache.get(this.__lastBamlDir.toString());
+      if (db && cache) {
+        return { root_path: this.__lastBamlDir, db, cache }
+      }
+    }
+    return null;
+  }
+
   public getBamlDir(textDocument: TextDocument): URI | null {
     let uri = URI.parse(textDocument.uri)
     return this.getBamlDirUri(uri)

@@ -7,6 +7,7 @@ import { atomWithStorage } from "jotai/utils"
 
 export const currentParserDbAtom = atom<ParserDatabase | null>(null)
 export const currentEditorFilesAtom = atomWithStorage<EditorFile[]>('files', [], sessionStore as any)
+export const functionTestCaseAtom = atomWithStorage<{ [key: string]: string }>('function_test_cases', {}, sessionStore as any)
 export const functionsAndTestsAtom = atomWithStorage<ParserDBFunctionTestModel[]>(
   'parserdb_functions',
   [],

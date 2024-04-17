@@ -5,6 +5,11 @@
 // @ts-nocheck
 /* eslint-disable */
 
+const enum DataType {
+    Resume = "Resume",
+    Event = "Event",
+}
+
 const enum EnumInClass {
     ONE = "ONE",
     TWO = "TWO",
@@ -35,6 +40,12 @@ const enum OptionalTest_CategoryType {
 const enum OverrideEnum {
     ONE = "ONE",
     TWO = "TWO",
+}
+
+const enum Tag {
+    Security = "Security",
+    AI = "AI",
+    Blockchain = "Blockchain",
 }
 
 const enum TestEnum {
@@ -73,6 +84,13 @@ interface DynamicPropsClass {
   prop3: number;
 }
 
+interface Event {
+  title: string;
+  date: string;
+  location: string;
+  description: string;
+}
+
 interface ModifiedOutput {
   reasoning: string;
   answer: string;
@@ -105,6 +123,11 @@ interface OverrideClass {
   prop2: string;
 }
 
+interface RaysData {
+  dataType: DataType;
+  value: Resume | Event;
+}
+
 interface Resume {
   name: string;
   email: string;
@@ -112,6 +135,15 @@ interface Resume {
   experience: string[];
   education: string[];
   skills: string[];
+}
+
+interface SearchParams {
+  dateRange: number | null;
+  location: string[];
+  jobTitle: WithReasoning | null;
+  company: WithReasoning | null;
+  description: WithReasoning[];
+  tags: Tag | string[];
 }
 
 interface SomeClass2 {
@@ -143,6 +175,11 @@ interface UnionTest_ReturnType {
   prop3: number[] | boolean[];
 }
 
+interface WithReasoning {
+  value: string;
+  reasoning: string;
+}
 
-export { EnumInClass, EnumOutput, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalTest_CategoryType, OverrideEnum, TestEnum, Blah, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, DynamicPropsClass, ModifiedOutput, NamedArgsSingleClass, OptionalClass, OptionalTest_Prop1, OptionalTest_ReturnType, OverrideClass, Resume, SomeClass2, TestClassAlias, TestClassWithEnum, TestOutputClass, UnionTest_ReturnType }
+
+export { DataType, EnumInClass, EnumOutput, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalTest_CategoryType, OverrideEnum, Tag, TestEnum, Blah, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, DynamicPropsClass, Event, ModifiedOutput, NamedArgsSingleClass, OptionalClass, OptionalTest_Prop1, OptionalTest_ReturnType, OverrideClass, RaysData, Resume, SearchParams, SomeClass2, TestClassAlias, TestClassWithEnum, TestOutputClass, UnionTest_ReturnType, WithReasoning }
 

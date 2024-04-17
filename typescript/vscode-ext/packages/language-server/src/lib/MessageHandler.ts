@@ -60,6 +60,7 @@ import { Range, Uri } from 'vscode'
 export function handleDiagnosticsRequest(
   rootPath: URI,
   documents: { path: string; doc: TextDocument }[],
+  selectedTests: { [key: string]: string },
   onError?: (errorMessage: string) => void,
 ): { diagnostics: Map<string, Diagnostic[]>; state: ParserDatabase | undefined } {
   const linterInput: LinterInput = {
@@ -68,6 +69,7 @@ export function handleDiagnosticsRequest(
       path,
       content: doc.getText(),
     })),
+    selected_tests: selectedTests,
   }
 
 
