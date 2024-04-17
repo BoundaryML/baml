@@ -50,10 +50,11 @@ jobs:
           poetry run ruff format --check .
         working-directory: clients/python
 
-      - name: Test Python Client
-        run: |
-          poetry run pytest baml_lib/ baml_core/
-        working-directory: clients/python
+      # Temporary disabled until we have tests
+      # - name: Test Python Client
+      #   run: |
+      #     poetry run pytest baml_lib/ baml_core/
+      #   working-directory: clients/python
 
       - name: Build Python Client
         run: poetry build
