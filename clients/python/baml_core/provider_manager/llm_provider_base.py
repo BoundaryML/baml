@@ -16,7 +16,7 @@ from ..services.api_types import CacheRequest, LLMChat
 from ..otel.helper import try_serialize
 from ..otel.provider import create_event
 from .llm_response import LLMResponse
-from ..jinja.render_prompt import RenderData, render_prompt
+from ..jinja.render_prompt import RenderData
 
 
 class BaseProvider(abc.ABC):

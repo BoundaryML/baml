@@ -117,9 +117,7 @@ class LLMChatProvider(AbstractLLMProvider):
             jinja_template,
             RenderData(
                 args={
-                    k: v.dict() if hasattr(v, "dict") else v
-                    for (k, v)
-                    in args.items()
+                    k: v.dict() if hasattr(v, "dict") else v for (k, v) in args.items()
                 },
                 ctx=RenderData.ctx(
                     client=self.client,
@@ -153,9 +151,7 @@ class LLMChatProvider(AbstractLLMProvider):
             jinja_template,
             RenderData(
                 args={
-                    k: v.dict() if hasattr(v, "dict") else v
-                    for (k, v)
-                    in args.items()
+                    k: v.dict() if hasattr(v, "dict") else v for (k, v) in args.items()
                 },
                 ctx=RenderData.ctx(
                     client=self.client,
