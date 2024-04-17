@@ -6,9 +6,323 @@
 /* eslint-disable */
 
 
+<<<<<<< HEAD
 import { ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, EnumOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalClass, OptionalTest_ReturnType, OverrideClass, OverrideEnum, RaysData, Resume, SearchParams, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass, UnionTest_ReturnType } from './types';
+||||||| parent of 209e3d97 (add examples)
+import { ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, EnumOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalClass, OptionalTest_ReturnType, OverrideClass, OverrideEnum, Resume, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass, UnionTest_ReturnType } from './types';
+=======
+import { Category, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, Email, EnumOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalClass, OptionalTest_ReturnType, OrderInfo, OverrideClass, OverrideEnum, Resume, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass, UnionTest_ReturnType } from './types';
+>>>>>>> 209e3d97 (add examples)
 import { FireBamlEvent, traceAsync } from '@boundaryml/baml-core/ffi_layer';
 
+
+type IClassifyMessage = (args: {
+  input: string
+}) => Promise<Category>
+
+type ClassifyMessageImpls = 'default_config';
+
+interface ClassifyMessageImpl {
+    run: IClassifyMessage;
+    name: ClassifyMessageImpls;
+}
+
+interface ClassifyMessageFunction {
+  registerImpl: (name: ClassifyMessageImpls, impl: ClassifyMessageImpl) => void;
+  getImpl: (name: ClassifyMessageImpls) => ClassifyMessageImpl;
+}
+
+function createClassifyMessageInstance(): IClassifyMessage & ClassifyMessageFunction {
+
+  const registry: Record<ClassifyMessageImpls, ClassifyMessageImpl> = {}
+
+  const wrapper: ClassifyMessageFunction = {
+    getImpl: (name: ClassifyMessageImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for ClassifyMessage with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: ClassifyMessageImpls, cb: IClassifyMessage) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for ClassifyMessage with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"ClassifyMessage",
+          /* returnType */ "Category",
+          /* paramters */ [
+            [
+              "input",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            input: string
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for ClassifyMessage: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    input: string
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IClassifyMessage & ClassifyMessageFunction;
+}
+
+const ClassifyMessage = createClassifyMessageInstance();
+
+type IClassifyMessage2 = (args: {
+  input: string
+}) => Promise<Category>
+
+type ClassifyMessage2Impls = 'default_config';
+
+interface ClassifyMessage2Impl {
+    run: IClassifyMessage2;
+    name: ClassifyMessage2Impls;
+}
+
+interface ClassifyMessage2Function {
+  registerImpl: (name: ClassifyMessage2Impls, impl: ClassifyMessage2Impl) => void;
+  getImpl: (name: ClassifyMessage2Impls) => ClassifyMessage2Impl;
+}
+
+function createClassifyMessage2Instance(): IClassifyMessage2 & ClassifyMessage2Function {
+
+  const registry: Record<ClassifyMessage2Impls, ClassifyMessage2Impl> = {}
+
+  const wrapper: ClassifyMessage2Function = {
+    getImpl: (name: ClassifyMessage2Impls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for ClassifyMessage2 with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: ClassifyMessage2Impls, cb: IClassifyMessage2) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for ClassifyMessage2 with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"ClassifyMessage2",
+          /* returnType */ "Category",
+          /* paramters */ [
+            [
+              "input",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            input: string
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for ClassifyMessage2: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    input: string
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IClassifyMessage2 & ClassifyMessage2Function;
+}
+
+const ClassifyMessage2 = createClassifyMessage2Instance();
+
+type IClassifyMessage3 = (args: {
+  input: string
+}) => Promise<Category>
+
+type ClassifyMessage3Impls = 'default_config';
+
+interface ClassifyMessage3Impl {
+    run: IClassifyMessage3;
+    name: ClassifyMessage3Impls;
+}
+
+interface ClassifyMessage3Function {
+  registerImpl: (name: ClassifyMessage3Impls, impl: ClassifyMessage3Impl) => void;
+  getImpl: (name: ClassifyMessage3Impls) => ClassifyMessage3Impl;
+}
+
+function createClassifyMessage3Instance(): IClassifyMessage3 & ClassifyMessage3Function {
+
+  const registry: Record<ClassifyMessage3Impls, ClassifyMessage3Impl> = {}
+
+  const wrapper: ClassifyMessage3Function = {
+    getImpl: (name: ClassifyMessage3Impls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for ClassifyMessage3 with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: ClassifyMessage3Impls, cb: IClassifyMessage3) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for ClassifyMessage3 with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"ClassifyMessage3",
+          /* returnType */ "Category",
+          /* paramters */ [
+            [
+              "input",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            input: string
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for ClassifyMessage3: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    input: string
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IClassifyMessage3 & ClassifyMessage3Function;
+}
+
+const ClassifyMessage3 = createClassifyMessage3Instance();
+
+type IExtractNames = (args: {
+  input: string
+}) => Promise<string[]>
+
+type ExtractNamesImpls = 'default_config';
+
+interface ExtractNamesImpl {
+    run: IExtractNames;
+    name: ExtractNamesImpls;
+}
+
+interface ExtractNamesFunction {
+  registerImpl: (name: ExtractNamesImpls, impl: ExtractNamesImpl) => void;
+  getImpl: (name: ExtractNamesImpls) => ExtractNamesImpl;
+}
+
+function createExtractNamesInstance(): IExtractNames & ExtractNamesFunction {
+
+  const registry: Record<ExtractNamesImpls, ExtractNamesImpl> = {}
+
+  const wrapper: ExtractNamesFunction = {
+    getImpl: (name: ExtractNamesImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for ExtractNames with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: ExtractNamesImpls, cb: IExtractNames) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for ExtractNames with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"ExtractNames",
+          /* returnType */ "string[]",
+          /* paramters */ [
+            [
+              "input",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            input: string
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for ExtractNames: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    input: string
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IExtractNames & ExtractNamesFunction;
+}
+
+const ExtractNames = createExtractNamesInstance();
 
 type IExtractResume = (args: {
   resume: string
@@ -1525,6 +1839,7 @@ function createFnTestOutputAdapterInstance(): IFnTestOutputAdapter & FnTestOutpu
 
 const FnTestOutputAdapter = createFnTestOutputAdapterInstance();
 
+<<<<<<< HEAD
 type IGetDataType = (args: {
   text: string
 }) => Promise<RaysData>
@@ -1679,6 +1994,86 @@ function createGetQueryInstance(): IGetQuery & GetQueryFunction {
 
 const GetQuery = createGetQueryInstance();
 
+||||||| parent of 209e3d97 (add examples)
+=======
+type IGetOrderInfo = (args: {
+  email: Email
+}) => Promise<OrderInfo>
+
+type GetOrderInfoImpls = 'default_config';
+
+interface GetOrderInfoImpl {
+    run: IGetOrderInfo;
+    name: GetOrderInfoImpls;
+}
+
+interface GetOrderInfoFunction {
+  registerImpl: (name: GetOrderInfoImpls, impl: GetOrderInfoImpl) => void;
+  getImpl: (name: GetOrderInfoImpls) => GetOrderInfoImpl;
+}
+
+function createGetOrderInfoInstance(): IGetOrderInfo & GetOrderInfoFunction {
+
+  const registry: Record<GetOrderInfoImpls, GetOrderInfoImpl> = {}
+
+  const wrapper: GetOrderInfoFunction = {
+    getImpl: (name: GetOrderInfoImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for GetOrderInfo with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: GetOrderInfoImpls, cb: IGetOrderInfo) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for GetOrderInfo with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"GetOrderInfo",
+          /* returnType */ "OrderInfo",
+          /* paramters */ [
+            [
+              "email",
+              "Email"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            email: Email
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for GetOrderInfo: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    email: Email
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IGetOrderInfo & GetOrderInfoFunction;
+}
+
+const GetOrderInfo = createGetOrderInfoInstance();
+
+>>>>>>> 209e3d97 (add examples)
 type IOptionalTest_Function = (arg: string) => Promise<OptionalTest_ReturnType | null[]>
 
 type OptionalTest_FunctionImpls = 'v1';
@@ -2584,5 +2979,11 @@ function createUnionTest_FunctionInstance(): IUnionTest_Function & UnionTest_Fun
 const UnionTest_Function = createUnionTest_FunctionInstance();
 
 
+<<<<<<< HEAD
 export { ExtractResume, IExtractResume, ExtractResumeFunction, ExtractResume2, IExtractResume2, ExtractResume2Function, FnClassOptional, IFnClassOptional, FnClassOptionalFunction, FnClassOptional2, IFnClassOptional2, FnClassOptional2Function, FnClassOptionalOutput, IFnClassOptionalOutput, FnClassOptionalOutputFunction, FnClassOptionalOutput2, IFnClassOptionalOutput2, FnClassOptionalOutput2Function, FnEnumListOutput, IFnEnumListOutput, FnEnumListOutputFunction, FnEnumOutput, IFnEnumOutput, FnEnumOutputFunction, FnNamedArgsSingleStringOptional, IFnNamedArgsSingleStringOptional, FnNamedArgsSingleStringOptionalFunction, FnOutputBool, IFnOutputBool, FnOutputBoolFunction, FnOutputClass, IFnOutputClass, FnOutputClassFunction, FnOutputClassList, IFnOutputClassList, FnOutputClassListFunction, FnOutputClassWithEnum, IFnOutputClassWithEnum, FnOutputClassWithEnumFunction, FnOutputStringList, IFnOutputStringList, FnOutputStringListFunction, FnStringOptional, IFnStringOptional, FnStringOptionalFunction, FnTestAliasedEnumOutput, IFnTestAliasedEnumOutput, FnTestAliasedEnumOutputFunction, FnTestClassAlias, IFnTestClassAlias, FnTestClassAliasFunction, FnTestClassOverride, IFnTestClassOverride, FnTestClassOverrideFunction, FnTestEnumOverride, IFnTestEnumOverride, FnTestEnumOverrideFunction, FnTestNamedArgsSingleEnum, IFnTestNamedArgsSingleEnum, FnTestNamedArgsSingleEnumFunction, FnTestOutputAdapter, IFnTestOutputAdapter, FnTestOutputAdapterFunction, GetDataType, IGetDataType, GetDataTypeFunction, GetQuery, IGetQuery, GetQueryFunction, OptionalTest_Function, IOptionalTest_Function, OptionalTest_FunctionFunction, PromptTest, IPromptTest, PromptTestFunction, TestFnNamedArgsSingleBool, ITestFnNamedArgsSingleBool, TestFnNamedArgsSingleBoolFunction, TestFnNamedArgsSingleClass, ITestFnNamedArgsSingleClass, TestFnNamedArgsSingleClassFunction, TestFnNamedArgsSingleEnumList, ITestFnNamedArgsSingleEnumList, TestFnNamedArgsSingleEnumListFunction, TestFnNamedArgsSingleFloat, ITestFnNamedArgsSingleFloat, TestFnNamedArgsSingleFloatFunction, TestFnNamedArgsSingleInt, ITestFnNamedArgsSingleInt, TestFnNamedArgsSingleIntFunction, TestFnNamedArgsSingleString, ITestFnNamedArgsSingleString, TestFnNamedArgsSingleStringFunction, TestFnNamedArgsSingleStringArray, ITestFnNamedArgsSingleStringArray, TestFnNamedArgsSingleStringArrayFunction, TestFnNamedArgsSingleStringList, ITestFnNamedArgsSingleStringList, TestFnNamedArgsSingleStringListFunction, TestFnNamedArgsSyntax, ITestFnNamedArgsSyntax, TestFnNamedArgsSyntaxFunction, UnionTest_Function, IUnionTest_Function, UnionTest_FunctionFunction }
+||||||| parent of 209e3d97 (add examples)
+export { ExtractResume, IExtractResume, ExtractResumeFunction, FnClassOptional, IFnClassOptional, FnClassOptionalFunction, FnClassOptional2, IFnClassOptional2, FnClassOptional2Function, FnClassOptionalOutput, IFnClassOptionalOutput, FnClassOptionalOutputFunction, FnClassOptionalOutput2, IFnClassOptionalOutput2, FnClassOptionalOutput2Function, FnEnumListOutput, IFnEnumListOutput, FnEnumListOutputFunction, FnEnumOutput, IFnEnumOutput, FnEnumOutputFunction, FnNamedArgsSingleStringOptional, IFnNamedArgsSingleStringOptional, FnNamedArgsSingleStringOptionalFunction, FnOutputBool, IFnOutputBool, FnOutputBoolFunction, FnOutputClass, IFnOutputClass, FnOutputClassFunction, FnOutputClassList, IFnOutputClassList, FnOutputClassListFunction, FnOutputClassWithEnum, IFnOutputClassWithEnum, FnOutputClassWithEnumFunction, FnOutputStringList, IFnOutputStringList, FnOutputStringListFunction, FnStringOptional, IFnStringOptional, FnStringOptionalFunction, FnTestAliasedEnumOutput, IFnTestAliasedEnumOutput, FnTestAliasedEnumOutputFunction, FnTestClassAlias, IFnTestClassAlias, FnTestClassAliasFunction, FnTestClassOverride, IFnTestClassOverride, FnTestClassOverrideFunction, FnTestEnumOverride, IFnTestEnumOverride, FnTestEnumOverrideFunction, FnTestNamedArgsSingleEnum, IFnTestNamedArgsSingleEnum, FnTestNamedArgsSingleEnumFunction, FnTestOutputAdapter, IFnTestOutputAdapter, FnTestOutputAdapterFunction, OptionalTest_Function, IOptionalTest_Function, OptionalTest_FunctionFunction, PromptTest, IPromptTest, PromptTestFunction, TestFnNamedArgsSingleBool, ITestFnNamedArgsSingleBool, TestFnNamedArgsSingleBoolFunction, TestFnNamedArgsSingleClass, ITestFnNamedArgsSingleClass, TestFnNamedArgsSingleClassFunction, TestFnNamedArgsSingleEnumList, ITestFnNamedArgsSingleEnumList, TestFnNamedArgsSingleEnumListFunction, TestFnNamedArgsSingleFloat, ITestFnNamedArgsSingleFloat, TestFnNamedArgsSingleFloatFunction, TestFnNamedArgsSingleInt, ITestFnNamedArgsSingleInt, TestFnNamedArgsSingleIntFunction, TestFnNamedArgsSingleString, ITestFnNamedArgsSingleString, TestFnNamedArgsSingleStringFunction, TestFnNamedArgsSingleStringArray, ITestFnNamedArgsSingleStringArray, TestFnNamedArgsSingleStringArrayFunction, TestFnNamedArgsSingleStringList, ITestFnNamedArgsSingleStringList, TestFnNamedArgsSingleStringListFunction, TestFnNamedArgsSyntax, ITestFnNamedArgsSyntax, TestFnNamedArgsSyntaxFunction, UnionTest_Function, IUnionTest_Function, UnionTest_FunctionFunction }
+=======
+export { ClassifyMessage, IClassifyMessage, ClassifyMessageFunction, ClassifyMessage2, IClassifyMessage2, ClassifyMessage2Function, ClassifyMessage3, IClassifyMessage3, ClassifyMessage3Function, ExtractNames, IExtractNames, ExtractNamesFunction, ExtractResume, IExtractResume, ExtractResumeFunction, FnClassOptional, IFnClassOptional, FnClassOptionalFunction, FnClassOptional2, IFnClassOptional2, FnClassOptional2Function, FnClassOptionalOutput, IFnClassOptionalOutput, FnClassOptionalOutputFunction, FnClassOptionalOutput2, IFnClassOptionalOutput2, FnClassOptionalOutput2Function, FnEnumListOutput, IFnEnumListOutput, FnEnumListOutputFunction, FnEnumOutput, IFnEnumOutput, FnEnumOutputFunction, FnNamedArgsSingleStringOptional, IFnNamedArgsSingleStringOptional, FnNamedArgsSingleStringOptionalFunction, FnOutputBool, IFnOutputBool, FnOutputBoolFunction, FnOutputClass, IFnOutputClass, FnOutputClassFunction, FnOutputClassList, IFnOutputClassList, FnOutputClassListFunction, FnOutputClassWithEnum, IFnOutputClassWithEnum, FnOutputClassWithEnumFunction, FnOutputStringList, IFnOutputStringList, FnOutputStringListFunction, FnStringOptional, IFnStringOptional, FnStringOptionalFunction, FnTestAliasedEnumOutput, IFnTestAliasedEnumOutput, FnTestAliasedEnumOutputFunction, FnTestClassAlias, IFnTestClassAlias, FnTestClassAliasFunction, FnTestClassOverride, IFnTestClassOverride, FnTestClassOverrideFunction, FnTestEnumOverride, IFnTestEnumOverride, FnTestEnumOverrideFunction, FnTestNamedArgsSingleEnum, IFnTestNamedArgsSingleEnum, FnTestNamedArgsSingleEnumFunction, FnTestOutputAdapter, IFnTestOutputAdapter, FnTestOutputAdapterFunction, GetOrderInfo, IGetOrderInfo, GetOrderInfoFunction, OptionalTest_Function, IOptionalTest_Function, OptionalTest_FunctionFunction, PromptTest, IPromptTest, PromptTestFunction, TestFnNamedArgsSingleBool, ITestFnNamedArgsSingleBool, TestFnNamedArgsSingleBoolFunction, TestFnNamedArgsSingleClass, ITestFnNamedArgsSingleClass, TestFnNamedArgsSingleClassFunction, TestFnNamedArgsSingleEnumList, ITestFnNamedArgsSingleEnumList, TestFnNamedArgsSingleEnumListFunction, TestFnNamedArgsSingleFloat, ITestFnNamedArgsSingleFloat, TestFnNamedArgsSingleFloatFunction, TestFnNamedArgsSingleInt, ITestFnNamedArgsSingleInt, TestFnNamedArgsSingleIntFunction, TestFnNamedArgsSingleString, ITestFnNamedArgsSingleString, TestFnNamedArgsSingleStringFunction, TestFnNamedArgsSingleStringArray, ITestFnNamedArgsSingleStringArray, TestFnNamedArgsSingleStringArrayFunction, TestFnNamedArgsSingleStringList, ITestFnNamedArgsSingleStringList, TestFnNamedArgsSingleStringListFunction, TestFnNamedArgsSyntax, ITestFnNamedArgsSyntax, TestFnNamedArgsSyntaxFunction, UnionTest_Function, IUnionTest_Function, UnionTest_FunctionFunction }
+>>>>>>> 209e3d97 (add examples)
 

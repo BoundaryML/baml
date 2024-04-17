@@ -168,7 +168,6 @@ const Snippet: React.FC<{
   type?: 'preview' | 'error'
   client: Impl['client']
 }> = ({ text, type = 'preview', client }) => {
-  console.log('client snippet', client)
   const [showTokens, setShowTokens] = useState(false)
   const [showWhitespace, setShowWhitespace] = useState(false)
   const [wrapText, setWrapText] = useState(true)
@@ -304,8 +303,6 @@ const PromptPreview: React.FC<{ prompt: Impl['prompt']; client: Impl['client'] }
 
 const ImplPanel: React.FC<{ impl: Impl; showTab: boolean }> = ({ impl, showTab }) => {
   const { func } = useImplCtx(impl.name.value)
-
-  console.log('impl.client', impl)
 
   if (!func) return null
 

@@ -1,7 +1,15 @@
 
+<<<<<<< HEAD
 
 function ExtractResume2(resume: string) -> Resume {
     client Resilient_ComplexSyntax
+||||||| parent of 209e3d97 (add examples)
+function ExtractResume(resume: string) -> Resume {
+    client Ollama
+=======
+function ExtractResume(resume: string) -> Resume {
+    client GPT4
+>>>>>>> 209e3d97 (add examples)
     prompt #"
         {{ _.chat('system') }}
 

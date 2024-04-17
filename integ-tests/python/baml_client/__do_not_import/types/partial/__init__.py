@@ -12,12 +12,18 @@ from .classes.cls_classoptionalfields import PartialClassOptionalFields
 from .classes.cls_classoptionaloutput import PartialClassOptionalOutput
 from .classes.cls_classoptionaloutput2 import PartialClassOptionalOutput2
 from .classes.cls_dynamicpropsclass import PartialDynamicPropsClass
+<<<<<<< HEAD
 from .classes.cls_event import PartialEvent
+||||||| parent of 209e3d97 (add examples)
+=======
+from .classes.cls_email import PartialEmail
+>>>>>>> 209e3d97 (add examples)
 from .classes.cls_modifiedoutput import PartialModifiedOutput
 from .classes.cls_namedargssingleclass import PartialNamedArgsSingleClass
 from .classes.cls_optionalclass import PartialOptionalClass
 from .classes.cls_optionaltest_prop1 import PartialOptionalTest_Prop1
 from .classes.cls_optionaltest_returntype import PartialOptionalTest_ReturnType
+from .classes.cls_orderinfo import PartialOrderInfo
 from .classes.cls_overrideclass import PartialOverrideClass
 from .classes.cls_raysdata import PartialRaysData
 from .classes.cls_resume import PartialResume
@@ -38,12 +44,18 @@ __all__ = [
     'PartialClassOptionalOutput',
     'PartialClassOptionalOutput2',
     'PartialDynamicPropsClass',
+<<<<<<< HEAD
     'PartialEvent',
+||||||| parent of 209e3d97 (add examples)
+=======
+    'PartialEmail',
+>>>>>>> 209e3d97 (add examples)
     'PartialModifiedOutput',
     'PartialNamedArgsSingleClass',
     'PartialOptionalClass',
     'PartialOptionalTest_Prop1',
     'PartialOptionalTest_ReturnType',
+    'PartialOrderInfo',
     'PartialOverrideClass',
     'PartialRaysData',
     'PartialResume',

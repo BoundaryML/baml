@@ -12,12 +12,18 @@ from .classes.cls_classoptionalfields import ClassOptionalFields
 from .classes.cls_classoptionaloutput import ClassOptionalOutput
 from .classes.cls_classoptionaloutput2 import ClassOptionalOutput2
 from .classes.cls_dynamicpropsclass import DynamicPropsClass
+<<<<<<< HEAD
 from .classes.cls_event import Event
+||||||| parent of 209e3d97 (add examples)
+=======
+from .classes.cls_email import Email
+>>>>>>> 209e3d97 (add examples)
 from .classes.cls_modifiedoutput import ModifiedOutput
 from .classes.cls_namedargssingleclass import NamedArgsSingleClass
 from .classes.cls_optionalclass import OptionalClass
 from .classes.cls_optionaltest_prop1 import OptionalTest_Prop1
 from .classes.cls_optionaltest_returntype import OptionalTest_ReturnType
+from .classes.cls_orderinfo import OrderInfo
 from .classes.cls_overrideclass import OverrideClass
 from .classes.cls_raysdata import RaysData
 from .classes.cls_resume import Resume
@@ -27,13 +33,21 @@ from .classes.cls_testclassalias import TestClassAlias
 from .classes.cls_testclasswithenum import TestClassWithEnum
 from .classes.cls_testoutputclass import TestOutputClass
 from .classes.cls_uniontest_returntype import UnionTest_ReturnType
+<<<<<<< HEAD
 from .classes.cls_withreasoning import WithReasoning
 from .enums.enm_datatype import DataType
+||||||| parent of 209e3d97 (add examples)
+=======
+from .enums.enm_category import Category
+from .enums.enm_category2 import Category2
+from .enums.enm_category3 import Category3
+>>>>>>> 209e3d97 (add examples)
 from .enums.enm_enuminclass import EnumInClass
 from .enums.enm_enumoutput import EnumOutput
 from .enums.enm_namedargssingleenum import NamedArgsSingleEnum
 from .enums.enm_namedargssingleenumlist import NamedArgsSingleEnumList
 from .enums.enm_optionaltest_categorytype import OptionalTest_CategoryType
+from .enums.enm_orderstatus import OrderStatus
 from .enums.enm_overrideenum import OverrideEnum
 from .enums.enm_tag import Tag
 from .enums.enm_testenum import TestEnum
@@ -43,11 +57,15 @@ from .enums.enm_testenum import TestEnum
 
 __all__ = [
     'Blah',
+    'Category',
+    'Category2',
+    'Category3',
     'ClassOptionalFields',
     'ClassOptionalOutput',
     'ClassOptionalOutput2',
     'DataType',
     'DynamicPropsClass',
+    'Email',
     'EnumInClass',
     'EnumOutput',
     'Event',
@@ -59,6 +77,8 @@ __all__ = [
     'OptionalTest_CategoryType',
     'OptionalTest_Prop1',
     'OptionalTest_ReturnType',
+    'OrderInfo',
+    'OrderStatus',
     'OverrideClass',
     'OverrideEnum',
     'RaysData',

@@ -8,14 +8,16 @@
 # fmt: off
 
 from baml_core.provider_manager import LLMManager
+from os import environ
 
 
 Ollama = LLMManager.add_llm(
     name="Ollama",
-    provider="baml-ollama-chat",
+    provider="baml-anthropic-chat",
     retry_policy=None,
-    redactions=[],
+    redactions=["api_key"],
     options=dict(
-        model="llama2",
+        model="claude-3-haiku-20240307",
+        api_key=environ['ANTHROPIC_API_KEY'],
     ),
 )

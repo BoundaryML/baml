@@ -12,6 +12,7 @@ import { JSONSchema7 } from 'json-schema';
 
 const schema: JSONSchema7 = {
   "definitions": {
+<<<<<<< HEAD
     "DataType": {
       "title": "DataType",
       "enum": [
@@ -23,6 +24,69 @@ const schema: JSONSchema7 = {
         }
       ]
     },
+||||||| parent of 209e3d97 (add examples)
+=======
+    "Category": {
+      "title": "Category",
+      "enum": [
+        {
+          "const": "Refund"
+        },
+        {
+          "const": "CancelOrder"
+        },
+        {
+          "const": "TechnicalSupport"
+        },
+        {
+          "const": "AccountIssue"
+        },
+        {
+          "const": "Question"
+        }
+      ]
+    },
+    "Category2": {
+      "title": "Category2",
+      "enum": [
+        {
+          "const": "Refund"
+        },
+        {
+          "const": "CancelOrder"
+        },
+        {
+          "const": "TechnicalSupport"
+        },
+        {
+          "const": "AccountIssue"
+        },
+        {
+          "const": "Question"
+        }
+      ]
+    },
+    "Category3": {
+      "title": "Category3",
+      "enum": [
+        {
+          "const": "Refund"
+        },
+        {
+          "const": "CancelOrder"
+        },
+        {
+          "const": "TechnicalSupport"
+        },
+        {
+          "const": "AccountIssue"
+        },
+        {
+          "const": "Question"
+        }
+      ]
+    },
+>>>>>>> 209e3d97 (add examples)
     "EnumInClass": {
       "title": "EnumInClass",
       "enum": [
@@ -81,6 +145,23 @@ const schema: JSONSchema7 = {
         },
         {
           "const": "Gamma"
+        }
+      ]
+    },
+    "OrderStatus": {
+      "title": "OrderStatus",
+      "enum": [
+        {
+          "const": "ORDERED"
+        },
+        {
+          "const": "SHIPPED"
+        },
+        {
+          "const": "DELIVERED"
+        },
+        {
+          "const": "CANCELLED"
         }
       ]
     },
@@ -240,6 +321,7 @@ const schema: JSONSchema7 = {
         "prop3"
       ]
     },
+<<<<<<< HEAD
     "Event": {
       "title": "Event",
       "type": "object",
@@ -264,6 +346,29 @@ const schema: JSONSchema7 = {
         "description"
       ]
     },
+||||||| parent of 209e3d97 (add examples)
+=======
+    "Email": {
+      "title": "Email",
+      "type": "object",
+      "properties": {
+        "subject": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string"
+        },
+        "from_address": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "subject",
+        "body",
+        "from_address"
+      ]
+    },
+>>>>>>> 209e3d97 (add examples)
     "ModifiedOutput": {
       "title": "ModifiedOutput",
       "type": "object",
@@ -375,6 +480,32 @@ const schema: JSONSchema7 = {
       },
       "required": [
         "omega_3"
+      ]
+    },
+    "OrderInfo": {
+      "title": "OrderInfo",
+      "type": "object",
+      "properties": {
+        "order_status": {
+          "$ref": "#/definitions/OrderStatus"
+        },
+        "tracking_number": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "estimated_arrival_date": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "order_status"
       ]
     },
     "OverrideClass": {
@@ -662,6 +793,7 @@ const schema: JSONSchema7 = {
         "prop3"
       ]
     },
+<<<<<<< HEAD
     "WithReasoning": {
       "title": "WithReasoning",
       "type": "object",
@@ -678,6 +810,57 @@ const schema: JSONSchema7 = {
         "reasoning"
       ]
     },
+||||||| parent of 209e3d97 (add examples)
+=======
+    "ClassifyMessage_input": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "input"
+      ],
+      "title": "ClassifyMessage input"
+    },
+    "ClassifyMessage2_input": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "input"
+      ],
+      "title": "ClassifyMessage2 input"
+    },
+    "ClassifyMessage3_input": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "input"
+      ],
+      "title": "ClassifyMessage3 input"
+    },
+    "ExtractNames_input": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "input"
+      ],
+      "title": "ExtractNames input"
+    },
+>>>>>>> 209e3d97 (add examples)
     "ExtractResume_input": {
       "type": "object",
       "properties": {
@@ -810,6 +993,7 @@ const schema: JSONSchema7 = {
       "type": "string",
       "title": "FnTestOutputAdapter input"
     },
+<<<<<<< HEAD
     "GetDataType_input": {
       "type": "object",
       "properties": {
@@ -834,6 +1018,21 @@ const schema: JSONSchema7 = {
       ],
       "title": "GetQuery input"
     },
+||||||| parent of 209e3d97 (add examples)
+=======
+    "GetOrderInfo_input": {
+      "type": "object",
+      "properties": {
+        "email": {
+          "$ref": "#/definitions/Email"
+        }
+      },
+      "required": [
+        "email"
+      ],
+      "title": "GetOrderInfo input"
+    },
+>>>>>>> 209e3d97 (add examples)
     "OptionalTest_Function_input": {
       "type": "string",
       "title": "OptionalTest_Function input"
@@ -957,6 +1156,25 @@ const schema: JSONSchema7 = {
       ],
       "title": "UnionTest_Function input"
     },
+    "ClassifyMessage_output": {
+      "$ref": "#/definitions/Category",
+      "title": "ClassifyMessage output"
+    },
+    "ClassifyMessage2_output": {
+      "$ref": "#/definitions/Category",
+      "title": "ClassifyMessage2 output"
+    },
+    "ClassifyMessage3_output": {
+      "$ref": "#/definitions/Category",
+      "title": "ClassifyMessage3 output"
+    },
+    "ExtractNames_output": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "ExtractNames output"
+    },
     "ExtractResume_output": {
       "$ref": "#/definitions/Resume",
       "title": "ExtractResume output"
@@ -1070,6 +1288,7 @@ const schema: JSONSchema7 = {
       "type": "string",
       "title": "FnTestOutputAdapter output"
     },
+<<<<<<< HEAD
     "GetDataType_output": {
       "$ref": "#/definitions/RaysData",
       "title": "GetDataType output"
@@ -1078,6 +1297,13 @@ const schema: JSONSchema7 = {
       "$ref": "#/definitions/SearchParams",
       "title": "GetQuery output"
     },
+||||||| parent of 209e3d97 (add examples)
+=======
+    "GetOrderInfo_output": {
+      "$ref": "#/definitions/OrderInfo",
+      "title": "GetOrderInfo output"
+    },
+>>>>>>> 209e3d97 (add examples)
     "OptionalTest_Function_output": {
       "type": "array",
       "items": {
@@ -1142,10 +1368,35 @@ const schema: JSONSchema7 = {
   }
 };
 
+<<<<<<< HEAD
 registerEnumDeserializer(schema.definitions.DataType, {
 
 });
 
+||||||| parent of 209e3d97 (add examples)
+=======
+registerEnumDeserializer(schema.definitions.Category, {
+
+});
+
+registerEnumDeserializer(schema.definitions.Category2, {
+
+});
+
+registerEnumDeserializer(schema.definitions.Category3, {
+  "k1": "Refund",
+  "k1: Customer wants to refund a product": "Refund",
+  "k2": "CancelOrder",
+  "k2: Customer wants to cancel an order": "CancelOrder",
+  "k3": "TechnicalSupport",
+  "k3: Customer needs help with a technical issue unrelated to account creation or login": "TechnicalSupport",
+  "k4": "AccountIssue",
+  "k4: Specifically relates to account-login or account-creation": "AccountIssue",
+  "k5": "Question",
+  "k5: Customer has a question": "Question"
+});
+
+>>>>>>> 209e3d97 (add examples)
 registerEnumDeserializer(schema.definitions.EnumInClass, {
 
 });
@@ -1163,6 +1414,10 @@ registerEnumDeserializer(schema.definitions.NamedArgsSingleEnumList, {
 });
 
 registerEnumDeserializer(schema.definitions.OptionalTest_CategoryType, {
+
+});
+
+registerEnumDeserializer(schema.definitions.OrderStatus, {
 
 });
 
@@ -1210,10 +1465,18 @@ registerObjectDeserializer(schema.definitions.DynamicPropsClass, {
 
 });
 
+<<<<<<< HEAD
 registerObjectDeserializer(schema.definitions.Event, {
 
 });
 
+||||||| parent of 209e3d97 (add examples)
+=======
+registerObjectDeserializer(schema.definitions.Email, {
+
+});
+
+>>>>>>> 209e3d97 (add examples)
 registerObjectDeserializer(schema.definitions.ModifiedOutput, {
   "REASONING": "reasoning",
   "ANSWER": "answer"
@@ -1232,6 +1495,10 @@ registerObjectDeserializer(schema.definitions.OptionalTest_Prop1, {
 });
 
 registerObjectDeserializer(schema.definitions.OptionalTest_ReturnType, {
+
+});
+
+registerObjectDeserializer(schema.definitions.OrderInfo, {
 
 });
 

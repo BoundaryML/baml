@@ -276,7 +276,7 @@ fn render_prompt(template: String, context: RenderData) -> PyResult<PyObject> {
             let messages = errors
                 .into_iter()
                 .map(|SerializationError { position, message }| {
-                    format!("args.{}: {message}", position.join("."))
+                    format!("{{{{{}}}}}: {message}", position.join("."))
                 })
                 .collect::<Vec<String>>();
 

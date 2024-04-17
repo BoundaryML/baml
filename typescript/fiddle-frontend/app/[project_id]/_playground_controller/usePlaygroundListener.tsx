@@ -52,7 +52,6 @@ export const usePlaygroundListener = () => {
     let shadowedState = { functionsAndTests: functionsAndTestsJotai }
     const listener = async (event: any) => {
       const { command, data } = event.data
-      console.log('running command', { event, command, data })
 
       switch (command) {
         case 'receiveData':

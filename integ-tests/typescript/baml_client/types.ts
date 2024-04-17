@@ -5,11 +5,39 @@
 // @ts-nocheck
 /* eslint-disable */
 
+<<<<<<< HEAD
 const enum DataType {
     Resume = "Resume",
     Event = "Event",
 }
 
+||||||| parent of 209e3d97 (add examples)
+=======
+const enum Category {
+    Refund = "Refund",
+    CancelOrder = "CancelOrder",
+    TechnicalSupport = "TechnicalSupport",
+    AccountIssue = "AccountIssue",
+    Question = "Question",
+}
+
+const enum Category2 {
+    Refund = "Refund",
+    CancelOrder = "CancelOrder",
+    TechnicalSupport = "TechnicalSupport",
+    AccountIssue = "AccountIssue",
+    Question = "Question",
+}
+
+const enum Category3 {
+    Refund = "Refund",
+    CancelOrder = "CancelOrder",
+    TechnicalSupport = "TechnicalSupport",
+    AccountIssue = "AccountIssue",
+    Question = "Question",
+}
+
+>>>>>>> 209e3d97 (add examples)
 const enum EnumInClass {
     ONE = "ONE",
     TWO = "TWO",
@@ -35,6 +63,13 @@ const enum OptionalTest_CategoryType {
     Aleph = "Aleph",
     Beta = "Beta",
     Gamma = "Gamma",
+}
+
+const enum OrderStatus {
+    ORDERED = "ORDERED",
+    SHIPPED = "SHIPPED",
+    DELIVERED = "DELIVERED",
+    CANCELLED = "CANCELLED",
 }
 
 const enum OverrideEnum {
@@ -84,6 +119,7 @@ interface DynamicPropsClass {
   prop3: number;
 }
 
+<<<<<<< HEAD
 interface Event {
   title: string;
   date: string;
@@ -91,6 +127,15 @@ interface Event {
   description: string;
 }
 
+||||||| parent of 209e3d97 (add examples)
+=======
+interface Email {
+  subject: string;
+  body: string;
+  from_address: string;
+}
+
+>>>>>>> 209e3d97 (add examples)
 interface ModifiedOutput {
   reasoning: string;
   answer: string;
@@ -116,6 +161,12 @@ interface OptionalTest_ReturnType {
   omega_1: OptionalTest_Prop1 | null;
   omega_2: string | null;
   omega_3: OptionalTest_CategoryType | null[];
+}
+
+interface OrderInfo {
+  order_status: OrderStatus;
+  tracking_number: string | null;
+  estimated_arrival_date: string | null;
 }
 
 interface OverrideClass {
@@ -180,6 +231,12 @@ interface WithReasoning {
   reasoning: string;
 }
 
+<<<<<<< HEAD
 
 export { DataType, EnumInClass, EnumOutput, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalTest_CategoryType, OverrideEnum, Tag, TestEnum, Blah, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, DynamicPropsClass, Event, ModifiedOutput, NamedArgsSingleClass, OptionalClass, OptionalTest_Prop1, OptionalTest_ReturnType, OverrideClass, RaysData, Resume, SearchParams, SomeClass2, TestClassAlias, TestClassWithEnum, TestOutputClass, UnionTest_ReturnType, WithReasoning }
+||||||| parent of 209e3d97 (add examples)
+export { EnumInClass, EnumOutput, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalTest_CategoryType, OverrideEnum, TestEnum, Blah, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, DynamicPropsClass, ModifiedOutput, NamedArgsSingleClass, OptionalClass, OptionalTest_Prop1, OptionalTest_ReturnType, OverrideClass, Resume, SomeClass2, TestClassAlias, TestClassWithEnum, TestOutputClass, UnionTest_ReturnType }
+=======
+export { Category, Category2, Category3, EnumInClass, EnumOutput, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalTest_CategoryType, OrderStatus, OverrideEnum, TestEnum, Blah, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, DynamicPropsClass, Email, ModifiedOutput, NamedArgsSingleClass, OptionalClass, OptionalTest_Prop1, OptionalTest_ReturnType, OrderInfo, OverrideClass, Resume, SomeClass2, TestClassAlias, TestClassWithEnum, TestOutputClass, UnionTest_ReturnType }
+>>>>>>> 209e3d97 (add examples)
 
