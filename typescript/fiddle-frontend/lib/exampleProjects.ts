@@ -209,7 +209,7 @@ export const exampleProjects: BAMLProject[] = [
         test_cases: [{
           // the actual object type
           content: JSON.stringify(extractNamesTest),
-          name: stringSpanTest('ExtractVerbs', 'test1'),
+          name: stringSpanTest('ClassifyMessage', 'test1'),
         }]
       }
     ],
@@ -236,11 +236,7 @@ export const exampleProjects: BAMLProject[] = [
           end: 0,
           source_file: 'baml_src/main.baml',
         },
-        test_cases: [{
-          // the actual object type
-          content: JSON.stringify(classifyMessageTest),
-          name: stringSpanTest('ClassifyMessage', 'test1'),
-        }]
+        test_cases: [],
       }
     ],
     files: [
@@ -266,13 +262,7 @@ export const exampleProjects: BAMLProject[] = [
           end: 0,
           source_file: 'baml_src/main.baml',
         },
-        test_cases: [{
-          // the actual object type
-          content: JSON.stringify({
-            input: "I am running and jumping",
-          }),
-          name: stringSpanTest('ClassifyMessage', 'test1'),
-        }]
+        test_cases: []
       }
     ],
     files: [
@@ -298,13 +288,7 @@ export const exampleProjects: BAMLProject[] = [
           end: 0,
           source_file: 'baml_src/main.baml',
         },
-        test_cases: [{
-          // the actual object type
-          content: JSON.stringify({
-            input: "I am running and jumping",
-          }),
-          name: stringSpanTest('ClassifyMessage', 'test1'),
-        }]
+        test_cases: []
       }
     ],
     files: [
@@ -330,13 +314,7 @@ export const exampleProjects: BAMLProject[] = [
           end: 0,
           source_file: 'baml_src/main.baml',
         },
-        test_cases: [{
-          // the actual object type
-          content: JSON.stringify({
-            input: "I am running and jumping",
-          }),
-          name: stringSpanTest('ClassifyMessage', 'test1'),
-        }]
+        test_cases: []
       }
     ],
     files: [
