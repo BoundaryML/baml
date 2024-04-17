@@ -3,7 +3,7 @@ import { EditorFile } from '@/app/actions'
 import { Button } from '@baml/playground-common/components/ui/button'
 import { useAtom, useSetAtom } from 'jotai'
 import { usePathname } from 'next/navigation'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   activeFileAtom,
   currentEditorFilesAtom,
@@ -58,10 +58,7 @@ async function bamlLinter(_view: any): Promise<Diagnostic[]> {
     files: currentFiles,
     selected_tests: selectedTests,
   }
-  console.log('linter input', linterInput)
-  console.log('linter input, selected files', currentFiles)
-  console.log('linter input, selected tests', selectedTests)
-  console.info(`Linting ${linterInput.files.length} files in ${linterInput.root_path}`)
+
   const res = lint(JSON.stringify(linterInput))
   const parsedRes = JSON.parse(res) as LintResponse
   const BamlDB = new Map<string, any>()
@@ -107,7 +104,9 @@ const extensions = [
   lintGutter({}),
   linter(bamlLinter, {
     delay: 200,
-    // needsRefresh: (view) => ,
+    // needsRefresh: (update) => {
+
+    // },
   }),
 ]
 
@@ -118,6 +117,13 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
   useEffect(() => {
     setActiveFile(project.files[0])
   }, [project.id])
+
+  useEffect(() => {
+    console.log(
+      'editorfiles changed',
+      editorFiles.map((f) => f.path),
+    )
+  }, [JSON.stringify(editorFiles)])
 
   const setUnsavedChanges = useSetAtom(unsavedChangesAtom)
 
@@ -141,6 +147,7 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
       </div>
       <>
         <CodeMirror
+          key={editorFiles.map((f) => f.path).join('')}
           value={activeFile?.content ?? ''}
           extensions={extensions}
           theme={theme}

@@ -13,7 +13,6 @@ const customConfig: Config = {
   length: 2,
 }
 
-
 export const usePlaygroundListener = () => {
   // const parserDb = useAtomValue(currentParserDbAtom)
   const setEditorFiles = useSetAtom(currentEditorFilesAtom)
@@ -34,23 +33,28 @@ export const usePlaygroundListener = () => {
             funcName: string
             testCaseName: StringSpan | undefined | string
             params: any
-          } = data;
+          } = data
 
-          let fileName;
+          let fileName
           if (typeof saveTestRequest.testCaseName === 'string') {
             if (saveTestRequest.testCaseName.length > 0) {
-              fileName = `${saveTestRequest.testCaseName}.json`;
+              fileName = `${saveTestRequest.testCaseName}.json`
             } else {
-              fileName = `${uniqueNamesGenerator(customConfig)}.json`;
+              fileName = `${uniqueNamesGenerator(customConfig)}.json`
             }
           } else if (saveTestRequest.testCaseName?.source_file) {
-            fileName = saveTestRequest.testCaseName?.source_file.split('/').pop();
+            fileName = saveTestRequest.testCaseName?.source_file.split('/').pop()
           } else {
-            fileName = `${uniqueNamesGenerator(customConfig)}.json`;
+            fileName = `${uniqueNamesGenerator(customConfig)}.json`
           }
 
           if (!fileName) {
-            console.log('No file name provided for test' + saveTestRequest.funcName + ' ' + JSON.stringify(saveTestRequest.testCaseName));
+            console.log(
+              'No file name provided for test' +
+                saveTestRequest.funcName +
+                ' ' +
+                JSON.stringify(saveTestRequest.testCaseName),
+            )
             return
           }
 
@@ -86,12 +90,14 @@ export const usePlaygroundListener = () => {
           }
 
           setEditorFiles((prev) => {
-            prev = prev as EditorFile[]
-            prev.push({
-              path: uri,
-              content: JSON.stringify(testFileContent, null, 2),
-            })
-            return prev
+            const prevFiles = prev as EditorFile[]
+            return [
+              ...prevFiles,
+              {
+                path: uri,
+                content: JSON.stringify(testFileContent, null, 2),
+              },
+            ]
           })
           break
 
