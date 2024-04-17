@@ -66,22 +66,6 @@ async function bamlLinter(_view: any): Promise<Diagnostic[]> {
 
   if (parsedRes.ok) {
     atomStore.set(currentParserDbAtom, parsedRes.response)
-
-    // Get all the selected tests
-    let funcTestSelector = Object.fromEntries(
-      parsedRes.response.functions
-        .map((f) => {
-          let test_case = Array.from(
-            new Set(f.impls.flatMap((i) => i.prompt.test_case).filter((t): t is string => t !== undefined)),
-          )
-
-          if (test_case.length > 0) {
-            return [f.name.value, test_case[0]]
-          }
-          return undefined
-        })
-        .filter((t): t is [string, string] => t !== undefined),
-    )
   }
 
   return parsedRes.diagnostics

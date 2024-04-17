@@ -16,14 +16,10 @@ import { FlaskConical } from 'lucide-react'
 import clsx from 'clsx'
 import { TooltipProvider } from '../components/ui/tooltip'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/ui/resizable'
-import {
-  ImperativePanelHandle,
-  ImperativePanelHandle,
-  getPanelElement,
-  getPanelGroupElement,
-} from 'react-resizable-panels'
+import { ImperativePanelHandle } from 'react-resizable-panels'
+import { TestResult } from '@baml/common'
 
-function getTopPanelSize(showTests: boolean, test_results: TestState | undefined): number {
+function getTopPanelSize(showTests: boolean, test_results: TestResult[] | undefined): number {
   if (showTests) {
     if (test_results && test_results.length > 0) {
       return 40
