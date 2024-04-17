@@ -49,7 +49,7 @@ const TestCasePanelEntry: React.FC<{ func: Func; test_case: TestCase }> = ({ fun
   const { root_path, test_results } = useContext(ASTContext)
 
   return (
-    <div key={test_case.name.value} className="py-1 group">
+    <div key={test_case.name.value} className="flex flex-col w-full py-1 pr-2 overflow-x-clip group">
       <div className="flex flex-row items-center justify-between">
         <div className="flex flex-row items-center justify-center gap-x-1">
           <Button
@@ -270,7 +270,7 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
   const { root_path, test_results } = useContext(ASTContext)
 
   return (
-    <>
+    <div className="flex flex-col w-full h-full">
       <div className="flex flex-row gap-x-1">
         <VSCodeTextField
           placeholder="Search test cases"
@@ -337,7 +337,7 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
           <TestCasePanelEntry func={func} test_case={t} />
         ))}
       </div>
-    </>
+    </div>
   )
 }
 

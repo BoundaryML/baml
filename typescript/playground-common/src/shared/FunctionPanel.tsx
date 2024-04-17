@@ -6,7 +6,7 @@ import { useSelections } from './hooks'
 import { VSCodeDivider, VSCodePanels } from '@vscode/webview-ui-toolkit/react'
 import TestCasePanel from './TestCasePanel'
 import ImplPanel from './ImplPanel'
-import { useContext, useEffect, useId, useState } from 'react'
+import { createRef, useContext, useEffect, useId, useImperativeHandle, useRef, useState } from 'react'
 import { ASTContext } from './ASTProvider'
 import TypeComponent from './TypeComponent'
 import TestResultPanel from './TestResultOutcomes'
@@ -16,6 +16,23 @@ import { FlaskConical } from 'lucide-react'
 import clsx from 'clsx'
 import { TooltipProvider } from '../components/ui/tooltip'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/ui/resizable'
+import {
+  ImperativePanelHandle,
+  ImperativePanelHandle,
+  getPanelElement,
+  getPanelGroupElement,
+} from 'react-resizable-panels'
+
+function getTopPanelSize(showTests: boolean, test_results: TestState | undefined): number {
+  if (showTests) {
+    if (test_results && test_results.length > 0) {
+      return 40
+    } else {
+      return 85
+    }
+  }
+  return 100
+}
 
 const FunctionPanel: React.FC = () => {
   const {
@@ -26,6 +43,16 @@ const FunctionPanel: React.FC = () => {
   const { test_results } = useSelections()
   const results = test_results ?? []
   const id = useId()
+  const refs = useRef()
+  const testResultId = test_results ? test_results[0]?.status : ''
+  const ref = createRef<ImperativePanelHandle>()
+
+  useEffect(() => {
+    let topPanelSize = getTopPanelSize(showTests, test_results)
+    if (ref.current) {
+      ref.current.resize(topPanelSize)
+    }
+  }, [showTests, testResultId])
 
   if (!func)
     return <div className="flex flex-col">No function selected. Create or select a function to get started</div>
@@ -53,15 +80,7 @@ const FunctionPanel: React.FC = () => {
     )
   }
 
-  let topPanelSize = 100
-  if (showTests) {
-    if (test_results && test_results.length > 0) {
-      topPanelSize = 40
-    } else {
-      topPanelSize = 85
-    }
-  }
-  let testResultId = test_results ? test_results[0]?.status : ''
+  let topPanelSize = getTopPanelSize(showTests, test_results)
 
   return (
     <div
@@ -71,14 +90,8 @@ const FunctionPanel: React.FC = () => {
       }}
     >
       <TooltipProvider>
-        {/* <Allotment vertical> */}
-        <ResizablePanelGroup
-          key={testResultId}
-          direction="vertical"
-          className="h-full"
-          id={id + showTests.valueOf() + testResultId}
-        >
-          <ResizablePanel className="flex w-full " defaultSize={topPanelSize}>
+        <ResizablePanelGroup direction="vertical" className="h-full">
+          <ResizablePanel id="top-panel" ref={ref} className="flex w-full " defaultSize={topPanelSize}>
             <div className="w-full">
               <ResizablePanelGroup direction="horizontal" className="h-full">
                 {impl && (

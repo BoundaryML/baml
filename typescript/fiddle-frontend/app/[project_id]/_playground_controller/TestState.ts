@@ -130,7 +130,8 @@ export class TestState {
     this.test_results.exit_code = code
     if (code === undefined) {
       this.test_results.run_status = 'NOT_STARTED'
-    } else if (code === 0) {
+      // this means it already errored out:
+    } else if (code === 0 && this.test_results.run_status !== 'ERROR') {
       this.test_results.run_status = 'COMPLETED'
     } else {
       this.test_results.run_status = 'ERROR'

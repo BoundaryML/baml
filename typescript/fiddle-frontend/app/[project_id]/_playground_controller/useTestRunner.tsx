@@ -16,6 +16,7 @@ export const useTestRunner = () => {
   const fetchData = useAtomCallback(async (get, set, testRequest: TestRequest) => {
     const editorFiles = await get(currentEditorFilesAtom)
     const testState = new TestState()
+
     setTestRunOutput((prev) => {
       return {
         testState: {
@@ -44,6 +45,7 @@ export const useTestRunner = () => {
         }
       })
     })
+    console.log('initialize test cases')
     testState.initializeTestCases({
       functions: testRequest.functions,
     })
@@ -68,8 +70,10 @@ export const useTestRunner = () => {
           console.log('Connection made ', res)
         } else if (res.status >= 400 && res.status < 500 && res.status !== 429) {
           console.log('Client side error ', res)
-          const result = await res.text()
+          const result = await res.clone().text()
           console.log('stream result:', result)
+          window.postMessage({ command: 'test-stdout', content: result })
+          testState.setExitCode(5)
         }
       },
       onmessage(event) {
