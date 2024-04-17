@@ -23,7 +23,6 @@ import { EditorFile, createUrl } from '../../actions'
 import {
   currentEditorFilesAtom,
   currentParserDbAtom,
-  functionsAndTestsAtom,
   testRunOutputAtom,
   unsavedChangesAtom,
 } from '../_atoms/atoms'
@@ -38,7 +37,6 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
   const setEditorFiles = useSetAtom(currentEditorFilesAtom)
   const setTestRunOutput = useSetAtom(testRunOutputAtom)
   useCommandS()
-  const setFunctionsAndTests = useSetAtom(functionsAndTestsAtom)
   // Tried to use url pathnames for this but nextjs hijacks the pathname state (even the window.location) so we have to manually track unsaved changes in the app.
   const [unsavedChanges, setUnsavedChanges] = useAtom(unsavedChangesAtom)
 
@@ -52,7 +50,6 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
 
   useEffect(() => {
     if (project) {
-      setFunctionsAndTests(project.functionsWithTests)
       if (project.testRunOutput) {
         setTestRunOutput(project.testRunOutput)
       }
@@ -130,7 +127,6 @@ export const ProjectView = ({ project }: { project: BAMLProject }) => {
 
 const ShareButton = ({ project, projectName }: { project: BAMLProject; projectName: string }) => {
   const [loading, setLoading] = useState(false)
-  const functionsAndTests = useAtomValue(functionsAndTestsAtom)
   const editorFiles = useAtomValue(currentEditorFilesAtom)
   const runTestOutput = useAtomValue(testRunOutputAtom)
   const pathname = usePathname()
@@ -151,7 +147,6 @@ const ShareButton = ({ project, projectName }: { project: BAMLProject; projectNa
               ...project,
               name: projectName,
               files: editorFiles,
-              functionsWithTests: functionsAndTests,
               testRunOutput: runTestOutput ?? undefined,
             })
 
@@ -183,7 +178,6 @@ const DummyHydrate = ({ files }: { files: EditorFile[] }) => {
 
 const PlaygroundView = () => {
   const [parserDb] = useAtom(currentParserDbAtom)
-  const [functionsAndTests] = useAtom(functionsAndTestsAtom)
   usePlaygroundListener()
   const testRunOutput = useAtomValue(testRunOutputAtom)
 
@@ -194,22 +188,11 @@ const PlaygroundView = () => {
     const newParserDb = { ...parserDb }
     console.log('newParserDb', newParserDb)
 
-    if (newParserDb.functions.length > 0) {
-      functionsAndTests.forEach((func) => {
-        const existingFunc = newParserDb.functions.find((f) => f.name.value === func.name.value)
-        if (existingFunc) {
-          existingFunc.test_cases = func.test_cases
-        } else {
-          // can happen if you reload and linter hasnt run.
-          console.error(`Function ${JSON.stringify(func.name)} not found in parserDb`)
-        }
-      })
-    }
     window.postMessage({
       command: 'setDb',
-      content: [[`${BAML_DIR}`, newParserDb]],
+      content: [[BAML_DIR, newParserDb]],
     })
-  }, [JSON.stringify(parserDb), JSON.stringify(functionsAndTests)])
+  }, [parserDb])
 
   useEffect(() => {
     if (testRunOutput) {

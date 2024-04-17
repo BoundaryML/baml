@@ -4,7 +4,8 @@ import { fetchEventSource } from '@microsoft/fetch-event-source'
 import { useCallback } from 'react'
 import { TestState } from './TestState'
 import { useAtom, useSetAtom } from 'jotai'
-import { testRunOutputAtom } from '../_atoms/atoms'
+import { currentEditorFilesAtom, testRunOutputAtom } from '../_atoms/atoms'
+import { useAtomCallback } from 'jotai/utils'
 
 const serverBaseURL = 'http://localhost:8000'
 const prodBaseURL = 'https://prompt-fiddle.fly.dev'
@@ -12,7 +13,8 @@ const baseUrl = prodBaseURL
 
 export const useTestRunner = () => {
   const setTestRunOutput = useSetAtom(testRunOutputAtom)
-  const fetchData = useCallback(async (editorFiles: EditorFile[], testRequest: TestRequest) => {
+  const fetchData = useAtomCallback(async (get, set, testRequest: TestRequest) => {
+    const editorFiles = await get(currentEditorFilesAtom)
     console.log('editor files sent', editorFiles)
     const testState = new TestState()
     setTestRunOutput((prev) => {
@@ -110,7 +112,7 @@ export const useTestRunner = () => {
         throw err // rethrow to stop the event source
       },
     })
-  }, [])
+  })
 
   return fetchData
 }

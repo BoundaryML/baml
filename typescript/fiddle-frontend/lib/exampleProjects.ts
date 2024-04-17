@@ -2,14 +2,14 @@ import { TestRunOutput } from "@/app/[project_id]/_atoms/atoms";
 import { EditorFile } from "@/app/actions";
 import { ParserDatabase, StringSpan } from "@baml/common";
 
-export type ParserDBFunctionTestModel = Pick<ParserDatabase['functions'][0], 'name' | 'test_cases'>;
+// export type ParserDBFunctionTestModel = Pick<ParserDatabase['functions'][0], 'name' | 'test_cases'>;
 
 export type BAMLProject = {
   id: string;
   name: string;
   description: string;
   files: EditorFile[];
-  functionsWithTests: ParserDBFunctionTestModel[];
+  // functionsWithTests: ParserDBFunctionTestModel[];
   testRunOutput?: TestRunOutput;
 };
 
@@ -198,21 +198,6 @@ export const exampleProjects: BAMLProject[] = [
     id: 'extract-names',
     name: 'ExtractNames',
     description: 'Extract names from a given input',
-    functionsWithTests: [
-      {
-        name: {
-          value: 'ExtractNames',
-          start: 0,
-          end: 0,
-          source_file: 'baml_src/main.baml',
-        },
-        test_cases: [{
-          // the actual object type
-          content: JSON.stringify(extractNamesTest),
-          name: stringSpanTest('ClassifyMessage', 'test1'),
-        }]
-      }
-    ],
     files: [
       {
         path: 'baml_src/main.baml',
@@ -221,6 +206,10 @@ export const exampleProjects: BAMLProject[] = [
       {
         path: 'baml_src/clients.baml',
         content: clientsBaml,
+      },
+      {
+        path: 'baml_src/__tests__/ExtractNames/test1.json',
+        content: JSON.stringify({ input: extractNamesTest }),
       }
     ]
   },
@@ -228,17 +217,6 @@ export const exampleProjects: BAMLProject[] = [
     id: 'classify-message',
     name: 'ClassifyMessage',
     description: 'Classify a message from a user',
-    functionsWithTests: [
-      {
-        name: {
-          value: 'ClassifyMessage',
-          start: 0,
-          end: 0,
-          source_file: 'baml_src/main.baml',
-        },
-        test_cases: [],
-      }
-    ],
     files: [
       {
         path: 'baml_src/main.baml',
@@ -254,17 +232,6 @@ export const exampleProjects: BAMLProject[] = [
     id: 'chain-of-thought',
     name: 'Chain of thought',
     description: 'Classify a message from a user, and demonstrate chain of thought',
-    functionsWithTests: [
-      {
-        name: {
-          value: 'ClassifyMessage',
-          start: 0,
-          end: 0,
-          source_file: 'baml_src/main.baml',
-        },
-        test_cases: []
-      }
-    ],
     files: [
       {
         path: 'baml_src/main.baml',
@@ -280,17 +247,6 @@ export const exampleProjects: BAMLProject[] = [
     id: 'chat-roles',
     name: 'Chat roles',
     description: 'Use a sequence of system and user messages when prompting',
-    functionsWithTests: [
-      {
-        name: {
-          value: 'ClassifyMessage',
-          start: 0,
-          end: 0,
-          source_file: 'baml_src/main.baml',
-        },
-        test_cases: []
-      }
-    ],
     files: [
       {
         path: 'baml_src/main.baml',
@@ -306,17 +262,6 @@ export const exampleProjects: BAMLProject[] = [
     id: 'symbol-tuning',
     name: 'Symbol tuning',
     description: 'Using "symbols" as aliases for terms in your prompt can improve your results',
-    functionsWithTests: [
-      {
-        name: {
-          value: 'ClassifyMessage',
-          start: 0,
-          end: 0,
-          source_file: 'baml_src/main.baml',
-        },
-        test_cases: []
-      }
-    ],
     files: [
       {
         path: 'baml_src/main.baml',
