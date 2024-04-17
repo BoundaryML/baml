@@ -82,7 +82,7 @@ export class WebPanelView {
         // Panel title
         'BAML Playground',
         // The editor column the panel should be displayed in
-        ViewColumn.Beside,
+        process.env.VSCODE_DEBUG_MODE === "true" ? ViewColumn.Two : ViewColumn.Beside,
         // Extra panel configurations
         {
           // Enable JavaScript in the webview
@@ -178,6 +178,14 @@ export class WebPanelView {
             // Code that should run in response to the hello message command
             window.showInformationMessage(text)
             return
+          case 'selectTestCase':
+            console.log('selectTestCase', message.data);
+            const testRequest: { root_path: string; test_name: string, function_name: string } = message.data
+            vscode.commands.executeCommand('baml.selectTestCase', {
+              functionName: testRequest.function_name,
+              testCaseName: testRequest.test_name,
+            })
+            return
           // Add more switch case statements here as more webview message commands
           // are created within the webview context (i.e. inside media/main.js)
           // todo: MULTI TEST
@@ -208,7 +216,11 @@ export class WebPanelView {
             } = message.data
             let fileName;
             if (typeof saveTestRequest.testCaseName === 'string') {
-              fileName = `${saveTestRequest.testCaseName}.json`;
+              if (saveTestRequest.testCaseName.length > 0) {
+                fileName = `${saveTestRequest.testCaseName}.json`;
+              } else {
+                fileName = `${uniqueNamesGenerator(customConfig)}.json`;
+              }
             } else if (saveTestRequest.testCaseName?.source_file) {
               fileName = vscode.Uri.file(saveTestRequest.testCaseName.source_file).path.split('/').pop();
             } else {

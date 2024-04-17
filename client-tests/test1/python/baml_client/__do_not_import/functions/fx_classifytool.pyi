@@ -34,14 +34,14 @@ class IClassifyTool(Protocol):
     This is the interface for a function.
 
     Args:
-        query: str
         context: str
+        query: str
 
     Returns:
         ClassifyResponse
     """
 
-    async def __call__(self, *, query: str, context: str) -> ClassifyResponse:
+    async def __call__(self, *, context: str, query: str) -> ClassifyResponse:
         ...
 
    
@@ -52,21 +52,21 @@ class IClassifyToolStream(Protocol):
     This is the interface for a stream function.
 
     Args:
-        query: str
         context: str
+        query: str
 
     Returns:
         AsyncStream[ClassifyResponse, PartialClassifyResponse]
     """
 
-    def __call__(self, *, query: str, context: str
+    def __call__(self, *, context: str, query: str
 ) -> AsyncStream[ClassifyResponse, PartialClassifyResponse]:
         ...
 class BAMLClassifyToolImpl:
-    async def run(self, *, query: str, context: str) -> ClassifyResponse:
+    async def run(self, *, context: str, query: str) -> ClassifyResponse:
         ...
     
-    def stream(self, *, query: str, context: str
+    def stream(self, *, context: str, query: str
 ) -> AsyncStream[ClassifyResponse, PartialClassifyResponse]:
         ...
 
@@ -76,10 +76,10 @@ class IBAMLClassifyTool:
     ) -> typing.Callable[[IClassifyTool, IClassifyToolStream], None]:
         ...
 
-    async def __call__(self, *, query: str, context: str) -> ClassifyResponse:
+    async def __call__(self, *, context: str, query: str) -> ClassifyResponse:
         ...
 
-    def stream(self, *, query: str, context: str
+    def stream(self, *, context: str, query: str
 ) -> AsyncStream[ClassifyResponse, PartialClassifyResponse]:
         ...
 

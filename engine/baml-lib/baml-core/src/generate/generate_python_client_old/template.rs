@@ -12,6 +12,7 @@ pub(super) enum HSTemplate {
     Client,
     BAMLClient,
     Variant,
+    DefaultVariant,
     RetryPolicy,
     SingleArgTestSnippet,
     MultiArgTestSnippet,
@@ -65,6 +66,19 @@ fn use_partial(
 
             register_partial_file!(reg, "functions", "variant");
             String::from("variant")
+        }
+        HSTemplate::DefaultVariant => {
+            register_partial_file!(reg, "functions", "arg_list");
+            register_partial_file!(reg, "functions", "arg_values");
+            register_partial_file!(reg, "functions", "func_def");
+            register_partial_file!(reg, "functions", "func_params");
+            f.add_import("baml_lib._impl.deserializer", "Deserializer");
+            f.add_line("import typing");
+            f.add_import("baml_core.stream", "AsyncStream");
+            f.add_import("baml_core.provider_manager.llm_response", "LLMResponse");
+
+            register_partial_file!(reg, "functions", "default_variant");
+            String::from("default_variant")
         }
         HSTemplate::BAMLClient => {
             register_partial_file!(reg, "export", "generated_baml_client");

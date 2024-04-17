@@ -22,7 +22,11 @@ pub struct DatamodelError {
 ///
 /// # Returns
 /// A vector of strings from `options` that are similar to `name`, sorted by similarity.
-fn sort_by_match<'a, I, T>(name: &str, options: &'a I, max_return: Option<usize>) -> Vec<&'a str>
+pub(super) fn sort_by_match<'a, I, T>(
+    name: &str,
+    options: &'a I,
+    max_return: Option<usize>,
+) -> Vec<&'a str>
 where
     I: Index<usize, Output = T> + 'a,
     &'a I: IntoIterator<Item = &'a T>,
@@ -371,6 +375,32 @@ impl DatamodelError {
         span: Span,
     ) -> DatamodelError {
         Self::new(message.into(), span)
+    }
+
+    pub fn not_found_error(
+        type_name: &str,
+        name: &str,
+        span: Span,
+        names: Vec<String>,
+    ) -> DatamodelError {
+        let close_names = sort_by_match(name, &names, Some(3));
+        let suggestions = if names.is_empty() {
+            "".to_string()
+        } else if close_names.is_empty() {
+            // If no names are close enough, suggest nothing or provide a generic message
+            "".to_string()
+        } else if close_names.len() == 1 {
+            // If there's only one close name, suggest it
+            format!(" Did you mean `{}`?", close_names[0])
+        } else {
+            // If there are multiple close names, suggest them all
+            format!(
+                " Did you mean one of these: `{}`?",
+                close_names.join("`, `")
+            )
+        };
+
+        Self::new(format!("{type_name} {name} not found.{suggestions}"), span)
     }
 
     pub fn type_not_used_in_prompt_error(

@@ -7,20 +7,6 @@ use internal_baml_schema_ast::ast::WithName;
 mod print_enum_default;
 mod print_type_default;
 
-#[cfg(feature = "use-pyo3")]
-use pyo3::Python;
-#[cfg(feature = "use-pyo3")]
-mod enum_printer;
-#[cfg(feature = "use-pyo3")]
-mod printer;
-#[cfg(feature = "use-pyo3")]
-mod type_printer;
-
-#[cfg(feature = "use-pyo3")]
-use enum_printer::setup_printer as setup_enum_printer;
-#[cfg(feature = "use-pyo3")]
-use type_printer::setup_printer as setup_type_printer;
-
 use crate::{
     interner::StringId,
     types::{StaticStringAttributes, ToStringAttributes},
@@ -31,7 +17,11 @@ use crate::{
 /// Trait
 pub trait WithSerializeableContent {
     /// Trait to render an object.
-    fn serialize_data(&self, variant: &VariantWalker<'_>) -> serde_json::Value;
+    fn serialize_data(
+        &self,
+        variant: Option<&VariantWalker<'_>>,
+        db: &'_ ParserDatabase,
+    ) -> serde_json::Value;
 }
 
 /// Trait
@@ -42,14 +32,15 @@ pub trait WithStaticRenames<'db>: WithName {
     fn get_default_attributes(&self) -> Option<&'db ToStringAttributes>;
 
     /// Overrides for local names.
-    fn alias(&'db self, variant: &VariantWalker<'db>) -> String {
+    fn alias(&'db self, variant: Option<&VariantWalker<'db>>, db: &'db ParserDatabase) -> String {
         let (overrides, defaults) = self.get_attributes(variant);
 
         let override_alias = overrides.and_then(|o| *o.alias());
         let base_alias = defaults.and_then(|a| *a.alias());
+
         match (override_alias, base_alias) {
-            (Some(id), _) => variant.db[id].to_string(),
-            (None, Some(id)) => variant.db[id].to_string(),
+            (Some(id), _) => db[id].to_string(),
+            (None, Some(id)) => db[id].to_string(),
             (None, None) => self.name().to_string(),
         }
     }
@@ -65,7 +56,11 @@ pub trait WithStaticRenames<'db>: WithName {
     }
 
     /// Overrides for local names.
-    fn meta(&'db self, variant: &VariantWalker<'db>) -> HashMap<String, String> {
+    fn meta(
+        &'db self,
+        variant: Option<&VariantWalker<'db>>,
+        db: &'db ParserDatabase,
+    ) -> HashMap<String, String> {
         let (overrides, defaults) = self.get_attributes(variant);
 
         let mut meta: HashMap<StringId, StringId> = Default::default();
@@ -81,12 +76,12 @@ pub trait WithStaticRenames<'db>: WithName {
         }
 
         meta.iter()
-            .map(|(&k, &v)| (variant.db[k].to_string(), variant.db[v].to_string()))
+            .map(|(&k, &v)| (db[k].to_string(), db[v].to_string()))
             .collect::<HashMap<_, _>>()
     }
 
     /// Overrides for skip.
-    fn skip(&'db self, variant: &VariantWalker<'db>) -> bool {
+    fn skip(&'db self, variant: Option<&VariantWalker<'db>>) -> bool {
         let (overrides, defaults) = self.get_attributes(variant);
 
         let override_alias = overrides.and_then(|o| *o.skip());
@@ -101,7 +96,7 @@ pub trait WithStaticRenames<'db>: WithName {
     /// Overrides for local names.
     fn get_attributes(
         &'db self,
-        variant: &VariantWalker<'db>,
+        variant: Option<&VariantWalker<'db>>,
     ) -> (
         Option<&'db StaticStringAttributes>,
         Option<&'db StaticStringAttributes>,
@@ -110,12 +105,17 @@ pub trait WithStaticRenames<'db>: WithName {
             Some(ToStringAttributes::Static(refs)) => Some(refs),
             _ => None,
         };
-        let overrides = match self.get_override(variant) {
-            Some(ToStringAttributes::Static(refs)) => Some(refs),
-            _ => None,
-        };
+        match variant {
+            Some(variant) => {
+                let overrides = match self.get_override(variant) {
+                    Some(ToStringAttributes::Static(refs)) => Some(refs),
+                    _ => None,
+                };
 
-        (overrides, defaults)
+                (overrides, defaults)
+            }
+            None => (None, defaults),
+        }
     }
 }
 
@@ -124,33 +124,21 @@ pub trait WithSerialize: WithSerializeableContent {
     /// Trait to render an object.
     fn serialize(
         &self,
-        variant: &VariantWalker<'_>,
-        block: &PrinterBlock,
+        db: &'_ ParserDatabase,
+        variant: Option<&VariantWalker<'_>>,
+        block: Option<&PrinterBlock>,
+        span: &internal_baml_diagnostics::Span,
+    ) -> Result<String, DatamodelError>;
+
+    /// For generating ctx.output_schema
+    fn output_schema(
+        &self,
+        db: &'_ ParserDatabase,
+        span: &internal_baml_diagnostics::Span,
     ) -> Result<String, DatamodelError>;
 }
 
-#[cfg(feature = "use-pyo3")]
-pub fn serialize_with_printer(
-    is_enum: bool,
-    printer: Option<String>,
-    json: serde_json::Value,
-) -> Result<String, String> {
-    pyo3::prepare_freethreaded_python();
-
-    Python::with_gil(|py| {
-        let printer = if is_enum {
-            setup_enum_printer(py, printer.as_deref())
-                .map_err(|e| format!("Failed to create enum printer: {}", e))?
-        } else {
-            setup_type_printer(py, printer.as_deref())
-                .map_err(|e| format!("Failed to create type printer: {}", e))?
-        };
-
-        printer.print(py, json)
-    })
-}
-
-#[cfg(not(feature = "use-pyo3"))]
+/// print_type, print_enum implementation
 pub fn serialize_with_printer(
     is_enum: bool,
     template: Option<String>,

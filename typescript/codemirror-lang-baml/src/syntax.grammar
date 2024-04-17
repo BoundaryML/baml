@@ -1,6 +1,6 @@
 @top Baml { Decl* }
 
-Decl { ClassDecl | EnumDecl | FunctionDecl }
+Decl { ClassDecl | EnumDecl | FunctionDecl | ClientDecl }
 
 ClassDecl { "class" IdentifierDecl "{" (BlockAttribute | ClassField)* "}" }
 
@@ -25,11 +25,11 @@ EnumDecl { "enum" IdentifierDecl "{" (BlockAttribute | EnumValueDecl)* "}" }
 EnumValueDecl { IdentifierDecl FieldAttribute* }
 
 FieldAttribute {
-  "@" IdentifierDecl "(" LiteralDecl? ")"
+  "@" IdentifierDecl AttributeValue
 }
 
 BlockAttribute {
-  "@@" IdentifierDecl "(" LiteralDecl? ")"
+  "@@" IdentifierDecl AttributeValue
 }
 
 FunctionDecl {
@@ -42,26 +42,40 @@ FunctionArg {
 }
 TupleValue { IdentifierDecl ValueExpr }
 
-ValueExpr { LiteralDecl | PromptExpr }
+ValueExpr { LiteralDecl | PromptExpr | "{" TupleValue* "}" }
+
+ClientDecl {
+  "client<llm>" IdentifierDecl "{" TupleValue* "}"
+}
+
+LiteralDecl { NumericLiteral | QuotedString | UnquotedString }
 
 @tokens {
 
-  IdentifierDecl { $[A-Za-z0-9]+ }
-
-  LiteralDecl {
-    '"' char* '"' | // strings
-    $[A-Za-z0-9]+ // raw strings, ints
-    // floats not yet supported
+  @precedence {
+    NumericLiteral, QuotedString, UnquotedString, UnquotedAttributeValue
   }
 
-  promptChar { whitespace | char }
-  char { $[\u{20}\u{21}\u{23}-\u{5b}\u{5d}-\u{10ffff}] | "\\" esc }
+  IdentifierDecl { $[A-Za-z0-9-_]+ }
+
+  NumericLiteral { $[0-9]+ | $[0-9]*'.'$[0-9]+ }
+
+  QuotedString { '"' QuotedStringChar* '"' }
+  UnquotedString { UnquotedStringChar+ }
+  UnquotedAttributeValue { (UnquotedStringChar | ' ')+ }
+
+  promptChar { ![] }
+
+  // match all unicode characters except \u0022 " and \u005c \
+  QuotedStringChar { $[\u{20}\u{21}\u{23}-\u{5b}\u{5d}-\u{10ffff}] | "\\" esc }
   esc  { $["\\\/bfnrt] | "u" hex hex hex hex }
   hex  { $[0-9a-fA-F] }
   whitespace { $[ \n\r\t] }
+
+  UnquotedStringChar { ![#@{}()[\]<>,'\n\r\t/ ]}
   
-  TrailingComment { "//"$[^\\n]* }
-  MultilineComment { "{//"(char|whitespace)*"//}" }
+  TrailingComment { "//" ![\n]* }
+  MultilineComment { "{//"![]*"//}" }
 
   "{" "}" "[" "]"
 }
@@ -71,7 +85,12 @@ ValueExpr { LiteralDecl | PromptExpr }
 }
 
 @skip {} {
-  PromptExpr { '#"' (promptChar)* '"#'}
+  PromptExpr { '#"' PromptExprContents '"#'}
+  PromptExprContents { (promptChar)* }
+  AttributeValue { '(' (QuotedString | UnquotedAttributeValue | PromptExprNonJinja)? ')' }
+  //AttributeValue2 { '(#"' (QuotedString |  )? '"#)' }
+  PromptExprNonJinja { '#"' PromptExprContents '"#'}
+
 }
 
 @detectDelim

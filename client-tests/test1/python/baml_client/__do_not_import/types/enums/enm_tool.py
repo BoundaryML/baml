@@ -13,9 +13,11 @@ from enum import Enum
 
 @register_deserializer({
   "k1": "CodeInterpreter",
+  "k1: Use this tool if the user is asking to compute something": "CodeInterpreter",
   "k2": "DrawImage",
+  "k2: Use this tool if the user is asking to draw something": "DrawImage",
   "k3": "GenerateText",
-
+  "k3: Use this tool if the user is asking to generate text": "GenerateText"
 })
 class Tool(str, Enum):
     CodeInterpreter = "CodeInterpreter"

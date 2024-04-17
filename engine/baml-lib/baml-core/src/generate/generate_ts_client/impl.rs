@@ -3,7 +3,7 @@ use serde_json::json;
 use crate::generate::{
     dir_writer::WithFileContent,
     generate_ts_client::{field_type::to_parse_expression, ts_language_features::ToTypeScript},
-    ir::{Function, FunctionArgs, Impl, Prompt, Walker},
+    ir::{repr, Function, FunctionArgs, Impl, Prompt, Walker},
 };
 use std::collections::HashMap;
 
@@ -18,7 +18,7 @@ impl WithFileContent<TSLanguageFeatures> for Walker<'_, (&Function, &Impl)> {
     }
 
     fn file_name(&self) -> String {
-        format!("{}_{}", self.item.0.elem.name, self.elem().name).to_lowercase()
+        format!("{}_{}", self.item.0.elem.name(), self.elem().name).to_lowercase()
     }
 
     fn write(&self, collector: &mut TSFileCollector) {
@@ -26,7 +26,7 @@ impl WithFileContent<TSLanguageFeatures> for Walker<'_, (&Function, &Impl)> {
 
         let file = collector.start_file(self.file_dir(), self.file_name(), false);
         file.add_import("../client", impl_.elem.client.clone(), None, false);
-        file.add_import("../function", function.elem.name.clone(), None, false);
+        file.add_import("../function", function.elem.name().clone(), None, false);
         file.add_import(
             "@boundaryml/baml-core/deserializer/deserializer",
             "Deserializer",
@@ -36,17 +36,16 @@ impl WithFileContent<TSLanguageFeatures> for Walker<'_, (&Function, &Impl)> {
         file.add_import("../json_schema", "schema", None, false);
 
         let function_content = json!({
-          "name": function.elem.name.clone(),
-          "params": match &function.elem.inputs {
-            FunctionArgs::UnnamedArg(arg) => {
-              json!({
+          "name": function.elem.name(),
+          "params": match function.elem.inputs() {
+            either::Either::Left(FunctionArgs::UnnamedArg(arg)) => json!({
                 "positional": true,
                 "name": "arg",
                 "type": arg.to_ts(),
                 "expr": to_parse_expression(&"arg".to_string(), arg, file),
-              })
-            }
-            FunctionArgs::NamedArgList(args) => json!({
+              }),
+            either::Left(FunctionArgs::NamedArgList(args)) |
+            either::Either::Right(args) => json!({
                 "positional": false,
                 "name": "args",
                 "values": args.iter().map(|(name, r#type)| json!({
@@ -56,7 +55,7 @@ impl WithFileContent<TSLanguageFeatures> for Walker<'_, (&Function, &Impl)> {
                 })).collect::<Vec<_>>(),
             }),
           },
-          "return_type": function.elem.output.elem.to_ts(),
+          "return_type": function.elem.output().to_ts()
         });
 
         let is_chat = match impl_.elem.prompt {

@@ -5,6 +5,35 @@
 // @ts-nocheck
 /* eslint-disable */
 
+const enum Category {
+    Refund = "Refund",
+    CancelOrder = "CancelOrder",
+    TechnicalSupport = "TechnicalSupport",
+    AccountIssue = "AccountIssue",
+    Question = "Question",
+}
+
+const enum Category2 {
+    Refund = "Refund",
+    CancelOrder = "CancelOrder",
+    TechnicalSupport = "TechnicalSupport",
+    AccountIssue = "AccountIssue",
+    Question = "Question",
+}
+
+const enum Category3 {
+    Refund = "Refund",
+    CancelOrder = "CancelOrder",
+    TechnicalSupport = "TechnicalSupport",
+    AccountIssue = "AccountIssue",
+    Question = "Question",
+}
+
+const enum DataType {
+    Resume = "Resume",
+    Event = "Event",
+}
+
 const enum EnumInClass {
     ONE = "ONE",
     TWO = "TWO",
@@ -32,9 +61,22 @@ const enum OptionalTest_CategoryType {
     Gamma = "Gamma",
 }
 
+const enum OrderStatus {
+    ORDERED = "ORDERED",
+    SHIPPED = "SHIPPED",
+    DELIVERED = "DELIVERED",
+    CANCELLED = "CANCELLED",
+}
+
 const enum OverrideEnum {
     ONE = "ONE",
     TWO = "TWO",
+}
+
+const enum Tag {
+    Security = "Security",
+    AI = "AI",
+    Blockchain = "Blockchain",
 }
 
 const enum TestEnum {
@@ -73,6 +115,19 @@ interface DynamicPropsClass {
   prop3: number;
 }
 
+interface Email {
+  subject: string;
+  body: string;
+  from_address: string;
+}
+
+interface Event {
+  title: string;
+  date: string;
+  location: string;
+  description: string;
+}
+
 interface ModifiedOutput {
   reasoning: string;
   answer: string;
@@ -100,9 +155,38 @@ interface OptionalTest_ReturnType {
   omega_3: OptionalTest_CategoryType | null[];
 }
 
+interface OrderInfo {
+  order_status: OrderStatus;
+  tracking_number: string | null;
+  estimated_arrival_date: string | null;
+}
+
 interface OverrideClass {
   prop1: string;
   prop2: string;
+}
+
+interface RaysData {
+  dataType: DataType;
+  value: Resume | Event;
+}
+
+interface Resume {
+  name: string;
+  email: string;
+  phone: string;
+  experience: string[];
+  education: string[];
+  skills: string[];
+}
+
+interface SearchParams {
+  dateRange: number | null;
+  location: string[];
+  jobTitle: WithReasoning | null;
+  company: WithReasoning | null;
+  description: WithReasoning[];
+  tags: Tag | string[];
 }
 
 interface SomeClass2 {
@@ -134,6 +218,11 @@ interface UnionTest_ReturnType {
   prop3: number[] | boolean[];
 }
 
+interface WithReasoning {
+  value: string;
+  reasoning: string;
+}
 
-export { EnumInClass, EnumOutput, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalTest_CategoryType, OverrideEnum, TestEnum, Blah, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, DynamicPropsClass, ModifiedOutput, NamedArgsSingleClass, OptionalClass, OptionalTest_Prop1, OptionalTest_ReturnType, OverrideClass, SomeClass2, TestClassAlias, TestClassWithEnum, TestOutputClass, UnionTest_ReturnType }
+
+export { Category, Category2, Category3, DataType, EnumInClass, EnumOutput, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalTest_CategoryType, OrderStatus, OverrideEnum, Tag, TestEnum, Blah, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, DynamicPropsClass, Email, Event, ModifiedOutput, NamedArgsSingleClass, OptionalClass, OptionalTest_Prop1, OptionalTest_ReturnType, OrderInfo, OverrideClass, RaysData, Resume, SearchParams, SomeClass2, TestClassAlias, TestClassWithEnum, TestOutputClass, UnionTest_ReturnType, WithReasoning }
 

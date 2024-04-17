@@ -1,7 +1,5 @@
 schema = {
-    SOI
-    ~ (interface_declaration | function_declaration | variant_block | config_block | enum_declaration | type_alias | arbitrary_block | comment_block | raw_string_literal | empty_lines | CATCH_ALL)*
-    ~ EOI
+    SOI ~ (interface_declaration | template_declaration | function_declaration | old_function_declaration | variant_block | config_block | enum_declaration | type_alias | arbitrary_block | comment_block | raw_string_literal | empty_lines | CATCH_ALL)* ~ EOI
 }
 
 // a block definition without a keyword. Is not valid. Just acts as a catch for the parser to display a nice error.
@@ -11,75 +9,65 @@ arbitrary_block = { identifier ~ BLOCK_OPEN ~ ((!BLOCK_CLOSE ~ ANY) | NEWLINE)* 
 // Enum
 // ######################################
 enum_declaration = {
-    ENUM_KEYWORD
-    ~ identifier
-    ~ BLOCK_OPEN
-    ~ enum_contents
-    ~ BLOCK_CLOSE
-    }
+    ENUM_KEYWORD ~ identifier ~ BLOCK_OPEN ~ enum_contents ~ BLOCK_CLOSE
+}
 
 enum_value_declaration = { identifier ~ (NEWLINE? ~ (field_attribute | trailing_comment))* ~ NEWLINE }
-enum_contents = {
-    (enum_value_declaration | block_attribute | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)* 
+enum_contents          = {
+    (enum_value_declaration | block_attribute | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
 }
 
 // ######################################
 // Interface blocks are configs which only have types as values.
 // ######################################
 
-interface_declaration = { 
-    CLASS_KEYWORD
-    ~ identifier
-    ~ BLOCK_OPEN
-    ~ class_contents
-    ~ BLOCK_CLOSE
+interface_declaration = {
+    CLASS_KEYWORD ~ identifier ~ BLOCK_OPEN ~ class_contents ~ BLOCK_CLOSE
 }
 
 field_declaration = {
-    identifier
-    ~ field_type?
-    ~ ((NEWLINE? ~ field_attribute) | (NEWLINE? ~ trailing_comment))*
-    ~ NEWLINE
+    identifier ~ field_type? ~ ((NEWLINE? ~ field_attribute) | (NEWLINE? ~ trailing_comment))* ~ NEWLINE
 }
 
 class_contents = {
     (field_declaration | (block_attribute ~ NEWLINE) | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
 }
 
-
 // ######################################
 // Interface blocks are configs which only have types as values.
 // ######################################
+ARROW                = { "->" }
+function_declaration = {
+    FUNCTION_KEYWORD ~ identifier ~ named_argument_list ~ ARROW? ~ field_type? ~ BLOCK_OPEN ~ function_contents ~ BLOCK_CLOSE
+}
 
-function_declaration = { 
-    FUNCTION_KEYWORD
-    ~ identifier
-    ~ BLOCK_OPEN
-    ~ function_contents
-    ~ BLOCK_CLOSE
+template_declaration = {
+    TEMPLATE_KEYWORD ~ identifier ~ named_argument_list? ~ raw_string_literal
+}
+
+function_contents = {
+    (key_value | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
+}
+
+old_function_declaration = {
+    FUNCTION_KEYWORD ~ identifier ~ BLOCK_OPEN ~ old_function_contents ~ BLOCK_CLOSE
 }
 
 input_field_declaration = {
-    "input"
-    ~ function_field_type?
-    ~ trailing_comment?
-    ~ NEWLINE
+    "input" ~ function_field_type? ~ trailing_comment? ~ NEWLINE
 }
 
 output_field_declaration = {
-    "output"
-    ~ function_field_type?
-    ~ trailing_comment?
-    ~ NEWLINE
+    "output" ~ function_field_type? ~ trailing_comment? ~ NEWLINE
 }
 
-
-function_field_type = { field_type | named_argument_list }
-function_contents = {
+function_field_type   = { field_type | named_argument_list }
+old_function_contents = {
     (input_field_declaration | output_field_declaration | (key_value ~ NEWLINE) | (block_attribute ~ NEWLINE) | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
 }
 
-named_argument = { identifier ~ ":" ~ field_type? }
+colon          = { ":" }
+named_argument = { identifier ~ ((":" ~ field_type) | colon)? }
 // Be forgiving and allow trailing comma
 named_argument_list = { "(" ~ named_argument? ~ ("," ~ named_argument)* ~ ","? ~ ")" }
 
@@ -89,38 +77,25 @@ named_argument_list = { "(" ~ named_argument? ~ ("," ~ named_argument)* ~ ","? ~
 // ######################################
 
 serializer_block = {
-    SERIALIZER_KEYWORD
-    ~ identifier
-    ~ BLOCK_OPEN
-    ~ serializer_contents
-    ~ BLOCK_CLOSE
+    SERIALIZER_KEYWORD ~ identifier ~ BLOCK_OPEN ~ serializer_contents ~ BLOCK_CLOSE
 }
 
 serializer_field = { identifier ~ ((NEWLINE? ~ field_attribute) | (NEWLINE? ~ trailing_comment))* ~ NEWLINE }
 
 serializer_contents = {
-    (serializer_field | (block_attribute ~ NEWLINE) | comment_block | empty_lines| BLOCK_LEVEL_CATCH_ALL)*
+    (serializer_field | (block_attribute ~ NEWLINE) | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
 }
 
 variant_block = {
-    VARIANT_KEYWORD
-    ~ template_args?
-    ~ identifier
-    ~ BLOCK_OPEN
-    ~ variant_contents
-    ~ BLOCK_CLOSE
-    }
-
+    VARIANT_KEYWORD ~ template_args? ~ identifier ~ BLOCK_OPEN ~ variant_contents ~ BLOCK_CLOSE
+}
 
 adapter_block = {
-    "adapter"
-    ~ field_template_args?
-    ~ expression?
-    ~ NEWLINE?
+    "adapter" ~ field_template_args? ~ expression? ~ NEWLINE?
 }
 
 variant_contents = {
-    ( serializer_block | adapter_block | (key_value ~ NEWLINE) | (block_attribute ~ NEWLINE) | comment_block | empty_lines| BLOCK_LEVEL_CATCH_ALL)*
+    (serializer_block | adapter_block | (key_value ~ NEWLINE) | (block_attribute ~ NEWLINE) | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
 }
 
 // ######################################
@@ -128,18 +103,13 @@ variant_contents = {
 // The value of each key is an expression.
 // ######################################
 config_block = {
-    (CLIENT_KEYWORD | GENERATOR_KEYWORD | RETRY_POLICY_KEYWORD | PRINTER_KEYWORD)
-    ~ template_args?
-    ~ identifier
-    ~ BLOCK_OPEN
-    ~ config_contents
-    ~ BLOCK_CLOSE
-    }
+    (CLIENT_KEYWORD | GENERATOR_KEYWORD | RETRY_POLICY_KEYWORD | PRINTER_KEYWORD) ~ template_args? ~ identifier ~ BLOCK_OPEN ~ config_contents ~ BLOCK_CLOSE
+}
 
 key_value = { identifier ~ template_args? ~ expression? ~ (NEWLINE? ~ field_attribute)* ~ trailing_comment? }
 
 config_contents = {
-    ((key_value ~ NEWLINE) | (block_attribute ~ NEWLINE) | comment_block | empty_lines| BLOCK_LEVEL_CATCH_ALL)*
+    ((key_value ~ NEWLINE) | (block_attribute ~ NEWLINE) | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
 }
 
 // ######################################
@@ -153,15 +123,15 @@ field_attribute = { "@" ~ identifier ~ arguments_list? }
 // ######################################
 
 // Pest is greedy, order is very important here.
-field_type = { (union | non_union) ~ optional_token? }
-optional_token = {"?"}
-union = { base_type ~ ("|" ~ base_type)+ }
-base_type = { array_notation | dict | identifier | group | tuple }
+field_type     = { (union | non_union) ~ optional_token? }
+optional_token = { "?" }
+union          = { base_type ~ ("|" ~ base_type)+ }
+base_type      = { array_notation | dict | identifier | group | tuple }
 
-array_suffix = {"[]"}
+array_suffix   = { "[]" }
 array_notation = { base_type_without_array ~ array_suffix+ }
 
-dict = { "{" ~ field_type ~ ":" ~ field_type ~ "}" }
+dict  = { "{" ~ field_type ~ ":" ~ field_type ~ "}" }
 group = { "(" ~ field_type ~ ")" }
 tuple = { "(" ~ field_type ~ ("," ~ field_type)+ ~ ")" }
 
@@ -169,29 +139,29 @@ base_type_without_array = { dict | identifier | group | tuple }
 
 non_union = { array_notation | dict | identifier | group | tuple }
 
-path_identifier = {single_word ~ ("." ~ single_word)+}
-identifier = { path_identifier | single_word }
-single_word = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_" | "-" )* }
+path_identifier =  { single_word ~ ("." ~ single_word)+ }
+identifier      =  { path_identifier | single_word }
+single_word     = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_" | "-")* }
 
 // ######################################
 // Type Alias
 // ######################################
-type_alias = { TYPE_KEYWORD ~ identifier ~ base_type ~ (NEWLINE? ~ field_attribute)*  }
+type_alias = { TYPE_KEYWORD ~ identifier ~ base_type ~ (NEWLINE? ~ field_attribute)* }
 
 // ######################################
 // Arguments
 // ######################################
-arguments_list = { "(" ~ (NEWLINE?) ~ expression? ~ ("," ~(NEWLINE?) ~ expression)? ~ (NEWLINE?) ~ ")" }
+arguments_list = { "(" ~ (NEWLINE?) ~ expression? ~ ("," ~ (NEWLINE?) ~ expression)? ~ (NEWLINE?) ~ ")" }
 
 // ######################################
 // Expressions & Functions
 // ######################################
-dict_key = { identifier | quoted_string_literal }
-dict_entry = { (comment_block | empty_lines)* ~ dict_key ~ expression ~ trailing_comment? }
-splitter = _{ ("," ~ NEWLINE?) | NEWLINE }
-dict_expression = { "{" ~ empty_lines? ~ (dict_entry ~ ( splitter ~ dict_entry )*)? ~ (comment_block | empty_lines)* ~ "}" }
-array_expression = { "[" ~ empty_lines? ~ (expression ~ trailing_comment? ~ ( splitter ~ (comment_block | empty_lines)* ~ expression ~ trailing_comment? )*)? ~ (comment_block | empty_lines)* ~ "]" }
-expression = { dict_expression | array_expression | numeric_literal | string_literal }
+dict_key         =  { identifier | quoted_string_literal }
+dict_entry       =  { (comment_block | empty_lines)* ~ dict_key ~ expression ~ trailing_comment? }
+splitter         = _{ ("," ~ NEWLINE?) | NEWLINE }
+dict_expression  =  { "{" ~ empty_lines? ~ (dict_entry ~ (splitter ~ dict_entry)*)? ~ (comment_block | empty_lines)* ~ "}" }
+array_expression =  { "[" ~ empty_lines? ~ (expression ~ trailing_comment? ~ (splitter ~ (comment_block | empty_lines)* ~ expression ~ trailing_comment?)*)? ~ (comment_block | empty_lines)* ~ "]" }
+expression       =  { dict_expression | array_expression | numeric_literal | string_literal }
 
 // ######################################
 // Literals / Values
@@ -201,12 +171,12 @@ numeric_literal = @{ ("-")? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
 // ######################################
 // String literals. These behave specially in BAML.
 // ######################################
-banned_chars = @{"#" | "@" | "{" | "(" | "[" | "<"  | "}" | ")" | "]" | ">" | "," | "'" | NEWLINE}
-banned_start_chars = {WHITESPACE | banned_chars}
-banned_end_chars = {WHITESPACE | banned_chars}
-unquoted_string_literal = { (!banned_start_chars ~ ANY) ~ (!banned_chars ~ ANY)* ~ (!banned_end_chars ~ ANY)* }
-quoted_string_content = @{ (!"\"" ~ !NEWLINE ~ ANY)* }
-quoted_string_literal = ${ "\"" ~ quoted_string_content ~ "\"" }
+banned_chars            = @{ "#" | "@" | "{" | "(" | "[" | "<" | "}" | ")" | "]" | ">" | "," | "'" | NEWLINE }
+banned_start_chars      =  { WHITESPACE | banned_chars }
+banned_end_chars        =  { WHITESPACE | banned_chars }
+unquoted_string_literal =  { (!banned_start_chars ~ ANY) ~ (!banned_chars ~ ANY)* ~ (!banned_end_chars ~ ANY)* }
+quoted_string_content   = @{ (!"\"" ~ !NEWLINE ~ ANY)* }
+quoted_string_literal   = ${ "\"" ~ quoted_string_content ~ "\"" }
 // TODO: Support comments in raw string literals
 raw_string_literal_content_1 = @{ (!"\"#" ~ ANY)* }
 raw_string_literal_content_2 = @{ (!"\"##" ~ ANY)* }
@@ -220,63 +190,63 @@ raw_string_start_3 = _{ (single_word)? ~ "###\"" }
 raw_string_start_2 = _{ (single_word)? ~ "##\"" }
 raw_string_start_1 = _{ (single_word)? ~ "#\"" }
 
-raw_string_literal = { 
+raw_string_literal                 =  {
     (raw_string_start_5 ~ raw_string_literal_content_5 ~ "\"#####")
-    | (raw_string_start_4 ~ raw_string_literal_content_4 ~ "\"####") 
-    | (raw_string_start_3 ~ raw_string_literal_content_3 ~ "\"###") 
-    | (raw_string_start_2 ~ raw_string_literal_content_2 ~ "\"##") 
-    | (raw_string_start_1 ~ raw_string_literal_content_1 ~ "\"#") 
+  | (raw_string_start_4 ~ raw_string_literal_content_4 ~ "\"####")
+  | (raw_string_start_3 ~ raw_string_literal_content_3 ~ "\"###")
+  | (raw_string_start_2 ~ raw_string_literal_content_2 ~ "\"##")
+  | (raw_string_start_1 ~ raw_string_literal_content_1 ~ "\"#")
 }
-unterminated_raw_string_literal = ${ 
+unterminated_raw_string_literal    = ${
     (raw_string_start_5 ~ raw_string_literal_content_5)
-    | (raw_string_start_4 ~ raw_string_literal_content_4)
-    | (raw_string_start_3 ~ raw_string_literal_content_3)
-    | (raw_string_start_2 ~ raw_string_literal_content_2)
-    | (raw_string_start_1 ~ raw_string_literal_content_1)
+  | (raw_string_start_4 ~ raw_string_literal_content_4)
+  | (raw_string_start_3 ~ raw_string_literal_content_3)
+  | (raw_string_start_2 ~ raw_string_literal_content_2)
+  | (raw_string_start_1 ~ raw_string_literal_content_1)
 }
 unterminated_quoted_string_literal = ${ "\"" ~ quoted_string_content }
-unterminated_string_literal = ${ unterminated_raw_string_literal | unterminated_quoted_string_literal }
-string_literal = { raw_string_literal | quoted_string_literal | unquoted_string_literal | unterminated_string_literal }
-
+unterminated_string_literal        = ${ unterminated_raw_string_literal | unterminated_quoted_string_literal }
+string_literal                     =  { raw_string_literal | quoted_string_literal | unquoted_string_literal | unterminated_string_literal }
 
 // ######################################
 // Comments and Documentation Comments
 // ######################################
-comment_block = ${ ((block_comment | doc_comment | comment) ~ NEWLINE?)+ }
+comment_block    = ${ ((block_comment | doc_comment | comment) ~ NEWLINE?)+ }
 trailing_comment = ${ doc_comment | comment }
-doc_comment = { WHITESPACE* ~ "///" ~ doc_content }
-comment = { WHITESPACE* ~ (!"///") ~ "//" ~ doc_content }
-block_content = @{ (!"//}" ~ ANY)* }
-block_comment = { WHITESPACE* ~ "{//" ~ block_content ~ "//}" }
-doc_content = @{ (!NEWLINE ~ ANY)* }
+doc_comment      =  { WHITESPACE* ~ "///" ~ doc_content }
+comment          =  { WHITESPACE* ~ (!"///") ~ "//" ~ doc_content }
+block_content    = @{ (!"//}" ~ ANY)* }
+block_comment    =  { WHITESPACE* ~ "{//" ~ block_content ~ "//}" }
+doc_content      = @{ (!NEWLINE ~ ANY)* }
 
 // ######################################
 // Shared Building Blocks and Comments
 // ######################################
-WHITESPACE = _{ " " | "\t" }
-NEWLINE = _{ "\n" | "\r\n" | "\r" }
+WHITESPACE  = _{ " " | "\t" }
+NEWLINE     = _{ "\n" | "\r\n" | "\r" }
 empty_lines = @{ (WHITESPACE* ~ NEWLINE)+ }
 
 // the any part is to not crash on comments next to an open block, see test `parse_comments_without_crasing_or_loosing_info`
-BLOCK_OPEN = { "{" ~ (!NEWLINE ~ ANY)* ~ NEWLINE }
+BLOCK_OPEN  = { "{" }
 BLOCK_CLOSE = { "}" }
 
 BLOCK_LEVEL_CATCH_ALL = { !BLOCK_CLOSE ~ CATCH_ALL }
-CATCH_ALL = { (!NEWLINE ~ ANY)+ ~ NEWLINE? }
+CATCH_ALL             = { (!NEWLINE ~ ANY)+ ~ NEWLINE? }
 
-TYPE_KEYWORD = { "type" }
-ENUM_KEYWORD = { "enum" }
-CLASS_KEYWORD = { "class" }
+TYPE_KEYWORD     = { "type" }
+ENUM_KEYWORD     = { "enum" }
+CLASS_KEYWORD    = { "class" }
 FUNCTION_KEYWORD = { "function" }
+TEMPLATE_KEYWORD = { "template_string" }
 
 empty_template_args = ${ "<" ~ ">" }
-template_args = { empty_template_args | ("<" ~ expression ~ ("," ~ expression)* ~ ">") }
+template_args       =  { empty_template_args | ("<" ~ expression ~ ("," ~ expression)* ~ ">") }
 
 field_template_args = { empty_template_args | ("<" ~ field_type ~ ("," ~ field_type)* ~ ">") }
 
 RETRY_POLICY_KEYWORD = { "retry_policy" }
-CLIENT_KEYWORD = { "client" }
-GENERATOR_KEYWORD = { "generator" }
-VARIANT_KEYWORD = { "impl" }
-SERIALIZER_KEYWORD = { "override" }
-PRINTER_KEYWORD = { "printer" }
+CLIENT_KEYWORD       = { "client" }
+GENERATOR_KEYWORD    = { "generator" }
+VARIANT_KEYWORD      = { "impl" }
+SERIALIZER_KEYWORD   = { "override" }
+PRINTER_KEYWORD      = { "printer" }

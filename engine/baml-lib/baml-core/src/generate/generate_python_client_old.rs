@@ -39,7 +39,8 @@ pub(crate) fn generate_py(
     db.walk_enums().for_each(|e| generate_py_file(&e, &mut fc));
     db.walk_classes()
         .for_each(|c| generate_py_file(&c, &mut fc));
-    db.walk_functions()
+    db.walk_old_functions()
+        .chain(db.walk_new_functions())
         .for_each(|f| generate_py_file(&f, &mut fc));
     let mut variants = db.walk_variants().collect::<Vec<_>>();
     variants.sort_by(|a, b| {
@@ -142,20 +143,23 @@ impl WithWritePythonString for ParserDatabase {
         fc.complete_file();
 
         fc.start_export_file("./baml_types", "__init__");
-        self.walk_functions().for_each(|f| {
-            fc.last_file().add_import(
-                &format!("..__do_not_import.functions.{}", f.file_name()),
-                &format!("I{}", f.name()),
-            );
-            fc.last_file().add_import(
-                &format!("..__do_not_import.functions.{}", f.file_name()),
-                &format!("I{}Stream", f.name()),
-            );
-            fc.last_file().add_import(
-                &format!("..__do_not_import.functions.{}", f.file_name()),
-                &format!("I{}Output", f.name()),
-            )
-        });
+
+        self.walk_old_functions()
+            .chain(self.walk_new_functions())
+            .for_each(|f| {
+                fc.last_file().add_import(
+                    &format!("..__do_not_import.functions.{}", f.file_name()),
+                    &format!("I{}", f.name()),
+                );
+                fc.last_file().add_import(
+                    &format!("..__do_not_import.functions.{}", f.file_name()),
+                    &format!("I{}Stream", f.name()),
+                );
+                fc.last_file().add_import(
+                    &format!("..__do_not_import.functions.{}", f.file_name()),
+                    &format!("I{}Output", f.name()),
+                )
+            });
         self.walk_enums().for_each(|e| {
             fc.last_file().add_import(
                 &format!("..__do_not_import.types.enums.{}", e.file_name()),
@@ -191,7 +195,8 @@ impl WithWritePythonString for ParserDatabase {
 
         fc.start_py_file(".", "generated_baml_client");
         let mut fxs = self
-            .walk_functions()
+            .walk_old_functions()
+            .chain(self.walk_new_functions())
             .map(|f| {
                 fc.last_file().add_import(
                     &format!(".functions.{}", f.file_name()),

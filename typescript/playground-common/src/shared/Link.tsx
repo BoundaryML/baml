@@ -4,7 +4,7 @@ import { VSCodeLink } from '@vscode/webview-ui-toolkit/react'
 
 const Link: React.FC<{ item: StringSpan; display?: string }> = ({ item, display }) => (
   <VSCodeLink
-    className="text-vscode-list-activeSelectionForeground"
+    className="text-vscode-foreground font-medium"
     onClick={() => {
       vscode.postMessage({ command: 'jumpToFile', data: item })
     }}

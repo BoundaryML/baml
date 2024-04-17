@@ -12,6 +12,7 @@ mod configuration;
 mod r#enum;
 mod field;
 mod function;
+mod template_string;
 mod variants;
 
 pub use client::*;
@@ -23,6 +24,8 @@ use internal_baml_schema_ast::ast::{Identifier, TopId, WithName};
 pub use r#class::*;
 pub use r#enum::*;
 pub use variants::*;
+
+pub use self::template_string::TemplateStringWalker;
 
 /// A generic walker. Only walkers intantiated with a concrete ID type (`I`) are useful.
 #[derive(Clone, Copy)]
@@ -110,8 +113,14 @@ impl<'db> crate::ParserDatabase {
     /// Find a function by name.
     pub fn find_function_by_name(&'db self, name: &str) -> Option<FunctionWalker<'db>> {
         self.find_top_by_str(name)
-            .and_then(|top_id| top_id.as_function_id())
-            .map(|model_id| self.walk(model_id))
+            .map(
+                |top_id| match (top_id.as_old_function_id(), top_id.as_new_function_id()) {
+                    (Some(model_id), _) => Some(self.walk((false, model_id))),
+                    (_, Some(model_id)) => Some(self.walk((true, model_id))),
+                    _ => None,
+                },
+            )
+            .flatten()
     }
 
     /// Find a function by name.
@@ -152,9 +161,11 @@ impl<'db> crate::ParserDatabase {
 
     /// Get all the types that are valid in the schema. (including primitives)
     pub fn valid_function_names(&self) -> Vec<String> {
-        self.walk_functions()
-            .map(|c| c.name().to_string())
-            .collect()
+        let oldfns = self.walk_old_functions().map(|c| c.name().to_string());
+
+        let newfns = self.walk_new_functions().map(|c| c.name().to_string());
+
+        oldfns.chain(newfns).collect()
     }
 
     /// Get all the types that are valid in the schema. (including primitives)
@@ -196,11 +207,39 @@ impl<'db> crate::ParserDatabase {
             })
     }
 
-    /// Walk all classes in the schema.
-    pub fn walk_functions(&self) -> impl Iterator<Item = FunctionWalker<'_>> {
+    /// Walk all template strings in the schema.
+    pub fn walk_templates(&self) -> impl Iterator<Item = TemplateStringWalker<'_>> {
         self.ast()
             .iter_tops()
-            .filter_map(|(top_id, _)| top_id.as_function_id())
+            .filter_map(|(top_id, _)| top_id.as_template_string_id())
+            .map(move |top_id| Walker {
+                db: self,
+                id: top_id,
+            })
+    }
+
+    /// Walk all classes in the schema.
+    pub fn walk_old_functions(&self) -> impl Iterator<Item = FunctionWalker<'_>> {
+        self.ast()
+            .iter_tops()
+            .filter_map(|(top_id, _)| match top_id.as_old_function_id() {
+                Some(model_id) => Some((false, model_id)),
+                _ => None,
+            })
+            .map(move |top_id| Walker {
+                db: self,
+                id: top_id,
+            })
+    }
+
+    /// Walk all classes in the schema.
+    pub fn walk_new_functions(&self) -> impl Iterator<Item = FunctionWalker<'_>> {
+        self.ast()
+            .iter_tops()
+            .filter_map(|(top_id, _)| match top_id.as_new_function_id() {
+                Some(model_id) => Some((true, model_id)),
+                _ => None,
+            })
             .map(move |top_id| Walker {
                 db: self,
                 id: top_id,

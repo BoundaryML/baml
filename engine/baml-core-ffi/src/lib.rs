@@ -1,6 +1,9 @@
 #![deny(clippy::all)]
 
 use colored::*;
+use internal_baml_jinja::{RenderedChatMessage, RenderedPrompt};
+use napi::bindgen_prelude::{FromNapiValue, ToNapiValue};
+use serde_json::Value;
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Result;
@@ -8,6 +11,7 @@ mod api_wrapper;
 mod baml_function_ctx;
 mod env_setup;
 mod otel;
+mod rendering_lib;
 
 use api_wrapper::{
   api_interface::UpdateTestCaseRequest, core_types::TestCaseStatus, BoundaryAPI, BoundaryTestAPI,

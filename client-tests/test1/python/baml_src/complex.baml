@@ -58,6 +58,9 @@ impl<llm, ClassifyTool> v1 {
     }           
 
     prompt #"
+
+        {#chat(system)}
+
         
         {#input.query}
  
@@ -65,6 +68,8 @@ impl<llm, ClassifyTool> v1 {
         {#input.context}
   
         {#print_enum(Tool)} 
+
+        {#chat(user)}
 
         Use this output format:
         {#print_type(output)}

@@ -20,7 +20,7 @@ const watch = process.argv.includes('--watch')
       esbuildplugincopy.copy({
         assets: [
           {
-            from: ['./node_modules/@gloo-ai/baml-schema-wasm/dist/*'],
+            from: ['./node_modules/@gloo-ai/baml-schema-wasm-node/dist/*'],
             to: ['.'],
             watch: watch,
           },

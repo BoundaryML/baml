@@ -1,0 +1,24 @@
+[package]
+name = "baml-ffi"
+edition = "2021"
+version = "0.1.0"
+authors = ["Boundary <contact@boundaryml.com>"]
+description = "BAML python bindings (Cargo.toml)"
+license-file = "LICENSE"
+
+[lib]
+name = "baml_core_ffi"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.21.1", features = [
+  "extension-module",
+  "abi3-py38",
+  "generate-import-lib",
+  "serde",
+] }
+internal-baml-jinja = { path = "../../engine/baml-lib/jinja" }
+serde_json = { version = "1", features = ["float_roundtrip", "preserve_order"] }
+serde = { version = "1", features = ["derive"] }
+pythonize = "0.21.1"
+regex = "1.10.4"

@@ -10,7 +10,7 @@ use crate::{
     ast::{self, WithName, WithSpan},
     printer::{serialize_with_printer, WithSerializeableContent, WithStaticRenames},
     types::ToStringAttributes,
-    WithSerialize,
+    ParserDatabase, WithSerialize,
 };
 
 use super::{field::FieldWalker, EnumWalker, VariantWalker};
@@ -100,13 +100,17 @@ impl<'db> WithSpan for ClassWalker<'db> {
 }
 
 impl<'db> WithSerializeableContent for ClassWalker<'db> {
-    fn serialize_data(&self, variant: &VariantWalker<'_>) -> serde_json::Value {
+    fn serialize_data(
+        &self,
+        variant: Option<&VariantWalker<'_>>,
+        db: &'_ ParserDatabase,
+    ) -> serde_json::Value {
         json!({
             "rtype": "class",
             "optional": false,
-            "name": self.alias(variant),
-            "meta": self.meta(variant),
-            "fields": self.static_fields().map(|f| f.serialize_data(variant)).collect::<Vec<_>>(),
+            "name": self.alias(variant, db),
+            "meta": self.meta(variant, db),
+            "fields": self.static_fields().map(|f| f.serialize_data(variant, db)).collect::<Vec<_>>(),
             // Dynamic fields are not serialized.
         })
     }
@@ -129,10 +133,12 @@ impl<'db> WithStaticRenames<'db> for ClassWalker<'db> {
 impl<'db> WithSerialize for ClassWalker<'db> {
     fn serialize(
         &self,
-        variant: &VariantWalker<'_>,
-        block: &internal_baml_prompt_parser::ast::PrinterBlock,
+        db: &'_ ParserDatabase,
+        variant: Option<&VariantWalker<'_>>,
+        block: Option<&internal_baml_prompt_parser::ast::PrinterBlock>,
+        span: &internal_baml_diagnostics::Span,
     ) -> Result<String, internal_baml_diagnostics::DatamodelError> {
-        let printer_template = match &block.printer {
+        let printer_template = match &block.map(|b| b.printer.as_ref()).flatten() {
             Some((p, _)) => self
                 .db
                 .find_printer(p)
@@ -140,12 +146,60 @@ impl<'db> WithSerialize for ClassWalker<'db> {
             _ => None,
         };
         // Eventually we should validate what parameters are in meta.
-        match serialize_with_printer(false, printer_template, self.serialize_data(variant)) {
+        match serialize_with_printer(false, printer_template, self.serialize_data(variant, db)) {
             Ok(val) => Ok(val),
             Err(e) => Err(DatamodelError::new_validation_error(
                 &format!("Error serializing class: {}\n{}", self.name(), e),
-                block.span().clone(),
+                span.clone(),
             )),
         }
+    }
+
+    fn output_schema(
+        &self,
+        db: &'_ ParserDatabase,
+        span: &internal_baml_diagnostics::Span,
+    ) -> Result<String, internal_baml_diagnostics::DatamodelError> {
+        let class_schema = self.serialize(db, None, None, span)?;
+
+        let mut enum_schemas = self
+            .required_enums()
+            // TODO(sam) - if enum serialization fails, then we do not surface the error to the user.
+            // That is bad!!!!!!!
+            .filter_map(
+                |e| match e.serialize(&db, None, None, e.identifier().span()) {
+                    Ok(enum_schema) => Some((e.name().to_string(), enum_schema)),
+                    Err(_) => None,
+                },
+            )
+            .collect::<Vec<_>>();
+        // Enforce a stable order on enum schemas. Without this, the order is actually unstable, and the order can ping-pong
+        // when the vscode ext re-renders the live preview
+        enum_schemas.sort_by_key(|(name, _)| name.to_string());
+        let enum_schemas = enum_schemas
+            .into_iter()
+            .map(|(_, enum_schema)| enum_schema)
+            .collect::<Vec<_>>();
+
+        let enum_schemas = match enum_schemas.len() {
+            0 => "".to_string(),
+            1 => format!(
+                "\n\nUse this enum for the output:\n{}",
+                enum_schemas.join("")
+            ),
+            _ => format!(
+                "\n\nUse these enums for the output:\n{}",
+                enum_schemas
+                    .into_iter()
+                    .map(|enum_schema| format!("{enum_schema}\n---"))
+                    .collect::<Vec<_>>()
+                    .join("\n\n")
+            ),
+        };
+
+        Ok(format!(
+            "Use this output format:\n{}{}",
+            class_schema, enum_schemas
+        ))
     }
 }

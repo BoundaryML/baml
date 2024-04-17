@@ -6,9 +6,471 @@
 /* eslint-disable */
 
 
-import { ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, EnumOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalClass, OptionalTest_ReturnType, OverrideClass, OverrideEnum, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass, UnionTest_ReturnType } from './types';
+import { Category, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, Email, EnumOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalClass, OptionalTest_ReturnType, OrderInfo, OverrideClass, OverrideEnum, RaysData, Resume, SearchParams, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass, UnionTest_ReturnType } from './types';
 import { FireBamlEvent, traceAsync } from '@boundaryml/baml-core/ffi_layer';
 
+
+type IClassifyMessage = (args: {
+  input: string
+}) => Promise<Category>
+
+type ClassifyMessageImpls = 'default_config';
+
+interface ClassifyMessageImpl {
+    run: IClassifyMessage;
+    name: ClassifyMessageImpls;
+}
+
+interface ClassifyMessageFunction {
+  registerImpl: (name: ClassifyMessageImpls, impl: ClassifyMessageImpl) => void;
+  getImpl: (name: ClassifyMessageImpls) => ClassifyMessageImpl;
+}
+
+function createClassifyMessageInstance(): IClassifyMessage & ClassifyMessageFunction {
+
+  const registry: Record<ClassifyMessageImpls, ClassifyMessageImpl> = {}
+
+  const wrapper: ClassifyMessageFunction = {
+    getImpl: (name: ClassifyMessageImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for ClassifyMessage with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: ClassifyMessageImpls, cb: IClassifyMessage) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for ClassifyMessage with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"ClassifyMessage",
+          /* returnType */ "Category",
+          /* paramters */ [
+            [
+              "input",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            input: string
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for ClassifyMessage: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    input: string
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IClassifyMessage & ClassifyMessageFunction;
+}
+
+const ClassifyMessage = createClassifyMessageInstance();
+
+type IClassifyMessage2 = (args: {
+  input: string
+}) => Promise<Category>
+
+type ClassifyMessage2Impls = 'default_config';
+
+interface ClassifyMessage2Impl {
+    run: IClassifyMessage2;
+    name: ClassifyMessage2Impls;
+}
+
+interface ClassifyMessage2Function {
+  registerImpl: (name: ClassifyMessage2Impls, impl: ClassifyMessage2Impl) => void;
+  getImpl: (name: ClassifyMessage2Impls) => ClassifyMessage2Impl;
+}
+
+function createClassifyMessage2Instance(): IClassifyMessage2 & ClassifyMessage2Function {
+
+  const registry: Record<ClassifyMessage2Impls, ClassifyMessage2Impl> = {}
+
+  const wrapper: ClassifyMessage2Function = {
+    getImpl: (name: ClassifyMessage2Impls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for ClassifyMessage2 with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: ClassifyMessage2Impls, cb: IClassifyMessage2) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for ClassifyMessage2 with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"ClassifyMessage2",
+          /* returnType */ "Category",
+          /* paramters */ [
+            [
+              "input",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            input: string
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for ClassifyMessage2: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    input: string
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IClassifyMessage2 & ClassifyMessage2Function;
+}
+
+const ClassifyMessage2 = createClassifyMessage2Instance();
+
+type IClassifyMessage3 = (args: {
+  input: string
+}) => Promise<Category>
+
+type ClassifyMessage3Impls = 'default_config';
+
+interface ClassifyMessage3Impl {
+    run: IClassifyMessage3;
+    name: ClassifyMessage3Impls;
+}
+
+interface ClassifyMessage3Function {
+  registerImpl: (name: ClassifyMessage3Impls, impl: ClassifyMessage3Impl) => void;
+  getImpl: (name: ClassifyMessage3Impls) => ClassifyMessage3Impl;
+}
+
+function createClassifyMessage3Instance(): IClassifyMessage3 & ClassifyMessage3Function {
+
+  const registry: Record<ClassifyMessage3Impls, ClassifyMessage3Impl> = {}
+
+  const wrapper: ClassifyMessage3Function = {
+    getImpl: (name: ClassifyMessage3Impls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for ClassifyMessage3 with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: ClassifyMessage3Impls, cb: IClassifyMessage3) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for ClassifyMessage3 with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"ClassifyMessage3",
+          /* returnType */ "Category",
+          /* paramters */ [
+            [
+              "input",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            input: string
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for ClassifyMessage3: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    input: string
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IClassifyMessage3 & ClassifyMessage3Function;
+}
+
+const ClassifyMessage3 = createClassifyMessage3Instance();
+
+type IExtractNames = (args: {
+  input: string
+}) => Promise<string[]>
+
+type ExtractNamesImpls = 'default_config';
+
+interface ExtractNamesImpl {
+    run: IExtractNames;
+    name: ExtractNamesImpls;
+}
+
+interface ExtractNamesFunction {
+  registerImpl: (name: ExtractNamesImpls, impl: ExtractNamesImpl) => void;
+  getImpl: (name: ExtractNamesImpls) => ExtractNamesImpl;
+}
+
+function createExtractNamesInstance(): IExtractNames & ExtractNamesFunction {
+
+  const registry: Record<ExtractNamesImpls, ExtractNamesImpl> = {}
+
+  const wrapper: ExtractNamesFunction = {
+    getImpl: (name: ExtractNamesImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for ExtractNames with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: ExtractNamesImpls, cb: IExtractNames) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for ExtractNames with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"ExtractNames",
+          /* returnType */ "string[]",
+          /* paramters */ [
+            [
+              "input",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            input: string
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for ExtractNames: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    input: string
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IExtractNames & ExtractNamesFunction;
+}
+
+const ExtractNames = createExtractNamesInstance();
+
+type IExtractResume = (args: {
+  resume: string
+}) => Promise<Resume>
+
+type ExtractResumeImpls = 'default_config';
+
+interface ExtractResumeImpl {
+    run: IExtractResume;
+    name: ExtractResumeImpls;
+}
+
+interface ExtractResumeFunction {
+  registerImpl: (name: ExtractResumeImpls, impl: ExtractResumeImpl) => void;
+  getImpl: (name: ExtractResumeImpls) => ExtractResumeImpl;
+}
+
+function createExtractResumeInstance(): IExtractResume & ExtractResumeFunction {
+
+  const registry: Record<ExtractResumeImpls, ExtractResumeImpl> = {}
+
+  const wrapper: ExtractResumeFunction = {
+    getImpl: (name: ExtractResumeImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for ExtractResume with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: ExtractResumeImpls, cb: IExtractResume) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for ExtractResume with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"ExtractResume",
+          /* returnType */ "Resume",
+          /* paramters */ [
+            [
+              "resume",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            resume: string
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for ExtractResume: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    resume: string
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IExtractResume & ExtractResumeFunction;
+}
+
+const ExtractResume = createExtractResumeInstance();
+
+type IExtractResume2 = (args: {
+  resume: string
+}) => Promise<Resume>
+
+type ExtractResume2Impls = 'default_config';
+
+interface ExtractResume2Impl {
+    run: IExtractResume2;
+    name: ExtractResume2Impls;
+}
+
+interface ExtractResume2Function {
+  registerImpl: (name: ExtractResume2Impls, impl: ExtractResume2Impl) => void;
+  getImpl: (name: ExtractResume2Impls) => ExtractResume2Impl;
+}
+
+function createExtractResume2Instance(): IExtractResume2 & ExtractResume2Function {
+
+  const registry: Record<ExtractResume2Impls, ExtractResume2Impl> = {}
+
+  const wrapper: ExtractResume2Function = {
+    getImpl: (name: ExtractResume2Impls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for ExtractResume2 with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: ExtractResume2Impls, cb: IExtractResume2) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for ExtractResume2 with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"ExtractResume2",
+          /* returnType */ "Resume",
+          /* paramters */ [
+            [
+              "resume",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            resume: string
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for ExtractResume2: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    resume: string
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IExtractResume2 & ExtractResume2Function;
+}
+
+const ExtractResume2 = createExtractResume2Instance();
 
 type IFnClassOptional = (arg: OptionalClass | null) => Promise<string>
 
@@ -1371,6 +1833,237 @@ function createFnTestOutputAdapterInstance(): IFnTestOutputAdapter & FnTestOutpu
 
 const FnTestOutputAdapter = createFnTestOutputAdapterInstance();
 
+type IGetDataType = (args: {
+  text: string
+}) => Promise<RaysData>
+
+type GetDataTypeImpls = 'default_config';
+
+interface GetDataTypeImpl {
+    run: IGetDataType;
+    name: GetDataTypeImpls;
+}
+
+interface GetDataTypeFunction {
+  registerImpl: (name: GetDataTypeImpls, impl: GetDataTypeImpl) => void;
+  getImpl: (name: GetDataTypeImpls) => GetDataTypeImpl;
+}
+
+function createGetDataTypeInstance(): IGetDataType & GetDataTypeFunction {
+
+  const registry: Record<GetDataTypeImpls, GetDataTypeImpl> = {}
+
+  const wrapper: GetDataTypeFunction = {
+    getImpl: (name: GetDataTypeImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for GetDataType with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: GetDataTypeImpls, cb: IGetDataType) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for GetDataType with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"GetDataType",
+          /* returnType */ "RaysData",
+          /* paramters */ [
+            [
+              "text",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            text: string
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for GetDataType: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    text: string
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IGetDataType & GetDataTypeFunction;
+}
+
+const GetDataType = createGetDataTypeInstance();
+
+type IGetOrderInfo = (args: {
+  email: Email
+}) => Promise<OrderInfo>
+
+type GetOrderInfoImpls = 'default_config';
+
+interface GetOrderInfoImpl {
+    run: IGetOrderInfo;
+    name: GetOrderInfoImpls;
+}
+
+interface GetOrderInfoFunction {
+  registerImpl: (name: GetOrderInfoImpls, impl: GetOrderInfoImpl) => void;
+  getImpl: (name: GetOrderInfoImpls) => GetOrderInfoImpl;
+}
+
+function createGetOrderInfoInstance(): IGetOrderInfo & GetOrderInfoFunction {
+
+  const registry: Record<GetOrderInfoImpls, GetOrderInfoImpl> = {}
+
+  const wrapper: GetOrderInfoFunction = {
+    getImpl: (name: GetOrderInfoImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for GetOrderInfo with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: GetOrderInfoImpls, cb: IGetOrderInfo) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for GetOrderInfo with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"GetOrderInfo",
+          /* returnType */ "OrderInfo",
+          /* paramters */ [
+            [
+              "email",
+              "Email"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            email: Email
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for GetOrderInfo: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    email: Email
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IGetOrderInfo & GetOrderInfoFunction;
+}
+
+const GetOrderInfo = createGetOrderInfoInstance();
+
+type IGetQuery = (args: {
+  query: string
+}) => Promise<SearchParams>
+
+type GetQueryImpls = 'default_config';
+
+interface GetQueryImpl {
+    run: IGetQuery;
+    name: GetQueryImpls;
+}
+
+interface GetQueryFunction {
+  registerImpl: (name: GetQueryImpls, impl: GetQueryImpl) => void;
+  getImpl: (name: GetQueryImpls) => GetQueryImpl;
+}
+
+function createGetQueryInstance(): IGetQuery & GetQueryFunction {
+
+  const registry: Record<GetQueryImpls, GetQueryImpl> = {}
+
+  const wrapper: GetQueryFunction = {
+    getImpl: (name: GetQueryImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for GetQuery with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: GetQueryImpls, cb: IGetQuery) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for GetQuery with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"GetQuery",
+          /* returnType */ "SearchParams",
+          /* paramters */ [
+            [
+              "query",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            query: string
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for GetQuery: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    query: string
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IGetQuery & GetQueryFunction;
+}
+
+const GetQuery = createGetQueryInstance();
+
 type IOptionalTest_Function = (arg: string) => Promise<OptionalTest_ReturnType | null[]>
 
 type OptionalTest_FunctionImpls = 'v1';
@@ -2276,5 +2969,5 @@ function createUnionTest_FunctionInstance(): IUnionTest_Function & UnionTest_Fun
 const UnionTest_Function = createUnionTest_FunctionInstance();
 
 
-export { FnClassOptional, IFnClassOptional, FnClassOptionalFunction, FnClassOptional2, IFnClassOptional2, FnClassOptional2Function, FnClassOptionalOutput, IFnClassOptionalOutput, FnClassOptionalOutputFunction, FnClassOptionalOutput2, IFnClassOptionalOutput2, FnClassOptionalOutput2Function, FnEnumListOutput, IFnEnumListOutput, FnEnumListOutputFunction, FnEnumOutput, IFnEnumOutput, FnEnumOutputFunction, FnNamedArgsSingleStringOptional, IFnNamedArgsSingleStringOptional, FnNamedArgsSingleStringOptionalFunction, FnOutputBool, IFnOutputBool, FnOutputBoolFunction, FnOutputClass, IFnOutputClass, FnOutputClassFunction, FnOutputClassList, IFnOutputClassList, FnOutputClassListFunction, FnOutputClassWithEnum, IFnOutputClassWithEnum, FnOutputClassWithEnumFunction, FnOutputStringList, IFnOutputStringList, FnOutputStringListFunction, FnStringOptional, IFnStringOptional, FnStringOptionalFunction, FnTestAliasedEnumOutput, IFnTestAliasedEnumOutput, FnTestAliasedEnumOutputFunction, FnTestClassAlias, IFnTestClassAlias, FnTestClassAliasFunction, FnTestClassOverride, IFnTestClassOverride, FnTestClassOverrideFunction, FnTestEnumOverride, IFnTestEnumOverride, FnTestEnumOverrideFunction, FnTestNamedArgsSingleEnum, IFnTestNamedArgsSingleEnum, FnTestNamedArgsSingleEnumFunction, FnTestOutputAdapter, IFnTestOutputAdapter, FnTestOutputAdapterFunction, OptionalTest_Function, IOptionalTest_Function, OptionalTest_FunctionFunction, PromptTest, IPromptTest, PromptTestFunction, TestFnNamedArgsSingleBool, ITestFnNamedArgsSingleBool, TestFnNamedArgsSingleBoolFunction, TestFnNamedArgsSingleClass, ITestFnNamedArgsSingleClass, TestFnNamedArgsSingleClassFunction, TestFnNamedArgsSingleEnumList, ITestFnNamedArgsSingleEnumList, TestFnNamedArgsSingleEnumListFunction, TestFnNamedArgsSingleFloat, ITestFnNamedArgsSingleFloat, TestFnNamedArgsSingleFloatFunction, TestFnNamedArgsSingleInt, ITestFnNamedArgsSingleInt, TestFnNamedArgsSingleIntFunction, TestFnNamedArgsSingleString, ITestFnNamedArgsSingleString, TestFnNamedArgsSingleStringFunction, TestFnNamedArgsSingleStringArray, ITestFnNamedArgsSingleStringArray, TestFnNamedArgsSingleStringArrayFunction, TestFnNamedArgsSingleStringList, ITestFnNamedArgsSingleStringList, TestFnNamedArgsSingleStringListFunction, TestFnNamedArgsSyntax, ITestFnNamedArgsSyntax, TestFnNamedArgsSyntaxFunction, UnionTest_Function, IUnionTest_Function, UnionTest_FunctionFunction }
+export { ClassifyMessage, IClassifyMessage, ClassifyMessageFunction, ClassifyMessage2, IClassifyMessage2, ClassifyMessage2Function, ClassifyMessage3, IClassifyMessage3, ClassifyMessage3Function, ExtractNames, IExtractNames, ExtractNamesFunction, ExtractResume, IExtractResume, ExtractResumeFunction, ExtractResume2, IExtractResume2, ExtractResume2Function, FnClassOptional, IFnClassOptional, FnClassOptionalFunction, FnClassOptional2, IFnClassOptional2, FnClassOptional2Function, FnClassOptionalOutput, IFnClassOptionalOutput, FnClassOptionalOutputFunction, FnClassOptionalOutput2, IFnClassOptionalOutput2, FnClassOptionalOutput2Function, FnEnumListOutput, IFnEnumListOutput, FnEnumListOutputFunction, FnEnumOutput, IFnEnumOutput, FnEnumOutputFunction, FnNamedArgsSingleStringOptional, IFnNamedArgsSingleStringOptional, FnNamedArgsSingleStringOptionalFunction, FnOutputBool, IFnOutputBool, FnOutputBoolFunction, FnOutputClass, IFnOutputClass, FnOutputClassFunction, FnOutputClassList, IFnOutputClassList, FnOutputClassListFunction, FnOutputClassWithEnum, IFnOutputClassWithEnum, FnOutputClassWithEnumFunction, FnOutputStringList, IFnOutputStringList, FnOutputStringListFunction, FnStringOptional, IFnStringOptional, FnStringOptionalFunction, FnTestAliasedEnumOutput, IFnTestAliasedEnumOutput, FnTestAliasedEnumOutputFunction, FnTestClassAlias, IFnTestClassAlias, FnTestClassAliasFunction, FnTestClassOverride, IFnTestClassOverride, FnTestClassOverrideFunction, FnTestEnumOverride, IFnTestEnumOverride, FnTestEnumOverrideFunction, FnTestNamedArgsSingleEnum, IFnTestNamedArgsSingleEnum, FnTestNamedArgsSingleEnumFunction, FnTestOutputAdapter, IFnTestOutputAdapter, FnTestOutputAdapterFunction, GetDataType, IGetDataType, GetDataTypeFunction, GetOrderInfo, IGetOrderInfo, GetOrderInfoFunction, GetQuery, IGetQuery, GetQueryFunction, OptionalTest_Function, IOptionalTest_Function, OptionalTest_FunctionFunction, PromptTest, IPromptTest, PromptTestFunction, TestFnNamedArgsSingleBool, ITestFnNamedArgsSingleBool, TestFnNamedArgsSingleBoolFunction, TestFnNamedArgsSingleClass, ITestFnNamedArgsSingleClass, TestFnNamedArgsSingleClassFunction, TestFnNamedArgsSingleEnumList, ITestFnNamedArgsSingleEnumList, TestFnNamedArgsSingleEnumListFunction, TestFnNamedArgsSingleFloat, ITestFnNamedArgsSingleFloat, TestFnNamedArgsSingleFloatFunction, TestFnNamedArgsSingleInt, ITestFnNamedArgsSingleInt, TestFnNamedArgsSingleIntFunction, TestFnNamedArgsSingleString, ITestFnNamedArgsSingleString, TestFnNamedArgsSingleStringFunction, TestFnNamedArgsSingleStringArray, ITestFnNamedArgsSingleStringArray, TestFnNamedArgsSingleStringArrayFunction, TestFnNamedArgsSingleStringList, ITestFnNamedArgsSingleStringList, TestFnNamedArgsSingleStringListFunction, TestFnNamedArgsSyntax, ITestFnNamedArgsSyntax, TestFnNamedArgsSyntaxFunction, UnionTest_Function, IUnionTest_Function, UnionTest_FunctionFunction }
 

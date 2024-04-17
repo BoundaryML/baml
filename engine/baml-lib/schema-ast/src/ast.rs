@@ -18,6 +18,7 @@ mod newline_type;
 mod printer_config;
 mod retry_policy_config;
 mod serializer;
+mod template_string;
 mod top;
 mod traits;
 mod variant;
@@ -44,6 +45,7 @@ pub use r#class::{Class, FieldId};
 pub use r#enum::{Enum, EnumValue, EnumValueId};
 pub use retry_policy_config::RetryPolicyConfig;
 pub use serializer::{Serializer, SerializerField, SerializerFieldId};
+pub use template_string::TemplateString;
 pub use top::Top;
 pub use traits::{WithAttributes, WithDocumentation, WithIdentifier, WithName, WithSpan};
 pub use variant::{
@@ -116,12 +118,18 @@ impl std::ops::Index<ClassId> for SchemaAst {
 /// An opaque identifier for a model in a schema AST. Use the
 /// `schema[model_id]` syntax to resolve the id to an `ast::Model`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct FunctionId(u32);
+pub struct FunctionId((bool, u32));
 impl std::ops::Index<FunctionId> for SchemaAst {
     type Output = Function;
 
     fn index(&self, index: FunctionId) -> &Self::Output {
-        self.tops[index.0 as usize].as_function().unwrap()
+        let (ver, idx) = index.0;
+        let var = &self.tops[idx as usize];
+        if ver {
+            var.as_function().unwrap()
+        } else {
+            var.as_function_old().unwrap()
+        }
     }
 }
 
@@ -164,6 +172,18 @@ impl std::ops::Index<VariantConfigId> for SchemaAst {
 /// An opaque identifier for a model in a schema AST. Use the
 /// `schema[model_id]` syntax to resolve the id to an `ast::Model`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct TemplateStringId(u32);
+impl std::ops::Index<TemplateStringId> for SchemaAst {
+    type Output = TemplateString;
+
+    fn index(&self, index: TemplateStringId) -> &Self::Output {
+        self.tops[index.0 as usize].as_template_string().unwrap()
+    }
+}
+
+/// An opaque identifier for a model in a schema AST. Use the
+/// `schema[model_id]` syntax to resolve the id to an `ast::Model`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ConfigurationId(u32);
 impl std::ops::Index<ConfigurationId> for SchemaAst {
     type Output = Configuration;
@@ -195,6 +215,9 @@ pub enum TopId {
     // A variant declaration
     Variant(VariantConfigId),
 
+    // Template Strings
+    TemplateString(TemplateStringId),
+
     // A config block
     Config((ConfigurationId, &'static str)),
 }
@@ -224,9 +247,22 @@ impl TopId {
     }
 
     /// Try to interpret the top as a function.
-    pub fn as_function_id(self) -> Option<FunctionId> {
+    // pub fn as_function_id(self) -> Option<FunctionId> {
+    //     match self {
+    //         TopId::Function(id) => Some(id),
+    //         _ => None,
+    //     }
+    // }
+
+    pub fn as_old_function_id(self) -> Option<FunctionId> {
         match self {
-            TopId::Function(id) => Some(id),
+            TopId::Function(id) if id.0 .0 == false => Some(id),
+            _ => None,
+        }
+    }
+    pub fn as_new_function_id(self) -> Option<FunctionId> {
+        match self {
+            TopId::Function(id) if id.0 .0 == true => Some(id),
             _ => None,
         }
     }
@@ -234,6 +270,13 @@ impl TopId {
     pub fn as_client_id(self) -> Option<ClientId> {
         match self {
             TopId::Client(id) => Some(id),
+            _ => None,
+        }
+    }
+
+    pub fn as_template_string_id(self) -> Option<TemplateStringId> {
+        match self {
+            TopId::TemplateString(id) => Some(id),
             _ => None,
         }
     }
@@ -267,7 +310,8 @@ impl std::ops::Index<TopId> for SchemaAst {
         let idx = match index {
             TopId::Enum(EnumId(idx)) => idx,
             TopId::Class(ClassId(idx)) => idx,
-            TopId::Function(FunctionId(idx)) => idx,
+            TopId::Function(FunctionId((_, idx))) => idx,
+            TopId::TemplateString(TemplateStringId(idx)) => idx,
             TopId::Client(ClientId(idx)) => idx,
             TopId::Generator(GeneratorConfigId(idx)) => idx,
             TopId::Variant(VariantConfigId(idx)) => idx,
@@ -282,8 +326,10 @@ fn top_idx_to_top_id(top_idx: usize, top: &Top) -> TopId {
     match top {
         Top::Enum(_) => TopId::Enum(EnumId(top_idx as u32)),
         Top::Class(_) => TopId::Class(ClassId(top_idx as u32)),
-        Top::Function(_) => TopId::Function(FunctionId(top_idx as u32)),
+        Top::FunctionOld(_) => TopId::Function(FunctionId((false, top_idx as u32))),
+        Top::Function(_) => TopId::Function(FunctionId((true, top_idx as u32))),
         Top::Client(_) => TopId::Client(ClientId(top_idx as u32)),
+        Top::TemplateString(_) => TopId::TemplateString(TemplateStringId(top_idx as u32)),
         Top::Generator(_) => TopId::Generator(GeneratorConfigId(top_idx as u32)),
         Top::Variant(_) => TopId::Variant(VariantConfigId(top_idx as u32)),
         Top::Config(c) => TopId::Config((ConfigurationId(top_idx as u32), c.get_type())),

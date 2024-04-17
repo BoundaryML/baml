@@ -1,5 +1,3 @@
-use pyo3::Python;
-
 use super::printer::Printer;
 
 pub(crate) fn setup_printer<'a>(

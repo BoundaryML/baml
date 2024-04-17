@@ -114,6 +114,12 @@ export function useSelections() {
     }
   }, [test_results_raw, func?.name.value])
 
+  const renderedTestCase = useMemo(() => {
+    let tc = func?.impls.flatMap((i) => i.prompt.test_case).filter((tc): tc is string => tc !== undefined);
+    if (!tc || tc.length === 0) return undefined;
+    return tc[0];
+  }, [func]);
+
   const test_results: (TestResult[] & { span?: StringSpan }) | undefined = useMemo(
     () => {
       return test_results_raw?.results.filter((tr) => tr.functionName == func?.name.value).map((tr) => {
@@ -164,6 +170,7 @@ export function useSelections() {
     test_result_exit_status,
     test_log,
     input_json_schema,
+    renderedTestCase,
   }
 }
 

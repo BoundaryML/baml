@@ -139,7 +139,7 @@ impl ParserDatabase {
 
     fn link_functions(&mut self, _diag: &mut Diagnostics) {
         let default_impl = self
-            .walk_functions()
+            .walk_old_functions()
             .filter_map(|f| {
                 if f.metadata().default_impl.is_none() {
                     return f.walk_variants().find_map(|v| {
@@ -150,10 +150,10 @@ impl ParserDatabase {
             })
             .collect::<Vec<_>>();
 
-        default_impl.iter().for_each(|(fid, impl_name, span)| {
+        default_impl.iter().for_each(|((_, fid), impl_name, span)| {
             self.types.function.get_mut(fid).unwrap().default_impl =
                 Some((impl_name.clone(), span.clone()))
-        })
+        });
     }
 
     fn finalize_dependencies(&mut self, diag: &mut Diagnostics) {

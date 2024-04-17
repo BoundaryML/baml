@@ -16,3 +16,4 @@ from enum import Enum
 })
 class EmptyEnum(str, Enum):
     pass
+    

@@ -13,8 +13,7 @@ from enum import Enum
 
 @register_deserializer({
   "ai": "AI",
-  "resident": "RESIDENT",
-
+  "resident": "RESIDENT"
 })
 class MessageSender(str, Enum):
     AI = "AI"

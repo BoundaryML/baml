@@ -1,4 +1,5 @@
 import typing
+from baml_core_ffi import TemplateStringMacro
 import typing_extensions
 
 from baml_core.provider_manager import (
@@ -109,7 +110,11 @@ class FallbackProvider(AbstractLLMProvider):
     async def _run_strategy(
         self,
         method_name: typing.Literal[
-            "run_prompt", "run_prompt_template", "run_chat", "run_chat_template"
+            "run_prompt",
+            "run_prompt_template",
+            "run_chat",
+            "run_chat_template",
+            "run_jinja_template",
         ],
         *args: typing.Any,
         **kwargs: typing.Any,
@@ -137,6 +142,7 @@ class FallbackProvider(AbstractLLMProvider):
             "run_prompt_template_stream",
             "run_chat_stream",
             "run_chat_template_stream",
+            "run_jinja_template_stream",
         ],
         *args: typing.Any,
         **kwargs: typing.Any,
@@ -169,6 +175,22 @@ class FallbackProvider(AbstractLLMProvider):
     ) -> LLMResponse:
         return await self._run_strategy(
             "run_prompt_template", template=template, replacers=replacers, params=params
+        )
+
+    async def _run_jinja_template_internal(
+        self,
+        *,
+        jinja_template: str,
+        args: typing.Dict[str, typing.Any],
+        output_schema: str,
+        template_macros: typing.List[TemplateStringMacro],
+    ) -> LLMResponse:
+        return await self._run_strategy(
+            "run_jinja_template",
+            jinja_template=jinja_template,
+            args=args,
+            template_macros=template_macros,
+            output_schema=output_schema,
         )
 
     async def _run_chat_internal(
@@ -227,5 +249,22 @@ class FallbackProvider(AbstractLLMProvider):
             *message_templates,
             replacers=replacers,
             params=params,
+        ):
+            yield r
+
+    async def _run_jinja_template_internal_stream(
+        self,
+        *,
+        jinja_template: str,
+        args: typing.Dict[str, typing.Any],
+        output_schema: str,
+        template_macros: typing.List[TemplateStringMacro],
+    ) -> typing.AsyncIterator[LLMResponse]:
+        async for r in self._stream_strategy(
+            "run_jinja_template_stream",
+            jinja_template=jinja_template,
+            args=args,
+            output_schema=output_schema,
+            template_macros=template_macros,
         ):
             yield r

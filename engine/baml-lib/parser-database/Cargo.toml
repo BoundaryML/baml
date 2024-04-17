@@ -8,6 +8,7 @@ description.workspace = true
 license-file.workspace = true
 
 [dependencies]
+internal-baml-jinja = { path = "../jinja" }
 internal-baml-diagnostics = { path = "../diagnostics" }
 internal-baml-schema-ast = { path = "../schema-ast" }
 internal-baml-prompt-parser = { path = "../prompt-parser" }
@@ -24,12 +25,5 @@ serde.workspace = true
 serde_json.workspace = true
 regex = "1.10.2"
 
-[dependencies.pyo3]
-version = "0.20.0"
-optional = true
-features = []
-
-
 [features]
-use-pyo3 = ["pyo3"]
 default = []

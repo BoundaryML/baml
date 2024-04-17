@@ -12,6 +12,77 @@ import { JSONSchema7 } from 'json-schema';
 
 const schema: JSONSchema7 = {
   "definitions": {
+    "Category": {
+      "title": "Category",
+      "enum": [
+        {
+          "const": "Refund"
+        },
+        {
+          "const": "CancelOrder"
+        },
+        {
+          "const": "TechnicalSupport"
+        },
+        {
+          "const": "AccountIssue"
+        },
+        {
+          "const": "Question"
+        }
+      ]
+    },
+    "Category2": {
+      "title": "Category2",
+      "enum": [
+        {
+          "const": "Refund"
+        },
+        {
+          "const": "CancelOrder"
+        },
+        {
+          "const": "TechnicalSupport"
+        },
+        {
+          "const": "AccountIssue"
+        },
+        {
+          "const": "Question"
+        }
+      ]
+    },
+    "Category3": {
+      "title": "Category3",
+      "enum": [
+        {
+          "const": "Refund"
+        },
+        {
+          "const": "CancelOrder"
+        },
+        {
+          "const": "TechnicalSupport"
+        },
+        {
+          "const": "AccountIssue"
+        },
+        {
+          "const": "Question"
+        }
+      ]
+    },
+    "DataType": {
+      "title": "DataType",
+      "enum": [
+        {
+          "const": "Resume"
+        },
+        {
+          "const": "Event"
+        }
+      ]
+    },
     "EnumInClass": {
       "title": "EnumInClass",
       "enum": [
@@ -73,6 +144,23 @@ const schema: JSONSchema7 = {
         }
       ]
     },
+    "OrderStatus": {
+      "title": "OrderStatus",
+      "enum": [
+        {
+          "const": "ORDERED"
+        },
+        {
+          "const": "SHIPPED"
+        },
+        {
+          "const": "DELIVERED"
+        },
+        {
+          "const": "CANCELLED"
+        }
+      ]
+    },
     "OverrideEnum": {
       "title": "OverrideEnum",
       "enum": [
@@ -81,6 +169,20 @@ const schema: JSONSchema7 = {
         },
         {
           "const": "TWO"
+        }
+      ]
+    },
+    "Tag": {
+      "title": "Tag",
+      "enum": [
+        {
+          "const": "Security"
+        },
+        {
+          "const": "AI"
+        },
+        {
+          "const": "Blockchain"
         }
       ]
     },
@@ -215,6 +317,50 @@ const schema: JSONSchema7 = {
         "prop3"
       ]
     },
+    "Email": {
+      "title": "Email",
+      "type": "object",
+      "properties": {
+        "subject": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string"
+        },
+        "from_address": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "subject",
+        "body",
+        "from_address"
+      ]
+    },
+    "Event": {
+      "title": "Event",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "date": {
+          "type": "string"
+        },
+        "location": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "date",
+        "location",
+        "description"
+      ]
+    },
     "ModifiedOutput": {
       "title": "ModifiedOutput",
       "type": "object",
@@ -328,6 +474,32 @@ const schema: JSONSchema7 = {
         "omega_3"
       ]
     },
+    "OrderInfo": {
+      "title": "OrderInfo",
+      "type": "object",
+      "properties": {
+        "order_status": {
+          "$ref": "#/definitions/OrderStatus"
+        },
+        "tracking_number": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "estimated_arrival_date": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "order_status"
+      ]
+    },
     "OverrideClass": {
       "title": "OverrideClass",
       "type": "object",
@@ -342,6 +514,143 @@ const schema: JSONSchema7 = {
       "required": [
         "prop1",
         "prop2"
+      ]
+    },
+    "RaysData": {
+      "title": "RaysData",
+      "type": "object",
+      "properties": {
+        "dataType": {
+          "$ref": "#/definitions/DataType"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Resume",
+              "title": "Resume"
+            },
+            {
+              "$ref": "#/definitions/Event",
+              "title": "Event"
+            }
+          ]
+        }
+      },
+      "required": [
+        "dataType",
+        "value"
+      ]
+    },
+    "Resume": {
+      "title": "Resume",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "experience": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "education": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "skills": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "name",
+        "email",
+        "phone",
+        "experience",
+        "education",
+        "skills"
+      ]
+    },
+    "SearchParams": {
+      "title": "SearchParams",
+      "type": "object",
+      "properties": {
+        "dateRange": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "default": null
+        },
+        "location": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "jobTitle": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/WithReasoning",
+              "title": "WithReasoning"
+            },
+            {
+              "type": "null",
+              "title": "null"
+            }
+          ],
+          "default": null
+        },
+        "company": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/WithReasoning",
+              "title": "WithReasoning"
+            },
+            {
+              "type": "null",
+              "title": "null"
+            }
+          ],
+          "default": null
+        },
+        "description": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/WithReasoning"
+          }
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/Tag",
+                "title": "Tag"
+              },
+              {
+                "type": "string",
+                "title": "string"
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "location",
+        "description",
+        "tags"
       ]
     },
     "SomeClass2": {
@@ -476,6 +785,94 @@ const schema: JSONSchema7 = {
         "prop3"
       ]
     },
+    "WithReasoning": {
+      "title": "WithReasoning",
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string"
+        },
+        "reasoning": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value",
+        "reasoning"
+      ]
+    },
+    "ClassifyMessage_input": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "input"
+      ],
+      "title": "ClassifyMessage input"
+    },
+    "ClassifyMessage2_input": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "input"
+      ],
+      "title": "ClassifyMessage2 input"
+    },
+    "ClassifyMessage3_input": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "input"
+      ],
+      "title": "ClassifyMessage3 input"
+    },
+    "ExtractNames_input": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "input"
+      ],
+      "title": "ExtractNames input"
+    },
+    "ExtractResume_input": {
+      "type": "object",
+      "properties": {
+        "resume": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "resume"
+      ],
+      "title": "ExtractResume input"
+    },
+    "ExtractResume2_input": {
+      "type": "object",
+      "properties": {
+        "resume": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "resume"
+      ],
+      "title": "ExtractResume2 input"
+    },
     "FnClassOptional_input": {
       "anyOf": [
         {
@@ -583,6 +980,42 @@ const schema: JSONSchema7 = {
     "FnTestOutputAdapter_input": {
       "type": "string",
       "title": "FnTestOutputAdapter input"
+    },
+    "GetDataType_input": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "GetDataType input"
+    },
+    "GetOrderInfo_input": {
+      "type": "object",
+      "properties": {
+        "email": {
+          "$ref": "#/definitions/Email"
+        }
+      },
+      "required": [
+        "email"
+      ],
+      "title": "GetOrderInfo input"
+    },
+    "GetQuery_input": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "title": "GetQuery input"
     },
     "OptionalTest_Function_input": {
       "type": "string",
@@ -707,6 +1140,33 @@ const schema: JSONSchema7 = {
       ],
       "title": "UnionTest_Function input"
     },
+    "ClassifyMessage_output": {
+      "$ref": "#/definitions/Category",
+      "title": "ClassifyMessage output"
+    },
+    "ClassifyMessage2_output": {
+      "$ref": "#/definitions/Category",
+      "title": "ClassifyMessage2 output"
+    },
+    "ClassifyMessage3_output": {
+      "$ref": "#/definitions/Category",
+      "title": "ClassifyMessage3 output"
+    },
+    "ExtractNames_output": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "ExtractNames output"
+    },
+    "ExtractResume_output": {
+      "$ref": "#/definitions/Resume",
+      "title": "ExtractResume output"
+    },
+    "ExtractResume2_output": {
+      "$ref": "#/definitions/Resume",
+      "title": "ExtractResume2 output"
+    },
     "FnClassOptional_output": {
       "type": "string",
       "title": "FnClassOptional output"
@@ -812,6 +1272,18 @@ const schema: JSONSchema7 = {
       "type": "string",
       "title": "FnTestOutputAdapter output"
     },
+    "GetDataType_output": {
+      "$ref": "#/definitions/RaysData",
+      "title": "GetDataType output"
+    },
+    "GetOrderInfo_output": {
+      "$ref": "#/definitions/OrderInfo",
+      "title": "GetOrderInfo output"
+    },
+    "GetQuery_output": {
+      "$ref": "#/definitions/SearchParams",
+      "title": "GetQuery output"
+    },
     "OptionalTest_Function_output": {
       "type": "array",
       "items": {
@@ -876,6 +1348,31 @@ const schema: JSONSchema7 = {
   }
 };
 
+registerEnumDeserializer(schema.definitions.Category, {
+
+});
+
+registerEnumDeserializer(schema.definitions.Category2, {
+
+});
+
+registerEnumDeserializer(schema.definitions.Category3, {
+  "k1": "Refund",
+  "k1: Customer wants to refund a product": "Refund",
+  "k2": "CancelOrder",
+  "k2: Customer wants to cancel an order": "CancelOrder",
+  "k3": "TechnicalSupport",
+  "k3: Customer needs help with a technical issue unrelated to account creation or login": "TechnicalSupport",
+  "k4": "AccountIssue",
+  "k4: Specifically relates to account-login or account-creation": "AccountIssue",
+  "k5": "Question",
+  "k5: Customer has a question": "Question"
+});
+
+registerEnumDeserializer(schema.definitions.DataType, {
+
+});
+
 registerEnumDeserializer(schema.definitions.EnumInClass, {
 
 });
@@ -896,7 +1393,15 @@ registerEnumDeserializer(schema.definitions.OptionalTest_CategoryType, {
 
 });
 
+registerEnumDeserializer(schema.definitions.OrderStatus, {
+
+});
+
 registerEnumDeserializer(schema.definitions.OverrideEnum, {
+
+});
+
+registerEnumDeserializer(schema.definitions.Tag, {
 
 });
 
@@ -936,6 +1441,14 @@ registerObjectDeserializer(schema.definitions.DynamicPropsClass, {
 
 });
 
+registerObjectDeserializer(schema.definitions.Email, {
+
+});
+
+registerObjectDeserializer(schema.definitions.Event, {
+
+});
+
 registerObjectDeserializer(schema.definitions.ModifiedOutput, {
   "REASONING": "reasoning",
   "ANSWER": "answer"
@@ -957,7 +1470,23 @@ registerObjectDeserializer(schema.definitions.OptionalTest_ReturnType, {
 
 });
 
+registerObjectDeserializer(schema.definitions.OrderInfo, {
+
+});
+
 registerObjectDeserializer(schema.definitions.OverrideClass, {
+
+});
+
+registerObjectDeserializer(schema.definitions.RaysData, {
+
+});
+
+registerObjectDeserializer(schema.definitions.Resume, {
+
+});
+
+registerObjectDeserializer(schema.definitions.SearchParams, {
 
 });
 
@@ -981,6 +1510,10 @@ registerObjectDeserializer(schema.definitions.TestOutputClass, {
 });
 
 registerObjectDeserializer(schema.definitions.UnionTest_ReturnType, {
+
+});
+
+registerObjectDeserializer(schema.definitions.WithReasoning, {
 
 });
 

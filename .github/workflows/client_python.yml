@@ -43,6 +43,11 @@ jobs:
           poetry install --no-root
         working-directory: clients/python
 
+      - name: Build FFI
+        run: |
+          ./tools/build clients/python
+        working-directory: ./
+
       - name: Lint Python Client
         run: |
           poetry run mypy .

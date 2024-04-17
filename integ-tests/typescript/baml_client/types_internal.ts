@@ -6,8 +6,28 @@
 /* eslint-disable */
 
 
-import { Blah, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, DynamicPropsClass, EnumInClass, EnumOutput, ModifiedOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalClass, OptionalTest_CategoryType, OptionalTest_Prop1, OptionalTest_ReturnType, OverrideClass, OverrideEnum, SomeClass2, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass, UnionTest_ReturnType } from './types';
+import { Blah, Category, Category2, Category3, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, DataType, DynamicPropsClass, Email, EnumInClass, EnumOutput, Event, ModifiedOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalClass, OptionalTest_CategoryType, OptionalTest_Prop1, OptionalTest_ReturnType, OrderInfo, OrderStatus, OverrideClass, OverrideEnum, RaysData, Resume, SearchParams, SomeClass2, Tag, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass, UnionTest_ReturnType, WithReasoning } from './types';
 
+
+// Function to check if a value is a member of the Category enum
+function isCategory(value: any): value is Category {
+  return Object.values(Category).includes(value);
+}
+
+// Function to check if a value is a member of the Category2 enum
+function isCategory2(value: any): value is Category2 {
+  return Object.values(Category2).includes(value);
+}
+
+// Function to check if a value is a member of the Category3 enum
+function isCategory3(value: any): value is Category3 {
+  return Object.values(Category3).includes(value);
+}
+
+// Function to check if a value is a member of the DataType enum
+function isDataType(value: any): value is DataType {
+  return Object.values(DataType).includes(value);
+}
 
 // Function to check if a value is a member of the EnumInClass enum
 function isEnumInClass(value: any): value is EnumInClass {
@@ -34,9 +54,19 @@ function isOptionalTest_CategoryType(value: any): value is OptionalTest_Category
   return Object.values(OptionalTest_CategoryType).includes(value);
 }
 
+// Function to check if a value is a member of the OrderStatus enum
+function isOrderStatus(value: any): value is OrderStatus {
+  return Object.values(OrderStatus).includes(value);
+}
+
 // Function to check if a value is a member of the OverrideEnum enum
 function isOverrideEnum(value: any): value is OverrideEnum {
   return Object.values(OverrideEnum).includes(value);
+}
+
+// Function to check if a value is a member of the Tag enum
+function isTag(value: any): value is Tag {
+  return Object.values(Tag).includes(value);
 }
 
 // Function to check if a value is a member of the TestEnum enum
@@ -244,6 +274,98 @@ return this.prop1 + this.prop2
   }
 }
 
+// Function to validate if an object is a Email object
+function isEmail(obj: any): obj is Email {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("subject" in obj && (typeof obj.subject === 'string'))
+    && ("body" in obj && (typeof obj.body === 'string'))
+    && ("from_address" in obj && (typeof obj.from_address === 'string'))
+  );
+}
+
+
+class InternalEmail implements Email {
+  private constructor(private data: {
+    subject: string,
+    body: string,
+    from_address: string,
+  }, private raw: Email) {}
+
+  static from(data: Email): InternalEmail {
+    return new InternalEmail({
+      subject: data.subject,
+      body: data.body,
+      from_address: data.from_address,
+    }, data);
+  }
+
+  get subject(): string {
+    return this.data.subject;
+  }
+  get body(): string {
+    return this.data.body;
+  }
+  get from_address(): string {
+    return this.data.from_address;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
+// Function to validate if an object is a Event object
+function isEvent(obj: any): obj is Event {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("title" in obj && (typeof obj.title === 'string'))
+    && ("date" in obj && (typeof obj.date === 'string'))
+    && ("location" in obj && (typeof obj.location === 'string'))
+    && ("description" in obj && (typeof obj.description === 'string'))
+  );
+}
+
+
+class InternalEvent implements Event {
+  private constructor(private data: {
+    title: string,
+    date: string,
+    location: string,
+    description: string,
+  }, private raw: Event) {}
+
+  static from(data: Event): InternalEvent {
+    return new InternalEvent({
+      title: data.title,
+      date: data.date,
+      location: data.location,
+      description: data.description,
+    }, data);
+  }
+
+  get title(): string {
+    return this.data.title;
+  }
+  get date(): string {
+    return this.data.date;
+  }
+  get location(): string {
+    return this.data.location;
+  }
+  get description(): string {
+    return this.data.description;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
 // Function to validate if an object is a ModifiedOutput object
 function isModifiedOutput(obj: any): obj is ModifiedOutput {
   return (
@@ -441,6 +563,49 @@ class InternalOptionalTest_ReturnType implements OptionalTest_ReturnType {
   }
 }
 
+// Function to validate if an object is a OrderInfo object
+function isOrderInfo(obj: any): obj is OrderInfo {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("order_status" in obj && (isOrderStatus(obj.order_status)))
+    && ("tracking_number" in obj && ((obj.tracking_number === null || obj.tracking_number === undefined) || typeof obj.tracking_number === 'string'))
+    && ("estimated_arrival_date" in obj && ((obj.estimated_arrival_date === null || obj.estimated_arrival_date === undefined) || typeof obj.estimated_arrival_date === 'string'))
+  );
+}
+
+
+class InternalOrderInfo implements OrderInfo {
+  private constructor(private data: {
+    order_status: OrderStatus,
+    tracking_number: string | null,
+    estimated_arrival_date: string | null,
+  }, private raw: OrderInfo) {}
+
+  static from(data: OrderInfo): InternalOrderInfo {
+    return new InternalOrderInfo({
+      order_status: data.order_status,
+      tracking_number: (data.tracking_number === null || data.tracking_number === undefined) ? null : data.tracking_number,
+      estimated_arrival_date: (data.estimated_arrival_date === null || data.estimated_arrival_date === undefined) ? null : data.estimated_arrival_date,
+    }, data);
+  }
+
+  get order_status(): OrderStatus {
+    return this.data.order_status;
+  }
+  get tracking_number(): string | null {
+    return this.data.tracking_number;
+  }
+  get estimated_arrival_date(): string | null {
+    return this.data.estimated_arrival_date;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
 // Function to validate if an object is a OverrideClass object
 function isOverrideClass(obj: any): obj is OverrideClass {
   return (
@@ -470,6 +635,179 @@ class InternalOverrideClass implements OverrideClass {
   }
   get prop2(): string {
     return this.data.prop2;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
+// Function to validate if an object is a RaysData object
+function isRaysData(obj: any): obj is RaysData {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("dataType" in obj && (isDataType(obj.dataType)))
+    && ("value" in obj && ((isResume(obj.value)) || (isEvent(obj.value))))
+  );
+}
+
+
+class InternalRaysData implements RaysData {
+  private constructor(private data: {
+    dataType: DataType,
+    value: Resume | Event,
+  }, private raw: RaysData) {}
+
+  static from(data: RaysData): InternalRaysData {
+    return new InternalRaysData({
+      dataType: data.dataType,
+      value: ((x) => {
+if (isResume(x)) {
+  return new InternalResume(x);
+}
+if (isEvent(x)) {
+  return new InternalEvent(x);
+}
+})(data.value),
+    }, data);
+  }
+
+  get dataType(): DataType {
+    return this.data.dataType;
+  }
+  get value(): Resume | Event {
+    return this.data.value;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
+// Function to validate if an object is a Resume object
+function isResume(obj: any): obj is Resume {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("name" in obj && (typeof obj.name === 'string'))
+    && ("email" in obj && (typeof obj.email === 'string'))
+    && ("phone" in obj && (typeof obj.phone === 'string'))
+    && ("experience" in obj && (Array.isArray(obj.experience) && obj.experience.every((x: any) => typeof x === 'string')))
+    && ("education" in obj && (Array.isArray(obj.education) && obj.education.every((x: any) => typeof x === 'string')))
+    && ("skills" in obj && (Array.isArray(obj.skills) && obj.skills.every((x: any) => typeof x === 'string')))
+  );
+}
+
+
+class InternalResume implements Resume {
+  private constructor(private data: {
+    name: string,
+    email: string,
+    phone: string,
+    experience: string[],
+    education: string[],
+    skills: string[],
+  }, private raw: Resume) {}
+
+  static from(data: Resume): InternalResume {
+    return new InternalResume({
+      name: data.name,
+      email: data.email,
+      phone: data.phone,
+      experience: data.experience.map(x => x),
+      education: data.education.map(x => x),
+      skills: data.skills.map(x => x),
+    }, data);
+  }
+
+  get name(): string {
+    return this.data.name;
+  }
+  get email(): string {
+    return this.data.email;
+  }
+  get phone(): string {
+    return this.data.phone;
+  }
+  get experience(): string[] {
+    return this.data.experience;
+  }
+  get education(): string[] {
+    return this.data.education;
+  }
+  get skills(): string[] {
+    return this.data.skills;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
+// Function to validate if an object is a SearchParams object
+function isSearchParams(obj: any): obj is SearchParams {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("dateRange" in obj && ((obj.dateRange === null || obj.dateRange === undefined) || typeof obj.dateRange === 'number'))
+    && ("location" in obj && (Array.isArray(obj.location) && obj.location.every((x: any) => typeof x === 'string')))
+    && ("jobTitle" in obj && ((obj.jobTitle === null || obj.jobTitle === undefined) || isWithReasoning(obj.jobTitle)))
+    && ("company" in obj && ((obj.company === null || obj.company === undefined) || isWithReasoning(obj.company)))
+    && ("description" in obj && (Array.isArray(obj.description) && obj.description.every((x: any) => isWithReasoning(x))))
+    && ("tags" in obj && (Array.isArray(obj.tags) && obj.tags.every((x: any) => (isTag(x)) || (typeof x === 'string'))))
+  );
+}
+
+
+class InternalSearchParams implements SearchParams {
+  private constructor(private data: {
+    dateRange: number | null,
+    location: string[],
+    jobTitle: WithReasoning | null,
+    company: WithReasoning | null,
+    description: InternalWithReasoning[],
+    tags: Tag | string[],
+  }, private raw: SearchParams) {}
+
+  static from(data: SearchParams): InternalSearchParams {
+    return new InternalSearchParams({
+      dateRange: (data.dateRange === null || data.dateRange === undefined) ? null : data.dateRange,
+      location: data.location.map(x => x),
+      jobTitle: (data.jobTitle === null || data.jobTitle === undefined) ? null : new InternalWithReasoning(data.jobTitle),
+      company: (data.company === null || data.company === undefined) ? null : new InternalWithReasoning(data.company),
+      description: data.description.map(x => new InternalWithReasoning(x)),
+      tags: data.tags.map(x => ((x) => {
+if (isTag(x)) {
+  return x;
+}
+if (typeof x === 'string') {
+  return x;
+}
+})(x)),
+    }, data);
+  }
+
+  get dateRange(): number | null {
+    return this.data.dateRange;
+  }
+  get location(): string[] {
+    return this.data.location;
+  }
+  get jobTitle(): WithReasoning | null {
+    return this.data.jobTitle;
+  }
+  get company(): WithReasoning | null {
+    return this.data.company;
+  }
+  get description(): InternalWithReasoning[] {
+    return this.data.description;
+  }
+  get tags(): Tag | string[] {
+    return this.data.tags;
   }
 
 
@@ -708,6 +1046,43 @@ if (Array.isArray(x) && x.every((x: any) => typeof x === 'boolean')) {
   }
 }
 
+// Function to validate if an object is a WithReasoning object
+function isWithReasoning(obj: any): obj is WithReasoning {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("value" in obj && (typeof obj.value === 'string'))
+    && ("reasoning" in obj && (typeof obj.reasoning === 'string'))
+  );
+}
 
-export { InternalBlah, InternalClassOptionalFields, InternalClassOptionalOutput, InternalClassOptionalOutput2, InternalDynamicPropsClass, InternalModifiedOutput, InternalNamedArgsSingleClass, InternalOptionalClass, InternalOptionalTest_Prop1, InternalOptionalTest_ReturnType, InternalOverrideClass, InternalSomeClass2, InternalTestClassAlias, InternalTestClassWithEnum, InternalTestOutputClass, InternalUnionTest_ReturnType }
+
+class InternalWithReasoning implements WithReasoning {
+  private constructor(private data: {
+    value: string,
+    reasoning: string,
+  }, private raw: WithReasoning) {}
+
+  static from(data: WithReasoning): InternalWithReasoning {
+    return new InternalWithReasoning({
+      value: data.value,
+      reasoning: data.reasoning,
+    }, data);
+  }
+
+  get value(): string {
+    return this.data.value;
+  }
+  get reasoning(): string {
+    return this.data.reasoning;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
+
+export { InternalBlah, InternalClassOptionalFields, InternalClassOptionalOutput, InternalClassOptionalOutput2, InternalDynamicPropsClass, InternalEmail, InternalEvent, InternalModifiedOutput, InternalNamedArgsSingleClass, InternalOptionalClass, InternalOptionalTest_Prop1, InternalOptionalTest_ReturnType, InternalOrderInfo, InternalOverrideClass, InternalRaysData, InternalResume, InternalSearchParams, InternalSomeClass2, InternalTestClassAlias, InternalTestClassWithEnum, InternalTestOutputClass, InternalUnionTest_ReturnType, InternalWithReasoning }
 

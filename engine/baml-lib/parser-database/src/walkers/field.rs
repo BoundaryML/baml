@@ -7,6 +7,7 @@ use crate::{
 };
 
 use super::{ClassWalker, VariantWalker, Walker};
+use internal_baml_jinja::Type;
 use internal_baml_schema_ast::ast::{self, FieldType, Identifier, WithName};
 use serde_json::json;
 
@@ -76,7 +77,11 @@ impl<'db> WithName for FieldWalker<'db> {
 }
 
 impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
-    fn serialize_data(&self, variant: &VariantWalker<'_>) -> serde_json::Value {
+    fn serialize_data(
+        &self,
+        variant: Option<&VariantWalker<'_>>,
+        db: &'_ ParserDatabase,
+    ) -> serde_json::Value {
         match self.1 {
             FieldType::Tuple(..) | FieldType::Dictionary(..) => json!({
                 "rtype": "unsupported",
@@ -85,12 +90,12 @@ impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
             FieldType::Union(arity, fts, _) => json!({
                 "rtype": "union",
                 "optional": arity.is_optional(),
-                "options": fts.iter().map(|ft| (self.0, ft).serialize_data(variant)).collect::<Vec<_>>(),
+                "options": fts.iter().map(|ft| (self.0, ft).serialize_data(variant, db)).collect::<Vec<_>>(),
             }),
             FieldType::List(ft, dims, _) => json!({
                 "rtype": "list",
                 "dims": dims,
-                "inner": (self.0, ft.deref()).serialize_data(variant),
+                "inner": (self.0, ft.deref()).serialize_data(variant, db),
             }),
             FieldType::Identifier(arity, Identifier::Primitive(name, ..)) => {
                 json!({
@@ -109,7 +114,7 @@ impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
             FieldType::Identifier(arity, Identifier::Local(name, ..)) => {
                 match self.0.find_type_by_str(name) {
                     Some(either::Either::Left(cls)) => {
-                        let mut class_type = cls.serialize_data(variant);
+                        let mut class_type = cls.serialize_data(variant, db);
                         let Some(obj) = class_type.as_object_mut() else {
                             return class_type;
                         };
@@ -120,7 +125,7 @@ impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
                         json!({
                             "rtype": "enum",
                             "optional": arity.is_optional(),
-                            "name": enm.alias(variant),
+                            "name": enm.alias(variant, db),
                         })
                     }
                     None => json!({
@@ -135,11 +140,15 @@ impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
 }
 
 impl<'db> WithSerializeableContent for FieldWalker<'db> {
-    fn serialize_data(&self, variant: &VariantWalker<'_>) -> serde_json::Value {
+    fn serialize_data(
+        &self,
+        variant: Option<&VariantWalker<'_>>,
+        db: &'_ ParserDatabase,
+    ) -> serde_json::Value {
         json!({
-            "name": self.alias(variant),
-            "meta": self.meta(variant),
-            "type_meta": (self.db, self.r#type()).serialize_data(variant),
+            "name": self.alias(variant, db),
+            "meta": self.meta(variant, db),
+            "type_meta": (self.db, self.r#type()).serialize_data(variant, db),
         })
     }
 }
@@ -155,5 +164,58 @@ impl<'db> WithStaticRenames<'db> for FieldWalker<'db> {
             .class_attributes
             .get(&self.id.0)
             .and_then(|f| f.field_serilizers.get(&self.id.1))
+    }
+}
+
+/// Convert a field type to a `Type`.
+pub fn to_type(ft: &FieldType) -> Type {
+    match ft {
+        FieldType::Identifier(arity, idn) => {
+            let t = match idn {
+                ast::Identifier::ENV(_, _) => Type::String,
+                ast::Identifier::Ref(x, _) => Type::ClassRef(x.full_name.clone()),
+                ast::Identifier::Local(_, _) => Type::String,
+                ast::Identifier::Primitive(idx, _) => match idx {
+                    ast::TypeValue::String => Type::String,
+                    ast::TypeValue::Int => Type::Int,
+                    ast::TypeValue::Float => Type::Float,
+                    ast::TypeValue::Bool => Type::Bool,
+                    ast::TypeValue::Char => Type::String,
+                    ast::TypeValue::Null => Type::None,
+                },
+                ast::Identifier::String(_, _) => Type::String,
+                ast::Identifier::Invalid(_, _) => Type::Unknown,
+            };
+            if arity.is_optional() {
+                Type::None | t
+            } else {
+                t
+            }
+        }
+        FieldType::List(inner, dims, _) => {
+            let mut t = to_type(inner);
+            for _ in 0..*dims {
+                t = Type::List(Box::new(t));
+            }
+            t
+        }
+        FieldType::Tuple(airty, c, _) => {
+            let mut t = Type::Tuple(c.iter().map(|f| to_type(f)).collect());
+            if airty.is_optional() {
+                t = Type::None | t;
+            }
+            t
+        }
+        FieldType::Union(arity, options, _) => {
+            let mut t = Type::Union(options.iter().map(|f| to_type(f)).collect());
+            if arity.is_optional() {
+                t = Type::None | t;
+            }
+            t
+        }
+        FieldType::Dictionary(kv, _) => {
+            let t = Type::Map(Box::new(to_type(&kv.0)), Box::new(to_type(&kv.1)));
+            t
+        }
     }
 }

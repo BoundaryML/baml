@@ -12,6 +12,7 @@ license-file.workspace = true
 crate-type = ["cdylib"]
 
 [dependencies]
+internal-baml-jinja = { path = "../baml-lib/jinja" }
 napi = { version = "2", features = ["serde-json", "anyhow", "async"] }
 napi-derive = "2"
 anyhow.workspace = true

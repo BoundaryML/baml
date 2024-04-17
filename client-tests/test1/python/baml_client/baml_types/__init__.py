@@ -7,17 +7,18 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
+from ..__do_not_import.functions.fx_analyzeproductreview import IAnalyzeProductReview, IAnalyzeProductReviewOutput, IAnalyzeProductReviewStream
 from ..__do_not_import.functions.fx_booleanfunc import IBooleanFunc, IBooleanFuncOutput, IBooleanFuncStream
 from ..__do_not_import.functions.fx_classfunc import IClassFunc, IClassFuncOutput, IClassFuncStream
 from ..__do_not_import.functions.fx_classifytool import IClassifyTool, IClassifyToolOutput, IClassifyToolStream
 from ..__do_not_import.functions.fx_enumfunc import IEnumFunc, IEnumFuncOutput, IEnumFuncStream
+from ..__do_not_import.functions.fx_haikualpha import IHaikuAlpha, IHaikuAlphaOutput, IHaikuAlphaStream
 from ..__do_not_import.functions.fx_intfunc import IIntFunc, IIntFuncOutput, IIntFuncStream
 from ..__do_not_import.functions.fx_maybepolishtext import IMaybePolishText, IMaybePolishTextOutput, IMaybePolishTextStream
 from ..__do_not_import.functions.fx_messagesimplifier import IMessageSimplifier, IMessageSimplifierOutput, IMessageSimplifierStream
 from ..__do_not_import.functions.fx_namedfunc import INamedfunc, INamedfuncOutput, INamedfuncStream
 from ..__do_not_import.functions.fx_optionalfunc import IOptionalFunc, IOptionalFuncOutput, IOptionalFuncStream
 from ..__do_not_import.functions.fx_optionalnamedfunc import IOptionalNamedFunc, IOptionalNamedFuncOutput, IOptionalNamedFuncStream
-from ..__do_not_import.functions.fx_optionaltest_function import IOptionalTest_Function, IOptionalTest_FunctionOutput, IOptionalTest_FunctionStream
 from ..__do_not_import.functions.fx_stringfunc import IStringFunc, IStringFuncOutput, IStringFuncStream
 from ..__do_not_import.types.classes.cls_basicclass import BasicClass
 from ..__do_not_import.types.classes.cls_classifyresponse import ClassifyResponse
@@ -28,13 +29,13 @@ from ..__do_not_import.types.classes.cls_hi import Hi
 from ..__do_not_import.types.classes.cls_improvedresponse import ImprovedResponse
 from ..__do_not_import.types.classes.cls_message import Message
 from ..__do_not_import.types.classes.cls_optionalobject import OptionalObject
-from ..__do_not_import.types.classes.cls_optionaltest_prop1 import OptionalTest_Prop1
-from ..__do_not_import.types.classes.cls_optionaltest_returntype import OptionalTest_ReturnType
 from ..__do_not_import.types.classes.cls_proposedmessage import ProposedMessage
+from ..__do_not_import.types.classes.cls_reviewanalysis import ReviewAnalysis
 from ..__do_not_import.types.enums.enm_categories import Categories
 from ..__do_not_import.types.enums.enm_emptyenum import EmptyEnum
 from ..__do_not_import.types.enums.enm_messagesender import MessageSender
-from ..__do_not_import.types.enums.enm_optionaltest_categorytype import OptionalTest_CategoryType
+from ..__do_not_import.types.enums.enm_reviewhelpfulness import ReviewHelpfulness
+from ..__do_not_import.types.enums.enm_reviewsentiment import ReviewSentiment
 from ..__do_not_import.types.enums.enm_sentiment import Sentiment
 from ..__do_not_import.types.enums.enm_tool import Tool
 
@@ -50,6 +51,9 @@ __all__ = [
     'EmptyEnum',
     'Haiku',
     'Hi',
+    'IAnalyzeProductReview',
+    'IAnalyzeProductReviewOutput',
+    'IAnalyzeProductReviewStream',
     'IBooleanFunc',
     'IBooleanFuncOutput',
     'IBooleanFuncStream',
@@ -62,6 +66,9 @@ __all__ = [
     'IEnumFunc',
     'IEnumFuncOutput',
     'IEnumFuncStream',
+    'IHaikuAlpha',
+    'IHaikuAlphaOutput',
+    'IHaikuAlphaStream',
     'IIntFunc',
     'IIntFuncOutput',
     'IIntFuncStream',
@@ -80,9 +87,6 @@ __all__ = [
     'IOptionalNamedFunc',
     'IOptionalNamedFuncOutput',
     'IOptionalNamedFuncStream',
-    'IOptionalTest_Function',
-    'IOptionalTest_FunctionOutput',
-    'IOptionalTest_FunctionStream',
     'IStringFunc',
     'IStringFuncOutput',
     'IStringFuncStream',
@@ -90,10 +94,10 @@ __all__ = [
     'Message',
     'MessageSender',
     'OptionalObject',
-    'OptionalTest_CategoryType',
-    'OptionalTest_Prop1',
-    'OptionalTest_ReturnType',
     'ProposedMessage',
+    'ReviewAnalysis',
+    'ReviewHelpfulness',
+    'ReviewSentiment',
     'Sentiment',
     'Tool'
 ]

@@ -33,14 +33,14 @@ class INamedfunc(Protocol):
     This is the interface for a function.
 
     Args:
-        name: BasicClass
         address: str
+        name: BasicClass
 
     Returns:
         str
     """
 
-    async def __call__(self, *, name: BasicClass, address: str) -> str:
+    async def __call__(self, *, address: str, name: BasicClass) -> str:
         ...
 
    
@@ -51,21 +51,21 @@ class INamedfuncStream(Protocol):
     This is the interface for a stream function.
 
     Args:
-        name: BasicClass
         address: str
+        name: BasicClass
 
     Returns:
         AsyncStream[str, str]
     """
 
-    def __call__(self, *, name: BasicClass, address: str
+    def __call__(self, *, address: str, name: BasicClass
 ) -> AsyncStream[str, str]:
         ...
 class BAMLNamedfuncImpl:
-    async def run(self, *, name: BasicClass, address: str) -> str:
+    async def run(self, *, address: str, name: BasicClass) -> str:
         ...
     
-    def stream(self, *, name: BasicClass, address: str
+    def stream(self, *, address: str, name: BasicClass
 ) -> AsyncStream[str, str]:
         ...
 
@@ -75,10 +75,10 @@ class IBAMLNamedfunc:
     ) -> typing.Callable[[INamedfunc, INamedfuncStream], None]:
         ...
 
-    async def __call__(self, *, name: BasicClass, address: str) -> str:
+    async def __call__(self, *, address: str, name: BasicClass) -> str:
         ...
 
-    def stream(self, *, name: BasicClass, address: str
+    def stream(self, *, address: str, name: BasicClass
 ) -> AsyncStream[str, str]:
         ...
 

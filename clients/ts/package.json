@@ -66,7 +66,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.18.0",
     "@azure/openai": "1.0.0-beta.11",
-    "@boundaryml/baml-core-ffi": "0.15.0",
+    "@boundaryml/baml-core-ffi": "link:../../engine/baml-core-ffi",
     "dotenv": "^16.4.5",
     "jest-runner": "^29.7.0",
     "json-schema": "^0.4.0",

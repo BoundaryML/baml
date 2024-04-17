@@ -44,31 +44,34 @@ export type ArgType =
     }[]
   }
 
+// keep in sync with engine/baml-fmt/src/lint.rs
 export type Impl = {
   type: 'llm'
   name: StringSpan
   prompt_key: Span
-  input_replacers: { key: string; value: string }[]
-  output_replacers: { key: string; value: string }[]
-  client: StringSpan
-} & (
-    {
-      has_v2?: false
-      prompt: string
-    } | {
-      has_v2: true
-      prompt_v2: {
-        is_chat: false,
-        prompt: string
-      } | {
-        is_chat: true,
-        prompt: {
-          role: string
-          content: string
-        }[]
-      }
-    }
-  )
+  client: {
+    identifier: StringSpan
+    provider: string
+    model?: string
+  }
+  prompt: {
+    test_case?: string;
+  } & ({
+    type: "Completion"
+    completion: string
+  } | {
+    type: "Chat"
+    chat: {
+      role: string
+      message: string
+    }[]
+  } | {
+    type: "Error"
+    error: string
+  })
+  input_replacers: [string, string][],
+  output_replacers: [string, string][],
+};
 
 export interface SFunction {
   name: StringSpan
@@ -77,7 +80,8 @@ export interface SFunction {
   impls: Impl[]
   test_cases: {
     name: StringSpan
-    // For now this is json.
+    // For now this is a JSON.parse-able string
     content: string
   }[]
+  syntax: "Version1" | "Version2"
 }

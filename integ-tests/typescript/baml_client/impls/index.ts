@@ -5,6 +5,18 @@
 // @ts-nocheck
 /* eslint-disable */
 
+import './classifymessage_default_config';
+
+import './classifymessage2_default_config';
+
+import './classifymessage3_default_config';
+
+import './extractnames_default_config';
+
+import './extractresume_default_config';
+
+import './extractresume2_default_config';
+
 import './fnclassoptional_v1';
 
 import './fnclassoptional2_v1';
@@ -42,6 +54,12 @@ import './fntestenumoverride_v1';
 import './fntestnamedargssingleenum_v1';
 
 import './fntestoutputadapter_v1';
+
+import './getdatatype_default_config';
+
+import './getorderinfo_default_config';
+
+import './getquery_default_config';
 
 import './optionaltest_function_v1';
 

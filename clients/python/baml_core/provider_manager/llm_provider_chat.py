@@ -1,7 +1,12 @@
+from __future__ import annotations
 import abc
 import json
+import os
 import typing
+from baml_core_ffi import TemplateStringMacro
 from typeguard import typechecked
+
+from baml_core.jinja.render_prompt import render_prompt, RenderData
 
 
 from ..errors.llm_exc import LLMException, ProviderErrorCode
@@ -98,6 +103,98 @@ class LLMChatProvider(AbstractLLMProvider):
             return await self.__run_chat_with_telemetry(messages)
         except Exception as e:
             self._raise_error(e)
+
+    @typing.final
+    async def _run_jinja_template_internal(
+        self,
+        *,
+        jinja_template: str,
+        args: typing.Dict[str, typing.Any],
+        output_schema: str,
+        template_macros: typing.List[TemplateStringMacro],
+    ) -> LLMResponse:
+        rendered = render_prompt(
+            jinja_template,
+            RenderData(
+                args={
+                    k: v.dict() if hasattr(v, "dict") else v for (k, v) in args.items()
+                },
+                ctx=RenderData.ctx(
+                    client=self.client,
+                    output_schema=output_schema,
+                    env=os.environ.copy(),
+                ),
+                template_string_macros=template_macros,
+            ),
+        )
+
+        if rendered[0] == "chat":
+            return await self._run_chat_internal(
+                [
+                    LLMChatMessage(role=chat.role, content=chat.message)
+                    for chat in rendered[1]
+                ]
+            )
+        else:
+            return await self._run_prompt_internal(rendered[1])
+
+    @typing.final
+    async def _run_jinja_template_internal_stream(
+        self,
+        *,
+        jinja_template: str,
+        args: typing.Dict[str, typing.Any],
+        output_schema: str,
+        template_macros: typing.List[TemplateStringMacro],
+    ) -> typing.AsyncIterator[LLMResponse]:
+        prompt = render_prompt(
+            jinja_template,
+            RenderData(
+                args={
+                    k: v.dict() if hasattr(v, "dict") else v for (k, v) in args.items()
+                },
+                ctx=RenderData.ctx(
+                    client=self.client,
+                    output_schema=output_schema,
+                    env=os.environ.copy(),
+                ),
+                template_string_macros=template_macros,
+            ),
+        )
+
+        if prompt[0] == "chat":
+            async for r in self._run_chat_internal_stream(
+                list(
+                    map(
+                        lambda x: LLMChatMessage(role=x.role, content=x.message),
+                        prompt[1],
+                    )
+                )
+            ):
+                yield r
+        else:
+            async for r in self._run_prompt_internal_stream(prompt=prompt[1]):
+                yield r
+
+    @typing.final
+    async def _run_chat_internal_stream(
+        self, *messages: LLMChatMessage | typing.List[LLMChatMessage]
+    ) -> typing.AsyncIterator[LLMResponse]:
+        if len(messages) == 1 and isinstance(messages[0], list):
+            chat_message = messages[0]
+        else:
+            chat_message = typing.cast(typing.List[LLMChatMessage], messages)
+        async for response in self.__run_chat_stream_with_telemetry(chat_message):
+            yield response
+
+    @typing.final
+    async def _run_prompt_internal_stream(
+        self, *, prompt: str
+    ) -> typing.AsyncIterator[LLMResponse]:
+        async for response in self._run_chat_internal_stream(
+            self.__prompt_to_chat(prompt)
+        ):
+            yield response
 
     @typing.final
     async def _run_chat_template_internal_stream(

@@ -7,7 +7,9 @@
       "patterns": [
         { "include": "#enum_declaration" },
         { "include": "#interface_declaration" },
+        { "include": "#template_string_declaration" },
         { "include": "#function_declaration" },
+        { "include": "#function_declaration_old" },
         { "include": "#config_block" },
         { "include": "#type_alias" },
         { "include": "#function" },
@@ -68,7 +70,66 @@
         { "include": "#single_variable_no_assignment" }
       ]
     },
+    "template_string_declaration": {
+      "begin": "(template_string)\\s+(\\w+)\\(([^)]*)\\)\\s+(#)(\")",
+      "beginCaptures": {
+        "1": { "name": "storage.type.declaration.function" },
+        "2": { "name": "entity.name.function" },
+        "3": { "name": "variable.parameter.function" },
+        "4": { "name": "string.quoted.block.baml" },
+        "5": { "name": "string.quoted.block.baml" }
+      },
+      "end": "(\")(#)",
+      "endCaptures": {
+        "1": { "name": "string.quoted.block.baml" },
+        "2": { "name": "string.quoted.block.baml" }
+      },
+      "name": "string.quoted.block.baml",
+      "patterns": [
+        {
+          "include": "source.jinja"
+        },
+        { "include": "#block_attribute" }
+      ]
+    },
     "function_declaration": {
+      "begin": "(function)\\s+(\\w+)\\(([^)]*)\\)\\s*(->)\\s*(\\w+)\\s+\\{",
+      "beginCaptures": {
+        "1": { "name": "storage.type.declaration.function" },
+        "2": { "name": "entity.name.function" },
+        "3": { "name": "variable.parameter.function" },
+        "4": { "name": "keyword.operator" },
+        "5": { "name": "support.type" }
+      },
+      "end": "\\}",
+      "patterns": [
+        { "include": "#comment" },
+        {
+          "match": "(client)\\s+(\\w+)",
+          "captures": {
+            "1": { "name": "keyword.other.client" },
+            "2": { "name": "entity.name.other.client" }
+          },
+          "name": "meta.client.declaration"
+        },
+        {
+          "begin": "(prompt)\\s+#(\"){1,3}",
+          "beginCaptures": {
+            "1": { "name": "keyword.other.client" }
+          },
+          "end": "(\"){1,3}#",
+          "endCaptures": {},
+          "name": "string.quoted.block.baml",
+          "patterns": [
+            {
+              "include": "source.jinja"
+            }
+          ]
+        },
+        { "include": "#block_attribute" }
+      ]
+    },
+    "function_declaration_old": {
       "begin": "(function)\\s+(\\w+)\\s*\\{",
       "beginCaptures": {
         "1": { "name": "storage.type.declaration.function" },
@@ -213,6 +274,23 @@
         { "include": "#key_boolean_pair" },
         { "include": "#key_array_pair" },
         { "include": "#key_custom_string_pair" }
+      ]
+    },
+    "language_block_jinja": {
+      "begin": "(#{1,3}\")",
+      "beginCaptures": {
+        "1": { "name": "comment.line" },
+        "2": { "name": "string.quoted" }
+      },
+      "end": "\\s*(\"{1,3}#)",
+      "endCaptures": {
+        "1": { "name": "string.quoted" }
+      },
+      "contentName": "source.jinja.embedded",
+      "patterns": [
+        {
+          "include": "source.jinja"
+        }
       ]
     },
     "language_block_python": {

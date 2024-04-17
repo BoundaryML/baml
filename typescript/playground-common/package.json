@@ -57,11 +57,14 @@
     "ts-jest": "^29.1.1",
     "ts-node": "^10.9.1",
     "tsup": "^6.7.0",
-    "typescript": "^5.1.6"
+    "typescript": "^5.1.6",
+    "vite-plugin-top-level-await": "^1.4.1",
+    "vite-plugin-wasm": "^3.3.0"
   },
   "dependencies": {
     "@baml/common": "workspace:*",
     "@radix-ui/react-accordion": "^1.1.2",
+    "@radix-ui/react-checkbox": "^1.0.4",
     "@radix-ui/react-dialog": "^1.0.5",
     "@radix-ui/react-dropdown-menu": "^2.0.6",
     "@radix-ui/react-hover-card": "^1.0.7",
@@ -86,7 +89,9 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.0.0",
     "cmdk": "^1.0.0",
+    "js-tiktoken": "^1.0.10",
     "json-schema-empty": "^1.1.1",
+    "json-schema-faker": "^0.5.6",
     "lucide-react": "^0.294.0",
     "papaparse": "^5.4.1",
     "react": "^18.2.0",
@@ -94,7 +99,8 @@
     "react-resizable-panels": "^2.0.16",
     "react18-json-view": "^0.2.7",
     "tailwind-merge": "^2.0.0",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwindcss-animate": "^1.0.7",
+    "unique-names-generator": "^4.7.1"
   },
   "peerDependencies": {
     "@gloo-ai/baml-schema-wasm-web": "*"

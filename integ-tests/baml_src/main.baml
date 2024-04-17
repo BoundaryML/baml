@@ -20,9 +20,9 @@ generator lang_typescript {
   // This command is used by "baml test" to run tests
   // defined in the playground
   //test_command "infisical run -- npm test -- "
-  test_command "npm test -- "
+  test_command "pnpm test -- "
   // This command is used by "baml update-client" to install
   // dependencies to your language environment
-  install_command "npm install"
-  package_version_command "npm list"
+  install_command "pnpm install"
+  package_version_command "pnpm list @boundaryml/baml-core"
 }

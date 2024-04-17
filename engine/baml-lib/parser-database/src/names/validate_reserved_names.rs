@@ -58,6 +58,18 @@ pub(crate) fn validate_class_fiel_name(
     );
 }
 
+pub(crate) fn validate_template_string_name(
+    ast_template_string: &ast::TemplateString,
+    diagnostics: &mut Diagnostics,
+) {
+    validate_name(
+        "template_string",
+        ast_template_string.identifier(),
+        diagnostics,
+        true,
+    );
+}
+
 pub(crate) fn validate_function_name(ast_func: &ast::Function, diagnostics: &mut Diagnostics) {
     validate_name("function", ast_func.identifier(), diagnostics, true);
 }

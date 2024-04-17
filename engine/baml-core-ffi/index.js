@@ -234,9 +234,23 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { TestCaseStatus, BamlTracer, BamlTester, BamlScopeGuard, version } = nativeBinding
+const {
+  TestCaseStatus,
+  NapiChatMessage,
+  NapiRenderedPrompt,
+  NapiClient,
+  NapiRenderer,
+  BamlTracer,
+  BamlTester,
+  BamlScopeGuard,
+  version,
+} = nativeBinding
 
 module.exports.TestCaseStatus = TestCaseStatus
+module.exports.NapiChatMessage = NapiChatMessage
+module.exports.NapiRenderedPrompt = NapiRenderedPrompt
+module.exports.NapiClient = NapiClient
+module.exports.NapiRenderer = NapiRenderer
 module.exports.BamlTracer = BamlTracer
 module.exports.BamlTester = BamlTester
 module.exports.BamlScopeGuard = BamlScopeGuard

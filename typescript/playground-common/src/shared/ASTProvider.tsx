@@ -109,7 +109,6 @@ export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
   const selectedState = useMemo(() => {
     if (selectedProjectId === undefined) return undefined
     let match = projects.find((project) => project.root_dir === selectedProjectId)
-    console.log('selected project id', selectedProjectId, match)
     if (match) {
       let jsonSchema = {
         definitions: Object.fromEntries([
@@ -169,7 +168,7 @@ export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
           break
         }
         case 'setDb': {
-          console.log('parser db updated' + JSON.stringify(messageContent))
+          console.log('parser db : ' + JSON.stringify(messageContent, undefined, 2))
           if (messageContent && messageContent !== '') {
             setProjects(messageContent.map((p: any) => ({ root_dir: p[0], db: p[1] })))
           }

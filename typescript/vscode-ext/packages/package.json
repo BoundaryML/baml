@@ -110,6 +110,11 @@
         "title": "Jump to Definition",
         "category": "Baml",
         "enablement": "editorLangId == 'python'"
+      },
+      {
+        "command": "baml.selectTestCase",
+        "title": "Select Test Case",
+        "category": "Baml"
       }
     ]
   },

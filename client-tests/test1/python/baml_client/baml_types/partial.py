@@ -16,9 +16,8 @@ from ..__do_not_import.types.partial.classes.cls_hi import PartialHi
 from ..__do_not_import.types.partial.classes.cls_improvedresponse import PartialImprovedResponse
 from ..__do_not_import.types.partial.classes.cls_message import PartialMessage
 from ..__do_not_import.types.partial.classes.cls_optionalobject import PartialOptionalObject
-from ..__do_not_import.types.partial.classes.cls_optionaltest_prop1 import PartialOptionalTest_Prop1
-from ..__do_not_import.types.partial.classes.cls_optionaltest_returntype import PartialOptionalTest_ReturnType
 from ..__do_not_import.types.partial.classes.cls_proposedmessage import PartialProposedMessage
+from ..__do_not_import.types.partial.classes.cls_reviewanalysis import PartialReviewAnalysis
 
 
 
@@ -33,7 +32,6 @@ __all__ = [
     'PartialImprovedResponse',
     'PartialMessage',
     'PartialOptionalObject',
-    'PartialOptionalTest_Prop1',
-    'PartialOptionalTest_ReturnType',
-    'PartialProposedMessage'
+    'PartialProposedMessage',
+    'PartialReviewAnalysis'
 ]

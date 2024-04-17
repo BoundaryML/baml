@@ -1,58 +1,50 @@
-import Image from 'next/image'
+import { BAMLProject, exampleProjects } from '@/lib/exampleProjects'
+import { Separator } from '@baml/playground-common/components/ui/separator'
 import dynamic from 'next/dynamic'
-import { EditorFile, loadUrl } from './actions'
-const Editor = dynamic(() => import('./_components/Editor'), { ssr: false })
+import { ExampleProjectCard } from './_components/ExampleProjectCard'
+import { loadUrl } from './actions'
+const ProjectView = dynamic(() => import('./[project_id]/_components/ProjectView'), { ssr: false })
 
 type SearchParams = {
   id: string
 }
 
-const defaultMainBaml = `
-function ExtractVerbs {
-    input string
-    /// list of verbs
-    output string[]
-}
-
-client<llm> GPT4 {
-  provider baml-openai-chat
-  options {
-    model gpt-4 
-    api_key env.OPENAI_API_KEY
+export default async function Home({
+  searchParams,
+  params,
+}: {
+  searchParams: SearchParams
+  params: { project_id: string }
+}) {
+  let data: BAMLProject = exampleProjects[0]
+  const id = params.project_id ?? searchParams.id
+  if (id) {
+    const exampleProject = exampleProjects.find((p) => p.id === id)
+    if (exampleProject) {
+      data = exampleProject
+    } else {
+      data = await loadUrl(id)
+    }
+  } else {
+    data = exampleProjects[0]
   }
-}
-
-impl<llm, ExtractVerbs> version1 {
-  client GPT4
-  prompt #"
-    Extract the verbs from this INPUT:
- 
-    INPUT:
-    ---
-    {#input}
-    ---
-    {// this is a comment inside a prompt! //}
-    Return a {#print_type(output)}.
-
-    Response:
-  "#
-}
-`
-export default async function Home({ searchParams }: { searchParams: SearchParams }) {
-  let data: EditorFile[] = [
-    {
-      path: 'baml_src/main.baml',
-      content: defaultMainBaml,
-    },
-  ]
-  if (searchParams?.id) {
-    data = await loadUrl(searchParams.id)
-  }
-  console.log('loaded data ', data)
+  console.log(data)
   return (
-    <main className="flex flex-col items-center justify-between min-h-screen">
-      <div className="z-10 items-center justify-between w-screen h-screen font-mono text-sm overflow-clip lg:flex">
-        <Editor files={data} />
+    <main className="flex flex-col items-center justify-between min-h-screen font-sans">
+      <div className="z-10 items-center justify-between w-screen h-screen text-sm overflow-clip lg:flex">
+        <div className="w-[200px] justify-start flex flex-col px-1 pr-0 gap-y-2 items-start h-full dark:bg-vscode-sideBar-background">
+          <div className="w-full pt-1 text-lg italic font-bold text-center">Prompt Fiddle</div>
+          <div className="w-full text-center text-muted-foreground">Templates</div>
+          <div className="flex flex-col h-full overflow-y-auto gap-y-2">
+            {exampleProjects.map((p) => {
+              return <ExampleProjectCard key={p.name} project={p} />
+            })}
+          </div>
+        </div>
+        <Separator className="h-full bg-vscode-panel-border" orientation="vertical" />
+        <div className="w-screen h-screen dark:bg-black">
+          <ProjectView project={data} />
+        </div>
       </div>
     </main>
   )

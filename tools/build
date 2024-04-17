@@ -9,11 +9,13 @@ Usage: build [options]
 Options:
     --help      Display this help message and exit.
     --watch     Watch dependencies and rebuild on demand.
+    --test      In addition to build, run tests
 EOF
 }
 
 _help_mode=0
 _watch_mode=0
+_test_mode=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -23,6 +25,10 @@ while [ $# -gt 0 ]; do
             ;;
         --watch)
             _watch_mode=1
+            shift
+            ;;
+        --test)
+            _test_mode=1
             shift
             ;;
         --) # End of all options
@@ -47,6 +53,12 @@ else
     echo "Interactive mode is not enabled."
 fi
 
+if [ "$_test_mode" -eq 1 ]; then
+    echo "Testing is enabled."
+else
+    echo "Testing is not enabled."
+fi
+
 cd "$1"
 _repo_root="$(git rev-parse --show-toplevel)"
 _path="$(pwd | sed "s|^${_repo_root}||")"
@@ -68,26 +80,44 @@ case "$_path" in
     fi
     ;;
 
+  # Subdirectories of engine must be matched before this line
   /engine | /engine/* )
+    if [ "$_test_mode" -eq 1 ]; then
+      command="cargo build && cargo test; date"
+    else
+      command="cargo build; date"
+    fi
+
     if [ "$_watch_mode" -eq 1 ]; then
       npx nodemon \
         --verbose \
-        --ext rs,hb,hbs \
+        --ext rs,hb,hbs,toml \
         --ignore 'target' \
-        --exec 'cargo build; date'
+        --exec "${command}"
     else
-      cargo build
-      date
+      ${command}
     fi
     ;;
 
   /clients/python | /clients/python/* )
+    command="env -u CONDA_PREFIX poetry run maturin develop --manifest-path ${_repo_root}/clients/python-ffi/Cargo.toml"
+    #command="${command} && poetry run mypy ."
+    #command="${command} && poetry run ruff check"
+    command="${command} && poetry run ruff format"
+    command="${command} && poetry run -- python -m baml_core.jinja.render_prompt"
+    if [ "$_test_mode" -eq 1 ]; then
+      command="${command} && poetry run -- pytest baml_core"
+    fi
+    command="${command}; date"
     if [ "$_watch_mode" -eq 1 ]; then
       npx nodemon \
-        --ext py \
-        --exec 'poetry run mypy . && poetry run ruff check && poetry run ruff format'
+        --ext py,pyi,rs \
+        --watch "${_repo_root}/engine/baml-lib/jinja" \
+        --watch "${_repo_root}/clients/python-ffi" \
+        --watch . \
+        --exec "${command}"
     else
-      poetry run mypy . && poetry run ruff check && poetry run ruff format
+      eval "${command}"
       date
     fi
     ;;
@@ -107,7 +137,8 @@ case "$_path" in
     fi
     ;;
 
-  /integ-tests | /integ-tests/* )
+  /integ-tests | /integ-tests/* | \
+  /client-tests | /client-tests/* )
     if [ "$_watch_mode" -eq 1 ]; then
       npx nodemon \
         --verbose \
@@ -119,16 +150,27 @@ case "$_path" in
     fi
     ;;
 
+  /typescript/codemirror-lang-baml | /typescript/codemirror-lang-baml/* )
+    if [ "$_watch_mode" -eq 1 ]; then
+      npx nodemon \
+        --ext grammar,js,ts,tsx,json \
+        --ignore '**/dist' \
+        --exec 'pnpm prepare; date'
+    else
+      pnpm prepare
+      date
+    fi
+    ;;
+
   /typescript | /typescript/* )
     # This also consume schanges to baml-schema-wasm
     if [ "$_watch_mode" -eq 1 ]; then
       # nodemon config in typescript/nodemon.json
       npx nodemon \
-        --verbose \
-        --ext js,ts,rs,hb,hbs
-        --watch "${_repo_root}/baml-lib" \
-        --watch "${_repo_root}/baml-fmt" \
-        --watch "${_repo_root}/baml-schema-wasm" \
+        --ext js,ts,tsx,rs,hb,hbs,toml \
+        --watch "${_repo_root}/engine" \
+        --watch "${_repo_root}/engine/jinja" \
+        --watch "${_repo_root}/typescript" \
         --ignore '**/dist' \
         --ignore '**/node_modules' \
         --ignore '**/out' \

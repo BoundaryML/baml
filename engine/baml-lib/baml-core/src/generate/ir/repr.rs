@@ -5,12 +5,13 @@ use indexmap::IndexMap;
 use internal_baml_parser_database::{
     walkers::{
         ClassWalker, ClientWalker, ConfigurationWalker, EnumValueWalker, EnumWalker, FieldWalker,
-        FunctionWalker, VariantWalker,
+        FunctionWalker, TemplateStringWalker, VariantWalker,
     },
-    ParserDatabase, PromptAst, RetryPolicyStrategy, ToStringAttributes, WithStaticRenames,
+    ParserDatabase, PromptAst, RetryPolicyStrategy, ToStringAttributes, WithSerialize,
+    WithStaticRenames,
 };
 
-use internal_baml_schema_ast::ast::{self, FieldArity, WithName};
+use internal_baml_schema_ast::ast::{self, FieldArity, RawString, WithName, WithSpan};
 use serde::Serialize;
 
 /// This class represents the intermediate representation of the BAML AST.
@@ -24,6 +25,7 @@ pub struct IntermediateRepr {
     functions: Vec<Node<Function>>,
     clients: Vec<Node<Client>>,
     retry_policies: Vec<Node<RetryPolicy>>,
+    template_strings: Vec<Node<TemplateString>>,
 }
 
 /// A generic walker. Only walkers instantiated with a concrete ID type (`I`) are useful.
@@ -52,10 +54,18 @@ impl IntermediateRepr {
         self.clients.iter().map(|e| Walker { db: self, item: e })
     }
 
+    pub fn walk_template_strings<'a>(
+        &'a self,
+    ) -> impl Iterator<Item = Walker<'a, &'a Node<TemplateString>>> {
+        self.template_strings
+            .iter()
+            .map(|e| Walker { db: self, item: e })
+    }
+
     pub fn walk_tests<'a>(&'a self) -> impl Iterator<Item = Walker<'a, &'a Node<Function>>> {
         self.functions
             .iter()
-            .filter(|f| f.elem.name.starts_with("test"))
+            .filter(|f| f.elem.name().starts_with("test"))
             .map(|e| Walker { db: self, item: e })
     }
 
@@ -79,7 +89,8 @@ impl IntermediateRepr {
                 .map(|e| e.node(db))
                 .collect::<Result<Vec<_>>>()?,
             functions: db
-                .walk_functions()
+                .walk_old_functions()
+                .chain(db.walk_new_functions())
                 .map(|e| e.node(db))
                 .collect::<Result<Vec<_>>>()?,
             clients: db
@@ -90,12 +101,17 @@ impl IntermediateRepr {
                 .walk_retry_policies()
                 .map(|e| WithRepr::<RetryPolicy>::node(&e, db))
                 .collect::<Result<Vec<_>>>()?,
+            template_strings: db
+                .walk_templates()
+                .map(|e| e.node(db))
+                .collect::<Result<Vec<_>>>()?,
         };
 
         // Sort each item by name.
         repr.enums.sort_by(|a, b| a.elem.name.cmp(&b.elem.name));
         repr.classes.sort_by(|a, b| a.elem.name.cmp(&b.elem.name));
-        repr.functions.sort_by(|a, b| a.elem.name.cmp(&b.elem.name));
+        repr.functions
+            .sort_by(|a, b| a.elem.name().cmp(&b.elem.name()));
         repr.clients.sort_by(|a, b| a.elem.name.cmp(&b.elem.name));
         repr.retry_policies
             .sort_by(|a, b| a.elem.name.0.cmp(&b.elem.name.0));
@@ -337,6 +353,43 @@ impl WithRepr<Expression> for ast::Expression {
     }
 }
 
+type TemplateStringId = String;
+
+#[derive(serde::Serialize, Debug)]
+pub struct TemplateString {
+    pub name: TemplateStringId,
+    pub params: Vec<Field>,
+    pub content: String,
+}
+
+impl WithRepr<TemplateString> for TemplateStringWalker<'_> {
+    fn repr(&self, _db: &ParserDatabase) -> Result<TemplateString> {
+        let node = self.ast_node();
+        Ok(TemplateString {
+            name: self.name().to_string(),
+            params: self.ast_node().input().map_or(vec![], |e| match e {
+                ast::FunctionArgs::Named(arg_list) => arg_list
+                    .args
+                    .iter()
+                    .filter_map(|(id, arg)| {
+                        arg.field_type
+                            .node(_db)
+                            .map(|f| Field {
+                                name: id.name().to_string(),
+                                r#type: f,
+                            })
+                            .ok()
+                    })
+                    .collect::<Vec<_>>(),
+                ast::FunctionArgs::Unnamed(arg) => {
+                    vec![]
+                }
+            }),
+            content: self.template_string().to_string(),
+        })
+    }
+}
+
 type EnumId = String;
 
 #[derive(serde::Serialize, Debug)]
@@ -354,7 +407,7 @@ impl WithRepr<EnumValue> for EnumValueWalker<'_> {
 
         attributes.meta = to_ir_attributes(db, self.get_default_attributes());
 
-        for r#fn in db.walk_functions() {
+        for r#fn in db.walk_old_functions() {
             for r#impl in r#fn.walk_variants() {
                 let node_attributes = to_ir_attributes(db, self.get_override(&r#impl));
 
@@ -381,7 +434,7 @@ impl WithRepr<Enum> for EnumWalker<'_> {
 
         attributes.meta = to_ir_attributes(db, self.get_default_attributes());
 
-        for r#fn in db.walk_functions() {
+        for r#fn in db.walk_old_functions() {
             for r#impl in r#fn.walk_variants() {
                 let node_attributes =
                     to_ir_attributes(db, r#impl.find_serializer_attributes(self.name()));
@@ -420,7 +473,7 @@ impl WithRepr<Field> for FieldWalker<'_> {
 
         attributes.meta = to_ir_attributes(db, self.get_default_attributes());
 
-        for r#fn in db.walk_functions() {
+        for r#fn in db.walk_old_functions() {
             for r#impl in r#fn.walk_variants() {
                 let node_attributes = to_ir_attributes(db, self.get_override(&r#impl));
                 if !node_attributes.is_empty() {
@@ -458,7 +511,7 @@ impl WithRepr<Class> for ClassWalker<'_> {
 
         attributes.meta = to_ir_attributes(db, self.get_default_attributes());
 
-        for r#fn in db.walk_functions() {
+        for r#fn in db.walk_old_functions() {
             for r#impl in r#fn.walk_variants() {
                 let node_attributes =
                     to_ir_attributes(db, r#impl.find_serializer_attributes(self.name()));
@@ -545,13 +598,63 @@ pub enum FunctionArgs {
 type FunctionId = String;
 
 #[derive(serde::Serialize)]
-pub struct Function {
+#[serde(tag = "version")]
+pub enum Function {
+    V1(FunctionV1),
+    V2(FunctionV2),
+}
+
+impl Function {
+    pub fn name(&self) -> &str {
+        match self {
+            Function::V1(f) => &f.name,
+            Function::V2(f) => &f.name,
+        }
+    }
+
+    pub fn output(&self) -> &FieldType {
+        match &self {
+            Function::V1(f) => &f.output.elem,
+            Function::V2(f) => &f.output.elem,
+        }
+    }
+
+    pub fn inputs(&self) -> either::Either<&FunctionArgs, &Vec<(String, FieldType)>> {
+        match &self {
+            Function::V1(f) => either::Either::Left(&f.inputs),
+            Function::V2(f) => either::Either::Right(&f.inputs),
+        }
+    }
+}
+
+#[derive(serde::Serialize)]
+pub struct FunctionV1 {
     pub name: FunctionId,
     pub inputs: FunctionArgs,
     pub output: Node<FieldType>,
     pub impls: Vec<Node<Implementation>>,
     pub tests: Vec<Node<TestCase>>,
     pub default_impl: Option<ImplementationId>,
+}
+
+#[derive(serde::Serialize)]
+pub struct FunctionV2 {
+    pub name: FunctionId,
+    pub inputs: Vec<(String, FieldType)>,
+    pub output: Node<FieldType>,
+    pub tests: Vec<Node<TestCase>>,
+    pub configs: Vec<FunctionConfig>,
+    pub default_config: String,
+}
+
+#[derive(serde::Serialize)]
+pub struct FunctionConfig {
+    pub name: String,
+    // TODO: We technically have alll the information given output type
+    // and we should derive this each time.
+    pub output_schema: String,
+    pub prompt_template: String,
+    pub client: ClientId,
 }
 
 impl WithRepr<Implementation> for VariantWalker<'_> {
@@ -704,7 +807,20 @@ fn process_field(
 
 impl WithRepr<Function> for FunctionWalker<'_> {
     fn repr(&self, db: &ParserDatabase) -> Result<Function> {
-        Ok(Function {
+        if self.is_old_function() {
+            Ok(Function::V1(self.repr(db)?))
+        } else {
+            Ok(Function::V2(self.repr(db)?))
+        }
+    }
+}
+
+impl WithRepr<FunctionV1> for FunctionWalker<'_> {
+    fn repr(&self, db: &ParserDatabase) -> Result<FunctionV1> {
+        if !self.is_old_function() {
+            bail!("Cannot represent a new function as a FunctionV1")
+        }
+        Ok(FunctionV1 {
             name: self.name().to_string(),
             inputs: match self.ast_function().input() {
                 ast::FunctionArgs::Named(arg_list) => FunctionArgs::NamedArgList(
@@ -731,6 +847,42 @@ impl WithRepr<Function> for FunctionWalker<'_> {
                 impls.sort_by(|a, b| a.elem.name.cmp(&&b.elem.name));
                 impls
             },
+            tests: self
+                .walk_tests()
+                .map(|e| e.node(db))
+                .collect::<Result<Vec<_>>>()?,
+        })
+    }
+}
+
+impl WithRepr<FunctionV2> for FunctionWalker<'_> {
+    fn repr(&self, db: &ParserDatabase) -> Result<FunctionV2> {
+        if self.is_old_function() {
+            bail!("Cannot represent a new function as a FunctionV1")
+        }
+        Ok(FunctionV2 {
+            name: self.name().to_string(),
+            inputs: match self.ast_function().input() {
+                ast::FunctionArgs::Named(arg_list) => arg_list
+                    .args
+                    .iter()
+                    .map(|(id, arg)| Ok((id.name().to_string(), arg.field_type.repr(db)?)))
+                    .collect::<Result<Vec<_>>>()?,
+                ast::FunctionArgs::Unnamed(_) => bail!("Unnamed args not supported"),
+            },
+            output: match self.ast_function().output() {
+                ast::FunctionArgs::Named(_) => bail!("Functions may not return named args"),
+                ast::FunctionArgs::Unnamed(arg) => arg.field_type.node(db),
+            }?,
+            configs: vec![FunctionConfig {
+                name: "default_config".to_string(),
+                output_schema: self
+                    .output_schema(self.db, self.identifier().span())
+                    .unwrap_or("{{{ Unable to generate ctx.output_schema }}}".into()),
+                prompt_template: self.jinja_prompt().to_string(),
+                client: self.client().unwrap().name().to_string(),
+            }],
+            default_config: "default_config".to_string(),
             tests: self
                 .walk_tests()
                 .map(|e| e.node(db))

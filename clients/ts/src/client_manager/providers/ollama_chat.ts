@@ -9,7 +9,7 @@ class OllamaChatAIClient extends LLMChatProvider {
 
   constructor(params: LLMBaseProviderArgs) {
     const {
-      host = "http://localhost:11434",
+      host = "http://127.0.0.1:11434",
       options,
       format,
       model,
@@ -27,15 +27,17 @@ class OllamaChatAIClient extends LLMChatProvider {
     });
 
     if (host === undefined) {
-      throw new Error("Missing host: consider adding 'host http://localhost:11434'");
+      throw new Error("Missing host: consider adding 'host http://127.0.0.1:11434'");
     }
 
     if (model === undefined) {
       throw new Error("Missing model: consider adding 'model mistral'");
     }
 
-
-    this.client = new Ollama({ host: host });
+    console.log(`Connecting to Ollama at ${host} with model ${model}`);
+    this.client = new Ollama({
+      host: host,
+    });
     this.params = {
       model: model,
       format: format,
@@ -44,6 +46,11 @@ class OllamaChatAIClient extends LLMChatProvider {
   }
 
   protected to_error_code_impl(err: unknown): number | undefined {
+    if (err instanceof Error) {
+      if (err.message.includes("model not found")) {
+        return 404;
+      }
+    }
     return undefined;
   }
 
@@ -60,7 +67,6 @@ class OllamaChatAIClient extends LLMChatProvider {
 
   protected async chat_impl(prompt: LLMChatMessage[]): Promise<LLMResponse> {
     try {
-      console.log(JSON.stringify(prompt, null, 2), JSON.stringify(this.params, null, 2));
       const response = await this.client.chat({
         messages: prompt.map((chat) => ({
           role: this.to_ollama_role(chat.role),
@@ -69,8 +75,6 @@ class OllamaChatAIClient extends LLMChatProvider {
         ...this.params,
         stream: false
       })
-
-      console.log(JSON.stringify(response, null, 2));
 
       return {
         generated: response.message.content,
@@ -83,7 +87,6 @@ class OllamaChatAIClient extends LLMChatProvider {
         }
       }
     } catch (err) {
-      console.log("errroor!!")
       console.log(JSON.stringify(err, null, 2));
       throw err;
     }

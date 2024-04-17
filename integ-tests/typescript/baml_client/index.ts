@@ -12,6 +12,12 @@ import "./impls"
 loadEnvVars()
 
 const BamlClient = {
+  ClassifyMessage: f.ClassifyMessage,
+  ClassifyMessage2: f.ClassifyMessage2,
+  ClassifyMessage3: f.ClassifyMessage3,
+  ExtractNames: f.ExtractNames,
+  ExtractResume: f.ExtractResume,
+  ExtractResume2: f.ExtractResume2,
   FnClassOptional: f.FnClassOptional,
   FnClassOptional2: f.FnClassOptional2,
   FnClassOptionalOutput: f.FnClassOptionalOutput,
@@ -31,6 +37,9 @@ const BamlClient = {
   FnTestEnumOverride: f.FnTestEnumOverride,
   FnTestNamedArgsSingleEnum: f.FnTestNamedArgsSingleEnum,
   FnTestOutputAdapter: f.FnTestOutputAdapter,
+  GetDataType: f.GetDataType,
+  GetOrderInfo: f.GetOrderInfo,
+  GetQuery: f.GetQuery,
   OptionalTest_Function: f.OptionalTest_Function,
   PromptTest: f.PromptTest,
   TestFnNamedArgsSingleBool: f.TestFnNamedArgsSingleBool,

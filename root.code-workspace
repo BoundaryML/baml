@@ -1,10 +1,13 @@
 {
   "folders": [
     {
-      "path": "fiddle"
+      "path": ".github"
     },
     {
       "path": "engine"
+    },
+    {
+      "path": "fiddle"
     },
     {
       "path": "integ-tests"
@@ -14,11 +17,15 @@
       "path": "typescript"
     },
     {
-      "name": "Python Client",
+      "name": "clients/python (Python client)",
       "path": "clients/python"
     },
     {
-      "name": "TS Client",
+      "name": "clients/python-ffi (pyo3 client)",
+      "path": "clients/python-ffi"
+    },
+    {
+      "name": "clients/ts (TS client)",
       "path": "clients/ts"
     },
     {
@@ -26,15 +33,12 @@
       "path": "docs"
     },
     {
-      "name": "Release Tools",
+      "name": "release (Release Tools)",
       "path": "release"
     },
     {
-      "name": "test1/python",
+      "name": "client-tests/test1/python",
       "path": "client-tests/test1/python"
-    },
-    {
-      "path": ".github"
     },
     {
       "path": "client-tests/test2"
@@ -63,7 +67,8 @@
       "titleBar.activeBackground": "#8B0002",
       "titleBar.activeForeground": "#FFFBFB"
     },
-    "python.analysis.typeCheckingMode": "strict"
+    "python.analysis.typeCheckingMode": "strict",
+    "editor.colorDecoratorsLimit": 2000
   },
   "extensions": {
     "recommendations": [

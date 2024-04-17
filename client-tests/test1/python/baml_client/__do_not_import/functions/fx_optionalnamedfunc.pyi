@@ -33,14 +33,14 @@ class IOptionalNamedFunc(Protocol):
     This is the interface for a function.
 
     Args:
-        name: Optional[BasicClass]
         address: Union[str, None]
+        name: Optional[BasicClass]
 
     Returns:
         str
     """
 
-    async def __call__(self, *, name: Optional[BasicClass] = None, address: Union[str, None] = None) -> str:
+    async def __call__(self, *, address: Union[str, None] = None, name: Optional[BasicClass] = None) -> str:
         ...
 
    
@@ -51,21 +51,21 @@ class IOptionalNamedFuncStream(Protocol):
     This is the interface for a stream function.
 
     Args:
-        name: Optional[BasicClass]
         address: Union[str, None]
+        name: Optional[BasicClass]
 
     Returns:
         AsyncStream[str, str]
     """
 
-    def __call__(self, *, name: Optional[BasicClass] = None, address: Union[str, None] = None
+    def __call__(self, *, address: Union[str, None] = None, name: Optional[BasicClass] = None
 ) -> AsyncStream[str, str]:
         ...
 class BAMLOptionalNamedFuncImpl:
-    async def run(self, *, name: Optional[BasicClass] = None, address: Union[str, None] = None) -> str:
+    async def run(self, *, address: Union[str, None] = None, name: Optional[BasicClass] = None) -> str:
         ...
     
-    def stream(self, *, name: Optional[BasicClass] = None, address: Union[str, None] = None
+    def stream(self, *, address: Union[str, None] = None, name: Optional[BasicClass] = None
 ) -> AsyncStream[str, str]:
         ...
 
@@ -75,10 +75,10 @@ class IBAMLOptionalNamedFunc:
     ) -> typing.Callable[[IOptionalNamedFunc, IOptionalNamedFuncStream], None]:
         ...
 
-    async def __call__(self, *, name: Optional[BasicClass] = None, address: Union[str, None] = None) -> str:
+    async def __call__(self, *, address: Union[str, None] = None, name: Optional[BasicClass] = None) -> str:
         ...
 
-    def stream(self, *, name: Optional[BasicClass] = None, address: Union[str, None] = None
+    def stream(self, *, address: Union[str, None] = None, name: Optional[BasicClass] = None
 ) -> AsyncStream[str, str]:
         ...
 

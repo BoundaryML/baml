@@ -12,7 +12,7 @@ from enum import Enum
 
 
 @register_deserializer({
-    
+
 })
 class Categories(str, Enum):
     ONE = "ONE"

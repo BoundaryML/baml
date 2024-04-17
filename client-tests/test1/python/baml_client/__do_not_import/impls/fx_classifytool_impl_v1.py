@@ -12,9 +12,11 @@ from ..functions.fx_classifytool import BAMLClassifyTool
 from ..types.classes.cls_classifyresponse import ClassifyResponse
 from ..types.enums.enm_tool import Tool
 from ..types.partial.classes.cls_classifyresponse import PartialClassifyResponse
+from baml_core.provider_manager.llm_provider_base import LLMChatMessage
 from baml_core.provider_manager.llm_response import LLMResponse
 from baml_core.stream import AsyncStream
 from baml_lib._impl.deserializer import Deserializer
+from typing import List
 
 
 import typing
@@ -22,8 +24,10 @@ import typing
 # Client: AZURE_GPT4
 # An implementation of ClassifyTool.
 
-__prompt_template = """\
-
+__prompt_template: List[LLMChatMessage] = [
+{
+    "role": "system",
+    "content": """\
 {query}
 
 UserContext:
@@ -33,8 +37,13 @@ tool
 ---
 k1: Use this tool if the user is asking to compute something
 k2: Use this tool if the user is asking to draw something
-k3: Use this tool if the user is asking to generate text 
-
+k3: Use this tool if the user is asking to generate text\
+"""
+}
+,
+{
+    "role": "user",
+    "content": """\
 Use this output format:
 {
   // Any number of tools the user may want to use
@@ -45,6 +54,9 @@ Use this output format:
 
 JSON:\
 """
+}
+
+]
 
 __input_replacers = {
     "{context}",
@@ -67,16 +79,16 @@ __partial_deserializer.overload("ClassifyResponse", {"foo": "assistant_response"
 
 
 
-async def v1(*, query: str, context: str) -> ClassifyResponse:
-    response = await AZURE_GPT4.run_prompt_template(template=__prompt_template, replacers=__input_replacers, params=dict(query=query, context=context))
+async def v1(*, context: str, query: str) -> ClassifyResponse:
+    response = await AZURE_GPT4.run_chat_template(__prompt_template, replacers=__input_replacers, params=dict(context=context, query=query))
     deserialized = __deserializer.from_string(response.generated)
     return deserialized
 
 
-def v1_stream(*, query: str, context: str
+def v1_stream(*, context: str, query: str
 ) -> AsyncStream[ClassifyResponse, PartialClassifyResponse]:
     def run_prompt() -> typing.AsyncIterator[LLMResponse]:
-        raw_stream = AZURE_GPT4.run_prompt_template_stream(template=__prompt_template, replacers=__input_replacers, params=dict(query=query, context=context))
+        raw_stream = AZURE_GPT4.run_chat_template_stream(__prompt_template, replacers=__input_replacers, params=dict(context=context, query=query))
         return raw_stream
     stream = AsyncStream(stream_cb=run_prompt, partial_deserializer=__partial_deserializer, final_deserializer=__deserializer)
     return stream

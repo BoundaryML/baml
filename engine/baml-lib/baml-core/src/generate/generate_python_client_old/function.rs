@@ -1,6 +1,10 @@
-use internal_baml_parser_database::walkers::{ArgWalker, EnumWalker, Walker};
+use internal_baml_parser_database::{
+    walkers::{ArgWalker, EnumWalker, FunctionWalker, Walker},
+    WithSerialize,
+};
 use internal_baml_schema_ast::ast::{
-    FieldType, FunctionArg, FunctionId, Identifier, WithDocumentation, WithName,
+    FieldType, FunctionArg, FunctionArgs, FunctionId, Identifier, WithDocumentation, WithName,
+    WithSpan,
 };
 
 use serde_json::json;
@@ -8,6 +12,7 @@ use serde_json::json;
 use crate::generate::generate_python_client_old::file::clean_file_name;
 
 use super::{
+    client,
     file::File,
     template::render_template,
     traits::{JsonHelper, WithToCode, WithWritePythonString},
@@ -92,15 +97,22 @@ impl JsonHelper for ArgWalker<'_> {
     }
 }
 
-impl JsonHelper for Walker<'_, FunctionId> {
+impl JsonHelper for FunctionWalker<'_> {
     fn json(&self, f: &mut File) -> serde_json::Value {
-        let mut impls = self
-            .walk_variants()
-            .map(|v| v.name().to_string())
-            .collect::<Vec<_>>();
-        impls.sort();
+        let impls = if self.is_old_function() {
+            let mut impls = self
+                .walk_variants()
+                .map(|v| v.name().to_string())
+                .collect::<Vec<_>>();
+            impls.sort();
+            impls
+        } else {
+            // New function logic
+            vec!["default_config".into()]
+        };
+
         let mut inputs = self.walk_input_args().collect::<Vec<_>>();
-        inputs.sort_by(|a, b| a.is_optional().cmp(&b.is_optional()));
+        inputs.sort_by(|a, b| a.name().cmp(&b.name()));
 
         json!({
             "name": self.ast_function().name(),
@@ -130,7 +142,7 @@ fn is_enum<'a>(
     return false;
 }
 
-impl WithWritePythonString for Walker<'_, FunctionId> {
+impl WithWritePythonString for FunctionWalker<'_> {
     fn file_name(&self) -> String {
         format!("fx_{}", clean_file_name(self.name()))
     }
@@ -152,5 +164,62 @@ impl WithWritePythonString for Walker<'_, FunctionId> {
             json,
         );
         fc.complete_file();
+
+        if !self.is_old_function() {
+            let impl_name = format!(
+                "fx_{}_impl_{}",
+                clean_file_name(self.name()),
+                "default_config"
+            );
+
+            fc.start_py_file("impls", "__init__.py");
+            fc.last_file().add_line(format!(
+                "from .{0} import {1} as unused_{0}",
+                impl_name, "default_config"
+            ));
+            fc.complete_file();
+
+            // May need to do some fancy stuff
+            fc.start_py_file("impls", impl_name);
+
+            fc.last_file().add_import(
+                &format!("..functions.{}", self.file_name()),
+                &format!("BAML{}", self.name()),
+            );
+            let client = self.client().unwrap();
+            fc.last_file()
+                .add_import(&format!("..clients.{}", client.file_name()), client.name());
+
+            fc.last_file()
+                .add_import("baml_core.jinja.render_prompt", "RenderData");
+
+            let json = json!({
+                "name": "default_config",
+                "function": self.json(fc.last_file()),
+                "prompt": self.jinja_prompt().replace(r#"""""#, r#"\"\"\""#),
+                "client": client.name(),
+                "output_schema": self.output_schema(self.db, self.identifier().span()).unwrap(),
+                "template_macros": self.db.walk_templates().map(|t| json!({
+                    "name": t.name().to_string(),
+                    "args": match t.ast_node().input() {
+                        Some(FunctionArgs::Named(list)) => {
+                            list.args.iter().map(|(idn, field_type)| json!({
+                                "name": idn.name(),
+                                "type": field_type.to_py_string(fc.last_file()),
+                            })).collect::<Vec<_>>()
+                        },
+                        _ => vec![],
+                    },
+                    "template": t.template_string().replace(r#"""""#, r#"\"\"\""#),
+            })).collect::<Vec<_>>(),
+            });
+
+            render_template(
+                super::template::HSTemplate::DefaultVariant,
+                fc.last_file(),
+                json,
+            );
+            fc.complete_file();
+        }
     }
 }
