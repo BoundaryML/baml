@@ -54,19 +54,6 @@ export const usePlaygroundListener = () => {
       const { command, data } = event.data
 
       switch (command) {
-        case 'receiveData':
-          // Example of showing received information, adapt as necessary
-          // alert(data.text)
-          break
-
-        case 'commandSequence':
-          // console.log('received command sequence', data)
-          for (const subcommand of data) {
-            // console.log('received command in sequence', subcommand)
-            await listener({ data: subcommand })
-          }
-          break
-
         case 'saveTest':
           // reset the url
           window.history.replaceState(null, '', '/')

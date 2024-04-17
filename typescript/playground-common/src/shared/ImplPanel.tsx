@@ -320,17 +320,18 @@ const ImplPanel: React.FC<{ impl: Impl; showTab: boolean }> = ({ impl, showTab }
           <div className="flex flex-col gap-1">
             <div className="flex flex-col items-start">
               <span className="flex gap-1">
-                <b>Prompt Preview</b>
+                Prompt Preview
                 <Link item={impl.name} display="Edit" />
               </span>
               <div className="flex flex-row gap-1">
-                <span className="font-light">Client</span>
+                <span className="font-light">Using client</span>
                 <Link item={impl.client.identifier} />
               </div>
-              {impl.prompt.test_case && (<div className="flex flex-row gap-1">
-                <span className="font-light">Test Case</span>
-                {impl.prompt.test_case}
-              </div>)}
+              <div className="flex flex-row gap-1">
+                {impl.prompt.test_case ? <><span className="font-light">With test case</span>
+                  {impl.prompt.test_case}
+                </> : <span className="font-light">Add a test case to see the full prompt!</span>}
+              </div>
             </div>
             <PromptPreview prompt={impl.prompt} client={impl.client} />
           </div>
