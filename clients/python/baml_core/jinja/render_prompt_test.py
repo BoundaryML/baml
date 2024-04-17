@@ -1,6 +1,6 @@
 import pytest
 
-from baml_core import render_prompt, RenderData, RenderedChatMessage
+from baml_core import render_prompt, RenderData
 
 
 def test_success() -> None:
