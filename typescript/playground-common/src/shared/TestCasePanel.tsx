@@ -381,9 +381,7 @@ const EditTestCaseForm = ({
       <DialogTrigger asChild={true}>{children}</DialogTrigger>
       <DialogContent className="max-h-screen overflow-y-scroll bg-vscode-editorWidget-background border-vscode-textSeparator-foreground overflow-x-clip">
         <DialogHeader className="flex flex-row items-center gap-x-4">
-          <DialogTitle className="text-xs font-semibold">
-            {testCase === undefined || duplicate ? 'Duplicate test' : 'Edit test'}
-          </DialogTitle>
+          <DialogTitle className="text-xs font-semibold">{duplicate ? 'Duplicate test' : 'Edit test'}</DialogTitle>
 
           <div className="flex flex-row items-center pb-1 gap-x-2">
             {testCase === undefined || duplicate ? (
