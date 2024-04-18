@@ -1,10 +1,6 @@
-use std::error::Error;
-
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span};
-use internal_baml_jinja::{TypeError, ValidationError};
 use internal_baml_parser_database::walkers::to_type;
 use internal_baml_schema_ast::ast::{WithIdentifier, WithName, WithSpan};
-use serde::de;
 
 use crate::validate::validation_pipeline::context::Context;
 
@@ -59,7 +55,6 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
 
     let mut defined_types = internal_baml_jinja::PredefinedTypes::default();
     ctx.db.walk_classes().for_each(|t| {
-        log::error!("walking class {:#?}", t.name());
         t.add_to_types(&mut defined_types);
     });
     ctx.db.walk_templates().for_each(|t| {

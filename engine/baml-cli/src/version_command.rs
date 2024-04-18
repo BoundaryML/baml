@@ -207,9 +207,8 @@ fn extract_client_version(package_version_command: &str, output: &str) -> Result
         )));
     };
 
-    let version_re = Regex::new("[0-9][^ ]*").map_err(|e| {
-        CliError::StringError(format!("{} Error: {}", "Failed!".red(), e))
-    })?;
+    let version_re = Regex::new("[0-9][^ ]*")
+        .map_err(|e| CliError::StringError(format!("{} Error: {}", "Failed!".red(), e)))?;
 
     let Some(version) = version_re.find(version_line) else {
         log::info!("version_line: {:?}", version_line);

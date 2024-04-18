@@ -1,7 +1,5 @@
 #[cfg(test)]
 mod tests {
-    use minijinja::machinery::parse;
-
     use crate::evaluate_type::{
         stmt::get_variable_types,
         types::{PredefinedTypes, Type},

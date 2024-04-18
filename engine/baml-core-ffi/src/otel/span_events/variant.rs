@@ -13,6 +13,7 @@ pub(crate) struct Variant {
 }
 
 impl Variant {
+  #[allow(dead_code)]
   pub fn variant_name(&self) -> Option<&String> {
     self.variant_name.as_ref()
   }

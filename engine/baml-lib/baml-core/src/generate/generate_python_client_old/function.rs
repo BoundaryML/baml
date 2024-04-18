@@ -1,10 +1,9 @@
 use internal_baml_parser_database::{
-    walkers::{ArgWalker, EnumWalker, FunctionWalker, Walker},
+    walkers::{ArgWalker, EnumWalker, FunctionWalker},
     WithSerialize,
 };
 use internal_baml_schema_ast::ast::{
-    FieldType, FunctionArg, FunctionArgs, FunctionId, Identifier, WithDocumentation, WithName,
-    WithSpan,
+    FieldType, FunctionArg, FunctionArgs, Identifier, WithDocumentation, WithName, WithSpan,
 };
 
 use serde_json::json;
@@ -12,7 +11,6 @@ use serde_json::json;
 use crate::generate::generate_python_client_old::file::clean_file_name;
 
 use super::{
-    client,
     file::File,
     template::render_template,
     traits::{JsonHelper, WithToCode, WithWritePythonString},

@@ -1,6 +1,6 @@
-use std::path::{Component, PathBuf};
-use dunce::canonicalize;
 use baml_lib::{parse_configuration, Configuration, Diagnostics};
+use dunce::canonicalize;
+use std::path::{Component, PathBuf};
 
 use crate::errors::CliError;
 

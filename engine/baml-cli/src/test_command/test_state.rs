@@ -3,8 +3,6 @@ use colored::*;
 use log::debug;
 use std::{collections::HashMap, ops::Deref, str::FromStr};
 
-
-
 use super::ipc_comms::{LogSchema, MessageData, Template, TestCaseStatus, ValueType};
 
 #[derive(Debug)]
@@ -124,7 +122,10 @@ impl RunState {
             .tests
             .iter()
             .filter(|(_, state)| {
-                matches!(state, TestState::Queued | TestState::Running | TestState::Cancelled)
+                matches!(
+                    state,
+                    TestState::Queued | TestState::Running | TestState::Cancelled
+                )
             })
             .collect();
 
@@ -531,8 +532,6 @@ pub(crate) async fn on_finish_test(
                 Ok(())
             }
         }
-        Err(e) => {
-            Err(std::io::Error::new(std::io::ErrorKind::InvalidData, e))
-        }
+        Err(e) => Err(std::io::Error::new(std::io::ErrorKind::InvalidData, e)),
     }
 }

@@ -176,6 +176,7 @@ impl BatchProcessor {
     }
   }
 
+  #[allow(dead_code)]
   pub fn restart(&mut self, api_config: APIWrapper, max_batch_size: usize) -> Result<()> {
     self.stop()?;
     let (tx, rx, join_handle) = start_worker(&api_config, max_batch_size);

@@ -1,6 +1,6 @@
+use dunce::canonicalize;
 /// File to convert types to baml code.
 use std::path::PathBuf;
-use dunce::canonicalize;
 
 use crate::errors::CliError;
 

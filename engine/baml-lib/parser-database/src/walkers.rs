@@ -112,12 +112,13 @@ impl<'db> crate::ParserDatabase {
 
     /// Find a function by name.
     pub fn find_function_by_name(&'db self, name: &str) -> Option<FunctionWalker<'db>> {
-        self.find_top_by_str(name)
-            .and_then(|top_id| match (top_id.as_old_function_id(), top_id.as_new_function_id()) {
-                    (Some(model_id), _) => Some(self.walk((false, model_id))),
-                    (_, Some(model_id)) => Some(self.walk((true, model_id))),
-                    _ => None,
-                })
+        self.find_top_by_str(name).and_then(|top_id| {
+            match (top_id.as_old_function_id(), top_id.as_new_function_id()) {
+                (Some(model_id), _) => Some(self.walk((false, model_id))),
+                (_, Some(model_id)) => Some(self.walk((true, model_id))),
+                _ => None,
+            }
+        })
     }
 
     /// Find a function by name.
@@ -219,7 +220,11 @@ impl<'db> crate::ParserDatabase {
     pub fn walk_old_functions(&self) -> impl Iterator<Item = FunctionWalker<'_>> {
         self.ast()
             .iter_tops()
-            .filter_map(|(top_id, _)| top_id.as_old_function_id().map(|model_id| (false, model_id)))
+            .filter_map(|(top_id, _)| {
+                top_id
+                    .as_old_function_id()
+                    .map(|model_id| (false, model_id))
+            })
             .map(move |top_id| Walker {
                 db: self,
                 id: top_id,

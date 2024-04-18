@@ -1,5 +1,3 @@
-use log::info;
-
 macro_rules! include_template {
     ($type:expr, $file:expr) => {
         include_str!(concat!("templates/", $type, "/", $file, ".hbs"))

@@ -16,7 +16,9 @@ pub(super) type Expression = repr::Expression;
 pub(super) type Identifier = repr::Identifier;
 pub(super) type TypeValue = ast::TypeValue;
 pub(super) type Function = repr::Node<repr::Function>;
+#[allow(dead_code)]
 pub(super) type FunctionV1 = repr::FunctionV1;
+#[allow(dead_code)]
 pub(super) type FunctionV2 = repr::FunctionV2;
 pub(super) type FunctionArgs = repr::FunctionArgs;
 pub(super) type Impl = repr::Node<repr::Implementation>;

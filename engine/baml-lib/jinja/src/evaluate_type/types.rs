@@ -2,7 +2,7 @@ use core::panic;
 use std::{collections::HashMap, ops::BitOr};
 
 use minijinja::machinery::{
-    ast::{Call, Expr, Spanned},
+    ast::{Call, Spanned},
     Span,
 };
 

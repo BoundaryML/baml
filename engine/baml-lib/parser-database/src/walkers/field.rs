@@ -199,9 +199,9 @@ pub fn to_type(ft: &FieldType) -> Type {
             }
             t
         }
-        FieldType::Tuple(airty, c, _) => {
+        FieldType::Tuple(arity, c, _) => {
             let mut t = Type::Tuple(c.iter().map(to_type).collect());
-            if airty.is_optional() {
+            if arity.is_optional() {
                 t = Type::None | t;
             }
             t
@@ -214,7 +214,6 @@ pub fn to_type(ft: &FieldType) -> Type {
             t
         }
         FieldType::Dictionary(kv, _) => {
-            
             Type::Map(Box::new(to_type(&kv.0)), Box::new(to_type(&kv.1)))
         }
     }

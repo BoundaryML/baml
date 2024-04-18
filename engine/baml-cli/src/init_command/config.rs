@@ -14,8 +14,6 @@ use super::{
     traits::{ToBamlSrc, WithLanguage, WithLoader, Writer},
 };
 
-
-
 pub(super) struct ProjectConfig {
     pub project_root: PathBuf,
     pub generators: Vec<Generator>,

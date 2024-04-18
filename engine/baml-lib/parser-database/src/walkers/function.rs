@@ -260,9 +260,7 @@ impl<'db> WithSerializeableContent for FunctionWalker<'db> {
         variant: Option<&VariantWalker<'_>>,
         db: &'_ ParserDatabase,
     ) -> serde_json::Value {
-        if let Some((idx, _)) = variant
-            .and_then(|v| v.properties().output_adapter.as_ref())
-        {
+        if let Some((idx, _)) = variant.and_then(|v| v.properties().output_adapter.as_ref()) {
             let adapter = &variant.unwrap().ast_variant()[*idx];
 
             return json!({

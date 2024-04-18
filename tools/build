@@ -90,7 +90,6 @@ case "$_path" in
 
     if [ "$_watch_mode" -eq 1 ]; then
       npx nodemon \
-        --verbose \
         --ext rs,hb,hbs,toml,baml \
         --ignore 'target' \
         --exec "${command}"
