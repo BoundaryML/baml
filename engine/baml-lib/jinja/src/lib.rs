@@ -5,7 +5,6 @@ use evaluate_type::get_variable_types;
 use minijinja;
 use minijinja::context;
 use serde::Serialize;
-use serde_json::{self};
 use std::collections::HashMap;
 
 pub use evaluate_type::{PredefinedTypes, Type, TypeError};

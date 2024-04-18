@@ -17,7 +17,14 @@ class Email {
     body string
 }
 
-function InputComplex(email: Email) -> string {
+function InputObject(email: Email) -> string {
   client Bar
-  prompt #" Given the email {{ email.subject }} "#
+  prompt #" subject line {{ email.subject }} "#
+}
+
+enum Color { RED BLUE GREEN }
+
+function InputEnum(color: Color) -> string {
+  client Bar
+  prompt #" color {{ color }} "#
 }

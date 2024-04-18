@@ -1,7 +1,9 @@
 mod expr;
 mod pretty_print;
 mod stmt;
+#[cfg(test)]
 mod test_expr;
+#[cfg(test)]
 mod test_stmt;
 mod types;
 

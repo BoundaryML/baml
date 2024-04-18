@@ -83,7 +83,7 @@ case "$_path" in
   # Subdirectories of engine must be matched before this line
   /engine | /engine/* )
     if [ "$_test_mode" -eq 1 ]; then
-      command="cargo build; cargo test; date"
+      command="cargo build && cargo test; date"
     else
       command="cargo build; date"
     fi
