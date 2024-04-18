@@ -123,6 +123,7 @@ enum Scope {
     Branch(HashMap<String, Type>, HashMap<String, Type>, bool),
 }
 
+#[derive(Debug)]
 pub struct PredefinedTypes {
     functions: HashMap<String, (Type, Vec<(String, Type)>)>,
     classes: HashMap<String, HashMap<String, Type>>,

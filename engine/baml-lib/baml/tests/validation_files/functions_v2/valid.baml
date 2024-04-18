@@ -2,12 +2,22 @@ client<llm> Bar {
   provider baml-openai-chat
 }
 
-function Foo() -> int {
+function InputNone() -> int {
   client Bar
   prompt #"fa"#
 }
 
-function FooBar(a: string, b: int | bool) -> int {
+function InputSimple(a: string, b: int | bool) -> int {
   client Bar
   prompt #"fa"#
+}
+
+class Email {
+    subject string
+    body string
+}
+
+function InputComplex(email: Email) -> string {
+  client Bar
+  prompt #" Given the email {{ email.subject }} "#
 }

@@ -2,18 +2,17 @@ use std::collections::HashSet;
 
 use either::Either;
 use internal_baml_diagnostics::DatamodelError;
-use internal_baml_prompt_parser::ast::WithSpan as WithPromptSpan;
-use internal_baml_schema_ast::ast::WithIdentifier;
+use internal_baml_schema_ast::ast::{self, WithIdentifier, WithName, WithSpan};
 use serde_json::json;
+use std::collections::HashMap;
 
 use crate::{
-    ast::{self, WithName, WithSpan},
     printer::{serialize_with_printer, WithSerializeableContent, WithStaticRenames},
     types::ToStringAttributes,
     ParserDatabase, WithSerialize,
 };
 
-use super::{field::FieldWalker, EnumWalker, VariantWalker};
+use super::{field::to_type, field::FieldWalker, EnumWalker, VariantWalker};
 
 /// A `class` declaration in the Prisma schema.
 pub type ClassWalker<'db> = super::Walker<'db, ast::ClassId>;
@@ -84,6 +83,16 @@ impl<'db> ClassWalker<'db> {
                 Some(Either::Right(_enm)) => None,
                 None => None,
             })
+    }
+
+    /// The name of the template string.
+    pub fn add_to_types(self, types: &mut internal_baml_jinja::PredefinedTypes) {
+        types.add_class(
+            self.name(),
+            self.static_fields()
+                .map(|f| (f.name().to_string(), to_type(f.r#type())))
+                .collect::<HashMap<_, _>>(),
+        )
     }
 }
 

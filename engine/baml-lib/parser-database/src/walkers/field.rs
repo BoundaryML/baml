@@ -174,7 +174,7 @@ pub fn to_type(ft: &FieldType) -> Type {
             let t = match idn {
                 ast::Identifier::ENV(_, _) => Type::String,
                 ast::Identifier::Ref(x, _) => Type::ClassRef(x.full_name.clone()),
-                ast::Identifier::Local(_, _) => Type::String,
+                ast::Identifier::Local(x, _) => Type::ClassRef(x.clone()),
                 ast::Identifier::Primitive(idx, _) => match idx {
                     ast::TypeValue::String => Type::String,
                     ast::TypeValue::Int => Type::Int,

@@ -3,7 +3,6 @@
 use internal_baml_jinja::{
     render_prompt, RenderContext, RenderContext_Client, RenderedChatMessage, TemplateStringMacro,
 };
-use log::info;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
