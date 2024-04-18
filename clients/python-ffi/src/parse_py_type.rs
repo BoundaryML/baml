@@ -2,41 +2,45 @@ use std::collections::HashMap;
 
 use anyhow::{bail, Result};
 use pyo3::{
-    exceptions::PyRuntimeError,
+    exceptions::{PyRuntimeError, PyTypeError},
     types::{PyAnyMethods, PyDict, PyList},
     PyErr, PyObject, PyResult, Python, ToPyObject,
 };
 use serde_json::json;
 
-pub struct SerializationError {
+struct SerializationError {
     position: Vec<String>,
     message: String,
+}
+
+impl SerializationError {
+    fn to_string(&self) -> String {
+        if self.position.is_empty() {
+            return self.message.clone();
+        } else {
+            format!("{}: {}", self.position.join("."), self.message)
+        }
+    }
 }
 
 struct Errors {
     errors: Vec<SerializationError>,
 }
 
-impl Errors {
-    fn push(&mut self, error: SerializationError) {
-        self.errors.push(error);
-    }
-}
-
 impl Into<PyErr> for Errors {
     fn into(self) -> PyErr {
         let errs = self.errors;
         match errs.len() {
-            0 => {
-                PyRuntimeError::new_err("Unexpected BAML error! Report this bug to the developers!")
-            }
-            1 => PyRuntimeError::new_err(errs.get(0).unwrap().message.as_str().to_string()),
+            0 => PyRuntimeError::new_err(
+                "Unexpected error! Report this bug to the github.com/boundaryml/baml",
+            ),
+            1 => PyTypeError::new_err(errs.get(0).unwrap().to_string()),
             _ => {
                 let mut message = format!("{} errors occurred:\n", errs.len());
-                for error in errs {
-                    message.push_str(&format!("{}\n", error.message));
+                for err in errs {
+                    message.push_str(&format!(" - {}\n", err.to_string()));
                 }
-                PyRuntimeError::new_err(message)
+                PyTypeError::new_err(message)
             }
         }
     }
@@ -124,7 +128,7 @@ pub fn parse_py_type(any: PyObject) -> PyResult<serde_json::Value> {
             }
         };
 
-        match pyobject_to_json(any, py, &mut get_type) {
+        match pyobject_to_json(any, py, &mut get_type, vec![]) {
             Ok(v) => Ok(v),
             Err(errors) => Err((Errors { errors }).into()),
         }
@@ -135,6 +139,7 @@ fn pyobject_to_json<'py, F>(
     any: PyObject,
     py: Python<'py>,
     to_type: &mut F,
+    prefix: Vec<String>,
 ) -> Result<serde_json::Value, Vec<SerializationError>>
 where
     F: FnMut(Python<'py>, PyObject) -> Result<MappedPyType>,
@@ -151,19 +156,42 @@ where
     match infered {
         MappedPyType::Enum(_, values) => Ok(json!(values)),
         MappedPyType::Class(_, kvs) => {
+            let mut errs = vec![];
             let mut obj = serde_json::Map::new();
             for (k, v) in kvs {
-                let v = pyobject_to_json(v, py, to_type)?;
-                obj.insert(k, v);
+                let mut prefix = prefix.clone();
+                prefix.push(k.clone());
+                match pyobject_to_json(v, py, to_type, prefix) {
+                    Ok(v) => {
+                        obj.insert(k, v);
+                    }
+                    Err(e) => errs.extend(e),
+                };
             }
-            Ok(serde_json::Value::Object(obj))
+            if !errs.is_empty() {
+                Err(errs)
+            } else {
+                Ok(serde_json::Value::Object(obj))
+            }
         }
         MappedPyType::List(items) => {
+            let mut errs = vec![];
             let mut arr = vec![];
+            let mut count = 0;
             for item in items {
-                arr.push(pyobject_to_json(item, py, to_type)?);
+                let mut prefix = prefix.clone();
+                prefix.push(count.to_string());
+                match pyobject_to_json(item, py, to_type, prefix) {
+                    Ok(v) => arr.push(v),
+                    Err(e) => errs.extend(e),
+                }
+                count += 1;
             }
-            Ok(serde_json::Value::Array(arr))
+            if !errs.is_empty() {
+                Err(errs)
+            } else {
+                Ok(serde_json::Value::Array(arr))
+            }
         }
         MappedPyType::String(v) => Ok(json!(v)),
         MappedPyType::Int(v) => Ok(json!(v)),
@@ -171,7 +199,7 @@ where
         MappedPyType::Bool(v) => Ok(json!(v)),
         MappedPyType::None => Ok(serde_json::Value::Null),
         MappedPyType::Unsupported(r#type) => Err(vec![SerializationError {
-            position: vec![],
+            position: prefix,
             message: format!("Unsupported type: {}", r#type),
         }]),
     }

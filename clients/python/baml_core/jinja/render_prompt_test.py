@@ -107,12 +107,12 @@ def test_bad_template() -> None:
                             2,
                             {
                                 "a": "b",
-                                "y": {},
+                                "y": object(),
                                 "c": "d",
                                 "x": None,
                             },
                             4,
-                            {},
+                            object(),
                             6,
                         ],
                     },
@@ -125,6 +125,5 @@ def test_bad_template() -> None:
                 template_string_macros=[],
             ),
         )
-    e.value
-    assert "{{foo.buzz.3.y}}: unsupported type" in str(e.value)
-    assert "{{foo.buzz.5}}: unsupported type" in str(e.value)
+    assert e.match("foo.buzz.3.y: Unsupported type")
+    assert e.match("foo.buzz.5: Unsupported type")

@@ -2,7 +2,7 @@ mod parse_py_type;
 
 use anyhow::{bail, Result};
 use internal_baml_jinja;
-use parse_py_type::{parse_py_type, SerializationError};
+use parse_py_type::parse_py_type;
 use pyo3::exceptions::{PyRuntimeError, PyTypeError};
 use pyo3::prelude::{
     pyclass, pyfunction, pymethods, pymodule, wrap_pyfunction, Bound, PyAnyMethods, PyModule,
