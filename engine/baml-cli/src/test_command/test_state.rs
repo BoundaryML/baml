@@ -3,7 +3,7 @@ use colored::*;
 use log::debug;
 use std::{collections::HashMap, ops::Deref, str::FromStr};
 
-use crate::errors::CliError;
+
 
 use super::ipc_comms::{LogSchema, MessageData, Template, TestCaseStatus, ValueType};
 
@@ -532,7 +532,7 @@ pub(crate) async fn on_finish_test(
             }
         }
         Err(e) => {
-            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, e));
+            Err(std::io::Error::new(std::io::ErrorKind::InvalidData, e))
         }
     }
 }

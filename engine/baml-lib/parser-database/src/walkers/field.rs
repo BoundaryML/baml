@@ -200,22 +200,22 @@ pub fn to_type(ft: &FieldType) -> Type {
             t
         }
         FieldType::Tuple(airty, c, _) => {
-            let mut t = Type::Tuple(c.iter().map(|f| to_type(f)).collect());
+            let mut t = Type::Tuple(c.iter().map(to_type).collect());
             if airty.is_optional() {
                 t = Type::None | t;
             }
             t
         }
         FieldType::Union(arity, options, _) => {
-            let mut t = Type::Union(options.iter().map(|f| to_type(f)).collect());
+            let mut t = Type::Union(options.iter().map(to_type).collect());
             if arity.is_optional() {
                 t = Type::None | t;
             }
             t
         }
         FieldType::Dictionary(kv, _) => {
-            let t = Type::Map(Box::new(to_type(&kv.0)), Box::new(to_type(&kv.1)));
-            t
+            
+            Type::Map(Box::new(to_type(&kv.0)), Box::new(to_type(&kv.1)))
         }
     }
 }

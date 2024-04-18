@@ -147,7 +147,7 @@ impl<'db> WithSerialize for ClassWalker<'db> {
         block: Option<&internal_baml_prompt_parser::ast::PrinterBlock>,
         span: &internal_baml_diagnostics::Span,
     ) -> Result<String, internal_baml_diagnostics::DatamodelError> {
-        let printer_template = match &block.map(|b| b.printer.as_ref()).flatten() {
+        let printer_template = match &block.and_then(|b| b.printer.as_ref()) {
             Some((p, _)) => self
                 .db
                 .find_printer(p)
@@ -176,7 +176,7 @@ impl<'db> WithSerialize for ClassWalker<'db> {
             // TODO(sam) - if enum serialization fails, then we do not surface the error to the user.
             // That is bad!!!!!!!
             .filter_map(
-                |e| match e.serialize(&db, None, None, e.identifier().span()) {
+                |e| match e.serialize(db, None, None, e.identifier().span()) {
                     Ok(enum_schema) => Some((e.name().to_string(), enum_schema)),
                     Err(_) => None,
                 },

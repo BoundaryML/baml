@@ -458,7 +458,7 @@ fn visit_function<'db>(idx: FunctionId, function: &'db ast::Function, ctx: &mut 
                     ));
                 }
                 prompt = match &field.value {
-                    Some(val) => coerce::template_string(val, ctx.diagnostics).map(|v| v),
+                    Some(val) => coerce::template_string(val, ctx.diagnostics),
                     None => None,
                 }
             }

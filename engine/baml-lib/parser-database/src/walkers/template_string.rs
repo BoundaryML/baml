@@ -1,6 +1,6 @@
 use either::Either;
 use internal_baml_jinja::{PredefinedTypes, Type};
-use internal_baml_schema_ast::ast::{self, FieldType, FunctionArgs, WithIdentifier, WithName};
+use internal_baml_schema_ast::ast::{self, FunctionArgs, WithIdentifier, WithName};
 
 use crate::types::TemplateStringProperties;
 

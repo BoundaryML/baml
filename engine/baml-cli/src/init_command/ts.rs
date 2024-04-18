@@ -44,7 +44,7 @@ impl WithLoader<TypeScriptConfig> for TypeScriptConfig {
         let target_dir = match find_source_directory(&ts_project_root.join("tsconfig.json")) {
             Ok(dir) => dir,
             Err(e) => {
-                println!("Warning: {}", e.to_string());
+                println!("Warning: {}", e);
                 ts_project_root.clone()
             }
         };

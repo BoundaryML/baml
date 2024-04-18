@@ -3,7 +3,6 @@ use napi::tokio::runtime::Runtime;
 use std::{
   sync::mpsc::{Receiver, Sender, TryRecvError},
   time::Duration,
-  vec,
 };
 
 use crate::api_wrapper::{api_interface::BoundaryAPI, core_types::LogSchema, APIWrapper};

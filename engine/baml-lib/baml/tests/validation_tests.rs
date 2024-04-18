@@ -1,7 +1,7 @@
 mod panic_with_diff;
 
 use baml_lib::{SourceFile, ValidatedSchema};
-use env_logger;
+
 use std::sync::Once;
 
 use std::{
