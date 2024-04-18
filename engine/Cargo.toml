@@ -16,7 +16,7 @@ indexmap = { version = "2.1.0", features = ["serde"] }
 indoc = "2.0.1"
 
 [workspace.package]
-version = "0.18.0-canary.0"
+version = "0.18.0-canary.1"
 authors = ["Boundary <contact@boundaryml.com>"]
 
 description = "BAML Toolchain"
