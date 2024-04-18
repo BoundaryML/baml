@@ -62,7 +62,7 @@ impl WithFileContent<TSLanguageFeatures> for Walker<'_, (&Function, &FunctionCon
             &json!({
                 "function": function_content,
                 "name": impl_.name,
-                "prompt": impl_.prompt_template,
+                "prompt": impl_.prompt_template.replace("`", "\\`"),
                 "client": impl_.client,
                 "output_schema": impl_.output_schema,
                 "template_macros": [],
