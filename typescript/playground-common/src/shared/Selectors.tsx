@@ -29,7 +29,7 @@ const FunctionDropdown: React.FC = () => {
         <Button
           variant="ghost"
           aria-expanded={open}
-          className="max-w-[300px] justify-between flex hover:bg-secondary hover:text-foreground"
+          className="max-w-[300px] justify-between flex hover:bg-vscode-editorSuggestWidget-selectedBackground hover:text-foreground"
         >
           <span className="w-full -ml-2 text-left truncate">{value ?? 'Select a function...'}</span>
           <ChevronsUpDown className="w-4 h-4 ml-2 opacity-50 shrink-0" />

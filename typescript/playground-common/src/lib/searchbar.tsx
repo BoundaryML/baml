@@ -46,9 +46,10 @@ const SearchBarWithSelector: React.FC<{
   }, [handleKeyDown])
 
   return (
-    <div className="flex flex-col gap-4 p-4 bg-background text-foreground">
+    <div className="flex flex-col gap-4 p-4 bg-vscode-dropdown-background text-vscode-dropdown-foreground">
       <Input
         placeholder="Search..."
+        className="border-vscode-panel-border"
         value={searchTerm}
         onChange={(e) => setSearchTerm(e.target.value)}
         // Additional TailwindCSS classes can be applied if necessary
@@ -65,7 +66,9 @@ const SearchBarWithSelector: React.FC<{
               className={cn(
                 'cursor-pointer w-full',
                 'py-0.5 px-1 rounded-md',
-                highlightedIndex === index ? 'bg-secondary text-secondary-foreground' : '',
+                highlightedIndex === index
+                  ? 'bg-vscode-menu-selectionBackground text-vscode-menu-selectionForeground'
+                  : '',
               )}
               onClick={() => {
                 setSelectedOption(option.value)
