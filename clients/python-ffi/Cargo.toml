@@ -1,7 +1,7 @@
 [package]
 name = "baml-ffi"
 edition = "2021"
-version = "0.1.0"
+version = "0.1.5"
 authors = ["Boundary <contact@boundaryml.com>"]
 description = "BAML python bindings (Cargo.toml)"
 license-file = "LICENSE"
