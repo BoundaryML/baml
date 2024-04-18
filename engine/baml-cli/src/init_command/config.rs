@@ -14,8 +14,6 @@ use super::{
     traits::{ToBamlSrc, WithLanguage, WithLoader, Writer},
 };
 
-use crate::shell::build_shell_command;
-
 pub(super) struct ProjectConfig {
     pub project_root: PathBuf,
     pub generators: Vec<Generator>,

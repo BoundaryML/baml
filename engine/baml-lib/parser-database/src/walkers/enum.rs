@@ -1,5 +1,5 @@
 use internal_baml_diagnostics::DatamodelError;
-use internal_baml_prompt_parser::ast::{PrinterBlock, WithSpan};
+
 use internal_baml_schema_ast::ast::{WithDocumentation, WithIdentifier, WithName};
 use serde_json::json;
 
@@ -84,7 +84,7 @@ impl<'db> WithSerialize for EnumWalker<'db> {
         block: Option<&internal_baml_prompt_parser::ast::PrinterBlock>,
         span: &internal_baml_diagnostics::Span,
     ) -> Result<String, DatamodelError> {
-        let printer_template = match block.map(|b| b.printer.as_ref()).flatten() {
+        let printer_template = match block.and_then(|b| b.printer.as_ref()) {
             Some((p, _)) => self
                 .db
                 .find_printer(p)

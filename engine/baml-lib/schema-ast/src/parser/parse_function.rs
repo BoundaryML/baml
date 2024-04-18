@@ -75,7 +75,7 @@ pub(crate) fn parse_function(
         }
     }
 
-    let response = match (name) {
+    let response = match name {
         Some(name) => {
             let msg = match (input, output) {
                 (Some(input), Some(output)) => {

@@ -22,7 +22,7 @@ impl TypeScriptConfig {
 impl WithLoader<TypeScriptConfig> for TypeScriptConfig {
     fn from_dialoguer(
         no_prompt: bool,
-        project_root: &PathBuf,
+        _project_root: &PathBuf,
         writer: &mut Writer,
     ) -> Result<Self, CliError> {
         let modified_prompt = format!(
@@ -44,7 +44,7 @@ impl WithLoader<TypeScriptConfig> for TypeScriptConfig {
         let target_dir = match find_source_directory(&ts_project_root.join("tsconfig.json")) {
             Ok(dir) => dir,
             Err(e) => {
-                println!("Warning: {}", e.to_string());
+                println!("Warning: {}", e);
                 ts_project_root.clone()
             }
         };

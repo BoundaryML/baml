@@ -3,7 +3,6 @@ use napi::tokio::runtime::Runtime;
 use std::{
   sync::mpsc::{Receiver, Sender, TryRecvError},
   time::Duration,
-  vec,
 };
 
 use crate::api_wrapper::{api_interface::BoundaryAPI, core_types::LogSchema, APIWrapper};
@@ -177,6 +176,7 @@ impl BatchProcessor {
     }
   }
 
+  #[allow(dead_code)]
   pub fn restart(&mut self, api_config: APIWrapper, max_batch_size: usize) -> Result<()> {
     self.stop()?;
     let (tx, rx, join_handle) = start_worker(&api_config, max_batch_size);

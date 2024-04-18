@@ -11,7 +11,7 @@ use internal_baml_parser_database::{
     WithStaticRenames,
 };
 
-use internal_baml_schema_ast::ast::{self, FieldArity, RawString, WithName, WithSpan};
+use internal_baml_schema_ast::ast::{self, FieldArity, WithName, WithSpan};
 use serde::Serialize;
 
 /// This class represents the intermediate representation of the BAML AST.
@@ -54,6 +54,7 @@ impl IntermediateRepr {
         self.clients.iter().map(|e| Walker { db: self, item: e })
     }
 
+    #[allow(dead_code)]
     pub fn walk_template_strings<'a>(
         &'a self,
     ) -> impl Iterator<Item = Walker<'a, &'a Node<TemplateString>>> {
@@ -62,6 +63,7 @@ impl IntermediateRepr {
             .map(|e| Walker { db: self, item: e })
     }
 
+    #[allow(dead_code)]
     pub fn walk_tests<'a>(&'a self) -> impl Iterator<Item = Walker<'a, &'a Node<Function>>> {
         self.functions
             .iter()
@@ -291,6 +293,7 @@ pub enum Identifier {
     /// Starts with env.*
     ENV(String),
     /// The path to a Local Identifer + the local identifer. Separated by '.'
+    #[allow(dead_code)]
     Ref(Vec<String>),
     /// A string without spaces or '.' Always starts with a letter. May contain numbers
     Local(String),
@@ -364,7 +367,6 @@ pub struct TemplateString {
 
 impl WithRepr<TemplateString> for TemplateStringWalker<'_> {
     fn repr(&self, _db: &ParserDatabase) -> Result<TemplateString> {
-        let node = self.ast_node();
         Ok(TemplateString {
             name: self.name().to_string(),
             params: self.ast_node().input().map_or(vec![], |e| match e {
@@ -381,7 +383,7 @@ impl WithRepr<TemplateString> for TemplateStringWalker<'_> {
                             .ok()
                     })
                     .collect::<Vec<_>>(),
-                ast::FunctionArgs::Unnamed(arg) => {
+                ast::FunctionArgs::Unnamed(_) => {
                     vec![]
                 }
             }),

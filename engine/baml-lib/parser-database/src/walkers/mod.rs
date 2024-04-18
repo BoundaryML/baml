@@ -20,7 +20,7 @@ pub use configuration::*;
 use either::Either;
 pub use field::*;
 pub use function::*;
-use internal_baml_schema_ast::ast::{Identifier, TopId, WithName};
+use internal_baml_schema_ast::ast::{self, FieldType, Identifier, TopId, WithName};
 pub use r#class::*;
 pub use r#enum::*;
 pub use variants::*;
@@ -112,15 +112,13 @@ impl<'db> crate::ParserDatabase {
 
     /// Find a function by name.
     pub fn find_function_by_name(&'db self, name: &str) -> Option<FunctionWalker<'db>> {
-        self.find_top_by_str(name)
-            .map(
-                |top_id| match (top_id.as_old_function_id(), top_id.as_new_function_id()) {
-                    (Some(model_id), _) => Some(self.walk((false, model_id))),
-                    (_, Some(model_id)) => Some(self.walk((true, model_id))),
-                    _ => None,
-                },
-            )
-            .flatten()
+        self.find_top_by_str(name).and_then(|top_id| {
+            match (top_id.as_old_function_id(), top_id.as_new_function_id()) {
+                (Some(model_id), _) => Some(self.walk((false, model_id))),
+                (_, Some(model_id)) => Some(self.walk((true, model_id))),
+                _ => None,
+            }
+        })
     }
 
     /// Find a function by name.
@@ -222,9 +220,10 @@ impl<'db> crate::ParserDatabase {
     pub fn walk_old_functions(&self) -> impl Iterator<Item = FunctionWalker<'_>> {
         self.ast()
             .iter_tops()
-            .filter_map(|(top_id, _)| match top_id.as_old_function_id() {
-                Some(model_id) => Some((false, model_id)),
-                _ => None,
+            .filter_map(|(top_id, _)| {
+                top_id
+                    .as_old_function_id()
+                    .map(|model_id| (false, model_id))
             })
             .map(move |top_id| Walker {
                 db: self,
@@ -236,10 +235,7 @@ impl<'db> crate::ParserDatabase {
     pub fn walk_new_functions(&self) -> impl Iterator<Item = FunctionWalker<'_>> {
         self.ast()
             .iter_tops()
-            .filter_map(|(top_id, _)| match top_id.as_new_function_id() {
-                Some(model_id) => Some((true, model_id)),
-                _ => None,
-            })
+            .filter_map(|(top_id, _)| top_id.as_new_function_id().map(|model_id| (true, model_id)))
             .map(move |top_id| Walker {
                 db: self,
                 id: top_id,
@@ -299,5 +295,67 @@ impl<'db> crate::ParserDatabase {
                 db: self,
                 id: (top_id, "test_case"),
             })
+    }
+
+    /// Convert a field type to a `Type`.
+    pub fn to_jinja_type(&self, ft: &FieldType) -> internal_baml_jinja::Type {
+        use internal_baml_jinja::Type;
+        match ft {
+            FieldType::Identifier(arity, idn) => {
+                let t = match idn {
+                    ast::Identifier::ENV(_, _) => Type::String,
+                    ast::Identifier::Ref(x, _) => match self.find_type(idn) {
+                        None => Type::Undefined,
+                        Some(Either::Left(_)) => Type::ClassRef(x.full_name.clone()),
+                        Some(Either::Right(_)) => Type::String,
+                    },
+                    ast::Identifier::Local(x, _) => match self.find_type(idn) {
+                        None => Type::Undefined,
+                        Some(Either::Left(_)) => Type::ClassRef(x.clone()),
+                        Some(Either::Right(_)) => Type::String,
+                    },
+                    ast::Identifier::Primitive(idx, _) => match idx {
+                        ast::TypeValue::String => Type::String,
+                        ast::TypeValue::Int => Type::Int,
+                        ast::TypeValue::Float => Type::Float,
+                        ast::TypeValue::Bool => Type::Bool,
+                        ast::TypeValue::Char => Type::String,
+                        ast::TypeValue::Null => Type::None,
+                    },
+                    ast::Identifier::String(_, _) => Type::String,
+                    ast::Identifier::Invalid(_, _) => Type::Unknown,
+                };
+                if arity.is_optional() {
+                    Type::None | t
+                } else {
+                    t
+                }
+            }
+            FieldType::List(inner, dims, _) => {
+                let mut t = self.to_jinja_type(inner);
+                for _ in 0..*dims {
+                    t = Type::List(Box::new(t));
+                }
+                t
+            }
+            FieldType::Tuple(arity, c, _) => {
+                let mut t = Type::Tuple(c.iter().map(|e| self.to_jinja_type(e)).collect());
+                if arity.is_optional() {
+                    t = Type::None | t;
+                }
+                t
+            }
+            FieldType::Union(arity, options, _) => {
+                let mut t = Type::Union(options.iter().map(|e| self.to_jinja_type(e)).collect());
+                if arity.is_optional() {
+                    t = Type::None | t;
+                }
+                t
+            }
+            FieldType::Dictionary(kv, _) => Type::Map(
+                Box::new(self.to_jinja_type(&kv.0)),
+                Box::new(self.to_jinja_type(&kv.1)),
+            ),
+        }
     }
 }

@@ -158,6 +158,38 @@ function ClassifyMessage(input: string) -> Category {
 }
 `;
 
+const chatRolesBaml = `
+// This will be available as an enum in your Python and Typescript code.
+enum Category {
+    Refund
+    CancelOrder
+    TechnicalSupport
+    AccountIssue
+    Question
+}
+
+function ClassifyMessage(input: string) -> Category {
+  client GPT4
+
+  prompt #"
+    {# You can use _.chat("system") to start a system message #}
+    {{ _.chat("system") }}
+
+    Classify the following INPUT into ONE
+    of the following categories:
+
+    {{ ctx.output_schema }}
+
+    {# And _.chat("user") to start a user message #}
+    {{ _.chat("user") }}
+
+    INPUT: {{ input }}
+
+    Response:
+  "#
+}
+`;
+
 const symbolTuningBaml = `
 enum Category {
     Refund @alias("k1")

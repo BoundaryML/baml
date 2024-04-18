@@ -1,10 +1,5 @@
-use std::error::Error;
-
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span};
-use internal_baml_jinja::{TypeError, ValidationError};
-use internal_baml_parser_database::walkers::to_type;
 use internal_baml_schema_ast::ast::{WithIdentifier, WithName, WithSpan};
-use serde::de;
 
 use crate::validate::validation_pipeline::context::Context;
 
@@ -58,6 +53,9 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
         .collect::<Vec<_>>();
 
     let mut defined_types = internal_baml_jinja::PredefinedTypes::default();
+    ctx.db.walk_classes().for_each(|t| {
+        t.add_to_types(&mut defined_types);
+    });
     ctx.db.walk_templates().for_each(|t| {
         t.add_to_types(&mut defined_types);
     });
@@ -80,7 +78,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
             template.ast_node().input()
         {
             p.args.iter().for_each(|(name, t)| {
-                defined_types.add_variable(name.name(), to_type(&t.field_type))
+                defined_types.add_variable(name.name(), ctx.db.to_jinja_type(&t.field_type))
             });
         }
         match internal_baml_jinja::validate_template(
@@ -137,7 +135,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
         defined_types.start_scope();
         func.walk_input_args().for_each(|arg| {
             let name = arg.name();
-            let field_type = to_type(arg.field_type());
+            let field_type = ctx.db.to_jinja_type(arg.field_type());
             defined_types.add_variable(name, field_type);
         });
         match internal_baml_jinja::validate_template(

@@ -4,7 +4,7 @@ use super::{
     Rule,
 };
 use crate::{assert_correct_parser, ast::*, unreachable_rule};
-use internal_baml_diagnostics::{DatamodelWarning, Diagnostics};
+use internal_baml_diagnostics::Diagnostics;
 
 pub(crate) fn parse_expression(
     token: Pair<'_>,

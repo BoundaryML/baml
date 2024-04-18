@@ -2,6 +2,8 @@ mod panic_with_diff;
 
 use baml_lib::{SourceFile, ValidatedSchema};
 
+use std::sync::Once;
+
 use std::{
     fs,
     io::Write as _,
@@ -40,8 +42,14 @@ fn parse_schema_fail_on_diagnostics(
     }
 }
 
+static INIT: Once = Once::new();
+
 #[inline(never)] // we want to compile fast
 fn run_validation_test(test_file_path: &str) {
+    INIT.call_once(|| {
+        env_logger::init();
+    });
+
     let file_path = path::Path::new(TESTS_ROOT).join(test_file_path);
     let text = fs::read_to_string(file_path.clone()).unwrap();
     let last_comment_idx = {
@@ -101,10 +109,7 @@ fn run_validation_test(test_file_path: &str) {
         (false, Ok(_)) => String::new(), // expected diagnostics, got none
     };
 
-    if std::env::var("UPDATE_EXPECT")
-        .map(|s| s == "1")
-        .unwrap_or(false)
-    {
+    if std::env::var("UPDATE_EXPECT").map_or(|s| s == "1", false) {
         let mut file = fs::File::create(&file_path).unwrap(); // truncate
 
         let schema = last_comment_idx

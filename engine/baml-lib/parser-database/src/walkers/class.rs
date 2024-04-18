@@ -2,12 +2,11 @@ use std::collections::HashSet;
 
 use either::Either;
 use internal_baml_diagnostics::DatamodelError;
-use internal_baml_prompt_parser::ast::WithSpan as WithPromptSpan;
-use internal_baml_schema_ast::ast::WithIdentifier;
+use internal_baml_schema_ast::ast::{self, WithIdentifier, WithName, WithSpan};
 use serde_json::json;
+use std::collections::HashMap;
 
 use crate::{
-    ast::{self, WithName, WithSpan},
     printer::{serialize_with_printer, WithSerializeableContent, WithStaticRenames},
     types::ToStringAttributes,
     ParserDatabase, WithSerialize,
@@ -85,6 +84,16 @@ impl<'db> ClassWalker<'db> {
                 None => None,
             })
     }
+
+    /// The name of the template string.
+    pub fn add_to_types(self, types: &mut internal_baml_jinja::PredefinedTypes) {
+        types.add_class(
+            self.name(),
+            self.static_fields()
+                .map(|f| (f.name().to_string(), self.db.to_jinja_type(f.r#type())))
+                .collect::<HashMap<_, _>>(),
+        )
+    }
 }
 
 impl<'db> WithIdentifier for ClassWalker<'db> {
@@ -138,7 +147,7 @@ impl<'db> WithSerialize for ClassWalker<'db> {
         block: Option<&internal_baml_prompt_parser::ast::PrinterBlock>,
         span: &internal_baml_diagnostics::Span,
     ) -> Result<String, internal_baml_diagnostics::DatamodelError> {
-        let printer_template = match &block.map(|b| b.printer.as_ref()).flatten() {
+        let printer_template = match &block.and_then(|b| b.printer.as_ref()) {
             Some((p, _)) => self
                 .db
                 .find_printer(p)
@@ -167,7 +176,7 @@ impl<'db> WithSerialize for ClassWalker<'db> {
             // TODO(sam) - if enum serialization fails, then we do not surface the error to the user.
             // That is bad!!!!!!!
             .filter_map(
-                |e| match e.serialize(&db, None, None, e.identifier().span()) {
+                |e| match e.serialize(db, None, None, e.identifier().span()) {
                     Ok(enum_schema) => Some((e.name().to_string(), enum_schema)),
                     Err(_) => None,
                 },

@@ -188,7 +188,7 @@ async fn run_and_update_state(
         }
         Err(e) => {
             eprintln!("Failed to execute command: {}", e);
-            return Err(e);
+            Err(e)
         }
     }
 }

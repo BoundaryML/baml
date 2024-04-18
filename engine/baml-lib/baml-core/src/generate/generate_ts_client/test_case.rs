@@ -2,8 +2,8 @@ use serde_json::json;
 
 use crate::generate::{
     dir_writer::WithFileContent,
-    generate_ts_client::{field_type::to_parse_expression, ts_language_features::ToTypeScript},
-    ir::{self, Function, FunctionArgs, TestCase, Walker},
+    generate_ts_client::ts_language_features::ToTypeScript,
+    ir::{self, Function, TestCase, Walker},
 };
 
 use super::{
@@ -17,7 +17,7 @@ impl WithFileContent<TSLanguageFeatures> for Walker<'_, (&Function, &TestCase)> 
     }
 
     fn file_name(&self) -> String {
-        format!("{}.test", self.item.0.elem.name().clone())
+        format!("{}.test", self.item.0.elem.name())
     }
 
     fn write(&self, collector: &mut TSFileCollector) {
@@ -42,8 +42,8 @@ impl WithFileContent<TSLanguageFeatures> for Walker<'_, (&Function, &TestCase)> 
         );
         file.add_import("@boundaryml/baml-core/ffi_layer", "traceAsync", None, false);
         let test_content = json!({
-          "function_name": function.elem.name().clone(),
-          "test_name": test_case.elem.name.clone(),
+          "function_name": function.elem.name(),
+          "test_name": test_case.elem.name,
           "impl_names": impls,
           "test_content": test_case.elem.content.to_ts(),
         });

@@ -8,7 +8,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
         let (provider, span) = &f.properties().provider;
         if !provider.starts_with("baml") {
             ctx.push_warning(DatamodelWarning::new(
-                "Baml Providers are: baml-openai-[chat,completion] or baml-anthropic.".into(),
+                "Baml Providers are: baml-azure-[chat,completion], baml-openai-[chat,completion], baml-anthropic.".into(),
                 span.clone(),
             ))
         }

@@ -13,6 +13,7 @@ pub(crate) struct LlmRequestCacheHit {
 }
 
 impl LlmRequestCacheHit {
+  #[allow(dead_code)]
   pub fn latency_ms(&self) -> u64 {
     self.latency_ms
   }

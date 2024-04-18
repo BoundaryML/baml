@@ -204,6 +204,7 @@ impl Default for Template {
 }
 
 impl LLMEventInputPrompt {
+  #[allow(dead_code)]
   fn pretty_print(&self) -> String {
     match &self.template {
       Template::Single(s) => s.clone(),

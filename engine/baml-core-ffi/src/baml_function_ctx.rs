@@ -58,6 +58,7 @@ impl ScopeGuard {
     otel::log_event(name, event)
   }
 
+  #[allow(dead_code)]
   pub fn close(self) {
     drop(self.span)
   }

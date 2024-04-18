@@ -3,7 +3,6 @@
 use internal_baml_jinja::{
     render_prompt, RenderContext, RenderContext_Client, RenderedChatMessage, TemplateStringMacro,
 };
-use log::info;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
@@ -234,7 +233,7 @@ fn serialize_function(
                 })
             })
             .collect::<Vec<_>>(),
-        impls: serialize_impls(&schema, func, template_string_macros, selected_test_name),
+        impls: serialize_impls(schema, func, template_string_macros, selected_test_name),
         syntax,
     }
 }
@@ -282,7 +281,7 @@ fn apply_replacers(variant: VariantWalker, mut content: String) -> String {
         content = content.replace(&input_var.key(), &format!("{{{input_replacement}}}"));
     }
     for (output_var, output_replacement) in output_replacers {
-        content = content.replace(&output_var.key(), &format!("{output_replacement}"));
+        content = content.replace(&output_var.key(), &output_replacement.to_string());
     }
     content
 }
@@ -311,7 +310,7 @@ fn choose_client(
         .find(|c| Some(c.name()) == client_filter.as_deref())
     {
         Some(c) => c,
-        None => clients.get(0).ok_or(anyhow::anyhow!(
+        None => clients.first().ok_or(anyhow::anyhow!(
             "failed to resolve client {}",
             client_or_strategy
         ))?,
@@ -413,7 +412,7 @@ fn serialize_impls(
             Some(name) => func.walk_tests().find(|t| t.name() == name),
             None => None,
         })
-        .or(func.walk_tests().nth(0));
+        .or(func.walk_tests().next());
 
         let test_case_name = selected_test.map(|t| t.name().to_string());
         let args = selected_test
@@ -436,19 +435,19 @@ fn serialize_impls(
             env: HashMap::new(),
         };
 
-        let rendered = render_prompt(prompt.value(), &args, &render_ctx, &template_string_macros);
+        let rendered = render_prompt(prompt.value(), &args, &render_ctx, template_string_macros);
         vec![Impl {
             name: StringSpan::new("default_config", func.identifier().span()),
             prompt_key: prompt.span().into(),
             prompt: match rendered {
                 Ok(internal_baml_jinja::RenderedPrompt::Completion(completion)) => {
                     PromptPreview::Completion {
-                        completion: completion,
+                        completion,
                         test_case: test_case_name,
                     }
                 }
                 Ok(internal_baml_jinja::RenderedPrompt::Chat(chat)) => PromptPreview::Chat {
-                    chat: chat,
+                    chat,
                     test_case: test_case_name,
                 },
                 Err(err) => PromptPreview::Error {

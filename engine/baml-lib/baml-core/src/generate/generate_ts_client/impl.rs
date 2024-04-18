@@ -3,9 +3,8 @@ use serde_json::json;
 use crate::generate::{
     dir_writer::WithFileContent,
     generate_ts_client::{field_type::to_parse_expression, ts_language_features::ToTypeScript},
-    ir::{repr, Function, FunctionArgs, Impl, Prompt, Walker},
+    ir::{Function, FunctionArgs, Impl, Prompt, Walker},
 };
-use std::collections::HashMap;
 
 use super::{
     template::render_with_hbs,
@@ -26,7 +25,7 @@ impl WithFileContent<TSLanguageFeatures> for Walker<'_, (&Function, &Impl)> {
 
         let file = collector.start_file(self.file_dir(), self.file_name(), false);
         file.add_import("../client", impl_.elem.client.clone(), None, false);
-        file.add_import("../function", function.elem.name().clone(), None, false);
+        file.add_import("../function", function.elem.name(), None, false);
         file.add_import(
             "@boundaryml/baml-core/deserializer/deserializer",
             "Deserializer",

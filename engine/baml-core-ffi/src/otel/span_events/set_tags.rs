@@ -14,10 +14,12 @@ pub(crate) struct SetTags {
 }
 
 impl SetTags {
+  #[allow(dead_code)]
   pub fn tags(&self) -> &HashMap<String, Option<String>> {
     &self.tags
   }
 
+  #[allow(dead_code)]
   pub fn tags_mut(&mut self) -> &mut HashMap<String, Option<String>> {
     &mut self.tags
   }

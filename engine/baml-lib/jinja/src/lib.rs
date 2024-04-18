@@ -5,7 +5,6 @@ use evaluate_type::get_variable_types;
 use minijinja;
 use minijinja::context;
 use serde::Serialize;
-use serde_json::{self, map::Iter};
 use std::collections::HashMap;
 
 pub use evaluate_type::{PredefinedTypes, Type, TypeError};
@@ -63,6 +62,7 @@ pub fn validate_template(
     }
 }
 
+#[allow(non_camel_case_types)]
 #[derive(Clone, Debug, Serialize)]
 pub struct RenderContext_Client {
     pub name: String,

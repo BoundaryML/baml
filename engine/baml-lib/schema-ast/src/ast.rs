@@ -256,13 +256,13 @@ impl TopId {
 
     pub fn as_old_function_id(self) -> Option<FunctionId> {
         match self {
-            TopId::Function(id) if id.0 .0 == false => Some(id),
+            TopId::Function(id) if !id.0 .0 => Some(id),
             _ => None,
         }
     }
     pub fn as_new_function_id(self) -> Option<FunctionId> {
         match self {
-            TopId::Function(id) if id.0 .0 == true => Some(id),
+            TopId::Function(id) if id.0 .0 => Some(id),
             _ => None,
         }
     }

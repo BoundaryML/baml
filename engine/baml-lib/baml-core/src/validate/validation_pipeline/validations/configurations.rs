@@ -1,4 +1,4 @@
-use internal_baml_diagnostics::{DatamodelError, DatamodelWarning};
+use internal_baml_diagnostics::DatamodelWarning;
 
 use crate::validate::validation_pipeline::context::Context;
 

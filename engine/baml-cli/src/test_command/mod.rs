@@ -239,7 +239,6 @@ pub fn run(
             let test_runner: TestRunner = match generator.language {
                 GeneratorLanguage::Python => TestRunner::Pytest,
                 GeneratorLanguage::TypeScript => TestRunner::Jest,
-                _ => return Err("Invalid test runner".into()),
             };
 
             // Run the tests

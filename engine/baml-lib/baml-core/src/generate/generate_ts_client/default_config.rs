@@ -25,7 +25,7 @@ impl WithFileContent<TSLanguageFeatures> for Walker<'_, (&Function, &FunctionCon
 
         let file = collector.start_file(self.file_dir(), self.file_name(), false);
         file.add_import("../client", impl_.client.clone(), None, false);
-        file.add_import("../function", function.elem.name().clone(), None, false);
+        file.add_import("../function", function.elem.name(), None, false);
         file.add_import(
             "@boundaryml/baml-core/deserializer/deserializer",
             "Deserializer",

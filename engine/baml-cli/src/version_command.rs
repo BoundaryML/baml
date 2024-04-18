@@ -197,7 +197,7 @@ fn extract_client_version(package_version_command: &str, output: &str) -> Result
         // for other python package managers, they have "version" in the same line
         Regex::new(r#"(?i)\b(?:version)\b"#)
     }
-    .map_err(|e| CliError::StringError(format!("{} Error: {}", "Failed!".red(), e.to_string())))?;
+    .map_err(|e| CliError::StringError(format!("{} Error: {}", "Failed!".red(), e)))?;
 
     let Some(version_line) = output.lines().find(|line| version_line_re.is_match(line)) else {
         return Err(CliError::StringError(format!(
@@ -207,9 +207,8 @@ fn extract_client_version(package_version_command: &str, output: &str) -> Result
         )));
     };
 
-    let version_re = Regex::new("[0-9][^ ]*").map_err(|e| {
-        CliError::StringError(format!("{} Error: {}", "Failed!".red(), e.to_string()))
-    })?;
+    let version_re = Regex::new("[0-9][^ ]*")
+        .map_err(|e| CliError::StringError(format!("{} Error: {}", "Failed!".red(), e)))?;
 
     let Some(version) = version_re.find(version_line) else {
         log::info!("version_line: {:?}", version_line);

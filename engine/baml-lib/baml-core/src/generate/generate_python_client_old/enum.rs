@@ -1,9 +1,5 @@
-use internal_baml_parser_database::{
-    walkers::{EnumValueWalker, EnumWalker},
-    ParserDatabase, WithStaticRenames,
-};
-use internal_baml_schema_ast::ast::{Enum, WithName};
-use log::info;
+use internal_baml_parser_database::walkers::EnumWalker;
+use internal_baml_schema_ast::ast::WithName;
 use serde_json::json;
 
 use super::{
@@ -11,10 +7,7 @@ use super::{
     template::render_template,
     traits::{JsonHelper, WithWritePythonString},
 };
-use crate::generate::{
-    generate_python_client_old::file::clean_file_name,
-    ir::repr::{Expression, NodeAttributes},
-};
+use crate::generate::{generate_python_client_old::file::clean_file_name, ir::repr::Expression};
 
 use crate::generate::ir::repr::WithRepr;
 

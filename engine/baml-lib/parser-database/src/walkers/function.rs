@@ -110,7 +110,7 @@ impl<'db> FunctionWalker<'db> {
 
     /// Iterates over the variants for this function.
     pub fn walk_variants(self) -> impl ExactSizeIterator<Item = VariantWalker<'db>> {
-        assert_eq!(self.id.0, false, "Only old functions have variants");
+        assert!(!self.id.0, "Only old functions have variants");
         self.db
             .ast()
             .iter_tops()
@@ -146,12 +146,12 @@ impl<'db> FunctionWalker<'db> {
 
     /// Is this function an old version
     pub fn is_old_function(self) -> bool {
-        self.id.0 == false
+        !self.id.0
     }
 
     /// The prompt for the function
     pub fn jinja_prompt(self) -> &'db str {
-        assert_eq!(self.id.0, true, "Only new functions have prompts");
+        assert!(self.id.0, "Only new functions have prompts");
         self.db.types.template_strings[&Either::Right(self.function_id())]
             .template
             .as_str()
@@ -159,7 +159,7 @@ impl<'db> FunctionWalker<'db> {
 
     /// The client for the function
     pub fn client(self) -> Option<ClientWalker<'db>> {
-        assert_eq!(self.id.0, true, "Only new functions have clients");
+        assert!(self.id.0, "Only new functions have clients");
         let client = self.metadata().client.as_ref()?;
         self.db.find_client(client.0.as_str())
     }
@@ -260,10 +260,7 @@ impl<'db> WithSerializeableContent for FunctionWalker<'db> {
         variant: Option<&VariantWalker<'_>>,
         db: &'_ ParserDatabase,
     ) -> serde_json::Value {
-        if let Some((idx, _)) = variant
-            .map(|v| v.properties().output_adapter.as_ref())
-            .flatten()
-        {
+        if let Some((idx, _)) = variant.and_then(|v| v.properties().output_adapter.as_ref()) {
             let adapter = &variant.unwrap().ast_variant()[*idx];
 
             return json!({
@@ -291,7 +288,7 @@ impl<'db> WithSerialize for FunctionWalker<'db> {
         block: Option<&internal_baml_prompt_parser::ast::PrinterBlock>,
         span: &internal_baml_diagnostics::Span,
     ) -> Result<String, internal_baml_diagnostics::DatamodelError> {
-        let printer_template = match &block.map(|b| b.printer.as_ref()).flatten() {
+        let printer_template = match &block.and_then(|b| b.printer.as_ref()) {
             Some((p, _)) => self
                 .db
                 .find_printer(p)
@@ -324,7 +321,7 @@ impl<'db> WithSerialize for FunctionWalker<'db> {
             // TODO(sam) - if enum serialization fails, then we do not surface the error to the user.
             // That is bad!!!!!!!
             .filter_map(
-                |(_, e)| match e.serialize(&db, None, None, e.identifier().span()) {
+                |(_, e)| match e.serialize(db, None, None, e.identifier().span()) {
                     Ok(enum_schema) => Some((e.name().to_string(), enum_schema)),
                     Err(_) => None,
                 },

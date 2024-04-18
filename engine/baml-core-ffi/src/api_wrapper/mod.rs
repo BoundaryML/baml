@@ -98,6 +98,7 @@ impl APIConfig {
     }
   }
 
+  #[allow(dead_code)]
   #[allow(clippy::too_many_arguments)]
   pub(crate) fn copy_from(
     &self,
@@ -184,7 +185,9 @@ pub(super) struct CompleteAPIConfig {
 #[derive(Debug, Clone)]
 pub(super) struct PartialAPIConfig {
   log_level: bool,
+  #[allow(dead_code)]
   base_url: String,
+  #[allow(dead_code)]
   api_key: Option<String>,
   project_id: Option<String>,
   stage: String,
