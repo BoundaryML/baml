@@ -9,7 +9,6 @@
     "prebuild": "rimraf dist",
     "dev": "tsup --watch",
     "gen": "ts-node src/cli.ts generate",
-    "build": "tsup",
     "clean": "rimraf .turbo node_modules dist",
     "prep-test": "pnpm run clean && pnpm install"
   },
