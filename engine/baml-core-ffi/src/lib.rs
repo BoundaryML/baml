@@ -1,9 +1,6 @@
 #![deny(clippy::all)]
 
 use colored::*;
-use internal_baml_jinja::{RenderedChatMessage, RenderedPrompt};
-use napi::bindgen_prelude::{FromNapiValue, ToNapiValue};
-use serde_json::Value;
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Result;
