@@ -114,6 +114,12 @@ impl JsonHelper for FunctionWalker<'_> {
         let mut inputs = self.walk_input_args().collect::<Vec<_>>();
         inputs.sort_by(|a, b| a.name().cmp(&b.name()));
 
+        let default_impl = if self.is_old_function() {
+            self.metadata().default_impl.as_ref().map(|f| f.0.clone())
+        } else {
+            Some("default_config".to_string())
+        };
+
         json!({
             "name": self.ast_function().name(),
             "unnamed_args": self.is_positional_args(),
@@ -122,7 +128,7 @@ impl JsonHelper for FunctionWalker<'_> {
             "doc_string": self.ast_function().documentation(),
             "impls": impls,
             "has_impls": impls.len() > 0,
-            "default_impl": self.metadata().default_impl.as_ref().map(|f| f.0.clone())
+            "default_impl": default_impl,
         })
     }
 }
