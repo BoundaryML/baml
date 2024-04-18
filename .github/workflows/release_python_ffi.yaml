@@ -1,6 +1,12 @@
 name: Release clients/python-ffi
 
 on:
+  pull_request:
+    paths:
+      - "clients/python-ffi/**"
+      - ".github/workflows/release_python_ffi.yml"
+    branches:
+      - canary
   push:
     paths:
       - "clients/python-ffi/**"
