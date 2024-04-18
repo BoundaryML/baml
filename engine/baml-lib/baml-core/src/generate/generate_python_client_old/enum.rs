@@ -1,4 +1,4 @@
-use internal_baml_parser_database::{walkers::EnumWalker, ParserDatabase, WithStaticRenames};
+use internal_baml_parser_database::walkers::EnumWalker;
 use internal_baml_schema_ast::ast::WithName;
 use serde_json::json;
 

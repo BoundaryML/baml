@@ -32,7 +32,7 @@ fn tracker_visit_expr<'a>(
                 ast::UnaryOpKind::Neg => Type::Number,
             };
 
-            let inner = tracker_visit_expr(&expr.expr, state, types);
+            let _inner = tracker_visit_expr(&expr.expr, state, types);
             // TODO: Check for type compatibility
 
             expected
@@ -106,6 +106,7 @@ fn tracker_visit_expr<'a>(
                     }
                     t
                 }
+                Type::Unknown => Type::Unknown,
                 t => {
                     state.errors.push(TypeError::new_invalid_type(
                         &expr.expr,
@@ -117,8 +118,8 @@ fn tracker_visit_expr<'a>(
                 }
             }
         }
-        ast::Expr::GetItem(expr) => Type::Unknown,
-        ast::Expr::Slice(slice) => Type::Unknown,
+        ast::Expr::GetItem(_expr) => Type::Unknown,
+        ast::Expr::Slice(_slice) => Type::Unknown,
         ast::Expr::Call(expr) => {
             let func = tracker_visit_expr(&expr.expr, state, types);
 
@@ -178,7 +179,7 @@ fn tracker_visit_expr<'a>(
             );
             Type::Map(Box::new(keys), Box::new(values))
         }
-        ast::Expr::Kwargs(expr) => Type::Unknown,
+        ast::Expr::Kwargs(_) => Type::Unknown,
     }
 }
 

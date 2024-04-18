@@ -61,7 +61,7 @@ mod tests {
         let mut types = PredefinedTypes::default();
         assert_eq!(
             assert_fails_to!("ok ~ 1.1", &types),
-            vec!["Variable 'ok' is not defined",]
+            vec!["Variable `ok` does not exist. Did you mean one of these: `_`, `ctx`?"]
         );
         types.add_variable("ok", Type::String);
         assert_eq!(assert_evaluates_to!("ok ~ 1.1", &types), Type::String);
@@ -72,11 +72,7 @@ mod tests {
         let mut types = PredefinedTypes::default();
         assert_eq!(
             assert_fails_to!("bar.f.g", &types),
-            vec![
-                "Variable 'bar' is not defined",
-                "'bar' is not a class",
-                "'bar.f' is not a class"
-            ]
+            vec!["Variable `bar` does not exist. Did you mean one of these: `_`, `ctx`?"]
         );
 
         types.add_class(

@@ -16,7 +16,7 @@ use crate::configuration::Generator;
 
 use super::{
     dir_writer::WithFileContent,
-    ir::{repr, Expression, IntermediateRepr, WithJsonSchema},
+    ir::{Expression, IntermediateRepr, WithJsonSchema},
 };
 use ts_language_features::{get_file_collector, ToTypeScript};
 

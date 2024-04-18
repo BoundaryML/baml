@@ -11,7 +11,7 @@ use internal_baml_parser_database::{
     WithStaticRenames,
 };
 
-use internal_baml_schema_ast::ast::{self, FieldArity, RawString, WithName, WithSpan};
+use internal_baml_schema_ast::ast::{self, FieldArity, WithName, WithSpan};
 use serde::Serialize;
 
 /// This class represents the intermediate representation of the BAML AST.

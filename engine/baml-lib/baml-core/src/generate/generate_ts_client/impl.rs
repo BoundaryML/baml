@@ -3,9 +3,8 @@ use serde_json::json;
 use crate::generate::{
     dir_writer::WithFileContent,
     generate_ts_client::{field_type::to_parse_expression, ts_language_features::ToTypeScript},
-    ir::{repr, Function, FunctionArgs, Impl, Prompt, Walker},
+    ir::{Function, FunctionArgs, Impl, Prompt, Walker},
 };
-use std::collections::HashMap;
 
 use super::{
     template::render_with_hbs,

@@ -1,10 +1,6 @@
-use std::{
-    collections::{HashMap, HashSet},
-    fmt::Debug,
-};
+use std::{collections::HashMap, fmt::Debug};
 
 use minijinja::machinery::{ast, Span};
-use serde_json::map::Iter;
 
 pub(super) struct AssignmentTracker<'a> {
     nested_out: HashMap<String, Vec<Span>>,
@@ -12,6 +8,7 @@ pub(super) struct AssignmentTracker<'a> {
     deps: Dependencies,
 }
 
+#[allow(dead_code)]
 impl<'a> AssignmentTracker<'a> {
     fn is_assigned(&self, name: &str) -> bool {
         self.assigned.iter().any(|x| x.contains_key(name))
@@ -373,6 +370,7 @@ pub struct FunctionCall {
 }
 
 impl Dependencies {
+    #[allow(dead_code)]
     pub fn from(variables: HashMap<String, Vec<usize>>, function_calls: Vec<FunctionCall>) -> Self {
         Self {
             variables,
@@ -395,6 +393,7 @@ impl Dependencies {
     }
 }
 
+#[allow(dead_code)]
 pub(super) fn get_all_vars<'a>(parsed: &ast::Stmt<'a>) -> Dependencies {
     let mut state = AssignmentTracker {
         nested_out: Default::default(),

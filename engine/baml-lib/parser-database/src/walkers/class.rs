@@ -12,7 +12,7 @@ use crate::{
     ParserDatabase, WithSerialize,
 };
 
-use super::{field::to_type, field::FieldWalker, EnumWalker, VariantWalker};
+use super::{field::FieldWalker, EnumWalker, VariantWalker};
 
 /// A `class` declaration in the Prisma schema.
 pub type ClassWalker<'db> = super::Walker<'db, ast::ClassId>;
@@ -90,7 +90,7 @@ impl<'db> ClassWalker<'db> {
         types.add_class(
             self.name(),
             self.static_fields()
-                .map(|f| (f.name().to_string(), to_type(f.r#type())))
+                .map(|f| (f.name().to_string(), self.db.to_jinja_type(f.r#type())))
                 .collect::<HashMap<_, _>>(),
         )
     }

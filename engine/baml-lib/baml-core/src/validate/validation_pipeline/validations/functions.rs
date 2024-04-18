@@ -1,5 +1,4 @@
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span};
-use internal_baml_parser_database::walkers::to_type;
 use internal_baml_schema_ast::ast::{WithIdentifier, WithName, WithSpan};
 
 use crate::validate::validation_pipeline::context::Context;
@@ -79,7 +78,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
             template.ast_node().input()
         {
             p.args.iter().for_each(|(name, t)| {
-                defined_types.add_variable(name.name(), to_type(&t.field_type))
+                defined_types.add_variable(name.name(), ctx.db.to_jinja_type(&t.field_type))
             });
         }
         match internal_baml_jinja::validate_template(
@@ -136,19 +135,9 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
         defined_types.start_scope();
         func.walk_input_args().for_each(|arg| {
             let name = arg.name();
-            let field_type = to_type(arg.field_type());
+            let field_type = ctx.db.to_jinja_type(arg.field_type());
             defined_types.add_variable(name, field_type);
         });
-        if func.name() == "GetOrderInfo" || func.name() == "InputComplex" {
-            println!("dumping input args");
-            func.walk_input_args().for_each(|arg| {
-                let name = arg.name();
-                let field_type = to_type(arg.field_type());
-                println!("dumping input type {:#?} {:#?}", name, arg.field_type());
-                println!("dumping {:#?} {:#?}", name, field_type);
-            });
-            log::info!("{:#?}", defined_types);
-        }
         match internal_baml_jinja::validate_template(
             func.name(),
             prompt.raw_value(),

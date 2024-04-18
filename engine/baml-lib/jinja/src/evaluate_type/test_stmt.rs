@@ -52,7 +52,19 @@ mod tests {
     }
 
     #[test]
-    fn test_evaluate_number() {
+    fn evaluate_undefined() {
+        let mut types = PredefinedTypes::default();
+        assert_fails_to!(
+            r#"
+        {{ prompt }}
+        "#,
+            types,
+            vec!["Variable `prompt` does not exist. Did you mean one of these: `_`, `ctx`?"]
+        );
+    }
+
+    #[test]
+    fn evaluate_number() {
         let mut types = PredefinedTypes::default();
         assert_evaluates_to!(
             r#"
@@ -64,19 +76,19 @@ mod tests {
     }
 
     #[test]
-    fn test_evaluate_bool() {
+    fn evaluate_bool() {
         let mut types = PredefinedTypes::default();
-        assert_fails_to!(
+        assert_evaluates_to!(
             r#"
+        {%- set prompt = false -%}
         {{ prompt }}
         "#,
-            types,
-            vec!["Variable 'prompt' is not defined"]
+            types
         );
     }
 
     #[test]
-    fn test_evaluate_string() {
+    fn evaluate_string() {
         let mut types = PredefinedTypes::default();
         assert_evaluates_to!(
             r#"
@@ -88,7 +100,7 @@ mod tests {
     }
 
     #[test]
-    fn test_evaluate_pre_vars() {
+    fn evaluate_pre_vars() {
         let mut types = PredefinedTypes::default();
         types.add_variable("prompt", Type::Bool);
         assert_evaluates_to!(
@@ -100,7 +112,7 @@ mod tests {
     }
 
     #[test]
-    fn test_function_call() {
+    fn function_call() {
         let mut types = PredefinedTypes::default();
         types.add_variable("prompt", Type::Bool);
         assert_fails_to!(
@@ -108,12 +120,12 @@ mod tests {
         {{ prompt() }}
         "#,
             types,
-            vec!["'prompt' is not a function"]
+            vec!["'prompt' is a bool, expected function"]
         );
     }
 
     #[test]
-    fn test_function_call_1() {
+    fn function_call_1() {
         let mut types = PredefinedTypes::default();
         types.add_function("prompt", Type::Bool, vec![]);
         assert_evaluates_to!(
@@ -125,7 +137,7 @@ mod tests {
     }
 
     #[test]
-    fn test_function_call_2() {
+    fn function_call_2() {
         let mut types = PredefinedTypes::default();
         types.add_function("prompt", Type::Bool, vec![("arg".into(), Type::String)]);
         assert_fails_to!(
@@ -135,12 +147,12 @@ mod tests {
         {% endfor %}
         "#,
             types,
-            vec!["Variable 'items' is not defined"]
+            vec!["Variable `items` does not exist. Did you mean one of these: `_`, `ctx`?"]
         );
     }
 
     #[test]
-    fn test_function_call_3() {
+    fn function_call_3() {
         let mut types = PredefinedTypes::default();
         types.add_function("prompt", Type::Bool, vec![("arg".into(), Type::String)]);
         types.add_variable("items", Type::List(Box::new(Type::String)));
@@ -161,12 +173,12 @@ mod tests {
         {{ x }}
         "#,
             types,
-            vec!["Variable 'x' is not defined"]
+            vec!["Variable `x` does not exist. Did you mean one of these: `_`, `ctx`, `items`?"]
         );
     }
 
     #[test]
-    fn test_function_call_4() {
+    fn function_call_4() {
         let mut types = PredefinedTypes::default();
         types.add_function("prompt", Type::Bool, vec![("arg".into(), Type::String)]);
         types.add_variable(
@@ -188,7 +200,7 @@ mod tests {
     }
 
     #[test]
-    fn test_loop() {
+    fn loop_builtin() {
         let mut types = PredefinedTypes::default();
         types.add_variable("items", Type::List(Box::new(Type::String)));
         assert_fails_to!(
@@ -200,10 +212,7 @@ mod tests {
         "#
             .trim(),
             types,
-            vec![
-                "class LoopVar (loop) does not have a property 'a'",
-                "'loop.a' is not a class"
-            ]
+            vec!["class jinja::loop (loop) does not have a property 'a'",]
         );
 
         let mut types = PredefinedTypes::default();
@@ -221,7 +230,7 @@ mod tests {
     }
 
     #[test]
-    fn test_if_else() {
+    fn if_else() {
         let mut types = PredefinedTypes::default();
         types.add_variable("prompt", Type::String);
         types.add_function("Foo", Type::Bool, vec![("arg".into(), Type::String)]);

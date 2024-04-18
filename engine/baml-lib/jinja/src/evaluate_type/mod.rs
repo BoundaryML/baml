@@ -5,8 +5,8 @@ mod test_expr;
 mod test_stmt;
 mod types;
 
+use std::fmt::Debug;
 use std::ops::Index;
-use std::{collections::HashMap, fmt::Debug};
 
 use minijinja::machinery::{ast::Expr, Span};
 
@@ -79,7 +79,9 @@ impl TypeError {
     }
 
     fn new_unresolved_variable(name: &str, span: Span, options: Vec<String>) -> Self {
-        let close_names = sort_by_match(name, &options, Some(3));
+        let mut close_names = sort_by_match(name, &options, Some(3));
+        close_names.sort();
+        let close_names = close_names;
 
         let message = if close_names.is_empty() {
             // If no names are close enough, suggest nothing or provide a generic message
@@ -106,7 +108,7 @@ impl TypeError {
         func: &str,
         span: Span,
         name: &str,
-        arg_span: Span,
+        _arg_span: Span,
         expected: Type,
         got: Type,
     ) -> Self {
@@ -149,15 +151,20 @@ impl TypeError {
     fn new_invalid_type(expr: &Expr, got: &Type, expected: &str, span: Span) -> Self {
         Self {
             message: format!(
-                "'{}' is a {}, expected {}",
+                "'{}' is {}, expected {}",
                 pretty_print::pretty_print(expr),
-                got.name(),
+                if *got == Type::Undefined {
+                    "undefined".to_string()
+                } else {
+                    format!("a {}", got.name())
+                },
                 expected
             ),
             span,
         }
     }
 
+    #[allow(dead_code)]
     fn new_dot_operator_not_supported(
         name: &str,
         r#type: &Type,

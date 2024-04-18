@@ -4,7 +4,7 @@ use internal_baml_schema_ast::ast::{self, FunctionArgs, WithIdentifier, WithName
 
 use crate::types::TemplateStringProperties;
 
-use super::{to_type, Walker};
+use super::Walker;
 
 /// An `enum` declaration in the schema.
 pub type TemplateStringWalker<'db> = Walker<'db, ast::TemplateStringId>;
@@ -37,7 +37,10 @@ impl<'db> TemplateStringWalker<'db> {
 
         if let Some(FunctionArgs::Named(p)) = self.ast_node().input() {
             p.args.iter().for_each(|(name, t)| {
-                params.push((name.name().to_string(), to_type(&t.field_type)))
+                params.push((
+                    name.name().to_string(),
+                    self.db.to_jinja_type(&t.field_type),
+                ))
             });
         }
 
