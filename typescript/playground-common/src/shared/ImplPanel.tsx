@@ -89,7 +89,7 @@ const CodeLine: React.FC<{
 }> = ({ line, lineNumber: lineNumber, showWhitespace, wrapText, maxLineNumber }) => {
   // Function to render whitespace characters and invisible UTF characters with special styling
   const lineNumberSpan = (
-    <span className="pr-2 font-mono text-xs text-right text-gray-500 select-none">
+    <span className="pr-1 font-mono text-xs text-right text-gray-500 select-none">
       {lineNumber.toString().padStart(maxLineNumber.toString().length, ' ')}
     </span>
   )
@@ -333,14 +333,14 @@ const ImplPanel: React.FC<{ impl: Impl; showTab: boolean }> = ({ impl, showTab }
                 <Link item={impl.name} display="Edit" />
               </span>
               <div className="flex flex-row gap-1">
-                <span className="font-light">Using client</span>
+                <span className="text-xs font-light">client</span>
                 <Link item={impl.client.identifier} />
               </div>
               <div className="flex flex-row gap-1">
                 {impl.prompt.test_case ? (
                   <>
-                    <span className="font-light">With test case</span>
-                    <span className="font-bold text-vscode-foreground">{impl.prompt.test_case}</span>
+                    <span className="text-xs font-light">test case</span>
+                    <span className="font-semibold text-vscode-foreground">{impl.prompt.test_case}</span>
                   </>
                 ) : (
                   <>

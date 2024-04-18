@@ -91,11 +91,11 @@ const FunctionPanel: React.FC = () => {
             <div className="w-full">
               <ResizablePanelGroup direction="horizontal" className="h-full">
                 {impl && (
-                  <ResizablePanel defaultSize={50} className="px-0">
-                    <div className="relative h-full">
-                      <ScrollArea type="always" className="flex w-full h-full pr-3 ">
-                        {impls}
-                      </ScrollArea>
+                  <ResizablePanel defaultSize={50} className="px-0 overflow-y-auto">
+                    <div className="relative w-full h-full overflow-y-auto">
+                      {/* <ScrollArea type="auto" className="flex w-full h-full pr-3 "> */}
+                      <div className="flex w-full h-full">{impls}</div>
+                      {/* </ScrollArea> */}
                     </div>
                   </ResizablePanel>
                 )}
