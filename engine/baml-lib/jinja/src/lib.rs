@@ -63,6 +63,7 @@ pub fn validate_template(
     }
 }
 
+#[allow(non_camel_case_types)]
 #[derive(Clone, Debug, Serialize)]
 pub struct RenderContext_Client {
     pub name: String,

@@ -22,7 +22,7 @@ impl TypeScriptConfig {
 impl WithLoader<TypeScriptConfig> for TypeScriptConfig {
     fn from_dialoguer(
         no_prompt: bool,
-        project_root: &PathBuf,
+        _project_root: &PathBuf,
         writer: &mut Writer,
     ) -> Result<Self, CliError> {
         let modified_prompt = format!(
