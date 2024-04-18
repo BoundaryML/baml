@@ -199,18 +199,19 @@ tests-no-zope = ["attrs[tests-mypy]", "cloudpickle", "hypothesis", "pympler", "p
 
 [[package]]
 name = "baml"
-version = "0.18.0"
+version = "0.19.0.dev1"
 description = ""
 optional = false
 python-versions = "<4.0,>=3.8"
 files = [
-    {file = "baml-0.18.0-py3-none-any.whl", hash = "sha256:5560f5cfc6f2fcb3215952d47cbb22fd4a01a4c85574088f278b858125a52868"},
-    {file = "baml-0.18.0.tar.gz", hash = "sha256:05cd20547f8ed1431f1d2fd27ce34c9b9f4141390efeedf2e0330da50d4e78ba"},
+    {file = "baml-0.19.0.dev1-py3-none-any.whl", hash = "sha256:22196b8485c541361d4acbac63140221e9b7a251ba42a363a2ad8010abbc6174"},
+    {file = "baml-0.19.0.dev1.tar.gz", hash = "sha256:23f6c8faaa7699e26e28eb7ae979bbbbe0aa19680f249f07da2e1729744f1e30"},
 ]
 
 [package.dependencies]
 aiohttp = ">=3.8.3"
 anthropic = ">=0.14.0"
+baml_core_ffi = "0.1.1"
 colorama = ">=0.4.6"
 coloredlogs = ">=15.0.1"
 json5 = ">=0.9.10"
@@ -229,6 +230,20 @@ tenacity = ">=8.1.0"
 typeguard = ">=4.0.0"
 types-regex = ">=2023.10.3.0,<2024.0.0.0"
 types-requests = ">=2.28.11"
+
+[[package]]
+name = "baml-core-ffi"
+version = "0.1.1"
+description = "BAML python bindings (pyproject.toml)"
+optional = false
+python-versions = "*"
+files = [
+    {file = "baml_core_ffi-0.1.1-cp38-abi3-macosx_10_12_x86_64.whl", hash = "sha256:436dd35f9d396cfd04376d3eb5d3cbc2b3cb3900685c88ad97b7487a9dab02de"},
+    {file = "baml_core_ffi-0.1.1-cp38-abi3-macosx_11_0_arm64.whl", hash = "sha256:690c9c595272004a4ede310af4e6bd3184a7a88cd5c3839172d40518e45fde84"},
+    {file = "baml_core_ffi-0.1.1-cp38-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:fc13882feea4c699f0c7b8fd37c9b7e7fd5c2a3a503e414b88a4bdc811d8627f"},
+    {file = "baml_core_ffi-0.1.1-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:5e01473e11ff4bc5cf6b624fc9e3cfb78532715aae382ac0a510b6a438f1a54c"},
+    {file = "baml_core_ffi-0.1.1-cp38-abi3-win_amd64.whl", hash = "sha256:cacfee208fceaf5b26281cfc19d51b5e9d90988a0d52e4dc34d3c151cff69dda"},
+]
 
 [[package]]
 name = "certifi"
@@ -2078,4 +2093,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.9"
-content-hash = "ab328f5c0f2e495637bc8376052f163feeff84288531a7eeb578c23758cef351"
+content-hash = "dce0bc6b9c17adead1b6bd6de9dac470a91e9c06ac8dbd0225badd7249a2e8db"

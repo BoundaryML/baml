@@ -56,9 +56,11 @@ RUN chmod +x install-baml.sh
 # replace the sudo
 RUN sed -i 's/sudo //g' install-baml.sh
 
-RUN TERM=xterm bash ./install-baml.sh
+RUN TERM=xterm bash ./install-baml.sh --nightly
 
-RUN pip install baml pytest
+RUN pip install pytest
+
+RUN pip install baml --pre
 
 RUN baml version
 
