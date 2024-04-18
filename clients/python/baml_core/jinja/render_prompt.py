@@ -20,9 +20,32 @@ __all__ = [
 
 if __name__ == "__main__":
     print("Demonstrating render_prompt")
+
+    # With pydantic objects
+    from pydantic import BaseModel
+    from enum import Enum
+    import typing
+
+    class MyEnum(str, Enum):
+        FOO = "foo"
+        BAR = "bar"
+
+    class Foo(BaseModel):
+        bar: str
+        em2: MyEnum = MyEnum.FOO
+
+    foo = Foo(bar="baz")
+
+    class Bar(BaseModel):
+        foo: typing.List[Foo]
+        en: MyEnum = MyEnum.BAR
+
+    bar = Bar(foo=[foo])
+
     args = RenderData(
         args={
             "name": "world",
+            "bar": [bar],
             "foo": {
                 "bar": "baz",
                 "buzz": [
@@ -57,7 +80,7 @@ if __name__ == "__main__":
         ],
     )
     rendered = render_prompt(
-        '{{ _.chat("system") }} {{ctx.env.LANG}}: Hello {{name}}, it\'s a good day today!\n\n{{farewell(name)}}',
+        '{{ _.chat("system") }} {{ctx.env.LANG}}: Hello {{name}}, it\'s a good day today!\n\n{{farewell(name)}}\n\n{{ bar }}',
         args,
     )
     print("Rendered", rendered)
