@@ -281,7 +281,11 @@ const PromptCheckbox = ({
   )
 }
 
-const PromptPreview: React.FC<{ prompt: Impl['prompt']; client: Impl['client'] }> = ({ prompt, client }) => {
+const PromptPreview: React.FC<{ prompt: Impl['prompt']; client: Impl['client']; shouldSuppressError: boolean }> = ({
+  prompt,
+  client,
+  shouldSuppressError,
+}) => {
   switch (prompt.type) {
     case 'Completion':
       return <Snippet client={client} text={prompt.completion} />
@@ -299,6 +303,9 @@ const PromptPreview: React.FC<{ prompt: Impl['prompt']; client: Impl['client'] }
         </div>
       )
     case 'Error':
+      if (shouldSuppressError) {
+        return null
+      }
       return <Snippet type="error" client={client} text={prompt.error} />
   }
 }
@@ -336,11 +343,17 @@ const ImplPanel: React.FC<{ impl: Impl; showTab: boolean }> = ({ impl, showTab }
                     <span className="font-bold text-vscode-foreground">{impl.prompt.test_case}</span>
                   </>
                 ) : (
-                  <span className="font-light">Add a test case to see the full prompt!</span>
+                  <>
+                    {func.syntax === 'Version2' && (
+                      <span className="pt-4 text-sm text-center text-vscode-notifications-foreground">
+                        Add a test case to see the full prompt!
+                      </span>
+                    )}
+                  </>
                 )}
               </div>
             </div>
-            <PromptPreview prompt={impl.prompt} client={impl.client} />
+            <PromptPreview prompt={impl.prompt} client={impl.client} shouldSuppressError={!impl.prompt.test_case} />
           </div>
         </div>
       </VSCodePanelView>

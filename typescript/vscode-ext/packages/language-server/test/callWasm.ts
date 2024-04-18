@@ -1,4 +1,4 @@
-import languageWasm from '@gloo-ai/baml-schema-wasm'
+import languageWasm from '@gloo-ai/baml-schema-wasm-node'
 
 
 function callWasm() {
