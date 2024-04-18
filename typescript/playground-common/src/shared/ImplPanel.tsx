@@ -94,7 +94,7 @@ const CodeLine: React.FC<{
     </span>
   )
 
-  const isTokenized = Array.isArray(line[0]);
+  const isTokenized = Array.isArray(line[0])
 
   if (Array.isArray(line)) {
     return (
@@ -208,7 +208,9 @@ const Snippet: React.FC<{
           <TooltipTrigger asChild>
             <div className="flex-grow r-full ps-2 pt-1.5">{(tokenizer.tokens as []).length} tokens</div>
           </TooltipTrigger>
-          <TooltipContent className="flex flex-col gap-y-1">Tokenizer {encodingName} for model {client.model}</TooltipContent>
+          <TooltipContent className="flex flex-col gap-y-1">
+            Tokenizer {encodingName} for model {client.model}
+          </TooltipContent>
         </Tooltip>
       )}
     </div>
@@ -219,7 +221,7 @@ const Snippet: React.FC<{
     const tokenizedLines: [string, number][][] = [[]]
     tokenized.forEach((token, tokenIndex) => {
       const noNewlines = token.split('\n')
-        ; (tokenizedLines.at(-1) as [string, number][]).push([noNewlines.at(0) as string, tokenIndex])
+      ;(tokenizedLines.at(-1) as [string, number][]).push([noNewlines.at(0) as string, tokenIndex])
       for (let i = 1; i < noNewlines.length; i++) {
         tokenizedLines.push([['', tokenIndex]])
       }
@@ -318,9 +320,9 @@ const ImplPanel: React.FC<{ impl: Impl; showTab: boolean }> = ({ impl, showTab }
       <VSCodePanelView key={`view-${impl.name.value}`} id={`view-${func.name.value}-${impl.name.value}`}>
         <div className="flex flex-col w-full gap-2">
           <div className="flex flex-col gap-1">
-            <div className="flex flex-col items-start">
-              <span className="flex gap-1">
-                Prompt Preview
+            <div className="flex flex-col items-start text-vscode-descriptionForeground">
+              <span className="flex flex-row items-center gap-1 text-sm font-semibold text-vscode-settings-headerForeground">
+                <span>Prompt Preview</span>
                 <Link item={impl.name} display="Edit" />
               </span>
               <div className="flex flex-row gap-1">
@@ -328,9 +330,14 @@ const ImplPanel: React.FC<{ impl: Impl; showTab: boolean }> = ({ impl, showTab }
                 <Link item={impl.client.identifier} />
               </div>
               <div className="flex flex-row gap-1">
-                {impl.prompt.test_case ? <><span className="font-light">With test case</span>
-                  {impl.prompt.test_case}
-                </> : <span className="font-light">Add a test case to see the full prompt!</span>}
+                {impl.prompt.test_case ? (
+                  <>
+                    <span className="font-light">With test case</span>
+                    <span className="font-bold text-vscode-foreground">{impl.prompt.test_case}</span>
+                  </>
+                ) : (
+                  <span className="font-light">Add a test case to see the full prompt!</span>
+                )}
               </div>
             </div>
             <PromptPreview prompt={impl.prompt} client={impl.client} />

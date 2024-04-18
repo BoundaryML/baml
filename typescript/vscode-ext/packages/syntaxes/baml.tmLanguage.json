@@ -94,7 +94,7 @@
       ]
     },
     "function_declaration": {
-      "begin": "(function)\\s+(\\w+)\\(([^)]*)\\)\\s*(->)\\s*(\\w+)\\s+\\{",
+      "begin": "(function)\\s+(\\w+)\\(([^)]*)\\)\\s*(->)\\s*([\\w\\s\\[\\]|,]+)\\s+\\{",
       "beginCaptures": {
         "1": { "name": "storage.type.declaration.function" },
         "2": { "name": "entity.name.function" },
