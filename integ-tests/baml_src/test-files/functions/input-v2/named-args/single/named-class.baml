@@ -1,4 +1,4 @@
-class NamedArgsSingleClass {
+class NamedArgsSingleClass2 {
   key string
   key_two bool
   key_three int
@@ -7,7 +7,7 @@ class NamedArgsSingleClass {
   // key3 int
 }
 
-function V2_TestFnNamedArgsSingleClass(myArg: NamedArgsSingleClass) -> string {
+function V2_TestFnNamedArgsSingleClass(myArg: NamedArgsSingleClass2) -> string {
   client GPT35
   prompt #"
     Print these values back to me:
