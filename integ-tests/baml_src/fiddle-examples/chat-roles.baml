@@ -17,7 +17,7 @@ function ClassifyMessage2(input: string) -> Category {
     Classify the following INPUT into ONE
     of the following categories:
 
-    {{ ctx.output_schema }}
+    {{ ctx.output_format }}
 
     {{ _.chat("user") }}
     // And _.chat("user") to indicate that this text should be a user message

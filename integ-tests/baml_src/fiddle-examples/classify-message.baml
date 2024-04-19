@@ -16,7 +16,7 @@ function ClassifyMessage(input: string) -> Category {
 
     INPUT: {{ input }}
 
-    {{ ctx.output_schema }}
+    {{ ctx.output_format }}
 
     Response:
   "#
