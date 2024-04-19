@@ -27,6 +27,7 @@ import { ASTContext } from '@baml/playground-common/shared/ASTProvider'
 import { Badge } from '@/components/ui/badge'
 import { useRouter } from 'next/navigation'
 import { atomStore, sessionStore } from '@/app/_components/JotaiProvider'
+import FileViewer from './Tree/FileViewer'
 
 const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
   const setEditorFiles = useSetAtom(currentEditorFilesAtom)
@@ -56,57 +57,81 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
 
   return (
     // firefox wont apply the background color for some reason so we forcefully set it.
-    <div className="flex-col w-full h-full font-sans pl-2flex bg-background dark:bg-vscode-panel-background">
-      <div className="flex flex-row gap-x-12 border-b-[1px] border-vscode-panel-border h-[40px]">
-        <div className="flex flex-col items-center h-full py-1">
-          <Editable text={projectName} placeholder="Write a task name" type="input" childRef={inputRef}>
-            <input
-              className="px-2 text-lg border-none text-foreground"
-              type="text"
-              ref={inputRef}
-              name="task"
-              placeholder="Write a task name"
-              value={projectName}
-              onChange={(e) => setProjectName(e.target.value)}
-            />
-          </Editable>
-        </div>
-        <div className="flex flex-row items-center gap-x-2">
-          <ShareButton project={project} projectName={projectName} />
-        </div>
-
-        <div className="flex flex-row justify-center gap-x-1 item-center">
-          {/* <TestToggle /> */}
-          <Button variant={'ghost'} className="h-full py-1" asChild>
-            <Link href="https://docs.boundaryml.com">Docs</Link>
-          </Button>
-        </div>
-        {unsavedChanges ? (
-          <div className="flex flex-row items-center text-muted-foreground">
-            <Badge variant="outline" className="font-light text-red-400">
-              Unsaved changes
-            </Badge>
+    <div className="flex flex-row w-full h-full bg-gray-800">
+      <ResizablePanelGroup className="w-full h-full overflow-clip" direction="horizontal">
+        <ResizablePanel defaultSize={10} className="h-full bg-zinc-900">
+          <div className="flex flex-row gap-x-1">
+            <Button variant="ghost" className="h-full py-1">
+              Files
+            </Button>
+            <Button variant="ghost" className="h-full py-1">
+              Templates
+            </Button>
           </div>
-        ) : (
-          <></>
-        )}
-      </div>
+          <div className="flex flex-col w-full h-full pt-2">
+            <div className="w-full px-2 text-sm font-semibold uppercase text-white/90">project files</div>
+            <FileViewer />
+          </div>
+        </ResizablePanel>
+        <ResizableHandle className="bg-vscode-contrastActiveBorder border-vscode-contrastActiveBorder" />
+        <ResizablePanel defaultSize={90}>
+          <div className="flex-col w-full h-full font-sans pl-2flex bg-background dark:bg-vscode-panel-background">
+            <div className="flex flex-row gap-x-12 border-b-[1px] border-vscode-panel-border h-[40px]">
+              <div className="flex flex-col items-center h-full py-1">
+                <Editable text={projectName} placeholder="Write a task name" type="input" childRef={inputRef}>
+                  <input
+                    className="px-2 text-lg border-none text-foreground"
+                    type="text"
+                    ref={inputRef}
+                    name="task"
+                    placeholder="Write a task name"
+                    value={projectName}
+                    onChange={(e) => setProjectName(e.target.value)}
+                  />
+                </Editable>
+              </div>
+              <div className="flex flex-row items-center gap-x-2">
+                <ShareButton project={project} projectName={projectName} />
+              </div>
 
-      <div className="flex flex-row w-full h-full">
-        <ResizablePanelGroup className="min-h-[200px] w-full rounded-lg border overflow-clip" direction="horizontal">
-          <ResizablePanel defaultSize={50}>
-            <div className="flex w-full h-full">
-              <CodeMirrorEditor project={project} />
+              <div className="flex flex-row justify-center gap-x-1 item-center">
+                {/* <TestToggle /> */}
+                <Button variant={'ghost'} className="h-full py-1" asChild>
+                  <Link href="https://docs.boundaryml.com">Docs</Link>
+                </Button>
+              </div>
+              {unsavedChanges ? (
+                <div className="flex flex-row items-center text-muted-foreground">
+                  <Badge variant="outline" className="font-light text-red-400">
+                    Unsaved changes
+                  </Badge>
+                </div>
+              ) : (
+                <></>
+              )}
             </div>
-          </ResizablePanel>
-          <ResizableHandle withHandle className="bg-vscode-contrastActiveBorder" />
-          <ResizablePanel defaultSize={50}>
-            <div className="flex flex-row h-full bg-vscode-panel-background">
-              <PlaygroundView />
+
+            <div className="flex flex-row w-full h-full">
+              <ResizablePanelGroup
+                className="min-h-[200px] w-full rounded-lg border overflow-clip"
+                direction="horizontal"
+              >
+                <ResizablePanel defaultSize={50}>
+                  <div className="flex w-full h-full">
+                    <CodeMirrorEditor project={project} />
+                  </div>
+                </ResizablePanel>
+                <ResizableHandle className="bg-vscode-contrastActiveBorder" />
+                <ResizablePanel defaultSize={50}>
+                  <div className="flex flex-row h-full bg-vscode-panel-background">
+                    <PlaygroundView />
+                  </div>
+                </ResizablePanel>
+              </ResizablePanelGroup>
             </div>
-          </ResizablePanel>
-        </ResizablePanelGroup>
-      </div>
+          </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
     </div>
   )
 }

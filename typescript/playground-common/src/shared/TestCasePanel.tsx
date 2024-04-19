@@ -437,8 +437,8 @@ const EditTestCaseForm = ({
 
 const TestCaseCard: React.FC<{ test_case: TestCase; isRendered: boolean }> = ({ test_case, isRendered }) => {
   return (
-    <div className="flex flex-col max-w-full gap-2 text-xs text-left text-vscode-descriptionForeground">
-      <div className="break-all">
+    <div className="flex flex-col max-w-full gap-2 text-xs text-left truncate text-vscode-descriptionForeground">
+      <div className="break-all whitespace-pre-wrap">
         {test_case.content.substring(0, 120)}
         {test_case.content.length > 120 && '...'}
       </div>

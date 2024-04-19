@@ -32,9 +32,9 @@ export default async function Home({
   return (
     <main className="flex flex-col items-center justify-between min-h-screen font-sans">
       <div className="z-10 items-center justify-between w-screen h-screen text-sm overflow-clip lg:flex">
-        <div className="w-[200px] justify-start flex flex-col px-1 pr-0 gap-y-2 items-start h-full dark:bg-vscode-sideBar-background">
+        <div className="w-[140px] min-w-[140px] justify-start flex flex-col px-1 pr-0 gap-y-2 items-start h-full dark:bg-vscode-sideBar-background">
           <div className="w-full pt-1 text-lg italic font-bold text-center">Prompt Fiddle</div>
-          <div className="w-full text-center text-muted-foreground">Templates</div>
+          <div className="w-full text-center text-muted-foreground">Examples</div>
           <div className="flex flex-col h-full overflow-y-auto gap-y-2">
             {exampleProjects.map((p) => {
               return <ExampleProjectCard key={p.name} project={p} />

@@ -6,13 +6,11 @@ module.exports = {
   content: [path.join(path.dirname(require.resolve('@baml/playground-common')), '**/*.{js,ts,jsx,tsx}')],
   theme: {
     extend: {
-      
-      opacity: {
-        '15': '0.15',
-        '35': '0.35',
-        '65': '0.65',
-       }
-
+      // opacity: {
+      //   '15': '0.15',
+      //   '35': '0.35',
+      //   '65': '0.65',
+      //  }
     },
   },
 }
