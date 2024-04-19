@@ -1,39 +1,20 @@
-
-class ClassOptionalOutput {
-  prop1 string
-  prop2 string
-}
-
-function FnClassOptionalOutput_V2 {
-  (input: string  ) -> ClassOptionalOutput? {
-  client GPT35
-  prompt #"
-    Return a json blob for the following input:    {#input}
-
-    Answer in JSON using this schema:
-    {#print_type(output)}
-    JSON:
-  "#
-}
-
-
-class Blah {
+class Blah2 {
   prop4 string?
 }
 
-class ClassOptionalOutput2 {
+class ClassOptionalOutput2v2 {
   prop1 string?
   prop2 string?
-  prop3 Blah?
+  prop3 Blah2?
 }
 
-function FnClassOptionalOutput2_V2(input: string  ) -> ClassOptionalOutput2? {
+function FnClassOptionalOutput2_V2(input: string) -> ClassOptionalOutput2v2? {
   client GPT35
   prompt #"
-    Return a json blob for the following input:    {#input}
+    Return a json blob for the following input:    {{input}}
 
     Answer in JSON using this schema:
-    {#print_type(output)}
+    {{ ctx.output_format }}
     JSON:
   "#
 }

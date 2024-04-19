@@ -1,22 +1,19 @@
-enum EnumInClass {
+enum EnumInClass2 {
   ONE
   TWO
 }
 
-class TestClassWithEnum {
+class TestClassWithEnum2 {
   prop1 string
   prop2 EnumInClass
 }
 
-function FnOutputClassWithEnum_V2(input: string  ) -> TestClassWithEnum {
+function FnOutputClassWithEnum_V2(input: string  ) -> TestClassWithEnum2 {
   client GPT35
   prompt #"
     Return a made up json blob that matches this schema:
-    {#print_type(output)}
-    Here are the values to use for enum:
-    {#print_enum(EnumInClass)}
-    ---
-
+    {{ ctx.output_format }}
+    
     JSON:
   "#
 }
