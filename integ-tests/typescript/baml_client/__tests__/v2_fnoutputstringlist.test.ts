@@ -18,7 +18,7 @@ describe('test_case:substantial_tan', () => {
       'test_case_arg_name': `test_substantial_tan[V2_FnOutputStringList-${impl}]`,
       'test_cycle_id': process.env.BOUNDARY_PROCESS_ID || 'local-run',
     });
-    const test_case = "noop";
+    const test_case = { "input": "noop" };
     const result = await b.V2_FnOutputStringList.getImpl(impl).run(
       test_case
     );

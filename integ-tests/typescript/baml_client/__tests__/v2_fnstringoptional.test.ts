@@ -18,7 +18,7 @@ describe('test_case:wonderful_black', () => {
       'test_case_arg_name': `test_wonderful_black[V2_FnStringOptional-${impl}]`,
       'test_cycle_id': process.env.BOUNDARY_PROCESS_ID || 'local-run',
     });
-    const test_case = "noop";
+    const test_case = { "input": "noop" };
     const result = await b.V2_FnStringOptional.getImpl(impl).run(
       test_case
     );

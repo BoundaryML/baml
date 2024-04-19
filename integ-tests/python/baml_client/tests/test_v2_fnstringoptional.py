@@ -22,7 +22,7 @@ async def test_wonderful_black(V2_FnStringOptionalImpl: IV2_FnStringOptionalStre
             return item
         return dumps(item)
 
-    case = "noop"
+    case = {"input": "noop", }
     deserializer_input = Deserializer[Optional[str]](Optional[str]) # type: ignore
     input = deserializer_input.from_string(to_str(case["input"]))
     async with V2_FnStringOptionalImpl(

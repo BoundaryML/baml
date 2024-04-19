@@ -22,7 +22,7 @@ async def test_substantial_tan(V2_FnOutputStringListImpl: IV2_FnOutputStringList
             return item
         return dumps(item)
 
-    case = "noop"
+    case = {"input": "noop", }
     deserializer_input = Deserializer[str](str) # type: ignore
     input = deserializer_input.from_string(to_str(case["input"]))
     async with V2_FnOutputStringListImpl(
