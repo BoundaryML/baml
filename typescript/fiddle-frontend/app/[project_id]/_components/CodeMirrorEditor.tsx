@@ -109,20 +109,22 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
   return (
     <div className="w-full">
       <div className="flex px-3 py-1 h-fit gap-x-3 overflow-clip">
-        {editorFiles.map((file) => (
-          <Button
-            variant={'ghost'}
-            key={file.path}
-            onClick={() => setActiveFile(file)}
-            className={`${
-              activeFile?.path === file.path
-                ? '  border-b-[2px] border-b-blue-400 bg-background text-blue-500 hover:bg-vscode-selection-background hover:text-blue-500'
-                : 'hover:text-black/80 bg-background text-gray-500 hover:bg-vscode-selection-background hover:text-gray-5=400'
-            }  h-[30px] rounded-b-none rounded-tl-lg  border-r-0 px-1 text-sm  font-medium`}
-          >
-            {file.path.replace(`${BAML_DIR}/`, '')}
-          </Button>
-        ))}
+        {editorFiles
+          .filter((f) => f.path === activeFile?.path)
+          .map((file) => (
+            <Button
+              variant={'ghost'}
+              key={file.path}
+              onClick={() => setActiveFile(file)}
+              className={`${
+                activeFile?.path === file.path
+                  ? '  border-b-[2px] border-b-blue-400 bg-background text-blue-500 hover:bg-vscode-selection-background hover:text-blue-500'
+                  : 'hover:text-black/80 bg-background text-gray-500 hover:bg-vscode-selection-background hover:text-gray-5=400'
+              }  h-[30px] rounded-b-none rounded-tl-lg  border-r-0 px-1 text-sm  font-medium`}
+            >
+              {file.path.replace(`${BAML_DIR}/`, '')}
+            </Button>
+          ))}
       </div>
       <>
         <CodeMirror

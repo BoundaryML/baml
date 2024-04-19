@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { useKeybindingOverrides } from '@/hooks/command-s'
 import { BAML_DIR } from '@/lib/constants'
-import { BAMLProject } from '@/lib/exampleProjects'
+import { BAMLProject, exampleProjects } from '@/lib/exampleProjects'
 import {
   ASTProvider,
   CustomErrorBoundary,
@@ -28,6 +28,9 @@ import { Badge } from '@/components/ui/badge'
 import { useRouter } from 'next/navigation'
 import { atomStore, sessionStore } from '@/app/_components/JotaiProvider'
 import FileViewer from './Tree/FileViewer'
+import { ExampleProjectCard } from '@/app/_components/ExampleProjectCard'
+import { Separator } from '@baml/playground-common/components/ui/separator'
+import { ScrollArea } from '@/components/ui/scroll-area'
 
 const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
   const setEditorFiles = useSetAtom(currentEditorFilesAtom)
@@ -60,17 +63,22 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
     <div className="flex flex-row w-full h-full bg-gray-800">
       <ResizablePanelGroup className="w-full h-full overflow-clip" direction="horizontal">
         <ResizablePanel defaultSize={10} className="h-full bg-zinc-900">
-          <div className="flex flex-row gap-x-1">
-            <Button variant="ghost" className="h-full py-1">
-              Files
-            </Button>
-            <Button variant="ghost" className="h-full py-1">
-              Templates
-            </Button>
-          </div>
-          <div className="flex flex-col w-full h-full pt-2">
-            <div className="w-full px-2 text-sm font-semibold uppercase text-white/90">project files</div>
+          <div className="w-full pt-1 text-lg italic font-bold text-center">Prompt Fiddle</div>
+
+          <div className="flex flex-col w-full pt-2 h-[40%] overflow-y-auto">
+            <div className="w-full px-2 text-sm font-semibold text-center uppercase text-white/90">project files</div>
             <FileViewer />
+          </div>
+          {/* <Separator className="bg-vscode-textSeparator-foreground" /> */}
+          <div className="w-full px-2 pt-2 text-sm font-semibold text-center uppercase text-white/90">Templates</div>
+          <div className="flex flex-col h-[60%] pb-16">
+            <ScrollArea type="always">
+              <div className="flex flex-col px-2 gap-y-4">
+                {exampleProjects.map((p) => {
+                  return <ExampleProjectCard key={p.name} project={p} />
+                })}
+              </div>
+            </ScrollArea>
           </div>
         </ResizablePanel>
         <ResizableHandle className="bg-vscode-contrastActiveBorder border-vscode-contrastActiveBorder" />

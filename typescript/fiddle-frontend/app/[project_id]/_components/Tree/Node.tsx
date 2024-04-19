@@ -37,7 +37,7 @@ const Node = ({ node, style, dragHandle, tree }: NodeRendererProps<any>) => {
           nodes.push(tree.get(child.id))
         })
       }
-      if (diagnostics.some((d) => d.source === currentNode?.id)) {
+      if (diagnostics.filter((d) => d.severity === 'error').some((d) => d.source === currentNode?.id)) {
         return true
       }
     }
@@ -45,7 +45,8 @@ const Node = ({ node, style, dragHandle, tree }: NodeRendererProps<any>) => {
   }
 
   // Check if the current file or any children have errors
-  const fileHasErrors = diagnostics.some((d) => d.source === node.id) || hasErrorInChildren(node.id)
+  const fileHasErrors =
+    diagnostics.filter((d) => d.severity === 'error').some((d) => d.source === node.id) || hasErrorInChildren(node.id)
 
   return (
     <div
@@ -105,10 +106,10 @@ const Node = ({ node, style, dragHandle, tree }: NodeRendererProps<any>) => {
         </span>
       </div>
 
-      <div className="absolute top-0 right-0 hidden group-hover:flex">
+      <div className="absolute top-0 right-0 hidden rounded-md group-hover:flex bg-zinc-800">
         <div className="flex flex-row items-center gap-x-1 ">
           <button
-            className="p-1 hover:opacity-100 opacity-80"
+            className="p-1 hover:opacity-100 opacity-70"
             onClick={(e) => {
               e.stopPropagation()
               node.edit()
@@ -117,7 +118,18 @@ const Node = ({ node, style, dragHandle, tree }: NodeRendererProps<any>) => {
           >
             <Edit2 size={11} />
           </button>
-          <button className="p-1 hover:opacity-100 opacity-80" onClick={() => tree.delete(node.id)} title="Delete">
+          <button
+            className="p-1 hover:opacity-100 opacity-60"
+            onClick={() => {
+              tree.delete(node.id)
+
+              setEditorFiles((prev) => {
+                prev = prev as EditorFile[]
+                return prev.filter((f) => f.path !== node.id)
+              })
+            }}
+            title="Delete"
+          >
             <X size={16} />
           </button>
         </div>

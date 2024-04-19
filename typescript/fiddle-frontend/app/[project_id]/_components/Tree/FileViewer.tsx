@@ -6,8 +6,8 @@ import { RenameHandler, Tree, TreeApi } from 'react-arborist'
 import Node from './Node'
 import { FilePlus, FolderPlus } from 'lucide-react'
 import useResizeObserver from 'use-resize-observer'
-import { useAtom } from 'jotai'
-import { currentEditorFilesAtom } from '../../_atoms/atoms'
+import { useAtom, useAtomValue } from 'jotai'
+import { activeFileAtom, currentEditorFilesAtom } from '../../_atoms/atoms'
 
 export const data = [
   {
@@ -85,6 +85,7 @@ const FileViewer = () => {
   const { width, height, ref } = useResizeObserver()
   const [editorFiles, setEditorFiles] = useAtom(currentEditorFilesAtom)
   const treeRef = useRef<TreeApi<any> | null>(null)
+  const activeFile = useAtomValue(activeFileAtom)
 
   const data2 = createTree(editorFiles.map((f) => f.path))
 
@@ -102,22 +103,25 @@ const FileViewer = () => {
   )
 
   return (
-    <div className="">
-      <div className="folderFileActions">{createFileFolder}</div>
-      <input
+    <div className="overflow-x-clip">
+      {/* <div className="folderFileActions">{createFileFolder}</div> */}
+      {/* <input
         type="text"
         placeholder="Search..."
         className="search-input"
         value={term}
         onChange={(e) => setTerm(e.target.value)}
-      />
-      <aside ref={ref}>
+      /> */}
+      <aside ref={ref} className="">
         <Tree
+          className="truncate"
           ref={treeRef}
           data={data2}
+          // initialOpenState={{ baml_src: true }}
           rowHeight={24}
           width={width}
-          height={height}
+          selection={activeFile?.path}
+          height={300}
           searchTerm={term}
           searchMatch={(node, term) => node.data.name.toLowerCase().includes(term.toLowerCase())}
         >
