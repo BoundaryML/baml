@@ -8,7 +8,7 @@ function ExtractNames(input: string) -> string[] {
     {{ input }}
     ---
 
-    {{ ctx.output_schema }}
+    {{ ctx.output_format }}
 
     Response:
   "#
