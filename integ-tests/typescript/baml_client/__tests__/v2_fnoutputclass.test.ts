@@ -18,7 +18,7 @@ describe('test_case:early_chocolate', () => {
       'test_case_arg_name': `test_early_chocolate[V2_FnOutputClass-${impl}]`,
       'test_cycle_id': process.env.BOUNDARY_PROCESS_ID || 'local-run',
     });
-    const test_case = "noop";
+    const test_case = { "input": "noop" };
     const result = await b.V2_FnOutputClass.getImpl(impl).run(
       test_case
     );

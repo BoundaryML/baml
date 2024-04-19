@@ -25,7 +25,7 @@ import typing
 
 __prompt_template = """\
 Return a JSON array that follows this schema: 
-{#print_type(output)}
+{{ ctx.output_format(prefix=null) }}
 JSON:\
 """
 

@@ -22,7 +22,7 @@ async def test_deep_scarlet(V2_FnOutputClassListImpl: IV2_FnOutputClassListStrea
             return item
         return dumps(item)
 
-    case = "noop"
+    case = {"input": "noop", }
     deserializer_input = Deserializer[str](str) # type: ignore
     input = deserializer_input.from_string(to_str(case["input"]))
     async with V2_FnOutputClassListImpl(

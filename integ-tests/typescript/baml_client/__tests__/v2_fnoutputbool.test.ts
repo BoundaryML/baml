@@ -18,7 +18,7 @@ describe('test_case:western_green', () => {
       'test_case_arg_name': `test_western_green[V2_FnOutputBool-${impl}]`,
       'test_cycle_id': process.env.BOUNDARY_PROCESS_ID || 'local-run',
     });
-    const test_case = "noop";
+    const test_case = { "input": "noop" };
     const result = await b.V2_FnOutputBool.getImpl(impl).run(
       test_case
     );

@@ -18,7 +18,7 @@ describe('test_case:deep_scarlet', () => {
       'test_case_arg_name': `test_deep_scarlet[V2_FnOutputClassList-${impl}]`,
       'test_cycle_id': process.env.BOUNDARY_PROCESS_ID || 'local-run',
     });
-    const test_case = "noop";
+    const test_case = { "input": "noop" };
     const result = await b.V2_FnOutputClassList.getImpl(impl).run(
       test_case
     );

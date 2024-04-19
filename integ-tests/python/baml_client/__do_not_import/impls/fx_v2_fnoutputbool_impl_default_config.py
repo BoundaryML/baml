@@ -21,7 +21,7 @@ import typing
 # An implementation of V2_FnOutputBool.
 
 __prompt_template = """\
-Return a {#print_type(output)}:\
+Return a {{ ctx.output_format(prefix=null) }}:\
 """
 
 # We ignore the type here because baml does some type magic to make this work

@@ -18,7 +18,7 @@ import { Deserializer } from '@boundaryml/baml-core/deserializer/deserializer';
 
 
 const prompt_template = `Return a JSON array that follows this schema: 
-{#print_type(output)}
+{{ ctx.output_format(prefix=null) }}
 JSON:`;
 const output_format = `{
   "prop1": string,

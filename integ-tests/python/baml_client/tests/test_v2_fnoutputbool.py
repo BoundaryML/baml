@@ -22,7 +22,7 @@ async def test_western_green(V2_FnOutputBoolImpl: IV2_FnOutputBoolStream, baml_i
             return item
         return dumps(item)
 
-    case = "noop"
+    case = {"input": "noop", }
     deserializer_input = Deserializer[str](str) # type: ignore
     input = deserializer_input.from_string(to_str(case["input"]))
     async with V2_FnOutputBoolImpl(

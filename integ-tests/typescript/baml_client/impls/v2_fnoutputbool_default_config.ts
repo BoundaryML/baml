@@ -17,7 +17,7 @@ import { Deserializer } from '@boundaryml/baml-core/deserializer/deserializer';
 // An implementation for V2_FnOutputBool
 
 
-const prompt_template = `Return a {#print_type(output)}:`;
+const prompt_template = `Return a {{ ctx.output_format(prefix=null) }}:`;
 const output_format = `bool`;
 
 const template_macros = [

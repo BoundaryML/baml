@@ -22,7 +22,7 @@ async def test_early_chocolate(V2_FnOutputClassImpl: IV2_FnOutputClassStream, ba
             return item
         return dumps(item)
 
-    case = "noop"
+    case = {"input": "noop", }
     deserializer_input = Deserializer[str](str) # type: ignore
     input = deserializer_input.from_string(to_str(case["input"]))
     async with V2_FnOutputClassImpl(
