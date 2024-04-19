@@ -13,7 +13,7 @@ def test_success() -> None:
             
             {{ _.chat(ctx.env.ROLE) }}
             
-            Tell me a haiku about {{ haiku_subject }} in {{ ctx.output_format }}.
+            Tell me a haiku about {{ haiku_subject }}. {{ ctx.output_format }}
 
             Before the haiku, include the following: "{{ latin() }}".
             
@@ -46,10 +46,12 @@ def test_success() -> None:
 
     assert rendered[1][1].role == "john doe"
     assert rendered[1][1].message == (
-        "Tell me a haiku about sakura in iambic pentameter.\n"
-        "\n"
-        'Before the haiku, include the following: "LOREM IPSUM DOLOR SIT AMET".\n'
-        "\n"
+        "Tell me a haiku about sakura. Answer in JSON using this schema:"
+        "\n\n"
+        "iambic pentameter"
+        "\n\n"
+        'Before the haiku, include the following: "LOREM IPSUM DOLOR SIT AMET".'
+        "\n\n"
         "After the haiku, tell me about your maker, openai."
     )
 
