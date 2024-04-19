@@ -31,7 +31,7 @@ fn track_walk<'a>(node: &ast::Stmt<'a>, state: &mut PredefinedTypes) {
                 }
             };
 
-            let filter_type = stmt.filter_expr.as_ref().map(|x| evaluate_type(x, state));
+            let _filter_type = stmt.filter_expr.as_ref().map(|x| evaluate_type(x, state));
 
             state.start_scope();
             match &stmt.target {
@@ -90,7 +90,7 @@ fn track_walk<'a>(node: &ast::Stmt<'a>, state: &mut PredefinedTypes) {
             state.end_scope();
         }
         ast::Stmt::IfCond(stmt) => {
-            let expr_type = evaluate_type(&stmt.expr, state);
+            let _expr_type = evaluate_type(&stmt.expr, state);
 
             // Record variables in each branch and their types (fuse them if they are the same)
             state.start_branch();
@@ -116,13 +116,13 @@ fn track_walk<'a>(node: &ast::Stmt<'a>, state: &mut PredefinedTypes) {
             }
         }
         ast::Stmt::SetBlock(stmt) => {
-            let target_type = evaluate_type(&stmt.target, state);
-            let filter_type = stmt.filter.as_ref().map(|x| evaluate_type(x, state));
+            let _target_type = evaluate_type(&stmt.target, state);
+            let _filter_type = stmt.filter.as_ref().map(|x| evaluate_type(x, state));
             stmt.body.iter().for_each(|x| track_walk(x, state));
         }
         ast::Stmt::AutoEscape(_) => todo!(),
         ast::Stmt::FilterBlock(_) => todo!(),
-        ast::Stmt::Macro(stmt) => {}
+        ast::Stmt::Macro(_stmt) => {}
         ast::Stmt::CallBlock(_) => todo!(),
         ast::Stmt::Do(_) => todo!(),
     }

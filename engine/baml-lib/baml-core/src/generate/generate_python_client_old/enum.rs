@@ -56,7 +56,7 @@ impl JsonHelper for EnumWalker<'_> {
                     )
                 })
                 .collect::<Vec<_>>(),
-            Err(e) => vec![], // TODO: handle error
+            Err(_e) => vec![], // TODO: handle error
         };
 
         json!({

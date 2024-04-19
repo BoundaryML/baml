@@ -7,7 +7,7 @@ use crate::{
 };
 
 use super::{ClassWalker, VariantWalker, Walker};
-use internal_baml_jinja::Type;
+
 use internal_baml_schema_ast::ast::{self, FieldType, Identifier, WithName};
 use serde_json::json;
 

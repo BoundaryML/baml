@@ -89,7 +89,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
             Ok(_) => {}
             Err(e) => {
                 let pspan = prompt.span();
-                if let Some(e) = e.parsing_errors {
+                if let Some(_e) = e.parsing_errors {
                     // ctx.push_error(DatamodelError::new_validation_error(
                     //     &format!("Error parsing jinja template: {}", e),
                     //     e.line(),
@@ -146,7 +146,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
             Ok(_) => {}
             Err(e) => {
                 let pspan = prompt.span();
-                if let Some(e) = e.parsing_errors {
+                if let Some(_e) = e.parsing_errors {
                     // ctx.push_error(DatamodelError::new_validation_error(
                     //     &format!("Error parsing jinja template: {}", e),
                     //     e.line(),
