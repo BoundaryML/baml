@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "baml"
-version = "0.19.0.dev5"
+version = "0.19.0"
 description = ""
 authors = ["Boundary <contact@boundaryml.com>"]
 
