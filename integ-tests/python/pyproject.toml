@@ -10,7 +10,7 @@ packages = [{include = "app"}]
 python = "^3.8"
 # Use client in production
 # baml = "^0.14.1"
-baml = {path = "../../clients/python"}
+baml = {version = "^0.19.0.dev5", allow-prereleases = true}
 ruff = "^0.3.3"
 maturin = "^1.5.1"
 

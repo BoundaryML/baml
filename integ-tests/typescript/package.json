@@ -20,6 +20,6 @@
     "typescript": "^5.4.2"
   },
   "dependencies": {
-    "@boundaryml/baml-core": "link:../../clients/ts"
+    "@boundaryml/baml-core": "0.0.7-canary.3"
   }
 }

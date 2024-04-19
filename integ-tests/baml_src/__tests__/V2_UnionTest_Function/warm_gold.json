@@ -1,3 +1,5 @@
 {
-  "input": "noop"
+  "input": {
+    "input": "noop"
+  }
 }

@@ -202,54 +202,50 @@ tests-no-zope = ["attrs[tests-mypy]", "cloudpickle", "hypothesis", "pympler", "p
 
 [[package]]
 name = "baml"
-version = "0.19.0.dev0"
+version = "0.19.0.dev5"
 description = ""
 optional = false
-python-versions = ">=3.8,<4.0"
-files = []
-develop = false
+python-versions = "<4.0,>=3.8"
+files = [
+    {file = "baml-0.19.0.dev5-py3-none-any.whl", hash = "sha256:9318af52f73f9196d5ef0d8bf24d77c8a9b12c5d424cd24ea79ed78a610d1bdc"},
+    {file = "baml-0.19.0.dev5.tar.gz", hash = "sha256:25356c2f3962afacf884d3733d5c6969a653f6695e744aa125b509830fed2549"},
+]
 
 [package.dependencies]
 aiohttp = ">=3.8.3"
 anthropic = ">=0.14.0"
-baml_core_ffi = "=0.1.0"
+baml-core-ffi = "0.1.7"
 colorama = ">=0.4.6"
 coloredlogs = ">=15.0.1"
 json5 = ">=0.9.10"
-ollama = "^0.1.8"
+ollama = ">=0.1.8,<0.2.0"
 openai = ">=0.28.1"
 opentelemetry-api = ">=1.15.0"
 opentelemetry-instrumentation = ">=0.34b0"
 opentelemetry-sdk = ">=1.15.0"
-packaging = "^23.2"
+packaging = ">=23.2,<24.0"
 pydantic = ">=2,<3"
 pytest = ">=7.1.3,<8"
-pytest-asyncio = "^0.21.1"
+pytest-asyncio = ">=0.21.1,<0.22.0"
 python-dotenv = ">=0.21.0"
 regex = ">=2022.10.31"
 tenacity = ">=8.1.0"
 typeguard = ">=4.0.0"
-types-regex = "^2023.10.3.0"
+types-regex = ">=2023.10.3.0,<2024.0.0.0"
 types-requests = ">=2.28.11"
-
-[package.source]
-type = "directory"
-url = "../../clients/python"
 
 [[package]]
 name = "baml-core-ffi"
-version = "0.1.0"
+version = "0.1.7"
 description = "BAML python bindings (pyproject.toml)"
 optional = false
 python-versions = "*"
 files = [
-    {file = "baml_core_ffi-0.1.0-cp38-abi3-macosx_10_12_x86_64.whl", hash = "sha256:d2b4663747706739506e8208f3b5fdb4e78f86c9cb41de65ca8c8bcc686b51c6"},
-    {file = "baml_core_ffi-0.1.0-cp38-abi3-macosx_11_0_arm64.whl", hash = "sha256:42d56b726f8b368104d8b0113666e89d6db788af7ebb64ec3c7e295179e4f480"},
-    {file = "baml_core_ffi-0.1.0-cp38-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:d0eab247eee62ae475422f54fb0affc9467b61c572757537dcf6f495911cd312"},
-    {file = "baml_core_ffi-0.1.0-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:2a40023bd64154d9037a5b75e8e98cb0f852690a3878afe2543f9faefa39420a"},
-    {file = "baml_core_ffi-0.1.0-cp38-abi3-manylinux_2_34_x86_64.whl", hash = "sha256:1428e07eb28ddcc943f71583acedd354da2cae49547e81827fcd7b9941a3d873"},
-    {file = "baml_core_ffi-0.1.0-cp38-abi3-win_amd64.whl", hash = "sha256:e31218b7833553dc12cc93fb92e71aec51f3c296596ba0009ce6f576680350a8"},
-    {file = "baml_core_ffi-0.1.0.tar.gz", hash = "sha256:2a5cb1c48310773ac6846543eb412d95acca2544b916077e1200f6a82008c5fd"},
+    {file = "baml_core_ffi-0.1.7-cp38-abi3-macosx_10_12_x86_64.whl", hash = "sha256:78b38ae8acf8758c85631c1f049ef71474eb861b4f884eaaeafbb4473310e439"},
+    {file = "baml_core_ffi-0.1.7-cp38-abi3-macosx_11_0_arm64.whl", hash = "sha256:bf3e9d73c772d424a5326c3c457332b78da23fedb97c15b614dc668d2a858f03"},
+    {file = "baml_core_ffi-0.1.7-cp38-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:c2e1c4a14d2605bd46f8c0dcd2f42d9854d58a027f84bdbc63e267e43cfbecc8"},
+    {file = "baml_core_ffi-0.1.7-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:2e9acf6ea8b0b9f3bd45ab46377a2ba5c7ccdbe463f73e45561a0e0c3a47c10c"},
+    {file = "baml_core_ffi-0.1.7-cp38-abi3-win_amd64.whl", hash = "sha256:10abe0796e52650b24df6ee967298f4a21b4b4f2f104e178809d322dc2aa2e0e"},
 ]
 
 [[package]]
@@ -1828,4 +1824,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8"
-content-hash = "17ecac1ced29289b6ca339fafbdc5bc0cc1e0a733280ba4dd23650c6a3a32b2b"
+content-hash = "6ba55bc44aaf2b67eab9a98ac79f432f1e644f632a0a00132ef6694810b5911f"
