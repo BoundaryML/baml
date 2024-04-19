@@ -7,8 +7,7 @@ enum EnumOutput {
 }
 
 function FnEnumOutput {
-  input string
-  output EnumOutput
+  input string  output EnumOutput
 }
 
 impl<llm, FnEnumOutput> v1 {

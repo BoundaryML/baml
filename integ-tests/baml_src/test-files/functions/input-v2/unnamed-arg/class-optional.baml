@@ -4,15 +4,13 @@ class OptionalClass {
 }
 
 function FnClassOptional {
-  input OptionalClass?
-  output string
+  input OptionalClass?  output string
 }
 
 function FnClassOptional_V2 {
   client GPT35
   prompt #"
     {#input}
-
     Return three random words:
   "#
 }
@@ -22,11 +20,9 @@ class ClassOptionalFields {
   prop2 string?
 }
 
-function FnClassOptional2_V2(input: ClassOptionalFields) -> string {
-  client GPT35
+function FnClassOptional2_V2(input: ClassOptionalFields) -> string {  client GPT35
   prompt #"
     {{input}}
-
     Return three random words:
   "#
 }

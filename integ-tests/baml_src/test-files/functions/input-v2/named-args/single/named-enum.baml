@@ -4,8 +4,7 @@ enum NamedArgsSingleEnum {
 }
 
 function FnTestNamedArgsSingleEnum {
-  input (myArg: NamedArgsSingleEnum)
-  output string
+  (myArg: NamedArgsSingleEnum) -> string
 }
 
 function FnTestNamedArgsSingleEnum_V2 {

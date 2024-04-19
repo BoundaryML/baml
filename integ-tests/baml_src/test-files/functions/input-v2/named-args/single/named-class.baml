@@ -8,8 +8,7 @@ class NamedArgsSingleClass {
 }
 
 function TestFnNamedArgsSingleClass {
-  input (myArg: NamedArgsSingleClass)
-  output string
+  (myArg: NamedArgsSingleClass) -> string
 }
 
 function TestFnNamedArgsSingleClass_V2 {

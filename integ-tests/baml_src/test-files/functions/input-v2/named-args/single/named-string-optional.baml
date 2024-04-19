@@ -1,8 +1,6 @@
 // string[]
 function TestFnNamedArgsSingleStringArray {
-  input (myStringArray: string[])
-  output string
-}
+  (myStringArray: string[]) -> string}
 
 function TestFnNamedArgsSingleStringArray_V2 {
   client GPT35

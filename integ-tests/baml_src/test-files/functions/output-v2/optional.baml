@@ -17,8 +17,7 @@ class OptionalTest_ReturnType {
 
 
 function OptionalTest_Function {
-  input string
-  output (OptionalTest_ReturnType?)[]
+  input string  output (OptionalTest_ReturnType?)[]
 }
 
 impl<llm, OptionalTest_Function> v1 {
@@ -28,7 +27,6 @@ impl<llm, OptionalTest_Function> v1 {
 
     Return a JSON blob with this schema: 
     {#print_type(output)}
-
     Here's a list of values you can use for
     {#print_enum(OptionalTest_CategoryType)}
 

@@ -5,19 +5,16 @@ class ClassOptionalOutput {
 }
 
 function FnClassOptionalOutput {
-  input string
-  output ClassOptionalOutput?
+  input string  output ClassOptionalOutput?
 }
 
 impl<llm, FnClassOptionalOutput> v1 {
   client GPT35
   prompt #"
-    Return a json blob for the following input:
-    {#input}
+    Return a json blob for the following input:    {#input}
 
     Answer in JSON using this schema:
     {#print_type(output)}
-
     JSON:
   "#
 }
@@ -34,19 +31,16 @@ class ClassOptionalOutput2 {
 }
 
 function FnClassOptionalOutput2 {
-  input string
-  output ClassOptionalOutput2?
+  input string  output ClassOptionalOutput2?
 }
 
 impl<llm, FnClassOptionalOutput2> v1 {
   client GPT35
   prompt #"
-    Return a json blob for the following input:
-    {#input}
+    Return a json blob for the following input:    {#input}
 
     Answer in JSON using this schema:
     {#print_type(output)}
-
     JSON:
   "#
 }

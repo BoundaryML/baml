@@ -5,8 +5,7 @@ class UnionTest_ReturnType {
 }
 
 function UnionTest_Function {
-  input string | bool
-  output UnionTest_ReturnType
+  input string | bool  output UnionTest_ReturnType
 }
 
 impl<llm, UnionTest_Function> v1 {
@@ -14,7 +13,6 @@ impl<llm, UnionTest_Function> v1 {
   prompt #"
     Return a JSON blob with this schema: 
     {#print_type(output)}
-
     JSON:
   "#
 }

@@ -1,7 +1,6 @@
 
 function FnEnumListOutput {
-  input string
-  output EnumOutput[]
+  input string  output EnumOutput[]
 }
 
 impl<llm, FnEnumListOutput> v1 {

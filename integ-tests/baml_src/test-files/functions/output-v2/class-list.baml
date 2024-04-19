@@ -1,7 +1,6 @@
 
 function FnOutputClassList {
-  input string
-  output TestOutputClass[]
+  input string  output TestOutputClass[]
 }
 
 impl<llm, FnOutputClassList> v1 {
@@ -9,7 +8,6 @@ impl<llm, FnOutputClassList> v1 {
   prompt #"
     Return a JSON array that follows this schema: 
     {#print_type(output)}
-
     JSON:
   "#
 }

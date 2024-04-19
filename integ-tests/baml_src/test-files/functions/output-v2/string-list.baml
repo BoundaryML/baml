@@ -1,6 +1,5 @@
 function FnOutputStringList {
-  input string
-  output string[]
+  input string  output string[]
 }
 
 impl<llm, FnOutputStringList> v1 {
