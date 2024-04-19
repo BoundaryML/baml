@@ -25,7 +25,7 @@ checksum = "f1fdabc7756949593fe60f30ec81974b613357de856987752631dea1e3394c80"
 
 [[package]]
 name = "baml-ffi"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "anyhow",
  "indexmap 2.2.6",
