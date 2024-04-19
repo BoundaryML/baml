@@ -202,16 +202,17 @@ tests-no-zope = ["attrs[tests-mypy]", "cloudpickle", "hypothesis", "pympler", "p
 
 [[package]]
 name = "baml_core_ffi"
-version = "0.1.5"
+version = "0.1.6"
 description = "BAML python bindings (pyproject.toml)"
 optional = false
 python-versions = "*"
-files = []
-develop = true
-
-[package.source]
-type = "directory"
-url = "../python-ffi"
+files = [
+    {file = "baml_core_ffi-0.1.6-cp38-abi3-macosx_10_12_x86_64.whl", hash = "sha256:40bebb03f2da55a5acd4f94f656b17b9a9f159f916da91befd455ebc148f80a8"},
+    {file = "baml_core_ffi-0.1.6-cp38-abi3-macosx_11_0_arm64.whl", hash = "sha256:d93b0d5dbcb4c28700ecefa7d6a01899c499edfb26500d926c5c32ef129293bc"},
+    {file = "baml_core_ffi-0.1.6-cp38-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:f8de95c22fbe713e0f7edaed1964f134b2cbaf606dc040e6ed23c3d9530596ed"},
+    {file = "baml_core_ffi-0.1.6-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:b16f24183afa4462d5dbec8b0d5693fcfef9690b0410fd63a8ec236dd55295d0"},
+    {file = "baml_core_ffi-0.1.6-cp38-abi3-win_amd64.whl", hash = "sha256:bfe98fd419bfde4c5ea2c4e11bfb2829c76c95e45279fbe2a0951b3b4cd05217"},
+]
 
 [[package]]
 name = "certifi"
@@ -381,13 +382,13 @@ files = [
 
 [[package]]
 name = "exceptiongroup"
-version = "1.2.0"
+version = "1.2.1"
 description = "Backport of PEP 654 (exception groups)"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "exceptiongroup-1.2.0-py3-none-any.whl", hash = "sha256:4bfd3996ac73b41e9b9628b04e079f193850720ea5945fc96a08633c66912f14"},
-    {file = "exceptiongroup-1.2.0.tar.gz", hash = "sha256:91f5c769735f051a4290d52edd0858999b57e5876e9f85937691bd4c9fa3ed68"},
+    {file = "exceptiongroup-1.2.1-py3-none-any.whl", hash = "sha256:5258b9ed329c5bbdd31a309f53cbfb0b155341807f6ff7606a1e801a891b29ad"},
+    {file = "exceptiongroup-1.2.1.tar.gz", hash = "sha256:a4785e48b045528f5bfe627b6ad554ff32def154f42372786903b7abcfe1aa16"},
 ]
 
 [package.extras]
@@ -904,13 +905,13 @@ httpx = ">=0.27.0,<0.28.0"
 
 [[package]]
 name = "openai"
-version = "1.22.0"
+version = "1.23.1"
 description = "The official Python library for the openai API"
 optional = false
 python-versions = ">=3.7.1"
 files = [
-    {file = "openai-1.22.0-py3-none-any.whl", hash = "sha256:8f1d73c992f3558636661ba6681cdad75db30b5266ba19d938b1b5e0633f4bf7"},
-    {file = "openai-1.22.0.tar.gz", hash = "sha256:6e6f287a41f98fc36f65a0237845525cfdeb4db8d3e3f6f26efd0a00c7c345c1"},
+    {file = "openai-1.23.1-py3-none-any.whl", hash = "sha256:7941c1bc6fcdb1b6b889dfcfabff775ca52558a79d57dd1b9e15b463de1b3a4c"},
+    {file = "openai-1.23.1.tar.gz", hash = "sha256:6df937e2a1ad64494951ea3614f5516db4d67c3fcc0b751b8e5edf1bc57e2d3d"},
 ]
 
 [package.dependencies]
@@ -1886,4 +1887,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.8,<4.0"
-content-hash = "a29f944877a32d1e5d4a3d9308d3f30a8cd3f0af254a248543c304b7f859ea58"
+content-hash = "d3b9c8fbc6f985bf98f75e1086e5b9ddc967149c5d7128b32a716fe3d47617e8"

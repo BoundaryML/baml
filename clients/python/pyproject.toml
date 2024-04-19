@@ -49,7 +49,7 @@ typeguard = ">=4.0.0"
 types-regex = "^2023.10.3.0"
 packaging = "^23.2"
 ollama = "^0.1.8"
-baml-core-ffi = "=0.1.5"
+baml-core-ffi = "=0.1.6"
 
 [tool.mypy."coloredlogs.*"]
 ignore_missing_imports = true
