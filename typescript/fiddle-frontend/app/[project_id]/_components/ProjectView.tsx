@@ -62,16 +62,16 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
     // firefox wont apply the background color for some reason so we forcefully set it.
     <div className="flex flex-row w-full h-full bg-gray-800">
       <ResizablePanelGroup className="w-full h-full overflow-clip" direction="horizontal">
-        <ResizablePanel defaultSize={10} className="h-full bg-zinc-900">
+        <ResizablePanel defaultSize={12} className="h-full bg-zinc-900">
           <div className="w-full pt-1 text-lg italic font-bold text-center">Prompt Fiddle</div>
 
-          <div className="flex flex-col w-full pt-2 h-[40%] overflow-y-auto">
+          <div className="flex flex-col w-full pt-2 h-[30%] overflow-y-auto">
             <div className="w-full px-2 text-sm font-semibold text-center uppercase text-white/90">project files</div>
             <FileViewer />
           </div>
           {/* <Separator className="bg-vscode-textSeparator-foreground" /> */}
           <div className="w-full px-2 pt-2 text-sm font-semibold text-center uppercase text-white/90">Templates</div>
-          <div className="flex flex-col h-[60%] pb-16">
+          <div className="flex flex-col h-[70%] pb-16">
             <ScrollArea type="always">
               <div className="flex flex-col px-2 gap-y-4">
                 {exampleProjects.map((p) => {
@@ -82,7 +82,7 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
           </div>
         </ResizablePanel>
         <ResizableHandle className="bg-vscode-contrastActiveBorder border-vscode-contrastActiveBorder" />
-        <ResizablePanel defaultSize={90}>
+        <ResizablePanel defaultSize={88}>
           <div className="flex-col w-full h-full font-sans pl-2flex bg-background dark:bg-vscode-panel-background">
             <div className="flex flex-row gap-x-12 border-b-[1px] border-vscode-panel-border h-[40px]">
               <div className="flex flex-col items-center h-full py-1">

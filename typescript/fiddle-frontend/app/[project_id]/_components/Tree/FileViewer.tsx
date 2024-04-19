@@ -121,7 +121,7 @@ const FileViewer = () => {
           rowHeight={24}
           width={width}
           selection={activeFile?.path}
-          height={300}
+          height={200}
           searchTerm={term}
           searchMatch={(node, term) => node.data.name.toLowerCase().includes(term.toLowerCase())}
         >
