@@ -20,11 +20,11 @@ import { Deserializer } from '@boundaryml/baml-core/deserializer/deserializer';
 
 const prompt_template = `Given the email below:
 
-```
+\`\`\`
 from: {{email.from_address}}
 Email Subject: {{email.subject}}
 Email Body: {{email.body}}
-```
+\`\`\`
 
 Extract this info from the email in JSON format:
 {{ ctx.output_schema }}

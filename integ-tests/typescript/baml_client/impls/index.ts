@@ -5,6 +5,8 @@
 // @ts-nocheck
 /* eslint-disable */
 
+import './classifyconversation_default_config';
+
 import './classifymessage_default_config';
 
 import './classifymessage2_default_config';

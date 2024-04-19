@@ -361,6 +361,22 @@ const schema: JSONSchema7 = {
         "description"
       ]
     },
+    "Message": {
+      "title": "Message",
+      "type": "object",
+      "properties": {
+        "role": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "message"
+      ]
+    },
     "ModifiedOutput": {
       "title": "ModifiedOutput",
       "type": "object",
@@ -801,6 +817,21 @@ const schema: JSONSchema7 = {
         "reasoning"
       ]
     },
+    "ClassifyConversation_input": {
+      "type": "object",
+      "properties": {
+        "messages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Message"
+          }
+        }
+      },
+      "required": [
+        "messages"
+      ],
+      "title": "ClassifyConversation input"
+    },
     "ClassifyMessage_input": {
       "type": "object",
       "properties": {
@@ -1140,6 +1171,13 @@ const schema: JSONSchema7 = {
       ],
       "title": "UnionTest_Function input"
     },
+    "ClassifyConversation_output": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Category"
+      },
+      "title": "ClassifyConversation output"
+    },
     "ClassifyMessage_output": {
       "$ref": "#/definitions/Category",
       "title": "ClassifyMessage output"
@@ -1446,6 +1484,10 @@ registerObjectDeserializer(schema.definitions.Email, {
 });
 
 registerObjectDeserializer(schema.definitions.Event, {
+
+});
+
+registerObjectDeserializer(schema.definitions.Message, {
 
 });
 

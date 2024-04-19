@@ -26,7 +26,7 @@ Resume:
 {{ resume }}
 <<<<
 
-Output JSON schema:
+OUTPUT_JSON_SCHEMA:
 {{ ctx.output_schema }}
 
 JSON:`;

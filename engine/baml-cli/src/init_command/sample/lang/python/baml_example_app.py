@@ -6,22 +6,16 @@ python -m example_baml_app
 
 import asyncio
 from baml_client import baml as b
+from baml_client.baml_types import Message
 from datetime import datetime
 from typing import List
-from typing_extensions import TypedDict
 
 async def extract_resume(resume: str) -> None:
     """
     Extracts the resume and prints the extracted data.
     """
-    print("Parsing resume...")
-    print(resume[:100] + "..." if len(resume) > 100 else resume)
-    parsed_resume = await b.ExtractResume(resume)
-    print(parsed_resume.model_dump_json(indent=2))
-
-    await asyncio.sleep(1)
-    print("\n\nNow extracting using streaming")
-    async with b.ExtractResume.stream(resume) as stream:
+    print("\n\nExtracting a resume while streaming...")
+    async with b.ExtractResume.stream(text=resume) as stream:
         async for x in stream.parsed_stream:
             if x.is_parseable:
                 print(f"streaming: {x.parsed.model_dump_json()}")
@@ -32,22 +26,11 @@ async def extract_resume(resume: str) -> None:
             print("No final response")
 
 
-class ChatMessage(TypedDict):
-    sender: str
-    message: str
-
-
-async def classify_chat(messages: List[ChatMessage]) -> None:
+async def classify_conversation(messages: List[Message]) -> None:
     """
     Classifies the chat and prints the classification.
     """
-    print("Classifying chat...")
-    chat = "\n".join(map(lambda m: f'{m["sender"]}: {m["message"]}', messages))
-    print(chat[:100] + "..." if len(chat) > 100 else chat)
-
-    classification = await b.ClassifyMessage(
-        message=chat, message_date=datetime.now().strftime("%Y-%m-%d")
-    )
+    classification = await b.ClassifyConversation(messages=messages)
     print("Got categories: ", classification)
 
 
@@ -83,17 +66,15 @@ async def main():
     await extract_resume(resume)
 
     messages = [
-        {"sender": "Alice", "message": "I'm having issues with my computer."},
-        {
-            "sender": "Assistant",
-            "message": "I'm sorry to hear that. What seems to be the problem?",
-        },
-        {
-            "sender": "Alice",
-            "message": "It's running really slow. I need to return it. Can I get a refund?",
-        },
+        Message(role="user", message="I'm having issues with my computer."),
+        Message(role="assistant",
+            message="I'm sorry to hear that. What seems to be the problem?",
+        ),
+        Message(role="user",
+            message="It's running really slow. I need to return it. Can I get a refund?",
+        ),
     ]
-    await classify_chat(messages)
+    await classify_conversation(messages)
 
 
 if __name__ == "__main__":

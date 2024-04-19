@@ -14,6 +14,7 @@ from .classes.cls_classoptionaloutput2 import PartialClassOptionalOutput2
 from .classes.cls_dynamicpropsclass import PartialDynamicPropsClass
 from .classes.cls_email import PartialEmail
 from .classes.cls_event import PartialEvent
+from .classes.cls_message import PartialMessage
 from .classes.cls_modifiedoutput import PartialModifiedOutput
 from .classes.cls_namedargssingleclass import PartialNamedArgsSingleClass
 from .classes.cls_optionalclass import PartialOptionalClass
@@ -42,6 +43,7 @@ __all__ = [
     'PartialDynamicPropsClass',
     'PartialEmail',
     'PartialEvent',
+    'PartialMessage',
     'PartialModifiedOutput',
     'PartialNamedArgsSingleClass',
     'PartialOptionalClass',

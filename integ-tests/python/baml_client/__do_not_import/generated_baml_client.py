@@ -16,6 +16,7 @@ from .clients.client_lottery_simplesyntax import Lottery_SimpleSyntax
 from .clients.client_ollama import Ollama
 from .clients.client_resilient_complexsyntax import Resilient_ComplexSyntax
 from .clients.client_resilient_simplesyntax import Resilient_SimpleSyntax
+from .functions.fx_classifyconversation import BAMLClassifyConversation
 from .functions.fx_classifymessage import BAMLClassifyMessage
 from .functions.fx_classifymessage2 import BAMLClassifyMessage2
 from .functions.fx_classifymessage3 import BAMLClassifyMessage3
@@ -64,6 +65,7 @@ from typing import Callable, List, Optional
 
 
 class BAMLClient:
+    ClassifyConversation = BAMLClassifyConversation
     ClassifyMessage = BAMLClassifyMessage
     ClassifyMessage2 = BAMLClassifyMessage2
     ClassifyMessage3 = BAMLClassifyMessage3
