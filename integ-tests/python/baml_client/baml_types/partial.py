@@ -8,17 +8,25 @@
 # fmt: off
 
 from ..__do_not_import.types.partial.classes.cls_blah import PartialBlah
+from ..__do_not_import.types.partial.classes.cls_blah2 import PartialBlah2
 from ..__do_not_import.types.partial.classes.cls_classoptionalfields import PartialClassOptionalFields
+from ..__do_not_import.types.partial.classes.cls_classoptionalfieldsv2 import PartialClassOptionalFieldsv2
 from ..__do_not_import.types.partial.classes.cls_classoptionaloutput import PartialClassOptionalOutput
 from ..__do_not_import.types.partial.classes.cls_classoptionaloutput2 import PartialClassOptionalOutput2
+from ..__do_not_import.types.partial.classes.cls_classoptionaloutput2v2 import PartialClassOptionalOutput2v2
 from ..__do_not_import.types.partial.classes.cls_dynamicpropsclass import PartialDynamicPropsClass
 from ..__do_not_import.types.partial.classes.cls_email import PartialEmail
 from ..__do_not_import.types.partial.classes.cls_event import PartialEvent
 from ..__do_not_import.types.partial.classes.cls_modifiedoutput import PartialModifiedOutput
 from ..__do_not_import.types.partial.classes.cls_namedargssingleclass import PartialNamedArgsSingleClass
+from ..__do_not_import.types.partial.classes.cls_namedargssingleclass2 import PartialNamedArgsSingleClass2
+from ..__do_not_import.types.partial.classes.cls_namedargssingleclasslist2 import PartialNamedArgsSingleClassList2
 from ..__do_not_import.types.partial.classes.cls_optionalclass import PartialOptionalClass
+from ..__do_not_import.types.partial.classes.cls_optionalclassv2 import PartialOptionalClassv2
 from ..__do_not_import.types.partial.classes.cls_optionaltest_prop1 import PartialOptionalTest_Prop1
+from ..__do_not_import.types.partial.classes.cls_optionaltest_prop1v2 import PartialOptionalTest_Prop1v2
 from ..__do_not_import.types.partial.classes.cls_optionaltest_returntype import PartialOptionalTest_ReturnType
+from ..__do_not_import.types.partial.classes.cls_optionaltest_returntypev2 import PartialOptionalTest_ReturnTypev2
 from ..__do_not_import.types.partial.classes.cls_orderinfo import PartialOrderInfo
 from ..__do_not_import.types.partial.classes.cls_overrideclass import PartialOverrideClass
 from ..__do_not_import.types.partial.classes.cls_raysdata import PartialRaysData
@@ -27,8 +35,11 @@ from ..__do_not_import.types.partial.classes.cls_searchparams import PartialSear
 from ..__do_not_import.types.partial.classes.cls_someclass2 import PartialSomeClass2
 from ..__do_not_import.types.partial.classes.cls_testclassalias import PartialTestClassAlias
 from ..__do_not_import.types.partial.classes.cls_testclasswithenum import PartialTestClassWithEnum
+from ..__do_not_import.types.partial.classes.cls_testclasswithenum2 import PartialTestClassWithEnum2
 from ..__do_not_import.types.partial.classes.cls_testoutputclass import PartialTestOutputClass
+from ..__do_not_import.types.partial.classes.cls_testoutputclass2 import PartialTestOutputClass2
 from ..__do_not_import.types.partial.classes.cls_uniontest_returntype import PartialUnionTest_ReturnType
+from ..__do_not_import.types.partial.classes.cls_uniontest_returntypev2 import PartialUnionTest_ReturnTypev2
 from ..__do_not_import.types.partial.classes.cls_withreasoning import PartialWithReasoning
 
 
@@ -36,17 +47,25 @@ from ..__do_not_import.types.partial.classes.cls_withreasoning import PartialWit
 
 __all__ = [
     'PartialBlah',
+    'PartialBlah2',
     'PartialClassOptionalFields',
+    'PartialClassOptionalFieldsv2',
     'PartialClassOptionalOutput',
     'PartialClassOptionalOutput2',
+    'PartialClassOptionalOutput2v2',
     'PartialDynamicPropsClass',
     'PartialEmail',
     'PartialEvent',
     'PartialModifiedOutput',
     'PartialNamedArgsSingleClass',
+    'PartialNamedArgsSingleClass2',
+    'PartialNamedArgsSingleClassList2',
     'PartialOptionalClass',
+    'PartialOptionalClassv2',
     'PartialOptionalTest_Prop1',
+    'PartialOptionalTest_Prop1v2',
     'PartialOptionalTest_ReturnType',
+    'PartialOptionalTest_ReturnTypev2',
     'PartialOrderInfo',
     'PartialOverrideClass',
     'PartialRaysData',
@@ -55,7 +74,10 @@ __all__ = [
     'PartialSomeClass2',
     'PartialTestClassAlias',
     'PartialTestClassWithEnum',
+    'PartialTestClassWithEnum2',
     'PartialTestOutputClass',
+    'PartialTestOutputClass2',
     'PartialUnionTest_ReturnType',
+    'PartialUnionTest_ReturnTypev2',
     'PartialWithReasoning'
 ]

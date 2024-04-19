@@ -38,7 +38,7 @@ Before OUTPUT_JSON_SCHEMA, list 5 intentions the user may have.
 {
     ... // OUTPUT_JSON_SCHEMA
 }`;
-const output_schema = `{
+const output_format = `{
   // In ISO duration format, e.g. P1Y2M10D.
   "dateRange": int | null,
   "location": string[],
@@ -84,7 +84,7 @@ GetQuery.registerImpl('default_config', async (
     const result = await GPT4.run_jinja_template(
       prompt_template,
       args,
-      output_schema,
+      output_format,
       template_macros,
     );
 

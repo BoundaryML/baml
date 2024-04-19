@@ -57,10 +57,10 @@ class IBAMLExtractResume2(BaseBAMLFunction[Resume, PartialResume]):
         )
 
     async def __call__(self, *args, **kwargs) -> Resume:
-        return await self.get_impl("").run(*args, **kwargs)
+        return await self.get_impl("default_config").run(*args, **kwargs)
     
     def stream(self, *args, **kwargs) -> AsyncStream[Resume, PartialResume]:
-        res = self.get_impl("").stream(*args, **kwargs)
+        res = self.get_impl("default_config").stream(*args, **kwargs)
         return res
 
 BAMLExtractResume2 = IBAMLExtractResume2()

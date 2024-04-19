@@ -6,7 +6,7 @@
 /* eslint-disable */
 
 
-import { Blah, Category, Category2, Category3, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, DataType, DynamicPropsClass, Email, EnumInClass, EnumOutput, Event, ModifiedOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalClass, OptionalTest_CategoryType, OptionalTest_Prop1, OptionalTest_ReturnType, OrderInfo, OrderStatus, OverrideClass, OverrideEnum, RaysData, Resume, SearchParams, SomeClass2, Tag, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass, UnionTest_ReturnType, WithReasoning } from './types';
+import { Blah, Blah2, Category, Category2, Category3, ClassOptionalFields, ClassOptionalFieldsv2, ClassOptionalOutput, ClassOptionalOutput2, ClassOptionalOutput2v2, DataType, DynamicPropsClass, Email, EnumInClass, EnumInClass2, EnumOutput, EnumOutput2, Event, ModifiedOutput, NamedArgsSingleClass, NamedArgsSingleClass2, NamedArgsSingleClassList2, NamedArgsSingleEnum, NamedArgsSingleEnum2, NamedArgsSingleEnumList, NamedArgsSingleEnumList2, OptionalClass, OptionalClassv2, OptionalTest_CategoryType, OptionalTest_CategoryTypev2, OptionalTest_Prop1, OptionalTest_Prop1v2, OptionalTest_ReturnType, OptionalTest_ReturnTypev2, OrderInfo, OrderStatus, OverrideClass, OverrideEnum, RaysData, Resume, SearchParams, SomeClass2, Tag, TestClassAlias, TestClassWithEnum, TestClassWithEnum2, TestEnum, TestOutputClass, TestOutputClass2, UnionTest_ReturnType, UnionTest_ReturnTypev2, WithReasoning } from './types';
 
 
 // Function to check if a value is a member of the Category enum
@@ -34,9 +34,19 @@ function isEnumInClass(value: any): value is EnumInClass {
   return Object.values(EnumInClass).includes(value);
 }
 
+// Function to check if a value is a member of the EnumInClass2 enum
+function isEnumInClass2(value: any): value is EnumInClass2 {
+  return Object.values(EnumInClass2).includes(value);
+}
+
 // Function to check if a value is a member of the EnumOutput enum
 function isEnumOutput(value: any): value is EnumOutput {
   return Object.values(EnumOutput).includes(value);
+}
+
+// Function to check if a value is a member of the EnumOutput2 enum
+function isEnumOutput2(value: any): value is EnumOutput2 {
+  return Object.values(EnumOutput2).includes(value);
 }
 
 // Function to check if a value is a member of the NamedArgsSingleEnum enum
@@ -44,14 +54,29 @@ function isNamedArgsSingleEnum(value: any): value is NamedArgsSingleEnum {
   return Object.values(NamedArgsSingleEnum).includes(value);
 }
 
+// Function to check if a value is a member of the NamedArgsSingleEnum2 enum
+function isNamedArgsSingleEnum2(value: any): value is NamedArgsSingleEnum2 {
+  return Object.values(NamedArgsSingleEnum2).includes(value);
+}
+
 // Function to check if a value is a member of the NamedArgsSingleEnumList enum
 function isNamedArgsSingleEnumList(value: any): value is NamedArgsSingleEnumList {
   return Object.values(NamedArgsSingleEnumList).includes(value);
 }
 
+// Function to check if a value is a member of the NamedArgsSingleEnumList2 enum
+function isNamedArgsSingleEnumList2(value: any): value is NamedArgsSingleEnumList2 {
+  return Object.values(NamedArgsSingleEnumList2).includes(value);
+}
+
 // Function to check if a value is a member of the OptionalTest_CategoryType enum
 function isOptionalTest_CategoryType(value: any): value is OptionalTest_CategoryType {
   return Object.values(OptionalTest_CategoryType).includes(value);
+}
+
+// Function to check if a value is a member of the OptionalTest_CategoryTypev2 enum
+function isOptionalTest_CategoryTypev2(value: any): value is OptionalTest_CategoryTypev2 {
+  return Object.values(OptionalTest_CategoryTypev2).includes(value);
 }
 
 // Function to check if a value is a member of the OrderStatus enum
@@ -105,6 +130,37 @@ class InternalBlah implements Blah {
   }
 }
 
+// Function to validate if an object is a Blah2 object
+function isBlah2(obj: any): obj is Blah2 {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("prop4" in obj && ((obj.prop4 === null || obj.prop4 === undefined) || typeof obj.prop4 === 'string'))
+  );
+}
+
+
+class InternalBlah2 implements Blah2 {
+  private constructor(private data: {
+    prop4: string | null,
+  }, private raw: Blah2) {}
+
+  static from(data: Blah2): InternalBlah2 {
+    return new InternalBlah2({
+      prop4: (data.prop4 === null || data.prop4 === undefined) ? null : data.prop4,
+    }, data);
+  }
+
+  get prop4(): string | null {
+    return this.data.prop4;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
 // Function to validate if an object is a ClassOptionalFields object
 function isClassOptionalFields(obj: any): obj is ClassOptionalFields {
   return (
@@ -124,6 +180,43 @@ class InternalClassOptionalFields implements ClassOptionalFields {
 
   static from(data: ClassOptionalFields): InternalClassOptionalFields {
     return new InternalClassOptionalFields({
+      prop1: (data.prop1 === null || data.prop1 === undefined) ? null : data.prop1,
+      prop2: (data.prop2 === null || data.prop2 === undefined) ? null : data.prop2,
+    }, data);
+  }
+
+  get prop1(): string | null {
+    return this.data.prop1;
+  }
+  get prop2(): string | null {
+    return this.data.prop2;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
+// Function to validate if an object is a ClassOptionalFieldsv2 object
+function isClassOptionalFieldsv2(obj: any): obj is ClassOptionalFieldsv2 {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("prop1" in obj && ((obj.prop1 === null || obj.prop1 === undefined) || typeof obj.prop1 === 'string'))
+    && ("prop2" in obj && ((obj.prop2 === null || obj.prop2 === undefined) || typeof obj.prop2 === 'string'))
+  );
+}
+
+
+class InternalClassOptionalFieldsv2 implements ClassOptionalFieldsv2 {
+  private constructor(private data: {
+    prop1: string | null,
+    prop2: string | null,
+  }, private raw: ClassOptionalFieldsv2) {}
+
+  static from(data: ClassOptionalFieldsv2): InternalClassOptionalFieldsv2 {
+    return new InternalClassOptionalFieldsv2({
       prop1: (data.prop1 === null || data.prop1 === undefined) ? null : data.prop1,
       prop2: (data.prop2 === null || data.prop2 === undefined) ? null : data.prop2,
     }, data);
@@ -213,6 +306,49 @@ class InternalClassOptionalOutput2 implements ClassOptionalOutput2 {
     return this.data.prop2;
   }
   get prop3(): Blah | null {
+    return this.data.prop3;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
+// Function to validate if an object is a ClassOptionalOutput2v2 object
+function isClassOptionalOutput2v2(obj: any): obj is ClassOptionalOutput2v2 {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("prop1" in obj && ((obj.prop1 === null || obj.prop1 === undefined) || typeof obj.prop1 === 'string'))
+    && ("prop2" in obj && ((obj.prop2 === null || obj.prop2 === undefined) || typeof obj.prop2 === 'string'))
+    && ("prop3" in obj && ((obj.prop3 === null || obj.prop3 === undefined) || isBlah2(obj.prop3)))
+  );
+}
+
+
+class InternalClassOptionalOutput2v2 implements ClassOptionalOutput2v2 {
+  private constructor(private data: {
+    prop1: string | null,
+    prop2: string | null,
+    prop3: Blah2 | null,
+  }, private raw: ClassOptionalOutput2v2) {}
+
+  static from(data: ClassOptionalOutput2v2): InternalClassOptionalOutput2v2 {
+    return new InternalClassOptionalOutput2v2({
+      prop1: (data.prop1 === null || data.prop1 === undefined) ? null : data.prop1,
+      prop2: (data.prop2 === null || data.prop2 === undefined) ? null : data.prop2,
+      prop3: (data.prop3 === null || data.prop3 === undefined) ? null : new InternalBlah2(data.prop3),
+    }, data);
+  }
+
+  get prop1(): string | null {
+    return this.data.prop1;
+  }
+  get prop2(): string | null {
+    return this.data.prop2;
+  }
+  get prop3(): Blah2 | null {
     return this.data.prop3;
   }
 
@@ -446,6 +582,92 @@ class InternalNamedArgsSingleClass implements NamedArgsSingleClass {
   }
 }
 
+// Function to validate if an object is a NamedArgsSingleClass2 object
+function isNamedArgsSingleClass2(obj: any): obj is NamedArgsSingleClass2 {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("key" in obj && (typeof obj.key === 'string'))
+    && ("key_two" in obj && (typeof obj.key_two === 'boolean'))
+    && ("key_three" in obj && (typeof obj.key_three === 'number'))
+  );
+}
+
+
+class InternalNamedArgsSingleClass2 implements NamedArgsSingleClass2 {
+  private constructor(private data: {
+    key: string,
+    key_two: boolean,
+    key_three: number,
+  }, private raw: NamedArgsSingleClass2) {}
+
+  static from(data: NamedArgsSingleClass2): InternalNamedArgsSingleClass2 {
+    return new InternalNamedArgsSingleClass2({
+      key: data.key,
+      key_two: data.key_two,
+      key_three: data.key_three,
+    }, data);
+  }
+
+  get key(): string {
+    return this.data.key;
+  }
+  get key_two(): boolean {
+    return this.data.key_two;
+  }
+  get key_three(): number {
+    return this.data.key_three;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
+// Function to validate if an object is a NamedArgsSingleClassList2 object
+function isNamedArgsSingleClassList2(obj: any): obj is NamedArgsSingleClassList2 {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("key" in obj && (typeof obj.key === 'string'))
+    && ("key_two" in obj && (typeof obj.key_two === 'boolean'))
+    && ("key_three" in obj && (typeof obj.key_three === 'number'))
+  );
+}
+
+
+class InternalNamedArgsSingleClassList2 implements NamedArgsSingleClassList2 {
+  private constructor(private data: {
+    key: string,
+    key_two: boolean,
+    key_three: number,
+  }, private raw: NamedArgsSingleClassList2) {}
+
+  static from(data: NamedArgsSingleClassList2): InternalNamedArgsSingleClassList2 {
+    return new InternalNamedArgsSingleClassList2({
+      key: data.key,
+      key_two: data.key_two,
+      key_three: data.key_three,
+    }, data);
+  }
+
+  get key(): string {
+    return this.data.key;
+  }
+  get key_two(): boolean {
+    return this.data.key_two;
+  }
+  get key_three(): number {
+    return this.data.key_three;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
 // Function to validate if an object is a OptionalClass object
 function isOptionalClass(obj: any): obj is OptionalClass {
   return (
@@ -465,6 +687,43 @@ class InternalOptionalClass implements OptionalClass {
 
   static from(data: OptionalClass): InternalOptionalClass {
     return new InternalOptionalClass({
+      prop1: data.prop1,
+      prop2: data.prop2,
+    }, data);
+  }
+
+  get prop1(): string {
+    return this.data.prop1;
+  }
+  get prop2(): string {
+    return this.data.prop2;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
+// Function to validate if an object is a OptionalClassv2 object
+function isOptionalClassv2(obj: any): obj is OptionalClassv2 {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("prop1" in obj && (typeof obj.prop1 === 'string'))
+    && ("prop2" in obj && (typeof obj.prop2 === 'string'))
+  );
+}
+
+
+class InternalOptionalClassv2 implements OptionalClassv2 {
+  private constructor(private data: {
+    prop1: string,
+    prop2: string,
+  }, private raw: OptionalClassv2) {}
+
+  static from(data: OptionalClassv2): InternalOptionalClassv2 {
+    return new InternalOptionalClassv2({
       prop1: data.prop1,
       prop2: data.prop2,
     }, data);
@@ -520,6 +779,43 @@ class InternalOptionalTest_Prop1 implements OptionalTest_Prop1 {
   }
 }
 
+// Function to validate if an object is a OptionalTest_Prop1v2 object
+function isOptionalTest_Prop1v2(obj: any): obj is OptionalTest_Prop1v2 {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("omega_a" in obj && (typeof obj.omega_a === 'string'))
+    && ("omega_b" in obj && (typeof obj.omega_b === 'number'))
+  );
+}
+
+
+class InternalOptionalTest_Prop1v2 implements OptionalTest_Prop1v2 {
+  private constructor(private data: {
+    omega_a: string,
+    omega_b: number,
+  }, private raw: OptionalTest_Prop1v2) {}
+
+  static from(data: OptionalTest_Prop1v2): InternalOptionalTest_Prop1v2 {
+    return new InternalOptionalTest_Prop1v2({
+      omega_a: data.omega_a,
+      omega_b: data.omega_b,
+    }, data);
+  }
+
+  get omega_a(): string {
+    return this.data.omega_a;
+  }
+  get omega_b(): number {
+    return this.data.omega_b;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
 // Function to validate if an object is a OptionalTest_ReturnType object
 function isOptionalTest_ReturnType(obj: any): obj is OptionalTest_ReturnType {
   return (
@@ -554,6 +850,49 @@ class InternalOptionalTest_ReturnType implements OptionalTest_ReturnType {
     return this.data.omega_2;
   }
   get omega_3(): OptionalTest_CategoryType | null[] {
+    return this.data.omega_3;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
+// Function to validate if an object is a OptionalTest_ReturnTypev2 object
+function isOptionalTest_ReturnTypev2(obj: any): obj is OptionalTest_ReturnTypev2 {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("omega_1" in obj && ((obj.omega_1 === null || obj.omega_1 === undefined) || isOptionalTest_Prop1v2(obj.omega_1)))
+    && ("omega_2" in obj && ((obj.omega_2 === null || obj.omega_2 === undefined) || typeof obj.omega_2 === 'string'))
+    && ("omega_3" in obj && (Array.isArray(obj.omega_3) && obj.omega_3.every((x: any) => (x === null || x === undefined) || isOptionalTest_CategoryTypev2(x))))
+  );
+}
+
+
+class InternalOptionalTest_ReturnTypev2 implements OptionalTest_ReturnTypev2 {
+  private constructor(private data: {
+    omega_1: OptionalTest_Prop1v2 | null,
+    omega_2: string | null,
+    omega_3: OptionalTest_CategoryTypev2 | null[],
+  }, private raw: OptionalTest_ReturnTypev2) {}
+
+  static from(data: OptionalTest_ReturnTypev2): InternalOptionalTest_ReturnTypev2 {
+    return new InternalOptionalTest_ReturnTypev2({
+      omega_1: (data.omega_1 === null || data.omega_1 === undefined) ? null : new InternalOptionalTest_Prop1v2(data.omega_1),
+      omega_2: (data.omega_2 === null || data.omega_2 === undefined) ? null : data.omega_2,
+      omega_3: data.omega_3.map(x => (x === null || x === undefined) ? null : x),
+    }, data);
+  }
+
+  get omega_1(): OptionalTest_Prop1v2 | null {
+    return this.data.omega_1;
+  }
+  get omega_2(): string | null {
+    return this.data.omega_2;
+  }
+  get omega_3(): OptionalTest_CategoryTypev2 | null[] {
     return this.data.omega_3;
   }
 
@@ -945,6 +1284,43 @@ class InternalTestClassWithEnum implements TestClassWithEnum {
   }
 }
 
+// Function to validate if an object is a TestClassWithEnum2 object
+function isTestClassWithEnum2(obj: any): obj is TestClassWithEnum2 {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("prop1" in obj && (typeof obj.prop1 === 'string'))
+    && ("prop2" in obj && (isEnumInClass(obj.prop2)))
+  );
+}
+
+
+class InternalTestClassWithEnum2 implements TestClassWithEnum2 {
+  private constructor(private data: {
+    prop1: string,
+    prop2: EnumInClass,
+  }, private raw: TestClassWithEnum2) {}
+
+  static from(data: TestClassWithEnum2): InternalTestClassWithEnum2 {
+    return new InternalTestClassWithEnum2({
+      prop1: data.prop1,
+      prop2: data.prop2,
+    }, data);
+  }
+
+  get prop1(): string {
+    return this.data.prop1;
+  }
+  get prop2(): EnumInClass {
+    return this.data.prop2;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
 // Function to validate if an object is a TestOutputClass object
 function isTestOutputClass(obj: any): obj is TestOutputClass {
   return (
@@ -964,6 +1340,43 @@ class InternalTestOutputClass implements TestOutputClass {
 
   static from(data: TestOutputClass): InternalTestOutputClass {
     return new InternalTestOutputClass({
+      prop1: data.prop1,
+      prop2: data.prop2,
+    }, data);
+  }
+
+  get prop1(): string {
+    return this.data.prop1;
+  }
+  get prop2(): number {
+    return this.data.prop2;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
+// Function to validate if an object is a TestOutputClass2 object
+function isTestOutputClass2(obj: any): obj is TestOutputClass2 {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("prop1" in obj && (typeof obj.prop1 === 'string'))
+    && ("prop2" in obj && (typeof obj.prop2 === 'number'))
+  );
+}
+
+
+class InternalTestOutputClass2 implements TestOutputClass2 {
+  private constructor(private data: {
+    prop1: string,
+    prop2: number,
+  }, private raw: TestOutputClass2) {}
+
+  static from(data: TestOutputClass2): InternalTestOutputClass2 {
+    return new InternalTestOutputClass2({
       prop1: data.prop1,
       prop2: data.prop2,
     }, data);
@@ -1046,6 +1459,70 @@ if (Array.isArray(x) && x.every((x: any) => typeof x === 'boolean')) {
   }
 }
 
+// Function to validate if an object is a UnionTest_ReturnTypev2 object
+function isUnionTest_ReturnTypev2(obj: any): obj is UnionTest_ReturnTypev2 {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("prop1" in obj && ((typeof obj.prop1 === 'string') || (typeof obj.prop1 === 'boolean')))
+    && ("prop2" in obj && (Array.isArray(obj.prop2) && obj.prop2.every((x: any) => (typeof x === 'number') || (typeof x === 'boolean'))))
+    && ("prop3" in obj && ((Array.isArray(obj.prop3) && obj.prop3.every((x: any) => typeof x === 'number')) || (Array.isArray(obj.prop3) && obj.prop3.every((x: any) => typeof x === 'boolean'))))
+  );
+}
+
+
+class InternalUnionTest_ReturnTypev2 implements UnionTest_ReturnTypev2 {
+  private constructor(private data: {
+    prop1: string | boolean,
+    prop2: number | boolean[],
+    prop3: number[] | boolean[],
+  }, private raw: UnionTest_ReturnTypev2) {}
+
+  static from(data: UnionTest_ReturnTypev2): InternalUnionTest_ReturnTypev2 {
+    return new InternalUnionTest_ReturnTypev2({
+      prop1: ((x) => {
+if (typeof x === 'string') {
+  return x;
+}
+if (typeof x === 'boolean') {
+  return x;
+}
+})(data.prop1),
+      prop2: data.prop2.map(x => ((x) => {
+if (typeof x === 'number') {
+  return x;
+}
+if (typeof x === 'boolean') {
+  return x;
+}
+})(x)),
+      prop3: ((x) => {
+if (Array.isArray(x) && x.every((x: any) => typeof x === 'number')) {
+  return x.map(x => x);
+}
+if (Array.isArray(x) && x.every((x: any) => typeof x === 'boolean')) {
+  return x.map(x => x);
+}
+})(data.prop3),
+    }, data);
+  }
+
+  get prop1(): string | boolean {
+    return this.data.prop1;
+  }
+  get prop2(): number | boolean[] {
+    return this.data.prop2;
+  }
+  get prop3(): number[] | boolean[] {
+    return this.data.prop3;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
 // Function to validate if an object is a WithReasoning object
 function isWithReasoning(obj: any): obj is WithReasoning {
   return (
@@ -1084,5 +1561,5 @@ class InternalWithReasoning implements WithReasoning {
 }
 
 
-export { InternalBlah, InternalClassOptionalFields, InternalClassOptionalOutput, InternalClassOptionalOutput2, InternalDynamicPropsClass, InternalEmail, InternalEvent, InternalModifiedOutput, InternalNamedArgsSingleClass, InternalOptionalClass, InternalOptionalTest_Prop1, InternalOptionalTest_ReturnType, InternalOrderInfo, InternalOverrideClass, InternalRaysData, InternalResume, InternalSearchParams, InternalSomeClass2, InternalTestClassAlias, InternalTestClassWithEnum, InternalTestOutputClass, InternalUnionTest_ReturnType, InternalWithReasoning }
+export { InternalBlah, InternalBlah2, InternalClassOptionalFields, InternalClassOptionalFieldsv2, InternalClassOptionalOutput, InternalClassOptionalOutput2, InternalClassOptionalOutput2v2, InternalDynamicPropsClass, InternalEmail, InternalEvent, InternalModifiedOutput, InternalNamedArgsSingleClass, InternalNamedArgsSingleClass2, InternalNamedArgsSingleClassList2, InternalOptionalClass, InternalOptionalClassv2, InternalOptionalTest_Prop1, InternalOptionalTest_Prop1v2, InternalOptionalTest_ReturnType, InternalOptionalTest_ReturnTypev2, InternalOrderInfo, InternalOverrideClass, InternalRaysData, InternalResume, InternalSearchParams, InternalSomeClass2, InternalTestClassAlias, InternalTestClassWithEnum, InternalTestClassWithEnum2, InternalTestOutputClass, InternalTestOutputClass2, InternalUnionTest_ReturnType, InternalUnionTest_ReturnTypev2, InternalWithReasoning }
 

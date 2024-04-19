@@ -28,7 +28,7 @@ Output JSON schema:
 {{ ctx.output_schema }}
 
 JSON:`;
-const output_schema = `{
+const output_format = `{
   "dataType": "DataType as string",
   "value": {
     "name": string,
@@ -65,7 +65,7 @@ GetDataType.registerImpl('default_config', async (
     const result = await GPT4.run_jinja_template(
       prompt_template,
       args,
-      output_schema,
+      output_format,
       template_macros,
     );
 

@@ -6,7 +6,7 @@
 /* eslint-disable */
 
 
-import { Category, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, Email, EnumOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalClass, OptionalTest_ReturnType, OrderInfo, OverrideClass, OverrideEnum, RaysData, Resume, SearchParams, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass, UnionTest_ReturnType } from './types';
+import { Category, ClassOptionalFields, ClassOptionalFieldsv2, ClassOptionalOutput, ClassOptionalOutput2, ClassOptionalOutput2v2, Email, EnumOutput, EnumOutput2, NamedArgsSingleClass, NamedArgsSingleClass2, NamedArgsSingleClassList2, NamedArgsSingleEnum, NamedArgsSingleEnum2, NamedArgsSingleEnumList, NamedArgsSingleEnumList2, OptionalClass, OptionalClassv2, OptionalTest_ReturnType, OptionalTest_ReturnTypev2, OrderInfo, OverrideClass, OverrideEnum, RaysData, Resume, SearchParams, TestClassAlias, TestClassWithEnum, TestClassWithEnum2, TestEnum, TestOutputClass, TestOutputClass2, UnionTest_ReturnType, UnionTest_ReturnTypev2 } from './types';
 import { FireBamlEvent, traceAsync } from '@boundaryml/baml-core/ffi_layer';
 
 
@@ -756,6 +756,83 @@ function createFnClassOptionalOutput2Instance(): IFnClassOptionalOutput2 & FnCla
 
 const FnClassOptionalOutput2 = createFnClassOptionalOutput2Instance();
 
+type IFnClassOptionalOutput2_V2 = (args: {
+  input: string
+}) => Promise<ClassOptionalOutput2v2 | null>
+
+type FnClassOptionalOutput2_V2Impls = 'default_config';
+
+interface FnClassOptionalOutput2_V2Impl {
+    run: IFnClassOptionalOutput2_V2;
+    name: FnClassOptionalOutput2_V2Impls;
+}
+
+interface FnClassOptionalOutput2_V2Function {
+  registerImpl: (name: FnClassOptionalOutput2_V2Impls, impl: FnClassOptionalOutput2_V2Impl) => void;
+  getImpl: (name: FnClassOptionalOutput2_V2Impls) => FnClassOptionalOutput2_V2Impl;
+}
+
+function createFnClassOptionalOutput2_V2Instance(): IFnClassOptionalOutput2_V2 & FnClassOptionalOutput2_V2Function {
+
+  const registry: Record<FnClassOptionalOutput2_V2Impls, FnClassOptionalOutput2_V2Impl> = {}
+
+  const wrapper: FnClassOptionalOutput2_V2Function = {
+    getImpl: (name: FnClassOptionalOutput2_V2Impls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for FnClassOptionalOutput2_V2 with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: FnClassOptionalOutput2_V2Impls, cb: IFnClassOptionalOutput2_V2) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for FnClassOptionalOutput2_V2 with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"FnClassOptionalOutput2_V2",
+          /* returnType */ "ClassOptionalOutput2v2 | null",
+          /* paramters */ [
+            [
+              "input",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            input: string
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for FnClassOptionalOutput2_V2: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    input: string
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IFnClassOptionalOutput2_V2 & FnClassOptionalOutput2_V2Function;
+}
+
+const FnClassOptionalOutput2_V2 = createFnClassOptionalOutput2_V2Instance();
+
 type IFnEnumListOutput = (arg: string) => Promise<EnumOutput[]>
 
 type FnEnumListOutputImpls = 'v1';
@@ -1258,6 +1335,83 @@ function createFnOutputClassWithEnumInstance(): IFnOutputClassWithEnum & FnOutpu
 }
 
 const FnOutputClassWithEnum = createFnOutputClassWithEnumInstance();
+
+type IFnOutputClassWithEnum_V2 = (args: {
+  input: string
+}) => Promise<TestClassWithEnum2>
+
+type FnOutputClassWithEnum_V2Impls = 'default_config';
+
+interface FnOutputClassWithEnum_V2Impl {
+    run: IFnOutputClassWithEnum_V2;
+    name: FnOutputClassWithEnum_V2Impls;
+}
+
+interface FnOutputClassWithEnum_V2Function {
+  registerImpl: (name: FnOutputClassWithEnum_V2Impls, impl: FnOutputClassWithEnum_V2Impl) => void;
+  getImpl: (name: FnOutputClassWithEnum_V2Impls) => FnOutputClassWithEnum_V2Impl;
+}
+
+function createFnOutputClassWithEnum_V2Instance(): IFnOutputClassWithEnum_V2 & FnOutputClassWithEnum_V2Function {
+
+  const registry: Record<FnOutputClassWithEnum_V2Impls, FnOutputClassWithEnum_V2Impl> = {}
+
+  const wrapper: FnOutputClassWithEnum_V2Function = {
+    getImpl: (name: FnOutputClassWithEnum_V2Impls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for FnOutputClassWithEnum_V2 with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: FnOutputClassWithEnum_V2Impls, cb: IFnOutputClassWithEnum_V2) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for FnOutputClassWithEnum_V2 with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"FnOutputClassWithEnum_V2",
+          /* returnType */ "TestClassWithEnum2",
+          /* paramters */ [
+            [
+              "input",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            input: string
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for FnOutputClassWithEnum_V2: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    input: string
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IFnOutputClassWithEnum_V2 & FnOutputClassWithEnum_V2Function;
+}
+
+const FnOutputClassWithEnum_V2 = createFnOutputClassWithEnum_V2Instance();
 
 type IFnOutputStringList = (arg: string) => Promise<string[]>
 
@@ -2135,6 +2289,83 @@ function createOptionalTest_FunctionInstance(): IOptionalTest_Function & Optiona
 
 const OptionalTest_Function = createOptionalTest_FunctionInstance();
 
+type IOptionalTest_Function_V2 = (args: {
+  input: string
+}) => Promise<OptionalTest_ReturnTypev2 | null[]>
+
+type OptionalTest_Function_V2Impls = 'default_config';
+
+interface OptionalTest_Function_V2Impl {
+    run: IOptionalTest_Function_V2;
+    name: OptionalTest_Function_V2Impls;
+}
+
+interface OptionalTest_Function_V2Function {
+  registerImpl: (name: OptionalTest_Function_V2Impls, impl: OptionalTest_Function_V2Impl) => void;
+  getImpl: (name: OptionalTest_Function_V2Impls) => OptionalTest_Function_V2Impl;
+}
+
+function createOptionalTest_Function_V2Instance(): IOptionalTest_Function_V2 & OptionalTest_Function_V2Function {
+
+  const registry: Record<OptionalTest_Function_V2Impls, OptionalTest_Function_V2Impl> = {}
+
+  const wrapper: OptionalTest_Function_V2Function = {
+    getImpl: (name: OptionalTest_Function_V2Impls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for OptionalTest_Function_V2 with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: OptionalTest_Function_V2Impls, cb: IOptionalTest_Function_V2) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for OptionalTest_Function_V2 with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"OptionalTest_Function_V2",
+          /* returnType */ "OptionalTest_ReturnTypev2 | null[]",
+          /* paramters */ [
+            [
+              "input",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            input: string
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for OptionalTest_Function_V2: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    input: string
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IOptionalTest_Function_V2 & OptionalTest_Function_V2Function;
+}
+
+const OptionalTest_Function_V2 = createOptionalTest_Function_V2Instance();
+
 type IPromptTest = (arg: string) => Promise<string>
 
 type PromptTestImpls = 'bird_chat' | 'claude_chat' | 'claude_chat_with_chat_msgs' | 'claude_chat_with_chat_msgs_no_system' | 'ollama_chat' | 'openai_chat' | 'openai_chat_with_chat_msgs' | 'openai_chat_with_chat_msgs_no_system';
@@ -2968,6 +3199,1627 @@ function createUnionTest_FunctionInstance(): IUnionTest_Function & UnionTest_Fun
 
 const UnionTest_Function = createUnionTest_FunctionInstance();
 
+type IV2_FnClassOptional = (args: {
+  input: OptionalClassv2 | null
+}) => Promise<string>
 
-export { ClassifyMessage, IClassifyMessage, ClassifyMessageFunction, ClassifyMessage2, IClassifyMessage2, ClassifyMessage2Function, ClassifyMessage3, IClassifyMessage3, ClassifyMessage3Function, ExtractNames, IExtractNames, ExtractNamesFunction, ExtractResume, IExtractResume, ExtractResumeFunction, ExtractResume2, IExtractResume2, ExtractResume2Function, FnClassOptional, IFnClassOptional, FnClassOptionalFunction, FnClassOptional2, IFnClassOptional2, FnClassOptional2Function, FnClassOptionalOutput, IFnClassOptionalOutput, FnClassOptionalOutputFunction, FnClassOptionalOutput2, IFnClassOptionalOutput2, FnClassOptionalOutput2Function, FnEnumListOutput, IFnEnumListOutput, FnEnumListOutputFunction, FnEnumOutput, IFnEnumOutput, FnEnumOutputFunction, FnNamedArgsSingleStringOptional, IFnNamedArgsSingleStringOptional, FnNamedArgsSingleStringOptionalFunction, FnOutputBool, IFnOutputBool, FnOutputBoolFunction, FnOutputClass, IFnOutputClass, FnOutputClassFunction, FnOutputClassList, IFnOutputClassList, FnOutputClassListFunction, FnOutputClassWithEnum, IFnOutputClassWithEnum, FnOutputClassWithEnumFunction, FnOutputStringList, IFnOutputStringList, FnOutputStringListFunction, FnStringOptional, IFnStringOptional, FnStringOptionalFunction, FnTestAliasedEnumOutput, IFnTestAliasedEnumOutput, FnTestAliasedEnumOutputFunction, FnTestClassAlias, IFnTestClassAlias, FnTestClassAliasFunction, FnTestClassOverride, IFnTestClassOverride, FnTestClassOverrideFunction, FnTestEnumOverride, IFnTestEnumOverride, FnTestEnumOverrideFunction, FnTestNamedArgsSingleEnum, IFnTestNamedArgsSingleEnum, FnTestNamedArgsSingleEnumFunction, FnTestOutputAdapter, IFnTestOutputAdapter, FnTestOutputAdapterFunction, GetDataType, IGetDataType, GetDataTypeFunction, GetOrderInfo, IGetOrderInfo, GetOrderInfoFunction, GetQuery, IGetQuery, GetQueryFunction, OptionalTest_Function, IOptionalTest_Function, OptionalTest_FunctionFunction, PromptTest, IPromptTest, PromptTestFunction, TestFnNamedArgsSingleBool, ITestFnNamedArgsSingleBool, TestFnNamedArgsSingleBoolFunction, TestFnNamedArgsSingleClass, ITestFnNamedArgsSingleClass, TestFnNamedArgsSingleClassFunction, TestFnNamedArgsSingleEnumList, ITestFnNamedArgsSingleEnumList, TestFnNamedArgsSingleEnumListFunction, TestFnNamedArgsSingleFloat, ITestFnNamedArgsSingleFloat, TestFnNamedArgsSingleFloatFunction, TestFnNamedArgsSingleInt, ITestFnNamedArgsSingleInt, TestFnNamedArgsSingleIntFunction, TestFnNamedArgsSingleString, ITestFnNamedArgsSingleString, TestFnNamedArgsSingleStringFunction, TestFnNamedArgsSingleStringArray, ITestFnNamedArgsSingleStringArray, TestFnNamedArgsSingleStringArrayFunction, TestFnNamedArgsSingleStringList, ITestFnNamedArgsSingleStringList, TestFnNamedArgsSingleStringListFunction, TestFnNamedArgsSyntax, ITestFnNamedArgsSyntax, TestFnNamedArgsSyntaxFunction, UnionTest_Function, IUnionTest_Function, UnionTest_FunctionFunction }
+type V2_FnClassOptionalImpls = 'default_config';
+
+interface V2_FnClassOptionalImpl {
+    run: IV2_FnClassOptional;
+    name: V2_FnClassOptionalImpls;
+}
+
+interface V2_FnClassOptionalFunction {
+  registerImpl: (name: V2_FnClassOptionalImpls, impl: V2_FnClassOptionalImpl) => void;
+  getImpl: (name: V2_FnClassOptionalImpls) => V2_FnClassOptionalImpl;
+}
+
+function createV2_FnClassOptionalInstance(): IV2_FnClassOptional & V2_FnClassOptionalFunction {
+
+  const registry: Record<V2_FnClassOptionalImpls, V2_FnClassOptionalImpl> = {}
+
+  const wrapper: V2_FnClassOptionalFunction = {
+    getImpl: (name: V2_FnClassOptionalImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for V2_FnClassOptional with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: V2_FnClassOptionalImpls, cb: IV2_FnClassOptional) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for V2_FnClassOptional with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"V2_FnClassOptional",
+          /* returnType */ "string",
+          /* paramters */ [
+            [
+              "input",
+              "OptionalClassv2 | null"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            input: OptionalClassv2 | null
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for V2_FnClassOptional: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    input: OptionalClassv2 | null
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IV2_FnClassOptional & V2_FnClassOptionalFunction;
+}
+
+const V2_FnClassOptional = createV2_FnClassOptionalInstance();
+
+type IV2_FnClassOptional2 = (args: {
+  input: ClassOptionalFieldsv2
+}) => Promise<string>
+
+type V2_FnClassOptional2Impls = 'default_config';
+
+interface V2_FnClassOptional2Impl {
+    run: IV2_FnClassOptional2;
+    name: V2_FnClassOptional2Impls;
+}
+
+interface V2_FnClassOptional2Function {
+  registerImpl: (name: V2_FnClassOptional2Impls, impl: V2_FnClassOptional2Impl) => void;
+  getImpl: (name: V2_FnClassOptional2Impls) => V2_FnClassOptional2Impl;
+}
+
+function createV2_FnClassOptional2Instance(): IV2_FnClassOptional2 & V2_FnClassOptional2Function {
+
+  const registry: Record<V2_FnClassOptional2Impls, V2_FnClassOptional2Impl> = {}
+
+  const wrapper: V2_FnClassOptional2Function = {
+    getImpl: (name: V2_FnClassOptional2Impls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for V2_FnClassOptional2 with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: V2_FnClassOptional2Impls, cb: IV2_FnClassOptional2) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for V2_FnClassOptional2 with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"V2_FnClassOptional2",
+          /* returnType */ "string",
+          /* paramters */ [
+            [
+              "input",
+              "ClassOptionalFieldsv2"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            input: ClassOptionalFieldsv2
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for V2_FnClassOptional2: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    input: ClassOptionalFieldsv2
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IV2_FnClassOptional2 & V2_FnClassOptional2Function;
+}
+
+const V2_FnClassOptional2 = createV2_FnClassOptional2Instance();
+
+type IV2_FnEnumListOutput = (args: {
+  input: string
+}) => Promise<EnumOutput[]>
+
+type V2_FnEnumListOutputImpls = 'default_config';
+
+interface V2_FnEnumListOutputImpl {
+    run: IV2_FnEnumListOutput;
+    name: V2_FnEnumListOutputImpls;
+}
+
+interface V2_FnEnumListOutputFunction {
+  registerImpl: (name: V2_FnEnumListOutputImpls, impl: V2_FnEnumListOutputImpl) => void;
+  getImpl: (name: V2_FnEnumListOutputImpls) => V2_FnEnumListOutputImpl;
+}
+
+function createV2_FnEnumListOutputInstance(): IV2_FnEnumListOutput & V2_FnEnumListOutputFunction {
+
+  const registry: Record<V2_FnEnumListOutputImpls, V2_FnEnumListOutputImpl> = {}
+
+  const wrapper: V2_FnEnumListOutputFunction = {
+    getImpl: (name: V2_FnEnumListOutputImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for V2_FnEnumListOutput with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: V2_FnEnumListOutputImpls, cb: IV2_FnEnumListOutput) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for V2_FnEnumListOutput with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"V2_FnEnumListOutput",
+          /* returnType */ "EnumOutput[]",
+          /* paramters */ [
+            [
+              "input",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            input: string
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for V2_FnEnumListOutput: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    input: string
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IV2_FnEnumListOutput & V2_FnEnumListOutputFunction;
+}
+
+const V2_FnEnumListOutput = createV2_FnEnumListOutputInstance();
+
+type IV2_FnEnumOutput = (args: {
+  input: string
+}) => Promise<EnumOutput2>
+
+type V2_FnEnumOutputImpls = 'default_config';
+
+interface V2_FnEnumOutputImpl {
+    run: IV2_FnEnumOutput;
+    name: V2_FnEnumOutputImpls;
+}
+
+interface V2_FnEnumOutputFunction {
+  registerImpl: (name: V2_FnEnumOutputImpls, impl: V2_FnEnumOutputImpl) => void;
+  getImpl: (name: V2_FnEnumOutputImpls) => V2_FnEnumOutputImpl;
+}
+
+function createV2_FnEnumOutputInstance(): IV2_FnEnumOutput & V2_FnEnumOutputFunction {
+
+  const registry: Record<V2_FnEnumOutputImpls, V2_FnEnumOutputImpl> = {}
+
+  const wrapper: V2_FnEnumOutputFunction = {
+    getImpl: (name: V2_FnEnumOutputImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for V2_FnEnumOutput with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: V2_FnEnumOutputImpls, cb: IV2_FnEnumOutput) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for V2_FnEnumOutput with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"V2_FnEnumOutput",
+          /* returnType */ "EnumOutput2",
+          /* paramters */ [
+            [
+              "input",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            input: string
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for V2_FnEnumOutput: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    input: string
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IV2_FnEnumOutput & V2_FnEnumOutputFunction;
+}
+
+const V2_FnEnumOutput = createV2_FnEnumOutputInstance();
+
+type IV2_FnNamedArgsSingleStringOptional = (args: {
+  myString: string | null
+}) => Promise<string>
+
+type V2_FnNamedArgsSingleStringOptionalImpls = 'default_config';
+
+interface V2_FnNamedArgsSingleStringOptionalImpl {
+    run: IV2_FnNamedArgsSingleStringOptional;
+    name: V2_FnNamedArgsSingleStringOptionalImpls;
+}
+
+interface V2_FnNamedArgsSingleStringOptionalFunction {
+  registerImpl: (name: V2_FnNamedArgsSingleStringOptionalImpls, impl: V2_FnNamedArgsSingleStringOptionalImpl) => void;
+  getImpl: (name: V2_FnNamedArgsSingleStringOptionalImpls) => V2_FnNamedArgsSingleStringOptionalImpl;
+}
+
+function createV2_FnNamedArgsSingleStringOptionalInstance(): IV2_FnNamedArgsSingleStringOptional & V2_FnNamedArgsSingleStringOptionalFunction {
+
+  const registry: Record<V2_FnNamedArgsSingleStringOptionalImpls, V2_FnNamedArgsSingleStringOptionalImpl> = {}
+
+  const wrapper: V2_FnNamedArgsSingleStringOptionalFunction = {
+    getImpl: (name: V2_FnNamedArgsSingleStringOptionalImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for V2_FnNamedArgsSingleStringOptional with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: V2_FnNamedArgsSingleStringOptionalImpls, cb: IV2_FnNamedArgsSingleStringOptional) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for V2_FnNamedArgsSingleStringOptional with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"V2_FnNamedArgsSingleStringOptional",
+          /* returnType */ "string",
+          /* paramters */ [
+            [
+              "myString",
+              "string | null"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            myString: string | null
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for V2_FnNamedArgsSingleStringOptional: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    myString: string | null
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IV2_FnNamedArgsSingleStringOptional & V2_FnNamedArgsSingleStringOptionalFunction;
+}
+
+const V2_FnNamedArgsSingleStringOptional = createV2_FnNamedArgsSingleStringOptionalInstance();
+
+type IV2_FnOutputBool = (args: {
+  input: string
+}) => Promise<boolean>
+
+type V2_FnOutputBoolImpls = 'default_config';
+
+interface V2_FnOutputBoolImpl {
+    run: IV2_FnOutputBool;
+    name: V2_FnOutputBoolImpls;
+}
+
+interface V2_FnOutputBoolFunction {
+  registerImpl: (name: V2_FnOutputBoolImpls, impl: V2_FnOutputBoolImpl) => void;
+  getImpl: (name: V2_FnOutputBoolImpls) => V2_FnOutputBoolImpl;
+}
+
+function createV2_FnOutputBoolInstance(): IV2_FnOutputBool & V2_FnOutputBoolFunction {
+
+  const registry: Record<V2_FnOutputBoolImpls, V2_FnOutputBoolImpl> = {}
+
+  const wrapper: V2_FnOutputBoolFunction = {
+    getImpl: (name: V2_FnOutputBoolImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for V2_FnOutputBool with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: V2_FnOutputBoolImpls, cb: IV2_FnOutputBool) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for V2_FnOutputBool with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"V2_FnOutputBool",
+          /* returnType */ "boolean",
+          /* paramters */ [
+            [
+              "input",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            input: string
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for V2_FnOutputBool: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    input: string
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IV2_FnOutputBool & V2_FnOutputBoolFunction;
+}
+
+const V2_FnOutputBool = createV2_FnOutputBoolInstance();
+
+type IV2_FnOutputClass = (args: {
+  input: string
+}) => Promise<TestOutputClass2>
+
+type V2_FnOutputClassImpls = 'default_config';
+
+interface V2_FnOutputClassImpl {
+    run: IV2_FnOutputClass;
+    name: V2_FnOutputClassImpls;
+}
+
+interface V2_FnOutputClassFunction {
+  registerImpl: (name: V2_FnOutputClassImpls, impl: V2_FnOutputClassImpl) => void;
+  getImpl: (name: V2_FnOutputClassImpls) => V2_FnOutputClassImpl;
+}
+
+function createV2_FnOutputClassInstance(): IV2_FnOutputClass & V2_FnOutputClassFunction {
+
+  const registry: Record<V2_FnOutputClassImpls, V2_FnOutputClassImpl> = {}
+
+  const wrapper: V2_FnOutputClassFunction = {
+    getImpl: (name: V2_FnOutputClassImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for V2_FnOutputClass with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: V2_FnOutputClassImpls, cb: IV2_FnOutputClass) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for V2_FnOutputClass with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"V2_FnOutputClass",
+          /* returnType */ "TestOutputClass2",
+          /* paramters */ [
+            [
+              "input",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            input: string
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for V2_FnOutputClass: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    input: string
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IV2_FnOutputClass & V2_FnOutputClassFunction;
+}
+
+const V2_FnOutputClass = createV2_FnOutputClassInstance();
+
+type IV2_FnOutputClassList = (args: {
+  input: string
+}) => Promise<TestOutputClass[]>
+
+type V2_FnOutputClassListImpls = 'default_config';
+
+interface V2_FnOutputClassListImpl {
+    run: IV2_FnOutputClassList;
+    name: V2_FnOutputClassListImpls;
+}
+
+interface V2_FnOutputClassListFunction {
+  registerImpl: (name: V2_FnOutputClassListImpls, impl: V2_FnOutputClassListImpl) => void;
+  getImpl: (name: V2_FnOutputClassListImpls) => V2_FnOutputClassListImpl;
+}
+
+function createV2_FnOutputClassListInstance(): IV2_FnOutputClassList & V2_FnOutputClassListFunction {
+
+  const registry: Record<V2_FnOutputClassListImpls, V2_FnOutputClassListImpl> = {}
+
+  const wrapper: V2_FnOutputClassListFunction = {
+    getImpl: (name: V2_FnOutputClassListImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for V2_FnOutputClassList with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: V2_FnOutputClassListImpls, cb: IV2_FnOutputClassList) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for V2_FnOutputClassList with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"V2_FnOutputClassList",
+          /* returnType */ "TestOutputClass[]",
+          /* paramters */ [
+            [
+              "input",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            input: string
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for V2_FnOutputClassList: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    input: string
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IV2_FnOutputClassList & V2_FnOutputClassListFunction;
+}
+
+const V2_FnOutputClassList = createV2_FnOutputClassListInstance();
+
+type IV2_FnOutputStringList = (args: {
+  input: string
+}) => Promise<string[]>
+
+type V2_FnOutputStringListImpls = 'default_config';
+
+interface V2_FnOutputStringListImpl {
+    run: IV2_FnOutputStringList;
+    name: V2_FnOutputStringListImpls;
+}
+
+interface V2_FnOutputStringListFunction {
+  registerImpl: (name: V2_FnOutputStringListImpls, impl: V2_FnOutputStringListImpl) => void;
+  getImpl: (name: V2_FnOutputStringListImpls) => V2_FnOutputStringListImpl;
+}
+
+function createV2_FnOutputStringListInstance(): IV2_FnOutputStringList & V2_FnOutputStringListFunction {
+
+  const registry: Record<V2_FnOutputStringListImpls, V2_FnOutputStringListImpl> = {}
+
+  const wrapper: V2_FnOutputStringListFunction = {
+    getImpl: (name: V2_FnOutputStringListImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for V2_FnOutputStringList with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: V2_FnOutputStringListImpls, cb: IV2_FnOutputStringList) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for V2_FnOutputStringList with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"V2_FnOutputStringList",
+          /* returnType */ "string[]",
+          /* paramters */ [
+            [
+              "input",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            input: string
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for V2_FnOutputStringList: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    input: string
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IV2_FnOutputStringList & V2_FnOutputStringListFunction;
+}
+
+const V2_FnOutputStringList = createV2_FnOutputStringListInstance();
+
+type IV2_FnStringOptional = (args: {
+  input: string | null
+}) => Promise<string>
+
+type V2_FnStringOptionalImpls = 'default_config';
+
+interface V2_FnStringOptionalImpl {
+    run: IV2_FnStringOptional;
+    name: V2_FnStringOptionalImpls;
+}
+
+interface V2_FnStringOptionalFunction {
+  registerImpl: (name: V2_FnStringOptionalImpls, impl: V2_FnStringOptionalImpl) => void;
+  getImpl: (name: V2_FnStringOptionalImpls) => V2_FnStringOptionalImpl;
+}
+
+function createV2_FnStringOptionalInstance(): IV2_FnStringOptional & V2_FnStringOptionalFunction {
+
+  const registry: Record<V2_FnStringOptionalImpls, V2_FnStringOptionalImpl> = {}
+
+  const wrapper: V2_FnStringOptionalFunction = {
+    getImpl: (name: V2_FnStringOptionalImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for V2_FnStringOptional with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: V2_FnStringOptionalImpls, cb: IV2_FnStringOptional) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for V2_FnStringOptional with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"V2_FnStringOptional",
+          /* returnType */ "string",
+          /* paramters */ [
+            [
+              "input",
+              "string | null"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            input: string | null
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for V2_FnStringOptional: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    input: string | null
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IV2_FnStringOptional & V2_FnStringOptionalFunction;
+}
+
+const V2_FnStringOptional = createV2_FnStringOptionalInstance();
+
+type IV2_FnTestNamedArgsSingleEnum = (args: {
+  myArg: NamedArgsSingleEnum2
+}) => Promise<string>
+
+type V2_FnTestNamedArgsSingleEnumImpls = 'default_config';
+
+interface V2_FnTestNamedArgsSingleEnumImpl {
+    run: IV2_FnTestNamedArgsSingleEnum;
+    name: V2_FnTestNamedArgsSingleEnumImpls;
+}
+
+interface V2_FnTestNamedArgsSingleEnumFunction {
+  registerImpl: (name: V2_FnTestNamedArgsSingleEnumImpls, impl: V2_FnTestNamedArgsSingleEnumImpl) => void;
+  getImpl: (name: V2_FnTestNamedArgsSingleEnumImpls) => V2_FnTestNamedArgsSingleEnumImpl;
+}
+
+function createV2_FnTestNamedArgsSingleEnumInstance(): IV2_FnTestNamedArgsSingleEnum & V2_FnTestNamedArgsSingleEnumFunction {
+
+  const registry: Record<V2_FnTestNamedArgsSingleEnumImpls, V2_FnTestNamedArgsSingleEnumImpl> = {}
+
+  const wrapper: V2_FnTestNamedArgsSingleEnumFunction = {
+    getImpl: (name: V2_FnTestNamedArgsSingleEnumImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for V2_FnTestNamedArgsSingleEnum with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: V2_FnTestNamedArgsSingleEnumImpls, cb: IV2_FnTestNamedArgsSingleEnum) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for V2_FnTestNamedArgsSingleEnum with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"V2_FnTestNamedArgsSingleEnum",
+          /* returnType */ "string",
+          /* paramters */ [
+            [
+              "myArg",
+              "NamedArgsSingleEnum2"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            myArg: NamedArgsSingleEnum2
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for V2_FnTestNamedArgsSingleEnum: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    myArg: NamedArgsSingleEnum2
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IV2_FnTestNamedArgsSingleEnum & V2_FnTestNamedArgsSingleEnumFunction;
+}
+
+const V2_FnTestNamedArgsSingleEnum = createV2_FnTestNamedArgsSingleEnumInstance();
+
+type IV2_TestFnNamedArgsSingleBool = (args: {
+  myBool: boolean
+}) => Promise<string>
+
+type V2_TestFnNamedArgsSingleBoolImpls = 'default_config';
+
+interface V2_TestFnNamedArgsSingleBoolImpl {
+    run: IV2_TestFnNamedArgsSingleBool;
+    name: V2_TestFnNamedArgsSingleBoolImpls;
+}
+
+interface V2_TestFnNamedArgsSingleBoolFunction {
+  registerImpl: (name: V2_TestFnNamedArgsSingleBoolImpls, impl: V2_TestFnNamedArgsSingleBoolImpl) => void;
+  getImpl: (name: V2_TestFnNamedArgsSingleBoolImpls) => V2_TestFnNamedArgsSingleBoolImpl;
+}
+
+function createV2_TestFnNamedArgsSingleBoolInstance(): IV2_TestFnNamedArgsSingleBool & V2_TestFnNamedArgsSingleBoolFunction {
+
+  const registry: Record<V2_TestFnNamedArgsSingleBoolImpls, V2_TestFnNamedArgsSingleBoolImpl> = {}
+
+  const wrapper: V2_TestFnNamedArgsSingleBoolFunction = {
+    getImpl: (name: V2_TestFnNamedArgsSingleBoolImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for V2_TestFnNamedArgsSingleBool with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: V2_TestFnNamedArgsSingleBoolImpls, cb: IV2_TestFnNamedArgsSingleBool) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for V2_TestFnNamedArgsSingleBool with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"V2_TestFnNamedArgsSingleBool",
+          /* returnType */ "string",
+          /* paramters */ [
+            [
+              "myBool",
+              "boolean"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            myBool: boolean
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for V2_TestFnNamedArgsSingleBool: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    myBool: boolean
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IV2_TestFnNamedArgsSingleBool & V2_TestFnNamedArgsSingleBoolFunction;
+}
+
+const V2_TestFnNamedArgsSingleBool = createV2_TestFnNamedArgsSingleBoolInstance();
+
+type IV2_TestFnNamedArgsSingleClass = (args: {
+  myArg: NamedArgsSingleClass2
+}) => Promise<string>
+
+type V2_TestFnNamedArgsSingleClassImpls = 'default_config';
+
+interface V2_TestFnNamedArgsSingleClassImpl {
+    run: IV2_TestFnNamedArgsSingleClass;
+    name: V2_TestFnNamedArgsSingleClassImpls;
+}
+
+interface V2_TestFnNamedArgsSingleClassFunction {
+  registerImpl: (name: V2_TestFnNamedArgsSingleClassImpls, impl: V2_TestFnNamedArgsSingleClassImpl) => void;
+  getImpl: (name: V2_TestFnNamedArgsSingleClassImpls) => V2_TestFnNamedArgsSingleClassImpl;
+}
+
+function createV2_TestFnNamedArgsSingleClassInstance(): IV2_TestFnNamedArgsSingleClass & V2_TestFnNamedArgsSingleClassFunction {
+
+  const registry: Record<V2_TestFnNamedArgsSingleClassImpls, V2_TestFnNamedArgsSingleClassImpl> = {}
+
+  const wrapper: V2_TestFnNamedArgsSingleClassFunction = {
+    getImpl: (name: V2_TestFnNamedArgsSingleClassImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for V2_TestFnNamedArgsSingleClass with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: V2_TestFnNamedArgsSingleClassImpls, cb: IV2_TestFnNamedArgsSingleClass) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for V2_TestFnNamedArgsSingleClass with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"V2_TestFnNamedArgsSingleClass",
+          /* returnType */ "string",
+          /* paramters */ [
+            [
+              "myArg",
+              "NamedArgsSingleClass2"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            myArg: NamedArgsSingleClass2
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for V2_TestFnNamedArgsSingleClass: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    myArg: NamedArgsSingleClass2
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IV2_TestFnNamedArgsSingleClass & V2_TestFnNamedArgsSingleClassFunction;
+}
+
+const V2_TestFnNamedArgsSingleClass = createV2_TestFnNamedArgsSingleClassInstance();
+
+type IV2_TestFnNamedArgsSingleEnumList = (args: {
+  myArg: NamedArgsSingleEnumList2[]
+}) => Promise<string>
+
+type V2_TestFnNamedArgsSingleEnumListImpls = 'default_config';
+
+interface V2_TestFnNamedArgsSingleEnumListImpl {
+    run: IV2_TestFnNamedArgsSingleEnumList;
+    name: V2_TestFnNamedArgsSingleEnumListImpls;
+}
+
+interface V2_TestFnNamedArgsSingleEnumListFunction {
+  registerImpl: (name: V2_TestFnNamedArgsSingleEnumListImpls, impl: V2_TestFnNamedArgsSingleEnumListImpl) => void;
+  getImpl: (name: V2_TestFnNamedArgsSingleEnumListImpls) => V2_TestFnNamedArgsSingleEnumListImpl;
+}
+
+function createV2_TestFnNamedArgsSingleEnumListInstance(): IV2_TestFnNamedArgsSingleEnumList & V2_TestFnNamedArgsSingleEnumListFunction {
+
+  const registry: Record<V2_TestFnNamedArgsSingleEnumListImpls, V2_TestFnNamedArgsSingleEnumListImpl> = {}
+
+  const wrapper: V2_TestFnNamedArgsSingleEnumListFunction = {
+    getImpl: (name: V2_TestFnNamedArgsSingleEnumListImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for V2_TestFnNamedArgsSingleEnumList with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: V2_TestFnNamedArgsSingleEnumListImpls, cb: IV2_TestFnNamedArgsSingleEnumList) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for V2_TestFnNamedArgsSingleEnumList with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"V2_TestFnNamedArgsSingleEnumList",
+          /* returnType */ "string",
+          /* paramters */ [
+            [
+              "myArg",
+              "NamedArgsSingleEnumList2[]"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            myArg: NamedArgsSingleEnumList2[]
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for V2_TestFnNamedArgsSingleEnumList: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    myArg: NamedArgsSingleEnumList2[]
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IV2_TestFnNamedArgsSingleEnumList & V2_TestFnNamedArgsSingleEnumListFunction;
+}
+
+const V2_TestFnNamedArgsSingleEnumList = createV2_TestFnNamedArgsSingleEnumListInstance();
+
+type IV2_TestFnNamedArgsSingleFloat = (args: {
+  myFloat: number
+}) => Promise<string>
+
+type V2_TestFnNamedArgsSingleFloatImpls = 'default_config';
+
+interface V2_TestFnNamedArgsSingleFloatImpl {
+    run: IV2_TestFnNamedArgsSingleFloat;
+    name: V2_TestFnNamedArgsSingleFloatImpls;
+}
+
+interface V2_TestFnNamedArgsSingleFloatFunction {
+  registerImpl: (name: V2_TestFnNamedArgsSingleFloatImpls, impl: V2_TestFnNamedArgsSingleFloatImpl) => void;
+  getImpl: (name: V2_TestFnNamedArgsSingleFloatImpls) => V2_TestFnNamedArgsSingleFloatImpl;
+}
+
+function createV2_TestFnNamedArgsSingleFloatInstance(): IV2_TestFnNamedArgsSingleFloat & V2_TestFnNamedArgsSingleFloatFunction {
+
+  const registry: Record<V2_TestFnNamedArgsSingleFloatImpls, V2_TestFnNamedArgsSingleFloatImpl> = {}
+
+  const wrapper: V2_TestFnNamedArgsSingleFloatFunction = {
+    getImpl: (name: V2_TestFnNamedArgsSingleFloatImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for V2_TestFnNamedArgsSingleFloat with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: V2_TestFnNamedArgsSingleFloatImpls, cb: IV2_TestFnNamedArgsSingleFloat) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for V2_TestFnNamedArgsSingleFloat with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"V2_TestFnNamedArgsSingleFloat",
+          /* returnType */ "string",
+          /* paramters */ [
+            [
+              "myFloat",
+              "number"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            myFloat: number
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for V2_TestFnNamedArgsSingleFloat: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    myFloat: number
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IV2_TestFnNamedArgsSingleFloat & V2_TestFnNamedArgsSingleFloatFunction;
+}
+
+const V2_TestFnNamedArgsSingleFloat = createV2_TestFnNamedArgsSingleFloatInstance();
+
+type IV2_TestFnNamedArgsSingleInt = (args: {
+  myInt: number
+}) => Promise<string>
+
+type V2_TestFnNamedArgsSingleIntImpls = 'default_config';
+
+interface V2_TestFnNamedArgsSingleIntImpl {
+    run: IV2_TestFnNamedArgsSingleInt;
+    name: V2_TestFnNamedArgsSingleIntImpls;
+}
+
+interface V2_TestFnNamedArgsSingleIntFunction {
+  registerImpl: (name: V2_TestFnNamedArgsSingleIntImpls, impl: V2_TestFnNamedArgsSingleIntImpl) => void;
+  getImpl: (name: V2_TestFnNamedArgsSingleIntImpls) => V2_TestFnNamedArgsSingleIntImpl;
+}
+
+function createV2_TestFnNamedArgsSingleIntInstance(): IV2_TestFnNamedArgsSingleInt & V2_TestFnNamedArgsSingleIntFunction {
+
+  const registry: Record<V2_TestFnNamedArgsSingleIntImpls, V2_TestFnNamedArgsSingleIntImpl> = {}
+
+  const wrapper: V2_TestFnNamedArgsSingleIntFunction = {
+    getImpl: (name: V2_TestFnNamedArgsSingleIntImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for V2_TestFnNamedArgsSingleInt with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: V2_TestFnNamedArgsSingleIntImpls, cb: IV2_TestFnNamedArgsSingleInt) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for V2_TestFnNamedArgsSingleInt with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"V2_TestFnNamedArgsSingleInt",
+          /* returnType */ "string",
+          /* paramters */ [
+            [
+              "myInt",
+              "number"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            myInt: number
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for V2_TestFnNamedArgsSingleInt: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    myInt: number
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IV2_TestFnNamedArgsSingleInt & V2_TestFnNamedArgsSingleIntFunction;
+}
+
+const V2_TestFnNamedArgsSingleInt = createV2_TestFnNamedArgsSingleIntInstance();
+
+type IV2_TestFnNamedArgsSingleString = (args: {
+  myString: string
+}) => Promise<string>
+
+type V2_TestFnNamedArgsSingleStringImpls = 'default_config';
+
+interface V2_TestFnNamedArgsSingleStringImpl {
+    run: IV2_TestFnNamedArgsSingleString;
+    name: V2_TestFnNamedArgsSingleStringImpls;
+}
+
+interface V2_TestFnNamedArgsSingleStringFunction {
+  registerImpl: (name: V2_TestFnNamedArgsSingleStringImpls, impl: V2_TestFnNamedArgsSingleStringImpl) => void;
+  getImpl: (name: V2_TestFnNamedArgsSingleStringImpls) => V2_TestFnNamedArgsSingleStringImpl;
+}
+
+function createV2_TestFnNamedArgsSingleStringInstance(): IV2_TestFnNamedArgsSingleString & V2_TestFnNamedArgsSingleStringFunction {
+
+  const registry: Record<V2_TestFnNamedArgsSingleStringImpls, V2_TestFnNamedArgsSingleStringImpl> = {}
+
+  const wrapper: V2_TestFnNamedArgsSingleStringFunction = {
+    getImpl: (name: V2_TestFnNamedArgsSingleStringImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for V2_TestFnNamedArgsSingleString with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: V2_TestFnNamedArgsSingleStringImpls, cb: IV2_TestFnNamedArgsSingleString) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for V2_TestFnNamedArgsSingleString with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"V2_TestFnNamedArgsSingleString",
+          /* returnType */ "string",
+          /* paramters */ [
+            [
+              "myString",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            myString: string
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for V2_TestFnNamedArgsSingleString: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    myString: string
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IV2_TestFnNamedArgsSingleString & V2_TestFnNamedArgsSingleStringFunction;
+}
+
+const V2_TestFnNamedArgsSingleString = createV2_TestFnNamedArgsSingleStringInstance();
+
+type IV2_TestFnNamedArgsSingleStringArray = (args: {
+  myStringArray: string[]
+}) => Promise<string>
+
+type V2_TestFnNamedArgsSingleStringArrayImpls = 'default_config';
+
+interface V2_TestFnNamedArgsSingleStringArrayImpl {
+    run: IV2_TestFnNamedArgsSingleStringArray;
+    name: V2_TestFnNamedArgsSingleStringArrayImpls;
+}
+
+interface V2_TestFnNamedArgsSingleStringArrayFunction {
+  registerImpl: (name: V2_TestFnNamedArgsSingleStringArrayImpls, impl: V2_TestFnNamedArgsSingleStringArrayImpl) => void;
+  getImpl: (name: V2_TestFnNamedArgsSingleStringArrayImpls) => V2_TestFnNamedArgsSingleStringArrayImpl;
+}
+
+function createV2_TestFnNamedArgsSingleStringArrayInstance(): IV2_TestFnNamedArgsSingleStringArray & V2_TestFnNamedArgsSingleStringArrayFunction {
+
+  const registry: Record<V2_TestFnNamedArgsSingleStringArrayImpls, V2_TestFnNamedArgsSingleStringArrayImpl> = {}
+
+  const wrapper: V2_TestFnNamedArgsSingleStringArrayFunction = {
+    getImpl: (name: V2_TestFnNamedArgsSingleStringArrayImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for V2_TestFnNamedArgsSingleStringArray with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: V2_TestFnNamedArgsSingleStringArrayImpls, cb: IV2_TestFnNamedArgsSingleStringArray) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for V2_TestFnNamedArgsSingleStringArray with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"V2_TestFnNamedArgsSingleStringArray",
+          /* returnType */ "string",
+          /* paramters */ [
+            [
+              "myStringArray",
+              "string[]"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            myStringArray: string[]
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for V2_TestFnNamedArgsSingleStringArray: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    myStringArray: string[]
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IV2_TestFnNamedArgsSingleStringArray & V2_TestFnNamedArgsSingleStringArrayFunction;
+}
+
+const V2_TestFnNamedArgsSingleStringArray = createV2_TestFnNamedArgsSingleStringArrayInstance();
+
+type IV2_TestFnNamedArgsSingleStringList = (args: {
+  myArg: NamedArgsSingleClassList2[]
+}) => Promise<string>
+
+type V2_TestFnNamedArgsSingleStringListImpls = 'default_config';
+
+interface V2_TestFnNamedArgsSingleStringListImpl {
+    run: IV2_TestFnNamedArgsSingleStringList;
+    name: V2_TestFnNamedArgsSingleStringListImpls;
+}
+
+interface V2_TestFnNamedArgsSingleStringListFunction {
+  registerImpl: (name: V2_TestFnNamedArgsSingleStringListImpls, impl: V2_TestFnNamedArgsSingleStringListImpl) => void;
+  getImpl: (name: V2_TestFnNamedArgsSingleStringListImpls) => V2_TestFnNamedArgsSingleStringListImpl;
+}
+
+function createV2_TestFnNamedArgsSingleStringListInstance(): IV2_TestFnNamedArgsSingleStringList & V2_TestFnNamedArgsSingleStringListFunction {
+
+  const registry: Record<V2_TestFnNamedArgsSingleStringListImpls, V2_TestFnNamedArgsSingleStringListImpl> = {}
+
+  const wrapper: V2_TestFnNamedArgsSingleStringListFunction = {
+    getImpl: (name: V2_TestFnNamedArgsSingleStringListImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for V2_TestFnNamedArgsSingleStringList with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: V2_TestFnNamedArgsSingleStringListImpls, cb: IV2_TestFnNamedArgsSingleStringList) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for V2_TestFnNamedArgsSingleStringList with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"V2_TestFnNamedArgsSingleStringList",
+          /* returnType */ "string",
+          /* paramters */ [
+            [
+              "myArg",
+              "NamedArgsSingleClassList2[]"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            myArg: NamedArgsSingleClassList2[]
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for V2_TestFnNamedArgsSingleStringList: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    myArg: NamedArgsSingleClassList2[]
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IV2_TestFnNamedArgsSingleStringList & V2_TestFnNamedArgsSingleStringListFunction;
+}
+
+const V2_TestFnNamedArgsSingleStringList = createV2_TestFnNamedArgsSingleStringListInstance();
+
+type IV2_TestFnNamedArgsSyntax = (args: {
+  var: string, var_with_underscores: string
+}) => Promise<string>
+
+type V2_TestFnNamedArgsSyntaxImpls = 'default_config';
+
+interface V2_TestFnNamedArgsSyntaxImpl {
+    run: IV2_TestFnNamedArgsSyntax;
+    name: V2_TestFnNamedArgsSyntaxImpls;
+}
+
+interface V2_TestFnNamedArgsSyntaxFunction {
+  registerImpl: (name: V2_TestFnNamedArgsSyntaxImpls, impl: V2_TestFnNamedArgsSyntaxImpl) => void;
+  getImpl: (name: V2_TestFnNamedArgsSyntaxImpls) => V2_TestFnNamedArgsSyntaxImpl;
+}
+
+function createV2_TestFnNamedArgsSyntaxInstance(): IV2_TestFnNamedArgsSyntax & V2_TestFnNamedArgsSyntaxFunction {
+
+  const registry: Record<V2_TestFnNamedArgsSyntaxImpls, V2_TestFnNamedArgsSyntaxImpl> = {}
+
+  const wrapper: V2_TestFnNamedArgsSyntaxFunction = {
+    getImpl: (name: V2_TestFnNamedArgsSyntaxImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for V2_TestFnNamedArgsSyntax with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: V2_TestFnNamedArgsSyntaxImpls, cb: IV2_TestFnNamedArgsSyntax) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for V2_TestFnNamedArgsSyntax with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"V2_TestFnNamedArgsSyntax",
+          /* returnType */ "string",
+          /* paramters */ [
+            [
+              "var",
+              "string"
+            ],
+            [
+              "var_with_underscores",
+              "string"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            var: string, var_with_underscores: string
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for V2_TestFnNamedArgsSyntax: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    var: string, var_with_underscores: string
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IV2_TestFnNamedArgsSyntax & V2_TestFnNamedArgsSyntaxFunction;
+}
+
+const V2_TestFnNamedArgsSyntax = createV2_TestFnNamedArgsSyntaxInstance();
+
+type IV2_UnionTest_Function = (args: {
+  input: string | boolean
+}) => Promise<UnionTest_ReturnTypev2>
+
+type V2_UnionTest_FunctionImpls = 'default_config';
+
+interface V2_UnionTest_FunctionImpl {
+    run: IV2_UnionTest_Function;
+    name: V2_UnionTest_FunctionImpls;
+}
+
+interface V2_UnionTest_FunctionFunction {
+  registerImpl: (name: V2_UnionTest_FunctionImpls, impl: V2_UnionTest_FunctionImpl) => void;
+  getImpl: (name: V2_UnionTest_FunctionImpls) => V2_UnionTest_FunctionImpl;
+}
+
+function createV2_UnionTest_FunctionInstance(): IV2_UnionTest_Function & V2_UnionTest_FunctionFunction {
+
+  const registry: Record<V2_UnionTest_FunctionImpls, V2_UnionTest_FunctionImpl> = {}
+
+  const wrapper: V2_UnionTest_FunctionFunction = {
+    getImpl: (name: V2_UnionTest_FunctionImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for V2_UnionTest_Function with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: V2_UnionTest_FunctionImpls, cb: IV2_UnionTest_Function) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for V2_UnionTest_Function with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"V2_UnionTest_Function",
+          /* returnType */ "UnionTest_ReturnTypev2",
+          /* paramters */ [
+            [
+              "input",
+              "string | boolean"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            input: string | boolean
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for V2_UnionTest_Function: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    input: string | boolean
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IV2_UnionTest_Function & V2_UnionTest_FunctionFunction;
+}
+
+const V2_UnionTest_Function = createV2_UnionTest_FunctionInstance();
+
+
+export { ClassifyMessage, IClassifyMessage, ClassifyMessageFunction, ClassifyMessage2, IClassifyMessage2, ClassifyMessage2Function, ClassifyMessage3, IClassifyMessage3, ClassifyMessage3Function, ExtractNames, IExtractNames, ExtractNamesFunction, ExtractResume, IExtractResume, ExtractResumeFunction, ExtractResume2, IExtractResume2, ExtractResume2Function, FnClassOptional, IFnClassOptional, FnClassOptionalFunction, FnClassOptional2, IFnClassOptional2, FnClassOptional2Function, FnClassOptionalOutput, IFnClassOptionalOutput, FnClassOptionalOutputFunction, FnClassOptionalOutput2, IFnClassOptionalOutput2, FnClassOptionalOutput2Function, FnClassOptionalOutput2_V2, IFnClassOptionalOutput2_V2, FnClassOptionalOutput2_V2Function, FnEnumListOutput, IFnEnumListOutput, FnEnumListOutputFunction, FnEnumOutput, IFnEnumOutput, FnEnumOutputFunction, FnNamedArgsSingleStringOptional, IFnNamedArgsSingleStringOptional, FnNamedArgsSingleStringOptionalFunction, FnOutputBool, IFnOutputBool, FnOutputBoolFunction, FnOutputClass, IFnOutputClass, FnOutputClassFunction, FnOutputClassList, IFnOutputClassList, FnOutputClassListFunction, FnOutputClassWithEnum, IFnOutputClassWithEnum, FnOutputClassWithEnumFunction, FnOutputClassWithEnum_V2, IFnOutputClassWithEnum_V2, FnOutputClassWithEnum_V2Function, FnOutputStringList, IFnOutputStringList, FnOutputStringListFunction, FnStringOptional, IFnStringOptional, FnStringOptionalFunction, FnTestAliasedEnumOutput, IFnTestAliasedEnumOutput, FnTestAliasedEnumOutputFunction, FnTestClassAlias, IFnTestClassAlias, FnTestClassAliasFunction, FnTestClassOverride, IFnTestClassOverride, FnTestClassOverrideFunction, FnTestEnumOverride, IFnTestEnumOverride, FnTestEnumOverrideFunction, FnTestNamedArgsSingleEnum, IFnTestNamedArgsSingleEnum, FnTestNamedArgsSingleEnumFunction, FnTestOutputAdapter, IFnTestOutputAdapter, FnTestOutputAdapterFunction, GetDataType, IGetDataType, GetDataTypeFunction, GetOrderInfo, IGetOrderInfo, GetOrderInfoFunction, GetQuery, IGetQuery, GetQueryFunction, OptionalTest_Function, IOptionalTest_Function, OptionalTest_FunctionFunction, OptionalTest_Function_V2, IOptionalTest_Function_V2, OptionalTest_Function_V2Function, PromptTest, IPromptTest, PromptTestFunction, TestFnNamedArgsSingleBool, ITestFnNamedArgsSingleBool, TestFnNamedArgsSingleBoolFunction, TestFnNamedArgsSingleClass, ITestFnNamedArgsSingleClass, TestFnNamedArgsSingleClassFunction, TestFnNamedArgsSingleEnumList, ITestFnNamedArgsSingleEnumList, TestFnNamedArgsSingleEnumListFunction, TestFnNamedArgsSingleFloat, ITestFnNamedArgsSingleFloat, TestFnNamedArgsSingleFloatFunction, TestFnNamedArgsSingleInt, ITestFnNamedArgsSingleInt, TestFnNamedArgsSingleIntFunction, TestFnNamedArgsSingleString, ITestFnNamedArgsSingleString, TestFnNamedArgsSingleStringFunction, TestFnNamedArgsSingleStringArray, ITestFnNamedArgsSingleStringArray, TestFnNamedArgsSingleStringArrayFunction, TestFnNamedArgsSingleStringList, ITestFnNamedArgsSingleStringList, TestFnNamedArgsSingleStringListFunction, TestFnNamedArgsSyntax, ITestFnNamedArgsSyntax, TestFnNamedArgsSyntaxFunction, UnionTest_Function, IUnionTest_Function, UnionTest_FunctionFunction, V2_FnClassOptional, IV2_FnClassOptional, V2_FnClassOptionalFunction, V2_FnClassOptional2, IV2_FnClassOptional2, V2_FnClassOptional2Function, V2_FnEnumListOutput, IV2_FnEnumListOutput, V2_FnEnumListOutputFunction, V2_FnEnumOutput, IV2_FnEnumOutput, V2_FnEnumOutputFunction, V2_FnNamedArgsSingleStringOptional, IV2_FnNamedArgsSingleStringOptional, V2_FnNamedArgsSingleStringOptionalFunction, V2_FnOutputBool, IV2_FnOutputBool, V2_FnOutputBoolFunction, V2_FnOutputClass, IV2_FnOutputClass, V2_FnOutputClassFunction, V2_FnOutputClassList, IV2_FnOutputClassList, V2_FnOutputClassListFunction, V2_FnOutputStringList, IV2_FnOutputStringList, V2_FnOutputStringListFunction, V2_FnStringOptional, IV2_FnStringOptional, V2_FnStringOptionalFunction, V2_FnTestNamedArgsSingleEnum, IV2_FnTestNamedArgsSingleEnum, V2_FnTestNamedArgsSingleEnumFunction, V2_TestFnNamedArgsSingleBool, IV2_TestFnNamedArgsSingleBool, V2_TestFnNamedArgsSingleBoolFunction, V2_TestFnNamedArgsSingleClass, IV2_TestFnNamedArgsSingleClass, V2_TestFnNamedArgsSingleClassFunction, V2_TestFnNamedArgsSingleEnumList, IV2_TestFnNamedArgsSingleEnumList, V2_TestFnNamedArgsSingleEnumListFunction, V2_TestFnNamedArgsSingleFloat, IV2_TestFnNamedArgsSingleFloat, V2_TestFnNamedArgsSingleFloatFunction, V2_TestFnNamedArgsSingleInt, IV2_TestFnNamedArgsSingleInt, V2_TestFnNamedArgsSingleIntFunction, V2_TestFnNamedArgsSingleString, IV2_TestFnNamedArgsSingleString, V2_TestFnNamedArgsSingleStringFunction, V2_TestFnNamedArgsSingleStringArray, IV2_TestFnNamedArgsSingleStringArray, V2_TestFnNamedArgsSingleStringArrayFunction, V2_TestFnNamedArgsSingleStringList, IV2_TestFnNamedArgsSingleStringList, V2_TestFnNamedArgsSingleStringListFunction, V2_TestFnNamedArgsSyntax, IV2_TestFnNamedArgsSyntax, V2_TestFnNamedArgsSyntaxFunction, V2_UnionTest_Function, IV2_UnionTest_Function, V2_UnionTest_FunctionFunction }
 

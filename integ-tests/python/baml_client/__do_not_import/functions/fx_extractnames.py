@@ -55,10 +55,10 @@ class IBAMLExtractNames(BaseBAMLFunction[List[str], List[str]]):
         )
 
     async def __call__(self, *args, **kwargs) -> List[str]:
-        return await self.get_impl("").run(*args, **kwargs)
+        return await self.get_impl("default_config").run(*args, **kwargs)
     
     def stream(self, *args, **kwargs) -> AsyncStream[List[str], List[str]]:
-        res = self.get_impl("").stream(*args, **kwargs)
+        res = self.get_impl("default_config").stream(*args, **kwargs)
         return res
 
 BAMLExtractNames = IBAMLExtractNames()

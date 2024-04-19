@@ -26,6 +26,7 @@ from .functions.fx_fnclassoptional import BAMLFnClassOptional
 from .functions.fx_fnclassoptional2 import BAMLFnClassOptional2
 from .functions.fx_fnclassoptionaloutput import BAMLFnClassOptionalOutput
 from .functions.fx_fnclassoptionaloutput2 import BAMLFnClassOptionalOutput2
+from .functions.fx_fnclassoptionaloutput2_v2 import BAMLFnClassOptionalOutput2_V2
 from .functions.fx_fnenumlistoutput import BAMLFnEnumListOutput
 from .functions.fx_fnenumoutput import BAMLFnEnumOutput
 from .functions.fx_fnnamedargssinglestringoptional import BAMLFnNamedArgsSingleStringOptional
@@ -33,6 +34,7 @@ from .functions.fx_fnoutputbool import BAMLFnOutputBool
 from .functions.fx_fnoutputclass import BAMLFnOutputClass
 from .functions.fx_fnoutputclasslist import BAMLFnOutputClassList
 from .functions.fx_fnoutputclasswithenum import BAMLFnOutputClassWithEnum
+from .functions.fx_fnoutputclasswithenum_v2 import BAMLFnOutputClassWithEnum_V2
 from .functions.fx_fnoutputstringlist import BAMLFnOutputStringList
 from .functions.fx_fnstringoptional import BAMLFnStringOptional
 from .functions.fx_fntestaliasedenumoutput import BAMLFnTestAliasedEnumOutput
@@ -45,6 +47,7 @@ from .functions.fx_getdatatype import BAMLGetDataType
 from .functions.fx_getorderinfo import BAMLGetOrderInfo
 from .functions.fx_getquery import BAMLGetQuery
 from .functions.fx_optionaltest_function import BAMLOptionalTest_Function
+from .functions.fx_optionaltest_function_v2 import BAMLOptionalTest_Function_V2
 from .functions.fx_prompttest import BAMLPromptTest
 from .functions.fx_testfnnamedargssinglebool import BAMLTestFnNamedArgsSingleBool
 from .functions.fx_testfnnamedargssingleclass import BAMLTestFnNamedArgsSingleClass
@@ -56,6 +59,27 @@ from .functions.fx_testfnnamedargssinglestringarray import BAMLTestFnNamedArgsSi
 from .functions.fx_testfnnamedargssinglestringlist import BAMLTestFnNamedArgsSingleStringList
 from .functions.fx_testfnnamedargssyntax import BAMLTestFnNamedArgsSyntax
 from .functions.fx_uniontest_function import BAMLUnionTest_Function
+from .functions.fx_v2_fnclassoptional import BAMLV2_FnClassOptional
+from .functions.fx_v2_fnclassoptional2 import BAMLV2_FnClassOptional2
+from .functions.fx_v2_fnenumlistoutput import BAMLV2_FnEnumListOutput
+from .functions.fx_v2_fnenumoutput import BAMLV2_FnEnumOutput
+from .functions.fx_v2_fnnamedargssinglestringoptional import BAMLV2_FnNamedArgsSingleStringOptional
+from .functions.fx_v2_fnoutputbool import BAMLV2_FnOutputBool
+from .functions.fx_v2_fnoutputclass import BAMLV2_FnOutputClass
+from .functions.fx_v2_fnoutputclasslist import BAMLV2_FnOutputClassList
+from .functions.fx_v2_fnoutputstringlist import BAMLV2_FnOutputStringList
+from .functions.fx_v2_fnstringoptional import BAMLV2_FnStringOptional
+from .functions.fx_v2_fntestnamedargssingleenum import BAMLV2_FnTestNamedArgsSingleEnum
+from .functions.fx_v2_testfnnamedargssinglebool import BAMLV2_TestFnNamedArgsSingleBool
+from .functions.fx_v2_testfnnamedargssingleclass import BAMLV2_TestFnNamedArgsSingleClass
+from .functions.fx_v2_testfnnamedargssingleenumlist import BAMLV2_TestFnNamedArgsSingleEnumList
+from .functions.fx_v2_testfnnamedargssinglefloat import BAMLV2_TestFnNamedArgsSingleFloat
+from .functions.fx_v2_testfnnamedargssingleint import BAMLV2_TestFnNamedArgsSingleInt
+from .functions.fx_v2_testfnnamedargssinglestring import BAMLV2_TestFnNamedArgsSingleString
+from .functions.fx_v2_testfnnamedargssinglestringarray import BAMLV2_TestFnNamedArgsSingleStringArray
+from .functions.fx_v2_testfnnamedargssinglestringlist import BAMLV2_TestFnNamedArgsSingleStringList
+from .functions.fx_v2_testfnnamedargssyntax import BAMLV2_TestFnNamedArgsSyntax
+from .functions.fx_v2_uniontest_function import BAMLV2_UnionTest_Function
 from baml_core.otel import add_message_transformer_hook, flush_trace_logs
 from baml_core.provider_manager import LLMManager
 from baml_core.services import LogSchema
@@ -74,6 +98,7 @@ class BAMLClient:
     FnClassOptional2 = BAMLFnClassOptional2
     FnClassOptionalOutput = BAMLFnClassOptionalOutput
     FnClassOptionalOutput2 = BAMLFnClassOptionalOutput2
+    FnClassOptionalOutput2_V2 = BAMLFnClassOptionalOutput2_V2
     FnEnumListOutput = BAMLFnEnumListOutput
     FnEnumOutput = BAMLFnEnumOutput
     FnNamedArgsSingleStringOptional = BAMLFnNamedArgsSingleStringOptional
@@ -81,6 +106,7 @@ class BAMLClient:
     FnOutputClass = BAMLFnOutputClass
     FnOutputClassList = BAMLFnOutputClassList
     FnOutputClassWithEnum = BAMLFnOutputClassWithEnum
+    FnOutputClassWithEnum_V2 = BAMLFnOutputClassWithEnum_V2
     FnOutputStringList = BAMLFnOutputStringList
     FnStringOptional = BAMLFnStringOptional
     FnTestAliasedEnumOutput = BAMLFnTestAliasedEnumOutput
@@ -93,6 +119,7 @@ class BAMLClient:
     GetOrderInfo = BAMLGetOrderInfo
     GetQuery = BAMLGetQuery
     OptionalTest_Function = BAMLOptionalTest_Function
+    OptionalTest_Function_V2 = BAMLOptionalTest_Function_V2
     PromptTest = BAMLPromptTest
     TestFnNamedArgsSingleBool = BAMLTestFnNamedArgsSingleBool
     TestFnNamedArgsSingleClass = BAMLTestFnNamedArgsSingleClass
@@ -104,6 +131,27 @@ class BAMLClient:
     TestFnNamedArgsSingleStringList = BAMLTestFnNamedArgsSingleStringList
     TestFnNamedArgsSyntax = BAMLTestFnNamedArgsSyntax
     UnionTest_Function = BAMLUnionTest_Function
+    V2_FnClassOptional = BAMLV2_FnClassOptional
+    V2_FnClassOptional2 = BAMLV2_FnClassOptional2
+    V2_FnEnumListOutput = BAMLV2_FnEnumListOutput
+    V2_FnEnumOutput = BAMLV2_FnEnumOutput
+    V2_FnNamedArgsSingleStringOptional = BAMLV2_FnNamedArgsSingleStringOptional
+    V2_FnOutputBool = BAMLV2_FnOutputBool
+    V2_FnOutputClass = BAMLV2_FnOutputClass
+    V2_FnOutputClassList = BAMLV2_FnOutputClassList
+    V2_FnOutputStringList = BAMLV2_FnOutputStringList
+    V2_FnStringOptional = BAMLV2_FnStringOptional
+    V2_FnTestNamedArgsSingleEnum = BAMLV2_FnTestNamedArgsSingleEnum
+    V2_TestFnNamedArgsSingleBool = BAMLV2_TestFnNamedArgsSingleBool
+    V2_TestFnNamedArgsSingleClass = BAMLV2_TestFnNamedArgsSingleClass
+    V2_TestFnNamedArgsSingleEnumList = BAMLV2_TestFnNamedArgsSingleEnumList
+    V2_TestFnNamedArgsSingleFloat = BAMLV2_TestFnNamedArgsSingleFloat
+    V2_TestFnNamedArgsSingleInt = BAMLV2_TestFnNamedArgsSingleInt
+    V2_TestFnNamedArgsSingleString = BAMLV2_TestFnNamedArgsSingleString
+    V2_TestFnNamedArgsSingleStringArray = BAMLV2_TestFnNamedArgsSingleStringArray
+    V2_TestFnNamedArgsSingleStringList = BAMLV2_TestFnNamedArgsSingleStringList
+    V2_TestFnNamedArgsSyntax = BAMLV2_TestFnNamedArgsSyntax
+    V2_UnionTest_Function = BAMLV2_UnionTest_Function
     Claude = Claude
     GPT35 = GPT35
     GPT4 = GPT4

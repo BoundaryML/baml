@@ -17,6 +17,7 @@ from ..__do_not_import.functions.fx_fnclassoptional import IFnClassOptional, IFn
 from ..__do_not_import.functions.fx_fnclassoptional2 import IFnClassOptional2, IFnClassOptional2Output, IFnClassOptional2Stream
 from ..__do_not_import.functions.fx_fnclassoptionaloutput import IFnClassOptionalOutput, IFnClassOptionalOutputOutput, IFnClassOptionalOutputStream
 from ..__do_not_import.functions.fx_fnclassoptionaloutput2 import IFnClassOptionalOutput2, IFnClassOptionalOutput2Output, IFnClassOptionalOutput2Stream
+from ..__do_not_import.functions.fx_fnclassoptionaloutput2_v2 import IFnClassOptionalOutput2_V2, IFnClassOptionalOutput2_V2Output, IFnClassOptionalOutput2_V2Stream
 from ..__do_not_import.functions.fx_fnenumlistoutput import IFnEnumListOutput, IFnEnumListOutputOutput, IFnEnumListOutputStream
 from ..__do_not_import.functions.fx_fnenumoutput import IFnEnumOutput, IFnEnumOutputOutput, IFnEnumOutputStream
 from ..__do_not_import.functions.fx_fnnamedargssinglestringoptional import IFnNamedArgsSingleStringOptional, IFnNamedArgsSingleStringOptionalOutput, IFnNamedArgsSingleStringOptionalStream
@@ -24,6 +25,7 @@ from ..__do_not_import.functions.fx_fnoutputbool import IFnOutputBool, IFnOutput
 from ..__do_not_import.functions.fx_fnoutputclass import IFnOutputClass, IFnOutputClassOutput, IFnOutputClassStream
 from ..__do_not_import.functions.fx_fnoutputclasslist import IFnOutputClassList, IFnOutputClassListOutput, IFnOutputClassListStream
 from ..__do_not_import.functions.fx_fnoutputclasswithenum import IFnOutputClassWithEnum, IFnOutputClassWithEnumOutput, IFnOutputClassWithEnumStream
+from ..__do_not_import.functions.fx_fnoutputclasswithenum_v2 import IFnOutputClassWithEnum_V2, IFnOutputClassWithEnum_V2Output, IFnOutputClassWithEnum_V2Stream
 from ..__do_not_import.functions.fx_fnoutputstringlist import IFnOutputStringList, IFnOutputStringListOutput, IFnOutputStringListStream
 from ..__do_not_import.functions.fx_fnstringoptional import IFnStringOptional, IFnStringOptionalOutput, IFnStringOptionalStream
 from ..__do_not_import.functions.fx_fntestaliasedenumoutput import IFnTestAliasedEnumOutput, IFnTestAliasedEnumOutputOutput, IFnTestAliasedEnumOutputStream
@@ -36,6 +38,7 @@ from ..__do_not_import.functions.fx_getdatatype import IGetDataType, IGetDataTyp
 from ..__do_not_import.functions.fx_getorderinfo import IGetOrderInfo, IGetOrderInfoOutput, IGetOrderInfoStream
 from ..__do_not_import.functions.fx_getquery import IGetQuery, IGetQueryOutput, IGetQueryStream
 from ..__do_not_import.functions.fx_optionaltest_function import IOptionalTest_Function, IOptionalTest_FunctionOutput, IOptionalTest_FunctionStream
+from ..__do_not_import.functions.fx_optionaltest_function_v2 import IOptionalTest_Function_V2, IOptionalTest_Function_V2Output, IOptionalTest_Function_V2Stream
 from ..__do_not_import.functions.fx_prompttest import IPromptTest, IPromptTestOutput, IPromptTestStream
 from ..__do_not_import.functions.fx_testfnnamedargssinglebool import ITestFnNamedArgsSingleBool, ITestFnNamedArgsSingleBoolOutput, ITestFnNamedArgsSingleBoolStream
 from ..__do_not_import.functions.fx_testfnnamedargssingleclass import ITestFnNamedArgsSingleClass, ITestFnNamedArgsSingleClassOutput, ITestFnNamedArgsSingleClassStream
@@ -47,18 +50,47 @@ from ..__do_not_import.functions.fx_testfnnamedargssinglestringarray import ITes
 from ..__do_not_import.functions.fx_testfnnamedargssinglestringlist import ITestFnNamedArgsSingleStringList, ITestFnNamedArgsSingleStringListOutput, ITestFnNamedArgsSingleStringListStream
 from ..__do_not_import.functions.fx_testfnnamedargssyntax import ITestFnNamedArgsSyntax, ITestFnNamedArgsSyntaxOutput, ITestFnNamedArgsSyntaxStream
 from ..__do_not_import.functions.fx_uniontest_function import IUnionTest_Function, IUnionTest_FunctionOutput, IUnionTest_FunctionStream
+from ..__do_not_import.functions.fx_v2_fnclassoptional import IV2_FnClassOptional, IV2_FnClassOptionalOutput, IV2_FnClassOptionalStream
+from ..__do_not_import.functions.fx_v2_fnclassoptional2 import IV2_FnClassOptional2, IV2_FnClassOptional2Output, IV2_FnClassOptional2Stream
+from ..__do_not_import.functions.fx_v2_fnenumlistoutput import IV2_FnEnumListOutput, IV2_FnEnumListOutputOutput, IV2_FnEnumListOutputStream
+from ..__do_not_import.functions.fx_v2_fnenumoutput import IV2_FnEnumOutput, IV2_FnEnumOutputOutput, IV2_FnEnumOutputStream
+from ..__do_not_import.functions.fx_v2_fnnamedargssinglestringoptional import IV2_FnNamedArgsSingleStringOptional, IV2_FnNamedArgsSingleStringOptionalOutput, IV2_FnNamedArgsSingleStringOptionalStream
+from ..__do_not_import.functions.fx_v2_fnoutputbool import IV2_FnOutputBool, IV2_FnOutputBoolOutput, IV2_FnOutputBoolStream
+from ..__do_not_import.functions.fx_v2_fnoutputclass import IV2_FnOutputClass, IV2_FnOutputClassOutput, IV2_FnOutputClassStream
+from ..__do_not_import.functions.fx_v2_fnoutputclasslist import IV2_FnOutputClassList, IV2_FnOutputClassListOutput, IV2_FnOutputClassListStream
+from ..__do_not_import.functions.fx_v2_fnoutputstringlist import IV2_FnOutputStringList, IV2_FnOutputStringListOutput, IV2_FnOutputStringListStream
+from ..__do_not_import.functions.fx_v2_fnstringoptional import IV2_FnStringOptional, IV2_FnStringOptionalOutput, IV2_FnStringOptionalStream
+from ..__do_not_import.functions.fx_v2_fntestnamedargssingleenum import IV2_FnTestNamedArgsSingleEnum, IV2_FnTestNamedArgsSingleEnumOutput, IV2_FnTestNamedArgsSingleEnumStream
+from ..__do_not_import.functions.fx_v2_testfnnamedargssinglebool import IV2_TestFnNamedArgsSingleBool, IV2_TestFnNamedArgsSingleBoolOutput, IV2_TestFnNamedArgsSingleBoolStream
+from ..__do_not_import.functions.fx_v2_testfnnamedargssingleclass import IV2_TestFnNamedArgsSingleClass, IV2_TestFnNamedArgsSingleClassOutput, IV2_TestFnNamedArgsSingleClassStream
+from ..__do_not_import.functions.fx_v2_testfnnamedargssingleenumlist import IV2_TestFnNamedArgsSingleEnumList, IV2_TestFnNamedArgsSingleEnumListOutput, IV2_TestFnNamedArgsSingleEnumListStream
+from ..__do_not_import.functions.fx_v2_testfnnamedargssinglefloat import IV2_TestFnNamedArgsSingleFloat, IV2_TestFnNamedArgsSingleFloatOutput, IV2_TestFnNamedArgsSingleFloatStream
+from ..__do_not_import.functions.fx_v2_testfnnamedargssingleint import IV2_TestFnNamedArgsSingleInt, IV2_TestFnNamedArgsSingleIntOutput, IV2_TestFnNamedArgsSingleIntStream
+from ..__do_not_import.functions.fx_v2_testfnnamedargssinglestring import IV2_TestFnNamedArgsSingleString, IV2_TestFnNamedArgsSingleStringOutput, IV2_TestFnNamedArgsSingleStringStream
+from ..__do_not_import.functions.fx_v2_testfnnamedargssinglestringarray import IV2_TestFnNamedArgsSingleStringArray, IV2_TestFnNamedArgsSingleStringArrayOutput, IV2_TestFnNamedArgsSingleStringArrayStream
+from ..__do_not_import.functions.fx_v2_testfnnamedargssinglestringlist import IV2_TestFnNamedArgsSingleStringList, IV2_TestFnNamedArgsSingleStringListOutput, IV2_TestFnNamedArgsSingleStringListStream
+from ..__do_not_import.functions.fx_v2_testfnnamedargssyntax import IV2_TestFnNamedArgsSyntax, IV2_TestFnNamedArgsSyntaxOutput, IV2_TestFnNamedArgsSyntaxStream
+from ..__do_not_import.functions.fx_v2_uniontest_function import IV2_UnionTest_Function, IV2_UnionTest_FunctionOutput, IV2_UnionTest_FunctionStream
 from ..__do_not_import.types.classes.cls_blah import Blah
+from ..__do_not_import.types.classes.cls_blah2 import Blah2
 from ..__do_not_import.types.classes.cls_classoptionalfields import ClassOptionalFields
+from ..__do_not_import.types.classes.cls_classoptionalfieldsv2 import ClassOptionalFieldsv2
 from ..__do_not_import.types.classes.cls_classoptionaloutput import ClassOptionalOutput
 from ..__do_not_import.types.classes.cls_classoptionaloutput2 import ClassOptionalOutput2
+from ..__do_not_import.types.classes.cls_classoptionaloutput2v2 import ClassOptionalOutput2v2
 from ..__do_not_import.types.classes.cls_dynamicpropsclass import DynamicPropsClass
 from ..__do_not_import.types.classes.cls_email import Email
 from ..__do_not_import.types.classes.cls_event import Event
 from ..__do_not_import.types.classes.cls_modifiedoutput import ModifiedOutput
 from ..__do_not_import.types.classes.cls_namedargssingleclass import NamedArgsSingleClass
+from ..__do_not_import.types.classes.cls_namedargssingleclass2 import NamedArgsSingleClass2
+from ..__do_not_import.types.classes.cls_namedargssingleclasslist2 import NamedArgsSingleClassList2
 from ..__do_not_import.types.classes.cls_optionalclass import OptionalClass
+from ..__do_not_import.types.classes.cls_optionalclassv2 import OptionalClassv2
 from ..__do_not_import.types.classes.cls_optionaltest_prop1 import OptionalTest_Prop1
+from ..__do_not_import.types.classes.cls_optionaltest_prop1v2 import OptionalTest_Prop1v2
 from ..__do_not_import.types.classes.cls_optionaltest_returntype import OptionalTest_ReturnType
+from ..__do_not_import.types.classes.cls_optionaltest_returntypev2 import OptionalTest_ReturnTypev2
 from ..__do_not_import.types.classes.cls_orderinfo import OrderInfo
 from ..__do_not_import.types.classes.cls_overrideclass import OverrideClass
 from ..__do_not_import.types.classes.cls_raysdata import RaysData
@@ -67,18 +99,26 @@ from ..__do_not_import.types.classes.cls_searchparams import SearchParams
 from ..__do_not_import.types.classes.cls_someclass2 import SomeClass2
 from ..__do_not_import.types.classes.cls_testclassalias import TestClassAlias
 from ..__do_not_import.types.classes.cls_testclasswithenum import TestClassWithEnum
+from ..__do_not_import.types.classes.cls_testclasswithenum2 import TestClassWithEnum2
 from ..__do_not_import.types.classes.cls_testoutputclass import TestOutputClass
+from ..__do_not_import.types.classes.cls_testoutputclass2 import TestOutputClass2
 from ..__do_not_import.types.classes.cls_uniontest_returntype import UnionTest_ReturnType
+from ..__do_not_import.types.classes.cls_uniontest_returntypev2 import UnionTest_ReturnTypev2
 from ..__do_not_import.types.classes.cls_withreasoning import WithReasoning
 from ..__do_not_import.types.enums.enm_category import Category
 from ..__do_not_import.types.enums.enm_category2 import Category2
 from ..__do_not_import.types.enums.enm_category3 import Category3
 from ..__do_not_import.types.enums.enm_datatype import DataType
 from ..__do_not_import.types.enums.enm_enuminclass import EnumInClass
+from ..__do_not_import.types.enums.enm_enuminclass2 import EnumInClass2
 from ..__do_not_import.types.enums.enm_enumoutput import EnumOutput
+from ..__do_not_import.types.enums.enm_enumoutput2 import EnumOutput2
 from ..__do_not_import.types.enums.enm_namedargssingleenum import NamedArgsSingleEnum
+from ..__do_not_import.types.enums.enm_namedargssingleenum2 import NamedArgsSingleEnum2
 from ..__do_not_import.types.enums.enm_namedargssingleenumlist import NamedArgsSingleEnumList
+from ..__do_not_import.types.enums.enm_namedargssingleenumlist2 import NamedArgsSingleEnumList2
 from ..__do_not_import.types.enums.enm_optionaltest_categorytype import OptionalTest_CategoryType
+from ..__do_not_import.types.enums.enm_optionaltest_categorytypev2 import OptionalTest_CategoryTypev2
 from ..__do_not_import.types.enums.enm_orderstatus import OrderStatus
 from ..__do_not_import.types.enums.enm_overrideenum import OverrideEnum
 from ..__do_not_import.types.enums.enm_tag import Tag
@@ -89,17 +129,22 @@ from ..__do_not_import.types.enums.enm_testenum import TestEnum
 
 __all__ = [
     'Blah',
+    'Blah2',
     'Category',
     'Category2',
     'Category3',
     'ClassOptionalFields',
+    'ClassOptionalFieldsv2',
     'ClassOptionalOutput',
     'ClassOptionalOutput2',
+    'ClassOptionalOutput2v2',
     'DataType',
     'DynamicPropsClass',
     'Email',
     'EnumInClass',
+    'EnumInClass2',
     'EnumOutput',
+    'EnumOutput2',
     'Event',
     'IClassifyMessage',
     'IClassifyMessage2',
@@ -128,6 +173,9 @@ __all__ = [
     'IFnClassOptionalOutput2',
     'IFnClassOptionalOutput2Output',
     'IFnClassOptionalOutput2Stream',
+    'IFnClassOptionalOutput2_V2',
+    'IFnClassOptionalOutput2_V2Output',
+    'IFnClassOptionalOutput2_V2Stream',
     'IFnClassOptionalOutputOutput',
     'IFnClassOptionalOutputStream',
     'IFnClassOptionalStream',
@@ -152,6 +200,9 @@ __all__ = [
     'IFnOutputClassWithEnum',
     'IFnOutputClassWithEnumOutput',
     'IFnOutputClassWithEnumStream',
+    'IFnOutputClassWithEnum_V2',
+    'IFnOutputClassWithEnum_V2Output',
+    'IFnOutputClassWithEnum_V2Stream',
     'IFnOutputStringList',
     'IFnOutputStringListOutput',
     'IFnOutputStringListStream',
@@ -188,6 +239,9 @@ __all__ = [
     'IOptionalTest_Function',
     'IOptionalTest_FunctionOutput',
     'IOptionalTest_FunctionStream',
+    'IOptionalTest_Function_V2',
+    'IOptionalTest_Function_V2Output',
+    'IOptionalTest_Function_V2Stream',
     'IPromptTest',
     'IPromptTestOutput',
     'IPromptTestStream',
@@ -221,14 +275,85 @@ __all__ = [
     'IUnionTest_Function',
     'IUnionTest_FunctionOutput',
     'IUnionTest_FunctionStream',
+    'IV2_FnClassOptional',
+    'IV2_FnClassOptional2',
+    'IV2_FnClassOptional2Output',
+    'IV2_FnClassOptional2Stream',
+    'IV2_FnClassOptionalOutput',
+    'IV2_FnClassOptionalStream',
+    'IV2_FnEnumListOutput',
+    'IV2_FnEnumListOutputOutput',
+    'IV2_FnEnumListOutputStream',
+    'IV2_FnEnumOutput',
+    'IV2_FnEnumOutputOutput',
+    'IV2_FnEnumOutputStream',
+    'IV2_FnNamedArgsSingleStringOptional',
+    'IV2_FnNamedArgsSingleStringOptionalOutput',
+    'IV2_FnNamedArgsSingleStringOptionalStream',
+    'IV2_FnOutputBool',
+    'IV2_FnOutputBoolOutput',
+    'IV2_FnOutputBoolStream',
+    'IV2_FnOutputClass',
+    'IV2_FnOutputClassList',
+    'IV2_FnOutputClassListOutput',
+    'IV2_FnOutputClassListStream',
+    'IV2_FnOutputClassOutput',
+    'IV2_FnOutputClassStream',
+    'IV2_FnOutputStringList',
+    'IV2_FnOutputStringListOutput',
+    'IV2_FnOutputStringListStream',
+    'IV2_FnStringOptional',
+    'IV2_FnStringOptionalOutput',
+    'IV2_FnStringOptionalStream',
+    'IV2_FnTestNamedArgsSingleEnum',
+    'IV2_FnTestNamedArgsSingleEnumOutput',
+    'IV2_FnTestNamedArgsSingleEnumStream',
+    'IV2_TestFnNamedArgsSingleBool',
+    'IV2_TestFnNamedArgsSingleBoolOutput',
+    'IV2_TestFnNamedArgsSingleBoolStream',
+    'IV2_TestFnNamedArgsSingleClass',
+    'IV2_TestFnNamedArgsSingleClassOutput',
+    'IV2_TestFnNamedArgsSingleClassStream',
+    'IV2_TestFnNamedArgsSingleEnumList',
+    'IV2_TestFnNamedArgsSingleEnumListOutput',
+    'IV2_TestFnNamedArgsSingleEnumListStream',
+    'IV2_TestFnNamedArgsSingleFloat',
+    'IV2_TestFnNamedArgsSingleFloatOutput',
+    'IV2_TestFnNamedArgsSingleFloatStream',
+    'IV2_TestFnNamedArgsSingleInt',
+    'IV2_TestFnNamedArgsSingleIntOutput',
+    'IV2_TestFnNamedArgsSingleIntStream',
+    'IV2_TestFnNamedArgsSingleString',
+    'IV2_TestFnNamedArgsSingleStringArray',
+    'IV2_TestFnNamedArgsSingleStringArrayOutput',
+    'IV2_TestFnNamedArgsSingleStringArrayStream',
+    'IV2_TestFnNamedArgsSingleStringList',
+    'IV2_TestFnNamedArgsSingleStringListOutput',
+    'IV2_TestFnNamedArgsSingleStringListStream',
+    'IV2_TestFnNamedArgsSingleStringOutput',
+    'IV2_TestFnNamedArgsSingleStringStream',
+    'IV2_TestFnNamedArgsSyntax',
+    'IV2_TestFnNamedArgsSyntaxOutput',
+    'IV2_TestFnNamedArgsSyntaxStream',
+    'IV2_UnionTest_Function',
+    'IV2_UnionTest_FunctionOutput',
+    'IV2_UnionTest_FunctionStream',
     'ModifiedOutput',
     'NamedArgsSingleClass',
+    'NamedArgsSingleClass2',
+    'NamedArgsSingleClassList2',
     'NamedArgsSingleEnum',
+    'NamedArgsSingleEnum2',
     'NamedArgsSingleEnumList',
+    'NamedArgsSingleEnumList2',
     'OptionalClass',
+    'OptionalClassv2',
     'OptionalTest_CategoryType',
+    'OptionalTest_CategoryTypev2',
     'OptionalTest_Prop1',
+    'OptionalTest_Prop1v2',
     'OptionalTest_ReturnType',
+    'OptionalTest_ReturnTypev2',
     'OrderInfo',
     'OrderStatus',
     'OverrideClass',
@@ -240,8 +365,11 @@ __all__ = [
     'Tag',
     'TestClassAlias',
     'TestClassWithEnum',
+    'TestClassWithEnum2',
     'TestEnum',
     'TestOutputClass',
+    'TestOutputClass2',
     'UnionTest_ReturnType',
+    'UnionTest_ReturnTypev2',
     'WithReasoning'
 ]

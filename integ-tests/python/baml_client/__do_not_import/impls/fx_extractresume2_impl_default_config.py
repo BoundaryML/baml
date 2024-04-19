@@ -45,7 +45,7 @@ __deserializer = Deserializer[Resume](Resume)  # type: ignore
 # Add a deserializer that handles stream responses, which are all Partial types
 __partial_deserializer = Deserializer[PartialResume](PartialResume)  # type: ignore
 
-__output_schema = """
+__output_format = """
 {
   "name": string,
   "email": string,
@@ -63,7 +63,7 @@ __template_macros = [
 async def default_config(*, resume: str) -> Resume:
     response = await Resilient_ComplexSyntax.run_jinja_template(
         jinja_template=__prompt_template,
-        output_schema=__output_schema, template_macros=__template_macros,
+        output_format=__output_format, template_macros=__template_macros,
         args=dict(resume=resume)
     )
     deserialized = __deserializer.from_string(response.generated)
@@ -75,7 +75,7 @@ def default_config_stream(*, resume: str
     def run_prompt() -> typing.AsyncIterator[LLMResponse]:
         raw_stream = Resilient_ComplexSyntax.run_jinja_template_stream(
             jinja_template=__prompt_template,
-            output_schema=__output_schema, template_macros=__template_macros,
+            output_format=__output_format, template_macros=__template_macros,
             args=dict(resume=resume)
         )
         return raw_stream

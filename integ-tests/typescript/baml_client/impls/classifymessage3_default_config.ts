@@ -25,7 +25,7 @@ INPUT: {{ input }}
 {{ ctx.output_schema }}
 
 Response:`;
-const output_schema = `"Category as string"
+const output_format = `"Category as string"
 
 Category
 ---
@@ -50,7 +50,7 @@ ClassifyMessage3.registerImpl('default_config', async (
     const result = await GPT4.run_jinja_template(
       prompt_template,
       args,
-      output_schema,
+      output_format,
       template_macros,
     );
 

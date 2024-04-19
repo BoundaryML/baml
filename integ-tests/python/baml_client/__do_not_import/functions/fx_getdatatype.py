@@ -62,10 +62,10 @@ class IBAMLGetDataType(BaseBAMLFunction[RaysData, PartialRaysData]):
         )
 
     async def __call__(self, *args, **kwargs) -> RaysData:
-        return await self.get_impl("").run(*args, **kwargs)
+        return await self.get_impl("default_config").run(*args, **kwargs)
     
     def stream(self, *args, **kwargs) -> AsyncStream[RaysData, PartialRaysData]:
-        res = self.get_impl("").stream(*args, **kwargs)
+        res = self.get_impl("default_config").stream(*args, **kwargs)
         return res
 
 BAMLGetDataType = IBAMLGetDataType()
