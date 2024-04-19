@@ -18,7 +18,7 @@ describe('test_case:intermediate_olive', () => {
       'test_case_arg_name': `test_intermediate_olive[V2_FnClassOptional2-${impl}]`,
       'test_cycle_id': process.env.BOUNDARY_PROCESS_ID || 'local-run',
     });
-    const test_case = { "prop1": "hi" };
+    const test_case = { "input": { "prop1": "hi" } };
     const result = await b.V2_FnClassOptional2.getImpl(impl).run(
       test_case
     );

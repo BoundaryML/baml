@@ -22,7 +22,7 @@ async def test_intermediate_olive(V2_FnClassOptional2Impl: IV2_FnClassOptional2S
             return item
         return dumps(item)
 
-    case = {"prop1": "hi", }
+    case = {"input": {"prop1": "hi", }, }
     deserializer_input = Deserializer[ClassOptionalFieldsv2](ClassOptionalFieldsv2) # type: ignore
     input = deserializer_input.from_string(to_str(case["input"]))
     async with V2_FnClassOptional2Impl(

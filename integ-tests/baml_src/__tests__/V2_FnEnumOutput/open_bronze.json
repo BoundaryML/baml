@@ -1,3 +1,5 @@
 {
-  "input": "pick the first one"
+  "input": {
+    "input": "pick the first one"
+  }
 }

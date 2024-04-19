@@ -1,6 +1,8 @@
 {
   "input": {
-    "prop1": "jon",
-    "prop2": "stark"
+    "input": {
+      "prop1": "jon",
+      "prop2": "stark"
+    }
   }
 }

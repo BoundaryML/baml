@@ -22,7 +22,7 @@ async def test_elegant_green(V2_FnClassOptionalImpl: IV2_FnClassOptionalStream, 
             return item
         return dumps(item)
 
-    case = {"prop1": "jon", "prop2": "stark", }
+    case = {"input": {"prop1": "jon", "prop2": "stark", }, }
     deserializer_input = Deserializer[Optional[OptionalClassv2]](Optional[OptionalClassv2]) # type: ignore
     input = deserializer_input.from_string(to_str(case["input"]))
     async with V2_FnClassOptionalImpl(

@@ -22,7 +22,7 @@ async def test_skinny_lime(V2_UnionTest_FunctionImpl: IV2_UnionTest_FunctionStre
             return item
         return dumps(item)
 
-    case = "noop"
+    case = {"input": "noop", }
     deserializer_input = Deserializer[Union[str, bool]](Union[str, bool]) # type: ignore
     input = deserializer_input.from_string(to_str(case["input"]))
     async with V2_UnionTest_FunctionImpl(
@@ -39,7 +39,7 @@ async def test_warm_gold(V2_UnionTest_FunctionImpl: IV2_UnionTest_FunctionStream
             return item
         return dumps(item)
 
-    case = "noop"
+    case = {"input": "noop", }
     deserializer_input = Deserializer[Union[str, bool]](Union[str, bool]) # type: ignore
     input = deserializer_input.from_string(to_str(case["input"]))
     async with V2_UnionTest_FunctionImpl(

@@ -24,7 +24,7 @@ import typing
 __prompt_template = """\
 Choose one of these values randomly. Before you give the answer, write out an unrelated haiku about the ocean.
 
-{{ ctx.output_schema(prefix=null) }}\
+{{ ctx.output_format(prefix=null) }}\
 """
 
 # We ignore the type here because baml does some type magic to make this work

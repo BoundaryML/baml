@@ -18,7 +18,7 @@ describe('test_case:dependent_tomato', () => {
       'test_case_arg_name': `test_dependent_tomato[V2_FnEnumOutput-${impl}]`,
       'test_cycle_id': process.env.BOUNDARY_PROCESS_ID || 'local-run',
     });
-    const test_case = "noop";
+    const test_case = { "input": "noop" };
     const result = await b.V2_FnEnumOutput.getImpl(impl).run(
       test_case
     );
@@ -39,7 +39,7 @@ describe('test_case:open_bronze', () => {
       'test_case_arg_name': `test_open_bronze[V2_FnEnumOutput-${impl}]`,
       'test_cycle_id': process.env.BOUNDARY_PROCESS_ID || 'local-run',
     });
-    const test_case = "pick the first one";
+    const test_case = { "input": "pick the first one" };
     const result = await b.V2_FnEnumOutput.getImpl(impl).run(
       test_case
     );
@@ -60,7 +60,7 @@ describe('test_case:zestful_lavender', () => {
       'test_case_arg_name': `test_zestful_lavender[V2_FnEnumOutput-${impl}]`,
       'test_cycle_id': process.env.BOUNDARY_PROCESS_ID || 'local-run',
     });
-    const test_case = "pick the last one";
+    const test_case = { "input": "pick the last one" };
     const result = await b.V2_FnEnumOutput.getImpl(impl).run(
       test_case
     );

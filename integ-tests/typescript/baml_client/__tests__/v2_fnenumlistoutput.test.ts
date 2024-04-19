@@ -18,7 +18,7 @@ describe('test_case:precise_brown', () => {
       'test_case_arg_name': `test_precise_brown[V2_FnEnumListOutput-${impl}]`,
       'test_cycle_id': process.env.BOUNDARY_PROCESS_ID || 'local-run',
     });
-    const test_case = "noop";
+    const test_case = { "input": "input" };
     const result = await b.V2_FnEnumListOutput.getImpl(impl).run(
       test_case
     );

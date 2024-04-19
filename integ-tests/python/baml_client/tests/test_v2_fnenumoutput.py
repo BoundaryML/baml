@@ -22,7 +22,7 @@ async def test_dependent_tomato(V2_FnEnumOutputImpl: IV2_FnEnumOutputStream, bam
             return item
         return dumps(item)
 
-    case = "noop"
+    case = {"input": "noop", }
     deserializer_input = Deserializer[str](str) # type: ignore
     input = deserializer_input.from_string(to_str(case["input"]))
     async with V2_FnEnumOutputImpl(
@@ -39,7 +39,7 @@ async def test_open_bronze(V2_FnEnumOutputImpl: IV2_FnEnumOutputStream, baml_ipc
             return item
         return dumps(item)
 
-    case = "pick the first one"
+    case = {"input": "pick the first one", }
     deserializer_input = Deserializer[str](str) # type: ignore
     input = deserializer_input.from_string(to_str(case["input"]))
     async with V2_FnEnumOutputImpl(
@@ -56,7 +56,7 @@ async def test_zestful_lavender(V2_FnEnumOutputImpl: IV2_FnEnumOutputStream, bam
             return item
         return dumps(item)
 
-    case = "pick the last one"
+    case = {"input": "pick the last one", }
     deserializer_input = Deserializer[str](str) # type: ignore
     input = deserializer_input.from_string(to_str(case["input"]))
     async with V2_FnEnumOutputImpl(

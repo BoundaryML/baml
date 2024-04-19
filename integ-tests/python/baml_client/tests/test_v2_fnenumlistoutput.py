@@ -22,7 +22,7 @@ async def test_precise_brown(V2_FnEnumListOutputImpl: IV2_FnEnumListOutputStream
             return item
         return dumps(item)
 
-    case = "noop"
+    case = {"input": "input", }
     deserializer_input = Deserializer[str](str) # type: ignore
     input = deserializer_input.from_string(to_str(case["input"]))
     async with V2_FnEnumListOutputImpl(

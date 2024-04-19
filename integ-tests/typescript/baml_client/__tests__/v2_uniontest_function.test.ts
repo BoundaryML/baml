@@ -18,7 +18,7 @@ describe('test_case:skinny_lime', () => {
       'test_case_arg_name': `test_skinny_lime[V2_UnionTest_Function-${impl}]`,
       'test_cycle_id': process.env.BOUNDARY_PROCESS_ID || 'local-run',
     });
-    const test_case = "noop";
+    const test_case = { "input": "noop" };
     const result = await b.V2_UnionTest_Function.getImpl(impl).run(
       test_case
     );
@@ -39,7 +39,7 @@ describe('test_case:warm_gold', () => {
       'test_case_arg_name': `test_warm_gold[V2_UnionTest_Function-${impl}]`,
       'test_cycle_id': process.env.BOUNDARY_PROCESS_ID || 'local-run',
     });
-    const test_case = "noop";
+    const test_case = { "input": "noop" };
     const result = await b.V2_UnionTest_Function.getImpl(impl).run(
       test_case
     );

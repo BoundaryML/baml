@@ -1,5 +1,7 @@
 {
   "input": {
-    "prop1": "hi"
+    "input": {
+      "prop1": "hi"
+    }
   }
 }

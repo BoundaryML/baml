@@ -18,7 +18,7 @@ describe('test_case:elegant_green', () => {
       'test_case_arg_name': `test_elegant_green[V2_FnClassOptional-${impl}]`,
       'test_cycle_id': process.env.BOUNDARY_PROCESS_ID || 'local-run',
     });
-    const test_case = { "prop1": "jon", "prop2": "stark" };
+    const test_case = { "input": { "prop1": "jon", "prop2": "stark" } };
     const result = await b.V2_FnClassOptional.getImpl(impl).run(
       test_case
     );

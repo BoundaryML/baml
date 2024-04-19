@@ -19,7 +19,7 @@ import { Deserializer } from '@boundaryml/baml-core/deserializer/deserializer';
 
 const prompt_template = `Choose one of these values randomly. Before you give the answer, write out an unrelated haiku about the ocean.
 
-{{ ctx.output_schema(prefix=null) }}`;
+{{ ctx.output_format(prefix=null) }}`;
 const output_format = `"VALUE_ENUM as string"
 
 VALUE_ENUM
