@@ -7,79 +7,77 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-from ..clients.client_resilient_complexsyntax import Resilient_ComplexSyntax
-from ..functions.fx_extractresume2 import BAMLExtractResume2
-from ..types.classes.cls_resume import Resume
-from ..types.partial.classes.cls_resume import PartialResume
+from ..clients.client_gpt4 import GPT4
+from ..functions.fx_classifyconversation import BAMLClassifyConversation
+from ..types.classes.cls_message import Message
+from ..types.enums.enm_category import Category
+from ..types.partial.classes.cls_message import PartialMessage
 from baml_core.jinja.render_prompt import RenderData
 from baml_core.provider_manager.llm_response import LLMResponse
 from baml_core.stream import AsyncStream
 from baml_lib._impl.deserializer import Deserializer
+from typing import List
 
 
 import typing
 # Impl: default_config
-# Client: Resilient_ComplexSyntax
-# An implementation of ExtractResume2.
+# Client: GPT4
+# An implementation of ClassifyConversation.
 
 __prompt_template = """\
-{{ _.chat('system') }}
-
-Extract the following information from the resume:
-
-Resume:
-<<<<
-{{ resume }}
-<<<<
-
-OUTPUT_JSON_SCHEMA:
+Classify the following conversation into following:
 {{ ctx.output_schema }}
 
-JSON:\
+
+{% for m in messages %}
+{{ _.chat(role=m.role) }}
+{{ m.message }}
+{% endfor %}\
 """
 
 # We ignore the type here because baml does some type magic to make this work
 # for inline SpecialForms like Optional, Union, List.
-__deserializer = Deserializer[Resume](Resume)  # type: ignore
+__deserializer = Deserializer[List[Category]](List[Category])  # type: ignore
 
 # Add a deserializer that handles stream responses, which are all Partial types
-__partial_deserializer = Deserializer[PartialResume](PartialResume)  # type: ignore
+__partial_deserializer = Deserializer[List[Category]](List[Category])  # type: ignore
 
 __output_schema = """
-{
-  "name": string,
-  "email": string,
-  "phone": string,
-  "experience": string[],
-  "education": string[],
-  "skills": string[]
-}
+"Category as string"[]
+
+Category
+---
+Refund
+CancelOrder
+TechnicalSupport
+AccountIssue
+Question
 """.strip()
 
 __template_macros = [
 ]
 
 
-async def default_config(*, resume: str) -> Resume:
-    response = await Resilient_ComplexSyntax.run_jinja_template(
+async def default_config(*, messages: List[Message]) -> List[Category]:
+    response = await GPT4.run_jinja_template(
         jinja_template=__prompt_template,
         output_schema=__output_schema, template_macros=__template_macros,
-        args=dict(resume=resume)
+        args=dict(messages=messages)
     )
     deserialized = __deserializer.from_string(response.generated)
     return deserialized
 
 
-def default_config_stream(*, resume: str
-) -> AsyncStream[Resume, PartialResume]:
+def default_config_stream(*, messages: List[Message]
+) -> AsyncStream[List[Category], List[Category]]:
     def run_prompt() -> typing.AsyncIterator[LLMResponse]:
-        raw_stream = Resilient_ComplexSyntax.run_jinja_template_stream(
+        raw_stream = GPT4.run_jinja_template_stream(
             jinja_template=__prompt_template,
             output_schema=__output_schema, template_macros=__template_macros,
-            args=dict(resume=resume)
+            args=dict(messages=messages)
         )
         return raw_stream
     stream = AsyncStream(stream_cb=run_prompt, partial_deserializer=__partial_deserializer, final_deserializer=__deserializer)
     return stream
 
-BAMLExtractResume2.register_impl("default_config")(default_config, default_config_stream)
+BAMLClassifyConversation.register_impl("default_config")(default_config, default_config_stream)

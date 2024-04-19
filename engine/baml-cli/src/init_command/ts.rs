@@ -92,16 +92,25 @@ impl WithLanguage for PackageManager {
     }
 
     fn install_command(&self) -> String {
+        let allow_prerelease = std::env::var("BAML_ALLOW_PRERELEASE")
+            .map(|v| v == "1")
+            .unwrap_or(false);
+
+        let pkgname = if allow_prerelease {
+            "@boundaryml/baml-core@next @boundaryml/baml-core-ffi@next"
+        } else {
+            "@boundaryml/baml-core"
+        };
+
         match self {
             PackageManager::Yarn => {
-                "yarn add -D jest ts-jest @types/jest && yarn add @boundaryml/baml-core".into()
+                format!("yarn add -D jest ts-jest @types/jest && yarn add {pkgname}")
             }
             PackageManager::Pnpm => {
-                "pnpm add -D jest ts-jest @types/jest && pnpm add @boundaryml/baml-core".into()
+                format!("pnpm add -D jest ts-jest @types/jest && pnpm add {pkgname}")
             }
             PackageManager::Npm => {
-                "npm install -D jest ts-jest @types/jest && npm install @boundaryml/baml-core"
-                    .into()
+                format!("npm install -D jest ts-jest @types/jest && npm install {pkgname}")
             }
         }
     }

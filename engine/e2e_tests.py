@@ -2,7 +2,8 @@
 File for testing baml
 
 Run with:
-infisical run --env=test -- python3 -m pytest e2e_tests.py -s -v
+First: docker build -f .docker/Dockerfile.builder -t baml_builder . -q
+Then: infisical run --env=test -- python3 -m pytest e2e_tests.py -s -v -n 10
 """
 
 import subprocess
@@ -13,19 +14,19 @@ import pytest
 CWD = os.path.dirname(os.path.realpath(__file__))
 
 
-@pytest.fixture(scope="session", autouse=True)
-def setup_baml_builder():
-    try:
-        subprocess.check_output(
-            "docker build -f .docker/Dockerfile.builder -t baml_builder . -q",
-            shell=True,
-            stderr=subprocess.STDOUT,
-            cwd=CWD,
-        )
-    except subprocess.CalledProcessError as e:
-        print("Docker build for baml_builder failed.")
-        print(e.output.decode("utf-8"))
-        pytest.exit("Setup failed, exiting tests.", 1)
+# @pytest.fixture(scope="session", autouse=True)
+# def setup_baml_builder():
+#     try:
+#         subprocess.check_output(
+#             "docker build -f .docker/Dockerfile.builder -t baml_builder . -q",
+#             shell=True,
+#             stderr=subprocess.STDOUT,
+#             cwd=CWD,
+#         )
+#     except subprocess.CalledProcessError as e:
+#         print("Docker build for baml_builder failed.")
+#         print(e.output.decode("utf-8"))
+#         pytest.exit("Setup failed, exiting tests.", 1)
 
 
 @pytest.fixture(scope="session")
@@ -57,6 +58,7 @@ def test_docker_builds_and_runs(context: str, tag: str, openai_key: str):
     os.makedirs(f"{os.path.join(CWD, 'test_logs', tag)}", exist_ok=True)
     env_vars = {
         "OPENAI_API_KEY": openai_key,
+        "BAML_ALLOW_PRERELEASE": "1"
     }
     env_vars_str = " ".join([f"-e {k}={v}" for k, v in env_vars.items()])
 

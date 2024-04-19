@@ -60,10 +60,10 @@ class IBAMLGetOrderInfo(BaseBAMLFunction[OrderInfo, PartialOrderInfo]):
         )
 
     async def __call__(self, *args, **kwargs) -> OrderInfo:
-        return await self.get_impl("").run(*args, **kwargs)
+        return await self.get_impl("default_config").run(*args, **kwargs)
     
     def stream(self, *args, **kwargs) -> AsyncStream[OrderInfo, PartialOrderInfo]:
-        res = self.get_impl("").stream(*args, **kwargs)
+        res = self.get_impl("default_config").stream(*args, **kwargs)
         return res
 
 BAMLGetOrderInfo = IBAMLGetOrderInfo()

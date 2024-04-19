@@ -14,6 +14,7 @@ from .classes.cls_classoptionaloutput2 import ClassOptionalOutput2
 from .classes.cls_dynamicpropsclass import DynamicPropsClass
 from .classes.cls_email import Email
 from .classes.cls_event import Event
+from .classes.cls_message import Message
 from .classes.cls_modifiedoutput import ModifiedOutput
 from .classes.cls_namedargssingleclass import NamedArgsSingleClass
 from .classes.cls_optionalclass import OptionalClass
@@ -61,6 +62,7 @@ __all__ = [
     'EnumInClass',
     'EnumOutput',
     'Event',
+    'Message',
     'ModifiedOutput',
     'NamedArgsSingleClass',
     'NamedArgsSingleEnum',

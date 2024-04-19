@@ -102,7 +102,10 @@ impl WithLanguage for PackageManager {
     }
 
     fn install_command(&self) -> String {
-        match self {
+        let allow_prerelease = std::env::var("BAML_ALLOW_PRERELEASE")
+            .map(|v| v == "1")
+            .unwrap_or(false);
+        let cmd = match self {
             PackageManager::Pip(_) => "pip install --upgrade baml".into(),
             PackageManager::Pip3(_) => "pip3 install --upgrade baml".into(),
             PackageManager::Poetry => "poetry add baml@latest".into(),
@@ -112,6 +115,16 @@ impl WithLanguage for PackageManager {
             PackageManager::Conda(name) => {
                 format!("conda run -n {} pip install --upgrade baml", name)
             }
+        };
+
+        if allow_prerelease {
+            if matches!(self, PackageManager::Poetry) {
+                format!("{} --allow-prereleases", cmd)
+            } else {
+                format!("{} --pre", cmd)
+            }
+        } else {
+            cmd
         }
     }
 

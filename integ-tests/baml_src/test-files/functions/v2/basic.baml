@@ -12,7 +12,7 @@ function ExtractResume2(resume: string) -> Resume {
         {{ resume }}
         <<<<
 
-        Output JSON schema:
+        OUTPUT_JSON_SCHEMA:
         {{ ctx.output_schema }}
 
         JSON:
@@ -110,4 +110,24 @@ function GetDataType(text: string) -> RaysData {
 
         JSON:
     "#
+}
+
+class Message {
+  role string
+  message string
+}
+
+
+function ClassifyConversation(messages: Message[]) -> Category[] {
+  client GPT4
+  prompt #"
+    Classify the following conversation into following:
+    {{ ctx.output_schema }}
+
+
+    {% for m in messages %}
+    {{ _.chat(role=m.role) }}
+    {{ m.message }}
+    {% endfor %}
+  "#
 }

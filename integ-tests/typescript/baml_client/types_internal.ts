@@ -6,7 +6,7 @@
 /* eslint-disable */
 
 
-import { Blah, Category, Category2, Category3, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, DataType, DynamicPropsClass, Email, EnumInClass, EnumOutput, Event, ModifiedOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalClass, OptionalTest_CategoryType, OptionalTest_Prop1, OptionalTest_ReturnType, OrderInfo, OrderStatus, OverrideClass, OverrideEnum, RaysData, Resume, SearchParams, SomeClass2, Tag, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass, UnionTest_ReturnType, WithReasoning } from './types';
+import { Blah, Category, Category2, Category3, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, DataType, DynamicPropsClass, Email, EnumInClass, EnumOutput, Event, Message, ModifiedOutput, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalClass, OptionalTest_CategoryType, OptionalTest_Prop1, OptionalTest_ReturnType, OrderInfo, OrderStatus, OverrideClass, OverrideEnum, RaysData, Resume, SearchParams, SomeClass2, Tag, TestClassAlias, TestClassWithEnum, TestEnum, TestOutputClass, UnionTest_ReturnType, WithReasoning } from './types';
 
 
 // Function to check if a value is a member of the Category enum
@@ -358,6 +358,43 @@ class InternalEvent implements Event {
   }
   get description(): string {
     return this.data.description;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
+// Function to validate if an object is a Message object
+function isMessage(obj: any): obj is Message {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("role" in obj && (typeof obj.role === 'string'))
+    && ("message" in obj && (typeof obj.message === 'string'))
+  );
+}
+
+
+class InternalMessage implements Message {
+  private constructor(private data: {
+    role: string,
+    message: string,
+  }, private raw: Message) {}
+
+  static from(data: Message): InternalMessage {
+    return new InternalMessage({
+      role: data.role,
+      message: data.message,
+    }, data);
+  }
+
+  get role(): string {
+    return this.data.role;
+  }
+  get message(): string {
+    return this.data.message;
   }
 
 
@@ -1084,5 +1121,5 @@ class InternalWithReasoning implements WithReasoning {
 }
 
 
-export { InternalBlah, InternalClassOptionalFields, InternalClassOptionalOutput, InternalClassOptionalOutput2, InternalDynamicPropsClass, InternalEmail, InternalEvent, InternalModifiedOutput, InternalNamedArgsSingleClass, InternalOptionalClass, InternalOptionalTest_Prop1, InternalOptionalTest_ReturnType, InternalOrderInfo, InternalOverrideClass, InternalRaysData, InternalResume, InternalSearchParams, InternalSomeClass2, InternalTestClassAlias, InternalTestClassWithEnum, InternalTestOutputClass, InternalUnionTest_ReturnType, InternalWithReasoning }
+export { InternalBlah, InternalClassOptionalFields, InternalClassOptionalOutput, InternalClassOptionalOutput2, InternalDynamicPropsClass, InternalEmail, InternalEvent, InternalMessage, InternalModifiedOutput, InternalNamedArgsSingleClass, InternalOptionalClass, InternalOptionalTest_Prop1, InternalOptionalTest_ReturnType, InternalOrderInfo, InternalOverrideClass, InternalRaysData, InternalResume, InternalSearchParams, InternalSomeClass2, InternalTestClassAlias, InternalTestClassWithEnum, InternalTestOutputClass, InternalUnionTest_ReturnType, InternalWithReasoning }
 

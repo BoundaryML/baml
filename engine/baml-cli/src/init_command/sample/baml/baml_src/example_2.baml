@@ -6,23 +6,23 @@ enum Category {
     Question
 }
 
-function ClassifyMessage { 
-  input (message: string, message_date: string)
-  output Category[]
+class Message {
+  role string
+  message string
 }
 
-impl<llm, ClassifyMessage> level1 {
+
+function ClassifyConversation(messages: Message[]) -> Category[] {
   client $GENERATED_BAML_CLIENT$
   prompt #"
-    Classify the following INPUT into following:
-    {#print_enum(Category)}
+    Classify the following conversation into following:
+    {{ ctx.output_schema }}
 
-    INPUT
-    ---
-    date: {#input.message_date}
-    message: {#input.message}
-    ---
 
-    JSON array of categories that match:
+    {% for m in messages %}
+    {{ _.chat(m.role) }}
+    {{ m.message }}
+    {% endfor %}
+
   "#
 }

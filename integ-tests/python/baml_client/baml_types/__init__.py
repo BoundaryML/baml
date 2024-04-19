@@ -7,6 +7,7 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
+from ..__do_not_import.functions.fx_classifyconversation import IClassifyConversation, IClassifyConversationOutput, IClassifyConversationStream
 from ..__do_not_import.functions.fx_classifymessage import IClassifyMessage, IClassifyMessageOutput, IClassifyMessageStream
 from ..__do_not_import.functions.fx_classifymessage2 import IClassifyMessage2, IClassifyMessage2Output, IClassifyMessage2Stream
 from ..__do_not_import.functions.fx_classifymessage3 import IClassifyMessage3, IClassifyMessage3Output, IClassifyMessage3Stream
@@ -54,6 +55,7 @@ from ..__do_not_import.types.classes.cls_classoptionaloutput2 import ClassOption
 from ..__do_not_import.types.classes.cls_dynamicpropsclass import DynamicPropsClass
 from ..__do_not_import.types.classes.cls_email import Email
 from ..__do_not_import.types.classes.cls_event import Event
+from ..__do_not_import.types.classes.cls_message import Message
 from ..__do_not_import.types.classes.cls_modifiedoutput import ModifiedOutput
 from ..__do_not_import.types.classes.cls_namedargssingleclass import NamedArgsSingleClass
 from ..__do_not_import.types.classes.cls_optionalclass import OptionalClass
@@ -101,6 +103,9 @@ __all__ = [
     'EnumInClass',
     'EnumOutput',
     'Event',
+    'IClassifyConversation',
+    'IClassifyConversationOutput',
+    'IClassifyConversationStream',
     'IClassifyMessage',
     'IClassifyMessage2',
     'IClassifyMessage2Output',
@@ -221,6 +226,7 @@ __all__ = [
     'IUnionTest_Function',
     'IUnionTest_FunctionOutput',
     'IUnionTest_FunctionStream',
+    'Message',
     'ModifiedOutput',
     'NamedArgsSingleClass',
     'NamedArgsSingleEnum',

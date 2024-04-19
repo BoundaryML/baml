@@ -10,23 +10,19 @@ class Education {
   year int
 }
 
-function ExtractResume {
-  input string
-  output Resume
-}
-
-impl<llm, ExtractResume> version1 {
+function ExtractResume(text: string) -> Resume {
   client $GENERATED_BAML_CLIENT$
   prompt #"
     Parse the following resume and return a structured representation of the data in the schema below.
 
     Resume:
     ---
-    {#input}
+    {{text}}
     ---
 
     Output JSON format (only include these fields, and no others):
-    {#print_type(output)}
+    {# output_schema is inferred from the return type of the function #}
+    {{ ctx.output_schema }}
 
     Output JSON:
   "#

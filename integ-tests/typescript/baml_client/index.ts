@@ -12,6 +12,7 @@ import "./impls"
 loadEnvVars()
 
 const BamlClient = {
+  ClassifyConversation: f.ClassifyConversation,
   ClassifyMessage: f.ClassifyMessage,
   ClassifyMessage2: f.ClassifyMessage2,
   ClassifyMessage3: f.ClassifyMessage3,
