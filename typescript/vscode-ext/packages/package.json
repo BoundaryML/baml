@@ -2,7 +2,7 @@
   "name": "baml",
   "displayName": "Baml",
   "description": "BAML is a DSL for AI applications.",
-  "version": "0.28.4",
+  "version": "0.29.0",
   "publisher": "Gloo",
   "repository": "https://github.com/BoundaryML/baml",
   "homepage": "https://www.boundaryml.com",
