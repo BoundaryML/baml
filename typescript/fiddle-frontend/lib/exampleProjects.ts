@@ -34,7 +34,7 @@ const extractNamesBaml = `function ExtractNames(input: string) -> string[] {
 
     {{ ctx.output_format }}
 
-    JSON:
+    JSON array:
   "#
 }
 `;
