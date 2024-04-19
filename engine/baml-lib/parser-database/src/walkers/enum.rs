@@ -155,3 +155,14 @@ impl<'db> WithStaticRenames<'db> for EnumValueWalker<'db> {
             .and_then(|f| f.value_serilizers.get(&self.id.1))
     }
 }
+
+impl<'db> internal_baml_jinja::ParserDbIntoPredefinedTypes for EnumWalker<'db> {
+    fn add_to_types(self, types: &mut internal_baml_jinja::PredefinedTypes) {
+        types.add_class(
+            self.name(),
+            self.static_fields()
+                .map(|f| (f.name().to_string(), self.db.to_jinja_type(f.r#type())))
+                .collect::<HashMap<_, _>>(),
+        )
+    }
+}

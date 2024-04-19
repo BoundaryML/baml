@@ -23,6 +23,7 @@ pub enum Type {
     Map(Box<Type>, Box<Type>),
     Tuple(Vec<Type>),
     Union(Vec<Type>),
+    EnumRef(String),
     ClassRef(String),
     FunctionRef(String),
 }
@@ -70,6 +71,7 @@ impl Type {
             ),
             Type::ClassRef(name) => format!("class {}", name),
             Type::FunctionRef(name) => format!("function {}", name),
+            Type::EnumRef(name) => format!("enum {}", name),
         }
     }
 
@@ -123,10 +125,15 @@ enum Scope {
     Branch(HashMap<String, Type>, HashMap<String, Type>, bool),
 }
 
+pub trait ParserDbIntoPredefinedTypes {
+    fn add_to_types(&self, types: &mut PredefinedTypes);
+}
+
 #[derive(Debug)]
 pub struct PredefinedTypes {
     functions: HashMap<String, (Type, Vec<(String, Type)>)>,
     classes: HashMap<String, HashMap<String, Type>>,
+    enums: HashMap<String, Vec<String>>,
     // Variable name <--> Definition
     variables: HashMap<String, Type>,
     scopes: Vec<Scope>,
@@ -196,6 +203,7 @@ impl PredefinedTypes {
                     ]),
                 ),
             ]),
+            enums: HashMap::new(),
             variables: HashMap::from([
                 ("ctx".into(), Type::ClassRef("baml::Context".into())),
                 ("_".into(), Type::ClassRef("baml::BuiltIn".into())),
@@ -311,6 +319,10 @@ impl PredefinedTypes {
 
     pub fn add_class(&mut self, name: &str, fields: HashMap<String, Type>) {
         self.classes.insert(name.to_string(), fields);
+    }
+
+    pub fn add_enum(&mut self, name: &str, values: Vec<String>) {
+        self.enums.insert(name.to_string(), values);
     }
 
     pub fn add_variable(&mut self, name: &str, t: Type) {

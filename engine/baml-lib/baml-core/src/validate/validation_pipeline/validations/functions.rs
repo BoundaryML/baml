@@ -53,12 +53,15 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
         .collect::<Vec<_>>();
 
     let mut defined_types = internal_baml_jinja::PredefinedTypes::default();
-    ctx.db.walk_classes().for_each(|t| {
-        t.add_to_types(&mut defined_types);
-    });
-    ctx.db.walk_templates().for_each(|t| {
-        t.add_to_types(&mut defined_types);
-    });
+    for t in ctx.db.walk_classes() {
+        t.add_to_types(&mut defined_types)
+    }
+    for t in ctx.db.walk_enums() {
+        t.add_to_types(&mut defined_types)
+    }
+    for t in ctx.db.walk_templates() {
+        t.add_to_types(&mut defined_types)
+    }
 
     // Validate template strings
     for template in ctx.db.walk_templates() {

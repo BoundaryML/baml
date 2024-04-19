@@ -7,7 +7,7 @@ use minijinja::context;
 use serde::Serialize;
 use std::collections::HashMap;
 
-pub use evaluate_type::{PredefinedTypes, Type, TypeError};
+pub use evaluate_type::{ParserDbIntoPredefinedTypes, PredefinedTypes, Type, TypeError};
 
 fn get_env<'a>() -> minijinja::Environment<'a> {
     let mut env = minijinja::Environment::new();

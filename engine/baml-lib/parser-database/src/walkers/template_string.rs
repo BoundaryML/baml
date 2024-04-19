@@ -28,9 +28,17 @@ impl<'db> TemplateStringWalker<'db> {
     pub fn template_string(self) -> &'db str {
         &self.metadata().template
     }
+}
 
+impl WithIdentifier for TemplateStringWalker<'_> {
+    fn identifier(&self) -> &ast::Identifier {
+        self.ast_node().identifier()
+    }
+}
+
+impl<'db> internal_baml_jinja::ParserDbIntoPredefinedTypes for ClassWalker<'db> {
     /// The name of the template string.
-    pub fn add_to_types(self, types: &mut PredefinedTypes) {
+    fn add_to_types(self, types: &mut PredefinedTypes) {
         let name = self.name();
         let ret_type = Type::String;
         let mut params = vec![];
@@ -45,11 +53,5 @@ impl<'db> TemplateStringWalker<'db> {
         }
 
         types.add_function(name, ret_type, params);
-    }
-}
-
-impl WithIdentifier for TemplateStringWalker<'_> {
-    fn identifier(&self) -> &ast::Identifier {
-        self.ast_node().identifier()
     }
 }

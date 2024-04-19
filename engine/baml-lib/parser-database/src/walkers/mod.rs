@@ -307,12 +307,12 @@ impl<'db> crate::ParserDatabase {
                     ast::Identifier::Ref(x, _) => match self.find_type(idn) {
                         None => Type::Undefined,
                         Some(Either::Left(_)) => Type::ClassRef(x.full_name.clone()),
-                        Some(Either::Right(_)) => Type::String,
+                        Some(Either::Right(_)) => Type::EnumRef(x.full_name.clone()),
                     },
                     ast::Identifier::Local(x, _) => match self.find_type(idn) {
                         None => Type::Undefined,
                         Some(Either::Left(_)) => Type::ClassRef(x.clone()),
-                        Some(Either::Right(_)) => Type::String,
+                        Some(Either::Right(_)) => Type::EnumRef(x.clone()),
                     },
                     ast::Identifier::Primitive(idx, _) => match idx {
                         ast::TypeValue::String => Type::String,

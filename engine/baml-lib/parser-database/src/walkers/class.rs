@@ -84,16 +84,6 @@ impl<'db> ClassWalker<'db> {
                 None => None,
             })
     }
-
-    /// The name of the template string.
-    pub fn add_to_types(self, types: &mut internal_baml_jinja::PredefinedTypes) {
-        types.add_class(
-            self.name(),
-            self.static_fields()
-                .map(|f| (f.name().to_string(), self.db.to_jinja_type(f.r#type())))
-                .collect::<HashMap<_, _>>(),
-        )
-    }
 }
 
 impl<'db> WithIdentifier for ClassWalker<'db> {
@@ -210,5 +200,16 @@ impl<'db> WithSerialize for ClassWalker<'db> {
             "Use this output format:\n{}{}",
             class_schema, enum_schemas
         ))
+    }
+}
+
+impl<'db> internal_baml_jinja::ParserDbIntoPredefinedTypes for ClassWalker<'db> {
+    fn add_to_types(self, types: &mut internal_baml_jinja::PredefinedTypes) {
+        types.add_class(
+            self.name(),
+            self.static_fields()
+                .map(|f| (f.name().to_string(), self.db.to_jinja_type(f.r#type())))
+                .collect::<HashMap<_, _>>(),
+        )
     }
 }
