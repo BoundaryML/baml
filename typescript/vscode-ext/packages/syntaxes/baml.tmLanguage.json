@@ -88,7 +88,7 @@
       "name": "string.quoted.block.baml",
       "patterns": [
         {
-          "include": "source.jinja"
+          "include": "source.baml-jinja"
         },
         { "include": "#block_attribute" }
       ]
