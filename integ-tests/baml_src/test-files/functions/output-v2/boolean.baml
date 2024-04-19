@@ -1,4 +1,4 @@
-function FnOutputBool {
+function V2_FnOutputBool {
   input string  output bool
 }
 

@@ -4,7 +4,7 @@ class UnionTest_ReturnType {
   prop3 (float[] | bool[])
 }
 
-function UnionTest_Function {
+function V2_UnionTest_Function {
   input string | bool  output UnionTest_ReturnType
 }
 

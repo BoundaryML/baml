@@ -8,7 +8,7 @@ class TestClassWithEnum {
   prop2 EnumInClass
 }
 
-function FnOutputClassWithEnum {
+function V2_FnOutputClassWithEnum {
   input string  output TestClassWithEnum
 }
 

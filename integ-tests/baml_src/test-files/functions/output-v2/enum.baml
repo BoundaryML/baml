@@ -6,7 +6,7 @@ enum EnumOutput {
   @@alias("VALUE_ENUM")
 }
 
-function FnEnumOutput {
+function V2_FnEnumOutput {
   input string  output EnumOutput
 }
 

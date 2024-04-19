@@ -3,11 +3,11 @@ enum NamedArgsSingleEnum {
   TWO
 }
 
-function FnTestNamedArgsSingleEnum {
+function V2_FnTestNamedArgsSingleEnum {
   (myArg: NamedArgsSingleEnum) -> string
 }
 
-function FnTestNamedArgsSingleEnum_V2 {
+function V2_FnTestNamedArgsSingleEnum_V2 {
   client GPT35
   prompt #"
     Print these values back to me:

@@ -16,7 +16,7 @@ class OptionalTest_ReturnType {
 }
 
 
-function OptionalTest_Function {
+function V2_OptionalTest_Function {
   input string  output (OptionalTest_ReturnType?)[]
 }
 

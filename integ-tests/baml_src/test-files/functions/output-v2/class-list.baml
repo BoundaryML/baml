@@ -1,5 +1,5 @@
 
-function FnOutputClassList {
+function V2_FnOutputClassList {
   input string  output TestOutputClass[]
 }
 

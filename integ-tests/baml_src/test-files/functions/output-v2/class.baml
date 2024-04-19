@@ -4,7 +4,7 @@ class TestOutputClass {
 }
 
 
-function FnOutputClass {
+function V2_FnOutputClass {
   input string  output TestOutputClass
 }
 

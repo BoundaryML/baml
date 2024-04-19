@@ -4,7 +4,7 @@ class ClassOptionalOutput {
   prop2 string
 }
 
-function FnClassOptionalOutput {
+function V2_FnClassOptionalOutput {
   input string  output ClassOptionalOutput?
 }
 
@@ -30,7 +30,7 @@ class ClassOptionalOutput2 {
   prop3 Blah?
 }
 
-function FnClassOptionalOutput2 {
+function V2_FnClassOptionalOutput2 {
   input string  output ClassOptionalOutput2?
 }
 

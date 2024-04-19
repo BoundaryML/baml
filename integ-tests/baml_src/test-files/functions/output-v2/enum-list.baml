@@ -1,5 +1,5 @@
 
-function FnEnumListOutput {
+function V2_FnEnumListOutput {
   input string  output EnumOutput[]
 }
 

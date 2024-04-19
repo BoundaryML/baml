@@ -7,11 +7,11 @@ class NamedArgsSingleClass {
   // key3 int
 }
 
-function TestFnNamedArgsSingleClass {
+function V2_TestFnNamedArgsSingleClass {
   (myArg: NamedArgsSingleClass) -> string
 }
 
-function TestFnNamedArgsSingleClass_V2 {
+function V2_TestFnNamedArgsSingleClass_V2 {
   client GPT35
   prompt #"
     Print these values back to me:
