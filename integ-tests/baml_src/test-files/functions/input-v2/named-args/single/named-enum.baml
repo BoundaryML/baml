@@ -12,6 +12,6 @@ impl<llm, FnTestNamedArgsSingleEnum> v1 {
   client GPT35
   prompt #"
     Print these values back to me:
-    {#input.myArg}
+    {{myArg}}
   "#
 }

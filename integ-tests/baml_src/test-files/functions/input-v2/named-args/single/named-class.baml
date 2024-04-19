@@ -16,8 +16,8 @@ impl<llm, TestFnNamedArgsSingleClass> v1 {
   client GPT35
   prompt #"
     Print these values back to me:
-    {#input.myArg.key}
-    {#input.myArg.key_two}
-    {#input.myArg.key_three}
+    {{myArg.key}}
+    {{myArg.key_two}}
+    {{myArg.key_three}}
   "#
 }  
