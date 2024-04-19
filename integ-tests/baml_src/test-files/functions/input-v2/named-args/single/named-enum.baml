@@ -7,7 +7,7 @@ function V2_FnTestNamedArgsSingleEnum {
   (myArg: NamedArgsSingleEnum) -> string
 }
 
-function V2_FnTestNamedArgsSingleEnum_V2 {
+function V2_FnTestNamedArgsSingleEnum {
   client GPT35
   prompt #"
     Print these values back to me:

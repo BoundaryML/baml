@@ -11,7 +11,7 @@ function V2_TestFnNamedArgsSingleClass {
   (myArg: NamedArgsSingleClass) -> string
 }
 
-function V2_TestFnNamedArgsSingleClass_V2 {
+function V2_TestFnNamedArgsSingleClass {
   client GPT35
   prompt #"
     Print these values back to me:

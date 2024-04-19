@@ -1,4 +1,4 @@
-function V2_TestFnNamedArgsSyntax_V2(var: string,  var_with_underscores: string) -> string {
+function V2_TestFnNamedArgsSyntax(var: string,  var_with_underscores: string) -> string {
   client GPT35
   prompt "prompt"
 }
