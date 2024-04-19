@@ -2,8 +2,8 @@ mod evaluate_type;
 mod get_vars;
 
 use evaluate_type::get_variable_types;
-use minijinja;
-use minijinja::context;
+use minijinja::{self, value::Kwargs};
+use minijinja::{context, ErrorKind};
 use serde::Serialize;
 use std::collections::HashMap;
 
@@ -133,8 +133,27 @@ fn render_minijinja<T: Serialize>(
     env.add_global(
         "_",
         context! {
-            chat => minijinja::Value::from_function(|role: String| {
-                format!("{MAGIC_CHAT_ROLE_DELIMITER}:baml-start-baml:{role}:baml-end-baml:{MAGIC_CHAT_ROLE_DELIMITER}")
+            chat => minijinja::Value::from_function(|role: Option<String>, kwargs: Kwargs| -> Result<String, minijinja::Error> {
+                let role = match (role, kwargs.get::<String>("role")) {
+                    (Some(b), Ok(a)) => {
+                        // If both are present, we should error
+                        return Err(minijinja::Error::new(
+                            ErrorKind::TooManyArguments,
+                            format!("chat() called with two roles: '{}' and '{}'", a, b),
+                        ));
+                    },
+                    (Some(role), _) => role,
+                    (_, Ok(role)) => role,
+                    _ => {
+                        // If neither are present, we should error
+                        return Err(minijinja::Error::new(
+                            ErrorKind::MissingArgument,
+                            "chat() called without role. Try chat('role') or chat(role='role').",
+                        ));
+                    }
+                };
+
+                Ok(format!("{MAGIC_CHAT_ROLE_DELIMITER}:baml-start-baml:{role}:baml-end-baml:{MAGIC_CHAT_ROLE_DELIMITER}"))
             })
         },
     );
@@ -330,6 +349,127 @@ mod render_tests {
                 ]
                 .join("\n")
             )
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn render_chat_param_failures() -> anyhow::Result<()> {
+        setup_logging();
+
+        let serde_json::Value::Object(args) = serde_json::json!({
+            "name": "world"
+        }) else {
+            anyhow::bail!("args must be convertible to a JSON object");
+        };
+
+        // rendering should fail: template contains '{{ name }' (missing '}' at the end)
+        let rendered = render_prompt(
+            r#"
+                    You are an assistant that always responds
+                    in a very excited way with emojis
+                    and also outputs this word 4 times
+                    after giving a response: {{ haiku_subject }}
+                    
+                    {{ _.chat(role=ctx.env.ROLE) }}
+                    
+                    Tell me a haiku about {{ haiku_subject }} in {{ ctx.output_schema }}.
+                    
+                    {{ _.chat(ctx.env.ROLE) }}
+                    End the haiku with a line about your maker, {{ ctx.client.provider }}.
+
+                    {{ _.chat("a", role="aa") }}
+                    hi!
+
+                    {{ _.chat() }}
+                    hi!
+            "#,
+            &args,
+            &RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                },
+                output_schema: "iambic pentameter".to_string(),
+                env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
+            },
+            &vec![],
+        );
+
+        match rendered {
+            Ok(_) => {
+                anyhow::bail!("Expected template rendering to fail, but it succeeded");
+            }
+            Err(e) => assert!(e
+                .to_string()
+                .contains("chat() called with two roles: 'aa' and 'a'")),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn render_with_kwargs() -> anyhow::Result<()> {
+        setup_logging();
+
+        let serde_json::Value::Object(args) = serde_json::json!({
+            "haiku_subject": "sakura"
+        }) else {
+            anyhow::bail!("args must be convertible to a JSON object");
+        };
+
+        let rendered = render_prompt(
+            r#"
+                    
+
+                    You are an assistant that always responds
+                    in a very excited way with emojis
+                    and also outputs this word 4 times
+                    after giving a response: {{ haiku_subject }}
+                    
+                    {{ _.chat(role=ctx.env.ROLE) }}
+                    
+                    Tell me a haiku about {{ haiku_subject }} in {{ ctx.output_schema }}.
+                    
+                    {{ _.chat(ctx.env.ROLE) }}
+                    End the haiku with a line about your maker, {{ ctx.client.provider }}.
+            "#,
+            &args,
+            &RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                },
+                output_schema: "iambic pentameter".to_string(),
+                env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
+            },
+            &vec![],
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Chat(vec![
+                RenderedChatMessage {
+                    role: "system".to_string(),
+                    message: vec![
+                        "You are an assistant that always responds",
+                        "in a very excited way with emojis",
+                        "and also outputs this word 4 times",
+                        "after giving a response: sakura",
+                    ]
+                    .join("\n")
+                },
+                RenderedChatMessage {
+                    role: "john doe".to_string(),
+                    message: vec!["Tell me a haiku about sakura in iambic pentameter.",].join("\n")
+                },
+                RenderedChatMessage {
+                    role: "john doe".to_string(),
+                    message: vec!["End the haiku with a line about your maker, openai.",]
+                        .join("\n")
+                }
+            ])
         );
 
         Ok(())
