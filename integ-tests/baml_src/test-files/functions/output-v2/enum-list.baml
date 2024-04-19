@@ -1,9 +1,9 @@
 
 function V2_FnEnumListOutput {
-  input string  output EnumOutput[]
+  (input: string  ) -> EnumOutput[]
 }
 
-impl<llm, FnEnumListOutput> v1 {
+function FnEnumListOutput_V2 {
   client GPT35
   prompt #"
     Print out two of these values randomly selected from the list below in a json array.

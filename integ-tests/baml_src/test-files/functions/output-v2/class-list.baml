@@ -1,9 +1,9 @@
 
 function V2_FnOutputClassList {
-  input string  output TestOutputClass[]
+  (input: string  ) -> TestOutputClass[]
 }
 
-impl<llm, FnOutputClassList> v1 {
+function FnOutputClassList_V2 {
   client GPT35
   prompt #"
     Return a JSON array that follows this schema: 

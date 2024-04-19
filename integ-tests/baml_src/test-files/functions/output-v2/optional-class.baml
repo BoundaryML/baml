@@ -5,10 +5,10 @@ class ClassOptionalOutput {
 }
 
 function V2_FnClassOptionalOutput {
-  input string  output ClassOptionalOutput?
+  (input: string  ) -> ClassOptionalOutput?
 }
 
-impl<llm, FnClassOptionalOutput> v1 {
+function FnClassOptionalOutput_V2 {
   client GPT35
   prompt #"
     Return a json blob for the following input:    {#input}
@@ -31,10 +31,10 @@ class ClassOptionalOutput2 {
 }
 
 function V2_FnClassOptionalOutput2 {
-  input string  output ClassOptionalOutput2?
+  (input: string  ) -> ClassOptionalOutput2?
 }
 
-impl<llm, FnClassOptionalOutput2> v1 {
+function FnClassOptionalOutput2_V2 {
   client GPT35
   prompt #"
     Return a json blob for the following input:    {#input}

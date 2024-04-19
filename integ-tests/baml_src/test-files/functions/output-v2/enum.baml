@@ -7,10 +7,10 @@ enum EnumOutput {
 }
 
 function V2_FnEnumOutput {
-  input string  output EnumOutput
+  (input: string  ) -> EnumOutput
 }
 
-impl<llm, FnEnumOutput> v1 {
+function FnEnumOutput_V2 {
   client GPT35
   prompt #"
     Choose one of these values randomly. Before you give the answer, write out an unrelated haiku about the ocean.

@@ -1,8 +1,8 @@
 function V2_FnOutputBool {
-  input string  output bool
+  (input: string  ) -> bool
 }
 
-impl<llm, FnOutputBool> v1 {
+function FnOutputBool_V2 {
   client GPT35
   prompt #"
     Return a {#print_type(output)}:  "#

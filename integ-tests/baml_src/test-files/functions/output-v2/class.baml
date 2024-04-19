@@ -5,10 +5,10 @@ class TestOutputClass {
 
 
 function V2_FnOutputClass {
-  input string  output TestOutputClass
+  (input: string  ) -> TestOutputClass
 }
 
-impl<llm, FnOutputClass> v1 {
+function FnOutputClass_V2 {
   client GPT35
   prompt #"
     Return a JSON blob with this schema: 

@@ -9,10 +9,10 @@ class TestClassWithEnum {
 }
 
 function V2_FnOutputClassWithEnum {
-  input string  output TestClassWithEnum
+  (input: string  ) -> TestClassWithEnum
 }
 
-impl<llm, FnOutputClassWithEnum> v1 {
+function FnOutputClassWithEnum_V2 {
   client GPT35
   prompt #"
     Return a made up json blob that matches this schema:

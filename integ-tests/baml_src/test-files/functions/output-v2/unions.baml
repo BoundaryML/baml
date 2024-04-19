@@ -5,10 +5,10 @@ class UnionTest_ReturnType {
 }
 
 function V2_UnionTest_Function {
-  input string | bool  output UnionTest_ReturnType
+  (input: string | bool  ) -> UnionTest_ReturnType
 }
 
-impl<llm, UnionTest_Function> v1 {
+function UnionTest_Function_V2 {
   client GPT35
   prompt #"
     Return a JSON blob with this schema: 
