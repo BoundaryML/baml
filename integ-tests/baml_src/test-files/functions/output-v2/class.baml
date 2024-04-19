@@ -4,11 +4,7 @@ class TestOutputClass {
 }
 
 
-function V2_FnOutputClass {
-  (input: string  ) -> TestOutputClass
-}
-
-function FnOutputClass_V2 {
+function V2_FnOutputClass(input: string  ) -> TestOutputClass {
   client GPT35
   prompt #"
     Return a JSON blob with this schema: 

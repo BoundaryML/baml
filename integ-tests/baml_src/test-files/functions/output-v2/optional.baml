@@ -16,11 +16,7 @@ class OptionalTest_ReturnType {
 }
 
 
-function V2_OptionalTest_Function {
-  (input: string  ) -> (OptionalTest_ReturnType?)[]
-}
-
-function OptionalTest_Function_V2 {
+function OptionalTest_Function_V2(input: string  ) -> (OptionalTest_ReturnType?)[] {
   client GPT35
   prompt #"
     

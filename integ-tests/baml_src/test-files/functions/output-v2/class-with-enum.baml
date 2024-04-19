@@ -8,11 +8,7 @@ class TestClassWithEnum {
   prop2 EnumInClass
 }
 
-function V2_FnOutputClassWithEnum {
-  (input: string  ) -> TestClassWithEnum
-}
-
-function FnOutputClassWithEnum_V2 {
+function FnOutputClassWithEnum_V2(input: string  ) -> TestClassWithEnum {
   client GPT35
   prompt #"
     Return a made up json blob that matches this schema:

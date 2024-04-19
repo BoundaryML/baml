@@ -4,11 +4,8 @@ class ClassOptionalOutput {
   prop2 string
 }
 
-function V2_FnClassOptionalOutput {
-  (input: string  ) -> ClassOptionalOutput?
-}
-
 function FnClassOptionalOutput_V2 {
+  (input: string  ) -> ClassOptionalOutput? {
   client GPT35
   prompt #"
     Return a json blob for the following input:    {#input}
@@ -30,11 +27,7 @@ class ClassOptionalOutput2 {
   prop3 Blah?
 }
 
-function V2_FnClassOptionalOutput2 {
-  (input: string  ) -> ClassOptionalOutput2?
-}
-
-function FnClassOptionalOutput2_V2 {
+function FnClassOptionalOutput2_V2(input: string  ) -> ClassOptionalOutput2? {
   client GPT35
   prompt #"
     Return a json blob for the following input:    {#input}
