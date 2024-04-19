@@ -169,7 +169,7 @@ impl PredefinedTypes {
                 (
                     "baml::Context".into(),
                     HashMap::from([
-                        ("output_schema".into(), Type::String),
+                        ("output_format".into(), Type::String),
                         ("client".into(), Type::ClassRef("baml::Client".into())),
                         (
                             "env".into(),

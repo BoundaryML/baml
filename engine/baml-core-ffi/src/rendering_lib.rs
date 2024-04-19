@@ -86,17 +86,17 @@ impl NapiClient {
 pub struct NapiRenderer {
   template_string_macros: Vec<TemplateStringMacro>,
   template: String,
-  output_schema: String,
+  output_format: String,
 }
 
 #[napi]
 impl NapiRenderer {
   #[napi(constructor)]
-  pub fn new(template: String, output_schema: String) -> Result<Self> {
+  pub fn new(template: String, output_format: String) -> Result<Self> {
     Ok(NapiRenderer {
       template_string_macros: vec![],
       template,
-      output_schema,
+      output_format,
     })
   }
 
@@ -130,7 +130,7 @@ impl NapiRenderer {
   ) -> Result<NapiRenderedPrompt> {
     let ctx = RenderContext {
       client: client.internal.clone(),
-      output_schema: self.output_schema.clone(),
+      output_format: self.output_format.clone(),
       env,
     };
     let rendered =

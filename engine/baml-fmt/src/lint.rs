@@ -426,10 +426,10 @@ fn serialize_impls(
 
         let render_ctx = RenderContext {
             client: client_ctx,
-            output_schema: func
-                .output_schema(&schema.db, func.identifier().span())
+            output_format: func
+                .output_format(&schema.db, func.identifier().span())
                 .unwrap_or(format!(
-                    "{{{{ Unable to generate ctx.output_schema for {} }}}}",
+                    "{{{{ Unable to generate ctx.output_format for {} }}}}",
                     func.name()
                 )),
             env: HashMap::new(),

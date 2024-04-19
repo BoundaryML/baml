@@ -72,7 +72,7 @@ pub struct RenderContext_Client {
 #[derive(Clone, Debug, Serialize)]
 pub struct RenderContext {
     pub client: RenderContext_Client,
-    pub output_schema: String,
+    pub output_format: String,
     pub env: HashMap<String, String>,
 }
 
@@ -83,6 +83,85 @@ pub struct TemplateStringMacro {
 }
 
 const MAGIC_CHAT_ROLE_DELIMITER: &'static str = "BAML_CHAT_ROLE_MAGIC_STRING_DELIMITER";
+
+#[derive(Debug)]
+struct OutputFormat {
+    text: String,
+}
+
+impl std::fmt::Display for OutputFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "Answer in JSON using this schema:\n\n{}", self.text)
+    }
+}
+
+impl minijinja::value::Object for OutputFormat {
+    fn call(
+        &self,
+        _state: &minijinja::State<'_, '_>,
+        args: &[minijinja::value::Value],
+    ) -> Result<minijinja::value::Value, minijinja::Error> {
+        use minijinja::{
+            value::{from_args, Value, ValueKind},
+            Error,
+        };
+
+        let (args, kwargs): (&[Value], Kwargs) = from_args(args)?;
+        if !args.is_empty() {
+            return Err(Error::new(
+                ErrorKind::TooManyArguments,
+                format!("output_format() may only be called with named arguments"),
+            ));
+        }
+
+        let Ok(prefix) = kwargs.get::<Value>("prefix") else {
+            // prefix was not specified, defaults to "Use this output format:"
+            return Ok(Value::from_safe_string(format!("{}", self)));
+        };
+
+        let Ok(_) = kwargs.assert_all_used() else {
+            return Err(Error::new(
+                ErrorKind::TooManyArguments,
+                "output_format() got an unexpected keyword argument (only 'prefix' is allowed)",
+            ));
+        };
+
+        match prefix.kind() {
+            ValueKind::Undefined | ValueKind::None => {
+                // prefix specified as none appears to result in ValueKind::Undefined
+                return Ok(Value::from_safe_string(self.text.clone()));
+            }
+            // prefix specified as a string
+            ValueKind::String => {
+                return Ok(Value::from_safe_string(format!(
+                    "{}\n\n{}",
+                    prefix.to_string(),
+                    self.text
+                )));
+            }
+            _ => {
+                return Err(Error::new(
+                    ErrorKind::TooManyArguments,
+                    format!(
+                        "output_format() expected 'prefix' to be string or none, but was type '{}'",
+                        prefix.kind()
+                    ),
+                ));
+            }
+        }
+    }
+    fn call_method(
+        &self,
+        _state: &minijinja::State<'_, '_>,
+        name: &str,
+        _args: &[minijinja::value::Value],
+    ) -> Result<minijinja::value::Value, minijinja::Error> {
+        Err(minijinja::Error::new(
+            ErrorKind::UnknownMethod,
+            format!("output_format has no callable attribute '{}'", name),
+        ))
+    }
+}
 
 fn render_minijinja<T: Serialize>(
     template: &str,
@@ -129,7 +208,14 @@ fn render_minijinja<T: Serialize>(
         .join("\n");
 
     env.add_template("prompt", &template)?;
-    env.add_global("ctx", minijinja::Value::from_serializable(&ctx));
+    env.add_global(
+        "ctx",
+        context! {
+            client => ctx.client,
+            env => ctx.env,
+            output_format => minijinja::value::Value::from_object(OutputFormat{ text: ctx.output_format.clone() }),
+        },
+    );
     env.add_global(
         "_",
         context! {
@@ -264,7 +350,7 @@ mod render_tests {
                     
                     {{ _.chat(ctx.env.ROLE) }}
                     
-                    Tell me a haiku about {{ haiku_subject }} in {{ ctx.output_schema }}.
+                    Tell me a haiku about {{ haiku_subject }}. {{ ctx.output_format }}
 
                     End the haiku with a line about your maker, {{ ctx.client.provider }}.
             
@@ -275,7 +361,7 @@ mod render_tests {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
                 },
-                output_schema: "iambic pentameter".to_string(),
+                output_format: "iambic pentameter".to_string(),
                 env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
             },
             &vec![],
@@ -297,7 +383,9 @@ mod render_tests {
                 RenderedChatMessage {
                     role: "john doe".to_string(),
                     message: vec![
-                        "Tell me a haiku about sakura in iambic pentameter.",
+                        "Tell me a haiku about sakura. Answer in JSON using this schema:",
+                        "",
+                        "iambic pentameter",
                         "",
                         "End the haiku with a line about your maker, openai.",
                     ]
@@ -332,7 +420,7 @@ mod render_tests {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
                 },
-                output_schema: "iambic pentameter".to_string(),
+                output_format: "iambic pentameter".to_string(),
                 env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
             },
             &vec![],
@@ -349,6 +437,138 @@ mod render_tests {
                 ]
                 .join("\n")
             )
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn render_output_format_directly() -> anyhow::Result<()> {
+        setup_logging();
+
+        let serde_json::Value::Object(args) = serde_json::json!({
+            "haiku_subject": "sakura"
+        }) else {
+            anyhow::bail!("args must be convertible to a JSON object");
+        };
+
+        let rendered = render_prompt(
+            "{{ ctx.output_format }}",
+            &args,
+            &RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                },
+                output_format: "iambic pentameter".to_string(),
+                env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
+            },
+            &vec![],
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Completion(
+                "Answer in JSON using this schema:\n\niambic pentameter".to_string()
+            )
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn render_output_format_prefix_unspecified() -> anyhow::Result<()> {
+        setup_logging();
+
+        let serde_json::Value::Object(args) = serde_json::json!({
+            "haiku_subject": "sakura"
+        }) else {
+            anyhow::bail!("args must be convertible to a JSON object");
+        };
+
+        let rendered = render_prompt(
+            "{{ ctx.output_format() }}",
+            &args,
+            &RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                },
+                output_format: "iambic pentameter".to_string(),
+                env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
+            },
+            &vec![],
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Completion(
+                "Answer in JSON using this schema:\n\niambic pentameter".to_string()
+            )
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn render_output_format_prefix_null() -> anyhow::Result<()> {
+        setup_logging();
+
+        let serde_json::Value::Object(args) = serde_json::json!({
+            "haiku_subject": "sakura"
+        }) else {
+            anyhow::bail!("args must be convertible to a JSON object");
+        };
+
+        let rendered = render_prompt(
+            "{{ ctx.output_format(prefix=null) }}",
+            &args,
+            &RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                },
+                output_format: "iambic pentameter".to_string(),
+                env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
+            },
+            &vec![],
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Completion("iambic pentameter".to_string())
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn render_output_format_prefix_str() -> anyhow::Result<()> {
+        setup_logging();
+
+        let serde_json::Value::Object(args) = serde_json::json!({
+            "haiku_subject": "sakura"
+        }) else {
+            anyhow::bail!("args must be convertible to a JSON object");
+        };
+
+        let rendered = render_prompt(
+            "{{ ctx.output_format(prefix='custom format:') }}",
+            &args,
+            &RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                },
+                output_format: "iambic pentameter".to_string(),
+                env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
+            },
+            &vec![],
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Completion("custom format:\n\niambic pentameter".to_string())
         );
 
         Ok(())
@@ -374,7 +594,7 @@ mod render_tests {
                     
                     {{ _.chat(role=ctx.env.ROLE) }}
                     
-                    Tell me a haiku about {{ haiku_subject }} in {{ ctx.output_schema }}.
+                    Tell me a haiku about {{ haiku_subject }} in {{ ctx.output_format }}.
                     
                     {{ _.chat(ctx.env.ROLE) }}
                     End the haiku with a line about your maker, {{ ctx.client.provider }}.
@@ -391,7 +611,7 @@ mod render_tests {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
                 },
-                output_schema: "iambic pentameter".to_string(),
+                output_format: "iambic pentameter".to_string(),
                 env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
             },
             &vec![],
@@ -430,7 +650,7 @@ mod render_tests {
                     
                     {{ _.chat(role=ctx.env.ROLE) }}
                     
-                    Tell me a haiku about {{ haiku_subject }} in {{ ctx.output_schema }}.
+                    Tell me a haiku about {{ haiku_subject }}. {{ ctx.output_format }}
                     
                     {{ _.chat(ctx.env.ROLE) }}
                     End the haiku with a line about your maker, {{ ctx.client.provider }}.
@@ -441,7 +661,7 @@ mod render_tests {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
                 },
-                output_schema: "iambic pentameter".to_string(),
+                output_format: "iambic pentameter".to_string(),
                 env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
             },
             &vec![],
@@ -462,7 +682,7 @@ mod render_tests {
                 },
                 RenderedChatMessage {
                     role: "john doe".to_string(),
-                    message: vec!["Tell me a haiku about sakura in iambic pentameter.",].join("\n")
+                    message: vec!["Tell me a haiku about sakura. Answer in JSON using this schema:\n\niambic pentameter",].join("\n")
                 },
                 RenderedChatMessage {
                     role: "john doe".to_string(),
@@ -500,7 +720,7 @@ mod render_tests {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
                 },
-                output_schema: "iambic pentameter".to_string(),
+                output_format: "iambic pentameter".to_string(),
                 env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
             },
             &vec![],
@@ -542,7 +762,7 @@ mod render_tests {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
                 },
-                output_schema: "output[]".to_string(),
+                output_format: "output[]".to_string(),
                 env: HashMap::new(),
             },
             &vec![],

@@ -182,7 +182,7 @@ class FallbackProvider(AbstractLLMProvider):
         *,
         jinja_template: str,
         args: typing.Dict[str, typing.Any],
-        output_schema: str,
+        output_format: str,
         template_macros: typing.List[TemplateStringMacro],
     ) -> LLMResponse:
         return await self._run_strategy(
@@ -190,7 +190,7 @@ class FallbackProvider(AbstractLLMProvider):
             jinja_template=jinja_template,
             args=args,
             template_macros=template_macros,
-            output_schema=output_schema,
+            output_format=output_format,
         )
 
     async def _run_chat_internal(
@@ -257,14 +257,14 @@ class FallbackProvider(AbstractLLMProvider):
         *,
         jinja_template: str,
         args: typing.Dict[str, typing.Any],
-        output_schema: str,
+        output_format: str,
         template_macros: typing.List[TemplateStringMacro],
     ) -> typing.AsyncIterator[LLMResponse]:
         async for r in self._stream_strategy(
             "run_jinja_template_stream",
             jinja_template=jinja_template,
             args=args,
-            output_schema=output_schema,
+            output_format=output_format,
             template_macros=template_macros,
         ):
             yield r

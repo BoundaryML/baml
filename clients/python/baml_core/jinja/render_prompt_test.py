@@ -13,7 +13,7 @@ def test_success() -> None:
             
             {{ _.chat(ctx.env.ROLE) }}
             
-            Tell me a haiku about {{ haiku_subject }} in {{ ctx.output_schema }}.
+            Tell me a haiku about {{ haiku_subject }} in {{ ctx.output_format }}.
 
             Before the haiku, include the following: "{{ latin() }}".
             
@@ -23,7 +23,7 @@ def test_success() -> None:
             args={"haiku_subject": "sakura"},
             ctx=RenderData.ctx(
                 client=RenderData.client(name="gpt4", provider="openai"),
-                output_schema="iambic pentameter",
+                output_format="iambic pentameter",
                 env={"ROLE": "john doe"},
             ),
             template_string_macros=[
@@ -80,7 +80,7 @@ def test_bad_params() -> None:
                 },
                 ctx=RenderData.ctx(
                     client=RenderData.client(name="gpt4", provider="openai"),
-                    output_schema="",
+                    output_format="",
                     env={},
                 ),
                 template_string_macros=[],
@@ -119,7 +119,7 @@ def test_bad_template() -> None:
                 },
                 ctx=RenderData.ctx(
                     client=RenderData.client(name="gpt4", provider="openai"),
-                    output_schema="",
+                    output_format="",
                     env={},
                 ),
                 template_string_macros=[],

@@ -60,13 +60,13 @@ class RoundRobinClient extends LLMBaseProvider {
         return clientManager.getClient(this.clients[clientIndex].client);
     }
 
-    async run_jinja_template_once(jinja_template: string, args: { [key: string]: any; }, output_schema: string, template_macros: {
+    async run_jinja_template_once(jinja_template: string, args: { [key: string]: any; }, output_format: string, template_macros: {
         name: string;
         argNames: string[];
         argTypes: string[];
         template: string;
     }[]): Promise<LLMResponse> {
-        return this.choose_provider().run_jinja_template(jinja_template, args, output_schema, template_macros);
+        return this.choose_provider().run_jinja_template(jinja_template, args, output_format, template_macros);
     }
 
     async run_prompt_once(prompt: string): Promise<LLMResponse> {

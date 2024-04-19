@@ -130,8 +130,8 @@ pub trait WithSerialize: WithSerializeableContent {
         span: &internal_baml_diagnostics::Span,
     ) -> Result<String, DatamodelError>;
 
-    /// For generating ctx.output_schema
-    fn output_schema(
+    /// For generating ctx.output_format
+    fn output_format(
         &self,
         db: &'_ ParserDatabase,
         span: &internal_baml_diagnostics::Span,

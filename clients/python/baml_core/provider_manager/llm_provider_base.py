@@ -132,7 +132,7 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
         jinja_template: str,
         # Params for the jinja template
         args: typing.Dict[str, typing.Any],
-        output_schema: str,
+        output_format: str,
         # Other template macros
         template_macros: typing.List[TemplateStringMacro],
     ) -> LLMResponse:
@@ -140,7 +140,7 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
             jinja_template=jinja_template,
             args=args,
             template_macros=template_macros,
-            output_schema=output_schema,
+            output_format=output_format,
         )
 
     @typing.final
@@ -151,7 +151,7 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
         jinja_template: str,
         # Params for the jinja template
         args: typing.Dict[str, typing.Any],
-        output_schema: str,
+        output_format: str,
         # Other template macros
         template_macros: typing.List[TemplateStringMacro],
     ) -> typing.AsyncIterator[LLMResponse]:
@@ -159,7 +159,7 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
             jinja_template=jinja_template,
             args=args,
             template_macros=template_macros,
-            output_schema=output_schema,
+            output_format=output_format,
         ):
             yield r
 
@@ -258,7 +258,7 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
         *,
         jinja_template: str,
         args: typing.Dict[str, typing.Any],
-        output_schema: str,
+        output_format: str,
         template_macros: typing.List[TemplateStringMacro],
     ) -> LLMResponse:
         pass
@@ -269,7 +269,7 @@ class AbstractLLMProvider(BaseProvider, abc.ABC):
         *,
         jinja_template: str,
         args: typing.Dict[str, typing.Any],
-        output_schema: str,
+        output_format: str,
         template_macros: typing.List[TemplateStringMacro],
     ) -> typing.AsyncIterator[LLMResponse]:
         pass

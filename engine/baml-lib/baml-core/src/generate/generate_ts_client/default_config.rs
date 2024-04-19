@@ -64,7 +64,7 @@ impl WithFileContent<TSLanguageFeatures> for Walker<'_, (&Function, &FunctionCon
                 "name": impl_.name,
                 "prompt": impl_.prompt_template.replace("`", "\\`"),
                 "client": impl_.client,
-                "output_schema": impl_.output_schema,
+                "output_format": impl_.output_format,
                 "template_macros": [],
             }),
         ));

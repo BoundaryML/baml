@@ -13,8 +13,8 @@ __deserializer = Deserializer[{{function.return.0.type}}]({{function.return.0.ty
 # Add a deserializer that handles stream responses, which are all Partial types
 __partial_deserializer = Deserializer[{{function.return.0.type_partial}}]({{function.return.0.type_partial}})  # type: ignore
 
-__output_schema = """
-{{{output_schema}}}
+__output_format = """
+{{{output_format}}}
 """.strip()
 
 __template_macros = [
@@ -35,7 +35,7 @@ __template_macros = [
 {{> func_def func_name=name unnamed_args=function.unnamed_args args=function.args return=function.return}}
     response = await {{client}}.run_jinja_template(
         jinja_template=__prompt_template,
-        output_schema=__output_schema, template_macros=__template_macros,
+        output_format=__output_format, template_macros=__template_macros,
         args=dict({{> arg_values unnamed_args=function.unnamed_args args=function.args}})
     )
     deserialized = __deserializer.from_string(response.generated)
@@ -46,7 +46,7 @@ def {{name}}_stream({{> func_params unnamed_args=this.function.unnamed_args args
     def run_prompt() -> typing.AsyncIterator[LLMResponse]:
         raw_stream = {{client}}.run_jinja_template_stream(
             jinja_template=__prompt_template,
-            output_schema=__output_schema, template_macros=__template_macros,
+            output_format=__output_format, template_macros=__template_macros,
             args=dict({{> arg_values unnamed_args=function.unnamed_args args=function.args}})
         )
         return raw_stream
