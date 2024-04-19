@@ -106,13 +106,13 @@ class RoundRobinProvider(AbstractLLMProvider):
         jinja_template: str,
         args: Dict[str, Any],
         template_macros: List[TemplateStringMacro],
-        output_schema: str,
+        output_format: str,
     ) -> LLMResponse:
         return await (await self._choose_provider()).run_jinja_template(
             jinja_template=jinja_template,
             args=args,
             template_macros=template_macros,
-            output_schema=output_schema,
+            output_format=output_format,
         )
 
     async def _run_prompt_internal(self, prompt: str) -> LLMResponse:
@@ -196,13 +196,13 @@ class RoundRobinProvider(AbstractLLMProvider):
         *,
         jinja_template: str,
         args: Dict[str, Any],
-        output_schema: str,
+        output_format: str,
         template_macros: List[TemplateStringMacro],
     ) -> AsyncIterator[LLMResponse]:
         async for r in (await self._choose_provider()).run_jinja_template_stream(
             jinja_template=jinja_template,
             args=args,
-            output_schema=output_schema,
+            output_format=output_format,
             template_macros=template_macros,
         ):
             yield r

@@ -29,7 +29,7 @@ struct RenderData_Client {
 #[allow(non_camel_case_types)]
 struct RenderData_Context {
     client: RenderData_Client,
-    output_schema: String,
+    output_format: String,
     env: HashMap<String, String>,
 }
 
@@ -78,13 +78,13 @@ impl RenderData {
     #[staticmethod]
     fn ctx(
         client: RenderData_Client,
-        output_schema: String,
+        output_format: String,
         env: PyObject,
     ) -> PyResult<RenderData_Context> {
         Python::with_gil(|py| {
             Ok(RenderData_Context {
                 client: client,
-                output_schema: output_schema,
+                output_format: output_format,
                 env: depythonize_bound(env.into_bound(py))?,
             })
         })
@@ -172,7 +172,7 @@ fn render_prompt(template: String, context: RenderData) -> PyResult<PyObject> {
                 name: ctx.client.name,
                 provider: ctx.client.provider,
             },
-            output_schema: ctx.output_schema,
+            output_format: ctx.output_format,
             env: ctx.env,
         },
         &template_string_macros

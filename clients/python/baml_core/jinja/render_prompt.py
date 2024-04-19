@@ -66,7 +66,7 @@ if __name__ == "__main__":
         },
         ctx=RenderData.ctx(
             client=RenderData.client(name="gpt4", provider="openai"),
-            output_schema="",
+            output_format="",
             env={"LANG": "en_US.UTF-8"},
         ),
         template_string_macros=[

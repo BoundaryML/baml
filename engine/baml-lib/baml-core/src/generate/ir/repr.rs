@@ -654,7 +654,7 @@ pub struct FunctionConfig {
     pub name: String,
     // TODO: We technically have alll the information given output type
     // and we should derive this each time.
-    pub output_schema: String,
+    pub output_format: String,
     pub prompt_template: String,
     pub client: ClientId,
 }
@@ -878,9 +878,9 @@ impl WithRepr<FunctionV2> for FunctionWalker<'_> {
             }?,
             configs: vec![FunctionConfig {
                 name: "default_config".to_string(),
-                output_schema: self
-                    .output_schema(self.db, self.identifier().span())
-                    .unwrap_or("{{{ Unable to generate ctx.output_schema }}}".into()),
+                output_format: self
+                    .output_format(self.db, self.identifier().span())
+                    .unwrap_or("{{{ Unable to generate ctx.output_format }}}".into()),
                 prompt_template: self.jinja_prompt().to_string(),
                 client: self.client().unwrap().name().to_string(),
             }],

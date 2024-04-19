@@ -305,7 +305,7 @@ impl<'db> WithSerialize for FunctionWalker<'db> {
         }
     }
 
-    fn output_schema(
+    fn output_format(
         &self,
         db: &'_ ParserDatabase,
         span: &internal_baml_diagnostics::Span,

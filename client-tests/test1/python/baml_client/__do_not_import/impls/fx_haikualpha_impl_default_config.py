@@ -39,7 +39,7 @@ __deserializer = Deserializer[str](str)  # type: ignore
 # Add a deserializer that handles stream responses, which are all Partial types
 __partial_deserializer = Deserializer[str](str)  # type: ignore
 
-__output_schema = """
+__output_format = """
 Use this output format:
 string
 """.strip()
@@ -51,7 +51,7 @@ __template_macros = [
 async def default_config(*, product_review: str) -> str:
     response = await ResilientGPT4.run_jinja_template(
         jinja_template=__prompt_template,
-        output_schema=__output_schema, template_macros=__template_macros,
+        output_format=__output_format, template_macros=__template_macros,
         args=dict(product_review=product_review)
     )
     deserialized = __deserializer.from_string(response.generated)
@@ -63,7 +63,7 @@ def default_config_stream(*, product_review: str
     def run_prompt() -> typing.AsyncIterator[LLMResponse]:
         raw_stream = ResilientGPT4.run_jinja_template_stream(
             jinja_template=__prompt_template,
-            output_schema=__output_schema, template_macros=__template_macros,
+            output_format=__output_format, template_macros=__template_macros,
             args=dict(product_review=product_review)
         )
         return raw_stream

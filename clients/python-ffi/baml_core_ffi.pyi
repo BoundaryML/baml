@@ -15,7 +15,7 @@ class RenderData:
 
     @staticmethod
     def ctx(client: RenderData_Client,
-            output_schema: str,
+            output_format: str,
             env: Dict[str, str]
             ) -> RenderData_Context: ...
 

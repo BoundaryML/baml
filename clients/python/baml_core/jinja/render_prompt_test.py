@@ -13,7 +13,7 @@ def test_success() -> None:
             
             {{ _.chat(ctx.env.ROLE) }}
             
-            Tell me a haiku about {{ haiku_subject }} in {{ ctx.output_schema }}.
+            Tell me a haiku about {{ haiku_subject }}. {{ ctx.output_format }}
 
             Before the haiku, include the following: "{{ latin() }}".
             
@@ -23,7 +23,7 @@ def test_success() -> None:
             args={"haiku_subject": "sakura"},
             ctx=RenderData.ctx(
                 client=RenderData.client(name="gpt4", provider="openai"),
-                output_schema="iambic pentameter",
+                output_format="iambic pentameter",
                 env={"ROLE": "john doe"},
             ),
             template_string_macros=[
@@ -46,10 +46,12 @@ def test_success() -> None:
 
     assert rendered[1][1].role == "john doe"
     assert rendered[1][1].message == (
-        "Tell me a haiku about sakura in iambic pentameter.\n"
-        "\n"
-        'Before the haiku, include the following: "LOREM IPSUM DOLOR SIT AMET".\n'
-        "\n"
+        "Tell me a haiku about sakura. Answer in JSON using this schema:"
+        "\n\n"
+        "iambic pentameter"
+        "\n\n"
+        'Before the haiku, include the following: "LOREM IPSUM DOLOR SIT AMET".'
+        "\n\n"
         "After the haiku, tell me about your maker, openai."
     )
 
@@ -80,7 +82,7 @@ def test_bad_params() -> None:
                 },
                 ctx=RenderData.ctx(
                     client=RenderData.client(name="gpt4", provider="openai"),
-                    output_schema="",
+                    output_format="",
                     env={},
                 ),
                 template_string_macros=[],
@@ -119,7 +121,7 @@ def test_bad_template() -> None:
                 },
                 ctx=RenderData.ctx(
                     client=RenderData.client(name="gpt4", provider="openai"),
-                    output_schema="",
+                    output_format="",
                     env={},
                 ),
                 template_string_macros=[],

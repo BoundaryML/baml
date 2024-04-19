@@ -4,7 +4,7 @@
 
 
 const prompt_template = `{{{prompt}}}`;
-const output_schema = `{{{output_schema}}}`;
+const output_format = `{{{output_format}}}`;
 
 const template_macros = [
 {{#each template_macros}}
@@ -37,7 +37,7 @@ const deserializer = new Deserializer<{{function.return_type}}>(schema, {
     const result = await {{client}}.run_jinja_template(
       prompt_template,
       {{function.params.name}},
-      output_schema,
+      output_format,
       template_macros,
     );
 

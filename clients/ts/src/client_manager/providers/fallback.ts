@@ -50,13 +50,13 @@ class FallbackClient extends LLMBaseProvider {
         throw new LLMException("All fallbacks failed", ProviderErrorCode.NotFound);
     }
 
-    protected run_jinja_template_once(jinja_template: string, args: { [key: string]: any; }, output_schema: string, template_macros: {
+    protected run_jinja_template_once(jinja_template: string, args: { [key: string]: any; }, output_format: string, template_macros: {
         name: string;
         argNames: string[];
         argTypes: string[];
         template: string;
     }[]): Promise<LLMResponse> {
-        return this.try_fallback((fallback) => fallback.run_jinja_template(jinja_template, args, output_schema, template_macros));
+        return this.try_fallback((fallback) => fallback.run_jinja_template(jinja_template, args, output_format, template_macros));
     }
 
 

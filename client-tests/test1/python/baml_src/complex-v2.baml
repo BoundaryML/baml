@@ -34,7 +34,7 @@ function AnalyzeProductReview(product_review: string) -> ReviewAnalysis {
         
         > {{ product_review }}
   
-        {{ ctx.output_schema }}
+        {{ ctx.output_format }}
 
         JSON:
     "#

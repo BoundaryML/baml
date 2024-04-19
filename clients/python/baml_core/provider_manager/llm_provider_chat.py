@@ -110,7 +110,7 @@ class LLMChatProvider(AbstractLLMProvider):
         *,
         jinja_template: str,
         args: typing.Dict[str, typing.Any],
-        output_schema: str,
+        output_format: str,
         template_macros: typing.List[TemplateStringMacro],
     ) -> LLMResponse:
         rendered = render_prompt(
@@ -119,7 +119,7 @@ class LLMChatProvider(AbstractLLMProvider):
                 args=args,
                 ctx=RenderData.ctx(
                     client=self.client,
-                    output_schema=output_schema,
+                    output_format=output_format,
                     env=os.environ.copy(),
                 ),
                 template_string_macros=template_macros,
@@ -142,7 +142,7 @@ class LLMChatProvider(AbstractLLMProvider):
         *,
         jinja_template: str,
         args: typing.Dict[str, typing.Any],
-        output_schema: str,
+        output_format: str,
         template_macros: typing.List[TemplateStringMacro],
     ) -> typing.AsyncIterator[LLMResponse]:
         prompt = render_prompt(
@@ -151,7 +151,7 @@ class LLMChatProvider(AbstractLLMProvider):
                 args=args,
                 ctx=RenderData.ctx(
                     client=self.client,
-                    output_schema=output_schema,
+                    output_format=output_format,
                     env=os.environ.copy(),
                 ),
                 template_string_macros=template_macros,
