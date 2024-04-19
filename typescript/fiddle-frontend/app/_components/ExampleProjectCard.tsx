@@ -12,11 +12,11 @@ export const ExampleProjectCard = ({ project }: { project: BAMLProject }) => {
   return (
     <Card
       className={clsx(
-        'flex w-full h-fit px-2 font-sans border-gray-800 bg-zinc-900 hover:cursor-pointer hover:bg-zinc-800 rounded-sm',
+        'flex w-full h-fit px-2 font-sans border-gray-800 bg-zinc-800/40 hover:cursor-pointer hover:bg-zinc-800 rounded-sm',
         [isSelected ? 'border-gray-600 bg-zinc-800' : 'border-transparent'],
       )}
       onClick={() => {
-        router.push(`/${project.id}`)
+        router.push(`/${project.id}`, { scroll: true })
         router.refresh()
       }}
     >

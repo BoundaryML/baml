@@ -40,7 +40,7 @@
   }
 
   .dark {
-    --background: 240 10% 3.9%;
+    --background: 224 71% 4%;
     --foreground: 213 31% 91%;
 
     --muted: 223 47% 11%;
@@ -78,7 +78,7 @@
     @apply border-border;
   }
   body {
-    @apply bg-backgroundone text-foreground;
+    @apply bg-background text-foreground;
   }
 }
 

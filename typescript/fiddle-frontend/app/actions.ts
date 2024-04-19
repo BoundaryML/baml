@@ -10,9 +10,11 @@ export type EditorFile = {
 }
 
 export async function createUrl(project: BAMLProject): Promise<string> {
-  const urlId = nanoid(6)
+  // Replace spaces, slashes, and other non-alphanumeric characters with dashes
+  const projectName = project.name;
+  const safeProjectName = projectName.replace(/[^a-zA-Z0-9]/g, '-')
+  const urlId = `${safeProjectName}-${nanoid(5)}`
   console.log(project)
-
   const urlResponse = await kv.set(urlId, project, {
     nx: true,
   });

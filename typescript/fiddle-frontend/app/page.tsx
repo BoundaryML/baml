@@ -31,21 +31,10 @@ export default async function Home({
   console.log(data)
   return (
     <main className="flex flex-col items-center justify-between min-h-screen font-sans">
-      <div className="z-10 items-center justify-between w-screen h-screen text-sm overflow-clip lg:flex">
-        <div className="w-[200px] justify-start flex flex-col px-1 pr-0 gap-y-2 items-start h-full dark:bg-vscode-sideBar-background">
-          <div className="w-full pt-1 text-lg italic font-bold text-center">Prompt Fiddle</div>
-          <div className="w-full text-center text-muted-foreground">Templates</div>
-          <div className="flex flex-col h-full overflow-y-auto gap-y-2">
-            {exampleProjects.map((p) => {
-              return <ExampleProjectCard key={p.name} project={p} />
-            })}
-          </div>
-        </div>
-        <Separator className="h-full bg-vscode-panel-border" orientation="vertical" />
-        <div className="w-screen h-screen dark:bg-black">
-          <ProjectView project={data} />
-        </div>
+      <div className="w-screen h-screen dark:bg-black">
+        <ProjectView project={data} />
       </div>
+      {/* </div> */}
     </main>
   )
 }
