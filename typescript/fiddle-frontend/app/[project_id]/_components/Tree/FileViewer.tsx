@@ -1,7 +1,7 @@
 // 1: Uncontrolled Tree
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
-import { Tree, TreeApi } from 'react-arborist'
+import { RenameHandler, Tree, TreeApi } from 'react-arborist'
 
 import Node from './Node'
 import { FilePlus, FolderPlus } from 'lucide-react'
@@ -71,17 +71,23 @@ function createTree(filePaths: string[]): TreeNode[] {
 
       currentLevel = node.children!
     })
+
+    let parentNode = pathMap.get(currentPath)
+    if (parentNode && parentNode.children && parentNode.children.length === 0) {
+      delete parentNode.children
+    }
   })
 
-  return root.filter((node) => node) // Filter out undefined entries, if any.
+  return root.filter((node) => node)
 }
 
 const FileViewer = () => {
   const { width, height, ref } = useResizeObserver()
-  const editorFiles = useAtom(currentEditorFilesAtom)
+  const [editorFiles, setEditorFiles] = useAtom(currentEditorFilesAtom)
   const treeRef = useRef<TreeApi<any> | null>(null)
 
-  // const { width, height, ref } = useResizeObserver({ ref: treeRef as any })
+  const data2 = createTree(editorFiles.map((f) => f.path))
+
   const [term, setTerm] = useState('')
 
   const createFileFolder = (
@@ -108,10 +114,8 @@ const FileViewer = () => {
       <aside ref={ref}>
         <Tree
           ref={treeRef}
-          initialData={data}
-          // indent={24}
+          data={data2}
           rowHeight={24}
-          // openByDefault={false}
           width={width}
           height={height}
           searchTerm={term}

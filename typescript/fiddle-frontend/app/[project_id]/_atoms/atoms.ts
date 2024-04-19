@@ -2,6 +2,7 @@ import { sessionStore } from "@/app/_components/JotaiProvider"
 import { EditorFile } from "@/app/actions"
 // import { ParserDBFunctionTestModel } from "@/lib/exampleProjects"
 import { ParserDatabase, TestState } from "@baml/common"
+import { Diagnostic } from "@codemirror/lint"
 import { atom } from "jotai"
 import { atomWithStorage } from "jotai/utils"
 
@@ -18,6 +19,7 @@ export const testRunOutputAtom = atom<TestRunOutput | null>(null)
 export const unsavedChangesAtom = atom<boolean>(false);
 
 export const activeFileAtom = atom<EditorFile | null>(null);
+export const fileDiagnostics = atom<Diagnostic[]>([]);
 
 export type TestRunOutput = {
   testState: TestState;

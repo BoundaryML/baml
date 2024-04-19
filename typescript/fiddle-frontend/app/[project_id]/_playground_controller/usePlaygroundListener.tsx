@@ -15,7 +15,7 @@ const customConfig: Config = {
 
 export const usePlaygroundListener = () => {
   // const parserDb = useAtomValue(currentParserDbAtom)
-  const setEditorFiles = useSetAtom(currentEditorFilesAtom)
+  const [editorFiles, setEditorFiles] = useAtom(currentEditorFilesAtom)
   const runTests = useTestRunner()
 
   // Setup message event listener to handle commands
@@ -88,13 +88,19 @@ export const usePlaygroundListener = () => {
           const testFileContent: TestFileContent = {
             input: testInputContent,
           }
+          console.log(
+            'uri',
+            uri,
+            editorFiles.map((f) => f.path),
+          )
+          const existingTestFile = editorFiles.find((file) => file.path === uri)
 
           setEditorFiles((prev) => {
             const prevFiles = prev as EditorFile[]
             return [
               ...prevFiles,
               {
-                path: uri,
+                path: existingTestFile ? `${uri.replaceAll('.json', '')}-${new Date().toISOString()}.json` : uri,
                 content: JSON.stringify(testFileContent, null, 2),
               },
             ]
@@ -128,7 +134,7 @@ export const usePlaygroundListener = () => {
     return () => {
       window.removeEventListener('message', eventListener)
     }
-  }, [])
+  }, [editorFiles])
 
   return <></>
 }

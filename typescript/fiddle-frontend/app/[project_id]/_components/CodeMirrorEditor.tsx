@@ -8,6 +8,7 @@ import {
   activeFileAtom,
   currentEditorFilesAtom,
   currentParserDbAtom,
+  fileDiagnostics,
   functionTestCaseAtom,
   unsavedChangesAtom,
 } from '../_atoms/atoms'
@@ -18,7 +19,6 @@ import { ParserDatabase } from '@baml/common'
 import { Diagnostic, linter, lintGutter, openLintPanel } from '@codemirror/lint'
 import CodeMirror, { EditorView } from '@uiw/react-codemirror'
 import { BAMLProject } from '@/lib/exampleProjects'
-import { useHydrateAtoms } from 'jotai/utils'
 
 type LintResponse = {
   diagnostics: LinterError[]
@@ -49,6 +49,7 @@ export interface LinterInput {
   // Function Name -> Test Name
   selected_tests: Record<string, string>
 }
+
 async function bamlLinter(_view: any): Promise<Diagnostic[]> {
   const lint = await import('@gloo-ai/baml-schema-wasm-web').then((m) => m.lint)
   const currentFiles = atomStore.get(currentEditorFilesAtom) as EditorFile[]
@@ -68,16 +69,19 @@ async function bamlLinter(_view: any): Promise<Diagnostic[]> {
     atomStore.set(currentParserDbAtom, parsedRes.response)
   }
 
-  return parsedRes.diagnostics
-    .filter((d) => d.source_file === atomStore.get(activeFileAtom)?.path)
-    .map((d) => {
-      return {
-        from: d.start,
-        to: d.end,
-        message: d.text,
-        severity: d.is_warning ? 'warning' : 'error',
-      }
-    })
+  const allDiagnostics = parsedRes.diagnostics.map((d) => {
+    return {
+      from: d.start,
+      to: d.end,
+      message: d.text,
+      severity: d.is_warning ? 'warning' : ('error' as Diagnostic['severity']),
+      source: d.source_file,
+    }
+  })
+
+  atomStore.set(fileDiagnostics, allDiagnostics)
+
+  return allDiagnostics.filter((d) => d.source === atomStore.get(activeFileAtom)?.path)
 }
 const extensions = [
   BAML(),
@@ -104,7 +108,7 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
 
   return (
     <div className="w-full">
-      <div className="border-border flex h-fit gap-x-3 overflow-clip rounded-t-lg border-x-[1px] border-t-[1px]  px-3 py-1">
+      <div className="flex px-3 py-1 h-fit gap-x-3 overflow-clip">
         {editorFiles.map((file) => (
           <Button
             variant={'ghost'}
