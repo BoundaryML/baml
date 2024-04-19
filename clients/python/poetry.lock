@@ -201,17 +201,17 @@ tests-mypy = ["mypy (>=1.6)", "pytest-mypy-plugins"]
 tests-no-zope = ["attrs[tests-mypy]", "cloudpickle", "hypothesis", "pympler", "pytest (>=4.3.0)", "pytest-xdist[psutil]"]
 
 [[package]]
-name = "baml_core_ffi"
-version = "0.1.6"
+name = "baml-core-ffi"
+version = "0.1.7"
 description = "BAML python bindings (pyproject.toml)"
 optional = false
 python-versions = "*"
 files = [
-    {file = "baml_core_ffi-0.1.6-cp38-abi3-macosx_10_12_x86_64.whl", hash = "sha256:40bebb03f2da55a5acd4f94f656b17b9a9f159f916da91befd455ebc148f80a8"},
-    {file = "baml_core_ffi-0.1.6-cp38-abi3-macosx_11_0_arm64.whl", hash = "sha256:d93b0d5dbcb4c28700ecefa7d6a01899c499edfb26500d926c5c32ef129293bc"},
-    {file = "baml_core_ffi-0.1.6-cp38-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:f8de95c22fbe713e0f7edaed1964f134b2cbaf606dc040e6ed23c3d9530596ed"},
-    {file = "baml_core_ffi-0.1.6-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:b16f24183afa4462d5dbec8b0d5693fcfef9690b0410fd63a8ec236dd55295d0"},
-    {file = "baml_core_ffi-0.1.6-cp38-abi3-win_amd64.whl", hash = "sha256:bfe98fd419bfde4c5ea2c4e11bfb2829c76c95e45279fbe2a0951b3b4cd05217"},
+    {file = "baml_core_ffi-0.1.7-cp38-abi3-macosx_10_12_x86_64.whl", hash = "sha256:78b38ae8acf8758c85631c1f049ef71474eb861b4f884eaaeafbb4473310e439"},
+    {file = "baml_core_ffi-0.1.7-cp38-abi3-macosx_11_0_arm64.whl", hash = "sha256:bf3e9d73c772d424a5326c3c457332b78da23fedb97c15b614dc668d2a858f03"},
+    {file = "baml_core_ffi-0.1.7-cp38-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:c2e1c4a14d2605bd46f8c0dcd2f42d9854d58a027f84bdbc63e267e43cfbecc8"},
+    {file = "baml_core_ffi-0.1.7-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:2e9acf6ea8b0b9f3bd45ab46377a2ba5c7ccdbe463f73e45561a0e0c3a47c10c"},
+    {file = "baml_core_ffi-0.1.7-cp38-abi3-win_amd64.whl", hash = "sha256:10abe0796e52650b24df6ee967298f4a21b4b4f2f104e178809d322dc2aa2e0e"},
 ]
 
 [[package]]
@@ -1210,6 +1210,7 @@ files = [
     {file = "PyYAML-6.0.1-cp311-cp311-win_amd64.whl", hash = "sha256:bf07ee2fef7014951eeb99f56f39c9bb4af143d8aa3c21b1677805985307da34"},
     {file = "PyYAML-6.0.1-cp312-cp312-macosx_10_9_x86_64.whl", hash = "sha256:855fb52b0dc35af121542a76b9a84f8d1cd886ea97c84703eaa6d88e37a2ad28"},
     {file = "PyYAML-6.0.1-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:40df9b996c2b73138957fe23a16a4f0ba614f4c0efce1e9406a184b6d07fa3a9"},
+    {file = "PyYAML-6.0.1-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:a08c6f0fe150303c1c6b71ebcd7213c2858041a7e01975da3a99aed1e7a378ef"},
     {file = "PyYAML-6.0.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:6c22bec3fbe2524cde73d7ada88f6566758a8f7227bfbf93a408a9d86bcc12a0"},
     {file = "PyYAML-6.0.1-cp312-cp312-musllinux_1_1_x86_64.whl", hash = "sha256:8d4e9c88387b0f5c7d5f281e55304de64cf7f9c0021a3525bd3b1c542da3b0e4"},
     {file = "PyYAML-6.0.1-cp312-cp312-win32.whl", hash = "sha256:d483d2cdf104e7c9fa60c544d92981f12ad66a457afae824d146093b8c294c54"},
@@ -1887,4 +1888,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.8,<4.0"
-content-hash = "d3b9c8fbc6f985bf98f75e1086e5b9ddc967149c5d7128b32a716fe3d47617e8"
+content-hash = "debf8772c27f8c47759d257d26aa26c6e972adc5112c90a5beb14d30998a3bfe"
