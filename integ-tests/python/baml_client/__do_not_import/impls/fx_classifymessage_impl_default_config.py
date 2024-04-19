@@ -27,7 +27,7 @@ of the following categories:
 
 INPUT: {{ input }}
 
-{{ ctx.output_schema }}
+{{ ctx.output_format }}
 
 Response:\
 """

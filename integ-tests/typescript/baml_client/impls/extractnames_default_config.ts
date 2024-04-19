@@ -24,7 +24,7 @@ INPUT:
 {{ input }}
 ---
 
-{{ ctx.output_schema }}
+{{ ctx.output_format }}
 
 Response:`;
 const output_format = `string[]`;

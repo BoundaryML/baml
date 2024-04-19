@@ -29,7 +29,7 @@ function GetOrderInfo(email: Email) -> OrderInfo {
     ```
 
     Extract this info from the email in JSON format:
-    {{ ctx.output_schema }}
+    {{ ctx.output_format }}
 
     Before you output the JSON, please explain your
     reasoning step-by-step. Here is an example on how to do this:

@@ -27,7 +27,7 @@ Resume:
 <<<<
 
 Output JSON schema:
-{{ ctx.output_schema }}
+{{ ctx.output_format }}
 
 JSON:`;
 const output_format = `{

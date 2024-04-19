@@ -34,7 +34,7 @@ Query:
 <<<<
 
 OUTPUT_JSON_SCHEMA:
-{{ ctx.output_schema }}
+{{ ctx.output_format }}
 
 Before OUTPUT_JSON_SCHEMA, list 5 intentions the user may have.
 --- EXAMPLES ---

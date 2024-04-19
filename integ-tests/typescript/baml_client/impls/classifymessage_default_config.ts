@@ -22,7 +22,7 @@ of the following categories:
 
 INPUT: {{ input }}
 
-{{ ctx.output_schema }}
+{{ ctx.output_format }}
 
 Response:`;
 const output_format = `"Category as string"

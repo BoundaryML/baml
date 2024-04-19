@@ -32,7 +32,7 @@ const extractNamesBaml = `function ExtractNames(input: string) -> string[] {
     {{ input }}
     ---
 
-    {{ ctx.output_schema }}
+    {{ ctx.output_format }}
 
     Response:
   "#
@@ -61,7 +61,7 @@ function ClassifyMessage(input: string) -> Category {
 
     INPUT: {{ input }}
 
-    {{ ctx.output_schema }}
+    {{ ctx.output_format }}
 
     Response:
   "#
@@ -104,7 +104,7 @@ function GetOrderInfo(email: Email) -> OrderInfo {
     \`\`\`
 
     Extract this info from the email in JSON format:
-    {{ ctx.output_schema }}
+    {{ ctx.output_format }}
 
     Before you output the JSON, please explain your
     reasoning step-by-step. Here is an example on how to do this:
@@ -146,7 +146,7 @@ function ClassifyMessage(input: string) -> Category {
     Classify the following INPUT into ONE
     of the following categories:
 
-    {{ ctx.output_schema }}
+    {{ ctx.output_format }}
 
     {# And _.chat("user") to start a user message #}
     {{ _.chat("user") }}
@@ -185,7 +185,7 @@ function ClassifyMessage(input: string) -> Category {
 
     INPUT: {{ input }}
 
-    {{ ctx.output_schema }}
+    {{ ctx.output_format }}
 
     Response:
   "#
