@@ -24,6 +24,7 @@ pub(super) type FunctionArgs = repr::FunctionArgs;
 pub(super) type Impl = repr::Node<repr::Implementation>;
 pub(super) type Client = repr::Node<repr::Client>;
 pub(super) type RetryPolicy = repr::Node<repr::RetryPolicy>;
+pub(super) type TemplateString = repr::Node<repr::TemplateString>;
 pub(super) type TestCase = repr::Node<repr::TestCase>;
 pub(super) type Walker<'db, I> = repr::Walker<'db, I>;
 

@@ -1,6 +1,6 @@
 use super::{
-    repr::{self, FunctionConfig},
-    Class, Client, Enum, Function, Impl, RetryPolicy, TestCase, Walker,
+    repr::{self, Field, FunctionConfig},
+    Class, Client, Enum, Function, Impl, RetryPolicy, TemplateString, TestCase, Walker,
 };
 
 impl<'a> Walker<'a, &'a Function> {
@@ -103,5 +103,23 @@ impl<'a> Walker<'a, &'a Client> {
 impl<'a> Walker<'a, &'a RetryPolicy> {
     pub fn elem(&self) -> &'a repr::RetryPolicy {
         &self.item.elem
+    }
+}
+
+impl<'a> Walker<'a, &'a TemplateString> {
+    pub fn elem(&self) -> &'a repr::TemplateString {
+        &self.item.elem
+    }
+
+    pub fn name(&self) -> &str {
+        self.elem().name.as_str()
+    }
+
+    pub fn inputs(&self) -> &'a Vec<Field> {
+        &self.item.elem.params
+    }
+
+    pub fn template(&self) -> &str {
+        &self.elem().content
     }
 }

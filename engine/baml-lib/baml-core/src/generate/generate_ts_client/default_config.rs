@@ -65,7 +65,14 @@ impl WithFileContent<TSLanguageFeatures> for Walker<'_, (&Function, &FunctionCon
                 "prompt": impl_.prompt_template.replace("`", "\\`"),
                 "client": impl_.client,
                 "output_format": impl_.output_format,
-                "template_macros": [],
+                "template_macros": self.db.walk_template_strings().map(|t| json!({
+                        "name": t.name(),
+                        "args": t.inputs().iter().map(|f| json!({
+                            "name": f.name,
+                            "type": f.r#type.elem.to_ts(),
+                        })).collect::<Vec<_>>(),
+                        "template": t.template().replace('`', "\\`"),
+                })).collect::<Vec<_>>(),
             }),
         ));
         collector.finish_file();
