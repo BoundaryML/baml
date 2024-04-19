@@ -8,7 +8,7 @@ function FnClassOptional {
   output string
 }
 
-impl<llm, FnClassOptional> v1 {
+function FnClassOptional_V2 {
   client GPT35
   prompt #"
     {#input}

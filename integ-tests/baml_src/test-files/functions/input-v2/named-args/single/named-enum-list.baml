@@ -8,7 +8,7 @@ function TestFnNamedArgsSingleEnumList {
   output string
 }
 
-impl<llm, TestFnNamedArgsSingleEnumList> v1 {
+function TestFnNamedArgsSingleEnumList_V2 {
   client GPT35
   prompt #"
     Print these values back to me:

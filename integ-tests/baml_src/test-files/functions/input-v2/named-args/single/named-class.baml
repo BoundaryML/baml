@@ -12,7 +12,7 @@ function TestFnNamedArgsSingleClass {
   output string
 }
 
-impl<llm, TestFnNamedArgsSingleClass> v1 {
+function TestFnNamedArgsSingleClass_V2 {
   client GPT35
   prompt #"
     Print these values back to me:

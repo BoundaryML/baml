@@ -4,7 +4,7 @@ function TestFnNamedArgsSingleStringArray {
   output string
 }
 
-impl<llm, TestFnNamedArgsSingleStringArray> v1 {
+function TestFnNamedArgsSingleStringArray_V2 {
   client GPT35
   prompt #"
     Return this value back to me: {{myStringArray}}
