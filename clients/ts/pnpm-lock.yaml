@@ -12,8 +12,8 @@ dependencies:
     specifier: 1.0.0-beta.11
     version: 1.0.0-beta.11
   '@boundaryml/baml-core-ffi':
-    specifier: 0.18.0-canary.3
-    version: 0.18.0-canary.3
+    specifier: 0.18.0-canary.4
+    version: 0.18.0-canary.4
   dotenv:
     specifier: ^16.4.5
     version: 16.4.5
@@ -484,8 +484,8 @@ packages:
     resolution: {integrity: sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==}
     dev: true
 
-  /@boundaryml/baml-core-ffi-darwin-arm64@0.18.0-canary.3:
-    resolution: {integrity: sha512-L7AYAu4aKGxM96HAYYRJAJ1z4PfMNM4z259M8/AMAo3tl/zCXln7douzFLq3SUnW8A+rm2or4jsolGmkxvHugg==}
+  /@boundaryml/baml-core-ffi-darwin-arm64@0.18.0-canary.4:
+    resolution: {integrity: sha512-s2ANrPA2gIuVbFlQ2+6Vr7XkH/pwHVRHMRsQKxZrIxb4XscYzRgI6OFL36PicgZSyw3DI2NPD+idWIFRCMZJNA==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [darwin]
@@ -493,8 +493,8 @@ packages:
     dev: false
     optional: true
 
-  /@boundaryml/baml-core-ffi-darwin-x64@0.18.0-canary.3:
-    resolution: {integrity: sha512-0L5hrdX9fkV391dGo//2PIjDj6zsVrVtyCH4/2/yuhC3jVVdB8t3oSfIqYhUquLwPwqNDLfG5WTtVyLv5CyjWA==}
+  /@boundaryml/baml-core-ffi-darwin-x64@0.18.0-canary.4:
+    resolution: {integrity: sha512-s1WAOBaTHytOug6D0tVKJEP3UoFrmaIjmKaUQ4FSsgOfFa/lTVa7ZKrbZC+rNG8ngPubgXX1wCqOGdw/Gz5/vg==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [darwin]
@@ -502,8 +502,8 @@ packages:
     dev: false
     optional: true
 
-  /@boundaryml/baml-core-ffi-linux-arm64-gnu@0.18.0-canary.3:
-    resolution: {integrity: sha512-xWOiC+jY41kwgmDO9e6kcsJ/LgK/vn4X/Q1UaUYpUh93EHJAPJqMozeBQd87j8ecOmRi7lVOmLOFuZTgMJJEjg==}
+  /@boundaryml/baml-core-ffi-linux-arm64-gnu@0.18.0-canary.4:
+    resolution: {integrity: sha512-JmsgRZRJfz5ta7O6flnlQMK8/90hs/hfs6SM5M9hTS7ZQ37XtbMGhANWEPmYP9s2+9QU+1Nm0fV42jkpuvQI7Q==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [linux]
@@ -511,8 +511,8 @@ packages:
     dev: false
     optional: true
 
-  /@boundaryml/baml-core-ffi-linux-x64-gnu@0.18.0-canary.3:
-    resolution: {integrity: sha512-NXoblLLmxyMdFwfmuDZvR+qijoiPS1DdBDe/+WZSDq554XVljr0nOS4hpNW4fnqI3VT6eXonR/e9G51PMpqC2g==}
+  /@boundaryml/baml-core-ffi-linux-x64-gnu@0.18.0-canary.4:
+    resolution: {integrity: sha512-qXHeUi2CAVah88CxwgSgXIz/HcFOzXhR15g9EVk4vtPsEYCPML+mn5HfLCghxIbmCLS2H7zWagjFLM10La+ulQ==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [linux]
@@ -520,8 +520,8 @@ packages:
     dev: false
     optional: true
 
-  /@boundaryml/baml-core-ffi-win32-x64-msvc@0.18.0-canary.3:
-    resolution: {integrity: sha512-RSGrcfGEL1ku5brVI/+DnbstRnDzRaKsubqxV8kOqiXr2hsNyj38OGo4+CIr4FzxjzJg5mzo9dSzd1n0hHie7g==}
+  /@boundaryml/baml-core-ffi-win32-x64-msvc@0.18.0-canary.4:
+    resolution: {integrity: sha512-26egxDBR/8eDVmikeNdzz9XbXSTE2rDeulBeWnUXg5NYth57aSSqRnY1fgZeEkw94DdHnyS9a1PblOCO5ieWcw==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [win32]
@@ -529,15 +529,15 @@ packages:
     dev: false
     optional: true
 
-  /@boundaryml/baml-core-ffi@0.18.0-canary.3:
-    resolution: {integrity: sha512-VRdj3fKSNOmmlM39L8DzAFpICHGrTHzIXmqNZr1WZ3RBMxbjmLMjWFrLTo5oD18Pzpzi68RC2K09FzYpCaV4Bg==}
+  /@boundaryml/baml-core-ffi@0.18.0-canary.4:
+    resolution: {integrity: sha512-D+HktdDfnt7ErKexYStXpRFSJxTcZs8ENkVcljRCn7rV5iJds6jXPwxfjgDpX/Mrgo3GZw7iQXMUV1rq9OV9EQ==}
     engines: {node: '>= 10'}
     optionalDependencies:
-      '@boundaryml/baml-core-ffi-darwin-arm64': 0.18.0-canary.3
-      '@boundaryml/baml-core-ffi-darwin-x64': 0.18.0-canary.3
-      '@boundaryml/baml-core-ffi-linux-arm64-gnu': 0.18.0-canary.3
-      '@boundaryml/baml-core-ffi-linux-x64-gnu': 0.18.0-canary.3
-      '@boundaryml/baml-core-ffi-win32-x64-msvc': 0.18.0-canary.3
+      '@boundaryml/baml-core-ffi-darwin-arm64': 0.18.0-canary.4
+      '@boundaryml/baml-core-ffi-darwin-x64': 0.18.0-canary.4
+      '@boundaryml/baml-core-ffi-linux-arm64-gnu': 0.18.0-canary.4
+      '@boundaryml/baml-core-ffi-linux-x64-gnu': 0.18.0-canary.4
+      '@boundaryml/baml-core-ffi-win32-x64-msvc': 0.18.0-canary.4
     dev: false
 
   /@cspotcode/source-map-support@0.8.1:
