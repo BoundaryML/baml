@@ -1,6 +1,6 @@
 {
   "name": "@boundaryml/baml-core",
-  "version": "0.0.7-canary.3",
+  "version": "0.0.7",
   "description": "",
   "exports": {
     ".": {
@@ -38,7 +38,7 @@
   "scripts": {
     "test": "jest",
     "clean": "rm -rf dist",
-    "build": "pnpm clean && tsc -p tsconfig.build.json && tsup",
+    "build": "pnpm i && pnpm clean && tsc -p tsconfig.build.json && tsup",
     "tsc-thing": "tsc -p tsconfig.build.json"
   },
   "files": [
@@ -66,7 +66,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.18.0",
     "@azure/openai": "1.0.0-beta.11",
-    "@boundaryml/baml-core-ffi": "0.18.0-canary.4",
+    "@boundaryml/baml-core-ffi": "0.18.0",
     "dotenv": "^16.4.5",
     "jest-runner": "^29.7.0",
     "json-schema": "^0.4.0",
