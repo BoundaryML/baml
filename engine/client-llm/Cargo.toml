@@ -1,14 +1,15 @@
 [package]
 edition = "2021"
-name = "client-llm"
+name = "internal-baml-client-llm"
 version.workspace = true
 authors.workspace = true
 description.workspace = true
 license-file.workspace = true
 
-[lib]
-crate-type = ["cdylib"]
-
 [dependencies]
-wasm-bindgen = "=0.2.87"
-wasm-logger = { version = "0.2.0" }
+anyhow.workspace = true
+async-openai = "0.20.0"
+clust = "0.8.0"
+env_logger.workspace = true
+log.workspace = true
+serde.workspace = true

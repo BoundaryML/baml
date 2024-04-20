@@ -34,7 +34,7 @@ fi
 
 ## Script
 printf '%s\n' "Starting build :: baml-schema-wasm"
-cargo build --release --target=wasm32-unknown-unknown --manifest-path=$baml_schema_wasm_dir/Cargo.toml
+cargo build --color=always --target=wasm32-unknown-unknown --manifest-path=$baml_schema_wasm_dir/Cargo.toml
 
 ## Build target specific steps
 if [ "$TARGET" == "node" ]; then

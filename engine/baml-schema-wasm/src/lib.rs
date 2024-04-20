@@ -29,18 +29,11 @@ fn register_panic_hook() {
     });
 }
 
-// #[wasm_bindgen]
-// pub fn format(schema: String, params: String) -> String {
-//     register_panic_hook();
-//     baml_fmt::format(&schema, &params)
-// }
-
-/// Docs: <add docs>
-// #[wasm_bindgen]
-// pub fn get_config(params: String) -> Result<String, JsError> {
-//     register_panic_hook();
-//     prisma_fmt::get_config(params).map_err(|e| JsError::new(&e))
-// }
+#[wasm_bindgen]
+pub fn call_llm(input: String) -> String {
+    register_panic_hook();
+    baml_fmt::call_llm(input)
+}
 
 #[wasm_bindgen]
 pub fn lint(input: String) -> String {

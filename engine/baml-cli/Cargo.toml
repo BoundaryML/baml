@@ -8,6 +8,7 @@ description.workspace = true
 license-file.workspace = true
 
 [dependencies]
+anyhow.workspace = true
 baml-lib = { path = "../baml-lib/baml" }
 base64 = "0.13.0"
 check-latest = "1.0.2"
@@ -19,8 +20,9 @@ dialoguer = "0.11.0"
 env_logger.workspace = true
 glob = "0.3.1"
 include_dir = { version = "0.7.3", features = ["glob"] }
-log = "0.4.20"
-reqwest = { version = "0.11.22", features = ["native-tls-vendored"] }
+internal-baml-client-llm.workspace = true
+log.workspace = true
+reqwest.workspace = true
 semver = "1.0.20"
 serde.workspace = true
 serde_json.workspace = true
@@ -30,7 +32,6 @@ walkdir = "2.4.0"
 regex = "1.10.3"
 tempfile = "3.10.1"
 uuid = { version = "1.7.0", features = ["v4"] }
-anyhow.workspace = true
 json_comments = "0.2.2"
 dunce = "1.0.4"
 
