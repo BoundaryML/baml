@@ -10,8 +10,9 @@ from typing import List, Optional, Dict
 from dotenv import load_dotenv
 from uuid import uuid4
 from fastapi.middleware.cors import CORSMiddleware
-from baml_client import baml
-from baml_client.baml_types import LinterOutput
+
+# from baml_client import baml
+# from baml_client.baml_types import LinterOutput
 
 
 origins = [
@@ -233,69 +234,66 @@ async def fiddle(request: RunTests, tmpdir: str = Depends(create_temp_files)):
     return StreamingResponse(streaming_gen, media_type="text/plain")
 
 
-class LintRequest(BaseModel):
-    lintingRules: List[str]
-    promptTemplate: str
-    promptVariables: Dict[str, str]
+# class LintRequest(BaseModel):
+#     lintingRules: List[str]
+#     promptTemplate: str
+#     promptVariables: Dict[str, str]
 
 
-class LinterRuleOutput(BaseModel):
-    diagnostics: List[LinterOutput]
-    ruleName: str
+# class LinterRuleOutput(BaseModel):
+#     diagnostics: List[LinterOutput]
+#     ruleName: str
 
 
-@app.post("/lint")
-async def lint(request: LintRequest) -> List[LinterRuleOutput]:
-    result1, result2, res3, res4, res5, res6, res7 = await asyncio.gather(
-        baml.Contradictions(request.promptTemplate),
-        baml.ChainOfThought(request.promptTemplate),
-        baml.AmbiguousTerm(request.promptTemplate),
-        baml.OffensiveLanguage(request.promptTemplate),
-        baml.ExampleProvider(request.promptTemplate),
-        baml.NoTipping(request.promptTemplate),
-        baml.NoLargeDistance(request.promptTemplate),
-    )
+# @app.post("/lint")
+# async def lint(request: LintRequest) -> List[LinterRuleOutput]:
+#     result1, result2, res3, res4, res5, res6, res7 = await asyncio.gather(
+#         baml.Contradictions(request.promptTemplate),
+#         baml.ChainOfThought(request.promptTemplate),
+#         baml.AmbiguousTerm(request.promptTemplate),
+#         baml.OffensiveLanguage(request.promptTemplate),
+#         baml.ExampleProvider(request.promptTemplate),
+#         baml.NoTipping(request.promptTemplate),
+#         baml.NoLargeDistance(request.promptTemplate),
+#     )
 
-    res1_outputs = [
-        LinterOutput(
-            exactPhrase=item.exactPhrase,
-            recommendation=item.recommendation,
-            fix=item.fix,
-            reason=item.reason,
-        )
-        for item in result1
-    ]
+#     res1_outputs = [
+#         LinterOutput(
+#             exactPhrase=item.exactPhrase,
+#             recommendation=item.recommendation,
+#             fix=item.fix,
+#             reason=item.reason,
+#         )
+#         for item in result1
+#     ]
 
-    res3 = [
-        LinterOutput(
-            exactPhrase=item.exactPhrase,
-            recommendation=item.recommendation,
-            fix=item.fix,
-            reason=item.reason,
-        )
-        for item in res3
-        if item.exactPhrase not in ["impl<llm, ExtractResume2> version1", "client GPT4"]
-    ]
+#     res3 = [
+#         LinterOutput(
+#             exactPhrase=item.exactPhrase,
+#             recommendation=item.recommendation,
+#             fix=item.fix,
+#             reason=item.reason,
+#         )
+#         for item in res3
+#         if item.exactPhrase not in ["impl<llm, ExtractResume2> version1", "client GPT4"]
+#     ]
 
+#     print(result1)
+#     print(result2)
+#     print(res3)
 
-    print(result1)
-    print(result2)
-    print(res3)
-
-    return [
-        LinterRuleOutput(
-            diagnostics=res1_outputs,
-            ruleName="Contradictions",
-        ),
-        LinterRuleOutput(diagnostics=res4, ruleName="OffensiveLanguage"),
-
-        # LinterRuleOutput(diagnostics=res5, ruleName="ExampleProvider"),
-        # LinterRuleOutput(diagnostics=res3, ruleName="AmbiguousTerm"),
-
-        LinterRuleOutput(diagnostics=result2, ruleName="ChainOfThought"),
-        LinterRuleOutput(diagnostics=res6, ruleName="Tipping"),
-        LinterRuleOutput(diagnostics=res7, ruleName="NoLargeDistance"),
-    ]
+#     return [
+#         LinterRuleOutput(
+#             diagnostics=res1_outputs,
+#             ruleName="Contradictions",
+#         ),
+#         LinterRuleOutput(diagnostics=res4, ruleName="OffensiveLanguage"),
+#         # LinterRuleOutput(diagnostics=res5, ruleName="ExampleProvider"),
+#         # LinterRuleOutput(diagnostics=res3, ruleName="AmbiguousTerm"),
+#         LinterRuleOutput(diagnostics=result2, ruleName="ChainOfThought"),
+#         LinterRuleOutput(diagnostics=res6, ruleName="Tipping"),
+#         LinterRuleOutput(diagnostics=res7, ruleName="NoLargeDistance"),
+#     ]
 
 
 # if __name__ == '__main__':
