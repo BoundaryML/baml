@@ -3,6 +3,7 @@
 ###############################################
 FROM python:3.9-slim as python-base
 
+
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=off \
@@ -58,7 +59,11 @@ RUN sed -i 's/sudo //g' install-baml.sh
 
 RUN TERM=xterm bash ./install-baml.sh
 
-RUN pip install baml pytest
+# Note it seems that the baml from the poetry.toml is the one that is still installed, so that version is the
+# one that matters. So perhaps remove this.
+RUN pip install baml
+RUN pip install pytest
+RUN pip show baml
 
 RUN baml version
 
