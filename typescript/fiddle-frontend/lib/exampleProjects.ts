@@ -22,9 +22,9 @@ function stringSpanTest(functionName: string, testName: string): StringSpan {
   }
 }
 
-const extractNamesBaml = `// Hello! This is a BAML config file, which allows you to define LLM functions and their prompts using jinja2 templating, but with additional features like type-checking, realtime LLM prompt previews, more resilient parsing of LLM outputs, and more.
+const extractNamesBaml = `// Hello! This is a BAML config file, where you can define LLM functions and their prompts using jinja2 templating, but with additional features like type-checking, realtime LLM prompt previews, more resilient parsing of LLM outputs, and more.
 
-// Here's an LLM function that takes in a chunk of text and outputs any "names" from it!
+// Here's an LLM function that extracts "names" from text.
 function ExtractNames(input: string) -> string[] {
   client GPT4
 
@@ -200,8 +200,14 @@ function ClassifyMessage(input: string) -> Category {
 }
 `;
 
-const clientsBaml = `client<llm> GPT4 {
+const clientsBaml = `// These are LLM clients you can use in your functions. We currently support Anthropic, OpenAI / Azure, and Ollama as providers but are expanding to many more.
+
+// For this playground, we have setup a few clients for you to use already with some free credits.
+
+client<llm> GPT4 {
+  // Use one of the following: https://docs.boundaryml.com/v3/syntax/client/client#providers
   provider baml-openai-chat
+  // You can pass in any parameters from the OpenAI Python documentation into the options block.
   options {
     model gpt-4
     api_key env.OPENAI_API_KEY

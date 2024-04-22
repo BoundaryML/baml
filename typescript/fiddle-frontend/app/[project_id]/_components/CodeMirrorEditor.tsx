@@ -129,7 +129,7 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
               </Button>
             ))}
         </>
-        <div className="flex items-center justify-center h-full pt-0.5 pl-4">
+        <div className="flex items-center justify-center h-full pt-0.5 pr-16 w-full">
           <Link
             href="https://docs.boundaryml.com"
             target="_blank"

@@ -31,6 +31,7 @@ import FileViewer from './Tree/FileViewer'
 import { ExampleProjectCard } from '@/app/_components/ExampleProjectCard'
 import { Separator } from '@baml/playground-common/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import Image from 'next/image'
 
 const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
   const setEditorFiles = useSetAtom(currentEditorFilesAtom)
@@ -89,7 +90,7 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
         <ResizableHandle className="bg-vscode-contrastActiveBorder border-vscode-contrastActiveBorder" />
         <ResizablePanel defaultSize={88}>
           <div className="flex-col w-full h-full font-sans bg-background dark:bg-vscode-panel-background">
-            <div className="flex flex-row gap-x-12 border-b-[1px] border-vscode-panel-border min-h-[40px]">
+            <div className="flex flex-row items-center gap-x-12 border-b-[1px] border-vscode-panel-border min-h-[40px]">
               <div className="flex flex-col items-center h-full py-1">
                 <Editable text={projectName} placeholder="Write a task name" type="input" childRef={inputRef}>
                   <input
@@ -107,13 +108,20 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
                 <ShareButton project={project} projectName={projectName} />
               </div>
 
-              <div className="flex flex-row justify-center gap-x-1 item-center">
-                {/* <TestToggle /> */}
+              {/* <div className="flex flex-row justify-center gap-x-1 item-center">
                 <Button variant={'ghost'} className="h-full py-1" asChild>
                   <Link target="_blank" href="https://docs.boundaryml.com">
                     Docs
                   </Link>
                 </Button>
+              </div> */}
+              <div className="flex h-full">
+                <Link href="/dashboard" className="h-full pt-1 w-fit text-zinc-400 hover:text-zinc-50">
+                  <div className="flex flex-row items-center text-sm gap-x-4">
+                    <Image src="/vscode_logo.svg" width={20} height={20} alt="VSCode extension" />
+                    <div>Get VSCode extension</div>
+                  </div>
+                </Link>
               </div>
               {unsavedChanges ? (
                 <div className="flex flex-row items-center text-muted-foreground">
