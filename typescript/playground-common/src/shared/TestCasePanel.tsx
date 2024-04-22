@@ -88,7 +88,10 @@ const TestCasePanelEntry: React.FC<{ func: Func; test_case: TestCase }> = ({ fun
               {test_case.name.value}
             </span>
             {isRendered && (
-              <Badge className="ml-2" variant="default">
+              <Badge
+                className="ml-2 bg-vscode-editorSuggestWidget-selectedBackground text-vscode-editorSuggestWidget-foreground hover:bg-vscode-editorSuggestWidget-selectedBackground"
+                variant="default"
+              >
                 <div className="flex flex-row items-center gap-x-1">
                   <Pin size={12} /> Rendered
                 </div>

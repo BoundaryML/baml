@@ -31,7 +31,7 @@ function ExtractNames(input: string) -> string[] {
   // All of the stuff inside #" ... "# is a jinja string. You can use {{ }} to insert variables, and {% %} to run code. The preview on the right will always show you the full prompt that will be sent to the LLM -- even if you add complex logic!
   prompt #"
     Extract the names from this INPUT:
-  
+
     INPUT:
     ---
     {{ input }}
@@ -194,7 +194,7 @@ function ClassifyMessage(input: string) -> Category {
     INPUT: {{ input }}
 
     {{ ctx.output_format }}
-
+    
     Response:
   "#
 }

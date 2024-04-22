@@ -65,7 +65,7 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
         <ResizablePanel defaultSize={12} className="h-full bg-zinc-900">
           <div className="w-full pt-2 text-lg italic font-bold text-center">Prompt Fiddle</div>
 
-          <div className="flex flex-col w-full pt-2 h-[30%] ">
+          <div className="flex flex-col w-full pt-2 h-[50%] ">
             <div className="w-full px-2 text-sm font-semibold text-center uppercase text-white/90">project files</div>
             {/* <ScrollArea type="hover" className="flex flex-col w-full"> */}
             <div className="flex flex-col w-full">
@@ -75,9 +75,9 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
           </div>
           {/* <Separator className="bg-vscode-textSeparator-foreground" /> */}
           <div className="w-full px-2 pt-2 text-sm font-semibold text-center uppercase text-white/90">Templates</div>
-          <div className="flex flex-col h-[70%] pb-16">
+          <div className="flex flex-col h-[50%] pb-16">
             <ScrollArea type="hover">
-              <div className="flex flex-col px-2 gap-y-4">
+              <div className="flex flex-col px-4 gap-y-4">
                 {exampleProjects.map((p) => {
                   return <ExampleProjectCard key={p.name} project={p} />
                 })}
