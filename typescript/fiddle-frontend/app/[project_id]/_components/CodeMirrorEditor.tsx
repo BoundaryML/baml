@@ -1,9 +1,16 @@
 'use client'
+import { atomStore } from '@/app/_components/JotaiProvider'
 import { EditorFile } from '@/app/actions'
+import { BAML_DIR } from '@/lib/constants'
+import { BAMLProject } from '@/lib/exampleProjects'
+import { BAML, theme } from '@baml/codemirror-lang'
+import { ParserDatabase } from '@baml/common'
 import { Button } from '@baml/playground-common/components/ui/button'
+import { Diagnostic, linter } from '@codemirror/lint'
+import CodeMirror, { EditorView } from '@uiw/react-codemirror'
 import { useAtom, useSetAtom } from 'jotai'
-import { usePathname } from 'next/navigation'
-import { useState, useEffect, useRef } from 'react'
+import Link from 'next/link'
+import { useEffect } from 'react'
 import {
   activeFileAtom,
   currentEditorFilesAtom,
@@ -12,13 +19,6 @@ import {
   functionTestCaseAtom,
   unsavedChangesAtom,
 } from '../_atoms/atoms'
-import { BAML_DIR } from '@/lib/constants'
-import { atomStore } from '@/app/_components/JotaiProvider'
-import { BAML, theme } from '@baml/codemirror-lang'
-import { ParserDatabase } from '@baml/common'
-import { Diagnostic, linter, lintGutter, openLintPanel } from '@codemirror/lint'
-import CodeMirror, { EditorView } from '@uiw/react-codemirror'
-import { BAMLProject } from '@/lib/exampleProjects'
 
 type LintResponse = {
   diagnostics: LinterError[]
@@ -88,6 +88,7 @@ const extensions = [
   EditorView.lineWrapping,
 
   // lintGutter({}),
+
   linter(bamlLinter, {
     delay: 200,
     // needsRefresh: (update) => {
@@ -108,30 +109,46 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
 
   return (
     <div className="w-full">
-      <div className="flex px-3 py-1 h-fit gap-x-3 overflow-clip">
-        {editorFiles
-          .filter((f) => f.path === activeFile?.path)
-          .map((file) => (
-            <Button
-              variant={'ghost'}
-              key={file.path}
-              onClick={() => setActiveFile(file)}
-              className={`${
-                activeFile?.path === file.path
-                  ? '  border-b-[2px] border-b-blue-400 bg-background text-blue-500 hover:bg-vscode-selection-background hover:text-blue-500'
-                  : 'hover:text-black/80 bg-background text-gray-500 hover:bg-vscode-selection-background hover:text-gray-5=400'
-              }  h-[30px] rounded-b-none rounded-tl-lg  border-r-0 px-1 text-sm  font-medium`}
-            >
-              {file.path.replace(`${BAML_DIR}/`, '')}
-            </Button>
-          ))}
+      <div className="flex px-3 py-1 h-fit gap-x-6 overflow-clip min-h-[20px]">
+        <>
+          {editorFiles
+            .filter((f) => f.path === activeFile?.path)
+            .map((file) => (
+              <Button
+                variant={'ghost'}
+                key={file.path}
+                onClick={() => setActiveFile(file)}
+                className={`${
+                  activeFile?.path === file.path
+                    ? '  border-b-[2px] border-b-blue-400 bg-background text-blue-500 hover:bg-vscode-selection-background hover:text-blue-500'
+                    : 'hover:text-black/80 bg-background text-gray-500 hover:bg-vscode-selection-background hover:text-gray-5=400'
+                }  h-[20px] rounded-b-none rounded-tl-lg  border-r-0 px-1 text-xs  font-medium`}
+              >
+                {file.path.replace(`${BAML_DIR}/`, '')}
+              </Button>
+            ))}
+        </>
+        <div className="flex items-center justify-center h-full pt-0.5 pr-16 w-full">
+          <Link
+            href="https://docs.boundaryml.com"
+            target="_blank"
+            className="text-xs hover:text-foreground text-muted-foreground "
+          >
+            What is BAML?
+          </Link>
+        </div>
       </div>
-      <>
+      <div
+        style={{
+          height: 'calc(100% - 30px)',
+        }}
+      >
         <CodeMirror
           key={editorFiles.map((f) => f.path).join('')}
           value={activeFile?.content ?? ''}
           extensions={extensions}
           theme={theme}
+          className="text-sm"
           height="100%"
           width="100%"
           maxWidth="100%"
@@ -166,7 +183,7 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
             setUnsavedChanges(true)
           }}
         />
-      </>
+      </div>
     </div>
   )
 }

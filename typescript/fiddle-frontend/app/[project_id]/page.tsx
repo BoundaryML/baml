@@ -1,9 +1,21 @@
-import { BAMLProject, exampleProjects } from '@/lib/exampleProjects'
-import { Separator } from '@baml/playground-common/components/ui/separator'
+import { BAMLProject } from '@/lib/exampleProjects'
+import { loadProject } from '@/lib/loadProject'
+import type { Metadata, ResolvingMetadata } from 'next'
 import dynamic from 'next/dynamic'
-import { ExampleProjectCard } from '../_components/ExampleProjectCard'
-import { loadUrl } from '../actions'
 const ProjectView = dynamic(() => import('./_components/ProjectView'), { ssr: false })
+
+type Props = {
+  params: { project_id: string }
+  searchParams: { [key: string]: string | string[] | undefined }
+}
+export async function generateMetadata({ params, searchParams }: Props, parent: ResolvingMetadata): Promise<Metadata> {
+  // read route params
+  const project = await loadProject({ project_id: params.project_id })
+  return {
+    title: `${project.name} — Prompt Fiddle`,
+    description: project.description,
+  }
+}
 
 type SearchParams = {
   id: string
@@ -16,17 +28,8 @@ export default async function Home({
   searchParams: SearchParams
   params: { project_id: string }
 }) {
-  let data: BAMLProject = exampleProjects[0]
-  const id = params.project_id ?? searchParams.id
-  if (id) {
-    const exampleProject = exampleProjects.find((p) => p.id === id)
-    if (exampleProject) {
-      data = exampleProject
-    } else {
-      data = await loadUrl(id)
-    }
-  }
-  console.log(data)
+  let data: BAMLProject = await loadProject(params)
+  // console.log(data)
   return (
     <main className="flex flex-col items-center justify-between min-h-screen font-sans">
       <div className="w-screen h-screen dark:bg-black">

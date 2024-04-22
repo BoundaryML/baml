@@ -22,25 +22,36 @@ function stringSpanTest(functionName: string, testName: string): StringSpan {
   }
 }
 
-const extractNamesBaml = `function ExtractNames(input: string) -> string[] {
-  client GPT4
+const extractNamesBaml = `// Hello! This is a BAML config file, which extends the Jinja2 templating language to better support writing LLM functions.
+
+// BAML adds many new features to Jinja -- type-support, static analysis of prompts, guarantees your defined output types, and more! BAML is the ✨ cleanest and fastest ✨ way to write complex LLM functions.
+
+// Run this function's tests on the right panel to get started!
+
+function ExtractNames(input: string) -> string[] {
+  // see clients.baml
+  client GPT4 
+
+  // All of the stuff inside #" ... "# is a jinja string. You can use {{ }} to insert variables, and {% %} to insert code
   prompt #"
     Extract the names from this INPUT:
-  
+
     INPUT:
     ---
     {{ input }}
     ---
 
+    {# This is a unique BAML variable to print out the output instructions. Check out other templates for complex type examples #}
     {{ ctx.output_format }}
 
     JSON array:
   "#
 }
+// Check out main.py to see how to use this in Python, and our Github repo for more documentation.
 `;
 
 const extractNamesTest = {
-  "input": "\"Attention Is All You Need\" is a landmark[1][2] 2017 research paper by Google.[3] Authored by eight scientists, it was responsible for expanding 2014 attention mechanisms proposed by Bahdanau et. al. into a new deep learning architecture known as the transformer. The paper is considered by some to be a founding document for modern artificial intelligence, as transformers became the main architecture of large language models.[4][5] At the time, the focus of the research was on improving Seq2seq techniques for machine translation, but even in their paper the authors saw the potential for other tasks like question answering and for what is now called multimodal Generative AI.\n\nThe paper's title is a reference to the song \"All You Need Is Love\" by the Beatles.[6]\n\nAs of 2024, the paper has been cited more than 100,000 times.[7]"
+  "input": "\"Attention Is All You Need\" is a landmark[1][2] 2017 research paper by Google.[3] Authored by eight scientists, it was responsible for expanding 2014 attention mechanisms proposed by Bahdanau et. al. into a new deep learning architecture known as the transformer."
 };
 
 const classifyMessageBaml = `// This will be available as an enum in your Python and Typescript code.
@@ -192,8 +203,14 @@ function ClassifyMessage(input: string) -> Category {
 }
 `;
 
-const clientsBaml = `client<llm> GPT4 {
+const clientsBaml = `// These are LLM clients you can use in your functions. We currently support Anthropic, OpenAI / Azure, and Ollama as providers but are expanding to many more.
+
+// For this playground, we have setup a few clients for you to use already with some free credits.
+
+client<llm> GPT4 {
+  // Use one of the following: https://docs.boundaryml.com/v3/syntax/client/client#providers
   provider baml-openai-chat
+  // You can pass in any parameters from the OpenAI Python documentation into the options block.
   options {
     model gpt-4
     api_key env.OPENAI_API_KEY
@@ -228,8 +245,8 @@ client<llm> Claude {
 export const exampleProjects: BAMLProject[] = [
   {
     id: 'extract-names',
-    name: 'ExtractNames',
-    description: 'Extract names from a given input',
+    name: 'Introduction to BAML',
+    description: 'Writing a simple LLM function to extract names from text',
     files: [
       {
         path: 'baml_src/main.baml',
@@ -242,25 +259,6 @@ export const exampleProjects: BAMLProject[] = [
       {
         path: 'baml_src/__tests__/ExtractNames/test1.json',
         content: JSON.stringify({ input: extractNamesTest }),
-      },
-    ]
-  },
-  {
-    id: 'classify-message',
-    name: 'ClassifyMessage',
-    description: 'Classify a message from a user',
-    files: [
-      {
-        path: 'baml_src/main.baml',
-        content: classifyMessageBaml,
-      },
-      {
-        path: 'baml_src/clients.baml',
-        content: clientsBaml,
-      },
-      {
-        path: 'baml_src/__tests__/ClassifyMessage/test1.json',
-        content: JSON.stringify({ input: classifyMessageTest }),
       },
     ]
   },
@@ -283,6 +281,26 @@ export const exampleProjects: BAMLProject[] = [
       },
     ]
   },
+  {
+    id: 'classify-message',
+    name: 'ClassifyMessage',
+    description: 'Classify a message from a user',
+    files: [
+      {
+        path: 'baml_src/main.baml',
+        content: classifyMessageBaml,
+      },
+      {
+        path: 'baml_src/clients.baml',
+        content: clientsBaml,
+      },
+      {
+        path: 'baml_src/__tests__/ClassifyMessage/test1.json',
+        content: JSON.stringify({ input: classifyMessageTest }),
+      },
+    ]
+  },
+
   {
     id: 'chat-roles',
     name: 'Chat roles',

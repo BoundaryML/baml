@@ -1,6 +1,6 @@
 @top Baml { Decl* }
 
-Decl { ClassDecl | EnumDecl | FunctionDecl | ClientDecl }
+Decl { ClassDecl | EnumDecl | FunctionDecl | ClientDecl | TemplateStringDecl}
 
 ClassDecl { "class" IdentifierDecl "{" (BlockAttribute | ClassField)* "}" }
 
@@ -49,6 +49,10 @@ ClientDecl {
 }
 
 LiteralDecl { NumericLiteral | QuotedString | UnquotedString }
+
+TemplateStringDecl {
+  "template_string" IdentifierDecl "(" FunctionArgs ")" PromptExpr
+}
 
 @tokens {
 
