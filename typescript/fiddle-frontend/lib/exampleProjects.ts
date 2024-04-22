@@ -24,7 +24,7 @@ function stringSpanTest(functionName: string, testName: string): StringSpan {
 
 const extractNamesBaml = `// Hello! This is a BAML config file, which extends the Jinja2 templating language to better support writing LLM functions.
 
-// BAML adds many new features to Jinja -- type-support, static analysis of prompts, guarantees your defined output types, and more!
+// BAML adds many new features to Jinja -- type-support, static analysis of prompts, guarantees your defined output types, and more! BAML is the ✨ cleanest and fastest ✨ way to write complex LLM functions.
 
 // Run this function's tests on the right panel to get started!
 
@@ -47,7 +47,7 @@ function ExtractNames(input: string) -> string[] {
     JSON array:
   "#
 }
-// Check out main.py to see how to use this in Python
+// Check out main.py to see how to use this in Python, and our Github repo for more documentation.
 `;
 
 const extractNamesTest = {
