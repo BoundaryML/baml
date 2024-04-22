@@ -30,6 +30,8 @@ import { usePlaygroundListener } from '../_playground_controller/usePlaygroundLi
 import { CodeMirrorEditor } from './CodeMirrorEditor'
 import { GithubStars } from './GithubStars'
 import FileViewer from './Tree/FileViewer'
+import clsx from 'clsx'
+import { FlaskConical } from 'lucide-react'
 
 const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
   const setEditorFiles = useSetAtom(currentEditorFilesAtom)
@@ -265,9 +267,14 @@ const PlaygroundView = () => {
     <>
       <CustomErrorBoundary>
         <ASTProvider>
-          {/* <TestToggle /> */}
-          <div className="flex flex-col gap-2 px-2 pb-4">
+          <div></div>
+
+          <div className="relative flex flex-col gap-2 px-2 pb-4">
+            <div className="absolute z-10 flex flex-col items-end gap-1 right-8 top-2 text-end">
+              <TestToggle />
+            </div>
             <FunctionSelector />
+
             {/* <Separator className="bg-vscode-textSeparator-foreground" /> */}
             <FunctionPanel />
           </div>
@@ -279,15 +286,24 @@ const PlaygroundView = () => {
 
 const TestToggle = () => {
   const { setSelection } = useContext(ASTContext)
-  const { showTests } = useSelections()
+  const { showTests, func } = useSelections()
+
+  useEffect(() => {
+    setSelection(undefined, undefined, undefined, undefined, false)
+  }, [])
+  const numTests = func?.test_cases?.length ?? 0
 
   return (
     <Button
       variant="outline"
-      className="p-1 text-xs w-fit h-fit border-vscode-textSeparator-foreground"
+      className={clsx(
+        'p-1 text-xs w-fit h-fit border-vscode-textSeparator-foreground bg-vscode-button-background gap-x-2 pr-2',
+        [!showTests ? 'bg-vscode-button-background' : 'bg-vscode-panel-background'],
+      )}
       onClick={() => setSelection(undefined, undefined, undefined, undefined, !showTests)}
     >
-      {showTests ? 'Hide tests' : 'Show tests'}
+      <FlaskConical size={16} />
+      <span>{showTests ? 'Hide tests' : `Show  ${numTests > 0 ? numTests : ''} tests`}</span>
     </Button>
   )
 }
