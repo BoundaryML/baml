@@ -64,6 +64,8 @@ export const BAMLLanguage = LRLanguage.define({
         'PromptExprNonJinja/...': t.string,
         "PromptExprNonJinja/PromptExprContents/...": t.operator,
 
+        "TemplateStringDecl/IdentifierDecl": t.attributeName,
+        "TemplateStringDecl/PromptExpr": t.string,
 
         "TupleValue/IdentifierDecl": t.operator,
 
@@ -95,6 +97,7 @@ const exampleCompletion = BAMLLanguage.data.of({
     snippetCompletion('prompt #"\n  {{ _.chat("user") }}\n  INPUT:\n  ---\n  {{ your-variable }}\n  ---\n  Response:\n"#', { label: 'prompt #"' }),
     snippetCompletion('#"${mystring}"#', { label: '#"' }),
     snippetCompletion('client<llm> GPT4 {\n  provider baml-openai-chat\n  options {\n    model gpt4  \n}}', { label: 'client<llm> GPT4' }),
+    snippetCompletion("template_string MyString(${arg1}: string) #\"\n  A jinja string\n\"#", { label: 'template_string' }),
   ],
 })
 
