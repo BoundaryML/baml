@@ -22,13 +22,17 @@ function stringSpanTest(functionName: string, testName: string): StringSpan {
   }
 }
 
-const extractNamesBaml = `// Hello! This is a BAML config file, where you can define LLM functions and their prompts using jinja2 templating, but with additional features like type-checking, realtime LLM prompt previews, more resilient parsing of LLM outputs, and more.
+const extractNamesBaml = `// Hello! This is a BAML config file, which extends the Jinja2 templating language to better support writing LLM functions.
 
-// Here's an LLM function that extracts "names" from text.
+// BAML adds many new features to Jinja -- type-support, static analysis of prompts, guarantees your defined output types, and more!
+
+// Run this function's tests on the right panel to get started!
+
 function ExtractNames(input: string) -> string[] {
-  client GPT4
+  // see clients.baml
+  client GPT4 
 
-  // All of the stuff inside #" ... "# is a jinja string. You can use {{ }} to insert variables, and {% %} to run code. The preview on the right will always show you the full prompt that will be sent to the LLM -- even if you add complex logic!
+  // All of the stuff inside #" ... "# is a jinja string. You can use {{ }} to insert variables, and {% %} to insert code
   prompt #"
     Extract the names from this INPUT:
 
@@ -37,14 +41,13 @@ function ExtractNames(input: string) -> string[] {
     {{ input }}
     ---
 
-    {# Use this 'ctx.output_format' variable to print out the output instructions. Check out other examples with more complex output types to see what gets printed out. In BAML, you ALWAYS get access to the full prompt. #}
+    {# This is a unique BAML variable to print out the output instructions. Check out other templates for complex type examples #}
     {{ ctx.output_format }}
 
     JSON array:
   "#
 }
-// Feel free to modify it, run or add tests, and share your results!
-
+// Check out main.py to see how to use this in Python
 `;
 
 const extractNamesTest = {
@@ -194,7 +197,7 @@ function ClassifyMessage(input: string) -> Category {
     INPUT: {{ input }}
 
     {{ ctx.output_format }}
-    
+
     Response:
   "#
 }
@@ -242,8 +245,8 @@ client<llm> Claude {
 export const exampleProjects: BAMLProject[] = [
   {
     id: 'extract-names',
-    name: 'ExtractNames',
-    description: 'Extract names from a given input',
+    name: 'Introduction to BAML',
+    description: 'Writing a simple LLM function to extract names from text',
     files: [
       {
         path: 'baml_src/main.baml',
@@ -256,25 +259,6 @@ export const exampleProjects: BAMLProject[] = [
       {
         path: 'baml_src/__tests__/ExtractNames/test1.json',
         content: JSON.stringify({ input: extractNamesTest }),
-      },
-    ]
-  },
-  {
-    id: 'classify-message',
-    name: 'ClassifyMessage',
-    description: 'Classify a message from a user',
-    files: [
-      {
-        path: 'baml_src/main.baml',
-        content: classifyMessageBaml,
-      },
-      {
-        path: 'baml_src/clients.baml',
-        content: clientsBaml,
-      },
-      {
-        path: 'baml_src/__tests__/ClassifyMessage/test1.json',
-        content: JSON.stringify({ input: classifyMessageTest }),
       },
     ]
   },
@@ -297,6 +281,26 @@ export const exampleProjects: BAMLProject[] = [
       },
     ]
   },
+  {
+    id: 'classify-message',
+    name: 'ClassifyMessage',
+    description: 'Classify a message from a user',
+    files: [
+      {
+        path: 'baml_src/main.baml',
+        content: classifyMessageBaml,
+      },
+      {
+        path: 'baml_src/clients.baml',
+        content: clientsBaml,
+      },
+      {
+        path: 'baml_src/__tests__/ClassifyMessage/test1.json',
+        content: JSON.stringify({ input: classifyMessageTest }),
+      },
+    ]
+  },
+
   {
     id: 'chat-roles',
     name: 'Chat roles',

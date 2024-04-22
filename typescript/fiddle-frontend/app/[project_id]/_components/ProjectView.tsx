@@ -91,7 +91,7 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
         <ResizablePanel defaultSize={88}>
           <div className="flex-col w-full h-full font-sans bg-background dark:bg-vscode-panel-background">
             <div className="flex flex-row items-center gap-x-12 border-b-[1px] border-vscode-panel-border min-h-[40px]">
-              <div className="flex flex-col items-center h-full py-1">
+              <div className="flex flex-col items-center h-full py-1 whitespace-nowrap">
                 <Editable text={projectName} placeholder="Write a task name" type="input" childRef={inputRef}>
                   <input
                     className="px-2 text-lg border-none text-foreground"
