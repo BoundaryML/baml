@@ -48,6 +48,7 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
   const inputRef = useRef(null)
 
   useEffect(() => {
+    setUnsavedChanges(false)
     if (project) {
       if (project.testRunOutput) {
         setTestRunOutput(project.testRunOutput)
@@ -63,16 +64,20 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
     <div className="flex flex-row w-full h-full bg-gray-800">
       <ResizablePanelGroup className="w-full h-full overflow-clip" direction="horizontal">
         <ResizablePanel defaultSize={12} className="h-full bg-zinc-900">
-          <div className="w-full pt-1 text-lg italic font-bold text-center">Prompt Fiddle</div>
+          <div className="w-full pt-2 text-lg italic font-bold text-center">Prompt Fiddle</div>
 
-          <div className="flex flex-col w-full pt-2 h-[30%] overflow-y-auto">
+          <div className="flex flex-col w-full pt-2 h-[30%] ">
             <div className="w-full px-2 text-sm font-semibold text-center uppercase text-white/90">project files</div>
-            <FileViewer />
+            {/* <ScrollArea type="hover" className="flex flex-col w-full"> */}
+            <div className="flex flex-col w-full">
+              <FileViewer />
+            </div>
+            {/* </ScrollArea> */}
           </div>
           {/* <Separator className="bg-vscode-textSeparator-foreground" /> */}
           <div className="w-full px-2 pt-2 text-sm font-semibold text-center uppercase text-white/90">Templates</div>
           <div className="flex flex-col h-[70%] pb-16">
-            <ScrollArea type="always">
+            <ScrollArea type="hover">
               <div className="flex flex-col px-2 gap-y-4">
                 {exampleProjects.map((p) => {
                   return <ExampleProjectCard key={p.name} project={p} />
@@ -83,8 +88,8 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
         </ResizablePanel>
         <ResizableHandle className="bg-vscode-contrastActiveBorder border-vscode-contrastActiveBorder" />
         <ResizablePanel defaultSize={88}>
-          <div className="flex-col w-full h-full font-sans pl-2flex bg-background dark:bg-vscode-panel-background">
-            <div className="flex flex-row gap-x-12 border-b-[1px] border-vscode-panel-border h-[40px]">
+          <div className="flex-col w-full h-full font-sans bg-background dark:bg-vscode-panel-background">
+            <div className="flex flex-row gap-x-12 border-b-[1px] border-vscode-panel-border min-h-[40px]">
               <div className="flex flex-col items-center h-full py-1">
                 <Editable text={projectName} placeholder="Write a task name" type="input" childRef={inputRef}>
                   <input
@@ -105,7 +110,9 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
               <div className="flex flex-row justify-center gap-x-1 item-center">
                 {/* <TestToggle /> */}
                 <Button variant={'ghost'} className="h-full py-1" asChild>
-                  <Link href="https://docs.boundaryml.com">Docs</Link>
+                  <Link target="_blank" href="https://docs.boundaryml.com">
+                    Docs
+                  </Link>
                 </Button>
               </div>
               {unsavedChanges ? (
@@ -119,7 +126,12 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
               )}
             </div>
 
-            <div className="flex flex-row w-full h-full">
+            <div
+              style={{
+                height: 'calc(100% - 40px)',
+              }}
+              className="flex flex-row h-full overflow-clip"
+            >
               <ResizablePanelGroup
                 className="min-h-[200px] w-full rounded-lg border overflow-clip"
                 direction="horizontal"

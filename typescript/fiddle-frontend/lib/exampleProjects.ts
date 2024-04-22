@@ -22,8 +22,13 @@ function stringSpanTest(functionName: string, testName: string): StringSpan {
   }
 }
 
-const extractNamesBaml = `function ExtractNames(input: string) -> string[] {
+const extractNamesBaml = `// Hello! This is a BAML config file, which allows you to define LLM functions and their prompts using jinja2 templating, but with additional features like type-checking, realtime LLM prompt previews, more resilient parsing of LLM outputs, and more.
+
+// Here's an LLM function that takes in a chunk of text and outputs any "names" from it!
+function ExtractNames(input: string) -> string[] {
   client GPT4
+
+  // All of the stuff inside #" ... "# is a jinja string. You can use {{ }} to insert variables, and {% %} to run code. The preview on the right will always show you the full prompt that will be sent to the LLM -- even if you add complex logic!
   prompt #"
     Extract the names from this INPUT:
   
@@ -32,11 +37,14 @@ const extractNamesBaml = `function ExtractNames(input: string) -> string[] {
     {{ input }}
     ---
 
+    {# Use this 'ctx.output_format' variable to print out the output instructions. Check out other examples with more complex output types to see what gets printed out. In BAML, you ALWAYS get access to the full prompt. #}
     {{ ctx.output_format }}
 
     JSON array:
   "#
 }
+// Feel free to modify it, run or add tests, and share your results!
+
 `;
 
 const extractNamesTest = {

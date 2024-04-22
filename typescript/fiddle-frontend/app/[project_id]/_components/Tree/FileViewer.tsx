@@ -8,6 +8,7 @@ import { FilePlus, FolderPlus } from 'lucide-react'
 import useResizeObserver from 'use-resize-observer'
 import { useAtom, useAtomValue } from 'jotai'
 import { activeFileAtom, currentEditorFilesAtom } from '../../_atoms/atoms'
+import { EditorFile } from '@/app/actions'
 
 export const data = [
   {
@@ -92,19 +93,31 @@ const FileViewer = () => {
   const [term, setTerm] = useState('')
 
   const createFileFolder = (
-    <>
-      <button onClick={() => treeRef?.current?.createInternal()} title="New Folder...">
-        <FolderPlus />
+    <div className="flex flex-row w-full pt-3 pl-1 gap-x-1">
+      {/* <button
+        onClick={() => {
+          treeRef?.current?.createInternal()
+        }}
+        title="New Folder..."
+      >
+        <FolderPlus size={14} className="text-zinc-500 hover:text-zinc-200" />
+      </button> */}
+      <button
+        onClick={async () => {
+          console.log('leaf', treeRef?.current)
+
+          const leaf = await treeRef?.current?.createLeaf()
+        }}
+        title="New File..."
+      >
+        <FilePlus size={14} className="text-zinc-500 hover:text-zinc-200" />
       </button>
-      <button onClick={() => treeRef?.current?.createLeaf()} title="New File...">
-        <FilePlus />
-      </button>
-    </>
+    </div>
   )
 
   return (
     <div className="overflow-x-clip">
-      {/* <div className="folderFileActions">{createFileFolder}</div> */}
+      <div className="folderFileActions">{createFileFolder}</div>
       {/* <input
         type="text"
         placeholder="Search..."
@@ -116,11 +129,22 @@ const FileViewer = () => {
         <Tree
           className="truncate"
           ref={treeRef}
+          openByDefault={false}
+          initialOpenState={{ baml_src: true }}
           data={data2}
           // initialOpenState={{ baml_src: true }}
           rowHeight={24}
           width={width}
           selection={activeFile?.path}
+          onCreate={({ parentId, parentNode }) => {
+            console.log('onCreate', parentId, parentNode)
+            const newFileName = 'new'
+            setEditorFiles((prev) => {
+              prev = prev as EditorFile[]
+              return [...prev, { path: `baml_src/${newFileName}`, content: '' }]
+            })
+            return { id: `baml_src/${newFileName}`, name: newFileName }
+          }}
           height={200}
           searchTerm={term}
           searchMatch={(node, term) => node.data.name.toLowerCase().includes(term.toLowerCase())}

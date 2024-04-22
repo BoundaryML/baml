@@ -75,7 +75,7 @@ export const BAMLLanguage = LRLanguage.define({
   languageData: {
     commentTokens: { line: "//" },
     closeBrackets: {
-      brackets: ["(", "[", '"', "#\"", "{",],
+      brackets: ["(", "[", '"', "#\"", "{"],
       stringPrefixes: ["#\""],
       wordChars: ["#", "\""],
     },

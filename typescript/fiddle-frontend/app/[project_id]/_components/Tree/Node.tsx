@@ -51,7 +51,9 @@ const Node = ({ node, style, dragHandle, tree }: NodeRendererProps<any>) => {
   return (
     <div
       className={clsx(
-        `group relative px-2 py-1 cursor-pointer  flex-flex-col text-xs ${node.state.isSelected ? 'isSelected' : ''}`,
+        `group relative px-2 py-1 cursor-pointer overflow-x-clip flex-flex-col text-xs ${
+          node.state.isSelected ? 'isSelected' : ''
+        }`,
         [node.state.isSelected ? 'bg-zinc-600' : ''],
       )}
       style={style}
@@ -106,34 +108,36 @@ const Node = ({ node, style, dragHandle, tree }: NodeRendererProps<any>) => {
         </span>
       </div>
 
-      <div className="absolute top-0 right-0 hidden rounded-md group-hover:flex bg-zinc-800">
-        <div className="flex flex-row items-center gap-x-1 ">
-          <button
-            className="p-1 hover:opacity-100 opacity-70"
-            onClick={(e) => {
-              e.stopPropagation()
-              node.edit()
-            }}
-            title="Rename..."
-          >
-            <Edit2 size={11} />
-          </button>
-          <button
-            className="p-1 hover:opacity-100 opacity-60"
-            onClick={() => {
-              tree.delete(node.id)
+      {node.id !== 'baml_src' && (
+        <div className="absolute top-0 right-0 hidden rounded-md group-hover:flex bg-zinc-800">
+          <div className="flex flex-row items-center gap-x-1 ">
+            <button
+              className="p-1 hover:opacity-100 opacity-70"
+              onClick={(e) => {
+                e.stopPropagation()
+                node.edit()
+              }}
+              title="Rename..."
+            >
+              <Edit2 size={11} />
+            </button>
+            <button
+              className="p-1 hover:opacity-100 opacity-60"
+              onClick={() => {
+                tree.delete(node.id)
 
-              setEditorFiles((prev) => {
-                prev = prev as EditorFile[]
-                return prev.filter((f) => f.path !== node.id)
-              })
-            }}
-            title="Delete"
-          >
-            <X size={16} />
-          </button>
+                setEditorFiles((prev) => {
+                  prev = prev as EditorFile[]
+                  return prev.filter((f) => f.path !== node.id)
+                })
+              }}
+              title="Delete"
+            >
+              <X size={16} />
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
