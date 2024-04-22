@@ -1,11 +1,10 @@
-import { ParserDatabase, SFunction, StringSpan, TestFileContent, TestRequest } from '@baml/common'
-import { useAtom, useAtomValue, useSetAtom } from 'jotai'
-import { useEffect } from 'react'
-import { currentParserDbAtom, currentEditorFilesAtom } from '../_atoms/atoms'
-import { useTestRunner } from './useTestRunner'
 import { EditorFile } from '@/app/actions'
-import { BAML_DIR } from '@/lib/constants'
-import { uniqueNamesGenerator, Config, adjectives, colors, animals } from 'unique-names-generator'
+import { StringSpan, TestFileContent, TestRequest } from '@baml/common'
+import { useAtom } from 'jotai'
+import { useEffect } from 'react'
+import { Config, adjectives, animals, colors, uniqueNamesGenerator } from 'unique-names-generator'
+import { currentEditorFilesAtom } from '../_atoms/atoms'
+import { useTestRunner } from './useTestRunner'
 
 const customConfig: Config = {
   dictionaries: [adjectives, colors, animals],

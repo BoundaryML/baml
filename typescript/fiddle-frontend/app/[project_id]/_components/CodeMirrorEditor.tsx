@@ -1,9 +1,16 @@
 'use client'
+import { atomStore } from '@/app/_components/JotaiProvider'
 import { EditorFile } from '@/app/actions'
+import { BAML_DIR } from '@/lib/constants'
+import { BAMLProject } from '@/lib/exampleProjects'
+import { BAML, theme } from '@baml/codemirror-lang'
+import { ParserDatabase } from '@baml/common'
 import { Button } from '@baml/playground-common/components/ui/button'
+import { Diagnostic, linter } from '@codemirror/lint'
+import CodeMirror, { EditorView } from '@uiw/react-codemirror'
 import { useAtom, useSetAtom } from 'jotai'
-import { usePathname } from 'next/navigation'
-import { useState, useEffect, useRef } from 'react'
+import Link from 'next/link'
+import { useEffect } from 'react'
 import {
   activeFileAtom,
   currentEditorFilesAtom,
@@ -12,14 +19,6 @@ import {
   functionTestCaseAtom,
   unsavedChangesAtom,
 } from '../_atoms/atoms'
-import { BAML_DIR } from '@/lib/constants'
-import { atomStore } from '@/app/_components/JotaiProvider'
-import { BAML, theme } from '@baml/codemirror-lang'
-import { ParserDatabase } from '@baml/common'
-import { Diagnostic, linter, lintGutter, openLintPanel } from '@codemirror/lint'
-import CodeMirror, { EditorView } from '@uiw/react-codemirror'
-import { BAMLProject } from '@/lib/exampleProjects'
-import Link from 'next/link'
 
 type LintResponse = {
   diagnostics: LinterError[]

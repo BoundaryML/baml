@@ -1,7 +1,10 @@
 'use client'
 
+import { ExampleProjectCard } from '@/app/_components/ExampleProjectCard'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { useKeybindingOverrides } from '@/hooks/command-s'
 import { BAML_DIR } from '@/lib/constants'
 import { BAMLProject, exampleProjects } from '@/lib/exampleProjects'
@@ -12,26 +15,21 @@ import {
   FunctionSelector,
   useSelections,
 } from '@baml/playground-common'
+import { ASTContext } from '@baml/playground-common/shared/ASTProvider'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { useHydrateAtoms } from 'jotai/utils'
+import Image from 'next/image'
 import Link from 'next/link'
-import { useParams, usePathname } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { useContext, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Editable } from '../../_components/EditableText'
 import { EditorFile, createUrl } from '../../actions'
 import { currentEditorFilesAtom, currentParserDbAtom, testRunOutputAtom, unsavedChangesAtom } from '../_atoms/atoms'
-import { CodeMirrorEditor } from './CodeMirrorEditor'
 import { usePlaygroundListener } from '../_playground_controller/usePlaygroundListener'
-import { ASTContext } from '@baml/playground-common/shared/ASTProvider'
-import { Badge } from '@/components/ui/badge'
-import { useRouter } from 'next/navigation'
-import { atomStore, sessionStore } from '@/app/_components/JotaiProvider'
+import { CodeMirrorEditor } from './CodeMirrorEditor'
+import { GithubStars } from './GithubStars'
 import FileViewer from './Tree/FileViewer'
-import { ExampleProjectCard } from '@/app/_components/ExampleProjectCard'
-import { Separator } from '@baml/playground-common/components/ui/separator'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import Image from 'next/image'
 
 const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
   const setEditorFiles = useSetAtom(currentEditorFilesAtom)
@@ -115,14 +113,7 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
                   </Link>
                 </Button>
               </div> */}
-              <div className="flex h-full">
-                <Link href="/dashboard" className="h-full pt-1 w-fit text-zinc-400 hover:text-zinc-50">
-                  <div className="flex flex-row items-center text-sm gap-x-4">
-                    <Image src="/vscode_logo.svg" width={20} height={20} alt="VSCode extension" />
-                    <div>Get VSCode extension</div>
-                  </div>
-                </Link>
-              </div>
+
               {unsavedChanges ? (
                 <div className="flex flex-row items-center text-muted-foreground">
                   <Badge variant="outline" className="font-light text-red-400">
@@ -132,6 +123,22 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
               ) : (
                 <></>
               )}
+              <div className="flex flex-row items-center justify-end w-full pr-4 gap-x-8">
+                <div className="flex h-full">
+                  <Link
+                    href="https://docs.boundaryml.com/v3/home/installation"
+                    className="h-full pt-1 w-fit text-zinc-300 hover:text-zinc-50"
+                  >
+                    <div className="flex flex-row items-center text-sm gap-x-4">
+                      <Image src="/vscode_logo.svg" width={20} height={20} alt="VSCode extension" />
+                      <div>Get VSCode extension</div>
+                    </div>
+                  </Link>
+                </div>
+                <div className="flex h-full">
+                  <GithubStars />
+                </div>
+              </div>
             </div>
 
             <div
