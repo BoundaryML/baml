@@ -12,11 +12,11 @@ pub fn run() -> Result<(), CliError> {
     let prompt = Prompt::Chat(vec![
         Message {
             role: "system".to_string(),
-            content: "You love talking about cats".to_string(),
+            content: "You love talking about cats. Respond with a 10-word description of a cat if one is provided, else return [done]".to_string(),
         },
         Message {
             role: "user".to_string(),
-            content: "Write a short haiku".to_string(),
+            content: "doberman".to_string(),
         },
     ]);
 
