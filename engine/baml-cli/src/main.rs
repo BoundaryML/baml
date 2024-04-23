@@ -3,7 +3,6 @@ use colored::*;
 use std::io::Write;
 
 mod builder;
-mod call_llm_command;
 mod command;
 mod errors;
 mod import_command;
@@ -43,7 +42,6 @@ enum Commands {
     Import(ImportArgs),
     /// Reports the current and latest versions of everything.
     Version(version_command::VersionArgs),
-    CallLlm(call_llm_command::CallArgs),
 }
 
 #[derive(Args, Debug)]
@@ -177,7 +175,6 @@ pub(crate) fn main() {
             })
         }
         Commands::Version(args) => version_command::run(args),
-        Commands::CallLlm(_args) => call_llm_command::run(),
     };
 
     if let Err(error) = response {

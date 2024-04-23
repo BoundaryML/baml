@@ -2,7 +2,7 @@ use magnus::{
     class, define_class,
     encoding::{CType, RbEncoding},
     exception::runtime_error,
-    method,
+    function, method,
     prelude::*,
     Error, RObject, RString, Ruby,
 };
@@ -43,12 +43,13 @@ fn foo(rb_self: magnus::value::Value) -> Result<String> {
     Ok("foo bar fizz buzz".to_string())
 }
 
+#[magnus::wrap(class = "BamlRuntimeFfi", free_immediately, size)]
 struct BamlRuntime {
     field: String,
 }
 
 impl BamlRuntime {
-    pub fn new(code: &str) -> Result<BamlRuntime> {
+    pub fn new() -> Result<Self> {
         Ok(BamlRuntime {
             field: "internal field".to_string(),
         })
@@ -72,7 +73,8 @@ fn init() -> Result<()> {
     };
 
     let runtime_class = rb.define_class("BamlRuntimeFfi", class::object())?;
-    runtime_class.define_method("latin", method!(BamlRuntime::latin, 1))?;
+    runtime_class.define_singleton_method("new", function!(BamlRuntime::new, 0))?;
+    runtime_class.define_method("latin", method!(BamlRuntime::latin, 0))?;
 
     Ok(())
 }

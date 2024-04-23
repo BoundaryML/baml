@@ -6,7 +6,8 @@ members = [
   "baml-fmt",
   "baml-schema-wasm",
   "baml-core-ffi",
-  # "language_clients/ruby/ext/rust_blank",
+  "client-llm",
+  "language_client_ruby/ext/rust_blank",
 ]
 
 [workspace.dependencies]
