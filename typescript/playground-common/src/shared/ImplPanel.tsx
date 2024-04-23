@@ -324,7 +324,11 @@ const ImplPanel: React.FC<{ impl: Impl; showTab: boolean }> = ({ impl, showTab }
           </div>
         </VSCodePanelTab>
       )}
-      <VSCodePanelView key={`view-${impl.name.value}`} id={`view-${func.name.value}-${impl.name.value}`}>
+      <VSCodePanelView
+        key={`view-${impl.name.value}`}
+        id={`view-${func.name.value}-${impl.name.value}`}
+        className="tour-prompt-preview"
+      >
         <div className="flex flex-col w-full gap-2">
           <div className="flex flex-col gap-1">
             <div className="flex flex-col items-start text-vscode-descriptionForeground">

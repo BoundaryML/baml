@@ -25,7 +25,14 @@ import { useContext, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Editable } from '../../_components/EditableText'
 import { EditorFile, createUrl } from '../../actions'
-import { currentEditorFilesAtom, currentParserDbAtom, testRunOutputAtom, unsavedChangesAtom } from '../_atoms/atoms'
+import Joyride, { STATUS } from 'react-joyride'
+import {
+  currentEditorFilesAtom,
+  currentParserDbAtom,
+  productTourDoneAtom,
+  testRunOutputAtom,
+  unsavedChangesAtom,
+} from '../_atoms/atoms'
 import { usePlaygroundListener } from '../_playground_controller/usePlaygroundListener'
 import { CodeMirrorEditor } from './CodeMirrorEditor'
 import { GithubStars } from './GithubStars'
@@ -33,6 +40,7 @@ import FileViewer from './Tree/FileViewer'
 import clsx from 'clsx'
 import { AlertTriangleIcon, FlaskConical, GitForkIcon, LinkIcon, ShareIcon } from 'lucide-react'
 import { Separator } from '@baml/playground-common/components/ui/separator'
+import { Tour } from './Tour'
 
 const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
   const setEditorFiles = useSetAtom(currentEditorFilesAtom)
@@ -50,6 +58,7 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
   const projectNameInputRef = useRef(null)
   const [description, setDescription] = useState(project.description)
   const descriptionInputRef = useRef(null)
+  const productTourDone = useAtomValue(productTourDoneAtom)
 
   useEffect(() => {
     setUnsavedChanges(false)
@@ -65,7 +74,7 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
 
   return (
     // firefox wont apply the background color for some reason so we forcefully set it.
-    <div className="flex flex-row w-full h-full bg-gray-800">
+    <div className="relative flex flex-row w-full h-full bg-gray-800 main-panel overflow-x-clip overflow-y-clip">
       <ResizablePanelGroup className="w-full h-full overflow-clip" direction="horizontal">
         <ResizablePanel defaultSize={12} className="h-full bg-zinc-900">
           <div className="w-full pt-2 text-lg italic font-bold text-center">Prompt Fiddle</div>
@@ -73,14 +82,14 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
           <ResizablePanelGroup className="h-full" direction="vertical">
             <ResizablePanel defaultSize={50} className="h-full ">
               <div className="w-full px-2 text-sm font-semibold text-center uppercase text-white/90">project files</div>
-              <div className="flex flex-col w-full h-full">
+              <div className="flex flex-col w-full h-full tour-file-view">
                 <FileViewer />
               </div>
             </ResizablePanel>
             <Separator className="bg-vscode-textSeparator-foreground" />
 
             <ResizableHandle className="bg-vscode-contrastActiveBorder border-vscode-contrastActiveBorder" />
-            <ResizablePanel className="w-full pt-2">
+            <ResizablePanel className="w-full pt-2 tour-templates">
               <div className="w-full px-2 pt-2 text-sm font-semibold text-center uppercase text-white/90">
                 Templates
               </div>
@@ -92,11 +101,11 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
             </ResizablePanel>
           </ResizablePanelGroup>
         </ResizablePanel>
-        <ResizableHandle className="bg-vscode-contrastActiveBorder border-vscode-contrastActiveBorder" />
+        <ResizableHandle className=" bg-vscode-contrastActiveBorder border-vscode-contrastActiveBorder" />
         <ResizablePanel defaultSize={88}>
           <div className="flex-col w-full h-full font-sans bg-background dark:bg-vscode-panel-background">
             <div className="flex flex-row items-center gap-x-12 border-b-[1px] border-vscode-panel-border min-h-[40px]">
-              <div className="flex flex-col items-center h-full py-1 whitespace-nowrap">
+              <div className="flex flex-col items-center h-full py-1 tour-title whitespace-nowrap">
                 <Editable
                   text={projectName}
                   placeholder="Write a task name"
@@ -184,12 +193,12 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
                       />
                     </Editable>
                   </div>
-                  <div className="flex w-full h-full">
+                  <div className="flex w-full h-full tour-editor">
                     <CodeMirrorEditor project={project} />
                   </div>
                 </ResizablePanel>
                 <ResizableHandle className="bg-vscode-contrastActiveBorder" />
-                <ResizablePanel defaultSize={50}>
+                <ResizablePanel defaultSize={50} className="tour-playground">
                   <div className="flex flex-row h-full bg-vscode-panel-background">
                     <PlaygroundView />
                   </div>
@@ -307,6 +316,7 @@ const PlaygroundView = () => {
             {/* <Separator className="bg-vscode-textSeparator-foreground" /> */}
             <FunctionPanel />
           </div>
+          <Tour />
         </ASTProvider>
       </CustomErrorBoundary>
     </>
@@ -317,16 +327,16 @@ const TestToggle = () => {
   const { setSelection } = useContext(ASTContext)
   const { showTests, func } = useSelections()
 
-  useEffect(() => {
-    setSelection(undefined, undefined, undefined, undefined, false)
-  }, [])
+  // useEffect(() => {
+  //   setSelection(undefined, undefined, undefined, undefined, false)
+  // }, [])
   const numTests = func?.test_cases?.length ?? 0
 
   return (
     <Button
       variant="outline"
       className={clsx(
-        'p-1 text-xs w-fit h-fit border-vscode-textSeparator-foreground bg-vscode-button-background gap-x-2 pr-2',
+        'tour-test-button p-1 text-xs w-fit h-fit border-vscode-textSeparator-foreground bg-vscode-button-background gap-x-2 pr-2',
         [!showTests ? 'bg-vscode-button-background' : 'bg-vscode-panel-background'],
       )}
       onClick={() => setSelection(undefined, undefined, undefined, undefined, !showTests)}

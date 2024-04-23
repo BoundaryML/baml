@@ -30,10 +30,10 @@ const extractNamesBaml = `// This is a BAML config file, which extends the Jinja
 // - robust deserialization of JSON outputs,
 // - ...and more! 
 
-// Run this function's tests on the right panel to get started!
+
 function ExtractNames(input: string) -> string[] {
   // see clients.baml
-  client GPT4 
+  client GPT4Turbo
 
   // The stuff inside #" ... "# is Jinja.
   prompt #"
@@ -44,7 +44,7 @@ function ExtractNames(input: string) -> string[] {
     {{ input }}
     ---
 
-    {# special macro to print out the output instructions. Check out other examples! #}
+    {# special macro to print out the output instructions. #}
     {{ ctx.output_format }}
 
     JSON array:
@@ -67,7 +67,7 @@ enum Category {
 }
 
 function ClassifyMessage(input: string) -> Category {
-  client GPT4
+  client GPT4Turbo
 
   prompt #"
     Classify the following INPUT into ONE
@@ -107,7 +107,7 @@ class OrderInfo {
 }
 
 function GetOrderInfo(email: Email) -> OrderInfo {
-  client GPT4
+  client GPT4Turbo
   prompt #"
     Given the email below:
 
@@ -151,7 +151,7 @@ enum Category {
 }
 
 function ClassifyMessage(input: string) -> Category {
-  client GPT4
+  client GPT4Turbo
 
   prompt #"
     {# You can use _.chat("system") to start a system message #}
@@ -191,7 +191,7 @@ enum Category {
 }
 
 function ClassifyMessage(input: string) -> Category {
-  client GPT4
+  client GPT4Turbo
 
   prompt #"
     Classify the following INPUT into ONE
