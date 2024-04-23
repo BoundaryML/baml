@@ -1,13 +1,15 @@
 use magnus::{
-    class,
-    define_class,
+    class, define_class,
     encoding::{CType, RbEncoding},
+    exception::runtime_error,
     method,
     prelude::*,
-    Error, RString, RObject
+    Error, RObject, RString, Ruby,
 };
 
-fn is_blank(rb_self: RString) -> Result<String, Error> {
+type Result<T> = std::result::Result<T, magnus::Error>;
+
+fn is_blank(rb_self: RString) -> Result<String> {
     // RString::as_str is unsafe as it's possible for Ruby to invalidate the
     // str as we hold a reference to it, but here we're only ever using the
     // &str before Ruby is invoked again, so it doesn't get a chance to mess
@@ -37,16 +39,40 @@ fn is_blank(rb_self: RString) -> Result<String, Error> {
     Ok("third path".to_string())
 }
 
-fn foo(rb_self: magnus::value::Value) -> Result<String, Error> {
+fn foo(rb_self: magnus::value::Value) -> Result<String> {
     Ok("foo bar fizz buzz".to_string())
 }
 
+struct BamlRuntime {
+    field: String,
+}
+
+impl BamlRuntime {
+    pub fn new(code: &str) -> Result<BamlRuntime> {
+        Ok(BamlRuntime {
+            field: "internal field".to_string(),
+        })
+    }
+
+    pub fn latin(&self) -> Result<String> {
+        Ok("lorem ipsum".to_string())
+    }
+}
+
 #[magnus::init]
-fn init() -> Result<(), Error> {
+fn init() -> Result<()> {
     let class = define_class("String", class::object())?;
     class.define_method("blank?", method!(is_blank, 0))?;
 
     let t = define_class("TrueClass", class::object())?;
     t.define_method("foo?", method!(foo, 0))?;
+
+    let Ok(rb) = Ruby::get() else {
+        return Err(Error::new(runtime_error(), "BANG"));
+    };
+
+    let runtime_class = rb.define_class("BamlRuntimeFfi", class::object())?;
+    runtime_class.define_method("latin", method!(BamlRuntime::latin, 1))?;
+
     Ok(())
 }
