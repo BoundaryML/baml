@@ -1427,16 +1427,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "internal-baml-toy"
-version = "0.18.0-canary.4"
-dependencies = [
- "anyhow",
- "env_logger",
- "log",
- "serde",
-]
-
-[[package]]
 name = "ipnet"
 version = "2.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
