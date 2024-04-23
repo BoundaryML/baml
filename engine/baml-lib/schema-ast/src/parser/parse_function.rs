@@ -133,6 +133,9 @@ fn parse_named_arguement_list(
     let span = diagnostics.span(pair.as_span());
     let mut args: Vec<(Identifier, FunctionArg)> = Vec::new();
     for named_arg in pair.into_inner() {
+        if matches!(named_arg.as_rule(), Rule::SPACER_TEXT) {
+            continue;
+        }
         assert_correct_parser!(named_arg, Rule::named_argument);
 
         let mut name = None;

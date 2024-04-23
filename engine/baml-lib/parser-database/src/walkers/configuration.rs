@@ -30,16 +30,17 @@ impl ConfigurationWalker<'_> {
     }
 
     /// Get the function that this test case is testing.
-    pub fn walk_function(&self) -> super::FunctionWalker<'_> {
+    pub fn walk_function(&self) -> Option<super::FunctionWalker<'_>> {
         assert!(self.id.1 == "test_case");
-        self.db
-            .find_function_by_name(&self.test_case().function.0)
-            .unwrap()
+        self.db.find_function_by_name(&self.test_case().function.0)
     }
 
     /// If adapters are not present we can stream
     pub fn is_streaming_supported(&self) -> bool {
-        let func = self.walk_function();
+        let func = match self.walk_function() {
+            Some(func) => func,
+            None => return true,
+        };
 
         if func.is_old_function() {
             !func

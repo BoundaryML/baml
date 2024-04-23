@@ -66,9 +66,16 @@
       "end": "\\}",
       "patterns": [
         { "include": "#comment" },
-        { "include": "#field_declaration_type" },
-        { "include": "#block_attribute" },
-        { "include": "#single_variable_no_assignment" }
+        {
+          "comment": "Property + Type",
+          "begin": "(\\w+)",
+          "beginCaptures": {
+            "1": { "name": "variable.other.readwrite" }
+          },
+          "end": "(?=$|\\n|@|\\}|/)",
+          "patterns": [{ "include": "#type_definition" }]
+        },
+        { "include": "#block_attribute" }
       ]
     },
     "template_string_declaration": {
@@ -94,6 +101,136 @@
       ]
     },
     "function_declaration": {
+      "comment": "Function declaration",
+      "begin": "(function)\\s+(\\w+)",
+      "beginCaptures": {
+        "1": { "name": "storage.type.declaration.function" },
+        "2": { "name": "entity.name.function" }
+      },
+      "end": "\\}",
+      "patterns": [
+        { "include": "#comment" },
+        { "include": "#function_parameters" },
+        { "include": "#arrow_return_type" },
+        { "include": "#function_body" }
+      ]
+    },
+    "function_parameters": {
+      "begin": "\\(",
+      "end": "\\)",
+      "patterns": [{ "include": "#comment" }, { "include": "#function_name_type" }]
+    },
+    "function_name_type": {
+      "patterns": [
+        {
+          "match": "(\\w+)\\s*:",
+          "captures": {
+            "1": { "name": "variable.other.readwrite" }
+          }
+        },
+        {
+          "include": "#type_definition"
+        }
+      ]
+    },
+    "type_definition": {
+      "patterns": [
+        {
+          "match": "\\b(bool|int|float|string|null)\\b",
+          "name": "storage.type.declaration.native"
+        },
+        {
+          "match": "\\w+",
+          "name": "support.type"
+        },
+        {
+          "match": "\\[\\]",
+          "name": "keyword.control"
+        },
+        {
+          "match": "\\?",
+          "name": "keyword.control"
+        },
+        {
+          "comment": "union a | b | c",
+          "match": "\\|",
+          "name": "keyword.control"
+        },
+        {
+          "comment": "Groups",
+          "begin": "\\(",
+          "beginCaptures": {
+            "0": { "name": "keyword.control" }
+          },
+          "end": "(\\))(\\[\\])*(\\?)?",
+          "endCaptures": {
+            "1": { "name": "keyword.control" },
+            "2": { "name": "keyword.control" },
+            "3": { "name": "keyword.control" }
+          },
+          "patterns": [{ "include": "#type_definition" }]
+        }
+      ]
+    },
+    "arrow_return_type": {
+      "begin": "(?<=\\))\\s*(->)\\s*",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.baml.arrow" }
+      },
+      "end": "(?=\\{)",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#type_definition"
+        }
+      ]
+    },
+    "function_body": {
+      "begin": "(?<=\\{)\\s*",
+      "end": "(?=\\})",
+      "patterns": [
+        { "include": "#comment" },
+        { "include": "#block_attribute" },
+        {
+          "comment": "Function client properties",
+          "patterns": [
+            {
+              "match": "(client)\\s+(\\w+)",
+              "captures": {
+                "1": { "name": "variable.other.readwrite.client" },
+                "2": { "name": "entity.name.other.client" }
+              },
+              "name": "meta.client.declaration"
+            },
+            {
+              "begin": "\\s+(prompt)\\s+(#{1,5})(\")",
+              "beginCaptures": {
+                "1": { "name": "variable.other.readwrite.prompt" },
+                "2": { "name": "string.quoted.block.baml.prompt" },
+                "3": { "name": "string.quoted.block.baml.prompt" }
+              },
+              "end": "\\s*(\"\\2)",
+              "contentName": "string.quoted.block.baml.prompt",
+              "endCaptures": {
+                "0": { "name": "string.quoted.block.baml.prompt" }
+              },
+              "patterns": [{ "include": "source.baml-jinja" }]
+            }
+          ]
+        }
+      ]
+    },
+    "key_value_pair": {
+      "begin": "(\\w+)\\s*",
+      "beginCaptures": {
+        "1": { "name": "variable.other.readwrite" }
+      },
+      "end": "(?=\\n)",
+      "patterns": [{ "include": "#string_literal" }]
+    },
+    "function_declaration2": {
       "begin": "(function)\\s+(\\w+)\\(([^)]*)\\)\\s*(->)\\s*([\\w\\s\\[\\]|,?]+)\\s+\\{",
       "beginCaptures": {
         "1": { "name": "storage.type.declaration.function" },
@@ -178,8 +315,8 @@
       "begin": "(client|generator|retry_policy|printer)\\s*(<([^>]+)>)?\\s+(\\w+)\\s*\\{",
       "beginCaptures": {
         "1": { "name": "storage.type.declaration" },
-        "3": { "name": "support.type" },
-        "4": { "name": "entity.name" }
+        "3": { "name": "storage.type.declaration" },
+        "4": { "name": "entity.name.type" }
       },
       "end": "\\}",
       "patterns": [
