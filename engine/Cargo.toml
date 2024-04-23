@@ -1,19 +1,19 @@
 [workspace]
 resolver = "2"
-members = [
-  "baml-lib/*",
-  "baml-cli",
-  "baml-fmt",
-  "baml-schema-wasm",
-  "baml-core-ffi",
-  "language_client_ruby/ext/rust_blank",
-]
 default-members = [
   "baml-lib/*",
   "baml-cli",
   "baml-fmt",
   "baml-schema-wasm",
   "baml-core-ffi",
+]
+members = [
+  "baml-lib/*",
+  "baml-cli",
+  "baml-fmt",
+  "baml-schema-wasm",
+  "baml-core-ffi",
+  "language_client_ruby/ext/baml",
 ]
 
 [workspace.dependencies]

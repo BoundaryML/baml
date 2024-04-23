@@ -85,6 +85,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "language-client-ruby"
+version = "0.1.0"
+dependencies = [
+ "magnus",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -114,7 +121,9 @@ dependencies = [
 
 [[package]]
 name = "magnus"
-version = "0.7.0"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0fc7a31fb0b64761e3cd09a6975577601fccc5f08b8fc9245064fc4f71ed6a9d"
 dependencies = [
  "magnus-macros",
  "rb-sys",
@@ -125,6 +134,8 @@ dependencies = [
 [[package]]
 name = "magnus-macros"
 version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5968c820e2960565f647819f5928a42d6e874551cab9d88d75e3e0660d7f71e3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -229,14 +240,6 @@ name = "regex-syntax"
 version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5ea92a5b6195c6ef2a0295ea818b312502c6fc94dde986c5553242e18fd4ce2"
-
-[[package]]
-name = "rust_blank"
-version = "0.1.0"
-dependencies = [
- "magnus",
- "rb-sys",
-]
 
 [[package]]
 name = "rustc-hash"

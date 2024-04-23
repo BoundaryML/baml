@@ -1,9 +1,11 @@
 [package]
-name = "rust_blank"
+name = "language-client-ruby"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
+# This controls the name of the generated .so file
+name = "baml"
 crate-type = ["cdylib"]
 
 [dependencies]

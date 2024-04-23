@@ -1,10 +1,13 @@
 require "rake/testtask"
 require "rake/extensiontask"
+require "rb_sys/toolchain_info"
 
 task default: :test
 
-Rake::ExtensionTask.new("rust_blank") do |c|
-  c.lib_dir = "dist/rust_blank"
+Rake::ExtensionTask.new("baml") do |ext|
+  ext.lib_dir = "dist/baml"
+  ext.cross_compile = true
+  ext.cross_platform = ["x86_64-linux", "x86_64-darwin", "arm64-darwin", "x64-mingw-ucrt"]
 end
 
 task :dev do
