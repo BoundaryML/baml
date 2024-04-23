@@ -22,17 +22,20 @@ function stringSpanTest(functionName: string, testName: string): StringSpan {
   }
 }
 
-const extractNamesBaml = `// Hello! This is a BAML config file, which extends the Jinja2 templating language to better support writing LLM functions.
+const extractNamesBaml = `// This is a BAML config file, which extends the Jinja2 templating language to write LLM functions.
 
-// BAML adds many new features to Jinja -- type-support, static analysis of prompts, guarantees your defined output types, and more! BAML is the ✨ cleanest and fastest ✨ way to write complex LLM functions.
+// BAML adds many new features to Jinja:
+// - type-support,
+// - static analysis of prompts, 
+// - robust deserialization of JSON outputs,
+// - ...and more! 
 
-// Run this function's tests on the right panel to get started!
 
 function ExtractNames(input: string) -> string[] {
   // see clients.baml
-  client GPT4 
+  client GPT4Turbo
 
-  // All of the stuff inside #" ... "# is a jinja string. You can use {{ }} to insert variables, and {% %} to insert code
+  // The stuff inside #" ... "# is Jinja.
   prompt #"
     Extract the names from this INPUT:
 
@@ -41,13 +44,13 @@ function ExtractNames(input: string) -> string[] {
     {{ input }}
     ---
 
-    {# This is a unique BAML variable to print out the output instructions. Check out other templates for complex type examples #}
+    {# special macro to print out the output instructions. #}
     {{ ctx.output_format }}
 
     JSON array:
   "#
 }
-// Check out main.py to see how to use this in Python, and our Github repo for more documentation.
+// Open main.py to see how to import this into Python, and our Github repo for more documentation.
 `;
 
 const extractNamesTest = {
@@ -64,7 +67,7 @@ enum Category {
 }
 
 function ClassifyMessage(input: string) -> Category {
-  client GPT4
+  client GPT4Turbo
 
   prompt #"
     Classify the following INPUT into ONE
@@ -104,7 +107,7 @@ class OrderInfo {
 }
 
 function GetOrderInfo(email: Email) -> OrderInfo {
-  client GPT4
+  client GPT4Turbo
   prompt #"
     Given the email below:
 
@@ -148,7 +151,7 @@ enum Category {
 }
 
 function ClassifyMessage(input: string) -> Category {
-  client GPT4
+  client GPT4Turbo
 
   prompt #"
     {# You can use _.chat("system") to start a system message #}
@@ -188,7 +191,7 @@ enum Category {
 }
 
 function ClassifyMessage(input: string) -> Category {
-  client GPT4
+  client GPT4Turbo
 
   prompt #"
     Classify the following INPUT into ONE
@@ -246,7 +249,7 @@ export const exampleProjects: BAMLProject[] = [
   {
     id: 'extract-names',
     name: 'Introduction to BAML',
-    description: 'Writing a simple LLM function to extract names from text',
+    description: 'A simple LLM function to extract names from text',
     files: [
       {
         path: 'baml_src/main.baml',

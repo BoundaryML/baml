@@ -49,7 +49,7 @@ const FunctionDropdown: React.FC = () => {
   )
 }
 
-export const FunctionArgs: React.FC<{func: SFunction}> = ({func}) => {
+export const FunctionArgs: React.FC<{ func: SFunction }> = ({ func }) => {
   if (func.input.arg_type === 'positional') {
     return (
       <div className="flex flex-row gap-1">
@@ -57,18 +57,18 @@ export const FunctionArgs: React.FC<{func: SFunction}> = ({func}) => {
       </div>
     )
   }
-  
-  const args = func.input.values;
+
+  const args = func.input.values
   return (
-    <div className="flex flex-row gap-1">
+    <div className="flex flex-wrap gap-1">
       {Array.from(args.entries()).map(([i, v]) => (
-        <div key={v.name.value}>
+        <div key={v.name.value} className="whitespace-nowrap">
           {v.name.value}: <TypeComponent typeString={v.type} /> {i < args.length - 1 && ','}
         </div>
       ))}
     </div>
   )
-};
+}
 
 export const FunctionSelector: React.FC = () => {
   const { func } = useSelections()
@@ -100,9 +100,11 @@ export const FunctionSelector: React.FC = () => {
         </VSCodeDropdown> */}
       </div>
       {func && (
-        <div className="flex flex-row items-center gap-0 text-xs">
-          <span className="pl-2 pr-1 text-vscode-descriptionForeground">Fn signature</span> <Link item={func.name} />
-          {'('}<FunctionArgs func={func}/> {') → '} {func.output.arg_type === 'positional' && <TypeComponent typeString={func.output.type} />}
+        <div className="flex flex-row items-center gap-0 pl-2 text-xs text-vscode-descriptionForeground">
+          <Link item={func.name} />
+          {'('}
+          <FunctionArgs func={func} /> {') → '}{' '}
+          {func.output.arg_type === 'positional' && <TypeComponent typeString={func.output.type} />}
         </div>
       )}
     </div>

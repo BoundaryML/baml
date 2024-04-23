@@ -273,7 +273,7 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
   const { root_path, test_results } = useContext(ASTContext)
 
   return (
-    <div className="flex flex-col w-full h-full">
+    <div className="flex flex-col w-full h-full tour-test-panel">
       <div className="flex flex-row gap-x-1">
         <VSCodeTextField
           placeholder="Search test cases"
