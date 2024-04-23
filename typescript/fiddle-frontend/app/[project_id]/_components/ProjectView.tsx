@@ -82,7 +82,7 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
           <ResizablePanelGroup className="h-full" direction="vertical">
             <ResizablePanel defaultSize={50} className="h-full ">
               <div className="w-full px-2 text-sm font-semibold text-center uppercase text-white/90">project files</div>
-              <div className="flex flex-col w-full h-full tour-file-view">
+              <div className="flex flex-col w-full h-full pb-8 tour-file-view">
                 <FileViewer />
               </div>
             </ResizablePanel>
@@ -93,10 +93,14 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
               <div className="w-full px-2 pt-2 text-sm font-semibold text-center uppercase text-white/90">
                 Templates
               </div>
-              <div className="flex flex-col px-4 gap-y-4">
-                {exampleProjects.map((p) => {
-                  return <ExampleProjectCard key={p.name} project={p} />
-                })}
+              <div className="flex flex-col w-full h-full">
+                <ScrollArea>
+                  <div className="flex flex-col h-full px-4 gap-y-4">
+                    {exampleProjects.map((p) => {
+                      return <ExampleProjectCard key={p.name} project={p} />
+                    })}
+                  </div>
+                </ScrollArea>
               </div>
             </ResizablePanel>
           </ResizablePanelGroup>
@@ -157,6 +161,22 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
                 <></>
               )}
               <div className="flex flex-row items-center justify-end w-full pr-4 gap-x-8">
+                <div className="flex h-full">
+                  <Link
+                    href="https://discord.gg/BTNBeXGuaS"
+                    className="h-full pt-1 w-fit text-zinc-300 hover:text-zinc-50"
+                  >
+                    <div className="flex flex-row items-center text-sm gap-x-4">
+                      <Image
+                        src="/discord-icon.svg"
+                        className="hover:opacity-85"
+                        width={24}
+                        height={24}
+                        alt="Discord"
+                      />
+                    </div>
+                  </Link>
+                </div>
                 <div className="flex h-full">
                   <Link
                     href="https://docs.boundaryml.com/v3/home/installation"

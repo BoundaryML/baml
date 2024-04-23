@@ -1,6 +1,8 @@
 import { Card, CardTitle } from '@/components/ui/card'
 import { useSelections } from '@baml/playground-common'
+import { useAtom } from 'jotai'
 import Joyride, { Placement, TooltipProps } from 'react-joyride'
+import { productTourDoneAtom } from '../_atoms/atoms'
 
 export const Tour = () => {
   const steps = [
@@ -8,7 +10,8 @@ export const Tour = () => {
       target: '.tour-editor',
       content:
         'Welcome! PromptFiddle is a playground to share and test prompt templates. Prompts here are modeled like functions',
-      // disableBeacon: true,
+      disableBeacon: true,
+      placement: 'auto' as Placement,
     },
     // {
     //   // ..that can convert these definitions into actual Python or TS functions
@@ -38,6 +41,10 @@ export const Tour = () => {
     //   content: 'Check out other templates to learn different prompting strategies',
     // },
   ]
+  const [productTourDone, setProductTourDone] = useAtom(productTourDoneAtom)
+  if (productTourDone) {
+    return null
+  }
 
   return (
     <div className="">
@@ -50,6 +57,11 @@ export const Tour = () => {
         hideCloseButton={true}
         disableCloseOnEsc={true}
         showSkipButton={false}
+        callback={(data) => {
+          if (data.status === 'finished') {
+            setProductTourDone(true)
+          }
+        }}
         styles={{
           options: {
             overlayColor: 'rgba(0, 0, 0, 0.7)',
