@@ -5,6 +5,7 @@ import { useEffect } from 'react'
 import { Config, adjectives, animals, colors, uniqueNamesGenerator } from 'unique-names-generator'
 import { currentEditorFilesAtom } from '../_atoms/atoms'
 import { useTestRunner } from './useTestRunner'
+import posthog from 'posthog-js'
 
 const customConfig: Config = {
   dictionaries: [adjectives, colors, animals],
@@ -117,6 +118,7 @@ export const usePlaygroundListener = () => {
           break
         case 'runTest':
           window.history.replaceState(null, '', '/')
+          posthog.capture('run_test', { test: data })
 
           const testRequest: { root_path: string; tests: TestRequest } = event.data.data
           await runTests(testRequest.tests)

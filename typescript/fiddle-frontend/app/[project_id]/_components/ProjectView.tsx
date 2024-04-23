@@ -41,6 +41,7 @@ import clsx from 'clsx'
 import { AlertTriangleIcon, FlaskConical, GitForkIcon, LinkIcon, ShareIcon } from 'lucide-react'
 import { Separator } from '@baml/playground-common/components/ui/separator'
 import { InitialTour, PostTestRunTour } from './Tour'
+import posthog from 'posthog-js'
 
 const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
   const setEditorFiles = useSetAtom(currentEditorFilesAtom)
@@ -277,14 +278,18 @@ const ShareButton = ({ project, projectName }: { project: BAMLProject; projectNa
               testRunOutput: runTestOutput ?? undefined,
             })
 
+            posthog.capture('share_url', { id: urlId })
+
             const newUrl = `${window.location.origin}/${urlId}`
             window.history.replaceState({ ...window.history.state, as: newUrl, url: newUrl }, '', newUrl)
             setUnsavedChanges(false)
           }
 
           navigator.clipboard.writeText(`${window.location.origin}/${urlId}`)
+
           toast('URL copied to clipboard')
         } catch (e) {
+          posthog.capture('share_url_failed', { error: JSON.stringify(e) })
           toast('Failed to generate URL')
           console.error(e)
         } finally {
