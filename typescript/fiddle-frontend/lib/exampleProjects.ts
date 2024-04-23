@@ -13,16 +13,7 @@ export type BAMLProject = {
   testRunOutput?: TestRunOutput;
 };
 
-function stringSpanTest(functionName: string, testName: string): StringSpan {
-  return {
-    value: testName,
-    start: 0,
-    end: 0,
-    source_file: `baml_src/__tests__/${functionName}/${testName}.json`,
-  }
-}
-
-const extractNamesBaml = `// This is a BAML config file, which extends the Jinja2 templating language to write LLM functions.
+const extractResumeBaml = `// This is a BAML config file, which extends the Jinja2 templating language to write LLM functions.
 
 // BAML adds many new features to Jinja:
 // - type-support,
@@ -30,31 +21,42 @@ const extractNamesBaml = `// This is a BAML config file, which extends the Jinja
 // - robust deserialization of JSON outputs,
 // - ...and more! 
 
+class Resume {
+  name string
+  education Education[] @description("Extract in the same order listed")
+  skills string[] @description("Only include programming languages")
+}
 
-function ExtractNames(input: string) -> string[] {
+class Education {
+  school string
+  degree string
+  year int
+}
+
+function ExtractResume(resume_text: string) -> Resume {
   // see clients.baml
   client GPT4Turbo
 
-  // The stuff inside #" ... "# is Jinja.
+  // The prompt uses Jinja syntax
   prompt #"
-    Extract the names from this INPUT:
+    Parse the following resume and return a structured representation of the data in the schema below.
 
-    INPUT:
+    Resume:
     ---
-    {{ input }}
+    {{ resume_text }}
     ---
 
-    {# special macro to print out the output instructions. #}
+    {# special macro to print the output instructions. #}
     {{ ctx.output_format }}
 
-    JSON array:
+    JSON:
   "#
 }
-// Open main.py to see how to import this into Python, and our Github repo for more documentation.
+// Open main.py to see how to use this function
 `;
 
-const extractNamesTest = {
-  "input": "\"Attention Is All You Need\" is a landmark[1][2] 2017 research paper by Google.[3] Authored by eight scientists, it was responsible for expanding 2014 attention mechanisms proposed by Bahdanau et. al. into a new deep learning architecture known as the transformer."
+const extractResumeTest = {
+  "resume_text": "Jason Doe\nPython, Rust\nUniversity of California, Berkeley, B.S.\nin Computer Science, 2020\nAlso an expert in Tableau, SQL, and C++\n"
 };
 
 const classifyMessageBaml = `// This will be available as an enum in your Python and Typescript code.
@@ -134,7 +136,7 @@ function GetOrderInfo(email: Email) -> OrderInfo {
 const chainOfThoughtTest = {
   "email": {
     "subject": "Your Amazon.com order of \"Wood Square Dowel Rods...\" has shipped!",
-    "body": "Content-Type: text/plain; charset=utf-8\nContent-Transfer-Encoding: 7bit\n\nAmazon Shipping Confirmation\nhttps://www.amazon.com?ie=UTF8&ref_=scr_home\n\n____________________________________________________________________\n\nHi Samuel, your package will arrive:\n\nThursday, April 4\n\nTrack your package:\nhttps://www.amazon.com/gp/your-account/ship-track?ie=UTF8&orderId=113-7540940-3785857&packageIndex=0&shipmentId=Gx7wk71F9&ref_=scr_pt_tp_t\n\n\n\nOn the way:\nWood Square Dowel Rods...\nOrder #113-7540940-3785857\n\n\n\nAn Amazon driver may contact you by text message or call you for help on the day of delivery.    \n\nShip to:\n    Sam\n    SEATTLE, WA\n\nShipment total:\n$0.00\nRewards points applied\n\n\nReturn or replace items in Your orders\nhttps://www.amazon.com/gp/css/order-history?ie=UTF8&ref_=scr_yo\n\nLearn how to recycle your packaging at Amazon Second Chance(https://www.amazon.com/amsc?ref_=ascyorn).\n\n",
+    "body": "Amazon Shipping Confirmation\nwww.amazon.com?ie=UTF8&ref_=scr_home\n\nHi Samuel, your package will arrive:\n\nThursday, April 4\n\nTrack your package:\nwww.amazon.com/gp/your-account/ship-track?ie=UTF8&orderId=113-7540940-3785857&packageIndex=0&shipmentId=Gx7wk71F9&ref_=scr_pt_tp_t\n\nOn the way:\nWood Square Dowel Rods...\nOrder #113-7540940-3785857\n\nAn Amazon driver may contact you by text message or call you for help on the day of delivery.    \n\nShip to:\n    Sam\n    SEATTLE, WA\n\nShipment total:\n$0.00",
     "from": "inov-8 <enquiries@inov-8.com>",
     "from_address": "\"Amazon.com\" <shipment-tracking@amazon.com>"
   }
@@ -154,7 +156,7 @@ function ClassifyMessage(input: string) -> Category {
   client GPT4Turbo
 
   prompt #"
-    {# You can use _.chat("system") to start a system message #}
+    {# _.chat("system") starts a system message #}
     {{ _.chat("system") }}
 
     Classify the following INPUT into ONE
@@ -162,7 +164,7 @@ function ClassifyMessage(input: string) -> Category {
 
     {{ ctx.output_format }}
 
-    {# And _.chat("user") to start a user message #}
+    {# This starts a user message #}
     {{ _.chat("user") }}
 
     INPUT: {{ input }}
@@ -245,24 +247,59 @@ client<llm> Claude {
 }
 `;
 
+
+
 export const exampleProjects: BAMLProject[] = [
   {
-    id: 'extract-names',
+    id: 'extract-resume',
     name: 'Introduction to BAML',
-    description: 'A simple LLM function to extract names from text',
+    description: 'A simple LLM function extract a resume',
     files: [
       {
         path: 'baml_src/main.baml',
-        content: extractNamesBaml,
+        content: extractResumeBaml,
       },
       {
         path: 'baml_src/clients.baml',
         content: clientsBaml,
       },
       {
-        path: 'baml_src/__tests__/ExtractNames/test1.json',
-        content: JSON.stringify({ input: extractNamesTest }),
+        path: 'baml_src/__tests__/ExtractResume/test1.json',
+        content: JSON.stringify({ input: extractResumeTest }),
       },
+      {
+        path: 'main.py',
+        content: `from baml_client import baml as b
+# BAML types get converted to Pydantic models
+from baml_client.baml_types import Resume
+
+async def main():
+    resume_text = """Jason Doe\nPython, Rust\nUniversity of California, Berkeley, B.S.\nin Computer Science, 2020\nAlso an expert in Tableau, SQL, and C++\n"""
+
+    # this function comes from the autogenerated "baml_client".
+    # It calls the LLM you specified and handles the parsing.
+    resume = await b.ExtractResume(resume_text)
+    
+    # Fully type-checked and validated!
+    assert isinstance(resume, Resume)
+`
+      },
+      {
+        path: 'main.ts',
+        content: `import b from 'baml_client'
+
+async function main() {
+    const resume_text = \`Jason Doe\nPython, Rust\nUniversity of California, Berkeley, B.S.\nin Computer Science, 2020\nAlso an expert in Tableau, SQL, and C++\n\`
+
+    # this function comes from the autogenerated "baml_client".
+    # It calls the LLM you specified and handles the parsing.
+    const resume = await b.ExtractResume(resume_text)
+    
+    # Fully type-checked and validated!
+    assert resume.name === "Jason Doe"
+}
+`
+      }
     ]
   },
   {

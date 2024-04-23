@@ -5,12 +5,29 @@ import { NodeRendererProps } from 'react-arborist'
 import { activeFileAtom, currentEditorFilesAtom, emptyDirsAtom, fileDiagnostics } from '../../_atoms/atoms'
 import { EditorFile } from '@/app/actions'
 import { useEffect } from 'react'
+import { SiPython, SiTypescript } from 'react-icons/si'
 
 export type Entity = {
   id: string
   name: string
   fullPath: string
   object: any
+}
+
+const renderIcon = (path: string) => {
+  const icon = path.split('.').pop()
+  switch (icon) {
+    case 'py':
+      return <SiPython size={14} color="#6bc7f6" />
+    case 'ts':
+      return <SiTypescript size={14} color="#2563eb" />
+    default:
+      return (
+        <span className="file-folder-icon">
+          <File color="#6bc7f6" size={16} />
+        </span>
+      )
+  }
 }
 
 const Node = ({ node, style, dragHandle, tree }: NodeRendererProps<any>) => {
@@ -64,9 +81,7 @@ const Node = ({ node, style, dragHandle, tree }: NodeRendererProps<any>) => {
         {node.isLeaf ? (
           <>
             <span className="arrow"></span>
-            <span className="file-folder-icon">
-              <File color="#6bc7f6" size={16} />
-            </span>
+            {renderIcon(node.id)}
           </>
         ) : (
           <>

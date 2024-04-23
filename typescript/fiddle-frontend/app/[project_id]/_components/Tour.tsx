@@ -2,9 +2,11 @@ import { Card, CardTitle } from '@/components/ui/card'
 import { useSelections } from '@baml/playground-common'
 import { useAtom } from 'jotai'
 import Joyride, { Placement, TooltipProps } from 'react-joyride'
-import { productTourDoneAtom } from '../_atoms/atoms'
+import { productTourDoneAtom, productTourTestDoneAtom } from '../_atoms/atoms'
+import { useParams } from 'next/navigation'
+import Link from 'next/link'
 
-export const Tour = () => {
+export const InitialTour = () => {
   const steps = [
     {
       target: '.tour-editor',
@@ -60,6 +62,90 @@ export const Tour = () => {
         callback={(data) => {
           if (data.status === 'finished') {
             setProductTourDone(true)
+          }
+        }}
+        styles={{
+          options: {
+            overlayColor: 'rgba(0, 0, 0, 0.7)',
+          },
+        }}
+      />
+    </div>
+  )
+}
+
+export const PostTestRunTour = () => {
+  const { test_results, test_result_url, test_result_exit_status } = useSelections()
+  const { project_id } = useParams()
+
+  const steps = [
+    {
+      target: '.tour-test-result-panel',
+      content: (
+        <div>
+          Congrats! BAML just called the LLM using this prompt, and parsed the result according to your function
+          signature.
+          <br />
+          <br />
+          The JSON view is the <span className="font-semibold">parsed output</span>.
+          <br />
+          <br />
+          Click on <span className="font-semibold">"Show raw output"</span> to see the string that the LLM returned.
+        </div>
+      ),
+      disableBeacon: true,
+      placement: 'left' as Placement,
+    },
+
+    // {
+    //   target: '.tour-templates',
+    //   content: 'Check out other templates to learn different prompting strategies',
+    // },
+  ]
+
+  const [productTourTestDone, setProductTourTestDone] = useAtom(productTourTestDoneAtom)
+
+  console.log('params', project_id)
+  if (project_id === 'extract-resume' || project_id === undefined) {
+    steps.push({
+      // ..that can convert these definitions into actual Python or TS functions
+      target: '.tour-file-view',
+      content: (
+        <div>
+          Check out the main.py or main.ts file to see how the LLM function is called in Python or TypeScript. For more
+          info, see the{' '}
+          <Link className="text-blue-600" href="https://docs.boundaryml.com">
+            docs
+          </Link>{' '}
+          , or reach out on Discord.
+          <br />
+          <br />
+          Happy prompting!
+        </div>
+      ),
+      disableBeacon: false,
+      placement: 'right' as Placement,
+    })
+  }
+
+  if (test_result_exit_status !== 'COMPLETED' || productTourTestDone) {
+    return null
+  }
+
+  return (
+    <div className="">
+      <Joyride
+        steps={steps}
+        continuous={true}
+        disableOverlayClose={true}
+        spotlightClicks={true}
+        showProgress={true}
+        hideCloseButton={true}
+        disableCloseOnEsc={true}
+        showSkipButton={false}
+        callback={(data) => {
+          if (data.status === 'finished') {
+            setProductTourTestDone(true)
           }
         }}
         styles={{

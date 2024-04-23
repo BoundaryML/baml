@@ -40,7 +40,7 @@ import FileViewer from './Tree/FileViewer'
 import clsx from 'clsx'
 import { AlertTriangleIcon, FlaskConical, GitForkIcon, LinkIcon, ShareIcon } from 'lucide-react'
 import { Separator } from '@baml/playground-common/components/ui/separator'
-import { Tour } from './Tour'
+import { InitialTour, PostTestRunTour } from './Tour'
 
 const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
   const setEditorFiles = useSetAtom(currentEditorFilesAtom)
@@ -79,7 +79,7 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
         <ResizablePanel defaultSize={12} className="h-full bg-zinc-900">
           <div className="w-full pt-2 text-lg italic font-bold text-center">Prompt Fiddle</div>
 
-          <ResizablePanelGroup className="h-full" direction="vertical">
+          <ResizablePanelGroup className="h-full pb-4" direction="vertical">
             <ResizablePanel defaultSize={50} className="h-full ">
               <div className="w-full px-2 text-sm font-semibold text-center uppercase text-white/90">project files</div>
               <div className="flex flex-col w-full h-full pb-8 tour-file-view">
@@ -130,7 +130,8 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
               <div className="flex flex-row items-center gap-x-2">
                 <ShareButton project={project} projectName={projectName} />
               </div>
-              <div className="flex items-center justify-start h-full pt-0.5 w-full">
+
+              <div className="flex items-center justify-start h-full pt-0.5 ">
                 <Button asChild variant={'ghost'} className="h-full py-1 gap-x-1">
                   <Link
                     href="https://docs.boundaryml.com"
@@ -141,15 +142,6 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
                   </Link>
                 </Button>
               </div>
-
-              {/* <div className="flex flex-row justify-center gap-x-1 item-center">
-                <Button variant={'ghost'} className="h-full py-1" asChild>
-                  <Link target="_blank" href="https://docs.boundaryml.com">
-                    Docs
-                  </Link>
-                </Button>
-              </div> */}
-
               {unsavedChanges ? (
                 <div className="flex flex-row items-center whitespace-nowrap text-muted-foreground">
                   <Badge variant="outline" className="font-light text-yellow-400 gap-x-2">
@@ -160,6 +152,15 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
               ) : (
                 <></>
               )}
+
+              {/* <div className="flex flex-row justify-center gap-x-1 item-center">
+                <Button variant={'ghost'} className="h-full py-1" asChild>
+                  <Link target="_blank" href="https://docs.boundaryml.com">
+                    Docs
+                  </Link>
+                </Button>
+              </div> */}
+
               <div className="flex flex-row items-center justify-end w-full pr-4 gap-x-8">
                 <div className="flex h-full">
                   <Link
@@ -184,7 +185,7 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
                   >
                     <div className="flex flex-row items-center text-sm gap-x-4">
                       <Image src="/vscode_logo.svg" width={20} height={20} alt="VSCode extension" />
-                      <div>Get VSCode extension</div>
+                      <div className="whitespace-nowrap">Get VSCode extension</div>
                     </div>
                   </Link>
                 </div>
@@ -347,7 +348,8 @@ const PlaygroundView = () => {
             {/* <Separator className="bg-vscode-textSeparator-foreground" /> */}
             <FunctionPanel />
           </div>
-          <Tour />
+          <InitialTour />
+          <PostTestRunTour />
         </ASTProvider>
       </CustomErrorBoundary>
     </>
