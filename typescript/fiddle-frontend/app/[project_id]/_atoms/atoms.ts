@@ -20,6 +20,8 @@ export const unsavedChangesAtom = atom<boolean>(false);
 
 export const activeFileAtom = atom<EditorFile | null>(null);
 export const fileDiagnostics = atom<Diagnostic[]>([]);
+export const emptyDirsAtom = atom<string[]>([]);
+
 
 export type TestRunOutput = {
   testState: TestState;

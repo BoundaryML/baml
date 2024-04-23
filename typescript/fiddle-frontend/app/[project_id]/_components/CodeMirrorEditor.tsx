@@ -7,7 +7,7 @@ import { BAML, theme } from '@baml/codemirror-lang'
 import { ParserDatabase } from '@baml/common'
 import { Button } from '@baml/playground-common/components/ui/button'
 import { Diagnostic, linter } from '@codemirror/lint'
-import CodeMirror, { EditorView } from '@uiw/react-codemirror'
+import CodeMirror, { EditorView, Extension } from '@uiw/react-codemirror'
 import { useAtom, useSetAtom } from 'jotai'
 import Link from 'next/link'
 import { useEffect } from 'react'
@@ -19,6 +19,8 @@ import {
   functionTestCaseAtom,
   unsavedChangesAtom,
 } from '../_atoms/atoms'
+import { langs } from '@uiw/codemirror-extensions-langs'
+import { Language, LanguageSupport } from '@codemirror/language'
 
 type LintResponse = {
   diagnostics: LinterError[]
@@ -83,7 +85,7 @@ async function bamlLinter(_view: any): Promise<Diagnostic[]> {
 
   return allDiagnostics.filter((d) => d.source === atomStore.get(activeFileAtom)?.path)
 }
-const extensions = [
+const extensions: Extension[] = [
   BAML(),
   EditorView.lineWrapping,
 
@@ -97,6 +99,16 @@ const extensions = [
   }),
 ]
 
+const extensionMap = {
+  ts: [langs.tsx(), EditorView.lineWrapping],
+  py: [langs.python(), EditorView.lineWrapping],
+  json: [langs.json(), EditorView.lineWrapping],
+  baml: [extensions],
+}
+const getLanguage = (filePath: string | undefined): Extension[] => {
+  const extension = filePath?.split('.').pop()
+  return extensionMap[extension as keyof typeof extensionMap] ?? []
+}
 export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
   const [editorFiles, setEditorFiles] = useAtom(currentEditorFilesAtom)
   const [activeFile, setActiveFile] = useAtom(activeFileAtom)
@@ -106,6 +118,8 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
   }, [project.id])
 
   const setUnsavedChanges = useSetAtom(unsavedChangesAtom)
+
+  const langExtensions = getLanguage(activeFile?.path)
 
   return (
     <div className="w-full">
@@ -128,13 +142,13 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
               </Button>
             ))}
         </>
-        <div className="flex items-center justify-center h-full pt-0.5 pr-16 w-full">
+        <div className="flex items-center justify-start h-full pt-0.5 w-full">
           <Link
             href="https://docs.boundaryml.com"
             target="_blank"
             className="text-xs hover:text-foreground text-muted-foreground "
           >
-            What is BAML?
+            (What is BAML?)
           </Link>
         </div>
       </div>
@@ -146,7 +160,7 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
         <CodeMirror
           key={editorFiles.map((f) => f.path).join('')}
           value={activeFile?.content ?? ''}
-          extensions={extensions}
+          extensions={langExtensions}
           theme={theme}
           className="text-sm"
           height="100%"

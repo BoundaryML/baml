@@ -2,7 +2,7 @@ import clsx from 'clsx'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { ArrowDown, ArrowRight, ChevronDown, ChevronRight, Edit, Edit2, File, Folder, X } from 'lucide-react'
 import { NodeRendererProps } from 'react-arborist'
-import { activeFileAtom, currentEditorFilesAtom, fileDiagnostics } from '../../_atoms/atoms'
+import { activeFileAtom, currentEditorFilesAtom, emptyDirsAtom, fileDiagnostics } from '../../_atoms/atoms'
 import { EditorFile } from '@/app/actions'
 import { useEffect } from 'react'
 
@@ -19,6 +19,7 @@ const Node = ({ node, style, dragHandle, tree }: NodeRendererProps<any>) => {
   const [editorFiles, setEditorFiles] = useAtom(currentEditorFilesAtom)
   const setActiveFile = useSetAtom(activeFileAtom)
   const diagnostics = useAtomValue(fileDiagnostics)
+  const setEmptyDirs = useSetAtom(emptyDirsAtom)
 
   useEffect(() => {
     if (node.isSelected) {
@@ -59,7 +60,7 @@ const Node = ({ node, style, dragHandle, tree }: NodeRendererProps<any>) => {
       style={style}
       ref={dragHandle}
     >
-      <div className="flex flex-row items-center w-full gap-x-1" onClick={() => node.isInternal && node.toggle()}>
+      <div className="flex flex-row items-center w-full pl-2 gap-x-1" onClick={() => node.isInternal && node.toggle()}>
         {node.isLeaf ? (
           <>
             <span className="arrow"></span>
@@ -96,6 +97,18 @@ const Node = ({ node, style, dragHandle, tree }: NodeRendererProps<any>) => {
                       return f
                     })
                   })
+
+                  setEmptyDirs((prev) => {
+                    prev = prev as string[]
+                    return prev.map((d) => {
+                      d = d.slice(0, -1)
+                      if (d === node.id) {
+                        const dirPathWithNoDirname = d.split('/').slice(0, -1).join('/')
+                        return `${dirPathWithNoDirname}/${e.currentTarget.value}`
+                      }
+                      return d
+                    })
+                  })
                 }
               }}
               autoFocus
@@ -129,6 +142,11 @@ const Node = ({ node, style, dragHandle, tree }: NodeRendererProps<any>) => {
                 setEditorFiles((prev) => {
                   prev = prev as EditorFile[]
                   return prev.filter((f) => f.path !== node.id)
+                })
+                console.log('emptydirs deleting ', node.id)
+                setEmptyDirs((prev) => {
+                  prev = prev as string[]
+                  return prev.filter((d) => d.slice(0, -1) !== node.id)
                 })
               }}
               title="Delete"
