@@ -142,15 +142,6 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
               </Button>
             ))}
         </>
-        <div className="flex items-center justify-start h-full pt-0.5 w-full">
-          <Link
-            href="https://docs.boundaryml.com"
-            target="_blank"
-            className="text-xs hover:text-foreground text-muted-foreground "
-          >
-            (What is BAML?)
-          </Link>
-        </div>
       </div>
       <div
         style={{

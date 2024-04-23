@@ -126,6 +126,17 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
               <div className="flex flex-row items-center gap-x-2">
                 <ShareButton project={project} projectName={projectName} />
               </div>
+              <div className="flex items-center justify-start h-full pt-0.5 w-full">
+                <Button asChild variant={'ghost'} className="h-full py-1 gap-x-1">
+                  <Link
+                    href="https://docs.boundaryml.com"
+                    target="_blank"
+                    className="text-sm hover:text-foreground text-foreground "
+                  >
+                    What is BAML?
+                  </Link>
+                </Button>
+              </div>
 
               {/* <div className="flex flex-row justify-center gap-x-1 item-center">
                 <Button variant={'ghost'} className="h-full py-1" asChild>

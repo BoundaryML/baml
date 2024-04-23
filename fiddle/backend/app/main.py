@@ -177,9 +177,12 @@ async def fiddle(request: RunTests, tmpdir: str = Depends(create_temp_files)):
     test_request = request.testRequest
     print(request)
 
+    main_found = False
+
     for file in files:
         if "main.baml" in file.name:
             file.content = generator_block + file.content
+            main_found = True
         # Ensure the directory path exists
         file_directory = os.path.join(tmpdir, os.path.dirname(file.name))
         os.makedirs(file_directory, exist_ok=True)  # Create any directories in the path
@@ -188,6 +191,12 @@ async def fiddle(request: RunTests, tmpdir: str = Depends(create_temp_files)):
         file_path = os.path.join(tmpdir, file.name)
         with open(file_path, "w") as f:
             f.write(file.content)
+
+    if not main_found:
+        file_path = os.path.join(tmpdir, "baml_src/main.baml")
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        with open(file_path, "w") as f:
+            f.write(generator_block)
 
     await asyncio.sleep(1.0)
     # Use asyncio subprocess for non-blocking call

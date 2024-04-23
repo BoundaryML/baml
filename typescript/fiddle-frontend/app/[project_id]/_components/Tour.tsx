@@ -8,7 +8,7 @@ export const Tour = () => {
       target: '.tour-editor',
       content:
         'Welcome! PromptFiddle is a playground to share and test prompt templates. Prompts here are modeled like functions',
-      disableBeacon: true,
+      // disableBeacon: true,
     },
     // {
     //   // ..that can convert these definitions into actual Python or TS functions
