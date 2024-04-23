@@ -109,7 +109,7 @@ fn run_validation_test(test_file_path: &str) {
         (false, Ok(_)) => String::new(), // expected diagnostics, got none
     };
 
-    if std::env::var("UPDATE_EXPECT").map_or(|s| s == "1", false) {
+    if std::env::var("UPDATE_EXPECT").map_or(false, |s| s == "1") {
         let mut file = fs::File::create(&file_path).unwrap(); // truncate
 
         let schema = last_comment_idx

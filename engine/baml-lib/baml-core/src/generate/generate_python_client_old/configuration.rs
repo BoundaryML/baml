@@ -47,7 +47,17 @@ impl WithWritePythonString for ConfigurationWalker<'_> {
             }
             Configuration::Printer(_) => {}
             Configuration::TestCase(tc) => {
-                let func = self.walk_function();
+                let func = match self.walk_function() {
+                    Some(func) => func,
+                    None => {
+                        eprintln!(
+                            "Function {} not found for test case {}",
+                            self.test_case().function.0,
+                            tc.name()
+                        );
+                        return;
+                    }
+                };
 
                 fc.start_export_file("tests", "__init__");
                 fc.complete_file();
