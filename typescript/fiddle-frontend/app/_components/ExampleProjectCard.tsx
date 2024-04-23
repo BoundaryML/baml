@@ -27,7 +27,7 @@ export const ExampleProjectCard = ({ project }: { project: BAMLProject }) => {
       <AlertDialogTrigger>
         <Card
           className={clsx(
-            'flex w-full h-fit px-2 font-sans border-gray-800 bg-zinc-800/40 hover:cursor-pointer hover:bg-zinc-800 rounded-sm',
+            'flex w-full h-fit text-center px-2 font-sans border-gray-800 bg-zinc-800/40 hover:cursor-pointer hover:bg-zinc-800 rounded-sm',
             [isSelected ? 'border-gray-600 bg-zinc-800' : 'border-transparent'],
           )}
           onClick={() => {
@@ -37,7 +37,7 @@ export const ExampleProjectCard = ({ project }: { project: BAMLProject }) => {
             }
           }}
         >
-          <CardHeader className="px-1 py-4">
+          <CardHeader className="w-full px-1 py-4">
             <CardTitle className="text-xs">{project.name}</CardTitle>
             <CardDescription className="text-xs">{project.description}</CardDescription>
           </CardHeader>

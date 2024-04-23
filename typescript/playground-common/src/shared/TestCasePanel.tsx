@@ -293,7 +293,7 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
         ) : (
           <>
             <Button
-              className="px-1 py-1 text-sm bg-red-500 rounded-sm h-fit whitespace-nowrap bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground"
+              className="h-full px-1 py-1 text-xs bg-red-500 rounded-sm whitespace-nowrap bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground"
               // disabled={test_cases.length === 0}
               onClick={() => {
                 const runTestRequest: TestRequest = {

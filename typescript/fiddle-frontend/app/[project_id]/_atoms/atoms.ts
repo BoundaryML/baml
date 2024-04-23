@@ -24,6 +24,8 @@ export const emptyDirsAtom = atom<string[]>([]);
 
 
 export const productTourDoneAtom = atomWithStorage<boolean>('initial_tutorial_v1', false);
+export const productTourTestDoneAtom = atomWithStorage<boolean>('test_tour_v1', false);
+
 
 
 export type TestRunOutput = {

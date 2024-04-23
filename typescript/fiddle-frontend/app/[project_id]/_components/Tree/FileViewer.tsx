@@ -66,22 +66,18 @@ function createTree(filePaths: string[]): TreeNode[] {
   const pathMap = new Map<string, TreeNode>()
 
   sortedFilePaths.forEach((path) => {
-    console.log('-------path ', path)
     const parts = path.split('/')
 
     let currentLevel = root
     let currentPath = ''
 
     parts.forEach((part, partIndex) => {
-      console.log('part', part)
       currentPath += (currentPath ? '/' : '') + part
-      console.log('currentPath', currentPath)
       if (part === '') {
         return
       }
 
       let node = pathMap.get(currentPath)
-      console.log('node', node)
       if (!node) {
         node = {
           id: currentPath,
@@ -93,11 +89,9 @@ function createTree(filePaths: string[]): TreeNode[] {
       }
 
       currentLevel = node.children!
-      console.log('------------------')
     })
 
     let parentNode = pathMap.get(currentPath)
-    console.log('parentNode', parentNode)
     if (parentNode && parentNode.children && parentNode.children.length === 0) {
       if (isFile(path)) {
         delete parentNode.children

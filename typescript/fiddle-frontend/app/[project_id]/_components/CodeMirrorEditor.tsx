@@ -58,7 +58,7 @@ async function bamlLinter(_view: any): Promise<Diagnostic[]> {
   const selectedTests = atomStore.get(functionTestCaseAtom) as Record<string, string>
   const linterInput: LinterInput = {
     root_path: `${BAML_DIR}`,
-    files: currentFiles,
+    files: currentFiles.filter((f) => f.path.includes(BAML_DIR)).map((f) => ({ path: f.path, content: f.content })),
     selected_tests: selectedTests,
   }
 

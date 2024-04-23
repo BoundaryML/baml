@@ -33,7 +33,7 @@ export const GithubStars = () => {
           height={18}
           alt="Github"
         />
-        <span>Star us on Github</span>
+        <span className="whitespace-nowrap">Star us on Github</span>
         <Separator orientation="vertical" className=" border-zinc-100 w-[1px] h-[24px] bg-zinc-700" />
         <Star className=" group-hover:fill-slate-50" size={16} />
       </Link>

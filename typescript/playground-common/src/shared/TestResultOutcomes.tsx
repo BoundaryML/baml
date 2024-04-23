@@ -50,7 +50,7 @@ const TestResultPanel = () => {
           </VSCodeLink>
         </div>
       )}
-      <div className="relative flex flex-col w-full h-full pb-4">
+      <div className="relative flex flex-col w-full h-full pb-4 tour-test-result-panel">
         <VSCodePanels
           activeid={`test-${selected}`}
           onChange={(e) => {
