@@ -1,3 +1,5 @@
-# These are used for compilation
-lib/
+*.so
 tmp/
+.bundle/
+vendor/
+pkg/

@@ -5,4 +5,4 @@ require "rb_sys/mkmf"
 #
 #    - CRATE_NAME is the name of the crate in ext/${GEM_NAME}/Cargo.toml
 #    - GEM_NAME is the name of the gem in ext/baml
-create_rust_makefile("language_client_ruby/baml")
+create_rust_makefile("baml/baml")

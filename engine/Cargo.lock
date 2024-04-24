@@ -1507,6 +1507,8 @@ name = "language-client-ruby"
 version = "0.1.0"
 dependencies = [
  "magnus",
+ "rb-sys",
+ "rb-sys-env",
 ]
 
 [[package]]

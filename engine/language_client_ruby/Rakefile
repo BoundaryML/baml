@@ -1,23 +1,61 @@
+require "bundler/gem_tasks"
 require "rake/testtask"
-require "rake/extensiontask"
+require "rb_sys/extensiontask"
 require "rb_sys/toolchain_info"
 
-GEMSPEC = Gem::Specification.load("my_gem.gemspec")
+GEMSPEC_PATH = "baml.gemspec"
+GEMSPEC = Gem::Specification.load(GEMSPEC_PATH) || abort("Could not load #{GEMSPEC_PATH}")
 
 task default: :test
 
-Rake::ExtensionTask.new("baml", GEMSPEC) do |ext|
+RbSys::ExtensionTask.new("baml", GEMSPEC) do |ext|
   ext.lib_dir = "lib/baml"
-  ext.cross_compile = true
-  ext.cross_platform = %w["x86_64-linux"]
+  #ext.cross_compile = true
+  #ext.cross_platform = %w[x86_64-linux-gnu]
   #ext.cross_platform = ["x86_64-linux", "x86_64-darwin", "arm64-darwin", "x64-mingw-ucrt"]
 end
 
-task :dev do
-  ENV['RB_SYS_CARGO_PROFILE'] = 'dev'
-end
+#task :dev do
+#  ENV['RB_SYS_CARGO_PROFILE'] = 'dev'
+#end
 
 Rake::TestTask.new do |t|
-  t.deps << :dev << :compile
-  t.test_files = FileList[File.expand_path("test/*_test.rb", __dir__)]
+  t.libs << "lib"
+  t.libs << "test"
+  t.test_files = FileList["test/*_test.rb"]
 end
+
+#PLATFORMS = %w[
+#  aarch64-linux-gnu
+#  aarch64-linux-musl
+#  arm-linux-gnu
+#  arm-linux-musl
+#  arm64-darwin
+#  x64-mingw-ucrt
+#  x64-mingw32
+#  x86-linux-gnu
+#  x86-linux-musl
+#  x86-mingw32
+#  x86_64-darwin
+#  x86_64-linux-gnu
+#  x86_64-linux-musl
+#]
+#PLATFORMS = %w[
+#  x86_64-linux-gnu
+#]
+#task 'gem:native' do
+#  require 'rake_compiler_dock'
+#  sh "bundle package --all"   # Avoid repeated downloads of gems by using gem files from the host.
+#  PLATFORMS.each do |plat|
+#    RakeCompilerDock.sh "bundle --local && rake native:#{plat} gem", platform: plat
+#  end
+#  RakeCompilerDock.sh "bundle --local && rake java gem", rubyvm: :jruby
+#end
+
+
+desc "Build native extension for a given platform (i.e. `rake 'native[x86_64-linux]'`)"
+task :native, [:platform] do |_t, platform:|
+  sh "bundle", "exec", "rb-sys-dock", "--platform", platform, "--build"
+end
+
+task build: :compile

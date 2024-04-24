@@ -1,7 +1,8 @@
 [package]
-name = "language-client-ruby"
+name = "baml"
 version = "0.1.0"
 edition = "2021"
+publish = false
 
 [lib]
 # This controls the name of the generated .so file
@@ -9,4 +10,20 @@ name = "baml"
 crate-type = ["cdylib"]
 
 [dependencies]
-magnus = "0.6.3"
+magnus = "0.6"
+rb-sys = { version = "0.9", features = [
+  "bindgen-rbimpls",
+  "bindgen-deprecated-types",
+  "stable-api-compiled-fallback",
+] }
+
+[dev-dependencies]
+rb-sys = { version = "0.9", features = [
+  "link-ruby",
+  "bindgen-rbimpls",
+  "bindgen-deprecated-types",
+  "stable-api-compiled-fallback",
+] }
+
+[build-dependencies]
+rb-sys-env = { version = "0.1" }

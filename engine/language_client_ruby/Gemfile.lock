@@ -1,0 +1,26 @@
+PATH
+  remote: .
+  specs:
+    baml (0.2.21)
+      rb_sys (~> 0.9)
+
+GEM
+  remote: https://rubygems.org/
+  specs:
+    rake (13.1.0)
+    rake-compiler (1.2.7)
+      rake
+    rb_sys (0.9.97)
+
+PLATFORMS
+  ruby
+  x86_64-linux
+
+DEPENDENCIES
+  baml!
+  rake (~> 13.0)
+  rake-compiler (~> 1.2)
+  rb_sys (~> 0.9.65)
+
+BUNDLED WITH
+   2.4.4
