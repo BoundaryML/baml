@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-default-members = [
+members = [
   "baml-lib/*",
   "baml-cli",
   "baml-fmt",

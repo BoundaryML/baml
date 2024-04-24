@@ -10,6 +10,7 @@ name = "baml"
 crate-type = ["cdylib"]
 
 [dependencies]
+baml-runtime = { path = "../../../baml-runtime" }
 magnus = "0.6"
 # Must be kept in sync with ../../Gemfile
 rb-sys = { version = "0.9.97", features = [

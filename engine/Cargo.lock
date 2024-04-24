@@ -1506,15 +1506,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9dbbfed4e59ba9750e15ba154fdfd9329cee16ff3df539c2666b70f58cc32105"
 
 [[package]]
-name = "language-client-ruby"
-version = "0.1.0"
-dependencies = [
- "magnus",
- "rb-sys",
- "rb-sys-env",
-]
-
-[[package]]
 name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
