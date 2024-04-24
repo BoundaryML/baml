@@ -6,11 +6,11 @@ import { BAMLProject } from '@/lib/exampleProjects'
 import { BAML, theme } from '@baml/codemirror-lang'
 import { ParserDatabase } from '@baml/common'
 import { Button } from '@baml/playground-common/components/ui/button'
-import { Diagnostic, linter } from '@codemirror/lint'
-import CodeMirror, { EditorView, Extension } from '@uiw/react-codemirror'
-import { useAtom, useSetAtom } from 'jotai'
+import { Diagnostic, linter, forceLinting } from '@codemirror/lint'
+import CodeMirror, { Compartment, EditorView, Extension, ReactCodeMirrorRef } from '@uiw/react-codemirror'
+import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import Link from 'next/link'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import {
   activeFileAtom,
   currentEditorFilesAtom,
@@ -52,8 +52,13 @@ export interface LinterInput {
   selected_tests: Record<string, string>
 }
 
+let wasmModuleCache: any = null
+
 async function bamlLinter(_view: any): Promise<Diagnostic[]> {
-  const lint = await import('@gloo-ai/baml-schema-wasm-web').then((m) => m.lint)
+  if (!wasmModuleCache) {
+    wasmModuleCache = await import('@gloo-ai/baml-schema-wasm-web')
+  }
+  const lint = wasmModuleCache.lint
   const currentFiles = atomStore.get(currentEditorFilesAtom) as EditorFile[]
   const selectedTests = atomStore.get(functionTestCaseAtom) as Record<string, string>
   const linterInput: LinterInput = {
@@ -85,19 +90,13 @@ async function bamlLinter(_view: any): Promise<Diagnostic[]> {
 
   return allDiagnostics.filter((d) => d.source === atomStore.get(activeFileAtom)?.path)
 }
-const extensions: Extension[] = [
-  BAML(),
-  EditorView.lineWrapping,
 
-  // lintGutter({}),
+function makeLinter() {
+  return linter(bamlLinter, { delay: 200 })
+}
 
-  linter(bamlLinter, {
-    delay: 200,
-    // needsRefresh: (update) => {
-
-    // },
-  }),
-]
+const comparment = new Compartment()
+const extensions: Extension[] = [BAML(), EditorView.lineWrapping, comparment.of(makeLinter())]
 
 const extensionMap = {
   ts: [langs.tsx(), EditorView.lineWrapping],
@@ -112,10 +111,23 @@ const getLanguage = (filePath: string | undefined): Extension[] => {
 export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
   const [editorFiles, setEditorFiles] = useAtom(currentEditorFilesAtom)
   const [activeFile, setActiveFile] = useAtom(activeFileAtom)
+  const ref = useRef<ReactCodeMirrorRef>({})
 
   useEffect(() => {
     setActiveFile(project.files[0])
   }, [project.id])
+
+  // force linting on file changes so playground updates
+  useEffect(() => {
+    if (ref.current?.view) {
+      const view = ref.current.view
+      view.dispatch({
+        effects: comparment.reconfigure([makeLinter()]),
+      })
+    }
+  }, [editorFiles])
+
+  // ref.current.view.
 
   const setUnsavedChanges = useSetAtom(unsavedChangesAtom)
 
@@ -149,7 +161,8 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
         }}
       >
         <CodeMirror
-          key={editorFiles.map((f) => f.path).join('')}
+          ref={ref}
+          // key={editorFiles.map((f) => f.path).join('')}
           value={activeFile?.content ?? ''}
           extensions={langExtensions}
           theme={theme}
