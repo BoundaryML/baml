@@ -83,8 +83,7 @@ export const PostTestRunTour = () => {
       target: '.tour-test-result-panel',
       content: (
         <div>
-          Congrats! BAML just called the LLM using this prompt, and parsed the result according to your function
-          signature.
+          These are the test results! BAML calls the LLM and parses the output into your function output type.
           <br />
           <br />
           The JSON view is the <span className="font-semibold">parsed output</span>.
@@ -104,6 +103,7 @@ export const PostTestRunTour = () => {
   ]
 
   const [productTourTestDone, setProductTourTestDone] = useAtom(productTourTestDoneAtom)
+  const [productTourDone] = useAtom(productTourDoneAtom)
 
   console.log('params', project_id)
   if (project_id === 'extract-resume' || project_id === undefined) {
@@ -126,6 +126,10 @@ export const PostTestRunTour = () => {
       disableBeacon: false,
       placement: 'right' as Placement,
     })
+  }
+
+  if (!productTourDone) {
+    return null
   }
 
   if (test_result_exit_status !== 'COMPLETED' || productTourTestDone) {
