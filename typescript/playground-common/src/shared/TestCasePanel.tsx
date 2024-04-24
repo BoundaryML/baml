@@ -325,6 +325,7 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
       <div className="flex flex-col py-2 divide-y gap-y-1 divide-vscode-textSeparator-foreground">
         {/* <pre>{JSON.stringify(input_json_schema, null, 2)}</pre> */}
         <EditTestCaseForm
+          key={'new'}
           testCase={undefined}
           schema={input_json_schema}
           func={func}
@@ -393,7 +394,14 @@ const EditTestCaseForm = ({
                 value={testName === undefined ? '' : testName}
                 placeholder="Enter test name"
                 onInput={(e) => {
-                  setTestName((e as React.FormEvent<HTMLInputElement>).currentTarget.value)
+                  // weird things happen if we dont do the replacement here -- on prompt fiddle
+                  // it seems new updates to tests dont get propagated if spaces are set.
+                  setTestName(
+                    (e as React.FormEvent<HTMLInputElement>).currentTarget.value.replace(
+                      /[&\/\\#, +()$~%.'":*?<>{}]/g,
+                      '_',
+                    ),
+                  )
                 }}
               />
             ) : (
@@ -430,7 +438,10 @@ const EditTestCaseForm = ({
               },
             })
             setShowForm(false)
-            setTestName(undefined)
+            if (testCase === undefined) {
+              // reset the name back to undefined since this component is used to add new tests
+              setTestName(undefined)
+            }
           }}
         />
       </DialogContent>

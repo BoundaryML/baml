@@ -1,11 +1,11 @@
 import { EditorFile } from '@/app/actions'
 import { StringSpan, TestFileContent, TestRequest } from '@baml/common'
 import { useAtom } from 'jotai'
+import posthog from 'posthog-js'
 import { useEffect } from 'react'
 import { Config, adjectives, animals, colors, uniqueNamesGenerator } from 'unique-names-generator'
 import { currentEditorFilesAtom } from '../_atoms/atoms'
 import { useTestRunner } from './useTestRunner'
-import posthog from 'posthog-js'
 
 const customConfig: Config = {
   dictionaries: [adjectives, colors, animals],
@@ -89,17 +89,13 @@ export const usePlaygroundListener = () => {
             input: testInputContent,
           }
 
-          const existingTestFile = editorFiles.find((file) => file.path === uri)
+          console.log(editorFiles.map((f) => f.path))
 
           setEditorFiles((prev) => {
             const prevFiles = prev as EditorFile[]
-            return [
-              ...prevFiles,
-              {
-                path: existingTestFile ? `${uri.replaceAll('.json', '')}-${new Date().toISOString()}.json` : uri,
-                content: JSON.stringify(testFileContent, null, 2),
-              },
-            ]
+            return prevFiles
+              .filter((file) => file.path !== uri)
+              .concat({ path: uri, content: JSON.stringify(testFileContent, null, 2) })
           })
           break
 
