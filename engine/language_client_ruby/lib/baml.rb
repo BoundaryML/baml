@@ -1,10 +1,8 @@
-require "baml/version"
-
 begin
-  RUBY_VERSION =~ /(\d+\.\d+)/
-  require "baml/#{$1}/baml"
+  ruby_version = /(\d+\.\d+)/.match(RUBY_VERSION)
+  require_relative "#{ruby_version}/baml"
 rescue LoadError
-  require "baml/baml"
+  require_relative "baml"
 end
 
 module Baml

@@ -55,7 +55,9 @@ end
 
 desc "Build native extension for a given platform (i.e. `rake 'native[x86_64-linux]'`)"
 task :native, [:platform] do |_t, platform:|
-  sh "bundle", "exec", "rb-sys-dock", "--platform", platform, "--build"
+  # There's some strange magnus<->rb_sys crate dependency error that occurs when targeting Ruby 2.6
+  CROSS_RUBY = %w[3.3.0 3.2.0 3.1.0 3.0.0]
+  sh "RUBY_CC_VERSION=#{CROSS_RUBY.join(":")}" "bundle", "exec", "rb-sys-dock", "--platform", platform, "--build"
 end
 
 task build: :compile
