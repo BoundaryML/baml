@@ -6,7 +6,4 @@ rescue LoadError
 end
 
 module Baml
-  class Error < StandardError; end
-
-  LATIN_TEXT = "loirem"
 end
