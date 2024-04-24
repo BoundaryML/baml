@@ -9,22 +9,22 @@ pub(super) use json_schema::WithJsonSchema;
 pub(super) use repr::IntermediateRepr;
 
 // Add aliases for the IR types
-pub(super) type Enum = repr::Node<repr::Enum>;
-pub(super) type Class = repr::Node<repr::Class>;
+pub type Enum = repr::Node<repr::Enum>;
+pub type Class = repr::Node<repr::Class>;
 pub(super) type FieldType = repr::FieldType;
 pub(super) type Expression = repr::Expression;
 pub(super) type Identifier = repr::Identifier;
 pub(super) type TypeValue = ast::TypeValue;
-pub(super) type Function = repr::Node<repr::Function>;
+pub type Function = repr::Node<repr::Function>;
 #[allow(dead_code)]
 pub(super) type FunctionV1 = repr::FunctionV1;
 #[allow(dead_code)]
 pub(super) type FunctionV2 = repr::FunctionV2;
 pub(super) type FunctionArgs = repr::FunctionArgs;
 pub(super) type Impl = repr::Node<repr::Implementation>;
-pub(super) type Client = repr::Node<repr::Client>;
-pub(super) type RetryPolicy = repr::Node<repr::RetryPolicy>;
-pub(super) type TemplateString = repr::Node<repr::TemplateString>;
+pub type Client = repr::Node<repr::Client>;
+pub type RetryPolicy = repr::Node<repr::RetryPolicy>;
+pub type TemplateString = repr::Node<repr::TemplateString>;
 pub(super) type TestCase = repr::Node<repr::TestCase>;
 pub(super) type Walker<'db, I> = repr::Walker<'db, I>;
 

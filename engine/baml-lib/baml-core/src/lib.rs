@@ -21,6 +21,8 @@ mod validate;
 
 use self::validate::generator_loader;
 
+pub use generate::ir;
+
 pub use crate::{
     common::{PreviewFeature, PreviewFeatures, ALL_PREVIEW_FEATURES},
     configuration::Configuration,
@@ -44,6 +46,10 @@ pub fn generate(db: &ParserDatabase, configuration: &Configuration) -> std::io::
         generate::generate_pipeline(db, gen, lock_file)?;
     }
     Ok(())
+}
+
+pub fn to_ir(db: &ParserDatabase) -> anyhow::Result<ir::repr::IntermediateRepr> {
+    ir::repr::IntermediateRepr::from_parser_database(db)
 }
 
 /// The most general API for dealing with Prisma schemas. It accumulates what analysis and

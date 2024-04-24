@@ -9,7 +9,7 @@ use super::{
     file::FileCollector,
     template::{render_template, HSTemplate},
     traits::{JsonHelper, WithWritePythonString},
-    value::to_py_value,
+    value::{expr_to_py_value, to_py_value},
     WithToCode,
 };
 
@@ -76,8 +76,7 @@ impl WithWritePythonString for ConfigurationWalker<'_> {
                     .add_import("..baml_types", &format!("I{}", func.name()));
                 fc.last_file()
                     .add_import("pytest_baml.ipc_channel", "BaseIPCChannel");
-                let test_case_content =
-                    to_py_value(&Into::<serde_json::Value>::into(&self.test_case().content));
+                let test_case_content = expr_to_py_value(&self.test_case().content);
                 match func.ast_function().input() {
                     FunctionArgs::Unnamed(arg) => {
                         let data = json!({
@@ -153,7 +152,7 @@ impl JsonHelper for ConfigurationWalker<'_> {
                 json!({
                     "name": self.name(),
                     "function": self.test_case().function.0,
-                    "test_case": Into::<serde_json::Value>::into(&self.test_case().content),
+                    "test_case": expr_to_py_value(&self.test_case().content),
                 })
             }
             "printer" => {

@@ -6,6 +6,7 @@ default-members = [
   "baml-fmt",
   "baml-schema-wasm",
   "baml-core-ffi",
+  "baml-runtime",
 ]
 exclude = ["language_client_ruby"]
 

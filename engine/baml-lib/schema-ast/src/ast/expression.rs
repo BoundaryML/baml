@@ -184,33 +184,6 @@ impl Expression {
     }
 }
 
-impl Into<serde_json::Value> for &Expression {
-    fn into(self) -> serde_json::Value {
-        match self {
-            Expression::BoolValue(val, _) => serde_json::Value::Bool(*val),
-            Expression::NumericValue(val, _) => serde_json::Value::Number(val.parse().unwrap()),
-            Expression::StringValue(val, _) => serde_json::Value::String(val.clone()),
-            Expression::RawStringValue(val) => serde_json::Value::String(val.value().to_string()),
-            Expression::Identifier(id) => serde_json::Value::String(id.name().to_string()),
-            Expression::Array(vals, _) => {
-                serde_json::Value::Array(vals.iter().map(Into::into).collect())
-            }
-            Expression::Map(vals, _) => serde_json::Value::Object(
-                vals.iter()
-                    .map(|(k, v)| {
-                        let k = Into::<serde_json::Value>::into(k);
-                        let k = match k.as_str() {
-                            Some(k) => k.to_string(),
-                            None => k.to_string(),
-                        };
-                        (k, v.into())
-                    })
-                    .collect(),
-            ),
-        }
-    }
-}
-
 impl fmt::Display for Expression {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

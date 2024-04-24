@@ -1,3 +1,4 @@
+use internal_baml_schema_ast::ast::{Expression, WithName};
 use serde_json::Value;
 
 pub(super) fn to_py_value(val: &Value) -> String {
@@ -20,6 +21,43 @@ pub(super) fn to_py_value(val: &Value) -> String {
             let mut repr = "{".to_string();
             for (k, v) in obj {
                 repr.push_str(&format!("\"{}\": {}, ", k, to_py_value(v)));
+            }
+            repr.push_str("}");
+            repr
+        }
+    }
+}
+
+pub(super) fn expr_to_py_value(expr: &Expression) -> String {
+    match expr {
+        Expression::BoolValue(v, _) => {
+            if *v {
+                "True".to_string()
+            } else {
+                "False".to_string()
+            }
+        }
+        Expression::NumericValue(n, _) => n.to_string(),
+        Expression::Identifier(idn) => {
+            format!("\"{}\"", idn.name().to_string().replace('"', "\\\""))
+        }
+        Expression::StringValue(v, _) => format!("\"{}\"", v.replace('"', "\\\"")),
+        Expression::RawStringValue(v) => {
+            format!("\"\"\"{}\"\"\"", v.value().replace("\"\"\"", "\\\"\"\"\""))
+        }
+        Expression::Array(val, _) => {
+            format!(
+                "[{}]",
+                val.iter()
+                    .map(|v| expr_to_py_value(v))
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            )
+        }
+        Expression::Map(kv, _) => {
+            let mut repr = "{".to_string();
+            for (k, v) in kv {
+                repr.push_str(&format!("\"{}\": {}, ", k, expr_to_py_value(v)));
             }
             repr.push_str("}");
             repr

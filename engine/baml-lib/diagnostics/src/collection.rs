@@ -1,7 +1,10 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use super::DatamodelError;
-use crate::{warning::DatamodelWarning, SourceFile, Span};
+use crate::{
+    warning::{self, DatamodelWarning},
+    SourceFile, Span,
+};
 
 /// Represents a list of validation or parser errors and warnings.
 ///
@@ -14,6 +17,24 @@ pub struct Diagnostics {
     errors: Vec<DatamodelError>,
     warnings: Vec<DatamodelWarning>,
 }
+
+impl std::fmt::Display for Diagnostics {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let err_str = self.to_pretty_string();
+        let warn_str = self.warnings_to_pretty_string();
+
+        if !err_str.is_empty() {
+            writeln!(f, "{}", err_str)?;
+        }
+        if !warn_str.is_empty() {
+            writeln!(f, "{}", warn_str)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl std::error::Error for Diagnostics {}
 
 impl Diagnostics {
     pub fn new(root_path: PathBuf) -> Diagnostics {

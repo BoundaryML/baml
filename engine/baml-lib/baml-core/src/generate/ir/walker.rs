@@ -1,11 +1,26 @@
 use super::{
     repr::{self, Field, FunctionConfig},
-    Class, Client, Enum, Function, Impl, RetryPolicy, TemplateString, TestCase, Walker,
+    Class, Client, Enum, Function, FunctionV2, Impl, RetryPolicy, TemplateString, TestCase, Walker,
 };
 
 impl<'a> Walker<'a, &'a Function> {
-    pub fn name(&self) -> &str {
+    pub fn name(&self) -> &'a str {
         self.elem().name()
+    }
+
+    pub fn is_v1(&self) -> bool {
+        matches!(self.item.elem, repr::Function::V1(_))
+    }
+
+    pub fn is_v2(&self) -> bool {
+        matches!(self.item.elem, repr::Function::V2(_))
+    }
+
+    pub fn as_v2(&self) -> Option<&'a FunctionV2> {
+        match &self.item.elem {
+            repr::Function::V1(_) => None,
+            repr::Function::V2(f) => Some(f),
+        }
     }
 
     pub fn walk_impls(
@@ -59,7 +74,10 @@ impl<'a> Walker<'a, &'a Function> {
 }
 
 impl<'a> Walker<'a, &'a Enum> {
-    #[allow(dead_code)]
+    pub fn name(&self) -> &'a str {
+        &self.elem().name
+    }
+
     pub fn walk_values(&'a self) -> impl Iterator<Item = &'a repr::EnumValue> {
         self.item.elem.values.iter().map(|v| &v.elem)
     }
@@ -84,6 +102,10 @@ impl<'a> Walker<'a, (&'a Function, &'a Impl)> {
 }
 
 impl<'a> Walker<'a, &'a Class> {
+    pub fn name(&self) -> &'a str {
+        &self.elem().name
+    }
+
     #[allow(dead_code)]
     pub fn walk_fields(&'a self) -> impl Iterator<Item = &'a repr::Field> {
         self.item.elem.static_fields.iter().map(|f| &f.elem)

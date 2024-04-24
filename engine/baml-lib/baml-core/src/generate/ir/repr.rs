@@ -46,6 +46,10 @@ impl IntermediateRepr {
         self.classes.iter().map(|e| Walker { db: self, item: e })
     }
 
+    pub fn function_names(&self) -> impl Iterator<Item = &str> {
+        self.functions.iter().map(|f| f.elem.name())
+    }
+
     pub fn walk_functions<'a>(&'a self) -> impl Iterator<Item = Walker<'a, &'a Node<Function>>> {
         self.functions.iter().map(|e| Walker { db: self, item: e })
     }
@@ -241,6 +245,15 @@ impl FieldType {
             FieldArity::Optional => FieldType::Optional(Box::new(self)),
         }
     }
+
+    pub fn is_optional(&self) -> bool {
+        match self {
+            FieldType::Optional(_) => true,
+            FieldType::Primitive(ast::TypeValue::Null) => true,
+            FieldType::Union(types) => types.iter().any(FieldType::is_optional),
+            _ => false,
+        }
+    }
 }
 
 impl WithRepr<FieldType> for ast::FieldType {
@@ -299,6 +312,17 @@ pub enum Identifier {
     Local(String),
     /// Special types (always lowercase).
     Primitive(ast::TypeValue),
+}
+
+impl Identifier {
+    pub fn name(&self) -> String {
+        match self {
+            Identifier::ENV(k) => k.clone(),
+            Identifier::Ref(r) => r.join("."),
+            Identifier::Local(l) => l.clone(),
+            Identifier::Primitive(p) => p.to_string(),
+        }
+    }
 }
 
 #[derive(serde::Serialize, Debug)]
