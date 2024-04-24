@@ -42,6 +42,7 @@ import { AlertTriangleIcon, FlaskConical, GitForkIcon, LinkIcon, ShareIcon } fro
 import { Separator } from '@baml/playground-common/components/ui/separator'
 import { InitialTour, PostTestRunTour } from './Tour'
 import posthog from 'posthog-js'
+import { isMobile } from 'react-device-detect'
 
 const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
   const setEditorFiles = useSetAtom(currentEditorFilesAtom)
@@ -76,36 +77,46 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
   return (
     // firefox wont apply the background color for some reason so we forcefully set it.
     <div className="relative flex flex-row w-full h-full bg-gray-800 main-panel overflow-x-clip overflow-y-clip">
+      {isMobile && (
+        <div className="absolute bottom-0 left-0 right-0 text-zinc-900 font-semibold bg-zinc-400 border-t-zinc-600 border-t-[1px] w-full h-[100px] z-50 text-center p-8">
+          Visit prompt fiddle on Desktop to see the full playground
+        </div>
+      )}
       <ResizablePanelGroup className="w-full h-full overflow-clip" direction="horizontal">
-        <ResizablePanel defaultSize={12} className="h-full bg-zinc-900">
-          <div className="w-full pt-2 text-lg italic font-bold text-center">Prompt Fiddle</div>
+        {!isMobile && (
+          <ResizablePanel defaultSize={12} className="h-full bg-zinc-900">
+            <div className="w-full pt-2 text-lg italic font-bold text-center">Prompt Fiddle</div>
 
-          <ResizablePanelGroup className="h-full pb-4" direction="vertical">
-            <ResizablePanel defaultSize={50} className="h-full ">
-              <div className="w-full px-2 text-sm font-semibold text-center uppercase text-white/90">project files</div>
-              <div className="flex flex-col w-full h-full pb-8 tour-file-view">
-                <FileViewer />
-              </div>
-            </ResizablePanel>
-            <Separator className="bg-vscode-textSeparator-foreground" />
+            <ResizablePanelGroup className="h-full pb-4" direction="vertical">
+              <ResizablePanel defaultSize={50} className="h-full ">
+                <div className="w-full px-2 text-sm font-semibold text-center uppercase text-white/90">
+                  project files
+                </div>
+                <div className="flex flex-col w-full h-full pb-8 tour-file-view">
+                  <FileViewer />
+                </div>
+              </ResizablePanel>
+              <Separator className="bg-vscode-textSeparator-foreground" />
 
-            <ResizableHandle className="bg-vscode-contrastActiveBorder border-vscode-contrastActiveBorder" />
-            <ResizablePanel className="w-full pt-2 tour-templates">
-              <div className="w-full px-2 pt-2 text-sm font-semibold text-center uppercase text-white/90">
-                Templates
-              </div>
-              <div className="flex flex-col w-full h-full">
-                <ScrollArea>
-                  <div className="flex flex-col h-full px-4 gap-y-4">
-                    {exampleProjects.map((p) => {
-                      return <ExampleProjectCard key={p.name} project={p} />
-                    })}
-                  </div>
-                </ScrollArea>
-              </div>
-            </ResizablePanel>
-          </ResizablePanelGroup>
-        </ResizablePanel>
+              <ResizableHandle className="bg-vscode-contrastActiveBorder border-vscode-contrastActiveBorder" />
+              <ResizablePanel className="w-full pt-2 tour-templates">
+                <div className="w-full px-2 pt-2 text-sm font-semibold text-center uppercase text-white/90">
+                  Examples
+                </div>
+                <div className="flex flex-col w-full h-full">
+                  <ScrollArea>
+                    <div className="flex flex-col h-full px-4 gap-y-4">
+                      {exampleProjects.map((p) => {
+                        return <ExampleProjectCard key={p.name} project={p} />
+                      })}
+                    </div>
+                  </ScrollArea>
+                </div>
+              </ResizablePanel>
+            </ResizablePanelGroup>
+          </ResizablePanel>
+        )}
+
         <ResizableHandle className=" bg-vscode-contrastActiveBorder border-vscode-contrastActiveBorder" />
         <ResizablePanel defaultSize={88}>
           <div className="flex-col w-full h-full font-sans bg-background dark:bg-vscode-panel-background">
@@ -231,11 +242,13 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
                   </div>
                 </ResizablePanel>
                 <ResizableHandle className="bg-vscode-contrastActiveBorder" />
-                <ResizablePanel defaultSize={50} className="tour-playground">
-                  <div className="flex flex-row h-full bg-vscode-panel-background">
-                    <PlaygroundView />
-                  </div>
-                </ResizablePanel>
+                {!isMobile && (
+                  <ResizablePanel defaultSize={50} className="tour-playground">
+                    <div className="flex flex-row h-full bg-vscode-panel-background">
+                      <PlaygroundView />
+                    </div>
+                  </ResizablePanel>
+                )}
               </ResizablePanelGroup>
             </div>
           </div>
@@ -263,8 +276,8 @@ const ShareButton = ({ project, projectName }: { project: BAMLProject; projectNa
 
   return (
     <Button
-      variant={'ghost'}
-      className="h-full py-1 gap-x-1"
+      variant={'default'}
+      className="h-full py-1 shadow-md gap-x-1 bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground w-fit whitespace-nowrap"
       disabled={loading}
       onClick={async () => {
         setLoading(true)

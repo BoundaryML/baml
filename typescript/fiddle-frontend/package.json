@@ -47,6 +47,7 @@
     "posthog-js": "^1.120.4",
     "react": "^18",
     "react-arborist": "^3.4.0",
+    "react-device-detect": "^2.2.3",
     "react-dom": "^18",
     "react-hook-form": "^7.51.2",
     "react-icons": "^5.1.0",

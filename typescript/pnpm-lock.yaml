@@ -1,4 +1,4 @@
-lockfileVersion: '6.1'
+lockfileVersion: '6.0'
 
 settings:
   autoInstallPeers: true
@@ -242,6 +242,9 @@ importers:
       react-arborist:
         specifier: ^3.4.0
         version: 3.4.0(@types/node@20.4.9)(@types/react@18.2.74)(react-dom@18.2.0)(react@18.2.0)
+      react-device-detect:
+        specifier: ^2.2.3
+        version: 2.2.3(react-dom@18.2.0)(react@18.2.0)
       react-dom:
         specifier: ^18
         version: 18.2.0(react@18.2.0)
@@ -10196,6 +10199,17 @@ packages:
       - '@types/react'
     dev: false
 
+  /react-device-detect@2.2.3(react-dom@18.2.0)(react@18.2.0):
+    resolution: {integrity: sha512-buYY3qrCnQVlIFHrC5UcUoAj7iANs/+srdkwsnNjI7anr3Tt7UY6MqNxtMLlr0tMBied0O49UZVK8XKs3ZIiPw==}
+    peerDependencies:
+      react: '>= 0.14.0'
+      react-dom: '>= 0.14.0'
+    dependencies:
+      react: 18.2.0
+      react-dom: 18.2.0(react@18.2.0)
+      ua-parser-js: 1.0.37
+    dev: false
+
   /react-dnd-html5-backend@14.1.0:
     resolution: {integrity: sha512-6ONeqEC3XKVf4eVmMTe0oPds+c5B9Foyj8p/ZKLb7kL2qh9COYxiBHv3szd6gztqi/efkmriywLUVlPotqoJyw==}
     dependencies:
@@ -11680,7 +11694,6 @@ packages:
 
   /ua-parser-js@1.0.37:
     resolution: {integrity: sha512-bhTyI94tZofjo+Dn8SN6Zv8nBDvyXTymAdM3LDI/0IboIUwTu1rEhW7v2TfiVsoYWgkQ4kOVqnI8APUFbIQIFQ==}
-    dev: true
 
   /uc.micro@1.0.6:
     resolution: {integrity: sha512-8Y75pvTYkLJW2hWQHXxoqRgV7qb9B+9vFEtidML+7koHUFapnVJAZ6cKs+Qjz5Aw3aZWHMC6u0wJE3At+nSGwA==}
