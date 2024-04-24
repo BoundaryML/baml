@@ -16,7 +16,7 @@ jobs:
       - uses: rubygems/configure-rubygems-credentials@main
         with:
           # https://rubygems.org/profile/oidc/api_key_roles/rg_oidc_akr_p6x4xz53qtk948na3bgy
-          role-to-assume: rg_oidc_akr_p6x4xz53qtk948na3bg
+          role-to-assume: rg_oidc_akr_p6x4xz53qtk948na3bgy
 
       - uses: actions/checkout@v4
 
