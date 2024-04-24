@@ -27,8 +27,8 @@ jobs:
           rubygems: latest
           ruby-version: "3.2"
           bundler-cache: false
-          cargo-cache: true
-          cargo-vendor: true
+          cargo-cache: false
+          cargo-vendor: false
 
       - uses: oxidize-rb/cross-gem-action@main
         with:
