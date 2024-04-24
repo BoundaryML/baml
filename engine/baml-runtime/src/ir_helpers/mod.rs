@@ -32,6 +32,7 @@ pub trait IRHelper {
     fn find_enum(&self, enum_name: &str) -> Result<EnumWalker>;
     fn find_class(&self, class_name: &str) -> Result<ClassWalker>;
     fn find_function<'a>(&'a self, function_name: &str) -> Result<FunctionWalker<'a>>;
+    fn find_client(&self, client_name: &str) -> Result<ClientWalker>;
     fn check_function_params<'a>(
         &'a self,
         function: &'a FunctionWalker<'a>,
@@ -82,6 +83,17 @@ impl IRHelper for IntermediateRepr {
                     .map(|f| f.name())
                     .collect::<Vec<_>>();
                 error_not_found!("function", function_name, &functions)
+            }
+        }
+    }
+
+    fn find_client(&self, client_name: &str) -> Result<ClientWalker> {
+        match self.walk_clients().find(|c| c.name() == client_name) {
+            Some(c) => Ok(c),
+            None => {
+                // Get best match.
+                let clients = self.walk_clients().map(|c| c.name()).collect::<Vec<_>>();
+                error_not_found!("client", client_name, &clients)
             }
         }
     }

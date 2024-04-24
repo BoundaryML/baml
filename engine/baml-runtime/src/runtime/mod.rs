@@ -65,6 +65,7 @@ impl BamlRuntime {
         let renderer = PromptRenderer::from_function(&function)?;
 
         // Call the LLM.
+        // self.ir.find_client()
 
         // Parse the output.
 
