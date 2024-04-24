@@ -20,6 +20,8 @@ jobs:
 
       - uses: actions/checkout@v4
 
+      - run: cd engine/language_client_ruby
+
       - uses: oxidize-rb/actions/setup-ruby-and-rust@main
         with:
           rubygems: latest
