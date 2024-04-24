@@ -88,11 +88,7 @@ export const usePlaygroundListener = () => {
           const testFileContent: TestFileContent = {
             input: testInputContent,
           }
-          console.log(
-            'uri',
-            uri,
-            editorFiles.map((f) => f.path),
-          )
+
           const existingTestFile = editorFiles.find((file) => file.path === uri)
 
           setEditorFiles((prev) => {
@@ -112,7 +108,7 @@ export const usePlaygroundListener = () => {
 
           setEditorFiles((prev) => {
             return (prev as EditorFile[]).filter((file) => {
-              return file.path !== `${removeRootPath}/__tests__/${removeFuncName}/${removeTestCaseName}.json`
+              return file.path !== removeTestCaseName.source_file
             })
           })
           break

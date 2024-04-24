@@ -158,7 +158,6 @@ const Node = ({ node, style, dragHandle, tree }: NodeRendererProps<any>) => {
                   prev = prev as EditorFile[]
                   return prev.filter((f) => f.path !== node.id)
                 })
-                console.log('emptydirs deleting ', node.id)
                 setEmptyDirs((prev) => {
                   prev = prev as string[]
                   return prev.filter((d) => d.slice(0, -1) !== node.id)

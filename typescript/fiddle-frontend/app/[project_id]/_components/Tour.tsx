@@ -105,7 +105,6 @@ export const PostTestRunTour = () => {
   const [productTourTestDone, setProductTourTestDone] = useAtom(productTourTestDoneAtom)
   const [productTourDone] = useAtom(productTourDoneAtom)
 
-  console.log('params', project_id)
   if (project_id === 'extract-resume' || project_id === undefined) {
     steps.push({
       // ..that can convert these definitions into actual Python or TS functions

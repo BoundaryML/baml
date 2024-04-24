@@ -109,11 +109,7 @@ const FileViewer = () => {
   const activeFile = useAtomValue(activeFileAtom)
   const [emptyDirs, setEmptydirs] = useAtom(emptyDirsAtom)
 
-  console.log('emptydirs', emptyDirs)
-
   const data2 = createTree(editorFiles.map((f) => f.path).concat(emptyDirs))
-
-  console.log('data2', JSON.stringify(data2, null, 2))
 
   const [term, setTerm] = useState('')
 
@@ -160,8 +156,6 @@ const FileViewer = () => {
           width={width}
           selection={activeFile?.path}
           onMove={({ dragIds, parentId, index, dragNodes, parentNode }) => {
-            console.log('onMove', dragIds, 'parentId', parentId, index, 'dragnodes', dragNodes, parentNode)
-
             setEditorFiles((prev) => {
               prev = prev as EditorFile[]
               const prevFiles = [...prev]
