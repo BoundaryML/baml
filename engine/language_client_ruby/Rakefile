@@ -2,12 +2,15 @@ require "rake/testtask"
 require "rake/extensiontask"
 require "rb_sys/toolchain_info"
 
+GEMSPEC = Gem::Specification.load("my_gem.gemspec")
+
 task default: :test
 
-Rake::ExtensionTask.new("baml") do |ext|
-  ext.lib_dir = "dist/baml"
+Rake::ExtensionTask.new("baml", GEMSPEC) do |ext|
+  ext.lib_dir = "lib/baml"
   ext.cross_compile = true
-  ext.cross_platform = ["x86_64-linux", "x86_64-darwin", "arm64-darwin", "x64-mingw-ucrt"]
+  ext.cross_platform = %w["x86_64-linux"]
+  #ext.cross_platform = ["x86_64-linux", "x86_64-darwin", "arm64-darwin", "x64-mingw-ucrt"]
 end
 
 task :dev do

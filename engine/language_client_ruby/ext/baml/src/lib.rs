@@ -56,11 +56,11 @@ impl BamlRuntime {
     }
 
     pub fn latin(&self) -> Result<String> {
-        Ok("lorem ipsum".to_string())
+        Ok("ipsum lorem".to_string())
     }
 }
 
-#[magnus::init]
+#[magnus::init(name = "baml")]
 fn init() -> Result<()> {
     let class = define_class("String", class::object())?;
     class.define_method("blank?", method!(is_blank, 0))?;

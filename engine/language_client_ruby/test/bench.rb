@@ -1,5 +1,5 @@
 require "benchmark"
-require_relative "../dist/baml"
+require_relative "../lib/baml"
 
 n = 1_000_000
 Benchmark.bmbm do |x|
