@@ -1,10 +1,13 @@
 use anyhow::Result;
-use internal_baml_core::ir::repr::FunctionConfig;
-use internal_baml_jinja::TemplateStringMacro;
+use internal_baml_core::{
+    error_unsupported,
+    ir::{repr::FunctionConfig, FunctionWalker},
+};
+use internal_baml_jinja::{
+    RenderContext, RenderContext_Client, RenderedPrompt, TemplateStringMacro,
+};
 
-use crate::error_unsupported;
-
-use super::{FunctionWalker, TemplateStringWalker};
+use super::runtime_ctx::RuntimeContext;
 
 pub struct PromptRenderer<'ir> {
     template_macros: Vec<TemplateStringMacro>,
@@ -47,6 +50,10 @@ impl PromptRenderer<'_> {
         }
     }
 
+    pub fn output_format(&self) -> &str {
+        &self.config.output_format
+    }
+
     pub fn prompt_template(&self) -> &str {
         &self.config.prompt_template
     }
@@ -57,5 +64,23 @@ impl PromptRenderer<'_> {
 
     pub fn client_name(&self) -> &str {
         &self.config.client
+    }
+
+    pub fn render_prompt(
+        &self,
+        ctx: &RuntimeContext,
+        params: &serde_json::Value,
+        client_ctx: RenderContext_Client,
+    ) -> Result<RenderedPrompt> {
+        internal_baml_jinja::render_prompt(
+            self.prompt_template(),
+            params,
+            &RenderContext {
+                client: client_ctx,
+                output_format: self.output_format().into(),
+                env: ctx.env.clone(),
+            },
+            self.template_macros(),
+        )
     }
 }

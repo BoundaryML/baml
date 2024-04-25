@@ -1,6 +1,6 @@
 [package]
 edition = "2021"
-name = "flexible-json"
+name = "jsonish"
 version.workspace = true
 authors.workspace = true
 description.workspace = true
@@ -8,6 +8,7 @@ description.workspace = true
 license-file.workspace = true
 
 [dependencies]
+internal-baml-core = { path = "../baml-core" }
 colored = "2"
 pest = "2.1.3"
 indoc.workspace = true

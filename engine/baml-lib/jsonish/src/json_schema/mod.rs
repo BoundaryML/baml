@@ -1,9 +1,17 @@
+mod deserialize_flags;
 mod value_to_bool;
 
 use anyhow::Result;
+use internal_baml_core::ir::{
+    repr::{FieldType, IntermediateRepr},
+    IRHelper,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
+
+pub use self::deserialize_flags::DeserializerConditions;
+use self::deserialize_flags::Flag;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(untagged)]
@@ -246,5 +254,123 @@ impl JSONSchema7 {
             }
         }
         anyhow::bail!("Value does not match any schema in union");
+    }
+}
+
+pub trait ValueCoerce {
+    fn coerce(
+        &self,
+        ir: &IntermediateRepr,
+        env: &HashMap<String, String>,
+        value: Option<&serde_json::Value>,
+    ) -> Result<(serde_json::Value, DeserializerConditions)>;
+}
+
+impl ValueCoerce for FieldType {
+    fn coerce(
+        &self,
+        ir: &IntermediateRepr,
+        env: &HashMap<String, String>,
+        value: Option<&serde_json::Value>,
+    ) -> Result<(serde_json::Value, DeserializerConditions)> {
+        match self {
+            FieldType::Primitive(_) => todo!(),
+            FieldType::Enum(name) => {
+                let enm = ir.find_enum(name)?;
+
+                // For optimization, we could do this once.
+                let candidates = enm
+                    .walk_values()
+                    .map(|v| Ok((v, v.valid_values(env)?)))
+                    .collect::<Result<Vec<_>>>()?;
+
+                if let Some(value) = value {
+                    let value_str = match value {
+                        serde_json::Value::String(s) => s.clone(),
+                        _ => value.to_string(),
+                    };
+
+                    // Try and look for a value that matches the value.
+                    // First search for exact matches
+                    for (v, valid_values) in candidates {
+                        todo!()
+                    }
+                }
+
+                todo!()
+            }
+            FieldType::Class(_) => todo!(),
+            FieldType::List(_) => todo!(),
+            FieldType::Union(options) => {
+                if options.is_empty() {
+                    anyhow::bail!("Union type has no options");
+                }
+
+                let mut res = options
+                    .iter()
+                    .map(|f| f.coerce(ir, env, value))
+                    .collect::<Vec<_>>();
+
+                // For all the results, sort them by the number of flags.
+                // If there are any results with no flags, return that.
+                // Otherwise, return the result with the fewest flags.
+                // In case of a tie, return the leftmost result.
+
+                let mut res_index = (0..res.len()).collect::<Vec<_>>();
+
+                res_index.sort_by(|&a, &b| {
+                    let a_res = &res[a];
+                    let b_res = &res[b];
+
+                    match (a_res, b_res) {
+                        (Err(_), Err(_)) => a.cmp(&b),
+                        (Ok(_), Err(_)) => std::cmp::Ordering::Less,
+                        (Err(_), Ok(_)) => std::cmp::Ordering::Greater,
+                        (Ok((_, a_flags)), Ok((_, b_flags))) => match a_flags.cmp(&b_flags) {
+                            std::cmp::Ordering::Equal => a.cmp(&b),
+                            other => other,
+                        },
+                    }
+                });
+
+                // Get the first result that succeeded.
+
+                let idx = res_index.first().unwrap();
+
+                // Remove all elements behind the first successful result.
+                res.truncate(*idx + 1);
+
+                // Get the value and flags of the first successful result.
+                let (value, flags) = res.pop().unwrap()?;
+                Ok((value, flags))
+            }
+            FieldType::Optional(inner) => match value {
+                Some(value) => {
+                    if value.is_null() {
+                        Ok((serde_json::Value::Null, DeserializerConditions::new()))
+                    } else {
+                        match inner.coerce(ir, env, Some(value)) {
+                            Ok(r) => Ok(r),
+                            Err(e) => {
+                                // TODO: Add a rule to allow this flag.
+                                Ok((
+                                    serde_json::Value::Null,
+                                    DeserializerConditions::new().add_flag(
+                                        Flag::NullButHadUnparseableValue(e, value.clone()),
+                                    ),
+                                ))
+                            }
+                        }
+                    }
+                }
+                None => Ok((serde_json::Value::Null, DeserializerConditions::new())),
+            },
+            FieldType::Tuple(_) => {
+                unimplemented!("Tuple coercion not implemented")
+            }
+            FieldType::Map(_, _) => {
+                unimplemented!("Map coercion not implemented")
+            }
+        }
     }
 }

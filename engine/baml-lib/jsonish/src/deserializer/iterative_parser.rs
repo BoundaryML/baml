@@ -12,6 +12,7 @@ use anyhow::Result;
  * block.
  */
 fn find_in_json_markdown(str: &str) -> Result<serde_json::Value> {
+    println!("Finding JSON in: {:?}", str.len());
     let mut values = vec![];
 
     let mut remaining = str;
@@ -36,13 +37,16 @@ fn find_in_json_markdown(str: &str) -> Result<serde_json::Value> {
             curr_start = end_idx + 3;
             remaining = &remaining[end_idx + 3..];
         } else {
-            // Some how an unclosed json block, try and parse it?
-            match parse_jsonish_value(remaining, JSONishOptions::recursive()) {
-                Ok(value) => {
-                    values.push(value);
+            let json_str = str[start_idx..].trim();
+            if json_str.len() > 0 {
+                match parse_jsonish_value(json_str, JSONishOptions::recursive()) {
+                    Ok(value) => {
+                        values.push(value);
+                    }
+                    Err(_) => {}
                 }
-                Err(_) => {}
             }
+            break;
         }
     }
 
@@ -80,6 +84,12 @@ fn find_all_json_objects(input: &str) -> Result<serde_json::Value> {
                     // Assuming json_str_start is never None when stack is empty
                     let end_index = index + 1;
                     let json_str = &input[json_str_start.unwrap()..end_index];
+                    println!(
+                        "Found JSON object: {:?}..{} / {}",
+                        json_str_start,
+                        end_index,
+                        input.len()
+                    );
                     match parse_jsonish_value(json_str, JSONishOptions::recursive()) {
                         Ok(json) => json_objects.push(json),
                         Err(e) => {
@@ -641,7 +651,6 @@ pub fn try_fix_jsonish<'a>(str: &str) -> Result<serde_json::Value> {
 
     let mut chars = str.char_indices().peekable();
     while let Some((count, c)) = chars.next() {
-        // println!("Processing: {:?}..{:?}", c, chars.peek());
         let peekable = str[count + 1..].char_indices().peekable();
         match state.process_token(c, peekable) {
             Ok(increments) => {

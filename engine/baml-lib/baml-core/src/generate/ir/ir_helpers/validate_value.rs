@@ -1,8 +1,4 @@
-use std::{any::Any, fs::File};
-
-use anyhow::Result;
-use clap::error;
-use internal_baml_core::ir::repr::{FieldType, IntermediateRepr};
+use crate::ir::{FieldType, IntermediateRepr, TypeValue};
 
 use super::{scope_diagnostics::ScopeStack, IRHelper};
 
@@ -34,16 +30,14 @@ pub fn validate_value(
     match field_type {
         FieldType::Primitive(t) => {
             if !match t {
-                internal_baml_core::ast::TypeValue::String => value.is_string(),
-                internal_baml_core::ast::TypeValue::Int => value.is_i64() || value.is_u64(),
-                internal_baml_core::ast::TypeValue::Float => {
-                    value.is_f64() || value.is_i64() || value.is_u64()
-                }
-                internal_baml_core::ast::TypeValue::Bool => value.is_boolean(),
-                internal_baml_core::ast::TypeValue::Char => {
+                TypeValue::String => value.is_string(),
+                TypeValue::Int => value.is_i64() || value.is_u64(),
+                TypeValue::Float => value.is_f64() || value.is_i64() || value.is_u64(),
+                TypeValue::Bool => value.is_boolean(),
+                TypeValue::Char => {
                     value.is_string() && value.as_str().unwrap().chars().count() == 1
                 }
-                internal_baml_core::ast::TypeValue::Null => value.is_null(),
+                TypeValue::Null => value.is_null(),
             } {
                 scope.push_error(format!("Expected type {:?}, got `{}`", t, value));
             }
@@ -52,12 +46,12 @@ pub fn validate_value(
             if let Ok(e) = ir.find_enum(name) {
                 match value.as_str() {
                     Some(s) => {
-                        if !e.walk_values().find(|v| v.0 == s).is_some() {
+                        if !e.walk_values().find(|v| v.item.elem.0 == s).is_some() {
                             scope.push_error(format!(
                                 "Invalid enum value for {}: expected one of ({}), got `{}`",
                                 name,
                                 e.walk_values()
-                                    .map(|v| v.0.as_str())
+                                    .map(|v| v.item.elem.0.as_str())
                                     .collect::<Vec<&str>>()
                                     .join(" | "),
                                 s

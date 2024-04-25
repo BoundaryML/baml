@@ -1,6 +1,7 @@
-use internal_baml_core::{internal_baml_parser_database::RetryPolicyStrategy, ir::RetryPolicy};
-
-use crate::ir_helpers::RetryPolicyWalker;
+use internal_baml_core::{
+    internal_baml_parser_database::RetryPolicyStrategy,
+    ir::{RetryPolicy, RetryPolicyWalker},
+};
 
 pub struct CallablePolicy<'ir> {
     policy: &'ir RetryPolicy,

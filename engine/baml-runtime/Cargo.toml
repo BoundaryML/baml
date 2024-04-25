@@ -9,6 +9,7 @@ license-file.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+jsonish = { path = "../baml-lib/jsonish" }
 internal-baml-core = { path = "../baml-lib/baml-core" }
 internal-baml-jinja = { path = "../baml-lib/jinja" }
 clap = { version = "4.4.6", features = ["cargo", "derive"] }

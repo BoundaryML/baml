@@ -5,13 +5,12 @@ mod retry_policy;
 use anyhow::Result;
 use async_stream::stream;
 use futures::Stream;
-use internal_baml_jinja::{
-    render_prompt, RenderContext, RenderContext_Client, RenderedChatMessage, RenderedPrompt,
-};
+use internal_baml_core::ir::RetryPolicyWalker;
+use internal_baml_jinja::{RenderContext_Client, RenderedChatMessage, RenderedPrompt};
 
 use self::retry_policy::CallablePolicy;
 
-use super::{PromptRenderer, RetryPolicyWalker, RuntimeContext};
+use super::{PromptRenderer, RuntimeContext};
 
 pub use llm_provider::LLMProvider;
 
@@ -87,16 +86,7 @@ trait LLMChatClient: LLMClient {
         ctx: &RuntimeContext,
         params: &serde_json::Value,
     ) -> Result<Vec<RenderedChatMessage>> {
-        let response = render_prompt(
-            renderer.prompt_template(),
-            params,
-            &RenderContext {
-                client: self.context(),
-                output_format: "".into(),
-                env: ctx.env.clone(),
-            },
-            renderer.template_macros(),
-        )?;
+        let response = renderer.render_prompt(ctx, params, self.context())?;
 
         match response {
             RenderedPrompt::Completion(message) => Ok(vec![RenderedChatMessage {
@@ -136,16 +126,7 @@ trait LLMCompletionClient: LLMClient {
         ctx: &RuntimeContext,
         params: &serde_json::Value,
     ) -> Result<String> {
-        let response = render_prompt(
-            renderer.prompt_template(),
-            params,
-            &RenderContext {
-                client: self.context(),
-                output_format: "".into(),
-                env: ctx.env.clone(),
-            },
-            renderer.template_macros(),
-        )?;
+        let response = renderer.render_prompt(ctx, params, self.context())?;
 
         match response {
             RenderedPrompt::Completion(response) => Ok(response),

@@ -1,6 +1,10 @@
+use anyhow::Result;
+use std::collections::HashMap;
+
 use super::{
     repr::{self, Field, FunctionConfig},
-    Class, Client, Enum, Function, FunctionV2, Impl, RetryPolicy, TemplateString, TestCase, Walker,
+    Class, Client, Enum, EnumValue, Expression, Function, FunctionV2, Identifier, Impl,
+    RetryPolicy, TemplateString, TestCase, Walker,
 };
 
 impl<'a> Walker<'a, &'a Function> {
@@ -78,12 +82,66 @@ impl<'a> Walker<'a, &'a Enum> {
         &self.elem().name
     }
 
-    pub fn walk_values(&'a self) -> impl Iterator<Item = &'a repr::EnumValue> {
-        self.item.elem.values.iter().map(|v| &v.elem)
+    pub fn walk_values(&'a self) -> impl Iterator<Item = Walker<'a, &'a EnumValue>> {
+        self.item.elem.values.iter().map(|v| Walker {
+            db: self.db,
+            item: v,
+        })
     }
 
     pub fn elem(&self) -> &'a repr::Enum {
         &self.item.elem
+    }
+}
+
+impl<'a> Walker<'a, &'a EnumValue> {
+    pub fn skip(&self) -> bool {
+        self.item.attributes.get("skip").is_some()
+    }
+
+    pub fn valid_values(&self, env_values: &HashMap<String, String>) -> Result<Vec<String>> {
+        let name = self
+            .item
+            .attributes
+            .get("alias")
+            .map(|s| s.as_string_value(env_values));
+
+        let name = match name {
+            Some(Ok(s)) => s,
+            Some(Err(e)) => anyhow::bail!("Error parsing alias: {:?}", e),
+            None => self.item.elem.0.clone(),
+        };
+
+        let description = self
+            .item
+            .attributes
+            .get("description")
+            .map(|s| s.as_string_value(env_values));
+
+        match &description {
+            Some(Ok(s)) => {
+                // For enums, we generate one for "name", one for "description", and one for "name: description"
+                // (this means that we currently don't support deserializing "name[^a-zA-Z0-9]{1,5}description" but
+                // for now it suffices)
+                Ok(vec![name.clone(), s.clone(), format!("{}: {}", name, s)])
+            }
+            Some(Err(e)) => anyhow::bail!("Error parsing description: {:?}", e),
+            None => Ok(vec![name]),
+        }
+    }
+}
+
+impl Expression {
+    pub fn as_string_value(&self, env_values: &HashMap<String, String>) -> Result<String> {
+        match self {
+            Expression::String(s) => Ok(s.clone()),
+            Expression::RawString(s) => Ok(s.clone()),
+            Expression::Identifier(Identifier::ENV(s)) => match env_values.get(s) {
+                Some(v) => Ok(v.clone()),
+                None => anyhow::bail!("Environment variable {} not found", s),
+            },
+            _ => anyhow::bail!("Expected string value, got {:?}", self),
+        }
     }
 }
 

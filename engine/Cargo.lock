@@ -345,6 +345,7 @@ dependencies = [
  "internal-baml-core",
  "internal-baml-jinja",
  "json_comments",
+ "jsonish",
  "log",
  "reqwest 0.11.24",
  "serde",
@@ -896,22 +897,6 @@ name = "fastrand"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "25cbce373ec4653f1a01a31e8a5e5ec0c622dc27ff9c4e6606eefef5cbbed4a5"
-
-[[package]]
-name = "flexible-json"
-version = "0.18.0-canary.4"
-dependencies = [
- "anyhow",
- "colored",
- "either",
- "indoc",
- "jsonschema",
- "log",
- "pest",
- "serde",
- "serde_json",
- "strsim 0.10.0",
-]
 
 [[package]]
 name = "fnv"
@@ -1595,6 +1580,23 @@ name = "json_comments"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9dbbfed4e59ba9750e15ba154fdfd9329cee16ff3df539c2666b70f58cc32105"
+
+[[package]]
+name = "jsonish"
+version = "0.18.0-canary.4"
+dependencies = [
+ "anyhow",
+ "colored",
+ "either",
+ "indoc",
+ "internal-baml-core",
+ "jsonschema",
+ "log",
+ "pest",
+ "serde",
+ "serde_json",
+ "strsim 0.10.0",
+]
 
 [[package]]
 name = "jsonschema"

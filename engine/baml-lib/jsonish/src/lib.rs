@@ -1,15 +1,23 @@
 #[cfg(test)]
 mod tests;
 
+use std::collections::HashMap;
+
 use anyhow::Result;
 mod deserializer;
 mod json_schema;
 
+use internal_baml_core::ir::repr::{FieldType, IntermediateRepr};
 use serde_json::{self};
 
-pub fn from_str<I: AsRef<str>>(raw_string: &str, schema: I) -> Result<serde_json::Value> {
-    let schema = serde_json::from_str::<json_schema::JSONSchema7>(schema.as_ref())?;
+use json_schema::{DeserializerConditions, ValueCoerce};
 
+pub fn from_str(
+    raw_string: &str,
+    ir: &IntermediateRepr,
+    target: &FieldType,
+    env: &HashMap<String, String>,
+) -> Result<(serde_json::Value, DeserializerConditions)> {
     // let s = jsonschema::JSONSchema::compile(&schema)?;
     // let target = deserializer::Target {
     //     schema: serde_json::from_str::<deserializer::Type>(schema.as_ref())?,
@@ -20,6 +28,6 @@ pub fn from_str<I: AsRef<str>>(raw_string: &str, schema: I) -> Result<serde_json
     let value =
         deserializer::parse_jsonish_value(raw_string, deserializer::JSONishOptions::default())?;
 
-    schema.coerce(&value)
     // Lets try to now coerce the value into the expected schema.
+    target.coerce(ir, env, Some(&value))
 }

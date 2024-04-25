@@ -277,3 +277,95 @@ Then would add a summary of sorts.
       "my_field_1": "**First fragment, Another fragment**\n\nFrag 2, frag 3. Frag 4, Frag 5, Frag 5.\n\nFrag 6, the rest, of the sentence. Then i would quote something \"like this\" or this.\n\nThen would add a summary of sorts."
     }
 );
+
+test_jsonish!(test_mal_formed_json_sequence, r#"```json
+{
+"foo1": {
+"field1": "Something horrible has happened!!",
+"field2": null,
+"field3": null,
+"field4": null,
+"field5": null,
+"field6": null
+},
+"foo2": {
+"field7": null,
+"field8": null,
+"field9": null,
+"field10": null,
+"field11": null,
+"field12": null,
+"field13": null{
+"foo1": {
+"field1": "A thing has been going on poorly",
+"field2": null,
+"field3": null,
+"field4": null,
+"field5": null,
+"field6": null
+},
+"foo2": {
+"field7": null,
+"field8": null,
+"field9": null,
+"field10": null,
+"field11": null,
+"field12": null,
+"field13": null,
+"field14": null,
+"field15": null,
+"field16": null,
+"field17": null,
+"field18": null,
+"field19": null,
+"field20": null,
+"field21": null,
+"field22": null,
+"field23": null,
+"field24": null,
+"field25": null
+},
+"foo2": [
+{
+  "field26": "The bad thing is confirmed.",
+  "field27": null
+}
+],
+"foo3": {
+"field28": "We are really going to try and take care of the bad thing.",
+"field29": [],
+"field30": [],
+"field31": [],
+"field32": [],
+"field33": null,
+"field34": null,
+"field35": null,
+"field36": null
+}
+}"#, {
+  "foo1": {
+    "field1": "Something horrible has happened!!",
+    "field2": "null",
+    "field3": "null",
+    "field4": "null",
+    "field5": "null",
+    "field6": "null"
+  },
+  "foo2": [
+    {
+      "field26": "The bad thing is confirmed.",
+      "field27": "null"
+    }
+  ],
+  "foo3": {
+    "field28": "We are really going to try and take care of the bad thing.",
+    "field29": [],
+    "field30": [],
+    "field31": [],
+    "field32": [],
+    "field33": "null",
+    "field34": "null",
+    "field35": "null",
+    "field36": "null"
+  }
+});

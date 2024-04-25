@@ -1,15 +1,22 @@
 mod generate;
+mod ir_helpers;
 mod json_schema;
 pub mod repr;
 mod walker;
 
 pub use generate::to_ir;
 use internal_baml_schema_ast::ast;
+pub use ir_helpers::{
+    ClassWalker, ClientWalker, EnumWalker, FunctionWalker, IRHelper, RetryPolicyWalker,
+    TemplateStringWalker,
+};
+
 pub(super) use json_schema::WithJsonSchema;
 pub(super) use repr::IntermediateRepr;
 
 // Add aliases for the IR types
 pub type Enum = repr::Node<repr::Enum>;
+pub type EnumValue = repr::Node<repr::EnumValue>;
 pub type Class = repr::Node<repr::Class>;
 pub(super) type FieldType = repr::FieldType;
 pub(super) type Expression = repr::Expression;

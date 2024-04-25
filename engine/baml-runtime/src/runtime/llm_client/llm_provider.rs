@@ -1,7 +1,8 @@
 use anyhow::Result;
+use internal_baml_core::ir::{ClientWalker, RetryPolicyWalker};
 use internal_baml_jinja::RenderedPrompt;
 
-use crate::ir_helpers::{ClientWalker, PromptRenderer, RetryPolicyWalker, RuntimeContext};
+use crate::runtime::{prompt_renderer::PromptRenderer, runtime_ctx::RuntimeContext};
 
 use super::{openai::OpenAIClient, LLMClientExt, LLMResponse};
 
@@ -30,6 +31,29 @@ impl LLMClientExt for LLMProvider<'_> {
     async fn single_call(&self, prompt: &RenderedPrompt) -> Result<LLMResponse> {
         match self {
             LLMProvider::OpenAI(client) => client.single_call(prompt).await,
+        }
+    }
+
+    async fn call(&mut self, prompt: &RenderedPrompt) -> Result<LLMResponse> {
+        if let Some(policy) = self.retry_policy() {
+            let retry_strategy = super::retry_policy::CallablePolicy::new(&policy);
+            let mut err = None;
+            for delay in retry_strategy {
+                match self.single_call(prompt).await {
+                    Ok(response) => return Ok(response),
+                    Err(e) => {
+                        err = Some(e);
+                    }
+                }
+                tokio::time::sleep(delay).await;
+            }
+            if let Some(e) = err {
+                return Err(e);
+            } else {
+                anyhow::bail!("No response from client");
+            }
+        } else {
+            return self.single_call(prompt).await;
         }
     }
 }

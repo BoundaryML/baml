@@ -53,7 +53,11 @@ where
 #[macro_export]
 macro_rules! error_not_found {
     ($type:expr, $name:expr, $candidates:expr) => {{
-        let suggestions = $crate::error_utils::sort_by_match($name, $candidates, Some(5));
+        let suggestions = $crate::generate::ir::ir_helpers::error_utils::sort_by_match(
+            $name,
+            $candidates,
+            Some(5),
+        );
         match suggestions.len() {
             0 => anyhow::bail!("{} `{}` not found.", $type, $name),
             1 => {

@@ -1,17 +1,19 @@
 use std::collections::HashMap;
 
-use crate::ir_helpers::{
-    llm_client::{
-        openai::types::{ChatCompletionResponse, FinishReason},
-        LLMChatClient, LLMClient, LLMResponse, ModelType,
-    },
-    ClientWalker, LLMClientExt, RetryPolicyWalker, RuntimeContext,
-};
-
 use anyhow::Result;
-use internal_baml_core::ir::repr::Expression;
+use internal_baml_core::ir::{repr::Expression, ClientWalker, RetryPolicyWalker};
 use internal_baml_jinja::{RenderContext_Client, RenderedChatMessage, RenderedPrompt};
 use serde_json::json;
+
+use crate::runtime::{
+    llm_client::{
+        openai::types::FinishReason, LLMChatClient, LLMClient, LLMClientExt, LLMResponse, ModelType,
+    },
+    prompt_renderer::PromptRenderer,
+    runtime_ctx::RuntimeContext,
+};
+
+use super::types::ChatCompletionResponse;
 
 fn serialize(ctx: &RuntimeContext, expr: &Expression) -> Result<serde_json::Value> {
     // serde_json::Value::serialize(&self.into(), serializer)
@@ -163,8 +165,8 @@ impl<'ir> OpenAIClient<'ir> {
 impl LLMClientExt for OpenAIClient<'_> {
     fn render_prompt(
         &self,
-        renderer: &crate::ir_helpers::PromptRenderer<'_>,
-        ctx: &crate::ir_helpers::RuntimeContext,
+        renderer: &PromptRenderer<'_>,
+        ctx: &RuntimeContext,
         params: &serde_json::Value,
     ) -> Result<RenderedPrompt> {
         self.render_chat_prompt(renderer, ctx, params)

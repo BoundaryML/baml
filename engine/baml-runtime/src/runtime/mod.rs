@@ -1,12 +1,23 @@
+mod llm_client;
+mod prompt_renderer;
+mod runtime_ctx;
+
 use anyhow::Result;
 use serde_json::json;
 use std::{collections::HashMap, path::PathBuf};
 
 use internal_baml_core::{
-    internal_baml_diagnostics::SourceFile, ir::repr::IntermediateRepr, validate,
+    internal_baml_diagnostics::SourceFile,
+    ir::{repr::IntermediateRepr, IRHelper},
+    validate,
 };
 
-use crate::ir_helpers::{IRHelper, LLMClientExt, LLMProvider, PromptRenderer, RuntimeContext};
+use crate::runtime::{
+    llm_client::{LLMClientExt, LLMProvider},
+    prompt_renderer::PromptRenderer,
+};
+
+use self::runtime_ctx::RuntimeContext;
 
 pub struct BamlRuntime {
     ir: IntermediateRepr,
@@ -75,12 +86,23 @@ impl BamlRuntime {
         println!("{:?}", response);
 
         // Parse the output.
-        todo!()
+        let parsed = jsonish::from_str(
+            response.content.as_str(),
+            &self.ir,
+            function.output(),
+            &ctx.env,
+        )?;
+
+        println!("{:?}", parsed.0);
+
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::runtime_ctx::RuntimeContext;
+
     use super::*;
     use std::collections::HashMap;
 
@@ -89,7 +111,7 @@ mod tests {
         let directory = PathBuf::from("/Users/vbv/repos/gloo-lang/integ-tests/baml_src");
         let runtime = BamlRuntime::from_directory(&directory).unwrap();
 
-        let ctx = RuntimeContext::new().add_env("OPENAI_API_KEY".into(), "foo".to_string());
+        let ctx = RuntimeContext::new().add_env("OPENAI_API_KEY".into(), "SOME_KEY".to_string());
 
         let mut params = HashMap::new();
         params.insert("input", json!("\"Attention Is All You Need\" is a landmark[1][2] 2017 research paper by Google.[3] Authored by eight scientists, it was responsible for expanding 2014 attention mechanisms proposed by Bahdanau et. al. into a new deep learning architecture known as the transformer. The paper is considered by some to be a founding document for modern artificial intelligence, as transformers became the main architecture of large language models.[4][5] At the time, the focus of the research was on improving Seq2seq techniques for machine translation, but even in their paper the authors saw the potential for other tasks like question answering and for what is now called multimodal Generative AI.\n\nThe paper's title is a reference to the song \"All You Need Is Love\" by the Beatles.[6]\n\nAs of 2024, the paper has been cited more than 100,000 times.[7]"));

@@ -1,62 +1,34 @@
-mod llm_client;
-mod prompt_renderer;
+mod error_utils;
 mod scope_diagnostics;
 mod validate_value;
 
 use std::collections::HashMap;
 
-use anyhow::Result;
-use internal_baml_core::ir::{
-    repr::{IntermediateRepr, Walker},
-    Class, Client, Enum, Function, RetryPolicy, TemplateString,
+use crate::{
+    error_not_found, error_unsupported,
+    ir::{
+        repr::{IntermediateRepr, Walker},
+        Class, Client, Enum, Function, RetryPolicy, TemplateString,
+    },
 };
-
-use crate::{error_not_found, error_unsupported};
+use anyhow::Result;
 
 use self::scope_diagnostics::ScopeStack;
 
-pub use self::llm_client::{LLMClientExt, LLMProvider};
-pub use self::prompt_renderer::PromptRenderer;
+use super::repr;
 
-type FunctionWalker<'a> = Walker<'a, &'a Function>;
-type EnumWalker<'a> = Walker<'a, &'a Enum>;
-type ClassWalker<'a> = Walker<'a, &'a Class>;
-type TemplateStringWalker<'a> = Walker<'a, &'a TemplateString>;
-type ClientWalker<'a> = Walker<'a, &'a Client>;
-type RetryPolicyWalker<'a> = Walker<'a, &'a RetryPolicy>;
-
-#[derive(Default)]
-pub struct RuntimeContext {
-    env: HashMap<String, String>,
-    tags: HashMap<String, serde_json::Value>,
-}
-
-impl RuntimeContext {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn add_env(mut self, key: String, value: String) -> Self {
-        self.env.insert(key, value);
-        self
-    }
-
-    pub fn with_env(mut self, env: HashMap<String, String>) -> Self {
-        self.env = env;
-        self
-    }
-
-    pub fn with_tags(mut self, tags: HashMap<String, serde_json::Value>) -> Self {
-        self.tags = tags;
-        self
-    }
-}
+pub type FunctionWalker<'a> = Walker<'a, &'a Function>;
+pub type EnumWalker<'a> = Walker<'a, &'a Enum>;
+pub type ClassWalker<'a> = Walker<'a, &'a Class>;
+pub type TemplateStringWalker<'a> = Walker<'a, &'a TemplateString>;
+pub type ClientWalker<'a> = Walker<'a, &'a Client>;
+pub type RetryPolicyWalker<'a> = Walker<'a, &'a RetryPolicy>;
 
 pub trait IRHelper {
-    fn find_enum(&self, enum_name: &str) -> Result<EnumWalker>;
-    fn find_class(&self, class_name: &str) -> Result<ClassWalker>;
-    fn find_function<'a>(&'a self, function_name: &str) -> Result<FunctionWalker<'a>>;
-    fn find_client(&self, client_name: &str) -> Result<ClientWalker>;
+    fn find_enum(&self, enum_name: &str) -> Result<EnumWalker<'_>>;
+    fn find_class(&self, class_name: &str) -> Result<ClassWalker<'_>>;
+    fn find_function(&self, function_name: &str) -> Result<FunctionWalker<'_>>;
+    fn find_client(&self, client_name: &str) -> Result<ClientWalker<'_>>;
     fn check_function_params<'a>(
         &'a self,
         function: &'a FunctionWalker<'a>,
@@ -65,7 +37,7 @@ pub trait IRHelper {
 }
 
 impl IRHelper for IntermediateRepr {
-    fn find_enum(&self, enum_name: &str) -> Result<EnumWalker> {
+    fn find_enum(&self, enum_name: &str) -> Result<EnumWalker<'_>> {
         match self.walk_enums().find(|e| e.name() == enum_name) {
             Some(e) => Ok(e),
             None => {
@@ -76,7 +48,7 @@ impl IRHelper for IntermediateRepr {
         }
     }
 
-    fn find_class(&self, class_name: &str) -> Result<ClassWalker> {
+    fn find_class(&self, class_name: &str) -> Result<ClassWalker<'_>> {
         match self.walk_classes().find(|e| e.name() == class_name) {
             Some(e) => Ok(e),
             None => {
@@ -90,14 +62,14 @@ impl IRHelper for IntermediateRepr {
     fn find_function<'a>(&'a self, function_name: &str) -> Result<FunctionWalker<'a>> {
         match self.walk_functions().find(|f| f.name() == function_name) {
             Some(f) => match f.item.elem {
-                internal_baml_core::ir::repr::Function::V1(_) => {
+                repr::Function::V1(_) => {
                     error_unsupported!(
                         "function",
                         function_name,
                         "legacy functions cannot use the runtime"
                     )
                 }
-                internal_baml_core::ir::repr::Function::V2(_) => Ok(f),
+                repr::Function::V2(_) => Ok(f),
             },
             None => {
                 // Get best match.
@@ -111,7 +83,7 @@ impl IRHelper for IntermediateRepr {
         }
     }
 
-    fn find_client(&self, client_name: &str) -> Result<ClientWalker> {
+    fn find_client(&self, client_name: &str) -> Result<ClientWalker<'_>> {
         match self.walk_clients().find(|c| c.elem().name == client_name) {
             Some(c) => Ok(c),
             None => {
