@@ -14,6 +14,7 @@ futures = { version = "0.3.30", features = ["executor"] }
 magnus = "0.6"
 # Must be kept in sync with ../../Gemfile
 rb-sys = { version = "0.9.97", features = [
+  "global-allocator",
   "bindgen-rbimpls",
   "bindgen-deprecated-types",
   "stable-api-compiled-fallback",

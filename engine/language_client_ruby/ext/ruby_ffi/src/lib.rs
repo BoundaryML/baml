@@ -1,18 +1,9 @@
 use baml_runtime::{BamlRuntime, RuntimeContext};
 use futures::executor::block_on;
 use magnus::{
-    class, define_class,
-    encoding::{CType, RbEncoding},
-    error::RubyUnavailableError,
-    exception::runtime_error,
-    exception::type_error,
-    function, method,
-    prelude::*,
-    scan_args::get_kwargs,
-    value::Value,
-    Error, KwArgs, RArray, RHash, RObject, RString, Ruby,
+    class, error::RubyUnavailableError, exception::runtime_error, function, method, prelude::*,
+    scan_args::get_kwargs, value::Value, Error, RHash, Ruby,
 };
-use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -20,19 +11,10 @@ mod json_to_ruby;
 
 type Result<T> = std::result::Result<T, magnus::Error>;
 
-struct SerializationError {
-    position: Vec<String>,
-    message: String,
-}
-
-impl SerializationError {
-    fn to_string(&self) -> String {
-        if self.position.is_empty() {
-            return self.message.clone();
-        } else {
-            format!("{}: {}", self.position.join("."), self.message)
-        }
-    }
+fn does_this_yield() {
+    println!("BEGIN- sleeping for 2s");
+    std::thread::sleep(std::time::Duration::from_secs(2));
+    println!("END- slept for 2s");
 }
 
 fn json_to_ruby(any: Value) -> Result<Value> {
@@ -65,12 +47,6 @@ fn json_to_ruby(any: Value) -> Result<Value> {
 #[magnus::wrap(class = "Baml::BamlRuntime", free_immediately, size)]
 struct BamlRuntimeFfi {
     internal: BamlRuntime,
-}
-
-#[derive(Deserialize)]
-struct BamlFunctionCallParams {
-    args: HashMap<String, serde_json::Value>,
-    ctx: Option<RuntimeContext>,
 }
 
 impl BamlRuntimeFfi {
@@ -172,6 +148,7 @@ fn init() -> Result<()> {
     runtime_class.define_method("call_function", method!(BamlRuntimeFfi::call_function, 1))?;
 
     module.define_module_function("json_to_ruby", function!(json_to_ruby, 1))?;
+    module.define_module_function("does_this_yield", function!(does_this_yield, 0))?;
 
     Ok(())
 }

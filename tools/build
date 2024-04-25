@@ -74,6 +74,7 @@ case "$_path" in
         --ext rs,hb,hbs,toml,baml,rb \
         --watch "${_repo_root}/engine" \
         --ignore 'target' \
+        --ignore 'tmp' \
         --exec "${command}"
     else
       eval "${command}"
