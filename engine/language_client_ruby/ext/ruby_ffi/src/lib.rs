@@ -118,7 +118,7 @@ impl BamlRuntimeFfi {
 
         if !rest.is_empty() {
             return Err(Error::new(
-                runtime_error(),
+                ruby.exception_syntax_error(),
                 format!("unexpected keyword arguments: {:#?}", rest),
             ));
         }
@@ -126,7 +126,7 @@ impl BamlRuntimeFfi {
         let Ok(args) = serde_magnus::deserialize::<_, HashMap<String, serde_json::Value>>(args)
         else {
             return Err(Error::new(
-                runtime_error(),
+                ruby.exception_syntax_error(),
                 format!(
                     "expected keyword 'args' to specify a hash, but was: {}",
                     args
@@ -139,7 +139,7 @@ impl BamlRuntimeFfi {
                 Ok(ctx) => ctx,
                 Err(e) => {
                     return Err(Error::new(
-                        runtime_error(),
+                        ruby.exception_syntax_error(),
                         format!("error while parsing ctx: {:#}", e),
                     ));
                 }
@@ -149,16 +149,17 @@ impl BamlRuntimeFfi {
 
         match block_on(self.internal.call_function(&function_name, &args, ctx)) {
             Ok(_) => Ok(()),
-            Err(e) => Err(Error::new(runtime_error(), format!("{:#}", e))),
+            Err(e) => Err(Error::new(
+                ruby.exception_runtime_error(),
+                format!("{:#}", e),
+            )),
         }
     }
 }
 
 #[magnus::init(name = "ruby_ffi")]
 fn init() -> Result<()> {
-    let Ok(rb) = Ruby::get() else {
-        return Err(Error::new(runtime_error(), "Failed to access Ruby runtime"));
-    };
+    let rb = BamlRuntimeFfi::try_lock_gvl()?;
 
     let module = rb.define_module("Baml")?;
 
