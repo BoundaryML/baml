@@ -119,7 +119,7 @@ impl BamlRuntimeFfi {
         if !rest.is_empty() {
             return Err(Error::new(
                 ruby.exception_syntax_error(),
-                format!("unexpected keyword arguments: {:#?}", rest),
+                format!("unexpected keyword arguments: {}", rest),
             ));
         }
 
@@ -140,7 +140,7 @@ impl BamlRuntimeFfi {
                 Err(e) => {
                     return Err(Error::new(
                         ruby.exception_syntax_error(),
-                        format!("error while parsing ctx: {:#}", e),
+                        format!("error while parsing ctx: {}", e),
                     ));
                 }
             },
