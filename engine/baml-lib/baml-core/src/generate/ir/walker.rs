@@ -120,9 +120,20 @@ impl<'a> Walker<'a, &'a Client> {
     pub fn elem(&self) -> &'a repr::Client {
         &self.item.elem
     }
+
+    pub fn retry_policy(&self) -> Option<Walker<'a, &'a RetryPolicy>> {
+        self.elem()
+            .retry_policy_id
+            .as_ref()
+            .and_then(|policy| self.db.walk_retry_policies().find(|r| r.name() == policy))
+    }
 }
 
 impl<'a> Walker<'a, &'a RetryPolicy> {
+    pub fn name(&self) -> &str {
+        &self.elem().name.0
+    }
+
     pub fn elem(&self) -> &'a repr::RetryPolicy {
         &self.item.elem
     }

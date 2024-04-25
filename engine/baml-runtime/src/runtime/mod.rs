@@ -1,11 +1,12 @@
 use anyhow::Result;
+use serde_json::json;
 use std::{collections::HashMap, path::PathBuf};
 
 use internal_baml_core::{
     internal_baml_diagnostics::SourceFile, ir::repr::IntermediateRepr, validate,
 };
 
-use crate::ir_helpers::{IRHelper, PromptRenderer, RuntimeContext};
+use crate::ir_helpers::{IRHelper, LLMClientExt, LLMProvider, PromptRenderer, RuntimeContext};
 
 pub struct BamlRuntime {
     ir: IntermediateRepr,
@@ -52,7 +53,7 @@ impl BamlRuntime {
         })
     }
 
-    pub fn call_function(
+    pub async fn call_function(
         &self,
         function_name: &str,
         params: &HashMap<&str, serde_json::Value>,
@@ -61,14 +62,40 @@ impl BamlRuntime {
         let function = self.ir.find_function(function_name)?;
         self.ir.check_function_params(&function, params)?;
 
-        // Generate the prompt.
         let renderer = PromptRenderer::from_function(&function)?;
+        let client = self.ir.find_client(renderer.client_name())?;
+        let mut client = LLMProvider::from_ir(&client, &ctx)?;
+
+        // Generate the prompt.
+        let prompt = client.render_prompt(&renderer, &ctx, &json!(params))?;
 
         // Call the LLM.
-        // self.ir.find_client()
+        let response = client.call(&prompt).await?;
+
+        println!("{:?}", response);
 
         // Parse the output.
-
         todo!()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[tokio::test]
+    async fn test_call_function() -> Result<()> {
+        let directory = PathBuf::from("/Users/vbv/repos/gloo-lang/integ-tests/baml_src");
+        let runtime = BamlRuntime::from_directory(&directory).unwrap();
+
+        let ctx = RuntimeContext::new().add_env("OPENAI_API_KEY".into(), "foo".to_string());
+
+        let mut params = HashMap::new();
+        params.insert("input", json!("\"Attention Is All You Need\" is a landmark[1][2] 2017 research paper by Google.[3] Authored by eight scientists, it was responsible for expanding 2014 attention mechanisms proposed by Bahdanau et. al. into a new deep learning architecture known as the transformer. The paper is considered by some to be a founding document for modern artificial intelligence, as transformers became the main architecture of large language models.[4][5] At the time, the focus of the research was on improving Seq2seq techniques for machine translation, but even in their paper the authors saw the potential for other tasks like question answering and for what is now called multimodal Generative AI.\n\nThe paper's title is a reference to the song \"All You Need Is Love\" by the Beatles.[6]\n\nAs of 2024, the paper has been cited more than 100,000 times.[7]"));
+
+        runtime.call_function("ExtractNames", &params, ctx).await?;
+
+        Ok(())
     }
 }

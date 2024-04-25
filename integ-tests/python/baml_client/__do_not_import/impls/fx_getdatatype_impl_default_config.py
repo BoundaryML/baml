@@ -48,7 +48,7 @@ __deserializer = Deserializer[RaysData](RaysData)  # type: ignore
 # Add a deserializer that handles stream responses, which are all Partial types
 __partial_deserializer = Deserializer[PartialRaysData](PartialRaysData)  # type: ignore
 
-__output_schema = """
+__output_format = """
 {
   "dataType": "DataType as string",
   "value": {
@@ -79,7 +79,7 @@ __template_macros = [
 async def default_config(*, text: str) -> RaysData:
     response = await GPT4.run_jinja_template(
         jinja_template=__prompt_template,
-        output_schema=__output_schema, template_macros=__template_macros,
+        output_format=__output_format, template_macros=__template_macros,
         args=dict(text=text)
     )
     deserialized = __deserializer.from_string(response.generated)
@@ -91,7 +91,7 @@ def default_config_stream(*, text: str
     def run_prompt() -> typing.AsyncIterator[LLMResponse]:
         raw_stream = GPT4.run_jinja_template_stream(
             jinja_template=__prompt_template,
-            output_schema=__output_schema, template_macros=__template_macros,
+            output_format=__output_format, template_macros=__template_macros,
             args=dict(text=text)
         )
         return raw_stream

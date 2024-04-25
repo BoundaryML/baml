@@ -1,3 +1,5 @@
 mod error_utils;
 mod ir_helpers;
-pub mod runtime;
+mod runtime;
+
+pub use runtime::BamlRuntime;

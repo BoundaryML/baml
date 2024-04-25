@@ -54,4 +54,8 @@ impl PromptRenderer<'_> {
     pub fn template_macros(&self) -> &Vec<TemplateStringMacro> {
         &self.template_macros
     }
+
+    pub fn client_name(&self) -> &str {
+        &self.config.client
+    }
 }

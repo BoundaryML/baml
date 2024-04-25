@@ -36,7 +36,7 @@ reasoning step-by-step. Here is an example on how to do this:
 {
   ... the json schema ...
 }'`;
-const output_schema = `{
+const output_format = `{
   "order_status": "OrderStatus as string",
   "tracking_number": string | null,
   "estimated_arrival_date": string | null
@@ -64,7 +64,7 @@ GetOrderInfo.registerImpl('default_config', async (
     const result = await GPT4.run_jinja_template(
       prompt_template,
       args,
-      output_schema,
+      output_format,
       template_macros,
     );
 

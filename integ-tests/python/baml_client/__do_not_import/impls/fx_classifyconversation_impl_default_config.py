@@ -42,7 +42,7 @@ __deserializer = Deserializer[List[Category]](List[Category])  # type: ignore
 # Add a deserializer that handles stream responses, which are all Partial types
 __partial_deserializer = Deserializer[List[Category]](List[Category])  # type: ignore
 
-__output_schema = """
+__output_format = """
 "Category as string"[]
 
 Category
@@ -61,7 +61,7 @@ __template_macros = [
 async def default_config(*, messages: List[Message]) -> List[Category]:
     response = await GPT4.run_jinja_template(
         jinja_template=__prompt_template,
-        output_schema=__output_schema, template_macros=__template_macros,
+        output_format=__output_format, template_macros=__template_macros,
         args=dict(messages=messages)
     )
     deserialized = __deserializer.from_string(response.generated)
@@ -73,7 +73,7 @@ def default_config_stream(*, messages: List[Message]
     def run_prompt() -> typing.AsyncIterator[LLMResponse]:
         raw_stream = GPT4.run_jinja_template_stream(
             jinja_template=__prompt_template,
-            output_schema=__output_schema, template_macros=__template_macros,
+            output_format=__output_format, template_macros=__template_macros,
             args=dict(messages=messages)
         )
         return raw_stream

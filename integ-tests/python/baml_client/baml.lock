@@ -1,7 +1,7 @@
 {
   "version": 1,
   "content": {
-    "cli_version": "0.18.0-canary.3",
+    "cli_version": "0.18.0",
     "client_version": null
   }
 }

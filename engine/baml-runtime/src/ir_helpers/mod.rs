@@ -8,13 +8,14 @@ use std::collections::HashMap;
 use anyhow::Result;
 use internal_baml_core::ir::{
     repr::{IntermediateRepr, Walker},
-    Class, Client, Enum, Function, TemplateString,
+    Class, Client, Enum, Function, RetryPolicy, TemplateString,
 };
 
 use crate::{error_not_found, error_unsupported};
 
 use self::scope_diagnostics::ScopeStack;
 
+pub use self::llm_client::{LLMClientExt, LLMProvider};
 pub use self::prompt_renderer::PromptRenderer;
 
 type FunctionWalker<'a> = Walker<'a, &'a Function>;
@@ -22,10 +23,33 @@ type EnumWalker<'a> = Walker<'a, &'a Enum>;
 type ClassWalker<'a> = Walker<'a, &'a Class>;
 type TemplateStringWalker<'a> = Walker<'a, &'a TemplateString>;
 type ClientWalker<'a> = Walker<'a, &'a Client>;
+type RetryPolicyWalker<'a> = Walker<'a, &'a RetryPolicy>;
 
+#[derive(Default)]
 pub struct RuntimeContext {
     env: HashMap<String, String>,
     tags: HashMap<String, serde_json::Value>,
+}
+
+impl RuntimeContext {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn add_env(mut self, key: String, value: String) -> Self {
+        self.env.insert(key, value);
+        self
+    }
+
+    pub fn with_env(mut self, env: HashMap<String, String>) -> Self {
+        self.env = env;
+        self
+    }
+
+    pub fn with_tags(mut self, tags: HashMap<String, serde_json::Value>) -> Self {
+        self.tags = tags;
+        self
+    }
 }
 
 pub trait IRHelper {
@@ -88,11 +112,14 @@ impl IRHelper for IntermediateRepr {
     }
 
     fn find_client(&self, client_name: &str) -> Result<ClientWalker> {
-        match self.walk_clients().find(|c| c.name() == client_name) {
+        match self.walk_clients().find(|c| c.elem().name == client_name) {
             Some(c) => Ok(c),
             None => {
                 // Get best match.
-                let clients = self.walk_clients().map(|c| c.name()).collect::<Vec<_>>();
+                let clients = self
+                    .walk_clients()
+                    .map(|c| c.elem().name.clone())
+                    .collect::<Vec<_>>();
                 error_not_found!("client", client_name, &clients)
             }
         }

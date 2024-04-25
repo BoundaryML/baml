@@ -28,7 +28,7 @@ Output JSON schema:
 {{ ctx.output_schema }}
 
 JSON:`;
-const output_schema = `{
+const output_format = `{
   "name": string,
   "email": string,
   "phone": string,
@@ -52,7 +52,7 @@ ExtractResume.registerImpl('default_config', async (
     const result = await Resilient_ComplexSyntax.run_jinja_template(
       prompt_template,
       args,
-      output_schema,
+      output_format,
       template_macros,
     );
 

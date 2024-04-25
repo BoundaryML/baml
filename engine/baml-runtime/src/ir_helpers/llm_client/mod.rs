@@ -1,4 +1,6 @@
-mod openai_client;
+mod llm_provider;
+mod openai;
+mod retry_policy;
 
 use anyhow::Result;
 use async_stream::stream;
@@ -7,13 +9,19 @@ use internal_baml_jinja::{
     render_prompt, RenderContext, RenderContext_Client, RenderedChatMessage, RenderedPrompt,
 };
 
-use super::{PromptRenderer, RuntimeContext};
+use self::retry_policy::CallablePolicy;
 
-struct LLMResponse {
-    content: String,
-    start_time_unix_ms: u64,
-    latency_ms: u64,
-    metadata: serde_json::Value,
+use super::{PromptRenderer, RetryPolicyWalker, RuntimeContext};
+
+pub use llm_provider::LLMProvider;
+
+#[derive(Debug)]
+pub struct LLMResponse {
+    pub model: String,
+    pub content: String,
+    pub start_time_unix_ms: u64,
+    pub latency_ms: u64,
+    pub metadata: serde_json::Value,
 }
 
 struct LLMStreamResponse {
@@ -26,13 +34,10 @@ struct LLMStreamResponse {
 #[derive(Clone, Copy)]
 pub enum ModelType {
     Chat,
-    Completion,
 }
 
-pub trait LLMClient {
-    fn context(&self) -> RenderContext_Client;
-
-    fn model_type(&self) -> ModelType;
+pub trait LLMClientExt {
+    fn retry_policy(&self) -> Option<RetryPolicyWalker>;
 
     fn render_prompt(
         &self,
@@ -41,10 +46,39 @@ pub trait LLMClient {
         params: &serde_json::Value,
     ) -> Result<RenderedPrompt>;
 
-    async fn call(&self, prompt: RenderedPrompt) -> Result<LLMResponse>;
+    async fn call(&mut self, prompt: &RenderedPrompt) -> Result<LLMResponse> {
+        if let Some(policy) = self.retry_policy() {
+            let retry_strategy = CallablePolicy::new(&policy);
+            let mut err = None;
+            for delay in retry_strategy {
+                match self.single_call(prompt).await {
+                    Ok(response) => return Ok(response),
+                    Err(e) => {
+                        err = Some(e);
+                    }
+                }
+                tokio::time::sleep(delay).await;
+            }
+            if let Some(e) = err {
+                return Err(e);
+            } else {
+                anyhow::bail!("No response from client");
+            }
+        } else {
+            return self.single_call(prompt).await;
+        }
+    }
+
+    async fn single_call(&self, prompt: &RenderedPrompt) -> Result<LLMResponse>;
 }
 
-pub trait LLMChatClient: LLMClient {
+trait LLMClient: LLMClientExt {
+    fn context(&self) -> RenderContext_Client;
+
+    fn model_type(&self) -> ModelType;
+}
+
+trait LLMChatClient: LLMClient {
     fn default_role(&self) -> &str;
 
     fn render_chat_prompt(
