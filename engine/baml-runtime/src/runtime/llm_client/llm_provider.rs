@@ -2,7 +2,8 @@ use anyhow::Result;
 use internal_baml_core::ir::{ClientWalker, RetryPolicyWalker};
 use internal_baml_jinja::RenderedPrompt;
 
-use crate::runtime::{prompt_renderer::PromptRenderer, runtime_ctx::RuntimeContext};
+use crate::runtime::{prompt_renderer::PromptRenderer};
+use crate::RuntimeContext;
 
 use super::{openai::OpenAIClient, LLMClientExt, LLMResponse};
 

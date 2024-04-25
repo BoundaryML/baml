@@ -1,16 +1,16 @@
 [package]
-name = "baml"
+name = "ruby_ffi"
 version = "0.1.0"
 edition = "2021"
 publish = false
 
 [lib]
 # This controls the name of the generated .so file
-name = "baml"
 crate-type = ["cdylib"]
 
 [dependencies]
 baml-runtime = { path = "../../../baml-runtime" }
+futures = { version = "0.3.30", features = ["executor"] }
 magnus = "0.6"
 # Must be kept in sync with ../../Gemfile
 rb-sys = { version = "0.9.97", features = [
@@ -18,6 +18,9 @@ rb-sys = { version = "0.9.97", features = [
   "bindgen-deprecated-types",
   "stable-api-compiled-fallback",
 ] }
+serde = "1.0.198"
+serde_json = "1.0.116"
+serde_magnus = "0.8.1"
 
 [dev-dependencies]
 rb-sys = { version = "0.9.97", features = [

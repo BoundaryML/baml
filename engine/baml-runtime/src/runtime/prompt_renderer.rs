@@ -7,7 +7,7 @@ use internal_baml_jinja::{
     RenderContext, RenderContext_Client, RenderedPrompt, TemplateStringMacro,
 };
 
-use super::runtime_ctx::RuntimeContext;
+use crate::RuntimeContext;
 
 pub struct PromptRenderer<'ir> {
     template_macros: Vec<TemplateStringMacro>,

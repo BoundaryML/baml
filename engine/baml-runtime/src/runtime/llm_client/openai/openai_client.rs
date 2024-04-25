@@ -10,8 +10,8 @@ use crate::runtime::{
         openai::types::FinishReason, LLMChatClient, LLMClient, LLMClientExt, LLMResponse, ModelType,
     },
     prompt_renderer::PromptRenderer,
-    runtime_ctx::RuntimeContext,
 };
+use crate::RuntimeContext;
 
 use super::types::ChatCompletionResponse;
 

@@ -8,7 +8,7 @@ GEMSPEC = Gem::Specification.load(GEMSPEC_PATH) || abort("Could not load #{GEMSP
 
 task default: :test
 
-RbSys::ExtensionTask.new("baml", GEMSPEC) do |ext|
+RbSys::ExtensionTask.new("ruby_ffi", GEMSPEC) do |ext|
   ext.lib_dir = "lib/baml"
   #ext.cross_compile = true
   #ext.cross_platform = %w[x86_64-linux-gnu]

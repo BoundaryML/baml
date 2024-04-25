@@ -1,6 +1,5 @@
 mod llm_client;
 mod prompt_renderer;
-mod runtime_ctx;
 
 use anyhow::Result;
 use serde_json::json;
@@ -16,8 +15,7 @@ use crate::runtime::{
     llm_client::{LLMClientExt, LLMProvider},
     prompt_renderer::PromptRenderer,
 };
-
-use self::runtime_ctx::RuntimeContext;
+use crate::RuntimeContext;
 
 pub struct BamlRuntime {
     ir: IntermediateRepr,
@@ -67,7 +65,7 @@ impl BamlRuntime {
     pub async fn call_function(
         &self,
         function_name: &str,
-        params: &HashMap<&str, serde_json::Value>,
+        params: &HashMap<String, serde_json::Value>,
         ctx: RuntimeContext,
     ) -> Result<()> {
         let function = self.ir.find_function(function_name)?;

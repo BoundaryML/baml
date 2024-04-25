@@ -7,8 +7,16 @@ members = [
   "baml-schema-wasm",
   "baml-core-ffi",
   "baml-runtime",
+  "language_client_ruby",
 ]
-exclude = ["language_client_ruby"]
+default-members = [
+  "baml-lib/*",
+  "baml-cli",
+  "baml-fmt",
+  "baml-schema-wasm",
+  "baml-core-ffi",
+  "baml-runtime",
+]
 
 [workspace.dependencies]
 anyhow = "1.0"

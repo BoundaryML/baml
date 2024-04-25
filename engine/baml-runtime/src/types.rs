@@ -1,8 +1,13 @@
+use serde::{self, Deserialize};
+use serde_json;
 use std::collections::HashMap;
 
-#[derive(Default)]
+#[derive(Deserialize, Debug, Default)]
+#[serde(deny_unknown_fields)]
 pub struct RuntimeContext {
+    #[serde(default = "HashMap::new")]
     pub env: HashMap<String, String>,
+    #[serde(default = "HashMap::new")]
     pub tags: HashMap<String, serde_json::Value>,
 }
 

@@ -1,9 +1,10 @@
 name: Release engine/language_client_ruby
 
 on:
-  push:
-    branches:
-      - sam/rust-llm
+  workflow_dispatch: {}
+  #push:
+  #  branches:
+  #    - sam/rust-llm
 
 permissions:
   contents: read
@@ -11,6 +12,16 @@ permissions:
 
 jobs:
   build:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - x86_64-linux
+          - aarch64-linux
+          - x86_64-darwin
+          - arm64-darwin
+          #- x64-mingw-ucrt
+
     runs-on: ubuntu-latest
     steps:
       - uses: rubygems/configure-rubygems-credentials@main
@@ -25,17 +36,101 @@ jobs:
       - uses: oxidize-rb/actions/setup-ruby-and-rust@main
         with:
           rubygems: latest
-          ruby-version: "3.2"
+          ruby-version: "3.3"
           bundler-cache: false
           cargo-cache: false
           cargo-vendor: false
 
-      - uses: oxidize-rb/cross-gem-action@main
-        with:
-          platform: ${{ matrix.platform }}
-          version: "latest"
-          env: |
-            RUBY_CC_VERSION=3.3.0:3.2.0:3.1.0:3.0.0
+      #################################################################################################################
+      #
+      #  BEGIN: these steps are copied from https://github.com/oxidize-rb/actions/blob/main/cross-gem/action.yml
+      #
+      #  We can't use oxidize-rb/actions/cross-gem@main directly, unfortunately, because our Ruby FFI lib is a member
+      #  of the top-level workspace, and we need to do stuff to make rb-sys-dock play nice with it
+      #
+      #################################################################################################################
+
+      - name: Configure environment
+        shell: bash
+        id: configure
+        run: |
+          : Configure environment
+          echo "RB_SYS_DOCK_UID=$(id -u)" >> $GITHUB_ENV
+          echo "RB_SYS_DOCK_GID=$(id -g)" >> $GITHUB_ENV
+          rb_sys_version="$((grep rb_sys Gemfile.lock | head -n 1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+') || (gem info rb_sys --remote | grep -oE '[0-9]+\.[0-9]+\.[0-9]+') || echo "latest")"
+          rb_sys_dock_cache_dir="$HOME/.cache/rb-sys-$rb_sys_version"
+          mkdir -p "$rb_sys_dock_cache_dir"
+          echo "RB_SYS_DOCK_CACHE_DIR=$rb_sys_dock_cache_dir" >> $GITHUB_ENV
+          echo "rb_sys_version=$rb_sys_version" >> $GITHUB_OUTPUT
+
+      #- name: Setup caching
+      #  uses: actions/cache@v4
+      #  with:
+      #    path: |
+      #      ${{ env.RB_SYS_DOCK_CACHE_DIR }}
+      #      tmp/rb-sys-dock/${{ inputs.platform }}/target
+      #    key: rb-sys-dock-${{ inputs.cache-version }}-${{ inputs.platform }}-${{ hashFiles('**/Gemfile.lock', '**/Cargo.lock') }}
+      #    save-always: ${{ inputs.cache-save-always == 'true' }}
+      #    restore-keys: |
+      #      rb-sys-dock-${{ inputs.cache-version }}-${{ inputs.platform }}-
+
+      #- name: Install cargo-cache
+      #  uses: oxidize-rb/actions/cargo-binstall@v1
+      #  id: install-cargo-cache
+      #  if: inputs.cargo-cache-clean == 'true'
+      #  with:
+      #    crate: cargo-cache
+      #    version: 0.8.3
+      #    strategies: quick-install
+
+      #- name: Clean the cargo cache
+      #  if: inputs.cargo-cache-clean == 'true'
+      #  uses: oxidize-rb/actions/post-run@v1
+      #  with:
+      #    run: cargo-cache --autoclean
+      #    cwd: ${{ inputs.working-directory }}
+      #    always: ${{ inputs.cache-save-always == 'true' }}
+
+      - name: Setup rb-sys
+        shell: bash
+        run: |
+          version="${{ steps.configure.outputs.rb_sys_version }}"
+          echo "Installing rb_sys@$version"
+
+          if [ "$version" = "latest" ]; then
+            gem install rb_sys
+          else
+            gem install rb_sys -v $version
+          fi
+
+      - run: |
+          echo "Switching to top-level workspace - we need to be able to resolve the root-level Cargo.toml"
+          cd ..
+          pwd
+
+      - name: Build gem
+        shell: bash
+        run: |
+          : Compile gem
+          echo "Docker Working Directory: $(pwd)"
+          set -x
+
+          rb-sys-dock \
+            --platform ${{ matrix.platform }} \
+            --mount-toolchains \
+            --directory language_client_ruby \
+            --ruby-versions 3.3,3.2,3.1,3.0,2.7 \
+            --build \
+            -- sudo yum install -y perl-IPC-Cmd
+
+      #################################################################################################################
+      #
+      #  END: these steps are copied from https://github.com/oxidize-rb/actions/blob/main/cross-gem/action.yml
+      #
+      #  We can't use oxidize-rb/actions/cross-gem@main directly, unfortunately, because our Ruby FFI lib is a member
+      #  of the top-level workspace, and we need to do stuff to make rb-sys-dock play nice with it
+      #
+      #################################################################################################################
 
       - run: |
           for i in $(ls pkg/*.gem); do

@@ -229,7 +229,8 @@ fn serialize_function(
                 let props = t.test_case();
                 json!({
                     "name": StringSpan::new(t.name(), t.identifier().span()),
-                    "content": Into::<serde_json::Value>::into(&props.content).to_string(),
+                    // DO NOT LAND
+                    "content": serde_json::from_str(&props.content.to_string()).unwrap_or(serde_json::Value::Null),
                 })
             })
             .collect::<Vec<_>>(),
@@ -417,8 +418,9 @@ fn serialize_impls(
         let test_case_name = selected_test.map(|t| t.name().to_string());
         let args = selected_test
             .map(
-                |t| match Into::<serde_json::Value>::into(&t.test_case().content) {
-                    serde_json::Value::Object(map) => map,
+                // DO NOT LAND
+                |t| match serde_json::from_str(&t.test_case().content.to_string()) {
+                    Ok(serde_json::Value::Object(map)) => map,
                     _ => serde_json::Map::new(),
                 },
             )

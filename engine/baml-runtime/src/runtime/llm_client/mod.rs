@@ -10,7 +10,8 @@ use internal_baml_jinja::{RenderContext_Client, RenderedChatMessage, RenderedPro
 
 use self::retry_policy::CallablePolicy;
 
-use super::{PromptRenderer, RuntimeContext};
+use super::{PromptRenderer};
+use crate::RuntimeContext;
 
 pub use llm_provider::LLMProvider;
 
