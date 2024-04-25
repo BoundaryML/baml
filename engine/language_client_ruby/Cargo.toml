@@ -1,4 +1,0 @@
-# Need this for rake to be able to resolve `cargo metadata`
-[workspace]
-members = ["ext/ruby_ffi"]
-resolver = "2"

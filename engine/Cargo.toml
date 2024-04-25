@@ -7,7 +7,7 @@ members = [
   "baml-schema-wasm",
   "baml-core-ffi",
   "baml-runtime",
-  "language_client_ruby",
+  "language_client_ruby/ext/ruby_ffi",
 ]
 default-members = [
   "baml-lib/*",

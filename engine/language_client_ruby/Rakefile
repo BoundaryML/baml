@@ -25,34 +25,6 @@ Rake::TestTask.new do |t|
   t.test_files = FileList["test/*_test.rb"]
 end
 
-#PLATFORMS = %w[
-#  aarch64-linux-gnu
-#  aarch64-linux-musl
-#  arm-linux-gnu
-#  arm-linux-musl
-#  arm64-darwin
-#  x64-mingw-ucrt
-#  x64-mingw32
-#  x86-linux-gnu
-#  x86-linux-musl
-#  x86-mingw32
-#  x86_64-darwin
-#  x86_64-linux-gnu
-#  x86_64-linux-musl
-#]
-#PLATFORMS = %w[
-#  x86_64-linux-gnu
-#]
-#task 'gem:native' do
-#  require 'rake_compiler_dock'
-#  sh "bundle package --all"   # Avoid repeated downloads of gems by using gem files from the host.
-#  PLATFORMS.each do |plat|
-#    RakeCompilerDock.sh "bundle --local && rake native:#{plat} gem", platform: plat
-#  end
-#  RakeCompilerDock.sh "bundle --local && rake java gem", rubyvm: :jruby
-#end
-
-
 desc "Build native extension for a given platform (i.e. `rake 'native[x86_64-linux]'`)"
 task :native, [:platform] do |_t, platform:|
   # There's some strange magnus<->rb_sys crate dependency error that occurs when targeting Ruby 2.6
