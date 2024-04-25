@@ -3,6 +3,7 @@ use futures::executor::block_on;
 use magnus::{
     class, define_class,
     encoding::{CType, RbEncoding},
+    error::RubyUnavailableError,
     exception::runtime_error,
     exception::type_error,
     function, method,
@@ -73,11 +74,31 @@ struct BamlFunctionCallParams {
 }
 
 impl BamlRuntimeFfi {
+    fn try_lock_gvl() -> Result<Ruby> {
+        match Ruby::get() {
+            Ok(ruby) => Ok(ruby),
+            Err(e) => match e {
+                // TODO(sam): this error handling code doesn't feel right to me - calling `runtime_error()` will
+                // panic from a non-Ruby thread - but I'm not sure what the right way to handle this is
+                RubyUnavailableError::GvlUnlocked => Err(Error::new(
+                    runtime_error(),
+                    "Failed to access Ruby runtime: GVL is unlocked",
+                )),
+                RubyUnavailableError::NonRubyThread => Err(Error::new(
+                    runtime_error(),
+                    "Failed to access Ruby runtime: calling from a non-Ruby thread",
+                )),
+            },
+        }
+    }
+
     pub fn from_directory(directory: PathBuf) -> Result<Self> {
+        let ruby = BamlRuntimeFfi::try_lock_gvl()?;
+
         match BamlRuntime::from_directory(&directory) {
             Ok(br) => Ok(BamlRuntimeFfi { internal: br }),
             Err(e) => Err(Error::new(
-                runtime_error(),
+                ruby.exception_runtime_error(),
                 format!(
                     "Encountered error while loading BAML files from directory:\n{:#}",
                     e
@@ -87,15 +108,7 @@ impl BamlRuntimeFfi {
     }
 
     pub fn call_function(&self, call_fn_args: RHash) -> Result<()> {
-        let ruby = match Ruby::get() {
-            Ok(ruby) => ruby,
-            Err(e) => {
-                return Err(Error::new(
-                    runtime_error(),
-                    format!("Failed to access Ruby runtime: {}", e),
-                ))
-            }
-        };
+        let ruby = BamlRuntimeFfi::try_lock_gvl()?;
 
         let call_fn_args = get_kwargs(call_fn_args, &["function_name", "args"], &["ctx"])?;
 
