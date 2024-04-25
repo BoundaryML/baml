@@ -99,8 +99,6 @@ impl BamlRuntime {
 
 #[cfg(test)]
 mod tests {
-    use super::runtime_ctx::RuntimeContext;
-
     use super::*;
     use std::collections::HashMap;
 

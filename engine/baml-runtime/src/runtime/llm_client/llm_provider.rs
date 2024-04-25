@@ -2,19 +2,21 @@ use anyhow::Result;
 use internal_baml_core::ir::{ClientWalker, RetryPolicyWalker};
 use internal_baml_jinja::RenderedPrompt;
 
-use crate::runtime::{prompt_renderer::PromptRenderer};
+use crate::runtime::prompt_renderer::PromptRenderer;
 use crate::RuntimeContext;
 
-use super::{openai::OpenAIClient, LLMClientExt, LLMResponse};
+use super::{anthropic::AnthropicClient, openai::OpenAIClient, LLMClientExt, LLMResponse};
 
 pub enum LLMProvider<'ir> {
     OpenAI(OpenAIClient<'ir>),
+    Anthropic(AnthropicClient<'ir>),
 }
 
 impl LLMClientExt for LLMProvider<'_> {
     fn retry_policy(&self) -> Option<RetryPolicyWalker> {
         match self {
             LLMProvider::OpenAI(client) => client.retry_policy(),
+            LLMProvider::Anthropic(client) => client.retry_policy(),
         }
     }
 
@@ -26,12 +28,14 @@ impl LLMClientExt for LLMProvider<'_> {
     ) -> Result<RenderedPrompt> {
         match self {
             LLMProvider::OpenAI(client) => client.render_prompt(renderer, ctx, params),
+            LLMProvider::Anthropic(client) => client.render_prompt(renderer, ctx, params),
         }
     }
 
     async fn single_call(&self, prompt: &RenderedPrompt) -> Result<LLMResponse> {
         match self {
             LLMProvider::OpenAI(client) => client.single_call(prompt).await,
+            LLMProvider::Anthropic(client) => client.single_call(prompt).await,
         }
     }
 
@@ -67,6 +71,9 @@ impl LLMProvider<'_> {
         match client.elem().provider.as_str() {
             "baml-openai-chat" | "openai" => {
                 OpenAIClient::new(client, ctx).map(LLMProvider::OpenAI)
+            }
+            "baml-anthropic-chat" | "anthropic" => {
+                AnthropicClient::new(client, ctx).map(LLMProvider::Anthropic)
             }
             _ => anyhow::bail!("Unsupported provider"),
         }
