@@ -2,7 +2,7 @@
 title: client
 ---
 
-A **client** is the mechanism by which an [impl](/v3/syntax/impl) is executed (can be an LLM or otherwise).
+A **client** is the mechanism by which a function calls an LLM.
 
 ## Syntax
 
@@ -24,7 +24,7 @@ client<CLIENT_TYPE> Name {
 | -------------- | -------------------- | -------------------------------------------------- | -------- |
 | `provider`     | name of the provider | The provider to use.                               | Yes      |
 | `options`      | key-value pair       | These are passed through directly to the provider. | No       |
-| `retry_policy` | name of the policy   | [Learn more](/v3/syntax/client/retry)              | No       |
+| `retry_policy` | name of the policy   | [Learn more](/docs/syntax/client/retry)              | No       |
 
 ## Providers
 
@@ -151,7 +151,7 @@ client<llm> MyClient {
 
 The `baml-fallback` provider allows you to define a resilient client, by
 specifying strategies for re-running failed requests. See
-[Fallbacks/Redundancy](/v3/syntax/client/redundancy) for more information.
+[Fallbacks/Redundancy](/docs/syntax/client/redundancy) for more information.
 
 ### Round Robin
 
