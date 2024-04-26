@@ -17,7 +17,7 @@ const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   title: 'Prompt Fiddle',
-  description: 'A powerful LLM prompt playground to build, test and share prompts.',
+  description: 'An LLM prompt playground for structured prompting',
 }
 
 export default function RootLayout({
