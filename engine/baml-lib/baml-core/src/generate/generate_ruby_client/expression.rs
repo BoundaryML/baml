@@ -1,8 +1,8 @@
 use crate::generate::ir::{Expression, Identifier, TypeValue};
 
-use super::ts_language_features::ToTypeScript;
+use super::ruby_language_features::ToRuby;
 
-impl ToTypeScript for Expression {
+impl ToRuby for Expression {
     fn to_ts(&self) -> String {
         match self {
             Expression::List(values) => {
@@ -39,7 +39,7 @@ impl ToTypeScript for Expression {
     }
 }
 
-impl ToTypeScript for TypeValue {
+impl ToRuby for TypeValue {
     fn to_ts(&self) -> String {
         match self {
             TypeValue::Bool => "boolean".to_string(),

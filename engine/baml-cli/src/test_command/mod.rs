@@ -239,6 +239,7 @@ pub fn run(
             let test_runner: TestRunner = match generator.language {
                 GeneratorLanguage::Python => TestRunner::Pytest,
                 GeneratorLanguage::TypeScript => TestRunner::Jest,
+                GeneratorLanguage::Ruby => todo!(),
             };
 
             // Run the tests

@@ -1,5 +1,5 @@
 use crate::generate::{
-    dir_writer::WithFileContent,
+    dir_writer::WithFileContentTs,
     ir::{RetryPolicy, Walker},
 };
 
@@ -27,7 +27,7 @@ impl ToTypeScript for RetryPolicy {
     }
 }
 
-impl WithFileContent<TSLanguageFeatures> for Walker<'_, &RetryPolicy> {
+impl WithFileContentTs<TSLanguageFeatures> for Walker<'_, &RetryPolicy> {
     fn file_dir(&self) -> &'static str {
         "."
     }

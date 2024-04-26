@@ -2,9 +2,9 @@ use std::collections::{HashMap, HashSet};
 
 use crate::generate::dir_writer::{FileCollector, Import, LanguageFeatures, LibImport};
 
-pub(super) struct TSLanguageFeatures {}
+pub(super) struct RubyLanguageFeatures {}
 
-impl LanguageFeatures for TSLanguageFeatures {
+impl LanguageFeatures for RubyLanguageFeatures {
     fn content_prefix(&self) -> &'static str {
         // NB: "// eslint-disable" does not work, which is why we use inline comments instead
         // NB: prettier does not allow ignoring files using inline directives or local ignore files
@@ -82,12 +82,12 @@ impl LanguageFeatures for TSLanguageFeatures {
     }
 }
 
-pub(super) trait ToTypeScript {
+pub(super) trait ToRuby {
     fn to_ts(&self) -> String;
 }
 
-pub(super) type TSFileCollector = FileCollector<TSLanguageFeatures>;
+pub(super) type TSFileCollector = FileCollector<RubyLanguageFeatures>;
 
 pub(super) fn get_file_collector() -> TSFileCollector {
-    TSFileCollector::new(TSLanguageFeatures {})
+    TSFileCollector::new(RubyLanguageFeatures {})
 }

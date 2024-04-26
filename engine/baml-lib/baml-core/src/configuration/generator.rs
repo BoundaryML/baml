@@ -46,6 +46,8 @@ pub enum GeneratorLanguage {
     Python,
     #[serde(rename = "typescript")]
     TypeScript,
+    #[serde(rename = "Ruby")]
+    Ruby,
 }
 
 impl GeneratorLanguage {
@@ -53,6 +55,7 @@ impl GeneratorLanguage {
         match self {
             Self::Python => "python",
             Self::TypeScript => "typescript",
+            Self::Ruby => "ruby",
         }
     }
 
@@ -60,6 +63,7 @@ impl GeneratorLanguage {
         match self {
             Self::Python => "baml",
             Self::TypeScript => "@boundaryml/baml-core",
+            Self::Ruby => "baml",
         }
     }
 
@@ -127,6 +131,27 @@ impl GeneratorLanguage {
                 };
 
                 Ok(version.as_str().split('@').last().unwrap().to_string())
+            }
+            Self::Ruby => {
+                // Look for "<package_name>@<version>"
+                let version_re = Regex::new(&format!(r#"{} ([^)]+)"#, self.package_name()))?;
+
+                let Some(version) = version_re.captures(output.trim()) else {
+                    return Err(anyhow::format_err!(
+                        "Could not find the version of the client: {}\n{}",
+                        self.package_name(),
+                        output
+                    ));
+                };
+                let Some(version) = version.get(1) else {
+                    return Err(anyhow::format_err!(
+                        "Could not parse the version of the client: {}\n{}",
+                        self.package_name(),
+                        output
+                    ));
+                };
+
+                Ok(version.as_str().into())
             }
         }
     }

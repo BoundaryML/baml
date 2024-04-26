@@ -2,7 +2,7 @@ use indexmap::IndexMap;
 use serde_json::json;
 
 use crate::generate::{
-    dir_writer::WithFileContent,
+    dir_writer::WithFileContentTs,
     ir::{Client, Walker},
 };
 
@@ -11,7 +11,7 @@ use super::{
     ts_language_features::{TSFileCollector, TSLanguageFeatures, ToTypeScript},
 };
 
-impl WithFileContent<TSLanguageFeatures> for Walker<'_, &Client> {
+impl WithFileContentTs<TSLanguageFeatures> for Walker<'_, &Client> {
     fn file_dir(&self) -> &'static str {
         "."
     }

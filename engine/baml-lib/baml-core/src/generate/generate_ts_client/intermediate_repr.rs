@@ -1,10 +1,10 @@
 use serde_json::json;
 
-use crate::generate::{dir_writer::WithFileContent, ir::IntermediateRepr};
+use crate::generate::{dir_writer::WithFileContentTs, ir::IntermediateRepr};
 
 use super::{template::render_with_hbs, ts_language_features::TSLanguageFeatures};
 
-impl WithFileContent<TSLanguageFeatures> for IntermediateRepr {
+impl WithFileContentTs<TSLanguageFeatures> for IntermediateRepr {
     fn file_dir(&self) -> &'static str {
         "./"
     }

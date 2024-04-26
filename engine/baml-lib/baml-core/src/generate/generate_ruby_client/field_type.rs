@@ -4,9 +4,9 @@ use internal_baml_schema_ast::ast::TypeValue;
 
 use crate::generate::{dir_writer::FileContent, ir::FieldType};
 
-use super::ts_language_features::ToTypeScript;
+use super::ruby_language_features::ToRuby;
 
-impl ToTypeScript for FieldType {
+impl ToRuby for FieldType {
     fn to_ts(&self) -> String {
         match self {
             FieldType::Class(name) => name.clone(),

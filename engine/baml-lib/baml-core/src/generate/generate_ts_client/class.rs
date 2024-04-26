@@ -1,7 +1,7 @@
 use serde_json::json;
 
 use crate::generate::{
-    dir_writer::WithFileContent,
+    dir_writer::WithFileContentTs,
     generate_ts_client::field_type::{
         to_internal_type, to_internal_type_constructor, to_type_check,
     },
@@ -13,7 +13,7 @@ use super::{
     ts_language_features::{TSFileCollector, TSLanguageFeatures, ToTypeScript},
 };
 
-impl WithFileContent<TSLanguageFeatures> for Walker<'_, &Class> {
+impl WithFileContentTs<TSLanguageFeatures> for Walker<'_, &Class> {
     fn file_dir(&self) -> &'static str {
         "."
     }

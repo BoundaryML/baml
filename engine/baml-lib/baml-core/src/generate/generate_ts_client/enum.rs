@@ -1,5 +1,5 @@
 use crate::generate::{
-    dir_writer::WithFileContent,
+    dir_writer::WithFileContentTs,
     ir::{Enum, Walker},
 };
 
@@ -8,7 +8,7 @@ use super::{
     ts_language_features::{TSFileCollector, TSLanguageFeatures},
 };
 
-impl WithFileContent<TSLanguageFeatures> for Walker<'_, &Enum> {
+impl WithFileContentTs<TSLanguageFeatures> for Walker<'_, &Enum> {
     fn file_dir(&self) -> &'static str {
         "."
     }

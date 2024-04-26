@@ -1,7 +1,7 @@
 use serde_json::json;
 
 use crate::generate::{
-    dir_writer::WithFileContent,
+    dir_writer::WithFileContentTs,
     generate_ts_client::{field_type::to_parse_expression, ts_language_features::ToTypeScript},
     ir::{Function, FunctionArgs, Impl, Prompt, Walker},
 };
@@ -11,7 +11,7 @@ use super::{
     ts_language_features::{TSFileCollector, TSLanguageFeatures},
 };
 
-impl WithFileContent<TSLanguageFeatures> for Walker<'_, (&Function, &Impl)> {
+impl WithFileContentTs<TSLanguageFeatures> for Walker<'_, (&Function, &Impl)> {
     fn file_dir(&self) -> &'static str {
         "./impls"
     }

@@ -213,7 +213,13 @@ pub(super) trait LanguageFeatures {
     fn content_prefix(&self) -> &'static str;
 }
 
-pub(super) trait WithFileContent<L: LanguageFeatures> {
+pub(super) trait WithFileContentTs<L: LanguageFeatures> {
+    fn file_dir(&self) -> &'static str;
+    fn file_name(&self) -> String;
+    fn write(&self, fc: &mut FileCollector<L>);
+}
+
+pub(super) trait WithFileContentRuby<L: LanguageFeatures> {
     fn file_dir(&self) -> &'static str;
     fn file_name(&self) -> String;
     fn write(&self, fc: &mut FileCollector<L>);

@@ -15,7 +15,7 @@ mod ts_language_features;
 use crate::configuration::Generator;
 
 use super::{
-    dir_writer::WithFileContent,
+    dir_writer::WithFileContentTs,
     ir::{Expression, IntermediateRepr, WithJsonSchema},
 };
 use ts_language_features::{get_file_collector, ToTypeScript};

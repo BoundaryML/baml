@@ -1,7 +1,7 @@
 use serde_json::json;
 
 use crate::generate::{
-    dir_writer::WithFileContent,
+    dir_writer::WithFileContentTs,
     generate_ts_client::ts_language_features::ToTypeScript,
     ir::{self, Function, TestCase, Walker},
 };
@@ -11,7 +11,7 @@ use super::{
     ts_language_features::{TSFileCollector, TSLanguageFeatures},
 };
 
-impl WithFileContent<TSLanguageFeatures> for Walker<'_, (&Function, &TestCase)> {
+impl WithFileContentTs<TSLanguageFeatures> for Walker<'_, (&Function, &TestCase)> {
     fn file_dir(&self) -> &'static str {
         "./__tests__"
     }
@@ -32,6 +32,8 @@ impl WithFileContent<TSLanguageFeatures> for Walker<'_, (&Function, &TestCase)> 
             return;
         }
 
+        let file_dir = self.file_dir();
+        let file_name = self.file_name();
         let file = collector.start_file(self.file_dir(), self.file_name(), false);
         file.add_import_lib("../", Some("b"));
         file.add_import(
