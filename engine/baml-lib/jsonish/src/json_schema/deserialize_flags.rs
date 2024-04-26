@@ -1,15 +1,76 @@
-use anyhow::Error;
-
-pub enum Flag {
-    NullButHadUnparseableValue(Error, serde_json::Value),
+#[derive(Clone)]
+pub struct SerializationError {
+    scope: Vec<String>,
+    message: String,
+    value: Option<serde_json::Value>,
 }
 
+#[derive(Clone)]
+pub struct SerializationContext {
+    errors: Vec<SerializationError>,
+}
+
+impl std::fmt::Display for SerializationContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for error in &self.errors {
+            write!(f, "{}", error)?;
+        }
+        Ok(())
+    }
+}
+
+impl std::fmt::Display for SerializationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if !self.scope.is_empty() {
+            write!(f, "{}: ", self.scope.join("."))?;
+        }
+        writeln!(f, "{}", self.message)?;
+        if let Some(value) = &self.value {
+            writeln!(f, "----RAW----")?;
+            writeln!(f, "{:#?}", value)?;
+            writeln!(f, "-----------")?;
+        }
+        Ok(())
+    }
+}
+
+impl SerializationContext {
+    pub fn from_error(
+        scope: Vec<String>,
+        message: String,
+        value: Option<serde_json::Value>,
+    ) -> Self {
+        Self {
+            errors: vec![SerializationError {
+                scope,
+                message,
+                value,
+            }],
+        }
+    }
+}
+
+#[derive(Clone)]
+pub enum Flag {
+    NullButHadUnparseableValue(SerializationContext, serde_json::Value),
+    ObjectToString(serde_json::Value),
+    StrippedNonAlphaNumeric(String),
+    SubstringMatch(String),
+    // Values here are the ones ignored
+    FirstMatch(Vec<serde_json::Value>),
+}
+
+#[derive(Clone)]
 pub struct DeserializerConditions {
     flags: Vec<Flag>,
 }
 
 impl DeserializerConditions {
-    pub fn add_flag(mut self, flag: Flag) -> Self {
+    pub fn add_flag(&mut self, flag: Flag) {
+        self.flags.push(flag);
+    }
+
+    pub fn with_flag(mut self, flag: Flag) -> Self {
         self.flags.push(flag);
         self
     }

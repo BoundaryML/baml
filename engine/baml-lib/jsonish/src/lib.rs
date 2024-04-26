@@ -29,5 +29,8 @@ pub fn from_str(
         deserializer::parse_jsonish_value(raw_string, deserializer::JSONishOptions::default())?;
 
     // Lets try to now coerce the value into the expected schema.
-    target.coerce(ir, env, Some(&value))
+    match target.coerce(vec![], ir, env, Some(&value)) {
+        Ok((v, c)) => Ok((v, c)),
+        Err(e) => anyhow::bail!("Failed to coerce value: {}", e),
+    }
 }

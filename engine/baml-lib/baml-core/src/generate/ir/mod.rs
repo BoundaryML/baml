@@ -7,8 +7,8 @@ mod walker;
 pub use generate::to_ir;
 use internal_baml_schema_ast::ast;
 pub use ir_helpers::{
-    ClassWalker, ClientWalker, EnumWalker, FunctionWalker, IRHelper, RetryPolicyWalker,
-    TemplateStringWalker,
+    ClassWalker, ClientWalker, EnumValueWalker, EnumWalker, FunctionWalker, IRHelper,
+    RetryPolicyWalker, TemplateStringWalker,
 };
 
 pub(super) use json_schema::WithJsonSchema;

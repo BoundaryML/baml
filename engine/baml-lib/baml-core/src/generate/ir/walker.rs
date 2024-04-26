@@ -95,8 +95,16 @@ impl<'a> Walker<'a, &'a Enum> {
 }
 
 impl<'a> Walker<'a, &'a EnumValue> {
-    pub fn skip(&self) -> bool {
-        self.item.attributes.get("skip").is_some()
+    pub fn skip(&self, env_values: &HashMap<String, String>) -> Result<bool> {
+        self.item
+            .attributes
+            .get("skip")
+            .map(|v| v.as_bool(env_values))
+            .unwrap_or(Ok(false))
+    }
+
+    pub fn name(&self) -> &str {
+        &self.item.elem.0
     }
 
     pub fn valid_values(&self, env_values: &HashMap<String, String>) -> Result<Vec<String>> {
@@ -112,6 +120,8 @@ impl<'a> Walker<'a, &'a EnumValue> {
             None => self.item.elem.0.clone(),
         };
 
+        let name = name.trim();
+
         let description = self
             .item
             .attributes
@@ -120,18 +130,27 @@ impl<'a> Walker<'a, &'a EnumValue> {
 
         match &description {
             Some(Ok(s)) => {
+                let s = s.trim();
                 // For enums, we generate one for "name", one for "description", and one for "name: description"
                 // (this means that we currently don't support deserializing "name[^a-zA-Z0-9]{1,5}description" but
                 // for now it suffices)
-                Ok(vec![name.clone(), s.clone(), format!("{}: {}", name, s)])
+                Ok(vec![name.into(), s.into(), format!("{}: {}", name, s)])
             }
             Some(Err(e)) => anyhow::bail!("Error parsing description: {:?}", e),
-            None => Ok(vec![name]),
+            None => Ok(vec![name.into()]),
         }
     }
 }
 
 impl Expression {
+    pub fn as_bool(&self, env_values: &HashMap<String, String>) -> Result<bool> {
+        match self {
+            Expression::Bool(b) => Ok(*b),
+            Expression::Identifier(Identifier::ENV(s)) => Ok(env_values.contains_key(s)),
+            _ => anyhow::bail!("Expected bool value, got {:?}", self),
+        }
+    }
+
     pub fn as_string_value(&self, env_values: &HashMap<String, String>) -> Result<String> {
         match self {
             Expression::String(s) => Ok(s.clone()),

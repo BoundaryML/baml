@@ -2,16 +2,19 @@ mod deserialize_flags;
 mod value_to_bool;
 
 use anyhow::Result;
-use internal_baml_core::ir::{
-    repr::{FieldType, IntermediateRepr},
-    IRHelper,
+use internal_baml_core::{
+    ast::TypeValue,
+    ir::{
+        repr::{FieldType, IntermediateRepr},
+        EnumValueWalker, EnumWalker, IRHelper,
+    },
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::format};
 
 pub use self::deserialize_flags::DeserializerConditions;
-use self::deserialize_flags::Flag;
+use self::deserialize_flags::{Flag, SerializationContext};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(untagged)]
@@ -260,102 +263,60 @@ impl JSONSchema7 {
 pub trait ValueCoerce {
     fn coerce(
         &self,
+        scope: Vec<String>,
         ir: &IntermediateRepr,
         env: &HashMap<String, String>,
         value: Option<&serde_json::Value>,
-    ) -> Result<(serde_json::Value, DeserializerConditions)>;
+    ) -> Result<(serde_json::Value, DeserializerConditions), SerializationContext>;
 }
 
 impl ValueCoerce for FieldType {
     fn coerce(
         &self,
+        scope: Vec<String>,
         ir: &IntermediateRepr,
         env: &HashMap<String, String>,
         value: Option<&serde_json::Value>,
-    ) -> Result<(serde_json::Value, DeserializerConditions)> {
+    ) -> Result<(serde_json::Value, DeserializerConditions), SerializationContext> {
         match self {
-            FieldType::Primitive(_) => todo!(),
-            FieldType::Enum(name) => {
-                let enm = ir.find_enum(name)?;
-
-                // For optimization, we could do this once.
-                let candidates = enm
-                    .walk_values()
-                    .map(|v| Ok((v, v.valid_values(env)?)))
-                    .collect::<Result<Vec<_>>>()?;
-
-                if let Some(value) = value {
-                    let value_str = match value {
-                        serde_json::Value::String(s) => s.clone(),
-                        _ => value.to_string(),
-                    };
-
-                    // Try and look for a value that matches the value.
-                    // First search for exact matches
-                    for (v, valid_values) in candidates {
-                        todo!()
-                    }
-                }
-
-                todo!()
-            }
+            FieldType::Primitive(primitive) => match parse_primitive(primitive, ir, env, value) {
+                Ok(v) => Ok(v),
+                Err(e) => Err(SerializationContext::from_error(
+                    scope,
+                    format!("Could not parse {}:\n{}", self, e),
+                    value.cloned(),
+                )),
+            },
+            FieldType::Enum(name) => match parse_enum(ir, env, name, value) {
+                Ok(v) => Ok(v),
+                Err(e) => Err(SerializationContext::from_error(
+                    scope,
+                    format!("Could not parse enum: {}\n{}", self, e),
+                    value.cloned(),
+                )),
+            },
             FieldType::Class(_) => todo!(),
             FieldType::List(_) => todo!(),
-            FieldType::Union(options) => {
-                if options.is_empty() {
-                    anyhow::bail!("Union type has no options");
-                }
-
-                let mut res = options
-                    .iter()
-                    .map(|f| f.coerce(ir, env, value))
-                    .collect::<Vec<_>>();
-
-                // For all the results, sort them by the number of flags.
-                // If there are any results with no flags, return that.
-                // Otherwise, return the result with the fewest flags.
-                // In case of a tie, return the leftmost result.
-
-                let mut res_index = (0..res.len()).collect::<Vec<_>>();
-
-                res_index.sort_by(|&a, &b| {
-                    let a_res = &res[a];
-                    let b_res = &res[b];
-
-                    match (a_res, b_res) {
-                        (Err(_), Err(_)) => a.cmp(&b),
-                        (Ok(_), Err(_)) => std::cmp::Ordering::Less,
-                        (Err(_), Ok(_)) => std::cmp::Ordering::Greater,
-                        (Ok((_, a_flags)), Ok((_, b_flags))) => match a_flags.cmp(&b_flags) {
-                            std::cmp::Ordering::Equal => a.cmp(&b),
-                            other => other,
-                        },
-                    }
-                });
-
-                // Get the first result that succeeded.
-
-                let idx = res_index.first().unwrap();
-
-                // Remove all elements behind the first successful result.
-                res.truncate(*idx + 1);
-
-                // Get the value and flags of the first successful result.
-                let (value, flags) = res.pop().unwrap()?;
-                Ok((value, flags))
-            }
+            FieldType::Union(options) => match parse_union(&scope, ir, env, options, value) {
+                Ok(v) => Ok(v),
+                Err(e) => Err(SerializationContext::from_error(
+                    scope,
+                    format!("Could not parse union: {}\n{}", self, e),
+                    value.cloned(),
+                )),
+            },
             FieldType::Optional(inner) => match value {
                 Some(value) => {
                     if value.is_null() {
                         Ok((serde_json::Value::Null, DeserializerConditions::new()))
                     } else {
-                        match inner.coerce(ir, env, Some(value)) {
+                        match inner.coerce(scope, ir, env, Some(value)) {
                             Ok(r) => Ok(r),
                             Err(e) => {
                                 // TODO: Add a rule to allow this flag.
                                 Ok((
                                     serde_json::Value::Null,
-                                    DeserializerConditions::new().add_flag(
+                                    DeserializerConditions::new().with_flag(
                                         Flag::NullButHadUnparseableValue(e, value.clone()),
                                     ),
                                 ))
@@ -373,4 +334,299 @@ impl ValueCoerce for FieldType {
             }
         }
     }
+}
+
+fn pick_best_match_array(
+    res: &Vec<Result<(Value, DeserializerConditions), SerializationContext>>,
+) -> Result<(Value, DeserializerConditions)> {
+    // For all the results, sort them by the number of flags.
+    // If there are any results with no flags, return that.
+    // Otherwise, return the result with the fewest flags.
+    // In case of a tie, return the leftmost result.
+
+    let mut res_index = (0..res.len()).collect::<Vec<_>>();
+
+    res_index.sort_by(|&a, &b| {
+        let a_res = &res[a];
+        let b_res = &res[b];
+
+        match (a_res, b_res) {
+            (Err(_), Err(_)) => a.cmp(&b),
+            (Ok(_), Err(_)) => std::cmp::Ordering::Less,
+            (Err(_), Ok(_)) => std::cmp::Ordering::Greater,
+            (Ok((_, a_flags)), Ok((_, b_flags))) => match a_flags.cmp(&b_flags) {
+                std::cmp::Ordering::Equal => a.cmp(&b),
+                other => other,
+            },
+        }
+    });
+
+    // Get the first result that succeeded.
+    // Since we already checked for at least one result, this is safe.
+    let idx = *res_index.first().unwrap();
+
+    // Get the value and flags of the first result (could have failed as well).
+    match res.get(idx) {
+        Some(Ok((v, flags))) => {
+            // Get all the other possible values.
+            let others = res
+                .iter()
+                .enumerate()
+                .filter_map(|(i, r)| match r {
+                    Ok((value, _)) if i != idx => Some(value.clone()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+
+            if others.is_empty() {
+                Ok((v.to_owned(), flags.clone()))
+            } else {
+                Ok((
+                    v.to_owned(),
+                    flags.clone().with_flag(Flag::FirstMatch(others)),
+                ))
+            }
+        }
+        Some(Err(_)) | None => {
+            // If there are multiple errors, we can't really do anything.
+            // Return all the errors.
+
+            let errs = res
+                .iter()
+                .filter_map(|r| match r {
+                    Ok(_) => None,
+                    Err(e) => Some(e.to_string()),
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+
+            anyhow::bail!("{}", errs);
+        }
+    }
+}
+
+fn parse_union(
+    scope: &Vec<String>,
+    ir: &IntermediateRepr,
+    env: &HashMap<String, String>,
+    options: &Vec<FieldType>,
+    value: Option<&Value>,
+) -> Result<(Value, DeserializerConditions)> {
+    if options.is_empty() {
+        anyhow::bail!("Union has no options");
+    }
+
+    let res = options
+        .iter()
+        .map(|f| f.coerce(scope.clone(), ir, env, value))
+        .collect::<Vec<_>>();
+
+    pick_best_match_array(&res)
+}
+
+fn parse_primitive(
+    primitive: &TypeValue,
+    ir: &IntermediateRepr,
+    env: &HashMap<String, String>,
+    value: Option<&Value>,
+) -> Result<(Value, DeserializerConditions)> {
+    let value = match value {
+        Some(value) => value,
+        None => {
+            // If the value is None, we can't parse it.
+            anyhow::bail!("No value to parse");
+        }
+    };
+
+    // If the value is a collection, we may need to parse each element and get the one with the best match.
+    match value {
+        Value::Array(items) => {
+            let parsed = items
+                .iter()
+                .map(|v| parse_primitive(primitive, ir, env, Some(v)))
+                .collect::<Vec<_>>();
+        }
+        Value::Object(kv) => todo!(),
+        _ => {}
+    }
+
+    todo!()
+}
+
+fn parse_enum(
+    ir: &IntermediateRepr,
+    env: &HashMap<String, String>,
+    name: &str,
+    value: Option<&Value>,
+) -> Result<(Value, DeserializerConditions)> {
+    let enm = ir.find_enum(name)?;
+
+    // For optimization, we could do this once.
+    let candidates = enm
+        .walk_values()
+        .filter_map(|v| match v.skip(env) {
+            Ok(true) => return None,
+            Ok(false) => match v.valid_values(env) {
+                Ok(valid_values) => Some(Ok((v, valid_values))),
+                Err(e) => return Some(Err(e)),
+            },
+            Err(e) => return Some(Err(e)),
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    let value = match value {
+        Some(value) => value,
+        None => {
+            // If the value is None, we can't parse it.
+            anyhow::bail!("No value to parse");
+        }
+    };
+
+    let mut flags = DeserializerConditions::new();
+    let value_str = match value {
+        serde_json::Value::String(s) => s.to_ascii_lowercase(),
+        _ => {
+            flags.add_flag(Flag::ObjectToString(value.clone()));
+            serde_json::to_string(value)?.to_ascii_lowercase()
+        }
+    };
+    let value_str = value_str.trim();
+
+    let remove_punctuation = |s: &str| {
+        s.chars()
+            .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
+            .collect::<String>()
+    };
+
+    match enum_match_strategy(&value_str, &candidates, flags.clone()) {
+        Some(res) => Ok(res),
+        None => {
+            let only_w_str = remove_punctuation(&value_str);
+            let no_punc_candidates = candidates
+                .iter()
+                .map(|(e, valid_values)| {
+                    (
+                        *e,
+                        valid_values
+                            .iter()
+                            .map(|v| remove_punctuation(v))
+                            .collect::<Vec<_>>(),
+                    )
+                })
+                .collect::<Vec<_>>();
+            match enum_match_strategy(&only_w_str, &no_punc_candidates, flags.clone()) {
+                Some((val, flags)) => Ok((
+                    val,
+                    flags.with_flag(Flag::StrippedNonAlphaNumeric(value_str.into())),
+                )),
+                None => {
+                    // If we still can't find a match, we can't parse the value.
+                    let values = candidates
+                        .iter()
+                        .map(|(e, values)| {
+                            // Format the enum values for the error message.
+                            // "{name} - ({values|map|truncate(50 chars)})"
+
+                            let name = e.name();
+                            let values = values
+                                .iter()
+                                // Find all non-exact matches.
+                                .filter(|v| !v.as_str().eq_ignore_ascii_case(name))
+                                .map(|v| {
+                                    if v.len() > 17 {
+                                        format!("'{}...'", v[..17].to_string())
+                                    } else {
+                                        format!("'{}'", v)
+                                    }
+                                })
+                                .collect::<Vec<_>>()
+                                .join(", ");
+
+                            if values.is_empty() {
+                                format!("{}", name)
+                            } else {
+                                format!("{} (also matches: {})", name, values)
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    anyhow::bail!("{}", values)
+                }
+            }
+        }
+    }
+}
+
+fn enum_match_strategy(
+    value_str: &str,
+    candidates: &Vec<(EnumValueWalker<'_>, Vec<String>)>,
+    mut flags: DeserializerConditions,
+) -> Option<(Value, DeserializerConditions)> {
+    // Try and look for a value that matches the value.
+    // First search for exact matches
+    for (e, valid_values) in candidates {
+        // Consider adding a flag for case insensitive match.
+        if valid_values
+            .iter()
+            .any(|v| v.eq_ignore_ascii_case(value_str))
+        {
+            // We did nothing fancy, so no extra flags.
+            return Some((json!(e.name()), flags));
+        }
+    }
+
+    // Now find all the enums which occur in the value, by frequency.
+    let mut result = candidates
+        .iter()
+        .filter_map(|(e, valid_names)| {
+            // Check how many counts of the enum are in the value.
+            let match_count_pos = valid_names
+                .iter()
+                .filter_map(|v| {
+                    let matches = value_str.match_indices(v);
+                    // Return (count, first_idx)
+                    matches.fold(None, |acc, (idx, _)| match acc {
+                        Some((count, prev_idx)) => Some((count + 1, prev_idx)),
+                        None => Some((1, idx)),
+                    })
+                })
+                .reduce(|a, b| match a.0.cmp(&b.0) {
+                    // Return the one with more matches.
+                    std::cmp::Ordering::Less => b,
+                    std::cmp::Ordering::Greater => a,
+                    // Return the one that matches earlier
+                    std::cmp::Ordering::Equal => match a.1.cmp(&b.1) {
+                        std::cmp::Ordering::Less => a,
+                        _ => b,
+                    },
+                });
+            match_count_pos.map(|(count, pos)| (count, pos, e))
+        })
+        .collect::<Vec<_>>();
+
+    // Sort by max count, then min pos.
+    result.sort_by(|a, b| match a.0.cmp(&b.0) {
+        std::cmp::Ordering::Less => std::cmp::Ordering::Greater,
+        std::cmp::Ordering::Greater => std::cmp::Ordering::Less,
+        std::cmp::Ordering::Equal => a.1.cmp(&b.1),
+    });
+
+    // Filter for max count.
+    let max_count = result.first().map(|r| r.0).unwrap_or(0);
+    result.retain(|r| r.0 == max_count);
+
+    // Return the best match if there is one.
+    if let Some((_, _, e)) = result.first() {
+        flags.add_flag(Flag::SubstringMatch(value_str.into()));
+
+        if result.len() > 1 {
+            flags.add_flag(Flag::FirstMatch(
+                result.iter().map(|(_, _, e)| json!(e.name())).collect(),
+            ));
+        }
+
+        return Some((json!(e.name()), flags));
+    }
+
+    None
 }

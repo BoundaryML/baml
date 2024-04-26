@@ -8,7 +8,7 @@ use crate::{
     error_not_found, error_unsupported,
     ir::{
         repr::{IntermediateRepr, Walker},
-        Class, Client, Enum, Function, RetryPolicy, TemplateString,
+        Class, Client, Enum, EnumValue, Function, RetryPolicy, TemplateString,
     },
 };
 use anyhow::Result;
@@ -19,6 +19,7 @@ use super::repr;
 
 pub type FunctionWalker<'a> = Walker<'a, &'a Function>;
 pub type EnumWalker<'a> = Walker<'a, &'a Enum>;
+pub type EnumValueWalker<'a> = Walker<'a, &'a EnumValue>;
 pub type ClassWalker<'a> = Walker<'a, &'a Class>;
 pub type TemplateStringWalker<'a> = Walker<'a, &'a TemplateString>;
 pub type ClientWalker<'a> = Walker<'a, &'a Client>;
