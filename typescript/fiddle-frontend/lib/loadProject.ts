@@ -70,8 +70,8 @@ async function getAllFiles(dirPath: string, arrayOfFiles: FileContent[] = []): P
 
 
 const getProjectFiles = async (projectPath: string): Promise<EditorFile[]> => {
-  const examplesPath = process.cwd() + '/app/_examples'
-  const projPath = examplesPath + projectPath
+  const examplesPath = path.join(process.cwd(), 'public/_examples')
+  const projPath = path.join(examplesPath, projectPath)
   const files = await getAllFiles(projPath);
   return files.map((f) => ({ path: f.path.replace(projPath, ""), content: f.content ?? '', error: f.error ?? null }));
 }
