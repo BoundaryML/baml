@@ -38,6 +38,6 @@ generator lang_ruby {
   test_command "ruby test"
   // This command is used by "baml update-client" to install
   // dependencies to your language environment
-  install_command "gem update baml"
-  package_version_command "bundle show baml"
+  install_command "bundle update baml"
+  package_version_command "bundle info baml"
 }

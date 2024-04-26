@@ -1,0 +1,6 @@
+{# https://sorbet.org/docs/tstruct #}
+class {{name}} < T::Struct
+  {% for (name, type) in fields %}
+  const :{{name}}, {{type}}
+  {% endfor %}
+end

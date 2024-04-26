@@ -13,6 +13,7 @@ internal-baml-schema-ast = { path = "../schema-ast" }
 internal-baml-parser-database = { path = "../parser-database" }
 internal-baml-prompt-parser = { path = "../prompt-parser" }
 anyhow.workspace = true
+askama.workspace = true
 indexmap.workspace = true
 serde.workspace = true
 serde_json.workspace = true

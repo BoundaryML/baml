@@ -3,14 +3,14 @@ use crate::generate::ir::{Expression, Identifier, TypeValue};
 use super::ruby_language_features::ToRuby;
 
 impl ToRuby for Expression {
-    fn to_ts(&self) -> String {
+    fn to_ruby(&self) -> String {
         match self {
             Expression::List(values) => {
                 format!(
                     "[{}]",
                     values
                         .iter()
-                        .map(|v| v.to_ts())
+                        .map(|v| v.to_ruby())
                         .collect::<Vec<_>>()
                         .join(", ")
                 )
@@ -20,7 +20,7 @@ impl ToRuby for Expression {
                     "{{ {} }}",
                     values
                         .iter()
-                        .map(|(k, v)| format!("{}: {}", k.to_ts(), v.to_ts()))
+                        .map(|(k, v)| format!("{}: {}", k.to_ruby(), v.to_ruby()))
                         .collect::<Vec<_>>()
                         .join(", ")
                 )
@@ -29,7 +29,7 @@ impl ToRuby for Expression {
                 Identifier::ENV(idn) => format!("process.env.{}", idn),
                 Identifier::Local(k) => format!("\"{}\"", k.replace('"', "\\\"")),
                 Identifier::Ref(r) => format!("\"{}\"", r.join(".")),
-                Identifier::Primitive(p) => p.to_ts(),
+                Identifier::Primitive(p) => p.to_ruby(),
             },
             Expression::String(val) => format!("\"{}\"", val.escape_default()),
             Expression::RawString(val) => format!("`{}`", val.replace('`', "\\`")),
@@ -40,7 +40,7 @@ impl ToRuby for Expression {
 }
 
 impl ToRuby for TypeValue {
-    fn to_ts(&self) -> String {
+    fn to_ruby(&self) -> String {
         match self {
             TypeValue::Bool => "boolean".to_string(),
             TypeValue::Float => "number".to_string(),

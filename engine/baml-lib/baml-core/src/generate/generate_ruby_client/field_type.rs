@@ -7,36 +7,43 @@ use crate::generate::{dir_writer::FileContent, ir::FieldType};
 use super::ruby_language_features::ToRuby;
 
 impl ToRuby for FieldType {
-    fn to_ts(&self) -> String {
+    fn to_ruby(&self) -> String {
         match self {
             FieldType::Class(name) => name.clone(),
             FieldType::Enum(name) => name.clone(),
-            FieldType::List(inner) => format!("{}[]", inner.to_ts()),
+            // https://sorbet.org/docs/stdlib-generics
+            FieldType::List(inner) => format!("T::Array[{}]", inner.to_ruby()),
             FieldType::Map(key, value) => {
-                format!("{{ [key: {}]: {} }}", key.to_ts(), value.to_ts())
+                format!("T::Hash[{}, {}]", key.to_ruby(), value.to_ruby())
             }
             FieldType::Primitive(r#type) => match r#type {
-                TypeValue::Bool => "boolean".to_string(),
-                TypeValue::Float => "number".to_string(),
-                TypeValue::Int => "number".to_string(),
-                TypeValue::String => "string".to_string(),
-                TypeValue::Null => "null".to_string(),
-                TypeValue::Char => "string".to_string(),
+                // https://sorbet.org/docs/class-types
+                TypeValue::Bool => "T::Boolean".to_string(),
+                TypeValue::Float => "Float".to_string(),
+                TypeValue::Int => "Integer".to_string(),
+                TypeValue::String => "String".to_string(),
+                TypeValue::Null => "NilClass".to_string(),
+                TypeValue::Char => "String".to_string(),
             },
-            FieldType::Union(inner) => inner
-                .iter()
-                .map(|t| t.to_ts())
-                .collect::<Vec<_>>()
-                .join(" | "),
-            FieldType::Tuple(inner) => format!(
-                "[{}]",
+            FieldType::Union(inner) => format!(
+                // https://sorbet.org/docs/union-types
+                "T.any({})",
                 inner
                     .iter()
-                    .map(|t| t.to_ts())
+                    .map(|t| t.to_ruby())
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            FieldType::Optional(inner) => format!("{} | null", inner.to_ts()),
+            FieldType::Tuple(inner) => format!(
+                // https://sorbet.org/docs/tuples
+                "[{}]",
+                inner
+                    .iter()
+                    .map(|t| t.to_ruby())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            FieldType::Optional(inner) => format!("T.nilable({})", inner.to_ruby()),
         }
     }
 }
@@ -63,18 +70,18 @@ pub(super) fn to_internal_type(r#type: &FieldType) -> String {
         },
         FieldType::Union(inner) => inner
             .iter()
-            .map(|t| t.to_ts())
+            .map(|t| t.to_ruby())
             .collect::<Vec<_>>()
             .join(" | "),
         FieldType::Tuple(inner) => format!(
             "[{}]",
             inner
                 .iter()
-                .map(|t| t.to_ts())
+                .map(|t| t.to_ruby())
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
-        FieldType::Optional(inner) => format!("{} | null", inner.to_ts()),
+        FieldType::Optional(inner) => format!("{} | null", inner.to_ruby()),
     }
 }
 

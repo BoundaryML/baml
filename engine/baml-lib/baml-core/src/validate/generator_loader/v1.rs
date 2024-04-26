@@ -102,6 +102,7 @@ pub(crate) fn parse_generator(
     let language = match parse_required_key(&args, "language", ast_generator.span()) {
         Ok("python") => Some(GeneratorLanguage::Python),
         Ok("typescript") => Some(GeneratorLanguage::TypeScript),
+        Ok("ruby") => Some(GeneratorLanguage::Ruby),
         Ok(name) => {
             errors.push(DatamodelError::new_validation_error(
                 &format!("The language '{}' is not supported.", name),

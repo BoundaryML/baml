@@ -13,7 +13,5 @@ impl WithFileContentRuby<RubyLanguageFeatures> for IntermediateRepr {
         "index".into()
     }
 
-    fn write(&self, fc: &mut crate::generate::dir_writer::FileCollector<RubyLanguageFeatures>) {
-        todo!()
-    }
+    fn write(&self, fc: &mut crate::generate::dir_writer::FileCollector<RubyLanguageFeatures>) {}
 }
