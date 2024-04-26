@@ -22,7 +22,7 @@ function ExtractResume(resume_text: string) -> Resume {
   // see clients.baml
   client GPT4Turbo
 
-  // The prompt uses Jinja syntax
+  // The prompt uses Jinja syntax. Change the models or this text and watch the prompt preview change!
   prompt #"
     Parse the following resume and return a structured representation of the data in the schema below.
 
