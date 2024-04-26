@@ -30,6 +30,7 @@ import Joyride, { STATUS } from 'react-joyride'
 import {
   currentEditorFilesAtom,
   currentParserDbAtom,
+  exploreProjectsOpenAtom,
   productTourDoneAtom,
   testRunOutputAtom,
   unsavedChangesAtom,
@@ -73,6 +74,7 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
       }
     }
   }, [project.id])
+  const setOpenExplorePanel = useSetAtom(exploreProjectsOpenAtom)
 
   return (
     // firefox wont apply the background color for some reason so we forcefully set it.
@@ -99,19 +101,7 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
               {/* <Separator className="bg-vscode-textSeparator-foreground" /> */}
 
               <ResizableHandle className="bg-vscode-contrastActiveBorder border-vscode-contrastActiveBorder" />
-              <ResizablePanel className="flex flex-col items-center w-full pt-2 tour-templates">
-                {/* <Sheet>
-                  <SheetTrigger asChild>
-                    <Button className="flex flex-row items-center px-2 text-sm whitespace-pre-wrap bg-indigo-600 hover:bg-indigo-500 h-fit gap-x-2 text-vscode-button-foreground">
-                      <Compass size={24} strokeWidth={2} />
-                      <span>Browse Examples</span>
-                    </Button>
-                  </SheetTrigger>
-                  <SheetContent className="bg-zinc-900 min-w-[600px]">
-                    <ExploreProjects />
-                  </SheetContent>
-                </Sheet> */}
-              </ResizablePanel>
+              <ResizablePanel className="flex flex-col items-center w-full pt-2 tour-templates"></ResizablePanel>
             </ResizablePanelGroup>
           </ResizablePanel>
         )}
@@ -143,7 +133,7 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
               </div>
 
               <div className="flex items-center justify-start h-full pt-0.5 ">
-                <Button asChild variant={'ghost'} className="h-full py-1 gap-x-1">
+                <Button asChild variant={'ghost'} className="h-full py-1 gap-x-1 hover:bg-indigo-600">
                   <Link
                     href="https://docs.boundaryml.com"
                     target="_blank"
@@ -151,6 +141,18 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
                   >
                     What is BAML?
                   </Link>
+                </Button>
+              </div>
+              <div className="flex flex-col items-center justify-center h-full">
+                <Button
+                  variant={'ghost'}
+                  className="flex flex-row items-center px-2 py-1 text-sm whitespace-pre-wrap bg-indigo-600 hover:bg-indigo-500 h-fit gap-x-2 text-vscode-button-foregrounde"
+                  onClick={() => {
+                    setOpenExplorePanel(true)
+                  }}
+                >
+                  <Compass size={16} strokeWidth={2} />
+                  <span className="whitespace-nowrap">Explore Examples</span>
                 </Button>
               </div>
               {unsavedChanges ? (
@@ -276,7 +278,7 @@ const ShareButton = ({ project, projectName }: { project: BAMLProject; projectNa
   return (
     <Button
       variant={'default'}
-      className="h-full py-1 bg-indigo-900 shadow-md gap-x-1 text-vscode-button-foreground hover:bg-indigo-800 w-fit whitespace-nowrap"
+      className="h-full py-1 shadow-md bg-zinc-900/80 gap-x-1 text-vscode-button-foreground hover:bg-indigo-600 w-fit whitespace-nowrap"
       disabled={loading}
       onClick={async () => {
         setLoading(true)

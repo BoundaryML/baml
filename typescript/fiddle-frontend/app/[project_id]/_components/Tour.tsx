@@ -10,8 +10,12 @@ export const InitialTour = () => {
   const steps = [
     {
       target: '.tour-editor',
-      content:
-        'Welcome! PromptFiddle is a playground to share and test prompt templates. Prompts here are modeled like functions',
+      content: (
+        <>
+          Welcome! PromptFiddle is a playground to share and test prompt templates.{' '}
+          <span className="font-semibold">Prompts here are modeled like functions</span>
+        </>
+      ),
       disableBeacon: true,
       placement: 'auto' as Placement,
     },
@@ -25,7 +29,7 @@ export const InitialTour = () => {
       target: '.tour-prompt-preview',
       content: (
         <div>
-          <p>See a realtime preview of the exact prompt, including ifs, loops, and inputs.</p>
+          <p>See a realtime preview of the exact prompt, even if you add loops, ifs, or change models</p>
           <br />
           <p className="font-semibold"> No guessing what the prompt is!</p>
         </div>
@@ -34,7 +38,11 @@ export const InitialTour = () => {
     },
     {
       target: '.tour-test-panel',
-      content: "Click 'Run all' to test this LLM function!",
+      content: (
+        <>
+          Click <span className="font-semibold">'Run all'</span> to test this LLM function!
+        </>
+      ),
       placement: 'left-start' as Placement,
     },
 

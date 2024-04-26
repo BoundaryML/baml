@@ -109,7 +109,6 @@ const FileViewer = () => {
   const activeFile = useAtomValue(activeFileAtom)
   const [emptyDirs, setEmptydirs] = useAtom(emptyDirsAtom)
 
-  console.log('editorfiles', editorFiles)
   const data2 = createTree(editorFiles.map((f) => f.path).concat(emptyDirs))
 
   const [term, setTerm] = useState('')
