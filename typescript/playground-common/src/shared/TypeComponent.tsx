@@ -21,9 +21,9 @@ const TypeComponent: React.FC<{ typeString: string }> = ({ typeString }) => {
     const matchedClass = classes.find((cls) => cls.name.value === className)
     const matchedEnum = enums.find((enm) => enm.name.value === className)
     if (matchedClass) {
-      elements.push(Link({ item: matchedClass.name }))
+      elements.push(Link({ item: matchedClass.name, className: 'whitespace-nowrap' }))
     } else if (matchedEnum) {
-      elements.push(Link({ item: matchedEnum.name }))
+      elements.push(Link({ item: matchedEnum.name, className: 'whitespace-nowrap' }))
     } else {
       elements.push(className)
     }

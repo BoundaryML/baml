@@ -52,7 +52,7 @@ const FunctionDropdown: React.FC = () => {
 export const FunctionArgs: React.FC<{ func: SFunction }> = ({ func }) => {
   if (func.input.arg_type === 'positional') {
     return (
-      <div className="flex flex-row gap-1">
+      <div className="flex flex-row gap-1 whitespace-nowrap">
         arg: <TypeComponent typeString={func.input.type} />
       </div>
     )
@@ -100,7 +100,7 @@ export const FunctionSelector: React.FC = () => {
         </VSCodeDropdown> */}
       </div>
       {func && (
-        <div className="flex flex-row items-center gap-0 pl-2 text-xs text-vscode-descriptionForeground">
+        <div className="flex flex-row items-center gap-0 pl-2 text-xs text-vscode-descriptionForeground whitespace-nowrap">
           <Link item={func.name} />
           {'('}
           <FunctionArgs func={func} /> {') → '}{' '}

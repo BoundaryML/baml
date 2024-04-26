@@ -1,0 +1,32 @@
+---
+title: Seeing the full prompt
+---
+
+## VSCode playground
+
+BAML exposes some capabilities to help lint and standardize prompts. To see the full prompt in realtime, you can use the [VSCode Extension](/docs/home/installation)!
+Once the extension loads, you'll have helpers to open the prompt in the playground.
+
+<img src="/images/v3/extractverbs_playground2.png" />
+
+<img src="/images/v3/extractverbs_playground.png" />
+
+## Why do we have utilities?
+
+In LLMs it is often useful to rename or provide descriptions about the task you are attempting to do. For example, you may want to rename a property from duration to duration_in_minutes so the LLM can understand what value it should output better. However, changing the string you pass to an LLM should NOT require you to change buisness logic code. This is where utilities come in.
+
+For example we may find we get better accuracy if we change from
+
+```
+{
+"duration": int
+}
+```
+
+to
+
+```json
+{
+  "duration_in_minutes": int
+}
+```

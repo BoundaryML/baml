@@ -1,0 +1,80 @@
+---
+title: retry_policy
+---
+
+Many LLMs are subject to fail due to transient errors. The retry policy allows you to configure how many times and how the client should retry a failed operation before giving up.
+
+## Syntax
+
+```rust
+retry_policy PolicyName {
+    max_retries int
+    strategy {
+      type constant_delay
+      delay_ms int? // defaults to 200
+    } | {
+      type exponential_backoff
+      delay_ms int? // defaults to 200
+      max_delay_ms int? // defaults to 10000
+      multiplier float? // defaults to 1.5
+    }
+}
+```
+
+### Properties
+
+| Name          | Description                                                             | Required                               |
+| ------------- | ----------------------------------------------------------------------- | -------------------------------------- |
+| `max_retries` | The maximum number of times the client should retry a failed operation. | YES                                    |
+| `strategy`    | The strategy to use for retrying failed operations.                     | NO, defauts to `constant_delay(200ms)` |
+
+You can read more about specific retry strategy param:
+
+- [constant_delay](https://tenacity.readthedocs.io/en/latest/api.html?highlight=wait_exponential#tenacity.wait.wait_fixed)
+- [exponential_backoff](https://tenacity.readthedocs.io/en/latest/api.html?highlight=wait_exponential#tenacity.wait.wait_exponential)
+
+## Conditions for retrying
+
+If the client encounters a transient error, it will retry the operation. The following errors are considered transient:
+| Name | Error Code | Retry |
+| ----------------- | -------------------- | --- |
+| BAD_REQUEST | 400 | NO |
+| UNAUTHORIZED | 401 | NO |
+| FORBIDDEN | 403 | NO |
+| NOT_FOUND | 404 | NO |
+| RATE_LIMITED | 429 | YES |
+| INTERNAL_ERROR | 500 | YES |
+| SERVICE_UNAVAILABLE | 503 | YES |
+| UNKNOWN | 1 | YES |
+
+The UNKNOWN error code is used when the client encounters an error that is not listed above. This is usually a temporary error, but it is not guaranteed.
+
+## Example
+
+<Tip>
+  Each client may have a different retry policy, or no retry policy at all. But
+  you can also reuse the same retry policy across multiple clients.
+</Tip>
+
+```rust
+// in a .baml file
+
+retry_policy MyRetryPolicy {
+  max_retries 5
+  strategy {
+    type exponential_backoff
+  }
+}
+
+// A client that uses the OpenAI chat API.
+client<llm> MyGPT35Client {
+  provider baml-openai-chat
+  // Set the retry policy to the MyRetryPolicy defined above.
+  // Any impl that uses this client will retry failed operations.
+  retry_policy MyRetryPolicy
+  options {
+    model gpt-3.5-turbo
+    api_key env.OPENAI_API_KEY
+  }
+}
+```

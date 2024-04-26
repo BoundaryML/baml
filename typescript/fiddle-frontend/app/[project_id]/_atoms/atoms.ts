@@ -21,6 +21,7 @@ export const unsavedChangesAtom = atom<boolean>(false);
 export const activeFileAtom = atom<EditorFile | null>(null);
 export const fileDiagnostics = atom<Diagnostic[]>([]);
 export const emptyDirsAtom = atom<string[]>([]);
+// export const exploreProjectsOpenAtom = atom<boolean>(false);
 
 
 export const productTourDoneAtom = atomWithStorage<boolean>('initial_tutorial_v1', false);

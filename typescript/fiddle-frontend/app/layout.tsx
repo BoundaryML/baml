@@ -6,6 +6,8 @@ import JotaiProvider from './_components/JotaiProvider'
 import { PHProvider } from './_components/PosthogProvider'
 import dynamic from 'next/dynamic'
 import { Toaster } from '@/components/ui/toaster'
+import { BrowseSheet } from './_components/BrowseSheet'
+import { Suspense } from 'react'
 
 const PostHogPageView = dynamic(() => import('./PostHogPageView'), {
   ssr: false,
@@ -31,7 +33,14 @@ export default function RootLayout({
           <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} disableTransitionOnChange={true}>
             <Toaster />
 
-            <JotaiProvider>{children}</JotaiProvider>
+            <JotaiProvider>
+              <>
+                <Suspense fallback={<div>Loading...</div>}>{children}</Suspense>
+                <div className="fixed left-0 bottom-1/2 w-[12%] px-1 items-center justify-center flex">
+                  <BrowseSheet />
+                </div>
+              </>
+            </JotaiProvider>
           </ThemeProvider>
         </body>
       </PHProvider>
