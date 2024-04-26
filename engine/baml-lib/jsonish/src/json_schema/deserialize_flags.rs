@@ -54,10 +54,20 @@ impl SerializationContext {
 pub enum Flag {
     NullButHadUnparseableValue(SerializationContext, serde_json::Value),
     ObjectToString(serde_json::Value),
+    ObjectToField(serde_json::Value),
     StrippedNonAlphaNumeric(String),
     SubstringMatch(String),
     // Values here are the ones ignored
     FirstMatch(Vec<serde_json::Value>),
+
+    NullButHadValue(serde_json::Value),
+
+    // String -> X convertions.
+    StringToBool(String),
+    StringToNull(String),
+    StringToChar(String),
+    // Number -> X convertions.
+    FloatToInt(f64),
 }
 
 #[derive(Clone)]

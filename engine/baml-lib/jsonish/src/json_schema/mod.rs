@@ -296,7 +296,41 @@ impl ValueCoerce for FieldType {
                 )),
             },
             FieldType::Class(_) => todo!(),
-            FieldType::List(_) => todo!(),
+            FieldType::List(item) => match value {
+                Some(Value::Array(items)) => {
+                    let res = items
+                        .iter()
+                        .enumerate()
+                        .map(|(idx, v)| {
+                            let mut scope = scope.clone();
+                            scope.push(format!("{}", idx));
+                            item.coerce(scope, ir, env, Some(v))
+                        })
+                        .filter_map(|r| r.ok())
+                        .collect::<Vec<_>>();
+
+                    let parsed = res.iter().map(|v| v.0.clone()).collect::<Vec<_>>();
+
+                    // TODO: @hellovai determine how to send up flags for each field.
+
+                    Ok((
+                        serde_json::Value::Array(parsed),
+                        DeserializerConditions::new(),
+                    ))
+                }
+                Some(inner) => {
+                    let res = item.coerce(scope.clone(), ir, env, Some(inner));
+                    match res {
+                        Ok((v, flags)) => Ok((json!([v]), flags)),
+                        Err(e) => Err(SerializationContext::from_error(
+                            scope,
+                            format!("Could not parse list: {}\n{}", self, e),
+                            value.cloned(),
+                        )),
+                    }
+                }
+                None => Ok((json!([]), DeserializerConditions::new())),
+            },
             FieldType::Union(options) => match parse_union(&scope, ir, env, options, value) {
                 Ok(v) => Ok(v),
                 Err(e) => Err(SerializationContext::from_error(
@@ -336,9 +370,12 @@ impl ValueCoerce for FieldType {
     }
 }
 
-fn pick_best_match_array(
-    res: &Vec<Result<(Value, DeserializerConditions), SerializationContext>>,
-) -> Result<(Value, DeserializerConditions)> {
+fn pick_best_match_array<T>(
+    res: &Vec<Result<(Value, DeserializerConditions), T>>,
+) -> Result<(Value, DeserializerConditions)>
+where
+    T: std::fmt::Display,
+{
     // For all the results, sort them by the number of flags.
     // If there are any results with no flags, return that.
     // Otherwise, return the result with the fewest flags.
@@ -445,12 +482,123 @@ fn parse_primitive(
                 .iter()
                 .map(|v| parse_primitive(primitive, ir, env, Some(v)))
                 .collect::<Vec<_>>();
+            pick_best_match_array(&parsed)
         }
-        Value::Object(kv) => todo!(),
-        _ => {}
-    }
+        Value::Object(kv) => {
+            if kv.len() == 1 {
+                let (k, v) = kv.iter().next().unwrap();
+                let res = parse_primitive(primitive, ir, env, Some(v))?;
+                Ok((res.0, res.1.with_flag(Flag::ObjectToField(value.clone()))))
+            } else {
+                anyhow::bail!("Object has more than one key")
+            }
+        }
+        Value::String(s) => {
+            // First do some primitive type checking.
+            match s.as_str() {
+                "null" => parse_primitive(primitive, ir, env, Some(&Value::Null)),
+                "true" => parse_primitive(primitive, ir, env, Some(&Value::Bool(true))),
+                "false" => parse_primitive(primitive, ir, env, Some(&Value::Bool(false))),
+                // Special case for numbers.
+                _ => {
+                    if let Ok(n) = s.parse::<i64>() {
+                        return parse_primitive(primitive, ir, env, Some(&json!(n)));
+                    } else if let Ok(n) = s.parse::<f32>() {
+                        return parse_primitive(primitive, ir, env, Some(&json!(n)));
+                    }
 
-    todo!()
+                    // If the value is a string, we need to parse it.
+                    let mut flags = DeserializerConditions::new();
+
+                    let res = match primitive {
+                        TypeValue::Char => match s.len() {
+                            0 => anyhow::bail!("String is not a char"),
+                            1 => json!(s.chars().next().unwrap()),
+                            _ => {
+                                flags.add_flag(Flag::StringToChar(s.clone()));
+                                json!(s.chars().next().unwrap())
+                            }
+                        },
+                        TypeValue::Int => anyhow::bail!("String is not an int"),
+                        TypeValue::Float => anyhow::bail!("String is not a float"),
+                        TypeValue::Bool => match s.to_ascii_lowercase().trim() {
+                            "true" => {
+                                flags.add_flag(Flag::StringToBool(s.clone()));
+                                json!(true)
+                            }
+                            "false" => {
+                                flags.add_flag(Flag::StringToBool(s.clone()));
+                                json!(false)
+                            }
+                            _ => anyhow::bail!("String is not a bool"),
+                        },
+                        TypeValue::Null => match s.to_ascii_lowercase().trim() {
+                            "null" => {
+                                flags.add_flag(Flag::StringToNull(s.clone()));
+                                json!(null)
+                            }
+                            _ => {
+                                flags.add_flag(Flag::NullButHadValue(value.clone()));
+                                json!(null)
+                            }
+                        },
+                        TypeValue::String => json!(s),
+                    };
+
+                    Ok((res, flags))
+                }
+            }
+        }
+        Value::Null => match primitive {
+            TypeValue::Null => Ok((json!(null), DeserializerConditions::new())),
+            _ => anyhow::bail!("Value is not null"),
+        },
+        Value::Bool(b) => match primitive {
+            TypeValue::String => Ok((json!(b.to_string()), DeserializerConditions::new())),
+            TypeValue::Int => anyhow::bail!("Value is not an int"),
+            TypeValue::Float => anyhow::bail!("Value is not an int"),
+            TypeValue::Bool => Ok((json!(*b), DeserializerConditions::new())),
+            TypeValue::Char => anyhow::bail!("Value is not a char"),
+            TypeValue::Null => Ok((
+                json!(null),
+                DeserializerConditions::new().with_flag(Flag::NullButHadValue(value.clone())),
+            )),
+        },
+        Value::Number(n) => match primitive {
+            TypeValue::String => Ok((json!(n.to_string()), DeserializerConditions::new())),
+            TypeValue::Int => {
+                if let Some(n) = n.as_i64() {
+                    Ok((json!(n), DeserializerConditions::new()))
+                } else if let Some(n) = n.as_u64() {
+                    Ok((json!(n), DeserializerConditions::new()))
+                } else if let Some(n) = n.as_f64() {
+                    Ok((
+                        json!(n.round() as i64),
+                        DeserializerConditions::new().with_flag(Flag::FloatToInt(n)),
+                    ))
+                } else {
+                    anyhow::bail!("Value is not an int")
+                }
+            }
+            TypeValue::Float => {
+                if let Some(n) = n.as_f64() {
+                    Ok((json!(n), DeserializerConditions::new()))
+                } else if let Some(n) = n.as_i64() {
+                    Ok((json!(n as f64), DeserializerConditions::new()))
+                } else if let Some(n) = n.as_u64() {
+                    Ok((json!(n as f64), DeserializerConditions::new()))
+                } else {
+                    anyhow::bail!("Value is not a float")
+                }
+            }
+            TypeValue::Bool => anyhow::bail!("Value is not a bool"),
+            TypeValue::Char => anyhow::bail!("Value is not a char"),
+            TypeValue::Null => Ok((
+                json!(null),
+                DeserializerConditions::new().with_flag(Flag::NullButHadValue(value.clone())),
+            )),
+        },
+    }
 }
 
 fn parse_enum(
