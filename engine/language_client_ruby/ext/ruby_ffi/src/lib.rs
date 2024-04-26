@@ -2,8 +2,11 @@ use baml_runtime::{BamlRuntime, RuntimeContext};
 use futures::executor::block_on;
 use magnus::{
     class, error::RubyUnavailableError, exception::runtime_error, function, method, prelude::*,
-    scan_args::get_kwargs, value::Value, Error, RHash, Ruby,
+    scan_args::get_kwargs, value::Value, Error, RClass, RHash, Ruby,
 };
+use rb_sys::bindings::uncategorized::rb_fiber_current;
+use rb_sys::bindings::uncategorized::rb_fiber_yield;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -11,10 +14,63 @@ mod json_to_ruby;
 
 type Result<T> = std::result::Result<T, magnus::Error>;
 
+thread_local! {
+    //static REQUEST_POOL: RefCell<LocalPool> = RefCell::new(LocalPool::new());
+}
+
+#[no_mangle]
+pub extern "C" fn hello_from_rust() {
+    let duration = std::time::Duration::from_secs(2);
+    println!("hello-BEGIN- sleeping for {duration:#?}");
+    std::thread::sleep(duration);
+    println!("hello-END- slept for {duration:#?}");
+}
+
 fn does_this_yield() {
-    println!("BEGIN- sleeping for 2s");
-    std::thread::sleep(std::time::Duration::from_secs(2));
-    println!("END- slept for 2s");
+    let duration = std::time::Duration::from_secs(2);
+    println!("BEGIN- sleeping for {duration:#?}");
+    let Ok(ruby) = BamlRuntimeFfi::try_lock_gvl() else {
+        println!("Failed to access Ruby runtime");
+        return;
+    };
+    // unsafe {
+    //     let current = rb_fiber_current();
+    //     println!("current fiber {}", current);
+    // }
+    // REQUEST_POOL.with_borrow_mut(|t| {});
+    // println!("first sleep");
+    // std::thread::sleep(duration);
+    // unsafe {
+    //     rb_fiber_yield(0, std::ptr::null());
+    // }
+    // println!("second sleep");
+    // std::thread::sleep(duration);
+    // unsafe {
+    //     rb_fiber_yield(0, std::ptr::null());
+    // }
+    // ruby.proc_from_fn(|_args, _block| {
+    //     println!("inside proc");
+    //     Ok(magnus::QNIL)
+    // });
+    let block = ruby.proc_new(|_args, _block| {
+        println!("inside Fiber.schedule1");
+        unsafe {
+            rb_fiber_yield(0, std::ptr::null());
+        }
+        println!("inside Fiber.schedule2");
+        unsafe {
+            rb_fiber_yield(0, std::ptr::null());
+        }
+        println!("inside Fiber.schedule3");
+        Ok(())
+    });
+    let fiber_class = class::object().const_get::<_, RClass>("Fiber").unwrap();
+    fiber_class
+        .as_value()
+        .funcall_with_block::<&str, (), Value>("schedule", (), block)
+        .unwrap();
+
+    println!("END- slept for {duration:#?}");
 }
 
 fn json_to_ruby(any: Value) -> Result<Value> {
@@ -148,7 +204,8 @@ fn init() -> Result<()> {
     runtime_class.define_method("call_function", method!(BamlRuntimeFfi::call_function, 1))?;
 
     module.define_module_function("json_to_ruby", function!(json_to_ruby, 1))?;
-    module.define_module_function("does_this_yield", function!(does_this_yield, 0))?;
+
+    rb.define_global_function("does_this_yield", function!(does_this_yield, 0));
 
     Ok(())
 }

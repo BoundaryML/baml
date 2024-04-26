@@ -2,20 +2,37 @@ PATH
   remote: .
   specs:
     baml (0.1.0)
+      ffi
 
 GEM
   remote: https://rubygems.org/
   specs:
+    async (2.10.2)
+      console (~> 1.10)
+      fiber-annotation
+      io-event (~> 1.5, >= 1.5.1)
+      timers (~> 4.1)
+    console (1.24.0)
+      fiber-annotation
+      fiber-local
+      json
+    ffi (1.16.3)
+    fiber-annotation (0.2.0)
+    fiber-local (1.0.0)
+    io-event (1.5.1)
+    json (2.7.2)
     rake (13.1.0)
     rake-compiler (1.2.7)
       rake
     rb_sys (0.9.97)
+    timers (4.3.5)
 
 PLATFORMS
   ruby
   x86_64-linux
 
 DEPENDENCIES
+  async
   baml!
   rake (~> 13.0)
   rake-compiler (~> 1.2)
