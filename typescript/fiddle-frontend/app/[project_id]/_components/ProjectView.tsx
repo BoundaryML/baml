@@ -7,7 +7,8 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/componen
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useKeybindingOverrides } from '@/hooks/command-s'
 import { BAML_DIR } from '@/lib/constants'
-import { BAMLProject, exampleProjects } from '@/lib/exampleProjects'
+import { BAMLProject } from '@/lib/exampleProjects'
+import { ExploreProjects } from './ExploreProjects'
 import {
   ASTProvider,
   CustomErrorBoundary,
@@ -38,7 +39,7 @@ import { CodeMirrorEditor } from './CodeMirrorEditor'
 import { GithubStars } from './GithubStars'
 import FileViewer from './Tree/FileViewer'
 import clsx from 'clsx'
-import { AlertTriangleIcon, FlaskConical, GitForkIcon, LinkIcon, ShareIcon } from 'lucide-react'
+import { AlertTriangleIcon, Compass, FlaskConical, GitForkIcon, LinkIcon, ShareIcon } from 'lucide-react'
 import { Separator } from '@baml/playground-common/components/ui/separator'
 import { InitialTour, PostTestRunTour } from './Tour'
 import posthog from 'posthog-js'
@@ -60,7 +61,6 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
   const projectNameInputRef = useRef(null)
   const [description, setDescription] = useState(project.description)
   const descriptionInputRef = useRef(null)
-  const productTourDone = useAtomValue(productTourDoneAtom)
 
   useEffect(() => {
     setUnsavedChanges(false)
@@ -89,29 +89,28 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
 
             <ResizablePanelGroup className="h-full pb-4" direction="vertical">
               <ResizablePanel defaultSize={50} className="h-full ">
-                <div className="w-full px-2 text-sm font-semibold text-center uppercase text-white/90">
+                <div className="w-full px-2 pt-4 text-sm font-semibold text-center uppercase text-white/90">
                   project files
                 </div>
                 <div className="flex flex-col w-full h-full pb-8 tour-file-view">
                   <FileViewer />
                 </div>
               </ResizablePanel>
-              <Separator className="bg-vscode-textSeparator-foreground" />
+              {/* <Separator className="bg-vscode-textSeparator-foreground" /> */}
 
               <ResizableHandle className="bg-vscode-contrastActiveBorder border-vscode-contrastActiveBorder" />
-              <ResizablePanel className="w-full pt-2 tour-templates">
-                <div className="w-full px-2 pt-2 text-sm font-semibold text-center uppercase text-white/90">
-                  Examples
-                </div>
-                <div className="flex flex-col w-full h-full">
-                  <ScrollArea>
-                    <div className="flex flex-col h-full px-4 gap-y-4">
-                      {exampleProjects.map((p) => {
-                        return <ExampleProjectCard key={p.name} project={p} />
-                      })}
-                    </div>
-                  </ScrollArea>
-                </div>
+              <ResizablePanel className="flex flex-col items-center w-full pt-2 tour-templates">
+                {/* <Sheet>
+                  <SheetTrigger asChild>
+                    <Button className="flex flex-row items-center px-2 text-sm whitespace-pre-wrap bg-indigo-600 hover:bg-indigo-500 h-fit gap-x-2 text-vscode-button-foreground">
+                      <Compass size={24} strokeWidth={2} />
+                      <span>Browse Examples</span>
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent className="bg-zinc-900 min-w-[600px]">
+                    <ExploreProjects />
+                  </SheetContent>
+                </Sheet> */}
               </ResizablePanel>
             </ResizablePanelGroup>
           </ResizablePanel>
@@ -195,8 +194,8 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
                     href="https://docs.boundaryml.com/v3/home/installation"
                     className="h-full pt-1 w-fit text-zinc-300 hover:text-zinc-50"
                   >
-                    <div className="flex flex-row items-center text-sm gap-x-4">
-                      <Image src="/vscode_logo.svg" width={20} height={20} alt="VSCode extension" />
+                    <div className="flex flex-row items-center text-xs 2xl:text-sm gap-x-4">
+                      <Image src="/vscode_logo.svg" width={18} height={18} alt="VSCode extension" />
                       <div className="whitespace-nowrap">Get VSCode extension</div>
                     </div>
                   </Link>
@@ -224,7 +223,7 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
                       placeholder="Write a task name"
                       type="input"
                       childRef={descriptionInputRef}
-                      className="w-full px-2 text-sm font-light text-left border-none text-card-foreground"
+                      className="w-full px-2 text-sm font-light text-left border-none text-card-foreground/80"
                     >
                       <textarea
                         className="w-[95%] ml-2 px-2 text-sm border-none text-vscode-descriptionForeground"
@@ -277,7 +276,7 @@ const ShareButton = ({ project, projectName }: { project: BAMLProject; projectNa
   return (
     <Button
       variant={'default'}
-      className="h-full py-1 shadow-md gap-x-1 bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground w-fit whitespace-nowrap"
+      className="h-full py-1 bg-indigo-900 shadow-md gap-x-1 text-vscode-button-foreground hover:bg-indigo-800 w-fit whitespace-nowrap"
       disabled={loading}
       onClick={async () => {
         setLoading(true)

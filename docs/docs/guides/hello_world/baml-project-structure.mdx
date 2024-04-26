@@ -1,0 +1,86 @@
+---
+title: "BAML Project Structure"
+---
+
+At a high level, you will define your AI prompts and interfaces in BAML files.
+The BAML compiler will then generate Python or Typescript code for you to use in
+your application, depending on the generators configured in your `main.baml`:
+
+```rust main.baml
+generator MyGenerator{
+  language "python"
+  // This is where the generated baml-client will be written to
+  project_root "../"
+  test_command "poetry run python -m pytest"
+  install_command "poetry add baml@latest"
+  package_version_command "poetry show baml"
+}
+```
+
+Here is the typical project structure:
+
+```bash
+.
+├── baml_client/ # Generated code
+├── baml_src/ # Prompts live here
+│   ├── __tests__/ # Tests loaded by playground
+│   │   └── YourAIFunction/
+│   │       └── test_1.json
+│   ├── main.baml
+│   ├── any_directory/
+│   │   └── baz.baml
+│   └── foo.baml
+# The rest of your project (not generated nor used by BAML)
+├── app/
+│  ├── __init__.py
+│  └── main.py
+├── pyproject.toml
+└── poetry.lock
+
+```
+
+1. `baml_src/` is where you write your BAML files with the AI
+function declarations, prompts, retry policies, etc. It also contains
+[generator](/docs/syntax/generator) blocks which configure how and where to
+transpile your BAML code.
+
+2. `baml_client/` is where the BAML compiler will generate code for you,
+based on the types and functions you define in your BAML code.
+
+<CodeGroup>
+```python Python
+from baml_client import baml as b
+
+async def use_llm_for_task():
+  await b.CallMyLLM()
+```
+
+```typescript TypeScript
+import b from '@/baml_client'
+
+const use_llm_for_task = async () => {
+  await b.CallMyLLM();
+};
+```
+</CodeGroup>
+
+3. `baml_src/__tests__/**/*.json` is where your test inputs live. The VSCode
+extension allows you to load, delete, create, and run any of these these inputs.
+You can also use these tests ou like. See [here](/docs/syntax/function-testing) for more information.
+
+<Warning>
+  **You should never edit any files inside baml_client directory** as the whole
+  directory gets regenerated on every `baml build` (auto runs on save if using
+  the VSCode extension).
+</Warning>
+
+<Tip>
+  If you ever run into any issues with the generated code (like merge
+  conflicts), you can always delete the `baml_client` directory and it will get
+  regenerated automatically once you fix any other conflicts in your `.baml`
+  files.
+</Tip>
+
+### imports
+
+BAML by default has global imports. Every entity declared in any `.baml` file is available to all other `.baml` files under the same `baml_src` directory. You **can** have multiple `baml_src` directories, but no promises on how the VSCode extension will behave (yet).

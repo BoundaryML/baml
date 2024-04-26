@@ -114,7 +114,11 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
   const ref = useRef<ReactCodeMirrorRef>({})
 
   useEffect(() => {
-    setActiveFile(project.files[0])
+    const mainBaml =
+      project.files.find((f) => f.path.endsWith('.baml') && !f.path.endsWith('clients.baml')) ?? project.files[0]
+    if (mainBaml) {
+      setActiveFile(mainBaml)
+    }
   }, [project.id])
 
   // force linting on file changes so playground updates

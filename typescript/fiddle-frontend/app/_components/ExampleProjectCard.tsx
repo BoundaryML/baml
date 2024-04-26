@@ -27,19 +27,20 @@ export const ExampleProjectCard = ({ project }: { project: BAMLProject }) => {
       <AlertDialogTrigger>
         <Card
           className={clsx(
-            'flex w-full h-fit text-center px-2 font-sans border-gray-800 bg-zinc-800/40 hover:cursor-pointer hover:bg-zinc-800 rounded-sm',
-            [isSelected ? 'border-gray-600 bg-zinc-800' : 'border-transparent'],
+            'flex w-[200px] h-[140px] text-center px-2 font-sans border-zinc-700 border-[1px] bg-zinc-800/40 hover:cursor-pointer hover:bg-zinc-800 rounded-sm',
+            [isSelected ? 'border-gray-600 bg-zinc-800' : ''],
           )}
           onClick={() => {
+            // TODO use Link since the data can be prefetched
             if (!unsavedChanges) {
-              router.push(`/${project.id}`, { scroll: false })
-              router.refresh()
+              router.push(`/${project.id}`)
+              // router.refresh()
             }
           }}
         >
           <CardHeader className="w-full px-1 py-4">
-            <CardTitle className="text-xs">{project.name}</CardTitle>
-            <CardDescription className="text-xs">{project.description}</CardDescription>
+            <CardTitle className="text-base text-left">{project.name}</CardTitle>
+            <CardDescription className="text-sm text-left">{project.description}</CardDescription>
           </CardHeader>
         </Card>
       </AlertDialogTrigger>

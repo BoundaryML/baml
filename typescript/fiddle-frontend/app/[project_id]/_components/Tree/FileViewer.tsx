@@ -109,6 +109,7 @@ const FileViewer = () => {
   const activeFile = useAtomValue(activeFileAtom)
   const [emptyDirs, setEmptydirs] = useAtom(emptyDirsAtom)
 
+  console.log('editorfiles', editorFiles)
   const data2 = createTree(editorFiles.map((f) => f.path).concat(emptyDirs))
 
   const [term, setTerm] = useState('')
@@ -148,10 +149,11 @@ const FileViewer = () => {
         <Tree
           className="truncate "
           ref={treeRef}
+          key={activeFile?.path}
           openByDefault={false}
-          initialOpenState={{ baml_src: true }}
-          data={data2}
           // initialOpenState={{ baml_src: true }}
+          data={data2}
+          initialOpenState={{ baml_src: true }}
           rowHeight={24}
           width={width}
           selection={activeFile?.path}
