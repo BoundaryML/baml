@@ -1,66 +1,19 @@
+use std::sync::Arc;
+
 use anyhow::Result;
-use internal_baml_core::ir::{ClientWalker, RetryPolicyWalker};
-use internal_baml_jinja::RenderedPrompt;
+use internal_baml_core::ir::ClientWalker;
 
-use crate::runtime::prompt_renderer::PromptRenderer;
-use crate::RuntimeContext;
+use crate::{runtime::prompt_renderer::PromptRenderer, RuntimeContext};
 
-use super::{anthropic::AnthropicClient, openai::OpenAIClient, LLMClientExt, LLMResponse};
+use super::{
+    openai::OpenAIClient,
+    traits::{WithCallable, WithPrompt},
+    LLMResponse,
+};
 
 pub enum LLMProvider<'ir> {
     OpenAI(OpenAIClient<'ir>),
-    Anthropic(AnthropicClient<'ir>),
-}
-
-impl LLMClientExt for LLMProvider<'_> {
-    fn retry_policy(&self) -> Option<RetryPolicyWalker> {
-        match self {
-            LLMProvider::OpenAI(client) => client.retry_policy(),
-            LLMProvider::Anthropic(client) => client.retry_policy(),
-        }
-    }
-
-    fn render_prompt(
-        &self,
-        renderer: &PromptRenderer<'_>,
-        ctx: &RuntimeContext,
-        params: &serde_json::Value,
-    ) -> Result<RenderedPrompt> {
-        match self {
-            LLMProvider::OpenAI(client) => client.render_prompt(renderer, ctx, params),
-            LLMProvider::Anthropic(client) => client.render_prompt(renderer, ctx, params),
-        }
-    }
-
-    async fn single_call(&self, prompt: &RenderedPrompt) -> Result<LLMResponse> {
-        match self {
-            LLMProvider::OpenAI(client) => client.single_call(prompt).await,
-            LLMProvider::Anthropic(client) => client.single_call(prompt).await,
-        }
-    }
-
-    async fn call(&mut self, prompt: &RenderedPrompt) -> Result<LLMResponse> {
-        if let Some(policy) = self.retry_policy() {
-            let retry_strategy = super::retry_policy::CallablePolicy::new(&policy);
-            let mut err = None;
-            for delay in retry_strategy {
-                match self.single_call(prompt).await {
-                    Ok(response) => return Ok(response),
-                    Err(e) => {
-                        err = Some(e);
-                    }
-                }
-                tokio::time::sleep(delay).await;
-            }
-            if let Some(e) = err {
-                return Err(e);
-            } else {
-                anyhow::bail!("No response from client");
-            }
-        } else {
-            return self.single_call(prompt).await;
-        }
-    }
+    // Anthropic(AnthropicClient<'ir>),
 }
 
 impl LLMProvider<'_> {
@@ -72,10 +25,43 @@ impl LLMProvider<'_> {
             "baml-openai-chat" | "openai" => {
                 OpenAIClient::new(client, ctx).map(LLMProvider::OpenAI)
             }
-            "baml-anthropic-chat" | "anthropic" => {
-                AnthropicClient::new(client, ctx).map(LLMProvider::Anthropic)
+            // "baml-anthropic-chat" | "anthropic" => {
+            //     AnthropicClient::new(client, ctx).map(LLMProvider::Anthropic)
+            // }
+            other => {
+                let options = ["openai"];
+                anyhow::bail!(
+                    "Unsupported provider: {}. Available ones are: {}",
+                    other,
+                    options.join(", ")
+                )
             }
-            _ => anyhow::bail!("Unsupported provider"),
+        }
+    }
+}
+
+impl WithPrompt for LLMProvider<'_> {
+    fn render_prompt(
+        &mut self,
+        renderer: &PromptRenderer<'_>,
+        ctx: &RuntimeContext,
+        params: &serde_json::Value,
+    ) -> Result<internal_baml_jinja::RenderedPrompt> {
+        match self {
+            LLMProvider::OpenAI(client) => client.render_prompt(renderer, ctx, params),
+        }
+    }
+}
+
+impl WithCallable for LLMProvider<'_> {
+    async fn call(
+        &mut self,
+        ir: &internal_baml_core::ir::repr::IntermediateRepr,
+        ctx: &RuntimeContext,
+        prompt: &internal_baml_jinja::RenderedPrompt,
+    ) -> Result<LLMResponse> {
+        match self {
+            LLMProvider::OpenAI(client) => client.call(ir, ctx, prompt).await,
         }
     }
 }

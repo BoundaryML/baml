@@ -28,6 +28,7 @@ strsim = "0.11.1"
 either = "1.8.1"
 futures = "0.3.30"
 async-stream = "0.3.5"
+async-trait = "0.1.80"
 
 [dev-dependencies]
 base64 = "0.13.0"

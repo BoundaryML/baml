@@ -288,6 +288,57 @@ pub enum RenderedPrompt {
     Chat(Vec<RenderedChatMessage>),
 }
 
+pub struct ChatOptions {
+    default_role: String,
+    valid_roles: Option<Vec<String>>,
+}
+
+impl ChatOptions {
+    pub fn new(default_role: String, valid_roles: Option<Vec<String>>) -> ChatOptions {
+        ChatOptions {
+            default_role,
+            valid_roles,
+        }
+    }
+}
+
+pub struct CompletionOptions {
+    joiner: String,
+}
+
+impl CompletionOptions {
+    pub fn new(joiner: String) -> CompletionOptions {
+        CompletionOptions { joiner }
+    }
+}
+
+impl RenderedPrompt {
+    pub fn as_chat(self, chat_options: &ChatOptions) -> RenderedPrompt {
+        match self {
+            RenderedPrompt::Chat(messages) => RenderedPrompt::Chat(messages),
+            RenderedPrompt::Completion(message) => {
+                RenderedPrompt::Chat(vec![RenderedChatMessage {
+                    role: chat_options.default_role.clone(),
+                    message,
+                }])
+            }
+        }
+    }
+
+    pub fn as_completion(self, completion_options: &CompletionOptions) -> RenderedPrompt {
+        match self {
+            RenderedPrompt::Chat(messages) => RenderedPrompt::Completion(
+                messages
+                    .into_iter()
+                    .map(|m| m.message)
+                    .collect::<Vec<String>>()
+                    .join(&completion_options.joiner),
+            ),
+            RenderedPrompt::Completion(message) => RenderedPrompt::Completion(message),
+        }
+    }
+}
+
 pub fn render_prompt<T: Serialize>(
     template: &str,
     args: &T,

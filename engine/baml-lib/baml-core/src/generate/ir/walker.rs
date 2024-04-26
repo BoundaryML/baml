@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::collections::HashMap;
 
 use super::{
-    repr::{self, Field, FunctionConfig},
+    repr::{self, Field, FunctionConfig, RetryPolicyId},
     Class, Client, Enum, EnumValue, Expression, Function, FunctionV2, Identifier, Impl,
     RetryPolicy, TemplateString, TestCase, Walker,
 };
@@ -198,11 +198,12 @@ impl<'a> Walker<'a, &'a Client> {
         &self.item.elem
     }
 
-    pub fn retry_policy(&self) -> Option<Walker<'a, &'a RetryPolicy>> {
-        self.elem()
-            .retry_policy_id
-            .as_ref()
-            .and_then(|policy| self.db.walk_retry_policies().find(|r| r.name() == policy))
+    pub fn name(&self) -> &str {
+        &self.elem().name
+    }
+
+    pub fn retry_policy(&self) -> &Option<String> {
+        &self.elem().retry_policy_id
     }
 }
 

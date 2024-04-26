@@ -12,7 +12,7 @@ use internal_baml_core::{
 };
 
 use crate::runtime::{
-    llm_client::{LLMClientExt, LLMProvider},
+    llm_client::{LLMProvider, WithCallable, WithPrompt},
     prompt_renderer::PromptRenderer,
 };
 use crate::RuntimeContext;
@@ -79,7 +79,7 @@ impl BamlRuntime {
         let prompt = client.render_prompt(&renderer, &ctx, &json!(params))?;
 
         // Call the LLM.
-        let response = client.call(&prompt).await?;
+        let response = client.call(&self.ir, &ctx, &prompt).await?;
 
         println!("{:?}", response);
 
@@ -107,10 +107,10 @@ mod tests {
         let directory = PathBuf::from("/Users/vbv/repos/gloo-lang/integ-tests/baml_src");
         let runtime = BamlRuntime::from_directory(&directory).unwrap();
 
-        let ctx = RuntimeContext::new().add_env("OPENAI_API_KEY".into(), "SOME_KEY".to_string());
+        let ctx = RuntimeContext::new().add_env("OPENAI_API_KEY".into(), "API_KEY".to_string());
 
         let mut params = HashMap::new();
-        params.insert("input", json!("\"Attention Is All You Need\" is a landmark[1][2] 2017 research paper by Google.[3] Authored by eight scientists, it was responsible for expanding 2014 attention mechanisms proposed by Bahdanau et. al. into a new deep learning architecture known as the transformer. The paper is considered by some to be a founding document for modern artificial intelligence, as transformers became the main architecture of large language models.[4][5] At the time, the focus of the research was on improving Seq2seq techniques for machine translation, but even in their paper the authors saw the potential for other tasks like question answering and for what is now called multimodal Generative AI.\n\nThe paper's title is a reference to the song \"All You Need Is Love\" by the Beatles.[6]\n\nAs of 2024, the paper has been cited more than 100,000 times.[7]"));
+        params.insert("input".into(), json!("\"Attention Is All You Need\" is a landmark[1][2] 2017 research paper by Google.[3] Authored by eight scientists, it was responsible for expanding 2014 attention mechanisms proposed by Bahdanau et. al. into a new deep learning architecture known as the transformer. The paper is considered by some to be a founding document for modern artificial intelligence, as transformers became the main architecture of large language models.[4][5] At the time, the focus of the research was on improving Seq2seq techniques for machine translation, but even in their paper the authors saw the potential for other tasks like question answering and for what is now called multimodal Generative AI.\n\nThe paper's title is a reference to the song \"All You Need Is Love\" by the Beatles.[6]\n\nAs of 2024, the paper has been cited more than 100,000 times.[7]"));
 
         runtime.call_function("ExtractNames", &params, ctx).await?;
 

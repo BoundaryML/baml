@@ -6,7 +6,7 @@ use internal_baml_jinja::{RenderContext_Client, RenderedChatMessage, RenderedPro
 use serde_json::json;
 
 use crate::runtime::{
-    llm_client::{LLMChatClient, LLMClient, LLMClientExt, LLMResponse, ModelType},
+    llm_client::{LLMResponse, ModelFeatures},
     prompt_renderer::PromptRenderer,
 };
 use crate::RuntimeContext;
@@ -77,7 +77,7 @@ impl<'ir> AnthropicClient<'ir> {
     }
 }
 
-impl LLMClientExt for AnthropicClient<'_> {
+impl LLMClientOrStrategy for AnthropicClient<'_> {
     fn render_prompt(
         &self,
         renderer: &PromptRenderer<'_>,
@@ -106,7 +106,7 @@ impl LLMClient for AnthropicClient<'_> {
     }
 
     /// https://docs.anthropic.com/claude/docs/models-overview
-    fn model_type(&self) -> ModelType {
+    fn model_features(&self) -> ModelFeatures {
         if let Some(model) = self.properties.get("model") {
             if let serde_json::Value::String(model) = model {
                 if model.contains("claude-2.1")
@@ -114,12 +114,12 @@ impl LLMClient for AnthropicClient<'_> {
                     || model.contains("claude-instant-1.2")
                 {
                     // The old Claude models support both chat and completion, but it's unclear how to model this in model_type
-                    return ModelType::Chat;
+                    return ModelFeatures::Chat;
                 }
             }
         }
         // newer models only support chat
-        ModelType::Chat
+        ModelFeatures::Chat
     }
 }
 

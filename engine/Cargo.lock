@@ -331,6 +331,7 @@ version = "0.18.0-canary.4"
 dependencies = [
  "anyhow",
  "async-stream",
+ "async-trait",
  "base64 0.13.1",
  "clap 4.5.1",
  "dissimilar",
