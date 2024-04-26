@@ -1,5 +1,5 @@
 use baml_runtime::{BamlRuntime, RuntimeContext};
-use futures::executor::block_on;
+use futures::executor::{block_on, LocalPool};
 use magnus::{
     class, error::RubyUnavailableError, exception::runtime_error, function, method, prelude::*,
     scan_args::get_kwargs, value::Value, Error, RClass, RHash, Ruby,
@@ -15,7 +15,7 @@ mod json_to_ruby;
 type Result<T> = std::result::Result<T, magnus::Error>;
 
 thread_local! {
-    //static REQUEST_POOL: RefCell<LocalPool> = RefCell::new(LocalPool::new());
+    static REQUEST_POOL: RefCell<LocalPool> = RefCell::new(LocalPool::new());
 }
 
 #[no_mangle]
@@ -26,13 +26,18 @@ pub extern "C" fn hello_from_rust() {
     println!("hello-END- slept for {duration:#?}");
 }
 
-fn does_this_yield() {
+async fn async_fn() -> String {
     let duration = std::time::Duration::from_secs(2);
-    println!("BEGIN- sleeping for {duration:#?}");
-    let Ok(ruby) = BamlRuntimeFfi::try_lock_gvl() else {
-        println!("Failed to access Ruby runtime");
-        return;
-    };
+    println!("async-BEGIN- sleeping for {duration:#?}");
+    async_std::task::sleep(duration).await;
+    println!("async-END- slept for {duration:#?}");
+    "async-retval".to_string()
+}
+
+fn does_this_yield() -> Result<Value> {
+    //let duration = std::time::Duration::from_secs(2);
+    //println!("BEGIN- sleeping for {duration:#?}");
+    let ruby = BamlRuntimeFfi::try_lock_gvl()?;
     // unsafe {
     //     let current = rb_fiber_current();
     //     println!("current fiber {}", current);
@@ -53,24 +58,25 @@ fn does_this_yield() {
     //     Ok(magnus::QNIL)
     // });
     let block = ruby.proc_new(|_args, _block| {
-        println!("inside Fiber.schedule1");
-        unsafe {
-            rb_fiber_yield(0, std::ptr::null());
-        }
-        println!("inside Fiber.schedule2");
-        unsafe {
-            rb_fiber_yield(0, std::ptr::null());
-        }
-        println!("inside Fiber.schedule3");
-        Ok(())
+        println!("begin proc1");
+        //std::thread::sleep(std::time::Duration::from_secs(1));
+        let s = REQUEST_POOL.with_borrow_mut(|t| t.run_until(async_fn()));
+        println!("end proc1");
+        Ok(s)
     });
-    let fiber_class = class::object().const_get::<_, RClass>("Fiber").unwrap();
-    fiber_class
+    let ractor_class = class::object().const_get::<_, RClass>("Ractor").unwrap();
+    let retval = ractor_class
         .as_value()
-        .funcall_with_block::<&str, (), Value>("schedule", (), block)
+        .funcall_with_block::<&str, (), Value>("new", (), block)
         .unwrap();
+    //let fiber_class = class::object().const_get::<_, RClass>("Fiber").unwrap();
+    //fiber_class
+    //    .as_value()
+    //    .funcall_with_block::<&str, (), Value>("schedule", (), block)
+    //    .unwrap();
 
-    println!("END- slept for {duration:#?}");
+    //println!("END- slept for {duration:#?}");
+    Ok(retval)
 }
 
 fn json_to_ruby(any: Value) -> Result<Value> {

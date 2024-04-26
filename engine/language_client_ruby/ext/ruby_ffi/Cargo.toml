@@ -9,6 +9,7 @@ publish = false
 crate-type = ["cdylib"]
 
 [dependencies]
+async-std = "1.12.0"
 baml-runtime = { path = "../../../baml-runtime" }
 futures = { version = "0.3.30", features = ["executor"] }
 magnus = "0.6"
