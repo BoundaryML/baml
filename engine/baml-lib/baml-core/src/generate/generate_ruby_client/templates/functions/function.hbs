@@ -1,0 +1,107 @@
+{{#if params.positional}}
+type I{{name}} = ({{params.name}}: {{params.type}}) => Promise<{{return_type}}>
+{{else}}
+type I{{name}} = ({{params.name}}: {
+  {{#each params.values as |v|}}{{v.name}}: {{v.type}}{{#unless @last}}, {{/unless}}{{/each}}
+}) => Promise<{{return_type}}>
+{{/if}}
+
+{{#if impls}}
+type {{name}}Impls = {{#each impls as |impl|}}{{#if @first}}'{{impl}}'{{else}} | '{{impl}}'{{/if}}{{/each}};
+{{else}}
+type {{name}}Impls = never;
+{{/if}}
+
+interface {{name}}Impl {
+    run: I{{name}};
+    name: {{name}}Impls;
+}
+
+interface {{name}}Function {
+  registerImpl: (name: {{name}}Impls, impl: {{name}}Impl) => void;
+  getImpl: (name: {{name}}Impls) => {{name}}Impl;
+}
+
+function create{{name}}Instance(): I{{name}} & {{name}}Function {
+
+  const registry: Record<{{name}}Impls, {{name}}Impl> = {}
+
+  const wrapper: {{name}}Function = {
+    getImpl: (name: {{name}}Impls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for {{name}} with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: {{name}}Impls, cb: I{{name}}) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for {{name}} with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"{{name}}",
+          /* returnType */ "{{return_type}}",
+          /* paramters */ [
+            {{#if params.positional}}
+            [
+              "{{params.name}}",
+              "{{params.type}}"
+            ]
+            {{else}}
+            {{#each params.values as |v|}}
+            [
+              "{{v.name}}",
+              "{{v.type}}"
+            ]{{#unless @last}},{{/unless}}
+            {{/each}}
+            {{/if}}
+          ],
+          /* arg_type */ {{#if params.positional}}'positional'{{else}}'named'{{/if}},
+          /* cb */ async (
+          {{#if params.positional}}
+          {{params.name}}: {{params.type}}
+          {{else}}
+          params: {
+            {{#each params.values as |v|}}{{v.name}}: {{v.type}}{{#unless @last}}, {{/unless}}{{/each}}
+          }
+          {{/if}}
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb({{#if params.positional}}{{params.name}}{{else}}params{{/if}});
+        })
+      };
+    },
+    validate: () => {
+      {{#if impls}}
+      const targets = [{{#each impls as |impl|}}'{{impl}}'{{#unless @last}}, {{/unless}}{{/each}}];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for {{name}}: ${missing.join(', ')}`);
+      }
+      {{/if}}
+    }
+  };
+
+  {{#if params.positional}}
+  const impl = async ({{params.name}}: {{params.type}}) => {
+  {{else}}
+  const impl = async (params : {
+    {{#each params.values as |v|}}{{v.name}}: {{v.type}}{{#unless @last}}, {{/unless}}{{/each}}
+  }) => {
+  {{/if}}
+    {{#if default_impl}}
+    return wrapper.getImpl('{{default_impl}}').run({{#if params.positional}}{{params.name}}{{else}}params{{/if}});
+    {{else}}
+    throw new Error('No implementation for {{name}}');
+    {{/if}}
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  I{{name}} & {{name}}Function;
+}
+
+const {{name}} = create{{name}}Instance();
