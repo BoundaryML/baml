@@ -1,17 +1,9 @@
-mod class;
-mod client;
-mod default_config;
-mod r#enum;
 mod expression;
 mod field_type;
-mod function;
-mod r#impl;
-mod intermediate_repr;
 mod ruby_language_features;
-mod template;
-mod test_case;
 
 use askama::Template;
+use either::Either;
 
 use crate::configuration::Generator;
 
@@ -33,6 +25,17 @@ struct RubyEnum<'a> {
 struct RubyStruct<'a> {
     name: &'a str,
     fields: Vec<(&'a str, String)>,
+}
+
+#[derive(askama::Template)]
+#[template(path = "client.rb.j2", escape = "none")]
+struct RubyClient {
+    funcs: Vec<RubyFunction>,
+}
+struct RubyFunction {
+    name: String,
+    return_type: String,
+    args: Vec<(String, String)>,
 }
 
 pub(crate) fn generate_ruby(ir: &IntermediateRepr, gen: &Generator) -> std::io::Result<()> {
@@ -68,12 +71,44 @@ pub(crate) fn generate_ruby(ir: &IntermediateRepr, gen: &Generator) -> std::io::
                     .collect(),
             }
             .render()
-            .unwrap_or("# Error rendering enum".to_string()),
+            .unwrap_or("# Error rendering class".to_string()),
         );
     });
     collector.finish_file();
 
-    ir.write(&mut collector);
+    let file = collector.start_file(".", "functions", false);
+    let functions = ir
+        .walk_functions()
+        .flat_map(|f| {
+            let Either::Right(configs) = f.walk_impls() else {
+                return vec![];
+            };
+            let funcs = configs
+                .map(|c| {
+                    let (function, impl_) = c.item;
+                    RubyFunction {
+                        name: f.name().to_string(),
+                        return_type: f.elem().output().to_ruby(),
+                        args: match f.inputs() {
+                            // TODO: unnamed args should fail explicitly instead of silently
+                            either::Either::Left(args) => vec![],
+                            either::Either::Right(args) => args
+                                .iter()
+                                .map(|(name, r#type)| (name.to_string(), r#type.to_ruby()))
+                                .collect(),
+                        },
+                    }
+                })
+                .collect::<Vec<_>>();
+            funcs
+        })
+        .collect();
+    file.append(
+        RubyClient { funcs: functions }
+            .render()
+            .unwrap_or("# Error rendering client".to_string()),
+    );
+    collector.finish_file();
 
     collector.commit(&gen.output_path)
 }

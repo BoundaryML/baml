@@ -1,0 +1,28 @@
+class BamlClient
+  extend T::Sig
+
+  {% for fn in funcs -%}
+  sig {
+    params(
+      {% for (name, type) in fn.args -%}
+      {{name}}: {{type}},
+      {%- endfor %}
+    ).returns({{ fn.return_type }})
+  }
+  def self.{{fn.name}}(
+      {% for (name, _) in fn.args -%}
+      {{name}}{% if !loop.last %},{% endif %}
+      {%- endfor %}
+  )
+    runtime.call_function(
+      function_name: "{{fn.name}}",
+      args: {
+        {% for (name, _) in fn.args -%}
+        "{{name}}" => {{name}},
+        {%- endfor %}
+      }
+    )
+  end
+
+  {% endfor %}
+end
