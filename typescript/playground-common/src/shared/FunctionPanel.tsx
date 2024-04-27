@@ -1,23 +1,17 @@
 /// Content once a function has been selected.
 
-import { Separator } from '../components/ui/separator'
-import { TestCaseSelector } from './Selectors'
-import { useSelections } from './hooks'
-import { VSCodeDivider, VSCodePanels } from '@vscode/webview-ui-toolkit/react'
-import TestCasePanel from './TestCasePanel'
-import ImplPanel from './ImplPanel'
-import { createRef, useContext, useEffect, useId, useImperativeHandle, useRef, useState } from 'react'
-import { ASTContext } from './ASTProvider'
-import TypeComponent from './TypeComponent'
-import TestResultPanel from './TestResultOutcomes'
-import { ScrollArea, ScrollBar } from '../components/ui/scroll-area'
-import { Button } from '../components/ui/button'
-import { FlaskConical } from 'lucide-react'
-import clsx from 'clsx'
-import { TooltipProvider } from '../components/ui/tooltip'
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/ui/resizable'
-import { ImperativePanelHandle } from 'react-resizable-panels'
 import { TestResult } from '@baml/common'
+import { VSCodePanels } from '@vscode/webview-ui-toolkit/react'
+import clsx from 'clsx'
+import { createRef, useContext, useEffect, useId, useRef } from 'react'
+import { ImperativePanelHandle } from 'react-resizable-panels'
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/ui/resizable'
+import { TooltipProvider } from '../components/ui/tooltip'
+import { ASTContext } from './ASTProvider'
+import ImplPanel from './ImplPanel'
+import TestCasePanel from './TestCasePanel'
+import TestResultPanel from './TestResultOutcomes'
+import { useSelections } from './hooks'
 
 function getTopPanelSize(showTests: boolean, test_results: TestResult[] | undefined): number {
   if (showTests) {
@@ -91,7 +85,7 @@ const FunctionPanel: React.FC = () => {
             <div className="w-full">
               <ResizablePanelGroup direction="horizontal" className="h-full">
                 {impl && (
-                  <ResizablePanel defaultSize={50} className="px-0 overflow-y-auto">
+                  <ResizablePanel defaultSize={60} className="px-0 overflow-y-auto">
                     <div className="relative w-full h-full overflow-y-auto">
                       {/* <ScrollArea type="auto" className="flex w-full h-full pr-3 "> */}
                       <div className="flex w-full h-full">{impls}</div>
@@ -100,7 +94,7 @@ const FunctionPanel: React.FC = () => {
                   </ResizablePanel>
                 )}
                 <ResizableHandle withHandle={false} className="bg-vscode-panel-border" />
-                <ResizablePanel minSize={30} className="pl-2 pr-0.5" hidden={!showTests}>
+                <ResizablePanel minSize={20} className="pl-2 pr-0.5" hidden={!showTests}>
                   {/* <Allotment.Pane className="pl-2 pr-0.5" minSize={200} visible={showTests}> */}
                   <div className="flex flex-col h-full overflow-y-auto overflow-x-clip">
                     {/* On windows this scroll area extends beyond the wanted width, so we just use a normal scrollbar here vs using ScrollArea*/}

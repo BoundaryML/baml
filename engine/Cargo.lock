@@ -277,7 +277,7 @@ dependencies = [
 
 [[package]]
 name = "baml"
-version = "0.18.0-canary.4"
+version = "0.20.0-canary.0"
 dependencies = [
  "anyhow",
  "baml-lib",
@@ -313,7 +313,7 @@ dependencies = [
 
 [[package]]
 name = "baml-ffi"
-version = "0.18.0-canary.4"
+version = "0.20.0-canary.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -334,7 +334,7 @@ dependencies = [
 
 [[package]]
 name = "baml-fmt"
-version = "0.18.0-canary.4"
+version = "0.20.0-canary.0"
 dependencies = [
  "anyhow",
  "baml-lib",
@@ -356,7 +356,7 @@ dependencies = [
 
 [[package]]
 name = "baml-lib"
-version = "0.18.0-canary.4"
+version = "0.20.0-canary.0"
 dependencies = [
  "base64 0.13.1",
  "dissimilar",
@@ -402,7 +402,7 @@ dependencies = [
 
 [[package]]
 name = "baml-schema-build"
-version = "0.18.0-canary.4"
+version = "0.20.0-canary.0"
 dependencies = [
  "baml-fmt",
  "wasm-bindgen",
@@ -1547,7 +1547,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-core"
-version = "0.18.0-canary.4"
+version = "0.20.0-canary.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -1579,7 +1579,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-diagnostics"
-version = "0.18.0-canary.4"
+version = "0.20.0-canary.0"
 dependencies = [
  "anyhow",
  "colored",
@@ -1591,7 +1591,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-jinja"
-version = "0.18.0-canary.4"
+version = "0.20.0-canary.0"
 dependencies = [
  "anyhow",
  "env_logger",
@@ -1605,7 +1605,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-parser-database"
-version = "0.18.0-canary.4"
+version = "0.20.0-canary.0"
 dependencies = [
  "colored",
  "either",
@@ -1626,7 +1626,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-prompt-parser"
-version = "0.18.0-canary.4"
+version = "0.20.0-canary.0"
 dependencies = [
  "internal-baml-diagnostics",
  "internal-baml-schema-ast",
@@ -1638,7 +1638,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-schema-ast"
-version = "0.18.0-canary.4"
+version = "0.20.0-canary.0"
 dependencies = [
  "either",
  "internal-baml-diagnostics",

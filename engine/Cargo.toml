@@ -32,7 +32,7 @@ tokio = { version = "1.35.1", features = ["full"] }
 walkdir = "2.5.0"
 
 [workspace.package]
-version = "0.18.0-canary.4"
+version = "0.20.0-canary.0"
 authors = ["Boundary <contact@boundaryml.com>"]
 
 description = "BAML Toolchain"

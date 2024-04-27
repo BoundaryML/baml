@@ -1,11 +1,10 @@
-import { EditorFile } from '@/app/actions'
 import { TestRequest } from '@baml/common'
 import { fetchEventSource } from '@microsoft/fetch-event-source'
-import { useCallback } from 'react'
-import { TestState } from './TestState'
-import { useAtom, useSetAtom } from 'jotai'
-import { currentEditorFilesAtom, testRunOutputAtom } from '../_atoms/atoms'
+import { useSetAtom } from 'jotai'
 import { useAtomCallback } from 'jotai/utils'
+import { currentEditorFilesAtom, testRunOutputAtom } from '../_atoms/atoms'
+import { TestState } from './TestState'
+import posthog from 'posthog-js'
 
 const serverBaseURL = 'http://localhost:8000'
 const prodBaseURL = 'https://prompt-fiddle.fly.dev'
@@ -44,6 +43,17 @@ export const useTestRunner = () => {
           }
         }
       })
+      if (testResults.run_status === 'ERROR') {
+        posthog.capture('test_run_error', {
+          testResults: testResults,
+          testRequest: testRequest,
+        })
+      } else if (testResults.run_status === 'COMPLETED') {
+        posthog.capture('test_run_finished', {
+          testResults: testResults,
+          testRequest: testRequest,
+        })
+      }
     })
     console.log('initialize test cases')
     testState.initializeTestCases({

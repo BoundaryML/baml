@@ -3,13 +3,43 @@
     <source media="(prefers-color-scheme: dark)" srcset="https://www.boundaryml.com/gloo-ai-square-256.png">
     <img src="https://www.boundaryml.com/gloo-ai-square-256.png" height="64">
   </picture>
+  
 </a>
 
 # BAML
 
-BAML is a config file format for declaring LLM functions that you can then use in TypeScript or Python.
+An LLM function is a prompt template with some defined input variables, and a specific output type like a class, enum, union, optional string, etc.
 
-With BAML you can Classify or Extract any structured data using Anthropic, OpenAI or local models (using Ollama)
+**BAML is a configuration file format to write better and cleaner LLM functions.**
+
+With BAML you can write and test a complex LLM function in 1/10 of the time it takes to setup a python LLM testing environment.
+
+## Try it out in the playground -- [PromptFiddle.com](https://promptfiddle.com)
+
+Share your creations and ask questions in our [Discord](https://discord.gg/BTNBeXGuaS).
+
+<br />
+
+## Features
+
+- **Python and Typescript support**: Plug-and-play BAML with other languages
+- **Type validation**: more resilient to common LLM mistakes than Pydantic or Zod
+- **Wide model support**: Ollama, Openai, Anthropic. Tested on small models like Llama2
+- **Streaming**: Stream structured partial outputs.
+- **Realtime Prompt Previews**: See the full prompt always, even if it has loops and conditionals
+- **Testing support**: Test functions in the playground with 1 click.
+- **Resilience and fallback features**: Add retries, redundancy, to your LLM calls
+- **Observability Platform**: Use Boundary Studio to visualize your functions and replay production requests with 1 click.
+
+## Companies using BAML
+
+- [Zenfetch](https://zenfetch.com/) - ChatGPT for your bookmarks
+- [Vetrec](https://www.vetrec.io/) - AI-powered Clinical Notes for Veterinarians
+- [MagnaPlay](https://www.magnaplay.com/) - Production-quality machine translation for games
+- [Aer Compliance](https://www.aercompliance.com/) - AI-powered compliance tasks
+- [Haven](https://www.usehaven.ai/) - Automate Tenant communications with AI
+- [Muckrock](https://www.muckrock.com/) - FOIA request tracking and filing
+- and more! [Let us know](https://calendly.com/boundaryml/meeting-with-founders) if you want to be showcased or want to work with us 1-1 to solve your usecase.
 
 ## Resources
 
@@ -17,84 +47,116 @@ With BAML you can Classify or Extract any structured data using Anthropic, OpenA
 <a href="https://twitter.com/intent/follow?screen_name=boundaryml"><img src="https://img.shields.io/twitter/follow/boundaryml?style=social"></a>
 
 - [Discord Office Hours](https://discord.gg/ENtBB6kkXH) - Come ask us anything! We hold office hours most days (9am - 12pm PST).
-- Documentation - [Learn BAML](https://docs.boundaryml.com/v3/guides/hello_world/writing-ai-functions)
-- Documentation - [BAML Syntax Reference](https://docs.boundaryml.com/v3/syntax/generator)
-- Documentation - [Prompt engineering tips](https://docs.boundaryml.com/v3/syntax/generator)
-- [Boundary Studio](https://app.boundaryml.com) - Observability and more
+- [Documentation](https://docs.boundaryml.com)
+- [Boundary Studio](https://app.boundaryml.com) - Observability of BAML functions
 
-#### Starter projects
+## Starter projects
 
 - [BAML + NextJS 14](https://github.com/BoundaryML/baml-examples/tree/main/nextjs-starter)
 - [BAML + FastAPI + Streaming](https://github.com/BoundaryML/baml-examples/tree/main/fastapi-starter)
 
-## Motivation
+## A BAML LLM Function
 
-Calling LLMs in your code is frustrating:
+Here is how you extract a "Resume" from a chunk of free-form text. Run this prompt in [PromptFiddle](https://promptfiddle.com/extract-resume).
 
-- your code uses types everywhere: classes, enums, and arrays
-- but LLMs speak English, not types
+Note: BAML syntax highlight is not supported yet in Github -- so we apologize, we're working on it!
 
-BAML makes calling LLMs easy by taking a type-first approach that lives fully in your codebase:
+```rust
+// Declare some data models for my function, with descriptions
+class Resume {
+  name string
+  education Education[] @description("Extract in the same order listed")
+  skills string[] @description("Only include programming languages")
+}
 
-1. Define what your LLM output type is in a .baml file, with rich syntax to describe any field (even enum values)
-2. Declare your prompt in the .baml config using those types
-3. Add additional LLM config like retries or redundancy
-4. Transpile the .baml files to a callable Python or TS function with a type-safe interface. (VSCode extension does this for you automatically).
+class Education {
+  school string
+  degree string
+  year int
+}
 
-We were inspired by similar patterns for type safety: [protobuf] and [OpenAPI] for RPCs, [Prisma] and [SQLAlchemy] for databases.
+function ExtractResume(resume_text: string) -> Resume {
+  // LLM client with params you want (not pictured)
+  client GPT4Turbo
 
-BAML guarantees type safety for LLMs and comes with tools to give you a great developer experience:
+  // BAML prompts use Jinja syntax
+  prompt #"
+    Parse the following resume and return a structured representation of the data in the schema below.
 
-<img src="docs/images/v3/prompt_view.gif" />
+    Resume:
+    ---
+    {{ resume_text }}
+    ---
 
-Jump to [BAML code](#show-me-the-code) or how [Flexible Parsing](#flexible-parsing) works without additional LLM calls.
+    {# special Jinja macro to print the output instructions. #}
+    {{ ctx.output_format }}
 
-[protobuf]: https://protobuf.dev
-[OpenAPI]: https://github.com/OpenAPITools/openapi-generator
-[Prisma]: https://www.prisma.io/
-[SQLAlchemy]: https://www.sqlalchemy.org/
+    JSON:
+  "#
+}
+```
 
-| BAML Tooling                                                                              | Capabilities                                                                                                                                                                                                                                                                                                                       |
+Once you're done iterating on it using the interactive BAML VSCode Playground, you can convert it to Python or TS using the BAML CLI.
+
+## Usage in Python
+
+```python
+# baml_client is autogenerated
+from baml_client import baml as b
+# BAML types get converted to Pydantic models
+from baml_client.baml_types import Resume
+
+async def main():
+    resume_text = """Jason Doe
+Python, Rust
+University of California, Berkeley, B.S.
+in Computer Science, 2020
+Also an expert in Tableau, SQL, and C++
+"""
+
+    # this function comes from the autogenerated "baml_client".
+    # It calls the LLM you specified and handles the parsing.
+    resume = await b.ExtractResume(resume_text)
+
+    # Fully type-checked and validated!
+    assert isinstance(resume, Resume)
+```
+
+## Usage in TypeScript
+
+```typescript
+// baml_client is autogenerated
+import baml as b from "@/baml_client";
+// BAML also auto generates types for all your data models
+import { Resume } from "@/baml_client/types";
+
+function getResume(resumeUrl: string): Promise<Resume> {
+  const resume_text = await loadResume(resumeUrl);
+  // Call the BAML function, which calls the LLM client you specified
+  // and handles all the parsing.
+  return b.ExtractResume({ resumeText: content });
+}
+```
+
+With BAML you have:
+
+- Better output parsing than Pydantic or Zod -- more on this later
+- Your code is looking as clean as ever
+- Calling your LLM feels like calling a normal function, with actual type guarantees.
+
+## BAML Toolchain
+
+|                                                                                           | Capabilities                                                                                                                                                                                                                                                                                                                       |
 | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| BAML Compiler [install](#installation)                                                    | Transpiles BAML code to a native Python / Typescript library <br />(you only need it for development, never for releases)<br />Works on Mac, Windows, Linux <br /><img src="https://img.shields.io/badge/Python-3.8+-default?logo=python" /><img src="https://img.shields.io/badge/Typescript-Node_18+-default?logo=typescript" /> |
+| BAML CLI [install](#installation)                                                         | Transpiles BAML code to a native Python / Typescript library <br />(you only need it for development, never for releases)<br />Works on Mac, Windows, Linux <br /><img src="https://img.shields.io/badge/Python-3.8+-default?logo=python" /><img src="https://img.shields.io/badge/Typescript-Node_18+-default?logo=typescript" /> |
 | VSCode Extension [install](https://marketplace.visualstudio.com/items?itemName=gloo.baml) | Syntax highlighting for BAML files<br /> Real-time prompt preview <br /> Testing UI                                                                                                                                                                                                                                                |
 | Boundary Studio [open](https://app.boundaryml.com)<br />(not open source)                 | Type-safe observability <br />Labeling                                                                                                                                                                                                                                                                                             |
 
 </p>
 
-## Developer experience
-
-✅ Type-safe guarantee<br />
-_The LLM will return your data model, or we'll raise an exception. We use [Flexible Parsing](#flexible-parsing)_
-
-✅ Fast iteration loops ([code](#comparing-multiple-prompts--llms))<br />
-_Compare multiple prompts / LLM providers in VSCode_
-
-Streaming partial jsons ([code](#streaming))<br />
-✅ Python
-🚧 Typescript<br />
-_BAML fills in incomplete jsons as they come in_
-
-✅ LLM Robustness for production ([code](#robust-llm-calls))<br />
-_Retry policies, Fallback strategies, Round-robin selection_
-
-✅ Many LLM providers<br />
-_OpenAI, Azure, Anthropic out-of-the-box. Reach out to get beta access for Mistral and more_
-
-✅ Comments in prompts ([code](#comments-in-prompts))<br />
-_Your future self will thank you_
-
-| Use Cases                                                                                            | Prompt Examples                                                                                                                                |
-| ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| ✅ Function calling ([code](#function-calling))<br />_Using tools_                                   | ✅ Chain of thought ([code](#chain-of-thought))<br />_Using techniques like reasoning_                                                         |
-| ✅ Classification ([code](#classification))<br />_Getting intent from a customer message_            | ✅ Multi-shot ([code](#multi-shot))<br/>_Adding examples to the prompt_                                                                        |
-| ✅ Extraction ([code](#show-me-the-code))<br />_Extracting a Resume data model from unstructed text_ | ✅ Symbol tuning ([code](#symbol-tuning))<br/>_Using symbolic names for data-types_                                                            |
-| ✅ Agents <br />_Orchestrating multiple prompts to achieve a goal_                                   | ✅ Chat roles ([code](#chat-roles-system-vs-user-message))<br />_Use system / assistant / whatever you want. We standardize it for all models_ |
-| 🚧 Images<br />_Coming soon_                                                                         |                                                                                                                                                |
-
 ## Installation
 
-### 1. Download the BAML Compiler
+### 1. Download the BAML CLI
 
 Mac:
 
@@ -135,540 +197,116 @@ baml init
 - [NextJS 14](https://github.com/BoundaryML/baml-examples/tree/main/nextjs-starter)
 - [FastAPI](https://github.com/BoundaryML/baml-examples/tree/main/fastapi-starter)
 
-## Show me the code...
-
-> For now this readme use rust syntax highlighting, but once we have 200 repos using BAML, [Github will support BAML](https://github.com/github-linguist/linguist/blob/master/CONTRIBUTING.md#adding-a-language)!
-
-```rust
-// extract_resume.baml
-
-// 1. Define the type for the output
-class Resume {
-  name string
-  // Use an array to get multiple education histories
-  education Education[]
-}
-
-// A nested class
-class Education {
-  university string
-  start_year int
-  // @description injects context into the prompt about this field
-  end_year int? @description("unset if still in school")
-}
-
-// 2. Define the function signature
-// This function takes in a single paramater
-// Outputs a Resume type
-function ExtractResume {
-  input (resume_text: string)
-  output Resume
-}
-
-// 3. Use an llm to implement ExtractResume.
-// We'll name this impl 'version1'.
-impl<llm, ExtractResume> version1 {
-  client GPT4Client
-  // BAML will automatically dedent and strip the
-  // prompt for you. You can see the prompt fully
-  // in the VSCode preview (including whitespace).
-
-  // We provide some macros like {#input} and {#print_type}
-  // to use the types you defined above.
-  prompt #"
-    Extract the resume from:
-    ###
-    {#input.resume_text}
-    ###
-
-    Output JSON Schema:
-    {#print_type(output)}
-  "#
-}
-
-// Define a reuseable client for an LLM
-// that can be used in any impl
-client<llm> GPT4Client {
-  provider "baml-openai-chat"
-  options {
-    model "gpt-4"
-    // Use an API key safely!
-    api_key env.OPENAI_API_KEY
-    // temperature 0.5 // Is 0 by default
-  }
-}
-```
-
-### See a live prompt preview in VSCode
-
-<img src="docs/images/v3/prompt_view.gif" />
-
-### Run test in VSCode
-
-<img src="docs/images/v3/test-extract.gif" />
-
-### Use your BAML function in your Python/Typescript app
-
-#### Python
-
-```python
-# baml_client is autogenerated
-from baml_client import baml as b
-# BAML also auto generates types for all your data models
-from baml_client.baml_types import Resume
-
-async def get_resume(resume_url: str) -> Resume:
-  resume_text = await load_resume(resume_url)
-
-  # Call the generated BAML function (this uses 'version1' by default)
-  resume = await b.ExtractResume(resume_text=resume_text)
-
-  # Not required, BAML already guarantees this!
-  assert isinstance(resume, Resume)
-
-  return resume
-```
-
-#### Typescript
-
-```typescript
-// baml_client is autogenerated
-import baml as b from "@/baml_client";
-// BAML also auto generates types for all your data models
-import { Resume } from "@/baml_client/types";
-
-function getResume(resumeUrl: string): Promise<Resume> {
-  const resume_text = await loadResume(resumeUrl);
-  // Call the BAML function (this uses 'version1' by default)
-  // This will raise an exception if we don't find
-  // a Resume type.
-  return b.ExtractResume({ resumeText: content });
-}
-```
-
-## Classification
-
-```rust
-// This will be available as an enum in your Python and Typescript code.
-enum Category {
-    Refund
-    CancelOrder
-    TechnicalSupport
-    AccountIssue
-    Question
-}
-
-function ClassifyMessage {
-  input string
-  // Could have used Category[] for multi-label
-  output Category
-}
-
-impl<llm, ClassifyMessage> version1 {
-  client GPT4
-
-  // BAML also provides a {#print_enum} macro in addition to
-  // {#input} or {#print_type}.
-  prompt #"
-    Classify the following INPUT into ONE
-    of the following Intents:
-
-    {#print_enum(Category)}
-
-    INPUT: {#input}
-
-    Response:
-  "#
-}
-```
-
-## Function Calling
-
-With BAML, this is just a simple extraction task!
-
-```rust
-class GithubCreateReleaseParams {
-  owner string
-  repo string
-  tag_name string
-  target_commitish string
-  name string
-  body string
-  draft bool
-  prerelease bool
-}
-
-function BuildGithubApiCall {
-  input string
-  output GithubCreateReleaseParams
-}
-
-impl<llm, BuildGithubApiCall> v1 {
-  client GPT35
-  prompt #"
-    Given the user query, extract the right details:
-
-    Instructions
-    {#input}
-
-    Output JSON Schema:
-    {#print_type(output)}
-
-    JSON:
-  "#
-}
-```
-
-If you wanted to call multiple functions you can combine enums with classes. Almost 0 changes to the prompt.
-
-```diff
-+ enum Intent {
-+  CreateRelease
-+  CreatePullRequest
-+ }
-+
-+ class GithubCreatePullRequestParams {
-+   ...
-+ }
-+
-+ class Action {
-+   tag Intent
-+   data GithubCreateReleaseParams | GithubCreatePullRequestParams
-+ }
-
- function BuildGithubApiCall {
-  input string
--  output GithubCreateReleaseParams
-+  output Action
- }
-
-impl<llm, BuildGithubApiCall> v1 {
-  client GPT35
-  prompt #"
-    Given the user query, extract the right details:
-
-    Instructions
-    {#input}
-
-+   {#print_enum(Intent)}
-
-    Output JSON Schema:
-    {#print_type(output)}
-
-    JSON:
-  "#
-}
-```
-
-## Agents
-
-With BAML you combine AI functions with regular code to create powerful agents. That means you can do everything purely in python or typescript!
-
-```python
-from baml_client import baml as b
-from baml_client.baml_types import Intent
-
-async def handle_message(msg: str) -> str:
-    # Determine what the user is trying to do
-    intent = await b.ClassifyMessage(msg)
-    if intent == Intent.AccountBalance:
-      # Get the balance, requires no more AI functions
-      balance = await some_remote_api(...)
-      return f'Your balance is: {balance}'
-    if intent == Intent.ShowPlot:
-      # Call another AI function with some additional context
-      plot_query = await b.GetPlotQuery(
-        table_defs=load_table_defintions(), query=msg)
-
-      # Run the query, then return a plot
-      response = await some_query_executor(plot_query)
-      return response.to_plot_html()
-    ...
-```
-
-<details>
-<summary>Supporting BAML code</summary>
-
-```rust
-enum Intent {
-  AccountBalance
-  ShowPlot
-  Other
-}
-
-function ClassifyMessage {
-  input string
-  output Intent
-}
-
-function GetPlotQuery {
-  input (table_defs: string, query: string)
-  output string
-}
-
-// Impls of prompts pending
-```
-
-</details>
-
-## Robust LLM calls
-
-We make it easy to add [retry policies] to your LLM calls (and also provide other [resilience strategies]). Your python / typescript interfaces for functions using the `GPT4Client` are completely unimpacted.
-
-[retry policies]: https://docs.boundaryml.com/v3/syntax/client/retry
-[resilience strategies]: https://docs.boundaryml.com/v3/syntax/client/client#fallback
-
-```diff
-  client<llm> GPT4Client {
-    provider "baml-openai-chat"
-+   retry_policy SimpleRetryPolicy
-    options {
-      model "gpt-4"
-      api_key env.OPENAI_API_KEY
-    }
-  }
-
-+ retry_policy SimpleRetryPolicy {
-+     max_retries 5
-+     strategy {
-+       type exponential_backoff
-+       delay_ms 300
-+       multiplier 1.5
-+     }
-+ }
-```
-
-## Chain-of-thought
-
-To do planning with BAML, just tell the LLM what planning steps to do. Thanks to [Flexible Parsing](#flexible-parsing), BAML will automatically find your data objects and convert them automatically.
-
-```diff
-impl<llm, GetOrderInfo> version1 {
-  client GPT4
-  prompt #"
-    Given the email below:
-
-    Email Subject: {#input.subject}
-    Email Body: {#input.body}
-
-    Extract this info from the email in JSON format:
-    {#print_type(output)}
-
-    Schema definitions:
-    {#print_enum(OrderStatus)}
-
-+    Before you output the JSON, please explain your
-+    reasoning step-by-step. Here is an example on how to do this:
-+    'If we think step by step we can see that ...
-+     therefore the output JSON is:
-+    {
-+      ... the json schema ...
-+    }'
-  "#
-}
-```
-
-## Multi-shot
-
-To add examples into your prompt with BAML, you can use a multiple parameters:
-
-```diff
-function DoSomething {
-+  input (my_data: int, examples: string)
-  output string
-}
-
-impl<llm, DoSomething> v1 {
-  client GPT4
-  prompt #"
-    Given DATA do something cool!
-
-    DATA: {#input.my_data}
-
-+    Examples:
-+    {#input.examples}
-  "#
-}
-```
-
-## Symbol-tuning
-
-Sometimes using abstract names as "symbols" (e.g. k1, k2, k3…) allows the LLM to focus on your rules better.
-
-- [research paper](https://arxiv.org/abs/2305.08298)
-- Also used by OpenAI for their [content moderation](https://openai.com/blog/using-gpt-4-for-content-moderation).
-
-```rust
-// Enums will still be available as Category.Refund
-// BAML will auto convert k1 --> Category.Refund for you :)
-enum Category {
-    Refund @alias("k1")
-    @description("Customer wants to refund a product")
-
-    CancelOrder @alias("k2")
-    @description("Customer wants to cancel an order")
-
-    TechnicalSupport @alias("k3")
-    @description("Customer needs help with a technical issue unrelated to account creation or login")
-
-    AccountIssue @alias("k4")
-    @description("Specifically relates to account-login or account-creation")
-
-    Question @alias("k5")
-    @description("Customer has a question")
-
-    // Skip this category for the LLM
-    Bug @skip
-
-}
-
-// whenever you now use:
-// {#print_enum(Category)}
-// BAML will substitute in the alias and description automatically
-// and parse anything the LLM returns into the appropriate type
-```
-
-## Comparing multiple prompts / llms
-
-In BAML you do this by declaring multiple `impls`. The VSCode Extension will also let you run the tests side by side.
-
-```diff
-  // Same signature as above
-  function ExtractResume {
-    input (resume_text: string)
-    output Resume
-+   // Declare which impl is the default one my python/ts code calls
-+   default_impl version1
-  }
-
-// My original impl
-impl<llm, ExtractResume> version1 {
-  ...
-}
-
-+ // My new and super improved impl
-+ impl<llm, ExtractResume> with_claude {
-+   // Since resumes are faily easy, i'll try claude here
-+   client ClaudeClient
-+   prompt #"
-+     {#chat(system)}
-+     You are an expert tech recruiter.
-+     Extract the resume from TEXT.
-+
-+     {#chat(user)}
-+     TEXT
-+     ###
-+     {#input.resume_text}
-+     ###
-+
-+     {#chat(assistant)}
-+     Output JSON Schema:
-+     {#print_type(output)}
-+   "#
-+ }
-+
-+ // another client definition
-+ client<llm> ClaudeClient {
-+   provider "baml-anthropic-chat"
-+   options {
-+     model "claude-3-haiku-20240307"
-+     api_key env.ANTHROPIC_API_KEY
-+   }
-+ }
-```
-
-## Chat Roles (system vs user message)
-
-Instead of using arrays of `{"role": string, "content": string}`, BAML uses a `{#chat(role)}` macro that auto converts prompts into multiple messages. Everything from after the `{#chat(role)}` to either the next `{#chat(role)}` or the end is included as the content.
-
-VSCode will give you a live preview of exactly how it will be split.
-
-```diff
-impl<llm, BuildGithubApiCall> v1 {
-  client GPT35
-  prompt #"
-+   {#chat(system)}
-    Given the user query, extract the right details:
-
-+   {#chat(user)}
-    {#input}
-
-+   {#chat(assitant)}
-    {#print_enum(Intent)}
-
-    Output JSON Schema:
-    {#print_type(output)}
-
-    JSON:
-  "#
-}
-```
-
-> Once we finish adding loops and conditionals, you'll be able to add `{#chat(role)}` dynamically based on inputs and clients as well!
-
-## Streaming
-
-BAML is able to offer streaming for partial jsons out of the box. No changes to BAML files, just call a different python function (TS support coming soon).
-
-```python
-async def main():
-    async with b.ExtractResume.stream(resume_text="...") as stream:
-        async for output in stream.parsed_stream:
-            if output.is_parseable:
-              # name is typed with None | str (in case we haven't gotten the name field in the response yet.)
-              name = output.parsed.name
-              print(f"streaming: {output.parsed.model_dump_json()}")
-
-            # You can also get the current delta. This will always be present.
-            print(f"streaming: {output.delta}")
-
-        # Resume type
-        final_output = await stream.get_final_response()
-        if final_output.has_value:
-            print(f"final response: {final_output.value}")
-        else:
-            # A parsing error likely occurred.
-            print(f"final resopnse didnt have a value")
-```
-
 ## Observability
 
 Analyze, label, and trace each request in [Boundary Studio](https://app.boundaryml.com).
 
 <img src="docs/images/v3/pipeline_view.png" width="80%" alt="Boundary Studio">
 
-## Comments in prompts
+## Why not just use an existing Python framework?
 
-You can add prompts in comments wrapped around `{// comment //}`.
+Existing frameworks can work pretty well (especially for very simple prompts), but they run into limitations when working with structured data and complex logic.
 
-```rust
-#"
-    Hello world.
-    {// this won't show up in the prompt! //}
-    Please {// 'please' works best, don't ask.. //} enter your name:
-"#
+<details>
+<summary>Iteration speed is slow</summary>
+
+There are two reasons:
+
+1. **You can't visualize your prompt in realtime so you need to run it over and over to figure out what string the LLM is actually ingesting.**
+   This gets much worse if you build your prompt using conditionals and loops, or have structured outputs. BAML's prompt-preview feature in the playground works even with complex logic.
+2. **Poor testing support**. Testing prompts is 80% of the battle. Developers have to deal with copy pasting prompts from one playground UI to the codebase, and if you have structured outputs you'll need to generate the pydantic json schema yourself and do more copy-pasting around.
+</details>
+<br />
+<details>
+<summary>Pydantic and Zod weren't made with LLMs in mind</summary>
+
+LLMs don't always output correct JSON.
+
+Sometimes you get something like this text blob below, where the json blob is in-between some other text:
+
+```
+Based on my observations X Y Z...., it seems the answer is:
+{
+  "sentiment": Happy,
+}
+Hope this is what you wanted!
 ```
 
-Comments can be multiline
+This isn't valid JSON, since it's missing quotes in "Happy" and has some prefix text that you will have to regex out yourself before trying to parse using Pydantic or Zod.
+BAML handles this and many more cases, such as identifying `Enums` in LLM string responses.. See [flexible parsing](#flexible-parsing)
+
+**Aliasing issues**
+
+Prompt engineering requires you to think carefully about what the name of each key in the schema is. Rather than changing your code everytime you want to try a new name out, you can alias fields to a different name and convert them back into the original field name during parsing.
+
+Here's how BAML differs from these frameworks:
+
+**Aliasing object fields in Zod**
+
+```
+const UserSchema = z.object({
+  first_name: z.string(),
+}).transform((user) => ({
+  firstName: user.first_name
+}));
+```
+
+**Aliasing object fields BAML**
 
 ```rust
-#"
-    {//
-        some giant
-        comment
-    //}
-"#
+class User {
+  first_name string @alias("firstName")
+}
 ```
+
+**Aliasing enum values in Zod/Pydantic**
+
+Zod: not possible
+
+Pydantic:
+
+```
+class Sentiment(Enum):
+  HAPPY = ("ecstatic")
+  SAD = ("sad")
+
+  def __init__(self, alias):
+    self._alias = alias
+
+  @property
+  def alias(self):
+    return self._alias
+
+  @classmethod
+  def from_string(cls, category: str) -> "Sentiment":
+    for c in cls:
+      if c.alias == alias:
+        return c
+      raise ValueError(f"Invalid alias: {alias}")
+  ...
+  # more code here to actually parse the aliases
+```
+
+**Aliasing enum values in BAML**
+
+```rust
+enum Sentiment {
+  HAPPY @alias("ecstatic")
+  SAD @alias("sad")
+}
+```
+
+</details>
+<br />
+Finally, BAML is more of an ecosystem designed to bring you the best developer experience for doing any kind of LLM function-calling, which is why we've built tools like the playground and Boundary Studio -- our observability platform.
 
 ## Flexible Parsing
 
-> "be conservative in what you send, be liberal in what you accept". The principle is also known as Postel's law, after Jon Postel, who used the wording in an early specification of TCP.
->
-> In other words, programs that send messages to other machines (or to other programs on the same machine) should conform completely to the specifications, but programs that receive messages should accept non-conformant input as long as the meaning is clear. [[1]](https://en.wikipedia.org/wiki/Robustness_principle#:~:text=It%20is%20often%20reworded%20as,an%20early%20specification%20of%20TCP.)
+> "be conservative in what you send, be liberal in what you accept" -- Postel's Law.
 
-LLMs are prone to producing non-conformant outputs. Instead of wasting tokens and time getting the prompt perfect to your needs, we built a parser that handles many of these scenarios for you. The parser uses 0 LLMs, instead relies on the types you define in BAML.
+LLMs are prone to producing non-conformant outputs. Instead of wasting tokens and time getting the prompt perfect to your needs, we built a parser that handles many of these scenarios for you. The parser uses 0 LLMs, and instead relies on the types you define in BAML.
 
-### Example of flexible parsing
+### Example
 
 <details open>
 
@@ -750,35 +388,21 @@ Your answer in the schema you requested is:
 
 ### Why make a new language?
 
-We started building SDKs for TypeScript and Python (and even experimented with YAML), and it worked, but they weren't fun, and were too slow to iterate in. Having powerful prompt configuration that could be run using a VSCode extension made for a better DX than writing python scripts to test things. Less boilerplate, dead-simple syntax, great errors, and auto-complete.
+We basically wanted [Jinja](https://jinja.palletsprojects.com/en/3.1.x/), but with types + function declarations, so we decided to make it happen. Earlier we tried making a YAML-based sdk, and even a Python SDK, but they were not powerful enough.
 
 <img src="https://imgs.xkcd.com/comics/standards.png" />
 
-### Why not use Pydantic / Instructor or Langchain?
-
-Here’s our detailed comparison vs [Pydantic and other frameworks](https://docs.boundaryml.com/v3/home/comparisons/pydantic).
-TL;DR: BAML is more than just a data-modeling library like Pydantic.
-
-1. Everything is typesafe
-2. The prompt is also never hidden from you
-3. It comes with an integrated playground
-4. can support any model
-
 ### Does BAML use LLMs to generate code?
 
-No, BAML uses a custom-built compiler. Takes just a few milliseconds!
+No, the BAML CLI transpiles the code using Rust 🦀. It takes just a few milliseconds!
 
 ### What does BAML stand for?
 
 Basically, A Made-up Language
 
-### What is the BAML compiler written in?
-
-Rust 🦀
-
 ### How do I deploy with BAML?
 
-BAML files are only used to generate Python or Typescript code. You don’t need to install the BAML compiler in your actual production servers. Just commit the generated code as you would any other python code, and you're good to go
+BAML files are only used to generate Python or Typescript code. You don’t need to install the BAML CLI in your actual production servers. Just commit the generated code as you would any other python code, and you're good to go
 
 ### Is BAML secure?
 

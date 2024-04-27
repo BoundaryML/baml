@@ -11,7 +11,7 @@
     "light": "#a5b4fc",
     "dark": "#020617",
     "background": {
-      "dark": "#020617"
+      "dark": "#0d1423"
     },
     "anchors": {
       "from": "#FF7F57",
@@ -41,150 +41,115 @@
   },
   "tabs": [
     {
-      "name": "Learn BAML",
-      "url": "v3/guides"
+      "name": "Guides & Examples",
+      "url": "docs/guides"
     },
     {
       "name": "BAML Syntax Reference",
-      "url": "v3/syntax"
-    },
-    {
-      "name": "Guides",
-      "url": "v3/how-to"
+      "url": "docs/syntax"
     }
   ],
   "navigation": [
     {
       "group": "Overview",
-      "pages": ["v3/home/overview", "v3/home/faq"]
+      "pages": ["docs/home/overview", "docs/home/faq"]
     },
     {
       "group": "Quickstart",
-      "pages": ["v3/home/installation", "v3/home/roadmap"]
+      "pages": [
+        "docs/home/installation",
+        "docs/home/baml-in-2-min",
+        "docs/home/roadmap"
+      ]
     },
     {
       "group": "Comparisons",
-      "pages": ["v3/home/comparisons/marvin", "v3/home/comparisons/pydantic"]
+      "pages": [
+        "docs/home/comparisons/marvin",
+        "docs/home/comparisons/pydantic"
+      ]
     },
-
     {
       "group": "Hello World",
       "pages": [
-        "v3/guides/hello_world/writing-ai-functions",
-        "v3/guides/hello_world/testing-ai-functions",
-        "v3/guides/hello_world/baml-project-structure"
+        "docs/guides/hello_world/writing-ai-functions",
+        "docs/guides/hello_world/testing-ai-functions",
+        "docs/guides/hello_world/baml-project-structure"
       ]
-    },
-    {
-      "group": "Extraction (i.e. getting structured data)",
-      "pages": [
-        "v3/guides/entity_extraction/level1",
-        "v3/guides/entity_extraction/level2",
-        "v3/guides/entity_extraction/level3",
-        "v3/guides/entity_extraction/level4"
-      ]
-    },
-    {
-      "group": "Classifiers (e.g. using Tools)",
-      "pages": [
-        "v3/guides/classification/level1",
-        "v3/guides/classification/level2",
-        "v3/guides/classification/level3"
-      ]
-    },
-
-    {
-      "group": "Multi-step Apps",
-      "pages": ["v3/guides/multi-step/example1"]
     },
     {
       "group": "Overview",
       "pages": [
-        "v3/syntax/overview",
-        "v3/syntax/generator",
-        "v3/syntax/comments",
-        "v3/syntax/strings"
+        "docs/syntax/overview",
+        "docs/syntax/generator",
+        "docs/syntax/comments",
+        "docs/syntax/strings",
+        "docs/syntax/function"
       ]
     },
     {
       "group": "Types",
-      "pages": ["v3/syntax/type", "v3/syntax/enum", "v3/syntax/class"]
-    },
-    {
-      "group": "function",
-      "pages": [
-        "v3/syntax/function",
-        "v3/syntax/impl",
-        "v3/syntax/function-adapters"
-      ]
+      "pages": ["docs/syntax/type", "docs/syntax/enum", "docs/syntax/class"]
     },
 
     {
       "group": "client",
       "pages": [
-        "v3/syntax/client/client",
-        "v3/syntax/client/retry",
-        "v3/syntax/client/redundancy"
+        "docs/syntax/client/client",
+        "docs/syntax/client/retry",
+        "docs/syntax/client/redundancy"
       ]
     },
     {
-      "group": "impl<llm> (Prompt Engineering)",
+      "group": "prompt",
       "pages": [
-        "v3/syntax/prompt_engineering/overview",
-        "v3/syntax/prompt_engineering/variables",
-        "v3/syntax/prompt_engineering/class",
-        "v3/syntax/prompt_engineering/enum",
-        "v3/syntax/prompt_engineering/type-deserializer"
+        "docs/syntax/prompt_engineering/overview",
+        "docs/syntax/prompt_engineering/type-deserializer"
       ]
     },
     {
       "group": "How-to Guides",
       "pages": [
-        "v3/how-to/overview",
+        "docs/guides/overview",
         {
           "group": "Prompt engineering",
           "icon": "sparkles",
-          "pages": [
-            "v3/how-to/prompt_engineering/chat-prompts",
-            "v3/how-to/prompt_engineering/serialize_list",
-            "v3/how-to/prompt_engineering/serialize_complex_input",
-            "v3/how-to/prompt_engineering/conditional_rendering"
-          ]
+          "pages": ["docs/guides/prompt_engineering/chat-prompts"]
         },
         {
           "group": "Testing",
           "pages": [
-            "v3/how-to/testing/unit_test",
-            "v3/how-to/testing/test_with_assertions",
-            "v3/how-to/testing/advanced_testing_guide"
+            "docs/guides/testing/unit_test",
+            "docs/guides/testing/test_with_assertions",
+            "docs/guides/testing/advanced_testing_guide"
           ],
           "icon": "flask-vial"
         },
         {
           "group": "Resilience / Reliability",
           "pages": [
-            "v3/how-to/resilience/retries",
-            "v3/how-to/resilience/fallback"
+            "docs/guides/resilience/retries",
+            "docs/guides/resilience/fallback"
           ],
           "icon": "shield-check"
         },
         {
           "group": "Observability",
           "icon": "chart-mixed",
-          "pages": ["v3/how-to/boundary_studio/tracing-tagging"]
+          "pages": ["docs/guides/boundary_studio/tracing-tagging"]
         },
         {
           "group": "Improve LLM results",
           "pages": [
-            "v3/how-to/improve_results/diagnose",
-            "v3/how-to/improve_results/fine_tune"
+            "docs/guides/improve_results/diagnose",
+            "docs/guides/improve_results/fine_tune"
           ],
           "icon": "bolt"
         },
         {
           "group": "Streaming",
           "icon": "water",
-          "pages": ["v3/how-to/streaming/streaming"]
+          "pages": ["docs/guides/streaming/streaming"]
         }
       ]
     }

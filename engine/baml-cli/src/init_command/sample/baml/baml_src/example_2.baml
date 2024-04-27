@@ -15,8 +15,8 @@ class Message {
 function ClassifyConversation(messages: Message[]) -> Category[] {
   client $GENERATED_BAML_CLIENT$
   prompt #"
-    Classify the following conversation into following:
-    {{ ctx.output_schema }}
+    {# output_format is a helper to print out Category[] #}
+    {{ ctx.output_format(prefix="Classify the following conversation into following:") }}
 
 
     {% for m in messages %}

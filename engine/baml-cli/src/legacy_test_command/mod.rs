@@ -118,7 +118,10 @@ pub fn run(
         .db
         .walk_test_cases()
         .flat_map(|test_case| {
-            let funcwalker = test_case.walk_function();
+            let funcwalker = match test_case.walk_function() {
+                Some(funcwalker) => funcwalker,
+                None => return vec![],
+            };
             let function = funcwalker.name();
             let test = test_case.name();
             if funcwalker.is_old_function() {

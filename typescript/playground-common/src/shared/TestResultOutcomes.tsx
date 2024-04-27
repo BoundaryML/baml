@@ -50,7 +50,7 @@ const TestResultPanel = () => {
           </VSCodeLink>
         </div>
       )}
-      <div className="relative flex flex-col w-full h-full pb-4">
+      <div className="relative flex flex-col w-full h-full pb-4 tour-test-result-panel">
         <VSCodePanels
           activeid={`test-${selected}`}
           onChange={(e) => {
@@ -63,7 +63,7 @@ const TestResultPanel = () => {
         >
           <VSCodePanelTab id={`test-summary`}>Summary</VSCodePanelTab>
           <VSCodePanelView id={`view-summary`} className="">
-            <div className="flex flex-col w-full gap-y-1">
+            <div className="flex flex-col w-full pb-8 gap-y-1">
               {test_result_exit_status === 'ERROR' && (
                 <div className="flex flex-row items-center justify-center w-full h-full space-x-2">
                   <div className="flex flex-col items-center justify-center space-y-2">

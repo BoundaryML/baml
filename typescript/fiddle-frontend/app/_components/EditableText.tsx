@@ -1,3 +1,4 @@
+import { cn } from '@/lib/utils'
 import { useState, useEffect } from 'react'
 
 type EditableProps = {
@@ -6,9 +7,10 @@ type EditableProps = {
   placeholder: string
   children: React.ReactNode
   childRef: React.RefObject<HTMLDivElement>
+  className?: string
 }
 
-export const Editable = ({ text, type, placeholder, children, childRef }: EditableProps) => {
+export const Editable = ({ text, type, placeholder, children, childRef, className }: EditableProps) => {
   const [isEditing, setEditing] = useState(false)
 
   useEffect(() => {
@@ -35,7 +37,10 @@ export const Editable = ({ text, type, placeholder, children, childRef }: Editab
         </div>
       ) : (
         <div
-          className={`pt-1 pl-4 text-lg hover:text-muted-foreground font-semibold text-foreground editable-${type}`}
+          className={cn(
+            `pt-1 pl-4 text-lg hover:text-muted-foreground font-semibold text-foreground editable-${type}`,
+            className,
+          )}
           onClick={() => setEditing(true)}
         >
           <span className={`${text ? 'text-foreground' : 'text-gray-500'}`}>

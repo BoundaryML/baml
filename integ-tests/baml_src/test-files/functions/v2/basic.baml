@@ -12,8 +12,8 @@ function ExtractResume2(resume: string) -> Resume {
         {{ resume }}
         <<<<
 
-        OUTPUT_JSON_SCHEMA:
-        {{ ctx.output_schema }}
+        Output JSON schema:
+        {{ ctx.output_format }}
 
         JSON:
     "#
@@ -62,7 +62,7 @@ function GetQuery(query: string) -> SearchParams {
         <<<<
 
         OUTPUT_JSON_SCHEMA:
-        {{ ctx.output_schema }}
+        {{ ctx.output_format }}
 
         Before OUTPUT_JSON_SCHEMA, list 5 intentions the user may have.
         --- EXAMPLES ---
@@ -106,28 +106,8 @@ function GetDataType(text: string) -> RaysData {
         <<<<
 
         Output JSON schema:
-        {{ ctx.output_schema }}
+        {{ ctx.output_format }}
 
         JSON:
     "#
-}
-
-class Message {
-  role string
-  message string
-}
-
-
-function ClassifyConversation(messages: Message[]) -> Category[] {
-  client GPT4
-  prompt #"
-    Classify the following conversation into following:
-    {{ ctx.output_schema }}
-
-
-    {% for m in messages %}
-    {{ _.chat(role=m.role) }}
-    {{ m.message }}
-    {% endfor %}
-  "#
 }

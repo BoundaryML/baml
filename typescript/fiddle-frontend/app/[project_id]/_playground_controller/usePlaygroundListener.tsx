@@ -1,11 +1,11 @@
-import { ParserDatabase, SFunction, StringSpan, TestFileContent, TestRequest } from '@baml/common'
-import { useAtom, useAtomValue, useSetAtom } from 'jotai'
-import { useEffect } from 'react'
-import { currentParserDbAtom, currentEditorFilesAtom } from '../_atoms/atoms'
-import { useTestRunner } from './useTestRunner'
 import { EditorFile } from '@/app/actions'
-import { BAML_DIR } from '@/lib/constants'
-import { uniqueNamesGenerator, Config, adjectives, colors, animals } from 'unique-names-generator'
+import { StringSpan, TestFileContent, TestRequest } from '@baml/common'
+import { useAtom } from 'jotai'
+import posthog from 'posthog-js'
+import { useEffect } from 'react'
+import { Config, adjectives, animals, colors, uniqueNamesGenerator } from 'unique-names-generator'
+import { currentEditorFilesAtom } from '../_atoms/atoms'
+import { useTestRunner } from './useTestRunner'
 
 const customConfig: Config = {
   dictionaries: [adjectives, colors, animals],
@@ -88,22 +88,14 @@ export const usePlaygroundListener = () => {
           const testFileContent: TestFileContent = {
             input: testInputContent,
           }
-          console.log(
-            'uri',
-            uri,
-            editorFiles.map((f) => f.path),
-          )
-          const existingTestFile = editorFiles.find((file) => file.path === uri)
+
+          console.log(editorFiles.map((f) => f.path))
 
           setEditorFiles((prev) => {
             const prevFiles = prev as EditorFile[]
-            return [
-              ...prevFiles,
-              {
-                path: existingTestFile ? `${uri.replaceAll('.json', '')}-${new Date().toISOString()}.json` : uri,
-                content: JSON.stringify(testFileContent, null, 2),
-              },
-            ]
+            return prevFiles
+              .filter((file) => file.path !== uri)
+              .concat({ path: uri, content: JSON.stringify(testFileContent, null, 2) })
           })
           break
 
@@ -112,12 +104,13 @@ export const usePlaygroundListener = () => {
 
           setEditorFiles((prev) => {
             return (prev as EditorFile[]).filter((file) => {
-              return file.path !== `${removeRootPath}/__tests__/${removeFuncName}/${removeTestCaseName}.json`
+              return file.path !== removeTestCaseName.source_file
             })
           })
           break
         case 'runTest':
           window.history.replaceState(null, '', '/')
+          posthog.capture('run_test', { test: data })
 
           const testRequest: { root_path: string; tests: TestRequest } = event.data.data
           await runTests(testRequest.tests)

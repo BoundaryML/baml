@@ -1,4 +1,4 @@
-import { sessionStore } from "@/app/_components/JotaiProvider"
+import { atomStore, sessionStore } from "@/app/_components/JotaiProvider"
 import { EditorFile } from "@/app/actions"
 // import { ParserDBFunctionTestModel } from "@/lib/exampleProjects"
 import { ParserDatabase, TestState } from "@baml/common"
@@ -20,6 +20,13 @@ export const unsavedChangesAtom = atom<boolean>(false);
 
 export const activeFileAtom = atom<EditorFile | null>(null);
 export const fileDiagnostics = atom<Diagnostic[]>([]);
+export const emptyDirsAtom = atom<string[]>([]);
+export const exploreProjectsOpenAtom = atom<boolean>(false);
+
+
+export const productTourDoneAtom = atomWithStorage<boolean>('initial_tutorial_v1', false);
+export const productTourTestDoneAtom = atomWithStorage<boolean>('test_tour_v1', false);
+
 
 export type TestRunOutput = {
   testState: TestState;

@@ -10,8 +10,9 @@ from typing import List, Optional, Dict
 from dotenv import load_dotenv
 from uuid import uuid4
 from fastapi.middleware.cors import CORSMiddleware
-from baml_client import baml
-from baml_client.baml_types import LinterOutput
+
+# from baml_client import baml
+# from baml_client.baml_types import LinterOutput
 
 
 origins = [
@@ -176,9 +177,12 @@ async def fiddle(request: RunTests, tmpdir: str = Depends(create_temp_files)):
     test_request = request.testRequest
     print(request)
 
+    main_found = False
+
     for file in files:
         if "main.baml" in file.name:
             file.content = generator_block + file.content
+            main_found = True
         # Ensure the directory path exists
         file_directory = os.path.join(tmpdir, os.path.dirname(file.name))
         os.makedirs(file_directory, exist_ok=True)  # Create any directories in the path
@@ -187,6 +191,12 @@ async def fiddle(request: RunTests, tmpdir: str = Depends(create_temp_files)):
         file_path = os.path.join(tmpdir, file.name)
         with open(file_path, "w") as f:
             f.write(file.content)
+
+    if not main_found:
+        file_path = os.path.join(tmpdir, "baml_src/main.baml")
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        with open(file_path, "w") as f:
+            f.write(generator_block)
 
     await asyncio.sleep(1.0)
     # Use asyncio subprocess for non-blocking call
@@ -233,69 +243,66 @@ async def fiddle(request: RunTests, tmpdir: str = Depends(create_temp_files)):
     return StreamingResponse(streaming_gen, media_type="text/plain")
 
 
-class LintRequest(BaseModel):
-    lintingRules: List[str]
-    promptTemplate: str
-    promptVariables: Dict[str, str]
+# class LintRequest(BaseModel):
+#     lintingRules: List[str]
+#     promptTemplate: str
+#     promptVariables: Dict[str, str]
 
 
-class LinterRuleOutput(BaseModel):
-    diagnostics: List[LinterOutput]
-    ruleName: str
+# class LinterRuleOutput(BaseModel):
+#     diagnostics: List[LinterOutput]
+#     ruleName: str
 
 
-@app.post("/lint")
-async def lint(request: LintRequest) -> List[LinterRuleOutput]:
-    result1, result2, res3, res4, res5, res6, res7 = await asyncio.gather(
-        baml.Contradictions(request.promptTemplate),
-        baml.ChainOfThought(request.promptTemplate),
-        baml.AmbiguousTerm(request.promptTemplate),
-        baml.OffensiveLanguage(request.promptTemplate),
-        baml.ExampleProvider(request.promptTemplate),
-        baml.NoTipping(request.promptTemplate),
-        baml.NoLargeDistance(request.promptTemplate),
-    )
+# @app.post("/lint")
+# async def lint(request: LintRequest) -> List[LinterRuleOutput]:
+#     result1, result2, res3, res4, res5, res6, res7 = await asyncio.gather(
+#         baml.Contradictions(request.promptTemplate),
+#         baml.ChainOfThought(request.promptTemplate),
+#         baml.AmbiguousTerm(request.promptTemplate),
+#         baml.OffensiveLanguage(request.promptTemplate),
+#         baml.ExampleProvider(request.promptTemplate),
+#         baml.NoTipping(request.promptTemplate),
+#         baml.NoLargeDistance(request.promptTemplate),
+#     )
 
-    res1_outputs = [
-        LinterOutput(
-            exactPhrase=item.exactPhrase,
-            recommendation=item.recommendation,
-            fix=item.fix,
-            reason=item.reason,
-        )
-        for item in result1
-    ]
+#     res1_outputs = [
+#         LinterOutput(
+#             exactPhrase=item.exactPhrase,
+#             recommendation=item.recommendation,
+#             fix=item.fix,
+#             reason=item.reason,
+#         )
+#         for item in result1
+#     ]
 
-    res3 = [
-        LinterOutput(
-            exactPhrase=item.exactPhrase,
-            recommendation=item.recommendation,
-            fix=item.fix,
-            reason=item.reason,
-        )
-        for item in res3
-        if item.exactPhrase not in ["impl<llm, ExtractResume2> version1", "client GPT4"]
-    ]
+#     res3 = [
+#         LinterOutput(
+#             exactPhrase=item.exactPhrase,
+#             recommendation=item.recommendation,
+#             fix=item.fix,
+#             reason=item.reason,
+#         )
+#         for item in res3
+#         if item.exactPhrase not in ["impl<llm, ExtractResume2> version1", "client GPT4"]
+#     ]
 
+#     print(result1)
+#     print(result2)
+#     print(res3)
 
-    print(result1)
-    print(result2)
-    print(res3)
-
-    return [
-        LinterRuleOutput(
-            diagnostics=res1_outputs,
-            ruleName="Contradictions",
-        ),
-        LinterRuleOutput(diagnostics=res4, ruleName="OffensiveLanguage"),
-
-        # LinterRuleOutput(diagnostics=res5, ruleName="ExampleProvider"),
-        # LinterRuleOutput(diagnostics=res3, ruleName="AmbiguousTerm"),
-
-        LinterRuleOutput(diagnostics=result2, ruleName="ChainOfThought"),
-        LinterRuleOutput(diagnostics=res6, ruleName="Tipping"),
-        LinterRuleOutput(diagnostics=res7, ruleName="NoLargeDistance"),
-    ]
+#     return [
+#         LinterRuleOutput(
+#             diagnostics=res1_outputs,
+#             ruleName="Contradictions",
+#         ),
+#         LinterRuleOutput(diagnostics=res4, ruleName="OffensiveLanguage"),
+#         # LinterRuleOutput(diagnostics=res5, ruleName="ExampleProvider"),
+#         # LinterRuleOutput(diagnostics=res3, ruleName="AmbiguousTerm"),
+#         LinterRuleOutput(diagnostics=result2, ruleName="ChainOfThought"),
+#         LinterRuleOutput(diagnostics=res6, ruleName="Tipping"),
+#         LinterRuleOutput(diagnostics=res7, ruleName="NoLargeDistance"),
+#     ]
 
 
 # if __name__ == '__main__':

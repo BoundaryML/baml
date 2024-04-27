@@ -60,14 +60,18 @@ export const columns: ColumnDef<TestResult & { span?: StringSpan }>[] = [
         <HoverCard openDelay={50} closeDelay={0}>
           <HoverCardTrigger>
             <div className="flex flex-row items-center gap-1 text-center w-fit">
-              <div className="underline">
+              <div className="underline whitespace-nowrap truncate max-w-[100px]">
                 {row.original.span ? (
                   <Link item={row.original.span} display={row.original.testName}></Link>
                 ) : (
                   <>{row.original.testName}</>
                 )}
               </div>
-              <div className="text-xs text-vscode-descriptionForeground">({row.original.implName})</div>
+              {row.original.implName !== 'default_config' && (
+                <>
+                  <div className="text-xs text-vscode-descriptionForeground">({row.original.implName})</div>
+                </>
+              )}
             </div>
           </HoverCardTrigger>
           <HoverCardContent

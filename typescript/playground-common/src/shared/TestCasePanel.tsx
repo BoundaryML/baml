@@ -88,7 +88,10 @@ const TestCasePanelEntry: React.FC<{ func: Func; test_case: TestCase }> = ({ fun
               {test_case.name.value}
             </span>
             {isRendered && (
-              <Badge className="ml-2" variant="default">
+              <Badge
+                className="ml-2 bg-vscode-editorSuggestWidget-selectedBackground text-vscode-editorSuggestWidget-foreground hover:bg-vscode-editorSuggestWidget-selectedBackground"
+                variant="default"
+              >
                 <div className="flex flex-row items-center gap-x-1">
                   <Pin size={12} /> Rendered
                 </div>
@@ -270,7 +273,7 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
   const { root_path, test_results } = useContext(ASTContext)
 
   return (
-    <div className="flex flex-col w-full h-full">
+    <div className="flex flex-col w-full h-full tour-test-panel">
       <div className="flex flex-row gap-x-1">
         <VSCodeTextField
           placeholder="Search test cases"
@@ -290,7 +293,7 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
         ) : (
           <>
             <Button
-              className="px-1 py-1 text-sm bg-red-500 rounded-sm h-fit whitespace-nowrap bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground"
+              className="h-full px-1 py-1 text-xs bg-red-500 rounded-sm whitespace-nowrap bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground"
               // disabled={test_cases.length === 0}
               onClick={() => {
                 const runTestRequest: TestRequest = {
@@ -322,6 +325,7 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
       <div className="flex flex-col py-2 divide-y gap-y-1 divide-vscode-textSeparator-foreground">
         {/* <pre>{JSON.stringify(input_json_schema, null, 2)}</pre> */}
         <EditTestCaseForm
+          key={'new'}
           testCase={undefined}
           schema={input_json_schema}
           func={func}
@@ -390,7 +394,14 @@ const EditTestCaseForm = ({
                 value={testName === undefined ? '' : testName}
                 placeholder="Enter test name"
                 onInput={(e) => {
-                  setTestName((e as React.FormEvent<HTMLInputElement>).currentTarget.value)
+                  // weird things happen if we dont do the replacement here -- on prompt fiddle
+                  // it seems new updates to tests dont get propagated if spaces are set.
+                  setTestName(
+                    (e as React.FormEvent<HTMLInputElement>).currentTarget.value.replace(
+                      /[&\/\\#, +()$~%.'":*?<>{}]/g,
+                      '_',
+                    ),
+                  )
                 }}
               />
             ) : (
@@ -427,7 +438,10 @@ const EditTestCaseForm = ({
               },
             })
             setShowForm(false)
-            setTestName(undefined)
+            if (testCase === undefined) {
+              // reset the name back to undefined since this component is used to add new tests
+              setTestName(undefined)
+            }
           }}
         />
       </DialogContent>
