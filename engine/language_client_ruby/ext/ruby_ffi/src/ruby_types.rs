@@ -17,7 +17,7 @@ impl FunctionResult {
     }
 
     pub fn raw(&self) -> Result<String> {
-        let Some(content) = self.inner.llm_response.content() else {
+        let Some(content) = self.inner.content() else {
             return Err(Error::new(
                 runtime_error(),
                 "never received a response from the LLM",
@@ -28,7 +28,10 @@ impl FunctionResult {
 
     pub fn parsed(&self) -> Result<Value> {
         let Some(value) = self.inner.parsed() else {
-            return Err(Error::new(runtime_error(), "Failed to parse"));
+            return Err(Error::new(
+                runtime_error(),
+                "Failed to parse the LLM response",
+            ));
         };
         serde_magnus::serialize(value)
     }

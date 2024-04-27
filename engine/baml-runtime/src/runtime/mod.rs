@@ -31,6 +31,10 @@ pub struct FunctionResult {
 }
 
 impl FunctionResult {
+    pub fn content(&self) -> Option<&str> {
+        self.llm_response.content()
+    }
+
     pub fn parsed(&self) -> Option<&serde_json::Value> {
         self.parsed
             .as_ref()
