@@ -28,6 +28,13 @@ struct RubyStruct<'a> {
 }
 
 #[derive(askama::Template)]
+#[template(path = "types.rb.j2", escape = "none")]
+struct RubyTypes {
+    enums: Vec<String>,
+    forward_decls: Vec<String>,
+    classes: Vec<String>,
+}
+#[derive(askama::Template)]
 #[template(path = "client.rb.j2", escape = "none")]
 struct RubyClient {
     funcs: Vec<RubyFunction>,
@@ -42,49 +49,50 @@ pub(crate) fn generate_ruby(ir: &IntermediateRepr, gen: &Generator) -> std::io::
     let mut collector = get_file_collector();
 
     let file = collector.start_file(".", "types", false);
-    file.append("require 'sorbet-runtime'".to_string());
-    file.append("require 'sorbet-coerce'".to_string());
-    file.append("".to_string());
-    file.append("module Baml".to_string());
-    file.append("  module Types".to_string());
-    ir.walk_enums().for_each(|e| {
-        file.append(
-            RubyEnum {
-                name: e.name(),
-                values: e
-                    .item
-                    .elem
-                    .values
-                    .iter()
-                    .map(|v| v.elem.0.as_str())
-                    .collect(),
-            }
-            .render()
-            .unwrap_or("# Error rendering enum".to_string()),
-        );
-    });
-    ir.walk_classes().for_each(|c| {
-        // forward declare all classes
-        file.append(format!("    class {} < T::Struct; end", c.name()));
-    });
-    ir.walk_classes().for_each(|c| {
-        file.append(
-            RubyStruct {
-                name: c.name(),
-                fields: c
-                    .item
-                    .elem
-                    .static_fields
-                    .iter()
-                    .map(|f| (f.elem.name.as_str(), f.elem.r#type.elem.to_ruby()))
-                    .collect(),
-            }
-            .render()
-            .unwrap_or("# Error rendering class".to_string()),
-        );
-    });
-    file.append("  end".to_string());
-    file.append("end".to_string());
+    file.append(
+        RubyTypes {
+            enums: ir
+                .walk_enums()
+                .map(|e| {
+                    RubyEnum {
+                        name: e.name(),
+                        values: e
+                            .item
+                            .elem
+                            .values
+                            .iter()
+                            .map(|v| v.elem.0.as_str())
+                            .collect(),
+                    }
+                    .render()
+                    .unwrap_or(format!("# Error rendering enum {}", e.name()))
+                })
+                .collect(),
+            forward_decls: ir
+                .walk_classes()
+                .map(|c| format!("class {} < T::Struct; end", c.name()))
+                .collect(),
+            classes: ir
+                .walk_classes()
+                .map(|c| {
+                    RubyStruct {
+                        name: c.name(),
+                        fields: c
+                            .item
+                            .elem
+                            .static_fields
+                            .iter()
+                            .map(|f| (f.elem.name.as_str(), f.elem.r#type.elem.to_ruby()))
+                            .collect(),
+                    }
+                    .render()
+                    .unwrap_or(format!("# Error rendering class {}", c.name()))
+                })
+                .collect(),
+        }
+        .render()
+        .unwrap_or("# Error rendering types".to_string()),
+    );
     collector.finish_file();
 
     let file = collector.start_file(".", "client", false);

@@ -1,0 +1,32 @@
+require "delegate"
+require "sorbet-runtime"
+require "sorbet-coerce"
+
+module Baml
+  module Types
+    class FunctionResult < SimpleDelegator
+      extend T::Sig
+      extend T::Generic
+
+      ParsedType = type_member
+
+      def initialize(val:)
+        @inner = val
+      end
+
+      def parsed
+        TypeCoerce[ParsedType].new.from(@inner.parsed)
+      end
+    end
+
+    {%- for enum in enums %}
+{{ enum }}
+    {%- endfor %}
+    {%- for forward_decl in forward_decls %}
+    {{ forward_decl }}
+    {%- endfor %}
+    {%- for cls in classes %}
+{{ cls }}
+    {%- endfor %}
+  end
+end

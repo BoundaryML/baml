@@ -190,6 +190,7 @@ impl BamlRuntimeFfi {
             },
             None => RuntimeContext::default(),
         };
+        log::debug!("Calling {function_name} with:\nargs: {args:#?}\nctx (where env is envvar overrides): {ctx:#?}");
         ctx.env = std::env::vars_os()
             .map(|(k, v)| {
                 (
@@ -200,15 +201,11 @@ impl BamlRuntimeFfi {
             .chain(ctx.env.into_iter())
             .collect();
 
-        log::debug!("Calling {function_name} with:\nargs: {args:#?}\nctx: {ctx:#?}");
         let retval = match self
             .t
             .block_on(self.internal.call_function(function_name, args, ctx))
         {
-            Ok(res) => {
-                log::debug!("LLM call result:\n{res:#?}");
-                Ok(ruby_types::FunctionResult::new(res))
-            }
+            Ok(res) => Ok(ruby_types::FunctionResult::new(res)),
             Err(e) => Err(Error::new(
                 ruby.exception_runtime_error(),
                 format!("error while calling function: {}", e),

@@ -12,14 +12,26 @@
 # rubocop: disable
 # formatter:off
 
-require 'sorbet-runtime'
-
-require 'sorbet-coerce'
+require "delegate"
+require "sorbet-runtime"
+require "sorbet-coerce"
 
 module Baml
-
   module Types
+    class FunctionResult < SimpleDelegator
+      extend T::Sig
+      extend T::Generic
 
+      ParsedType = type_member
+
+      def initialize(val:)
+        @inner = val
+      end
+
+      def parsed
+        TypeCoerce[ParsedType].new.from(@inner.parsed)
+      end
+    end
 
     class Category < T::Enum
       enums do
@@ -31,7 +43,6 @@ module Baml
         end
     end
 
-
     class Category2 < T::Enum
       enums do
         Refund = new
@@ -41,7 +52,6 @@ module Baml
         Question = new
         end
     end
-
 
     class Category3 < T::Enum
       enums do
@@ -53,7 +63,6 @@ module Baml
         end
     end
 
-
     class DataType < T::Enum
       enums do
         Resume = new
@@ -61,14 +70,12 @@ module Baml
         end
     end
 
-
     class EnumInClass < T::Enum
       enums do
         ONE = new
         TWO = new
         end
     end
-
 
     class EnumOutput < T::Enum
       enums do
@@ -78,14 +85,12 @@ module Baml
         end
     end
 
-
     class NamedArgsSingleEnum < T::Enum
       enums do
         ONE = new
         TWO = new
         end
     end
-
 
     class NamedArgsSingleEnumList < T::Enum
       enums do
@@ -94,7 +99,6 @@ module Baml
         end
     end
 
-
     class OptionalTest_CategoryType < T::Enum
       enums do
         Aleph = new
@@ -102,7 +106,6 @@ module Baml
         Gamma = new
         end
     end
-
 
     class OrderStatus < T::Enum
       enums do
@@ -113,14 +116,12 @@ module Baml
         end
     end
 
-
     class OverrideEnum < T::Enum
       enums do
         ONE = new
         TWO = new
         end
     end
-
 
     class Tag < T::Enum
       enums do
@@ -129,7 +130,6 @@ module Baml
         Blockchain = new
         end
     end
-
 
     class TestEnum < T::Enum
       enums do
@@ -142,72 +142,44 @@ module Baml
         G = new
         end
     end
-
     class Blah < T::Struct; end
-
     class ClassOptionalFields < T::Struct; end
-
     class ClassOptionalOutput < T::Struct; end
-
     class ClassOptionalOutput2 < T::Struct; end
-
     class DynamicPropsClass < T::Struct; end
-
     class Email < T::Struct; end
-
     class Event < T::Struct; end
-
     class Message < T::Struct; end
-
     class ModifiedOutput < T::Struct; end
-
     class NamedArgsSingleClass < T::Struct; end
-
     class OptionalClass < T::Struct; end
-
     class OptionalTest_Prop1 < T::Struct; end
-
     class OptionalTest_ReturnType < T::Struct; end
-
     class OrderInfo < T::Struct; end
-
     class OverrideClass < T::Struct; end
-
     class RaysData < T::Struct; end
-
     class Resume < T::Struct; end
-
     class SearchParams < T::Struct; end
-
     class SomeClass2 < T::Struct; end
-
     class TestClassAlias < T::Struct; end
-
     class TestClassWithEnum < T::Struct; end
-
     class TestOutputClass < T::Struct; end
-
     class UnionTest_ReturnType < T::Struct; end
-
     class WithReasoning < T::Struct; end
-
 
     class Blah < T::Struct
       const :prop4, T.nilable(String)
       end
-
 
     class ClassOptionalFields < T::Struct
       const :prop1, T.nilable(String)
       const :prop2, T.nilable(String)
       end
 
-
     class ClassOptionalOutput < T::Struct
       const :prop1, String
       const :prop2, String
       end
-
 
     class ClassOptionalOutput2 < T::Struct
       const :prop1, T.nilable(String)
@@ -215,20 +187,17 @@ module Baml
       const :prop3, T.nilable(Baml::Types::Blah)
       end
 
-
     class DynamicPropsClass < T::Struct
       const :prop1, String
       const :prop2, String
       const :prop3, Integer
       end
 
-
     class Email < T::Struct
       const :subject, String
       const :body, String
       const :from_address, String
       end
-
 
     class Event < T::Struct
       const :title, String
@@ -237,18 +206,15 @@ module Baml
       const :description, String
       end
 
-
     class Message < T::Struct
       const :role, String
       const :message, String
       end
 
-
     class ModifiedOutput < T::Struct
       const :reasoning, String
       const :answer, String
       end
-
 
     class NamedArgsSingleClass < T::Struct
       const :key, String
@@ -256,18 +222,15 @@ module Baml
       const :key_three, Integer
       end
 
-
     class OptionalClass < T::Struct
       const :prop1, String
       const :prop2, String
       end
 
-
     class OptionalTest_Prop1 < T::Struct
       const :omega_a, String
       const :omega_b, Integer
       end
-
 
     class OptionalTest_ReturnType < T::Struct
       const :omega_1, T.nilable(Baml::Types::OptionalTest_Prop1)
@@ -275,25 +238,21 @@ module Baml
       const :omega_3, T::Array[T.nilable(Baml::Types::OptionalTest_CategoryType)]
       end
 
-
     class OrderInfo < T::Struct
       const :order_status, Baml::Types::OrderStatus
       const :tracking_number, T.nilable(String)
       const :estimated_arrival_date, T.nilable(String)
       end
 
-
     class OverrideClass < T::Struct
       const :prop1, String
       const :prop2, String
       end
 
-
     class RaysData < T::Struct
       const :dataType, Baml::Types::DataType
       const :value, T.any(Baml::Types::Resume, Baml::Types::Event)
       end
-
 
     class Resume < T::Struct
       const :name, String
@@ -304,7 +263,6 @@ module Baml
       const :skills, T::Array[String]
       end
 
-
     class SearchParams < T::Struct
       const :dateRange, T.nilable(Integer)
       const :location, T::Array[String]
@@ -314,12 +272,10 @@ module Baml
       const :tags, T::Array[T.any(Baml::Types::Tag, String)]
       end
 
-
     class SomeClass2 < T::Struct
       const :prop1, String
       const :prop2, String
       end
-
 
     class TestClassAlias < T::Struct
       const :key, String
@@ -329,18 +285,15 @@ module Baml
       const :key5, String
       end
 
-
     class TestClassWithEnum < T::Struct
       const :prop1, String
       const :prop2, Baml::Types::EnumInClass
       end
 
-
     class TestOutputClass < T::Struct
       const :prop1, String
       const :prop2, Integer
       end
-
 
     class UnionTest_ReturnType < T::Struct
       const :prop1, T.any(String, T::Boolean)
@@ -348,14 +301,11 @@ module Baml
       const :prop3, T.any(T::Array[Float], T::Array[T::Boolean])
       end
 
-
     class WithReasoning < T::Struct
       const :value, String
       const :reasoning, String
       end
-
   end
-
 end
 
 

@@ -16,6 +16,16 @@ impl FunctionResult {
         format!("{:#?}", self.inner)
     }
 
+    pub fn raw(&self) -> Result<String> {
+        let Some(content) = self.inner.llm_response.content() else {
+            return Err(Error::new(
+                runtime_error(),
+                "never received a response from the LLM",
+            ));
+        };
+        Ok(content.to_string())
+    }
+
     pub fn parsed(&self) -> Result<Value> {
         let Some(value) = self.inner.parsed() else {
             return Err(Error::new(runtime_error(), "Failed to parse"));
@@ -30,6 +40,7 @@ impl FunctionResult {
         let cls = rmod.define_class("FunctionResult", class::object())?;
 
         cls.define_method("to_s", method!(FunctionResult::to_s, 0))?;
+        cls.define_method("raw", method!(FunctionResult::raw, 0))?;
         cls.define_method("parsed", method!(FunctionResult::parsed, 0))?;
 
         Ok(())

@@ -235,23 +235,16 @@ impl BamlRuntime {
 
         // Call the LLM.
         let response = client.call(&self.ir, &ctx, &prompt).await;
+        let parsed = response
+            .content()
+            .map(|content| jsonish::from_str(content, &self.ir, function.output(), &ctx.env));
 
-        match response.content() {
-            None => {
-                return Ok(FunctionResult {
-                    llm_response: response,
-                    parsed: None,
-                });
-            }
-            Some(content) => {
-                let parsed = jsonish::from_str(content, &self.ir, function.output(), &ctx.env);
-
-                Ok(FunctionResult {
-                    llm_response: response,
-                    parsed: Some(parsed),
-                })
-            }
-        }
+        let result = FunctionResult {
+            llm_response: response,
+            parsed,
+        };
+        log::debug!("LLM call result:\n{result:#?}");
+        Ok(result)
     }
 }
 

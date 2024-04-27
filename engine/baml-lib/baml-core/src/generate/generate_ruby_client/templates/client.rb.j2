@@ -23,7 +23,7 @@ module Baml
         {% for (name, type) in fn.args -%}
         {{name}}: {{type}},
         {%- endfor %}
-      ).returns({{ fn.return_type }})
+      ).returns(Baml::Types::FunctionResult[{{ fn.return_type }}])
     }
     def {{fn.name}}(
         {% for (name, _) in fn.args -%}
@@ -38,10 +38,7 @@ module Baml
           {%- endfor %}
         }
       )
-      {# TODO- consider making this not-frozen #}
-      raw.value = TypeCoerce[{{ fn.return_type }}].new.from(raw.value)
-
-      raw
+      Baml::Types::FunctionResult[{{ fn.return_type }}].new(val: raw)
     end
 
     {% endfor %}

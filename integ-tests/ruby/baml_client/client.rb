@@ -34,7 +34,7 @@ module Baml
     sig {
       params(
         messages: T::Array[Baml::Types::Message],
-      ).returns(T::Array[Baml::Types::Category])
+      ).returns(Baml::Types::FunctionResult[T::Array[Baml::Types::Category]])
     }
     def ClassifyConversation(
         messages:
@@ -45,16 +45,13 @@ module Baml
           "messages" => messages,
         }
       )
-      
-      raw.value = TypeCoerce[T::Array[Baml::Types::Category]].new.from(raw.value)
-
-      raw
+      Baml::Types::FunctionResult[T::Array[Baml::Types::Category]].new(val: raw)
     end
 
     sig {
       params(
         input: String,
-      ).returns(Baml::Types::Category)
+      ).returns(Baml::Types::FunctionResult[Baml::Types::Category])
     }
     def ClassifyMessage(
         input:
@@ -65,16 +62,13 @@ module Baml
           "input" => input,
         }
       )
-      
-      raw.value = TypeCoerce[Baml::Types::Category].new.from(raw.value)
-
-      raw
+      Baml::Types::FunctionResult[Baml::Types::Category].new(val: raw)
     end
 
     sig {
       params(
         input: String,
-      ).returns(Baml::Types::Category)
+      ).returns(Baml::Types::FunctionResult[Baml::Types::Category])
     }
     def ClassifyMessage2(
         input:
@@ -85,16 +79,13 @@ module Baml
           "input" => input,
         }
       )
-      
-      raw.value = TypeCoerce[Baml::Types::Category].new.from(raw.value)
-
-      raw
+      Baml::Types::FunctionResult[Baml::Types::Category].new(val: raw)
     end
 
     sig {
       params(
         input: String,
-      ).returns(Baml::Types::Category)
+      ).returns(Baml::Types::FunctionResult[Baml::Types::Category])
     }
     def ClassifyMessage3(
         input:
@@ -105,16 +96,13 @@ module Baml
           "input" => input,
         }
       )
-      
-      raw.value = TypeCoerce[Baml::Types::Category].new.from(raw.value)
-
-      raw
+      Baml::Types::FunctionResult[Baml::Types::Category].new(val: raw)
     end
 
     sig {
       params(
         input: String,
-      ).returns(T::Array[String])
+      ).returns(Baml::Types::FunctionResult[T::Array[String]])
     }
     def ExtractNames(
         input:
@@ -125,16 +113,13 @@ module Baml
           "input" => input,
         }
       )
-      
-      raw.value = TypeCoerce[T::Array[String]].new.from(raw.value)
-
-      raw
+      Baml::Types::FunctionResult[T::Array[String]].new(val: raw)
     end
 
     sig {
       params(
         resume: String,
-      ).returns(Baml::Types::Resume)
+      ).returns(Baml::Types::FunctionResult[Baml::Types::Resume])
     }
     def ExtractResume(
         resume:
@@ -145,16 +130,13 @@ module Baml
           "resume" => resume,
         }
       )
-      
-      raw.value = TypeCoerce[Baml::Types::Resume].new.from(raw.value)
-
-      raw
+      Baml::Types::FunctionResult[Baml::Types::Resume].new(val: raw)
     end
 
     sig {
       params(
         resume: String,
-      ).returns(Baml::Types::Resume)
+      ).returns(Baml::Types::FunctionResult[Baml::Types::Resume])
     }
     def ExtractResume2(
         resume:
@@ -165,16 +147,13 @@ module Baml
           "resume" => resume,
         }
       )
-      
-      raw.value = TypeCoerce[Baml::Types::Resume].new.from(raw.value)
-
-      raw
+      Baml::Types::FunctionResult[Baml::Types::Resume].new(val: raw)
     end
 
     sig {
       params(
         text: String,
-      ).returns(Baml::Types::RaysData)
+      ).returns(Baml::Types::FunctionResult[Baml::Types::RaysData])
     }
     def GetDataType(
         text:
@@ -185,16 +164,13 @@ module Baml
           "text" => text,
         }
       )
-      
-      raw.value = TypeCoerce[Baml::Types::RaysData].new.from(raw.value)
-
-      raw
+      Baml::Types::FunctionResult[Baml::Types::RaysData].new(val: raw)
     end
 
     sig {
       params(
         email: Baml::Types::Email,
-      ).returns(Baml::Types::OrderInfo)
+      ).returns(Baml::Types::FunctionResult[Baml::Types::OrderInfo])
     }
     def GetOrderInfo(
         email:
@@ -205,16 +181,13 @@ module Baml
           "email" => email,
         }
       )
-      
-      raw.value = TypeCoerce[Baml::Types::OrderInfo].new.from(raw.value)
-
-      raw
+      Baml::Types::FunctionResult[Baml::Types::OrderInfo].new(val: raw)
     end
 
     sig {
       params(
         query: String,
-      ).returns(Baml::Types::SearchParams)
+      ).returns(Baml::Types::FunctionResult[Baml::Types::SearchParams])
     }
     def GetQuery(
         query:
@@ -225,10 +198,7 @@ module Baml
           "query" => query,
         }
       )
-      
-      raw.value = TypeCoerce[Baml::Types::SearchParams].new.from(raw.value)
-
-      raw
+      Baml::Types::FunctionResult[Baml::Types::SearchParams].new(val: raw)
     end
 
     
