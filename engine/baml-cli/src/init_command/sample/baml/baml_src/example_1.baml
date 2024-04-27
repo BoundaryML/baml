@@ -20,9 +20,8 @@ function ExtractResume(text: string) -> Resume {
     {{text}}
     ---
 
-    Output JSON format (only include these fields, and no others):
-    {# output_schema is inferred from the return type of the function #}
-    {{ ctx.output_schema }}
+    {# output_format is a helper to print out Resume #}
+    {{ ctx.output_format }}
 
     Output JSON:
   "#
