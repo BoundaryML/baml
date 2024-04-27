@@ -75,6 +75,13 @@ pub struct DeserializerConditions {
     flags: Vec<Flag>,
 }
 
+impl std::fmt::Debug for DeserializerConditions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Use the Display trait to print the flags
+        write!(f, "{}", self)
+    }
+}
+
 impl std::fmt::Display for DeserializerConditions {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.flags.is_empty() {

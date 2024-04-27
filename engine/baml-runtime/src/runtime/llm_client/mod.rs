@@ -1,5 +1,5 @@
 // mod anthropic;
-mod expression_helper;
+pub mod expression_helper;
 mod llm_provider;
 mod openai;
 mod retry_policy;

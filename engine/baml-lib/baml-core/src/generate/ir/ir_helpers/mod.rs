@@ -8,7 +8,7 @@ use crate::{
     error_not_found, error_unsupported,
     ir::{
         repr::{IntermediateRepr, Walker},
-        Class, Client, Enum, EnumValue, Function, RetryPolicy, TemplateString,
+        Class, Client, Enum, EnumValue, Function, RetryPolicy, TemplateString, TestCase,
     },
 };
 use anyhow::Result;
@@ -24,12 +24,18 @@ pub type ClassWalker<'a> = Walker<'a, &'a Class>;
 pub type TemplateStringWalker<'a> = Walker<'a, &'a TemplateString>;
 pub type ClientWalker<'a> = Walker<'a, &'a Client>;
 pub type RetryPolicyWalker<'a> = Walker<'a, &'a RetryPolicy>;
+pub type TestCaseWalker<'a> = Walker<'a, (&'a Function, &'a TestCase)>;
 
 pub trait IRHelper {
     fn find_enum(&self, enum_name: &str) -> Result<EnumWalker<'_>>;
     fn find_class(&self, class_name: &str) -> Result<ClassWalker<'_>>;
     fn find_function(&self, function_name: &str) -> Result<FunctionWalker<'_>>;
     fn find_client(&self, client_name: &str) -> Result<ClientWalker<'_>>;
+    fn find_test<'a>(
+        &'a self,
+        function: &'a FunctionWalker<'a>,
+        test_name: &str,
+    ) -> Result<TestCaseWalker<'a>>;
     fn check_function_params<'a>(
         &'a self,
         function: &'a FunctionWalker<'a>,
@@ -38,6 +44,24 @@ pub trait IRHelper {
 }
 
 impl IRHelper for IntermediateRepr {
+    fn find_test<'a>(
+        &'a self,
+        function: &'a FunctionWalker<'a>,
+        test_name: &str,
+    ) -> Result<TestCaseWalker<'a>> {
+        match function.find_test(test_name) {
+            Some(t) => Ok(t),
+            None => {
+                // Get best match.
+                let tests = function
+                    .walk_tests()
+                    .map(|t| t.item.1.elem.name.clone())
+                    .collect::<Vec<_>>();
+                error_not_found!("test", test_name, &tests)
+            }
+        }
+    }
+
     fn find_enum(&self, enum_name: &str) -> Result<EnumWalker<'_>> {
         match self.walk_enums().find(|e| e.name() == enum_name) {
             Some(e) => Ok(e),

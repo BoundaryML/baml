@@ -32,7 +32,7 @@ pub(super) type Impl = repr::Node<repr::Implementation>;
 pub type Client = repr::Node<repr::Client>;
 pub type RetryPolicy = repr::Node<repr::RetryPolicy>;
 pub type TemplateString = repr::Node<repr::TemplateString>;
-pub(super) type TestCase = repr::Node<repr::TestCase>;
+pub type TestCase = repr::Node<repr::TestCase>;
 pub(super) type Walker<'db, I> = repr::Walker<'db, I>;
 
 pub(super) type Prompt = repr::Prompt;

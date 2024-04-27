@@ -54,24 +54,26 @@ impl IntermediateRepr {
         self.functions.iter().map(|e| Walker { db: self, item: e })
     }
 
+    pub fn walk_tests<'a>(
+        &'a self,
+    ) -> impl Iterator<Item = Walker<'a, (&'a Node<Function>, &'a Node<TestCase>)>> {
+        self.functions.iter().flat_map(move |f| {
+            f.elem.tests().iter().map(move |t| Walker {
+                db: self,
+                item: (f, t),
+            })
+        })
+    }
+
     pub fn walk_clients<'a>(&'a self) -> impl Iterator<Item = Walker<'a, &'a Node<Client>>> {
         self.clients.iter().map(|e| Walker { db: self, item: e })
     }
 
-    #[allow(dead_code)]
     pub fn walk_template_strings<'a>(
         &'a self,
     ) -> impl Iterator<Item = Walker<'a, &'a Node<TemplateString>>> {
         self.template_strings
             .iter()
-            .map(|e| Walker { db: self, item: e })
-    }
-
-    #[allow(dead_code)]
-    pub fn walk_tests<'a>(&'a self) -> impl Iterator<Item = Walker<'a, &'a Node<Function>>> {
-        self.functions
-            .iter()
-            .filter(|f| f.elem.name().starts_with("test"))
             .map(|e| Walker { db: self, item: e })
     }
 
@@ -649,6 +651,13 @@ impl Function {
         match &self {
             Function::V1(f) => either::Either::Left(&f.inputs),
             Function::V2(f) => either::Either::Right(&f.inputs),
+        }
+    }
+
+    pub fn tests(&self) -> &Vec<Node<TestCase>> {
+        match &self {
+            Function::V1(f) => &f.tests,
+            Function::V2(f) => &f.tests,
         }
     }
 }

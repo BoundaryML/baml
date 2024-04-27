@@ -2,6 +2,7 @@ mod llm_client;
 mod prompt_renderer;
 
 use anyhow::Result;
+use serde::Serialize;
 use serde_json::json;
 use std::{collections::HashMap, path::PathBuf, process::Termination};
 
@@ -23,16 +24,90 @@ pub struct BamlRuntime {
     ir: IntermediateRepr,
 }
 
+#[derive(Debug)]
 pub struct FunctionResponse {
     llm_response: LLMResponse,
     parsed: Option<Result<(serde_json::Value, jsonish::DeserializerConditions)>>,
 }
 
+impl FunctionResponse {
+    pub fn parsed(&self) -> Option<&serde_json::Value> {
+        self.parsed
+            .as_ref()
+            .and_then(|res| res.as_ref().ok().map(|(val, _)| val))
+    }
+}
+
+#[derive(Debug)]
+pub struct TestResponse {
+    function_response: Result<FunctionResponse>,
+}
+
+#[derive(PartialEq, Eq, Debug)]
+pub enum TestStatus<'a> {
+    Pass,
+    Fail(TestFailReason<'a>),
+}
+
+#[derive(Debug)]
+pub enum TestFailReason<'a> {
+    TestUnspecified(String),
+    TestLLMFailure(&'a LLMResponse),
+    TestParseFailure(&'a anyhow::Error),
+}
+
+impl PartialEq for TestFailReason<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::TestUnspecified(a), Self::TestUnspecified(b)) => a == b,
+            (Self::TestLLMFailure(_), Self::TestLLMFailure(_)) => true,
+            (Self::TestParseFailure(a), Self::TestParseFailure(b)) => {
+                a.to_string() == b.to_string()
+            }
+            _ => false,
+        }
+    }
+}
+
+impl Eq for TestFailReason<'_> {}
+
+impl TestResponse {
+    pub fn status(&self) -> TestStatus {
+        match &self.function_response {
+            Ok(func_res) => {
+                if let Some(parsed) = &func_res.parsed {
+                    if parsed.is_ok() {
+                        TestStatus::Pass
+                    } else {
+                        TestStatus::Fail(TestFailReason::TestParseFailure(
+                            parsed.as_ref().unwrap_err(),
+                        ))
+                    }
+                } else {
+                    TestStatus::Fail(TestFailReason::TestLLMFailure(&func_res.llm_response))
+                }
+            }
+            Err(e) => TestStatus::Fail(TestFailReason::TestUnspecified(e.to_string())),
+        }
+    }
+}
+
 impl Termination for FunctionResponse {
     fn report(self) -> std::process::ExitCode {
-        match self.parsed {
-            Some(Ok((_, _))) => std::process::ExitCode::SUCCESS,
-            _ => std::process::ExitCode::FAILURE,
+        if self.parsed().is_some() {
+            std::process::ExitCode::SUCCESS
+        } else {
+            std::process::ExitCode::FAILURE
+        }
+    }
+}
+
+impl Termination for TestResponse {
+    fn report(self) -> std::process::ExitCode {
+        if self.status() == TestStatus::Pass {
+            std::process::ExitCode::SUCCESS
+        } else {
+            std::process::ExitCode::FAILURE
         }
     }
 }
@@ -87,6 +162,40 @@ impl BamlRuntime {
         })
     }
 
+    pub async fn run_test(
+        &self,
+        function_name: &str,
+        test_name: &str,
+        ctx: RuntimeContext,
+    ) -> Result<TestResponse> {
+        let function = self.ir.find_function(function_name)?;
+        let test = self.ir.find_test(&function, test_name)?;
+
+        let params = match test.content().as_json(&ctx.env)? {
+            serde_json::Value::Object(kv) => {
+                let mut params = HashMap::new();
+                for (k, v) in kv {
+                    params.insert(k, v);
+                }
+                params
+            }
+            x => {
+                return Ok(TestResponse {
+                    function_response: Err(anyhow::anyhow!(
+                        "Test content must be an object, found: {:?}",
+                        x
+                    )),
+                })
+            }
+        };
+
+        let func_response = self.call_function(function_name, &params, ctx).await;
+
+        Ok(TestResponse {
+            function_response: func_response,
+        })
+    }
+
     pub async fn call_function(
         &self,
         function_name: &str,
@@ -130,6 +239,27 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
 
+    fn assert_passed(test: &TestResponse) {
+        assert_eq!(test.status(), TestStatus::Pass);
+    }
+
+    fn assert_failed(test: &TestResponse) {
+        assert_ne!(test.status(), TestStatus::Pass);
+    }
+
+    #[tokio::test]
+    async fn test_run_test() -> Result<()> {
+        let directory = PathBuf::from("/Users/vbv/repos/gloo-lang/integ-tests/baml_src");
+        let runtime = BamlRuntime::from_directory(&directory).unwrap();
+
+        let ctx = RuntimeContext::new().add_env("OPENAI_API_KEY".into(), "API_KEY".to_string());
+
+        let res = runtime.run_test("ExtractNames", "pale_maroon", ctx).await?;
+
+        assert_passed(&res);
+        Ok(())
+    }
+
     #[tokio::test]
     async fn test_call_function() -> Result<FunctionResponse> {
         let directory = PathBuf::from("/Users/vbv/repos/gloo-lang/integ-tests/baml_src");
@@ -142,12 +272,7 @@ mod tests {
 
         let res = runtime.call_function("ExtractNames", &params, ctx).await?;
 
-        println!("{:#?}", res.llm_response);
-
-        if let Some(Ok((val, flags))) = &res.parsed {
-            println!("{}", val);
-            println!("{}", flags);
-        }
+        println!("{:#?}", res);
 
         Ok(res)
     }

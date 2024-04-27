@@ -1,4 +1,5 @@
 use anyhow::Result;
+use serde_json::json;
 use std::collections::HashMap;
 
 use super::{
@@ -46,17 +47,17 @@ impl<'a> Walker<'a, &'a Function> {
     }
 
     pub fn walk_tests(&'a self) -> impl Iterator<Item = Walker<'a, (&'a Function, &'a TestCase)>> {
-        self.tests().iter().map(|i| Walker {
+        self.elem().tests().iter().map(|i| Walker {
             db: self.db,
             item: (self.item, i),
         })
     }
 
-    fn tests(&self) -> &'a Vec<TestCase> {
-        match &self.item.elem {
-            repr::Function::V1(f) => &f.tests,
-            repr::Function::V2(f) => &f.tests,
-        }
+    pub fn find_test(
+        &'a self,
+        test_name: &str,
+    ) -> Option<Walker<'a, (&'a Function, &'a TestCase)>> {
+        self.walk_tests().find(|t| t.item.1.elem.name == test_name)
     }
 
     pub fn elem(&self) -> &'a repr::Function {
@@ -159,7 +160,36 @@ impl Expression {
                 Some(v) => Ok(v.clone()),
                 None => anyhow::bail!("Environment variable {} not found", s),
             },
+            Expression::Identifier(idn) => Ok(idn.name().to_string()),
             _ => anyhow::bail!("Expected string value, got {:?}", self),
+        }
+    }
+
+    pub fn as_json(&self, env_values: &HashMap<String, String>) -> Result<serde_json::Value> {
+        match self {
+            Expression::Identifier(Identifier::ENV(s)) => match env_values.get(s) {
+                Some(v) => Ok(json!(v)),
+                None => anyhow::bail!("Environment variable {} not found", s),
+            },
+            Expression::String(s) => Ok(json!(s)),
+            Expression::RawString(s) => Ok(json!(s)),
+            Expression::Bool(b) => Ok(json!(*b)),
+            Expression::Map(m) => {
+                let mut map = serde_json::Map::new();
+                for (k, v) in m {
+                    map.insert(k.as_string_value(env_values)?, v.as_json(env_values)?);
+                }
+                Ok(json!(map))
+            }
+            Expression::List(l) => {
+                let mut list = Vec::new();
+                for v in l {
+                    list.push(v.as_json(env_values)?);
+                }
+                Ok(json!(list))
+            }
+            repr::Expression::Identifier(idn) => Ok(json!(idn.name())),
+            repr::Expression::Numeric(n) => Ok(serde_json::Value::Number(n.parse()?)),
         }
     }
 }
@@ -175,6 +205,20 @@ impl<'a> Walker<'a, (&'a Function, &'a Impl)> {
 
     pub fn elem(&self) -> &'a repr::Implementation {
         &self.item.1.elem
+    }
+}
+
+impl<'a> Walker<'a, (&'a Function, &'a TestCase)> {
+    pub fn matches(&self, function_name: &str, test_name: &str) -> bool {
+        self.item.0.elem.name() == function_name && self.item.1.elem.name == test_name
+    }
+
+    pub fn name(&self) -> String {
+        format!("{}::{}", self.item.0.elem.name(), self.item.1.elem.name)
+    }
+
+    pub fn content(&self) -> &Expression {
+        &self.item.1.elem.content
     }
 }
 
