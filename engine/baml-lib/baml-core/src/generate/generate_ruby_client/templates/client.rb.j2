@@ -38,7 +38,10 @@ module Baml
           {%- endfor %}
         }
       )
-      Baml::Types::FunctionResult[{{ fn.return_type }}].new(val: raw)
+      Baml::Types::FunctionResult[{{ fn.return_type }}].new(
+        inner: raw,
+        parsed: TypeCoerce[{{ fn.return_type }}].new.from(raw.parsed)
+      )
     end
 
     {% endfor %}

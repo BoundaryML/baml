@@ -10,12 +10,13 @@ module Baml
 
       ParsedType = type_member
 
-      def initialize(val:)
-        @inner = val
-      end
+      sig { returns(ParsedType) }
+      attr_reader :parsed
 
-      def parsed
-        TypeCoerce[ParsedType].new.from(@inner.parsed)
+      sig { params(inner: Baml::FunctionResult, parsed: ParsedType).void }
+      def initialize(inner:, parsed:)
+        @inner = inner
+        @parsed = parsed
       end
     end
 

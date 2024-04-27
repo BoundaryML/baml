@@ -45,7 +45,10 @@ module Baml
           "messages" => messages,
         }
       )
-      Baml::Types::FunctionResult[T::Array[Baml::Types::Category]].new(val: raw)
+      Baml::Types::FunctionResult[T::Array[Baml::Types::Category]].new(
+        inner: raw,
+        parsed: TypeCoerce[T::Array[Baml::Types::Category]].new.from(raw.parsed)
+      )
     end
 
     sig {
@@ -62,7 +65,10 @@ module Baml
           "input" => input,
         }
       )
-      Baml::Types::FunctionResult[Baml::Types::Category].new(val: raw)
+      Baml::Types::FunctionResult[Baml::Types::Category].new(
+        inner: raw,
+        parsed: TypeCoerce[Baml::Types::Category].new.from(raw.parsed)
+      )
     end
 
     sig {
@@ -79,7 +85,10 @@ module Baml
           "input" => input,
         }
       )
-      Baml::Types::FunctionResult[Baml::Types::Category].new(val: raw)
+      Baml::Types::FunctionResult[Baml::Types::Category].new(
+        inner: raw,
+        parsed: TypeCoerce[Baml::Types::Category].new.from(raw.parsed)
+      )
     end
 
     sig {
@@ -96,7 +105,10 @@ module Baml
           "input" => input,
         }
       )
-      Baml::Types::FunctionResult[Baml::Types::Category].new(val: raw)
+      Baml::Types::FunctionResult[Baml::Types::Category].new(
+        inner: raw,
+        parsed: TypeCoerce[Baml::Types::Category].new.from(raw.parsed)
+      )
     end
 
     sig {
@@ -113,7 +125,10 @@ module Baml
           "input" => input,
         }
       )
-      Baml::Types::FunctionResult[T::Array[String]].new(val: raw)
+      Baml::Types::FunctionResult[T::Array[String]].new(
+        inner: raw,
+        parsed: TypeCoerce[T::Array[String]].new.from(raw.parsed)
+      )
     end
 
     sig {
@@ -130,7 +145,10 @@ module Baml
           "resume" => resume,
         }
       )
-      Baml::Types::FunctionResult[Baml::Types::Resume].new(val: raw)
+      Baml::Types::FunctionResult[Baml::Types::Resume].new(
+        inner: raw,
+        parsed: TypeCoerce[Baml::Types::Resume].new.from(raw.parsed)
+      )
     end
 
     sig {
@@ -147,7 +165,10 @@ module Baml
           "resume" => resume,
         }
       )
-      Baml::Types::FunctionResult[Baml::Types::Resume].new(val: raw)
+      Baml::Types::FunctionResult[Baml::Types::Resume].new(
+        inner: raw,
+        parsed: TypeCoerce[Baml::Types::Resume].new.from(raw.parsed)
+      )
     end
 
     sig {
@@ -164,7 +185,10 @@ module Baml
           "text" => text,
         }
       )
-      Baml::Types::FunctionResult[Baml::Types::RaysData].new(val: raw)
+      Baml::Types::FunctionResult[Baml::Types::RaysData].new(
+        inner: raw,
+        parsed: TypeCoerce[Baml::Types::RaysData].new.from(raw.parsed)
+      )
     end
 
     sig {
@@ -181,7 +205,10 @@ module Baml
           "email" => email,
         }
       )
-      Baml::Types::FunctionResult[Baml::Types::OrderInfo].new(val: raw)
+      Baml::Types::FunctionResult[Baml::Types::OrderInfo].new(
+        inner: raw,
+        parsed: TypeCoerce[Baml::Types::OrderInfo].new.from(raw.parsed)
+      )
     end
 
     sig {
@@ -198,7 +225,10 @@ module Baml
           "query" => query,
         }
       )
-      Baml::Types::FunctionResult[Baml::Types::SearchParams].new(val: raw)
+      Baml::Types::FunctionResult[Baml::Types::SearchParams].new(
+        inner: raw,
+        parsed: TypeCoerce[Baml::Types::SearchParams].new.from(raw.parsed)
+      )
     end
 
     
