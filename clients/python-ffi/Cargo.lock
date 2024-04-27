@@ -108,7 +108,7 @@ checksum = "b248f5224d1d606005e02c97f5aa4e88eeb230488bcc03bc9ca4d7991399f2b5"
 
 [[package]]
 name = "internal-baml-jinja"
-version = "0.19.0-canary.0"
+version = "0.20.0-canary.0"
 dependencies = [
  "anyhow",
  "indexmap 2.2.6",
