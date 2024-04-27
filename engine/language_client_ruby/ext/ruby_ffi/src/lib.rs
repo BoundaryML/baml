@@ -178,8 +178,6 @@ impl BamlRuntimeFfi {
             ));
         };
 
-        println!("args are {:#?}", args);
-
         let mut ctx = match ctx {
             Some(ctx) => match serde_magnus::deserialize::<_, RuntimeContext>(ctx) {
                 Ok(ctx) => ctx,
@@ -202,13 +200,15 @@ impl BamlRuntimeFfi {
             .chain(ctx.env.into_iter())
             .collect();
 
-        println!("fn trying to call? {}", function_name);
-
+        log::debug!("Calling {function_name} with:\nargs: {args:#?}\nctx: {ctx:#?}");
         let retval = match self
             .t
             .block_on(self.internal.call_function(function_name, args, ctx))
         {
-            Ok(res) => Ok(ruby_types::FunctionResult::new(res)),
+            Ok(res) => {
+                log::debug!("LLM call result:\n{res:#?}");
+                Ok(ruby_types::FunctionResult::new(res))
+            }
             Err(e) => Err(Error::new(
                 ruby.exception_runtime_error(),
                 format!("error while calling function: {}", e),
@@ -245,7 +245,7 @@ fn init() -> Result<()> {
     tokio_demo.define_singleton_method("new", function!(TokioDemo::new, 0))?;
     tokio_demo.define_method("does_this_yield", method!(TokioDemo::does_this_yield, 0))?;
 
-    ruby_types::FunctionResult::define_in(&module)?;
+    ruby_types::FunctionResult::ruby_define_self(&module)?;
 
     Ok(())
 }

@@ -12,6 +12,7 @@ crate-type = ["cdylib"]
 baml-runtime = { path = "../../../baml-runtime" }
 env_logger.workspace = true
 futures = { version = "0.3.30", features = ["executor"] }
+log.workspace = true
 magnus = { version = "0.6", features = ["rb-sys"] }
 # Must be kept in sync with ../../Gemfile
 rb-sys = { version = "0.9.97", features = [

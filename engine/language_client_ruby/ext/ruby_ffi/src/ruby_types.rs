@@ -1,7 +1,4 @@
-use magnus::{
-    class, error::RubyUnavailableError, exception::runtime_error, function, method, prelude::*,
-    scan_args::get_kwargs, value::Value, Error, RHash, RModule,
-};
+use magnus::{class, exception::runtime_error, method, prelude::*, value::Value, Error, RModule};
 
 type Result<T> = std::result::Result<T, magnus::Error>;
 
@@ -12,7 +9,6 @@ pub struct FunctionResult {
 
 impl FunctionResult {
     pub fn new(inner: baml_runtime::FunctionResult) -> Self {
-        //println!("FunctionResult::new {:#?}", inner);
         Self { inner }
     }
 
@@ -30,7 +26,7 @@ impl FunctionResult {
     /// For usage in magnus::init
     ///
     /// This should really be implemented using a combination of traits and macros but this will do
-    pub fn define_in(rmod: &RModule) -> Result<()> {
+    pub fn ruby_define_self(rmod: &RModule) -> Result<()> {
         let cls = rmod.define_class("FunctionResult", class::object())?;
 
         cls.define_method("to_s", method!(FunctionResult::to_s, 0))?;

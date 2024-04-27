@@ -291,7 +291,9 @@ mod tests {
         let mut params = HashMap::new();
         params.insert("input".into(), json!("\"Attention Is All You Need\" is a landmark[1][2] 2017 research paper by Google.[3] Authored by eight scientists, it was responsible for expanding 2014 attention mechanisms proposed by Bahdanau et. al. into a new deep learning architecture known as the transformer. The paper is considered by some to be a founding document for modern artificial intelligence, as transformers became the main architecture of large language models.[4][5] At the time, the focus of the research was on improving Seq2seq techniques for machine translation, but even in their paper the authors saw the potential for other tasks like question answering and for what is now called multimodal Generative AI.\n\nThe paper's title is a reference to the song \"All You Need Is Love\" by the Beatles.[6]\n\nAs of 2024, the paper has been cited more than 100,000 times.[7]"));
 
-        let res = runtime.call_function("ExtractNames", &params, ctx).await?;
+        let res = runtime
+            .call_function("ExtractNames".to_string(), params, ctx)
+            .await?;
 
         println!("{:#?}", res);
 

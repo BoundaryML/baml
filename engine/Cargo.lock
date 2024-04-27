@@ -2604,6 +2604,7 @@ dependencies = [
  "baml-runtime",
  "env_logger",
  "futures",
+ "log",
  "magnus",
  "rb-sys",
  "rb-sys-env",
