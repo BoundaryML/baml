@@ -6,7 +6,7 @@ use baml_lib::{internal_baml_schema_ast::ast::WithName, Configuration, Validated
 
 use baml_lib::internal_baml_core::configuration::GeneratorLanguage;
 
-use crate::{errors::CliError, test_command::test_state::RunState, TestAction, TestArgs};
+use crate::{errors::CliError, legacy_test_command::test_state::RunState, TestAction, TestArgs};
 
 use run_tests::TestRunner;
 

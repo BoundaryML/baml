@@ -7,8 +7,8 @@ mod command;
 mod errors;
 mod import_command;
 mod init_command;
+mod legacy_test_command;
 mod shell;
-mod test_command;
 mod update;
 mod update_client;
 mod version_command;
@@ -166,7 +166,7 @@ pub(crate) fn main() {
             }),
         Commands::Test(args) => {
             builder::build(&args.baml_dir).and_then(|(baml_dir, config, schema)| {
-                test_command::run(args, &baml_dir, &config, schema)
+                legacy_test_command::run(args, &baml_dir, &config, schema)
             })
         }
         Commands::Import(args) => {

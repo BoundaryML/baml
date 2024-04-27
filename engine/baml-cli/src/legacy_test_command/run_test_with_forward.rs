@@ -2,20 +2,19 @@ use colored::*;
 use std::{
     borrow::Borrow,
     fs::{self, File},
-    io::{self, Write},
     process::Stdio,
     sync::Arc,
 };
 
 use tokio::{
-    io::AsyncReadExt,
+    io::{self, AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
     sync::Mutex,
     time,
 };
 
 use crate::{
-    errors::CliError, shell::build_shell_command, test_command::test_state::on_finish_test,
+    errors::CliError, legacy_test_command::test_state::on_finish_test, shell::build_shell_command,
 };
 
 use super::{ipc_comms, run_tests::TestRunner, test_state::RunState};
@@ -23,6 +22,7 @@ use super::{ipc_comms, run_tests::TestRunner, test_state::RunState};
 async fn handle_connection(
     mut stream: TcpStream,
     state: Arc<Mutex<RunState>>,
+    forward_port: u16,
 ) -> tokio::io::Result<()> {
     let mut buffer = Vec::new();
     let mut read_buf = [0u8; 1024]; // Adjust buffer size as needed
@@ -68,10 +68,13 @@ async fn handle_connection(
                 if message.is_empty() {
                     continue;
                 }
+                let promise = forward_to_port(forward_port, message);
 
                 if let Some(message) = ipc_comms::handle_message(message) {
                     state.add_message(message);
+                    _ = promise.await;
                 } else {
+                    _ = promise.await;
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidData,
                         format!("Failed to parse message: {}", message),
@@ -83,6 +86,7 @@ async fn handle_connection(
         // Prepare buffer for next read, preserving the incomplete message if there is one
         buffer = incomplete_message.as_bytes().to_vec();
     }
+
     Ok(())
 }
 
@@ -97,6 +101,7 @@ async fn run_and_update_state(
     language_root_dir: std::path::PathBuf,
     state: Arc<Mutex<RunState>>,
     mut shell_command: Vec<String>,
+    forward_port: u16,
 ) -> tokio::io::Result<()> {
     let (listener, port) = start_server().await?;
 
@@ -106,19 +111,20 @@ async fn run_and_update_state(
         loop {
             let (socket, _) = listener.accept().await.unwrap();
             let state = server_state.clone();
-            tokio::spawn(handle_connection(socket, state));
+            tokio::spawn(handle_connection(socket, state, forward_port));
         }
     });
 
-    // Add the port to the shell command
     runner.add_ipc_to_command(&mut shell_command, port);
 
     let mut cmd = build_shell_command(shell_command.clone());
 
-    println!("{}", format!("Running test with args: {:?}", &cmd).dimmed());
-
+    // We don't need this - too noisy. We can append to stdout logs later or print it if there was an error.
+    // println!(
+    //     "{}",
+    //     format!("Running pytest with args: {:?}", cmd).dimmed()
+    // );
     // Create a directory in the temp folder
-    // Load from environment variable (BAML_TEST_LOGS) if set or use temp_dir
     let baml_tests_dir = match std::env::var("BAML_TEST_LOGS") {
         Ok(dir) => std::path::PathBuf::from(dir),
         Err(_) => std::env::temp_dir().join("baml/tests"),
@@ -132,7 +138,7 @@ async fn run_and_update_state(
 
     println!(
         "{}\n{}\n{}",
-        "Verbose logs available at:".dimmed(),
+        "Verbose logs available at: ".dimmed(),
         stdout_file_path.display().to_string().dimmed(),
         stderr_file_path.display().to_string().dimmed()
     );
@@ -140,70 +146,79 @@ async fn run_and_update_state(
     let stdout_file = File::create(&stdout_file_path)?;
     let stderr_file = File::create(&stderr_file_path)?;
 
+    println!("{}", format!("Running tests using: {:?}", &cmd,));
     let mut child = cmd
         .envs(runner.env_vars().into_iter())
-        .env("BOUNDARY_IPC_PORT", port.to_string())
         .current_dir(language_root_dir)
+        .env("BOUNDARY_IPC_PORT", port.to_string())
         .stdout(Stdio::from(stdout_file))
         .stderr(Stdio::from(stderr_file))
         .spawn()
-        .expect("failed to spawn test process");
+        .unwrap_or_else(|_| panic!("failed to spawn child process {}", shell_command.join(" ")));
 
-    // Print state every 2 seconds while pytest/jest is running
-    let mut interval = time::interval(time::Duration::from_millis(1000));
-    let mut last_print_lines = 0;
+    // Print state every 2 seconds while pytest is running
+    let mut interval = time::interval(time::Duration::from_millis(500));
     while child.try_wait()?.is_none() {
         interval.tick().await;
-        let (state_string, extra_message) = {
-            let mut state = state.lock().await;
-            let message = state.sync();
-            (state.to_string(), message)
-        };
-
-        // Clear previous print characters
-        for _ in 0..last_print_lines {
-            print!("\x1B[A\x1B[2K"); // ANSI escape code: Move up and clear line
+        let mut state = state.lock().await;
+        if let Some(message) = state.sync() {
+            println!("{}", message);
         }
-        print!("\r");
-        match extra_message {
-            Some(message) => print!("{}\n{}", message, state_string),
-            None => print!("{}", state_string),
-        }
-
-        // Update the length of the last printed state
-        last_print_lines = state_string.lines().count();
-
-        // Flush stdout to ensure immediate output
-        let _ = io::stdout().flush();
     }
 
-    // Optionally, you can handle the output after the subprocess has finished
-    let output = child.wait_with_output()?;
-    on_finish_test(
-        output,
-        state.lock().await.borrow(),
-        stdout_file_path,
-        stderr_file_path,
-    )
-    .await
+    {
+        let mut state = state.lock().await;
+        state.sync();
+
+        // Create a symlink to the baml directory
+        println!("{}", state.to_string())
+    }
+
+    // exit also with the same status only if the exit codes are
+    // 2, 3, 4 https://docs.pytest.org/en/latest/reference/exit-codes.html
+    match child.wait_with_output() {
+        Ok(output) => {
+            on_finish_test(
+                output,
+                state.lock().await.borrow(),
+                stdout_file_path,
+                stderr_file_path,
+            )
+            .await
+        }
+        Err(e) => {
+            eprintln!("Failed to execute command: {}", e);
+            Err(e)
+        }
+    }
 }
 
-pub(crate) fn run_test_with_watcher(
+pub(crate) fn run_test_with_forward(
     runner: TestRunner,
     language_root_dir: std::path::PathBuf,
     state: RunState,
     shell_command: Vec<String>,
+    forward_port: u16,
 ) -> Result<(), CliError> {
     let rt = tokio::runtime::Runtime::new().unwrap();
 
     let state = Arc::new(Mutex::new(state));
+
     rt.block_on(run_and_update_state(
         runner,
         language_root_dir,
         state,
         shell_command,
+        forward_port,
     ))
-    .map_err(|e| CliError::StringError(format!("Failed to run tests!\n{}", e)))?;
+    .map_err(|e| format!("Failed to run tests!\n{}", e).into())
+}
 
-    Ok(())
+async fn forward_to_port(port: u16, message: &str) -> tokio::io::Result<()> {
+    const HOST: &str = "127.0.0.1";
+    // Forward message to the port.
+    let mut stream = TcpStream::connect(format!("{}:{}", HOST, port)).await?;
+    stream.write_all(message.as_bytes()).await?;
+    stream.write_all(b"<BAML_END_MSG>\n").await?;
+    stream.flush().await
 }
