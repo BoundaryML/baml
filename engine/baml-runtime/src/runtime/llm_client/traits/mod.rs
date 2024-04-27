@@ -12,10 +12,7 @@ pub use self::{
     completion::{WithCompletion, WithNoCompletion},
 };
 
-use super::{
-    retry_policy::CallablePolicy,
-    {LLMResponse, ModelFeatures},
-};
+use super::{retry_policy::CallablePolicy, LLMResponse, ModelFeatures, RetryLLMResponse};
 
 pub trait WithRetryPolicy {
     fn retry_policy<'a>(&self, ir: &'a IntermediateRepr) -> Option<RetryPolicyWalker<'a>>;
@@ -27,7 +24,7 @@ pub trait WithCallable {
         ir: &IntermediateRepr,
         ctx: &RuntimeContext,
         prompt: &RenderedPrompt,
-    ) -> Result<LLMResponse>;
+    ) -> LLMResponse;
 }
 
 pub trait WithSingleCallable {
@@ -62,27 +59,56 @@ where
         ir: &'a IntermediateRepr,
         ctx: &RuntimeContext,
         prompt: &RenderedPrompt,
-    ) -> Result<LLMResponse> {
+    ) -> LLMResponse {
         if let Some(policy) = &self.retry_policy(ir) {
             let retry_strategy = CallablePolicy::new(&policy);
             // TODO: @sxlijin collect all errors.
-            let mut err = None;
+            let mut err = vec![];
+
+            let to_final_response = |res: LLMResponse, err: Vec<LLMResponse>| {
+                if err.is_empty() {
+                    res
+                } else {
+                    LLMResponse::Retry(RetryLLMResponse {
+                        client: None,
+                        passed: Some(Box::new(res)),
+                        failed: err,
+                    })
+                }
+            };
+
             for delay in retry_strategy {
                 match self.single_call(ctx, prompt).await {
-                    Ok(response) => return Ok(response),
+                    Ok(LLMResponse::Success(content)) => {
+                        return to_final_response(LLMResponse::Success(content), err);
+                    }
+                    Ok(LLMResponse::Retry(retry)) if retry.passed.is_some() => {
+                        return to_final_response(LLMResponse::Retry(retry), err);
+                    }
+                    Ok(x) => {
+                        err.push(x);
+                    }
                     Err(e) => {
-                        err = Some(e);
+                        err.push(LLMResponse::OtherFailures(e.to_string()));
                     }
                 }
                 tokio::time::sleep(delay).await;
             }
-            if let Some(e) = err {
-                return Err(e);
+
+            if err.is_empty() {
+                LLMResponse::OtherFailures("No calls were made".to_string())
             } else {
-                anyhow::bail!("No response from client");
+                LLMResponse::Retry(RetryLLMResponse {
+                    client: None,
+                    passed: None,
+                    failed: err,
+                })
             }
         } else {
-            self.single_call(ctx, prompt).await
+            match self.single_call(ctx, prompt).await {
+                Ok(x) => x,
+                Err(e) => LLMResponse::OtherFailures(e.to_string()),
+            }
         }
     }
 }
@@ -148,11 +174,11 @@ where
             ModelFeatures {
                 completion: true,
                 chat: false,
-            } => Ok(prompt.as_completion(&self.completion_options()?)),
+            } => Ok(prompt.as_completion(&self.completion_options(ctx)?)),
             ModelFeatures {
                 completion: false,
                 chat: true,
-            } => Ok(prompt.as_chat(&self.chat_options()?)),
+            } => Ok(prompt.as_chat(&self.chat_options(ctx)?)),
             ModelFeatures {
                 completion: true,
                 chat: true,

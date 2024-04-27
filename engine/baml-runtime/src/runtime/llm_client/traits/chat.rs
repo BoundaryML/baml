@@ -9,30 +9,32 @@ use crate::{
 };
 
 pub trait WithChat: Sync + Send {
-    fn chat_options(&mut self) -> Result<ChatOptions>;
+    fn chat_options(&mut self, ctx: &RuntimeContext) -> Result<ChatOptions>;
 
     async fn chat(
         &mut self,
         ctx: &RuntimeContext,
         prompt: &Vec<RenderedChatMessage>,
     ) -> Result<LLMResponse>;
-
-    async fn stream_chat(
-        &mut self,
-        ctx: &RuntimeContext,
-        messages: &Vec<RenderedChatMessage>,
-    ) -> impl Stream<Item = Result<LLMStreamResponse>> {
-        stream! {
-            let response = self.chat(ctx, messages).await?;
-            yield Ok(LLMStreamResponse {
-                delta: response.content,
-                start_time_unix_ms: response.start_time_unix_ms,
-                latency_ms: response.latency_ms,
-                metadata: response.metadata,
-            });
-        }
-    }
 }
+
+// pub trait WithChatStream: WithChat {
+//     fn stream_chat(
+//         &mut self,
+//         ctx: &RuntimeContext,
+//         prompt: &Vec<RenderedChatMessage>,
+//     ) -> impl Stream<Item = Result<LLMStreamResponse>> {
+//         stream! {
+//             let response = self.chat(ctx, prompt).await?;
+//             yield Ok(LLMStreamResponse {
+//                 delta: response.content(),
+//                 start_time_unix_ms: response.start_time_unix_ms,
+//                 latency_ms: response.latency_ms,
+//                 metadata: response.metadata,
+//             });
+//         }
+//     }
+// }
 
 pub trait WithNoChat {}
 
@@ -40,7 +42,7 @@ impl<T> WithChat for T
 where
     T: WithNoChat + Send + Sync,
 {
-    fn chat_options(&mut self) -> Result<ChatOptions> {
+    fn chat_options(&mut self, ctx: &RuntimeContext) -> Result<ChatOptions> {
         anyhow::bail!("Chat prompts are not supported by this provider")
     }
 

@@ -1,20 +1,18 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use async_trait::async_trait;
 use internal_baml_core::ir::repr::IntermediateRepr;
 use internal_baml_core::ir::{ClientWalker, RetryPolicyWalker};
-use internal_baml_jinja::{CompletionOptions, RenderContext_Client, RenderedChatMessage};
+use internal_baml_jinja::{RenderContext_Client, RenderedChatMessage};
 use serde_json::json;
 
 use crate::runtime::llm_client::expression_helper::to_value;
-use crate::runtime::llm_client::traits::{
-    WithChat, WithClient, WithCompletion, WithNoCompletion, WithPrompt, WithRetryPolicy,
-};
+use crate::runtime::llm_client::traits::{WithChat, WithClient, WithNoCompletion, WithRetryPolicy};
 use crate::runtime::llm_client::{openai::types::FinishReason, LLMResponse, ModelFeatures};
+use crate::runtime::llm_client::{ErrorCode, LLMCompleteResponse, LLMErrorResponse};
 use crate::RuntimeContext;
 
-use super::types::ChatCompletionResponse;
+use super::types::{ChatCompletionResponse, OpenAIErrorResponse};
 
 struct PostRequestProperities<'ir> {
     default_role: String,
@@ -51,7 +49,8 @@ impl WithClient for OpenAIClient<'_> {
         match self.features {
             Some(ref f) => Ok(f),
             None => {
-                let properties = self.load_properties(&self.client, ctx)?;
+                let _properties = self.load_properties(&self.client, ctx)?;
+
                 self.features = Some(ModelFeatures {
                     chat: true,
                     completion: false,
@@ -66,8 +65,12 @@ impl WithClient for OpenAIClient<'_> {
 impl WithNoCompletion for OpenAIClient<'_> {}
 
 impl WithChat for OpenAIClient<'_> {
-    fn chat_options(&mut self) -> Result<internal_baml_jinja::ChatOptions> {
-        Ok(internal_baml_jinja::ChatOptions::new("system".into(), None))
+    fn chat_options(&mut self, ctx: &RuntimeContext) -> Result<internal_baml_jinja::ChatOptions> {
+        let properties = self.load_properties(&self.client, ctx)?;
+        Ok(internal_baml_jinja::ChatOptions::new(
+            properties.default_role.clone(),
+            None,
+        ))
     }
 
     async fn chat(
@@ -80,21 +83,74 @@ impl WithChat for OpenAIClient<'_> {
         let now = std::time::SystemTime::now();
         let res = req.send().await?;
 
-        // Raise for status.
-        let res = res.error_for_status()?;
+        let status = res.status();
 
-        let body = res.json::<ChatCompletionResponse>().await?;
+        // Raise for status.
+        if !status.is_success() {
+            let err_code = ErrorCode::from_status(status);
+
+            let err_message = match res.json::<serde_json::Value>().await {
+                Ok(body) => match serde_json::from_value::<OpenAIErrorResponse>(body) {
+                    Ok(err) => format!("API Error ({}): {}", err.error.r#type, err.error.message),
+                    Err(e) => format!("Does this support the OpenAI Response type?\n{:#?}", e),
+                },
+                Err(e) => {
+                    format!("Does this support the OpenAI Response type?\n{:#?}", e)
+                }
+            };
+
+            return Ok(LLMResponse::LLMFailure(LLMErrorResponse {
+                client: self.client.name().into(),
+                model: None,
+                prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
+                start_time_unix_ms: now
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis() as u64,
+                latency_ms: now.elapsed().unwrap().as_millis() as u64,
+                message: err_message,
+                code: err_code,
+            }));
+        }
+
+        let body = match res.json::<ChatCompletionResponse>().await {
+            Ok(body) => body,
+            Err(e) => {
+                return Ok(LLMResponse::LLMFailure(LLMErrorResponse {
+                    client: self.client.name().into(),
+                    model: None,
+                    prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
+                    start_time_unix_ms: now
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_millis() as u64,
+                    latency_ms: now.elapsed().unwrap().as_millis() as u64,
+                    message: format!("Does this support the OpenAI Response type?\n{:#?}", e),
+                    code: ErrorCode::UnsupportedResponse(status.as_u16()),
+                }));
+            }
+        };
 
         if body.choices.len() < 1 {
-            anyhow::bail!(
-                "Expected exactly one response from OpenAI, got 0.\n{:?}",
-                body
-            );
+            return Ok(LLMResponse::LLMFailure(LLMErrorResponse {
+                client: self.client.name().into(),
+                model: None,
+                prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
+                start_time_unix_ms: now
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis() as u64,
+                latency_ms: now.elapsed().unwrap().as_millis() as u64,
+                message: format!("No content in response:\n{:#?}", body),
+                code: ErrorCode::Other(status.as_u16()),
+            }));
         }
 
         let usage = body.usage.as_ref();
 
-        Ok(LLMResponse {
+        Ok(LLMResponse::Success(LLMCompleteResponse {
+            client: self.client.name().into(),
+            prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
             content: body.choices[0]
                 .message
                 .content
@@ -118,12 +174,12 @@ impl WithChat for OpenAIClient<'_> {
                 "output_tokens": usage.map(|u| u.completion_tokens),
                 "total_tokens": usage.map(|u| u.total_tokens),
             }),
-        })
+        }))
     }
 }
 
 impl<'ir> OpenAIClient<'ir> {
-    pub fn load_properties(
+    fn load_properties(
         &mut self,
         client: &'ir ClientWalker<'ir>,
         ctx: &RuntimeContext,

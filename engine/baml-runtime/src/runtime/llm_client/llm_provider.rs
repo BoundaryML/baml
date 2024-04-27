@@ -59,7 +59,7 @@ impl WithCallable for LLMProvider<'_> {
         ir: &internal_baml_core::ir::repr::IntermediateRepr,
         ctx: &RuntimeContext,
         prompt: &internal_baml_jinja::RenderedPrompt,
-    ) -> Result<LLMResponse> {
+    ) -> LLMResponse {
         match self {
             LLMProvider::OpenAI(client) => client.call(ir, ctx, prompt).await,
         }

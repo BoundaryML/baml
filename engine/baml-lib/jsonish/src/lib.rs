@@ -10,7 +10,9 @@ mod json_schema;
 use internal_baml_core::ir::repr::{FieldType, IntermediateRepr};
 use serde_json::{self};
 
-use json_schema::{DeserializerConditions, ValueCoerce};
+use json_schema::ValueCoerce;
+
+pub use json_schema::DeserializerConditions;
 
 pub fn from_str(
     raw_string: &str,

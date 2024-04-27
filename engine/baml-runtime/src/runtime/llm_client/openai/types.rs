@@ -113,3 +113,15 @@ pub struct TopLogprobs {
     /// A list of integers representing the UTF-8 bytes representation of the token. Useful in instances where characters are represented by multiple tokens and their byte representations must be combined to generate the correct text representation. Can be `null` if there is no bytes representation for the token.
     pub bytes: Option<Vec<u8>>,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct OpenAIErrorResponse {
+    pub error: OpenAIError,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct OpenAIError {
+    pub message: String,
+    pub r#type: String,
+    pub code: Option<String>,
+}

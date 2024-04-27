@@ -3,7 +3,7 @@ mod prompt_renderer;
 
 use anyhow::Result;
 use serde_json::json;
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf, process::Termination};
 
 use internal_baml_core::{
     internal_baml_diagnostics::SourceFile,
@@ -17,8 +17,24 @@ use crate::runtime::{
 };
 use crate::RuntimeContext;
 
+use self::llm_client::LLMResponse;
+
 pub struct BamlRuntime {
     ir: IntermediateRepr,
+}
+
+pub struct FunctionResponse {
+    llm_response: LLMResponse,
+    parsed: Option<Result<(serde_json::Value, jsonish::DeserializerConditions)>>,
+}
+
+impl Termination for FunctionResponse {
+    fn report(self) -> std::process::ExitCode {
+        match self.parsed {
+            Some(Ok((_, _))) => std::process::ExitCode::SUCCESS,
+            _ => std::process::ExitCode::FAILURE,
+        }
+    }
 }
 
 impl BamlRuntime {
@@ -67,7 +83,7 @@ impl BamlRuntime {
         function_name: &str,
         params: &HashMap<String, serde_json::Value>,
         ctx: RuntimeContext,
-    ) -> Result<()> {
+    ) -> Result<FunctionResponse> {
         let function = self.ir.find_function(function_name)?;
         self.ir.check_function_params(&function, params)?;
 
@@ -79,21 +95,24 @@ impl BamlRuntime {
         let prompt = client.render_prompt(&renderer, &ctx, &json!(params))?;
 
         // Call the LLM.
-        let response = client.call(&self.ir, &ctx, &prompt).await?;
+        let response = client.call(&self.ir, &ctx, &prompt).await;
 
-        println!("{:?}", response);
+        match response.content() {
+            None => {
+                return Ok(FunctionResponse {
+                    llm_response: response,
+                    parsed: None,
+                });
+            }
+            Some(content) => {
+                let parsed = jsonish::from_str(content, &self.ir, function.output(), &ctx.env);
 
-        // Parse the output.
-        let parsed = jsonish::from_str(
-            response.content.as_str(),
-            &self.ir,
-            function.output(),
-            &ctx.env,
-        )?;
-
-        println!("{:?}", parsed.0);
-
-        Ok(())
+                Ok(FunctionResponse {
+                    llm_response: response,
+                    parsed: Some(parsed),
+                })
+            }
+        }
     }
 }
 
@@ -103,7 +122,7 @@ mod tests {
     use std::collections::HashMap;
 
     #[tokio::test]
-    async fn test_call_function() -> Result<()> {
+    async fn test_call_function() -> Result<FunctionResponse> {
         let directory = PathBuf::from("/Users/vbv/repos/gloo-lang/integ-tests/baml_src");
         let runtime = BamlRuntime::from_directory(&directory).unwrap();
 
@@ -112,8 +131,15 @@ mod tests {
         let mut params = HashMap::new();
         params.insert("input".into(), json!("\"Attention Is All You Need\" is a landmark[1][2] 2017 research paper by Google.[3] Authored by eight scientists, it was responsible for expanding 2014 attention mechanisms proposed by Bahdanau et. al. into a new deep learning architecture known as the transformer. The paper is considered by some to be a founding document for modern artificial intelligence, as transformers became the main architecture of large language models.[4][5] At the time, the focus of the research was on improving Seq2seq techniques for machine translation, but even in their paper the authors saw the potential for other tasks like question answering and for what is now called multimodal Generative AI.\n\nThe paper's title is a reference to the song \"All You Need Is Love\" by the Beatles.[6]\n\nAs of 2024, the paper has been cited more than 100,000 times.[7]"));
 
-        runtime.call_function("ExtractNames", &params, ctx).await?;
+        let res = runtime.call_function("ExtractNames", &params, ctx).await?;
 
-        Ok(())
+        println!("{:#?}", res.llm_response);
+
+        if let Some(Ok((val, flags))) = &res.parsed {
+            println!("{}", val);
+            println!("{}", flags);
+        }
+
+        Ok(res)
     }
 }

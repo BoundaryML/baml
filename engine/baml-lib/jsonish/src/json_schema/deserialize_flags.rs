@@ -75,6 +75,71 @@ pub struct DeserializerConditions {
     flags: Vec<Flag>,
 }
 
+impl std::fmt::Display for DeserializerConditions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.flags.is_empty() {
+            return Ok(());
+        }
+
+        writeln!(f, "----Parsing Conditions----")?;
+        for flag in &self.flags {
+            writeln!(f, "{}", flag)?;
+        }
+        writeln!(f, "--------------------------")?;
+        Ok(())
+    }
+}
+
+impl std::fmt::Display for Flag {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Flag::NullButHadUnparseableValue(ctx, value) => {
+                write!(f, "Null but had unparseable value: {}", ctx)?;
+                writeln!(f, "----RAW----")?;
+                writeln!(f, "{:#?}", value)?;
+                writeln!(f, "-----------")?;
+            }
+            Flag::ObjectToString(value) => {
+                write!(f, "Object to string: ")?;
+                writeln!(f, "{:#?}", value)?;
+            }
+            Flag::ObjectToField(value) => {
+                write!(f, "Object to field: ")?;
+                writeln!(f, "{:#?}", value)?;
+            }
+            Flag::StrippedNonAlphaNumeric(value) => {
+                write!(f, "Stripped non-alphanumeric characters: {}", value)?;
+            }
+            Flag::SubstringMatch(value) => {
+                write!(f, "Substring match: {}", value)?;
+            }
+            Flag::FirstMatch(values) => {
+                write!(f, "First match: ")?;
+                for value in values {
+                    writeln!(f, "{:#?}", value)?;
+                }
+            }
+            Flag::NullButHadValue(value) => {
+                write!(f, "Null but had value: ")?;
+                writeln!(f, "{:#?}", value)?;
+            }
+            Flag::StringToBool(value) => {
+                write!(f, "String to bool: {}", value)?;
+            }
+            Flag::StringToNull(value) => {
+                write!(f, "String to null: {}", value)?;
+            }
+            Flag::StringToChar(value) => {
+                write!(f, "String to char: {}", value)?;
+            }
+            Flag::FloatToInt(value) => {
+                write!(f, "Float to int: {}", value)?;
+            }
+        }
+        Ok(())
+    }
+}
+
 impl DeserializerConditions {
     pub fn add_flag(&mut self, flag: Flag) {
         self.flags.push(flag);
