@@ -22,7 +22,7 @@ async def test_natural_orange(ClassifyMessageImpl: IClassifyMessageStream, baml_
             return item
         return dumps(item)
 
-    case = {"input": "Can't access my account using my usual login credentials, and each attempt results in an error message stating \"Invalid username or password.\" I have tried resetting my password using the 'Forgot Password' link, but I haven't received the promised password reset email.", }
+    case = {""input"": "Can't access my account using my usual login credentials, and each attempt results in an error message stating \"Invalid username or password.\" I have tried resetting my password using the 'Forgot Password' link, but I haven't received the promised password reset email.", }
     deserializer_input = Deserializer[str](str) # type: ignore
     input = deserializer_input.from_string(to_str(case["input"]))
     async with ClassifyMessageImpl(

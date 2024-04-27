@@ -22,7 +22,7 @@ async def test_mobile_gold(FnNamedArgsSingleStringOptionalImpl: IFnNamedArgsSing
             return item
         return dumps(item)
 
-    case = {"myString": "null", }
+    case = {""myString"": "null", }
     deserializer_myString = Deserializer[Optional[str]](Optional[str]) # type: ignore
     myString = deserializer_myString.from_string(to_str(case["myString"]))
     async with FnNamedArgsSingleStringOptionalImpl(
@@ -39,7 +39,7 @@ async def test_upper_pink(FnNamedArgsSingleStringOptionalImpl: IFnNamedArgsSingl
             return item
         return dumps(item)
 
-    case = {"myString": "value", }
+    case = {""myString"": "value", }
     deserializer_myString = Deserializer[Optional[str]](Optional[str]) # type: ignore
     myString = deserializer_myString.from_string(to_str(case["myString"]))
     async with FnNamedArgsSingleStringOptionalImpl(

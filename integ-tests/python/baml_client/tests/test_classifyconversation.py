@@ -22,7 +22,7 @@ async def test_blue_dolphin(ClassifyConversationImpl: IClassifyConversationStrea
             return item
         return dumps(item)
 
-    case = {"messages": [{"role": "user", "message": "This is so frustrating, i bought a laptop and it's not working properly. I want to return it and get my money back. I'm so disappointed", }, {"role": "assistant", "message": "I'm sorry to hear that. Could you please provide me with the order number and the reason for the return?", }, {"role": "user", "message": "I don't have the order number with me right now, but I can provide you with the serial number of the laptop. The reason for the return is that the laptop is not turning on and the screen is flickering. Also i can't even log in!", }], }
+    case = {""messages"": [{""role"": "user", ""message"": "This is so frustrating, i bought a laptop and it's not working properly. I want to return it and get my money back. I'm so disappointed", }, {""role"": "assistant", ""message"": "I'm sorry to hear that. Could you please provide me with the order number and the reason for the return?", }, {""role"": "user", ""message"": "I don't have the order number with me right now, but I can provide you with the serial number of the laptop. The reason for the return is that the laptop is not turning on and the screen is flickering. Also i can't even log in!", }], }
     deserializer_messages = Deserializer[List[Message]](List[Message]) # type: ignore
     messages = deserializer_messages.from_string(to_str(case["messages"]))
     async with ClassifyConversationImpl(
@@ -39,7 +39,7 @@ async def test_case1(ClassifyConversationImpl: IClassifyConversationStream, baml
             return item
         return dumps(item)
 
-    case = {"messages": [{"role": "user", "content": "Can you help me find when an order I placed is shipping?", }], }
+    case = {""messages"": [{""role"": "user", ""content"": "Can you help me find when an order I placed is shipping?", }], }
     deserializer_messages = Deserializer[List[Message]](List[Message]) # type: ignore
     messages = deserializer_messages.from_string(to_str(case["messages"]))
     async with ClassifyConversationImpl(

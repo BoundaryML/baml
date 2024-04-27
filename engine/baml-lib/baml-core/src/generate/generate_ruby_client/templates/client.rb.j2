@@ -7,28 +7,27 @@ module Baml
   class BamlClient
     extend T::Sig
 
-    private_class_method :new
-
-    def initialize(runtime)
+    sig {params(runtime: Baml::BamlRuntime).void}
+    def initialize(runtime:)
       @runtime = runtime
     end
 
     sig {params(path: String).returns(BamlClient)}
-    def from_directory(path)
-      BamlClient.new(BamlRuntime.new(path))
+    def self.from_directory(path)
+      BamlClient.new(runtime: BamlRuntime.from_directory(path))
     end
 
     {% for fn in funcs -%}
     sig {
       params(
         {% for (name, type) in fn.args -%}
-        {{name}}: Baml::Types::{{type}},
+        {{name}}: {{type}},
         {%- endfor %}
-      ).returns(Baml::Types::{{ fn.return_type }})
+      ).returns({{ fn.return_type }})
     }
-    def self.{{fn.name}}(
+    def {{fn.name}}(
         {% for (name, _) in fn.args -%}
-        {{name}}{% if !loop.last %},{% endif %}
+        {{name}}:{% if !loop.last %},{% endif %}
         {%- endfor %}
     )
       let raw = @runtime.call_function(
@@ -40,7 +39,7 @@ module Baml
         }
       )
       {# TODO- consider making this not-frozen #}
-      raw.value = TypeCoerce[Baml::Types::{{ fn.return_type }}].new.from(raw.value)
+      raw.value = TypeCoerce[{{ fn.return_type }}].new.from(raw.value)
 
       raw
     end

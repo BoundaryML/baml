@@ -87,7 +87,7 @@ pub(crate) fn generate_ruby(ir: &IntermediateRepr, gen: &Generator) -> std::io::
     file.append("end".to_string());
     collector.finish_file();
 
-    let file = collector.start_file(".", "functions", false);
+    let file = collector.start_file(".", "client", false);
     let functions = ir
         .walk_functions()
         .flat_map(|f| {

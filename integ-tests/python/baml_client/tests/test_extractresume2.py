@@ -22,7 +22,7 @@ async def test_chronic_salmon(ExtractResume2Impl: IExtractResume2Stream, baml_ip
             return item
         return dumps(item)
 
-    case = {"resume": "some super amazing resume", }
+    case = {""resume"": "some super amazing resume", }
     deserializer_resume = Deserializer[str](str) # type: ignore
     resume = deserializer_resume.from_string(to_str(case["resume"]))
     async with ExtractResume2Impl(

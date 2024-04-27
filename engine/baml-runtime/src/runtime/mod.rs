@@ -39,24 +39,33 @@ impl Termination for FunctionResponse {
 
 impl BamlRuntime {
     pub fn from_directory(directory: &PathBuf) -> Result<Self> {
-        let glob_pattern = directory.join("**/*").to_string_lossy().to_string();
-        let glob_pattern = if glob_pattern.starts_with(r"\\?\") {
-            &glob_pattern[4..]
-        } else {
-            &glob_pattern
-        };
-        let entries = glob::glob(glob_pattern)?;
+        static VALID_EXTENSIONS: [&str; 2] = ["baml", "json"];
 
-        let valid_extensions = ["baml", "json"];
-        let src_files = entries
-            .filter_map(|path| path.ok())
-            .filter(|path| {
-                path.is_file()
-                    && path.extension().map_or(false, |ext| {
-                        valid_extensions.contains(&ext.to_str().unwrap())
-                    })
+        let src_files = walkdir::WalkDir::new(directory)
+            .into_iter()
+            .filter_map(|e| match e {
+                Ok(e) => Some(e),
+                Err(e) => {
+                    log::warn!(
+                        "Error while reading files from {:#}: {}",
+                        directory.to_string_lossy(),
+                        e
+                    );
+                    None
+                }
             })
-            .collect::<Vec<_>>();
+            .filter(|e| e.file_type().is_file())
+            .filter(|e| {
+                let Some(ext) = e.path().extension() else {
+                    return false;
+                };
+                let Some(ext) = ext.to_str() else {
+                    return false;
+                };
+                VALID_EXTENSIONS.contains(&ext)
+            })
+            .map(|e| e.path().to_path_buf())
+            .collect();
 
         Self::from_files(directory, src_files)
     }

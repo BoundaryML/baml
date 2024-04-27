@@ -22,7 +22,8 @@ async def test_increasing_crimson(FnClassOptionalOutput2Impl: IFnClassOptionalOu
             return item
         return dumps(item)
 
-    content = to_str("prop1 is hello\nprop2 is world")
+    content = to_str("prop1 is hello
+prop2 is world")
     deserializer = Deserializer[str](str) # type: ignore
     param = deserializer.from_string(content)
     async with FnClassOptionalOutput2Impl(param) as stream:

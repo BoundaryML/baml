@@ -22,7 +22,7 @@ async def test_expected_copper(ClassifyMessage2Impl: IClassifyMessage2Stream, ba
             return item
         return dumps(item)
 
-    case = {"input": "The app isn't working on my phone", }
+    case = {""input"": "The app isn't working on my phone", }
     deserializer_input = Deserializer[str](str) # type: ignore
     input = deserializer_input.from_string(to_str(case["input"]))
     async with ClassifyMessage2Impl(
@@ -39,7 +39,7 @@ async def test_patient_olive(ClassifyMessage2Impl: IClassifyMessage2Stream, baml
             return item
         return dumps(item)
 
-    case = {"input": "The item was damaged when I got it", }
+    case = {""input"": "The item was damaged when I got it", }
     deserializer_input = Deserializer[str](str) # type: ignore
     input = deserializer_input.from_string(to_str(case["input"]))
     async with ClassifyMessage2Impl(

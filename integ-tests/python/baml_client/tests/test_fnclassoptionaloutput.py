@@ -38,7 +38,8 @@ async def test_national_blush(FnClassOptionalOutputImpl: IFnClassOptionalOutputS
             return item
         return dumps(item)
 
-    content = to_str("prop1 is hello\nprop2 is world")
+    content = to_str("prop1 is hello
+prop2 is world")
     deserializer = Deserializer[str](str) # type: ignore
     param = deserializer.from_string(content)
     async with FnClassOptionalOutputImpl(param) as stream:

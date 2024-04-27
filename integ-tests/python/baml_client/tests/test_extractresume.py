@@ -22,7 +22,33 @@ async def test_nutty_white(ExtractResumeImpl: IExtractResumeStream, baml_ipc_cha
             return item
         return dumps(item)
 
-    case = {"resume": "Vaibhav Gupta\nlinkedin/vaigup\n(972) 400-5279\nvaibhavtheory@gmail.com\nEXPERIENCE\nGoogle,\nSoftware Engineer\nDec 2018-Present\nSeattle, WA\n•\nAugmented Reality,\nDepth Team\n•\nTechnical Lead for on-device optimizations\n•\nOptimized and designed front\nfacing depth algorithm\non Pixel 4\n•\nFocus: C++ and SIMD on custom silicon\n\n\nEDUCATION\nUniversity of Texas at Austin\nAug 2012-May 2015\nBachelors of Engineering, Integrated Circuits\nBachelors of Computer Science", }
+    case = {""resume"": "Vaibhav Gupta
+linkedin/vaigup
+(972) 400-5279
+vaibhavtheory@gmail.com
+EXPERIENCE
+Google,
+Software Engineer
+Dec 2018-Present
+Seattle, WA
+•
+Augmented Reality,
+Depth Team
+•
+Technical Lead for on-device optimizations
+•
+Optimized and designed front
+facing depth algorithm
+on Pixel 4
+•
+Focus: C++ and SIMD on custom silicon
+
+
+EDUCATION
+University of Texas at Austin
+Aug 2012-May 2015
+Bachelors of Engineering, Integrated Circuits
+Bachelors of Computer Science", }
     deserializer_resume = Deserializer[str](str) # type: ignore
     resume = deserializer_resume.from_string(to_str(case["resume"]))
     async with ExtractResumeImpl(
@@ -39,7 +65,123 @@ async def test_working_peach(ExtractResumeImpl: IExtractResumeStream, baml_ipc_c
             return item
         return dumps(item)
 
-    case = {"resume": "Vaibhav Gupta\nlinkedin/vaigup\n(972) 400-5279\nvaibhavtheory@gmail.com\nEXPERIENCE\nGoogle,\nSoftware Engineer\nDec 2018-Present\nSeattle, WA\n•\nAugmented Reality,\nDepth Team\n•\nTechnical Lead for on-device optimizations\n•\nOptimized and designed front\nfacing depth algorithm\non Pixel 4\n•\nFocus: C++ and SIMD on custom silicon\nLife Plus Plus,\nFounder\nJuly 2018-July 2019\nSeattle, WA\n•\nBootcamp for landing people jobs in the computer science industry\n•\nDesigned the curriculumn and sourced students to join the program\n•\nOrganically grew to\n$\n50k in profit with 3 out of 4 people landing jobs\nMicrosoft,\nProgram Manager\nSep 2017-July 2018\nRedmond, WA\n•\nMicrosoft Mixed Reality (HoloLens + VR), 6DoF Tracking\n•\nWorked to establish the VR Arcade space with external enterprises\n•\nGuided various prototypes from concept stage to enterpise APIs\nMicrosoft,\nSoftware Engineer\nJul 2015-Sep 2017\nRedmond, WA\n•\nMicrosoft HoloLens, Scene Reconstruction\n•\nArchitected, implemented, tested fault resistent storage pipeline for mesh data across 2 teams\n•\nScoped, designed, and implemented mesh delivery API surface with a team of 2\n•\nResponsible for runtime bring up on new hardware with custom instruction set and power constraints\n•\nFocus: C++ and SIMD on custom silicon\nLyte Labs,\nFounder\nMar 2014-Jul 2015\nAustin, TX\n•\nDeveloped prototype hardware to noninvasively measure blood glucose levels\n•\nLed a team of 7 across engineering, data collection, and bio-research\n•\nManaged data collection across 50 weekly syncs with patients\n•\nRaised\n$\n50k from multiple funding sources, for research and data collection\nOneApp,\nCo-Founder\nDec 2011-Aug 2012\nhttp://oneapp.googlecode.com\n•\nCreated an online form generator for K-12 organizations used by 250 students\n•\nFocus: PHP, MYSQL, HTML, Javascript\nRESEARCH\nARiSE Pharos Lab,\nUndergraduate Research Assistant\nSept 2012-May 2013\nProf. Christine Julien, University of Texas at Austin\n•\nImplemented coarse localization using indoor wifi signals for triangulation\n•\nFocus: Objective C\nComputation & Neural Systems,\nSummer Intern\nJune 2012-Aug 2012\nProf. Ralph Adolphs, California Institute of Technology\n•\nResearched the role of the amygdala in patients\n•\nFocus: Signal Processing MATLAB Libraries, R\nMulti-scale Surface Science and Engineering Cluster,\nUndergraduate Researcher\nMarch 2011-May 2012\nDr. Peter Collins, University of North Texas\n•\nUsed Neural Nets to predict yeild strength of different alloys\n•\nWork presented at Materials Science & Technology 2012 Conference\n•\nFocus: MATLAB, C++\nPROJECTS\n•\nleapofcode\n: Website to educate for computer science education with secure remote code execution\n•\nrezi.io\n- Ex-CTO: Website to build and update resumes - over 1,000,000 resumes built\nEDUCATION\nUniversity of Texas at Austin\nAug 2012-May 2015\nBachelors of Engineering, Integrated Circuits\nBachelors of Computer Science", }
+    case = {""resume"": "Vaibhav Gupta
+linkedin/vaigup
+(972) 400-5279
+vaibhavtheory@gmail.com
+EXPERIENCE
+Google,
+Software Engineer
+Dec 2018-Present
+Seattle, WA
+•
+Augmented Reality,
+Depth Team
+•
+Technical Lead for on-device optimizations
+•
+Optimized and designed front
+facing depth algorithm
+on Pixel 4
+•
+Focus: C++ and SIMD on custom silicon
+Life Plus Plus,
+Founder
+July 2018-July 2019
+Seattle, WA
+•
+Bootcamp for landing people jobs in the computer science industry
+•
+Designed the curriculumn and sourced students to join the program
+•
+Organically grew to
+$
+50k in profit with 3 out of 4 people landing jobs
+Microsoft,
+Program Manager
+Sep 2017-July 2018
+Redmond, WA
+•
+Microsoft Mixed Reality (HoloLens + VR), 6DoF Tracking
+•
+Worked to establish the VR Arcade space with external enterprises
+•
+Guided various prototypes from concept stage to enterpise APIs
+Microsoft,
+Software Engineer
+Jul 2015-Sep 2017
+Redmond, WA
+•
+Microsoft HoloLens, Scene Reconstruction
+•
+Architected, implemented, tested fault resistent storage pipeline for mesh data across 2 teams
+•
+Scoped, designed, and implemented mesh delivery API surface with a team of 2
+•
+Responsible for runtime bring up on new hardware with custom instruction set and power constraints
+•
+Focus: C++ and SIMD on custom silicon
+Lyte Labs,
+Founder
+Mar 2014-Jul 2015
+Austin, TX
+•
+Developed prototype hardware to noninvasively measure blood glucose levels
+•
+Led a team of 7 across engineering, data collection, and bio-research
+•
+Managed data collection across 50 weekly syncs with patients
+•
+Raised
+$
+50k from multiple funding sources, for research and data collection
+OneApp,
+Co-Founder
+Dec 2011-Aug 2012
+http://oneapp.googlecode.com
+•
+Created an online form generator for K-12 organizations used by 250 students
+•
+Focus: PHP, MYSQL, HTML, Javascript
+RESEARCH
+ARiSE Pharos Lab,
+Undergraduate Research Assistant
+Sept 2012-May 2013
+Prof. Christine Julien, University of Texas at Austin
+•
+Implemented coarse localization using indoor wifi signals for triangulation
+•
+Focus: Objective C
+Computation & Neural Systems,
+Summer Intern
+June 2012-Aug 2012
+Prof. Ralph Adolphs, California Institute of Technology
+•
+Researched the role of the amygdala in patients
+•
+Focus: Signal Processing MATLAB Libraries, R
+Multi-scale Surface Science and Engineering Cluster,
+Undergraduate Researcher
+March 2011-May 2012
+Dr. Peter Collins, University of North Texas
+•
+Used Neural Nets to predict yeild strength of different alloys
+•
+Work presented at Materials Science & Technology 2012 Conference
+•
+Focus: MATLAB, C++
+PROJECTS
+•
+leapofcode
+: Website to educate for computer science education with secure remote code execution
+•
+rezi.io
+- Ex-CTO: Website to build and update resumes - over 1,000,000 resumes built
+EDUCATION
+University of Texas at Austin
+Aug 2012-May 2015
+Bachelors of Engineering, Integrated Circuits
+Bachelors of Computer Science", }
     deserializer_resume = Deserializer[str](str) # type: ignore
     resume = deserializer_resume.from_string(to_str(case["resume"]))
     async with ExtractResumeImpl(

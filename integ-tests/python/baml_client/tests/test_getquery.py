@@ -22,7 +22,7 @@ async def test_famous_apricot(GetQueryImpl: IGetQueryStream, baml_ipc_channel: B
             return item
         return dumps(item)
 
-    case = {"query": "who are partners are sequoia capital", }
+    case = {""query"": "who are partners are sequoia capital", }
     deserializer_query = Deserializer[str](str) # type: ignore
     query = deserializer_query.from_string(to_str(case["query"]))
     async with GetQueryImpl(
@@ -39,7 +39,7 @@ async def test_harsh_ivory(GetQueryImpl: IGetQueryStream, baml_ipc_channel: Base
             return item
         return dumps(item)
 
-    case = {"query": "who worked at google chrome in the last 2 years. ideally in security", }
+    case = {""query"": "who worked at google chrome in the last 2 years. ideally in security", }
     deserializer_query = Deserializer[str](str) # type: ignore
     query = deserializer_query.from_string(to_str(case["query"]))
     async with GetQueryImpl(

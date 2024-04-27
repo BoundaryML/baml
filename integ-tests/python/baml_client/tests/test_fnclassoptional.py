@@ -22,7 +22,7 @@ async def test_elegant_green(FnClassOptionalImpl: IFnClassOptionalStream, baml_i
             return item
         return dumps(item)
 
-    content = to_str({"prop1": "jon", "prop2": "stark", })
+    content = to_str({""prop1"": "jon", ""prop2"": "stark", })
     deserializer = Deserializer[Optional[OptionalClass]](Optional[OptionalClass]) # type: ignore
     param = deserializer.from_string(content)
     async with FnClassOptionalImpl(param) as stream:

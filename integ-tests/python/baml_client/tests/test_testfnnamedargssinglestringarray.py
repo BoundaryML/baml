@@ -22,7 +22,9 @@ async def test_ministerial_beige(TestFnNamedArgsSingleStringArrayImpl: ITestFnNa
             return item
         return dumps(item)
 
-    case = {"myStringArray": ["hello there!\n\nhow are you.", "im doing fine'"], }
+    case = {""myStringArray"": ["hello there!
+
+how are you.", "im doing fine'"], }
     deserializer_myStringArray = Deserializer[List[str]](List[str]) # type: ignore
     myStringArray = deserializer_myStringArray.from_string(to_str(case["myStringArray"]))
     async with TestFnNamedArgsSingleStringArrayImpl(

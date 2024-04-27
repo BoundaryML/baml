@@ -22,7 +22,46 @@ async def test_interim_purple(GetOrderInfoImpl: IGetOrderInfoStream, baml_ipc_ch
             return item
         return dumps(item)
 
-    case = {"email": {"subject": "Your Amazon.com order of \"Wood Square Dowel Rods...\" has shipped!", "body": "Content-Type: text/plain; charset=utf-8\nContent-Transfer-Encoding: 7bit\n\nAmazon Shipping Confirmation\nhttps://www.amazon.com?ie=UTF8&ref_=scr_home\n\n____________________________________________________________________\n\nHi Samuel, your package will arrive:\n\nThursday, April 4\n\nTrack your package:\nhttps://www.amazon.com/gp/your-account/ship-track?ie=UTF8&orderId=113-7540940-3785857&packageIndex=0&shipmentId=Gx7wk71F9&ref_=scr_pt_tp_t\n\n\n\nOn the way:\nWood Square Dowel Rods...\nOrder #113-7540940-3785857\n\n\n\nAn Amazon driver may contact you by text message or call you for help on the day of delivery.    \n\nShip to:\n    Sam\n    SEATTLE, WA\n\nShipment total:\n$0.00\nRewards points applied\n\n\nReturn or replace items in Your orders\nhttps://www.amazon.com/gp/css/order-history?ie=UTF8&ref_=scr_yo\n\nLearn how to recycle your packaging at Amazon Second Chance(https://www.amazon.com/amsc?ref_=ascyorn).\n\n", "from": "inov-8 <enquiries@inov-8.com>", "from_address": "\"Amazon.com\" <shipment-tracking@amazon.com>", }, }
+    case = {""email"": {""subject"": "Your Amazon.com order of \"Wood Square Dowel Rods...\" has shipped!", ""body"": "Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 7bit
+
+Amazon Shipping Confirmation
+https://www.amazon.com?ie=UTF8&ref_=scr_home
+
+____________________________________________________________________
+
+Hi Samuel, your package will arrive:
+
+Thursday, April 4
+
+Track your package:
+https://www.amazon.com/gp/your-account/ship-track?ie=UTF8&orderId=113-7540940-3785857&packageIndex=0&shipmentId=Gx7wk71F9&ref_=scr_pt_tp_t
+
+
+
+On the way:
+Wood Square Dowel Rods...
+Order #113-7540940-3785857
+
+
+
+An Amazon driver may contact you by text message or call you for help on the day of delivery.    
+
+Ship to:
+    Sam
+    SEATTLE, WA
+
+Shipment total:
+$0.00
+Rewards points applied
+
+
+Return or replace items in Your orders
+https://www.amazon.com/gp/css/order-history?ie=UTF8&ref_=scr_yo
+
+Learn how to recycle your packaging at Amazon Second Chance(https://www.amazon.com/amsc?ref_=ascyorn).
+
+", ""from"": "inov-8 <enquiries@inov-8.com>", ""from_address"": "\"Amazon.com\" <shipment-tracking@amazon.com>", }, }
     deserializer_email = Deserializer[Email](Email) # type: ignore
     email = deserializer_email.from_string(to_str(case["email"]))
     async with GetOrderInfoImpl(

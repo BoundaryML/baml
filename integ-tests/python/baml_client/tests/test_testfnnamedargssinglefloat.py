@@ -22,7 +22,7 @@ async def test_lost_maroon(TestFnNamedArgsSingleFloatImpl: ITestFnNamedArgsSingl
             return item
         return dumps(item)
 
-    case = {"myFloat": 6, }
+    case = {""myFloat"": 6, }
     deserializer_myFloat = Deserializer[float](float) # type: ignore
     myFloat = deserializer_myFloat.from_string(to_str(case["myFloat"]))
     async with TestFnNamedArgsSingleFloatImpl(

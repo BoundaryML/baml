@@ -22,7 +22,28 @@ async def test_case1(TestFnNamedArgsSingleStringImpl: ITestFnNamedArgsSingleStri
             return item
         return dumps(item)
 
-    case = {"myString": "hellothere.\n\nSome new lines\n\n\\n\\n\n\n\"\"\"triple quote string\"\"\"\n\nsome json:\n```json\n{\n    \"hi\": \"there\"\n}\n```\nSingle chars\n(\n{\n{}\nXML Tags:\n<hi>hey</hi>\n\n", }
+    case = {""myString"": "hellothere.
+
+Some new lines
+
+\n\n
+
+\"\"\"triple quote string\"\"\"
+
+some json:
+```json
+{
+    \"hi\": \"there\"
+}
+```
+Single chars
+(
+{
+{}
+XML Tags:
+<hi>hey</hi>
+
+", }
     deserializer_myString = Deserializer[str](str) # type: ignore
     myString = deserializer_myString.from_string(to_str(case["myString"]))
     async with TestFnNamedArgsSingleStringImpl(

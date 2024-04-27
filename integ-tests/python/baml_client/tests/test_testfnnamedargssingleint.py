@@ -22,7 +22,7 @@ async def test_human_lime(TestFnNamedArgsSingleIntImpl: ITestFnNamedArgsSingleIn
             return item
         return dumps(item)
 
-    case = {"myInt": 6, }
+    case = {""myInt"": 6, }
     deserializer_myInt = Deserializer[int](int) # type: ignore
     myInt = deserializer_myInt.from_string(to_str(case["myInt"]))
     async with TestFnNamedArgsSingleIntImpl(

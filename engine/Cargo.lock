@@ -384,7 +384,6 @@ dependencies = [
  "env_logger",
  "expect-test",
  "futures",
- "glob",
  "indoc",
  "internal-baml-client-llm",
  "internal-baml-core",
@@ -398,6 +397,7 @@ dependencies = [
  "strsim 0.11.1",
  "tokio",
  "uuid",
+ "walkdir",
 ]
 
 [[package]]

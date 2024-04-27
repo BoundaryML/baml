@@ -123,6 +123,8 @@ impl BamlRuntimeFfi {
             None => RuntimeContext::default(),
         };
 
+        println!("fn trying to call? {}", function_name);
+
         match block_on(self.internal.call_function(&function_name, &args, ctx)) {
             Ok(_) => Ok(()),
             Err(e) => Err(Error::new(

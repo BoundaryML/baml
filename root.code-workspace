@@ -80,7 +80,8 @@
       "unifiedjs.vscode-mdx",
       "tamasfe.even-better-toml",
       "charliermarsh.ruff",
-      "matangover.mypy"
+      "matangover.mypy",
+      "samuelcolvin.jinjahtml"
     ]
   }
 }

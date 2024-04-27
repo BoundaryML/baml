@@ -22,7 +22,7 @@ async def test_intermediate_olive(FnClassOptional2Impl: IFnClassOptional2Stream,
             return item
         return dumps(item)
 
-    content = to_str({"prop1": "hi", })
+    content = to_str({""prop1"": "hi", })
     deserializer = Deserializer[ClassOptionalFields](ClassOptionalFields) # type: ignore
     param = deserializer.from_string(content)
     async with FnClassOptional2Impl(param) as stream:
