@@ -40,7 +40,7 @@ impl WithFileContentTs<TSLanguageFeatures> for Walker<'_, &Client> {
         if let Some(retry_policy_id) = self.elem().retry_policy_id.as_ref() {
             options.insert("retry_policy".into(), retry_policy_id.clone());
         }
-        file.append(render_with_hbs(
+        file.trim_append(render_with_hbs(
             super::template::Template::Client,
             &json!({
                 "name": self.elem().name,

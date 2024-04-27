@@ -57,7 +57,7 @@ impl WithFileContentTs<TSLanguageFeatures> for Walker<'_, (&Function, &FunctionC
           "return_type": function.elem.output().to_ts()
         });
 
-        file.append(render_with_hbs(
+        file.trim_append(render_with_hbs(
             super::template::Template::DefaultImpl,
             &json!({
                 "function": function_content,
@@ -78,7 +78,7 @@ impl WithFileContentTs<TSLanguageFeatures> for Walker<'_, (&Function, &FunctionC
         collector.finish_file();
 
         let file = collector.start_file(self.file_dir(), "index", false);
-        file.append(format!("import './{}';", self.file_name()));
+        file.trim_append(format!("import './{}';", self.file_name()));
         collector.finish_file();
     }
 }

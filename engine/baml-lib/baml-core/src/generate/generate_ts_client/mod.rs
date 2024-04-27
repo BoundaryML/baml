@@ -43,7 +43,7 @@ pub(crate) fn generate_ts(ir: &IntermediateRepr, gen: &Generator) -> std::io::Re
 
     {
         let clients = collector.start_file(".", "client", false);
-        clients.append(
+        clients.trim_append(
             r#"
     import { loadEnvVars } from '@boundaryml/baml-core';
     loadEnvVars();
@@ -71,7 +71,7 @@ pub(crate) fn generate_ts(ir: &IntermediateRepr, gen: &Generator) -> std::io::Re
         None,
         false,
     );
-    file.append(format!(
+    file.trim_append(format!(
         "const schema: JSONSchema7 = {};",
         serde_json::to_string_pretty(&ir.json_schema())?,
     ));
@@ -113,14 +113,14 @@ pub(crate) fn generate_ts(ir: &IntermediateRepr, gen: &Generator) -> std::io::Re
                 )
             })
             .collect::<Vec<_>>();
-        file.append(format!(
+        file.trim_append(format!(
             "registerEnumDeserializer(schema.definitions.{}, {{\n{}\n}});",
             e.elem().name,
             alias_value_name_pairs.join(",\n")
         ))
     });
     ir.walk_classes().for_each(|c| {
-        file.append(format!(
+        file.trim_append(format!(
             "registerObjectDeserializer(schema.definitions.{}, {{\n{}\n}});",
             c.elem().name,
             c.elem()

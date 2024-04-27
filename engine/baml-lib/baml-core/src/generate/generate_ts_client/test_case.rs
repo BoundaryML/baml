@@ -50,7 +50,7 @@ impl WithFileContentTs<TSLanguageFeatures> for Walker<'_, (&Function, &TestCase)
           "test_content": test_case.elem.content.to_ts(),
         });
 
-        file.append(render_with_hbs(
+        file.trim_append(render_with_hbs(
             super::template::Template::TestCase,
             &test_content,
         ));

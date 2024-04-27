@@ -59,8 +59,14 @@ impl FileContent {
         self.exports.push(name.into());
     }
 
-    pub fn append(&mut self, content: String) {
+    pub fn trim_append(&mut self, content: String) {
         let content = content.trim();
+        if content.len() > 0 {
+            self.content.push(content.to_string());
+        }
+    }
+
+    pub fn append(&mut self, content: String) {
         if content.len() > 0 {
             self.content.push(content.to_string());
         }

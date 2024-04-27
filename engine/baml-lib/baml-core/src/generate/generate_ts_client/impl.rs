@@ -79,7 +79,7 @@ impl WithFileContentTs<TSLanguageFeatures> for Walker<'_, (&Function, &Impl)> {
                 .collect::<Vec<_>>()),
         };
 
-        file.append(render_with_hbs(
+        file.trim_append(render_with_hbs(
             super::template::Template::Impl,
             &json!({
                 "function": function_content,
@@ -100,7 +100,7 @@ impl WithFileContentTs<TSLanguageFeatures> for Walker<'_, (&Function, &Impl)> {
         collector.finish_file();
 
         let file = collector.start_file(self.file_dir(), "index", false);
-        file.append(format!("import './{}';", self.file_name()));
+        file.trim_append(format!("import './{}';", self.file_name()));
         collector.finish_file();
     }
 }

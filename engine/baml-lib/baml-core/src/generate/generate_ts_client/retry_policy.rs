@@ -56,7 +56,7 @@ impl WithFileContentTs<TSLanguageFeatures> for Walker<'_, &RetryPolicy> {
             Some("BamlInternalExponentialBackoffRetryPolicy"),
             false,
         );
-        file.append(self.item.to_ts());
+        file.trim_append(self.item.to_ts());
         file.add_export(self.elem().name.0.clone());
         collector.finish_file();
     }

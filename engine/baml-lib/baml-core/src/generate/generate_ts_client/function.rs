@@ -75,7 +75,7 @@ impl WithFileContentTs<TSLanguageFeatures> for Walker<'_, &Function> {
           },
         });
 
-        file.append(render_with_hbs(
+        file.trim_append(render_with_hbs(
             super::template::Template::Function,
             &function_content,
         ));

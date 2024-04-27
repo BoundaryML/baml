@@ -42,6 +42,11 @@ pub(crate) fn generate_ruby(ir: &IntermediateRepr, gen: &Generator) -> std::io::
     let mut collector = get_file_collector();
 
     let file = collector.start_file(".", "types", false);
+    file.append("require 'sorbet-runtime'".to_string());
+    file.append("require 'sorbet-coerce'".to_string());
+    file.append("".to_string());
+    file.append("module Baml".to_string());
+    file.append("  module Types".to_string());
     ir.walk_enums().for_each(|e| {
         file.append(
             RubyEnum {
@@ -59,6 +64,10 @@ pub(crate) fn generate_ruby(ir: &IntermediateRepr, gen: &Generator) -> std::io::
         );
     });
     ir.walk_classes().for_each(|c| {
+        // forward declare all classes
+        file.append(format!("    class {} < T::Struct; end", c.name()));
+    });
+    ir.walk_classes().for_each(|c| {
         file.append(
             RubyStruct {
                 name: c.name(),
@@ -74,6 +83,8 @@ pub(crate) fn generate_ruby(ir: &IntermediateRepr, gen: &Generator) -> std::io::
             .unwrap_or("# Error rendering class".to_string()),
         );
     });
+    file.append("  end".to_string());
+    file.append("end".to_string());
     collector.finish_file();
 
     let file = collector.start_file(".", "functions", false);

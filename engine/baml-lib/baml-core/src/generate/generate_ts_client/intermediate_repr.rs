@@ -15,7 +15,7 @@ impl WithFileContentTs<TSLanguageFeatures> for IntermediateRepr {
 
     fn write(&self, fc: &mut crate::generate::dir_writer::FileCollector<TSLanguageFeatures>) {
         let file = fc.start_file(self.file_dir(), self.file_name(), false);
-        file.append(render_with_hbs(
+        file.trim_append(render_with_hbs(
             super::template::Template::ExportFile,
             &json!({
               "functions": self.walk_functions().map(|f| f.elem().name()).collect::<Vec<_>>(),

@@ -1,28 +1,50 @@
-class BamlClient
-  extend T::Sig
+require "baml"
+require "sorbet-runtime"
 
-  {% for fn in funcs -%}
-  sig {
-    params(
-      {% for (name, type) in fn.args -%}
-      {{name}}: {{type}},
-      {%- endfor %}
-    ).returns({{ fn.return_type }})
-  }
-  def self.{{fn.name}}(
-      {% for (name, _) in fn.args -%}
-      {{name}}{% if !loop.last %},{% endif %}
-      {%- endfor %}
-  )
-    runtime.call_function(
-      function_name: "{{fn.name}}",
-      args: {
-        {% for (name, _) in fn.args -%}
-        "{{name}}" => {{name}},
+require_relative "types"
+
+module Baml
+  class BamlClient
+    extend T::Sig
+
+    private_class_method :new
+
+    def initialize(runtime)
+      @runtime = runtime
+    end
+
+    sig {params(path: String).returns(BamlClient)}
+    def from_directory(path)
+      BamlClient.new(BamlRuntime.new(path))
+    end
+
+    {% for fn in funcs -%}
+    sig {
+      params(
+        {% for (name, type) in fn.args -%}
+        {{name}}: Baml::Types::{{type}},
         {%- endfor %}
-      }
+      ).returns(Baml::Types::{{ fn.return_type }})
+    }
+    def self.{{fn.name}}(
+        {% for (name, _) in fn.args -%}
+        {{name}}{% if !loop.last %},{% endif %}
+        {%- endfor %}
     )
-  end
+      let raw = @runtime.call_function(
+        function_name: "{{fn.name}}",
+        args: {
+          {% for (name, _) in fn.args -%}
+          "{{name}}" => {{name}},
+          {%- endfor %}
+        }
+      )
+      {# TODO- consider making this not-frozen #}
+      raw.value = TypeCoerce[Baml::Types::{{ fn.return_type }}].new.from(raw.value)
 
-  {% endfor %}
+      raw
+    end
+
+    {% endfor %}
+  end
 end
