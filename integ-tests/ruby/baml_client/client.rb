@@ -39,7 +39,7 @@ module Baml
     def ClassifyConversation(
         messages:
     )
-      let raw = @runtime.call_function(
+      raw = @runtime.call_function(
         function_name: "ClassifyConversation",
         args: {
           "messages" => messages,
@@ -59,7 +59,7 @@ module Baml
     def ClassifyMessage(
         input:
     )
-      let raw = @runtime.call_function(
+      raw = @runtime.call_function(
         function_name: "ClassifyMessage",
         args: {
           "input" => input,
@@ -79,7 +79,7 @@ module Baml
     def ClassifyMessage2(
         input:
     )
-      let raw = @runtime.call_function(
+      raw = @runtime.call_function(
         function_name: "ClassifyMessage2",
         args: {
           "input" => input,
@@ -99,7 +99,7 @@ module Baml
     def ClassifyMessage3(
         input:
     )
-      let raw = @runtime.call_function(
+      raw = @runtime.call_function(
         function_name: "ClassifyMessage3",
         args: {
           "input" => input,
@@ -119,7 +119,7 @@ module Baml
     def ExtractNames(
         input:
     )
-      let raw = @runtime.call_function(
+      raw = @runtime.call_function(
         function_name: "ExtractNames",
         args: {
           "input" => input,
@@ -139,7 +139,7 @@ module Baml
     def ExtractResume(
         resume:
     )
-      let raw = @runtime.call_function(
+      raw = @runtime.call_function(
         function_name: "ExtractResume",
         args: {
           "resume" => resume,
@@ -159,7 +159,7 @@ module Baml
     def ExtractResume2(
         resume:
     )
-      let raw = @runtime.call_function(
+      raw = @runtime.call_function(
         function_name: "ExtractResume2",
         args: {
           "resume" => resume,
@@ -179,7 +179,7 @@ module Baml
     def GetDataType(
         text:
     )
-      let raw = @runtime.call_function(
+      raw = @runtime.call_function(
         function_name: "GetDataType",
         args: {
           "text" => text,
@@ -199,7 +199,7 @@ module Baml
     def GetOrderInfo(
         email:
     )
-      let raw = @runtime.call_function(
+      raw = @runtime.call_function(
         function_name: "GetOrderInfo",
         args: {
           "email" => email,
@@ -219,7 +219,7 @@ module Baml
     def GetQuery(
         query:
     )
-      let raw = @runtime.call_function(
+      raw = @runtime.call_function(
         function_name: "GetQuery",
         args: {
           "query" => query,

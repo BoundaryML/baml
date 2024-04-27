@@ -30,7 +30,7 @@ module Baml
         {{name}}:{% if !loop.last %},{% endif %}
         {%- endfor %}
     )
-      let raw = @runtime.call_function(
+      raw = @runtime.call_function(
         function_name: "{{fn.name}}",
         args: {
           {% for (name, _) in fn.args -%}

@@ -261,7 +261,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_call_function() -> Result<FunctionResponse> {
+    async fn test_call_function() -> Result<FunctionResult> {
         let directory = PathBuf::from("/Users/vbv/repos/gloo-lang/integ-tests/baml_src");
         let runtime = BamlRuntime::from_directory(&directory).unwrap();
 

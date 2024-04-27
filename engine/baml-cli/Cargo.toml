@@ -27,8 +27,8 @@ semver = "1.0.20"
 serde.workspace = true
 serde_json.workspace = true
 shellwords = "1.1.0"
-tokio = { version = "1.35.1", features = ["full"] }
-walkdir = "2.4.0"
+tokio.workspace = true
+walkdir.workspace = true
 regex = "1.10.3"
 tempfile = "3.10.1"
 uuid = { version = "1.7.0", features = ["v4"] }

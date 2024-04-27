@@ -28,6 +28,8 @@ indoc = "2.0.1"
 reqwest = { version = "0.11.22", features = ["native-tls-vendored"] }
 serde_json = { version = "1", features = ["float_roundtrip", "preserve_order"] }
 serde = { version = "1", features = ["derive"] }
+tokio = { version = "1.35.1", features = ["full"] }
+walkdir = "2.5.0"
 
 [workspace.package]
 version = "0.18.0-canary.4"

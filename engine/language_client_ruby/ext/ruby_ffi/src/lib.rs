@@ -1,4 +1,4 @@
-use baml_runtime::{BamlRuntime, RuntimeContext};
+use baml_runtime::{BamlRuntime, FunctionResult, RuntimeContext};
 use futures::executor::block_on;
 use magnus::{
     class, error::RubyUnavailableError, exception::runtime_error, function, method, prelude::*,
@@ -6,15 +6,41 @@ use magnus::{
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
+use tokio::time::{sleep, Duration};
 
 mod json_to_ruby;
+mod ruby_types;
 
 type Result<T> = std::result::Result<T, magnus::Error>;
 
-fn does_this_yield() {
-    println!("BEGIN- sleeping for 2s");
-    std::thread::sleep(std::time::Duration::from_secs(2));
-    println!("END- slept for 2s");
+async fn async_fn() -> String {
+    let duration = Duration::from_secs(2);
+    println!("async-BEGIN- sleeping for {duration:#?}");
+    sleep(duration).await;
+    println!("async-END- slept for {duration:#?}");
+    "async-retval".to_string()
+}
+
+#[magnus::wrap(class = "Baml::TokioDemo", free_immediately, size)]
+struct TokioDemo {
+    t: tokio::runtime::Runtime,
+}
+
+impl TokioDemo {
+    fn new() -> Result<Self> {
+        let Ok(tokio_runtime) = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+        else {
+            return Err(Error::new(runtime_error(), "Failed to start tokio runtime"));
+        };
+
+        Ok(Self { t: tokio_runtime })
+    }
+
+    fn does_this_yield(&self) {
+        self.t.block_on(async_fn());
+    }
 }
 
 fn json_to_ruby(any: Value) -> Result<Value> {
@@ -47,6 +73,7 @@ fn json_to_ruby(any: Value) -> Result<Value> {
 #[magnus::wrap(class = "Baml::BamlRuntime", free_immediately, size)]
 struct BamlRuntimeFfi {
     internal: BamlRuntime,
+    t: tokio::runtime::Runtime,
 }
 
 impl BamlRuntimeFfi {
@@ -71,19 +98,38 @@ impl BamlRuntimeFfi {
     pub fn from_directory(directory: PathBuf) -> Result<Self> {
         let ruby = BamlRuntimeFfi::try_lock_gvl()?;
 
-        match BamlRuntime::from_directory(&directory) {
-            Ok(br) => Ok(BamlRuntimeFfi { internal: br }),
-            Err(e) => Err(Error::new(
+        let baml_runtime = match BamlRuntime::from_directory(&directory) {
+            Ok(br) => br,
+            Err(e) => {
+                return Err(Error::new(
+                    ruby.exception_runtime_error(),
+                    format!(
+                        "Encountered error while loading BAML files from directory:\n{:#}",
+                        e
+                    ),
+                ))
+            }
+        };
+
+        // NB: libruby will panic if called from a non-Ruby thread, so we stick to the current thread
+        // to avoid causing issues
+        let Ok(tokio_runtime) = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+        else {
+            return Err(Error::new(
                 ruby.exception_runtime_error(),
-                format!(
-                    "Encountered error while loading BAML files from directory:\n{:#}",
-                    e
-                ),
-            )),
-        }
+                "Failed to start tokio runtime",
+            ));
+        };
+
+        Ok(Self {
+            internal: baml_runtime,
+            t: tokio_runtime,
+        })
     }
 
-    pub fn call_function(&self, call_fn_args: RHash) -> Result<()> {
+    pub fn call_function(&self, call_fn_args: RHash) -> Result<ruby_types::FunctionResult> {
         let ruby = BamlRuntimeFfi::try_lock_gvl()?;
 
         let call_fn_args = get_kwargs(call_fn_args, &["function_name", "args"], &["ctx"])?;
@@ -110,6 +156,8 @@ impl BamlRuntimeFfi {
             ));
         };
 
+        println!("args are {:#?}", args);
+
         let ctx = match ctx {
             Some(ctx) => match serde_magnus::deserialize::<_, RuntimeContext>(ctx) {
                 Ok(ctx) => ctx,
@@ -125,12 +173,17 @@ impl BamlRuntimeFfi {
 
         println!("fn trying to call? {}", function_name);
 
-        match block_on(self.internal.call_function(&function_name, &args, ctx)) {
-            Ok(_) => Ok(()),
-            Err(e) => Err(Error::new(
-                ruby.exception_runtime_error(),
-                format!("{:#}", e),
-            )),
+        match self
+            .t
+            .block_on(self.internal.call_function(function_name, args, ctx))
+        {
+            Ok(res) => Ok(ruby_types::FunctionResult::new(res)),
+            Err(e) => {
+                return Err(Error::new(
+                    ruby.exception_runtime_error(),
+                    format!("error while calling function: {}", e),
+                ));
+            }
         }
     }
 }
@@ -150,7 +203,12 @@ fn init() -> Result<()> {
     runtime_class.define_method("call_function", method!(BamlRuntimeFfi::call_function, 1))?;
 
     module.define_module_function("json_to_ruby", function!(json_to_ruby, 1))?;
-    module.define_module_function("does_this_yield", function!(does_this_yield, 0))?;
+
+    let tokio_demo = module.define_class("TokioDemo", class::object())?;
+    tokio_demo.define_singleton_method("new", function!(TokioDemo::new, 0))?;
+    tokio_demo.define_method("does_this_yield", method!(TokioDemo::does_this_yield, 0))?;
+
+    ruby_types::FunctionResult::define_in(&module)?;
 
     Ok(())
 }
