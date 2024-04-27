@@ -22,6 +22,7 @@ impl ToTypeScript for FieldType {
                 TypeValue::String => "string".to_string(),
                 TypeValue::Null => "null".to_string(),
                 TypeValue::Char => "string".to_string(),
+                TypeValue::Image => "Image".to_string(),
             },
             FieldType::Union(inner) => inner
                 .iter()
@@ -60,6 +61,7 @@ pub(super) fn to_internal_type(r#type: &FieldType) -> String {
             TypeValue::String => "string".to_string(),
             TypeValue::Null => "null".to_string(),
             TypeValue::Char => "string".to_string(),
+            TypeValue::Image => "Image".to_string(),
         },
         FieldType::Union(inner) => inner
             .iter()
@@ -152,6 +154,7 @@ pub(super) fn to_type_check(variable: &str, r#type: &FieldType) -> String {
             TypeValue::String => format!("typeof {variable} === 'string'"),
             TypeValue::Null => format!("{variable} === null"),
             TypeValue::Char => format!("typeof {variable} === 'string'"),
+            TypeValue::Image => format!("typeof {variable} === 'string'"),
         },
         FieldType::Union(inner) => inner
             .iter()

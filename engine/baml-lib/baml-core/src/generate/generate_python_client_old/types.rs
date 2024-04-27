@@ -29,6 +29,7 @@ impl WithToCode for TypeValue {
             TypeValue::Float => "float".to_string(),
             TypeValue::Bool => "bool".to_string(),
             TypeValue::Null => "None".to_string(),
+            TypeValue::Image => "Image".to_string(),
         }
     }
 }

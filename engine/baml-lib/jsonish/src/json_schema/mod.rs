@@ -543,6 +543,8 @@ fn parse_primitive(
                             }
                         },
                         TypeValue::String => json!(s),
+                        // TODO: double check?
+                        TypeValue::Image => json!(s),
                     };
 
                     Ok((res, flags))
@@ -563,6 +565,7 @@ fn parse_primitive(
                 json!(null),
                 DeserializerConditions::new().with_flag(Flag::NullButHadValue(value.clone())),
             )),
+            TypeValue::Image => anyhow::bail!("Value is not an image"),
         },
         Value::Number(n) => match primitive {
             TypeValue::String => Ok((json!(n.to_string()), DeserializerConditions::new())),
@@ -597,6 +600,7 @@ fn parse_primitive(
                 json!(null),
                 DeserializerConditions::new().with_flag(Flag::NullButHadValue(value.clone())),
             )),
+            TypeValue::Image => anyhow::bail!("Value is not an image"),
         },
     }
 }

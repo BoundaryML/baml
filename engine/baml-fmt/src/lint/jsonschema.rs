@@ -41,16 +41,38 @@ impl WithJsonSchema for FieldType {
     fn json_schema(&self) -> Value {
         match self {
             FieldType::Identifier(_, idn) => match idn {
-                Identifier::Primitive(t, ..) => json!({
-                    "type": match t {
-                        TypeValue::String => "string",
-                        TypeValue::Int => "integer",
-                        TypeValue::Float => "number",
-                        TypeValue::Bool => "boolean",
-                        TypeValue::Null => "undefined",
-                        TypeValue::Char => "string",
-                    }
-                }),
+                Identifier::Primitive(t, ..) => match t {
+                    TypeValue::Char => json!({
+                        "type": "string",
+                        "maxLength": 1,
+                    }),
+                    TypeValue::String => json!({
+                        "type": "string",
+                    }),
+                    TypeValue::Int => json!({
+                        "type": "integer",
+                    }),
+                    TypeValue::Float => json!({
+                        "type": "number",
+                    }),
+                    TypeValue::Bool => json!({
+                        "type": "boolean",
+                    }),
+                    TypeValue::Null => json!({
+                        "type": "null",
+                    }),
+                    TypeValue::Image => json!({
+                        "type": "object",
+                        "properties": {
+                            "url": {
+                                "type": "string",
+                                // "format": "uri",
+                            }
+                        },
+                        "required": ["url"],
+
+                    }),
+                },
                 Identifier::Local(name, _) => json!({
                     "$ref": format!("#/definitions/{}", name),
                 }),

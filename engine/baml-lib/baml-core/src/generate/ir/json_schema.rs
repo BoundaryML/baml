@@ -1,10 +1,11 @@
 // JSON Schema
 
+use internal_baml_schema_ast::ast::TypeValue;
 use serde_json::json;
 
 use super::{
     repr::{self},
-    Class, Enum, FieldType, Function, FunctionArgs, IntermediateRepr, TypeValue, Walker,
+    Class, Enum, FieldType, Function, FunctionArgs, IntermediateRepr, Walker,
 };
 
 pub trait WithJsonSchema {
@@ -184,6 +185,18 @@ impl<'db> WithJsonSchema for FieldType {
                 TypeValue::Null => json!({
                     "type": "null",
                 }),
+                TypeValue::Image => json!({
+                    // anyOf either an object that has a uri, or it has a base64 string
+                    "type": "object",
+                    "properties": {
+                        "url": {
+                            "type": "string",
+                            // "format": "uri",
+                        }
+                    },
+                    "required": ["url"],
+
+                }),
             },
             FieldType::List(item) => json!({
                 "type": "array",
@@ -250,6 +263,7 @@ impl std::fmt::Display for FieldType {
                 TypeValue::Float => write!(f, "float"),
                 TypeValue::Bool => write!(f, "bool"),
                 TypeValue::Null => write!(f, "null"),
+                TypeValue::Image => write!(f, "image"),
             },
             FieldType::Union(choices) => {
                 write!(

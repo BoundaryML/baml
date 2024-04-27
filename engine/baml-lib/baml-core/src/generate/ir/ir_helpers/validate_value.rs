@@ -38,6 +38,7 @@ pub fn validate_value(
                     value.is_string() && value.as_str().unwrap().chars().count() == 1
                 }
                 TypeValue::Null => value.is_null(),
+                TypeValue::Image => value.is_string(),
             } {
                 scope.push_error(format!("Expected type {:?}, got `{}`", t, value));
             }

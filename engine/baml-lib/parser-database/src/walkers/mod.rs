@@ -321,6 +321,7 @@ impl<'db> crate::ParserDatabase {
                         ast::TypeValue::Bool => Type::Bool,
                         ast::TypeValue::Char => Type::String,
                         ast::TypeValue::Null => Type::None,
+                        ast::TypeValue::Image => Type::Image,
                     },
                     ast::Identifier::String(_, _) => Type::String,
                     ast::Identifier::Invalid(_, _) => Type::Unknown,
