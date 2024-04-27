@@ -12,24 +12,19 @@ pub struct FunctionResult {
 
 impl FunctionResult {
     pub fn new(inner: baml_runtime::FunctionResult) -> Self {
+        //println!("FunctionResult::new {:#?}", inner);
         Self { inner }
     }
 
-    pub fn parsed(&self) -> Result<Value> {
-        let Some(ref opt) = self.inner.parsed else {
-            return Err(Error::new(runtime_error(), "parsed is None"));
-        };
-        let (value, _dc) = match opt {
-            Ok(ok) => ok,
-            Err(err) => {
-                return Err(Error::new(
-                    runtime_error(),
-                    format!("parsed is Err: {}", err),
-                ))
-            }
-        };
+    pub fn to_s(&self) -> String {
+        format!("{:#?}", self.inner)
+    }
 
-        serde_magnus::serialize(&value)
+    pub fn parsed(&self) -> Result<Value> {
+        let Some(value) = self.inner.parsed() else {
+            return Err(Error::new(runtime_error(), "Failed to parse"));
+        };
+        serde_magnus::serialize(value)
     }
 
     /// For usage in magnus::init
@@ -38,6 +33,7 @@ impl FunctionResult {
     pub fn define_in(rmod: &RModule) -> Result<()> {
         let cls = rmod.define_class("FunctionResult", class::object())?;
 
+        cls.define_method("to_s", method!(FunctionResult::to_s, 0))?;
         cls.define_method("parsed", method!(FunctionResult::parsed, 0))?;
 
         Ok(())

@@ -25,12 +25,12 @@ pub struct BamlRuntime {
 }
 
 #[derive(Debug)]
-pub struct FunctionResponse {
+pub struct FunctionResult {
     llm_response: LLMResponse,
     parsed: Option<Result<(serde_json::Value, jsonish::DeserializerConditions)>>,
 }
 
-impl FunctionResponse {
+impl FunctionResult {
     pub fn parsed(&self) -> Option<&serde_json::Value> {
         self.parsed
             .as_ref()
@@ -40,7 +40,7 @@ impl FunctionResponse {
 
 #[derive(Debug)]
 pub struct TestResponse {
-    function_response: Result<FunctionResponse>,
+    function_response: Result<FunctionResult>,
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -92,7 +92,7 @@ impl TestResponse {
     }
 }
 
-impl Termination for FunctionResponse {
+impl Termination for FunctionResult {
     fn report(self) -> std::process::ExitCode {
         if self.parsed().is_some() {
             std::process::ExitCode::SUCCESS
@@ -113,19 +113,31 @@ impl Termination for TestResponse {
 }
 
 impl BamlRuntime {
-    pub fn from_directory(directory: &PathBuf) -> Result<Self> {
+    pub fn from_directory(dir: &PathBuf) -> Result<Self> {
         static VALID_EXTENSIONS: [&str; 2] = ["baml", "json"];
 
-        let src_files = walkdir::WalkDir::new(directory)
+        log::info!("Reading files from {:#}", dir.to_string_lossy());
+
+        if !dir.exists() {
+            anyhow::bail!("{dir:#?} does not exist (expected a directory containing BAML files)",);
+        }
+        if dir.is_file() {
+            return Err(anyhow::anyhow!(
+                "{dir:#?} is a file, not a directory (expected a directory containing BAML files)",
+            ));
+        }
+        if !dir.is_dir() {
+            return Err(anyhow::anyhow!(
+                "{dir:#?} is not a directory (expected a directory containing BAML files)",
+            ));
+        }
+
+        let src_files = walkdir::WalkDir::new(dir)
             .into_iter()
             .filter_map(|e| match e {
                 Ok(e) => Some(e),
                 Err(e) => {
-                    log::warn!(
-                        "Error while reading files from {:#}: {}",
-                        directory.to_string_lossy(),
-                        e
-                    );
+                    log::error!("Error while reading files from {dir:#?}: {e}");
                     None
                 }
             })
@@ -140,9 +152,16 @@ impl BamlRuntime {
                 VALID_EXTENSIONS.contains(&ext)
             })
             .map(|e| e.path().to_path_buf())
-            .collect();
+            .collect::<Vec<_>>();
 
-        Self::from_files(directory, src_files)
+        if !src_files
+            .iter()
+            .any(|f| f.extension() == Some("baml".as_ref()))
+        {
+            anyhow::bail!("no .baml files found in {dir:#?}");
+        }
+
+        Self::from_files(dir, src_files)
     }
 
     fn from_files(directory: &PathBuf, files: Vec<PathBuf>) -> Result<Self> {
@@ -189,7 +208,9 @@ impl BamlRuntime {
             }
         };
 
-        let func_response = self.call_function(function_name, &params, ctx).await;
+        let func_response = self
+            .call_function(function_name.to_string(), params, ctx)
+            .await;
 
         Ok(TestResponse {
             function_response: func_response,
@@ -198,12 +219,12 @@ impl BamlRuntime {
 
     pub async fn call_function(
         &self,
-        function_name: &str,
-        params: &HashMap<String, serde_json::Value>,
+        function_name: String,
+        params: HashMap<String, serde_json::Value>,
         ctx: RuntimeContext,
-    ) -> Result<FunctionResponse> {
-        let function = self.ir.find_function(function_name)?;
-        self.ir.check_function_params(&function, params)?;
+    ) -> Result<FunctionResult> {
+        let function = self.ir.find_function(function_name.as_str())?;
+        self.ir.check_function_params(&function, &params)?;
 
         let renderer = PromptRenderer::from_function(&function)?;
         let client = self.ir.find_client(renderer.client_name())?;
@@ -217,7 +238,7 @@ impl BamlRuntime {
 
         match response.content() {
             None => {
-                return Ok(FunctionResponse {
+                return Ok(FunctionResult {
                     llm_response: response,
                     parsed: None,
                 });
@@ -225,7 +246,7 @@ impl BamlRuntime {
             Some(content) => {
                 let parsed = jsonish::from_str(content, &self.ir, function.output(), &ctx.env);
 
-                Ok(FunctionResponse {
+                Ok(FunctionResult {
                     llm_response: response,
                     parsed: Some(parsed),
                 })

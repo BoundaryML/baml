@@ -3,32 +3,27 @@ require_relative "../lib/baml"
 
 start = Time.now
 
+t = Baml::TokioDemo.new
+
+puts "BEGIN sync sleep"
+t.does_this_yield
+t.does_this_yield
+puts "END sync sleep"
+puts
+
+puts "BEGIN async sleep"
 Async do |task|
-  t = Baml::TokioDemo.new
+
+  Fiber.schedule do
+    t.does_this_yield
+  end
+  Fiber.schedule do
+    t.does_this_yield
+  end
   #task.async do
-  #  puts "BEGIN- ruby-native sleep"
-  #  sleep 1
-  #  puts "END- ruby-native sleep"
+  #  t.does_this_yield
   #end
-  task.async do
-    t.does_this_yield
-  end
-  task.async do
-    t.does_this_yield
-  end
-  task.async do
-    t.does_this_yield
-  end
-  #  Fiber.schedule do
-  #    puts "a-put1"
-  #    #Fiber.yield
-  #    puts "a-put2"
-  #  end
-  #  Fiber.schedule do
-  #    puts "b-put1"
-  #    #Fiber.yield
-  #    puts "b-put2"
-  #  end
 end
+puts "END async sleep"
 
 puts "Duration: #{Time.now - start}"

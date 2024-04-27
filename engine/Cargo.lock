@@ -2602,6 +2602,7 @@ name = "ruby_ffi"
 version = "0.1.0"
 dependencies = [
  "baml-runtime",
+ "env_logger",
  "futures",
  "magnus",
  "rb-sys",

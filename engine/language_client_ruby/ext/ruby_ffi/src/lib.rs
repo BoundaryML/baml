@@ -2,13 +2,16 @@ use baml_runtime::{BamlRuntime, FunctionResult, RuntimeContext};
 use futures::executor::block_on;
 use magnus::{
     class, error::RubyUnavailableError, exception::runtime_error, function, method, prelude::*,
-    scan_args::get_kwargs, value::Value, Error, RHash, Ruby,
+    rb_sys::AsRawValue, scan_args::get_kwargs, value::Value, Error, IntoValue, RHash, Ruby,
+};
+use rb_sys::bindings::uncategorized::{
+    rb_fiber_current, rb_fiber_scheduler_block, rb_fiber_scheduler_current, rb_fiber_scheduler_get,
+    rb_fiber_scheduler_kernel_sleep, rb_fiber_scheduler_unblock,
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tokio::time::{sleep, Duration};
 
-mod json_to_ruby;
 mod ruby_types;
 
 type Result<T> = std::result::Result<T, magnus::Error>;
@@ -39,33 +42,55 @@ impl TokioDemo {
     }
 
     fn does_this_yield(&self) {
-        self.t.block_on(async_fn());
+        let rb_qnil = rb_sys::special_consts::Qnil;
+        println!("build2 qnil {}", Into::<u64>::into(rb_qnil));
+        let rb_scheduler = unsafe { rb_fiber_scheduler_get() };
+        println!("current scheduler {}", Into::<u64>::into(rb_scheduler));
+        let rb_curr_fiber = unsafe { rb_fiber_current() };
+        println!(
+            "  fiber={} going to sleep",
+            Into::<u64>::into(rb_curr_fiber)
+        );
+        unsafe {
+            let rb_duration = magnus::Integer::from_i64(10).into_value();
+            //rb_fiber_scheduler_kernel_sleep(rb_scheduler, rb_duration.as_raw());
+        }
+        let fut = self.t.spawn(async move {
+            async_fn().await;
+            println!("  fiber={} done sleeping, pls wake up", rb_curr_fiber);
+            unsafe {
+                let rb_qnil = rb_sys::special_consts::Qnil;
+                if rb_scheduler != Into::<u64>::into(rb_qnil) {
+                    rb_fiber_scheduler_unblock(rb_scheduler, rb_qnil.into(), rb_curr_fiber);
+                }
+            }
+        });
+        println!(
+            "  fiber={} signalling that we're going to block",
+            Into::<u64>::into(rb_curr_fiber)
+        );
+        unsafe {
+            if rb_scheduler != Into::<u64>::into(rb_qnil) {
+                rb_fiber_scheduler_block(
+                    rb_scheduler,
+                    rb_qnil.into(),
+                    // In theory, according to rb_fiber_scheduler_make_timeout, qnil blocks indefinitely
+                    /*timeout:*/
+                    rb_qnil.into(),
+                );
+            }
+        }
+        println!(
+            "  fiber={} blocking until woken up",
+            Into::<u64>::into(rb_curr_fiber)
+        );
+        self.t.block_on(fut);
     }
-}
 
-fn json_to_ruby(any: Value) -> Result<Value> {
-    let json = serde_magnus::deserialize::<Value, serde_json::Value>(any);
-
-    let ruby = match Ruby::get() {
-        Ok(ruby) => ruby,
-        Err(e) => {
-            return Err(Error::new(
-                runtime_error(),
-                format!("Failed to access Ruby runtime: {}", e),
-            ))
-        }
-    };
-
-    match json {
-        Ok(json) => {
-            return Ok(json_to_ruby::JsonToRuby::to_ruby(&ruby, json)?);
-        }
-        Err(e) => {
-            return Err(Error::new(
-                ruby.exception_type_error(),
-                format!("Failed to convert input to magnus::Value: {}", e),
-            ));
-        }
+    fn tokio_test(&self) {
+        let f0 = self.t.spawn(async_fn());
+        let f1 = self.t.spawn(async_fn());
+        let f2 = self.t.spawn(async_fn());
     }
 }
 
@@ -103,10 +128,7 @@ impl BamlRuntimeFfi {
             Err(e) => {
                 return Err(Error::new(
                     ruby.exception_runtime_error(),
-                    format!(
-                        "Encountered error while loading BAML files from directory:\n{:#}",
-                        e
-                    ),
+                    format!("Failed to initialize BAML runtime:\n{:#}", e),
                 ))
             }
         };
@@ -158,7 +180,7 @@ impl BamlRuntimeFfi {
 
         println!("args are {:#?}", args);
 
-        let ctx = match ctx {
+        let mut ctx = match ctx {
             Some(ctx) => match serde_magnus::deserialize::<_, RuntimeContext>(ctx) {
                 Ok(ctx) => ctx,
                 Err(e) => {
@@ -170,26 +192,43 @@ impl BamlRuntimeFfi {
             },
             None => RuntimeContext::default(),
         };
+        ctx.env = std::env::vars_os()
+            .map(|(k, v)| {
+                (
+                    k.to_string_lossy().to_string(),
+                    v.to_string_lossy().to_string(),
+                )
+            })
+            .chain(ctx.env.into_iter())
+            .collect();
 
         println!("fn trying to call? {}", function_name);
 
-        match self
+        let retval = match self
             .t
             .block_on(self.internal.call_function(function_name, args, ctx))
         {
             Ok(res) => Ok(ruby_types::FunctionResult::new(res)),
-            Err(e) => {
-                return Err(Error::new(
-                    ruby.exception_runtime_error(),
-                    format!("error while calling function: {}", e),
-                ));
-            }
-        }
+            Err(e) => Err(Error::new(
+                ruby.exception_runtime_error(),
+                format!("error while calling function: {}", e),
+            )),
+        };
+
+        retval
     }
 }
 
 #[magnus::init(name = "ruby_ffi")]
 fn init() -> Result<()> {
+    if let Err(e) = env_logger::try_init_from_env(
+        env_logger::Env::new()
+            .filter("BAML_LOG")
+            .write_style("BAML_LOG_STYLE"),
+    ) {
+        eprintln!("Failed to initialize BAML logger: {:#}", e);
+    };
+
     let rb = BamlRuntimeFfi::try_lock_gvl()?;
 
     let module = rb.define_module("Baml")?;
@@ -201,8 +240,6 @@ fn init() -> Result<()> {
         function!(BamlRuntimeFfi::from_directory, 1),
     )?;
     runtime_class.define_method("call_function", method!(BamlRuntimeFfi::call_function, 1))?;
-
-    module.define_module_function("json_to_ruby", function!(json_to_ruby, 1))?;
 
     let tokio_demo = module.define_class("TokioDemo", class::object())?;
     tokio_demo.define_singleton_method("new", function!(TokioDemo::new, 0))?;

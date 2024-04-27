@@ -77,8 +77,7 @@ pub struct DeserializerConditions {
 
 impl std::fmt::Debug for DeserializerConditions {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // Use the Display trait to print the flags
-        write!(f, "{}", self)
+        std::fmt::Display::fmt(self, f)
     }
 }
 
