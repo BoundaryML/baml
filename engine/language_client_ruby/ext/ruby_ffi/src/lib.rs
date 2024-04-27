@@ -1,101 +1,18 @@
-use baml_runtime::{BamlRuntime, FunctionResult, RuntimeContext};
-use futures::executor::block_on;
+use baml_runtime::{BamlRuntime, RuntimeContext};
 use magnus::{
     class, error::RubyUnavailableError, exception::runtime_error, function, method, prelude::*,
-    rb_sys::AsRawValue, scan_args::get_kwargs, value::Value, Error, IntoValue, RHash, Ruby,
-};
-use rb_sys::bindings::uncategorized::{
-    rb_fiber_current, rb_fiber_scheduler_block, rb_fiber_scheduler_current, rb_fiber_scheduler_get,
-    rb_fiber_scheduler_kernel_sleep, rb_fiber_scheduler_unblock,
+    scan_args::get_kwargs, Error, RHash, Ruby,
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
-use tokio::time::{sleep, Duration};
 
 mod ruby_types;
+mod tokio_demo;
 
 type Result<T> = std::result::Result<T, magnus::Error>;
 
-async fn async_fn() -> String {
-    let duration = Duration::from_secs(2);
-    println!("async-BEGIN- sleeping for {duration:#?}");
-    sleep(duration).await;
-    println!("async-END- slept for {duration:#?}");
-    "async-retval".to_string()
-}
-
-#[magnus::wrap(class = "Baml::TokioDemo", free_immediately, size)]
-struct TokioDemo {
-    t: tokio::runtime::Runtime,
-}
-
-impl TokioDemo {
-    fn new() -> Result<Self> {
-        let Ok(tokio_runtime) = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-        else {
-            return Err(Error::new(runtime_error(), "Failed to start tokio runtime"));
-        };
-
-        Ok(Self { t: tokio_runtime })
-    }
-
-    fn does_this_yield(&self) {
-        let rb_qnil = rb_sys::special_consts::Qnil;
-        println!("build2 qnil {}", Into::<u64>::into(rb_qnil));
-        let rb_scheduler = unsafe { rb_fiber_scheduler_get() };
-        println!("current scheduler {}", Into::<u64>::into(rb_scheduler));
-        let rb_curr_fiber = unsafe { rb_fiber_current() };
-        println!(
-            "  fiber={} going to sleep",
-            Into::<u64>::into(rb_curr_fiber)
-        );
-        unsafe {
-            let rb_duration = magnus::Integer::from_i64(10).into_value();
-            //rb_fiber_scheduler_kernel_sleep(rb_scheduler, rb_duration.as_raw());
-        }
-        let fut = self.t.spawn(async move {
-            async_fn().await;
-            println!("  fiber={} done sleeping, pls wake up", rb_curr_fiber);
-            unsafe {
-                let rb_qnil = rb_sys::special_consts::Qnil;
-                if rb_scheduler != Into::<u64>::into(rb_qnil) {
-                    rb_fiber_scheduler_unblock(rb_scheduler, rb_qnil.into(), rb_curr_fiber);
-                }
-            }
-        });
-        println!(
-            "  fiber={} signalling that we're going to block",
-            Into::<u64>::into(rb_curr_fiber)
-        );
-        unsafe {
-            if rb_scheduler != Into::<u64>::into(rb_qnil) {
-                rb_fiber_scheduler_block(
-                    rb_scheduler,
-                    rb_qnil.into(),
-                    // In theory, according to rb_fiber_scheduler_make_timeout, qnil blocks indefinitely
-                    /*timeout:*/
-                    rb_qnil.into(),
-                );
-            }
-        }
-        println!(
-            "  fiber={} blocking until woken up",
-            Into::<u64>::into(rb_curr_fiber)
-        );
-        self.t.block_on(fut);
-    }
-
-    fn tokio_test(&self) {
-        let f0 = self.t.spawn(async_fn());
-        let f1 = self.t.spawn(async_fn());
-        let f2 = self.t.spawn(async_fn());
-    }
-}
-
 // must be kept in sync with rb.define_class in the init() fn
-#[magnus::wrap(class = "Baml::BamlRuntime", free_immediately, size)]
+#[magnus::wrap(class = "Baml::Ffi::BamlRuntime", free_immediately, size)]
 struct BamlRuntimeFfi {
     internal: BamlRuntime,
     t: tokio::runtime::Runtime,
@@ -228,7 +145,7 @@ fn init() -> Result<()> {
 
     let rb = BamlRuntimeFfi::try_lock_gvl()?;
 
-    let module = rb.define_module("Baml")?;
+    let module = rb.define_module("Baml")?.define_module("Ffi")?;
 
     // must be kept in sync with the magnus::wrap annotation
     let runtime_class = module.define_class("BamlRuntime", class::object())?;
@@ -238,11 +155,8 @@ fn init() -> Result<()> {
     )?;
     runtime_class.define_method("call_function", method!(BamlRuntimeFfi::call_function, 1))?;
 
-    let tokio_demo = module.define_class("TokioDemo", class::object())?;
-    tokio_demo.define_singleton_method("new", function!(TokioDemo::new, 0))?;
-    tokio_demo.define_method("does_this_yield", method!(TokioDemo::does_this_yield, 0))?;
-
-    ruby_types::FunctionResult::ruby_define_self(&module)?;
+    tokio_demo::TokioDemo::define_in_ruby(&module);
+    ruby_types::define_types(&module)?;
 
     Ok(())
 }

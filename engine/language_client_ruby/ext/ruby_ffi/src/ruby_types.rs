@@ -1,8 +1,8 @@
 use magnus::{class, exception::runtime_error, method, prelude::*, value::Value, Error, RModule};
 
-type Result<T> = std::result::Result<T, magnus::Error>;
+use crate::Result;
 
-#[magnus::wrap(class = "Baml::FunctionResult", free_immediately, size)]
+#[magnus::wrap(class = "Baml::Ffi::FunctionResult", free_immediately, size)]
 pub struct FunctionResult {
     inner: baml_runtime::FunctionResult,
 }
@@ -38,9 +38,9 @@ impl FunctionResult {
 
     /// For usage in magnus::init
     ///
-    /// This should really be implemented using a combination of traits and macros but this will do
-    pub fn ruby_define_self(rmod: &RModule) -> Result<()> {
-        let cls = rmod.define_class("FunctionResult", class::object())?;
+    /// TODO: use traits and macros to implement this
+    pub fn define_in_ruby(module: &RModule) -> Result<()> {
+        let cls = module.define_class("FunctionResult", class::object())?;
 
         cls.define_method("to_s", method!(FunctionResult::to_s, 0))?;
         cls.define_method("raw", method!(FunctionResult::raw, 0))?;
@@ -48,4 +48,10 @@ impl FunctionResult {
 
         Ok(())
     }
+}
+
+pub fn define_types(rmod: &RModule) -> Result<()> {
+    FunctionResult::define_in_ruby(rmod)?;
+
+    Ok(())
 }
