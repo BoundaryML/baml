@@ -114,7 +114,7 @@ impl BamlRuntimeFfi {
         let retval = match self.t.block_on(self.internal.call_function(
             function_name.clone(),
             args,
-            ctx,
+            &ctx,
         )) {
             Ok(res) => Ok(ruby_types::FunctionResult::new(res)),
             Err(e) => Err(Error::new(
