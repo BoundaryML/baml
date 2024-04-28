@@ -38,19 +38,23 @@ pub struct Walker<'db, I> {
 }
 
 impl IntermediateRepr {
-    pub fn walk_enums<'a>(&'a self) -> impl Iterator<Item = Walker<'a, &'a Node<Enum>>> {
+    pub fn walk_enums<'a>(&'a self) -> impl ExactSizeIterator<Item = Walker<'a, &'a Node<Enum>>> {
         self.enums.iter().map(|e| Walker { db: self, item: e })
     }
 
-    pub fn walk_classes<'a>(&'a self) -> impl Iterator<Item = Walker<'a, &'a Node<Class>>> {
+    pub fn walk_classes<'a>(
+        &'a self,
+    ) -> impl ExactSizeIterator<Item = Walker<'a, &'a Node<Class>>> {
         self.classes.iter().map(|e| Walker { db: self, item: e })
     }
 
-    pub fn function_names(&self) -> impl Iterator<Item = &str> {
+    pub fn function_names(&self) -> impl ExactSizeIterator<Item = &str> {
         self.functions.iter().map(|f| f.elem.name())
     }
 
-    pub fn walk_functions<'a>(&'a self) -> impl Iterator<Item = Walker<'a, &'a Node<Function>>> {
+    pub fn walk_functions<'a>(
+        &'a self,
+    ) -> impl ExactSizeIterator<Item = Walker<'a, &'a Node<Function>>> {
         self.functions.iter().map(|e| Walker { db: self, item: e })
     }
 
@@ -65,13 +69,15 @@ impl IntermediateRepr {
         })
     }
 
-    pub fn walk_clients<'a>(&'a self) -> impl Iterator<Item = Walker<'a, &'a Node<Client>>> {
+    pub fn walk_clients<'a>(
+        &'a self,
+    ) -> impl ExactSizeIterator<Item = Walker<'a, &'a Node<Client>>> {
         self.clients.iter().map(|e| Walker { db: self, item: e })
     }
 
     pub fn walk_template_strings<'a>(
         &'a self,
-    ) -> impl Iterator<Item = Walker<'a, &'a Node<TemplateString>>> {
+    ) -> impl ExactSizeIterator<Item = Walker<'a, &'a Node<TemplateString>>> {
         self.template_strings
             .iter()
             .map(|e| Walker { db: self, item: e })
@@ -80,7 +86,7 @@ impl IntermediateRepr {
     #[allow(dead_code)]
     pub fn walk_retry_policies<'a>(
         &'a self,
-    ) -> impl Iterator<Item = Walker<'a, &'a Node<RetryPolicy>>> {
+    ) -> impl ExactSizeIterator<Item = Walker<'a, &'a Node<RetryPolicy>>> {
         self.retry_policies
             .iter()
             .map(|e| Walker { db: self, item: e })

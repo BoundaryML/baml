@@ -1,8 +1,8 @@
+pub mod internal;
 mod llm_client;
 mod prompt_renderer;
 
 use anyhow::Result;
-use serde::Serialize;
 use serde_json::json;
 use std::{collections::HashMap, path::PathBuf, process::Termination};
 
@@ -189,7 +189,7 @@ impl BamlRuntime {
         &self,
         function_name: &str,
         test_name: &str,
-        ctx: RuntimeContext,
+        ctx: &RuntimeContext,
     ) -> Result<TestResponse> {
         let function = self.ir.find_function(function_name)?;
         let test = self.ir.find_test(&function, test_name)?;
@@ -225,7 +225,7 @@ impl BamlRuntime {
         &self,
         function_name: String,
         params: HashMap<String, serde_json::Value>,
-        ctx: RuntimeContext,
+        ctx: &RuntimeContext,
     ) -> Result<FunctionResult> {
         let function = self.ir.find_function(function_name.as_str())?;
         self.ir.check_function_params(&function, &params)?;
@@ -272,7 +272,9 @@ mod tests {
 
         let ctx = RuntimeContext::new().add_env("OPENAI_API_KEY".into(), "API_KEY".to_string());
 
-        let res = runtime.run_test("ExtractNames", "pale_maroon", ctx).await?;
+        let res = runtime
+            .run_test("ExtractNames", "pale_maroon", &ctx)
+            .await?;
 
         assert_passed(&res);
         Ok(())
@@ -289,7 +291,7 @@ mod tests {
         params.insert("input".into(), json!("\"Attention Is All You Need\" is a landmark[1][2] 2017 research paper by Google.[3] Authored by eight scientists, it was responsible for expanding 2014 attention mechanisms proposed by Bahdanau et. al. into a new deep learning architecture known as the transformer. The paper is considered by some to be a founding document for modern artificial intelligence, as transformers became the main architecture of large language models.[4][5] At the time, the focus of the research was on improving Seq2seq techniques for machine translation, but even in their paper the authors saw the potential for other tasks like question answering and for what is now called multimodal Generative AI.\n\nThe paper's title is a reference to the song \"All You Need Is Love\" by the Beatles.[6]\n\nAs of 2024, the paper has been cited more than 100,000 times.[7]"));
 
         let res = runtime
-            .call_function("ExtractNames".to_string(), params, ctx)
+            .call_function("ExtractNames".to_string(), params, &ctx)
             .await?;
 
         println!("{:#?}", res);

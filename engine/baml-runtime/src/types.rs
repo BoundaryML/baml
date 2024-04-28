@@ -2,7 +2,7 @@ use serde::{self, Deserialize};
 use serde_json;
 use std::collections::HashMap;
 
-#[derive(Deserialize, Debug, Default)]
+#[derive(Deserialize, Debug, Default, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct RuntimeContext {
     #[serde(default = "HashMap::new")]

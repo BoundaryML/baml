@@ -220,6 +220,17 @@ impl<'a> Walker<'a, (&'a Function, &'a TestCase)> {
     pub fn content(&self) -> &Expression {
         &self.item.1.elem.content
     }
+
+    pub fn test_case(&self) -> &repr::TestCase {
+        &self.item.1.elem
+    }
+
+    pub fn function(&'a self) -> Walker<'a, &'a Function> {
+        Walker {
+            db: self.db,
+            item: self.item.0,
+        }
+    }
 }
 
 impl<'a> Walker<'a, &'a Class> {

@@ -281,6 +281,7 @@ version = "0.20.0-canary.0"
 dependencies = [
  "anyhow",
  "baml-lib",
+ "baml-runtime",
  "base64 0.13.1",
  "check-latest",
  "chrono",

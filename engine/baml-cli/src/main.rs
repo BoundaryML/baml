@@ -8,6 +8,7 @@ mod errors;
 mod import_command;
 mod init_command;
 mod legacy_test_command;
+mod runtime_test_command;
 mod shell;
 mod update;
 mod update_client;
@@ -86,6 +87,10 @@ pub struct TestArgs {
     /// Specify which generator (and therefore language) you want to use to run the tests.
     #[arg(long, short = 'g')]
     generator: Option<String>,
+
+    // Use the runtime or not (default is false)
+    #[arg(long, action = clap::ArgAction::SetTrue)]
+    use_runtime: bool,
 }
 
 impl fmt::Display for TestAction {
@@ -165,9 +170,13 @@ pub(crate) fn main() {
                 );
             }),
         Commands::Test(args) => {
-            builder::build(&args.baml_dir).and_then(|(baml_dir, config, schema)| {
-                legacy_test_command::run(args, &baml_dir, &config, schema)
-            })
+            if args.use_runtime {
+                runtime_test_command::run(args).map_err(|e| e.to_string().into())
+            } else {
+                builder::build(&args.baml_dir).and_then(|(baml_dir, config, schema)| {
+                    legacy_test_command::run(args, &baml_dir, &config, schema)
+                })
+            }
         }
         Commands::Import(args) => {
             builder::build(&args.baml_dir).and_then(|(baml_dir, config, schema)| {

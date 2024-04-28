@@ -9,6 +9,7 @@ license-file.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+baml-runtime = { path = "../baml-runtime" }
 baml-lib = { path = "../baml-lib/baml" }
 base64 = "0.13.0"
 check-latest = "1.0.2"
