@@ -12,12 +12,14 @@ pub(crate) trait CallableJinja {
         kwargs: &mut Kwargs,
     ) -> Result<Self::Params, minijinja::Error>;
 
+    // Call an actual function like {{ hello() }}
     fn call(
         &self,
         state: &minijinja::State,
         params: Self::Params,
     ) -> Result<minijinja::Value, minijinja::Error>;
 
+    // Call a method on the object like {{ hello.there() }}
     fn call_method(
         &self,
         name: &str,

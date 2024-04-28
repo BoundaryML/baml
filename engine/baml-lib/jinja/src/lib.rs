@@ -1,14 +1,16 @@
+mod baml_image;
 use colored::*;
 mod evaluate_type;
 mod get_vars;
 
 use evaluate_type::get_variable_types;
-use minijinja::{self, value::Kwargs};
-use minijinja::{context, ErrorKind};
-use serde::Serialize;
-use std::collections::HashMap;
-
 pub use evaluate_type::{PredefinedTypes, Type, TypeError};
+use log::info;
+use minijinja::{self, value::Kwargs};
+use minijinja::{context, ErrorKind, Value};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
 
 fn get_env<'a>() -> minijinja::Environment<'a> {
     let mut env = minijinja::Environment::new();
@@ -84,6 +86,7 @@ pub struct TemplateStringMacro {
 }
 
 const MAGIC_CHAT_ROLE_DELIMITER: &'static str = "BAML_CHAT_ROLE_MAGIC_STRING_DELIMITER";
+const MAGIC_IMAGE_DELIMITER: &'static str = "BAML_IMAGE_MAGIC_STRING_DELIMITER";
 
 #[derive(Debug)]
 struct OutputFormat {
@@ -92,7 +95,7 @@ struct OutputFormat {
 
 impl std::fmt::Display for OutputFormat {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "Answer in JSON using this schema:\n\n{}", self.text)
+        write!(f, "Answer in JSON using this schema:\n{}", self.text)
     }
 }
 
@@ -164,9 +167,9 @@ impl minijinja::value::Object for OutputFormat {
     }
 }
 
-fn render_minijinja<T: Serialize>(
+fn render_minijinja(
     template: &str,
-    args: &T,
+    args: &minijinja::Value,
     ctx: &RenderContext,
     template_string_macros: &[TemplateStringMacro],
 ) -> Result<RenderedPrompt, minijinja::Error> {
@@ -187,6 +190,9 @@ fn render_minijinja<T: Serialize>(
 
     // trim
     let template = template.trim();
+    println!("Rendering template: \n{}\n------\n", template);
+    // let args_dict = minijinja::Value::from_serializable(args);
+    println!("With args: {:#?}", args);
 
     // inject macros
     let template = template_string_macros
@@ -246,7 +252,7 @@ fn render_minijinja<T: Serialize>(
     );
     let tmpl = env.get_template("prompt")?;
 
-    let rendered = tmpl.render(minijinja::Value::from_serializable(args))?;
+    let rendered = tmpl.render(args)?;
 
     if !rendered.contains(MAGIC_CHAT_ROLE_DELIMITER) {
         return Ok(RenderedPrompt::Completion(rendered));
@@ -267,9 +273,35 @@ fn render_minijinja<T: Serialize>(
         } else if role.is_none() && chunk.is_empty() {
             // If there's only whitespace before the first `_.chat()` directive, we discard that chunk
         } else {
+            let mut parts = vec![];
+            for part in chunk.split(MAGIC_IMAGE_DELIMITER) {
+                if part.starts_with(":baml-start-image:") && part.ends_with(":baml-end-image:") {
+                    let image_data = part
+                        .strip_prefix(":baml-start-image:")
+                        .unwrap_or(part)
+                        .strip_suffix(":baml-end-image:")
+                        .unwrap_or(part);
+
+                    match serde_json::from_str::<BamlImage>(image_data) {
+                        Ok(image) => {
+                            parts.push(ChatMessagePart::Image(image));
+                        }
+                        Err(_) => {
+                            Err(minijinja::Error::new(
+                                ErrorKind::CannotUnpack,
+                                format!("Image variable had unrecognizable data: {}", image_data),
+                            ))?;
+                        }
+                    }
+                } else if part.is_empty() {
+                    // only whitespace, so discard
+                } else {
+                    parts.push(ChatMessagePart::Text(part.trim().to_string()));
+                }
+            }
             chat_messages.push(RenderedChatMessage {
                 role: role.unwrap_or("system").to_string(),
-                message: chunk.trim().to_string(),
+                parts,
             });
         }
     }
@@ -280,7 +312,53 @@ fn render_minijinja<T: Serialize>(
 #[derive(Debug, PartialEq, Serialize, Clone)]
 pub struct RenderedChatMessage {
     pub role: String,
-    pub message: String,
+    pub parts: Vec<ChatMessagePart>,
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "PascalCase")]
+// #[serde(untagged)]
+pub enum BamlImage {
+    Url(ImageUrl),
+    Base64(ImageBase64),
+}
+
+impl std::fmt::Display for BamlImage {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "{MAGIC_IMAGE_DELIMITER}:baml-start-image:{}:baml-end-image:{MAGIC_IMAGE_DELIMITER}",
+            serde_json::to_string(&self).unwrap()
+        )
+    }
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
+pub struct ImageUrl {
+    pub url: String,
+}
+
+impl ImageUrl {
+    pub fn new(url: String) -> ImageUrl {
+        ImageUrl { url }
+    }
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
+pub struct ImageBase64 {
+    pub base64: String,
+}
+
+impl ImageBase64 {
+    pub fn new(base64: String) -> ImageBase64 {
+        ImageBase64 { base64 }
+    }
+}
+
+#[derive(Debug, PartialEq, Serialize, Clone)]
+pub enum ChatMessagePart {
+    Text(String), // raw user-provided text
+    Image(BamlImage),
 }
 
 #[derive(Debug, PartialEq)]
@@ -340,7 +418,7 @@ impl RenderedPrompt {
             RenderedPrompt::Completion(message) => {
                 RenderedPrompt::Chat(vec![RenderedChatMessage {
                     role: chat_options.default_role.clone(),
-                    message,
+                    parts: vec![ChatMessagePart::Text(message)],
                 }])
             }
         }
@@ -351,7 +429,12 @@ impl RenderedPrompt {
             RenderedPrompt::Chat(messages) => RenderedPrompt::Completion(
                 messages
                     .into_iter()
-                    .map(|m| m.message)
+                    .flat_map(|m| {
+                        m.parts.into_iter().map(|p| match p {
+                            ChatMessagePart::Text(t) => t,
+                            ChatMessagePart::Image(_) => "".to_string(), // we are choosing to ignore the image for now
+                        })
+                    })
                     .collect::<Vec<String>>()
                     .join(&completion_options.joiner),
             ),
@@ -360,9 +443,9 @@ impl RenderedPrompt {
     }
 }
 
-pub fn render_prompt<T: Serialize>(
+pub fn render_prompt(
     template: &str,
-    args: &T,
+    args: &minijinja::Value,
     ctx: &RenderContext,
     template_string_macros: &[TemplateStringMacro],
 ) -> anyhow::Result<RenderedPrompt> {
@@ -385,6 +468,25 @@ pub fn render_prompt<T: Serialize>(
     }
 }
 
+impl minijinja::value::StructObject for ImageUrl {
+    fn get_field(&self, name: &str) -> Option<minijinja::Value> {
+        Some(Value::from_safe_string("hello".into()))
+    }
+}
+
+impl minijinja::value::Object for BamlImage {
+    fn call(
+        &self,
+        _state: &minijinja::State<'_, '_>,
+        args: &[minijinja::value::Value],
+    ) -> Result<minijinja::value::Value, minijinja::Error> {
+        Err(minijinja::Error::new(
+            ErrorKind::UnknownMethod,
+            format!("baml image has no callable attribute '{}'", "blah"),
+        ))
+    }
+}
+
 #[cfg(test)]
 mod render_tests {
 
@@ -399,6 +501,87 @@ mod render_tests {
         INIT.call_once(|| {
             env_logger::init();
         });
+    }
+
+    #[test]
+    fn render_image() -> anyhow::Result<()> {
+        setup_logging();
+        let args = context! {
+            img => minijinja::Value::from_object(BamlImage::Url(ImageUrl {
+                url: "https://example.com/image.jpg".to_string(),
+            })),
+        };
+
+        let rendered = render_prompt2(
+            "{{ _.chat(\"system\") }}
+            Here is an image: {{ img }}",
+            &args,
+            &RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                },
+                output_format: "iambic pentameter".to_string(),
+                env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
+            },
+            &vec![],
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Chat(vec![RenderedChatMessage {
+                role: "system".to_string(),
+                parts: vec![
+                    ChatMessagePart::Text(vec!["Here is an image:",].join("\n")),
+                    ChatMessagePart::Image(BamlImage::Url(ImageUrl::new(
+                        "https://example.com/image.jpg".to_string()
+                    )),),
+                ]
+            },])
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn render_image_suffix() -> anyhow::Result<()> {
+        setup_logging();
+        let args = context! {
+            img => minijinja::Value::from_object(BamlImage::Url(ImageUrl {
+                url: "https://example.com/image.jpg".to_string(),
+            })),
+        };
+
+        let rendered = render_prompt2(
+            "{{ _.chat(\"system\") }}
+            Here is an image: {{ img }}. Please help me.",
+            &args,
+            &RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                },
+                output_format: "iambic pentameter".to_string(),
+                env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
+            },
+            &vec![],
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Chat(vec![RenderedChatMessage {
+                role: "system".to_string(),
+                parts: vec![
+                    ChatMessagePart::Text(vec!["Here is an image:",].join("\n")),
+                    ChatMessagePart::Image(BamlImage::Url(ImageUrl::new(
+                        "https://example.com/image.jpg".to_string()
+                    )),),
+                    ChatMessagePart::Text(vec![". Please help me.",].join("\n")),
+                ]
+            },])
+        );
+
+        Ok(())
     }
 
     #[test]
@@ -444,24 +627,28 @@ mod render_tests {
             RenderedPrompt::Chat(vec![
                 RenderedChatMessage {
                     role: "system".to_string(),
-                    message: vec![
-                        "You are an assistant that always responds",
-                        "in a very excited way with emojis",
-                        "and also outputs this word 4 times",
-                        "after giving a response: sakura",
-                    ]
-                    .join("\n")
+                    parts: vec![ChatMessagePart::Text(
+                        vec![
+                            "You are an assistant that always responds",
+                            "in a very excited way with emojis",
+                            "and also outputs this word 4 times",
+                            "after giving a response: sakura",
+                        ]
+                        .join("\n")
+                    )]
                 },
                 RenderedChatMessage {
                     role: "john doe".to_string(),
-                    message: vec![
-                        "Tell me a haiku about sakura. Answer in JSON using this schema:",
-                        "",
-                        "iambic pentameter",
-                        "",
-                        "End the haiku with a line about your maker, openai.",
-                    ]
-                    .join("\n")
+                    parts: vec![ChatMessagePart::Text(
+                        vec![
+                            "Tell me a haiku about sakura. Answer in JSON using this schema:",
+                            "",
+                            "iambic pentameter",
+                            "",
+                            "End the haiku with a line about your maker, openai.",
+                        ]
+                        .join("\n")
+                    )]
                 }
             ])
         );
@@ -744,22 +931,24 @@ mod render_tests {
             RenderedPrompt::Chat(vec![
                 RenderedChatMessage {
                     role: "system".to_string(),
-                    message: vec![
+                    parts: vec![ChatMessagePart::Text(vec![
                         "You are an assistant that always responds",
                         "in a very excited way with emojis",
                         "and also outputs this word 4 times",
                         "after giving a response: sakura",
+                    ].join("\n"))]
+                },
+                RenderedChatMessage {
+                    role: "john doe".to_string(),
+                    parts: vec![
+                        ChatMessagePart::Text("Tell me a haiku about sakura. Answer in JSON using this schema:\n\niambic pentameter".to_string())
                     ]
-                    .join("\n")
                 },
                 RenderedChatMessage {
                     role: "john doe".to_string(),
-                    message: vec!["Tell me a haiku about sakura. Answer in JSON using this schema:\n\niambic pentameter",].join("\n")
-                },
-                RenderedChatMessage {
-                    role: "john doe".to_string(),
-                    message: vec!["End the haiku with a line about your maker, openai.",]
-                        .join("\n")
+                    parts: vec![
+                        ChatMessagePart::Text("End the haiku with a line about your maker, openai.".to_string())
+                    ]
                 }
             ])
         );
@@ -802,13 +991,72 @@ mod render_tests {
             rendered,
             RenderedPrompt::Chat(vec![RenderedChatMessage {
                 role: "system".to_string(),
-                message: vec![
-                    "You are an assistant that always responds",
-                    "in a very excited way with emojis",
-                    "and also outputs this word 4 times",
-                    "after giving a response: sakura",
+                parts: vec![ChatMessagePart::Text(
+                    vec![
+                        "You are an assistant that always responds",
+                        "in a very excited way with emojis",
+                        "and also outputs this word 4 times",
+                        "after giving a response: sakura",
+                    ]
+                    .join("\n")
+                )]
+            },])
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn render_chat_with_image() -> anyhow::Result<()> {
+        setup_logging();
+
+        let serde_json::Value::Object(args) = serde_json::json!({
+            "img_input": {
+                "url": "https://example.com/image.jpg"
+            }
+        }) else {
+            anyhow::bail!("args must be convertible to a JSON object");
+        };
+
+        let rendered = render_prompt(
+            "
+                {{ _.chat(\"system\") }}
+
+                You are an assistant that always responds
+                with an image
+                and also outputs this image url
+                after giving a response: {{ img_input }}
+            ",
+            &args,
+            &RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                },
+                output_format: "iambic pentameter".to_string(),
+                env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
+            },
+            &vec![],
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Chat(vec![RenderedChatMessage {
+                role: "system".to_string(),
+                parts: vec![
+                    ChatMessagePart::Text(
+                        vec![
+                            "You are an assistant that always responds",
+                            "with an image",
+                            "and also outputs this image url",
+                            "after giving a response: ",
+                        ]
+                        .join("\n")
+                    ),
+                    ChatMessagePart::Image(BamlImage::Url(ImageUrl::new(
+                        "https://example.com/image.jpg".to_string()
+                    )),),
                 ]
-                .join("\n")
             },])
         );
 

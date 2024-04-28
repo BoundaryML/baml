@@ -18,7 +18,7 @@ class Education {
   year int
 }
 
-function ExtractResume(img: image) -> Resume {
+function ExtractResume(img: image ) -> Resume {
   // see clients.baml
   client GPT4Turbo
 
