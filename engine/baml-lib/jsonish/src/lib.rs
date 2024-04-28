@@ -7,7 +7,10 @@ use anyhow::Result;
 mod deserializer;
 mod json_schema;
 
-use internal_baml_core::ir::repr::{FieldType, IntermediateRepr};
+use internal_baml_core::{
+    ast::TypeValue,
+    ir::repr::{FieldType, IntermediateRepr},
+};
 use serde_json::{self};
 
 use json_schema::ValueCoerce;
@@ -20,11 +23,12 @@ pub fn from_str(
     target: &FieldType,
     env: &HashMap<String, String>,
 ) -> Result<(serde_json::Value, DeserializerConditions)> {
-    // let s = jsonschema::JSONSchema::compile(&schema)?;
-    // let target = deserializer::Target {
-    //     schema: serde_json::from_str::<deserializer::Type>(schema.as_ref())?,
-    // };
-    // target.parse(raw_string)
+    if matches!(target, FieldType::Primitive(TypeValue::String)) {
+        return Ok((
+            serde_json::Value::String(raw_string.to_string()),
+            DeserializerConditions::new(),
+        ));
+    }
 
     // When the schema is just a string, i should really just return the raw_string w/o parsing it.
     let value =

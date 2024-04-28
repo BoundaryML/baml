@@ -75,15 +75,15 @@ pub fn validate_value(
                 match value {
                     serde_json::Value::Object(obj) => {
                         for f in c.walk_fields() {
-                            if let Some(v) = obj.get(&f.name) {
-                                validate_value(ir, &f.r#type.elem, v, scope);
-                            } else if !f.r#type.elem.is_optional() {
-                                scope.push_error(format!("Missing required field `{}`", f.name));
+                            if let Some(v) = obj.get(f.name()) {
+                                validate_value(ir, f.r#type(), v, scope);
+                            } else if !f.r#type().is_optional() {
+                                scope.push_error(format!("Missing required field `{}`", f.name()));
                             }
                         }
 
                         for f in obj.keys() {
-                            if !c.walk_fields().any(|f2| f2.name.as_str() == f) {
+                            if !c.walk_fields().any(|f2| f2.name() == f) {
                                 scope.push_error(format!(
                                     "Field `{}` not found in class `{}`",
                                     f, name

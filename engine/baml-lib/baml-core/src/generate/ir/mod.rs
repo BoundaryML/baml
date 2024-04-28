@@ -7,8 +7,8 @@ mod walker;
 pub use generate::to_ir;
 use internal_baml_schema_ast::ast;
 pub use ir_helpers::{
-    ClassWalker, ClientWalker, EnumValueWalker, EnumWalker, FunctionWalker, IRHelper,
-    RetryPolicyWalker, TemplateStringWalker, TestCaseWalker,
+    ClassFieldWalker, ClassWalker, ClientWalker, EnumValueWalker, EnumWalker, FunctionWalker,
+    IRHelper, RetryPolicyWalker, TemplateStringWalker, TestCaseWalker,
 };
 
 pub(super) use json_schema::WithJsonSchema;
@@ -18,6 +18,7 @@ pub(super) use repr::IntermediateRepr;
 pub type Enum = repr::Node<repr::Enum>;
 pub type EnumValue = repr::Node<repr::EnumValue>;
 pub type Class = repr::Node<repr::Class>;
+pub type Field = repr::Node<repr::Field>;
 pub(super) type FieldType = repr::FieldType;
 pub(super) type Expression = repr::Expression;
 pub(super) type Identifier = repr::Identifier;

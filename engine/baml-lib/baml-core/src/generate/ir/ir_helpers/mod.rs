@@ -8,7 +8,7 @@ use crate::{
     error_not_found, error_unsupported,
     ir::{
         repr::{IntermediateRepr, Walker},
-        Class, Client, Enum, EnumValue, Function, RetryPolicy, TemplateString, TestCase,
+        Class, Client, Enum, EnumValue, Field, Function, RetryPolicy, TemplateString, TestCase,
     },
 };
 use anyhow::Result;
@@ -25,6 +25,7 @@ pub type TemplateStringWalker<'a> = Walker<'a, &'a TemplateString>;
 pub type ClientWalker<'a> = Walker<'a, &'a Client>;
 pub type RetryPolicyWalker<'a> = Walker<'a, &'a RetryPolicy>;
 pub type TestCaseWalker<'a> = Walker<'a, (&'a Function, &'a TestCase)>;
+pub type ClassFieldWalker<'a> = Walker<'a, &'a Field>;
 
 pub trait IRHelper {
     fn find_enum(&self, enum_name: &str) -> Result<EnumWalker<'_>>;

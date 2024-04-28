@@ -3,8 +3,8 @@ use serde_json::json;
 use std::collections::HashMap;
 
 use super::{
-    repr::{self, Field, FunctionConfig, RetryPolicyId},
-    Class, Client, Enum, EnumValue, Expression, Function, FunctionV2, Identifier, Impl,
+    repr::{self, FunctionConfig},
+    Class, Client, Enum, EnumValue, Expression, Field, Function, FunctionV2, Identifier, Impl,
     RetryPolicy, TemplateString, TestCase, Walker,
 };
 
@@ -238,9 +238,11 @@ impl<'a> Walker<'a, &'a Class> {
         &self.elem().name
     }
 
-    #[allow(dead_code)]
-    pub fn walk_fields(&'a self) -> impl Iterator<Item = &'a repr::Field> {
-        self.item.elem.static_fields.iter().map(|f| &f.elem)
+    pub fn walk_fields(&'a self) -> impl Iterator<Item = Walker<'a, &'a Field>> {
+        self.item.elem.static_fields.iter().map(|f| Walker {
+            db: self.db,
+            item: f,
+        })
     }
 
     pub fn elem(&self) -> &'a repr::Class {
@@ -281,11 +283,33 @@ impl<'a> Walker<'a, &'a TemplateString> {
         self.elem().name.as_str()
     }
 
-    pub fn inputs(&self) -> &'a Vec<Field> {
+    pub fn inputs(&self) -> &'a Vec<repr::Field> {
         &self.item.elem.params
     }
 
     pub fn template(&self) -> &str {
         &self.elem().content
+    }
+}
+
+impl<'a> Walker<'a, &'a Field> {
+    pub fn name(&self) -> &str {
+        &self.elem().name
+    }
+
+    pub fn r#type(&self) -> &repr::FieldType {
+        &self.elem().r#type.elem
+    }
+
+    pub fn elem(&self) -> &'a repr::Field {
+        &self.item.elem
+    }
+
+    pub fn valid_names(&self, env_values: &HashMap<String, String>) -> Result<Vec<String>> {
+        let val = self.elem().r#type.attributes.get("alias").map_or_else(
+            || Ok(self.name().to_string()),
+            |v| v.as_string_value(env_values),
+        )?;
+        Ok(vec![val])
     }
 }

@@ -1,264 +1,18 @@
 mod deserialize_flags;
-mod value_to_bool;
 
 use anyhow::Result;
 use internal_baml_core::{
     ast::TypeValue,
     ir::{
         repr::{FieldType, IntermediateRepr},
-        EnumValueWalker, EnumWalker, IRHelper,
+        ClassFieldWalker, EnumValueWalker, IRHelper,
     },
 };
-use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::{collections::HashMap, fmt::format};
+use std::collections::HashMap;
 
 pub use self::deserialize_flags::DeserializerConditions;
 use self::deserialize_flags::{Flag, SerializationContext};
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(untagged)]
-pub enum SchemaOrBool {
-    Schema(Box<JSONSchema7>),
-    Bool(bool),
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "lowercase")]
-pub enum Type {
-    String,
-    Number,
-    Integer,
-    Boolean,
-    Object,
-    Array,
-    Null,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct JSONSchema7 {
-    #[serde(skip_serializing_if = "Option::is_none", rename = "type")]
-    pub type_: Option<Type>,
-
-    #[serde(skip_serializing_if = "Option::is_none", rename = "enum")]
-    pub enum_: Option<Vec<Value>>,
-
-    // #[serde(skip_serializing_if = "Option::is_none", rename = "const")]
-    // pub const_: Option<Value>,
-
-    // Array specific fields
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub items: Option<Box<JSONSchema7>>,
-
-    // Object specific fields
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub properties: Option<HashMap<String, JSONSchema7>>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub additional_properties: Option<SchemaOrBool>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub pattern_properties: Option<HashMap<String, JSONSchema7>>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub required: Option<Vec<String>>,
-
-    // Combinators
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub any_of: Option<Vec<JSONSchema7>>,
-    // #[serde(skip_serializing_if = "Option::is_none")]
-    // pub all_of: Option<Vec<JSONSchema7>>,
-    // #[serde(skip_serializing_if = "Option::is_none")]
-    // pub one_of: Option<Vec<JSONSchema7>>,
-
-    // Adding support for $ref
-    #[serde(rename = "$ref", skip_serializing_if = "Option::is_none")]
-    pub ref_: Option<String>,
-
-    // Support for definitions
-    // Alternatively, using $defs as recommended in newer drafts
-    #[serde(rename = "definitions", skip_serializing_if = "Option::is_none")]
-    pub definitions: Option<HashMap<String, JSONSchema7>>,
-
-    #[serde(rename = "$defs", skip_serializing_if = "Option::is_none")]
-    pub defs: Option<HashMap<String, JSONSchema7>>,
-}
-
-impl JSONSchema7 {
-    pub fn coerce(&self, value: &Value) -> Result<Value> {
-        match self.type_ {
-            Some(Type::String) => self.coerce_string(value).map(Value::String),
-            Some(Type::Number) => self.coerce_float(value).map(|n| json!(n)),
-            Some(Type::Integer) => self.coerce_int(value).map(|n| json!(n)),
-            Some(Type::Boolean) => self.coerce_boolean(value).map(Value::Bool),
-            Some(Type::Object) => self.coerce_object(value),
-            Some(Type::Array) => self.coerce_array(value),
-            Some(Type::Null) => self.coerce_null(value),
-            None => {
-                if self.enum_.is_some() {
-                    return self.coerce_enum(value);
-                }
-                if self.any_of.is_some() {
-                    return self.coerce_union(value);
-                }
-                if let Some(ref ref_) = self.ref_ {
-                    return self.coerce_ref(value, ref_);
-                }
-
-                anyhow::bail!("Could not coerce value")
-            }
-        }
-    }
-
-    fn coerce_ref(&self, value: &Value, ref_: &str) -> Result<Value> {
-        match self.definitions.as_ref().and_then(|d| d.get(ref_)) {
-            Some(schema) => schema.coerce(value),
-            None => anyhow::bail!("Could not find schema for ref: {}", ref_),
-        }
-    }
-
-    fn coerce_enum(&self, value: &Value) -> Result<Value> {
-        if self.enum_.as_ref().unwrap().contains(value) {
-            Ok(value.clone())
-        } else {
-            anyhow::bail!("Value does not match enum")
-        }
-    }
-
-    fn coerce_array(&self, value: &Value) -> Result<Value> {
-        match self.items {
-            Some(ref schema) => {
-                let mut coerced = Vec::new();
-                match value {
-                    Value::Array(arr) => {
-                        for v in arr {
-                            coerced.push(schema.coerce(v)?);
-                        }
-                    }
-                    _ => {
-                        coerced.push(schema.coerce(value)?);
-                    }
-                }
-                Ok(Value::Array(coerced))
-            }
-            None => anyhow::bail!("Array schema must have items"),
-        }
-    }
-
-    fn coerce_object(&self, value: &Value) -> Result<Value> {
-        let mut coerced = HashMap::new();
-        for (k, v) in value.as_object().unwrap() {
-            if let Some(schema) = self.properties.as_ref().and_then(|p| p.get(k)) {
-                coerced.insert(k.clone(), schema.coerce(v)?);
-            } else {
-                coerced.insert(k.clone(), v.clone());
-            }
-        }
-        Ok(Value::Object(serde_json::Map::from_iter(
-            coerced.into_iter(),
-        )))
-    }
-
-    fn coerce_string(&self, value: &Value) -> Result<String> {
-        match value {
-            Value::String(v) => Ok(v.clone()),
-            _ => Ok(value.to_string()),
-        }
-    }
-
-    fn coerce_float(&self, value: &Value) -> Result<f64> {
-        match value {
-            Value::Number(v) => {
-                if let Some(n) = v.as_i64() {
-                    return Ok(n as f64);
-                }
-                if let Some(n) = v.as_f64() {
-                    return Ok(n);
-                }
-                if let Some(n) = v.as_u64() {
-                    return Ok(n as f64);
-                }
-                anyhow::bail!("Value is not an float")
-            }
-            Value::Array(arr) => {
-                if arr.len() == 1 {
-                    return self.coerce_float(&arr[0]);
-                }
-                anyhow::bail!("Value is not a float");
-            }
-            Value::String(v) => {
-                if let Ok(n) = v.parse::<f64>() {
-                    return Ok(n);
-                }
-                anyhow::bail!("Value is not a float");
-            }
-            Value::Object(m) => {
-                if m.len() == 1 {
-                    let (_, v) = m.iter().next().unwrap();
-                    return self.coerce_float(v);
-                }
-                anyhow::bail!("Value is not a float");
-            }
-            _ => anyhow::bail!("Value is not a float"),
-        }
-    }
-
-    fn coerce_int(&self, value: &Value) -> Result<i64> {
-        match value {
-            Value::Number(v) => {
-                if let Some(n) = v.as_i64() {
-                    return Ok(n);
-                }
-                if let Some(n) = v.as_f64() {
-                    return Ok(n as i64);
-                }
-                if let Some(n) = v.as_u64() {
-                    return Ok(n as i64);
-                }
-                anyhow::bail!("Value is not an integer")
-            }
-            Value::String(v) => {
-                if let Ok(n) = v.parse::<i64>() {
-                    return Ok(n);
-                }
-                if let Ok(n) = v.parse::<f64>() {
-                    return Ok(n as i64);
-                }
-                anyhow::bail!("Value is not a integer");
-            }
-            _ => anyhow::bail!("Value is not a integer"),
-        }
-    }
-
-    fn coerce_boolean(&self, value: &Value) -> Result<bool> {
-        match value {
-            Value::Bool(v) => Ok(*v),
-            Value::String(v) => {
-                if v.trim().eq_ignore_ascii_case("true") {
-                    Ok(true)
-                } else if v.trim().eq_ignore_ascii_case("false") {
-                    Ok(false)
-                } else {
-                    anyhow::bail!("Value is not a boolean")
-                }
-            }
-            _ => anyhow::bail!("Value is not a boolean"),
-        }
-    }
-
-    fn coerce_null(&self, value: &Value) -> Result<Value> {
-        Ok(value.clone())
-    }
-
-    fn coerce_union(&self, value: &Value) -> Result<Value> {
-        for schema in self.any_of.as_ref().unwrap() {
-            if schema.coerce(value).is_ok() {
-                return schema.coerce(value);
-            }
-        }
-        anyhow::bail!("Value does not match any schema in union");
-    }
-}
 
 pub trait ValueCoerce {
     fn coerce(
@@ -295,7 +49,14 @@ impl ValueCoerce for FieldType {
                     value.cloned(),
                 )),
             },
-            FieldType::Class(_) => todo!(),
+            FieldType::Class(name) => match parse_class(&scope, ir, env, name, value) {
+                Ok(v) => Ok(v),
+                Err(e) => Err(SerializationContext::from_error(
+                    scope,
+                    format!("Could not parse class: {}\n{}", self, e),
+                    value.cloned(),
+                )),
+            },
             FieldType::List(item) => match value {
                 Some(Value::Array(items)) => {
                     let res = items
@@ -470,6 +231,10 @@ fn parse_primitive(
     let value = match value {
         Some(value) => value,
         None => {
+            if matches!(primitive, TypeValue::Null) {
+                return Ok((json!(null), DeserializerConditions::new()));
+            }
+
             // If the value is None, we can't parse it.
             anyhow::bail!("No value to parse");
         }
@@ -486,11 +251,11 @@ fn parse_primitive(
         }
         Value::Object(kv) => {
             if kv.len() == 1 {
-                let (k, v) = kv.iter().next().unwrap();
+                let (_, v) = kv.iter().next().unwrap();
                 let res = parse_primitive(primitive, ir, env, Some(v))?;
                 Ok((res.0, res.1.with_flag(Flag::ObjectToField(value.clone()))))
             } else {
-                anyhow::bail!("Object has more than one key")
+                anyhow::bail!("Value is ambiguous")
             }
         }
         Value::String(s) => {
@@ -603,6 +368,242 @@ fn parse_primitive(
             TypeValue::Image => anyhow::bail!("Value is not an image"),
         },
     }
+}
+
+fn update_map<'a>(
+    required_values: &'a mut HashMap<
+        String,
+        Option<Result<(Value, DeserializerConditions), SerializationContext>>,
+    >,
+    optional_values: &'a mut HashMap<
+        String,
+        Option<Result<(Value, DeserializerConditions), SerializationContext>>,
+    >,
+    field: &'a ClassFieldWalker,
+    value: Result<(Value, DeserializerConditions), SerializationContext>,
+) -> Result<()> {
+    let map = if field.r#type().is_optional() {
+        optional_values
+    } else {
+        required_values
+    };
+    let key = field.name();
+    match map.get(key) {
+        Some(Some(_)) => anyhow::bail!("Duplicate field: {}", key),
+        Some(None) => {
+            map.insert(key.into(), Some(value));
+            Ok(())
+        }
+        None => anyhow::bail!("Unknown field: {}", key),
+    }
+}
+
+fn parse_class(
+    scope: &Vec<String>,
+    ir: &IntermediateRepr,
+    env: &HashMap<String, String>,
+    name: &str,
+    value: Option<&Value>,
+) -> Result<(Value, DeserializerConditions)> {
+    let class = ir.find_class(name)?;
+
+    // Classes are a bit tricky, many fields can be optional, the input may be an array of multiple objects, that all potentially match.
+    // We need to find the best match.
+
+    let mut complete_class = vec![];
+
+    let field_with_names = class
+        .walk_fields()
+        .map(|f| Ok((f, f.valid_names(env)?)))
+        .collect::<Result<Vec<_>>>()?;
+    let (optional, required): (Vec<_>, Vec<_>) = field_with_names
+        .iter()
+        .partition(|f| f.0.r#type().is_optional());
+
+    let mut required_values = required
+        .iter()
+        .map(|f| (f.0.name().into(), None))
+        .collect::<HashMap<_, _>>();
+
+    let mut optional_values = optional
+        .iter()
+        .map(|f| (f.0.name().into(), None))
+        .collect::<HashMap<_, _>>();
+
+    let parsed_status = match required.len() + optional.len() {
+        0 => None,
+        1 => {
+            // Special case for a single field.
+            let (field, field_names) = required.first().or(optional.first()).unwrap();
+            let field_scope = {
+                let mut scope = scope.clone();
+                scope.push(field.name().to_string());
+                scope
+            };
+
+            // Try and parse the field.
+            let parsed_field = match value {
+                Some(serde_json::Value::Object(kv)) => {
+                    let mut parsed = field_names
+                        .iter()
+                        .filter_map(|n| {
+                            if let Some(v) = kv.get(n) {
+                                Some(field.r#type().coerce(field_scope.clone(), ir, env, Some(v)))
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<_>>();
+
+                    // Also try and parse the field from the whole object.
+                    let as_complete = field.r#type().coerce(field_scope.clone(), ir, env, value);
+                    parsed.push(as_complete);
+
+                    let best_match = pick_best_match_array(&parsed);
+
+                    Some(match best_match {
+                        Ok(v) => Ok(v),
+                        Err(e) => Err(SerializationContext::from_error(
+                            field_scope,
+                            format!("{e}"),
+                            value.cloned(),
+                        )),
+                    })
+                }
+                Some(serde_json::Value::Array(items)) => {
+                    // There are two approaches here:
+                    // Approach 1: we have an array of objects, and we need to find the best match.
+                    // Approach 2: we have an array of values, and we need to find the best match for each field.
+
+                    // In the case of a single field, it looks the same.
+                    let res = items
+                        .iter()
+                        .map(|v| {
+                            let approach1 = {
+                                let mut scope = scope.clone();
+                                scope.push(field.name().to_string());
+                                field.r#type().coerce(scope, ir, env, Some(v))
+                            };
+
+                            match parse_class(scope, ir, env, name, Some(v)) {
+                                Ok(v) => complete_class.push(Ok(v)),
+                                Err(e) => {}
+                            };
+
+                            approach1
+                        })
+                        .collect::<Vec<_>>();
+
+                    let best_match = pick_best_match_array(&res);
+
+                    Some(match best_match {
+                        Ok(v) => Ok(v),
+                        Err(e) => Err(SerializationContext::from_error(
+                            scope.clone(),
+                            format!("{e}"),
+                            value.cloned(),
+                        )),
+                    })
+                }
+                Some(v) => Some(field.r#type().coerce(field_scope, ir, env, Some(v))),
+                None => None,
+            };
+
+            parsed_field.map(|parsed_field| {
+                update_map(
+                    &mut required_values,
+                    &mut optional_values,
+                    field,
+                    parsed_field,
+                )
+            })
+        }
+        _ => {
+            // For multiple fields, we need to find the best match for each field.
+            if let Some(value) = value {
+                match value {
+                    serde_json::Value::Array(items) => {
+                        // Try and parse every item in the array as the class.
+                        items
+                            .iter()
+                            .filter_map(|v| parse_class(scope, ir, env, name, Some(v)).ok())
+                            .for_each(|v| complete_class.push(Ok(v)));
+                        Some(Ok(()))
+                    }
+                    serde_json::Value::Object(kv) => {
+                        for (field, field_names) in required.iter().chain(optional.iter()) {
+                            let field_scope = {
+                                let mut scope = scope.clone();
+                                scope.push(field.name().to_string());
+                                scope
+                            };
+
+                            let value = match field_names.iter().find_map(|n| kv.get(n)) {
+                                Some(v) => v,
+                                None => continue,
+                            };
+
+                            let res =
+                                field
+                                    .r#type()
+                                    .coerce(field_scope.clone(), ir, env, Some(value));
+
+                            update_map(&mut required_values, &mut optional_values, field, res);
+                        }
+
+                        Some(Ok(()))
+                    }
+                    v => Some(Err(anyhow::format_err!(
+                        "{}",
+                        SerializationContext::from_error(
+                            scope.clone(),
+                            "Value is not an object or array".to_string(),
+                            Some(v.clone())
+                        )
+                        .to_string()
+                    ))),
+                }
+            } else {
+                None
+            }
+        }
+    };
+
+    if let Some(Ok(_)) = parsed_status {
+        // Check that all required fields are present.
+        let invalid_fields = required_values
+            .iter()
+            .filter_map(|(k, v)| match v {
+                Some(Ok(_)) => None,
+                Some(Err(e)) => Some(e.to_string()),
+                None => Some(format!("Missing required field: {}", k)),
+            })
+            .collect::<Vec<_>>();
+
+        if invalid_fields.is_empty() {
+            // The object is all good, we can return it.
+            let kv = required_values
+                .iter()
+                .chain(optional_values.iter())
+                .map(|(name, v)| {
+                    (
+                        name,
+                        v.as_ref()
+                            .and_then(|v| v.as_ref().ok().and_then(|(v, _)| Some(v.clone())))
+                            .unwrap_or(serde_json::Value::Null),
+                    )
+                })
+                .collect::<HashMap<_, _>>();
+
+            complete_class.insert(0, Ok((json!(kv), DeserializerConditions::new())));
+        }
+    }
+
+    if complete_class.is_empty() {
+        anyhow::bail!("No valid class found");
+    }
+
+    pick_best_match_array::<anyhow::Error>(&complete_class)
 }
 
 fn parse_enum(

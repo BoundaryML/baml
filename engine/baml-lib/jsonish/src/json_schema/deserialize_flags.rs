@@ -66,8 +66,12 @@ pub enum Flag {
     StringToBool(String),
     StringToNull(String),
     StringToChar(String),
+
     // Number -> X convertions.
     FloatToInt(f64),
+
+    // X -> Object convertions.
+    NoFields(Option<serde_json::Value>),
 }
 
 #[derive(Clone)]
@@ -140,6 +144,14 @@ impl std::fmt::Display for Flag {
             }
             Flag::FloatToInt(value) => {
                 write!(f, "Float to int: {}", value)?;
+            }
+            Flag::NoFields(value) => {
+                write!(f, "No fields: ")?;
+                if let Some(value) = value {
+                    writeln!(f, "{:#?}", value)?;
+                } else {
+                    writeln!(f, "<empty>")?;
+                }
             }
         }
         Ok(())
