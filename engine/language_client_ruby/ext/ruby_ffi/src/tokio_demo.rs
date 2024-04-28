@@ -1,6 +1,7 @@
 use magnus::{
     class, exception::runtime_error, function, method, prelude::*, Error, IntoValue, RModule,
 };
+#[cfg(ruby_have_ruby_fiber_scheduler_h)]
 use rb_sys::bindings::uncategorized::{
     rb_fiber_current, rb_fiber_scheduler_block, rb_fiber_scheduler_current, rb_fiber_scheduler_get,
     rb_fiber_scheduler_kernel_sleep, rb_fiber_scheduler_unblock,
@@ -35,6 +36,7 @@ impl TokioDemo {
         Ok(Self { t: tokio_runtime })
     }
 
+    #[cfg(ruby_have_ruby_fiber_scheduler_h)]
     fn does_this_yield(&self) {
         let rb_qnil = rb_sys::special_consts::Qnil;
         println!("build2 qnil {}", Into::<u64>::into(rb_qnil));
@@ -93,6 +95,7 @@ impl TokioDemo {
     pub fn define_in_ruby(module: &RModule) -> Result<()> {
         let tokio_demo = module.define_class("TokioDemo", class::object())?;
         tokio_demo.define_singleton_method("new", function!(TokioDemo::new, 0))?;
+        #[cfg(ruby_have_ruby_fiber_scheduler_h)]
         tokio_demo.define_method("does_this_yield", method!(TokioDemo::does_this_yield, 0))?;
 
         Ok(())
