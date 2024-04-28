@@ -31,14 +31,21 @@ pub struct FunctionResult {
 }
 
 impl FunctionResult {
-    pub fn content(&self) -> Option<&str> {
+    pub fn content(&self) -> Result<&str> {
         self.llm_response.content()
     }
 
-    pub fn parsed(&self) -> Option<&serde_json::Value> {
+    pub fn parsed_content(&self) -> Result<&serde_json::Value> {
         self.parsed
             .as_ref()
-            .and_then(|res| res.as_ref().ok().map(|(val, _)| val))
+            .map(|res| {
+                if let Ok((val, _)) = res {
+                    Ok(val)
+                } else {
+                    anyhow::bail!("{:#?}", self)
+                }
+            })
+            .unwrap_or_else(|| anyhow::bail!("{:#?}", self))
     }
 }
 
@@ -96,9 +103,11 @@ impl TestResponse {
     }
 }
 
+// This allows tests to pass or fail based on the contents of the FunctionResult
+#[cfg(test)]
 impl Termination for FunctionResult {
     fn report(self) -> std::process::ExitCode {
-        if self.parsed().is_some() {
+        if self.parsed_content().is_ok() {
             std::process::ExitCode::SUCCESS
         } else {
             std::process::ExitCode::FAILURE
@@ -106,6 +115,8 @@ impl Termination for FunctionResult {
     }
 }
 
+// This allows tests to pass or fail based on the contents of the TestResponse
+#[cfg(test)]
 impl Termination for TestResponse {
     fn report(self) -> std::process::ExitCode {
         if self.status() == TestStatus::Pass {
@@ -241,6 +252,7 @@ impl BamlRuntime {
         let response = client.call(&self.ir, &ctx, &prompt).await;
         let parsed = response
             .content()
+            .ok()
             .map(|content| jsonish::from_str(content, &self.ir, function.output(), &ctx.env));
 
         let result = FunctionResult {

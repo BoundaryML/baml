@@ -10,11 +10,10 @@ pub fn to_value(ctx: &RuntimeContext, expr: &Expression) -> Result<serde_json::V
     // serde_json::Value::serialize(&self.into(), serializer)
     Ok(match expr {
         Expression::Identifier(idn) => match idn {
-            internal_baml_core::ir::repr::Identifier::ENV(key) => {
-                ctx.env.get(key).map_or(serde_json::Value::Null, |val| {
-                    serde_json::Value::String(val.to_string())
-                })
-            }
+            internal_baml_core::ir::repr::Identifier::ENV(key) => match ctx.env.get(key) {
+                None => anyhow::bail!("env.{} is not set", key),
+                Some(val) => serde_json::Value::String(val.to_string()),
+            },
             _ => serde_json::Value::String(idn.name()),
         },
         Expression::Bool(b) => serde_json::Value::Bool(*b),

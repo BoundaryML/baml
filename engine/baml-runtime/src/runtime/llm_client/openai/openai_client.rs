@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use internal_baml_core::ir::repr::IntermediateRepr;
 use internal_baml_core::ir::{ClientWalker, RetryPolicyWalker};
 use internal_baml_jinja::{RenderContext_Client, RenderedChatMessage};
@@ -189,7 +189,16 @@ impl<'ir> OpenAIClient<'ir> {
             None => {
                 let mut properties = (&client.item.elem.options)
                     .iter()
-                    .map(|(k, v)| Ok((k.as_str(), to_value(ctx, v)?)))
+                    .map(|(k, v)| {
+                        Ok((
+                            k.as_str(),
+                            to_value(ctx, v).context(format!(
+                                "client {} could not resolve options.{}",
+                                client.name(),
+                                k
+                            ))?,
+                        ))
+                    })
                     .collect::<Result<HashMap<&str, serde_json::Value>>>()?;
 
                 let default_role = properties

@@ -3,9 +3,9 @@
     {#- https://sorbet.org/docs/tenum #}
     class {{name}} < T::Enum
       enums do
-        {% for value in values -%}
+        {%- for value in values %}
         {{ value }} = new
-        {% endfor -%}
+        {%- endfor %}
       end
     end
   {#- end #}

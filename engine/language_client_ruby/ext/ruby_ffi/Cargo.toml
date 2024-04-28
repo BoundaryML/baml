@@ -9,6 +9,7 @@ publish = false
 crate-type = ["cdylib"]
 
 [dependencies]
+anyhow.workspace = true
 baml-runtime = { path = "../../../baml-runtime" }
 env_logger.workspace = true
 futures = { version = "0.3.30", features = ["executor"] }

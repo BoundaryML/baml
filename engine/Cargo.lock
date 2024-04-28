@@ -2602,6 +2602,7 @@ dependencies = [
 name = "ruby_ffi"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "baml-runtime",
  "env_logger",
  "futures",

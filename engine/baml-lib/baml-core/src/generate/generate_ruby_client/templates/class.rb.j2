@@ -2,9 +2,20 @@
   {#- module Types #}
     {#- https://sorbet.org/docs/tstruct #}
     class {{name}} < T::Struct
-      {% for (name, type) in fields -%}
+      {%- for (name, type) in fields %}
       const :{{name}}, {{type}}
-      {% endfor -%}
+      {%- endfor %}
+
+      {#- The below is part of a proof-of-concept serialization impl, see struct_to_map_via_to_hash #}
+      {#-
+      def to_hash
+        {
+          {%- for (name, _) in fields %}
+          :{{name}} => self.{{name}},
+          {%- endfor %}
+        }
+      end
+      #}
     end
   {#- end #}
 {#- end #}

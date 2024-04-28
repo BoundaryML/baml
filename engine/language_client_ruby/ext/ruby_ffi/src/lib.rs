@@ -1,4 +1,5 @@
 use baml_runtime::{BamlRuntime, RuntimeContext};
+use magnus::IntoValue;
 use magnus::{
     class, error::RubyUnavailableError, exception::runtime_error, function, method, prelude::*,
     scan_args::get_kwargs, Error, RHash, Ruby,
@@ -6,6 +7,7 @@ use magnus::{
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+mod ruby_to_json;
 mod ruby_types;
 mod tokio_demo;
 
@@ -45,7 +47,7 @@ impl BamlRuntimeFfi {
             Err(e) => {
                 return Err(Error::new(
                     ruby.exception_runtime_error(),
-                    format!("Failed to initialize BAML runtime:\n{:#}", e),
+                    format!("{:?}", e.context("Failed to initialize BAML runtime")),
                 ))
             }
         };
@@ -84,27 +86,18 @@ impl BamlRuntimeFfi {
             ));
         }
 
-        let Ok(args) = serde_magnus::deserialize::<_, HashMap<String, serde_json::Value>>(args)
-        else {
-            return Err(Error::new(
-                ruby.exception_syntax_error(),
-                format!(
-                    "expected keyword 'args' to specify a hash, but was: {}",
-                    args
-                ),
-            ));
+        let args = match ruby_to_json::RubyToJson::convert_hash_to_json(args) {
+            Ok(args) => args.into_iter().collect(),
+            Err(e) => {
+                return Err(Error::new(
+                    ruby.exception_syntax_error(),
+                    format!("error while parsing keyword 'args' as JSON:\n{}", e),
+                ));
+            }
         };
 
         let mut ctx = match ctx {
-            Some(ctx) => match serde_magnus::deserialize::<_, RuntimeContext>(ctx) {
-                Ok(ctx) => ctx,
-                Err(e) => {
-                    return Err(Error::new(
-                        ruby.exception_syntax_error(),
-                        format!("error while parsing ctx: {}", e),
-                    ));
-                }
-            },
+            Some(ctx) => serde_magnus::deserialize::<_, RuntimeContext>(ctx)?,
             None => RuntimeContext::default(),
         };
         log::debug!("Calling {function_name} with:\nargs: {args:#?}\nctx (where env is envvar overrides): {ctx:#?}");
@@ -118,14 +111,18 @@ impl BamlRuntimeFfi {
             .chain(ctx.env.into_iter())
             .collect();
 
-        let retval = match self
-            .t
-            .block_on(self.internal.call_function(function_name, args, ctx))
-        {
+        let retval = match self.t.block_on(self.internal.call_function(
+            function_name.clone(),
+            args,
+            ctx,
+        )) {
             Ok(res) => Ok(ruby_types::FunctionResult::new(res)),
             Err(e) => Err(Error::new(
                 ruby.exception_runtime_error(),
-                format!("error while calling function: {}", e),
+                format!(
+                    "{:?}",
+                    e.context(format!("error while calling {function_name}"))
+                ),
             )),
         };
 
@@ -155,8 +152,14 @@ fn init() -> Result<()> {
     )?;
     runtime_class.define_method("call_function", method!(BamlRuntimeFfi::call_function, 1))?;
 
-    tokio_demo::TokioDemo::define_in_ruby(&module);
     ruby_types::define_types(&module)?;
+
+    // everything below this is for our own testing purposes
+    tokio_demo::TokioDemo::define_in_ruby(&module)?;
+    module.define_module_function(
+        "roundtrip",
+        function!(ruby_to_json::RubyToJson::roundtrip, 1),
+    )?;
 
     Ok(())
 }

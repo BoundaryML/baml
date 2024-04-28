@@ -17,23 +17,23 @@ impl FunctionResult {
     }
 
     pub fn raw(&self) -> Result<String> {
-        let Some(content) = self.inner.content() else {
-            return Err(Error::new(
+        match self.inner.content() {
+            Ok(content) => Ok(content.to_string()),
+            Err(e) => Err(Error::new(
                 runtime_error(),
-                "never received a response from the LLM",
-            ));
-        };
-        Ok(content.to_string())
+                format!("No LLM response: {:#?}", self.inner),
+            )),
+        }
     }
 
     pub fn parsed(&self) -> Result<Value> {
-        let Some(value) = self.inner.parsed() else {
-            return Err(Error::new(
+        match self.inner.parsed_content() {
+            Ok(parsed) => serde_magnus::serialize(parsed),
+            Err(e) => Err(Error::new(
                 runtime_error(),
-                "Failed to parse the LLM response",
-            ));
-        };
-        serde_magnus::serialize(value)
+                format!("Failed to parse LLM response: {:#?}", self.inner),
+            )),
+        }
     }
 
     /// For usage in magnus::init
