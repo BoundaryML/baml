@@ -1,25 +1,11 @@
+# typed: false
 require "delegate"
 require "sorbet-runtime"
 require "sorbet-coerce"
 
 module Baml
+  {# Baml::Types is reserved for generated types. #}
   module Types
-    class FunctionResult < SimpleDelegator
-      extend T::Sig
-      extend T::Generic
-
-      ParsedType = type_member
-
-      sig { returns(ParsedType) }
-      attr_reader :parsed
-
-      sig { params(inner: Baml::FunctionResult, parsed: ParsedType).void }
-      def initialize(inner:, parsed:)
-        @inner = inner
-        @parsed = parsed
-      end
-    end
-
     {%- for enum in enums %}
 {{ enum }}
     {%- endfor %}
@@ -29,5 +15,23 @@ module Baml
     {%- for cls in classes %}
 {{ cls }}
     {%- endfor %}
+  end
+
+  module Unstable
+    class FunctionResult < SimpleDelegator
+      extend T::Sig
+      extend T::Generic
+
+      ParsedType = type_member
+
+      sig { returns(ParsedType) }
+      attr_reader :parsed
+
+      sig { params(inner: Baml::Ffi::FunctionResult, parsed: ParsedType).void }
+      def initialize(inner:, parsed:)
+        @inner = inner
+        @parsed = parsed
+      end
+    end
   end
 end

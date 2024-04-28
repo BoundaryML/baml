@@ -12,27 +12,14 @@
 # rubocop: disable
 # formatter:off
 
+# typed: false
 require "delegate"
 require "sorbet-runtime"
 require "sorbet-coerce"
 
 module Baml
+  
   module Types
-    class FunctionResult < SimpleDelegator
-      extend T::Sig
-      extend T::Generic
-
-      ParsedType = type_member
-
-      sig { returns(ParsedType) }
-      attr_reader :parsed
-
-      sig { params(inner: Baml::FunctionResult, parsed: ParsedType).void }
-      def initialize(inner:, parsed:)
-        @inner = inner
-        @parsed = parsed
-      end
-    end
 
     class Category < T::Enum
       enums do
@@ -143,29 +130,53 @@ module Baml
         G = new
         end
     end
+    
     class Blah < T::Struct; end
+    
     class ClassOptionalFields < T::Struct; end
+    
     class ClassOptionalOutput < T::Struct; end
+    
     class ClassOptionalOutput2 < T::Struct; end
+    
     class DynamicPropsClass < T::Struct; end
+    
     class Email < T::Struct; end
+    
     class Event < T::Struct; end
+    
     class Message < T::Struct; end
+    
     class ModifiedOutput < T::Struct; end
+    
     class NamedArgsSingleClass < T::Struct; end
+    
     class OptionalClass < T::Struct; end
+    
     class OptionalTest_Prop1 < T::Struct; end
+    
     class OptionalTest_ReturnType < T::Struct; end
+    
     class OrderInfo < T::Struct; end
+    
     class OverrideClass < T::Struct; end
+    
     class RaysData < T::Struct; end
+    
     class Resume < T::Struct; end
+    
     class SearchParams < T::Struct; end
+    
     class SomeClass2 < T::Struct; end
+    
     class TestClassAlias < T::Struct; end
+    
     class TestClassWithEnum < T::Struct; end
+    
     class TestOutputClass < T::Struct; end
+    
     class UnionTest_ReturnType < T::Struct; end
+    
     class WithReasoning < T::Struct; end
 
     class Blah < T::Struct
@@ -306,6 +317,24 @@ module Baml
       const :value, String
       const :reasoning, String
       end
+  end
+
+  module Unstable
+    class FunctionResult < SimpleDelegator
+      extend T::Sig
+      extend T::Generic
+
+      ParsedType = type_member
+
+      sig { returns(ParsedType) }
+      attr_reader :parsed
+
+      sig { params(inner: Baml::Ffi::FunctionResult, parsed: ParsedType).void }
+      def initialize(inner:, parsed:)
+        @inner = inner
+        @parsed = parsed
+      end
+    end
   end
 end
 

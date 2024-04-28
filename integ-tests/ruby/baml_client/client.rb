@@ -12,29 +12,35 @@
 # rubocop: disable
 # formatter:off
 
+# typed: strict
 require "baml"
 require "sorbet-runtime"
 
 require_relative "types"
 
 module Baml
+
   class BamlClient
     extend T::Sig
 
-    sig {params(runtime: Baml::BamlRuntime).void}
+    sig { returns(UnstableBamlClient) }
+    attr_reader :unstable
+
+    sig {params(runtime: Baml::Ffi::BamlRuntime).void}
     def initialize(runtime:)
       @runtime = runtime
+      @unstable = T.let(UnstableBamlClient.new(runtime: runtime), UnstableBamlClient)
     end
 
     sig {params(path: String).returns(BamlClient)}
     def self.from_directory(path)
-      BamlClient.new(runtime: BamlRuntime.from_directory(path))
+      BamlClient.new(runtime: Baml::Ffi::BamlRuntime.from_directory(path))
     end
 
     sig {
       params(
         messages: T::Array[Baml::Types::Message],
-      ).returns(Baml::Types::FunctionResult[T::Array[Baml::Types::Category]])
+      ).returns(T::Array[Baml::Types::Category])
     }
     def ClassifyConversation(
         messages:
@@ -45,16 +51,13 @@ module Baml
           "messages" => messages,
         }
       )
-      Baml::Types::FunctionResult[T::Array[Baml::Types::Category]].new(
-        inner: raw,
-        parsed: TypeCoerce[T::Array[Baml::Types::Category]].new.from(raw.parsed)
-      )
+      TypeCoerce[T::Array[Baml::Types::Category]].new.from(raw.parsed)
     end
 
     sig {
       params(
         input: String,
-      ).returns(Baml::Types::FunctionResult[Baml::Types::Category])
+      ).returns(Baml::Types::Category)
     }
     def ClassifyMessage(
         input:
@@ -65,16 +68,13 @@ module Baml
           "input" => input,
         }
       )
-      Baml::Types::FunctionResult[Baml::Types::Category].new(
-        inner: raw,
-        parsed: TypeCoerce[Baml::Types::Category].new.from(raw.parsed)
-      )
+      TypeCoerce[Baml::Types::Category].new.from(raw.parsed)
     end
 
     sig {
       params(
         input: String,
-      ).returns(Baml::Types::FunctionResult[Baml::Types::Category])
+      ).returns(Baml::Types::Category)
     }
     def ClassifyMessage2(
         input:
@@ -85,16 +85,13 @@ module Baml
           "input" => input,
         }
       )
-      Baml::Types::FunctionResult[Baml::Types::Category].new(
-        inner: raw,
-        parsed: TypeCoerce[Baml::Types::Category].new.from(raw.parsed)
-      )
+      TypeCoerce[Baml::Types::Category].new.from(raw.parsed)
     end
 
     sig {
       params(
         input: String,
-      ).returns(Baml::Types::FunctionResult[Baml::Types::Category])
+      ).returns(Baml::Types::Category)
     }
     def ClassifyMessage3(
         input:
@@ -105,16 +102,13 @@ module Baml
           "input" => input,
         }
       )
-      Baml::Types::FunctionResult[Baml::Types::Category].new(
-        inner: raw,
-        parsed: TypeCoerce[Baml::Types::Category].new.from(raw.parsed)
-      )
+      TypeCoerce[Baml::Types::Category].new.from(raw.parsed)
     end
 
     sig {
       params(
         input: String,
-      ).returns(Baml::Types::FunctionResult[T::Array[String]])
+      ).returns(T::Array[String])
     }
     def ExtractNames(
         input:
@@ -125,16 +119,13 @@ module Baml
           "input" => input,
         }
       )
-      Baml::Types::FunctionResult[T::Array[String]].new(
-        inner: raw,
-        parsed: TypeCoerce[T::Array[String]].new.from(raw.parsed)
-      )
+      TypeCoerce[T::Array[String]].new.from(raw.parsed)
     end
 
     sig {
       params(
         resume: String,
-      ).returns(Baml::Types::FunctionResult[Baml::Types::Resume])
+      ).returns(Baml::Types::Resume)
     }
     def ExtractResume(
         resume:
@@ -145,16 +136,13 @@ module Baml
           "resume" => resume,
         }
       )
-      Baml::Types::FunctionResult[Baml::Types::Resume].new(
-        inner: raw,
-        parsed: TypeCoerce[Baml::Types::Resume].new.from(raw.parsed)
-      )
+      TypeCoerce[Baml::Types::Resume].new.from(raw.parsed)
     end
 
     sig {
       params(
         resume: String,
-      ).returns(Baml::Types::FunctionResult[Baml::Types::Resume])
+      ).returns(Baml::Types::Resume)
     }
     def ExtractResume2(
         resume:
@@ -165,16 +153,13 @@ module Baml
           "resume" => resume,
         }
       )
-      Baml::Types::FunctionResult[Baml::Types::Resume].new(
-        inner: raw,
-        parsed: TypeCoerce[Baml::Types::Resume].new.from(raw.parsed)
-      )
+      TypeCoerce[Baml::Types::Resume].new.from(raw.parsed)
     end
 
     sig {
       params(
         text: String,
-      ).returns(Baml::Types::FunctionResult[Baml::Types::RaysData])
+      ).returns(Baml::Types::RaysData)
     }
     def GetDataType(
         text:
@@ -185,16 +170,13 @@ module Baml
           "text" => text,
         }
       )
-      Baml::Types::FunctionResult[Baml::Types::RaysData].new(
-        inner: raw,
-        parsed: TypeCoerce[Baml::Types::RaysData].new.from(raw.parsed)
-      )
+      TypeCoerce[Baml::Types::RaysData].new.from(raw.parsed)
     end
 
     sig {
       params(
         email: Baml::Types::Email,
-      ).returns(Baml::Types::FunctionResult[Baml::Types::OrderInfo])
+      ).returns(Baml::Types::OrderInfo)
     }
     def GetOrderInfo(
         email:
@@ -205,16 +187,13 @@ module Baml
           "email" => email,
         }
       )
-      Baml::Types::FunctionResult[Baml::Types::OrderInfo].new(
-        inner: raw,
-        parsed: TypeCoerce[Baml::Types::OrderInfo].new.from(raw.parsed)
-      )
+      TypeCoerce[Baml::Types::OrderInfo].new.from(raw.parsed)
     end
 
     sig {
       params(
         query: String,
-      ).returns(Baml::Types::FunctionResult[Baml::Types::SearchParams])
+      ).returns(Baml::Types::SearchParams)
     }
     def GetQuery(
         query:
@@ -225,7 +204,216 @@ module Baml
           "query" => query,
         }
       )
-      Baml::Types::FunctionResult[Baml::Types::SearchParams].new(
+      TypeCoerce[Baml::Types::SearchParams].new.from(raw.parsed)
+    end
+
+    
+
+  end
+
+  class UnstableBamlClient
+    extend T::Sig
+
+    sig {params(runtime: Baml::Ffi::BamlRuntime).void}
+    def initialize(runtime:)
+      @runtime = runtime
+    end
+
+    sig {
+      params(
+        messages: T::Array[Baml::Types::Message],
+      ).returns(Baml::Unstable::FunctionResult[T::Array[Baml::Types::Category]])
+    }
+    def ClassifyConversation(
+        messages:
+    )
+      raw = @runtime.call_function(
+        function_name: "ClassifyConversation",
+        args: {
+          "messages" => messages,
+        }
+      )
+      Baml::Unstable::FunctionResult[T::Array[Baml::Types::Category]].new(
+        inner: raw,
+        parsed: TypeCoerce[T::Array[Baml::Types::Category]].new.from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::Unstable::FunctionResult[Baml::Types::Category])
+    }
+    def ClassifyMessage(
+        input:
+    )
+      raw = @runtime.call_function(
+        function_name: "ClassifyMessage",
+        args: {
+          "input" => input,
+        }
+      )
+      Baml::Unstable::FunctionResult[Baml::Types::Category].new(
+        inner: raw,
+        parsed: TypeCoerce[Baml::Types::Category].new.from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::Unstable::FunctionResult[Baml::Types::Category])
+    }
+    def ClassifyMessage2(
+        input:
+    )
+      raw = @runtime.call_function(
+        function_name: "ClassifyMessage2",
+        args: {
+          "input" => input,
+        }
+      )
+      Baml::Unstable::FunctionResult[Baml::Types::Category].new(
+        inner: raw,
+        parsed: TypeCoerce[Baml::Types::Category].new.from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::Unstable::FunctionResult[Baml::Types::Category])
+    }
+    def ClassifyMessage3(
+        input:
+    )
+      raw = @runtime.call_function(
+        function_name: "ClassifyMessage3",
+        args: {
+          "input" => input,
+        }
+      )
+      Baml::Unstable::FunctionResult[Baml::Types::Category].new(
+        inner: raw,
+        parsed: TypeCoerce[Baml::Types::Category].new.from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::Unstable::FunctionResult[T::Array[String]])
+    }
+    def ExtractNames(
+        input:
+    )
+      raw = @runtime.call_function(
+        function_name: "ExtractNames",
+        args: {
+          "input" => input,
+        }
+      )
+      Baml::Unstable::FunctionResult[T::Array[String]].new(
+        inner: raw,
+        parsed: TypeCoerce[T::Array[String]].new.from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        resume: String,
+      ).returns(Baml::Unstable::FunctionResult[Baml::Types::Resume])
+    }
+    def ExtractResume(
+        resume:
+    )
+      raw = @runtime.call_function(
+        function_name: "ExtractResume",
+        args: {
+          "resume" => resume,
+        }
+      )
+      Baml::Unstable::FunctionResult[Baml::Types::Resume].new(
+        inner: raw,
+        parsed: TypeCoerce[Baml::Types::Resume].new.from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        resume: String,
+      ).returns(Baml::Unstable::FunctionResult[Baml::Types::Resume])
+    }
+    def ExtractResume2(
+        resume:
+    )
+      raw = @runtime.call_function(
+        function_name: "ExtractResume2",
+        args: {
+          "resume" => resume,
+        }
+      )
+      Baml::Unstable::FunctionResult[Baml::Types::Resume].new(
+        inner: raw,
+        parsed: TypeCoerce[Baml::Types::Resume].new.from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        text: String,
+      ).returns(Baml::Unstable::FunctionResult[Baml::Types::RaysData])
+    }
+    def GetDataType(
+        text:
+    )
+      raw = @runtime.call_function(
+        function_name: "GetDataType",
+        args: {
+          "text" => text,
+        }
+      )
+      Baml::Unstable::FunctionResult[Baml::Types::RaysData].new(
+        inner: raw,
+        parsed: TypeCoerce[Baml::Types::RaysData].new.from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        email: Baml::Types::Email,
+      ).returns(Baml::Unstable::FunctionResult[Baml::Types::OrderInfo])
+    }
+    def GetOrderInfo(
+        email:
+    )
+      raw = @runtime.call_function(
+        function_name: "GetOrderInfo",
+        args: {
+          "email" => email,
+        }
+      )
+      Baml::Unstable::FunctionResult[Baml::Types::OrderInfo].new(
+        inner: raw,
+        parsed: TypeCoerce[Baml::Types::OrderInfo].new.from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        query: String,
+      ).returns(Baml::Unstable::FunctionResult[Baml::Types::SearchParams])
+    }
+    def GetQuery(
+        query:
+    )
+      raw = @runtime.call_function(
+        function_name: "GetQuery",
+        args: {
+          "query" => query,
+        }
+      )
+      Baml::Unstable::FunctionResult[Baml::Types::SearchParams].new(
         inner: raw,
         parsed: TypeCoerce[Baml::Types::SearchParams].new.from(raw.parsed)
       )

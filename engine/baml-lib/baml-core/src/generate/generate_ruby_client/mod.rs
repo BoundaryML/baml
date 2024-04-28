@@ -21,6 +21,13 @@ struct RubyEnum<'a> {
 }
 
 #[derive(askama::Template)]
+#[template(path = "class_forward_decl.rb.j2")]
+struct RubyForwardDecl<'a> {
+    name: &'a str,
+    fields: Vec<(&'a str, String)>,
+}
+
+#[derive(askama::Template)]
 #[template(path = "class.rb.j2")]
 struct RubyStruct<'a> {
     name: &'a str,
@@ -70,7 +77,20 @@ pub(crate) fn generate_ruby(ir: &IntermediateRepr, gen: &Generator) -> std::io::
                 .collect(),
             forward_decls: ir
                 .walk_classes()
-                .map(|c| format!("class {} < T::Struct; end", c.name()))
+                .map(|c| {
+                    RubyForwardDecl {
+                        name: c.name(),
+                        fields: c
+                            .item
+                            .elem
+                            .static_fields
+                            .iter()
+                            .map(|f| (f.elem.name.as_str(), f.elem.r#type.elem.to_ruby()))
+                            .collect(),
+                    }
+                    .render()
+                    .unwrap_or(format!("# Error rendering class {}", c.name()))
+                })
                 .collect(),
             classes: ir
                 .walk_classes()

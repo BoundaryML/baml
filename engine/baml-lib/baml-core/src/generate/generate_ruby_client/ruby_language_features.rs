@@ -6,9 +6,7 @@ pub(super) struct RubyLanguageFeatures {}
 
 impl LanguageFeatures for RubyLanguageFeatures {
     fn content_prefix(&self) -> &'static str {
-        // NB: "// eslint-disable" does not work, which is why we use inline comments instead
-        // NB: prettier does not allow ignoring files using inline directives or local ignore files
-        // see https://github.com/prettier/prettier/issues/3634 and https://github.com/prettier/prettier/issues/4081
+        // "typed: strict" is for compat with sorbet
         r#"
 ###############################################################################
 #
@@ -27,61 +25,12 @@ impl LanguageFeatures for RubyLanguageFeatures {
         .trim()
     }
 
-    fn format_exports(&self, exports: &Vec<String>) -> String {
-        format!("export {{ {} }}", exports.join(", "))
+    fn format_exports(&self, _exports: &Vec<String>) -> String {
+        "".to_string()
     }
 
-    fn format_imports(&self, libs: &HashSet<LibImport>, imports: &Vec<Import>) -> String {
-        let lib_imports = libs.iter().fold(String::new(), |mut buffer, lib| {
-            buffer.push_str(&format!(
-                "import {} from '{}';\n",
-                lib.as_name.as_ref().unwrap_or(&lib.lib),
-                lib.lib
-            ));
-            buffer
-        });
-
-        // group imports by lib
-        let mut imports_by_lib = imports
-            .iter()
-            .fold(HashMap::new(), |mut map, import| {
-                let imports = map.entry(&import.lib).or_insert(HashSet::new());
-                imports.insert(import);
-                map
-            })
-            .into_iter()
-            .collect::<Vec<_>>();
-        imports_by_lib.sort_by(|a, b| a.0.cmp(b.0));
-
-        let imports = imports_by_lib
-            .iter()
-            .fold(String::new(), |mut buffer, (lib, imports)| {
-                let mut sorted_imports: Vec<_> = imports.iter().collect();
-                sorted_imports.sort_by(|a, b| a.name.cmp(&b.name));
-
-                buffer.push_str(&format!(
-                    "import {{ {} }} from '{}';\n",
-                    sorted_imports
-                        .iter()
-                        .fold(String::new(), |mut buffer, import| {
-                            match import.as_name {
-                                Some(ref as_name) => {
-                                    buffer.push_str(&format!("{} as {}", import.name, as_name));
-                                }
-                                None => {
-                                    buffer.push_str(&import.name);
-                                }
-                            }
-                            buffer.push_str(", ");
-                            buffer
-                        })
-                        .trim_end_matches(", "),
-                    lib
-                ));
-                buffer
-            });
-
-        format!("{}\n{}", lib_imports, imports)
+    fn format_imports(&self, _libs: &HashSet<LibImport>, _imports: &Vec<Import>) -> String {
+        "".to_string()
     }
 
     fn to_file_path(&self, path: &str, name: &str) -> std::path::PathBuf {
