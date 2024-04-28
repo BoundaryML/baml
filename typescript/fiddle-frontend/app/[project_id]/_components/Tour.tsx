@@ -40,7 +40,8 @@ export const InitialTour = () => {
       target: '.tour-test-panel',
       content: (
         <>
-          Click <span className="font-semibold">'Run all'</span> to test this LLM function!
+          Click <span className="font-semibold">'Run all'</span> to test this LLM function! Close this dialog by
+          clicking next.
         </>
       ),
       placement: 'left-start' as Placement,

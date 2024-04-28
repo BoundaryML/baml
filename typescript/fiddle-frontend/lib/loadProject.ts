@@ -4,15 +4,21 @@ import path from 'path';
 import { EditorFile, loadUrl } from "@/app/actions"
 import { BAMLProject } from "./exampleProjects"
 export async function loadProject(params: { project_id: string }, chooseDefault: boolean = false) {
-  const projectGroups = (await loadExampleProjects());
+  const projectGroups = await loadExampleProjects();
   let data: BAMLProject = projectGroups.intros[0] //exampleProjects[0]
   const id = params.project_id
   if (id) {
-    const exampleProject = findBamlProjectById(projectGroups, id)
+    const exampleProject = await loadExampleProject(projectGroups, id)
     if (exampleProject) {
       data = exampleProject
     } else {
       data = await loadUrl(id)
+    }
+  } else {
+    const exampleProject = projectGroups.intros[0]
+    const loadedProject = await loadExampleProject(projectGroups, exampleProject.id)
+    if (loadedProject) {
+      data = loadedProject
     }
   }
   return data
@@ -31,16 +37,26 @@ interface FileContent {
 }
 
 
-function findBamlProjectById(groupings: BamlProjectsGroupings, projectId: string): BAMLProject | undefined {
+async function loadExampleProject(groupings: BamlProjectsGroupings, projectId: string): Promise<BAMLProject | undefined> {
   // Combine all projects into a single array
-  const allProjects = [
+  const exampleProjects = [
     ...groupings.intros,
     ...groupings.advancedPromptSyntax,
     ...groupings.promptEngineering
   ];
 
   // Search for the project by id
-  return allProjects.find(project => project.id === projectId);
+  const proj = exampleProjects.find(project => project.id === projectId);
+  if (proj) {
+    if (!proj.filePath) {
+      throw new Error(`Example Project ${projectId} does not have a file path`);
+    }
+
+    return {
+      ...proj,
+      files: await getProjectFiles(proj.filePath)
+    }
+  }
 }
 
 async function getAllFiles(dirPath: string, arrayOfFiles: FileContent[] = []): Promise<FileContent[]> {
@@ -73,6 +89,9 @@ const getProjectFiles = async (projectPath: string): Promise<EditorFile[]> => {
   const examplesPath = path.join(process.cwd(), 'public/_examples')
   const projPath = path.join(examplesPath, projectPath)
   const files = await getAllFiles(projPath);
+  if (files.length === 0) {
+    throw new Error(`No files found in project path ${projPath}`);
+  }
   return files.map((f) => ({ path: f.path.replace(projPath, ""), content: f.content ?? '', error: f.error ?? null }));
 }
 
@@ -82,43 +101,56 @@ export type BamlProjectsGroupings = {
   promptEngineering: BAMLProject[]
 }
 
-export async function loadExampleProjects(): Promise<BamlProjectsGroupings> {
 
-  console.log("Loading example projects")
-  // TODO parallelize
-  return {
+export async function loadExampleProjects(): Promise<BamlProjectsGroupings> {
+  const exampleProjects: BamlProjectsGroupings = {
     intros: [
       {
         id: 'extract-resume',
         name: 'Introduction to BAML',
         description: 'A simple LLM function extract a resume',
-        files: await getProjectFiles("/intro/extract-resume/"),
+        filePath: '/intro/extract-resume/',
+        files: [],
+
       },
       {
         id: 'classify-message',
         name: 'ClassifyMessage',
         description: 'Classify a message from a user',
-        files: await getProjectFiles("/intro/classify-message/"),
+        filePath: '/intro/classify-message/',
+        files: [],
+
       },
       {
         id: 'chat-roles',
         name: 'ChatRoles',
         description: 'Use a sequence of system and user messages',
-        files: await getProjectFiles("/intro/chat-roles/"),
-      }
+        filePath: '/intro/chat-roles/',
+        files: [],
+
+      },
+      {
+        id: 'images',
+        name: 'Using Vision / Image APIs',
+        description: 'Extract resume from image',
+        filePath: '/intro/images/',
+        files: [],
+      },
     ],
     advancedPromptSyntax: [],
     promptEngineering: [{
       id: 'chain-of-thought',
       name: 'Chain of Thought',
       description: 'Using chain of thought to improve results and reduce hallucinations',
-      files: await getProjectFiles("/prompt-engineering/chain-of-thought/"),
+      filePath: '/prompt-engineering/chain-of-thought/',
+      files: [],
     },
     {
       id: 'symbol-tuning',
       name: 'Symbol Tuning',
       description: 'Use symbol tuning to remove biases on schema property names',
-      files: await getProjectFiles("/prompt-engineering/symbol-tuning/"),
+      files: [],
     }]
   };
+  return exampleProjects;
 }
