@@ -2,6 +2,9 @@
   {#- module Types #}
     {#- https://sorbet.org/docs/tstruct #}
     class {{name}} < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
+      end
       {%- for (name, type) in fields %}
       const :{{name}}, {{type}}
       {%- endfor %}

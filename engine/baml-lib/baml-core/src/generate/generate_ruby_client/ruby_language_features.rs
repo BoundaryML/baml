@@ -12,7 +12,7 @@ impl LanguageFeatures for RubyLanguageFeatures {
 #
 #  Welcome to Baml! To use this generated code, please run the following:
 #
-#  $ bundle add sorbet-runtime sorbet-coerce
+#  $ bundle add sorbet-runtime sorbet-coerce sorbet-struct-comparable
 #
 ###############################################################################
 
