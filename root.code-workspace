@@ -45,13 +45,6 @@
     }
   ],
   "settings": {
-    "rust-analyzer.procMacro.ignored": {
-      "napi-derive": [
-        "napi"
-      ]
-    },
-    "editor.formatOnSaveMode": "file",
-    "editor.formatOnSave": true,
     "[rust]": {
       "editor.defaultFormatter": "rust-lang.rust-analyzer",
       "editor.formatOnSave": true
@@ -59,16 +52,40 @@
     "[python]": {
       "editor.defaultFormatter": "ms-python.black-formatter"
     },
-    "mypy.enabled": false,
+    "editor.colorDecoratorsLimit": 2000,
+    "editor.formatOnSaveMode": "file",
+    "editor.formatOnSave": true,
     "editor.tabSize": 2,
+    "mypy.enabled": false,
     "git.openDiffOnClick": true,
+    "python.analysis.typeCheckingMode": "strict",
+    "rust-analyzer.procMacro.ignored": {
+      "napi-derive": [
+        "napi"
+      ]
+    },
+    "sorbet.enabled": true,
+    "sorbet.lspConfigs": [
+      {
+        "id": "stable",
+        "name": "Sorbet",
+        "description": "Stable Sorbet Ruby IDE features",
+        "cwd": "${workspaceFolder}",
+        "command": [
+            "bundle",
+            "exec",
+            "srb",
+            "typecheck",
+            "--lsp",
+            "--disable-watchman"
+        ]
+      },
+    ],
     "workbench.colorCustomizations": {
       "activityBar.background": "#630001",
       "titleBar.activeBackground": "#8B0002",
       "titleBar.activeForeground": "#FFFBFB"
     },
-    "python.analysis.typeCheckingMode": "strict",
-    "editor.colorDecoratorsLimit": 2000
   },
   "extensions": {
     "recommendations": [
