@@ -1,6 +1,7 @@
 use anyhow::Result;
 use baml_lib::internal_baml_core::ir::TestCaseWalker;
 use colored::*;
+use indexmap::IndexMap;
 use indicatif::{MultiProgress, ProgressBar};
 use std::{
     collections::HashMap,
@@ -25,10 +26,76 @@ pub(super) struct TestCommand<'a> {
 pub(super) struct TestRunState {
     // Test state for each test
     // <Function, <Test, State>>
-    test_state: HashMap<String, HashMap<String, TestState>>,
+    test_state: IndexMap<String, IndexMap<String, TestState>>,
 
     progress_bar: MultiProgress,
-    bars: HashMap<String, ProgressBar>,
+    bars: IndexMap<String, ProgressBar>,
+}
+
+impl std::fmt::Display for TestRunState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut total = 0;
+        let mut passed = 0;
+        let mut failed = 0;
+        let mut unable_to_run = 0;
+
+        for (func_name, tests) in &self.test_state {
+            total += tests.len();
+            if tests.len() == 1 {
+                let (name, state) = tests.iter().next().unwrap();
+                writeln!(
+                    f,
+                    "{state} {}:{}",
+                    func_name.bold().cyan(),
+                    name,
+                    state = match state {
+                        TestState::Queued => "○".dimmed(),
+                        TestState::Running => "▶".dimmed(),
+                        TestState::UnableToRun(_) => "✖".red(),
+                        TestState::Finished(r) => match r.status() {
+                            baml_runtime::TestStatus::Pass => "✔".green(),
+                            baml_runtime::TestStatus::Fail(_) => "✖".red(),
+                        },
+                    }
+                )?;
+            } else {
+                writeln!(
+                    f,
+                    "{} {}",
+                    func_name.bold().cyan(),
+                    format!("({} Tests)", tests.len()).dimmed()
+                )?;
+                for (test_name, state) in tests {
+                    writeln!(
+                        f,
+                        "  {state} {}",
+                        test_name,
+                        state = match state {
+                            TestState::Queued => "○".dimmed(),
+                            TestState::Running => "▶".dimmed(),
+                            TestState::UnableToRun(_) => "✖".red(),
+                            TestState::Finished(r) => match r.status() {
+                                baml_runtime::TestStatus::Pass => "✔".green(),
+                                baml_runtime::TestStatus::Fail(_) => "✖".red(),
+                            },
+                        }
+                    )?;
+                }
+            }
+        }
+
+        write!(
+            f,
+            "Total: {}, Passed: {}, Failed: {}",
+            total, passed, failed
+        )?;
+
+        if unable_to_run > 0 {
+            write!(f, ", Unable to run: {}", unable_to_run)?;
+        }
+
+        Ok(())
+    }
 }
 
 impl TestRunState {
@@ -122,19 +189,19 @@ impl<'runtime> TestCommand<'runtime> {
     }
 
     fn run_state(&self) -> TestRunState {
-        let mut test_state = HashMap::new();
+        let mut test_state = IndexMap::default();
 
         for t in &self.selected_tests {
             let function = t.function().name().to_string();
             let test = t.test_case().name.clone();
             test_state
                 .entry(function)
-                .or_insert_with(HashMap::new)
+                .or_insert_with(IndexMap::default)
                 .insert(test, TestState::Queued);
         }
 
         let p = MultiProgress::new();
-        let mut bars = HashMap::new();
+        let mut bars = IndexMap::default();
         for (func_name, tests) in &test_state {
             let bar = ProgressBar::new(tests.len() as u64)
                 .with_prefix(func_name.clone())

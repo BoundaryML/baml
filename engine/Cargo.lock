@@ -296,6 +296,7 @@ dependencies = [
  "expect-test",
  "glob",
  "include_dir",
+ "indexmap 2.2.5",
  "indicatif",
  "indoc",
  "internal-baml-client-llm",

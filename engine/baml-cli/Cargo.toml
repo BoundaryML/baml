@@ -36,6 +36,7 @@ uuid = { version = "1.7.0", features = ["v4"] }
 json_comments = "0.2.2"
 dunce = "1.0.4"
 indicatif = { version = "0.17.8", features = ["tokio"] }
+indexmap.workspace = true
 
 [dev-dependencies]
 base64 = "0.13.0"
