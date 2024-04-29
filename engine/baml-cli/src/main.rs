@@ -88,8 +88,8 @@ pub struct TestArgs {
     #[arg(long, short = 'g')]
     generator: Option<String>,
 
-    // Use the runtime or not (default is false)
-    #[arg(long, action = clap::ArgAction::SetTrue)]
+    // Use the runtime or not (default is false) (flag is named --runtime)
+    #[arg(long = "runtime", action = clap::ArgAction::SetTrue)]
     use_runtime: bool,
 }
 

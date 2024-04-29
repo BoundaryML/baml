@@ -2,7 +2,6 @@ use anyhow::Result;
 
 mod filter;
 mod run_state;
-use std::path::PathBuf;
 
 use filter::FilterArgs;
 
@@ -12,15 +11,7 @@ use baml_runtime::{internal::WithInternal, BamlRuntime};
 
 fn check_supported(runtime: &BamlRuntime) -> anyhow::Result<()> {
     let features = runtime.features();
-    if features.v1_functions {
-        return Err(anyhow::anyhow!("Legacy functions are not supported. Please migrate to the new function format. See https://docs.boundaryml.com"));
-    }
-
-    if features.class_getters {
-        return Err(anyhow::anyhow!("Legacy @get is not supported. Please remove them from your code. See https://docs.boundaryml.com"));
-    }
-
-    Ok(())
+    features.err_if_legacy()
 }
 
 pub fn run(command: &TestArgs) -> Result<()> {
@@ -35,12 +26,15 @@ pub fn run(command: &TestArgs) -> Result<()> {
 
     let test_command = TestCommand::new(&runtime, &filter_args);
 
-    let env_vars = std::env::vars().collect();
-
-    let fut = test_command.run_parallel(4, runtime.clone(), &env_vars);
-
-    let rt = tokio::runtime::Runtime::new()?;
-    let test_summary = rt.block_on(fut)?;
+    match command.action {
+        crate::TestAction::Run => {
+            let env_vars = std::env::vars().collect();
+            let fut = test_command.run_parallel(4, runtime.clone(), &env_vars);
+            let rt = tokio::runtime::Runtime::new()?;
+            let test_summary = rt.block_on(fut)?;
+        }
+        crate::TestAction::List => test_command.print_as_list(true),
+    }
 
     Ok(())
 }

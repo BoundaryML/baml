@@ -45,9 +45,9 @@ impl LLMResponse {
                     )),
                 },
             },
-            Self::LLMFailure(failure) => Err(anyhow::anyhow!("LLM call failed: {failure:#?}")),
+            Self::LLMFailure(failure) => Err(anyhow::anyhow!("LLM call failed: {failure:?}")),
             Self::OtherFailures(e) => {
-                Err(anyhow::anyhow!("LLM call failed for unknown reason: {e}"))
+                Err(anyhow::anyhow!("LLM call failed for unknown reason: {e:?}"))
             }
         }
     }

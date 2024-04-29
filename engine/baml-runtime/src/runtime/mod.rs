@@ -62,7 +62,7 @@ pub enum TestStatus<'a> {
 
 #[derive(Debug)]
 pub enum TestFailReason<'a> {
-    TestUnspecified(String),
+    TestUnspecified(&'a anyhow::Error),
     TestLLMFailure(&'a LLMResponse),
     TestParseFailure(&'a anyhow::Error),
 }
@@ -70,7 +70,7 @@ pub enum TestFailReason<'a> {
 impl PartialEq for TestFailReason<'_> {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::TestUnspecified(a), Self::TestUnspecified(b)) => a == b,
+            (Self::TestUnspecified(a), Self::TestUnspecified(b)) => a.to_string() == b.to_string(),
             (Self::TestLLMFailure(_), Self::TestLLMFailure(_)) => true,
             (Self::TestParseFailure(a), Self::TestParseFailure(b)) => {
                 a.to_string() == b.to_string()
@@ -98,7 +98,7 @@ impl TestResponse {
                     TestStatus::Fail(TestFailReason::TestLLMFailure(&func_res.llm_response))
                 }
             }
-            Err(e) => TestStatus::Fail(TestFailReason::TestUnspecified(e.to_string())),
+            Err(e) => TestStatus::Fail(TestFailReason::TestUnspecified(e)),
         }
     }
 }

@@ -185,8 +185,8 @@ fn to_ir_attributes(
     if let Some(ast_attributes) = maybe_ast_attributes {
         match ast_attributes {
             ToStringAttributes::Static(s) => {
-                if s.skip().is_some() {
-                    attributes.insert("skip".to_string(), Expression::String("".to_string()));
+                if let Some(skip) = s.skip() {
+                    attributes.insert("skip".to_string(), Expression::Bool(*skip));
                 }
                 if let Some(v) = s.alias() {
                     attributes.insert("alias".to_string(), Expression::String(db[*v].to_string()));

@@ -538,15 +538,12 @@ fn parse_class(
                                 scope
                             };
 
-                            let value = match field_names.iter().find_map(|n| kv.get(n)) {
-                                Some(v) => v,
-                                None => continue,
-                            };
-
-                            let res =
-                                field
-                                    .r#type()
-                                    .coerce(field_scope.clone(), ir, env, Some(value));
+                            let res = field.r#type().coerce(
+                                field_scope.clone(),
+                                ir,
+                                env,
+                                field_names.iter().find_map(|n| kv.get(n)),
+                            );
 
                             update_map(&mut required_values, &mut optional_values, field, res);
                         }
@@ -571,16 +568,20 @@ fn parse_class(
 
     if let Some(Ok(_)) = parsed_status {
         // Check that all required fields are present.
-        let invalid_fields = required_values
-            .iter()
-            .filter_map(|(k, v)| match v {
-                Some(Ok(_)) => None,
-                Some(Err(e)) => Some(e.to_string()),
-                None => Some(format!("Missing required field: {}", k)),
-            })
-            .collect::<Vec<_>>();
+        let mut missing_fields = vec![];
+        let mut invalid_fields = vec![];
 
-        if invalid_fields.is_empty() {
+        required_values.iter().for_each(|(k, v)| match v {
+            Some(Ok(_)) => {}
+            Some(Err(e)) => {
+                invalid_fields.push((k.clone(), format!("{}", e.to_string())));
+            }
+            None => {
+                missing_fields.push(k.clone());
+            }
+        });
+
+        if invalid_fields.is_empty() && missing_fields.is_empty() {
             // The object is all good, we can return it.
             let kv = required_values
                 .iter()
@@ -596,6 +597,40 @@ fn parse_class(
                 .collect::<HashMap<_, _>>();
 
             complete_class.insert(0, Ok((json!(kv), DeserializerConditions::new())));
+        } else {
+            match (missing_fields.len(), invalid_fields.len()) {
+                (0, _) => complete_class.push(Err(anyhow::format_err!(
+                    "Invalid fields: {}\n{}",
+                    invalid_fields
+                        .iter()
+                        .map(|(k, _)| k.as_str())
+                        .collect::<Vec<_>>()
+                        .join(","),
+                    invalid_fields
+                        .iter()
+                        .map(|(_, v)| v.as_str())
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                ))),
+                (_, 0) => complete_class.push(Err(anyhow::format_err!(
+                    "Missing required fields: {}",
+                    missing_fields.join(", ")
+                ))),
+                (_, _) => complete_class.push(Err(anyhow::format_err!(
+                    "Missing required fields: {}\nInvalid fields: {}\n{}",
+                    missing_fields.join(", "),
+                    invalid_fields
+                        .iter()
+                        .map(|(k, _)| k.as_str())
+                        .collect::<Vec<_>>()
+                        .join(","),
+                    invalid_fields
+                        .iter()
+                        .map(|(_, v)| v.as_str())
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                ))),
+            }
         }
     }
 

@@ -27,7 +27,11 @@ impl std::fmt::Display for SerializationError {
         writeln!(f, "{}", self.message)?;
         if let Some(value) = &self.value {
             writeln!(f, "----RAW----")?;
-            writeln!(f, "{:#?}", value)?;
+            writeln!(
+                f,
+                "{}",
+                serde_json::to_string_pretty(value).unwrap_or(value.to_string())
+            )?;
             writeln!(f, "-----------")?;
         }
         Ok(())
@@ -106,7 +110,11 @@ impl std::fmt::Display for Flag {
             Flag::NullButHadUnparseableValue(ctx, value) => {
                 write!(f, "Null but had unparseable value: {}", ctx)?;
                 writeln!(f, "----RAW----")?;
-                writeln!(f, "{:#?}", value)?;
+                writeln!(
+                    f,
+                    "{}",
+                    serde_json::to_string_pretty(value).unwrap_or(value.to_string())
+                )?;
                 writeln!(f, "-----------")?;
             }
             Flag::ObjectToString(value) => {

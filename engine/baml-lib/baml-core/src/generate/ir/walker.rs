@@ -306,7 +306,7 @@ impl<'a> Walker<'a, &'a Field> {
     }
 
     pub fn valid_names(&self, env_values: &HashMap<String, String>) -> Result<Vec<String>> {
-        let val = self.elem().r#type.attributes.get("alias").map_or_else(
+        let val = self.item.attributes.get("alias").map_or_else(
             || Ok(self.name().to_string()),
             |v| v.as_string_value(env_values),
         )?;
