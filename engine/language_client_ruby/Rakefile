@@ -8,16 +8,12 @@ GEMSPEC = Gem::Specification.load(GEMSPEC_PATH) || abort("Could not load #{GEMSP
 
 task default: :test
 
-RbSys::ExtensionTask.new("ruby_ffi", GEMSPEC) do |ext|
+exttask = RbSys::ExtensionTask.new("ruby_ffi", GEMSPEC) do |ext|
   ext.lib_dir = "lib/baml"
   #ext.cross_compile = true
   #ext.cross_platform = %w[x86_64-linux-gnu]
-  #ext.cross_platform = ["x86_64-linux", "x86_64-darwin", "arm64-darwin", "x64-mingw-ucrt"]
+  #ext.cross_platform = ["x86_64-linux", "x86_64-darwin", "arm64-darwin"] # "x64-mingw-ucrt"]
 end
-
-#task :dev do
-#  ENV['RB_SYS_CARGO_PROFILE'] = 'dev'
-#end
 
 Rake::TestTask.new do |t|
   t.libs << "lib"
@@ -28,8 +24,21 @@ end
 desc "Build native extension for a given platform (i.e. `rake 'native[x86_64-linux]'`)"
 task :native, [:platform] do |_t, platform:|
   # There's some strange magnus<->rb_sys crate dependency error that occurs when targeting Ruby 2.6
-  CROSS_RUBY = %w[3.3.0 3.2.0 3.1.0 3.0.0]
-  sh "RUBY_CC_VERSION=#{CROSS_RUBY.join(":")}" "bundle", "exec", "rb-sys-dock", "--platform", platform, "--build"
+  Dir.chdir '..' do
+    sh "bundle", "exec", "rb-sys-dock", "--platform", platform, "--mount-toolchains", "--directory", "language_client_ruby ", "--build", "--ruby-versions", "3.3,3.2"
+  end
+end
+
+namespace "gem" do
+  exttask.cross_platform.each do |plat|
+    desc "Build all native binary gems in parallel"
+    multitask 'all' => plat
+
+    desc "Build the native gem for #{plat}"
+    task plat do
+      sh %w[rb-sys-dock --platform #{plat} --mount-toolchains --directory language_client_ruby --build --ruby_versions 3.3,3.2]
+    end
+  end
 end
 
 task build: :compile
