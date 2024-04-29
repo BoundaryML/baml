@@ -10,4 +10,7 @@ require "rb_sys/mkmf"
 #    - GEM_NAME is the name of the gem in ext/baml
 create_rust_makefile("ruby_ffi") do |r|
   r.extra_cargo_args += ["--package", "ruby_ffi"]
+  r.env = {
+    "MACOSX_DEPLOYMENT_TARGET" => "10.13",
+  }
 end

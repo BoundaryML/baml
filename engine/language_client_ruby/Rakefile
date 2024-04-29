@@ -8,7 +8,7 @@ GEMSPEC = Gem::Specification.load(GEMSPEC_PATH) || abort("Could not load #{GEMSP
 
 task default: :test
 
-exttask = RbSys::ExtensionTask.new("ruby_ffi", GEMSPEC) do |ext|
+RbSys::ExtensionTask.new("ruby_ffi", GEMSPEC) do |ext|
   ext.lib_dir = "lib/baml"
   #ext.cross_compile = true
   #ext.cross_platform = %w[x86_64-linux-gnu]
@@ -29,16 +29,16 @@ task :native, [:platform] do |_t, platform:|
   end
 end
 
-namespace "gem" do
-  exttask.cross_platform.each do |plat|
-    desc "Build all native binary gems in parallel"
-    multitask 'all' => plat
-
-    desc "Build the native gem for #{plat}"
-    task plat do
-      sh %w[rb-sys-dock --platform #{plat} --mount-toolchains --directory language_client_ruby --build --ruby_versions 3.3,3.2]
-    end
-  end
-end
+#namespace "gem" do
+#  exttask.cross_platform.each do |plat|
+#    desc "Build all native binary gems in parallel"
+#    multitask 'all' => plat
+#
+#    desc "Build the native gem for #{plat}"
+#    task plat do
+#      sh %w[rb-sys-dock --platform #{plat} --mount-toolchains --directory language_client_ruby --build --ruby_versions 3.3,3.2]
+#    end
+#  end
+#end
 
 task build: :compile
