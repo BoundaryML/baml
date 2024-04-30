@@ -44,7 +44,7 @@ module Baml
           {%- endfor %}
         }
       )
-      TypeCoerce[{{ fn.return_type }}].new.from(raw.parsed)
+      Baml::convert_to({{ fn.return_type }}).from(raw.parsed)
     end
 
     {% endfor %}
@@ -82,7 +82,7 @@ module Baml
       )
       Baml::Unstable::FunctionResult[{{ fn.return_type }}].new(
         inner: raw,
-        parsed: TypeCoerce[{{ fn.return_type }}].new.from(raw.parsed)
+        parsed: Baml::convert_to({{ fn.return_type }}).from(raw.parsed)
       )
     end
 

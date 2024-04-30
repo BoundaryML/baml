@@ -26,8 +26,7 @@ class DigitalEdition < T::Struct
     include T::Struct::ActsAsComparable
   end
 
-  const :edition, String
-  const :publication_year, Integer
+  const :url, String
 end
 
 class PrintEdition < T::Struct
@@ -81,6 +80,14 @@ BOOK_HASH = {
 }
 
 describe "converting Ruby objects to JSON" do
+  it "BamlConvert handles JSON to Ruby" do
+    converted = Baml::convert_to(Book).from(BOOK_HASH)
+    assert_equal(converted, BOOK_OBJ)
+
+    converted = Baml::convert_to(BookGenre).from("NON_FICTION")
+    assert_equal(converted, BookGenre::NON_FICTION)
+  end
+
   it "T::Struct.serialize does not handle unions correctly" do
     refute_equal(
       BOOK_OBJ.serialize,
