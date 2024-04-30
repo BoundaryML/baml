@@ -2,7 +2,7 @@
 #
 #  Welcome to Baml! To use this generated code, please run the following:
 #
-#  $ bundle add sorbet sorbet sorbet-runtime sorbet-coerce
+#  $ bundle add sorbet-runtime sorbet-coerce sorbet-struct-comparable
 #
 ###############################################################################
 
@@ -14,8 +14,9 @@
 
 # typed: false
 require "delegate"
-require "sorbet-runtime"
 require "sorbet-coerce"
+require "sorbet-struct-comparable"
+require "sorbet-runtime"
 
 module Baml
   
@@ -23,121 +24,224 @@ module Baml
 
     class Category < T::Enum
       enums do
-        Refund = new
-        CancelOrder = new
-        TechnicalSupport = new
-        AccountIssue = new
-        Question = new
-        end
+        Refund = new("Refund")
+        CancelOrder = new("CancelOrder")
+        TechnicalSupport = new("TechnicalSupport")
+        AccountIssue = new("AccountIssue")
+        Question = new("Question")
+      end
     end
 
     class Category2 < T::Enum
       enums do
-        Refund = new
-        CancelOrder = new
-        TechnicalSupport = new
-        AccountIssue = new
-        Question = new
-        end
+        Refund = new("Refund")
+        CancelOrder = new("CancelOrder")
+        TechnicalSupport = new("TechnicalSupport")
+        AccountIssue = new("AccountIssue")
+        Question = new("Question")
+      end
     end
 
     class Category3 < T::Enum
       enums do
-        Refund = new
-        CancelOrder = new
-        TechnicalSupport = new
-        AccountIssue = new
-        Question = new
-        end
+        Refund = new("Refund")
+        CancelOrder = new("CancelOrder")
+        TechnicalSupport = new("TechnicalSupport")
+        AccountIssue = new("AccountIssue")
+        Question = new("Question")
+      end
     end
 
     class DataType < T::Enum
       enums do
-        Resume = new
-        Event = new
-        end
+        Resume = new("Resume")
+        Event = new("Event")
+      end
     end
 
     class EnumInClass < T::Enum
       enums do
-        ONE = new
-        TWO = new
-        end
+        ONE = new("ONE")
+        TWO = new("TWO")
+      end
+    end
+
+    class EnumInClass2 < T::Enum
+      enums do
+        ONE = new("ONE")
+        TWO = new("TWO")
+      end
     end
 
     class EnumOutput < T::Enum
       enums do
-        ONE = new
-        TWO = new
-        THREE = new
-        end
+        ONE = new("ONE")
+        TWO = new("TWO")
+        THREE = new("THREE")
+      end
+    end
+
+    class EnumOutput2 < T::Enum
+      enums do
+        ONE = new("ONE")
+        TWO = new("TWO")
+        THREE = new("THREE")
+      end
+    end
+
+    class GreekLetter < T::Enum
+      enums do
+        ALPHA = new("ALPHA")
+        BETA = new("BETA")
+        GAMMA = new("GAMMA")
+        DELTA = new("DELTA")
+        EPSILON = new("EPSILON")
+        ZETA = new("ZETA")
+        ETA = new("ETA")
+        THETA = new("THETA")
+        IOTA = new("IOTA")
+        KAPPA = new("KAPPA")
+        LAMBDA = new("LAMBDA")
+        MU = new("MU")
+        NU = new("NU")
+        XI = new("XI")
+        OMICRON = new("OMICRON")
+        PI = new("PI")
+        RHO = new("RHO")
+        SIGMA = new("SIGMA")
+        TAU = new("TAU")
+        UPSILON = new("UPSILON")
+        PHI = new("PHI")
+        CHI = new("CHI")
+        PSI = new("PSI")
+        OMEGA = new("OMEGA")
+      end
+    end
+
+    class HebrewLetter < T::Enum
+      enums do
+        ALEPH = new("ALEPH")
+        BET = new("BET")
+        GIMEL = new("GIMEL")
+        DALET = new("DALET")
+        HE = new("HE")
+        VAV = new("VAV")
+        ZAYIN = new("ZAYIN")
+        CHET = new("CHET")
+        TET = new("TET")
+        YOD = new("YOD")
+        KAF = new("KAF")
+        LAMED = new("LAMED")
+        MEM = new("MEM")
+        NUN = new("NUN")
+        SAMECH = new("SAMECH")
+        AYIN = new("AYIN")
+        PE = new("PE")
+        TZADI = new("TZADI")
+        KUF = new("KUF")
+        RESH = new("RESH")
+        SHIN = new("SHIN")
+        TAV = new("TAV")
+      end
     end
 
     class NamedArgsSingleEnum < T::Enum
       enums do
-        ONE = new
-        TWO = new
-        end
+        ONE = new("ONE")
+        TWO = new("TWO")
+      end
+    end
+
+    class NamedArgsSingleEnum2 < T::Enum
+      enums do
+        ONE = new("ONE")
+        TWO = new("TWO")
+      end
     end
 
     class NamedArgsSingleEnumList < T::Enum
       enums do
-        ONE = new
-        TWO = new
-        end
+        ONE = new("ONE")
+        TWO = new("TWO")
+      end
+    end
+
+    class NamedArgsSingleEnumList2 < T::Enum
+      enums do
+        ONE = new("ONE")
+        TWO = new("TWO")
+      end
     end
 
     class OptionalTest_CategoryType < T::Enum
       enums do
-        Aleph = new
-        Beta = new
-        Gamma = new
-        end
+        Aleph = new("Aleph")
+        Beta = new("Beta")
+        Gamma = new("Gamma")
+      end
+    end
+
+    class OptionalTest_CategoryTypev2 < T::Enum
+      enums do
+        Aleph = new("Aleph")
+        Beta = new("Beta")
+        Gamma = new("Gamma")
+      end
     end
 
     class OrderStatus < T::Enum
       enums do
-        ORDERED = new
-        SHIPPED = new
-        DELIVERED = new
-        CANCELLED = new
-        end
+        ORDERED = new("ORDERED")
+        SHIPPED = new("SHIPPED")
+        DELIVERED = new("DELIVERED")
+        CANCELLED = new("CANCELLED")
+      end
     end
 
     class OverrideEnum < T::Enum
       enums do
-        ONE = new
-        TWO = new
-        end
+        ONE = new("ONE")
+        TWO = new("TWO")
+      end
     end
 
     class Tag < T::Enum
       enums do
-        Security = new
-        AI = new
-        Blockchain = new
-        end
+        Security = new("Security")
+        AI = new("AI")
+        Blockchain = new("Blockchain")
+      end
     end
 
     class TestEnum < T::Enum
       enums do
-        A = new
-        B = new
-        C = new
-        D = new
-        E = new
-        F = new
-        G = new
-        end
+        A = new("A")
+        B = new("B")
+        C = new("C")
+        D = new("D")
+        E = new("E")
+        F = new("F")
+        G = new("G")
+      end
     end
     
     class Blah < T::Struct; end
     
+    class Blah2 < T::Struct; end
+    
+    class ChoiceBar < T::Struct; end
+    
+    class ChoiceFoo < T::Struct; end
+    
     class ClassOptionalFields < T::Struct; end
+    
+    class ClassOptionalFieldsv2 < T::Struct; end
     
     class ClassOptionalOutput < T::Struct; end
     
     class ClassOptionalOutput2 < T::Struct; end
+    
+    class ClassOptionalOutput2v2 < T::Struct; end
     
     class DynamicPropsClass < T::Struct; end
     
@@ -145,17 +249,27 @@ module Baml
     
     class Event < T::Struct; end
     
-    class Message < T::Struct; end
+    class FizzBuzz < T::Struct; end
     
     class ModifiedOutput < T::Struct; end
     
     class NamedArgsSingleClass < T::Struct; end
     
+    class NamedArgsSingleClass2 < T::Struct; end
+    
+    class NamedArgsSingleClassList2 < T::Struct; end
+    
     class OptionalClass < T::Struct; end
+    
+    class OptionalClassv2 < T::Struct; end
     
     class OptionalTest_Prop1 < T::Struct; end
     
+    class OptionalTest_Prop1v2 < T::Struct; end
+    
     class OptionalTest_ReturnType < T::Struct; end
+    
+    class OptionalTest_ReturnTypev2 < T::Struct; end
     
     class OrderInfo < T::Struct; end
     
@@ -165,6 +279,8 @@ module Baml
     
     class Resume < T::Struct; end
     
+    class RoundtripObject < T::Struct; end
+    
     class SearchParams < T::Struct; end
     
     class SomeClass2 < T::Struct; end
@@ -173,150 +289,350 @@ module Baml
     
     class TestClassWithEnum < T::Struct; end
     
+    class TestClassWithEnum2 < T::Struct; end
+    
     class TestOutputClass < T::Struct; end
     
+    class TestOutputClass2 < T::Struct; end
+    
     class UnionTest_ReturnType < T::Struct; end
+    
+    class UnionTest_ReturnTypev2 < T::Struct; end
     
     class WithReasoning < T::Struct; end
 
     class Blah < T::Struct
-      const :prop4, T.nilable(String)
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
       end
+      const :prop4, T.nilable(String)
+    end
+
+    class Blah2 < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
+      end
+      const :prop4, T.nilable(String)
+    end
+
+    class ChoiceBar < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
+      end
+      const :bar, String
+      const :hebrew_letter, Baml::Types::HebrewLetter
+    end
+
+    class ChoiceFoo < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
+      end
+      const :foo, String
+      const :greek_letter, Baml::Types::GreekLetter
+    end
 
     class ClassOptionalFields < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
+      end
       const :prop1, T.nilable(String)
       const :prop2, T.nilable(String)
+    end
+
+    class ClassOptionalFieldsv2 < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
       end
+      const :prop1, T.nilable(String)
+      const :prop2, T.nilable(String)
+    end
 
     class ClassOptionalOutput < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
+      end
       const :prop1, String
       const :prop2, String
-      end
+    end
 
     class ClassOptionalOutput2 < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
+      end
       const :prop1, T.nilable(String)
       const :prop2, T.nilable(String)
       const :prop3, T.nilable(Baml::Types::Blah)
+    end
+
+    class ClassOptionalOutput2v2 < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
       end
+      const :prop1, T.nilable(String)
+      const :prop2, T.nilable(String)
+      const :prop3, T.nilable(Baml::Types::Blah2)
+    end
 
     class DynamicPropsClass < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
+      end
       const :prop1, String
       const :prop2, String
       const :prop3, Integer
-      end
+    end
 
     class Email < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
+      end
       const :subject, String
       const :body, String
       const :from_address, String
-      end
+    end
 
     class Event < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
+      end
       const :title, String
       const :date, String
       const :location, String
       const :description, String
-      end
+    end
 
-    class Message < T::Struct
-      const :role, String
-      const :message, String
+    class FizzBuzz < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
       end
+      const :beer, String
+      const :wine, String
+    end
 
     class ModifiedOutput < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
+      end
       const :reasoning, String
       const :answer, String
-      end
+    end
 
     class NamedArgsSingleClass < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
+      end
       const :key, String
       const :key_two, T::Boolean
       const :key_three, Integer
+    end
+
+    class NamedArgsSingleClass2 < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
       end
+      const :key, String
+      const :key_two, T::Boolean
+      const :key_three, Integer
+    end
+
+    class NamedArgsSingleClassList2 < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
+      end
+      const :key, String
+      const :key_two, T::Boolean
+      const :key_three, Integer
+    end
 
     class OptionalClass < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
+      end
       const :prop1, String
       const :prop2, String
+    end
+
+    class OptionalClassv2 < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
       end
+      const :prop1, String
+      const :prop2, String
+    end
 
     class OptionalTest_Prop1 < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
+      end
       const :omega_a, String
       const :omega_b, Integer
+    end
+
+    class OptionalTest_Prop1v2 < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
       end
+      const :omega_a, String
+      const :omega_b, Integer
+    end
 
     class OptionalTest_ReturnType < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
+      end
       const :omega_1, T.nilable(Baml::Types::OptionalTest_Prop1)
       const :omega_2, T.nilable(String)
       const :omega_3, T::Array[T.nilable(Baml::Types::OptionalTest_CategoryType)]
+    end
+
+    class OptionalTest_ReturnTypev2 < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
       end
+      const :omega_1, T.nilable(Baml::Types::OptionalTest_Prop1v2)
+      const :omega_2, T.nilable(String)
+      const :omega_3, T::Array[T.nilable(Baml::Types::OptionalTest_CategoryTypev2)]
+    end
 
     class OrderInfo < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
+      end
       const :order_status, Baml::Types::OrderStatus
       const :tracking_number, T.nilable(String)
       const :estimated_arrival_date, T.nilable(String)
-      end
+    end
 
     class OverrideClass < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
+      end
       const :prop1, String
       const :prop2, String
-      end
+    end
 
     class RaysData < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
+      end
       const :dataType, Baml::Types::DataType
       const :value, T.any(Baml::Types::Resume, Baml::Types::Event)
-      end
+    end
 
     class Resume < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
+      end
       const :name, String
       const :email, String
       const :phone, String
       const :experience, T::Array[String]
       const :education, T::Array[String]
       const :skills, T::Array[String]
+    end
+
+    class RoundtripObject < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
       end
+      const :my_int, Integer
+      const :my_float, Float
+      const :my_string, String
+      const :greek_letter, Baml::Types::GreekLetter
+      const :nullable, T.any(Baml::Types::FizzBuzz, String, NilClass)
+      const :string_list, T::Array[String]
+      const :primitive_union, T.any(Integer, String)
+      const :object_union, T.any(Baml::Types::ChoiceFoo, T::Array[Baml::Types::ChoiceBar])
+    end
 
     class SearchParams < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
+      end
       const :dateRange, T.nilable(Integer)
       const :location, T::Array[String]
       const :jobTitle, T.nilable(Baml::Types::WithReasoning)
       const :company, T.nilable(Baml::Types::WithReasoning)
       const :description, T::Array[Baml::Types::WithReasoning]
       const :tags, T::Array[T.any(Baml::Types::Tag, String)]
-      end
+    end
 
     class SomeClass2 < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
+      end
       const :prop1, String
       const :prop2, String
-      end
+    end
 
     class TestClassAlias < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
+      end
       const :key, String
       const :key2, String
       const :key3, String
       const :key4, String
       const :key5, String
-      end
+    end
 
     class TestClassWithEnum < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
+      end
       const :prop1, String
       const :prop2, Baml::Types::EnumInClass
+    end
+
+    class TestClassWithEnum2 < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
       end
+      const :prop1, String
+      const :prop2, Baml::Types::EnumInClass
+    end
 
     class TestOutputClass < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
+      end
       const :prop1, String
       const :prop2, Integer
+    end
+
+    class TestOutputClass2 < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
       end
+      const :prop1, String
+      const :prop2, Integer
+    end
 
     class UnionTest_ReturnType < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
+      end
       const :prop1, T.any(String, T::Boolean)
       const :prop2, T::Array[T.any(Float, T::Boolean)]
       const :prop3, T.any(T::Array[Float], T::Array[T::Boolean])
+    end
+
+    class UnionTest_ReturnTypev2 < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
       end
+      const :prop1, T.any(String, T::Boolean)
+      const :prop2, T::Array[T.any(Float, T::Boolean)]
+      const :prop3, T.any(T::Array[Float], T::Array[T::Boolean])
+    end
 
     class WithReasoning < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
+      end
       const :value, String
       const :reasoning, String
-      end
+    end
   end
 
   module Unstable

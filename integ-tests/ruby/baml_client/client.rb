@@ -2,7 +2,7 @@
 #
 #  Welcome to Baml! To use this generated code, please run the following:
 #
-#  $ bundle add sorbet sorbet sorbet-runtime sorbet-coerce
+#  $ bundle add sorbet-runtime sorbet-coerce sorbet-struct-comparable
 #
 ###############################################################################
 
@@ -39,23 +39,6 @@ module Baml
 
     sig {
       params(
-        messages: T::Array[Baml::Types::Message],
-      ).returns(T::Array[Baml::Types::Category])
-    }
-    def ClassifyConversation(
-        messages:
-    )
-      raw = @runtime.call_function(
-        function_name: "ClassifyConversation",
-        args: {
-          "messages" => messages,
-        }
-      )
-      TypeCoerce[T::Array[Baml::Types::Category]].new.from(raw.parsed)
-    end
-
-    sig {
-      params(
         input: String,
       ).returns(Baml::Types::Category)
     }
@@ -68,7 +51,7 @@ module Baml
           "input" => input,
         }
       )
-      TypeCoerce[Baml::Types::Category].new.from(raw.parsed)
+      Baml::convert_to(Baml::Types::Category).from(raw.parsed)
     end
 
     sig {
@@ -85,7 +68,7 @@ module Baml
           "input" => input,
         }
       )
-      TypeCoerce[Baml::Types::Category].new.from(raw.parsed)
+      Baml::convert_to(Baml::Types::Category).from(raw.parsed)
     end
 
     sig {
@@ -102,7 +85,7 @@ module Baml
           "input" => input,
         }
       )
-      TypeCoerce[Baml::Types::Category].new.from(raw.parsed)
+      Baml::convert_to(Baml::Types::Category).from(raw.parsed)
     end
 
     sig {
@@ -119,7 +102,7 @@ module Baml
           "input" => input,
         }
       )
-      TypeCoerce[T::Array[String]].new.from(raw.parsed)
+      Baml::convert_to(T::Array[String]).from(raw.parsed)
     end
 
     sig {
@@ -136,7 +119,7 @@ module Baml
           "resume" => resume,
         }
       )
-      TypeCoerce[Baml::Types::Resume].new.from(raw.parsed)
+      Baml::convert_to(Baml::Types::Resume).from(raw.parsed)
     end
 
     sig {
@@ -153,7 +136,41 @@ module Baml
           "resume" => resume,
         }
       )
-      TypeCoerce[Baml::Types::Resume].new.from(raw.parsed)
+      Baml::convert_to(Baml::Types::Resume).from(raw.parsed)
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(T.nilable(Baml::Types::ClassOptionalOutput2v2))
+    }
+    def FnClassOptionalOutput2_V2(
+        input:
+    )
+      raw = @runtime.call_function(
+        function_name: "FnClassOptionalOutput2_V2",
+        args: {
+          "input" => input,
+        }
+      )
+      Baml::convert_to(T.nilable(Baml::Types::ClassOptionalOutput2v2)).from(raw.parsed)
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::Types::TestClassWithEnum2)
+    }
+    def FnOutputClassWithEnum_V2(
+        input:
+    )
+      raw = @runtime.call_function(
+        function_name: "FnOutputClassWithEnum_V2",
+        args: {
+          "input" => input,
+        }
+      )
+      Baml::convert_to(Baml::Types::TestClassWithEnum2).from(raw.parsed)
     end
 
     sig {
@@ -170,7 +187,7 @@ module Baml
           "text" => text,
         }
       )
-      TypeCoerce[Baml::Types::RaysData].new.from(raw.parsed)
+      Baml::convert_to(Baml::Types::RaysData).from(raw.parsed)
     end
 
     sig {
@@ -187,7 +204,7 @@ module Baml
           "email" => email,
         }
       )
-      TypeCoerce[Baml::Types::OrderInfo].new.from(raw.parsed)
+      Baml::convert_to(Baml::Types::OrderInfo).from(raw.parsed)
     end
 
     sig {
@@ -204,7 +221,398 @@ module Baml
           "query" => query,
         }
       )
-      TypeCoerce[Baml::Types::SearchParams].new.from(raw.parsed)
+      Baml::convert_to(Baml::Types::SearchParams).from(raw.parsed)
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(T::Array[T.nilable(Baml::Types::OptionalTest_ReturnTypev2)])
+    }
+    def OptionalTest_Function_V2(
+        input:
+    )
+      raw = @runtime.call_function(
+        function_name: "OptionalTest_Function_V2",
+        args: {
+          "input" => input,
+        }
+      )
+      Baml::convert_to(T::Array[T.nilable(Baml::Types::OptionalTest_ReturnTypev2)]).from(raw.parsed)
+    end
+
+    sig {
+      params(
+        input: Baml::Types::RoundtripObject,
+      ).returns(Baml::Types::RoundtripObject)
+    }
+    def RoundtripMyData(
+        input:
+    )
+      raw = @runtime.call_function(
+        function_name: "RoundtripMyData",
+        args: {
+          "input" => input,
+        }
+      )
+      Baml::convert_to(Baml::Types::RoundtripObject).from(raw.parsed)
+    end
+
+    sig {
+      params(
+        input: T.nilable(Baml::Types::OptionalClassv2),
+      ).returns(String)
+    }
+    def V2_FnClassOptional(
+        input:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_FnClassOptional",
+        args: {
+          "input" => input,
+        }
+      )
+      Baml::convert_to(String).from(raw.parsed)
+    end
+
+    sig {
+      params(
+        input: Baml::Types::ClassOptionalFieldsv2,
+      ).returns(String)
+    }
+    def V2_FnClassOptional2(
+        input:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_FnClassOptional2",
+        args: {
+          "input" => input,
+        }
+      )
+      Baml::convert_to(String).from(raw.parsed)
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(T::Array[Baml::Types::EnumOutput])
+    }
+    def V2_FnEnumListOutput(
+        input:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_FnEnumListOutput",
+        args: {
+          "input" => input,
+        }
+      )
+      Baml::convert_to(T::Array[Baml::Types::EnumOutput]).from(raw.parsed)
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::Types::EnumOutput2)
+    }
+    def V2_FnEnumOutput(
+        input:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_FnEnumOutput",
+        args: {
+          "input" => input,
+        }
+      )
+      Baml::convert_to(Baml::Types::EnumOutput2).from(raw.parsed)
+    end
+
+    sig {
+      params(
+        myString: T.nilable(String),
+      ).returns(String)
+    }
+    def V2_FnNamedArgsSingleStringOptional(
+        myString:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_FnNamedArgsSingleStringOptional",
+        args: {
+          "myString" => myString,
+        }
+      )
+      Baml::convert_to(String).from(raw.parsed)
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(T::Boolean)
+    }
+    def V2_FnOutputBool(
+        input:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_FnOutputBool",
+        args: {
+          "input" => input,
+        }
+      )
+      Baml::convert_to(T::Boolean).from(raw.parsed)
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::Types::TestOutputClass2)
+    }
+    def V2_FnOutputClass(
+        input:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_FnOutputClass",
+        args: {
+          "input" => input,
+        }
+      )
+      Baml::convert_to(Baml::Types::TestOutputClass2).from(raw.parsed)
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(T::Array[Baml::Types::TestOutputClass])
+    }
+    def V2_FnOutputClassList(
+        input:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_FnOutputClassList",
+        args: {
+          "input" => input,
+        }
+      )
+      Baml::convert_to(T::Array[Baml::Types::TestOutputClass]).from(raw.parsed)
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(T::Array[String])
+    }
+    def V2_FnOutputStringList(
+        input:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_FnOutputStringList",
+        args: {
+          "input" => input,
+        }
+      )
+      Baml::convert_to(T::Array[String]).from(raw.parsed)
+    end
+
+    sig {
+      params(
+        input: T.nilable(String),
+      ).returns(String)
+    }
+    def V2_FnStringOptional(
+        input:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_FnStringOptional",
+        args: {
+          "input" => input,
+        }
+      )
+      Baml::convert_to(String).from(raw.parsed)
+    end
+
+    sig {
+      params(
+        myArg: Baml::Types::NamedArgsSingleEnum2,
+      ).returns(String)
+    }
+    def V2_FnTestNamedArgsSingleEnum(
+        myArg:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_FnTestNamedArgsSingleEnum",
+        args: {
+          "myArg" => myArg,
+        }
+      )
+      Baml::convert_to(String).from(raw.parsed)
+    end
+
+    sig {
+      params(
+        myBool: T::Boolean,
+      ).returns(String)
+    }
+    def V2_TestFnNamedArgsSingleBool(
+        myBool:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_TestFnNamedArgsSingleBool",
+        args: {
+          "myBool" => myBool,
+        }
+      )
+      Baml::convert_to(String).from(raw.parsed)
+    end
+
+    sig {
+      params(
+        myArg: Baml::Types::NamedArgsSingleClass2,
+      ).returns(String)
+    }
+    def V2_TestFnNamedArgsSingleClass(
+        myArg:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_TestFnNamedArgsSingleClass",
+        args: {
+          "myArg" => myArg,
+        }
+      )
+      Baml::convert_to(String).from(raw.parsed)
+    end
+
+    sig {
+      params(
+        myArg: T::Array[Baml::Types::NamedArgsSingleEnumList2],
+      ).returns(String)
+    }
+    def V2_TestFnNamedArgsSingleEnumList(
+        myArg:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_TestFnNamedArgsSingleEnumList",
+        args: {
+          "myArg" => myArg,
+        }
+      )
+      Baml::convert_to(String).from(raw.parsed)
+    end
+
+    sig {
+      params(
+        myFloat: Float,
+      ).returns(String)
+    }
+    def V2_TestFnNamedArgsSingleFloat(
+        myFloat:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_TestFnNamedArgsSingleFloat",
+        args: {
+          "myFloat" => myFloat,
+        }
+      )
+      Baml::convert_to(String).from(raw.parsed)
+    end
+
+    sig {
+      params(
+        myInt: Integer,
+      ).returns(String)
+    }
+    def V2_TestFnNamedArgsSingleInt(
+        myInt:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_TestFnNamedArgsSingleInt",
+        args: {
+          "myInt" => myInt,
+        }
+      )
+      Baml::convert_to(String).from(raw.parsed)
+    end
+
+    sig {
+      params(
+        myString: String,
+      ).returns(String)
+    }
+    def V2_TestFnNamedArgsSingleString(
+        myString:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_TestFnNamedArgsSingleString",
+        args: {
+          "myString" => myString,
+        }
+      )
+      Baml::convert_to(String).from(raw.parsed)
+    end
+
+    sig {
+      params(
+        myStringArray: T::Array[String],
+      ).returns(String)
+    }
+    def V2_TestFnNamedArgsSingleStringArray(
+        myStringArray:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_TestFnNamedArgsSingleStringArray",
+        args: {
+          "myStringArray" => myStringArray,
+        }
+      )
+      Baml::convert_to(String).from(raw.parsed)
+    end
+
+    sig {
+      params(
+        myArg: T::Array[Baml::Types::NamedArgsSingleClassList2],
+      ).returns(String)
+    }
+    def V2_TestFnNamedArgsSingleStringList(
+        myArg:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_TestFnNamedArgsSingleStringList",
+        args: {
+          "myArg" => myArg,
+        }
+      )
+      Baml::convert_to(String).from(raw.parsed)
+    end
+
+    sig {
+      params(
+        var: String,var_with_underscores: String,
+      ).returns(String)
+    }
+    def V2_TestFnNamedArgsSyntax(
+        var:,var_with_underscores:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_TestFnNamedArgsSyntax",
+        args: {
+          "var" => var,"var_with_underscores" => var_with_underscores,
+        }
+      )
+      Baml::convert_to(String).from(raw.parsed)
+    end
+
+    sig {
+      params(
+        input: T.any(String, T::Boolean),
+      ).returns(Baml::Types::UnionTest_ReturnTypev2)
+    }
+    def V2_UnionTest_Function(
+        input:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_UnionTest_Function",
+        args: {
+          "input" => input,
+        }
+      )
+      Baml::convert_to(Baml::Types::UnionTest_ReturnTypev2).from(raw.parsed)
     end
 
     
@@ -217,26 +625,6 @@ module Baml
     sig {params(runtime: Baml::Ffi::BamlRuntime).void}
     def initialize(runtime:)
       @runtime = runtime
-    end
-
-    sig {
-      params(
-        messages: T::Array[Baml::Types::Message],
-      ).returns(Baml::Unstable::FunctionResult[T::Array[Baml::Types::Category]])
-    }
-    def ClassifyConversation(
-        messages:
-    )
-      raw = @runtime.call_function(
-        function_name: "ClassifyConversation",
-        args: {
-          "messages" => messages,
-        }
-      )
-      Baml::Unstable::FunctionResult[T::Array[Baml::Types::Category]].new(
-        inner: raw,
-        parsed: TypeCoerce[T::Array[Baml::Types::Category]].new.from(raw.parsed)
-      )
     end
 
     sig {
@@ -255,7 +643,7 @@ module Baml
       )
       Baml::Unstable::FunctionResult[Baml::Types::Category].new(
         inner: raw,
-        parsed: TypeCoerce[Baml::Types::Category].new.from(raw.parsed)
+        parsed: Baml::convert_to(Baml::Types::Category).from(raw.parsed)
       )
     end
 
@@ -275,7 +663,7 @@ module Baml
       )
       Baml::Unstable::FunctionResult[Baml::Types::Category].new(
         inner: raw,
-        parsed: TypeCoerce[Baml::Types::Category].new.from(raw.parsed)
+        parsed: Baml::convert_to(Baml::Types::Category).from(raw.parsed)
       )
     end
 
@@ -295,7 +683,7 @@ module Baml
       )
       Baml::Unstable::FunctionResult[Baml::Types::Category].new(
         inner: raw,
-        parsed: TypeCoerce[Baml::Types::Category].new.from(raw.parsed)
+        parsed: Baml::convert_to(Baml::Types::Category).from(raw.parsed)
       )
     end
 
@@ -315,7 +703,7 @@ module Baml
       )
       Baml::Unstable::FunctionResult[T::Array[String]].new(
         inner: raw,
-        parsed: TypeCoerce[T::Array[String]].new.from(raw.parsed)
+        parsed: Baml::convert_to(T::Array[String]).from(raw.parsed)
       )
     end
 
@@ -335,7 +723,7 @@ module Baml
       )
       Baml::Unstable::FunctionResult[Baml::Types::Resume].new(
         inner: raw,
-        parsed: TypeCoerce[Baml::Types::Resume].new.from(raw.parsed)
+        parsed: Baml::convert_to(Baml::Types::Resume).from(raw.parsed)
       )
     end
 
@@ -355,7 +743,47 @@ module Baml
       )
       Baml::Unstable::FunctionResult[Baml::Types::Resume].new(
         inner: raw,
-        parsed: TypeCoerce[Baml::Types::Resume].new.from(raw.parsed)
+        parsed: Baml::convert_to(Baml::Types::Resume).from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::Unstable::FunctionResult[T.nilable(Baml::Types::ClassOptionalOutput2v2)])
+    }
+    def FnClassOptionalOutput2_V2(
+        input:
+    )
+      raw = @runtime.call_function(
+        function_name: "FnClassOptionalOutput2_V2",
+        args: {
+          "input" => input,
+        }
+      )
+      Baml::Unstable::FunctionResult[T.nilable(Baml::Types::ClassOptionalOutput2v2)].new(
+        inner: raw,
+        parsed: Baml::convert_to(T.nilable(Baml::Types::ClassOptionalOutput2v2)).from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::Unstable::FunctionResult[Baml::Types::TestClassWithEnum2])
+    }
+    def FnOutputClassWithEnum_V2(
+        input:
+    )
+      raw = @runtime.call_function(
+        function_name: "FnOutputClassWithEnum_V2",
+        args: {
+          "input" => input,
+        }
+      )
+      Baml::Unstable::FunctionResult[Baml::Types::TestClassWithEnum2].new(
+        inner: raw,
+        parsed: Baml::convert_to(Baml::Types::TestClassWithEnum2).from(raw.parsed)
       )
     end
 
@@ -375,7 +803,7 @@ module Baml
       )
       Baml::Unstable::FunctionResult[Baml::Types::RaysData].new(
         inner: raw,
-        parsed: TypeCoerce[Baml::Types::RaysData].new.from(raw.parsed)
+        parsed: Baml::convert_to(Baml::Types::RaysData).from(raw.parsed)
       )
     end
 
@@ -395,7 +823,7 @@ module Baml
       )
       Baml::Unstable::FunctionResult[Baml::Types::OrderInfo].new(
         inner: raw,
-        parsed: TypeCoerce[Baml::Types::OrderInfo].new.from(raw.parsed)
+        parsed: Baml::convert_to(Baml::Types::OrderInfo).from(raw.parsed)
       )
     end
 
@@ -415,7 +843,467 @@ module Baml
       )
       Baml::Unstable::FunctionResult[Baml::Types::SearchParams].new(
         inner: raw,
-        parsed: TypeCoerce[Baml::Types::SearchParams].new.from(raw.parsed)
+        parsed: Baml::convert_to(Baml::Types::SearchParams).from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::Unstable::FunctionResult[T::Array[T.nilable(Baml::Types::OptionalTest_ReturnTypev2)]])
+    }
+    def OptionalTest_Function_V2(
+        input:
+    )
+      raw = @runtime.call_function(
+        function_name: "OptionalTest_Function_V2",
+        args: {
+          "input" => input,
+        }
+      )
+      Baml::Unstable::FunctionResult[T::Array[T.nilable(Baml::Types::OptionalTest_ReturnTypev2)]].new(
+        inner: raw,
+        parsed: Baml::convert_to(T::Array[T.nilable(Baml::Types::OptionalTest_ReturnTypev2)]).from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        input: Baml::Types::RoundtripObject,
+      ).returns(Baml::Unstable::FunctionResult[Baml::Types::RoundtripObject])
+    }
+    def RoundtripMyData(
+        input:
+    )
+      raw = @runtime.call_function(
+        function_name: "RoundtripMyData",
+        args: {
+          "input" => input,
+        }
+      )
+      Baml::Unstable::FunctionResult[Baml::Types::RoundtripObject].new(
+        inner: raw,
+        parsed: Baml::convert_to(Baml::Types::RoundtripObject).from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        input: T.nilable(Baml::Types::OptionalClassv2),
+      ).returns(Baml::Unstable::FunctionResult[String])
+    }
+    def V2_FnClassOptional(
+        input:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_FnClassOptional",
+        args: {
+          "input" => input,
+        }
+      )
+      Baml::Unstable::FunctionResult[String].new(
+        inner: raw,
+        parsed: Baml::convert_to(String).from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        input: Baml::Types::ClassOptionalFieldsv2,
+      ).returns(Baml::Unstable::FunctionResult[String])
+    }
+    def V2_FnClassOptional2(
+        input:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_FnClassOptional2",
+        args: {
+          "input" => input,
+        }
+      )
+      Baml::Unstable::FunctionResult[String].new(
+        inner: raw,
+        parsed: Baml::convert_to(String).from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::Unstable::FunctionResult[T::Array[Baml::Types::EnumOutput]])
+    }
+    def V2_FnEnumListOutput(
+        input:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_FnEnumListOutput",
+        args: {
+          "input" => input,
+        }
+      )
+      Baml::Unstable::FunctionResult[T::Array[Baml::Types::EnumOutput]].new(
+        inner: raw,
+        parsed: Baml::convert_to(T::Array[Baml::Types::EnumOutput]).from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::Unstable::FunctionResult[Baml::Types::EnumOutput2])
+    }
+    def V2_FnEnumOutput(
+        input:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_FnEnumOutput",
+        args: {
+          "input" => input,
+        }
+      )
+      Baml::Unstable::FunctionResult[Baml::Types::EnumOutput2].new(
+        inner: raw,
+        parsed: Baml::convert_to(Baml::Types::EnumOutput2).from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        myString: T.nilable(String),
+      ).returns(Baml::Unstable::FunctionResult[String])
+    }
+    def V2_FnNamedArgsSingleStringOptional(
+        myString:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_FnNamedArgsSingleStringOptional",
+        args: {
+          "myString" => myString,
+        }
+      )
+      Baml::Unstable::FunctionResult[String].new(
+        inner: raw,
+        parsed: Baml::convert_to(String).from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::Unstable::FunctionResult[T::Boolean])
+    }
+    def V2_FnOutputBool(
+        input:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_FnOutputBool",
+        args: {
+          "input" => input,
+        }
+      )
+      Baml::Unstable::FunctionResult[T::Boolean].new(
+        inner: raw,
+        parsed: Baml::convert_to(T::Boolean).from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::Unstable::FunctionResult[Baml::Types::TestOutputClass2])
+    }
+    def V2_FnOutputClass(
+        input:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_FnOutputClass",
+        args: {
+          "input" => input,
+        }
+      )
+      Baml::Unstable::FunctionResult[Baml::Types::TestOutputClass2].new(
+        inner: raw,
+        parsed: Baml::convert_to(Baml::Types::TestOutputClass2).from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::Unstable::FunctionResult[T::Array[Baml::Types::TestOutputClass]])
+    }
+    def V2_FnOutputClassList(
+        input:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_FnOutputClassList",
+        args: {
+          "input" => input,
+        }
+      )
+      Baml::Unstable::FunctionResult[T::Array[Baml::Types::TestOutputClass]].new(
+        inner: raw,
+        parsed: Baml::convert_to(T::Array[Baml::Types::TestOutputClass]).from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::Unstable::FunctionResult[T::Array[String]])
+    }
+    def V2_FnOutputStringList(
+        input:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_FnOutputStringList",
+        args: {
+          "input" => input,
+        }
+      )
+      Baml::Unstable::FunctionResult[T::Array[String]].new(
+        inner: raw,
+        parsed: Baml::convert_to(T::Array[String]).from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        input: T.nilable(String),
+      ).returns(Baml::Unstable::FunctionResult[String])
+    }
+    def V2_FnStringOptional(
+        input:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_FnStringOptional",
+        args: {
+          "input" => input,
+        }
+      )
+      Baml::Unstable::FunctionResult[String].new(
+        inner: raw,
+        parsed: Baml::convert_to(String).from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        myArg: Baml::Types::NamedArgsSingleEnum2,
+      ).returns(Baml::Unstable::FunctionResult[String])
+    }
+    def V2_FnTestNamedArgsSingleEnum(
+        myArg:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_FnTestNamedArgsSingleEnum",
+        args: {
+          "myArg" => myArg,
+        }
+      )
+      Baml::Unstable::FunctionResult[String].new(
+        inner: raw,
+        parsed: Baml::convert_to(String).from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        myBool: T::Boolean,
+      ).returns(Baml::Unstable::FunctionResult[String])
+    }
+    def V2_TestFnNamedArgsSingleBool(
+        myBool:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_TestFnNamedArgsSingleBool",
+        args: {
+          "myBool" => myBool,
+        }
+      )
+      Baml::Unstable::FunctionResult[String].new(
+        inner: raw,
+        parsed: Baml::convert_to(String).from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        myArg: Baml::Types::NamedArgsSingleClass2,
+      ).returns(Baml::Unstable::FunctionResult[String])
+    }
+    def V2_TestFnNamedArgsSingleClass(
+        myArg:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_TestFnNamedArgsSingleClass",
+        args: {
+          "myArg" => myArg,
+        }
+      )
+      Baml::Unstable::FunctionResult[String].new(
+        inner: raw,
+        parsed: Baml::convert_to(String).from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        myArg: T::Array[Baml::Types::NamedArgsSingleEnumList2],
+      ).returns(Baml::Unstable::FunctionResult[String])
+    }
+    def V2_TestFnNamedArgsSingleEnumList(
+        myArg:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_TestFnNamedArgsSingleEnumList",
+        args: {
+          "myArg" => myArg,
+        }
+      )
+      Baml::Unstable::FunctionResult[String].new(
+        inner: raw,
+        parsed: Baml::convert_to(String).from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        myFloat: Float,
+      ).returns(Baml::Unstable::FunctionResult[String])
+    }
+    def V2_TestFnNamedArgsSingleFloat(
+        myFloat:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_TestFnNamedArgsSingleFloat",
+        args: {
+          "myFloat" => myFloat,
+        }
+      )
+      Baml::Unstable::FunctionResult[String].new(
+        inner: raw,
+        parsed: Baml::convert_to(String).from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        myInt: Integer,
+      ).returns(Baml::Unstable::FunctionResult[String])
+    }
+    def V2_TestFnNamedArgsSingleInt(
+        myInt:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_TestFnNamedArgsSingleInt",
+        args: {
+          "myInt" => myInt,
+        }
+      )
+      Baml::Unstable::FunctionResult[String].new(
+        inner: raw,
+        parsed: Baml::convert_to(String).from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        myString: String,
+      ).returns(Baml::Unstable::FunctionResult[String])
+    }
+    def V2_TestFnNamedArgsSingleString(
+        myString:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_TestFnNamedArgsSingleString",
+        args: {
+          "myString" => myString,
+        }
+      )
+      Baml::Unstable::FunctionResult[String].new(
+        inner: raw,
+        parsed: Baml::convert_to(String).from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        myStringArray: T::Array[String],
+      ).returns(Baml::Unstable::FunctionResult[String])
+    }
+    def V2_TestFnNamedArgsSingleStringArray(
+        myStringArray:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_TestFnNamedArgsSingleStringArray",
+        args: {
+          "myStringArray" => myStringArray,
+        }
+      )
+      Baml::Unstable::FunctionResult[String].new(
+        inner: raw,
+        parsed: Baml::convert_to(String).from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        myArg: T::Array[Baml::Types::NamedArgsSingleClassList2],
+      ).returns(Baml::Unstable::FunctionResult[String])
+    }
+    def V2_TestFnNamedArgsSingleStringList(
+        myArg:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_TestFnNamedArgsSingleStringList",
+        args: {
+          "myArg" => myArg,
+        }
+      )
+      Baml::Unstable::FunctionResult[String].new(
+        inner: raw,
+        parsed: Baml::convert_to(String).from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        var: String,var_with_underscores: String,
+      ).returns(Baml::Unstable::FunctionResult[String])
+    }
+    def V2_TestFnNamedArgsSyntax(
+        var:,var_with_underscores:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_TestFnNamedArgsSyntax",
+        args: {
+          "var" => var,"var_with_underscores" => var_with_underscores,
+        }
+      )
+      Baml::Unstable::FunctionResult[String].new(
+        inner: raw,
+        parsed: Baml::convert_to(String).from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        input: T.any(String, T::Boolean),
+      ).returns(Baml::Unstable::FunctionResult[Baml::Types::UnionTest_ReturnTypev2])
+    }
+    def V2_UnionTest_Function(
+        input:
+    )
+      raw = @runtime.call_function(
+        function_name: "V2_UnionTest_Function",
+        args: {
+          "input" => input,
+        }
+      )
+      Baml::Unstable::FunctionResult[Baml::Types::UnionTest_ReturnTypev2].new(
+        inner: raw,
+        parsed: Baml::convert_to(Baml::Types::UnionTest_ReturnTypev2).from(raw.parsed)
       )
     end
 
