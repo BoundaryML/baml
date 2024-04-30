@@ -3,7 +3,7 @@ mod chat;
 mod completion;
 
 use internal_baml_core::ir::{repr::IntermediateRepr, RetryPolicyWalker};
-use internal_baml_jinja::{RenderContext_Client, RenderedPrompt};
+use internal_baml_jinja::{BamlArgType, RenderContext_Client, RenderedPrompt};
 
 use crate::{internal::prompt_renderer::PromptRenderer, RuntimeContext};
 
@@ -46,7 +46,7 @@ pub trait WithPrompt<'ir> {
         &'ir mut self,
         renderer: &PromptRenderer,
         ctx: &RuntimeContext,
-        params: &serde_json::Value,
+        params: &BamlArgType,
     ) -> Result<RenderedPrompt>;
 }
 
@@ -165,7 +165,7 @@ where
         &'ir mut self,
         renderer: &PromptRenderer,
         ctx: &RuntimeContext,
-        params: &serde_json::Value,
+        params: &BamlArgType,
     ) -> Result<RenderedPrompt> {
         let prompt = renderer.render_prompt(ctx, params, self.context())?;
 

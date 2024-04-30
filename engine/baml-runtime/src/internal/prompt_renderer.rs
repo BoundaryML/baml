@@ -4,7 +4,7 @@ use internal_baml_core::{
     ir::{repr::FunctionConfig, FunctionWalker},
 };
 use internal_baml_jinja::{
-    RenderContext, RenderContext_Client, RenderedPrompt, TemplateStringMacro,
+    BamlArgType, RenderContext, RenderContext_Client, RenderedPrompt, TemplateStringMacro,
 };
 
 use crate::RuntimeContext;
@@ -77,19 +77,18 @@ impl PromptRenderer {
     pub fn render_prompt(
         &self,
         ctx: &RuntimeContext,
-        params: &serde_json::Value,
+        params: &BamlArgType,
         client_ctx: &RenderContext_Client,
     ) -> Result<RenderedPrompt> {
-        Err(anyhow::anyhow!("Not implemented"))
-        // internal_baml_jinja::render_prompt(
-        //     self.prompt_template(),
-        //     params,
-        //     &RenderContext {
-        //         client: client_ctx.clone(),
-        //         output_format: self.output_format().into(),
-        //         env: ctx.env.clone(),
-        //     },
-        //     self.template_macros(),
-        // )
+        internal_baml_jinja::render_prompt(
+            self.prompt_template(),
+            params,
+            &RenderContext {
+                client: client_ctx.clone(),
+                output_format: self.output_format().into(),
+                env: ctx.env.clone(),
+            },
+            self.template_macros(),
+        )
     }
 }

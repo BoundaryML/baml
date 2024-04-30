@@ -172,7 +172,7 @@ impl RuntimeInterface for InternalBamlRuntime {
         let client_name = renderer.client_name().to_string();
 
         let (client, retry_policy) = self.get_client_mut(&client_name, ctx)?;
-        let prompt = client.render_prompt(&renderer, &ctx, &serde_json::json!(params))?;
+        let prompt = client.render_prompt(&renderer, &ctx, params)?;
 
         let response = client.call(retry_policy, ctx, &prompt).await;
 

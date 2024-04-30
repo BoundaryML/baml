@@ -1,5 +1,6 @@
 use anyhow::Result;
 use internal_baml_core::ir::ClientWalker;
+use internal_baml_jinja::BamlArgType;
 
 use crate::RuntimeContext;
 
@@ -42,7 +43,7 @@ impl<'ir> WithPrompt<'ir> for LLMProvider {
         &'ir mut self,
         renderer: &PromptRenderer,
         ctx: &RuntimeContext,
-        params: &serde_json::Value,
+        params: &BamlArgType,
     ) -> Result<internal_baml_jinja::RenderedPrompt> {
         match self {
             LLMProvider::OpenAI(client) => client.render_prompt(renderer, ctx, params),

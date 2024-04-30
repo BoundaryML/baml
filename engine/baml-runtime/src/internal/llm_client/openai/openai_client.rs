@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::{Context, Result};
 use internal_baml_core::ir::ClientWalker;
-use internal_baml_jinja::{RenderContext_Client, RenderedChatMessage};
+use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
 use serde_json::json;
 
 use super::super::expression_helper::to_value;
@@ -262,8 +262,7 @@ impl OpenAIClient {
                 .map(|m| {
                     json!({
                         "role": m.role,
-                        // TODO: fix this
-                        "content": "say 'error'",
+                        "content": convert_message_parts_to_content(m.parts)
                     })
                 })
                 .collect::<serde_json::Value>(),
@@ -285,4 +284,28 @@ impl OpenAIClient {
         // Add all the properties as data parameters.
         Ok(req)
     }
+}
+
+fn convert_message_parts_to_content(parts: Vec<ChatMessagePart>) -> serde_json::Value {
+    let content: Vec<serde_json::Value> = parts
+        .into_iter()
+        .map(|part| match part {
+            ChatMessagePart::Text(text) => json!({"type": "text", "text": text}),
+            ChatMessagePart::Image(image) => match image {
+                internal_baml_jinja::BamlImage::Url(image) => {
+                    json!({"type": "image_url", "image_url": image.url})
+                }
+                internal_baml_jinja::BamlImage::Base64(image) => {
+                    json!({"type": "image_url", "image_url": image.base64})
+                }
+            },
+        })
+        .collect();
+
+    // This is for non-image apis, where there is no "type", and the content is returned as a string instead of the list of parts.
+    if content.len() == 1 && content[0].get("type").unwrap() == "text" {
+        return content[0].get("text").unwrap().to_string();
+    }
+
+    json!(content)
 }

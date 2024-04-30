@@ -220,7 +220,7 @@ fn render_prompt(template: String, context: RenderData) -> PyResult<PyObject> {
     } = context;
     let render_args = parse_py_type(args)?;
 
-    let rendered = internal_baml_jinja::render_prompt2(
+    let rendered = internal_baml_jinja::render_prompt(
         &template,
         &render_args,
         &internal_baml_jinja::RenderContext {

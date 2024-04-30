@@ -421,6 +421,8 @@ fn serialize_impls(
         .or(func.walk_tests().next());
 
         let test_case_name = selected_test.map(|t| t.name().to_string());
+        // TODO: find out which properties in the testcase inputs are images, recursively.
+
         let args = selected_test
             .map(
                 // DO NOT LAND

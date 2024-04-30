@@ -457,30 +457,30 @@ impl RenderedPrompt {
     }
 }
 
-pub fn render_prompt(
-    template: &str,
-    args: &minijinja::Value,
-    ctx: &RenderContext,
-    template_string_macros: &[TemplateStringMacro],
-) -> anyhow::Result<RenderedPrompt> {
-    let rendered = render_minijinja(template, args, ctx, template_string_macros);
+// pub fn render_prompt(
+//     template: &str,
+//     args: &minijinja::Value,
+//     ctx: &RenderContext,
+//     template_string_macros: &[TemplateStringMacro],
+// ) -> anyhow::Result<RenderedPrompt> {
+//     let rendered = render_minijinja(template, args, ctx, template_string_macros);
 
-    match rendered {
-        Ok(r) => Ok(r),
-        Err(err) => {
-            let mut minijinja_err = "".to_string();
-            minijinja_err += &format!("{err:#}");
+//     match rendered {
+//         Ok(r) => Ok(r),
+//         Err(err) => {
+//             let mut minijinja_err = "".to_string();
+//             minijinja_err += &format!("{err:#}");
 
-            let mut err = &err as &dyn std::error::Error;
-            while let Some(next_err) = err.source() {
-                minijinja_err += &format!("\n\ncaused by: {next_err:#}");
-                err = next_err;
-            }
+//             let mut err = &err as &dyn std::error::Error;
+//             while let Some(next_err) = err.source() {
+//                 minijinja_err += &format!("\n\ncaused by: {next_err:#}");
+//                 err = next_err;
+//             }
 
-            anyhow::bail!("Error occurred while rendering prompt: {minijinja_err}");
-        }
-    }
-}
+//             anyhow::bail!("Error occurred while rendering prompt: {minijinja_err}");
+//         }
+//     }
+// }
 
 #[derive(Debug, PartialEq, Serialize, Clone)]
 pub enum BamlArgType {
@@ -523,11 +523,13 @@ impl From<BamlArgType> for minijinja::Value {
                 minijinja::Value::from_iter(map.into_iter())
             }
             BamlArgType::None => minijinja::Value::from(()),
+            // TODO: shouldnt this fail?
             BamlArgType::Unsupported(s) => minijinja::Value::from(s),
         }
     }
 }
-pub fn render_prompt2(
+
+pub fn render_prompt(
     template: &str,
     args: &BamlArgType,
     ctx: &RenderContext,
@@ -564,7 +566,7 @@ mod render_tests {
     use super::*;
 
     use env_logger;
-    use std::sync::Once;
+    use std::{env::Args, sync::Once};
 
     static INIT: Once = Once::new();
 
@@ -577,23 +579,13 @@ mod render_tests {
     #[test]
     fn render_image() -> anyhow::Result<()> {
         setup_logging();
-        let args = context! {
-            img => minijinja::Value::from_object(BamlImage::Url(ImageUrl {
-                url: "https://example.com/image.jpg".to_string(),
-            })),
-            hello => context! {
-                img => BamlImage::Url(ImageUrl {
-                    url: "https://example.com/image.jpg".to_string(),
-                }),
-            }
-        };
 
-        // let args = Arg::JsonVal(serde_json::json!({
-        //     "haiku_subject": "sakura",
-        //     "img": Arg::BamlImage(BamlImage::Url(ImageUrl {
-        //         url: "https://example.com/image.jpg".to_string(),
-        //     })),
-        // }));
+        let args: BamlArgType = BamlArgType::Map(IndexMap::from([(
+            "img".to_string(),
+            BamlArgType::Image(BamlImage::Url(ImageUrl::new(
+                "https://example.com/image.jpg".to_string(),
+            ))),
+        )]));
 
         let rendered = render_prompt(
             "{{ _.chat(\"system\") }}
@@ -627,13 +619,60 @@ mod render_tests {
     }
 
     #[test]
+    fn render_image_nested() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args: BamlArgType = BamlArgType::Map(IndexMap::from([(
+            "myObject".to_string(),
+            BamlArgType::Map(IndexMap::from([(
+                "img".to_string(),
+                BamlArgType::Image(BamlImage::Url(ImageUrl::new(
+                    "https://example.com/image.jpg".to_string(),
+                ))),
+            )])),
+        )]));
+
+        let rendered = render_prompt(
+            "{{ _.chat(\"system\") }}
+            Here is an image: {{ myObject.img }}",
+            &args,
+            &RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                },
+                output_format: "iambic pentameter".to_string(),
+                env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
+            },
+            &vec![],
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Chat(vec![RenderedChatMessage {
+                role: "system".to_string(),
+                parts: vec![
+                    ChatMessagePart::Text(vec!["Here is an image:",].join("\n")),
+                    ChatMessagePart::Image(BamlImage::Url(ImageUrl::new(
+                        "https://example.com/image.jpg".to_string()
+                    )),),
+                ]
+            },])
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn render_image_suffix() -> anyhow::Result<()> {
         setup_logging();
-        let args = context! {
-            img => minijinja::Value::from_object(BamlImage::Url(ImageUrl {
-                url: "https://example.com/image.jpg".to_string(),
-            })),
-        };
+
+        let args: BamlArgType = BamlArgType::Map(IndexMap::from([(
+            "img".to_string(),
+            BamlArgType::Image(BamlImage::Url(ImageUrl::new(
+                "https://example.com/image.jpg".to_string(),
+            ))),
+        )]));
 
         let rendered = render_prompt(
             "{{ _.chat(\"system\") }}
@@ -671,9 +710,10 @@ mod render_tests {
     fn render_chat() -> anyhow::Result<()> {
         setup_logging();
 
-        let args = context! {
-            haiku_subject => "sakura"
-        };
+        let args = BamlArgType::Map(IndexMap::from([(
+            "haiku_subject".to_string(),
+            BamlArgType::String("sakura".to_string()),
+        )]));
 
         let rendered = render_prompt(
             "
@@ -744,6 +784,11 @@ mod render_tests {
             haiku_subject => "sakura"
         };
 
+        let args: BamlArgType = BamlArgType::Map(IndexMap::from([(
+            "haiku_subject".to_string(),
+            BamlArgType::String("sakura".to_string()),
+        )]));
+
         let rendered = render_prompt(
             "
                 You are an assistant that always responds
@@ -783,9 +828,10 @@ mod render_tests {
     fn render_output_format_directly() -> anyhow::Result<()> {
         setup_logging();
 
-        let args = context! {
-            haiku_subject => "sakura"
-        };
+        let args: BamlArgType = BamlArgType::Map(IndexMap::from([(
+            "haiku_subject".to_string(),
+            BamlArgType::String("sakura".to_string()),
+        )]));
 
         let rendered = render_prompt(
             "{{ ctx.output_format }}",
@@ -815,9 +861,10 @@ mod render_tests {
     fn render_output_format_prefix_unspecified() -> anyhow::Result<()> {
         setup_logging();
 
-        let args = context! {
-            haiku_subject => "sakura"
-        };
+        let args: BamlArgType = BamlArgType::Map(IndexMap::from([(
+            "haiku_subject".to_string(),
+            BamlArgType::String("sakura".to_string()),
+        )]));
 
         let rendered = render_prompt(
             "{{ ctx.output_format() }}",
@@ -847,9 +894,10 @@ mod render_tests {
     fn render_output_format_prefix_null() -> anyhow::Result<()> {
         setup_logging();
 
-        let args = context! {
-            haiku_subject => "sakura"
-        };
+        let args: BamlArgType = BamlArgType::Map(IndexMap::from([(
+            "haiku_subject".to_string(),
+            BamlArgType::String("sakura".to_string()),
+        )]));
 
         let rendered = render_prompt(
             "{{ ctx.output_format(prefix=null) }}",
@@ -877,9 +925,10 @@ mod render_tests {
     fn render_output_format_prefix_str() -> anyhow::Result<()> {
         setup_logging();
 
-        let args = context! {
-            haiku_subject => "sakura"
-        };
+        let args: BamlArgType = BamlArgType::Map(IndexMap::from([(
+            "haiku_subject".to_string(),
+            BamlArgType::String("sakura".to_string()),
+        )]));
 
         let rendered = render_prompt(
             "{{ ctx.output_format(prefix='custom format:') }}",
@@ -907,9 +956,10 @@ mod render_tests {
     fn render_chat_param_failures() -> anyhow::Result<()> {
         setup_logging();
 
-        let args = context! {
-            name => "world"
-        };
+        let args: BamlArgType = BamlArgType::Map(IndexMap::from([(
+            "name".to_string(),
+            BamlArgType::String("world".to_string()),
+        )]));
 
         // rendering should fail: template contains '{{ name }' (missing '}' at the end)
         let rendered = render_prompt(
@@ -960,9 +1010,10 @@ mod render_tests {
     fn render_with_kwargs() -> anyhow::Result<()> {
         setup_logging();
 
-        let args = context! {
-            haiku_subject => "sakura"
-        };
+        let args: BamlArgType = BamlArgType::Map(IndexMap::from([(
+            "haiku_subject".to_string(),
+            BamlArgType::String("sakura".to_string()),
+        )]));
 
         let rendered = render_prompt(
             r#"
@@ -1026,9 +1077,10 @@ mod render_tests {
     fn render_chat_starts_with_system() -> anyhow::Result<()> {
         setup_logging();
 
-        let args = context! {
-            haiku_subject => "sakura"
-        };
+        let args: BamlArgType = BamlArgType::Map(IndexMap::from([(
+            "haiku_subject".to_string(),
+            BamlArgType::String("sakura".to_string()),
+        )]));
 
         let rendered = render_prompt(
             "
@@ -1073,10 +1125,10 @@ mod render_tests {
     #[test]
     fn render_malformed_jinja() -> anyhow::Result<()> {
         setup_logging();
-
-        let args = context! {
-            name => "world"
-        };
+        let args: BamlArgType = BamlArgType::Map(IndexMap::from([(
+            "name".to_string(),
+            BamlArgType::String("world".to_string()),
+        )]));
 
         // rendering should fail: template contains '{{ name }' (missing '}' at the end)
         let rendered = render_prompt(
