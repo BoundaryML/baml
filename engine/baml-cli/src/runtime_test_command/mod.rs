@@ -2,6 +2,7 @@ use anyhow::Result;
 
 mod filter;
 mod run_state;
+mod tracing_helper;
 
 use baml_runtime::{load_runtime_from_dir, InternalRuntimeInterface};
 use filter::FilterArgs;

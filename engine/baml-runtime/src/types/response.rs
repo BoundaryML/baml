@@ -26,6 +26,7 @@ impl FunctionResult {
     }
 }
 
+#[derive(Debug)]
 pub struct TestResponse {
     pub(crate) function_response: Result<FunctionResult>,
 }

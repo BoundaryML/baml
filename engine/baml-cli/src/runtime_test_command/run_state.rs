@@ -3,7 +3,7 @@ use baml_lib::internal_baml_core::ir::TestCaseWalker;
 use colored::*;
 use indexmap::{IndexMap, IndexSet};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, fmt::Debug, sync::Arc, time::Duration};
 use tokio::{
     sync::{Mutex, MutexGuard, Semaphore},
     task,
@@ -73,12 +73,7 @@ impl TestRunBar {
     }
 
     pub fn println<I: AsRef<str>>(&self, msg: I) {
-        match self.p.println(msg) {
-            Ok(_) => {}
-            Err(e) => {
-                println!("ERR: {:#?}", e)
-            }
-        }
+        self.primary_bar.println(msg)
     }
 
     fn start_test(
@@ -119,8 +114,13 @@ impl std::fmt::Display for TestRunState {
         for (func_name, tests) in &self.test_state {
             total += tests.len();
 
-            if tests.len() == 1 {
-                let (name, state) = tests.iter().next().unwrap();
+            writeln!(
+                f,
+                "{} {}",
+                func_name.bold().cyan(),
+                format!("({} Tests)", tests.len()).dimmed()
+            )?;
+            for (test_name, state) in tests {
                 match state {
                     TestState::Finished(r) => match r.status() {
                         baml_runtime::TestStatus::Pass => passed += 1,
@@ -129,52 +129,7 @@ impl std::fmt::Display for TestRunState {
                     TestState::UnableToRun(_) => unable_to_run += 1,
                     _ => {}
                 }
-                writeln!(
-                    f,
-                    "{state} {}:{}",
-                    func_name.bold().cyan(),
-                    name,
-                    state = match state {
-                        TestState::Queued => "○".dimmed(),
-                        TestState::Running => "▶".dimmed(),
-                        TestState::UnableToRun(_) => "✖".red(),
-                        TestState::Finished(r) => match r.status() {
-                            baml_runtime::TestStatus::Pass => "✔".green(),
-                            baml_runtime::TestStatus::Fail(_) => "✖".red(),
-                        },
-                    }
-                )?;
-            } else {
-                writeln!(
-                    f,
-                    "{} {}",
-                    func_name.bold().cyan(),
-                    format!("({} Tests)", tests.len()).dimmed()
-                )?;
-                for (test_name, state) in tests {
-                    match state {
-                        TestState::Finished(r) => match r.status() {
-                            baml_runtime::TestStatus::Pass => passed += 1,
-                            baml_runtime::TestStatus::Fail(_) => failed += 1,
-                        },
-                        TestState::UnableToRun(_) => unable_to_run += 1,
-                        _ => {}
-                    }
-                    writeln!(
-                        f,
-                        "  {state} {}",
-                        test_name,
-                        state = match state {
-                            TestState::Queued => "○".dimmed(),
-                            TestState::Running => "▶".dimmed(),
-                            TestState::UnableToRun(_) => "✖".red(),
-                            TestState::Finished(r) => match r.status() {
-                                baml_runtime::TestStatus::Pass => "✔".green(),
-                                baml_runtime::TestStatus::Fail(_) => "✖".red(),
-                            },
-                        }
-                    )?;
-                }
+                writeln!(f, "  {state} {}", test_name, state = state.colored_symbol())?;
             }
         }
 
@@ -194,56 +149,19 @@ impl std::fmt::Display for TestRunState {
 
 impl TestRunState {
     fn update(&mut self, function_name: &str, test_name: &str, state: TestState, bar: &TestRunBar) {
-        let msg: Option<(bool, Option<String>)> = match &state {
-            TestState::Queued => None,
+        match &state {
+            TestState::Queued => {}
             TestState::Running => {
                 self.active_tests
                     .insert((function_name.into(), test_name.into()));
                 bar.start_test(function_name, test_name, &self.active_tests);
-                None
             }
-            TestState::UnableToRun(message) => Some((false, Some(message.clone()))),
-            TestState::Finished(s) => match s.status() {
-                baml_runtime::TestStatus::Pass => Some((true, None)),
-                baml_runtime::TestStatus::Fail(err) => match err {
-                    baml_runtime::TestFailReason::TestUnspecified(msg) => {
-                        Some((false, Some(format!("{:?}", msg))))
-                    }
-                    baml_runtime::TestFailReason::TestParseFailure(e) => {
-                        Some((false, Some(format!("{:?}", e))))
-                    }
-                    baml_runtime::TestFailReason::TestLLMFailure(llm_fail) => Some((
-                        false,
-                        Some(match llm_fail.content() {
-                            Ok(k) => k.to_string(),
-                            Err(e) => format!("{:?}", e),
-                        }),
-                    )),
-                },
-            },
+            TestState::Finished(_) | TestState::UnableToRun(_) => {
+                self.active_tests
+                    .shift_remove(&(function_name.into(), test_name.into()));
+                bar.end_test(function_name, test_name, &self.active_tests);
+            }
         };
-
-        if let Some((passed, msg)) = msg {
-            self.active_tests
-                .shift_remove(&(function_name.into(), test_name.into()));
-            bar.end_test(function_name, test_name, &self.active_tests);
-            let test_line = format!(
-                "{} {}:{}",
-                if passed { "✔".green() } else { "✖".red() },
-                function_name.bold().cyan(),
-                test_name,
-            );
-
-            if let Some(msg) = msg {
-                bar.println(format!(
-                    "{test_line}\n{msg}\n\n",
-                    msg = msg,
-                    test_line = test_line
-                ));
-            } else {
-                bar.println(test_line);
-            }
-        }
 
         self.test_state
             .get_mut(function_name)
@@ -260,16 +178,49 @@ pub enum TestState {
     Finished(TestResponse),
 }
 
+impl std::fmt::Display for TestState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TestState::Queued => write!(f, "Queued"),
+            TestState::Running => write!(f, "Running"),
+            TestState::UnableToRun(e) => write!(f, "{}", e.red()),
+            TestState::Finished(r) => r.fmt(f),
+        }
+    }
+}
+
+impl TestState {
+    fn symbol(&self) -> &str {
+        match self {
+            TestState::Queued => "○",
+            TestState::Running => "▶",
+            TestState::UnableToRun(_) => "⚠",
+            TestState::Finished(r) => match r.status() {
+                baml_runtime::TestStatus::Pass => "✔",
+                baml_runtime::TestStatus::Fail(_) => "✖",
+            },
+        }
+    }
+
+    fn colored_symbol(&self) -> ColoredString {
+        match self {
+            TestState::Queued => "○".dimmed(),
+            TestState::Running => "▶".dimmed(),
+            TestState::UnableToRun(_) => "⚠".red().bold(),
+            TestState::Finished(r) => match r.status() {
+                baml_runtime::TestStatus::Pass => "✔".green(),
+                baml_runtime::TestStatus::Fail(_) => "✖".red(),
+            },
+        }
+    }
+}
+
 impl<T: IBamlRuntime> TestCommand<T> {
     pub fn new(runtime: T, filter: FilterArgs) -> TestCommand<T> {
         TestCommand {
             runtime: Arc::from(Mutex::from(runtime)),
             filter,
         }
-        // TestCommand {
-        //     total_tests: count,
-        //     selected_tests,
-        // }
     }
 
     async fn run_state(&self, num_bars: usize) -> (TestRunBar, TestRunState) {
@@ -322,33 +273,38 @@ impl<T: IBamlRuntime> TestCommand<T> {
                 .await
                 .expect("Failed to acquire semaphore permit");
 
-            // println!("Got semaphore: {} {}", function_name, test_name);
-            state.lock().await.update(
-                &function_name,
-                &test_name,
-                TestState::Running,
-                &progress_bar,
-            );
-            // println!("Updated state: {} {}", function_name, test_name);
+            let result = {
+                let mut rt = runtime.lock().await;
+                // println!("Got semaphore: {} {}", function_name, test_name);
+                state.lock().await.update(
+                    &function_name,
+                    &test_name,
+                    TestState::Running,
+                    &progress_bar,
+                );
+                // println!("Updated state: {} {}", function_name, test_name);
 
-            let result = runtime
-                .lock()
-                .await
-                .run_test(&function_name, &test_name, &ctx)
-                .await;
-            println!("Got result: {} {}", function_name, test_name);
+                rt.run_test(&function_name, &test_name, &ctx).await
+            };
 
             let test_state = match result {
                 Ok(r) => TestState::Finished(r),
                 Err(e) => TestState::UnableToRun(e.to_string()),
             };
+
+            progress_bar.println(format!(
+                "{} {}:{}\n{}",
+                test_state.colored_symbol(),
+                function_name.bold().cyan(),
+                test_name,
+                test_state
+            ));
+
             state
                 .lock()
                 .await
                 .update(&function_name, &test_name, test_state, &progress_bar);
 
-            // println!("Updated final state: {} {}", function_name, test_name);
-            // Permit is automatically dropped and returned to the semaphore here
             drop(permit);
         })
     }
@@ -362,7 +318,7 @@ impl<T: IBamlRuntime> TestCommand<T> {
         // Each thread will take a test from the queue and run it
         let semaphore = Arc::new(Semaphore::new(max_parallel));
 
-        let (bars, state) = self.run_state(4).await;
+        let (bars, state) = self.run_state(1).await;
         let locked_state = Arc::new(Mutex::new(state));
 
         let mut handles = vec![];
