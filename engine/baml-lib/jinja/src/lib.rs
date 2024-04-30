@@ -10,6 +10,7 @@ use log::info;
 use minijinja::{self, value::Kwargs};
 use minijinja::{context, ErrorKind, Value};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -333,6 +334,19 @@ impl std::fmt::Display for BamlImage {
     }
 }
 
+impl minijinja::value::Object for BamlImage {
+    fn call(
+        &self,
+        _state: &minijinja::State<'_, '_>,
+        args: &[minijinja::value::Value],
+    ) -> Result<minijinja::value::Value, minijinja::Error> {
+        Err(minijinja::Error::new(
+            ErrorKind::UnknownMethod,
+            format!("baml image has no callable attribute '{}'", "blah"),
+        ))
+    }
+}
+
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct ImageUrl {
     pub url: String,
@@ -468,9 +482,11 @@ pub fn render_prompt(
     }
 }
 
+#[derive(Debug, PartialEq, Serialize, Clone)]
 pub enum BamlArgType {
     String(String),
-    Number(serde_json::Number),
+    Int(i64),
+    Float(f64),
     Bool(bool),
     Map(IndexMap<String, BamlArgType>),
     List(Vec<BamlArgType>),
@@ -478,24 +494,67 @@ pub enum BamlArgType {
     Enum(String, String),
     Class(String, IndexMap<String, BamlArgType>),
     None,
+    Unsupported(String),
 }
 
-pub fn render_prompt2<T: Serialize>(
+impl From<BamlArgType> for minijinja::Value {
+    fn from(arg: BamlArgType) -> minijinja::Value {
+        match arg {
+            BamlArgType::String(s) => minijinja::Value::from(s),
+            BamlArgType::Int(n) => minijinja::Value::from(n),
+            BamlArgType::Float(n) => minijinja::Value::from(n),
+            BamlArgType::Bool(b) => minijinja::Value::from(b),
+            BamlArgType::Map(m) => {
+                let map: IndexMap<String, minijinja::Value> = m
+                    .into_iter()
+                    .map(|(k, v)| (k, minijinja::Value::from(v)))
+                    .collect();
+                minijinja::Value::from_iter(map.into_iter())
+            }
+            BamlArgType::List(l) => {
+                let list: Vec<minijinja::Value> = l.into_iter().map(|v| v.into()).collect();
+                minijinja::Value::from(list)
+            }
+            BamlArgType::Image(i) => minijinja::Value::from_object(i),
+            BamlArgType::Enum(e, v) => minijinja::Value::from(v),
+            BamlArgType::Class(c, m) => {
+                let map: IndexMap<String, minijinja::Value> =
+                    m.into_iter().map(|(k, v)| (k, v.into())).collect();
+                minijinja::Value::from_iter(map.into_iter())
+            }
+            BamlArgType::None => minijinja::Value::from(()),
+            BamlArgType::Unsupported(s) => minijinja::Value::from(s),
+        }
+    }
+}
+pub fn render_prompt2(
     template: &str,
-    args: IndexMap<String, BamlArgType>,
+    args: &BamlArgType,
     ctx: &RenderContext,
     template_string_macros: &[TemplateStringMacro],
 ) -> anyhow::Result<RenderedPrompt> {
-    // let args = args.to_minijinja_value();
+    if !matches!(args, BamlArgType::Map(_)) {
+        anyhow::bail!("args must be a map");
+    }
+
+    println!("\n\n BamlArgType args: {:#?}", args);
+
+    let minijinja_args = args.clone().into();
+    println!("\nminijinja_args: {:#?}", minijinja_args);
 
     let args = context! {
         img => minijinja::Value::from_object(BamlImage::Url(ImageUrl {
             url: "https://example.com/image.jpg".to_string(),
         })),
+        hello => context! {
+            img => BamlImage::Url(ImageUrl {
+                url: "https://example.com/image.jpg".to_string(),
+            }),
+        }
     };
-    println!("minijinja Args: {:#?}", args);
+    println!("args: {:#?}", args);
 
-    let rendered = render_minijinja(template, &args, ctx, template_string_macros);
+    let rendered = render_minijinja(template, &minijinja_args, ctx, template_string_macros);
 
     match rendered {
         Ok(r) => Ok(r),
@@ -511,36 +570,6 @@ pub fn render_prompt2<T: Serialize>(
 
             anyhow::bail!("Error occurred while rendering prompt: {minijinja_err}");
         }
-    }
-}
-
-pub enum Arg<T: Serialize> {
-    BamlImage(BamlImage),
-    JsonVal(T),
-}
-
-pub trait ToMiniJinjaValue {
-    fn to_minijinja_value(&self) -> minijinja::value::Value;
-}
-impl<T: Serialize> ToMiniJinjaValue for Arg<T> {
-    fn to_minijinja_value(&self) -> minijinja::value::Value {
-        match self {
-            Arg::BamlImage(baml_image) => minijinja::Value::from_object(baml_image.clone()),
-            Arg::JsonVal(t) => minijinja::Value::from_serializable(t),
-        }
-    }
-}
-
-impl minijinja::value::Object for BamlImage {
-    fn call(
-        &self,
-        _state: &minijinja::State<'_, '_>,
-        args: &[minijinja::value::Value],
-    ) -> Result<minijinja::value::Value, minijinja::Error> {
-        Err(minijinja::Error::new(
-            ErrorKind::UnknownMethod,
-            format!("baml image has no callable attribute '{}'", "blah"),
-        ))
     }
 }
 
@@ -567,8 +596,8 @@ mod render_tests {
             img => minijinja::Value::from_object(BamlImage::Url(ImageUrl {
                 url: "https://example.com/image.jpg".to_string(),
             })),
-            hello {
-                img: BamlImage::Url(ImageUrl {
+            hello => context! {
+                img => BamlImage::Url(ImageUrl {
                     url: "https://example.com/image.jpg".to_string(),
                 }),
             }

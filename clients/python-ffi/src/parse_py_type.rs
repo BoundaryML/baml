@@ -56,6 +56,7 @@ impl Into<PyErr> for Errors {
 enum MappedPyType {
     Enum(String, String),
     Class(String, HashMap<String, PyObject>),
+    Map(HashMap<String, PyObject>),
     List(Vec<PyObject>),
     String(String),
     Int(i64),
@@ -129,7 +130,7 @@ pub fn parse_py_type(any: PyObject) -> PyResult<BamlArgType> {
                 Ok(MappedPyType::List(items))
             } else if let Ok(dict) = any.downcast_bound::<PyDict>(py) {
                 let kv = dict.extract()?;
-                Ok(MappedPyType::Class("<UnnamedDict>".to_string(), kv))
+                Ok(MappedPyType::Map(kv))
             } else if let Ok(s) = any.extract::<String>(py) {
                 Ok(MappedPyType::String(s))
             } else if let Ok(i) = any.extract::<i64>(py) {
@@ -193,6 +194,25 @@ where
                 Ok(BamlArgType::Class(name, obj))
             }
         }
+        MappedPyType::Map(kvs) => {
+            let mut errs = vec![];
+            let mut obj = IndexMap::new();
+            for (k, v) in kvs {
+                let mut prefix = prefix.clone();
+                prefix.push(k.clone());
+                match pyobject_to_baml_arg_type(v, py, to_type, prefix) {
+                    Ok(v) => {
+                        obj.insert(k, v);
+                    }
+                    Err(e) => errs.extend(e),
+                };
+            }
+            if !errs.is_empty() {
+                Err(errs)
+            } else {
+                Ok(BamlArgType::Map(obj))
+            }
+        }
         MappedPyType::List(items) => {
             let mut errs = vec![];
             let mut arr = vec![];
@@ -213,14 +233,8 @@ where
             }
         }
         MappedPyType::String(v) => Ok(BamlArgType::String(v)),
-        MappedPyType::Int(v) => Ok(BamlArgType::Number(v.into())),
-        MappedPyType::Float(v) => match serde_json::Number::from_f64(v) {
-            Some(num) => Ok(BamlArgType::Number(num)),
-            None => Err(vec![SerializationError {
-                position: prefix,
-                message: format!("Failed to convert float to number: {}", v),
-            }]),
-        },
+        MappedPyType::Int(v) => Ok(BamlArgType::Int(v)),
+        MappedPyType::Float(v) => Ok(BamlArgType::Float(v)),
         MappedPyType::Bool(v) => Ok(BamlArgType::Bool(v)),
         MappedPyType::BamlImage(v) => Ok(internal_baml_jinja::BamlArgType::Image(v.into())),
         MappedPyType::Unsupported(r#type) => Err(vec![SerializationError {
@@ -252,6 +266,25 @@ where
     match infered {
         MappedPyType::Enum(_, values) => Ok(json!(values)),
         MappedPyType::Class(_, kvs) => {
+            let mut errs = vec![];
+            let mut obj = serde_json::Map::new();
+            for (k, v) in kvs {
+                let mut prefix = prefix.clone();
+                prefix.push(k.clone());
+                match pyobject_to_json(v, py, to_type, prefix) {
+                    Ok(v) => {
+                        obj.insert(k, v);
+                    }
+                    Err(e) => errs.extend(e),
+                };
+            }
+            if !errs.is_empty() {
+                Err(errs)
+            } else {
+                Ok(serde_json::Value::Object(obj))
+            }
+        }
+        MappedPyType::Map(kvs) => {
             let mut errs = vec![];
             let mut obj = serde_json::Map::new();
             for (k, v) in kvs {

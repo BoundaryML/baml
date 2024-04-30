@@ -30,7 +30,6 @@ dependencies = [
  "anyhow",
  "indexmap 2.2.6",
  "internal-baml-jinja",
- "minijinja",
  "pyo3",
  "pythonize",
  "regex",

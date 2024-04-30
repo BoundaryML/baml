@@ -121,7 +121,7 @@ impl RenderData {
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone, Eq)]
 #[serde(rename_all = "PascalCase")]
 // #[serde(untagged)]
-#[pyclass]
+#[pyclass(name = "BamlImage")]
 pub enum BamlImagePy {
     // struct
     Url { url: String },
@@ -230,6 +230,7 @@ fn render_prompt(template: String, context: RenderData) -> PyResult<PyObject> {
     //         "args must be convertible to a JSON object",
     //     ));
     // };
+    println!("Render args: {:#?}", render_args);
 
     // Err(PyRuntimeError::new_err("Not implemented"))
     let rendered = internal_baml_jinja::render_prompt2(
