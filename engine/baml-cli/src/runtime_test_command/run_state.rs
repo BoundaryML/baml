@@ -3,10 +3,7 @@ use baml_lib::internal_baml_core::ir::TestCaseWalker;
 use colored::*;
 use indexmap::{IndexMap, IndexSet};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::{
     sync::{Mutex, MutexGuard, Semaphore},
     task,
@@ -21,49 +18,55 @@ pub(super) struct TestCommand<T: IBamlRuntime + 'static> {
     filter: FilterArgs,
 }
 
+#[derive(Clone)]
 struct TestRunBar {
     p: MultiProgress,
     primary_bar: ProgressBar,
     bars: Vec<ProgressBar>,
     max_bars: usize,
-    active_tests: IndexSet<(String, String)>,
 }
 
 impl TestRunBar {
     fn new(num_tasks: u64, num_bars: usize) -> TestRunBar {
         let p = MultiProgress::new();
         let primary_bar = p.add(
-            ProgressBar::new(num_tasks)
-                .with_style(ProgressStyle::with_template("{spinner} {pos}/{len} {msg}").unwrap()),
+            ProgressBar::new(num_tasks).with_style(
+                ProgressStyle::with_template(
+                    "{elapsed} {spinner} {pos} of {len} tests finished: {msg}",
+                )
+                .unwrap()
+                .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈"),
+            ),
         );
+        primary_bar.enable_steady_tick(Duration::from_millis(250));
+
+        let bars = (0..num_bars)
+            .map(|_| {
+                let b = p.add(
+                    ProgressBar::new_spinner()
+                        .with_style(ProgressStyle::default_spinner().tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈")),
+                );
+                b.enable_steady_tick(Duration::from_millis(250));
+                b
+            })
+            .collect::<Vec<_>>();
 
         TestRunBar {
             p,
             max_bars: num_bars,
             primary_bar,
-            bars: vec![],
-            active_tests: Default::default(),
+            bars,
         }
     }
 
-    fn update_bars(&mut self) {
-        for (idx, (func_name, test_name)) in
-            self.active_tests.iter().take(self.max_bars).enumerate()
-        {
-            let bar = match self.bars.get(idx) {
-                Some(bar) => bar,
-                None => {
-                    let b = self.p.add(ProgressBar::new_spinner());
-                    self.bars.push(b);
-                    self.bars.last().unwrap()
-                }
-            };
-
-            bar.set_message(format!("{}::{}", func_name, test_name));
+    fn update_bars(&self, active_tests: &IndexSet<(String, String)>) {
+        for (idx, (func_name, test_name)) in active_tests.iter().take(self.max_bars).enumerate() {
+            let bar = self.bars.get(idx).unwrap();
+            bar.set_message(format!("Running {}::{}", func_name, test_name));
         }
 
         // for all non-active bars, hide them
-        for idx in self.max_bars..self.bars.len() {
+        for idx in active_tests.len()..self.bars.len() {
             let bar = self.bars.get(idx).unwrap();
             bar.set_message("");
         }
@@ -78,24 +81,23 @@ impl TestRunBar {
         }
     }
 
-    fn start_test(&mut self, function_name: &str, test_name: &str) {
-        if self
-            .active_tests
-            .insert((function_name.into(), test_name.into()))
-        {
-            self.primary_bar.tick();
-            self.update_bars();
-        }
+    fn start_test(
+        &self,
+        function_name: &str,
+        test_name: &str,
+        active_tests: &IndexSet<(String, String)>,
+    ) {
+        self.update_bars(active_tests);
     }
 
-    fn end_test(&mut self, function_name: &str, test_name: &str) {
-        if self
-            .active_tests
-            .shift_remove(&(function_name.into(), test_name.into()))
-        {
-            self.primary_bar.inc(1);
-            self.update_bars();
-        }
+    fn end_test(
+        &self,
+        function_name: &str,
+        test_name: &str,
+        active_tests: &IndexSet<(String, String)>,
+    ) {
+        self.primary_bar.inc(1);
+        self.update_bars(active_tests);
     }
 }
 
@@ -103,8 +105,7 @@ pub(super) struct TestRunState {
     // Test state for each test
     // <Function, <Test, State>>
     test_state: IndexMap<String, IndexMap<String, TestState>>,
-
-    progress_bar: TestRunBar,
+    active_tests: IndexSet<(String, String)>,
 }
 
 impl std::fmt::Display for TestRunState {
@@ -114,10 +115,20 @@ impl std::fmt::Display for TestRunState {
         let mut failed = 0;
         let mut unable_to_run = 0;
 
+        writeln!(f, "\n\n=== Test Results ===")?;
         for (func_name, tests) in &self.test_state {
             total += tests.len();
+
             if tests.len() == 1 {
                 let (name, state) = tests.iter().next().unwrap();
+                match state {
+                    TestState::Finished(r) => match r.status() {
+                        baml_runtime::TestStatus::Pass => passed += 1,
+                        baml_runtime::TestStatus::Fail(_) => failed += 1,
+                    },
+                    TestState::UnableToRun(_) => unable_to_run += 1,
+                    _ => {}
+                }
                 writeln!(
                     f,
                     "{state} {}:{}",
@@ -141,6 +152,14 @@ impl std::fmt::Display for TestRunState {
                     format!("({} Tests)", tests.len()).dimmed()
                 )?;
                 for (test_name, state) in tests {
+                    match state {
+                        TestState::Finished(r) => match r.status() {
+                            baml_runtime::TestStatus::Pass => passed += 1,
+                            baml_runtime::TestStatus::Fail(_) => failed += 1,
+                        },
+                        TestState::UnableToRun(_) => unable_to_run += 1,
+                        _ => {}
+                    }
                     writeln!(
                         f,
                         "  {state} {}",
@@ -174,11 +193,13 @@ impl std::fmt::Display for TestRunState {
 }
 
 impl TestRunState {
-    fn update(&mut self, function_name: &str, test_name: &str, state: TestState) {
+    fn update(&mut self, function_name: &str, test_name: &str, state: TestState, bar: &TestRunBar) {
         let msg: Option<(bool, Option<String>)> = match &state {
             TestState::Queued => None,
             TestState::Running => {
-                self.progress_bar.start_test(function_name, test_name);
+                self.active_tests
+                    .insert((function_name.into(), test_name.into()));
+                bar.start_test(function_name, test_name, &self.active_tests);
                 None
             }
             TestState::UnableToRun(message) => Some((false, Some(message.clone()))),
@@ -203,7 +224,9 @@ impl TestRunState {
         };
 
         if let Some((passed, msg)) = msg {
-            self.progress_bar.end_test(function_name, test_name);
+            self.active_tests
+                .shift_remove(&(function_name.into(), test_name.into()));
+            bar.end_test(function_name, test_name, &self.active_tests);
             let test_line = format!(
                 "{} {}:{}",
                 if passed { "✔".green() } else { "✖".red() },
@@ -212,13 +235,13 @@ impl TestRunState {
             );
 
             if let Some(msg) = msg {
-                self.progress_bar.println(format!(
+                bar.println(format!(
                     "{test_line}\n{msg}\n\n",
                     msg = msg,
                     test_line = test_line
                 ));
             } else {
-                self.progress_bar.println(test_line);
+                bar.println(test_line);
             }
         }
 
@@ -249,10 +272,11 @@ impl<T: IBamlRuntime> TestCommand<T> {
         // }
     }
 
-    async fn run_state(&self, num_bars: usize) -> TestRunState {
+    async fn run_state(&self, num_bars: usize) -> (TestRunBar, TestRunState) {
         let mut test_state = IndexMap::default();
 
         let runtime = self.runtime.lock().await;
+        let mut num_tests = 0;
 
         for t in self.selected_tests(&runtime).1 {
             let function = t.function().name().to_string();
@@ -261,12 +285,16 @@ impl<T: IBamlRuntime> TestCommand<T> {
                 .entry(function)
                 .or_insert_with(IndexMap::default)
                 .insert(test, TestState::Queued);
+            num_tests += 1;
         }
 
-        TestRunState {
-            progress_bar: TestRunBar::new(test_state.len() as u64, num_bars),
-            test_state,
-        }
+        (
+            TestRunBar::new(num_tests, num_bars),
+            TestRunState {
+                test_state,
+                active_tests: IndexSet::new(),
+            },
+        )
     }
 
     fn test_handler(
@@ -275,6 +303,7 @@ impl<T: IBamlRuntime> TestCommand<T> {
         test: &TestCaseWalker,
         env_vars: &HashMap<String, String>,
         state: Arc<Mutex<TestRunState>>,
+        progress_bar: TestRunBar,
     ) -> task::JoinHandle<()> {
         let function_name = test.function().name().to_string();
         let test_name = test.test_case().name.clone();
@@ -294,10 +323,12 @@ impl<T: IBamlRuntime> TestCommand<T> {
                 .expect("Failed to acquire semaphore permit");
 
             // println!("Got semaphore: {} {}", function_name, test_name);
-            state
-                .lock()
-                .await
-                .update(&function_name, &test_name, TestState::Running);
+            state.lock().await.update(
+                &function_name,
+                &test_name,
+                TestState::Running,
+                &progress_bar,
+            );
             // println!("Updated state: {} {}", function_name, test_name);
 
             let result = runtime
@@ -314,7 +345,7 @@ impl<T: IBamlRuntime> TestCommand<T> {
             state
                 .lock()
                 .await
-                .update(&function_name, &test_name, test_state);
+                .update(&function_name, &test_name, test_state, &progress_bar);
 
             // println!("Updated final state: {} {}", function_name, test_name);
             // Permit is automatically dropped and returned to the semaphore here
@@ -331,7 +362,8 @@ impl<T: IBamlRuntime> TestCommand<T> {
         // Each thread will take a test from the queue and run it
         let semaphore = Arc::new(Semaphore::new(max_parallel));
 
-        let locked_state = Arc::new(Mutex::new(self.run_state(4).await));
+        let (bars, state) = self.run_state(4).await;
+        let locked_state = Arc::new(Mutex::new(state));
 
         let mut handles = vec![];
 
@@ -344,7 +376,7 @@ impl<T: IBamlRuntime> TestCommand<T> {
 
             let state_clone = locked_state.clone();
 
-            let handle = self.test_handler(sem_clone, &test, env_vars, state_clone);
+            let handle = self.test_handler(sem_clone, &test, env_vars, state_clone, bars.clone());
 
             handles.push(handle);
         }

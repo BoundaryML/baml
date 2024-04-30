@@ -29,6 +29,8 @@ async fn run_async(command: &TestArgs) -> Result<()> {
         crate::TestAction::Run => {
             let env_vars = std::env::vars().collect();
             let response = test_command.run_parallel(4, &env_vars).await?;
+
+            println!("{}", response);
         }
         crate::TestAction::List => test_command.print_as_list(true).await,
     }

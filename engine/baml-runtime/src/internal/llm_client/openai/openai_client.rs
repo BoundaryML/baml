@@ -40,8 +40,6 @@ fn resolve_properties(
         .remove("base_url")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .unwrap_or_else(|| "https://api.openai.com/v1".to_string());
-    // Remove trailing slashes.
-    let base_url = base_url.trim_end_matches('/').to_string();
 
     let api_key = properties
         .remove("api_key")
