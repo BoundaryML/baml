@@ -80,15 +80,16 @@ impl PromptRenderer {
         params: &serde_json::Value,
         client_ctx: &RenderContext_Client,
     ) -> Result<RenderedPrompt> {
-        internal_baml_jinja::render_prompt(
-            self.prompt_template(),
-            params,
-            &RenderContext {
-                client: client_ctx.clone(),
-                output_format: self.output_format().into(),
-                env: ctx.env.clone(),
-            },
-            self.template_macros(),
-        )
+        Err(anyhow::anyhow!("Not implemented"))
+        // internal_baml_jinja::render_prompt(
+        //     self.prompt_template(),
+        //     params,
+        //     &RenderContext {
+        //         client: client_ctx.clone(),
+        //         output_format: self.output_format().into(),
+        //         env: ctx.env.clone(),
+        //     },
+        //     self.template_macros(),
+        // )
     }
 }

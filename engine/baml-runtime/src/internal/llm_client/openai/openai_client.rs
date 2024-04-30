@@ -262,7 +262,8 @@ impl OpenAIClient {
                 .map(|m| {
                     json!({
                         "role": m.role,
-                        "content": m.message,
+                        // TODO: fix this
+                        "content": "say 'error'",
                     })
                 })
                 .collect::<serde_json::Value>(),

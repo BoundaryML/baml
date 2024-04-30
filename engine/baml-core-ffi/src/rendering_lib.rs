@@ -2,9 +2,37 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use internal_baml_jinja::{
-  RenderContext, RenderContext_Client, RenderedChatMessage, RenderedPrompt, TemplateStringMacro,
+  ChatMessagePart, RenderContext, RenderContext_Client, RenderedChatMessage, RenderedPrompt,
+  TemplateStringMacro,
 };
 use napi_derive::napi;
+
+#[napi]
+pub struct NapiChatMessagePart {
+  internal: ChatMessagePart,
+}
+
+#[napi]
+impl NapiChatMessagePart {
+  #[napi]
+  pub fn is_text(&self) -> bool {
+    matches!(self.internal, ChatMessagePart::Text(_))
+  }
+
+  #[napi]
+  pub fn is_image(&self) -> bool {
+    matches!(self.internal, ChatMessagePart::Image(_))
+  }
+
+  #[napi]
+  pub fn text(&self) -> Result<&String> {
+    if let ChatMessagePart::Text(t) = &self.internal {
+      Ok(t)
+    } else {
+      anyhow::bail!("Not a text part")
+    }
+  }
+}
 
 #[napi]
 pub struct NapiChatMessage {
@@ -19,8 +47,17 @@ impl NapiChatMessage {
   }
 
   #[napi]
-  pub fn message(&self) -> &String {
-    &self.internal.message
+  pub fn parts(&self) -> Result<Vec<NapiChatMessagePart>> {
+    Ok(
+      self
+        .internal
+        .parts
+        .iter()
+        .map(|p| NapiChatMessagePart {
+          internal: p.clone(),
+        })
+        .collect(),
+    )
   }
 }
 
@@ -133,12 +170,17 @@ impl NapiRenderer {
       output_format: self.output_format.clone(),
       env,
     };
-    let rendered =
-      internal_baml_jinja::render_prompt(&self.template, &args, &ctx, &self.template_string_macros);
 
-    match rendered {
-      Ok(r) => Ok(NapiRenderedPrompt { internal: r }),
-      Err(e) => anyhow::bail!("Failed to render prompt: {}", e),
-    }
+    Err(anyhow::anyhow!("Not implemented"))
+
+    // let rendered =
+    //   RenderedPrompt {
+    //     role: "user".to_string(),
+    //     prompt: self.template.clone(),
+    //   }
+    // match rendered {
+    //   Ok(r) => Ok(NapiRenderedPrompt { internal: r }),
+    //   Err(e) => anyhow::bail!("Failed to render prompt: {}", e),
+    // }
   }
 }

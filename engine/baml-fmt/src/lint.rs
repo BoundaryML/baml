@@ -1,7 +1,8 @@
 #![allow(dead_code)]
 
 use internal_baml_jinja::{
-    render_prompt, RenderContext, RenderContext_Client, RenderedChatMessage, TemplateStringMacro,
+    render_prompt, ChatMessagePart, RenderContext, RenderContext_Client, RenderedChatMessage,
+    TemplateStringMacro,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -367,7 +368,11 @@ fn serialize_impls(
                                         .map(|c| c.role.0.as_str())
                                         .unwrap_or("system")
                                         .to_string(),
-                                    message: apply_replacers(i, text.clone()),
+                                    // message: apply_replacers(i, text.clone()),
+                                    parts: vec![ChatMessagePart::Text(apply_replacers(
+                                        i,
+                                        text.clone(),
+                                    ))],
                                 })
                                 .collect::<Vec<_>>(),
                         },
@@ -437,31 +442,32 @@ fn serialize_impls(
             env: HashMap::new(),
         };
 
-        let rendered = render_prompt(prompt.value(), &args, &render_ctx, template_string_macros);
-        vec![Impl {
-            name: StringSpan::new("default_config", func.identifier().span()),
-            prompt_key: prompt.span().into(),
-            prompt: match rendered {
-                Ok(internal_baml_jinja::RenderedPrompt::Completion(completion)) => {
-                    PromptPreview::Completion {
-                        completion,
-                        test_case: test_case_name,
-                    }
-                }
-                Ok(internal_baml_jinja::RenderedPrompt::Chat(chat)) => PromptPreview::Chat {
-                    chat,
-                    test_case: test_case_name,
-                },
-                Err(err) => PromptPreview::Error {
-                    error: format!("{err:#}"),
-                    test_case: test_case_name,
-                },
-            },
-            client: client_span,
-            client_list: client_options,
-            input_replacers: vec![],
-            output_replacers: vec![],
-        }]
+        vec![]
+        // let rendered = render_prompt(prompt.value(), &args, &render_ctx, template_string_macros);
+        // vec![Impl {
+        //     name: StringSpan::new("default_config", func.identifier().span()),
+        //     prompt_key: prompt.span().into(),
+        //     prompt: match rendered {
+        //         Ok(internal_baml_jinja::RenderedPrompt::Completion(completion)) => {
+        //             PromptPreview::Completion {
+        //                 completion,
+        //                 test_case: test_case_name,
+        //             }
+        //         }
+        //         Ok(internal_baml_jinja::RenderedPrompt::Chat(chat)) => PromptPreview::Chat {
+        //             chat,
+        //             test_case: test_case_name,
+        //         },
+        //         Err(err) => PromptPreview::Error {
+        //             error: format!("{err:#}"),
+        //             test_case: test_case_name,
+        //         },
+        //     },
+        //     client: client_span,
+        //     client_list: client_options,
+        //     input_replacers: vec![],
+        //     output_replacers: vec![],
+        // }]
     }
 }
 

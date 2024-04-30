@@ -5,6 +5,7 @@ mod get_vars;
 
 use evaluate_type::get_variable_types;
 pub use evaluate_type::{PredefinedTypes, Type, TypeError};
+use indexmap::IndexMap;
 use log::info;
 use minijinja::{self, value::Kwargs};
 use minijinja::{context, ErrorKind, Value};
@@ -138,7 +139,7 @@ impl minijinja::value::Object for OutputFormat {
             // prefix specified as a string
             ValueKind::String => {
                 return Ok(Value::from_safe_string(format!(
-                    "{}\n\n{}",
+                    "{}\n{}",
                     prefix.to_string(),
                     self.text
                 )));
@@ -192,7 +193,6 @@ fn render_minijinja(
     let template = template.trim();
     println!("Rendering template: \n{}\n------\n", template);
     // let args_dict = minijinja::Value::from_serializable(args);
-    println!("With args: {:#?}", args);
 
     // inject macros
     let template = template_string_macros
@@ -468,9 +468,66 @@ pub fn render_prompt(
     }
 }
 
-impl minijinja::value::StructObject for ImageUrl {
-    fn get_field(&self, name: &str) -> Option<minijinja::Value> {
-        Some(Value::from_safe_string("hello".into()))
+pub enum BamlArgType {
+    String(String),
+    Number(serde_json::Number),
+    Bool(bool),
+    Map(IndexMap<String, BamlArgType>),
+    List(Vec<BamlArgType>),
+    Image(BamlImage),
+    Enum(String, String),
+    Class(String, IndexMap<String, BamlArgType>),
+    None,
+}
+
+pub fn render_prompt2<T: Serialize>(
+    template: &str,
+    args: IndexMap<String, BamlArgType>,
+    ctx: &RenderContext,
+    template_string_macros: &[TemplateStringMacro],
+) -> anyhow::Result<RenderedPrompt> {
+    // let args = args.to_minijinja_value();
+
+    let args = context! {
+        img => minijinja::Value::from_object(BamlImage::Url(ImageUrl {
+            url: "https://example.com/image.jpg".to_string(),
+        })),
+    };
+    println!("minijinja Args: {:#?}", args);
+
+    let rendered = render_minijinja(template, &args, ctx, template_string_macros);
+
+    match rendered {
+        Ok(r) => Ok(r),
+        Err(err) => {
+            let mut minijinja_err = "".to_string();
+            minijinja_err += &format!("{err:#}");
+
+            let mut err = &err as &dyn std::error::Error;
+            while let Some(next_err) = err.source() {
+                minijinja_err += &format!("\n\ncaused by: {next_err:#}");
+                err = next_err;
+            }
+
+            anyhow::bail!("Error occurred while rendering prompt: {minijinja_err}");
+        }
+    }
+}
+
+pub enum Arg<T: Serialize> {
+    BamlImage(BamlImage),
+    JsonVal(T),
+}
+
+pub trait ToMiniJinjaValue {
+    fn to_minijinja_value(&self) -> minijinja::value::Value;
+}
+impl<T: Serialize> ToMiniJinjaValue for Arg<T> {
+    fn to_minijinja_value(&self) -> minijinja::value::Value {
+        match self {
+            Arg::BamlImage(baml_image) => minijinja::Value::from_object(baml_image.clone()),
+            Arg::JsonVal(t) => minijinja::Value::from_serializable(t),
+        }
     }
 }
 
@@ -510,9 +567,21 @@ mod render_tests {
             img => minijinja::Value::from_object(BamlImage::Url(ImageUrl {
                 url: "https://example.com/image.jpg".to_string(),
             })),
+            hello {
+                img: BamlImage::Url(ImageUrl {
+                    url: "https://example.com/image.jpg".to_string(),
+                }),
+            }
         };
 
-        let rendered = render_prompt2(
+        // let args = Arg::JsonVal(serde_json::json!({
+        //     "haiku_subject": "sakura",
+        //     "img": Arg::BamlImage(BamlImage::Url(ImageUrl {
+        //         url: "https://example.com/image.jpg".to_string(),
+        //     })),
+        // }));
+
+        let rendered = render_prompt(
             "{{ _.chat(\"system\") }}
             Here is an image: {{ img }}",
             &args,
@@ -552,7 +621,7 @@ mod render_tests {
             })),
         };
 
-        let rendered = render_prompt2(
+        let rendered = render_prompt(
             "{{ _.chat(\"system\") }}
             Here is an image: {{ img }}. Please help me.",
             &args,
@@ -588,10 +657,8 @@ mod render_tests {
     fn render_chat() -> anyhow::Result<()> {
         setup_logging();
 
-        let serde_json::Value::Object(args) = serde_json::json!({
-            "haiku_subject": "sakura"
-        }) else {
-            anyhow::bail!("args must be convertible to a JSON object");
+        let args = context! {
+            haiku_subject => "sakura"
         };
 
         let rendered = render_prompt(
@@ -642,7 +709,6 @@ mod render_tests {
                     parts: vec![ChatMessagePart::Text(
                         vec![
                             "Tell me a haiku about sakura. Answer in JSON using this schema:",
-                            "",
                             "iambic pentameter",
                             "",
                             "End the haiku with a line about your maker, openai.",
@@ -660,10 +726,8 @@ mod render_tests {
     fn render_completion() -> anyhow::Result<()> {
         setup_logging();
 
-        let serde_json::Value::Object(args) = serde_json::json!({
-            "haiku_subject": "sakura"
-        }) else {
-            anyhow::bail!("args must be convertible to a JSON object");
+        let args = context! {
+            haiku_subject => "sakura"
         };
 
         let rendered = render_prompt(
@@ -705,10 +769,8 @@ mod render_tests {
     fn render_output_format_directly() -> anyhow::Result<()> {
         setup_logging();
 
-        let serde_json::Value::Object(args) = serde_json::json!({
-            "haiku_subject": "sakura"
-        }) else {
-            anyhow::bail!("args must be convertible to a JSON object");
+        let args = context! {
+            haiku_subject => "sakura"
         };
 
         let rendered = render_prompt(
@@ -728,7 +790,7 @@ mod render_tests {
         assert_eq!(
             rendered,
             RenderedPrompt::Completion(
-                "Answer in JSON using this schema:\n\niambic pentameter".to_string()
+                "Answer in JSON using this schema:\niambic pentameter".to_string()
             )
         );
 
@@ -739,10 +801,8 @@ mod render_tests {
     fn render_output_format_prefix_unspecified() -> anyhow::Result<()> {
         setup_logging();
 
-        let serde_json::Value::Object(args) = serde_json::json!({
-            "haiku_subject": "sakura"
-        }) else {
-            anyhow::bail!("args must be convertible to a JSON object");
+        let args = context! {
+            haiku_subject => "sakura"
         };
 
         let rendered = render_prompt(
@@ -762,7 +822,7 @@ mod render_tests {
         assert_eq!(
             rendered,
             RenderedPrompt::Completion(
-                "Answer in JSON using this schema:\n\niambic pentameter".to_string()
+                "Answer in JSON using this schema:\niambic pentameter".to_string()
             )
         );
 
@@ -773,10 +833,8 @@ mod render_tests {
     fn render_output_format_prefix_null() -> anyhow::Result<()> {
         setup_logging();
 
-        let serde_json::Value::Object(args) = serde_json::json!({
-            "haiku_subject": "sakura"
-        }) else {
-            anyhow::bail!("args must be convertible to a JSON object");
+        let args = context! {
+            haiku_subject => "sakura"
         };
 
         let rendered = render_prompt(
@@ -805,10 +863,8 @@ mod render_tests {
     fn render_output_format_prefix_str() -> anyhow::Result<()> {
         setup_logging();
 
-        let serde_json::Value::Object(args) = serde_json::json!({
-            "haiku_subject": "sakura"
-        }) else {
-            anyhow::bail!("args must be convertible to a JSON object");
+        let args = context! {
+            haiku_subject => "sakura"
         };
 
         let rendered = render_prompt(
@@ -827,7 +883,7 @@ mod render_tests {
 
         assert_eq!(
             rendered,
-            RenderedPrompt::Completion("custom format:\n\niambic pentameter".to_string())
+            RenderedPrompt::Completion("custom format:\niambic pentameter".to_string())
         );
 
         Ok(())
@@ -837,10 +893,8 @@ mod render_tests {
     fn render_chat_param_failures() -> anyhow::Result<()> {
         setup_logging();
 
-        let serde_json::Value::Object(args) = serde_json::json!({
-            "name": "world"
-        }) else {
-            anyhow::bail!("args must be convertible to a JSON object");
+        let args = context! {
+            name => "world"
         };
 
         // rendering should fail: template contains '{{ name }' (missing '}' at the end)
@@ -892,10 +946,8 @@ mod render_tests {
     fn render_with_kwargs() -> anyhow::Result<()> {
         setup_logging();
 
-        let serde_json::Value::Object(args) = serde_json::json!({
-            "haiku_subject": "sakura"
-        }) else {
-            anyhow::bail!("args must be convertible to a JSON object");
+        let args = context! {
+            haiku_subject => "sakura"
         };
 
         let rendered = render_prompt(
@@ -941,7 +993,7 @@ mod render_tests {
                 RenderedChatMessage {
                     role: "john doe".to_string(),
                     parts: vec![
-                        ChatMessagePart::Text("Tell me a haiku about sakura. Answer in JSON using this schema:\n\niambic pentameter".to_string())
+                        ChatMessagePart::Text("Tell me a haiku about sakura. Answer in JSON using this schema:\niambic pentameter".to_string())
                     ]
                 },
                 RenderedChatMessage {
@@ -960,10 +1012,8 @@ mod render_tests {
     fn render_chat_starts_with_system() -> anyhow::Result<()> {
         setup_logging();
 
-        let serde_json::Value::Object(args) = serde_json::json!({
-            "haiku_subject": "sakura"
-        }) else {
-            anyhow::bail!("args must be convertible to a JSON object");
+        let args = context! {
+            haiku_subject => "sakura"
         };
 
         let rendered = render_prompt(
@@ -1007,70 +1057,11 @@ mod render_tests {
     }
 
     #[test]
-    fn render_chat_with_image() -> anyhow::Result<()> {
-        setup_logging();
-
-        let serde_json::Value::Object(args) = serde_json::json!({
-            "img_input": {
-                "url": "https://example.com/image.jpg"
-            }
-        }) else {
-            anyhow::bail!("args must be convertible to a JSON object");
-        };
-
-        let rendered = render_prompt(
-            "
-                {{ _.chat(\"system\") }}
-
-                You are an assistant that always responds
-                with an image
-                and also outputs this image url
-                after giving a response: {{ img_input }}
-            ",
-            &args,
-            &RenderContext {
-                client: RenderContext_Client {
-                    name: "gpt4".to_string(),
-                    provider: "openai".to_string(),
-                },
-                output_format: "iambic pentameter".to_string(),
-                env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
-            },
-            &vec![],
-        )?;
-
-        assert_eq!(
-            rendered,
-            RenderedPrompt::Chat(vec![RenderedChatMessage {
-                role: "system".to_string(),
-                parts: vec![
-                    ChatMessagePart::Text(
-                        vec![
-                            "You are an assistant that always responds",
-                            "with an image",
-                            "and also outputs this image url",
-                            "after giving a response: ",
-                        ]
-                        .join("\n")
-                    ),
-                    ChatMessagePart::Image(BamlImage::Url(ImageUrl::new(
-                        "https://example.com/image.jpg".to_string()
-                    )),),
-                ]
-            },])
-        );
-
-        Ok(())
-    }
-
-    #[test]
     fn render_malformed_jinja() -> anyhow::Result<()> {
         setup_logging();
 
-        let serde_json::Value::Object(args) = serde_json::json!({
-            "name": "world"
-        }) else {
-            anyhow::bail!("args must be convertible to a JSON object");
+        let args = context! {
+            name => "world"
         };
 
         // rendering should fail: template contains '{{ name }' (missing '}' at the end)

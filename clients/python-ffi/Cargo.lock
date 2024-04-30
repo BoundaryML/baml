@@ -30,6 +30,7 @@ dependencies = [
  "anyhow",
  "indexmap 2.2.6",
  "internal-baml-jinja",
+ "minijinja",
  "pyo3",
  "pythonize",
  "regex",
@@ -181,9 +182,9 @@ dependencies = [
 
 [[package]]
 name = "minijinja"
-version = "1.0.16"
+version = "1.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3fb3bf58a1ec4f3f228bec851a2066c7717ad308817cd8a08f67c10660c6ff7b"
+checksum = "55e877d961d4f96ce13615862322df7c0b6d169d40cab71a7ef3f9b9e594451e"
 dependencies = [
  "aho-corasick",
  "indexmap 1.9.3",
