@@ -8,7 +8,9 @@ license-file.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+askama.workspace = true
 internal-baml-core = { path = "../baml-lib/baml-core" }
+either.workspace = true
 env_logger.workspace = true
 log.workspace = true
 reqwest.workspace = true

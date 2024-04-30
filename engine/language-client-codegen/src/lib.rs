@@ -3,6 +3,9 @@ use std::path::PathBuf;
 use anyhow::Result;
 use serde::Deserialize;
 
+mod dir_writer;
+mod ruby;
+
 #[derive(Deserialize)]
 struct GeneratorInstructions {
     project_root: PathBuf,

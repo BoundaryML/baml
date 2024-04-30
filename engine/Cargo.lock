@@ -1763,6 +1763,8 @@ name = "language-client-codegen"
 version = "0.20.0-canary.0"
 dependencies = [
  "anyhow",
+ "askama",
+ "either",
  "env_logger",
  "internal-baml-core",
  "log",

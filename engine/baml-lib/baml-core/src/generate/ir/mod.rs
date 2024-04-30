@@ -19,10 +19,10 @@ pub type Enum = repr::Node<repr::Enum>;
 pub type EnumValue = repr::Node<repr::EnumValue>;
 pub type Class = repr::Node<repr::Class>;
 pub type Field = repr::Node<repr::Field>;
-pub(super) type FieldType = repr::FieldType;
-pub(super) type Expression = repr::Expression;
-pub(super) type Identifier = repr::Identifier;
-pub(super) type TypeValue = ast::TypeValue;
+pub type FieldType = repr::FieldType;
+pub type Expression = repr::Expression;
+pub type Identifier = repr::Identifier;
+pub type TypeValue = ast::TypeValue;
 pub type Function = repr::Node<repr::Function>;
 #[allow(dead_code)]
 pub(super) type FunctionV1 = repr::FunctionV1;
