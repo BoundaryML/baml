@@ -1,8 +1,8 @@
 mod error_utils;
 mod scope_diagnostics;
-mod validate_value;
+mod to_baml_arg;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, hash::Hash};
 
 use crate::{
     error_not_found, error_unsupported,
@@ -11,7 +11,9 @@ use crate::{
         Class, Client, Enum, EnumValue, Field, Function, RetryPolicy, TemplateString, TestCase,
     },
 };
-use anyhow::Result;
+use anyhow::{Error, Result};
+use indexmap::IndexMap;
+use internal_baml_jinja::BamlArgType;
 
 use self::scope_diagnostics::ScopeStack;
 
@@ -127,7 +129,7 @@ impl IRHelper for IntermediateRepr {
         &'a self,
         function: &'a FunctionWalker<'a>,
         params: &HashMap<String, serde_json::Value>,
-    ) -> Result<()> {
+    ) -> Result<BamlArgType, Error> {
         let function_params = match function.inputs() {
             either::Either::Left(_) => {
                 // legacy functions are not supported
@@ -142,10 +144,20 @@ impl IRHelper for IntermediateRepr {
 
         // Now check that all required parameters are present.
         let mut scope = ScopeStack::new();
+        let mut baml_arg_map = IndexMap::new();
         for (param_name, param_type) in function_params {
             scope.push(param_name.to_string());
             if let Some(param_value) = params.get(param_name.as_str()) {
-                validate_value::validate_value(self, param_type, param_value, &mut scope);
+                let baml_arg = to_baml_arg::to_baml_arg(self, param_type, param_value, &mut scope);
+                match baml_arg {
+                    BamlArgType::Unsupported(_) => {
+                        scope
+                            .push_error(format!("Unsupported value for parameter: {}", param_name));
+                    }
+                    _ => {
+                        baml_arg_map.insert(param_name.to_string(), baml_arg);
+                    }
+                }
             } else {
                 // Check if the parameter is optional.
                 if !param_type.is_optional() {
@@ -159,6 +171,6 @@ impl IRHelper for IntermediateRepr {
             anyhow::bail!(scope);
         }
 
-        Ok(())
+        Ok((BamlArgType::Map(baml_arg_map)))
     }
 }

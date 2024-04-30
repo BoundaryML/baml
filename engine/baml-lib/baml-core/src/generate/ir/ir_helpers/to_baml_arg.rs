@@ -1,3 +1,6 @@
+use anyhow::Error;
+use internal_baml_jinja::{BamlArgType, BamlImage, ImageBase64, ImageUrl};
+
 use crate::ir::{FieldType, IntermediateRepr, TypeValue};
 
 use super::{scope_diagnostics::ScopeStack, IRHelper};
@@ -21,26 +24,58 @@ impl ParameterError {
     }
 }
 
-pub fn validate_value(
+pub fn to_baml_arg(
     ir: &IntermediateRepr,
     field_type: &FieldType,
     value: &serde_json::Value,
     scope: &mut ScopeStack,
-) {
+) -> BamlArgType {
     match field_type {
         FieldType::Primitive(t) => {
-            if !match t {
-                TypeValue::String => value.is_string(),
-                TypeValue::Int => value.is_i64() || value.is_u64(),
-                TypeValue::Float => value.is_f64() || value.is_i64() || value.is_u64(),
-                TypeValue::Bool => value.is_boolean(),
-                TypeValue::Char => {
-                    value.is_string() && value.as_str().unwrap().chars().count() == 1
-                }
-                TypeValue::Null => value.is_null(),
-                TypeValue::Image => value.is_string(),
-            } {
+            let error = || {
                 scope.push_error(format!("Expected type {:?}, got `{}`", t, value));
+                BamlArgType::Unsupported("Error".to_string())
+            };
+
+            match t {
+                TypeValue::String if value.is_string() => {
+                    BamlArgType::String(value.as_str().unwrap().to_string())
+                }
+                TypeValue::Int if value.is_i64() => BamlArgType::Int(value.as_i64().unwrap()),
+                // TODO: should we use as_u64()?
+                TypeValue::Int if value.is_u64() => BamlArgType::Int(value.as_i64().unwrap()),
+                TypeValue::Float if value.is_f64() => BamlArgType::Float(value.as_f64().unwrap()),
+                TypeValue::Bool if value.is_boolean() => {
+                    BamlArgType::Bool(value.as_bool().unwrap())
+                }
+                TypeValue::Char
+                    if value.is_string() && value.as_str().unwrap().chars().count() == 1 =>
+                {
+                    // TODO: create char type?
+                    BamlArgType::String(value.as_str().unwrap().chars().next().unwrap().to_string())
+                }
+                TypeValue::Null if value.is_null() => BamlArgType::None,
+                TypeValue::Image if value.is_object() => {
+                    let map = value.as_object().unwrap(); // assuming value is an object
+                    if let Some(url) = map.get("url") {
+                        if let Some(url_str) = url.as_str() {
+                            BamlArgType::Image(BamlImage::Url(ImageUrl::new(url_str.to_string())))
+                        } else {
+                            error()
+                        }
+                    } else if let Some(base64) = map.get("base64") {
+                        if let Some(base64_str) = base64.as_str() {
+                            BamlArgType::Image(BamlImage::Base64(ImageBase64::new(
+                                base64_str.to_string(),
+                            )))
+                        } else {
+                            error()
+                        }
+                    } else {
+                        error()
+                    }
+                }
+                _ => error(),
             }
         }
         FieldType::Enum(name) => {
@@ -76,7 +111,7 @@ pub fn validate_value(
                     serde_json::Value::Object(obj) => {
                         for f in c.walk_fields() {
                             if let Some(v) = obj.get(f.name()) {
-                                validate_value(ir, f.r#type(), v, scope);
+                                to_baml_arg(ir, f.r#type(), v, scope);
                             } else if !f.r#type().is_optional() {
                                 scope.push_error(format!("Missing required field `{}`", f.name()));
                             }
@@ -106,7 +141,7 @@ pub fn validate_value(
             Some(arr) => {
                 for (idx, v) in arr.iter().enumerate() {
                     scope.push(format!("{}", idx));
-                    validate_value(ir, item, v, scope);
+                    to_baml_arg(ir, item, v, scope);
                     scope.pop(false);
                 }
             }
@@ -119,7 +154,7 @@ pub fn validate_value(
         FieldType::Union(options) => {
             for option in options {
                 let mut scope = ScopeStack::new();
-                validate_value(ir, option, value, &mut scope);
+                to_baml_arg(ir, option, value, &mut scope);
                 if !scope.has_errors() {
                     return;
                 }
@@ -129,7 +164,7 @@ pub fn validate_value(
         FieldType::Optional(inner) => {
             if !value.is_null() {
                 let mut inner_scope = ScopeStack::new();
-                validate_value(ir, inner, value, &mut inner_scope);
+                to_baml_arg(ir, inner, value, &mut inner_scope);
                 if inner_scope.has_errors() {
                     scope.push_error(format!("Expected optional {}, got `{}`", inner, value));
                 }

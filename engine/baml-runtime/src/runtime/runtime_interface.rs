@@ -14,6 +14,7 @@ use crate::{
 };
 use anyhow::Result;
 use internal_baml_core::ir::{repr::IntermediateRepr, FunctionWalker, IRHelper};
+use internal_baml_jinja::BamlArgType;
 
 use super::InternalBamlRuntime;
 
@@ -187,7 +188,7 @@ impl RuntimeInterface for InternalBamlRuntime {
     async fn call_function(
         &mut self,
         function_name: String,
-        params: HashMap<String, serde_json::Value>,
+        params: &BamlArgType,
         ctx: &RuntimeContext,
     ) -> Result<crate::FunctionResult> {
         let func = self.get_function(&function_name, ctx)?;

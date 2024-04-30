@@ -1,5 +1,6 @@
 use anyhow::Result;
 use internal_baml_core::ir::{repr::IntermediateRepr, FunctionWalker};
+use internal_baml_jinja::BamlArgType;
 use std::{collections::HashMap, path::PathBuf};
 
 use crate::{
@@ -29,7 +30,7 @@ pub trait RuntimeInterface {
     fn call_function(
         &mut self,
         function_name: String,
-        params: HashMap<String, serde_json::Value>,
+        params: &BamlArgType,
         ctx: &RuntimeContext,
     ) -> impl std::future::Future<Output = Result<FunctionResult>> + Send;
 }
