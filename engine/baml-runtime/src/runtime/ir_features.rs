@@ -5,9 +5,9 @@ use crate::{
     InternalRuntimeInterface,
 };
 
-use super::BamlRuntime;
+use super::InternalBamlRuntime;
 
-impl WithInternal for BamlRuntime {
+impl WithInternal for InternalBamlRuntime {
     fn features(&self) -> IrFeatures {
         let ir = self.ir();
 

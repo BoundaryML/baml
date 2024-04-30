@@ -4,7 +4,7 @@ mod filter;
 mod run_state;
 mod tracing_helper;
 
-use baml_runtime::{load_runtime_from_dir, InternalRuntimeInterface};
+use baml_runtime::{BamlRuntime, InternalRuntimeInterface};
 use filter::FilterArgs;
 
 use crate::{runtime_test_command::run_state::TestCommand, TestArgs};
@@ -21,7 +21,7 @@ async fn run_async(command: &TestArgs) -> Result<()> {
     let baml_dir = crate::builder::get_baml_src(&command.baml_dir)?;
 
     // Load the runtime.
-    let runtime = load_runtime_from_dir(&baml_dir)?;
+    let runtime = BamlRuntime::from_directory(&baml_dir)?;
     runtime.features().err_if_legacy()?;
 
     let test_command = TestCommand::new(runtime, filter_args);

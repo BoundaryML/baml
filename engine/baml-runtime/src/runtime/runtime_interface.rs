@@ -15,9 +15,9 @@ use crate::{
 use anyhow::Result;
 use internal_baml_core::ir::{repr::IntermediateRepr, FunctionWalker, IRHelper};
 
-use super::BamlRuntime;
+use super::InternalBamlRuntime;
 
-impl InternalRuntimeInterface for BamlRuntime {
+impl InternalRuntimeInterface for InternalBamlRuntime {
     fn features(&self) -> IrFeatures {
         WithInternal::features(self)
     }
@@ -86,8 +86,8 @@ impl InternalRuntimeInterface for BamlRuntime {
     }
 }
 
-impl RuntimeConstructor for BamlRuntime {
-    fn from_directory(dir: &std::path::PathBuf) -> Result<BamlRuntime> {
+impl RuntimeConstructor for InternalBamlRuntime {
+    fn from_directory(dir: &std::path::PathBuf) -> Result<InternalBamlRuntime> {
         static VALID_EXTENSIONS: [&str; 2] = ["baml", "json"];
 
         log::info!("Reading files from {:#}", dir.to_string_lossy());
@@ -135,11 +135,11 @@ impl RuntimeConstructor for BamlRuntime {
             anyhow::bail!("no .baml files found in {dir:#?}");
         }
 
-        BamlRuntime::from_files(dir, src_files)
+        InternalBamlRuntime::from_files(dir, src_files)
     }
 }
 
-impl RuntimeInterface for BamlRuntime {
+impl RuntimeInterface for InternalBamlRuntime {
     async fn run_test(
         &mut self,
         function_name: &str,

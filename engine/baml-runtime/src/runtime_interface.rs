@@ -9,12 +9,12 @@ use crate::{
             llm_provider::LLMProvider, retry_policy::CallablePolicy, LLMResponse, ModelFeatures,
         },
     },
-    runtime::BamlRuntime,
+    runtime::InternalBamlRuntime,
     FunctionResult, RuntimeContext, TestResponse,
 };
 
 pub(crate) trait RuntimeConstructor {
-    fn from_directory(dir: &PathBuf) -> Result<BamlRuntime>;
+    fn from_directory(dir: &PathBuf) -> Result<InternalBamlRuntime>;
 }
 
 // This is a runtime that has full access (disk, network, etc) - feature full
@@ -64,7 +64,3 @@ pub trait InternalRuntimeInterface {
 
     fn ir(&self) -> &IntermediateRepr;
 }
-
-pub trait IBamlRuntime: RuntimeInterface + InternalRuntimeInterface + Send {}
-
-impl<T> IBamlRuntime for T where T: RuntimeInterface + InternalRuntimeInterface + Send {}

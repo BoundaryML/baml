@@ -1759,6 +1759,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "language-client-codegen"
+version = "0.20.0-canary.0"
+dependencies = [
+ "anyhow",
+ "env_logger",
+ "internal-baml-core",
+ "log",
+ "reqwest 0.11.24",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -1,0 +1,17 @@
+[package]
+edition = "2021"
+name = "language-client-codegen"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+license-file.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+internal-baml-core = { path = "../baml-lib/baml-core" }
+env_logger.workspace = true
+log.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true

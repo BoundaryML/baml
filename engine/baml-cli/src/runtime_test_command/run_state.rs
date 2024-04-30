@@ -9,12 +9,14 @@ use tokio::{
     task,
 };
 
-use baml_runtime::{IBamlRuntime, RuntimeContext, TestResponse};
+use baml_runtime::{
+    BamlRuntime, InternalRuntimeInterface, RuntimeContext, RuntimeInterface, TestResponse,
+};
 
 use super::filter::FilterArgs;
 
-pub(super) struct TestCommand<T: IBamlRuntime + 'static> {
-    runtime: Arc<Mutex<T>>,
+pub(super) struct TestCommand {
+    runtime: Arc<Mutex<BamlRuntime>>,
     filter: FilterArgs,
 }
 
@@ -215,8 +217,8 @@ impl TestState {
     }
 }
 
-impl<T: IBamlRuntime> TestCommand<T> {
-    pub fn new(runtime: T, filter: FilterArgs) -> TestCommand<T> {
+impl TestCommand {
+    pub fn new(runtime: BamlRuntime, filter: FilterArgs) -> TestCommand {
         TestCommand {
             runtime: Arc::from(Mutex::from(runtime)),
             filter,
@@ -351,7 +353,7 @@ impl<T: IBamlRuntime> TestCommand<T> {
 
     fn selected_tests<'a>(
         &'a self,
-        runtime: &'a MutexGuard<'a, T>,
+        runtime: &'a MutexGuard<'a, BamlRuntime>,
     ) -> (usize, Vec<TestCaseWalker<'a>>) {
         let mut count = 0;
         let mut selected_tests = runtime

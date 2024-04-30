@@ -17,7 +17,7 @@ fn assert_failed(test: &TestResponse) {
 #[tokio::test]
 async fn test_run_test() -> Result<()> {
     let directory = PathBuf::from("/Users/vbv/repos/gloo-lang/integ-tests/baml_src");
-    let mut runtime = BamlRuntime::from_directory(&directory).unwrap();
+    let mut runtime = InternalBamlRuntime::from_directory(&directory).unwrap();
 
     let ctx = RuntimeContext::new().add_env("OPENAI_API_KEY".into(), "API_KEY".to_string());
 
@@ -32,7 +32,7 @@ async fn test_run_test() -> Result<()> {
 #[tokio::test]
 async fn test_call_function() -> Result<FunctionResult> {
     let directory = PathBuf::from("/Users/vbv/repos/gloo-lang/integ-tests/baml_src");
-    let mut runtime = BamlRuntime::from_directory(&directory).unwrap();
+    let mut runtime = InternalBamlRuntime::from_directory(&directory).unwrap();
 
     let ctx = RuntimeContext::new().add_env("OPENAI_API_KEY".into(), "API_KEY".to_string());
 

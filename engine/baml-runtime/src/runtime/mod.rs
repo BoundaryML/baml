@@ -12,12 +12,12 @@ use internal_baml_core::{
 
 use crate::internal::llm_client::{llm_provider::LLMProvider, retry_policy::CallablePolicy};
 
-pub struct BamlRuntime {
+pub struct InternalBamlRuntime {
     ir: IntermediateRepr,
     clients: HashMap<String, (LLMProvider, Option<CallablePolicy>)>,
 }
 
-impl BamlRuntime {
+impl InternalBamlRuntime {
     pub(super) fn from_files(directory: &PathBuf, files: Vec<PathBuf>) -> Result<Self> {
         let contents = files
             .iter()

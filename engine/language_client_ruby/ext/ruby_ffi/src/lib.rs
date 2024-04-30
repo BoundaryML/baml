@@ -1,9 +1,10 @@
-use baml_runtime::{BamlRuntime, RuntimeContext};
+use baml_runtime::{BamlRuntime, RuntimeContext, RuntimeInterface};
 use magnus::IntoValue;
 use magnus::{
     class, error::RubyUnavailableError, exception::runtime_error, function, method, prelude::*,
     scan_args::get_kwargs, Error, RHash, Ruby,
 };
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -16,7 +17,7 @@ type Result<T> = std::result::Result<T, magnus::Error>;
 // must be kept in sync with rb.define_class in the init() fn
 #[magnus::wrap(class = "Baml::Ffi::BamlRuntime", free_immediately, size)]
 struct BamlRuntimeFfi {
-    internal: BamlRuntime,
+    internal: RefCell<BamlRuntime>,
     t: tokio::runtime::Runtime,
 }
 
@@ -65,7 +66,7 @@ impl BamlRuntimeFfi {
         };
 
         Ok(Self {
-            internal: baml_runtime,
+            internal: RefCell::new(baml_runtime),
             t: tokio_runtime,
         })
     }
@@ -87,7 +88,7 @@ impl BamlRuntimeFfi {
         }
 
         let args = match ruby_to_json::RubyToJson::convert_hash_to_json(args) {
-            Ok(args) => args.into_iter().collect(),
+            Ok(args) => args.into_iter().collect::<HashMap<_, _>>(),
             Err(e) => {
                 return Err(Error::new(
                     ruby.exception_syntax_error(),
@@ -111,7 +112,7 @@ impl BamlRuntimeFfi {
             .chain(ctx.env.into_iter())
             .collect();
 
-        let retval = match self.t.block_on(self.internal.call_function(
+        let retval = match self.t.block_on(self.internal.borrow_mut().call_function(
             function_name.clone(),
             args,
             &ctx,
