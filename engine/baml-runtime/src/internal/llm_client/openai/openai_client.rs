@@ -1,74 +1,123 @@
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
-use internal_baml_core::ir::repr::IntermediateRepr;
-use internal_baml_core::ir::{ClientWalker, RetryPolicyWalker};
+use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{RenderContext_Client, RenderedChatMessage};
 use serde_json::json;
 
-use crate::runtime::llm_client::expression_helper::to_value;
-use crate::runtime::llm_client::traits::{WithChat, WithClient, WithNoCompletion, WithRetryPolicy};
-use crate::runtime::llm_client::{openai::types::FinishReason, LLMResponse, ModelFeatures};
-use crate::runtime::llm_client::{ErrorCode, LLMCompleteResponse, LLMErrorResponse};
+use super::super::expression_helper::to_value;
+use super::super::traits::{WithChat, WithClient, WithNoCompletion, WithRetryPolicy};
+use super::super::{openai::types::FinishReason, LLMResponse, ModelFeatures};
+use super::super::{ErrorCode, LLMCompleteResponse, LLMErrorResponse};
 use crate::RuntimeContext;
 
 use super::types::{ChatCompletionResponse, OpenAIErrorResponse};
 
-struct PostRequestProperities<'ir> {
+fn resolve_properties(
+    client: &ClientWalker,
+    ctx: &RuntimeContext,
+) -> Result<PostRequestProperities> {
+    let mut properties = (&client.item.elem.options)
+        .iter()
+        .map(|(k, v)| {
+            Ok((
+                k.into(),
+                to_value(ctx, v).context(format!(
+                    "client {} could not resolve options.{}",
+                    client.name(),
+                    k
+                ))?,
+            ))
+        })
+        .collect::<Result<HashMap<_, _>>>()?;
+
+    let default_role = properties
+        .remove("default_role")
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .unwrap_or_else(|| "system".to_string());
+
+    let base_url = properties
+        .remove("base_url")
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .unwrap_or_else(|| "https://api.openai.com/v1".to_string());
+    // Remove trailing slashes.
+    let base_url = base_url.trim_end_matches('/').to_string();
+
+    let api_key = properties
+        .remove("api_key")
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .or_else(|| ctx.env.get("OPENAI_API_KEY").map(|s| s.to_string()));
+
+    let headers = properties.remove("headers").map(|v| {
+        if let Some(v) = v.as_object() {
+            v.iter()
+                .map(|(k, v)| {
+                    Ok((
+                        k.to_string(),
+                        match v {
+                            serde_json::Value::String(s) => s.to_string(),
+                            _ => anyhow::bail!("Header '{k}' must be a string"),
+                        },
+                    ))
+                })
+                .collect::<Result<HashMap<String, String>>>()
+        } else {
+            Ok(Default::default())
+        }
+    });
+    let headers = match headers {
+        Some(h) => h?,
+        None => Default::default(),
+    };
+
+    Ok(PostRequestProperities {
+        default_role,
+        base_url,
+        api_key,
+        headers,
+        properties,
+    })
+}
+struct PostRequestProperities {
     default_role: String,
     base_url: String,
     api_key: Option<String>,
     headers: HashMap<String, String>,
 
     // These are passed directly to the OpenAI API.
-    properties: HashMap<&'ir str, serde_json::Value>,
+    properties: HashMap<String, serde_json::Value>,
 }
 
-pub struct OpenAIClient<'ir> {
-    client: &'ir ClientWalker<'ir>,
-    properties: Option<PostRequestProperities<'ir>>,
+pub struct OpenAIClient {
+    // client: ClientWalker<'ir>,
+    retry_policy: Option<String>,
     context: RenderContext_Client,
-    features: Option<ModelFeatures>,
+    features: ModelFeatures,
+    properties: PostRequestProperities,
 }
 
-impl WithRetryPolicy for OpenAIClient<'_> {
-    fn retry_policy<'ir>(&self, ir: &'ir IntermediateRepr) -> Option<RetryPolicyWalker<'ir>> {
-        self.client
-            .retry_policy()
-            .as_ref()
-            .and_then(|policy| ir.walk_retry_policies().find(|r| r.name() == policy))
+impl WithRetryPolicy for OpenAIClient {
+    fn retry_policy_name(&self) -> Option<&str> {
+        self.retry_policy.as_deref()
     }
 }
 
-impl WithClient for OpenAIClient<'_> {
-    fn context(&mut self) -> &RenderContext_Client {
+impl WithClient for OpenAIClient {
+    fn context(&self) -> &RenderContext_Client {
         &self.context
     }
 
-    fn model_features(&mut self, ctx: &RuntimeContext) -> Result<&ModelFeatures> {
-        match self.features {
-            Some(ref f) => Ok(f),
-            None => {
-                let _properties = self.load_properties(&self.client, ctx)?;
-
-                self.features = Some(ModelFeatures {
-                    chat: true,
-                    completion: false,
-                });
-
-                Ok(self.features.as_ref().unwrap())
-            }
-        }
+    fn model_features(&self) -> &ModelFeatures {
+        &self.features
     }
 }
 
-impl WithNoCompletion for OpenAIClient<'_> {}
+impl WithNoCompletion for OpenAIClient {}
 
-impl WithChat for OpenAIClient<'_> {
+impl WithChat for OpenAIClient {
     fn chat_options(&mut self, ctx: &RuntimeContext) -> Result<internal_baml_jinja::ChatOptions> {
-        let properties = self.load_properties(&self.client, ctx)?;
         Ok(internal_baml_jinja::ChatOptions::new(
-            properties.default_role.clone(),
+            self.properties.default_role.clone(),
             None,
         ))
     }
@@ -100,7 +149,7 @@ impl WithChat for OpenAIClient<'_> {
             };
 
             return Ok(LLMResponse::LLMFailure(LLMErrorResponse {
-                client: self.client.name().into(),
+                client: self.context.name.to_string(),
                 model: None,
                 prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
                 start_time_unix_ms: now
@@ -117,7 +166,7 @@ impl WithChat for OpenAIClient<'_> {
             Ok(body) => body,
             Err(e) => {
                 return Ok(LLMResponse::LLMFailure(LLMErrorResponse {
-                    client: self.client.name().into(),
+                    client: self.context.name.to_string(),
                     model: None,
                     prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
                     start_time_unix_ms: now
@@ -133,7 +182,7 @@ impl WithChat for OpenAIClient<'_> {
 
         if body.choices.len() < 1 {
             return Ok(LLMResponse::LLMFailure(LLMErrorResponse {
-                client: self.client.name().into(),
+                client: self.context.name.to_string(),
                 model: None,
                 prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
                 start_time_unix_ms: now
@@ -149,7 +198,7 @@ impl WithChat for OpenAIClient<'_> {
         let usage = body.usage.as_ref();
 
         Ok(LLMResponse::Success(LLMCompleteResponse {
-            client: self.client.name().into(),
+            client: self.context.name.to_string(),
             prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
             content: body.choices[0]
                 .message
@@ -178,107 +227,36 @@ impl WithChat for OpenAIClient<'_> {
     }
 }
 
-impl<'ir> OpenAIClient<'ir> {
-    fn load_properties(
-        &mut self,
-        client: &'ir ClientWalker<'ir>,
-        ctx: &RuntimeContext,
-    ) -> Result<&PostRequestProperities<'ir>> {
-        match self.properties {
-            Some(ref p) => Ok(p),
-            None => {
-                let mut properties = (&client.item.elem.options)
-                    .iter()
-                    .map(|(k, v)| {
-                        Ok((
-                            k.as_str(),
-                            to_value(ctx, v).context(format!(
-                                "client {} could not resolve options.{}",
-                                client.name(),
-                                k
-                            ))?,
-                        ))
-                    })
-                    .collect::<Result<HashMap<&str, serde_json::Value>>>()?;
-
-                let default_role = properties
-                    .remove("default_role")
-                    .and_then(|v| v.as_str().map(|s| s.to_string()))
-                    .unwrap_or_else(|| "system".to_string());
-
-                let base_url = properties
-                    .remove("base_url")
-                    .and_then(|v| v.as_str().map(|s| s.to_string()))
-                    .unwrap_or_else(|| "https://api.openai.com/v1".to_string());
-                // Remove trailing slashes.
-                let base_url = base_url.trim_end_matches('/').to_string();
-
-                let api_key = properties
-                    .remove("api_key")
-                    .and_then(|v| v.as_str().map(|s| s.to_string()))
-                    .or_else(|| ctx.env.get("OPENAI_API_KEY").map(|s| s.to_string()));
-
-                let headers = properties.remove("headers").map(|v| {
-                    if let Some(v) = v.as_object() {
-                        v.iter()
-                            .map(|(k, v)| {
-                                Ok((
-                                    k.to_string(),
-                                    match v {
-                                        serde_json::Value::String(s) => s.to_string(),
-                                        _ => anyhow::bail!("Header '{k}' must be a string"),
-                                    },
-                                ))
-                            })
-                            .collect::<Result<HashMap<String, String>>>()
-                    } else {
-                        Ok(Default::default())
-                    }
-                });
-                let headers = match headers {
-                    Some(h) => h?,
-                    None => Default::default(),
-                };
-
-                let properties = PostRequestProperities {
-                    default_role,
-                    base_url,
-                    api_key,
-                    headers,
-                    properties,
-                };
-
-                self.properties = Some(properties);
-
-                Ok(self.properties.as_ref().unwrap())
-            }
-        }
-    }
-
-    pub fn new(client: &'ir ClientWalker<'ir>, _: &RuntimeContext) -> Result<OpenAIClient<'ir>> {
+impl OpenAIClient {
+    pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<OpenAIClient> {
         Ok(Self {
-            client,
-            properties: None,
+            properties: resolve_properties(client, ctx)?,
             context: RenderContext_Client {
                 name: client.name().into(),
                 provider: client.elem().provider.clone(),
             },
-            features: None,
+            features: ModelFeatures {
+                chat: true,
+                completion: false,
+            },
+            retry_policy: client
+                .elem()
+                .retry_policy_id
+                .as_ref()
+                .map(|s| s.to_string()),
         })
     }
 
     fn client_http_request(
-        &mut self,
+        &self,
         ctx: &RuntimeContext,
         path: &str,
         prompt: &Vec<RenderedChatMessage>,
     ) -> Result<reqwest::RequestBuilder> {
-        let properties = self.load_properties(&self.client, ctx)?;
-
         // TODO: ideally like to keep this alive longer.
         let client = reqwest::Client::new();
 
-        let mut body = json!(properties.properties);
+        let mut body = json!(self.properties.properties);
         body.as_object_mut().unwrap().insert(
             "messages".into(),
             prompt
@@ -293,15 +271,15 @@ impl<'ir> OpenAIClient<'ir> {
         );
 
         let mut req = client
-            .post(format!("{}{}", properties.base_url, path))
+            .post(format!("{}{}", self.properties.base_url, path))
             .json(&body);
-        match properties.api_key {
+        match self.properties.api_key {
             Some(ref key) => {
                 req = req.header("Authorization", format!("Bearer {}", key));
             }
             None => {}
         }
-        for (k, v) in &properties.headers {
+        for (k, v) in &self.properties.headers {
             req = req.header(k, v);
         }
 

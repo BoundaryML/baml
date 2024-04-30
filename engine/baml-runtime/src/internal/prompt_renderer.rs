@@ -9,13 +9,18 @@ use internal_baml_jinja::{
 
 use crate::RuntimeContext;
 
-pub struct PromptRenderer<'ir> {
+pub struct PromptRenderer {
     template_macros: Vec<TemplateStringMacro>,
-    config: &'ir FunctionConfig,
+    pub name: String,
+    // TODO: We technically have alll the information given output type
+    // and we should derive this each time.
+    pub output_format: String,
+    pub prompt_template: String,
+    pub client_name: String,
 }
 
-impl PromptRenderer<'_> {
-    pub fn from_function<'ir>(function: &'ir FunctionWalker) -> Result<PromptRenderer<'ir>> {
+impl PromptRenderer {
+    pub fn from_function(function: &FunctionWalker) -> Result<PromptRenderer> {
         // Generate the prompt.
         match function.walk_impls() {
             either::Either::Left(_) => {
@@ -41,8 +46,11 @@ impl PromptRenderer<'_> {
                     .collect();
                 for c in configs {
                     return Ok(PromptRenderer {
-                        config: c.item.1,
                         template_macros,
+                        name: function.name().into(),
+                        output_format: c.item.1.output_format.clone(),
+                        prompt_template: c.item.1.prompt_template.clone(),
+                        client_name: c.item.1.client.clone(),
                     });
                 }
                 error_unsupported!("function", function.name(), "no valid prompt found")
@@ -51,11 +59,11 @@ impl PromptRenderer<'_> {
     }
 
     pub fn output_format(&self) -> &str {
-        &self.config.output_format
+        &self.output_format
     }
 
     pub fn prompt_template(&self) -> &str {
-        &self.config.prompt_template
+        &self.prompt_template
     }
 
     pub fn template_macros(&self) -> &Vec<TemplateStringMacro> {
@@ -63,7 +71,7 @@ impl PromptRenderer<'_> {
     }
 
     pub fn client_name(&self) -> &str {
-        &self.config.client
+        &self.client_name
     }
 
     pub fn render_prompt(

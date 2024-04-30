@@ -1,26 +1,102 @@
 use anyhow::Result;
 use baml_lib::internal_baml_core::ir::TestCaseWalker;
 use colored::*;
-use indexmap::IndexMap;
-use indicatif::{MultiProgress, ProgressBar};
+use indexmap::{IndexMap, IndexSet};
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use std::{
-    collections::HashMap,
-    fmt::Display,
-    sync::{Arc, Mutex},
-    time::Duration,
+    collections::{HashMap, HashSet},
+    sync::Arc,
 };
-use tokio::{sync::Semaphore, task};
+use tokio::{
+    sync::{Mutex, MutexGuard, Semaphore},
+    task,
+};
 
-use baml_runtime::{internal::WithInternal, BamlRuntime, RuntimeContext, TestResponse};
+use baml_runtime::{IBamlRuntime, RuntimeContext, TestResponse};
 
 use super::filter::FilterArgs;
 
-pub(super) struct TestCommand<'a> {
-    // Number of tests total in the runtime
-    total_tests: usize,
+pub(super) struct TestCommand<T: IBamlRuntime + 'static> {
+    runtime: Arc<Mutex<T>>,
+    filter: FilterArgs,
+}
 
-    // Number of tests selected by the filter
-    selected_tests: Vec<TestCaseWalker<'a>>,
+struct TestRunBar {
+    p: MultiProgress,
+    primary_bar: ProgressBar,
+    bars: Vec<ProgressBar>,
+    max_bars: usize,
+    active_tests: IndexSet<(String, String)>,
+}
+
+impl TestRunBar {
+    fn new(num_tasks: u64, num_bars: usize) -> TestRunBar {
+        let p = MultiProgress::new();
+        let primary_bar = p.add(
+            ProgressBar::new(num_tasks)
+                .with_style(ProgressStyle::with_template("{spinner} {pos}/{len} {msg}").unwrap()),
+        );
+
+        TestRunBar {
+            p,
+            max_bars: num_bars,
+            primary_bar,
+            bars: vec![],
+            active_tests: Default::default(),
+        }
+    }
+
+    fn update_bars(&mut self) {
+        for (idx, (func_name, test_name)) in
+            self.active_tests.iter().take(self.max_bars).enumerate()
+        {
+            let bar = match self.bars.get(idx) {
+                Some(bar) => bar,
+                None => {
+                    let b = self.p.add(ProgressBar::new_spinner());
+                    self.bars.push(b);
+                    self.bars.last().unwrap()
+                }
+            };
+
+            bar.set_message(format!("{}::{}", func_name, test_name));
+        }
+
+        // for all non-active bars, hide them
+        for idx in self.max_bars..self.bars.len() {
+            let bar = self.bars.get(idx).unwrap();
+            bar.set_message("");
+        }
+    }
+
+    pub fn println<I: AsRef<str>>(&self, msg: I) {
+        match self.p.println(msg) {
+            Ok(_) => {}
+            Err(e) => {
+                println!("ERR: {:#?}", e)
+            }
+        }
+    }
+
+    fn start_test(&mut self, function_name: &str, test_name: &str) {
+        if self
+            .active_tests
+            .insert((function_name.into(), test_name.into()))
+        {
+            self.primary_bar.tick();
+            self.update_bars();
+        }
+    }
+
+    fn end_test(&mut self, function_name: &str, test_name: &str) {
+        if self
+            .active_tests
+            .shift_remove(&(function_name.into(), test_name.into()))
+        {
+            self.primary_bar.inc(1);
+            self.update_bars();
+        }
+    }
 }
 
 pub(super) struct TestRunState {
@@ -28,8 +104,7 @@ pub(super) struct TestRunState {
     // <Function, <Test, State>>
     test_state: IndexMap<String, IndexMap<String, TestState>>,
 
-    progress_bar: MultiProgress,
-    bars: IndexMap<String, ProgressBar>,
+    progress_bar: TestRunBar,
 }
 
 impl std::fmt::Display for TestRunState {
@@ -101,7 +176,11 @@ impl std::fmt::Display for TestRunState {
 impl TestRunState {
     fn update(&mut self, function_name: &str, test_name: &str, state: TestState) {
         let msg: Option<(bool, Option<String>)> = match &state {
-            TestState::Queued | TestState::Running => None,
+            TestState::Queued => None,
+            TestState::Running => {
+                self.progress_bar.start_test(function_name, test_name);
+                None
+            }
             TestState::UnableToRun(message) => Some((false, Some(message.clone()))),
             TestState::Finished(s) => match s.status() {
                 baml_runtime::TestStatus::Pass => Some((true, None)),
@@ -124,8 +203,7 @@ impl TestRunState {
         };
 
         if let Some((passed, msg)) = msg {
-            let bar = self.bars.get_mut(function_name).unwrap();
-            bar.inc(1);
+            self.progress_bar.end_test(function_name, test_name);
             let test_line = format!(
                 "{} {}:{}",
                 if passed { "✔".green() } else { "✖".red() },
@@ -134,13 +212,13 @@ impl TestRunState {
             );
 
             if let Some(msg) = msg {
-                bar.println(format!(
+                self.progress_bar.println(format!(
                     "{test_line}\n{msg}\n\n",
                     msg = msg,
                     test_line = test_line
                 ));
             } else {
-                bar.println(test_line);
+                self.progress_bar.println(test_line);
             }
         }
 
@@ -159,13 +237,143 @@ pub enum TestState {
     Finished(TestResponse),
 }
 
-impl<'runtime> TestCommand<'runtime> {
-    pub fn new<'a>(runtime: &'a Arc<BamlRuntime>, test_filter: &FilterArgs) -> TestCommand<'a> {
+impl<T: IBamlRuntime> TestCommand<T> {
+    pub fn new(runtime: T, filter: FilterArgs) -> TestCommand<T> {
+        TestCommand {
+            runtime: Arc::from(Mutex::from(runtime)),
+            filter,
+        }
+        // TestCommand {
+        //     total_tests: count,
+        //     selected_tests,
+        // }
+    }
+
+    async fn run_state(&self, num_bars: usize) -> TestRunState {
+        let mut test_state = IndexMap::default();
+
+        let runtime = self.runtime.lock().await;
+
+        for t in self.selected_tests(&runtime).1 {
+            let function = t.function().name().to_string();
+            let test = t.test_case().name.clone();
+            test_state
+                .entry(function)
+                .or_insert_with(IndexMap::default)
+                .insert(test, TestState::Queued);
+        }
+
+        TestRunState {
+            progress_bar: TestRunBar::new(test_state.len() as u64, num_bars),
+            test_state,
+        }
+    }
+
+    fn test_handler(
+        &self,
+        semaphore: Arc<Semaphore>,
+        test: &TestCaseWalker,
+        env_vars: &HashMap<String, String>,
+        state: Arc<Mutex<TestRunState>>,
+    ) -> task::JoinHandle<()> {
+        let function_name = test.function().name().to_string();
+        let test_name = test.test_case().name.clone();
+
+        let ctx = RuntimeContext {
+            env: env_vars.clone(),
+            tags: Default::default(),
+        };
+
+        let runtime = self.runtime.clone();
+
+        tokio::task::spawn(async move {
+            // println!("Starting thread for: {} {}", function_name, test_name);
+            let permit = semaphore
+                .acquire()
+                .await
+                .expect("Failed to acquire semaphore permit");
+
+            // println!("Got semaphore: {} {}", function_name, test_name);
+            state
+                .lock()
+                .await
+                .update(&function_name, &test_name, TestState::Running);
+            // println!("Updated state: {} {}", function_name, test_name);
+
+            let result = runtime
+                .lock()
+                .await
+                .run_test(&function_name, &test_name, &ctx)
+                .await;
+            println!("Got result: {} {}", function_name, test_name);
+
+            let test_state = match result {
+                Ok(r) => TestState::Finished(r),
+                Err(e) => TestState::UnableToRun(e.to_string()),
+            };
+            state
+                .lock()
+                .await
+                .update(&function_name, &test_name, test_state);
+
+            // println!("Updated final state: {} {}", function_name, test_name);
+            // Permit is automatically dropped and returned to the semaphore here
+            drop(permit);
+        })
+    }
+
+    pub async fn run_parallel(
+        &self,
+        max_parallel: usize,
+        env_vars: &HashMap<String, String>,
+    ) -> Result<TestRunState> {
+        // Start a thread pool with max_parallel threads
+        // Each thread will take a test from the queue and run it
+        let semaphore = Arc::new(Semaphore::new(max_parallel));
+
+        let locked_state = Arc::new(Mutex::new(self.run_state(4).await));
+
+        let mut handles = vec![];
+
+        let runtime = self.runtime.lock().await;
+        let (_, selected_tests) = self.selected_tests(&runtime);
+
+        for test in selected_tests {
+            // Assume we have 10 tasks to handle
+            let sem_clone = semaphore.clone();
+
+            let state_clone = locked_state.clone();
+
+            let handle = self.test_handler(sem_clone, &test, env_vars, state_clone);
+
+            handles.push(handle);
+        }
+        drop(runtime);
+
+        // Wait for all tasks to complete
+        for handle in handles {
+            handle.await.expect("Task failed");
+        }
+
+        match Arc::try_unwrap(locked_state) {
+            Ok(state) => Ok(state.into_inner()),
+            Err(_) => panic!("Failed to get state.."),
+        }
+    }
+
+    fn selected_tests<'a>(
+        &'a self,
+        runtime: &'a MutexGuard<'a, T>,
+    ) -> (usize, Vec<TestCaseWalker<'a>>) {
         let mut count = 0;
         let mut selected_tests = runtime
+            .ir()
             .walk_tests()
             .filter_map(|test| {
-                if test_filter.matches_filters(test.function().name(), &test.test_case().name) {
+                if self
+                    .filter
+                    .matches_filters(test.function().name(), &test.test_case().name)
+                {
                     count += 1;
                     Some(test)
                 } else {
@@ -182,130 +390,18 @@ impl<'runtime> TestCommand<'runtime> {
                 .then(a.test_case().name.cmp(&b.test_case().name))
         });
 
-        TestCommand {
-            total_tests: count,
-            selected_tests,
-        }
+        (count, selected_tests)
     }
 
-    fn run_state(&self) -> TestRunState {
-        let mut test_state = IndexMap::default();
+    pub async fn print_as_list(&self, show_summary: bool) {
+        let runtime = self.runtime.lock().await;
+        let (total_tests, selected_tests) = self.selected_tests(&runtime);
 
-        for t in &self.selected_tests {
-            let function = t.function().name().to_string();
-            let test = t.test_case().name.clone();
-            test_state
-                .entry(function)
-                .or_insert_with(IndexMap::default)
-                .insert(test, TestState::Queued);
-        }
-
-        let p = MultiProgress::new();
-        let mut bars = IndexMap::default();
-        for (func_name, tests) in &test_state {
-            let bar = ProgressBar::new(tests.len() as u64)
-                .with_prefix(func_name.clone())
-                .with_style(
-                    indicatif::ProgressStyle::with_template("{spinner} {pos}/{len} {prefix}")
-                        .unwrap(),
-                );
-
-            let bar = p.add(bar);
-            bars.insert(func_name.clone(), bar);
-        }
-
-        TestRunState {
-            test_state,
-            progress_bar: p,
-            bars,
-        }
-    }
-
-    fn test_handler(
-        &'runtime self,
-        semaphore: Arc<Semaphore>,
-        runtime: Arc<BamlRuntime>,
-        test: &'runtime TestCaseWalker,
-        env_vars: &HashMap<String, String>,
-        state: Arc<Mutex<TestRunState>>,
-    ) -> task::JoinHandle<()> {
-        let function_name = test.function().name().to_string();
-        let test_name = test.test_case().name.clone();
-
-        let ctx = RuntimeContext {
-            env: env_vars.clone(),
-            tags: Default::default(),
-        };
-
-        tokio::task::spawn(async move {
-            let permit = semaphore
-                .acquire()
-                .await
-                .expect("Failed to acquire semaphore permit");
-
-            state
-                .lock()
-                .unwrap()
-                .update(&function_name, &test_name, TestState::Running);
-
-            let result = runtime.run_test(&function_name, &test_name, &ctx).await;
-
-            let test_state = match result {
-                Ok(r) => TestState::Finished(r),
-                Err(e) => TestState::UnableToRun(e.to_string()),
-            };
-            state
-                .lock()
-                .unwrap()
-                .update(&function_name, &test_name, test_state);
-
-            // Permit is automatically dropped and returned to the semaphore here
-            drop(permit);
-        })
-    }
-
-    pub async fn run_parallel(
-        &'runtime self,
-        max_parallel: usize,
-        runtime: Arc<BamlRuntime>,
-        env_vars: &HashMap<String, String>,
-    ) -> Result<TestRunState> {
-        // Start a thread pool with max_parallel threads
-        // Each thread will take a test from the queue and run it
-        let semaphore = Arc::new(Semaphore::new(max_parallel));
-
-        let locked_state = Arc::new(Mutex::new(self.run_state()));
-
-        let mut handles = vec![];
-
-        for test in self.selected_tests.iter() {
-            // Assume we have 10 tasks to handle
-            let sem_clone = semaphore.clone();
-
-            let state_clone = locked_state.clone();
-
-            let handle = self.test_handler(sem_clone, runtime.clone(), test, env_vars, state_clone);
-
-            handles.push(handle);
-        }
-
-        // Wait for all tasks to complete
-        for handle in handles {
-            handle.await.expect("Task failed");
-        }
-
-        match Arc::try_unwrap(locked_state) {
-            Ok(state) => Ok(state.into_inner().unwrap()),
-            Err(_) => panic!("Failed to get state.."),
-        }
-    }
-
-    pub fn print_as_list(&self, show_summary: bool) {
         let summary = format!(
             "========== {}/{} tests selected ({} deselected) ==========",
-            self.selected_tests.len(),
-            self.total_tests,
-            self.total_tests - self.selected_tests.len()
+            selected_tests.len(),
+            total_tests,
+            total_tests - selected_tests.len()
         )
         .bold();
 
@@ -314,7 +410,7 @@ impl<'runtime> TestCommand<'runtime> {
         }
 
         let mut last_function = None;
-        for test in &self.selected_tests {
+        for test in &selected_tests {
             if last_function.as_deref() != Some(test.function().name()) {
                 last_function = Some(test.function().name());
                 println!("{}", test.function().name().green());
@@ -322,7 +418,7 @@ impl<'runtime> TestCommand<'runtime> {
             println!("  {}", test.test_case().name);
         }
 
-        if show_summary && self.selected_tests.len() > 50 {
+        if show_summary && selected_tests.len() > 50 {
             println!("{}", summary);
         }
     }

@@ -5,23 +5,23 @@ mod completion;
 use internal_baml_core::ir::{repr::IntermediateRepr, RetryPolicyWalker};
 use internal_baml_jinja::{RenderContext_Client, RenderedPrompt};
 
-use crate::{runtime::prompt_renderer::PromptRenderer, RuntimeContext};
+use crate::{internal::prompt_renderer::PromptRenderer, RuntimeContext};
 
 pub use self::{
-    chat::{WithChat, WithNoChat},
+    chat::WithChat,
     completion::{WithCompletion, WithNoCompletion},
 };
 
 use super::{retry_policy::CallablePolicy, LLMResponse, ModelFeatures, RetryLLMResponse};
 
 pub trait WithRetryPolicy {
-    fn retry_policy<'a>(&self, ir: &'a IntermediateRepr) -> Option<RetryPolicyWalker<'a>>;
+    fn retry_policy_name(&self) -> Option<&str>;
 }
 
 pub trait WithCallable {
     async fn call(
         &mut self,
-        ir: &IntermediateRepr,
+        retry_policy: Option<CallablePolicy>,
         ctx: &RuntimeContext,
         prompt: &RenderedPrompt,
     ) -> LLMResponse;
@@ -36,15 +36,15 @@ pub trait WithSingleCallable {
 }
 
 pub trait WithClient {
-    fn context(&mut self) -> &RenderContext_Client;
+    fn context(&self) -> &RenderContext_Client;
 
-    fn model_features(&mut self, ctx: &RuntimeContext) -> Result<&ModelFeatures>;
+    fn model_features(&self) -> &ModelFeatures;
 }
 
-pub trait WithPrompt {
+pub trait WithPrompt<'ir> {
     fn render_prompt(
-        &mut self,
-        renderer: &PromptRenderer<'_>,
+        &'ir mut self,
+        renderer: &PromptRenderer,
         ctx: &RuntimeContext,
         params: &serde_json::Value,
     ) -> Result<RenderedPrompt>;
@@ -52,16 +52,15 @@ pub trait WithPrompt {
 
 impl<T> WithCallable for T
 where
-    T: WithRetryPolicy + WithSingleCallable,
+    T: WithSingleCallable,
 {
-    async fn call<'a>(
+    async fn call(
         &mut self,
-        ir: &'a IntermediateRepr,
+        retry_policy: Option<CallablePolicy>,
         ctx: &RuntimeContext,
         prompt: &RenderedPrompt,
     ) -> LLMResponse {
-        if let Some(policy) = &self.retry_policy(ir) {
-            let retry_strategy = CallablePolicy::new(&policy);
+        if let Some(retry_strategy) = retry_policy {
             // TODO: @sxlijin collect all errors.
             let mut err = vec![];
 
@@ -122,7 +121,7 @@ where
         ctx: &RuntimeContext,
         prompt: &RenderedPrompt,
     ) -> Result<LLMResponse> {
-        match self.model_features(ctx)? {
+        match self.model_features() {
             ModelFeatures {
                 completion: true,
                 chat: false,
@@ -158,27 +157,33 @@ where
     }
 }
 
-impl<T> WithPrompt for T
+impl<'ir, T> WithPrompt<'ir> for T
 where
     T: WithClient + WithChat + WithCompletion,
 {
     fn render_prompt(
-        &mut self,
-        renderer: &PromptRenderer<'_>,
+        &'ir mut self,
+        renderer: &PromptRenderer,
         ctx: &RuntimeContext,
         params: &serde_json::Value,
     ) -> Result<RenderedPrompt> {
         let prompt = renderer.render_prompt(ctx, params, self.context())?;
 
-        match self.model_features(ctx)? {
+        match self.model_features() {
             ModelFeatures {
                 completion: true,
                 chat: false,
-            } => Ok(prompt.as_completion(&self.completion_options(ctx)?)),
+            } => {
+                let options = self.completion_options(ctx)?;
+                Ok(prompt.as_completion(&options))
+            }
             ModelFeatures {
                 completion: false,
                 chat: true,
-            } => Ok(prompt.as_chat(&self.chat_options(ctx)?)),
+            } => {
+                let options = self.chat_options(ctx)?;
+                Ok(prompt.as_chat(&options))
+            }
             ModelFeatures {
                 completion: true,
                 chat: true,

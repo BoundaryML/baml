@@ -1,13 +1,8 @@
 use anyhow::Result;
-use async_stream::stream;
 use async_trait::async_trait;
-use futures::Stream;
 use internal_baml_jinja::CompletionOptions;
 
-use crate::{
-    runtime::llm_client::{LLMResponse, LLMStreamResponse},
-    RuntimeContext,
-};
+use crate::{internal::llm_client::LLMResponse, RuntimeContext};
 
 #[async_trait]
 pub trait WithCompletion: Sync + Send {

@@ -1,4 +1,5 @@
 use anyhow::Result;
+use internal_baml_parser_database::RetryPolicyStrategy;
 use serde_json::json;
 use std::collections::HashMap;
 
@@ -271,6 +272,14 @@ impl<'a> Walker<'a, &'a RetryPolicy> {
 
     pub fn elem(&self) -> &'a repr::RetryPolicy {
         &self.item.elem
+    }
+
+    pub fn max_retries(&self) -> u32 {
+        self.elem().max_retries
+    }
+
+    pub fn strategy(&self) -> &RetryPolicyStrategy {
+        &self.elem().strategy
     }
 }
 

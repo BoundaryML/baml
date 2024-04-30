@@ -1,7 +1,18 @@
+pub(crate) mod internal;
+
 mod runtime;
+mod runtime_interface;
 mod types;
 
-pub use runtime::{
-    internal, BamlRuntime, FunctionResult, TestFailReason, TestResponse, TestStatus,
-};
+use std::path::PathBuf;
+
+use runtime::BamlRuntime;
+pub use runtime_interface::*;
+pub use types::*;
+
 pub use types::RuntimeContext;
+
+/// Load a runtime from a directory
+pub fn load_runtime_from_dir(path: &PathBuf) -> anyhow::Result<impl IBamlRuntime> {
+    BamlRuntime::from_directory(path)
+}

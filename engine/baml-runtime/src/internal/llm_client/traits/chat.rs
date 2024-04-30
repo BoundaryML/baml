@@ -1,12 +1,7 @@
 use anyhow::Result;
-use async_stream::stream;
-use futures::Stream;
 use internal_baml_jinja::{ChatOptions, RenderedChatMessage};
 
-use crate::{
-    runtime::llm_client::{LLMResponse, LLMStreamResponse},
-    RuntimeContext,
-};
+use crate::{internal::llm_client::LLMResponse, RuntimeContext};
 
 pub trait WithChat: Sync + Send {
     fn chat_options(&mut self, ctx: &RuntimeContext) -> Result<ChatOptions>;

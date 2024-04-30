@@ -109,7 +109,7 @@ impl IRHelper for IntermediateRepr {
         }
     }
 
-    fn find_client(&self, client_name: &str) -> Result<ClientWalker<'_>> {
+    fn find_client<'ir>(&'ir self, client_name: &str) -> Result<ClientWalker<'ir>> {
         match self.walk_clients().find(|c| c.elem().name == client_name) {
             Some(c) => Ok(c),
             None => {

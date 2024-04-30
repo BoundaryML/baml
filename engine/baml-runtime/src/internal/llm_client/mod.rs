@@ -1,15 +1,13 @@
 // mod anthropic;
 pub mod expression_helper;
-mod llm_provider;
+pub mod llm_provider;
 mod openai;
-mod retry_policy;
-mod traits;
+pub mod retry_policy;
+pub mod traits;
 
 use anyhow::Result;
 use internal_baml_jinja::RenderedPrompt;
-pub use llm_provider::LLMProvider;
 use reqwest::StatusCode;
-pub use traits::{WithCallable, WithPrompt};
 
 #[derive(Clone, Copy)]
 pub struct ModelFeatures {

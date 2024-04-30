@@ -12,7 +12,6 @@ use anyhow::Result;
  * block.
  */
 fn find_in_json_markdown(str: &str) -> Result<serde_json::Value> {
-    println!("Finding JSON in: {:?}", str.len());
     let mut values = vec![];
 
     let mut remaining = str;
@@ -84,12 +83,6 @@ fn find_all_json_objects(input: &str) -> Result<serde_json::Value> {
                     // Assuming json_str_start is never None when stack is empty
                     let end_index = index + 1;
                     let json_str = &input[json_str_start.unwrap()..end_index];
-                    println!(
-                        "Found JSON object: {:?}..{} / {}",
-                        json_str_start,
-                        end_index,
-                        input.len()
-                    );
                     match parse_jsonish_value(json_str, JSONishOptions::recursive()) {
                         Ok(json) => json_objects.push(json),
                         Err(e) => {

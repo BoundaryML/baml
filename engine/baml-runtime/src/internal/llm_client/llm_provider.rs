@@ -1,26 +1,23 @@
-use std::sync::Arc;
-
 use anyhow::Result;
 use internal_baml_core::ir::ClientWalker;
 
-use crate::{runtime::prompt_renderer::PromptRenderer, RuntimeContext};
+use crate::RuntimeContext;
 
 use super::{
+    super::prompt_renderer::PromptRenderer,
     openai::OpenAIClient,
-    traits::{WithCallable, WithPrompt},
+    retry_policy::CallablePolicy,
+    traits::{WithCallable, WithPrompt, WithRetryPolicy},
     LLMResponse,
 };
 
-pub enum LLMProvider<'ir> {
-    OpenAI(OpenAIClient<'ir>),
+pub enum LLMProvider {
+    OpenAI(OpenAIClient),
     // Anthropic(AnthropicClient<'ir>),
 }
 
-impl LLMProvider<'_> {
-    pub fn from_ir<'ir>(
-        client: &'ir ClientWalker,
-        ctx: &RuntimeContext,
-    ) -> Result<LLMProvider<'ir>> {
+impl LLMProvider {
+    pub fn from_ir(client: &ClientWalker, ctx: &RuntimeContext) -> Result<LLMProvider> {
         match client.elem().provider.as_str() {
             "baml-openai-chat" | "openai" => {
                 OpenAIClient::new(client, ctx).map(LLMProvider::OpenAI)
@@ -40,10 +37,10 @@ impl LLMProvider<'_> {
     }
 }
 
-impl WithPrompt for LLMProvider<'_> {
+impl<'ir> WithPrompt<'ir> for LLMProvider {
     fn render_prompt(
-        &mut self,
-        renderer: &PromptRenderer<'_>,
+        &'ir mut self,
+        renderer: &PromptRenderer,
         ctx: &RuntimeContext,
         params: &serde_json::Value,
     ) -> Result<internal_baml_jinja::RenderedPrompt> {
@@ -53,15 +50,23 @@ impl WithPrompt for LLMProvider<'_> {
     }
 }
 
-impl WithCallable for LLMProvider<'_> {
+impl WithRetryPolicy for LLMProvider {
+    fn retry_policy_name(&self) -> Option<&str> {
+        match self {
+            LLMProvider::OpenAI(client) => client.retry_policy_name(),
+        }
+    }
+}
+
+impl WithCallable for LLMProvider {
     async fn call(
         &mut self,
-        ir: &internal_baml_core::ir::repr::IntermediateRepr,
+        retry_policy: Option<CallablePolicy>,
         ctx: &RuntimeContext,
         prompt: &internal_baml_jinja::RenderedPrompt,
     ) -> LLMResponse {
         match self {
-            LLMProvider::OpenAI(client) => client.call(ir, ctx, prompt).await,
+            LLMProvider::OpenAI(client) => client.call(retry_policy, ctx, prompt).await,
         }
     }
 }
