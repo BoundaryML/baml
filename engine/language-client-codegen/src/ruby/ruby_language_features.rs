@@ -1,12 +1,11 @@
-use std::collections::{HashMap, HashSet};
+use crate::dir_writer::{FileCollector, LanguageFeatures};
 
-use crate::dir_writer::{FileCollector, Import, LanguageFeatures, LibImport};
-
+#[derive(Default)]
 pub(super) struct RubyLanguageFeatures {}
 
 impl LanguageFeatures for RubyLanguageFeatures {
     fn content_prefix(&self) -> &'static str {
-        // "typed: strict" is for compat with sorbet
+        // "typed: strict" is set on a per-file basis in Ruby
         r#"
 ###############################################################################
 #
@@ -25,25 +24,11 @@ impl LanguageFeatures for RubyLanguageFeatures {
         .trim()
     }
 
-    fn format_exports(&self, _exports: &Vec<String>) -> String {
-        "".to_string()
-    }
-
-    fn format_imports(&self, _libs: &HashSet<LibImport>, _imports: &Vec<Import>) -> String {
-        "".to_string()
-    }
-
-    fn to_file_path(&self, path: &str, name: &str) -> std::path::PathBuf {
-        std::path::PathBuf::from(format!("{}/{}.rb", path, name).to_lowercase())
+    fn to_file_path(&self, name: &str) -> std::path::PathBuf {
+        std::path::PathBuf::from(name.to_lowercase()).with_extension("rb")
     }
 }
 
 pub(super) trait ToRuby {
     fn to_ruby(&self) -> String;
-}
-
-pub(super) type TSFileCollector = FileCollector<RubyLanguageFeatures>;
-
-pub(super) fn get_file_collector() -> TSFileCollector {
-    TSFileCollector::new(RubyLanguageFeatures {})
 }
