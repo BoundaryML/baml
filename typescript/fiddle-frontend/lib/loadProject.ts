@@ -129,13 +129,13 @@ export async function loadExampleProjects(): Promise<BamlProjectsGroupings> {
         files: [],
 
       },
-      {
-        id: 'images',
-        name: 'Using Vision / Image APIs',
-        description: 'Extract resume from image',
-        filePath: '/intro/images/',
-        files: [],
-      },
+      // {
+      //   id: 'images',
+      //   name: 'Using Vision / Image APIs',
+      //   description: 'Extract resume from image',
+      //   filePath: '/intro/images/',
+      //   files: [],
+      // },
     ],
     advancedPromptSyntax: [],
     promptEngineering: [{
