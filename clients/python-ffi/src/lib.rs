@@ -218,21 +218,8 @@ fn render_prompt(template: String, context: RenderData) -> PyResult<PyObject> {
         ctx,
         template_string_macros,
     } = context;
-    // python gil it
-    // let gil = Python::acquire_gil();
-    // let py = gil.python();
-    // // run args.repr
-    // let args_repr = args.repr(py)?;
-    // println!("Python args: {:#?}", args_repr);
     let render_args = parse_py_type(args)?;
-    // let serde_json::Value::Object(render_args) = render_args else {
-    //     return Err(PyTypeError::new_err(
-    //         "args must be convertible to a JSON object",
-    //     ));
-    // };
-    println!("Render args: {:#?}", render_args);
 
-    // Err(PyRuntimeError::new_err("Not implemented"))
     let rendered = internal_baml_jinja::render_prompt2(
         &template,
         &render_args,

@@ -537,22 +537,7 @@ pub fn render_prompt2(
         anyhow::bail!("args must be a map");
     }
 
-    println!("\n\n BamlArgType args: {:#?}", args);
-
-    let minijinja_args = args.clone().into();
-    println!("\nminijinja_args: {:#?}", minijinja_args);
-
-    let args = context! {
-        img => minijinja::Value::from_object(BamlImage::Url(ImageUrl {
-            url: "https://example.com/image.jpg".to_string(),
-        })),
-        hello => context! {
-            img => BamlImage::Url(ImageUrl {
-                url: "https://example.com/image.jpg".to_string(),
-            }),
-        }
-    };
-    println!("args: {:#?}", args);
+    let minijinja_args: Value = args.clone().into();
 
     let rendered = render_minijinja(template, &minijinja_args, ctx, template_string_macros);
 
