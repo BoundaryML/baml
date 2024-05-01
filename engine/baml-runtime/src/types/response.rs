@@ -1,10 +1,31 @@
 pub use crate::internal::llm_client::LLMResponse;
 use anyhow::Result;
+use colored::*;
 
-#[derive(Debug)]
 pub struct FunctionResult {
     pub(crate) llm_response: LLMResponse,
     pub(crate) parsed: Option<Result<(serde_json::Value, jsonish::DeserializerConditions)>>,
+}
+
+impl std::fmt::Display for FunctionResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "{}", self.llm_response)?;
+        match &self.parsed {
+            Some(Ok((val, _))) => {
+                writeln!(f, "{}", "---Parsed Response---".blue())?;
+                write!(
+                    f,
+                    "{}",
+                    serde_json::to_string_pretty(val).unwrap_or_else(|_| val.to_string())
+                )
+            }
+            Some(Err(e)) => {
+                writeln!(f, "{}", "---Parsed Response---".blue())?;
+                write!(f, "{}", e.to_string().red())
+            }
+            None => Ok(()),
+        }
+    }
 }
 
 impl FunctionResult {
@@ -19,16 +40,24 @@ impl FunctionResult {
                 if let Ok((val, _)) = res {
                     Ok(val)
                 } else {
-                    anyhow::bail!("{:#?}", self)
+                    anyhow::bail!("{}", self)
                 }
             })
-            .unwrap_or_else(|| anyhow::bail!("{:#?}", self))
+            .unwrap_or_else(|| anyhow::bail!("{}", self))
     }
 }
 
-#[derive(Debug)]
 pub struct TestResponse {
     pub(crate) function_response: Result<FunctionResult>,
+}
+
+impl std::fmt::Display for TestResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.function_response {
+            Ok(r) => write!(f, "{}", r),
+            Err(e) => write!(f, "{}", e.to_string().red()),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]

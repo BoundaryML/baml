@@ -1,3 +1,4 @@
+use colored::*;
 mod evaluate_type;
 mod get_vars;
 
@@ -286,6 +287,26 @@ pub struct RenderedChatMessage {
 pub enum RenderedPrompt {
     Completion(String),
     Chat(Vec<RenderedChatMessage>),
+}
+
+impl std::fmt::Display for RenderedPrompt {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            RenderedPrompt::Completion(s) => write!(f, "[{}] {}", "completion".dimmed(), s),
+            RenderedPrompt::Chat(messages) => {
+                write!(f, "[{}] ", "chat".dimmed())?;
+                for message in messages {
+                    writeln!(
+                        f,
+                        "{}{}",
+                        format!("{}: ", message.role).on_yellow(),
+                        message.message
+                    )?;
+                }
+                Ok(())
+            }
+        }
+    }
 }
 
 pub struct ChatOptions {

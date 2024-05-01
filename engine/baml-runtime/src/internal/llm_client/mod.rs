@@ -1,3 +1,4 @@
+use colored::*;
 // mod anthropic;
 pub mod expression_helper;
 pub mod llm_provider;
@@ -28,6 +29,23 @@ pub enum LLMResponse {
     LLMFailure(LLMErrorResponse),
     Retry(RetryLLMResponse),
     OtherFailures(String),
+}
+
+impl std::fmt::Display for LLMResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Success(response) => write!(f, "{}", response),
+            Self::Retry(retry) => match retry.passed.as_ref() {
+                Some(passed) => write!(f, "{}", passed),
+                None => match retry.failed.last() {
+                    Some(failed) => write!(f, "{}", failed),
+                    None => write!(f, "retry policy specified, but 0 requests were issued"),
+                },
+            },
+            Self::LLMFailure(failure) => write!(f, "LLM call failed: {failure:?}"),
+            Self::OtherFailures(e) => write!(f, "LLM call failed for unknown reason: {e:?}"),
+        }
+    }
 }
 
 impl LLMResponse {
@@ -101,6 +119,24 @@ pub struct LLMCompleteResponse {
     pub start_time_unix_ms: u64,
     pub latency_ms: u64,
     pub metadata: serde_json::Value,
+}
+
+impl std::fmt::Display for LLMCompleteResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(
+            f,
+            "{}",
+            format!(
+                "Client: {} ({}) - {}ms",
+                self.client, self.model, self.latency_ms
+            )
+            .yellow()
+        )?;
+        writeln!(f, "{}", "---PROMPT---".blue())?;
+        writeln!(f, "{}", self.prompt.to_string().dimmed())?;
+        writeln!(f, "{}", "---LLM REPLY---".blue())?;
+        write!(f, "{}", self.content.dimmed())
+    }
 }
 
 pub struct LLMStreamResponse {

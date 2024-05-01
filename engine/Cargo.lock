@@ -381,6 +381,7 @@ dependencies = [
  "async-trait",
  "base64 0.13.1",
  "clap 4.5.1",
+ "colored",
  "dissimilar",
  "dunce",
  "either",
@@ -1611,6 +1612,7 @@ name = "internal-baml-jinja"
 version = "0.20.0-canary.0"
 dependencies = [
  "anyhow",
+ "colored",
  "env_logger",
  "indexmap 2.2.5",
  "log",
