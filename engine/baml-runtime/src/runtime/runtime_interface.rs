@@ -10,10 +10,12 @@ use crate::{
         },
         prompt_renderer::PromptRenderer,
     },
-    InternalRuntimeInterface, RuntimeConstructor, RuntimeContext, RuntimeInterface, TestResponse,
+    runtime_interface::RuntimeConstructor,
+    InternalRuntimeInterface, RuntimeContext, RuntimeInterface, TestResponse,
 };
 use anyhow::Result;
 use internal_baml_core::ir::{repr::IntermediateRepr, FunctionWalker, IRHelper};
+use internal_baml_jinja::RenderedPrompt;
 use log::info;
 
 use super::InternalBamlRuntime;
@@ -21,6 +23,55 @@ use super::InternalBamlRuntime;
 impl InternalRuntimeInterface for InternalBamlRuntime {
     fn features(&self) -> IrFeatures {
         WithInternal::features(self)
+    }
+
+    fn render_prompt(
+        &mut self,
+        function_name: &str,
+        ctx: &RuntimeContext,
+        params: &HashMap<String, serde_json::Value>,
+    ) -> Result<RenderedPrompt> {
+        let func = self.get_function(function_name, ctx)?;
+        let baml_args = self.ir().check_function_params(&func, params)?;
+
+        let renderer = PromptRenderer::from_function(&func)?;
+        let client_name = renderer.client_name().to_string();
+
+        let (client, _) = self.get_client(&client_name, ctx)?;
+        client.render_prompt(&renderer, &ctx, &baml_args)
+    }
+
+    fn get_client(
+        &mut self,
+        client_name: &str,
+        ctx: &RuntimeContext,
+    ) -> Result<&(LLMProvider, Option<CallablePolicy>)> {
+        if !self.clients.contains_key(client_name) {
+            let walker = self.ir().find_client(client_name)?;
+            let client = LLMProvider::from_ir(&walker, ctx)?;
+
+            let retry_policy = match client.retry_policy_name() {
+                Some(name) => match self
+                    .ir()
+                    .walk_retry_policies()
+                    .find(|walker| walker.name() == name)
+                    .map(|walker| CallablePolicy::from(walker))
+                {
+                    Some(policy) => Some(policy),
+                    None => {
+                        return Err(anyhow::anyhow!(
+                            "Could not find retry policy with name: {}",
+                            name
+                        ))
+                    }
+                },
+                None => None,
+            };
+
+            self.clients
+                .insert(client_name.to_string(), (client, retry_policy));
+        }
+        Ok(self.clients.get(client_name).unwrap())
     }
 
     fn get_client_mut(
@@ -88,6 +139,14 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
 }
 
 impl RuntimeConstructor for InternalBamlRuntime {
+    fn from_file_content(
+        root_path: &str,
+        files: &HashMap<String, String>,
+    ) -> Result<InternalBamlRuntime> {
+        InternalBamlRuntime::from_file_content(root_path, files)
+    }
+
+    #[cfg(feature = "disk")]
     fn from_directory(dir: &std::path::PathBuf) -> Result<InternalBamlRuntime> {
         static VALID_EXTENSIONS: [&str; 2] = ["baml", "json"];
 

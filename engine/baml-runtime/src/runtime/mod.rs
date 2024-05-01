@@ -18,6 +18,30 @@ pub struct InternalBamlRuntime {
 }
 
 impl InternalBamlRuntime {
+    pub(super) fn from_file_content(
+        directory: &str,
+        files: &HashMap<String, String>,
+    ) -> Result<Self> {
+        let contents = files
+            .iter()
+            .map(|(path, contents)| {
+                Ok(SourceFile::from((
+                    PathBuf::from(path),
+                    contents.to_string(),
+                )))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let mut schema = validate(&PathBuf::from(directory), contents);
+        schema.diagnostics.to_result()?;
+
+        let ir = IntermediateRepr::from_parser_database(&schema.db)?;
+
+        Ok(Self {
+            ir,
+            clients: HashMap::new(),
+        })
+    }
+
     pub(super) fn from_files(directory: &PathBuf, files: Vec<PathBuf>) -> Result<Self> {
         let contents = files
             .iter()

@@ -4,7 +4,7 @@ use internal_baml_jinja::{ChatOptions, RenderedChatMessage};
 use crate::{internal::llm_client::LLMResponse, RuntimeContext};
 
 pub trait WithChat: Sync + Send {
-    fn chat_options(&mut self, ctx: &RuntimeContext) -> Result<ChatOptions>;
+    fn chat_options(&self, ctx: &RuntimeContext) -> Result<ChatOptions>;
 
     async fn chat(
         &mut self,
@@ -37,7 +37,7 @@ impl<T> WithChat for T
 where
     T: WithNoChat + Send + Sync,
 {
-    fn chat_options(&mut self, _ctx: &RuntimeContext) -> Result<ChatOptions> {
+    fn chat_options(&self, _ctx: &RuntimeContext) -> Result<ChatOptions> {
         anyhow::bail!("Chat prompts are not supported by this provider")
     }
 

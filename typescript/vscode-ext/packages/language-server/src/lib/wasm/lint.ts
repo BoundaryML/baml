@@ -41,16 +41,14 @@ export default function lint(input: LinterInput, onError?: (errorMessage: string
       })
     }
 
-    let res = languageWasm.create_runtime("/Users/vbv/repos/gloo-lang/integ-tests/baml_src");
-    let funcs = languageWasm.list_functions(res);
-    funcs.map((f) => {
-      console.log(f.name);
-    });
+    let res = languageWasm.create_runtime(input.root_path, input.files.map((f) => f.path), input.files.map((f) => f.content));
+    let func = res.get_function("ExtractResume2");
+    let ctx = new languageWasm.WasmRuntimeContext();
+    let prompt = func?.render_prompt(res, ctx, { resume: "Hi! I'm johsn!" });
 
-    funcs.map((f) => {
-      f.free();
-    });
-    res.free();
+    console.log(`prompt: ${prompt?.as_chat()?.map((c) => `${c.role}: ${c.parts.length} Parts`).join("\n")}`);
+
+    throw new Error('Not implemented')
 
     const result = languageWasm.lint(JSON.stringify(input))
     const parsed = JSON.parse(result) as LintResponse

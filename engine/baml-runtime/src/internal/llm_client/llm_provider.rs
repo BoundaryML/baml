@@ -40,7 +40,7 @@ impl LLMProvider {
 
 impl<'ir> WithPrompt<'ir> for LLMProvider {
     fn render_prompt(
-        &'ir mut self,
+        &'ir self,
         renderer: &PromptRenderer,
         ctx: &RuntimeContext,
         params: &BamlArgType,

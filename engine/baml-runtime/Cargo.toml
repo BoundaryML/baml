@@ -21,7 +21,6 @@ json_comments = "0.2.2"
 dunce = "1.0.4"
 strsim = "0.11.1"
 either = "1.8.1"
-walkdir.workspace = true
 colored = "2.1.0"
 indexmap.workspace = true
 tokio = { version = "1", default-features = false, features = [
@@ -29,6 +28,13 @@ tokio = { version = "1", default-features = false, features = [
   "time",
 ] }
 
+[dependencies.reqwest]
+version = "0.11"
+optional = true
+
+[dependencies.walkdir]
+version = "2.5.0"
+optional = true
 
 [dependencies.wasm-bindgen]
 version = "^0.2.74"
@@ -45,7 +51,7 @@ optional = true
 features = ["Headers", "Request", "RequestInit", "RequestMode"]
 
 [features]
-default = []
+default = ["network", "disk"]
 wasm = [
   "wasm-bindgen",
   "js-sys",
@@ -53,7 +59,9 @@ wasm = [
   "colored/no-color",
   "uuid/js",
 ] # Enable this feature for WASM build
-network = ["tokio/full"]
+network = ["tokio/full", "reqwest"]
+disk = ["walkdir"]
+internal = []
 
 [dev-dependencies]
 base64 = "0.13.0"

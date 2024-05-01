@@ -1,8 +1,9 @@
 use serde_json::json;
 
 use super::*;
+use crate::runtime_interface::RuntimeConstructor;
 use crate::types::TestStatus;
-use crate::{FunctionResult, RuntimeConstructor, RuntimeContext, RuntimeInterface, TestResponse};
+use crate::{FunctionResult, RuntimeContext, RuntimeInterface, TestResponse};
 use std::collections::HashMap;
 use std::path::PathBuf;
 

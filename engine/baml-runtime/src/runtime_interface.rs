@@ -1,20 +1,25 @@
 use anyhow::Result;
 use internal_baml_core::ir::{repr::IntermediateRepr, FunctionWalker};
+use internal_baml_jinja::RenderedPrompt;
 use std::{collections::HashMap, path::PathBuf};
 
 use crate::{
     internal::{
         ir_features::IrFeatures,
-        llm_client::{
-            llm_provider::LLMProvider, retry_policy::CallablePolicy, LLMResponse,
-        },
+        llm_client::{llm_provider::LLMProvider, retry_policy::CallablePolicy, LLMResponse},
     },
     runtime::InternalBamlRuntime,
     FunctionResult, RuntimeContext, TestResponse,
 };
 
 pub(crate) trait RuntimeConstructor {
+    #[cfg(feature = "disk")]
     fn from_directory(dir: &PathBuf) -> Result<InternalBamlRuntime>;
+
+    fn from_file_content(
+        root_path: &str,
+        files: &HashMap<String, String>,
+    ) -> Result<InternalBamlRuntime>;
 }
 
 // This is a runtime that has full access (disk, network, etc) - feature full
@@ -49,6 +54,12 @@ pub trait InternalRuntimeInterface {
         ctx: &RuntimeContext,
     ) -> Result<(&mut LLMProvider, Option<CallablePolicy>)>;
 
+    fn get_client(
+        &mut self,
+        client_name: &str,
+        ctx: &RuntimeContext,
+    ) -> Result<&(LLMProvider, Option<CallablePolicy>)>;
+
     fn get_function<'ir>(
         &'ir self,
         function_name: &str,
@@ -61,6 +72,13 @@ pub trait InternalRuntimeInterface {
         response: LLMResponse,
         ctx: &RuntimeContext,
     ) -> Result<FunctionResult>;
+
+    fn render_prompt(
+        &mut self,
+        function_name: &str,
+        ctx: &RuntimeContext,
+        params: &HashMap<String, serde_json::Value>,
+    ) -> Result<RenderedPrompt>;
 
     fn ir(&self) -> &IntermediateRepr;
 }

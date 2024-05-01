@@ -9,7 +9,7 @@ license-file.workspace = true
 
 [dependencies]
 anyhow.workspace = true
-baml-runtime = { path = "../baml-runtime" }
+baml-runtime = { path = "../baml-runtime", features = ["internal"] }
 baml-lib = { path = "../baml-lib/baml" }
 base64 = "0.13.0"
 check-latest = "1.0.2"
@@ -28,7 +28,7 @@ serde.workspace = true
 serde_json.workspace = true
 shellwords = "1.1.0"
 tokio = { version = "1.35.1", features = ["full"] }
-walkdir.workspace = true
+walkdir = "2.5.0"
 regex = "1.10.3"
 tempfile = "3.10.1"
 uuid = { version = "1.7.0", features = ["v4"] }

@@ -2,7 +2,6 @@ use anyhow::Result;
 mod chat;
 mod completion;
 
-
 use internal_baml_jinja::{BamlArgType, RenderContext_Client, RenderedPrompt};
 
 use crate::{internal::prompt_renderer::PromptRenderer, RuntimeContext};
@@ -43,7 +42,7 @@ pub trait WithClient {
 
 pub trait WithPrompt<'ir> {
     fn render_prompt(
-        &'ir mut self,
+        &'ir self,
         renderer: &PromptRenderer,
         ctx: &RuntimeContext,
         params: &BamlArgType,
@@ -162,7 +161,7 @@ where
     T: WithClient + WithChat + WithCompletion,
 {
     fn render_prompt(
-        &'ir mut self,
+        &'ir self,
         renderer: &PromptRenderer,
         ctx: &RuntimeContext,
         params: &BamlArgType,

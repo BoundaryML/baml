@@ -1,5 +1,6 @@
 pub(crate) mod internal;
 
+mod macros;
 mod runtime;
 mod runtime_interface;
 mod types;
@@ -11,8 +12,18 @@ use anyhow::Result;
 
 use runtime::InternalBamlRuntime;
 
-pub use runtime_interface::*;
+pub use runtime_interface::RuntimeInterface;
 pub use types::*;
+
+#[cfg(feature = "internal")]
+pub use internal_baml_jinja::{BamlImage, ChatMessagePart, RenderedPrompt};
+#[cfg(feature = "internal")]
+pub use runtime_interface::InternalRuntimeInterface;
+
+#[cfg(not(feature = "internal"))]
+pub(crate) use internal_baml_jinja::{BamlImage, ChatMessagePart, RenderedPrompt};
+#[cfg(not(feature = "internal"))]
+pub(crate) use runtime_interface::InternalRuntimeInterface;
 
 pub struct BamlRuntime {
     inner: InternalBamlRuntime,
@@ -20,14 +31,29 @@ pub struct BamlRuntime {
 
 impl BamlRuntime {
     /// Load a runtime from a directory
+    #[cfg(feature = "disk")]
     pub fn from_directory(path: &PathBuf) -> Result<Self> {
+        use runtime_interface::RuntimeConstructor;
+
         Ok(BamlRuntime {
             inner: InternalBamlRuntime::from_directory(path)?,
         })
     }
 
+    pub fn from_file_content(root_path: &str, files: &HashMap<String, String>) -> Result<Self> {
+        Ok(BamlRuntime {
+            inner: InternalBamlRuntime::from_file_content(root_path, files)?,
+        })
+    }
+
+    #[cfg(feature = "internal")]
     pub fn internal(&self) -> &impl InternalRuntimeInterface {
         &self.inner
+    }
+
+    #[cfg(feature = "internal")]
+    pub fn internal_mut(&mut self) -> &mut impl InternalRuntimeInterface {
+        &mut self.inner
     }
 }
 

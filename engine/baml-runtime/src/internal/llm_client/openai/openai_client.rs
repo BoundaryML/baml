@@ -12,8 +12,6 @@ use super::super::{LLMResponse, ModelFeatures};
 
 use crate::RuntimeContext;
 
-
-
 fn resolve_properties(
     client: &ClientWalker,
     ctx: &RuntimeContext,
@@ -114,7 +112,7 @@ impl WithClient for OpenAIClient {
 impl WithNoCompletion for OpenAIClient {}
 
 impl WithChat for OpenAIClient {
-    fn chat_options(&mut self, _ctx: &RuntimeContext) -> Result<internal_baml_jinja::ChatOptions> {
+    fn chat_options(&self, _ctx: &RuntimeContext) -> Result<internal_baml_jinja::ChatOptions> {
         Ok(internal_baml_jinja::ChatOptions::new(
             self.properties.default_role.clone(),
             None,
@@ -136,6 +134,11 @@ impl WithChat for OpenAIClient {
         ctx: &RuntimeContext,
         prompt: &Vec<RenderedChatMessage>,
     ) -> Result<LLMResponse> {
+        use crate::internal::llm_client::{
+            openai::types::{ChatCompletionResponse, FinishReason, OpenAIErrorResponse},
+            ErrorCode, LLMCompleteResponse, LLMErrorResponse,
+        };
+
         let req = self.client_http_request(ctx, "/chat/completions", prompt)?;
 
         let now = std::time::SystemTime::now();
@@ -280,7 +283,7 @@ impl OpenAIClient {
                 .collect::<serde_json::Value>(),
         );
 
-        info!("Request body: {:#?}", body);
+        log::info!("Request body: {:#?}", body);
 
         let mut req = client
             .post(format!("{}{}", self.properties.base_url, path))
