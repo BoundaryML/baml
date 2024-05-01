@@ -390,6 +390,7 @@ dependencies = [
  "env_logger",
  "expect-test",
  "futures",
+ "indexmap 2.2.5",
  "indoc",
  "internal-baml-client-llm",
  "internal-baml-core",

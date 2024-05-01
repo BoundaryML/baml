@@ -1,4 +1,5 @@
 use anyhow::Error;
+use indexmap::IndexMap;
 use internal_baml_jinja::{BamlArgType, BamlImage, ImageBase64, ImageUrl};
 
 use crate::ir::{FieldType, IntermediateRepr, TypeValue};
@@ -32,11 +33,10 @@ pub fn to_baml_arg(
 ) -> BamlArgType {
     match field_type {
         FieldType::Primitive(t) => {
-            let error = || {
+            let mut error = || {
                 scope.push_error(format!("Expected type {:?}, got `{}`", t, value));
                 BamlArgType::Unsupported("Error".to_string())
             };
-
             match t {
                 TypeValue::String if value.is_string() => {
                     BamlArgType::String(value.as_str().unwrap().to_string())
@@ -82,7 +82,9 @@ pub fn to_baml_arg(
             if let Ok(e) = ir.find_enum(name) {
                 match value.as_str() {
                     Some(s) => {
-                        if !e.walk_values().find(|v| v.item.elem.0 == s).is_some() {
+                        if e.walk_values().find(|v| v.item.elem.0 == s).is_some() {
+                            BamlArgType::Enum(name.to_string(), s.to_string())
+                        } else {
                             scope.push_error(format!(
                                 "Invalid enum value for {}: expected one of ({}), got `{}`",
                                 name,
@@ -92,6 +94,7 @@ pub fn to_baml_arg(
                                     .join(" | "),
                                 s
                             ));
+                            BamlArgType::Unsupported("Error".to_string())
                         }
                     }
                     None => {
@@ -99,54 +102,59 @@ pub fn to_baml_arg(
                             "Expected enum value for {}, got `{}`",
                             name, value
                         ));
+                        BamlArgType::Unsupported("Error".to_string())
                     }
                 }
             } else {
                 scope.push_error(format!("Enum {} not found", name));
+                BamlArgType::Unsupported("Error".to_string())
             }
         }
         FieldType::Class(name) => {
             if let Ok(c) = ir.find_class(name) {
                 match value {
                     serde_json::Value::Object(obj) => {
+                        let mut fields = IndexMap::new();
                         for f in c.walk_fields() {
                             if let Some(v) = obj.get(f.name()) {
-                                to_baml_arg(ir, f.r#type(), v, scope);
+                                fields.insert(
+                                    f.name().to_string(),
+                                    to_baml_arg(ir, f.r#type(), v, scope),
+                                );
                             } else if !f.r#type().is_optional() {
-                                scope.push_error(format!("Missing required field `{}`", f.name()));
-                            }
-                        }
-
-                        for f in obj.keys() {
-                            if !c.walk_fields().any(|f2| f2.name() == f) {
                                 scope.push_error(format!(
-                                    "Field `{}` not found in class `{}`",
-                                    f, name
+                                    "Missing required field `{}` for class {}",
+                                    f.name(),
+                                    name
                                 ));
                             }
                         }
+                        BamlArgType::Class(name.to_string(), fields)
                     }
                     _ => {
                         scope.push_error(format!(
                             "Expected object for class {}, got `{}`",
                             name, value
                         ));
+                        BamlArgType::Unsupported("Error".to_string())
                     }
                 }
             } else {
                 scope.push_error(format!("Class {} not found", name));
+                BamlArgType::Unsupported("Error".to_string())
             }
         }
         FieldType::List(item) => match value.as_array() {
             Some(arr) => {
-                for (idx, v) in arr.iter().enumerate() {
-                    scope.push(format!("{}", idx));
-                    to_baml_arg(ir, item, v, scope);
-                    scope.pop(false);
+                let mut items = Vec::new();
+                for v in arr {
+                    items.push(to_baml_arg(ir, item, v, scope));
                 }
+                BamlArgType::List(items)
             }
             None => {
-                scope.push_error(format!("Expected a list of {}, got `{}`", item, value));
+                scope.push_error(format!("Expected array, got `{}`", value));
+                BamlArgType::Unsupported("Error".to_string())
             }
         },
         FieldType::Tuple(_) => unimplemented!("Tuples are not yet supported"),
@@ -154,20 +162,26 @@ pub fn to_baml_arg(
         FieldType::Union(options) => {
             for option in options {
                 let mut scope = ScopeStack::new();
-                to_baml_arg(ir, option, value, &mut scope);
+                let result = to_baml_arg(ir, option, value, &mut scope);
                 if !scope.has_errors() {
-                    return;
+                    return result;
                 }
             }
-            scope.push_error(format!("Expected one of ({}), got `{}`", field_type, value));
+            scope.push_error(format!("Expected one of {:?}, got `{}`", options, value));
+            BamlArgType::Unsupported("Error".to_string())
         }
         FieldType::Optional(inner) => {
             if !value.is_null() {
                 let mut inner_scope = ScopeStack::new();
-                to_baml_arg(ir, inner, value, &mut inner_scope);
+                let baml_arg = to_baml_arg(ir, inner, value, &mut inner_scope);
                 if inner_scope.has_errors() {
                     scope.push_error(format!("Expected optional {}, got `{}`", inner, value));
+                    BamlArgType::Unsupported("Error".to_string())
+                } else {
+                    baml_arg
                 }
+            } else {
+                BamlArgType::None
             }
         }
     }

@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use anyhow::{Context, Result};
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
+use log::info;
 use serde_json::json;
 
 use super::super::expression_helper::to_value;
@@ -262,11 +263,13 @@ impl OpenAIClient {
                 .map(|m| {
                     json!({
                         "role": m.role,
-                        "content": convert_message_parts_to_content(m.parts)
+                        "content": convert_message_parts_to_content(&m.parts)
                     })
                 })
                 .collect::<serde_json::Value>(),
         );
+
+        info!("Request body: {:#?}", body);
 
         let mut req = client
             .post(format!("{}{}", self.properties.base_url, path))
@@ -286,17 +289,21 @@ impl OpenAIClient {
     }
 }
 
-fn convert_message_parts_to_content(parts: Vec<ChatMessagePart>) -> serde_json::Value {
+fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json::Value {
     let content: Vec<serde_json::Value> = parts
         .into_iter()
         .map(|part| match part {
             ChatMessagePart::Text(text) => json!({"type": "text", "text": text}),
             ChatMessagePart::Image(image) => match image {
                 internal_baml_jinja::BamlImage::Url(image) => {
-                    json!({"type": "image_url", "image_url": image.url})
+                    json!({"type": "image_url", "image_url": json!({
+                        "url": image.url
+                    })})
                 }
                 internal_baml_jinja::BamlImage::Base64(image) => {
-                    json!({"type": "image_url", "image_url": image.base64})
+                    json!({"type": "image_url", "image_url": json!({
+                        "base64": image.base64
+                    })})
                 }
             },
         })
@@ -304,7 +311,7 @@ fn convert_message_parts_to_content(parts: Vec<ChatMessagePart>) -> serde_json::
 
     // This is for non-image apis, where there is no "type", and the content is returned as a string instead of the list of parts.
     if content.len() == 1 && content[0].get("type").unwrap() == "text" {
-        return content[0].get("text").unwrap().to_string();
+        return serde_json::Value::String(content[0].get("text").unwrap().to_string());
     }
 
     json!(content)

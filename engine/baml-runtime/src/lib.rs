@@ -45,6 +45,7 @@ impl RuntimeInterface for BamlRuntime {
         test_name: &str,
         ctx: &RuntimeContext,
     ) -> Result<TestResponse> {
+        println!("Running test: {}::{}", function_name, test_name);
         let func = self.inner.get_function(function_name, ctx)?;
         let test = self.inner.ir().find_test(&func, test_name)?;
 
@@ -65,13 +66,17 @@ impl RuntimeInterface for BamlRuntime {
                 })
             }
         };
-        self.inner.ir().check_function_params(&func, &params)?;
+        // println!("check params: {:#?}", params);
+        let baml_arg = self.inner.ir().check_function_params(&func, &params)?;
+
+        println!("Test params: {:#?}", baml_arg);
 
         let renderer = PromptRenderer::from_function(&func)?;
         let client_name = renderer.client_name().to_string();
 
         let (client, retry_policy) = self.inner.get_client_mut(&client_name, ctx)?;
-        let prompt = client.render_prompt(&renderer, &ctx, &serde_json::json!(params))?;
+        let prompt = client.render_prompt(&renderer, &ctx, &baml_arg)?;
+        println!("Prompt: {:#?}", prompt);
 
         let response = client.call(retry_policy, ctx, &prompt).await;
 
@@ -90,13 +95,13 @@ impl RuntimeInterface for BamlRuntime {
         ctx: &RuntimeContext,
     ) -> Result<crate::FunctionResult> {
         let func = self.inner.get_function(&function_name, ctx)?;
-        self.inner.ir().check_function_params(&func, &params)?;
+        let baml_arg = self.inner.ir().check_function_params(&func, &params)?;
 
         let renderer = PromptRenderer::from_function(&func)?;
         let client_name = renderer.client_name().to_string();
 
         let (client, retry_policy) = self.inner.get_client_mut(&client_name, ctx)?;
-        let prompt = client.render_prompt(&renderer, &ctx, &serde_json::json!(params))?;
+        let prompt = client.render_prompt(&renderer, &ctx, &baml_arg)?;
 
         let response = client.call(retry_policy, ctx, &prompt).await;
 

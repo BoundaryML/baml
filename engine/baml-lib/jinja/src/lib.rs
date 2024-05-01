@@ -255,7 +255,7 @@ fn render_minijinja(
 
     let rendered = tmpl.render(args)?;
 
-    if !rendered.contains(MAGIC_CHAT_ROLE_DELIMITER) {
+    if !rendered.contains(MAGIC_CHAT_ROLE_DELIMITER) && !rendered.contains(MAGIC_IMAGE_DELIMITER) {
         return Ok(RenderedPrompt::Completion(rendered));
     }
 
@@ -392,7 +392,21 @@ impl std::fmt::Display for RenderedPrompt {
                         f,
                         "{}{}",
                         format!("{}: ", message.role).on_yellow(),
-                        message.message
+                        message
+                            .parts
+                            .iter()
+                            .map(|p| match p {
+                                ChatMessagePart::Text(t) => t.clone(),
+                                ChatMessagePart::Image(img) => match img {
+                                    BamlImage::Url(url) =>
+                                        format!("<image_placeholder: {}>", url.url),
+                                    BamlImage::Base64(base64) =>
+                                    // TODO: print this as well?
+                                        "<image_placeholder base64>".to_string(),
+                                },
+                            })
+                            .collect::<Vec<String>>()
+                            .join("")
                     )?;
                 }
                 Ok(())

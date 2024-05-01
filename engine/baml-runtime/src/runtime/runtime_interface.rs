@@ -14,7 +14,7 @@ use crate::{
 };
 use anyhow::Result;
 use internal_baml_core::ir::{repr::IntermediateRepr, FunctionWalker, IRHelper};
-use internal_baml_jinja::BamlArgType;
+use log::info;
 
 use super::InternalBamlRuntime;
 
@@ -167,13 +167,15 @@ impl RuntimeInterface for InternalBamlRuntime {
                 })
             }
         };
-        self.ir().check_function_params(&func, &params)?;
+        info!("Test params: {:#?}", params);
+        let baml_args = self.ir().check_function_params(&func, &params)?;
 
         let renderer = PromptRenderer::from_function(&func)?;
         let client_name = renderer.client_name().to_string();
 
         let (client, retry_policy) = self.get_client_mut(&client_name, ctx)?;
-        let prompt = client.render_prompt(&renderer, &ctx, params)?;
+        let prompt = client.render_prompt(&renderer, &ctx, &baml_args)?;
+        println!("Prompt: {:#?}", prompt);
 
         let response = client.call(retry_policy, ctx, &prompt).await;
 
@@ -188,17 +190,17 @@ impl RuntimeInterface for InternalBamlRuntime {
     async fn call_function(
         &mut self,
         function_name: String,
-        params: &BamlArgType,
+        params: HashMap<String, serde_json::Value>,
         ctx: &RuntimeContext,
     ) -> Result<crate::FunctionResult> {
         let func = self.get_function(&function_name, ctx)?;
-        self.ir().check_function_params(&func, &params)?;
+        let baml_args = self.ir().check_function_params(&func, &params)?;
 
         let renderer = PromptRenderer::from_function(&func)?;
         let client_name = renderer.client_name().to_string();
 
         let (client, retry_policy) = self.get_client_mut(&client_name, ctx)?;
-        let prompt = client.render_prompt(&renderer, &ctx, &serde_json::json!(params))?;
+        let prompt = client.render_prompt(&renderer, &ctx, &baml_args)?;
 
         let response = client.call(retry_policy, ctx, &prompt).await;
 

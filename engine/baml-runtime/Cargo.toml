@@ -30,6 +30,7 @@ async-stream = "0.3.5"
 async-trait = "0.1.80"
 walkdir.workspace = true
 colored = "2.1.0"
+indexmap.workspace = true
 
 [dev-dependencies]
 base64 = "0.13.0"

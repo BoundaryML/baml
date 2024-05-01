@@ -168,6 +168,7 @@ where
         params: &BamlArgType,
     ) -> Result<RenderedPrompt> {
         let prompt = renderer.render_prompt(ctx, params, self.context())?;
+        println!("Rdnerer prompt Prompt: {:#?}", prompt);
 
         match self.model_features() {
             ModelFeatures {

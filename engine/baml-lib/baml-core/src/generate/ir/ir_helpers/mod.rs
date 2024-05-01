@@ -43,7 +43,7 @@ pub trait IRHelper {
         &'a self,
         function: &'a FunctionWalker<'a>,
         params: &HashMap<String, serde_json::Value>,
-    ) -> Result<()>;
+    ) -> Result<BamlArgType, Error>;
 }
 
 impl IRHelper for IntermediateRepr {
@@ -151,8 +151,7 @@ impl IRHelper for IntermediateRepr {
                 let baml_arg = to_baml_arg::to_baml_arg(self, param_type, param_value, &mut scope);
                 match baml_arg {
                     BamlArgType::Unsupported(_) => {
-                        scope
-                            .push_error(format!("Unsupported value for parameter: {}", param_name));
+                        scope.push_error(format!("Ran into an error: {}", param_name));
                     }
                     _ => {
                         baml_arg_map.insert(param_name.to_string(), baml_arg);
@@ -171,6 +170,6 @@ impl IRHelper for IntermediateRepr {
             anyhow::bail!(scope);
         }
 
-        Ok((BamlArgType::Map(baml_arg_map)))
+        Ok(BamlArgType::Map(baml_arg_map))
     }
 }
