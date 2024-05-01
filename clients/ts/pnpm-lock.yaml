@@ -14,9 +14,15 @@ dependencies:
   '@boundaryml/baml-core-ffi':
     specifier: 0.18.0
     version: 0.18.0
+  '@next/env':
+    specifier: ^14.2.3
+    version: 14.2.3
   dotenv:
     specifier: ^16.4.5
     version: 16.4.5
+  dotenv-flow:
+    specifier: ^4.1.0
+    version: 4.1.0
   jest-runner:
     specifier: ^29.7.0
     version: 29.7.0
@@ -1015,6 +1021,10 @@ packages:
       '@jridgewell/sourcemap-codec': 1.4.15
     dev: true
 
+  /@next/env@14.2.3:
+    resolution: {integrity: sha512-W7fd7IbkfmeeY2gXrzJYDx8D2lWKbVoTIj1o1ScPHNzvp30s1AuoEFSdr39bC5sjxJaxTtq3OTCZboNp0lNWHA==}
+    dev: false
+
   /@nodelib/fs.scandir@2.1.5:
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
     engines: {node: '>= 8'}
@@ -1719,6 +1729,13 @@ packages:
     dependencies:
       path-type: 4.0.0
     dev: true
+
+  /dotenv-flow@4.1.0:
+    resolution: {integrity: sha512-0cwP9jpQBQfyHwvE0cRhraZMkdV45TQedA8AAUZMsFzvmLcQyc1HPv+oX0OOYwLFjIlvgVepQ+WuQHbqDaHJZg==}
+    engines: {node: '>= 12.0.0'}
+    dependencies:
+      dotenv: 16.4.5
+    dev: false
 
   /dotenv@16.4.5:
     resolution: {integrity: sha512-ZmdL2rui+eB2YwhsWzjInR8LldtZHGDoQ1ugH85ppHKwpUHL7j7rN0Ti9NCnGiQbhaZ11FpR+7ao1dNsmduNUg==}

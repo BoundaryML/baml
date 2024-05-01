@@ -1,6 +1,6 @@
 {
   "name": "@boundaryml/baml-core",
-  "version": "0.0.7",
+  "version": "0.0.7-canary.6",
   "description": "",
   "exports": {
     ".": {
@@ -67,7 +67,9 @@
     "@anthropic-ai/sdk": "^0.18.0",
     "@azure/openai": "1.0.0-beta.11",
     "@boundaryml/baml-core-ffi": "0.18.0",
+    "@next/env": "^14.2.3",
     "dotenv": "^16.4.5",
+    "dotenv-flow": "^4.1.0",
     "jest-runner": "^29.7.0",
     "json-schema": "^0.4.0",
     "ollama": "^0.5.0",
