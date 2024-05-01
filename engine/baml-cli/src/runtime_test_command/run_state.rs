@@ -3,7 +3,7 @@ use baml_lib::internal_baml_core::ir::TestCaseWalker;
 use colored::*;
 use indexmap::{IndexMap, IndexSet};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
-use std::{collections::HashMap, fmt::Debug, sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::{
     sync::{Mutex, MutexGuard, Semaphore},
     task,
@@ -357,6 +357,7 @@ impl TestCommand {
     ) -> (usize, Vec<TestCaseWalker<'a>>) {
         let mut count = 0;
         let mut selected_tests = runtime
+            .internal()
             .ir()
             .walk_tests()
             .filter_map(|test| {

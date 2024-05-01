@@ -22,7 +22,7 @@ async fn run_async(command: &TestArgs) -> Result<()> {
 
     // Load the runtime.
     let runtime = BamlRuntime::from_directory(&baml_dir)?;
-    runtime.features().err_if_legacy()?;
+    runtime.internal().features().err_if_legacy()?;
 
     let test_command = TestCommand::new(runtime, filter_args);
 
