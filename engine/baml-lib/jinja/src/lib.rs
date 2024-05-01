@@ -6,13 +6,10 @@ mod get_vars;
 use evaluate_type::get_variable_types;
 pub use evaluate_type::{PredefinedTypes, Type, TypeError};
 use indexmap::IndexMap;
-use log::info;
 use minijinja::{self, value::Kwargs};
 use minijinja::{context, ErrorKind, Value};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use std::collections::HashMap;
-use std::sync::Arc;
 
 fn get_env<'a>() -> minijinja::Environment<'a> {
     let mut env = minijinja::Environment::new();
@@ -108,7 +105,7 @@ impl minijinja::value::Object for OutputFormat {
         args: &[minijinja::value::Value],
     ) -> Result<minijinja::value::Value, minijinja::Error> {
         use minijinja::{
-            value::{from_args, Value, ValueKind},
+            value::{from_args, ValueKind},
             Error,
         };
 
@@ -338,7 +335,7 @@ impl minijinja::value::Object for BamlImage {
     fn call(
         &self,
         _state: &minijinja::State<'_, '_>,
-        args: &[minijinja::value::Value],
+        _args: &[minijinja::value::Value],
     ) -> Result<minijinja::value::Value, minijinja::Error> {
         Err(minijinja::Error::new(
             ErrorKind::UnknownMethod,
@@ -400,7 +397,7 @@ impl std::fmt::Display for RenderedPrompt {
                                 ChatMessagePart::Image(img) => match img {
                                     BamlImage::Url(url) =>
                                         format!("<image_placeholder: {}>", url.url),
-                                    BamlImage::Base64(base64) =>
+                                    BamlImage::Base64(_) =>
                                     // TODO: print this as well?
                                         "<image_placeholder base64>".to_string(),
                                 },
@@ -417,6 +414,7 @@ impl std::fmt::Display for RenderedPrompt {
 
 pub struct ChatOptions {
     default_role: String,
+    #[allow(dead_code)]
     valid_roles: Option<Vec<String>>,
 }
 
@@ -530,8 +528,8 @@ impl From<BamlArgType> for minijinja::Value {
                 minijinja::Value::from(list)
             }
             BamlArgType::Image(i) => minijinja::Value::from_object(i),
-            BamlArgType::Enum(e, v) => minijinja::Value::from(v),
-            BamlArgType::Class(c, m) => {
+            BamlArgType::Enum(_, v) => minijinja::Value::from(v),
+            BamlArgType::Class(_, m) => {
                 let map: IndexMap<String, minijinja::Value> =
                     m.into_iter().map(|(k, v)| (k, v.into())).collect();
                 minijinja::Value::from_iter(map.into_iter())

@@ -38,7 +38,7 @@ export function handleWasmError(e: Error, cmd: string, onError?: (errorMessage: 
       return { message: msg, isPanic: true, stack }
     }
 
-    const msg = `language-wasm errored when invoking ${cmd}.\n${e.message}`
+    const msg = `language-wasm errored when invoking ${cmd}.\n${e.message}\nRAW:${e}`
     return { message: msg, isPanic: false, stack: e.stack }
   }
 

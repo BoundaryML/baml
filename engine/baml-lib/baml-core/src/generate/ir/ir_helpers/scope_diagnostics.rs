@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 type ScopeName = Vec<String>;
 
 trait ScopeTrait {
@@ -9,6 +10,7 @@ trait ScopeTrait {
     ) -> (Vec<(ScopeName, String)>, Vec<(ScopeName, String)>);
 }
 
+#[allow(dead_code)]
 enum ScopeType {
     Generic,
     Class,
@@ -16,6 +18,7 @@ enum ScopeType {
     Union,
 }
 
+#[allow(dead_code)]
 enum Scope {
     Generic(GenericScope),
     Class(ClassScope),
@@ -30,15 +33,18 @@ struct GenericScope {
     warnings: Vec<String>,
 }
 
+#[allow(dead_code)]
 struct ClassScope {
     name: String,
     fields: Vec<Scope>,
 }
 
+#[allow(dead_code)]
 struct ArrayScope {
     items: Vec<Scope>,
 }
 
+#[allow(dead_code)]
 struct UnionScope {
     options: Vec<Scope>,
 }
@@ -52,6 +58,7 @@ impl GenericScope {
         }
     }
 
+    #[allow(dead_code)]
     fn push_type_error(&mut self, expected: &str, got: &str) {
         self.errors
             .push(format!("Expected type {}, got `{}`", expected, got));
@@ -113,7 +120,7 @@ impl ScopeStack {
         }
 
         let scope = self.scopes.pop().unwrap();
-        let mut parent_scope = self.scopes.last_mut().unwrap();
+        let parent_scope = self.scopes.last_mut().unwrap();
 
         if errors_as_warnings {
             parent_scope.warnings.extend(scope.errors);

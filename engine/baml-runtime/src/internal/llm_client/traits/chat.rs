@@ -37,7 +37,7 @@ impl<T> WithChat for T
 where
     T: WithNoChat + Send + Sync,
 {
-    fn chat_options(&mut self, ctx: &RuntimeContext) -> Result<ChatOptions> {
+    fn chat_options(&mut self, _ctx: &RuntimeContext) -> Result<ChatOptions> {
         anyhow::bail!("Chat prompts are not supported by this provider")
     }
 

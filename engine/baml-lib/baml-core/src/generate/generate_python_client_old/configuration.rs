@@ -9,7 +9,7 @@ use super::{
     file::FileCollector,
     template::{render_template, HSTemplate},
     traits::{JsonHelper, WithWritePythonString},
-    value::{expr_to_py_value, to_py_value},
+    value::{expr_to_py_value},
     WithToCode,
 };
 

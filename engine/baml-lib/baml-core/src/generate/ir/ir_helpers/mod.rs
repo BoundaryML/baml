@@ -2,7 +2,7 @@ mod error_utils;
 mod scope_diagnostics;
 mod to_baml_arg;
 
-use std::{collections::HashMap, hash::Hash};
+use std::{collections::HashMap};
 
 use crate::{
     error_not_found, error_unsupported,

@@ -41,6 +41,17 @@ export default function lint(input: LinterInput, onError?: (errorMessage: string
       })
     }
 
+    let res = languageWasm.create_runtime("/Users/vbv/repos/gloo-lang/integ-tests/baml_src");
+    let funcs = languageWasm.list_functions(res);
+    funcs.map((f) => {
+      console.log(f.name);
+    });
+
+    funcs.map((f) => {
+      f.free();
+    });
+    res.free();
+
     const result = languageWasm.lint(JSON.stringify(input))
     const parsed = JSON.parse(result) as LintResponse
     // console.log(`lint result ${JSON.stringify(JSON.parse(result), null, 2)}`)

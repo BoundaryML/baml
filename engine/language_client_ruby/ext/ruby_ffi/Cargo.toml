@@ -25,7 +25,7 @@ rb-sys = { version = "0.9.97", features = [
 serde = "1.0.198"
 serde_json = "1.0.116"
 serde_magnus = "0.8.1"
-tokio.workspace = true
+tokio = { version = "1", features = ["full"] }
 
 [dev-dependencies]
 rb-sys = { version = "0.9.97", features = [

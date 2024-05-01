@@ -6,7 +6,7 @@ use crate::{
     internal::{
         ir_features::IrFeatures,
         llm_client::{
-            llm_provider::LLMProvider, retry_policy::CallablePolicy, LLMResponse, ModelFeatures,
+            llm_provider::LLMProvider, retry_policy::CallablePolicy, LLMResponse,
         },
     },
     runtime::InternalBamlRuntime,

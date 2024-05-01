@@ -13,7 +13,5 @@ internal-baml-core.workspace = true
 either.workspace = true
 env_logger.workspace = true
 log.workspace = true
-reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-tokio.workspace = true

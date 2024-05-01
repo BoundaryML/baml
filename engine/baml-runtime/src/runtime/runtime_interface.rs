@@ -60,7 +60,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
     fn get_function<'ir>(
         &'ir self,
         function_name: &str,
-        ctx: &RuntimeContext,
+        _ctx: &RuntimeContext,
     ) -> Result<FunctionWalker<'ir>> {
         let walker = self.ir().find_function(function_name)?;
         Ok(walker)

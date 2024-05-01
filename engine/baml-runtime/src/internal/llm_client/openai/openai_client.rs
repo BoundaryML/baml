@@ -3,16 +3,16 @@ use std::collections::HashMap;
 use anyhow::{Context, Result};
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
-use log::info;
+
 use serde_json::json;
 
 use super::super::expression_helper::to_value;
 use super::super::traits::{WithChat, WithClient, WithNoCompletion, WithRetryPolicy};
-use super::super::{openai::types::FinishReason, LLMResponse, ModelFeatures};
-use super::super::{ErrorCode, LLMCompleteResponse, LLMErrorResponse};
+use super::super::{LLMResponse, ModelFeatures};
+
 use crate::RuntimeContext;
 
-use super::types::{ChatCompletionResponse, OpenAIErrorResponse};
+
 
 fn resolve_properties(
     client: &ClientWalker,
@@ -114,13 +114,23 @@ impl WithClient for OpenAIClient {
 impl WithNoCompletion for OpenAIClient {}
 
 impl WithChat for OpenAIClient {
-    fn chat_options(&mut self, ctx: &RuntimeContext) -> Result<internal_baml_jinja::ChatOptions> {
+    fn chat_options(&mut self, _ctx: &RuntimeContext) -> Result<internal_baml_jinja::ChatOptions> {
         Ok(internal_baml_jinja::ChatOptions::new(
             self.properties.default_role.clone(),
             None,
         ))
     }
 
+    #[cfg(not(feature = "network"))]
+    async fn chat(
+        &mut self,
+        _ctx: &RuntimeContext,
+        _prompt: &Vec<RenderedChatMessage>,
+    ) -> Result<LLMResponse> {
+        Err(anyhow::anyhow!("Network feature is not enabled"))
+    }
+
+    #[cfg(feature = "network")]
     async fn chat(
         &mut self,
         ctx: &RuntimeContext,
@@ -246,6 +256,7 @@ impl OpenAIClient {
         })
     }
 
+    #[cfg(feature = "network")]
     fn client_http_request(
         &self,
         ctx: &RuntimeContext,

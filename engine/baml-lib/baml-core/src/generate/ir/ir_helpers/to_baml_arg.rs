@@ -1,4 +1,3 @@
-use anyhow::Error;
 use indexmap::IndexMap;
 use internal_baml_jinja::{BamlArgType, BamlImage, ImageBase64, ImageUrl};
 
@@ -11,6 +10,7 @@ pub struct ParameterError {
     vec: Vec<String>,
 }
 
+#[allow(dead_code)]
 impl ParameterError {
     pub(super) fn required_param_missing(&mut self, param_name: &str) {
         self.vec

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use internal_baml_core::{
     error_unsupported,
-    ir::{repr::FunctionConfig, FunctionWalker},
+    ir::{FunctionWalker},
 };
 use internal_baml_jinja::{
     BamlArgType, RenderContext, RenderContext_Client, RenderedPrompt, TemplateStringMacro,

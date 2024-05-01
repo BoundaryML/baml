@@ -1,10 +1,8 @@
 use anyhow::Result;
-use async_trait::async_trait;
 use internal_baml_jinja::CompletionOptions;
 
 use crate::{internal::llm_client::LLMResponse, RuntimeContext};
 
-#[async_trait]
 pub trait WithCompletion: Sync + Send {
     fn completion_options(&mut self, ctx: &RuntimeContext) -> Result<CompletionOptions>;
 
@@ -31,12 +29,11 @@ pub trait WithCompletion: Sync + Send {
 
 pub trait WithNoCompletion {}
 
-#[async_trait]
 impl<T> WithCompletion for T
 where
     T: WithNoCompletion + Send + Sync,
 {
-    fn completion_options(&mut self, ctx: &RuntimeContext) -> Result<CompletionOptions> {
+    fn completion_options(&mut self, _ctx: &RuntimeContext) -> Result<CompletionOptions> {
         anyhow::bail!("Completion prompts are not supported by this provider")
     }
 

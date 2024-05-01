@@ -8,6 +8,8 @@ pub mod traits;
 
 use anyhow::Result;
 use internal_baml_jinja::RenderedPrompt;
+
+#[cfg(feature = "network")]
 use reqwest::StatusCode;
 
 #[derive(Clone, Copy)]
@@ -98,6 +100,7 @@ pub enum ErrorCode {
 }
 
 impl ErrorCode {
+    #[cfg(feature = "network")]
     pub fn from_status(status: StatusCode) -> Self {
         match status.as_u16() {
             401 => ErrorCode::InvalidAuthentication,

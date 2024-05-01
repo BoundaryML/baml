@@ -16,6 +16,6 @@ log = "0.4.20"
 strsim = "0.10.0"
 serde_json.workspace = true
 serde.workspace = true
-jsonschema = "0.17.1"
+# jsonschema = "0.17.1"
 anyhow.workspace = true
 either = "1.10.0"

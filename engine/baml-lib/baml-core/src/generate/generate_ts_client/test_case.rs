@@ -32,8 +32,8 @@ impl WithFileContentTs<TSLanguageFeatures> for Walker<'_, (&Function, &TestCase)
             return;
         }
 
-        let file_dir = self.file_dir();
-        let file_name = self.file_name();
+        let _file_dir = self.file_dir();
+        let _file_name = self.file_name();
         let file = collector.start_file(self.file_dir(), self.file_name(), false);
         file.add_import_lib("../", Some("b"));
         file.add_import(

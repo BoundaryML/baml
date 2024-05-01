@@ -1,6 +1,7 @@
 use internal_baml_schema_ast::ast::{Expression, WithName};
 use serde_json::Value;
 
+#[allow(dead_code)]
 pub(super) fn to_py_value(val: &Value) -> String {
     match val {
         Value::Null => "None".to_string(),

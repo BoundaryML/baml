@@ -1,6 +1,6 @@
 use internal_baml_core::{
     internal_baml_parser_database::RetryPolicyStrategy,
-    ir::{repr, RetryPolicy, RetryPolicyWalker},
+    ir::{RetryPolicyWalker},
 };
 
 #[derive(Clone)]

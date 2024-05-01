@@ -2,7 +2,7 @@ use anyhow::Result;
 mod chat;
 mod completion;
 
-use internal_baml_core::ir::{repr::IntermediateRepr, RetryPolicyWalker};
+
 use internal_baml_jinja::{BamlArgType, RenderContext_Client, RenderedPrompt};
 
 use crate::{internal::prompt_renderer::PromptRenderer, RuntimeContext};

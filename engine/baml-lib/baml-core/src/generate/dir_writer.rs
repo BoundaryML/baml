@@ -66,6 +66,7 @@ impl FileContent {
         }
     }
 
+    #[allow(dead_code)]
     pub fn append(&mut self, content: String) {
         if content.len() > 0 {
             self.content.push(content.to_string());

@@ -1,3 +1,5 @@
+mod runtime_wasm;
+
 use std::{env, panic};
 use wasm_bindgen::prelude::*;
 
