@@ -3,7 +3,7 @@ import asyncio
 
 async def fetch_data(url):
     print(f"Fetching data from {url}...")
-    await asyncio.sleep(2)  # simulate a 2-second delay
+    await asyncio.sleep(3)  # simulate a 2-second delay
     print(f"Received data from {url}!")
     return f"Data from {url}"
 
@@ -17,13 +17,23 @@ async def main():
 
     tasks = [
         fetch_data("https://example.com/data1"),
-        fetch_data("https://example.com/data2"),
-        fetch_data("https://example.com/data3")
-        baml_extract_names()
+        baml_py.rust_sleep(),
+        baml_py.rust_sleep(),
+        baml_py.rust_sleep(),
+        baml_py.rust_sleep(),
+        baml_py.rust_sleep(),
     ]
 
     results = await asyncio.gather(*tasks)
     for result in results:
         print(result)
 
+import time
+
+start_time = time.perf_counter()
+
 asyncio.run(main())
+
+end_time = time.perf_counter()
+elapsed_time = end_time - start_time
+print(f"Elapsed time: {elapsed_time:.2f} seconds")

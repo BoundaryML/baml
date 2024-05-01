@@ -16,14 +16,19 @@ baml-runtime.workspace = true
 env_logger.workspace = true
 futures.workspace = true
 indexmap.workspace = true
-pyo3 = { version = "0.21.1", features = [
+log.workspace = true
+# pyo3 0.21 introduces the Bound<> API, which is a massive breaking change
+pyo3 = { version = "0.20.0", features = [
   "abi3-py38",
   "extension-module",
   "generate-import-lib",
   "serde",
 ] }
-#pyo3-asyncio = "0.20.0"
-pythonize = "0.21.1"
+#pyo3-asyncio = { git = "https://github.com/jopemachine/pyo3-asyncio.git", branch = "migration-pyo3-0.21", features = [
+#  "tokio-runtime",
+#] }
+pyo3-asyncio = { version = "0.20.0", features = ["tokio-runtime"] }
+pythonize = "0.20.0"
 regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
