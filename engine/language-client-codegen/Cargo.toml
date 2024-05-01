@@ -1,6 +1,6 @@
 [package]
 edition = "2021"
-name = "language-client-codegen"
+name = "internal-baml-codegen"
 version.workspace = true
 authors.workspace = true
 description.workspace = true
@@ -9,7 +9,7 @@ license-file.workspace = true
 [dependencies]
 anyhow.workspace = true
 askama.workspace = true
-internal-baml-core = { path = "../baml-lib/baml-core" }
+internal-baml-core.workspace = true
 either.workspace = true
 env_logger.workspace = true
 log.workspace = true

@@ -300,6 +300,8 @@ dependencies = [
  "indicatif",
  "indoc",
  "internal-baml-client-llm",
+ "internal-baml-codegen",
+ "internal-baml-core",
  "json_comments",
  "log",
  "regex",
@@ -1564,6 +1566,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "internal-baml-codegen"
+version = "0.20.0-canary.0"
+dependencies = [
+ "anyhow",
+ "askama",
+ "either",
+ "env_logger",
+ "internal-baml-core",
+ "log",
+ "reqwest 0.11.24",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "internal-baml-core"
 version = "0.20.0-canary.0"
 dependencies = [
@@ -1758,22 +1776,6 @@ dependencies = [
  "time",
  "url",
  "uuid",
-]
-
-[[package]]
-name = "language-client-codegen"
-version = "0.20.0-canary.0"
-dependencies = [
- "anyhow",
- "askama",
- "either",
- "env_logger",
- "internal-baml-core",
- "log",
- "reqwest 0.11.24",
- "serde",
- "serde_json",
- "tokio",
 ]
 
 [[package]]

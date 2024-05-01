@@ -10,7 +10,7 @@ mod ruby;
 
 #[derive(Deserialize)]
 pub struct GeneratorInstructions {
-    project_root: PathBuf,
+    pub project_root: PathBuf,
 }
 
 #[derive(Deserialize)]

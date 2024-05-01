@@ -21,6 +21,7 @@ mod validate;
 
 use self::validate::generator_loader;
 
+pub use generate::generate_pipeline::generate_pipeline;
 pub use generate::ir;
 
 pub use crate::{
@@ -39,13 +40,6 @@ impl std::fmt::Debug for ValidatedSchema {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("<Prisma schema>")
     }
-}
-
-pub fn generate(db: &ParserDatabase, configuration: &Configuration) -> std::io::Result<()> {
-    for (gen, lock_file) in configuration.generators.iter() {
-        generate::generate_pipeline(db, gen, lock_file)?;
-    }
-    Ok(())
 }
 
 pub fn to_ir(db: &ParserDatabase) -> anyhow::Result<ir::repr::IntermediateRepr> {

@@ -34,6 +34,9 @@ serde = { version = "1", features = ["derive"] }
 tokio = { version = "1.35.1", features = ["full"] }
 walkdir = "2.5.0"
 
+internal-baml-codegen = { path = "language-client-codegen" }
+internal-baml-core = { path = "baml-lib/baml-core" }
+
 [workspace.package]
 version = "0.20.0-canary.0"
 authors = ["Boundary <contact@boundaryml.com>"]
