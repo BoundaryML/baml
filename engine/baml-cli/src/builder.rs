@@ -10,15 +10,7 @@ use crate::{builder::dir_utils::get_src_files, errors::CliError, update::version
 
 pub(crate) use crate::builder::dir_utils::{get_baml_src, get_src_dir};
 
-pub fn build(
-    baml_dir: &Option<String>,
-) -> std::result::Result<(PathBuf, Configuration, ValidatedSchema), CliError> {
-    build_anyhow(baml_dir).map_err(|e| CliError::StringError(e.to_string()))
-}
-
-pub fn build_anyhow(
-    baml_dir: &Option<String>,
-) -> Result<(PathBuf, Configuration, ValidatedSchema)> {
+pub fn build(baml_dir: &Option<String>) -> Result<(PathBuf, Configuration, ValidatedSchema)> {
     let (baml_dir, (config, diagnostics)) = get_src_dir(baml_dir)?;
     let src_files = get_src_files(&baml_dir)?;
     log::info!(

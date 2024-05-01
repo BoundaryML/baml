@@ -154,13 +154,16 @@ pub(crate) fn main() {
     let args = Cli::parse();
 
     let response = match &args.command {
-        Commands::Update(_args) => update::update(),
+        Commands::Update(_args) => update::update().map_err(anyhow::Error::new),
         Commands::Build(args) => builder::build(&args.baml_dir).map(|_| ()),
-        Commands::UpdateClient(args) => update_client::update_client(&args.baml_dir),
+        Commands::UpdateClient(args) => {
+            update_client::update_client(&args.baml_dir).map_err(anyhow::Error::new)
+        }
         Commands::Init(args) => init_command::init_command(args.no_prompt)
+            .map_err(anyhow::Error::new)
             .and_then(|_| builder::build(&None))
             // Note: double check this runs in the right dir
-            .and_then(|_| update_client::update_client(&None))
+            .and_then(|_| update_client::update_client(&None).map_err(anyhow::Error::new))
             .map(|_| {
                 println!(
                     "\n{}\n{}\n{}",
@@ -171,23 +174,25 @@ pub(crate) fn main() {
             }),
         Commands::Test(args) => {
             if args.use_runtime {
-                runtime_test_command::run(args).map_err(|e| e.to_string().into())
+                runtime_test_command::run(args)
             } else {
                 builder::build(&args.baml_dir).and_then(|(baml_dir, config, schema)| {
                     legacy_test_command::run(args, &baml_dir, &config, schema)
+                        .map_err(anyhow::Error::new)
                 })
             }
         }
         Commands::Import(args) => {
             builder::build(&args.baml_dir).and_then(|(baml_dir, config, schema)| {
                 import_command::run(&args.content, &baml_dir, &config, schema)
+                    .map_err(anyhow::Error::new)
             })
         }
-        Commands::Version(args) => version_command::run(args),
+        Commands::Version(args) => version_command::run(args).map_err(anyhow::Error::new),
     };
 
     if let Err(error) = response {
-        log::error!("{}", error);
+        log::error!("{:?}", error);
         std::process::exit(2);
     }
 }
