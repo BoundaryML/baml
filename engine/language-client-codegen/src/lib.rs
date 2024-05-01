@@ -5,6 +5,7 @@ use internal_baml_core::ir::repr::IntermediateRepr;
 use serde::Deserialize;
 
 mod dir_writer;
+mod golang;
 mod ruby;
 
 #[derive(Deserialize)]
@@ -23,6 +24,9 @@ pub enum LanguageClientFactory {
 
     #[serde(rename = "ruby/sorbet")]
     Ruby(GeneratorInstructions),
+
+    #[serde(rename = "go")]
+    Golang(GeneratorInstructions),
 }
 
 impl LanguageClientFactory {
@@ -34,7 +38,8 @@ impl LanguageClientFactory {
         match self {
             LanguageClientFactory::Python(_) => anyhow::bail!("Python not implemented"),
             LanguageClientFactory::Typescript(_) => anyhow::bail!("Typescript not implemented"),
-            LanguageClientFactory::Ruby(gen) => ruby::generate_ruby(ir, gen.project_root.as_path()),
+            LanguageClientFactory::Ruby(gen) => ruby::generate(ir, gen.project_root.as_path()),
+            LanguageClientFactory::Golang(gen) => golang::generate(ir, gen.project_root.as_path()),
         }
     }
 }
