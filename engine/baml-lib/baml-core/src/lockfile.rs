@@ -89,6 +89,12 @@ impl<'de> Deserialize<'de> for LockFile {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub enum LockfileVersion {
+    V1,
+    V2,
+    UNKNOWN,
+}
+#[derive(Debug, Serialize, Deserialize)]
 pub struct LockFileWrapper {
     version: u32,
     content: LockFile,
@@ -98,6 +104,14 @@ pub struct LockFileWrapper {
 }
 
 impl LockFileWrapper {
+    pub fn version(&self) -> LockfileVersion {
+        match self.version {
+            1 => LockfileVersion::V1,
+            2 => LockfileVersion::V2,
+            _ => LockfileVersion::UNKNOWN,
+        }
+    }
+
     pub fn cli_version(&self) -> Option<&semver::Version> {
         self.content.cli_version.as_ref()
     }

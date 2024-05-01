@@ -1,16 +1,16 @@
 use internal_baml_core::ir::{Expression, Identifier, TypeValue};
 
-use super::golang_language_features::ToGolang;
+use super::python_language_features::ToPython;
 
-impl ToGolang for Expression {
-    fn to_golang(&self) -> String {
+impl ToPython for Expression {
+    fn to_python(&self) -> String {
         match self {
             Expression::List(values) => {
                 format!(
                     "[{}]",
                     values
                         .iter()
-                        .map(|v| v.to_golang())
+                        .map(|v| v.to_python())
                         .collect::<Vec<_>>()
                         .join(", ")
                 )
@@ -20,7 +20,7 @@ impl ToGolang for Expression {
                     "{{ {} }}",
                     values
                         .iter()
-                        .map(|(k, v)| format!("{}: {}", k.to_golang(), v.to_golang()))
+                        .map(|(k, v)| format!("{}: {}", k.to_python(), v.to_python()))
                         .collect::<Vec<_>>()
                         .join(", ")
                 )
@@ -29,7 +29,7 @@ impl ToGolang for Expression {
                 Identifier::ENV(idn) => format!("process.env.{}", idn),
                 Identifier::Local(k) => format!("\"{}\"", k.replace('"', "\\\"")),
                 Identifier::Ref(r) => format!("\"{}\"", r.join(".")),
-                Identifier::Primitive(p) => p.to_golang(),
+                Identifier::Primitive(p) => p.to_python(),
             },
             Expression::String(val) => format!("\"{}\"", val.escape_default()),
             Expression::RawString(val) => format!("`{}`", val.replace('`', "\\`")),
@@ -39,8 +39,8 @@ impl ToGolang for Expression {
     }
 }
 
-impl ToGolang for TypeValue {
-    fn to_golang(&self) -> String {
+impl ToPython for TypeValue {
+    fn to_python(&self) -> String {
         match self {
             TypeValue::Bool => "boolean".to_string(),
             TypeValue::Float => "number".to_string(),

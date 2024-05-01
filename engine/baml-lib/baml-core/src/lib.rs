@@ -23,6 +23,7 @@ use self::validate::generator_loader;
 
 pub use generate::generate_pipeline::generate_pipeline;
 pub use generate::ir;
+pub use lockfile::LockfileVersion;
 
 pub use crate::{
     common::{PreviewFeature, PreviewFeatures, ALL_PREVIEW_FEATURES},

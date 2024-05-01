@@ -1,6 +1,7 @@
 mod dir_utils;
 
 use anyhow::Result;
+use internal_baml_core::LockfileVersion;
 use std::path::PathBuf;
 
 use baml_lib::{parse_and_validate_schema, Configuration, SourceFile, ValidatedSchema};
@@ -39,14 +40,20 @@ pub fn build(baml_dir: &Option<String>) -> Result<(PathBuf, Configuration, Valid
 
     let ir = internal_baml_core::ir::to_ir(&parsed.db)
         .map_err(|e| e.context("Failed to build BAML (IR stage)"))?;
-    for (gen, lock_file) in config.generators.iter() {
+    for (gen, lockfile) in config.generators.iter() {
         use internal_baml_core::configuration::GeneratorLanguage;
 
-        match gen.language {
-            GeneratorLanguage::Python | GeneratorLanguage::TypeScript => {
-                internal_baml_core::generate_pipeline(&parsed.db, gen, &ir, lock_file)?
+        match (&gen.language, lockfile.version()) {
+            (GeneratorLanguage::TypeScript, _) => {
+                internal_baml_core::generate_pipeline(&parsed.db, gen, &ir, lockfile)?
             }
-            GeneratorLanguage::Ruby => {
+            (GeneratorLanguage::Python, LockfileVersion::V1) => {
+                internal_baml_core::generate_pipeline(&parsed.db, gen, &ir, lockfile)?
+            }
+            (GeneratorLanguage::Python, _) => {
+                internal_baml_core::generate_pipeline(&parsed.db, gen, &ir, lockfile)?
+            }
+            (GeneratorLanguage::Ruby, _) => {
                 internal_baml_codegen::LanguageClientFactory::Ruby(
                     internal_baml_codegen::GeneratorInstructions {
                         project_root: gen.output_path.clone(),

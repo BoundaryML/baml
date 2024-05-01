@@ -1,11 +1,11 @@
 use crate::dir_writer::{FileCollector, LanguageFeatures};
 
 #[derive(Default)]
-pub(super) struct GolangLanguageFeatures {}
+pub(super) struct PythonLanguageFeatures {}
 
-impl LanguageFeatures for GolangLanguageFeatures {
+impl LanguageFeatures for PythonLanguageFeatures {
     fn content_prefix(&self) -> &'static str {
-        // "typed: strict" is set on a per-file basis in Golang
+        // "typed: strict" is set on a per-file basis in Python
         r#"
 ###############################################################################
 #
@@ -29,6 +29,6 @@ impl LanguageFeatures for GolangLanguageFeatures {
     }
 }
 
-pub(super) trait ToGolang {
-    fn to_golang(&self) -> String;
+pub(super) trait ToPython {
+    fn to_python(&self) -> String;
 }

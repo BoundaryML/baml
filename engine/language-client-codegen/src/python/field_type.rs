@@ -1,16 +1,16 @@
 use internal_baml_core::ir::{FieldType, TypeValue};
 
-use super::golang_language_features::ToGolang;
+use super::python_language_features::ToPython;
 
-impl ToGolang for FieldType {
-    fn to_golang(&self) -> String {
+impl ToPython for FieldType {
+    fn to_python(&self) -> String {
         match self {
             FieldType::Class(name) => format!("Baml::Types::{}", name.clone()),
             FieldType::Enum(name) => format!("Baml::Types::{}", name.clone()),
             // https://sorbet.org/docs/stdlib-generics
-            FieldType::List(inner) => format!("T::Array[{}]", inner.to_golang()),
+            FieldType::List(inner) => format!("T::Array[{}]", inner.to_python()),
             FieldType::Map(key, value) => {
-                format!("T::Hash[{}, {}]", key.to_golang(), value.to_golang())
+                format!("T::Hash[{}, {}]", key.to_python(), value.to_python())
             }
             FieldType::Primitive(r#type) => match r#type {
                 // https://sorbet.org/docs/class-types
@@ -28,7 +28,7 @@ impl ToGolang for FieldType {
                 "T.any({})",
                 inner
                     .iter()
-                    .map(|t| t.to_golang())
+                    .map(|t| t.to_python())
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
@@ -37,11 +37,11 @@ impl ToGolang for FieldType {
                 "[{}]",
                 inner
                     .iter()
-                    .map(|t| t.to_golang())
+                    .map(|t| t.to_python())
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            FieldType::Optional(inner) => format!("T.nilable({})", inner.to_golang()),
+            FieldType::Optional(inner) => format!("T.nilable({})", inner.to_python()),
         }
     }
 }
