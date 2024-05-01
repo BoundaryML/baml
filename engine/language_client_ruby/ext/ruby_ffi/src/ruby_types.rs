@@ -14,7 +14,7 @@ impl FunctionResult {
     }
 
     pub fn to_s(&self) -> String {
-        format!("{:#?}", self.inner)
+        format!("{}", self.inner)
     }
 
     pub fn raw(&self) -> Result<String> {
@@ -22,7 +22,7 @@ impl FunctionResult {
             Ok(content) => Ok(content.to_string()),
             Err(e) => Err(Error::new(
                 runtime_error(),
-                format!("No LLM response: {:#?}", self.inner),
+                format!("No LLM response: {}", self.inner),
             )),
         }
     }
@@ -32,7 +32,7 @@ impl FunctionResult {
             Ok(parsed) => serde_magnus::serialize(parsed),
             Err(e) => Err(Error::new(
                 runtime_error(),
-                format!("Failed to parse LLM response: {:#?}", self.inner),
+                format!("Failed to parse LLM response: {}", self.inner),
             )),
         }
     }

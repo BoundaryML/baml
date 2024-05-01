@@ -18,7 +18,7 @@ use crate::dir_writer::FileCollector;
 use self::python_language_features::PythonLanguageFeatures;
 
 #[derive(askama::Template)]
-#[template(path = "client.rb.j2", escape = "none")]
+#[template(path = "client.py.j2", escape = "none")]
 struct PythonClient {
     funcs: Vec<PythonFunction>,
 }

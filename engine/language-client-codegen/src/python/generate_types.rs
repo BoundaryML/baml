@@ -5,7 +5,7 @@ use super::python_language_features::ToPython;
 use internal_baml_core::ir::{repr::IntermediateRepr, ClassWalker, EnumWalker};
 
 #[derive(askama::Template)]
-#[template(path = "types.rb.j2", escape = "none")]
+#[template(path = "types.py.j2", escape = "none")]
 pub(crate) struct PythonTypes {
     enums: Vec<String>,
     forward_decls: Vec<String>,
@@ -13,20 +13,20 @@ pub(crate) struct PythonTypes {
 }
 
 #[derive(askama::Template)]
-#[template(path = "enum.rb.j2")]
+#[template(path = "enum.py.j2")]
 struct PythonEnum<'a> {
     pub name: &'a str,
     pub values: Vec<&'a str>,
 }
 
 #[derive(askama::Template)]
-#[template(path = "class_forward_decl.rb.j2")]
+#[template(path = "class_forward_decl.py.j2")]
 struct PythonForwardDecl<'a> {
     name: &'a str,
 }
 
 #[derive(askama::Template)]
-#[template(path = "class.rb.j2")]
+#[template(path = "class.py.j2")]
 struct PythonStruct<'a> {
     name: &'a str,
     fields: Vec<(&'a str, String)>,
