@@ -130,6 +130,10 @@ class Deserializer<T> {
         if (this.target?.type === "string") {
             return value as T;
         }
+        const _t = this.getInterface(this.target);
+        if (_t.type === "string" && _t.enum === undefined) {
+            return value as T;
+        }
 
         const raw = fromValue(value, d);
 

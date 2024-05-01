@@ -32,6 +32,38 @@ describe("String Deserializer", () => {
         expect(deserializer.coerce(test_str)).toBe(test_str);
     });
 
+    test("another_delims", () => {
+
+        const schema: JSONSchema7 = {
+            "definitions": {
+
+                "MyFunc_input": {
+                    "type": "object",
+                    "properties": {
+                        "input": {
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "input"
+                    ],
+                    "title": "MyFunc input"
+                },
+                "MyFunc_output": {
+                    "type": "string",
+                    "title": "MyFunc output"
+                }
+            }
+        };
+        const deserializer = new Deserializer<string>(schema, {
+            $ref: '#/definitions/MyFunc_output'
+        });
+
+        const test_str = 'The output is: {"hello": " {{user_name}world"}';
+        expect(deserializer.coerce(test_str)).toBe(test_str);
+
+    })
+
 
     test("string_from_list", () => {
         const test_list = ["hello", "world"];
@@ -556,14 +588,14 @@ describe("Complex Object Deserializer", () => {
 });
 
 /*
-
+ 
 def test_list_from_string() -> None:
     deserializer = Deserializer[List[str]](List[str])
     test_obj = ["hello", "world"]
     res = deserializer.from_string(json.dumps(test_obj))
     assert res == ["hello", "world"]
-
-
+ 
+ 
 def test_list_object_from_string() -> None:
     deserializer = Deserializer[List[BasicClass]](List[BasicClass])
     test_obj = [{"a": 1, "b": "hello"}, {"a": 2, "b": "world"}]
