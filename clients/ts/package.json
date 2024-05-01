@@ -1,6 +1,6 @@
 {
   "name": "@boundaryml/baml-core",
-  "version": "0.0.8",
+  "version": "0.0.10",
   "description": "",
   "exports": {
     ".": {
@@ -53,6 +53,8 @@
   "license": "Apache-2.0",
   "devDependencies": {
     "@jest/types": "^29.6.3",
+    "@swc/core": "^1.4.17",
+    "@swc/jest": "^0.2.36",
     "@types/jest": "^29.5.11",
     "@types/json-schema": "^7.0.15",
     "@types/node": "^20.11.21",

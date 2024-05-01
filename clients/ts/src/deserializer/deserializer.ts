@@ -126,9 +126,19 @@ class Deserializer<T> {
 
     coerce(value: string): T {
         const d = new Diagnostics(value);
+
+        if (this.target?.type === "string") {
+            return value as T;
+        }
+        const _t = this.getInterface(this.target);
+        if (_t.type === "string" && _t.enum === undefined) {
+            return value as T;
+        }
+
         const raw = fromValue(value, d);
 
         const deserializer = this.get_deserializer(this.target);
+
         const response = deserializer.coerce(raw, d, this.get_deserializer.bind(this));
         d.toException();
         return response.as_value;
