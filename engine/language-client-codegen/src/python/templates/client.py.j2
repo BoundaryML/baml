@@ -1,0 +1,29 @@
+import "baml"
+from . import types
+
+class BamlClient
+    @staticmethod
+    def from_directory(path):
+      new BamlClient(runtime=BamlRuntime.from_directory(path))
+
+    def __init__(self, runtime):
+      self.__runtime = runtime
+
+    {% for fn in funcs -%}
+    def {{fn.name}}(
+        self,
+        {% for (name, type) in fn.args -%}
+        {{name}}: {{type}}{% if !loop.last %},{% endif %}
+        {%- endfor %}
+    )
+      raw = self.__runtime.call_function(
+        function_name: "{{fn.name}}",
+        args: {
+          {% for (name, _) in fn.args -%}
+          "{{name}}" => {{name}},
+          {%- endfor %}
+        }
+      )
+      Baml::convert_to({{ fn.return_type }}).from(raw.parsed)
+
+    {% endfor %}

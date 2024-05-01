@@ -47,11 +47,17 @@ pub fn build(baml_dir: &Option<String>) -> Result<(PathBuf, Configuration, Valid
             (GeneratorLanguage::TypeScript, _) => {
                 internal_baml_core::generate_pipeline(&parsed.db, gen, &ir, lockfile)?
             }
-            (GeneratorLanguage::Python, LockfileVersion::V1) => {
-                internal_baml_core::generate_pipeline(&parsed.db, gen, &ir, lockfile)?
-            }
+            //(GeneratorLanguage::Python, LockfileVersion::V1) => {
+            //    internal_baml_core::generate_pipeline(&parsed.db, gen, &ir, lockfile)?
+            //}
             (GeneratorLanguage::Python, _) => {
-                internal_baml_core::generate_pipeline(&parsed.db, gen, &ir, lockfile)?
+                internal_baml_codegen::LanguageClientFactory::PythonPydantic(
+                    internal_baml_codegen::GeneratorInstructions {
+                        project_root: gen.output_path.clone(),
+                    },
+                )
+                .generate_client(&ir)?;
+                log::info!("Generated Python client with Pydantic types");
             }
             (GeneratorLanguage::Ruby, _) => {
                 internal_baml_codegen::LanguageClientFactory::Ruby(

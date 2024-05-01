@@ -5,8 +5,7 @@ use super::python_language_features::ToPython;
 impl ToPython for FieldType {
     fn to_python(&self) -> String {
         match self {
-            FieldType::Class(name) => name.clone(),
-            FieldType::Enum(name) => name.clone(),
+            FieldType::Class(name) | FieldType::Enum(name) => format!("\"{name}\""),
             FieldType::List(inner) => format!("List[{}]", inner.to_python()),
             FieldType::Map(key, value) => {
                 format!("Dict[{}, {}]", key.to_python(), value.to_python())

@@ -10,9 +10,9 @@ crate-type = ["cdylib"]
 
 [dependencies]
 anyhow.workspace = true
-baml-runtime = { path = "../../../baml-runtime" }
+baml-runtime.workspace = true
 env_logger.workspace = true
-futures = { version = "0.3.30", features = ["executor"] }
+futures.workspace = true
 log.workspace = true
 magnus = { version = "0.6", features = ["rb-sys"] }
 # Must be kept in sync with ../../Gemfile
@@ -22,8 +22,8 @@ rb-sys = { version = "0.9.97", features = [
   "bindgen-deprecated-types",
   "stable-api-compiled-fallback",
 ] }
-serde = "1.0.198"
-serde_json = "1.0.116"
+serde.workspace = true
+serde_json.workspace = true
 serde_magnus = "0.8.1"
 tokio = { version = "1", features = ["full"] }
 

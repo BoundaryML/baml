@@ -94,8 +94,33 @@ const schema: JSONSchema7 = {
         }
       ]
     },
+    "EnumInClass2": {
+      "title": "EnumInClass2",
+      "enum": [
+        {
+          "const": "ONE"
+        },
+        {
+          "const": "TWO"
+        }
+      ]
+    },
     "EnumOutput": {
       "title": "EnumOutput",
+      "enum": [
+        {
+          "const": "ONE"
+        },
+        {
+          "const": "TWO"
+        },
+        {
+          "const": "THREE"
+        }
+      ]
+    },
+    "EnumOutput2": {
+      "title": "EnumOutput2",
       "enum": [
         {
           "const": "ONE"
@@ -119,6 +144,17 @@ const schema: JSONSchema7 = {
         }
       ]
     },
+    "NamedArgsSingleEnum2": {
+      "title": "NamedArgsSingleEnum2",
+      "enum": [
+        {
+          "const": "ONE"
+        },
+        {
+          "const": "TWO"
+        }
+      ]
+    },
     "NamedArgsSingleEnumList": {
       "title": "NamedArgsSingleEnumList",
       "enum": [
@@ -130,8 +166,33 @@ const schema: JSONSchema7 = {
         }
       ]
     },
+    "NamedArgsSingleEnumList2": {
+      "title": "NamedArgsSingleEnumList2",
+      "enum": [
+        {
+          "const": "ONE"
+        },
+        {
+          "const": "TWO"
+        }
+      ]
+    },
     "OptionalTest_CategoryType": {
       "title": "OptionalTest_CategoryType",
+      "enum": [
+        {
+          "const": "Aleph"
+        },
+        {
+          "const": "Beta"
+        },
+        {
+          "const": "Gamma"
+        }
+      ]
+    },
+    "OptionalTest_CategoryTypev2": {
+      "title": "OptionalTest_CategoryTypev2",
       "enum": [
         {
           "const": "Aleph"
@@ -226,8 +287,43 @@ const schema: JSONSchema7 = {
       },
       "required": []
     },
+    "Blah2": {
+      "title": "Blah2",
+      "type": "object",
+      "properties": {
+        "prop4": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": []
+    },
     "ClassOptionalFields": {
       "title": "ClassOptionalFields",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "prop2": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": []
+    },
+    "ClassOptionalFieldsv2": {
+      "title": "ClassOptionalFieldsv2",
       "type": "object",
       "properties": {
         "prop1": {
@@ -286,6 +382,40 @@ const schema: JSONSchema7 = {
             {
               "$ref": "#/definitions/Blah",
               "title": "Blah"
+            },
+            {
+              "type": "null",
+              "title": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": []
+    },
+    "ClassOptionalOutput2v2": {
+      "title": "ClassOptionalOutput2v2",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "prop2": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "prop3": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Blah2",
+              "title": "Blah2"
             },
             {
               "type": "null",
@@ -361,22 +491,6 @@ const schema: JSONSchema7 = {
         "description"
       ]
     },
-    "Message": {
-      "title": "Message",
-      "type": "object",
-      "properties": {
-        "role": {
-          "type": "string"
-        },
-        "message": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "role",
-        "message"
-      ]
-    },
     "ModifiedOutput": {
       "title": "ModifiedOutput",
       "type": "object",
@@ -413,6 +527,46 @@ const schema: JSONSchema7 = {
         "key_three"
       ]
     },
+    "NamedArgsSingleClass2": {
+      "title": "NamedArgsSingleClass2",
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "key_two": {
+          "type": "boolean"
+        },
+        "key_three": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "key",
+        "key_two",
+        "key_three"
+      ]
+    },
+    "NamedArgsSingleClassList2": {
+      "title": "NamedArgsSingleClassList2",
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "key_two": {
+          "type": "boolean"
+        },
+        "key_three": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "key",
+        "key_two",
+        "key_three"
+      ]
+    },
     "OptionalClass": {
       "title": "OptionalClass",
       "type": "object",
@@ -429,8 +583,40 @@ const schema: JSONSchema7 = {
         "prop2"
       ]
     },
+    "OptionalClassv2": {
+      "title": "OptionalClassv2",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "type": "string"
+        },
+        "prop2": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "prop1",
+        "prop2"
+      ]
+    },
     "OptionalTest_Prop1": {
       "title": "OptionalTest_Prop1",
+      "type": "object",
+      "properties": {
+        "omega_a": {
+          "type": "string"
+        },
+        "omega_b": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "omega_a",
+        "omega_b"
+      ]
+    },
+    "OptionalTest_Prop1v2": {
+      "title": "OptionalTest_Prop1v2",
       "type": "object",
       "properties": {
         "omega_a": {
@@ -476,6 +662,51 @@ const schema: JSONSchema7 = {
               {
                 "$ref": "#/definitions/OptionalTest_CategoryType",
                 "title": "OptionalTest_CategoryType"
+              },
+              {
+                "type": "null",
+                "title": "null"
+              }
+            ],
+            "default": null
+          }
+        }
+      },
+      "required": [
+        "omega_3"
+      ]
+    },
+    "OptionalTest_ReturnTypev2": {
+      "title": "OptionalTest_ReturnTypev2",
+      "type": "object",
+      "properties": {
+        "omega_1": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/OptionalTest_Prop1v2",
+              "title": "OptionalTest_Prop1v2"
+            },
+            {
+              "type": "null",
+              "title": "null"
+            }
+          ],
+          "default": null
+        },
+        "omega_2": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "omega_3": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/OptionalTest_CategoryTypev2",
+                "title": "OptionalTest_CategoryTypev2"
               },
               {
                 "type": "null",
@@ -729,8 +960,40 @@ const schema: JSONSchema7 = {
         "prop2"
       ]
     },
+    "TestClassWithEnum2": {
+      "title": "TestClassWithEnum2",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "type": "string"
+        },
+        "prop2": {
+          "$ref": "#/definitions/EnumInClass"
+        }
+      },
+      "required": [
+        "prop1",
+        "prop2"
+      ]
+    },
     "TestOutputClass": {
       "title": "TestOutputClass",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "type": "string"
+        },
+        "prop2": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "prop1",
+        "prop2"
+      ]
+    },
+    "TestOutputClass2": {
+      "title": "TestOutputClass2",
       "type": "object",
       "properties": {
         "prop1": {
@@ -801,6 +1064,62 @@ const schema: JSONSchema7 = {
         "prop3"
       ]
     },
+    "UnionTest_ReturnTypev2": {
+      "title": "UnionTest_ReturnTypev2",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "anyOf": [
+            {
+              "type": "string",
+              "title": "string"
+            },
+            {
+              "type": "boolean",
+              "title": "bool"
+            }
+          ]
+        },
+        "prop2": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "number",
+                "title": "float"
+              },
+              {
+                "type": "boolean",
+                "title": "bool"
+              }
+            ]
+          }
+        },
+        "prop3": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "title": "float[]"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "boolean"
+              },
+              "title": "bool[]"
+            }
+          ]
+        }
+      },
+      "required": [
+        "prop1",
+        "prop2",
+        "prop3"
+      ]
+    },
     "WithReasoning": {
       "title": "WithReasoning",
       "type": "object",
@@ -816,21 +1135,6 @@ const schema: JSONSchema7 = {
         "value",
         "reasoning"
       ]
-    },
-    "ClassifyConversation_input": {
-      "type": "object",
-      "properties": {
-        "messages": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/Message"
-          }
-        }
-      },
-      "required": [
-        "messages"
-      ],
-      "title": "ClassifyConversation input"
     },
     "ClassifyMessage_input": {
       "type": "object",
@@ -930,6 +1234,18 @@ const schema: JSONSchema7 = {
       "type": "string",
       "title": "FnClassOptionalOutput2 input"
     },
+    "FnClassOptionalOutput2_V2_input": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "input"
+      ],
+      "title": "FnClassOptionalOutput2_V2 input"
+    },
     "FnEnumListOutput_input": {
       "type": "string",
       "title": "FnEnumListOutput input"
@@ -969,6 +1285,18 @@ const schema: JSONSchema7 = {
     "FnOutputClassWithEnum_input": {
       "type": "string",
       "title": "FnOutputClassWithEnum input"
+    },
+    "FnOutputClassWithEnum_V2_input": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "input"
+      ],
+      "title": "FnOutputClassWithEnum_V2 input"
     },
     "FnOutputStringList_input": {
       "type": "string",
@@ -1051,6 +1379,18 @@ const schema: JSONSchema7 = {
     "OptionalTest_Function_input": {
       "type": "string",
       "title": "OptionalTest_Function input"
+    },
+    "OptionalTest_Function_V2_input": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "input"
+      ],
+      "title": "OptionalTest_Function_V2 input"
     },
     "PromptTest_input": {
       "type": "string",
@@ -1171,12 +1511,291 @@ const schema: JSONSchema7 = {
       ],
       "title": "UnionTest_Function input"
     },
-    "ClassifyConversation_output": {
-      "type": "array",
-      "items": {
-        "$ref": "#/definitions/Category"
+    "V2_FnClassOptional_input": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/OptionalClassv2",
+              "title": "OptionalClassv2"
+            },
+            {
+              "type": "null",
+              "title": "null"
+            }
+          ],
+          "default": null
+        }
       },
-      "title": "ClassifyConversation output"
+      "required": [],
+      "title": "V2_FnClassOptional input"
+    },
+    "V2_FnClassOptional2_input": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "$ref": "#/definitions/ClassOptionalFieldsv2"
+        }
+      },
+      "required": [
+        "input"
+      ],
+      "title": "V2_FnClassOptional2 input"
+    },
+    "V2_FnEnumListOutput_input": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "input"
+      ],
+      "title": "V2_FnEnumListOutput input"
+    },
+    "V2_FnEnumOutput_input": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "input"
+      ],
+      "title": "V2_FnEnumOutput input"
+    },
+    "V2_FnNamedArgsSingleStringOptional_input": {
+      "type": "object",
+      "properties": {
+        "myString": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [],
+      "title": "V2_FnNamedArgsSingleStringOptional input"
+    },
+    "V2_FnOutputBool_input": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "input"
+      ],
+      "title": "V2_FnOutputBool input"
+    },
+    "V2_FnOutputClass_input": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "input"
+      ],
+      "title": "V2_FnOutputClass input"
+    },
+    "V2_FnOutputClassList_input": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "input"
+      ],
+      "title": "V2_FnOutputClassList input"
+    },
+    "V2_FnOutputStringList_input": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "input"
+      ],
+      "title": "V2_FnOutputStringList input"
+    },
+    "V2_FnStringOptional_input": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [],
+      "title": "V2_FnStringOptional input"
+    },
+    "V2_FnTestNamedArgsSingleEnum_input": {
+      "type": "object",
+      "properties": {
+        "myArg": {
+          "$ref": "#/definitions/NamedArgsSingleEnum2"
+        }
+      },
+      "required": [
+        "myArg"
+      ],
+      "title": "V2_FnTestNamedArgsSingleEnum input"
+    },
+    "V2_TestFnNamedArgsSingleBool_input": {
+      "type": "object",
+      "properties": {
+        "myBool": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "myBool"
+      ],
+      "title": "V2_TestFnNamedArgsSingleBool input"
+    },
+    "V2_TestFnNamedArgsSingleClass_input": {
+      "type": "object",
+      "properties": {
+        "myArg": {
+          "$ref": "#/definitions/NamedArgsSingleClass2"
+        }
+      },
+      "required": [
+        "myArg"
+      ],
+      "title": "V2_TestFnNamedArgsSingleClass input"
+    },
+    "V2_TestFnNamedArgsSingleEnumList_input": {
+      "type": "object",
+      "properties": {
+        "myArg": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/NamedArgsSingleEnumList2"
+          }
+        }
+      },
+      "required": [
+        "myArg"
+      ],
+      "title": "V2_TestFnNamedArgsSingleEnumList input"
+    },
+    "V2_TestFnNamedArgsSingleFloat_input": {
+      "type": "object",
+      "properties": {
+        "myFloat": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "myFloat"
+      ],
+      "title": "V2_TestFnNamedArgsSingleFloat input"
+    },
+    "V2_TestFnNamedArgsSingleInt_input": {
+      "type": "object",
+      "properties": {
+        "myInt": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "myInt"
+      ],
+      "title": "V2_TestFnNamedArgsSingleInt input"
+    },
+    "V2_TestFnNamedArgsSingleString_input": {
+      "type": "object",
+      "properties": {
+        "myString": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "myString"
+      ],
+      "title": "V2_TestFnNamedArgsSingleString input"
+    },
+    "V2_TestFnNamedArgsSingleStringArray_input": {
+      "type": "object",
+      "properties": {
+        "myStringArray": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "myStringArray"
+      ],
+      "title": "V2_TestFnNamedArgsSingleStringArray input"
+    },
+    "V2_TestFnNamedArgsSingleStringList_input": {
+      "type": "object",
+      "properties": {
+        "myArg": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/NamedArgsSingleClassList2"
+          }
+        }
+      },
+      "required": [
+        "myArg"
+      ],
+      "title": "V2_TestFnNamedArgsSingleStringList input"
+    },
+    "V2_TestFnNamedArgsSyntax_input": {
+      "type": "object",
+      "properties": {
+        "var": {
+          "type": "string"
+        },
+        "var_with_underscores": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "var",
+        "var_with_underscores"
+      ],
+      "title": "V2_TestFnNamedArgsSyntax input"
+    },
+    "V2_UnionTest_Function_input": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "anyOf": [
+            {
+              "type": "string",
+              "title": "string"
+            },
+            {
+              "type": "boolean",
+              "title": "bool"
+            }
+          ]
+        }
+      },
+      "required": [
+        "input"
+      ],
+      "title": "V2_UnionTest_Function input"
     },
     "ClassifyMessage_output": {
       "$ref": "#/definitions/Category",
@@ -1241,6 +1860,20 @@ const schema: JSONSchema7 = {
       "default": null,
       "title": "FnClassOptionalOutput2 output"
     },
+    "FnClassOptionalOutput2_V2_output": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ClassOptionalOutput2v2",
+          "title": "ClassOptionalOutput2v2"
+        },
+        {
+          "type": "null",
+          "title": "null"
+        }
+      ],
+      "default": null,
+      "title": "FnClassOptionalOutput2_V2 output"
+    },
     "FnEnumListOutput_output": {
       "type": "array",
       "items": {
@@ -1274,6 +1907,10 @@ const schema: JSONSchema7 = {
     "FnOutputClassWithEnum_output": {
       "$ref": "#/definitions/TestClassWithEnum",
       "title": "FnOutputClassWithEnum output"
+    },
+    "FnOutputClassWithEnum_V2_output": {
+      "$ref": "#/definitions/TestClassWithEnum2",
+      "title": "FnOutputClassWithEnum_V2 output"
     },
     "FnOutputStringList_output": {
       "type": "array",
@@ -1339,6 +1976,23 @@ const schema: JSONSchema7 = {
       },
       "title": "OptionalTest_Function output"
     },
+    "OptionalTest_Function_V2_output": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "$ref": "#/definitions/OptionalTest_ReturnTypev2",
+            "title": "OptionalTest_ReturnTypev2"
+          },
+          {
+            "type": "null",
+            "title": "null"
+          }
+        ],
+        "default": null
+      },
+      "title": "OptionalTest_Function_V2 output"
+    },
     "PromptTest_output": {
       "type": "string",
       "title": "PromptTest output"
@@ -1382,6 +2036,99 @@ const schema: JSONSchema7 = {
     "UnionTest_Function_output": {
       "$ref": "#/definitions/UnionTest_ReturnType",
       "title": "UnionTest_Function output"
+    },
+    "V2_FnClassOptional_output": {
+      "type": "string",
+      "title": "V2_FnClassOptional output"
+    },
+    "V2_FnClassOptional2_output": {
+      "type": "string",
+      "title": "V2_FnClassOptional2 output"
+    },
+    "V2_FnEnumListOutput_output": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/EnumOutput"
+      },
+      "title": "V2_FnEnumListOutput output"
+    },
+    "V2_FnEnumOutput_output": {
+      "$ref": "#/definitions/EnumOutput2",
+      "title": "V2_FnEnumOutput output"
+    },
+    "V2_FnNamedArgsSingleStringOptional_output": {
+      "type": "string",
+      "title": "V2_FnNamedArgsSingleStringOptional output"
+    },
+    "V2_FnOutputBool_output": {
+      "type": "boolean",
+      "title": "V2_FnOutputBool output"
+    },
+    "V2_FnOutputClass_output": {
+      "$ref": "#/definitions/TestOutputClass2",
+      "title": "V2_FnOutputClass output"
+    },
+    "V2_FnOutputClassList_output": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/TestOutputClass"
+      },
+      "title": "V2_FnOutputClassList output"
+    },
+    "V2_FnOutputStringList_output": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "V2_FnOutputStringList output"
+    },
+    "V2_FnStringOptional_output": {
+      "type": "string",
+      "title": "V2_FnStringOptional output"
+    },
+    "V2_FnTestNamedArgsSingleEnum_output": {
+      "type": "string",
+      "title": "V2_FnTestNamedArgsSingleEnum output"
+    },
+    "V2_TestFnNamedArgsSingleBool_output": {
+      "type": "string",
+      "title": "V2_TestFnNamedArgsSingleBool output"
+    },
+    "V2_TestFnNamedArgsSingleClass_output": {
+      "type": "string",
+      "title": "V2_TestFnNamedArgsSingleClass output"
+    },
+    "V2_TestFnNamedArgsSingleEnumList_output": {
+      "type": "string",
+      "title": "V2_TestFnNamedArgsSingleEnumList output"
+    },
+    "V2_TestFnNamedArgsSingleFloat_output": {
+      "type": "string",
+      "title": "V2_TestFnNamedArgsSingleFloat output"
+    },
+    "V2_TestFnNamedArgsSingleInt_output": {
+      "type": "string",
+      "title": "V2_TestFnNamedArgsSingleInt output"
+    },
+    "V2_TestFnNamedArgsSingleString_output": {
+      "type": "string",
+      "title": "V2_TestFnNamedArgsSingleString output"
+    },
+    "V2_TestFnNamedArgsSingleStringArray_output": {
+      "type": "string",
+      "title": "V2_TestFnNamedArgsSingleStringArray output"
+    },
+    "V2_TestFnNamedArgsSingleStringList_output": {
+      "type": "string",
+      "title": "V2_TestFnNamedArgsSingleStringList output"
+    },
+    "V2_TestFnNamedArgsSyntax_output": {
+      "type": "string",
+      "title": "V2_TestFnNamedArgsSyntax output"
+    },
+    "V2_UnionTest_Function_output": {
+      "$ref": "#/definitions/UnionTest_ReturnTypev2",
+      "title": "V2_UnionTest_Function output"
     }
   }
 };
@@ -1415,7 +2162,15 @@ registerEnumDeserializer(schema.definitions.EnumInClass, {
 
 });
 
+registerEnumDeserializer(schema.definitions.EnumInClass2, {
+
+});
+
 registerEnumDeserializer(schema.definitions.EnumOutput, {
+
+});
+
+registerEnumDeserializer(schema.definitions.EnumOutput2, {
 
 });
 
@@ -1423,11 +2178,23 @@ registerEnumDeserializer(schema.definitions.NamedArgsSingleEnum, {
 
 });
 
+registerEnumDeserializer(schema.definitions.NamedArgsSingleEnum2, {
+
+});
+
 registerEnumDeserializer(schema.definitions.NamedArgsSingleEnumList, {
 
 });
 
+registerEnumDeserializer(schema.definitions.NamedArgsSingleEnumList2, {
+
+});
+
 registerEnumDeserializer(schema.definitions.OptionalTest_CategoryType, {
+
+});
+
+registerEnumDeserializer(schema.definitions.OptionalTest_CategoryTypev2, {
 
 });
 
@@ -1463,7 +2230,15 @@ registerObjectDeserializer(schema.definitions.Blah, {
 
 });
 
+registerObjectDeserializer(schema.definitions.Blah2, {
+
+});
+
 registerObjectDeserializer(schema.definitions.ClassOptionalFields, {
+
+});
+
+registerObjectDeserializer(schema.definitions.ClassOptionalFieldsv2, {
 
 });
 
@@ -1472,6 +2247,10 @@ registerObjectDeserializer(schema.definitions.ClassOptionalOutput, {
 });
 
 registerObjectDeserializer(schema.definitions.ClassOptionalOutput2, {
+
+});
+
+registerObjectDeserializer(schema.definitions.ClassOptionalOutput2v2, {
 
 });
 
@@ -1487,10 +2266,6 @@ registerObjectDeserializer(schema.definitions.Event, {
 
 });
 
-registerObjectDeserializer(schema.definitions.Message, {
-
-});
-
 registerObjectDeserializer(schema.definitions.ModifiedOutput, {
   "REASONING": "reasoning",
   "ANSWER": "answer"
@@ -1500,7 +2275,19 @@ registerObjectDeserializer(schema.definitions.NamedArgsSingleClass, {
 
 });
 
+registerObjectDeserializer(schema.definitions.NamedArgsSingleClass2, {
+
+});
+
+registerObjectDeserializer(schema.definitions.NamedArgsSingleClassList2, {
+
+});
+
 registerObjectDeserializer(schema.definitions.OptionalClass, {
+
+});
+
+registerObjectDeserializer(schema.definitions.OptionalClassv2, {
 
 });
 
@@ -1508,7 +2295,15 @@ registerObjectDeserializer(schema.definitions.OptionalTest_Prop1, {
 
 });
 
+registerObjectDeserializer(schema.definitions.OptionalTest_Prop1v2, {
+
+});
+
 registerObjectDeserializer(schema.definitions.OptionalTest_ReturnType, {
+
+});
+
+registerObjectDeserializer(schema.definitions.OptionalTest_ReturnTypev2, {
 
 });
 
@@ -1547,11 +2342,23 @@ registerObjectDeserializer(schema.definitions.TestClassWithEnum, {
 
 });
 
+registerObjectDeserializer(schema.definitions.TestClassWithEnum2, {
+
+});
+
 registerObjectDeserializer(schema.definitions.TestOutputClass, {
 
 });
 
+registerObjectDeserializer(schema.definitions.TestOutputClass2, {
+
+});
+
 registerObjectDeserializer(schema.definitions.UnionTest_ReturnType, {
+
+});
+
+registerObjectDeserializer(schema.definitions.UnionTest_ReturnTypev2, {
 
 });
 

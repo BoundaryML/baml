@@ -28,7 +28,7 @@ impl<L: LanguageFeatures + Default> FileCollector<L> {
 
     pub(super) fn add_file<K: AsRef<str>, V: AsRef<str>>(&mut self, name: K, contents: V) {
         self.files.insert(
-            self.lang.to_file_path(name.as_ref()),
+            PathBuf::from(name.as_ref()),
             format!("{}\n{}", self.lang.content_prefix(), contents.as_ref()),
         );
     }

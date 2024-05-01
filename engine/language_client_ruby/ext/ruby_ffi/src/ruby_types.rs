@@ -1,15 +1,14 @@
-use baml_runtime::FunctionResult as BamlFunctionResult;
 use magnus::{class, exception::runtime_error, method, prelude::*, value::Value, Error, RModule};
 
 use crate::Result;
 
 #[magnus::wrap(class = "Baml::Ffi::FunctionResult", free_immediately, size)]
 pub struct FunctionResult {
-    inner: BamlFunctionResult,
+    inner: baml_runtime::FunctionResult,
 }
 
 impl FunctionResult {
-    pub fn new(inner: BamlFunctionResult) -> Self {
+    pub fn new(inner: baml_runtime::FunctionResult) -> Self {
         Self { inner }
     }
 

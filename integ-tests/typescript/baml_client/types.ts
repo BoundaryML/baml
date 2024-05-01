@@ -39,7 +39,18 @@ const enum EnumInClass {
     TWO = "TWO",
 }
 
+const enum EnumInClass2 {
+    ONE = "ONE",
+    TWO = "TWO",
+}
+
 const enum EnumOutput {
+    ONE = "ONE",
+    TWO = "TWO",
+    THREE = "THREE",
+}
+
+const enum EnumOutput2 {
     ONE = "ONE",
     TWO = "TWO",
     THREE = "THREE",
@@ -50,12 +61,28 @@ const enum NamedArgsSingleEnum {
     TWO = "TWO",
 }
 
+const enum NamedArgsSingleEnum2 {
+    ONE = "ONE",
+    TWO = "TWO",
+}
+
 const enum NamedArgsSingleEnumList {
     ONE = "ONE",
     TWO = "TWO",
 }
 
+const enum NamedArgsSingleEnumList2 {
+    ONE = "ONE",
+    TWO = "TWO",
+}
+
 const enum OptionalTest_CategoryType {
+    Aleph = "Aleph",
+    Beta = "Beta",
+    Gamma = "Gamma",
+}
+
+const enum OptionalTest_CategoryTypev2 {
     Aleph = "Aleph",
     Beta = "Beta",
     Gamma = "Gamma",
@@ -93,7 +120,16 @@ interface Blah {
   prop4: string | null;
 }
 
+interface Blah2 {
+  prop4: string | null;
+}
+
 interface ClassOptionalFields {
+  prop1: string | null;
+  prop2: string | null;
+}
+
+interface ClassOptionalFieldsv2 {
   prop1: string | null;
   prop2: string | null;
 }
@@ -107,6 +143,12 @@ interface ClassOptionalOutput2 {
   prop1: string | null;
   prop2: string | null;
   prop3: Blah | null;
+}
+
+interface ClassOptionalOutput2v2 {
+  prop1: string | null;
+  prop2: string | null;
+  prop3: Blah2 | null;
 }
 
 interface DynamicPropsClass {
@@ -128,11 +170,6 @@ interface Event {
   description: string;
 }
 
-interface Message {
-  role: string;
-  message: string;
-}
-
 interface ModifiedOutput {
   reasoning: string;
   answer: string;
@@ -144,7 +181,24 @@ interface NamedArgsSingleClass {
   key_three: number;
 }
 
+interface NamedArgsSingleClass2 {
+  key: string;
+  key_two: boolean;
+  key_three: number;
+}
+
+interface NamedArgsSingleClassList2 {
+  key: string;
+  key_two: boolean;
+  key_three: number;
+}
+
 interface OptionalClass {
+  prop1: string;
+  prop2: string;
+}
+
+interface OptionalClassv2 {
   prop1: string;
   prop2: string;
 }
@@ -154,10 +208,21 @@ interface OptionalTest_Prop1 {
   omega_b: number;
 }
 
+interface OptionalTest_Prop1v2 {
+  omega_a: string;
+  omega_b: number;
+}
+
 interface OptionalTest_ReturnType {
   omega_1: OptionalTest_Prop1 | null;
   omega_2: string | null;
   omega_3: OptionalTest_CategoryType | null[];
+}
+
+interface OptionalTest_ReturnTypev2 {
+  omega_1: OptionalTest_Prop1v2 | null;
+  omega_2: string | null;
+  omega_3: OptionalTest_CategoryTypev2 | null[];
 }
 
 interface OrderInfo {
@@ -212,12 +277,28 @@ interface TestClassWithEnum {
   prop2: EnumInClass;
 }
 
+interface TestClassWithEnum2 {
+  prop1: string;
+  prop2: EnumInClass;
+}
+
 interface TestOutputClass {
   prop1: string;
   prop2: number;
 }
 
+interface TestOutputClass2 {
+  prop1: string;
+  prop2: number;
+}
+
 interface UnionTest_ReturnType {
+  prop1: string | boolean;
+  prop2: number | boolean[];
+  prop3: number[] | boolean[];
+}
+
+interface UnionTest_ReturnTypev2 {
   prop1: string | boolean;
   prop2: number | boolean[];
   prop3: number[] | boolean[];
@@ -229,5 +310,5 @@ interface WithReasoning {
 }
 
 
-export { Category, Category2, Category3, DataType, EnumInClass, EnumOutput, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalTest_CategoryType, OrderStatus, OverrideEnum, Tag, TestEnum, Blah, ClassOptionalFields, ClassOptionalOutput, ClassOptionalOutput2, DynamicPropsClass, Email, Event, Message, ModifiedOutput, NamedArgsSingleClass, OptionalClass, OptionalTest_Prop1, OptionalTest_ReturnType, OrderInfo, OverrideClass, RaysData, Resume, SearchParams, SomeClass2, TestClassAlias, TestClassWithEnum, TestOutputClass, UnionTest_ReturnType, WithReasoning }
+export { Category, Category2, Category3, DataType, EnumInClass, EnumInClass2, EnumOutput, EnumOutput2, NamedArgsSingleEnum, NamedArgsSingleEnum2, NamedArgsSingleEnumList, NamedArgsSingleEnumList2, OptionalTest_CategoryType, OptionalTest_CategoryTypev2, OrderStatus, OverrideEnum, Tag, TestEnum, Blah, Blah2, ClassOptionalFields, ClassOptionalFieldsv2, ClassOptionalOutput, ClassOptionalOutput2, ClassOptionalOutput2v2, DynamicPropsClass, Email, Event, ModifiedOutput, NamedArgsSingleClass, NamedArgsSingleClass2, NamedArgsSingleClassList2, OptionalClass, OptionalClassv2, OptionalTest_Prop1, OptionalTest_Prop1v2, OptionalTest_ReturnType, OptionalTest_ReturnTypev2, OrderInfo, OverrideClass, RaysData, Resume, SearchParams, SomeClass2, TestClassAlias, TestClassWithEnum, TestClassWithEnum2, TestOutputClass, TestOutputClass2, UnionTest_ReturnType, UnionTest_ReturnTypev2, WithReasoning }
 

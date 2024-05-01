@@ -32,7 +32,7 @@ pub(crate) fn generate(ir: &IntermediateRepr, project_root: &Path) -> Result<()>
     let mut collector = FileCollector::<RubyLanguageFeatures>::new();
 
     collector.add_file(
-        "types",
+        "types.rb",
         TryInto::<generate_types::RubyTypes>::try_into(ir)
             .map_err(|e| e.context("Error while building types.rb"))?
             .render()
@@ -48,8 +48,8 @@ pub(crate) fn generate(ir: &IntermediateRepr, project_root: &Path) -> Result<()>
     );
 
     collector.add_file(
-        "client",
-        TryInto::<generate_types::RubyTypes>::try_into(ir)
+        "client.rb",
+        TryInto::<RubyClient>::try_into(ir)
             .map_err(|e| e.context("Error while building client.rb"))?
             .render()
             .map_or_else(

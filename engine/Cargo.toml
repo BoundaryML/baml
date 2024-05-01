@@ -8,6 +8,7 @@ members = [
   "baml-runtime",
   "baml-schema-wasm",
   "language-client-codegen",
+  "language_client_python",
   "language_client_ruby/ext/ruby_ffi",
 ]
 default-members = [
@@ -18,6 +19,7 @@ default-members = [
   "baml-runtime",
   "baml-schema-wasm",
   "language-client-codegen",
+  "language_client_python",
 ]
 
 [workspace.dependencies]
@@ -25,15 +27,20 @@ anyhow = "1.0"
 askama = "0.12.1"
 either = "1.6.1"
 env_logger = "0.11.3"
+futures = { version = "0.3.30", features = ["executor"] }
 log = "0.4.20"
 indexmap = { version = "2.1.0", features = ["serde"] }
 indoc = "2.0.1"
+regex = "1.10.4"
+reqwest = { version = "0.11.22", features = ["native-tls-vendored"] }
 serde_json = { version = "1", features = ["float_roundtrip", "preserve_order"] }
 serde = { version = "1", features = ["derive"] }
 walkdir = "2.5.0"
 
+baml-runtime = { path = "baml-runtime" }
 internal-baml-codegen = { path = "language-client-codegen" }
 internal-baml-core = { path = "baml-lib/baml-core" }
+internal-baml-jinja = { path = "baml-lib/jinja" }
 
 [workspace.package]
 version = "0.20.0-canary.0"

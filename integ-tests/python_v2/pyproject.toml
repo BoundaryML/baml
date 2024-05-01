@@ -1,0 +1,14 @@
+[tool.poetry]
+name = "python-v2"
+version = "0.1.0"
+description = ""
+authors = ["Sam Lijin <sam@boundaryml.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

@@ -1,0 +1,30 @@
+[package]
+name = "baml-python-ffi"
+edition = "2021"
+version = "0.1.0"
+authors.workspace = true
+description = "BAML python bindings (Cargo.toml)"
+license-file.workspace = true
+
+[lib]
+name = "baml_py"
+crate-type = ["cdylib"]
+
+[dependencies]
+anyhow.workspace = true
+baml-runtime.workspace = true
+env_logger.workspace = true
+futures.workspace = true
+indexmap.workspace = true
+pyo3 = { version = "0.21.1", features = [
+  "abi3-py38",
+  "extension-module",
+  "generate-import-lib",
+  "serde",
+] }
+#pyo3-asyncio = "0.20.0"
+pythonize = "0.21.1"
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio = { version = "1", features = ["full"] }

@@ -6,64 +6,34 @@ use internal_baml_core::ir::{repr::IntermediateRepr, ClassWalker, EnumWalker};
 
 #[derive(askama::Template)]
 #[template(path = "types.py.j2", escape = "none")]
-pub(crate) struct PythonTypes {
-    enums: Vec<String>,
-    forward_decls: Vec<String>,
-    classes: Vec<String>,
+pub(crate) struct PythonTypes<'ir> {
+    enums: Vec<PythonEnum<'ir>>,
+    classes: Vec<PythonClass<'ir>>,
 }
 
-#[derive(askama::Template)]
-#[template(path = "enum.py.j2")]
-struct PythonEnum<'a> {
-    pub name: &'a str,
-    pub values: Vec<&'a str>,
+struct PythonEnum<'ir> {
+    pub name: &'ir str,
+    pub values: Vec<&'ir str>,
 }
 
-#[derive(askama::Template)]
-#[template(path = "class_forward_decl.py.j2")]
-struct PythonForwardDecl<'a> {
-    name: &'a str,
+struct PythonClass<'ir> {
+    name: &'ir str,
+    fields: Vec<(&'ir str, String)>,
 }
 
-#[derive(askama::Template)]
-#[template(path = "class.py.j2")]
-struct PythonStruct<'a> {
-    name: &'a str,
-    fields: Vec<(&'a str, String)>,
-}
-
-impl TryFrom<&IntermediateRepr> for PythonTypes {
+impl<'ir> TryFrom<&'ir IntermediateRepr> for PythonTypes<'ir> {
     type Error = anyhow::Error;
 
-    fn try_from(ir: &IntermediateRepr) -> Result<Self> {
+    fn try_from(ir: &'ir IntermediateRepr) -> Result<PythonTypes<'ir>> {
         Ok(PythonTypes {
             enums: ir
                 .walk_enums()
-                .map(|e| {
-                    Into::<PythonEnum>::into(&e)
-                        .render()
-                        .unwrap_or(format!("# Error rendering enum {}", e.name()))
-                })
-                .collect(),
-            forward_decls: ir
-                .walk_classes()
-                .map(|c| {
-                    PythonForwardDecl { name: c.name() }
-                        .render()
-                        .unwrap_or(format!(
-                            "# Error rendering forward decl for class {}",
-                            c.name()
-                        ))
-                })
-                .collect(),
+                .map(|e| Into::<PythonEnum>::into(&e))
+                .collect::<Vec<_>>(),
             classes: ir
                 .walk_classes()
-                .map(|c| {
-                    Into::<PythonStruct>::into(&c)
-                        .render()
-                        .unwrap_or(format!("# Error rendering class {}", c.name()))
-                })
-                .collect(),
+                .map(|e| Into::<PythonClass>::into(&e))
+                .collect::<Vec<_>>(),
         })
     }
 }
@@ -83,9 +53,9 @@ impl<'ir> From<&EnumWalker<'ir>> for PythonEnum<'ir> {
     }
 }
 
-impl<'ir> From<&ClassWalker<'ir>> for PythonStruct<'ir> {
-    fn from(c: &ClassWalker<'ir>) -> PythonStruct<'ir> {
-        PythonStruct {
+impl<'ir> From<&ClassWalker<'ir>> for PythonClass<'ir> {
+    fn from(c: &ClassWalker<'ir>) -> PythonClass<'ir> {
+        PythonClass {
             name: c.name(),
             fields: c
                 .item

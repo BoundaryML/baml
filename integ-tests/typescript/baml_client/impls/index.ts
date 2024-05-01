@@ -5,8 +5,6 @@
 // @ts-nocheck
 /* eslint-disable */
 
-import './classifyconversation_default_config';
-
 import './classifymessage_default_config';
 
 import './classifymessage2_default_config';
@@ -27,6 +25,8 @@ import './fnclassoptionaloutput_v1';
 
 import './fnclassoptionaloutput2_v1';
 
+import './fnclassoptionaloutput2_v2_default_config';
+
 import './fnenumlistoutput_v1';
 
 import './fnenumoutput_v1';
@@ -40,6 +40,8 @@ import './fnoutputclass_v1';
 import './fnoutputclasslist_v1';
 
 import './fnoutputclasswithenum_v1';
+
+import './fnoutputclasswithenum_v2_default_config';
 
 import './fnoutputstringlist_v1';
 
@@ -64,6 +66,8 @@ import './getorderinfo_default_config';
 import './getquery_default_config';
 
 import './optionaltest_function_v1';
+
+import './optionaltest_function_v2_default_config';
 
 import './prompttest_bird_chat';
 
@@ -98,5 +102,47 @@ import './testfnnamedargssinglestringarray_v1';
 import './testfnnamedargssinglestringlist_v1';
 
 import './uniontest_function_v1';
+
+import './v2_fnclassoptional_default_config';
+
+import './v2_fnclassoptional2_default_config';
+
+import './v2_fnenumlistoutput_default_config';
+
+import './v2_fnenumoutput_default_config';
+
+import './v2_fnnamedargssinglestringoptional_default_config';
+
+import './v2_fnoutputbool_default_config';
+
+import './v2_fnoutputclass_default_config';
+
+import './v2_fnoutputclasslist_default_config';
+
+import './v2_fnoutputstringlist_default_config';
+
+import './v2_fnstringoptional_default_config';
+
+import './v2_fntestnamedargssingleenum_default_config';
+
+import './v2_testfnnamedargssinglebool_default_config';
+
+import './v2_testfnnamedargssingleclass_default_config';
+
+import './v2_testfnnamedargssingleenumlist_default_config';
+
+import './v2_testfnnamedargssinglefloat_default_config';
+
+import './v2_testfnnamedargssingleint_default_config';
+
+import './v2_testfnnamedargssinglestring_default_config';
+
+import './v2_testfnnamedargssinglestringarray_default_config';
+
+import './v2_testfnnamedargssinglestringlist_default_config';
+
+import './v2_testfnnamedargssyntax_default_config';
+
+import './v2_uniontest_function_default_config';
 
 

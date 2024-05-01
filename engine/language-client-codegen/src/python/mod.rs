@@ -32,15 +32,15 @@ pub(crate) fn generate(ir: &IntermediateRepr, project_root: &Path) -> Result<()>
     let mut collector = FileCollector::<PythonLanguageFeatures>::new();
 
     collector.add_file(
-        "types",
+        "types.py",
         TryInto::<generate_types::PythonTypes>::try_into(ir)
-            .map_err(|e| e.context("Error while building types.go"))?
+            .map_err(|e| e.context("Error while building types.py"))?
             .render()
             .map_or_else(
                 |e| {
                     format!(
                         "/*\n\n{:?}\n\n*/",
-                        anyhow::Error::new(e).context("Error while rendering types.go")
+                        anyhow::Error::new(e).context("Error while rendering types.py")
                     )
                 },
                 |r| r,
@@ -48,19 +48,30 @@ pub(crate) fn generate(ir: &IntermediateRepr, project_root: &Path) -> Result<()>
     );
 
     collector.add_file(
-        "client",
-        TryInto::<generate_types::PythonTypes>::try_into(ir)
-            .map_err(|e| e.context("Error while building client.go"))?
+        "client.py",
+        TryInto::<PythonClient>::try_into(ir)
+            .map_err(|e| e.context("Error while building client.py"))?
             .render()
             .map_or_else(
                 |e| {
                     format!(
                         "/*\n\n{:?}\n\n*/",
-                        anyhow::Error::new(e).context("Error while rendering client.go")
+                        anyhow::Error::new(e).context("Error while rendering client.py")
                     )
                 },
                 |r| r,
             ),
+    );
+
+    collector.add_file(
+        "baml.lock",
+        serde_json::to_string(&serde_json::json!({
+            "version": 2,
+            "content": {
+                "cli_version": "0.20.0-canary.0",
+                "client_version": null,
+            }
+        }))?,
     );
 
     collector.commit(project_root)?;
