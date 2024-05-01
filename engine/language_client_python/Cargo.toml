@@ -18,6 +18,7 @@ futures.workspace = true
 indexmap.workspace = true
 log.workspace = true
 # pyo3 0.21 introduces the Bound<> API, which is a massive breaking change
+# 0.21 is currently out, but pyo3-asyncio is stuck on the pre-Bound API, so we're also stuck on the pre-Bound API
 pyo3 = { version = "0.20.0", features = [
   "abi3-py38",
   "extension-module",

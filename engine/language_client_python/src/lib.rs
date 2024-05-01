@@ -29,6 +29,19 @@ struct BamlRuntimeFfi {
     t: tokio::runtime::Runtime,
 }
 
+impl BamlRuntimeFfi {
+    async fn call_async(&mut self) -> Result<python_types::FunctionResult> {
+        let result = self
+            .internal
+            .call_function(
+                "placeholder function".to_string(),
+                HashMap::new(),
+                &RuntimeContext::default(),
+            )
+            .await;
+    }
+}
+
 #[pymethods]
 impl BamlRuntimeFfi {
     #[staticmethod]
