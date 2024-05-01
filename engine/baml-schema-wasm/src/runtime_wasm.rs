@@ -14,6 +14,42 @@ use baml_runtime::InternalRuntimeInterface;
 use crate::runtime_wasm::runtime_prompt::WasmPrompt;
 
 #[wasm_bindgen]
+pub struct WasmProject {
+    root_dir_name: String,
+    files: HashMap<String, String>,
+}
+
+#[wasm_bindgen]
+impl WasmProject {
+    #[wasm_bindgen]
+    pub fn new(root_dir_name: &str, files: JsValue) -> Result<WasmProject, JsError> {
+        let files: HashMap<String, String> =
+            serde_wasm_bindgen::from_value(files).map_err(|e| e)?;
+
+        Ok(WasmProject {
+            root_dir_name: root_dir_name.to_string(),
+            files,
+        })
+    }
+
+    #[wasm_bindgen]
+    pub fn update_file(&mut self, name: &str, content: Option<String>) {
+        if let Some(content) = content {
+            self.files.insert(name.to_string(), content);
+        } else {
+            self.files.remove(name);
+        }
+    }
+
+    #[wasm_bindgen]
+    pub fn runtime(&self) -> Result<WasmRuntime, JsError> {
+        BamlRuntime::from_file_content(&self.root_dir_name, &self.files)
+            .map(|r| WasmRuntime { runtime: r })
+            .map_err(|e| wasm_bindgen::JsError::new(&e.to_string()))
+    }
+}
+
+#[wasm_bindgen]
 pub struct WasmRuntime {
     runtime: BamlRuntime,
 }
@@ -61,10 +97,20 @@ impl WasmFunction {
         params: JsValue,
     ) -> Result<WasmPrompt, wasm_bindgen::JsError> {
         let params = serde_wasm_bindgen::from_value(params)?;
-        let env_vars = rt.runtime.internal().ir().env_vars();
+        let env_vars = rt.runtime.internal().ir().required_env_vars();
+
+        // For anything env vars that are not provided, fill with empty strings
+        let mut ctx = ctx.ctx.clone();
+
+        for var in env_vars {
+            if !ctx.env.contains_key(var) {
+                ctx.env.insert(var.into(), "".to_string());
+            }
+        }
+
         rt.runtime
             .internal_mut()
-            .render_prompt(&self.name, &ctx.ctx, &params)
+            .render_prompt(&self.name, &ctx, &params)
             .map(|p| p.into())
             .map_err(|e| wasm_bindgen::JsError::new(&e.to_string()))
     }

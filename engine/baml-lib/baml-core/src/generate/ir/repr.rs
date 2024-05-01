@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use anyhow::{anyhow, bail, Result};
 use either::Either;
 
@@ -38,6 +40,16 @@ pub struct Walker<'db, I> {
 }
 
 impl IntermediateRepr {
+    pub fn required_env_vars(&self) -> HashSet<&str> {
+        // TODO: We should likely check the full IR.
+
+        self.clients
+            .iter()
+            .flat_map(|c| c.elem.options.iter())
+            .flat_map(|(_, expr)| expr.required_env_vars())
+            .collect::<HashSet<&str>>()
+    }
+
     pub fn walk_enums<'a>(&'a self) -> impl ExactSizeIterator<Item = Walker<'a, &'a Node<Enum>>> {
         self.enums.iter().map(|e| Walker { db: self, item: e })
     }
@@ -342,6 +354,24 @@ pub enum Expression {
     RawString(String),
     List(Vec<Expression>),
     Map(Vec<(Expression, Expression)>),
+}
+
+impl Expression {
+    pub fn required_env_vars(&self) -> Vec<&str> {
+        match self {
+            Expression::Identifier(Identifier::ENV(k)) => vec![k.as_str()],
+            Expression::List(l) => l.iter().flat_map(Expression::required_env_vars).collect(),
+            Expression::Map(m) => m
+                .iter()
+                .flat_map(|(k, v)| {
+                    let mut keys = k.required_env_vars();
+                    keys.extend(v.required_env_vars());
+                    keys
+                })
+                .collect(),
+            _ => vec![],
+        }
+    }
 }
 
 impl WithRepr<Expression> for ast::Expression {

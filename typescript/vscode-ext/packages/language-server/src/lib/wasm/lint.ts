@@ -41,7 +41,7 @@ export default function lint(input: LinterInput, onError?: (errorMessage: string
       })
     }
 
-    let res = languageWasm.create_runtime(input.root_path, input.files.map((f) => f.path), input.files.map((f) => f.content));
+    let res = languageWasm.create_runtime(input.root_path, input.files);
     let func = res.get_function("ExtractResume2");
     let ctx = new languageWasm.WasmRuntimeContext();
     let prompt = func?.render_prompt(res, ctx, { resume: "Hi! I'm johsn!" });
