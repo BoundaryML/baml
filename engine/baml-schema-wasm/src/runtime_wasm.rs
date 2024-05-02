@@ -1,9 +1,13 @@
 mod runtime_ctx;
 mod runtime_prompt;
 
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    ops::Deref,
+    path::PathBuf,
+};
 
-use baml_runtime::{BamlRuntime, RenderedPrompt};
+use baml_runtime::{BamlRuntime, DiagnosticsError, RenderedPrompt};
 use js_sys::{JsString, JSON};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
@@ -16,7 +20,81 @@ use crate::runtime_wasm::runtime_prompt::WasmPrompt;
 #[wasm_bindgen]
 pub struct WasmProject {
     root_dir_name: String,
+    // This is the version of the file on disk
     files: HashMap<String, String>,
+    // This is the version of the file that is currently being edited
+    // (unsaved changes)
+    unsaved_files: HashMap<String, String>,
+}
+
+#[wasm_bindgen(getter_with_clone)]
+#[derive(Debug)]
+pub struct WasmDiagnosticError {
+    errors: DiagnosticsError,
+    pub all_files: Vec<String>,
+}
+
+impl std::error::Error for WasmDiagnosticError {}
+
+impl std::fmt::Display for WasmDiagnosticError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.errors)
+    }
+}
+
+#[wasm_bindgen]
+impl WasmDiagnosticError {
+    #[wasm_bindgen]
+    pub fn errors(&self) -> Vec<WasmError> {
+        self.errors
+            .errors()
+            .iter()
+            .map(|e| {
+                let (start, end) = e.span().line_and_column();
+
+                WasmError {
+                    file_path: e.span().file.path(),
+                    start_line: start.0,
+                    start_column: start.1,
+                    end_line: end.0,
+                    end_column: end.1,
+                    r#type: "error".to_string(),
+                    message: e.message().to_string(),
+                }
+            })
+            .chain(self.errors.warnings().iter().map(|e| {
+                let (start, end) = e.span().line_and_column();
+
+                WasmError {
+                    file_path: e.span().file.path(),
+                    start_line: start.0,
+                    start_column: start.1,
+                    end_line: end.0,
+                    end_column: end.1,
+                    r#type: "warning".to_string(),
+                    message: e.message().to_string(),
+                }
+            }))
+            .collect()
+    }
+}
+
+#[wasm_bindgen(getter_with_clone)]
+pub struct WasmError {
+    #[wasm_bindgen(readonly)]
+    pub r#type: String,
+    #[wasm_bindgen(readonly)]
+    pub file_path: String,
+    #[wasm_bindgen(readonly)]
+    pub start_line: usize,
+    #[wasm_bindgen(readonly)]
+    pub start_column: usize,
+    #[wasm_bindgen(readonly)]
+    pub end_line: usize,
+    #[wasm_bindgen(readonly)]
+    pub end_column: usize,
+    #[wasm_bindgen(readonly)]
+    pub message: String,
 }
 
 #[wasm_bindgen]
@@ -29,6 +107,7 @@ impl WasmProject {
         Ok(WasmProject {
             root_dir_name: root_dir_name.to_string(),
             files,
+            unsaved_files: HashMap::new(),
         })
     }
 
@@ -42,10 +121,46 @@ impl WasmProject {
     }
 
     #[wasm_bindgen]
-    pub fn runtime(&self) -> Result<WasmRuntime, JsError> {
-        BamlRuntime::from_file_content(&self.root_dir_name, &self.files)
+    pub fn save_file(&mut self, name: &str, content: &str) {
+        self.files.insert(name.to_string(), content.to_string());
+        self.unsaved_files.remove(name);
+    }
+
+    #[wasm_bindgen]
+    pub fn set_unsaved_file(&mut self, name: &str, content: Option<String>) {
+        if let Some(content) = content {
+            self.unsaved_files.insert(name.to_string(), content);
+        } else {
+            self.unsaved_files.remove(name);
+        }
+    }
+
+    #[wasm_bindgen]
+    pub fn diagnostics(&self, rt: &WasmRuntime) -> WasmDiagnosticError {
+        let mut hm = self.files.iter().collect::<HashMap<_, _>>();
+        hm.extend(self.unsaved_files.iter());
+
+        WasmDiagnosticError {
+            errors: rt.runtime.internal().diagnostics().clone(),
+            all_files: hm.keys().map(|s| s.to_string()).collect(),
+        }
+    }
+
+    #[wasm_bindgen]
+    pub fn runtime(&self) -> Result<WasmRuntime, JsValue> {
+        let mut hm = self.files.iter().collect::<HashMap<_, _>>();
+        hm.extend(self.unsaved_files.iter());
+
+        BamlRuntime::from_file_content(&self.root_dir_name, &hm)
             .map(|r| WasmRuntime { runtime: r })
-            .map_err(|e| wasm_bindgen::JsError::new(&e.to_string()))
+            .map_err(|e| match e.downcast::<DiagnosticsError>() {
+                Ok(e) => WasmDiagnosticError {
+                    errors: e,
+                    all_files: hm.keys().map(|s| s.to_string()).collect(),
+                }
+                .into(),
+                Err(e) => JsValue::from_str(&e.to_string()),
+            })
     }
 }
 
@@ -114,16 +229,4 @@ impl WasmFunction {
             .map(|p| p.into())
             .map_err(|e| wasm_bindgen::JsError::new(&e.to_string()))
     }
-}
-
-#[wasm_bindgen]
-pub fn create_runtime(
-    root_dir_name: &str,
-    files: JsValue,
-) -> Result<WasmRuntime, wasm_bindgen::JsError> {
-    let files = serde_wasm_bindgen::from_value(files)?;
-
-    baml_runtime::BamlRuntime::from_file_content(root_dir_name, &files)
-        .map(|r| WasmRuntime { runtime: r })
-        .map_err(|e| wasm_bindgen::JsError::new(&e.to_string()))
 }

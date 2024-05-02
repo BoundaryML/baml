@@ -1,5 +1,5 @@
 import { ParserDatabase } from '@baml/common'
-import { languageWasm } from '.'
+import { BamlWasm } from '.'
 import { handleFormatPanic, handleWasmError } from './internals'
 
 type LintResponse = {
@@ -37,20 +37,12 @@ export default function lint(input: LinterInput, onError?: (errorMessage: string
     if (process.env.FORCE_PANIC_baml_SCHEMA) {
       handleFormatPanic(() => {
         console.debug('Triggering a Rust panic...')
-        languageWasm.debug_panic()
+        BamlWasm.debug_panic()
       })
     }
 
-    let res = languageWasm.create_runtime(input.root_path, input.files);
-    let func = res.get_function("ExtractResume2");
-    let ctx = new languageWasm.WasmRuntimeContext();
-    let prompt = func?.render_prompt(res, ctx, { resume: "Hi! I'm johsn!" });
 
-    console.log(`prompt: ${prompt?.as_chat()?.map((c) => `${c.role}: ${c.parts.length} Parts`).join("\n")}`);
-
-    throw new Error('Not implemented')
-
-    const result = languageWasm.lint(JSON.stringify(input))
+    const result = BamlWasm.lint(JSON.stringify(input))
     const parsed = JSON.parse(result) as LintResponse
     // console.log(`lint result ${JSON.stringify(JSON.parse(result), null, 2)}`)
     return parsed

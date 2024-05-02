@@ -1,5 +1,5 @@
 use anyhow::Result;
-use dashmap::mapref::one::Ref;
+use internal_baml_core::internal_baml_diagnostics::Diagnostics;
 use internal_baml_core::ir::{repr::IntermediateRepr, FunctionWalker};
 use internal_baml_jinja::RenderedPrompt;
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
@@ -17,9 +17,9 @@ pub(crate) trait RuntimeConstructor {
     #[cfg(feature = "disk")]
     fn from_directory(dir: &PathBuf) -> Result<InternalBamlRuntime>;
 
-    fn from_file_content(
+    fn from_file_content<T: AsRef<str>>(
         root_path: &str,
-        files: &HashMap<String, String>,
+        files: &HashMap<T, T>,
     ) -> Result<InternalBamlRuntime>;
 }
 
@@ -48,6 +48,8 @@ pub trait RuntimeInterface {
 // This is a runtime that has no access to the disk or network
 pub trait InternalRuntimeInterface {
     fn features(&self) -> IrFeatures;
+
+    fn diagnostics(&self) -> &Diagnostics;
 
     fn get_client(
         &self,

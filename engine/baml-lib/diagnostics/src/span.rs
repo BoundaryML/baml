@@ -32,6 +32,37 @@ impl Span {
     pub fn overlaps(self, other: Span) -> bool {
         self.file == other.file && (self.contains(other.start) || self.contains(other.end))
     }
+
+    pub fn line_and_column(&self) -> ((usize, usize), (usize, usize)) {
+        let contents = self.file.as_str();
+        let mut line = 0;
+        let mut column = 0;
+
+        let mut start = None;
+        let mut end = None;
+
+        for (idx, c) in contents.chars().enumerate() {
+            if idx == self.start {
+                start = Some((line, column));
+            }
+            if idx == self.end {
+                end = Some((line, column));
+                break;
+            }
+
+            if c == '\n' {
+                line += 1;
+                column = 0;
+            } else {
+                column += 1;
+            }
+        }
+
+        match (start, end) {
+            (Some(start), Some(end)) => (start, end),
+            _ => ((0, 0), (0, 0)),
+        }
+    }
 }
 
 impl From<(SourceFile, pest::Span<'_>)> for Span {

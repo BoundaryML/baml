@@ -21,6 +21,7 @@ import {
   Range,
   CodeLens,
   DidChangeWatchedFilesNotification,
+  FileSystemWatcher
 } from 'vscode-languageserver'
 import { URI } from 'vscode-uri'
 
@@ -30,14 +31,15 @@ import { TextDocument } from 'vscode-languageserver-textdocument'
 
 import * as MessageHandler from './lib/MessageHandler'
 import type { LSOptions, LSSettings } from './lib/types'
-import { getVersion, getEnginesVersion, getCliVersion } from './lib/wasm/internals'
+// import { getVersion, getEnginesVersion } from './lib/wasm/internals'
 import { BamlDirCache } from './file/fileCache'
 import { LinterInput } from './lib/wasm/lint'
 import { cliBuild, cliCheckForUpdates, cliVersion } from './baml-cli'
 import { ParserDatabase, TestRequest } from '@baml/common'
-import { FileChangeType, workspace } from 'vscode'
+// import { FileChangeType } from 'vscode'
 import fs from 'fs'
 import { z } from 'zod'
+import BamlProjectManager from './lib/baml_project_manager'
 
 const packageJson = require('../../package.json') // eslint-disable-line
 function getConnection(options?: LSOptions): Connection {
@@ -52,6 +54,8 @@ function getConnection(options?: LSOptions): Connection {
 
 let hasCodeActionLiteralsCapability = false
 let hasConfigurationCapability = true
+
+
 
 const BamlConfig = z.optional(
   z.object({
@@ -75,6 +79,16 @@ export function startServer(options?: LSOptions): void {
   console.log('Server-side -- startServer()')
   // Source code: https://github.com/microsoft/vscode-languageserver-node/blob/main/server/src/common/server.ts#L1044
   const connection: Connection = getConnection(options)
+  const bamlProjectManager = new BamlProjectManager((params) => {
+    if (params.type == 'diagnostic') {
+
+      params.errors.forEach(([uri, diagnostics]) => {
+        connection.sendDiagnostics({ uri, diagnostics })
+      })
+    } else {
+      connection.sendNotification('baml/message', { message: params.message, type: params.type ?? 'warn' })
+    }
+  })
 
   console.log = connection.console.log.bind(connection.console)
   console.error = connection.console.error.bind(connection.console)
@@ -89,8 +103,8 @@ export function startServer(options?: LSOptions): void {
       // eslint-disable-next-line
       `Extension '${packageJson?.name}': ${packageJson?.version}`,
     )
-    connection.console.info(`Using 'baml-wasm': ${getVersion()}`)
-    const prismaEnginesVersion = getEnginesVersion()
+    // connection.console.info(`Using 'baml-wasm': ${getVersion()}`)
+    // const prismaEnginesVersion = getEnginesVersion()
 
     // ... and then capabilities of the language server
     const capabilities = params.capabilities
@@ -208,23 +222,26 @@ export function startServer(options?: LSOptions): void {
   }
 
   connection.onDidChangeWatchedFiles(async (params) => {
-    params.changes.forEach((change) => {
-      const uri = change.uri
-      const languageExtension = getLanguageExtension(uri)
-      if (!languageExtension) {
-        return
-      }
-      const textDocument = TextDocument.create(uri, languageExtension, 1, '')
-      bamlCache.refreshDirectory(textDocument)
-    })
-    if (params.changes.length > 0) {
-      const uri = params.changes[0].uri
-      const languageExtension = getLanguageExtension(uri)
-      if (!languageExtension) {
-        return
-      }
-      const textDocument = TextDocument.create(uri, languageExtension, 1, '')
-      validateTextDocument(textDocument)
+
+    // let deleted_files = params.changes.filter((change) =>
+    //   change.type == FileChangeType.Deleted
+    // ).map((change) => change.uri);
+    // let created_files = params.changes.filter((change) =>
+    //   change.type == FileChangeType.Created
+    // ).map((change) => change.uri);
+    // let changed_files = params.changes.filter((change) =>
+    //   change.type == FileChangeType.Changed
+    // ).map((change) => change.uri);
+
+    // TODO: @hellovai be more efficient about this (only revalidate the files that changed)
+    // If anything changes, then we need to revalidate all documents
+    // let hasChanges = deleted_files.length > 0 || created_files.length > 0 || changed_files.length > 0;
+
+    let hasChanges = params.changes.length > 0;
+    if (hasChanges) {
+      // TODO: @hellovai we should technically get all possible root paths
+      // (someone could delete mutliple baml_src dirs at once)
+      await bamlProjectManager.reload_project_files(URI.parse(params.changes[0].uri));
     }
   })
 
@@ -237,21 +254,24 @@ export function startServer(options?: LSOptions): void {
       // globalSettings = <LSSettings>(change.settings.prisma || defaultSettings) // eslint-disable-line @typescript-eslint/no-unsafe-member-access
     }
 
-    documents.all().forEach(debouncedValidateTextDocument) // eslint-disable-line @typescript-eslint/no-misused-promises
+    // documents.all().forEach(debouncedValidateTextDocument) // eslint-disable-line @typescript-eslint/no-misused-promises
   })
 
-  documents.onDidOpen((e) => {
-    try {
-      // TODO: revalidate if something changed
-      bamlCache.addDocument(e.document)
-      debouncedValidateTextDocument(e.document)
-    } catch (e: any) {
-      if (e instanceof Error) {
-        console.log('Error opening doc' + e.message + ' ' + e.stack)
-      } else {
-        console.log('Error opening doc' + e)
-      }
-    }
+  documents.onDidOpen(async (e) => {
+    await bamlProjectManager.touch_project(URI.parse(e.document.uri))
+
+    // e.document.uri
+    // try {
+    //   // TODO: revalidate if something changed
+    //   bamlCache.addDocument(e.document)
+    //   debouncedValidateTextDocument(e.document)
+    // } catch (e: any) {
+    //   if (e instanceof Error) {
+    //     console.log('Error opening doc' + e.message + ' ' + e.stack)
+    //   } else {
+    //     console.log('Error opening doc' + e)
+    //   }
+    // }
   })
 
   // Note: VS Code strips newline characters from the message
@@ -335,57 +355,48 @@ export function startServer(options?: LSOptions): void {
     trailing: true,
   })
 
-  documents.onDidChangeContent((change: { document: TextDocument }) => {
+  documents.onDidChangeContent(async (change: { document: TextDocument }) => {
     const textDocument = change.document
-    const rootPath = bamlCache.getBamlDir(textDocument)
-    if (!rootPath) {
-      console.error('Could not find root path for ' + textDocument.uri)
-      connection.sendNotification('baml/message', {
-        type: 'error',
-        message: 'Could not find a baml_src directory for ' + textDocument.uri.toString(),
-      })
-      return
-    }
-    // add the document to the cache
-    // we want to do this since the doc may not be in disk (it's in vscode memory).
-    // If we try to just load docs from disk we will have outdated info.
-    try {
-      bamlCache.addDocument(textDocument)
-    } catch (e) {
-      console.log('Error adding document to cache ' + e)
-    }
-    debouncedValidateTextDocument(textDocument)
+    await bamlProjectManager.upsert_file(URI.parse(textDocument.uri), textDocument.getText())
+    // TODO: @hellovai Consider debouncing this
+    // debounce(validateTextDocument, 800, {
+    //   maxWait: 4000,
+    //   leading: true,
+    //   trailing: true,
+    // })
   })
 
-  const debouncedCLIBuild = debounce(cliBuild, 2000, {
-    leading: true,
-    trailing: true,
-  })
 
-  documents.onDidSave((change: { document: TextDocument }) => {
-    try {
-      const cliPath = config?.path || 'baml'
-      let bamlDir = bamlCache.getBamlDir(change.document)
-      if (!bamlDir) {
-        console.error(
-          'Could not find baml_src dir for ' + change.document.uri + '. Make sure your baml files are in baml_src dir',
-        )
-        return
-      }
+  documents.onDidSave(async (change: { document: TextDocument }) => {
+    await bamlProjectManager.save_file(URI.parse(change.document.uri), change.document.getText())
+    connection.sendNotification('baml/message', {
+      type: 'info',
+      message: 'Saved BAML client!',
+    });
 
-      debouncedCLIBuild(cliPath, bamlDir, showErrorToast, () => {
-        connection.sendNotification('baml/message', {
-          type: 'info',
-          message: 'Generated BAML client successfully!',
-        })
-      })
-    } catch (e: any) {
-      if (e instanceof Error) {
-        console.log('Error saving doc' + e.message + ' ' + e.stack)
-      } else {
-        console.log('Error saving doc' + e)
-      }
-    }
+    // try {
+    //   const cliPath = config?.path || 'baml'
+    //   let bamlDir = bamlCache.getBamlDir(change.document)
+    //   if (!bamlDir) {
+    //     console.error(
+    //       'Could not find baml_src dir for ' + change.document.uri + '. Make sure your baml files are in baml_src dir',
+    //     )
+    //     return
+    //   }
+
+    //   debouncedCLIBuild(cliPath, bamlDir, showErrorToast, () => {
+    //     connection.sendNotification('baml/message', {
+    //       type: 'info',
+    //       message: 'Generated BAML client successfully!',
+    //     })
+    //   })
+    // } catch (e: any) {
+    //   if (e instanceof Error) {
+    //     console.log('Error saving doc' + e.message + ' ' + e.stack)
+    //   } else {
+    //     console.log('Error saving doc' + e)
+    //   }
+    // }
   })
 
   function getDocument(uri: string): TextDocument | undefined {
@@ -393,19 +404,20 @@ export function startServer(options?: LSOptions): void {
   }
 
   connection.onDefinition((params: DeclarationParams) => {
-    const doc = getDocument(params.textDocument.uri)
-    if (doc) {
-      const db = bamlCache.getFileCache(doc)
-      if (db) {
-        return MessageHandler.handleDefinitionRequest(db, doc, params)
-      } else if (doc.languageId === 'python') {
-        const db = bamlCache.lastBamlDir?.cache
-        console.log(` python: ${doc.uri} files: ${db?.getDocuments().length}`)
-        if (db) {
-          return MessageHandler.handleDefinitionRequest(db, doc, params)
-        }
-      }
-    }
+    return undefined;
+    // const doc = getDocument(params.textDocument.uri)
+    // if (doc) {
+    //   const db = bamlCache.getFileCache(doc)
+    //   if (db) {
+    //     return MessageHandler.handleDefinitionRequest(db, doc, params)
+    //   } else if (doc.languageId === 'python') {
+    //     const db = bamlCache.lastBamlDir?.cache
+    //     console.log(` python: ${doc.uri} files: ${db?.getDocuments().length}`)
+    //     if (db) {
+    //       return MessageHandler.handleDefinitionRequest(db, doc, params)
+    //     }
+    //   }
+    // }
   })
 
   // connection.onCompletion((params: CompletionParams) => {
@@ -421,132 +433,135 @@ export function startServer(options?: LSOptions): void {
   // })
 
   connection.onHover((params: HoverParams) => {
-    const doc = getDocument(params.textDocument.uri)
-    if (doc) {
-      const db = bamlCache.getFileCache(doc)
-      if (db) {
-        return MessageHandler.handleHoverRequest(db, doc, params)
-      }
-    }
+    return undefined;
+    // const doc = getDocument(params.textDocument.uri)
+    // if (doc) {
+    //   const db = bamlCache.getFileCache(doc)
+    //   if (db) {
+    //     return MessageHandler.handleHoverRequest(db, doc, params)
+    //   }
+    // }
   })
 
   connection.onCodeLens((params: CodeLensParams) => {
-    const document = getDocument(params.textDocument.uri)
-    const codeLenses: CodeLens[] = []
-    if (!document) {
-      console.log('No text document available to compute codelens ' + params.textDocument.uri.toString())
-      return codeLenses
-    }
-    bamlCache.addDocument(document)
-    // Dont debounce this! We need to give VSCode the most up to date info.
-    // VSCode will actually do adaptive debouncing for us https://github.com/microsoft/vscode/issues/106267
-    validateTextDocument(document)
+    return undefined;
 
-    const db = bamlCache.getParserDatabase(document)
-    const docFsPath = URI.parse(document.uri).fsPath
-    const baml_dir = bamlCache.getBamlDir(document)
-    if (!db) {
-      console.log('No db for ' + document.uri + '. There may be a linter error or out of sync file')
-      return codeLenses
-    }
+    // const document = getDocument(params.textDocument.uri)
+    // const codeLenses: CodeLens[] = []
+    // if (!document) {
+    //   console.log('No text document available to compute codelens ' + params.textDocument.uri.toString())
+    //   return codeLenses
+    // }
+    // bamlCache.addDocument(document)
+    // // Dont debounce this! We need to give VSCode the most up to date info.
+    // // VSCode will actually do adaptive debouncing for us https://github.com/microsoft/vscode/issues/106267
+    // validateTextDocument(document)
 
-    for (const fn of db.functions) {
-      if (fn.name.source_file !== docFsPath) {
-        continue;
-      }
+    // const db = bamlCache.getParserDatabase(document)
+    // const docFsPath = URI.parse(document.uri).fsPath
+    // const baml_dir = bamlCache.getBamlDir(document)
+    // if (!db) {
+    //   console.log('No db for ' + document.uri + '. There may be a linter error or out of sync file')
+    //   return codeLenses
+    // }
 
-      const range = Range.create(document.positionAt(fn.name.start), document.positionAt(fn.name.end))
-      const command: Command = {
-        title: '▶️ Open Playground',
-        command: 'baml.openBamlPanel',
-        arguments: [
-          {
-            projectId: baml_dir?.fsPath || '',
-            functionName: fn.name.value,
-            showTests: true,
-          },
-        ],
-      }
-      codeLenses.push({
-        range,
-        command,
-      })
+    // for (const fn of db.functions) {
+    //   if (fn.name.source_file !== docFsPath) {
+    //     continue;
+    //   }
 
-      switch (fn.syntax) {
-        case "Version2":
-          continue;
+    //   const range = Range.create(document.positionAt(fn.name.start), document.positionAt(fn.name.end))
+    //   const command: Command = {
+    //     title: '▶️ Open Playground',
+    //     command: 'baml.openBamlPanel',
+    //     arguments: [
+    //       {
+    //         projectId: baml_dir?.fsPath || '',
+    //         functionName: fn.name.value,
+    //         showTests: true,
+    //       },
+    //     ],
+    //   }
+    //   codeLenses.push({
+    //     range,
+    //     command,
+    //   })
 
-        case "Version1":
-          for (const impl of fn.impls) {
-            codeLenses.push({
-              range: Range.create(document.positionAt(impl.name.start), document.positionAt(impl.name.end)),
-              command: {
-                title: '▶️ Open Playground',
-                command: 'baml.openBamlPanel',
-                arguments: [
-                  {
-                    projectId: baml_dir?.fsPath || '',
-                    functionName: fn.name.value,
-                    implName: impl.name.value,
-                    showTests: true,
-                  },
-                ],
-              },
-            })
-            codeLenses.push({
-              range: Range.create(document.positionAt(impl.prompt_key.start), document.positionAt(impl.prompt_key.end)),
-              command: {
-                title: '▶️ Open Live Preview',
-                command: 'baml.openBamlPanel',
-                arguments: [
-                  {
-                    projectId: baml_dir?.fsPath || '',
-                    functionName: fn.name.value,
-                    implName: impl.name.value,
-                    showTests: false,
-                  },
-                ],
-              },
-            })
-          }
-          break;
+    //   switch (fn.syntax) {
+    //     case "Version2":
+    //       continue;
 
-      }
-    }
+    //     case "Version1":
+    //       for (const impl of fn.impls) {
+    //         codeLenses.push({
+    //           range: Range.create(document.positionAt(impl.name.start), document.positionAt(impl.name.end)),
+    //           command: {
+    //             title: '▶️ Open Playground',
+    //             command: 'baml.openBamlPanel',
+    //             arguments: [
+    //               {
+    //                 projectId: baml_dir?.fsPath || '',
+    //                 functionName: fn.name.value,
+    //                 implName: impl.name.value,
+    //                 showTests: true,
+    //               },
+    //             ],
+    //           },
+    //         })
+    //         codeLenses.push({
+    //           range: Range.create(document.positionAt(impl.prompt_key.start), document.positionAt(impl.prompt_key.end)),
+    //           command: {
+    //             title: '▶️ Open Live Preview',
+    //             command: 'baml.openBamlPanel',
+    //             arguments: [
+    //               {
+    //                 projectId: baml_dir?.fsPath || '',
+    //                 functionName: fn.name.value,
+    //                 implName: impl.name.value,
+    //                 showTests: false,
+    //               },
+    //             ],
+    //           },
+    //         })
+    //       }
+    //       break;
 
-    const testCases = db.functions
-      .flatMap((f) =>
-        f.test_cases.map((t) => {
-          return {
-            value: t.name.value,
-            start: t.name.start,
-            end: t.name.end,
-            source_file: t.name.source_file,
-            function: f.name.value,
-          }
-        }),
-      )
-      .filter((x) => x.source_file === docFsPath)
-    testCases.forEach((name) => {
-      const range = Range.create(document.positionAt(name.start), document.positionAt(name.end))
-      const command: Command = {
-        title: '▶️ Open Playground',
-        command: 'baml.openBamlPanel',
-        arguments: [
-          {
-            projectId: baml_dir?.fsPath || '',
-            functionName: name.function,
-            testCaseName: name.value,
-            showTests: true,
-          },
-        ],
-      }
-      codeLenses.push({
-        range,
-        command,
-      })
-    })
-    return codeLenses
+    //   }
+    // }
+
+    // const testCases = db.functions
+    //   .flatMap((f) =>
+    //     f.test_cases.map((t) => {
+    //       return {
+    //         value: t.name.value,
+    //         start: t.name.start,
+    //         end: t.name.end,
+    //         source_file: t.name.source_file,
+    //         function: f.name.value,
+    //       }
+    //     }),
+    //   )
+    //   .filter((x) => x.source_file === docFsPath)
+    // testCases.forEach((name) => {
+    //   const range = Range.create(document.positionAt(name.start), document.positionAt(name.end))
+    //   const command: Command = {
+    //     title: '▶️ Open Playground',
+    //     command: 'baml.openBamlPanel',
+    //     arguments: [
+    //       {
+    //         projectId: baml_dir?.fsPath || '',
+    //         functionName: name.function,
+    //         testCaseName: name.value,
+    //         showTests: true,
+    //       },
+    //     ],
+    //   }
+    //   codeLenses.push({
+    //     range,
+    //     command,
+    //   })
+    // })
+    // return codeLenses
   })
 
   // connection.onDocumentFormatting((params: DocumentFormattingParams) => {
@@ -571,66 +586,69 @@ export function startServer(options?: LSOptions): void {
   // })
 
   connection.onDocumentSymbol((params: DocumentSymbolParams) => {
-    const doc = getDocument(params.textDocument.uri)
-    if (doc) {
-      const db = bamlCache.getFileCache(doc)
-      if (db) {
-        let symbols = MessageHandler.handleDocumentSymbol(db, params, doc)
-        return symbols
-      }
-    }
+    return undefined;
+    // const doc = getDocument(params.textDocument.uri)
+    // if (doc) {
+    //   const db = bamlCache.getFileCache(doc)
+    //   if (db) {
+    //     let symbols = MessageHandler.handleDocumentSymbol(db, params, doc)
+    //     return symbols
+    //   }
+    // }
   })
 
   connection.onRequest('selectTestCase', ({ functionName, testCaseName }: {
     functionName: string;
     testCaseName: string;
   }) => {
-    console.log('selectTestCase ' + functionName + ' ' + testCaseName)
-    let lastDb = bamlCache.lastPaserDatabase;
+    return;
+    // console.log('selectTestCase ' + functionName + ' ' + testCaseName)
+    // let lastDb = bamlCache.lastPaserDatabase;
 
-    if (!lastDb) {
-      console.log('No last db found');
-      return
-    }
+    // if (!lastDb) {
+    //   console.log('No last db found');
+    //   return
+    // }
 
-    const selectedTests = Object.fromEntries(lastDb.db.functions.map((fn) => {
-      let uniqueTestNames = new Set(fn.impls.flatMap((impl) => impl.prompt.test_case).filter((t): t is string => t !== undefined && t !== null));
-      const testCases = new Array(...uniqueTestNames);
-      let testCaseName = testCases.length > 0 ? testCases[0] : undefined;
-      if (testCaseName === undefined) {
-        return undefined;
-      }
-      return [fn.name.value, testCaseName]
-    }).filter((t): t is [string, string] => t !== undefined) ?? []);
-    selectedTests[functionName] = testCaseName;
+    // const selectedTests = Object.fromEntries(lastDb.db.functions.map((fn) => {
+    //   let uniqueTestNames = new Set(fn.impls.flatMap((impl) => impl.prompt.test_case).filter((t): t is string => t !== undefined && t !== null));
+    //   const testCases = new Array(...uniqueTestNames);
+    //   let testCaseName = testCases.length > 0 ? testCases[0] : undefined;
+    //   if (testCaseName === undefined) {
+    //     return undefined;
+    //   }
+    //   return [fn.name.value, testCaseName]
+    // }).filter((t): t is [string, string] => t !== undefined) ?? []);
+    // selectedTests[functionName] = testCaseName;
 
-    const response = MessageHandler.handleDiagnosticsRequest(lastDb.root_path, lastDb.cache.getDocuments(), selectedTests, showErrorToast)
-    for (const [uri, diagnosticList] of response.diagnostics) {
-      void connection.sendDiagnostics({ uri, diagnostics: diagnosticList })
-    }
+    // const response = MessageHandler.handleDiagnosticsRequest(lastDb.root_path, lastDb.cache.getDocuments(), selectedTests, showErrorToast)
+    // for (const [uri, diagnosticList] of response.diagnostics) {
+    //   void connection.sendDiagnostics({ uri, diagnostics: diagnosticList })
+    // }
 
-    bamlCache.addDatabase(lastDb.root_path, response.state)
-    if (response.state) {
-      lastDb.cache.setDB(response.state)
+    // bamlCache.addDatabase(lastDb.root_path, response.state)
+    // if (response.state) {
+    //   lastDb.cache.setDB(response.state)
 
-      updateClientDB(lastDb.root_path, response.state)
-    } else {
-      void connection.sendRequest('rm_database', lastDb.root_path)
-    }
+    //   updateClientDB(lastDb.root_path, response.state)
+    // } else {
+    //   void connection.sendRequest('rm_database', lastDb.root_path)
+    // }
   });
 
   connection.onRequest('getDefinition', ({ sourceFile, name }: { sourceFile: string; name: string }) => {
-    const fileCache = bamlCache.getCacheForUri(sourceFile)
-    if (fileCache) {
-      let match = fileCache.define(name)
-      if (match) {
-        return {
-          targetUri: match.uri.toString(),
-          targetRange: match.range,
-          targetSelectionRange: match.range,
-        }
-      }
-    }
+    return;
+    // const fileCache = bamlCache.getCacheForUri(sourceFile)
+    // if (fileCache) {
+    //   let match = fileCache.define(name)
+    //   if (match) {
+    //     return {
+    //       targetUri: match.uri.toString(),
+    //       targetRange: match.range,
+    //       targetSelectionRange: match.range,
+    //     }
+    //   }
+    // }
   })
 
   connection.onRequest('cliVersion', async () => {

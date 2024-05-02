@@ -7,7 +7,7 @@ use crate::{warning::DatamodelWarning, SourceFile, Span};
 ///
 /// This is used to accumulate multiple errors and warnings during validation.
 /// It is used to not error out early and instead show multiple errors at once.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Diagnostics {
     pub root_path: PathBuf,
     current_file: Option<SourceFile>,

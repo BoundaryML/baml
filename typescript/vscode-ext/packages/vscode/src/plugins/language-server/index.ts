@@ -273,6 +273,7 @@ const activateClient = (
         }
       }
     })
+
     client.onRequest('set_database', ({ rootPath, db }: { rootPath: string; db: ParserDatabase }) => {
       try {
         BamlDB.set(rootPath, db)

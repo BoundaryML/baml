@@ -12,6 +12,7 @@ use anyhow::Result;
 
 use runtime::InternalBamlRuntime;
 
+use runtime_interface::RuntimeConstructor;
 pub use runtime_interface::RuntimeInterface;
 pub use types::*;
 
@@ -25,6 +26,8 @@ pub(crate) use internal_baml_jinja::{BamlImage, ChatMessagePart, RenderedPrompt}
 #[cfg(not(feature = "internal"))]
 pub(crate) use runtime_interface::InternalRuntimeInterface;
 
+pub use internal_baml_core::internal_baml_diagnostics::Diagnostics as DiagnosticsError;
+
 pub struct BamlRuntime {
     inner: InternalBamlRuntime,
 }
@@ -33,14 +36,15 @@ impl BamlRuntime {
     /// Load a runtime from a directory
     #[cfg(feature = "disk")]
     pub fn from_directory(path: &PathBuf) -> Result<Self> {
-        use runtime_interface::RuntimeConstructor;
-
         Ok(BamlRuntime {
             inner: InternalBamlRuntime::from_directory(path)?,
         })
     }
 
-    pub fn from_file_content(root_path: &str, files: &HashMap<String, String>) -> Result<Self> {
+    pub fn from_file_content<T: AsRef<str>>(
+        root_path: &str,
+        files: &HashMap<T, T>,
+    ) -> Result<Self> {
         Ok(BamlRuntime {
             inner: InternalBamlRuntime::from_file_content(root_path, files)?,
         })

@@ -9,7 +9,9 @@ use std::{collections::HashMap, path::PathBuf};
 
 use dashmap::DashMap;
 use internal_baml_core::{
-    internal_baml_diagnostics::SourceFile, ir::repr::IntermediateRepr, validate,
+    internal_baml_diagnostics::{Diagnostics, SourceFile},
+    ir::repr::IntermediateRepr,
+    validate,
 };
 use std::sync::Arc;
 
@@ -17,6 +19,7 @@ use crate::internal::llm_client::{llm_provider::LLMProvider, retry_policy::Calla
 
 pub struct InternalBamlRuntime {
     ir: IntermediateRepr,
+    diagnostics: Diagnostics,
     clients: DashMap<String, (Arc<LLMProvider>, Option<CallablePolicy>)>,
 }
 
@@ -41,6 +44,7 @@ impl InternalBamlRuntime {
 
         Ok(Self {
             ir,
+            diagnostics: schema.diagnostics,
             clients: DashMap::new(),
         })
     }
@@ -61,6 +65,7 @@ impl InternalBamlRuntime {
 
         Ok(Self {
             ir,
+            diagnostics: schema.diagnostics,
             clients: DashMap::new(),
         })
     }

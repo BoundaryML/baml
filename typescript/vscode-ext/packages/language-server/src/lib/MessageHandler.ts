@@ -55,7 +55,9 @@ import {
   //   getDocumentationForBlock,
   //   getDatamodelBlock,
 } from './ast'
-import { Range, Uri } from 'vscode'
+// import { Range, Uri } from 'vscode'
+import BamlProjectManager from './baml_project_manager'
+
 
 export function handleDiagnosticsRequest(
   rootPath: URI,

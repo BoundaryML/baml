@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use crate::{
     internal::{
@@ -14,12 +14,20 @@ use crate::{
     InternalRuntimeInterface, RuntimeContext, RuntimeInterface, TestResponse,
 };
 use anyhow::Result;
-use internal_baml_core::ir::{repr::IntermediateRepr, FunctionWalker, IRHelper};
+use internal_baml_core::{
+    internal_baml_diagnostics::SourceFile,
+    ir::{repr::IntermediateRepr, FunctionWalker, IRHelper},
+    validate,
+};
 use internal_baml_jinja::RenderedPrompt;
 
 use super::InternalBamlRuntime;
 
 impl InternalRuntimeInterface for InternalBamlRuntime {
+    fn diagnostics(&self) -> &internal_baml_core::internal_baml_diagnostics::Diagnostics {
+        &self.diagnostics
+    }
+
     fn features(&self) -> IrFeatures {
         WithInternal::features(self)
     }
@@ -109,11 +117,30 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
 }
 
 impl RuntimeConstructor for InternalBamlRuntime {
-    fn from_file_content(
+    fn from_file_content<T: AsRef<str>>(
         root_path: &str,
-        files: &HashMap<String, String>,
+        files: &HashMap<T, T>,
     ) -> Result<InternalBamlRuntime> {
-        InternalBamlRuntime::from_file_content(root_path, files)
+        let contents = files
+            .iter()
+            .map(|(path, contents)| {
+                Ok(SourceFile::from((
+                    PathBuf::from(path.as_ref()),
+                    contents.as_ref().to_string(),
+                )))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let directory = PathBuf::from(root_path);
+        let mut schema = validate(&PathBuf::from(directory), contents);
+        schema.diagnostics.to_result()?;
+
+        let ir = IntermediateRepr::from_parser_database(&schema.db)?;
+
+        Ok(Self {
+            ir,
+            diagnostics: schema.diagnostics,
+            clients: HashMap::new(),
+        })
     }
 
     #[cfg(feature = "disk")]
