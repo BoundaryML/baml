@@ -145,29 +145,30 @@ impl BamlRuntimeFfi {
             .chain(ctx.env.into_iter())
             .collect();
 
-        let (tx, rx) = tokio::sync::oneshot::channel();
+        //let (tx, rx) = tokio::sync::oneshot::channel();
         let baml_runtime_arc = Arc::clone(&self.internal);
 
-        self.t.spawn(async move {
+        //self.t.spawn(async move {
+        //    let result = baml_runtime_arc
+        //        .lock()
+        //        .await
+        //        .deref_mut()
+        //        .call_function(function_name, args, &ctx)
+        //        .await
+        //        .map_err(BamlError::from_anyhow);
+        //    tx.send(result);
+        //});
+        pyo3_asyncio::tokio::future_into_py(py, async move {
             let result = baml_runtime_arc
                 .lock()
                 .await
                 .deref_mut()
-                .call_function(
-                    "placeholder function".to_string(),
-                    HashMap::new(),
-                    &RuntimeContext::default(),
-                )
+                .call_function(function_name, args, &ctx)
                 .await
+                .map(python_types::FunctionResult::new)
                 .map_err(BamlError::from_anyhow);
-            tx.send(result);
-        });
-        pyo3_asyncio::tokio::future_into_py(py, async {
-            match rx.await {
-                Ok(Ok(result)) => Ok(python_types::FunctionResult::new(result)),
-                Ok(Err(err)) => Err(err),
-                Err(_) => Err(BamlError::new_err("sender dropped")),
-            }
+
+            result
         })
         .map(|f| f.into())
     }

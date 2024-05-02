@@ -32,7 +32,7 @@ pub trait RuntimeInterface {
     ) -> impl std::future::Future<Output = Result<TestResponse>> + Send;
 
     fn call_function(
-        &self,
+        &mut self,
         function_name: String,
         params: HashMap<String, serde_json::Value>,
         ctx: &RuntimeContext,

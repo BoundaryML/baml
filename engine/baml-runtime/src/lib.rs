@@ -68,7 +68,7 @@ impl RuntimeInterface for BamlRuntime {
     }
 
     async fn call_function(
-        &self,
+        &mut self,
         function_name: String,
         params: HashMap<String, serde_json::Value>,
         ctx: &RuntimeContext,

@@ -21,8 +21,12 @@ async def main():
         b.call_async("ExtractNames", {"input": "We're generally a group of folks like Bayes"}, ctx = {}),
         b.call_async("ExtractNames", {"input": "We're generally a group of folks like Higgs"}, ctx = {}),
         b.call_async("ExtractNames", {"input": "We're generally a group of folks like Boson"}, ctx = {}),
-        rust_sleep(),
-        rust_sleep(),
+        b.call_async("ExtractNames", {"input": "We're generally a group of folks like Bayes"}, ctx = {}),
+        b.call_async("ExtractNames", {"input": "We're generally a group of folks like Higgs"}, ctx = {}),
+        b.call_async("ExtractNames", {"input": "We're generally a group of folks like Boson"}, ctx = {}),
+        b.call_async("ExtractNames", {"input": "We're generally a group of folks like Bayes"}, ctx = {}),
+        b.call_async("ExtractNames", {"input": "We're generally a group of folks like Higgs"}, ctx = {}),
+        b.call_async("ExtractNames", {"input": "We're generally a group of folks like Boson"}, ctx = {}),
     ]
     for t in tasks:
         print(repr(t))
