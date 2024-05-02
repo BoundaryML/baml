@@ -24,16 +24,16 @@ pub struct InternalBamlRuntime {
 }
 
 impl InternalBamlRuntime {
-    pub(super) fn from_file_content(
+    pub(super) fn from_file_content<T: AsRef<str>>(
         directory: &str,
-        files: &HashMap<String, String>,
+        files: &HashMap<T, T>,
     ) -> Result<Self> {
         let contents = files
             .iter()
             .map(|(path, contents)| {
                 Ok(SourceFile::from((
-                    PathBuf::from(path),
-                    contents.to_string(),
+                    PathBuf::from(path.as_ref()),
+                    contents.as_ref().to_string(),
                 )))
             })
             .collect::<Result<Vec<_>>>()?;

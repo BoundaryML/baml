@@ -127,7 +127,7 @@ impl WithChat for OpenAIClient {
 
     #[cfg(not(feature = "network"))]
     async fn chat(
-        &mut self,
+        &self,
         _ctx: &RuntimeContext,
         _prompt: &Vec<RenderedChatMessage>,
     ) -> Result<LLMResponse> {

@@ -14,6 +14,7 @@ use crate::{
     InternalRuntimeInterface, RuntimeContext, RuntimeInterface, TestResponse,
 };
 use anyhow::Result;
+use dashmap::DashMap;
 use internal_baml_core::{
     internal_baml_diagnostics::SourceFile,
     ir::{repr::IntermediateRepr, FunctionWalker, IRHelper},
@@ -139,7 +140,7 @@ impl RuntimeConstructor for InternalBamlRuntime {
         Ok(Self {
             ir,
             diagnostics: schema.diagnostics,
-            clients: HashMap::new(),
+            clients: DashMap::new(),
         })
     }
 
