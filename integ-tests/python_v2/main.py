@@ -1,29 +1,31 @@
 import baml_py
+import random
 import asyncio
 
-async def fetch_data(url):
+async def fetch_data(url: str):
     print(f"Fetching data from {url}...")
-    await asyncio.sleep(3)  # simulate a 2-second delay
+    await asyncio.sleep(1)
     print(f"Received data from {url}!")
     return f"Data from {url}"
 
-async def baml_extract_names():
-    b = baml_py.BamlRuntimeFfi.from_directory("/home/sam/baml/integ-tests/baml_src")
-    res = b.call_function("ExtractNames", {"input": "We're generally a group of folks like Bayes"}, ctx = {})
-    print(res)
-    return res
+async def rust_sleep():
+    i = random.randint(1000, 10000)
+    print(f"{i}: going to sleep in rust")
+    await baml_py.rust_sleep()
+    print(f"{i}: woke up from rust")
 
 async def main():
+    b = baml_py.BamlRuntimeFfi.from_directory("/home/sam/baml/integ-tests/baml_src")
 
     tasks = [
-        fetch_data("https://example.com/data1"),
-        baml_py.rust_sleep(),
-        baml_py.rust_sleep(),
-        baml_py.rust_sleep(),
-        baml_py.rust_sleep(),
-        baml_py.rust_sleep(),
+        b.call_async("ExtractNames", {"input": "We're generally a group of folks like Bayes"}, ctx = {}),
+        b.call_async("ExtractNames", {"input": "We're generally a group of folks like Higgs"}, ctx = {}),
+        b.call_async("ExtractNames", {"input": "We're generally a group of folks like Boson"}, ctx = {}),
+        rust_sleep(),
+        rust_sleep(),
     ]
-
+    for t in tasks:
+        print(repr(t))
     results = await asyncio.gather(*tasks)
     for result in results:
         print(result)

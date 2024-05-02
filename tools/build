@@ -152,6 +152,29 @@ case "$_path" in
     fi
     ;;
 
+  /integ-tests/python_v2 | /integ-tests/python_v2/* )
+    command="env -u CONDA_PREFIX poetry run maturin develop --manifest-path ${_repo_root}/engine/language_client_python/Cargo.toml"
+    #command="${command} && poetry run mypy ."
+    #command="${command} && poetry run ruff check"
+    #command="${command} && poetry run ruff format"
+    command="${command} && BAML_LOG=debug infisical run poetry run python main.py"
+    if [ "$_test_mode" -eq 1 ]; then
+      command="${command} && poetry run -- pytest baml_core"
+    fi
+    command="${command}; date"
+    if [ "$_watch_mode" -eq 1 ]; then
+      npx nodemon \
+        --ext py,pyi,rs \
+        --watch "${_repo_root}/engine/baml-lib/jinja" \
+        --watch "${_repo_root}/clients/python-ffi" \
+        --watch . \
+        --exec "${command}"
+    else
+      eval "${command}"
+      date
+    fi
+    ;;
+
   /integ-tests | /integ-tests/* | \
   /client-tests | /client-tests/* )
     if [ "$_watch_mode" -eq 1 ]; then

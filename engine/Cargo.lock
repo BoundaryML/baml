@@ -350,6 +350,7 @@ dependencies = [
  "log",
  "pyo3",
  "pyo3-asyncio",
+ "pyo3-build-config",
  "pythonize",
  "regex",
  "serde",

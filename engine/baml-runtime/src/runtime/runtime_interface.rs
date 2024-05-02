@@ -247,26 +247,27 @@ impl RuntimeInterface for InternalBamlRuntime {
     }
 
     async fn call_function(
-        &mut self,
+        &self,
         function_name: String,
         params: HashMap<String, serde_json::Value>,
         ctx: &RuntimeContext,
     ) -> Result<crate::FunctionResult> {
-        let func = self.get_function(&function_name, ctx)?;
-        let baml_args = self.ir().check_function_params(&func, &params)?;
+        todo!()
+        //let func = self.get_function(&function_name, ctx)?;
+        //let baml_args = self.ir().check_function_params(&func, &params)?;
 
-        let renderer = PromptRenderer::from_function(&func)?;
-        let client_name = renderer.client_name().to_string();
+        //let renderer = PromptRenderer::from_function(&func)?;
+        //let client_name = renderer.client_name().to_string();
 
-        let (client, retry_policy) = self.get_client_mut(&client_name, ctx)?;
-        let prompt = client.render_prompt(&renderer, &ctx, &baml_args)?;
+        //let (client, retry_policy) = self.get_client_mut(&client_name, ctx)?;
+        //let prompt = client.render_prompt(&renderer, &ctx, &baml_args)?;
 
-        let response = client.call(retry_policy, ctx, &prompt).await;
+        //let response = client.call(retry_policy, ctx, &prompt).await;
 
-        // We need to get the function again because self is borrowed mutably.
-        let func = self.get_function(&function_name, ctx)?;
-        let parsed = self.parse_response(&func, response, ctx)?;
-        Ok(parsed)
+        //// We need to get the function again because self is borrowed mutably.
+        //let func = self.get_function(&function_name, ctx)?;
+        //let parsed = self.parse_response(&func, response, ctx)?;
+        //Ok(parsed)
     }
 
     // async fn run_test(
