@@ -3,18 +3,21 @@ mod tests;
 
 mod ir_features;
 mod runtime_interface;
+
 use anyhow::Result;
 use std::{collections::HashMap, path::PathBuf};
 
+use dashmap::DashMap;
 use internal_baml_core::{
     internal_baml_diagnostics::SourceFile, ir::repr::IntermediateRepr, validate,
 };
+use std::sync::Arc;
 
 use crate::internal::llm_client::{llm_provider::LLMProvider, retry_policy::CallablePolicy};
 
 pub struct InternalBamlRuntime {
     ir: IntermediateRepr,
-    clients: HashMap<String, (LLMProvider, Option<CallablePolicy>)>,
+    clients: DashMap<String, (Arc<LLMProvider>, Option<CallablePolicy>)>,
 }
 
 impl InternalBamlRuntime {
@@ -38,7 +41,7 @@ impl InternalBamlRuntime {
 
         Ok(Self {
             ir,
-            clients: HashMap::new(),
+            clients: DashMap::new(),
         })
     }
 
@@ -58,7 +61,7 @@ impl InternalBamlRuntime {
 
         Ok(Self {
             ir,
-            clients: HashMap::new(),
+            clients: DashMap::new(),
         })
     }
 }

@@ -130,7 +130,7 @@ impl WithChat for OpenAIClient {
 
     #[cfg(feature = "network")]
     async fn chat(
-        &mut self,
+        &self,
         ctx: &RuntimeContext,
         prompt: &Vec<RenderedChatMessage>,
     ) -> Result<LLMResponse> {

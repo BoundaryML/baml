@@ -25,7 +25,8 @@ default-members = [
 [workspace.dependencies]
 anyhow = "1.0"
 askama = "0.12.1"
-either = "1.6.1"
+dashmap = "5.5.3"
+either = "1.8.1"
 env_logger = "0.11.3"
 futures = { version = "0.3.30", features = ["executor"] }
 log = "0.4.20"

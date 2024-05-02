@@ -61,7 +61,7 @@ impl WithRetryPolicy for LLMProvider {
 
 impl WithCallable for LLMProvider {
     async fn call(
-        &mut self,
+        &self,
         retry_policy: Option<CallablePolicy>,
         ctx: &RuntimeContext,
         prompt: &internal_baml_jinja::RenderedPrompt,

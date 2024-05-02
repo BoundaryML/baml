@@ -18,8 +18,11 @@ pub trait WithRetryPolicy {
 }
 
 pub trait WithCallable {
+    /// Call the model with the specified prompt, retrying as appropriate.
+    ///
+    /// retry_policy is a stateful iterator, so it's taken by value
     async fn call(
-        &mut self,
+        &self,
         retry_policy: Option<CallablePolicy>,
         ctx: &RuntimeContext,
         prompt: &RenderedPrompt,
@@ -28,7 +31,7 @@ pub trait WithCallable {
 
 pub trait WithSingleCallable {
     async fn single_call(
-        &mut self,
+        &self,
         ctx: &RuntimeContext,
         prompt: &RenderedPrompt,
     ) -> Result<LLMResponse>;
@@ -54,12 +57,14 @@ where
     T: WithSingleCallable,
 {
     async fn call(
-        &mut self,
+        &self,
         retry_policy: Option<CallablePolicy>,
         ctx: &RuntimeContext,
         prompt: &RenderedPrompt,
     ) -> LLMResponse {
         if let Some(retry_strategy) = retry_policy {
+            let retry_strategy = retry_strategy.clone();
+
             // TODO: @sxlijin collect all errors.
             let mut err = vec![];
 
@@ -116,7 +121,7 @@ where
     T: WithClient + WithChat + WithCompletion,
 {
     async fn single_call(
-        &mut self,
+        &self,
         ctx: &RuntimeContext,
         prompt: &RenderedPrompt,
     ) -> Result<LLMResponse> {

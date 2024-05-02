@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     internal::{
@@ -16,7 +16,6 @@ use crate::{
 use anyhow::Result;
 use internal_baml_core::ir::{repr::IntermediateRepr, FunctionWalker, IRHelper};
 use internal_baml_jinja::RenderedPrompt;
-use log::info;
 
 use super::InternalBamlRuntime;
 
@@ -42,70 +41,41 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
     }
 
     fn get_client(
-        &mut self,
+        &self,
         client_name: &str,
         ctx: &RuntimeContext,
-    ) -> Result<&(LLMProvider, Option<CallablePolicy>)> {
-        if !self.clients.contains_key(client_name) {
-            let walker = self.ir().find_client(client_name)?;
-            let client = LLMProvider::from_ir(&walker, ctx)?;
+    ) -> Result<(Arc<LLMProvider>, Option<CallablePolicy>)> {
+        let client_ref = self
+            .clients
+            .entry(client_name.into())
+            .or_try_insert_with(|| {
+                let walker = self.ir().find_client(client_name)?;
+                let client = LLMProvider::from_ir(&walker, ctx)?;
 
-            let retry_policy = match client.retry_policy_name() {
-                Some(name) => match self
-                    .ir()
-                    .walk_retry_policies()
-                    .find(|walker| walker.name() == name)
-                    .map(|walker| CallablePolicy::from(walker))
-                {
-                    Some(policy) => Some(policy),
-                    None => {
-                        return Err(anyhow::anyhow!(
-                            "Could not find retry policy with name: {}",
-                            name
-                        ))
-                    }
-                },
-                None => None,
-            };
+                let retry_policy = match client.retry_policy_name() {
+                    Some(name) => match self
+                        .ir()
+                        .walk_retry_policies()
+                        .find(|walker| walker.name() == name)
+                        .map(|walker| CallablePolicy::from(walker))
+                    {
+                        Some(policy) => Some(policy),
+                        None => {
+                            return Err(anyhow::anyhow!(
+                                "Could not find retry policy with name: {}",
+                                name
+                            ))
+                        }
+                    },
+                    None => None,
+                };
 
-            self.clients
-                .insert(client_name.to_string(), (client, retry_policy));
-        }
-        Ok(self.clients.get(client_name).unwrap())
-    }
+                Ok((Arc::new(client), retry_policy))
+            })?;
 
-    fn get_client_mut(
-        &mut self,
-        client_name: &str,
-        ctx: &RuntimeContext,
-    ) -> Result<(&mut LLMProvider, Option<CallablePolicy>)> {
-        if !self.clients.contains_key(client_name) {
-            let walker = self.ir().find_client(client_name)?;
-            let client = LLMProvider::from_ir(&walker, ctx)?;
+        let (client, retry_policy) = client_ref.value();
 
-            let retry_policy = match client.retry_policy_name() {
-                Some(name) => match self
-                    .ir()
-                    .walk_retry_policies()
-                    .find(|walker| walker.name() == name)
-                    .map(|walker| CallablePolicy::from(walker))
-                {
-                    Some(policy) => Some(policy),
-                    None => {
-                        return Err(anyhow::anyhow!(
-                            "Could not find retry policy with name: {}",
-                            name
-                        ))
-                    }
-                },
-                None => None,
-            };
-
-            self.clients
-                .insert(client_name.to_string(), (client, retry_policy));
-        }
-        let (client, retry) = self.clients.get_mut(client_name).unwrap();
-        Ok((client, retry.clone()))
+        Ok((Arc::clone(&client), retry_policy.clone()))
     }
 
     fn get_function<'ir>(
@@ -226,13 +196,13 @@ impl RuntimeInterface for InternalBamlRuntime {
                 })
             }
         };
-        info!("Test params: {:#?}", params);
+        log::info!("Test params: {:#?}", params);
         let baml_args = self.ir().check_function_params(&func, &params)?;
 
         let renderer = PromptRenderer::from_function(&func)?;
         let client_name = renderer.client_name().to_string();
 
-        let (client, retry_policy) = self.get_client_mut(&client_name, ctx)?;
+        let (client, retry_policy) = self.get_client(&client_name, ctx)?;
         let prompt = client.render_prompt(&renderer, &ctx, &baml_args)?;
         println!("Prompt: {:#?}", prompt);
 
@@ -258,7 +228,7 @@ impl RuntimeInterface for InternalBamlRuntime {
         let renderer = PromptRenderer::from_function(&func)?;
         let client_name = renderer.client_name().to_string();
 
-        let (client, retry_policy) = self.get_client_mut(&client_name, ctx)?;
+        let (client, retry_policy) = self.get_client(&client_name, ctx)?;
         let prompt = client.render_prompt(&renderer, &ctx, &baml_args)?;
 
         let response = client.call(retry_policy, ctx, &prompt).await;

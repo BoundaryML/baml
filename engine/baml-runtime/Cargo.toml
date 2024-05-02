@@ -9,6 +9,12 @@ license-file.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+colored = "2.1.0"
+dashmap.workspace = true
+dunce = "1.0.4"
+either.workspace = true
+indexmap.workspace = true
+json_comments = "0.2.2"
 jsonish = { path = "../baml-lib/jsonish" }
 internal-baml-core = { path = "../baml-lib/baml-core" }
 internal-baml-jinja = { path = "../baml-lib/jinja" }
@@ -16,17 +22,12 @@ internal-baml-jinja = { path = "../baml-lib/jinja" }
 log.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-uuid = { version = "1.7.0", features = ["v4"] }
-json_comments = "0.2.2"
-dunce = "1.0.4"
 strsim = "0.11.1"
-either = "1.8.1"
-colored = "2.1.0"
-indexmap.workspace = true
 tokio = { version = "1", default-features = false, features = [
   "macros",
   "time",
 ] }
+uuid = { version = "1.7.0", features = ["v4"] }
 
 [dependencies.reqwest]
 version = "0.11"
@@ -54,11 +55,11 @@ features = ["Headers", "Request", "RequestInit", "RequestMode"]
 [features]
 default = ["network", "disk"]
 wasm = [
-  "wasm-bindgen",
-  "js-sys",
-  "web-sys",
   "colored/no-color",
+  "js-sys",
   "uuid/js",
+  "wasm-bindgen",
+  "web-sys",
 ] # Enable this feature for WASM build
 network = ["tokio/full", "reqwest"]
 disk = ["walkdir"]

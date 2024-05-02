@@ -7,7 +7,7 @@ pub trait WithChat: Sync + Send {
     fn chat_options(&self, ctx: &RuntimeContext) -> Result<ChatOptions>;
 
     async fn chat(
-        &mut self,
+        &self,
         ctx: &RuntimeContext,
         prompt: &Vec<RenderedChatMessage>,
     ) -> Result<LLMResponse>;
@@ -41,11 +41,7 @@ where
         anyhow::bail!("Chat prompts are not supported by this provider")
     }
 
-    async fn chat(
-        &mut self,
-        _: &RuntimeContext,
-        _: &Vec<RenderedChatMessage>,
-    ) -> Result<LLMResponse> {
+    async fn chat(&self, _: &RuntimeContext, _: &Vec<RenderedChatMessage>) -> Result<LLMResponse> {
         anyhow::bail!("Chat prompts are not supported by this provider")
     }
 }

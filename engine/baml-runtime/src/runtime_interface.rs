@@ -1,7 +1,8 @@
 use anyhow::Result;
+use dashmap::mapref::one::Ref;
 use internal_baml_core::ir::{repr::IntermediateRepr, FunctionWalker};
 use internal_baml_jinja::RenderedPrompt;
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use crate::{
     internal::{
@@ -48,17 +49,11 @@ pub trait RuntimeInterface {
 pub trait InternalRuntimeInterface {
     fn features(&self) -> IrFeatures;
 
-    fn get_client_mut(
-        &mut self,
-        client_name: &str,
-        ctx: &RuntimeContext,
-    ) -> Result<(&mut LLMProvider, Option<CallablePolicy>)>;
-
     fn get_client(
-        &mut self,
+        &self,
         client_name: &str,
         ctx: &RuntimeContext,
-    ) -> Result<&(LLMProvider, Option<CallablePolicy>)>;
+    ) -> Result<(Arc<LLMProvider>, Option<CallablePolicy>)>;
 
     fn get_function<'ir>(
         &'ir self,

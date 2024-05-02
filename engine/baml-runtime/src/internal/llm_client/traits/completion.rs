@@ -6,7 +6,7 @@ use crate::{internal::llm_client::LLMResponse, RuntimeContext};
 pub trait WithCompletion: Sync + Send {
     fn completion_options(&self, ctx: &RuntimeContext) -> Result<CompletionOptions>;
 
-    async fn completion(&mut self, ctx: &RuntimeContext, prompt: &String) -> Result<LLMResponse>;
+    async fn completion(&self, ctx: &RuntimeContext, prompt: &String) -> Result<LLMResponse>;
 }
 
 // pub trait WithCompletionStream: WithCompletion {
@@ -37,7 +37,7 @@ where
         anyhow::bail!("Completion prompts are not supported by this provider")
     }
 
-    async fn completion(&mut self, _: &RuntimeContext, _: &String) -> Result<LLMResponse> {
+    async fn completion(&self, _: &RuntimeContext, _: &String) -> Result<LLMResponse> {
         anyhow::bail!("Completion prompts are not supported by this provider")
     }
 }
