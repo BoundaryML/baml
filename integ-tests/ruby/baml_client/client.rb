@@ -584,7 +584,7 @@ module Baml
     sig {
       params(
         input: T.any(String, T::Boolean),
-      ).returns(Baml::Types::UnionTest_ReturnTypev2)
+      ).returns(T.any(Baml::Types::UnionTest_ReturnTypev2, Baml::Types::DataType))
     }
     def V2_UnionTest_Function(
         input:
@@ -595,7 +595,7 @@ module Baml
           "input" => input,
         }
       )
-      Baml::convert_to(Baml::Types::UnionTest_ReturnTypev2).from(raw.parsed)
+      Baml::convert_to(T.any(Baml::Types::UnionTest_ReturnTypev2, Baml::Types::DataType)).from(raw.parsed)
     end
 
     
@@ -1253,7 +1253,7 @@ module Baml
     sig {
       params(
         input: T.any(String, T::Boolean),
-      ).returns(Baml::Unstable::FunctionResult[Baml::Types::UnionTest_ReturnTypev2])
+      ).returns(Baml::Unstable::FunctionResult[T.any(Baml::Types::UnionTest_ReturnTypev2, Baml::Types::DataType)])
     }
     def V2_UnionTest_Function(
         input:
@@ -1264,9 +1264,9 @@ module Baml
           "input" => input,
         }
       )
-      Baml::Unstable::FunctionResult[Baml::Types::UnionTest_ReturnTypev2].new(
+      Baml::Unstable::FunctionResult[T.any(Baml::Types::UnionTest_ReturnTypev2, Baml::Types::DataType)].new(
         inner: raw,
-        parsed: Baml::convert_to(Baml::Types::UnionTest_ReturnTypev2).from(raw.parsed)
+        parsed: Baml::convert_to(T.any(Baml::Types::UnionTest_ReturnTypev2, Baml::Types::DataType)).from(raw.parsed)
       )
     end
 

@@ -2127,7 +2127,16 @@ const schema: JSONSchema7 = {
       "title": "V2_TestFnNamedArgsSyntax output"
     },
     "V2_UnionTest_Function_output": {
-      "$ref": "#/definitions/UnionTest_ReturnTypev2",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/UnionTest_ReturnTypev2",
+          "title": "UnionTest_ReturnTypev2"
+        },
+        {
+          "$ref": "#/definitions/DataType",
+          "title": "DataType"
+        }
+      ],
       "title": "V2_UnionTest_Function output"
     }
   }

@@ -24,12 +24,17 @@ const output_format = `{
   "prop1": string | bool,
   "prop2": (float | bool)[],
   "prop3": float[] | bool[]
-}`;
+} | "DataType as string"
+
+DataType
+---
+Resume
+Event`;
 
 const template_macros = [
 ]
 
-const deserializer = new Deserializer<UnionTest_ReturnTypev2>(schema, {
+const deserializer = new Deserializer<UnionTest_ReturnTypev2 | DataType>(schema, {
   $ref: '#/definitions/V2_UnionTest_Function_output'
 });
 
@@ -37,7 +42,7 @@ V2_UnionTest_Function.registerImpl('default_config', async (
   args: {
     input: string | boolean
   }
-): Promise<UnionTest_ReturnTypev2> => {
+): Promise<UnionTest_ReturnTypev2 | DataType> => {
     const result = await GPT35.run_jinja_template(
       prompt_template,
       args,

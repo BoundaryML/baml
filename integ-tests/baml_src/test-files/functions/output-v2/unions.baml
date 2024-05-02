@@ -4,7 +4,7 @@ class UnionTest_ReturnTypev2 {
   prop3 (float[] | bool[])
 }
 
-function V2_UnionTest_Function(input: string | bool  ) -> UnionTest_ReturnTypev2 {
+function V2_UnionTest_Function(input: string | bool  ) -> UnionTest_ReturnTypev2 | DataType {
   client GPT35
   prompt #"
     Return a JSON blob with this schema: 

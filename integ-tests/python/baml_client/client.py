@@ -13,411 +13,720 @@
 # flake8: noqa: E501,F401
 # pylint: disable=unused-import,line-too-long
 # fmt: off
-import "baml"
+from typing import Dict, Generic, List, Optional, Tuple, TypeVar, Union
+import pprint
+
+import baml_py
+from pydantic import BaseModel, ValidationError
+
 from . import types
 
-class BamlClient
-    @staticmethod
-    def from_directory(path):
-      new BamlClient(runtime=BamlRuntime.from_directory(path))
+OutputType = TypeVar('OutputType')
 
-    def __init__(self, runtime):
+class BamlOutputWrapper(BaseModel, Generic[OutputType]):
+    wrapped: OutputType
+
+class BamlClient:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    @staticmethod
+    def from_directory(path: str) -> "BamlClient":
+      return BamlClient(runtime=baml_py.BamlRuntimeFfi.from_directory(path))
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
       self.__runtime = runtime
 
-    def ClassifyMessage(
+    async def ClassifyMessage(
         self,
-        input: string
-    )
-      raw = self.__runtime.call_function(
-        function_name: "ClassifyMessage",
-        args: {
-          "input" => input,
-        }
+        input: str
+    ) -> types.Category:
+      raw = await self.__runtime.call_function(
+        "ClassifyMessage",
+        {
+          "input": input,
+        },
+        ctx={}
       )
-      Baml::convert_to("Category").from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[types.Category].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for ClassifyMessage:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
-    def ClassifyMessage2(
+    async def ClassifyMessage2(
         self,
-        input: string
-    )
-      raw = self.__runtime.call_function(
-        function_name: "ClassifyMessage2",
-        args: {
-          "input" => input,
-        }
+        input: str
+    ) -> types.Category:
+      raw = await self.__runtime.call_function(
+        "ClassifyMessage2",
+        {
+          "input": input,
+        },
+        ctx={}
       )
-      Baml::convert_to("Category").from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[types.Category].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for ClassifyMessage2:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
-    def ClassifyMessage3(
+    async def ClassifyMessage3(
         self,
-        input: string
-    )
-      raw = self.__runtime.call_function(
-        function_name: "ClassifyMessage3",
-        args: {
-          "input" => input,
-        }
+        input: str
+    ) -> types.Category:
+      raw = await self.__runtime.call_function(
+        "ClassifyMessage3",
+        {
+          "input": input,
+        },
+        ctx={}
       )
-      Baml::convert_to("Category").from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[types.Category].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for ClassifyMessage3:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
-    def ExtractNames(
+    async def ExtractNames(
         self,
-        input: string
-    )
-      raw = self.__runtime.call_function(
-        function_name: "ExtractNames",
-        args: {
-          "input" => input,
-        }
+        input: str
+    ) -> List[str]:
+      raw = await self.__runtime.call_function(
+        "ExtractNames",
+        {
+          "input": input,
+        },
+        ctx={}
       )
-      Baml::convert_to(List[string]).from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[List[str]].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for ExtractNames:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
-    def ExtractResume(
+    async def ExtractResume(
         self,
-        resume: string
-    )
-      raw = self.__runtime.call_function(
-        function_name: "ExtractResume",
-        args: {
-          "resume" => resume,
-        }
+        resume: str
+    ) -> types.Resume:
+      raw = await self.__runtime.call_function(
+        "ExtractResume",
+        {
+          "resume": resume,
+        },
+        ctx={}
       )
-      Baml::convert_to("Resume").from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[types.Resume].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for ExtractResume:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
-    def ExtractResume2(
+    async def ExtractResume2(
         self,
-        resume: string
-    )
-      raw = self.__runtime.call_function(
-        function_name: "ExtractResume2",
-        args: {
-          "resume" => resume,
-        }
+        resume: str
+    ) -> types.Resume:
+      raw = await self.__runtime.call_function(
+        "ExtractResume2",
+        {
+          "resume": resume,
+        },
+        ctx={}
       )
-      Baml::convert_to("Resume").from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[types.Resume].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for ExtractResume2:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
-    def FnClassOptionalOutput2_V2(
+    async def FnClassOptionalOutput2_V2(
         self,
-        input: string
-    )
-      raw = self.__runtime.call_function(
-        function_name: "FnClassOptionalOutput2_V2",
-        args: {
-          "input" => input,
-        }
+        input: str
+    ) -> Optional[types.ClassOptionalOutput2v2]:
+      raw = await self.__runtime.call_function(
+        "FnClassOptionalOutput2_V2",
+        {
+          "input": input,
+        },
+        ctx={}
       )
-      Baml::convert_to(Optional["ClassOptionalOutput2v2"]).from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[Optional[types.ClassOptionalOutput2v2]].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for FnClassOptionalOutput2_V2:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
-    def FnOutputClassWithEnum_V2(
+    async def FnOutputClassWithEnum_V2(
         self,
-        input: string
-    )
-      raw = self.__runtime.call_function(
-        function_name: "FnOutputClassWithEnum_V2",
-        args: {
-          "input" => input,
-        }
+        input: str
+    ) -> types.TestClassWithEnum2:
+      raw = await self.__runtime.call_function(
+        "FnOutputClassWithEnum_V2",
+        {
+          "input": input,
+        },
+        ctx={}
       )
-      Baml::convert_to("TestClassWithEnum2").from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[types.TestClassWithEnum2].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for FnOutputClassWithEnum_V2:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
-    def GetDataType(
+    async def GetDataType(
         self,
-        text: string
-    )
-      raw = self.__runtime.call_function(
-        function_name: "GetDataType",
-        args: {
-          "text" => text,
-        }
+        text: str
+    ) -> types.RaysData:
+      raw = await self.__runtime.call_function(
+        "GetDataType",
+        {
+          "text": text,
+        },
+        ctx={}
       )
-      Baml::convert_to("RaysData").from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[types.RaysData].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for GetDataType:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
-    def GetOrderInfo(
+    async def GetOrderInfo(
         self,
-        email: "Email"
-    )
-      raw = self.__runtime.call_function(
-        function_name: "GetOrderInfo",
-        args: {
-          "email" => email,
-        }
+        email: types.Email
+    ) -> types.OrderInfo:
+      raw = await self.__runtime.call_function(
+        "GetOrderInfo",
+        {
+          "email": email,
+        },
+        ctx={}
       )
-      Baml::convert_to("OrderInfo").from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[types.OrderInfo].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for GetOrderInfo:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
-    def GetQuery(
+    async def GetQuery(
         self,
-        query: string
-    )
-      raw = self.__runtime.call_function(
-        function_name: "GetQuery",
-        args: {
-          "query" => query,
-        }
+        query: str
+    ) -> types.SearchParams:
+      raw = await self.__runtime.call_function(
+        "GetQuery",
+        {
+          "query": query,
+        },
+        ctx={}
       )
-      Baml::convert_to("SearchParams").from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[types.SearchParams].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for GetQuery:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
-    def OptionalTest_Function_V2(
+    async def OptionalTest_Function_V2(
         self,
-        input: string
-    )
-      raw = self.__runtime.call_function(
-        function_name: "OptionalTest_Function_V2",
-        args: {
-          "input" => input,
-        }
+        input: str
+    ) -> List[Optional[types.OptionalTest_ReturnTypev2]]:
+      raw = await self.__runtime.call_function(
+        "OptionalTest_Function_V2",
+        {
+          "input": input,
+        },
+        ctx={}
       )
-      Baml::convert_to(List[Optional["OptionalTest_ReturnTypev2"]]).from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[List[Optional[types.OptionalTest_ReturnTypev2]]].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for OptionalTest_Function_V2:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
-    def V2_FnClassOptional(
+    async def V2_FnClassOptional(
         self,
-        input: Optional["OptionalClassv2"]
-    )
-      raw = self.__runtime.call_function(
-        function_name: "V2_FnClassOptional",
-        args: {
-          "input" => input,
-        }
+        input: Optional[types.OptionalClassv2]
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "V2_FnClassOptional",
+        {
+          "input": input,
+        },
+        ctx={}
       )
-      Baml::convert_to(string).from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[str].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for V2_FnClassOptional:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
-    def V2_FnClassOptional2(
+    async def V2_FnClassOptional2(
         self,
-        input: "ClassOptionalFieldsv2"
-    )
-      raw = self.__runtime.call_function(
-        function_name: "V2_FnClassOptional2",
-        args: {
-          "input" => input,
-        }
+        input: types.ClassOptionalFieldsv2
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "V2_FnClassOptional2",
+        {
+          "input": input,
+        },
+        ctx={}
       )
-      Baml::convert_to(string).from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[str].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for V2_FnClassOptional2:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
-    def V2_FnEnumListOutput(
+    async def V2_FnEnumListOutput(
         self,
-        input: string
-    )
-      raw = self.__runtime.call_function(
-        function_name: "V2_FnEnumListOutput",
-        args: {
-          "input" => input,
-        }
+        input: str
+    ) -> List[types.EnumOutput]:
+      raw = await self.__runtime.call_function(
+        "V2_FnEnumListOutput",
+        {
+          "input": input,
+        },
+        ctx={}
       )
-      Baml::convert_to(List["EnumOutput"]).from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[List[types.EnumOutput]].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for V2_FnEnumListOutput:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
-    def V2_FnEnumOutput(
+    async def V2_FnEnumOutput(
         self,
-        input: string
-    )
-      raw = self.__runtime.call_function(
-        function_name: "V2_FnEnumOutput",
-        args: {
-          "input" => input,
-        }
+        input: str
+    ) -> types.EnumOutput2:
+      raw = await self.__runtime.call_function(
+        "V2_FnEnumOutput",
+        {
+          "input": input,
+        },
+        ctx={}
       )
-      Baml::convert_to("EnumOutput2").from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[types.EnumOutput2].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for V2_FnEnumOutput:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
-    def V2_FnNamedArgsSingleStringOptional(
+    async def V2_FnNamedArgsSingleStringOptional(
         self,
-        myString: Optional[string]
-    )
-      raw = self.__runtime.call_function(
-        function_name: "V2_FnNamedArgsSingleStringOptional",
-        args: {
-          "myString" => myString,
-        }
+        myString: Optional[str]
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "V2_FnNamedArgsSingleStringOptional",
+        {
+          "myString": myString,
+        },
+        ctx={}
       )
-      Baml::convert_to(string).from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[str].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for V2_FnNamedArgsSingleStringOptional:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
-    def V2_FnOutputBool(
+    async def V2_FnOutputBool(
         self,
-        input: string
-    )
-      raw = self.__runtime.call_function(
-        function_name: "V2_FnOutputBool",
-        args: {
-          "input" => input,
-        }
+        input: str
+    ) -> bool:
+      raw = await self.__runtime.call_function(
+        "V2_FnOutputBool",
+        {
+          "input": input,
+        },
+        ctx={}
       )
-      Baml::convert_to(boolean).from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[bool].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for V2_FnOutputBool:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
-    def V2_FnOutputClass(
+    async def V2_FnOutputClass(
         self,
-        input: string
-    )
-      raw = self.__runtime.call_function(
-        function_name: "V2_FnOutputClass",
-        args: {
-          "input" => input,
-        }
+        input: str
+    ) -> types.TestOutputClass2:
+      raw = await self.__runtime.call_function(
+        "V2_FnOutputClass",
+        {
+          "input": input,
+        },
+        ctx={}
       )
-      Baml::convert_to("TestOutputClass2").from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[types.TestOutputClass2].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for V2_FnOutputClass:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
-    def V2_FnOutputClassList(
+    async def V2_FnOutputClassList(
         self,
-        input: string
-    )
-      raw = self.__runtime.call_function(
-        function_name: "V2_FnOutputClassList",
-        args: {
-          "input" => input,
-        }
+        input: str
+    ) -> List[types.TestOutputClass]:
+      raw = await self.__runtime.call_function(
+        "V2_FnOutputClassList",
+        {
+          "input": input,
+        },
+        ctx={}
       )
-      Baml::convert_to(List["TestOutputClass"]).from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[List[types.TestOutputClass]].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for V2_FnOutputClassList:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
-    def V2_FnOutputStringList(
+    async def V2_FnOutputStringList(
         self,
-        input: string
-    )
-      raw = self.__runtime.call_function(
-        function_name: "V2_FnOutputStringList",
-        args: {
-          "input" => input,
-        }
+        input: str
+    ) -> List[str]:
+      raw = await self.__runtime.call_function(
+        "V2_FnOutputStringList",
+        {
+          "input": input,
+        },
+        ctx={}
       )
-      Baml::convert_to(List[string]).from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[List[str]].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for V2_FnOutputStringList:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
-    def V2_FnStringOptional(
+    async def V2_FnStringOptional(
         self,
-        input: Optional[string]
-    )
-      raw = self.__runtime.call_function(
-        function_name: "V2_FnStringOptional",
-        args: {
-          "input" => input,
-        }
+        input: Optional[str]
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "V2_FnStringOptional",
+        {
+          "input": input,
+        },
+        ctx={}
       )
-      Baml::convert_to(string).from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[str].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for V2_FnStringOptional:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
-    def V2_FnTestNamedArgsSingleEnum(
+    async def V2_FnTestNamedArgsSingleEnum(
         self,
-        myArg: "NamedArgsSingleEnum2"
-    )
-      raw = self.__runtime.call_function(
-        function_name: "V2_FnTestNamedArgsSingleEnum",
-        args: {
-          "myArg" => myArg,
-        }
+        myArg: types.NamedArgsSingleEnum2
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "V2_FnTestNamedArgsSingleEnum",
+        {
+          "myArg": myArg,
+        },
+        ctx={}
       )
-      Baml::convert_to(string).from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[str].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for V2_FnTestNamedArgsSingleEnum:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
-    def V2_TestFnNamedArgsSingleBool(
+    async def V2_TestFnNamedArgsSingleBool(
         self,
-        myBool: boolean
-    )
-      raw = self.__runtime.call_function(
-        function_name: "V2_TestFnNamedArgsSingleBool",
-        args: {
-          "myBool" => myBool,
-        }
+        myBool: bool
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "V2_TestFnNamedArgsSingleBool",
+        {
+          "myBool": myBool,
+        },
+        ctx={}
       )
-      Baml::convert_to(string).from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[str].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for V2_TestFnNamedArgsSingleBool:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
-    def V2_TestFnNamedArgsSingleClass(
+    async def V2_TestFnNamedArgsSingleClass(
         self,
-        myArg: "NamedArgsSingleClass2"
-    )
-      raw = self.__runtime.call_function(
-        function_name: "V2_TestFnNamedArgsSingleClass",
-        args: {
-          "myArg" => myArg,
-        }
+        myArg: types.NamedArgsSingleClass2
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "V2_TestFnNamedArgsSingleClass",
+        {
+          "myArg": myArg,
+        },
+        ctx={}
       )
-      Baml::convert_to(string).from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[str].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for V2_TestFnNamedArgsSingleClass:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
-    def V2_TestFnNamedArgsSingleEnumList(
+    async def V2_TestFnNamedArgsSingleEnumList(
         self,
-        myArg: List["NamedArgsSingleEnumList2"]
-    )
-      raw = self.__runtime.call_function(
-        function_name: "V2_TestFnNamedArgsSingleEnumList",
-        args: {
-          "myArg" => myArg,
-        }
+        myArg: List[types.NamedArgsSingleEnumList2]
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "V2_TestFnNamedArgsSingleEnumList",
+        {
+          "myArg": myArg,
+        },
+        ctx={}
       )
-      Baml::convert_to(string).from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[str].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for V2_TestFnNamedArgsSingleEnumList:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
-    def V2_TestFnNamedArgsSingleFloat(
+    async def V2_TestFnNamedArgsSingleFloat(
         self,
-        myFloat: number
-    )
-      raw = self.__runtime.call_function(
-        function_name: "V2_TestFnNamedArgsSingleFloat",
-        args: {
-          "myFloat" => myFloat,
-        }
+        myFloat: float
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "V2_TestFnNamedArgsSingleFloat",
+        {
+          "myFloat": myFloat,
+        },
+        ctx={}
       )
-      Baml::convert_to(string).from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[str].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for V2_TestFnNamedArgsSingleFloat:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
-    def V2_TestFnNamedArgsSingleInt(
+    async def V2_TestFnNamedArgsSingleInt(
         self,
-        myInt: number
-    )
-      raw = self.__runtime.call_function(
-        function_name: "V2_TestFnNamedArgsSingleInt",
-        args: {
-          "myInt" => myInt,
-        }
+        myInt: int
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "V2_TestFnNamedArgsSingleInt",
+        {
+          "myInt": myInt,
+        },
+        ctx={}
       )
-      Baml::convert_to(string).from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[str].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for V2_TestFnNamedArgsSingleInt:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
-    def V2_TestFnNamedArgsSingleString(
+    async def V2_TestFnNamedArgsSingleString(
         self,
-        myString: string
-    )
-      raw = self.__runtime.call_function(
-        function_name: "V2_TestFnNamedArgsSingleString",
-        args: {
-          "myString" => myString,
-        }
+        myString: str
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "V2_TestFnNamedArgsSingleString",
+        {
+          "myString": myString,
+        },
+        ctx={}
       )
-      Baml::convert_to(string).from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[str].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for V2_TestFnNamedArgsSingleString:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
-    def V2_TestFnNamedArgsSingleStringArray(
+    async def V2_TestFnNamedArgsSingleStringArray(
         self,
-        myStringArray: List[string]
-    )
-      raw = self.__runtime.call_function(
-        function_name: "V2_TestFnNamedArgsSingleStringArray",
-        args: {
-          "myStringArray" => myStringArray,
-        }
+        myStringArray: List[str]
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "V2_TestFnNamedArgsSingleStringArray",
+        {
+          "myStringArray": myStringArray,
+        },
+        ctx={}
       )
-      Baml::convert_to(string).from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[str].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for V2_TestFnNamedArgsSingleStringArray:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
-    def V2_TestFnNamedArgsSingleStringList(
+    async def V2_TestFnNamedArgsSingleStringList(
         self,
-        myArg: List["NamedArgsSingleClassList2"]
-    )
-      raw = self.__runtime.call_function(
-        function_name: "V2_TestFnNamedArgsSingleStringList",
-        args: {
-          "myArg" => myArg,
-        }
+        myArg: List[types.NamedArgsSingleClassList2]
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "V2_TestFnNamedArgsSingleStringList",
+        {
+          "myArg": myArg,
+        },
+        ctx={}
       )
-      Baml::convert_to(string).from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[str].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for V2_TestFnNamedArgsSingleStringList:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
-    def V2_TestFnNamedArgsSyntax(
+    async def V2_TestFnNamedArgsSyntax(
         self,
-        var: string,var_with_underscores: string
-    )
-      raw = self.__runtime.call_function(
-        function_name: "V2_TestFnNamedArgsSyntax",
-        args: {
-          "var" => var,"var_with_underscores" => var_with_underscores,
-        }
+        var: str,var_with_underscores: str
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "V2_TestFnNamedArgsSyntax",
+        {
+          "var": var,"var_with_underscores": var_with_underscores,
+        },
+        ctx={}
       )
-      Baml::convert_to(string).from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[str].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for V2_TestFnNamedArgsSyntax:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
-    def V2_UnionTest_Function(
+    async def V2_UnionTest_Function(
         self,
-        input: Union[string, boolean]
-    )
-      raw = self.__runtime.call_function(
-        function_name: "V2_UnionTest_Function",
-        args: {
-          "input" => input,
-        }
+        input: Union[str, bool]
+    ) -> Union[types.UnionTest_ReturnTypev2, types.DataType]:
+      raw = await self.__runtime.call_function(
+        "V2_UnionTest_Function",
+        {
+          "input": input,
+        },
+        ctx={}
       )
-      Baml::convert_to("UnionTest_ReturnTypev2").from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[Union[types.UnionTest_ReturnTypev2, types.DataType]].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for V2_UnionTest_Function:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
     

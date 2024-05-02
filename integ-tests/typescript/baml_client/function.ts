@@ -6,7 +6,7 @@
 /* eslint-disable */
 
 
-import { Category, ClassOptionalFields, ClassOptionalFieldsv2, ClassOptionalOutput, ClassOptionalOutput2, ClassOptionalOutput2v2, Email, EnumOutput, EnumOutput2, NamedArgsSingleClass, NamedArgsSingleClass2, NamedArgsSingleClassList2, NamedArgsSingleEnum, NamedArgsSingleEnum2, NamedArgsSingleEnumList, NamedArgsSingleEnumList2, OptionalClass, OptionalClassv2, OptionalTest_ReturnType, OptionalTest_ReturnTypev2, OrderInfo, OverrideClass, OverrideEnum, RaysData, Resume, SearchParams, TestClassAlias, TestClassWithEnum, TestClassWithEnum2, TestEnum, TestOutputClass, TestOutputClass2, UnionTest_ReturnType, UnionTest_ReturnTypev2 } from './types';
+import { Category, ClassOptionalFields, ClassOptionalFieldsv2, ClassOptionalOutput, ClassOptionalOutput2, ClassOptionalOutput2v2, DataType, Email, EnumOutput, EnumOutput2, NamedArgsSingleClass, NamedArgsSingleClass2, NamedArgsSingleClassList2, NamedArgsSingleEnum, NamedArgsSingleEnum2, NamedArgsSingleEnumList, NamedArgsSingleEnumList2, OptionalClass, OptionalClassv2, OptionalTest_ReturnType, OptionalTest_ReturnTypev2, OrderInfo, OverrideClass, OverrideEnum, RaysData, Resume, SearchParams, TestClassAlias, TestClassWithEnum, TestClassWithEnum2, TestEnum, TestOutputClass, TestOutputClass2, UnionTest_ReturnType, UnionTest_ReturnTypev2 } from './types';
 import { FireBamlEvent, traceAsync } from '@boundaryml/baml-core/ffi_layer';
 
 
@@ -4745,7 +4745,7 @@ const V2_TestFnNamedArgsSyntax = createV2_TestFnNamedArgsSyntaxInstance();
 
 type IV2_UnionTest_Function = (args: {
   input: string | boolean
-}) => Promise<UnionTest_ReturnTypev2>
+}) => Promise<UnionTest_ReturnTypev2 | DataType>
 
 type V2_UnionTest_FunctionImpls = 'default_config';
 
@@ -4779,7 +4779,7 @@ function createV2_UnionTest_FunctionInstance(): IV2_UnionTest_Function & V2_Unio
         name,
         run: traceAsync(
           /* functionName */"V2_UnionTest_Function",
-          /* returnType */ "UnionTest_ReturnTypev2",
+          /* returnType */ "UnionTest_ReturnTypev2 | DataType",
           /* paramters */ [
             [
               "input",
