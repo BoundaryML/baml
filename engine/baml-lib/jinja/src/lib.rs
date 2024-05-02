@@ -189,7 +189,7 @@ fn render_minijinja(
 
     // trim
     let template = template.trim();
-    println!("Rendering template: \n{}\n------\n", template);
+    log::debug!("Rendering template: \n{}\n------\n", template);
     // let args_dict = minijinja::Value::from_serializable(args);
 
     // inject macros

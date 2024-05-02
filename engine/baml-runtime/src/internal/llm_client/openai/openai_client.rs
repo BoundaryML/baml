@@ -147,14 +147,14 @@ impl WithChat for OpenAIClient {
 
         let req = self.build_http_request(ctx, "/chat/completions", prompt)?;
 
-        //match self.internal_state.clone().lock() {
-        //    Ok(mut state) => {
-        //        state.call_count += 1;
-        //    }
-        //    Err(e) => {
-        //        log::warn!("Failed to increment call count for OpenAIClient: {:#?}", e);
-        //    }
-        //}
+        match self.internal_state.clone().lock() {
+            Ok(mut state) => {
+                state.call_count += 1;
+            }
+            Err(e) => {
+                log::warn!("Failed to increment call count for OpenAIClient: {:#?}", e);
+            }
+        }
         let now = std::time::SystemTime::now();
         let res = req.send().await?;
 
