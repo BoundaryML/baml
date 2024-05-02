@@ -151,6 +151,12 @@ interface ClassOptionalOutput2v2 {
   prop3: Blah2 | null;
 }
 
+interface ClassWithImage {
+  myImage: Image;
+  param2: string;
+  fake_image: FakeImage;
+}
+
 interface DynamicPropsClass {
   prop1: string;
   prop2: string;
@@ -168,6 +174,10 @@ interface Event {
   date: string;
   location: string;
   description: string;
+}
+
+interface FakeImage {
+  url: string;
 }
 
 interface ModifiedOutput {
@@ -310,5 +320,5 @@ interface WithReasoning {
 }
 
 
-export { Category, Category2, Category3, DataType, EnumInClass, EnumInClass2, EnumOutput, EnumOutput2, NamedArgsSingleEnum, NamedArgsSingleEnum2, NamedArgsSingleEnumList, NamedArgsSingleEnumList2, OptionalTest_CategoryType, OptionalTest_CategoryTypev2, OrderStatus, OverrideEnum, Tag, TestEnum, Blah, Blah2, ClassOptionalFields, ClassOptionalFieldsv2, ClassOptionalOutput, ClassOptionalOutput2, ClassOptionalOutput2v2, DynamicPropsClass, Email, Event, ModifiedOutput, NamedArgsSingleClass, NamedArgsSingleClass2, NamedArgsSingleClassList2, OptionalClass, OptionalClassv2, OptionalTest_Prop1, OptionalTest_Prop1v2, OptionalTest_ReturnType, OptionalTest_ReturnTypev2, OrderInfo, OverrideClass, RaysData, Resume, SearchParams, SomeClass2, TestClassAlias, TestClassWithEnum, TestClassWithEnum2, TestOutputClass, TestOutputClass2, UnionTest_ReturnType, UnionTest_ReturnTypev2, WithReasoning }
+export { Category, Category2, Category3, DataType, EnumInClass, EnumInClass2, EnumOutput, EnumOutput2, NamedArgsSingleEnum, NamedArgsSingleEnum2, NamedArgsSingleEnumList, NamedArgsSingleEnumList2, OptionalTest_CategoryType, OptionalTest_CategoryTypev2, OrderStatus, OverrideEnum, Tag, TestEnum, Blah, Blah2, ClassOptionalFields, ClassOptionalFieldsv2, ClassOptionalOutput, ClassOptionalOutput2, ClassOptionalOutput2v2, ClassWithImage, DynamicPropsClass, Email, Event, FakeImage, ModifiedOutput, NamedArgsSingleClass, NamedArgsSingleClass2, NamedArgsSingleClassList2, OptionalClass, OptionalClassv2, OptionalTest_Prop1, OptionalTest_Prop1v2, OptionalTest_ReturnType, OptionalTest_ReturnTypev2, OrderInfo, OverrideClass, RaysData, Resume, SearchParams, SomeClass2, TestClassAlias, TestClassWithEnum, TestClassWithEnum2, TestOutputClass, TestOutputClass2, UnionTest_ReturnType, UnionTest_ReturnTypev2, WithReasoning }
 

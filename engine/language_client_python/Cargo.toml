@@ -17,6 +17,7 @@ baml-runtime = { path = "../baml-runtime", features = [
   "disk",
   "internal",
 ] }
+internal-baml-jinja = { path = "../baml-lib/jinja" }
 env_logger.workspace = true
 futures.workspace = true
 indexmap.workspace = true

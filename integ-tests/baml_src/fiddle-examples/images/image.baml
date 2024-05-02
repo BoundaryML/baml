@@ -10,10 +10,14 @@ function DescribeImage(img: image) -> string {
 
 }
 
+class FakeImage {
+  url string
+}
 
 class ClassWithImage {
   myImage image
   param2 string
+  fake_image FakeImage
 }
 
 // chat role user present

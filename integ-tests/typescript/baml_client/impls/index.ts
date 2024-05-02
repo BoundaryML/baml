@@ -11,6 +11,14 @@ import './classifymessage2_default_config';
 
 import './classifymessage3_default_config';
 
+import './describeimage_default_config';
+
+import './describeimage2_default_config';
+
+import './describeimage3_default_config';
+
+import './describeimage4_default_config';
+
 import './extractnames_default_config';
 
 import './extractresume_default_config';

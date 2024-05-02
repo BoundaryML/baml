@@ -6,7 +6,11 @@
 /* eslint-disable */
 
 
+<<<<<<< HEAD
 import { Category, ClassOptionalFields, ClassOptionalFieldsv2, ClassOptionalOutput, ClassOptionalOutput2, ClassOptionalOutput2v2, DataType, Email, EnumOutput, EnumOutput2, NamedArgsSingleClass, NamedArgsSingleClass2, NamedArgsSingleClassList2, NamedArgsSingleEnum, NamedArgsSingleEnum2, NamedArgsSingleEnumList, NamedArgsSingleEnumList2, OptionalClass, OptionalClassv2, OptionalTest_ReturnType, OptionalTest_ReturnTypev2, OrderInfo, OverrideClass, OverrideEnum, RaysData, Resume, SearchParams, TestClassAlias, TestClassWithEnum, TestClassWithEnum2, TestEnum, TestOutputClass, TestOutputClass2, UnionTest_ReturnType, UnionTest_ReturnTypev2 } from './types';
+=======
+import { Category, ClassOptionalFields, ClassOptionalFieldsv2, ClassOptionalOutput, ClassOptionalOutput2, ClassOptionalOutput2v2, ClassWithImage, Email, EnumOutput, EnumOutput2, NamedArgsSingleClass, NamedArgsSingleClass2, NamedArgsSingleClassList2, NamedArgsSingleEnum, NamedArgsSingleEnum2, NamedArgsSingleEnumList, NamedArgsSingleEnumList2, OptionalClass, OptionalClassv2, OptionalTest_ReturnType, OptionalTest_ReturnTypev2, OrderInfo, OverrideClass, OverrideEnum, RaysData, Resume, SearchParams, TestClassAlias, TestClassWithEnum, TestClassWithEnum2, TestEnum, TestOutputClass, TestOutputClass2, UnionTest_ReturnType, UnionTest_ReturnTypev2 } from './types';
+>>>>>>> 55f2eb9e (image works in python)
 import { FireBamlEvent, traceAsync } from '@boundaryml/baml-core/ffi_layer';
 
 
@@ -240,6 +244,326 @@ function createClassifyMessage3Instance(): IClassifyMessage3 & ClassifyMessage3F
 }
 
 const ClassifyMessage3 = createClassifyMessage3Instance();
+
+type IDescribeImage = (args: {
+  img: Image
+}) => Promise<string>
+
+type DescribeImageImpls = 'default_config';
+
+interface DescribeImageImpl {
+    run: IDescribeImage;
+    name: DescribeImageImpls;
+}
+
+interface DescribeImageFunction {
+  registerImpl: (name: DescribeImageImpls, impl: DescribeImageImpl) => void;
+  getImpl: (name: DescribeImageImpls) => DescribeImageImpl;
+}
+
+function createDescribeImageInstance(): IDescribeImage & DescribeImageFunction {
+
+  const registry: Record<DescribeImageImpls, DescribeImageImpl> = {}
+
+  const wrapper: DescribeImageFunction = {
+    getImpl: (name: DescribeImageImpls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for DescribeImage with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: DescribeImageImpls, cb: IDescribeImage) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for DescribeImage with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"DescribeImage",
+          /* returnType */ "string",
+          /* paramters */ [
+            [
+              "img",
+              "Image"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            img: Image
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for DescribeImage: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    img: Image
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IDescribeImage & DescribeImageFunction;
+}
+
+const DescribeImage = createDescribeImageInstance();
+
+type IDescribeImage2 = (args: {
+  classWithImage: ClassWithImage, img2: Image
+}) => Promise<string>
+
+type DescribeImage2Impls = 'default_config';
+
+interface DescribeImage2Impl {
+    run: IDescribeImage2;
+    name: DescribeImage2Impls;
+}
+
+interface DescribeImage2Function {
+  registerImpl: (name: DescribeImage2Impls, impl: DescribeImage2Impl) => void;
+  getImpl: (name: DescribeImage2Impls) => DescribeImage2Impl;
+}
+
+function createDescribeImage2Instance(): IDescribeImage2 & DescribeImage2Function {
+
+  const registry: Record<DescribeImage2Impls, DescribeImage2Impl> = {}
+
+  const wrapper: DescribeImage2Function = {
+    getImpl: (name: DescribeImage2Impls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for DescribeImage2 with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: DescribeImage2Impls, cb: IDescribeImage2) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for DescribeImage2 with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"DescribeImage2",
+          /* returnType */ "string",
+          /* paramters */ [
+            [
+              "classWithImage",
+              "ClassWithImage"
+            ],
+            [
+              "img2",
+              "Image"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            classWithImage: ClassWithImage, img2: Image
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for DescribeImage2: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    classWithImage: ClassWithImage, img2: Image
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IDescribeImage2 & DescribeImage2Function;
+}
+
+const DescribeImage2 = createDescribeImage2Instance();
+
+type IDescribeImage3 = (args: {
+  classWithImage: ClassWithImage, img2: Image
+}) => Promise<string>
+
+type DescribeImage3Impls = 'default_config';
+
+interface DescribeImage3Impl {
+    run: IDescribeImage3;
+    name: DescribeImage3Impls;
+}
+
+interface DescribeImage3Function {
+  registerImpl: (name: DescribeImage3Impls, impl: DescribeImage3Impl) => void;
+  getImpl: (name: DescribeImage3Impls) => DescribeImage3Impl;
+}
+
+function createDescribeImage3Instance(): IDescribeImage3 & DescribeImage3Function {
+
+  const registry: Record<DescribeImage3Impls, DescribeImage3Impl> = {}
+
+  const wrapper: DescribeImage3Function = {
+    getImpl: (name: DescribeImage3Impls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for DescribeImage3 with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: DescribeImage3Impls, cb: IDescribeImage3) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for DescribeImage3 with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"DescribeImage3",
+          /* returnType */ "string",
+          /* paramters */ [
+            [
+              "classWithImage",
+              "ClassWithImage"
+            ],
+            [
+              "img2",
+              "Image"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            classWithImage: ClassWithImage, img2: Image
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for DescribeImage3: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    classWithImage: ClassWithImage, img2: Image
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IDescribeImage3 & DescribeImage3Function;
+}
+
+const DescribeImage3 = createDescribeImage3Instance();
+
+type IDescribeImage4 = (args: {
+  classWithImage: ClassWithImage, img2: Image
+}) => Promise<string>
+
+type DescribeImage4Impls = 'default_config';
+
+interface DescribeImage4Impl {
+    run: IDescribeImage4;
+    name: DescribeImage4Impls;
+}
+
+interface DescribeImage4Function {
+  registerImpl: (name: DescribeImage4Impls, impl: DescribeImage4Impl) => void;
+  getImpl: (name: DescribeImage4Impls) => DescribeImage4Impl;
+}
+
+function createDescribeImage4Instance(): IDescribeImage4 & DescribeImage4Function {
+
+  const registry: Record<DescribeImage4Impls, DescribeImage4Impl> = {}
+
+  const wrapper: DescribeImage4Function = {
+    getImpl: (name: DescribeImage4Impls) => {
+      const impl = registry[name];
+      if (!impl) {
+        throw new Error(`No implementation for DescribeImage4 with name ${name}`);
+      }
+      return impl;
+    },
+    registerImpl: (name: DescribeImage4Impls, cb: IDescribeImage4) => {
+      if (registry[name]) {
+        throw new Error(`Implementation for DescribeImage4 with name ${name} already exists`);
+      }
+      registry[name] = {
+        name,
+        run: traceAsync(
+          /* functionName */"DescribeImage4",
+          /* returnType */ "string",
+          /* paramters */ [
+            [
+              "classWithImage",
+              "ClassWithImage"
+            ],
+            [
+              "img2",
+              "Image"
+            ]
+          ],
+          /* arg_type */ 'named',
+          /* cb */ async (
+          params: {
+            classWithImage: ClassWithImage, img2: Image
+          }
+        ) => {
+          FireBamlEvent.variant(name);
+          return await cb(params);
+        })
+      };
+    },
+    validate: () => {
+      const targets = ['default_config'];
+      const impls = Object.keys(registry);
+      const missing = targets.filter(t => !impls.includes(t));
+      if (missing.length > 0) {
+        throw new Error(`Missing implementations for DescribeImage4: ${missing.join(', ')}`);
+      }
+    }
+  };
+
+  const impl = async (params : {
+    classWithImage: ClassWithImage, img2: Image
+  }) => {
+    return wrapper.getImpl('default_config').run(params);
+  };
+
+  Object.assign(impl, wrapper);
+
+  return impl as  IDescribeImage4 & DescribeImage4Function;
+}
+
+const DescribeImage4 = createDescribeImage4Instance();
 
 type IExtractNames = (args: {
   input: string
@@ -4821,5 +5145,5 @@ function createV2_UnionTest_FunctionInstance(): IV2_UnionTest_Function & V2_Unio
 const V2_UnionTest_Function = createV2_UnionTest_FunctionInstance();
 
 
-export { ClassifyMessage, IClassifyMessage, ClassifyMessageFunction, ClassifyMessage2, IClassifyMessage2, ClassifyMessage2Function, ClassifyMessage3, IClassifyMessage3, ClassifyMessage3Function, ExtractNames, IExtractNames, ExtractNamesFunction, ExtractResume, IExtractResume, ExtractResumeFunction, ExtractResume2, IExtractResume2, ExtractResume2Function, FnClassOptional, IFnClassOptional, FnClassOptionalFunction, FnClassOptional2, IFnClassOptional2, FnClassOptional2Function, FnClassOptionalOutput, IFnClassOptionalOutput, FnClassOptionalOutputFunction, FnClassOptionalOutput2, IFnClassOptionalOutput2, FnClassOptionalOutput2Function, FnClassOptionalOutput2_V2, IFnClassOptionalOutput2_V2, FnClassOptionalOutput2_V2Function, FnEnumListOutput, IFnEnumListOutput, FnEnumListOutputFunction, FnEnumOutput, IFnEnumOutput, FnEnumOutputFunction, FnNamedArgsSingleStringOptional, IFnNamedArgsSingleStringOptional, FnNamedArgsSingleStringOptionalFunction, FnOutputBool, IFnOutputBool, FnOutputBoolFunction, FnOutputClass, IFnOutputClass, FnOutputClassFunction, FnOutputClassList, IFnOutputClassList, FnOutputClassListFunction, FnOutputClassWithEnum, IFnOutputClassWithEnum, FnOutputClassWithEnumFunction, FnOutputClassWithEnum_V2, IFnOutputClassWithEnum_V2, FnOutputClassWithEnum_V2Function, FnOutputStringList, IFnOutputStringList, FnOutputStringListFunction, FnStringOptional, IFnStringOptional, FnStringOptionalFunction, FnTestAliasedEnumOutput, IFnTestAliasedEnumOutput, FnTestAliasedEnumOutputFunction, FnTestClassAlias, IFnTestClassAlias, FnTestClassAliasFunction, FnTestClassOverride, IFnTestClassOverride, FnTestClassOverrideFunction, FnTestEnumOverride, IFnTestEnumOverride, FnTestEnumOverrideFunction, FnTestNamedArgsSingleEnum, IFnTestNamedArgsSingleEnum, FnTestNamedArgsSingleEnumFunction, FnTestOutputAdapter, IFnTestOutputAdapter, FnTestOutputAdapterFunction, GetDataType, IGetDataType, GetDataTypeFunction, GetOrderInfo, IGetOrderInfo, GetOrderInfoFunction, GetQuery, IGetQuery, GetQueryFunction, OptionalTest_Function, IOptionalTest_Function, OptionalTest_FunctionFunction, OptionalTest_Function_V2, IOptionalTest_Function_V2, OptionalTest_Function_V2Function, PromptTest, IPromptTest, PromptTestFunction, TestFnNamedArgsSingleBool, ITestFnNamedArgsSingleBool, TestFnNamedArgsSingleBoolFunction, TestFnNamedArgsSingleClass, ITestFnNamedArgsSingleClass, TestFnNamedArgsSingleClassFunction, TestFnNamedArgsSingleEnumList, ITestFnNamedArgsSingleEnumList, TestFnNamedArgsSingleEnumListFunction, TestFnNamedArgsSingleFloat, ITestFnNamedArgsSingleFloat, TestFnNamedArgsSingleFloatFunction, TestFnNamedArgsSingleInt, ITestFnNamedArgsSingleInt, TestFnNamedArgsSingleIntFunction, TestFnNamedArgsSingleString, ITestFnNamedArgsSingleString, TestFnNamedArgsSingleStringFunction, TestFnNamedArgsSingleStringArray, ITestFnNamedArgsSingleStringArray, TestFnNamedArgsSingleStringArrayFunction, TestFnNamedArgsSingleStringList, ITestFnNamedArgsSingleStringList, TestFnNamedArgsSingleStringListFunction, TestFnNamedArgsSyntax, ITestFnNamedArgsSyntax, TestFnNamedArgsSyntaxFunction, UnionTest_Function, IUnionTest_Function, UnionTest_FunctionFunction, V2_FnClassOptional, IV2_FnClassOptional, V2_FnClassOptionalFunction, V2_FnClassOptional2, IV2_FnClassOptional2, V2_FnClassOptional2Function, V2_FnEnumListOutput, IV2_FnEnumListOutput, V2_FnEnumListOutputFunction, V2_FnEnumOutput, IV2_FnEnumOutput, V2_FnEnumOutputFunction, V2_FnNamedArgsSingleStringOptional, IV2_FnNamedArgsSingleStringOptional, V2_FnNamedArgsSingleStringOptionalFunction, V2_FnOutputBool, IV2_FnOutputBool, V2_FnOutputBoolFunction, V2_FnOutputClass, IV2_FnOutputClass, V2_FnOutputClassFunction, V2_FnOutputClassList, IV2_FnOutputClassList, V2_FnOutputClassListFunction, V2_FnOutputStringList, IV2_FnOutputStringList, V2_FnOutputStringListFunction, V2_FnStringOptional, IV2_FnStringOptional, V2_FnStringOptionalFunction, V2_FnTestNamedArgsSingleEnum, IV2_FnTestNamedArgsSingleEnum, V2_FnTestNamedArgsSingleEnumFunction, V2_TestFnNamedArgsSingleBool, IV2_TestFnNamedArgsSingleBool, V2_TestFnNamedArgsSingleBoolFunction, V2_TestFnNamedArgsSingleClass, IV2_TestFnNamedArgsSingleClass, V2_TestFnNamedArgsSingleClassFunction, V2_TestFnNamedArgsSingleEnumList, IV2_TestFnNamedArgsSingleEnumList, V2_TestFnNamedArgsSingleEnumListFunction, V2_TestFnNamedArgsSingleFloat, IV2_TestFnNamedArgsSingleFloat, V2_TestFnNamedArgsSingleFloatFunction, V2_TestFnNamedArgsSingleInt, IV2_TestFnNamedArgsSingleInt, V2_TestFnNamedArgsSingleIntFunction, V2_TestFnNamedArgsSingleString, IV2_TestFnNamedArgsSingleString, V2_TestFnNamedArgsSingleStringFunction, V2_TestFnNamedArgsSingleStringArray, IV2_TestFnNamedArgsSingleStringArray, V2_TestFnNamedArgsSingleStringArrayFunction, V2_TestFnNamedArgsSingleStringList, IV2_TestFnNamedArgsSingleStringList, V2_TestFnNamedArgsSingleStringListFunction, V2_TestFnNamedArgsSyntax, IV2_TestFnNamedArgsSyntax, V2_TestFnNamedArgsSyntaxFunction, V2_UnionTest_Function, IV2_UnionTest_Function, V2_UnionTest_FunctionFunction }
+export { ClassifyMessage, IClassifyMessage, ClassifyMessageFunction, ClassifyMessage2, IClassifyMessage2, ClassifyMessage2Function, ClassifyMessage3, IClassifyMessage3, ClassifyMessage3Function, DescribeImage, IDescribeImage, DescribeImageFunction, DescribeImage2, IDescribeImage2, DescribeImage2Function, DescribeImage3, IDescribeImage3, DescribeImage3Function, DescribeImage4, IDescribeImage4, DescribeImage4Function, ExtractNames, IExtractNames, ExtractNamesFunction, ExtractResume, IExtractResume, ExtractResumeFunction, ExtractResume2, IExtractResume2, ExtractResume2Function, FnClassOptional, IFnClassOptional, FnClassOptionalFunction, FnClassOptional2, IFnClassOptional2, FnClassOptional2Function, FnClassOptionalOutput, IFnClassOptionalOutput, FnClassOptionalOutputFunction, FnClassOptionalOutput2, IFnClassOptionalOutput2, FnClassOptionalOutput2Function, FnClassOptionalOutput2_V2, IFnClassOptionalOutput2_V2, FnClassOptionalOutput2_V2Function, FnEnumListOutput, IFnEnumListOutput, FnEnumListOutputFunction, FnEnumOutput, IFnEnumOutput, FnEnumOutputFunction, FnNamedArgsSingleStringOptional, IFnNamedArgsSingleStringOptional, FnNamedArgsSingleStringOptionalFunction, FnOutputBool, IFnOutputBool, FnOutputBoolFunction, FnOutputClass, IFnOutputClass, FnOutputClassFunction, FnOutputClassList, IFnOutputClassList, FnOutputClassListFunction, FnOutputClassWithEnum, IFnOutputClassWithEnum, FnOutputClassWithEnumFunction, FnOutputClassWithEnum_V2, IFnOutputClassWithEnum_V2, FnOutputClassWithEnum_V2Function, FnOutputStringList, IFnOutputStringList, FnOutputStringListFunction, FnStringOptional, IFnStringOptional, FnStringOptionalFunction, FnTestAliasedEnumOutput, IFnTestAliasedEnumOutput, FnTestAliasedEnumOutputFunction, FnTestClassAlias, IFnTestClassAlias, FnTestClassAliasFunction, FnTestClassOverride, IFnTestClassOverride, FnTestClassOverrideFunction, FnTestEnumOverride, IFnTestEnumOverride, FnTestEnumOverrideFunction, FnTestNamedArgsSingleEnum, IFnTestNamedArgsSingleEnum, FnTestNamedArgsSingleEnumFunction, FnTestOutputAdapter, IFnTestOutputAdapter, FnTestOutputAdapterFunction, GetDataType, IGetDataType, GetDataTypeFunction, GetOrderInfo, IGetOrderInfo, GetOrderInfoFunction, GetQuery, IGetQuery, GetQueryFunction, OptionalTest_Function, IOptionalTest_Function, OptionalTest_FunctionFunction, OptionalTest_Function_V2, IOptionalTest_Function_V2, OptionalTest_Function_V2Function, PromptTest, IPromptTest, PromptTestFunction, TestFnNamedArgsSingleBool, ITestFnNamedArgsSingleBool, TestFnNamedArgsSingleBoolFunction, TestFnNamedArgsSingleClass, ITestFnNamedArgsSingleClass, TestFnNamedArgsSingleClassFunction, TestFnNamedArgsSingleEnumList, ITestFnNamedArgsSingleEnumList, TestFnNamedArgsSingleEnumListFunction, TestFnNamedArgsSingleFloat, ITestFnNamedArgsSingleFloat, TestFnNamedArgsSingleFloatFunction, TestFnNamedArgsSingleInt, ITestFnNamedArgsSingleInt, TestFnNamedArgsSingleIntFunction, TestFnNamedArgsSingleString, ITestFnNamedArgsSingleString, TestFnNamedArgsSingleStringFunction, TestFnNamedArgsSingleStringArray, ITestFnNamedArgsSingleStringArray, TestFnNamedArgsSingleStringArrayFunction, TestFnNamedArgsSingleStringList, ITestFnNamedArgsSingleStringList, TestFnNamedArgsSingleStringListFunction, TestFnNamedArgsSyntax, ITestFnNamedArgsSyntax, TestFnNamedArgsSyntaxFunction, UnionTest_Function, IUnionTest_Function, UnionTest_FunctionFunction, V2_FnClassOptional, IV2_FnClassOptional, V2_FnClassOptionalFunction, V2_FnClassOptional2, IV2_FnClassOptional2, V2_FnClassOptional2Function, V2_FnEnumListOutput, IV2_FnEnumListOutput, V2_FnEnumListOutputFunction, V2_FnEnumOutput, IV2_FnEnumOutput, V2_FnEnumOutputFunction, V2_FnNamedArgsSingleStringOptional, IV2_FnNamedArgsSingleStringOptional, V2_FnNamedArgsSingleStringOptionalFunction, V2_FnOutputBool, IV2_FnOutputBool, V2_FnOutputBoolFunction, V2_FnOutputClass, IV2_FnOutputClass, V2_FnOutputClassFunction, V2_FnOutputClassList, IV2_FnOutputClassList, V2_FnOutputClassListFunction, V2_FnOutputStringList, IV2_FnOutputStringList, V2_FnOutputStringListFunction, V2_FnStringOptional, IV2_FnStringOptional, V2_FnStringOptionalFunction, V2_FnTestNamedArgsSingleEnum, IV2_FnTestNamedArgsSingleEnum, V2_FnTestNamedArgsSingleEnumFunction, V2_TestFnNamedArgsSingleBool, IV2_TestFnNamedArgsSingleBool, V2_TestFnNamedArgsSingleBoolFunction, V2_TestFnNamedArgsSingleClass, IV2_TestFnNamedArgsSingleClass, V2_TestFnNamedArgsSingleClassFunction, V2_TestFnNamedArgsSingleEnumList, IV2_TestFnNamedArgsSingleEnumList, V2_TestFnNamedArgsSingleEnumListFunction, V2_TestFnNamedArgsSingleFloat, IV2_TestFnNamedArgsSingleFloat, V2_TestFnNamedArgsSingleFloatFunction, V2_TestFnNamedArgsSingleInt, IV2_TestFnNamedArgsSingleInt, V2_TestFnNamedArgsSingleIntFunction, V2_TestFnNamedArgsSingleString, IV2_TestFnNamedArgsSingleString, V2_TestFnNamedArgsSingleStringFunction, V2_TestFnNamedArgsSingleStringArray, IV2_TestFnNamedArgsSingleStringArray, V2_TestFnNamedArgsSingleStringArrayFunction, V2_TestFnNamedArgsSingleStringList, IV2_TestFnNamedArgsSingleStringList, V2_TestFnNamedArgsSingleStringListFunction, V2_TestFnNamedArgsSyntax, IV2_TestFnNamedArgsSyntax, V2_TestFnNamedArgsSyntaxFunction, V2_UnionTest_Function, IV2_UnionTest_Function, V2_UnionTest_FunctionFunction }
 

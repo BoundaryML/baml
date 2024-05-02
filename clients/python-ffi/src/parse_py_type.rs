@@ -121,6 +121,7 @@ pub fn parse_py_type(any: PyObject) -> PyResult<BamlArgType> {
                     }
                 };
                 Ok(MappedPyType::Class(name, fields))
+                // use downcast only
             } else if let Ok(list) = any.downcast_bound::<PyList>(py) {
                 let mut items = vec![];
                 let len = list.len()?;

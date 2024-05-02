@@ -347,6 +347,7 @@ dependencies = [
  "env_logger",
  "futures",
  "indexmap 2.2.5",
+ "internal-baml-jinja",
  "log",
  "pyo3",
  "pyo3-asyncio",

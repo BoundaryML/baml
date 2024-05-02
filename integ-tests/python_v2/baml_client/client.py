@@ -99,7 +99,59 @@ class BamlClient:
           )
         ) from e
 
+<<<<<<< HEAD
     async def ExtractNames(
+=======
+    def DescribeImage(
+        self,
+        img: Image
+    )
+      raw = self.__runtime.call_function(
+        function_name: "DescribeImage",
+        args: {
+          "img" => img,
+        }
+      )
+      Baml::convert_to(string).from(raw.parsed)
+
+    def DescribeImage2(
+        self,
+        classWithImage: "ClassWithImage",img2: Image
+    )
+      raw = self.__runtime.call_function(
+        function_name: "DescribeImage2",
+        args: {
+          "classWithImage" => classWithImage,"img2" => img2,
+        }
+      )
+      Baml::convert_to(string).from(raw.parsed)
+
+    def DescribeImage3(
+        self,
+        classWithImage: "ClassWithImage",img2: Image
+    )
+      raw = self.__runtime.call_function(
+        function_name: "DescribeImage3",
+        args: {
+          "classWithImage" => classWithImage,"img2" => img2,
+        }
+      )
+      Baml::convert_to(string).from(raw.parsed)
+
+    def DescribeImage4(
+        self,
+        classWithImage: "ClassWithImage",img2: Image
+    )
+      raw = self.__runtime.call_function(
+        function_name: "DescribeImage4",
+        args: {
+          "classWithImage" => classWithImage,"img2" => img2,
+        }
+      )
+      Baml::convert_to(string).from(raw.parsed)
+
+    def ExtractNames(
+>>>>>>> 55f2eb9e (image works in python)
         self,
         input: str
     ) -> List[str]:

@@ -6,7 +6,7 @@
 /* eslint-disable */
 
 
-import { Blah, Blah2, Category, Category2, Category3, ClassOptionalFields, ClassOptionalFieldsv2, ClassOptionalOutput, ClassOptionalOutput2, ClassOptionalOutput2v2, DataType, DynamicPropsClass, Email, EnumInClass, EnumInClass2, EnumOutput, EnumOutput2, Event, ModifiedOutput, NamedArgsSingleClass, NamedArgsSingleClass2, NamedArgsSingleClassList2, NamedArgsSingleEnum, NamedArgsSingleEnum2, NamedArgsSingleEnumList, NamedArgsSingleEnumList2, OptionalClass, OptionalClassv2, OptionalTest_CategoryType, OptionalTest_CategoryTypev2, OptionalTest_Prop1, OptionalTest_Prop1v2, OptionalTest_ReturnType, OptionalTest_ReturnTypev2, OrderInfo, OrderStatus, OverrideClass, OverrideEnum, RaysData, Resume, SearchParams, SomeClass2, Tag, TestClassAlias, TestClassWithEnum, TestClassWithEnum2, TestEnum, TestOutputClass, TestOutputClass2, UnionTest_ReturnType, UnionTest_ReturnTypev2, WithReasoning } from './types';
+import { Blah, Blah2, Category, Category2, Category3, ClassOptionalFields, ClassOptionalFieldsv2, ClassOptionalOutput, ClassOptionalOutput2, ClassOptionalOutput2v2, ClassWithImage, DataType, DynamicPropsClass, Email, EnumInClass, EnumInClass2, EnumOutput, EnumOutput2, Event, FakeImage, ModifiedOutput, NamedArgsSingleClass, NamedArgsSingleClass2, NamedArgsSingleClassList2, NamedArgsSingleEnum, NamedArgsSingleEnum2, NamedArgsSingleEnumList, NamedArgsSingleEnumList2, OptionalClass, OptionalClassv2, OptionalTest_CategoryType, OptionalTest_CategoryTypev2, OptionalTest_Prop1, OptionalTest_Prop1v2, OptionalTest_ReturnType, OptionalTest_ReturnTypev2, OrderInfo, OrderStatus, OverrideClass, OverrideEnum, RaysData, Resume, SearchParams, SomeClass2, Tag, TestClassAlias, TestClassWithEnum, TestClassWithEnum2, TestEnum, TestOutputClass, TestOutputClass2, UnionTest_ReturnType, UnionTest_ReturnTypev2, WithReasoning } from './types';
 
 
 // Function to check if a value is a member of the Category enum
@@ -358,6 +358,49 @@ class InternalClassOptionalOutput2v2 implements ClassOptionalOutput2v2 {
   }
 }
 
+// Function to validate if an object is a ClassWithImage object
+function isClassWithImage(obj: any): obj is ClassWithImage {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("myImage" in obj && (typeof obj.myImage === 'string'))
+    && ("param2" in obj && (typeof obj.param2 === 'string'))
+    && ("fake_image" in obj && (isFakeImage(obj.fake_image)))
+  );
+}
+
+
+class InternalClassWithImage implements ClassWithImage {
+  private constructor(private data: {
+    myImage: Image,
+    param2: string,
+    fake_image: InternalFakeImage,
+  }, private raw: ClassWithImage) {}
+
+  static from(data: ClassWithImage): InternalClassWithImage {
+    return new InternalClassWithImage({
+      myImage: data.myImage,
+      param2: data.param2,
+      fake_image: new InternalFakeImage(data.fake_image),
+    }, data);
+  }
+
+  get myImage(): Image {
+    return this.data.myImage;
+  }
+  get param2(): string {
+    return this.data.param2;
+  }
+  get fake_image(): InternalFakeImage {
+    return this.data.fake_image;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
 // Function to validate if an object is a DynamicPropsClass object
 function isDynamicPropsClass(obj: any): obj is DynamicPropsClass {
   return (
@@ -494,6 +537,37 @@ class InternalEvent implements Event {
   }
   get description(): string {
     return this.data.description;
+  }
+
+
+  toJSON(): string {
+    return JSON.stringify(this.raw, null, 2);
+  }
+}
+
+// Function to validate if an object is a FakeImage object
+function isFakeImage(obj: any): obj is FakeImage {
+  return (
+    obj &&
+    typeof obj === "object"
+    && ("url" in obj && (typeof obj.url === 'string'))
+  );
+}
+
+
+class InternalFakeImage implements FakeImage {
+  private constructor(private data: {
+    url: string,
+  }, private raw: FakeImage) {}
+
+  static from(data: FakeImage): InternalFakeImage {
+    return new InternalFakeImage({
+      url: data.url,
+    }, data);
+  }
+
+  get url(): string {
+    return this.data.url;
   }
 
 
@@ -1561,5 +1635,5 @@ class InternalWithReasoning implements WithReasoning {
 }
 
 
-export { InternalBlah, InternalBlah2, InternalClassOptionalFields, InternalClassOptionalFieldsv2, InternalClassOptionalOutput, InternalClassOptionalOutput2, InternalClassOptionalOutput2v2, InternalDynamicPropsClass, InternalEmail, InternalEvent, InternalModifiedOutput, InternalNamedArgsSingleClass, InternalNamedArgsSingleClass2, InternalNamedArgsSingleClassList2, InternalOptionalClass, InternalOptionalClassv2, InternalOptionalTest_Prop1, InternalOptionalTest_Prop1v2, InternalOptionalTest_ReturnType, InternalOptionalTest_ReturnTypev2, InternalOrderInfo, InternalOverrideClass, InternalRaysData, InternalResume, InternalSearchParams, InternalSomeClass2, InternalTestClassAlias, InternalTestClassWithEnum, InternalTestClassWithEnum2, InternalTestOutputClass, InternalTestOutputClass2, InternalUnionTest_ReturnType, InternalUnionTest_ReturnTypev2, InternalWithReasoning }
+export { InternalBlah, InternalBlah2, InternalClassOptionalFields, InternalClassOptionalFieldsv2, InternalClassOptionalOutput, InternalClassOptionalOutput2, InternalClassOptionalOutput2v2, InternalClassWithImage, InternalDynamicPropsClass, InternalEmail, InternalEvent, InternalFakeImage, InternalModifiedOutput, InternalNamedArgsSingleClass, InternalNamedArgsSingleClass2, InternalNamedArgsSingleClassList2, InternalOptionalClass, InternalOptionalClassv2, InternalOptionalTest_Prop1, InternalOptionalTest_Prop1v2, InternalOptionalTest_ReturnType, InternalOptionalTest_ReturnTypev2, InternalOrderInfo, InternalOverrideClass, InternalRaysData, InternalResume, InternalSearchParams, InternalSomeClass2, InternalTestClassAlias, InternalTestClassWithEnum, InternalTestClassWithEnum2, InternalTestOutputClass, InternalTestOutputClass2, InternalUnionTest_ReturnType, InternalUnionTest_ReturnTypev2, InternalWithReasoning }
 

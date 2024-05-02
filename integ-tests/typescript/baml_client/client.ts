@@ -28,7 +28,7 @@ const GPT4 = clientManager.createClient('GPT4', 'baml-openai-chat', {
 });
 
 const GPT4Turbo = clientManager.createClient('GPT4Turbo', 'baml-openai-chat', {
-    model: "gpt-4-1106-preview",
+    model: "gpt-4-turbo",
     api_key: process.env.OPENAI_API_KEY
 });
 

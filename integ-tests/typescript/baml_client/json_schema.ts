@@ -427,6 +427,34 @@ const schema: JSONSchema7 = {
       },
       "required": []
     },
+    "ClassWithImage": {
+      "title": "ClassWithImage",
+      "type": "object",
+      "properties": {
+        "myImage": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "url"
+          ]
+        },
+        "param2": {
+          "type": "string"
+        },
+        "fake_image": {
+          "$ref": "#/definitions/FakeImage"
+        }
+      },
+      "required": [
+        "myImage",
+        "param2",
+        "fake_image"
+      ]
+    },
     "DynamicPropsClass": {
       "title": "DynamicPropsClass",
       "type": "object",
@@ -489,6 +517,18 @@ const schema: JSONSchema7 = {
         "date",
         "location",
         "description"
+      ]
+    },
+    "FakeImage": {
+      "title": "FakeImage",
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
       ]
     },
     "ModifiedOutput": {
@@ -1172,6 +1212,98 @@ const schema: JSONSchema7 = {
       ],
       "title": "ClassifyMessage3 input"
     },
+    "DescribeImage_input": {
+      "type": "object",
+      "properties": {
+        "img": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "url"
+          ]
+        }
+      },
+      "required": [
+        "img"
+      ],
+      "title": "DescribeImage input"
+    },
+    "DescribeImage2_input": {
+      "type": "object",
+      "properties": {
+        "classWithImage": {
+          "$ref": "#/definitions/ClassWithImage"
+        },
+        "img2": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "url"
+          ]
+        }
+      },
+      "required": [
+        "classWithImage",
+        "img2"
+      ],
+      "title": "DescribeImage2 input"
+    },
+    "DescribeImage3_input": {
+      "type": "object",
+      "properties": {
+        "classWithImage": {
+          "$ref": "#/definitions/ClassWithImage"
+        },
+        "img2": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "url"
+          ]
+        }
+      },
+      "required": [
+        "classWithImage",
+        "img2"
+      ],
+      "title": "DescribeImage3 input"
+    },
+    "DescribeImage4_input": {
+      "type": "object",
+      "properties": {
+        "classWithImage": {
+          "$ref": "#/definitions/ClassWithImage"
+        },
+        "img2": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "url"
+          ]
+        }
+      },
+      "required": [
+        "classWithImage",
+        "img2"
+      ],
+      "title": "DescribeImage4 input"
+    },
     "ExtractNames_input": {
       "type": "object",
       "properties": {
@@ -1809,6 +1941,22 @@ const schema: JSONSchema7 = {
       "$ref": "#/definitions/Category",
       "title": "ClassifyMessage3 output"
     },
+    "DescribeImage_output": {
+      "type": "string",
+      "title": "DescribeImage output"
+    },
+    "DescribeImage2_output": {
+      "type": "string",
+      "title": "DescribeImage2 output"
+    },
+    "DescribeImage3_output": {
+      "type": "string",
+      "title": "DescribeImage3 output"
+    },
+    "DescribeImage4_output": {
+      "type": "string",
+      "title": "DescribeImage4 output"
+    },
     "ExtractNames_output": {
       "type": "array",
       "items": {
@@ -2263,6 +2411,10 @@ registerObjectDeserializer(schema.definitions.ClassOptionalOutput2v2, {
 
 });
 
+registerObjectDeserializer(schema.definitions.ClassWithImage, {
+
+});
+
 registerObjectDeserializer(schema.definitions.DynamicPropsClass, {
 
 });
@@ -2272,6 +2424,10 @@ registerObjectDeserializer(schema.definitions.Email, {
 });
 
 registerObjectDeserializer(schema.definitions.Event, {
+
+});
+
+registerObjectDeserializer(schema.definitions.FakeImage, {
 
 });
 

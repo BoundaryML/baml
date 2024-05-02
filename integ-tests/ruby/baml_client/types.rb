@@ -183,11 +183,15 @@ module Baml
     
     class ClassOptionalOutput2v2 < T::Struct; end
     
+    class ClassWithImage < T::Struct; end
+    
     class DynamicPropsClass < T::Struct; end
     
     class Email < T::Struct; end
     
     class Event < T::Struct; end
+    
+    class FakeImage < T::Struct; end
     
     class ModifiedOutput < T::Struct; end
     
@@ -293,6 +297,15 @@ module Baml
       const :prop3, T.nilable(Baml::Types::Blah2)
     end
 
+    class ClassWithImage < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
+      end
+      const :myImage, Baml::Types::Image
+      const :param2, String
+      const :fake_image, Baml::Types::FakeImage
+    end
+
     class DynamicPropsClass < T::Struct
       if defined?(T::Struct::ActsAsComparable)
         include T::Struct::ActsAsComparable
@@ -319,6 +332,13 @@ module Baml
       const :date, String
       const :location, String
       const :description, String
+    end
+
+    class FakeImage < T::Struct
+      if defined?(T::Struct::ActsAsComparable)
+        include T::Struct::ActsAsComparable
+      end
+      const :url, String
     end
 
     class ModifiedOutput < T::Struct

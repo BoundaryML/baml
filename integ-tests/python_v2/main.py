@@ -1,39 +1,58 @@
 import asyncio
 import baml_py
+from baml_py import Image
+from pydantic import BaseModel
 import time
 
-from baml_client import client
 
-b = baml_py.BamlRuntimeFfi.from_directory("/home/sam/baml/integ-tests/baml_src")
-b2 = client.BamlClient.from_directory("/home/sam/baml/integ-tests/baml_src")
-
+class FakeImage(BaseModel):
+    url: str
 
 
-async def timeit(b):
-    start_time = time.perf_counter()
-    await b.call_function("ExtractNames", {"input": "We're generally a group of folks like Bayes"}, ctx = {})
-    end_time = time.perf_counter()
-    return end_time - start_time
+class ClassWithImage(BaseModel):
+    myImage: Image
+    param2: str
+    fake_image: FakeImage
+
+
+async def fetch_data(url: str):
+    print(f"Fetching data from {url}...")
+    await asyncio.sleep(1)
+    print(f"Received data from {url}!")
+    return f"Data from {url}"
+
 
 
 async def main():
+    b = baml_py.BamlRuntimeFfi.from_directory("../../integ-tests/baml_src")
+    spongebob_image = Image(
+        url="https://i.kym-cdn.com/photos/images/original/002/807/304/a0b.jpeg"
+    )
+    print("image", spongebob_image)
 
-    tasks = [ b2.V2_UnionTest_Function(input="asdf") for _ in range(10)]
-    retvals = await asyncio.gather(*tasks)
-    print("retvals: ", retvals)
+    print("image.url", spongebob_image.url)
 
+    orc_image = Image(
+        url="https://i.kym-cdn.com/entries/icons/original/000/033/100/eht0m1qg8dk21.jpg"
+    )
 
-    for _ in range(10):
-        print("Kicking off N tasks")
-        start_time = time.perf_counter()
+    full_obj = ClassWithImage(
+        myImage=spongebob_image,
+        param2="ocean",
+        fake_image=FakeImage(
+            url="https://i.kym-cdn.com/entries/icons/original/000/033/100/eht0m1qg8dk21.jpg"
+        ),
+    )
 
-        tasks = [ timeit(b) for _ in range(10) ]
-        timings = await asyncio.gather(*tasks)
+    res = await b.call_function(
+        "DescribeImage2", args={"classWithImage": full_obj, "img2": orc_image}, ctx={}
+    )
+    print("res-------\n", res)
 
-        end_time = time.perf_counter()
-        elapsed_time = end_time - start_time
-        print(f"Elapsed time: {elapsed_time:.2f} seconds")
-        print("Results: {}".format([f"{t:.3f}s" for t in timings]))
+   
+
+    
+
 
 start_time = time.perf_counter()
 

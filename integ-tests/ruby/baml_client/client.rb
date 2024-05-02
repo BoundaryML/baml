@@ -90,6 +90,74 @@ module Baml
 
     sig {
       params(
+        img: Baml::Types::Image,
+      ).returns(String)
+    }
+    def DescribeImage(
+        img:
+    )
+      raw = @runtime.call_function(
+        function_name: "DescribeImage",
+        args: {
+          "img" => img,
+        }
+      )
+      Baml::convert_to(String).from(raw.parsed)
+    end
+
+    sig {
+      params(
+        classWithImage: Baml::Types::ClassWithImage,img2: Baml::Types::Image,
+      ).returns(String)
+    }
+    def DescribeImage2(
+        classWithImage:,img2:
+    )
+      raw = @runtime.call_function(
+        function_name: "DescribeImage2",
+        args: {
+          "classWithImage" => classWithImage,"img2" => img2,
+        }
+      )
+      Baml::convert_to(String).from(raw.parsed)
+    end
+
+    sig {
+      params(
+        classWithImage: Baml::Types::ClassWithImage,img2: Baml::Types::Image,
+      ).returns(String)
+    }
+    def DescribeImage3(
+        classWithImage:,img2:
+    )
+      raw = @runtime.call_function(
+        function_name: "DescribeImage3",
+        args: {
+          "classWithImage" => classWithImage,"img2" => img2,
+        }
+      )
+      Baml::convert_to(String).from(raw.parsed)
+    end
+
+    sig {
+      params(
+        classWithImage: Baml::Types::ClassWithImage,img2: Baml::Types::Image,
+      ).returns(String)
+    }
+    def DescribeImage4(
+        classWithImage:,img2:
+    )
+      raw = @runtime.call_function(
+        function_name: "DescribeImage4",
+        args: {
+          "classWithImage" => classWithImage,"img2" => img2,
+        }
+      )
+      Baml::convert_to(String).from(raw.parsed)
+    end
+
+    sig {
+      params(
         input: String,
       ).returns(T::Array[String])
     }
@@ -667,6 +735,86 @@ module Baml
       Baml::Unstable::FunctionResult[Baml::Types::Category].new(
         inner: raw,
         parsed: Baml::convert_to(Baml::Types::Category).from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        img: Baml::Types::Image,
+      ).returns(Baml::Unstable::FunctionResult[String])
+    }
+    def DescribeImage(
+        img:
+    )
+      raw = @runtime.call_function(
+        function_name: "DescribeImage",
+        args: {
+          "img" => img,
+        }
+      )
+      Baml::Unstable::FunctionResult[String].new(
+        inner: raw,
+        parsed: Baml::convert_to(String).from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        classWithImage: Baml::Types::ClassWithImage,img2: Baml::Types::Image,
+      ).returns(Baml::Unstable::FunctionResult[String])
+    }
+    def DescribeImage2(
+        classWithImage:,img2:
+    )
+      raw = @runtime.call_function(
+        function_name: "DescribeImage2",
+        args: {
+          "classWithImage" => classWithImage,"img2" => img2,
+        }
+      )
+      Baml::Unstable::FunctionResult[String].new(
+        inner: raw,
+        parsed: Baml::convert_to(String).from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        classWithImage: Baml::Types::ClassWithImage,img2: Baml::Types::Image,
+      ).returns(Baml::Unstable::FunctionResult[String])
+    }
+    def DescribeImage3(
+        classWithImage:,img2:
+    )
+      raw = @runtime.call_function(
+        function_name: "DescribeImage3",
+        args: {
+          "classWithImage" => classWithImage,"img2" => img2,
+        }
+      )
+      Baml::Unstable::FunctionResult[String].new(
+        inner: raw,
+        parsed: Baml::convert_to(String).from(raw.parsed)
+      )
+    end
+
+    sig {
+      params(
+        classWithImage: Baml::Types::ClassWithImage,img2: Baml::Types::Image,
+      ).returns(Baml::Unstable::FunctionResult[String])
+    }
+    def DescribeImage4(
+        classWithImage:,img2:
+    )
+      raw = @runtime.call_function(
+        function_name: "DescribeImage4",
+        args: {
+          "classWithImage" => classWithImage,"img2" => img2,
+        }
+      )
+      Baml::Unstable::FunctionResult[String].new(
+        inner: raw,
+        parsed: Baml::convert_to(String).from(raw.parsed)
       )
     end
 
