@@ -81,6 +81,7 @@ fn baml_py(_: Python<'_>, m: &PyModule) -> PyResult<()> {
     };
 
     m.add_class::<BamlRuntimeFfi>()?;
+    m.add_class::<python_types::FunctionResult>()?;
 
     Ok(())
 }

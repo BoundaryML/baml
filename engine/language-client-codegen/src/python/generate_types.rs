@@ -2,7 +2,7 @@ use anyhow::Result;
 use askama::Template;
 
 use super::python_language_features::ToPython;
-use internal_baml_core::ir::{repr::IntermediateRepr, ClassWalker, EnumWalker};
+use internal_baml_core::ir::{repr::IntermediateRepr, ClassWalker, EnumWalker, FieldType};
 
 #[derive(askama::Template)]
 #[template(path = "types.py.j2", escape = "none")]
@@ -62,8 +62,42 @@ impl<'ir> From<&ClassWalker<'ir>> for PythonClass<'ir> {
                 .elem
                 .static_fields
                 .iter()
-                .map(|f| (f.elem.name.as_str(), f.elem.r#type.elem.to_python()))
+                .map(|f| (f.elem.name.as_str(), f.elem.r#type.elem.to_type_decl()))
                 .collect(),
+        }
+    }
+}
+
+trait ToTypeDeclaration {
+    fn to_type_decl(&self) -> String;
+}
+
+impl ToTypeDeclaration for FieldType {
+    fn to_type_decl(&self) -> String {
+        match self {
+            FieldType::Class(name) | FieldType::Enum(name) => format!("\"{name}\""),
+            FieldType::List(inner) => format!("List[{}]", inner.to_type_decl()),
+            FieldType::Map(key, value) => {
+                format!("Dict[{}, {}]", key.to_type_decl(), value.to_type_decl())
+            }
+            FieldType::Primitive(r#type) => r#type.to_python(),
+            FieldType::Union(inner) => format!(
+                "Union[{}]",
+                inner
+                    .iter()
+                    .map(|t| t.to_type_decl())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            FieldType::Tuple(inner) => format!(
+                "Tuple[{}]",
+                inner
+                    .iter()
+                    .map(|t| t.to_type_decl())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            FieldType::Optional(inner) => format!("Optional[{}]", inner.to_type_decl()),
         }
     }
 }

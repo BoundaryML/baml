@@ -1,4 +1,5 @@
-use crate::dir_writer::{FileCollector, LanguageFeatures};
+use crate::dir_writer::LanguageFeatures;
+use internal_baml_core::ir::TypeValue;
 
 #[derive(Default)]
 pub(super) struct PythonLanguageFeatures {}
@@ -33,4 +34,18 @@ impl LanguageFeatures for PythonLanguageFeatures {
 
 pub(super) trait ToPython {
     fn to_python(&self) -> String;
+}
+
+impl ToPython for TypeValue {
+    fn to_python(&self) -> String {
+        match self {
+            TypeValue::Bool => "bool".to_string(),
+            TypeValue::Float => "float".to_string(),
+            TypeValue::Int => "int".to_string(),
+            TypeValue::String => "str".to_string(),
+            TypeValue::Null => "None".to_string(),
+            TypeValue::Char => "str".to_string(),
+            TypeValue::Image => "Image".to_string(),
+        }
+    }
 }

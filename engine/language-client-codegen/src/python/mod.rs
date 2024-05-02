@@ -1,21 +1,14 @@
-mod expression;
-mod field_type;
 mod generate_types;
 mod python_language_features;
 
-use std::path::Path;
-
 use anyhow::Result;
 use askama::Template;
-use python_language_features::ToPython;
-
 use either::Either;
+use internal_baml_core::ir::{repr::IntermediateRepr, FieldType};
+use std::path::Path;
 
-use internal_baml_core::ir::repr::IntermediateRepr;
-
+use self::python_language_features::{PythonLanguageFeatures, ToPython};
 use crate::dir_writer::FileCollector;
-
-use self::python_language_features::PythonLanguageFeatures;
 
 #[derive(askama::Template)]
 #[template(path = "client.py.j2", escape = "none")]
@@ -94,12 +87,12 @@ impl TryFrom<&IntermediateRepr> for PythonClient {
                         let (function, impl_) = c.item;
                         Ok(PythonFunction {
                             name: f.name().to_string(),
-                            return_type: f.elem().output().to_python(),
+                            return_type: f.elem().output().to_type_hint(),
                             args: match f.inputs() {
                                 either::Either::Left(args) => anyhow::bail!("Python codegen does not support unnamed args: please add names to all arguments of BAML function '{}'", f.name().to_string()),
                                 either::Either::Right(args) => args
                                     .iter()
-                                    .map(|(name, r#type)| (name.to_string(), r#type.to_python()))
+                                    .map(|(name, r#type)| (name.to_string(), r#type.to_type_hint()))
                                     .collect(),
                             },
                         })
@@ -111,5 +104,39 @@ impl TryFrom<&IntermediateRepr> for PythonClient {
             .into_iter()
             .flatten().collect();
         Ok(PythonClient { funcs: functions })
+    }
+}
+
+trait ToTypeHint {
+    fn to_type_hint(&self) -> String;
+}
+
+impl ToTypeHint for FieldType {
+    fn to_type_hint(&self) -> String {
+        match self {
+            FieldType::Class(name) | FieldType::Enum(name) => format!("types.{name}"),
+            FieldType::List(inner) => format!("List[{}]", inner.to_type_hint()),
+            FieldType::Map(key, value) => {
+                format!("Dict[{}, {}]", key.to_type_hint(), value.to_type_hint())
+            }
+            FieldType::Primitive(r#type) => r#type.to_python(),
+            FieldType::Union(inner) => format!(
+                "Union[{}]",
+                inner
+                    .iter()
+                    .map(|t| t.to_type_hint())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            FieldType::Tuple(inner) => format!(
+                "Tuple[{}]",
+                inner
+                    .iter()
+                    .map(|t| t.to_type_hint())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            FieldType::Optional(inner) => format!("Optional[{}]", inner.to_type_hint()),
+        }
     }
 }

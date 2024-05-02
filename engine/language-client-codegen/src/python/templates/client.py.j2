@@ -1,29 +1,50 @@
-import "baml"
+from typing import Dict, Generic, List, Optional, Tuple, TypeVar, Union
+import pprint
+
+import baml_py
+from pydantic import BaseModel, ValidationError
+
 from . import types
 
-class BamlClient
-    @staticmethod
-    def from_directory(path):
-      new BamlClient(runtime=BamlRuntime.from_directory(path))
+OutputType = TypeVar('OutputType')
 
-    def __init__(self, runtime):
+class BamlOutputWrapper(BaseModel, Generic[OutputType]):
+    wrapped: OutputType
+
+class BamlClient:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    @staticmethod
+    def from_directory(path: str) -> "BamlClient":
+      return BamlClient(runtime=baml_py.BamlRuntimeFfi.from_directory(path))
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
       self.__runtime = runtime
 
     {% for fn in funcs -%}
-    def {{fn.name}}(
+    async def {{fn.name}}(
         self,
         {% for (name, type) in fn.args -%}
         {{name}}: {{type}}{% if !loop.last %},{% endif %}
         {%- endfor %}
-    )
-      raw = self.__runtime.call_function(
-        function_name: "{{fn.name}}",
-        args: {
+    ) -> {{fn.return_type}}:
+      raw = await self.__runtime.call_function(
+        "{{fn.name}}",
+        {
           {% for (name, _) in fn.args -%}
-          "{{name}}" => {{name}},
+          "{{name}}": {{name}},
           {%- endfor %}
-        }
+        },
+        ctx={}
       )
-      Baml::convert_to({{ fn.return_type }}).from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[{{ fn.return_type }}].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for {{fn.name}}:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
     {% endfor %}
