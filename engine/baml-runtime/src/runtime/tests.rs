@@ -52,7 +52,7 @@ async fn test_call_function() -> Result<FunctionResult> {
         .call_function("ExtractNames".to_string(), params, &ctx)
         .await?;
 
-    println!("Result: {}", res);
+    log::info!("Result: {}", res);
 
     Ok(res)
 }

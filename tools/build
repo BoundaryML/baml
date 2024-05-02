@@ -157,7 +157,7 @@ case "$_path" in
     #command="${command} && poetry run mypy ."
     #command="${command} && poetry run ruff check"
     #command="${command} && poetry run ruff format"
-    command="${command} && BAML_LOG=debug infisical run poetry run python main.py"
+    command="${command} && infisical run poetry run python main.py"
     if [ "$_test_mode" -eq 1 ]; then
       command="${command} && poetry run -- pytest baml_core"
     fi

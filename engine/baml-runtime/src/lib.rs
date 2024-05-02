@@ -59,7 +59,7 @@ impl BamlRuntime {
 
 impl RuntimeInterface for BamlRuntime {
     async fn run_test(
-        &mut self,
+        &self,
         function_name: &str,
         test_name: &str,
         ctx: &RuntimeContext,
@@ -68,7 +68,7 @@ impl RuntimeInterface for BamlRuntime {
     }
 
     async fn call_function(
-        &mut self,
+        &self,
         function_name: String,
         params: HashMap<String, serde_json::Value>,
         ctx: &RuntimeContext,
@@ -76,5 +76,3 @@ impl RuntimeInterface for BamlRuntime {
         self.inner.call_function(function_name, params, ctx).await
     }
 }
-
-unsafe impl Send for BamlRuntime {}

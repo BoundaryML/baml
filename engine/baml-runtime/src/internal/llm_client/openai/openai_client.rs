@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
 use internal_baml_core::ir::ClientWalker;
@@ -6,9 +7,12 @@ use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMes
 
 use serde_json::json;
 
-use super::super::expression_helper::to_value;
-use super::super::traits::{WithChat, WithClient, WithNoCompletion, WithRetryPolicy};
-use super::super::{LLMResponse, ModelFeatures};
+use crate::internal::llm_client::{
+    expression_helper::to_value,
+    state::LlmClientState,
+    traits::{WithChat, WithClient, WithNoCompletion, WithRetryPolicy},
+    LLMResponse, ModelFeatures,
+};
 
 use crate::RuntimeContext;
 
@@ -91,6 +95,8 @@ pub struct OpenAIClient {
     context: RenderContext_Client,
     features: ModelFeatures,
     properties: PostRequestProperities,
+
+    internal_state: Arc<Mutex<LlmClientState>>,
 }
 
 impl WithRetryPolicy for OpenAIClient {
@@ -139,8 +145,16 @@ impl WithChat for OpenAIClient {
             ErrorCode, LLMCompleteResponse, LLMErrorResponse,
         };
 
-        let req = self.client_http_request(ctx, "/chat/completions", prompt)?;
+        let req = self.build_http_request(ctx, "/chat/completions", prompt)?;
 
+        //match self.internal_state.clone().lock() {
+        //    Ok(mut state) => {
+        //        state.call_count += 1;
+        //    }
+        //    Err(e) => {
+        //        log::warn!("Failed to increment call count for OpenAIClient: {:#?}", e);
+        //    }
+        //}
         let now = std::time::SystemTime::now();
         let res = req.send().await?;
 
@@ -256,11 +270,12 @@ impl OpenAIClient {
                 .retry_policy_id
                 .as_ref()
                 .map(|s| s.to_string()),
+            internal_state: Arc::new(Mutex::new(LlmClientState::new())),
         })
     }
 
     #[cfg(feature = "network")]
-    fn client_http_request(
+    fn build_http_request(
         &self,
         ctx: &RuntimeContext,
         path: &str,

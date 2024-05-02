@@ -25,47 +25,10 @@ impl BamlError {
 }
 
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 #[pyclass]
 struct BamlRuntimeFfi {
-    internal: Arc<Mutex<BamlRuntime>>,
-    t: tokio::runtime::Runtime,
-}
-
-impl<'ffi, 'py> BamlRuntimeFfi {
-    async fn call_async_plain(&'ffi mut self, py: Python<'py>) -> PyResult<&'py PyAny> {
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        let baml_runtime_arc = Arc::clone(&self.internal);
-        self.t.spawn(async move {
-            let Some(baml_runtime) = Arc::into_inner(baml_runtime_arc) else {
-                return ();
-            };
-            //let Ok(mut baml_runtime) = baml_runtime.lock() else {
-            //    return ();
-            //};
-
-            let result = baml_runtime
-                .lock()
-                .await
-                .deref_mut()
-                .call_function(
-                    "placeholder function".to_string(),
-                    HashMap::new(),
-                    &RuntimeContext::default(),
-                )
-                .await
-                .map_err(BamlError::from_anyhow);
-            tx.send(result);
-        });
-        pyo3_asyncio::tokio::future_into_py(py, async {
-            match rx.await {
-                Ok(Ok(result)) => Ok(python_types::FunctionResult::new(result)),
-                Ok(Err(err)) => Err(err),
-                Err(_) => Err(BamlError::new_err("sender dropped")),
-            }
-        })
-    }
+    internal: Arc<BamlRuntime>,
 }
 
 #[pymethods]
@@ -73,18 +36,9 @@ impl BamlRuntimeFfi {
     #[staticmethod]
     fn from_directory(directory: PathBuf) -> PyResult<Self> {
         Ok(BamlRuntimeFfi {
-            internal: Arc::new(Mutex::new(
+            internal: Arc::new(
                 BamlRuntime::from_directory(&directory).map_err(BamlError::from_anyhow)?,
-            )),
-            t: tokio::runtime::Builder::new_multi_thread()
-                .on_thread_start(|| {
-                    log::info!("Tokio thread started");
-                })
-                .on_thread_stop(|| {
-                    log::info!("Tokio thread stopped");
-                })
-                .enable_all()
-                .build()?,
+            ),
         })
     }
 
@@ -145,24 +99,10 @@ impl BamlRuntimeFfi {
             .chain(ctx.env.into_iter())
             .collect();
 
-        //let (tx, rx) = tokio::sync::oneshot::channel();
-        let baml_runtime_arc = Arc::clone(&self.internal);
+        let baml_runtime = Arc::clone(&self.internal);
 
-        //self.t.spawn(async move {
-        //    let result = baml_runtime_arc
-        //        .lock()
-        //        .await
-        //        .deref_mut()
-        //        .call_function(function_name, args, &ctx)
-        //        .await
-        //        .map_err(BamlError::from_anyhow);
-        //    tx.send(result);
-        //});
         pyo3_asyncio::tokio::future_into_py(py, async move {
-            let result = baml_runtime_arc
-                .lock()
-                .await
-                .deref_mut()
+            let result = baml_runtime
                 .call_function(function_name, args, &ctx)
                 .await
                 .map(python_types::FunctionResult::new)

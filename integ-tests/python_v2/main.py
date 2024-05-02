@@ -28,11 +28,11 @@ async def main():
         b.call_async("ExtractNames", {"input": "We're generally a group of folks like Higgs"}, ctx = {}),
         b.call_async("ExtractNames", {"input": "We're generally a group of folks like Boson"}, ctx = {}),
     ]
-    for t in tasks:
-        print(repr(t))
+    #for t in tasks:
+    #    print(repr(t))
     results = await asyncio.gather(*tasks)
-    for result in results:
-        print(result)
+    #for result in results:
+    #    print(result)
 
 import time
 

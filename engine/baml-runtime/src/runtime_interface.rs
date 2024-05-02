@@ -26,14 +26,14 @@ pub(crate) trait RuntimeConstructor {
 // This is a runtime that has full access (disk, network, etc) - feature full
 pub trait RuntimeInterface {
     fn run_test(
-        &mut self,
+        &self,
         function_name: &str,
         test_name: &str,
         ctx: &RuntimeContext,
     ) -> impl std::future::Future<Output = Result<TestResponse>> + Send;
 
     fn call_function(
-        &mut self,
+        &self,
         function_name: String,
         params: HashMap<String, serde_json::Value>,
         ctx: &RuntimeContext,
@@ -69,7 +69,7 @@ pub trait InternalRuntimeInterface {
     ) -> Result<FunctionResult>;
 
     fn render_prompt(
-        &mut self,
+        &self,
         function_name: &str,
         ctx: &RuntimeContext,
         params: &HashMap<String, serde_json::Value>,

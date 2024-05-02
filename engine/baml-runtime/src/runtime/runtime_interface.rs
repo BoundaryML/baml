@@ -25,7 +25,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
     }
 
     fn render_prompt(
-        &mut self,
+        &self,
         function_name: &str,
         ctx: &RuntimeContext,
         params: &HashMap<String, serde_json::Value>,
@@ -171,7 +171,7 @@ impl RuntimeConstructor for InternalBamlRuntime {
 
 impl RuntimeInterface for InternalBamlRuntime {
     async fn run_test(
-        &mut self,
+        &self,
         function_name: &str,
         test_name: &str,
         ctx: &RuntimeContext,
@@ -204,7 +204,7 @@ impl RuntimeInterface for InternalBamlRuntime {
 
         let (client, retry_policy) = self.get_client(&client_name, ctx)?;
         let prompt = client.render_prompt(&renderer, &ctx, &baml_args)?;
-        println!("Prompt: {:#?}", prompt);
+        log::debug!("Prompt: {:#?}", prompt);
 
         let response = client.call(retry_policy, ctx, &prompt).await;
 
@@ -217,7 +217,7 @@ impl RuntimeInterface for InternalBamlRuntime {
     }
 
     async fn call_function(
-        &mut self,
+        &self,
         function_name: String,
         params: HashMap<String, serde_json::Value>,
         ctx: &RuntimeContext,
