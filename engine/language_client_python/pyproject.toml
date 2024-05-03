@@ -1,5 +1,5 @@
 [project]
-name = "baml_py"
+name = "baml-py"
 version = "0.1.7"
 description = "BAML python bindings (pyproject.toml)"
 readme = "README.md"
