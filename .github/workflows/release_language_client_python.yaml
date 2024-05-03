@@ -47,10 +47,6 @@ jobs:
           python-version: "3.8"
           architecture: ${{ matrix._.runs_on == 'windows-latest' && 'x64' || null }}
 
-      - name: Install openssl build deps
-        if: matrix._.runs_on == 'ubuntu-latest'
-        run: sudo apt install libipc-run-perl
-
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
@@ -59,6 +55,13 @@ jobs:
           args: --release --out engine/language_client_python/dist --manifest-path engine/language_client_python/Cargo.toml
           sccache: "true"
           manylinux: ${{ matrix._.runs_on == 'ubuntu-latest' && 'auto' || null }}
+          before-script-linux: |
+            if command -v yum &> /dev/null; then
+                yum update -y && yum install -y perl-core openssl openssl-devel pkgconfig libatomic
+            else
+                # If we're running on debian-based system.
+                apt update -y && apt-get install -y libssl-dev openssl pkg-config
+            fi
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
