@@ -76,6 +76,7 @@ impl RuntimeInterface for BamlRuntime {
         self.inner.call_function(function_name, params, ctx).await
     }
 
+    #[cfg(feature = "disk")]
     fn generate_client(
         &self,
         client_type: &LanguageClientType,

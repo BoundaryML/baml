@@ -35,6 +35,12 @@
           "description": "Override the baml CLI path",
           "scope": "resource"
         },
+        "baml.envCommand": {
+          "type": "string",
+          "default": "env",
+          "description": "Command to run to retrieve environment variables (runs in workspace root)",
+          "scope": "resource"
+        },
         "baml.fileWatcher": {
           "scope": "window",
           "type": "boolean",

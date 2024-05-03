@@ -268,6 +268,7 @@ impl RuntimeInterface for InternalBamlRuntime {
         Ok(parsed)
     }
 
+    #[cfg(feature = "disk")]
     fn generate_client(
         &self,
         client_type: &LanguageClientType,
