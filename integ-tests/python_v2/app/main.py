@@ -4,16 +4,7 @@ from baml_py import Image
 from pydantic import BaseModel
 import time
 from baml_client import client
-
-class FakeImage(BaseModel):
-    url: str
-
-
-class ClassWithImage(BaseModel):
-    myImage: Image
-    param2: str
-    fake_image: FakeImage
-
+from baml_client.types import ClassWithImage, FakeImage
 
 async def fetch_data(url: str):
     print(f"Fetching data from {url}...")
@@ -29,14 +20,15 @@ async def main():
     b = baml_py.BamlRuntimeFfi.from_directory("../../integ-tests/baml_src")
     end_time = time.perf_counter()
     elapsed_time = end_time - start_time
-    print(f"Elapsed time: {elapsed_time:.2f} seconds")
+    print(f"-------------------- Elapsed time: {elapsed_time:.2f} seconds")
+    print("hellooooooooooooooooo")
 
     spongebob_image = Image(
         url="https://i.kym-cdn.com/photos/images/original/002/807/304/a0b.jpeg"
     )
     print("image", spongebob_image)
 
-    print("image.url", spongebob_image.url)
+    print("image.urlllllll", spongebob_image.url)
 
     orc_image = Image(
         url="https://i.kym-cdn.com/entries/icons/original/000/033/100/eht0m1qg8dk21.jpg"
@@ -53,12 +45,12 @@ async def main():
     res = await b.call_function(
         "DescribeImage2", args={"classWithImage": full_obj, "img2": orc_image}, ctx={}
     )
-    print("res-------\n", res)
+    print("res1-------\n", res)
 
     runtime = client.BamlClient.from_directory("../../integ-tests/baml_src")
-    runtime.DescribeImage2()
+    res2 = await runtime.DescribeImage2(classWithImage=full_obj, img2=orc_image)
 
-    
+    print("res2-------\n", res2)
 
 
 start_time = time.perf_counter()
