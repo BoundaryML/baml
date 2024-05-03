@@ -1,0 +1,15 @@
+import baml_py
+import pydantic
+
+from .client import BamlClient
+from . import types
+
+__all__ = [
+  "BamlClient",
+  "types",
+]
+
+{% if encoded_baml_src.len() > 0 %}
+__all__.append("b")
+b = BamlClient.from_encoded("""{{encoded_baml_src}}""")
+{% endif %}
