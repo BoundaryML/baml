@@ -369,3 +369,51 @@ test_jsonish!(test_mal_formed_json_sequence, r#"```json
     "field36": "null"
   }
 });
+
+test_jsonish!(
+  test_paulo,
+  r#"
+To effectively localize these strings for a Portuguese-speaking audience, I will focus on maintaining the original tone and meaning while ensuring that the translations sound natural and culturally appropriate. For the game title "Arcadian Atlas," I will keep it unchanged as it is a proper noun and likely a branded term within the game. For the other strings, I will adapt them to resonate with Portuguese players, using idiomatic expressions if necessary and ensuring that the sense of adventure and urgency is conveyed.
+
+For the string with the placeholder {player_name}, I will ensure that the placeholder is kept intact and that the surrounding text is grammatically correct and flows naturally in Portuguese. The name "Jonathan" will remain unchanged as it is a proper noun and recognizable in Portuguese.
+
+JSON Output:
+```
+[
+  {
+    "id": "CH1_Welcome",
+    "English": "Welcome to Arcadian Atlas",
+    "Portuguese": "Bem-vindo ao Arcadian Atlas"
+  },
+  {
+    "id": "CH1_02",
+    "English": "Arcadia is a vast land, with monsters and dangers!",
+    "Portuguese": "Arcadia é uma terra vasta, repleta de monstros e perigos!"
+  },
+  {
+    "id": "CH1_03",
+    "English": "Find him {player_name}. Find him and save Arcadia. Jonathan will save us all. It is the only way.",
+    "Portuguese": "Encontre-o {player_name}. Encontre-o e salve Arcadia. Jonathan nos salvará a todos. É a única maneira."
+  }
+]
+```
+  "#.trim(),
+  [
+    {},
+    [{
+      "id": "CH1_Welcome",
+      "English": "Welcome to Arcadian Atlas",
+      "Portuguese": "Bem-vindo ao Arcadian Atlas"
+    },
+    {
+      "id": "CH1_02",
+      "English": "Arcadia is a vast land, with monsters and dangers!",
+      "Portuguese": "Arcadia é uma terra vasta, repleta de monstros e perigos!"
+    },
+    {
+      "id": "CH1_03",
+      "English": "Find him {player_name}. Find him and save Arcadia. Jonathan will save us all. It is the only way.",
+      "Portuguese": "Encontre-o {player_name}. Encontre-o e salve Arcadia. Jonathan nos salvará a todos. É a única maneira."
+    }]
+  ]
+);

@@ -644,7 +644,7 @@ pub fn try_fix_jsonish<'a>(str: &str) -> Result<serde_json::Value> {
 
     let mut chars = str.char_indices().peekable();
     while let Some((count, c)) = chars.next() {
-        let peekable = str[count + 1..].char_indices().peekable();
+        let peekable = str[count + c.len_utf8()..].char_indices().peekable();
         match state.process_token(c, peekable) {
             Ok(increments) => {
                 for _ in 0..increments {
@@ -698,7 +698,9 @@ pub fn try_fix_jsonish<'a>(str: &str) -> Result<serde_json::Value> {
     }
 }
 
+#[derive(Debug)]
 pub struct JSONishOptions {
+    all_finding_all_json_objects: bool,
     allow_markdown_json: bool,
     allow_fixes: bool,
     allow_as_string: bool,
@@ -707,6 +709,7 @@ pub struct JSONishOptions {
 impl JSONishOptions {
     pub fn default() -> Self {
         JSONishOptions {
+            all_finding_all_json_objects: true,
             allow_markdown_json: true,
             allow_fixes: true,
             allow_as_string: true,
@@ -715,6 +718,7 @@ impl JSONishOptions {
 
     fn recursive() -> Self {
         JSONishOptions {
+            all_finding_all_json_objects: false,
             allow_markdown_json: false,
             allow_fixes: true,
             allow_as_string: false,
@@ -723,6 +727,8 @@ impl JSONishOptions {
 }
 
 pub fn parse_jsonish_value<'a>(str: &'a str, options: JSONishOptions) -> Result<serde_json::Value> {
+    println!("Parsing:\n{:?}\n-------\n{:?}\n-------", options, str);
+
     // Try naive parsing first to see if it's valid JSON
     match serde_json::from_str(str) {
         Ok(value) => return Ok(value),
@@ -734,6 +740,13 @@ pub fn parse_jsonish_value<'a>(str: &'a str, options: JSONishOptions) -> Result<
     if options.allow_markdown_json {
         // Then try searching for json-like objects recursively
         if let Ok(value) = find_in_json_markdown(str) {
+            return Ok(value);
+        }
+    }
+
+    if options.all_finding_all_json_objects {
+        // Then try searching for json-like objects recursively
+        if let Ok(value) = find_all_json_objects(str) {
             return Ok(value);
         }
     }
