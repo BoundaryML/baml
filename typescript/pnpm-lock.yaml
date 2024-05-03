@@ -315,9 +315,6 @@ importers:
       '@baml/common':
         specifier: workspace:*
         version: link:../common
-      '@gloo-ai/baml-schema-wasm-node':
-        specifier: workspace:*
-        version: link:../baml-schema-wasm-node
       '@gloo-ai/baml-schema-wasm-web':
         specifier: '*'
         version: link:../baml-schema-wasm-web
