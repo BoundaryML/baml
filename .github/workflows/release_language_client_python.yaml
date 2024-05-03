@@ -47,9 +47,9 @@ jobs:
           python-version: "3.8"
           architecture: ${{ matrix._.runs_on == 'windows-latest' && 'x64' || null }}
 
-      - name: Install openssl
+      - name: Install openssl build deps
         if: matrix._.runs_on == 'ubuntu-latest'
-        run: sudo apt install libssl-dev
+        run: sudo apt install libipc-run-perl
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
