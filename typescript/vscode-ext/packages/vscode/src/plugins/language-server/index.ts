@@ -274,6 +274,10 @@ const activateClient = (
       }
     })
 
+    client.onRequest('runtime_updated', (project_root) => {
+      WebPanelView.currentPanel?.postMessage('runtime_updated', project_root)
+    })
+
     client.onRequest('set_database', ({ rootPath, db }: { rootPath: string; db: ParserDatabase }) => {
       try {
         BamlDB.set(rootPath, db)

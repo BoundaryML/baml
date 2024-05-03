@@ -80,13 +80,22 @@ export function startServer(options?: LSOptions): void {
   // Source code: https://github.com/microsoft/vscode-languageserver-node/blob/main/server/src/common/server.ts#L1044
   const connection: Connection = getConnection(options)
   const bamlProjectManager = new BamlProjectManager((params) => {
-    if (params.type == 'diagnostic') {
-
-      params.errors.forEach(([uri, diagnostics]) => {
-        connection.sendDiagnostics({ uri, diagnostics })
-      })
-    } else {
-      connection.sendNotification('baml/message', { message: params.message, type: params.type ?? 'warn' })
+    switch (params.type) {
+      case 'runtime_updated':
+        connection.sendRequest('runtime_updated', params.root_path);
+        break;
+      case "diagnostic":
+        params.errors.forEach(([uri, diagnostics]) => {
+          connection.sendDiagnostics({ uri, diagnostics })
+        })
+        break;
+      case "error":
+      case "warn":
+      case "info":
+        connection.sendNotification('baml/message', { message: params.message, type: params.type ?? 'warn' })
+        break;
+      default:
+        console.error(`Unknown notification type ${params}`)
     }
   })
 

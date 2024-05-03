@@ -1,10 +1,14 @@
 import { URI } from 'vscode-uri'
 import BamlWasm, { WasmDiagnosticError } from '@gloo-ai/baml-schema-wasm-node'
+import { DiagnosticSeverity, Diagnostic } from 'vscode-languageserver'
 import { findTopLevelParent, gatherFiles } from '../file/fileUtils'
 import { readFile } from 'fs/promises'
-import { DiagnosticSeverity, Diagnostic } from 'vscode-languageserver'
 
-type Notify = (params: { message: string, type?: 'error' | 'warn' | 'info' } | { errors: [string, Diagnostic[]][], type: 'diagnostic' }) => void
+type Notify = (params:
+  { type: 'error' | 'warn' | 'info', message: string } |
+  { type: 'diagnostic', errors: [string, Diagnostic[]][] } |
+  { type: 'runtime_updated', root_path: string }
+) => void
 
 const uriToRootPath = (uri: URI): string => {
   // Find the "baml_src" directory in the path
@@ -172,7 +176,10 @@ class BamlProjectManager {
 
   private add_project(root_path: string, files: { [path: string]: string }) {
     const project = BamlWasm.WasmProject.new(root_path, files)
-    this.projects.set(root_path, new Project(project, new BamlWasm.WasmRuntimeContext(), this.handleMessage.bind(this)))
+    this.projects.set(root_path, new Project(project, new BamlWasm.WasmRuntimeContext(), (d) => {
+      this.handleMessage(d)
+      this.notifier({ type: 'runtime_updated', root_path })
+    }))
     return this.get_project(root_path)!
   }
 
@@ -241,7 +248,7 @@ class BamlProjectManager {
       }));
 
       if (files.length === 0) {
-        this.notifier({ message: `Empty baml_src directory found: ${rootPath}. See Output panel -> BAML Language Server for more details.` })
+        this.notifier({ type: 'warn', message: `Empty baml_src directory found: ${rootPath}. See Output panel -> BAML Language Server for more details.` })
       }
 
       if (!this.projects.has(rootPath)) {

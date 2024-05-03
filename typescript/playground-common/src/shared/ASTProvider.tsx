@@ -47,7 +47,7 @@ export const ASTContext = createContext<{
     selectedTestCase: undefined,
     showTests: true,
   },
-  setSelection: () => {},
+  setSelection: () => { },
 })
 
 function useSelectionSetup() {
@@ -159,6 +159,10 @@ export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
       const messageContent = event.data.content
 
       switch (command) {
+        case 'runtime_updated': {
+          const project_path = messageContent;
+          break
+        }
         case 'test-stdout': {
           if (messageContent === '<BAML_RESTART>') {
             setTestLog(undefined)
