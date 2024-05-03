@@ -15,6 +15,7 @@ use crate::{
 };
 use anyhow::Result;
 use dashmap::DashMap;
+use internal_baml_codegen::{GeneratorArgs, LanguageClientType};
 use internal_baml_core::{
     internal_baml_diagnostics::SourceFile,
     ir::{repr::IntermediateRepr, FunctionWalker, IRHelper},
@@ -265,6 +266,14 @@ impl RuntimeInterface for InternalBamlRuntime {
         let func = self.get_function(&function_name, ctx)?;
         let parsed = self.parse_response(&func, response, ctx)?;
         Ok(parsed)
+    }
+
+    fn generate_client(
+        &self,
+        client_type: &LanguageClientType,
+        args: &GeneratorArgs,
+    ) -> Result<()> {
+        client_type.generate_client(self.ir(), args)
     }
 
     // async fn run_test(

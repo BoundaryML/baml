@@ -1,13 +1,14 @@
 mod parse_py_type;
 mod python_types;
 
-use baml_runtime::{BamlRuntime, BamlSourceTree, RuntimeContext, RuntimeInterface};
+use baml_runtime::{BamlRuntime, RuntimeContext, RuntimeInterface};
+use internal_baml_codegen::GeneratorArgs;
 use parse_py_type::parse_py_type;
 use pyo3::exceptions::{PyRuntimeError, PyTypeError};
 use pyo3::prelude::{pyclass, pyfunction, pymethods, pymodule, PyModule, PyResult};
 
 use pyo3::types::{IntoPyDict, PyType};
-use pyo3::{create_exception, Py, PyAny, PyErr, PyObject, Python, ToPyObject};
+use pyo3::{create_exception, wrap_pymodule, Py, PyAny, PyErr, PyObject, Python, ToPyObject};
 use pythonize::depythonize;
 use serde::de;
 use serde::{Deserialize, Serialize};
@@ -134,19 +135,6 @@ impl BamlRuntimeFfi {
         })
     }
 
-    #[staticmethod]
-    fn from_encoded(encoded: String) -> PyResult<Self> {
-        let baml_src = BamlSourceTree::decode(&encoded).map_err(|e| {
-            BamlError::from_anyhow(e.context("Failed to decode compressed BAML blob"))
-        })?;
-        Ok(BamlRuntimeFfi {
-            internal: Arc::new(
-                BamlRuntime::from_file_content("<virtual>baml_src", &baml_src.files)
-                    .map_err(BamlError::from_anyhow)?,
-            ),
-        })
-    }
-
     /// TODO: ctx should be optional
     #[pyo3(signature = (function_name, args, *, ctx))]
     fn call_function(
@@ -190,32 +178,18 @@ impl BamlRuntimeFfi {
             }
         }
     }
-}
 
-fn maybe_codegen(py: Python<'_>) -> PyResult<()> {
-    let name_global = py.eval("__name__", None, None)?;
-    let name_global = name_global.extract::<String>()?;
+    fn generate_client(&self, py: Python<'_>, args: python_types::GenerateArgs) -> PyResult<()> {
+        self.internal
+            .generate_client(&args.client_type, &(&args).into())
+            .map_err(BamlError::from_anyhow)?;
 
-    if name_global != "__main__" {
-        return Ok(());
+        Ok(())
     }
-
-    let argv = py
-        .eval("import sys; sys.argv", None, None)?
-        .extract::<Vec<String>>()?;
-
-    let from_path = argv
-        .get(1)
-        .ok_or(BamlError::new_err("No --from specified"))?;
-    let to_path = argv.get(2).ok_or(BamlError::new_err("No --to specified"))?;
-
-    let runtime = BamlRuntime::from_directory(&directory).map_err(BamlError::from_anyhow)?;
-
-    Ok(())
 }
 
 #[pymodule]
-fn baml_py(py: Python<'_>, m: &PyModule) -> PyResult<()> {
+fn baml_py(_: Python<'_>, m: &PyModule) -> PyResult<()> {
     if let Err(e) = env_logger::try_init_from_env(
         env_logger::Env::new()
             .filter("BAML_LOG")
@@ -227,11 +201,7 @@ fn baml_py(py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<BamlRuntimeFfi>()?;
     m.add_class::<python_types::FunctionResult>()?;
     m.add_class::<BamlImagePy>()?;
-
-    // Generate code if we are running as a module, but never fail hard
-    if let Err(e) = maybe_codegen(py) {
-        log::warn!("Error occurred while importing baml_py: {e:#?}");
-    }
+    m.add_class::<python_types::GenerateArgs>()?;
 
     Ok(())
 }

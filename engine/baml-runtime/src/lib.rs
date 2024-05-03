@@ -26,6 +26,7 @@ pub(crate) use internal_baml_jinja::{BamlImage, ChatMessagePart, RenderedPrompt}
 #[cfg(not(feature = "internal"))]
 pub(crate) use runtime_interface::InternalRuntimeInterface;
 
+use internal_baml_codegen::{GeneratorArgs, LanguageClientType};
 pub use internal_baml_core::internal_baml_diagnostics::Diagnostics as DiagnosticsError;
 
 pub struct BamlRuntime {
@@ -78,5 +79,13 @@ impl RuntimeInterface for BamlRuntime {
         ctx: &RuntimeContext,
     ) -> Result<crate::FunctionResult> {
         self.inner.call_function(function_name, params, ctx).await
+    }
+
+    fn generate_client(
+        &self,
+        client_type: &LanguageClientType,
+        args: &GeneratorArgs,
+    ) -> Result<()> {
+        self.inner.generate_client(client_type, args)
     }
 }

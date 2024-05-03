@@ -41,34 +41,7 @@ pub fn build(baml_dir: &Option<String>) -> Result<(PathBuf, Configuration, Valid
     let ir = internal_baml_core::ir::to_ir(&parsed.db)
         .map_err(|e| e.context("Failed to build BAML (IR stage)"))?;
     for (gen, lockfile) in config.generators.iter() {
-        use internal_baml_core::configuration::GeneratorLanguage;
-
-        match (&gen.language, lockfile.version()) {
-            (GeneratorLanguage::TypeScript, _) => {
-                internal_baml_core::generate_pipeline(&parsed.db, gen, &ir, lockfile)?
-            }
-            //(GeneratorLanguage::Python, LockfileVersion::V1) => {
-            //    internal_baml_core::generate_pipeline(&parsed.db, gen, &ir, lockfile)?
-            //}
-            (GeneratorLanguage::Python, _) => {
-                internal_baml_codegen::LanguageClientFactory::PythonPydantic(
-                    internal_baml_codegen::GeneratorInstructions {
-                        project_root: gen.output_path.clone(),
-                    },
-                )
-                .generate_client(&ir)?;
-                log::info!("Generated Python client with Pydantic types");
-            }
-            (GeneratorLanguage::Ruby, _) => {
-                internal_baml_codegen::LanguageClientFactory::Ruby(
-                    internal_baml_codegen::GeneratorInstructions {
-                        project_root: gen.output_path.clone(),
-                    },
-                )
-                .generate_client(&ir)?;
-                log::info!("Generated Ruby client");
-            }
-        }
+        internal_baml_core::generate_pipeline(&parsed.db, gen, &ir, lockfile)?
     }
 
     config.generators.iter().for_each(|(_, lockfile)| {

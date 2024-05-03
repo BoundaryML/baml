@@ -11,27 +11,25 @@ mod python;
 mod ruby;
 
 #[derive(Deserialize)]
-pub struct GeneratorInstructions {
-    pub project_root: PathBuf,
+pub struct GeneratorArgs {
+    pub output_root: PathBuf,
     pub encoded_baml_files: Option<String>,
 }
 
-//#[derive(Deserialize)]
-//#[serde(tag = "language")]
-pub enum LanguageClientFactory {
-    PythonPydantic(GeneratorInstructions),
-    Ruby(GeneratorInstructions),
+#[derive(Clone, Deserialize)]
+pub enum LanguageClientType {
+    #[serde(rename = "python/pydantic")]
+    PythonPydantic,
+
+    #[serde(rename = "ruby")]
+    Ruby,
 }
 
-impl LanguageClientFactory {
-    pub fn new() -> Self {
-        todo!()
-    }
-
-    pub fn generate_client(&self, ir: &IntermediateRepr) -> Result<()> {
+impl LanguageClientType {
+    pub fn generate_client(&self, ir: &IntermediateRepr, gen: &GeneratorArgs) -> Result<()> {
         match self {
-            LanguageClientFactory::Ruby(gen) => ruby::generate(ir, gen),
-            LanguageClientFactory::PythonPydantic(gen) => python::generate(ir, gen),
+            LanguageClientType::Ruby => ruby::generate(ir, gen),
+            LanguageClientType::PythonPydantic => python::generate(ir, gen),
         }
     }
 }

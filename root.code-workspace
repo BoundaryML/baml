@@ -17,6 +17,10 @@
       "path": "typescript"
     },
     {
+      "name": "clients/python-cli",
+      "path": "clients/python-cli"
+    },
+    {
       "name": "clients/python (Python client)",
       "path": "clients/python"
     },

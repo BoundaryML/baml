@@ -38,6 +38,13 @@ pub trait RuntimeInterface {
         params: HashMap<String, serde_json::Value>,
         ctx: &RuntimeContext,
     ) -> impl std::future::Future<Output = Result<FunctionResult>> + Send;
+
+    #[cfg(feature = "disk")]
+    fn generate_client(
+        &self,
+        client_type: &internal_baml_codegen::LanguageClientType,
+        args: &internal_baml_codegen::GeneratorArgs,
+    ) -> Result<()>;
 }
 
 //

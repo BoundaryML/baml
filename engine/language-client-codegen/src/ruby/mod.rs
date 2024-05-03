@@ -28,10 +28,7 @@ struct RubyFunction {
     args: Vec<(String, String)>,
 }
 
-pub(crate) fn generate(
-    ir: &IntermediateRepr,
-    generator: &crate::GeneratorInstructions,
-) -> Result<()> {
+pub(crate) fn generate(ir: &IntermediateRepr, generator: &crate::GeneratorArgs) -> Result<()> {
     let mut collector = FileCollector::<RubyLanguageFeatures>::new();
 
     collector.add_file(
@@ -66,7 +63,7 @@ pub(crate) fn generate(
             ),
     );
 
-    collector.commit(&generator.project_root)?;
+    collector.commit(&generator.output_root)?;
 
     Ok(())
 }

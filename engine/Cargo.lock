@@ -165,7 +165,7 @@ checksum = "11e97f9c5e0ee3260caee9700ba1bb61a6fdc34d2b6786a31e018c5de5198491"
 dependencies = [
  "async-convert",
  "backoff",
- "base64 0.22.0",
+ "base64 0.22.1",
  "bytes",
  "derive_builder",
  "futures",
@@ -247,6 +247,7 @@ dependencies = [
  "baml-lib",
  "baml-runtime",
  "base64 0.13.1",
+ "base64 0.22.1",
  "check-latest",
  "chrono",
  "clap 4.5.1",
@@ -307,7 +308,7 @@ version = "0.20.0-canary.0"
 dependencies = [
  "anyhow",
  "baml-lib",
- "base64 0.13.1",
+ "base64 0.22.1",
  "colored",
  "dissimilar",
  "either",
@@ -347,6 +348,7 @@ dependencies = [
  "env_logger",
  "futures",
  "indexmap 2.2.5",
+ "internal-baml-codegen",
  "internal-baml-jinja",
  "log",
  "pyo3",
@@ -365,6 +367,7 @@ version = "0.20.0-canary.0"
 dependencies = [
  "anyhow",
  "base64 0.13.1",
+ "base64 0.22.1",
  "colored",
  "dashmap",
  "dissimilar",
@@ -373,6 +376,7 @@ dependencies = [
  "expect-test",
  "indexmap 2.2.5",
  "indoc",
+ "internal-baml-codegen",
  "internal-baml-core",
  "internal-baml-jinja",
  "js-sys",
@@ -420,9 +424,9 @@ checksum = "9d297deb1925b89f2ccc13d7635fa0714f12c87adce1c75356b39ca9b7178567"
 
 [[package]]
 name = "base64"
-version = "0.22.0"
+version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9475866fec1451be56a3c2400fd081ff546538961565ccb5b7142cbd22bc7a51"
+checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
 name = "basic-toml"
@@ -1525,6 +1529,7 @@ version = "0.20.0-canary.0"
 dependencies = [
  "anyhow",
  "askama",
+ "base64 0.22.1",
  "either",
  "env_logger",
  "internal-baml-core",
@@ -2511,7 +2516,7 @@ version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "566cafdd92868e0939d3fb961bd0dc25fcfaaed179291093b3d43e6b3150ea10"
 dependencies = [
- "base64 0.22.0",
+ "base64 0.22.1",
  "bytes",
  "futures-core",
  "futures-util",
@@ -2586,6 +2591,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "baml-runtime",
+ "base64 0.22.1",
  "env_logger",
  "futures",
  "log",
@@ -2677,7 +2683,7 @@ version = "2.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29993a25686778eb88d4189742cd713c9bce943bc54251a33509dc63cbacf73d"
 dependencies = [
- "base64 0.22.0",
+ "base64 0.22.1",
  "rustls-pki-types",
 ]
 
