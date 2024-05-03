@@ -4,7 +4,16 @@ from baml_py import Image
 from pydantic import BaseModel
 import time
 from baml_client import client
-from baml_client.types import ClassWithImage, FakeImage
+
+class FakeImage(BaseModel):
+    url: str
+
+
+class ClassWithImage(BaseModel):
+    myImage: Image
+    param2: str
+    fake_image: FakeImage
+
 
 async def fetch_data(url: str):
     print(f"Fetching data from {url}...")
@@ -12,10 +21,16 @@ async def fetch_data(url: str):
     print(f"Received data from {url}!")
     return f"Data from {url}"
 
-
+ 
 
 async def main():
+    start_time = time.perf_counter()
+
     b = baml_py.BamlRuntimeFfi.from_directory("../../integ-tests/baml_src")
+    end_time = time.perf_counter()
+    elapsed_time = end_time - start_time
+    print(f"Elapsed time: {elapsed_time:.2f} seconds")
+
     spongebob_image = Image(
         url="https://i.kym-cdn.com/photos/images/original/002/807/304/a0b.jpeg"
     )
@@ -41,8 +56,7 @@ async def main():
     print("res-------\n", res)
 
     runtime = client.BamlClient.from_directory("../../integ-tests/baml_src")
-    res2 = await runtime.DescribeImage2(classWithImage=full_obj, img2=orc_image)
-    print("res2-------\n", res2)
+    runtime.DescribeImage2()
 
     
 
