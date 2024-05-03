@@ -11,7 +11,7 @@ license-file.workspace = true
 anyhow.workspace = true
 baml-runtime = { path = "../baml-runtime", features = ["internal"] }
 baml-lib = { path = "../baml-lib/baml" }
-base64 = "0.13.0"
+base64.workspace = true
 check-latest = "1.0.2"
 chrono = "0.4.31"
 clap = { version = "4.4.6", features = ["cargo", "derive"] }
