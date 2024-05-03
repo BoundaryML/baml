@@ -55,11 +55,6 @@ impl BamlRuntime {
     pub fn internal(&self) -> &impl InternalRuntimeInterface {
         &self.inner
     }
-
-    #[cfg(feature = "internal")]
-    pub fn internal_mut(&mut self) -> &mut impl InternalRuntimeInterface {
-        &mut self.inner
-    }
 }
 
 impl RuntimeInterface for BamlRuntime {

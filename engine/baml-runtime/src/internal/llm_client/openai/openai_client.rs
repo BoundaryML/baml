@@ -8,7 +8,6 @@ use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMes
 use serde_json::json;
 
 use crate::internal::llm_client::{
-    expression_helper::to_value,
     state::LlmClientState,
     traits::{WithChat, WithClient, WithNoCompletion, WithRetryPolicy},
     LLMResponse, ModelFeatures,
@@ -25,7 +24,7 @@ fn resolve_properties(
         .map(|(k, v)| {
             Ok((
                 k.into(),
-                to_value(ctx, v).context(format!(
+                ctx.resolve_expression(v).context(format!(
                     "client {} could not resolve options.{}",
                     client.name(),
                     k

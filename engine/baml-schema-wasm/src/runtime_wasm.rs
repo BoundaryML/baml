@@ -17,6 +17,8 @@ use baml_runtime::InternalRuntimeInterface;
 
 use crate::runtime_wasm::runtime_prompt::WasmPrompt;
 
+use self::runtime_ctx::WasmRuntimeContext;
+
 #[wasm_bindgen]
 pub struct WasmProject {
     root_dir_name: String,
@@ -173,33 +175,84 @@ pub struct WasmRuntime {
 pub struct WasmFunction {
     #[wasm_bindgen(readonly)]
     pub name: String,
+    #[wasm_bindgen(readonly)]
+    pub test_cases: Vec<WasmTestCase>,
+}
+
+#[wasm_bindgen(getter_with_clone)]
+#[derive(Clone)]
+pub struct WasmTestCase {
+    #[wasm_bindgen(readonly)]
+    pub name: String,
+    #[wasm_bindgen(readonly)]
+    pub inputs: Vec<WasmParam>,
+}
+
+#[wasm_bindgen(getter_with_clone)]
+#[derive(Clone)]
+pub struct WasmParam {
+    #[wasm_bindgen(readonly)]
+    pub name: String,
+    #[wasm_bindgen(readonly)]
+    pub value: JsValue,
 }
 
 #[wasm_bindgen]
 impl WasmRuntime {
     #[wasm_bindgen]
-    pub fn list_functions(&self) -> Vec<WasmFunction> {
+    pub fn list_functions(&self, ctx: &WasmRuntimeContext) -> Vec<WasmFunction> {
         self.runtime
             .internal()
             .ir()
             .walk_functions()
             .map(|f| WasmFunction {
                 name: f.name().to_string(),
+                test_cases: f
+                    .walk_tests()
+                    .map(|tc| WasmTestCase {
+                        name: tc.name().to_string(),
+                        inputs: match tc.test_case_params(&ctx.ctx.env) {
+                            Ok(params) => params
+                                .iter()
+                                .map(|(k, v)| WasmParam {
+                                    name: k.to_string(),
+                                    value: match v {
+                                        Ok(v) => serde_wasm_bindgen::to_value(v).unwrap(),
+                                        Err(e) => {
+                                            serde_wasm_bindgen::to_value(&e.to_string()).unwrap()
+                                        }
+                                    },
+                                })
+                                .collect(),
+                            Err(_) => vec![],
+                        },
+                    })
+                    .collect(),
             })
             .collect()
     }
 
-    #[wasm_bindgen]
-    pub fn get_function(&self, name: &str) -> Option<WasmFunction> {
-        self.runtime
-            .internal()
-            .ir()
-            .walk_functions()
-            .find(|f| f.name() == name)
-            .map(|f| WasmFunction {
-                name: f.name().to_string(),
-            })
-    }
+    // #[wasm_bindgen]
+    // pub fn get_function(&self, name: &str, ctx: &WasmRuntimeContext) -> Option<WasmFunction> {
+    //     self.runtime
+    //         .internal()
+    //         .ir()
+    //         .walk_functions()
+    //         .find(|f| f.name() == name)
+    //         .map(|f| WasmFunction {
+    //             name: f.name().to_string(),
+    //             test_cases: f
+    //                 .walk_tests()
+    //                 .map(|tc| WasmTestCase {
+    //                     name: tc.name().to_string(),
+    //                     inputs: match tc.test_case().content {
+    //                         Map => vec![],
+    //                         _ => panic!(),
+    //                     },
+    //                 })
+    //                 .collect(),
+    //         })
+    // }
 }
 
 #[wasm_bindgen]
@@ -224,7 +277,7 @@ impl WasmFunction {
         }
 
         rt.runtime
-            .internal_mut()
+            .internal()
             .render_prompt(&self.name, &ctx, &params)
             .map(|p| p.into())
             .map_err(|e| wasm_bindgen::JsError::new(&e.to_string()))

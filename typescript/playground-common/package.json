@@ -102,6 +102,7 @@
     "unique-names-generator": "^4.7.1"
   },
   "peerDependencies": {
-    "@gloo-ai/baml-schema-wasm-web": "*"
+    "@gloo-ai/baml-schema-wasm-web": "*",
+    "jotai": "*"
   }
 }

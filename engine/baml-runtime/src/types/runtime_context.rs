@@ -1,5 +1,7 @@
+use anyhow::Result;
+use internal_baml_core::ir::repr::Expression;
 use serde::{self, Deserialize};
-use serde_json;
+use serde_json::{self};
 use std::collections::HashMap;
 
 #[derive(Deserialize, Debug, Default, Clone)]
@@ -29,5 +31,9 @@ impl RuntimeContext {
     pub fn with_tags(mut self, tags: HashMap<String, serde_json::Value>) -> Self {
         self.tags = tags;
         self
+    }
+
+    pub fn resolve_expression(&self, expr: &Expression) -> Result<serde_json::Value> {
+        super::expression_helper::to_value(self, expr)
     }
 }

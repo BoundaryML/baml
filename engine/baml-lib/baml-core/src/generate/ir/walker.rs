@@ -226,6 +226,22 @@ impl<'a> Walker<'a, (&'a Function, &'a TestCase)> {
         &self.item.1.elem
     }
 
+    pub fn test_case_params(
+        &self,
+        env_values: &HashMap<String, String>,
+    ) -> Result<Vec<(String, Result<serde_json::Value>)>> {
+        match self.content() {
+            Expression::Map(m) => {
+                let mut params = Vec::new();
+                for (k, v) in m {
+                    params.push((k.as_string_value(env_values)?, v.as_json(env_values)));
+                }
+                Ok(params)
+            }
+            _ => anyhow::bail!("Expected map, got {:?}", self.content()),
+        }
+    }
+
     pub fn function(&'a self) -> Walker<'a, &'a Function> {
         Walker {
             db: self.db,

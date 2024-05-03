@@ -3,7 +3,8 @@ import { useEffect, useState, useMemo, useContext } from 'react'
 import './App.css'
 import 'allotment/dist/style.css'
 
-import { ASTContext, ASTProvider } from './shared/ASTProvider'
+import { EventListener } from './baml_wasm_web/EventListener'
+// import { ASTContext, ASTProvider } from './shared/ASTProvider'
 import FunctionPanel from './shared/FunctionPanel'
 import { FunctionSelector } from './shared/Selectors'
 import { VSCodeLink } from '@vscode/webview-ui-toolkit/react'
@@ -15,14 +16,14 @@ import { useSelections } from './shared/hooks'
 import { ProjectToggle } from './shared/ProjectPanel'
 
 const TestToggle = () => {
-  const { setSelection } = useContext(ASTContext)
+  // const { setSelection } = useContext(ASTContext)
   const { showTests } = useSelections()
 
   return (
     <Button
       variant="outline"
       className="p-1 text-xs w-fit h-fit border-vscode-textSeparator-foreground"
-      onClick={() => setSelection(undefined, undefined, undefined, undefined, !showTests)}
+      onClick={() => { }}
     >
       {showTests ? 'Hide tests' : 'Show tests'}
     </Button>
@@ -30,11 +31,9 @@ const TestToggle = () => {
 }
 
 function App() {
-  const [selected, setSelected] = useState<boolean>(true)
-
   return (
     <CustomErrorBoundary>
-      <ASTProvider>
+      <EventListener>
         <div className="absolute z-10 flex flex-col items-end gap-1 right-1 top-2 text-end">
           <TestToggle />
           <VSCodeLink href="https://docs.boundaryml.com">Docs</VSCodeLink>
@@ -44,7 +43,7 @@ function App() {
           <Separator className="bg-vscode-textSeparator-foreground" />
           <FunctionPanel />
         </div>
-      </ASTProvider>
+      </EventListener>
     </CustomErrorBoundary>
   )
 }
