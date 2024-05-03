@@ -21,18 +21,27 @@ class Image:
     def __init__(
         self, url: Optional[str] = None, base64: Optional[str] = None
     ) -> None: ...
+
     @property
     def url(self) -> Optional[str]: ...
+
     @url.setter
     def url(self, value: Optional[str]) -> None: ...
+
     @property
     def base64(self) -> Optional[str]: ...
+
     @base64.setter
     def base64(self, value: Optional[str]) -> None: ...
+
 
 class BamlRuntimeFfi:
     @staticmethod
     def from_directory(directory: str) -> BamlRuntimeFfi: ...
+
+    @staticmethod
+    def from_encoded(encoded: str) -> BamlRuntimeFfi: ...
+
     async def call_function(
         self,
         function_name: str,

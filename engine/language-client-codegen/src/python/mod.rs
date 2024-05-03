@@ -21,7 +21,16 @@ struct PythonFunction {
     args: Vec<(String, String)>,
 }
 
-pub(crate) fn generate(ir: &IntermediateRepr, project_root: &Path) -> Result<()> {
+#[derive(askama::Template)]
+#[template(path = "__init__.py.j2", escape = "none")]
+struct PythonInit {
+    encoded_baml_src: String,
+}
+
+pub(crate) fn generate(
+    ir: &IntermediateRepr,
+    generator: &crate::GeneratorInstructions,
+) -> Result<()> {
     let mut collector = FileCollector::<PythonLanguageFeatures>::new();
 
     collector.add_file(
@@ -57,17 +66,26 @@ pub(crate) fn generate(ir: &IntermediateRepr, project_root: &Path) -> Result<()>
     );
 
     collector.add_file(
-        "baml.lock",
-        serde_json::to_string(&serde_json::json!({
-            "version": 2,
-            "content": {
-                "cli_version": "0.20.0-canary.0",
-                "client_version": null,
-            }
-        }))?,
+        "__init__.py",
+        PythonInit {
+            encoded_baml_src: generator
+                .encoded_baml_files
+                .clone()
+                .unwrap_or("".to_string()),
+        }
+        .render()
+        .map_or_else(
+            |e| {
+                format!(
+                    "/*\n\n{:?}\n\n*/",
+                    anyhow::Error::new(e).context("Error while rendering client.py")
+                )
+            },
+            |r| r,
+        ),
     );
 
-    collector.commit(project_root)?;
+    collector.commit(&generator.project_root)?;
 
     Ok(())
 }
