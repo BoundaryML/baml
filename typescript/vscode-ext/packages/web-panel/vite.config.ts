@@ -1,6 +1,6 @@
-import wasmPack from 'vite-plugin-wasm-pack';
-import topLevelAwait from "vite-plugin-top-level-await";
-import wasm from 'vite-plugin-wasm'
+//import wasmPack from 'vite-plugin-wasm-pack';
+//import topLevelAwait from "vite-plugin-top-level-await";
+//import wasm from 'vite-plugin-wasm'
 
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
@@ -12,9 +12,9 @@ console.log('isWatchMode', isWatchMode);
 export default defineConfig({
   plugins: [
     react(),
-    wasm(),
-    wasmPack("../../../../engine/baml-schema-wasm"),
-    topLevelAwait()
+    //wasm(),
+    //wasmPack("../../../../engine/baml-schema-wasm"),
+    //topLevelAwait()
   ],
   resolve: {
     alias: {
