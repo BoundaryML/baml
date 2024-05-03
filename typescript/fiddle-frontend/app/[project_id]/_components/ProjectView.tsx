@@ -323,34 +323,39 @@ const DummyHydrate = ({ files }: { files: EditorFile[] }) => {
 }
 
 const PlaygroundView = () => {
-  const [parserDb] = useAtom(currentParserDbAtom)
-  usePlaygroundListener()
-  const testRunOutput = useAtomValue(testRunOutputAtom)
+  // const [parserDb] = useAtom(currentParserDbAtom)
+  // usePlaygroundListener()
+  // const testRunOutput = useAtomValue(testRunOutputAtom)
 
-  useEffect(() => {
-    if (!parserDb) {
-      return
-    }
-    const newParserDb = { ...parserDb }
+  // useEffect(() => {
+  //   if (!parserDb) {
+  //     return
+  //   }
+  //   const newParserDb = { ...parserDb }
 
-    window.postMessage({
-      command: 'setDb',
-      content: [[BAML_DIR, newParserDb]],
-    })
-  }, [parserDb])
+  //   window.postMessage({
+  //     command: 'setDb',
+  //     content: [[BAML_DIR, newParserDb]],
+  //   })
+  // }, [parserDb])
 
-  useEffect(() => {
-    if (testRunOutput) {
-      window.postMessage({
-        command: 'test-results',
-        content: testRunOutput.testState,
-      })
-      window.postMessage({
-        command: 'test-stdout',
-        content: testRunOutput.outputLogs.join('\n'),
-      })
-    }
-  }, [testRunOutput])
+  // useEffect(() => {
+  //   if (testRunOutput) {
+  //     window.postMessage({
+  //       command: 'test-results',
+  //       content: testRunOutput.testState,
+  //     })
+  //     window.postMessage({
+  //       command: 'test-stdout',
+  //       content: testRunOutput.outputLogs.join('\n'),
+  //     })
+  //   }
+  // }, [testRunOutput])
+  return <>
+    <CustomErrorBoundary>
+      Hi!
+    </CustomErrorBoundary>
+  </>
 
   return (
     <>

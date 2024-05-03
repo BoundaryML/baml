@@ -2,9 +2,21 @@ import { useEffect } from "react";
 import BamlProjectManager from "./project_manager";
 import { atom, useSetAtom, useAtomValue, useAtom } from 'jotai';
 import { atomFamily } from 'jotai/utils';
-import { WasmProject, WasmRuntime, WasmRuntimeContext, version as RuntimeVersion } from "@gloo-ai/baml-schema-wasm-web";
-import { VSCodeButton } from "@vscode/webview-ui-toolkit/react";
 import CustomErrorBoundary from "../utils/ErrorFallback";
+import { VSCodeButton } from "@vscode/webview-ui-toolkit/react";
+import { WasmProject, WasmRuntimeContext, WasmRuntime } from "@gloo-ai/baml-schema-wasm-web";
+
+const wasm_loader = null;
+const wasm = async (): Promise<typeof import("@gloo-ai/baml-schema-wasm-web")> => {
+  if (!wasm_loader) {
+    const wasm = await import("@gloo-ai/baml-schema-wasm-web");
+    return wasm;
+  }
+  return wasm_loader;
+}
+
+// const wasm = await import("@gloo-ai/baml-schema-wasm-web");
+// const { WasmProject, WasmRuntime, WasmRuntimeContext, version: RuntimeVersion } = wasm;
 
 type Selection = {
   project?: string;
@@ -18,13 +30,21 @@ type ASTContextType = {
   selected: Selection
 }
 
-
+const runtimeCtxRaw = atom<WasmRuntimeContext | null>(null)
+const runtimeCtx = atom((get) => {
+  let ctx = get(runtimeCtxRaw);
+  if (!ctx) {
+    throw new Error("Runtime context not initialized");
+  }
+  return ctx;
+}, (get, set, ctx: WasmRuntimeContext) => {
+  set(runtimeCtxRaw, ctx);
+});
 
 const availableProjectsAtom = atom<string[]>([]);
 const selectedProjectAtom = atom<string | null>(null);
 const selectedFunctionAtom = atom<string | null>(null);
 const selectedTestCaseAtom = atom<string | null>(null);
-const runtimeCtx = atom(new WasmRuntimeContext())
 const filesAtom = atom<Record<string, string>>({});
 const projectAtom = atom<WasmProject | null>(null);
 const runtimesAtom = atom<{
@@ -45,7 +65,7 @@ const removeProjectAtom = atom(null, (get, set, root_path: string) => {
   set(availableProjectsAtom, availableProjects.filter(p => p !== root_path));
 });
 
-const updateFileAtom = atom(null, (get, set, { root_path, files }: { root_path: string, files: { name: string, content: string | undefined }[] }) => {
+const updateFileAtom = atom(null, async (get, set, { root_path, files }: { root_path: string, files: { name: string, content: string | undefined }[] }) => {
   let projFiles = get(projectFilesAtom(root_path));
   for (let file of files) {
     if (file.content === undefined) {
@@ -61,7 +81,7 @@ const updateFileAtom = atom(null, (get, set, { root_path, files }: { root_path: 
       project.update_file(file.name, file.content);
     }
   } else {
-    project = WasmProject.new(root_path, files);
+    project = (await wasm()).WasmProject.new(root_path, files);
   }
   let rt = undefined;
   try {
@@ -93,7 +113,9 @@ const selectedRuntimeAtom = atom((get) => {
   return runtime.current_runtime ?? runtime.last_successful_runtime;
 });
 
-export const versionAtom = atom((get) => RuntimeVersion());
+export const versionAtom = atom(async (get) => {
+  (await wasm()).version();
+});
 
 export const availableFunctionsAtom = atom((get) => {
   let runtime = get(selectedRuntimeAtom);
