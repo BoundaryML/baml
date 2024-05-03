@@ -26,17 +26,13 @@ OutputType = TypeVar('OutputType')
 class BamlOutputWrapper(BaseModel, Generic[OutputType]):
     wrapped: OutputType
 
-class BamlClient:
+class BamlOutput_ClassifyMessage:
     __runtime: baml_py.BamlRuntimeFfi
-
-    @staticmethod
-    def from_directory(path: str) -> "BamlClient":
-      return BamlClient(runtime=baml_py.BamlRuntimeFfi.from_directory(path))
 
     def __init__(self, runtime: baml_py.BamlRuntimeFfi):
       self.__runtime = runtime
 
-    async def ClassifyMessage(
+    async def __call__(
         self,
         input: str
     ) -> types.Category:
@@ -57,7 +53,25 @@ class BamlClient:
           )
         ) from e
 
-    async def ClassifyMessage2(
+    async def unstable(
+        self,
+        input: str
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "ClassifyMessage",
+        {
+          "input": input,
+        },
+        ctx={}
+      )
+
+class BamlOutput_ClassifyMessage2:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
         self,
         input: str
     ) -> types.Category:
@@ -78,7 +92,25 @@ class BamlClient:
           )
         ) from e
 
-    async def ClassifyMessage3(
+    async def unstable(
+        self,
+        input: str
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "ClassifyMessage2",
+        {
+          "input": input,
+        },
+        ctx={}
+      )
+
+class BamlOutput_ClassifyMessage3:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
         self,
         input: str
     ) -> types.Category:
@@ -99,55 +131,181 @@ class BamlClient:
           )
         ) from e
 
-    def DescribeImage(
+    async def unstable(
+        self,
+        input: str
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "ClassifyMessage3",
+        {
+          "input": input,
+        },
+        ctx={}
+      )
+
+class BamlOutput_DescribeImage:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
         self,
         img: Image
-    )
-      raw = self.__runtime.call_function(
-        function_name: "DescribeImage",
-        args: {
-          "img" => img,
-        }
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "DescribeImage",
+        {
+          "img": img,
+        },
+        ctx={}
       )
-      Baml::convert_to(string).from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[str].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for DescribeImage:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
-    def DescribeImage2(
+    async def unstable(
         self,
-        classWithImage: "ClassWithImage",img2: Image
-    )
-      raw = self.__runtime.call_function(
-        function_name: "DescribeImage2",
-        args: {
-          "classWithImage" => classWithImage,"img2" => img2,
-        }
+        img: Image
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "DescribeImage",
+        {
+          "img": img,
+        },
+        ctx={}
       )
-      Baml::convert_to(string).from(raw.parsed)
 
-    def DescribeImage3(
+class BamlOutput_DescribeImage2:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
         self,
-        classWithImage: "ClassWithImage",img2: Image
-    )
-      raw = self.__runtime.call_function(
-        function_name: "DescribeImage3",
-        args: {
-          "classWithImage" => classWithImage,"img2" => img2,
-        }
+        classWithImage: types.ClassWithImage,img2: Image
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "DescribeImage2",
+        {
+          "classWithImage": classWithImage,"img2": img2,
+        },
+        ctx={}
       )
-      Baml::convert_to(string).from(raw.parsed)
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[str].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for DescribeImage2:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
 
-    def DescribeImage4(
+    async def unstable(
         self,
-        classWithImage: "ClassWithImage",img2: Image
-    )
-      raw = self.__runtime.call_function(
-        function_name: "DescribeImage4",
-        args: {
-          "classWithImage" => classWithImage,"img2" => img2,
-        }
+        classWithImage: types.ClassWithImage,img2: Image
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "DescribeImage2",
+        {
+          "classWithImage": classWithImage,"img2": img2,
+        },
+        ctx={}
       )
-      Baml::convert_to(string).from(raw.parsed)
 
-    def ExtractNames(
+class BamlOutput_DescribeImage3:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
+        self,
+        classWithImage: types.ClassWithImage,img2: Image
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "DescribeImage3",
+        {
+          "classWithImage": classWithImage,"img2": img2,
+        },
+        ctx={}
+      )
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[str].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for DescribeImage3:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
+
+    async def unstable(
+        self,
+        classWithImage: types.ClassWithImage,img2: Image
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "DescribeImage3",
+        {
+          "classWithImage": classWithImage,"img2": img2,
+        },
+        ctx={}
+      )
+
+class BamlOutput_DescribeImage4:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
+        self,
+        classWithImage: types.ClassWithImage,img2: Image
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "DescribeImage4",
+        {
+          "classWithImage": classWithImage,"img2": img2,
+        },
+        ctx={}
+      )
+      parsed = raw.parsed()
+      try:
+        return BamlOutputWrapper[str].model_validate(obj={'wrapped': parsed}).wrapped
+      except ValidationError as e:
+        raise TypeError(
+          "Internal BAML error while mapping the FFI output type for DescribeImage4:\n{}".format(
+            pprint.pformat(parsed)
+          )
+        ) from e
+
+    async def unstable(
+        self,
+        classWithImage: types.ClassWithImage,img2: Image
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "DescribeImage4",
+        {
+          "classWithImage": classWithImage,"img2": img2,
+        },
+        ctx={}
+      )
+
+class BamlOutput_ExtractNames:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
         self,
         input: str
     ) -> List[str]:
@@ -168,7 +326,25 @@ class BamlClient:
           )
         ) from e
 
-    async def ExtractResume(
+    async def unstable(
+        self,
+        input: str
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "ExtractNames",
+        {
+          "input": input,
+        },
+        ctx={}
+      )
+
+class BamlOutput_ExtractResume:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
         self,
         resume: str
     ) -> types.Resume:
@@ -189,7 +365,25 @@ class BamlClient:
           )
         ) from e
 
-    async def ExtractResume2(
+    async def unstable(
+        self,
+        resume: str
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "ExtractResume",
+        {
+          "resume": resume,
+        },
+        ctx={}
+      )
+
+class BamlOutput_ExtractResume2:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
         self,
         resume: str
     ) -> types.Resume:
@@ -210,7 +404,25 @@ class BamlClient:
           )
         ) from e
 
-    async def FnClassOptionalOutput2_V2(
+    async def unstable(
+        self,
+        resume: str
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "ExtractResume2",
+        {
+          "resume": resume,
+        },
+        ctx={}
+      )
+
+class BamlOutput_FnClassOptionalOutput2_V2:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
         self,
         input: str
     ) -> Optional[types.ClassOptionalOutput2v2]:
@@ -231,7 +443,25 @@ class BamlClient:
           )
         ) from e
 
-    async def FnOutputClassWithEnum_V2(
+    async def unstable(
+        self,
+        input: str
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "FnClassOptionalOutput2_V2",
+        {
+          "input": input,
+        },
+        ctx={}
+      )
+
+class BamlOutput_FnOutputClassWithEnum_V2:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
         self,
         input: str
     ) -> types.TestClassWithEnum2:
@@ -252,7 +482,25 @@ class BamlClient:
           )
         ) from e
 
-    async def GetDataType(
+    async def unstable(
+        self,
+        input: str
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "FnOutputClassWithEnum_V2",
+        {
+          "input": input,
+        },
+        ctx={}
+      )
+
+class BamlOutput_GetDataType:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
         self,
         text: str
     ) -> types.RaysData:
@@ -273,7 +521,25 @@ class BamlClient:
           )
         ) from e
 
-    async def GetOrderInfo(
+    async def unstable(
+        self,
+        text: str
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "GetDataType",
+        {
+          "text": text,
+        },
+        ctx={}
+      )
+
+class BamlOutput_GetOrderInfo:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
         self,
         email: types.Email
     ) -> types.OrderInfo:
@@ -294,7 +560,25 @@ class BamlClient:
           )
         ) from e
 
-    async def GetQuery(
+    async def unstable(
+        self,
+        email: types.Email
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "GetOrderInfo",
+        {
+          "email": email,
+        },
+        ctx={}
+      )
+
+class BamlOutput_GetQuery:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
         self,
         query: str
     ) -> types.SearchParams:
@@ -315,7 +599,25 @@ class BamlClient:
           )
         ) from e
 
-    async def OptionalTest_Function_V2(
+    async def unstable(
+        self,
+        query: str
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "GetQuery",
+        {
+          "query": query,
+        },
+        ctx={}
+      )
+
+class BamlOutput_OptionalTest_Function_V2:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
         self,
         input: str
     ) -> List[Optional[types.OptionalTest_ReturnTypev2]]:
@@ -336,7 +638,25 @@ class BamlClient:
           )
         ) from e
 
-    async def V2_FnClassOptional(
+    async def unstable(
+        self,
+        input: str
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "OptionalTest_Function_V2",
+        {
+          "input": input,
+        },
+        ctx={}
+      )
+
+class BamlOutput_V2_FnClassOptional:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
         self,
         input: Optional[types.OptionalClassv2]
     ) -> str:
@@ -357,7 +677,25 @@ class BamlClient:
           )
         ) from e
 
-    async def V2_FnClassOptional2(
+    async def unstable(
+        self,
+        input: Optional[types.OptionalClassv2]
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "V2_FnClassOptional",
+        {
+          "input": input,
+        },
+        ctx={}
+      )
+
+class BamlOutput_V2_FnClassOptional2:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
         self,
         input: types.ClassOptionalFieldsv2
     ) -> str:
@@ -378,7 +716,25 @@ class BamlClient:
           )
         ) from e
 
-    async def V2_FnEnumListOutput(
+    async def unstable(
+        self,
+        input: types.ClassOptionalFieldsv2
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "V2_FnClassOptional2",
+        {
+          "input": input,
+        },
+        ctx={}
+      )
+
+class BamlOutput_V2_FnEnumListOutput:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
         self,
         input: str
     ) -> List[types.EnumOutput]:
@@ -399,7 +755,25 @@ class BamlClient:
           )
         ) from e
 
-    async def V2_FnEnumOutput(
+    async def unstable(
+        self,
+        input: str
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "V2_FnEnumListOutput",
+        {
+          "input": input,
+        },
+        ctx={}
+      )
+
+class BamlOutput_V2_FnEnumOutput:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
         self,
         input: str
     ) -> types.EnumOutput2:
@@ -420,7 +794,25 @@ class BamlClient:
           )
         ) from e
 
-    async def V2_FnNamedArgsSingleStringOptional(
+    async def unstable(
+        self,
+        input: str
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "V2_FnEnumOutput",
+        {
+          "input": input,
+        },
+        ctx={}
+      )
+
+class BamlOutput_V2_FnNamedArgsSingleStringOptional:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
         self,
         myString: Optional[str]
     ) -> str:
@@ -441,7 +833,25 @@ class BamlClient:
           )
         ) from e
 
-    async def V2_FnOutputBool(
+    async def unstable(
+        self,
+        myString: Optional[str]
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "V2_FnNamedArgsSingleStringOptional",
+        {
+          "myString": myString,
+        },
+        ctx={}
+      )
+
+class BamlOutput_V2_FnOutputBool:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
         self,
         input: str
     ) -> bool:
@@ -462,7 +872,25 @@ class BamlClient:
           )
         ) from e
 
-    async def V2_FnOutputClass(
+    async def unstable(
+        self,
+        input: str
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "V2_FnOutputBool",
+        {
+          "input": input,
+        },
+        ctx={}
+      )
+
+class BamlOutput_V2_FnOutputClass:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
         self,
         input: str
     ) -> types.TestOutputClass2:
@@ -483,7 +911,25 @@ class BamlClient:
           )
         ) from e
 
-    async def V2_FnOutputClassList(
+    async def unstable(
+        self,
+        input: str
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "V2_FnOutputClass",
+        {
+          "input": input,
+        },
+        ctx={}
+      )
+
+class BamlOutput_V2_FnOutputClassList:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
         self,
         input: str
     ) -> List[types.TestOutputClass]:
@@ -504,7 +950,25 @@ class BamlClient:
           )
         ) from e
 
-    async def V2_FnOutputStringList(
+    async def unstable(
+        self,
+        input: str
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "V2_FnOutputClassList",
+        {
+          "input": input,
+        },
+        ctx={}
+      )
+
+class BamlOutput_V2_FnOutputStringList:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
         self,
         input: str
     ) -> List[str]:
@@ -525,7 +989,25 @@ class BamlClient:
           )
         ) from e
 
-    async def V2_FnStringOptional(
+    async def unstable(
+        self,
+        input: str
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "V2_FnOutputStringList",
+        {
+          "input": input,
+        },
+        ctx={}
+      )
+
+class BamlOutput_V2_FnStringOptional:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
         self,
         input: Optional[str]
     ) -> str:
@@ -546,7 +1028,25 @@ class BamlClient:
           )
         ) from e
 
-    async def V2_FnTestNamedArgsSingleEnum(
+    async def unstable(
+        self,
+        input: Optional[str]
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "V2_FnStringOptional",
+        {
+          "input": input,
+        },
+        ctx={}
+      )
+
+class BamlOutput_V2_FnTestNamedArgsSingleEnum:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
         self,
         myArg: types.NamedArgsSingleEnum2
     ) -> str:
@@ -567,7 +1067,25 @@ class BamlClient:
           )
         ) from e
 
-    async def V2_TestFnNamedArgsSingleBool(
+    async def unstable(
+        self,
+        myArg: types.NamedArgsSingleEnum2
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "V2_FnTestNamedArgsSingleEnum",
+        {
+          "myArg": myArg,
+        },
+        ctx={}
+      )
+
+class BamlOutput_V2_TestFnNamedArgsSingleBool:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
         self,
         myBool: bool
     ) -> str:
@@ -588,7 +1106,25 @@ class BamlClient:
           )
         ) from e
 
-    async def V2_TestFnNamedArgsSingleClass(
+    async def unstable(
+        self,
+        myBool: bool
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "V2_TestFnNamedArgsSingleBool",
+        {
+          "myBool": myBool,
+        },
+        ctx={}
+      )
+
+class BamlOutput_V2_TestFnNamedArgsSingleClass:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
         self,
         myArg: types.NamedArgsSingleClass2
     ) -> str:
@@ -609,7 +1145,25 @@ class BamlClient:
           )
         ) from e
 
-    async def V2_TestFnNamedArgsSingleEnumList(
+    async def unstable(
+        self,
+        myArg: types.NamedArgsSingleClass2
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "V2_TestFnNamedArgsSingleClass",
+        {
+          "myArg": myArg,
+        },
+        ctx={}
+      )
+
+class BamlOutput_V2_TestFnNamedArgsSingleEnumList:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
         self,
         myArg: List[types.NamedArgsSingleEnumList2]
     ) -> str:
@@ -630,7 +1184,25 @@ class BamlClient:
           )
         ) from e
 
-    async def V2_TestFnNamedArgsSingleFloat(
+    async def unstable(
+        self,
+        myArg: List[types.NamedArgsSingleEnumList2]
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "V2_TestFnNamedArgsSingleEnumList",
+        {
+          "myArg": myArg,
+        },
+        ctx={}
+      )
+
+class BamlOutput_V2_TestFnNamedArgsSingleFloat:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
         self,
         myFloat: float
     ) -> str:
@@ -651,7 +1223,25 @@ class BamlClient:
           )
         ) from e
 
-    async def V2_TestFnNamedArgsSingleInt(
+    async def unstable(
+        self,
+        myFloat: float
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "V2_TestFnNamedArgsSingleFloat",
+        {
+          "myFloat": myFloat,
+        },
+        ctx={}
+      )
+
+class BamlOutput_V2_TestFnNamedArgsSingleInt:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
         self,
         myInt: int
     ) -> str:
@@ -672,7 +1262,25 @@ class BamlClient:
           )
         ) from e
 
-    async def V2_TestFnNamedArgsSingleString(
+    async def unstable(
+        self,
+        myInt: int
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "V2_TestFnNamedArgsSingleInt",
+        {
+          "myInt": myInt,
+        },
+        ctx={}
+      )
+
+class BamlOutput_V2_TestFnNamedArgsSingleString:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
         self,
         myString: str
     ) -> str:
@@ -693,7 +1301,25 @@ class BamlClient:
           )
         ) from e
 
-    async def V2_TestFnNamedArgsSingleStringArray(
+    async def unstable(
+        self,
+        myString: str
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "V2_TestFnNamedArgsSingleString",
+        {
+          "myString": myString,
+        },
+        ctx={}
+      )
+
+class BamlOutput_V2_TestFnNamedArgsSingleStringArray:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
         self,
         myStringArray: List[str]
     ) -> str:
@@ -714,7 +1340,25 @@ class BamlClient:
           )
         ) from e
 
-    async def V2_TestFnNamedArgsSingleStringList(
+    async def unstable(
+        self,
+        myStringArray: List[str]
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "V2_TestFnNamedArgsSingleStringArray",
+        {
+          "myStringArray": myStringArray,
+        },
+        ctx={}
+      )
+
+class BamlOutput_V2_TestFnNamedArgsSingleStringList:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
         self,
         myArg: List[types.NamedArgsSingleClassList2]
     ) -> str:
@@ -735,7 +1379,25 @@ class BamlClient:
           )
         ) from e
 
-    async def V2_TestFnNamedArgsSyntax(
+    async def unstable(
+        self,
+        myArg: List[types.NamedArgsSingleClassList2]
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "V2_TestFnNamedArgsSingleStringList",
+        {
+          "myArg": myArg,
+        },
+        ctx={}
+      )
+
+class BamlOutput_V2_TestFnNamedArgsSyntax:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
         self,
         var: str,var_with_underscores: str
     ) -> str:
@@ -756,7 +1418,25 @@ class BamlClient:
           )
         ) from e
 
-    async def V2_UnionTest_Function(
+    async def unstable(
+        self,
+        var: str,var_with_underscores: str
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "V2_TestFnNamedArgsSyntax",
+        {
+          "var": var,"var_with_underscores": var_with_underscores,
+        },
+        ctx={}
+      )
+
+class BamlOutput_V2_UnionTest_Function:
+    __runtime: baml_py.BamlRuntimeFfi
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+
+    async def __call__(
         self,
         input: Union[str, bool]
     ) -> Union[types.UnionTest_ReturnTypev2, types.DataType]:
@@ -777,4 +1457,100 @@ class BamlClient:
           )
         ) from e
 
-    
+    async def unstable(
+        self,
+        input: Union[str, bool]
+    ) -> baml_py.FunctionResult:
+      return await self.__runtime.call_function(
+        "V2_UnionTest_Function",
+        {
+          "input": input,
+        },
+        ctx={}
+      )
+
+
+
+class BamlClient:
+    __runtime: baml_py.BamlRuntimeFfi
+    ClassifyMessage: BamlOutput_ClassifyMessage
+    ClassifyMessage2: BamlOutput_ClassifyMessage2
+    ClassifyMessage3: BamlOutput_ClassifyMessage3
+    DescribeImage: BamlOutput_DescribeImage
+    DescribeImage2: BamlOutput_DescribeImage2
+    DescribeImage3: BamlOutput_DescribeImage3
+    DescribeImage4: BamlOutput_DescribeImage4
+    ExtractNames: BamlOutput_ExtractNames
+    ExtractResume: BamlOutput_ExtractResume
+    ExtractResume2: BamlOutput_ExtractResume2
+    FnClassOptionalOutput2_V2: BamlOutput_FnClassOptionalOutput2_V2
+    FnOutputClassWithEnum_V2: BamlOutput_FnOutputClassWithEnum_V2
+    GetDataType: BamlOutput_GetDataType
+    GetOrderInfo: BamlOutput_GetOrderInfo
+    GetQuery: BamlOutput_GetQuery
+    OptionalTest_Function_V2: BamlOutput_OptionalTest_Function_V2
+    V2_FnClassOptional: BamlOutput_V2_FnClassOptional
+    V2_FnClassOptional2: BamlOutput_V2_FnClassOptional2
+    V2_FnEnumListOutput: BamlOutput_V2_FnEnumListOutput
+    V2_FnEnumOutput: BamlOutput_V2_FnEnumOutput
+    V2_FnNamedArgsSingleStringOptional: BamlOutput_V2_FnNamedArgsSingleStringOptional
+    V2_FnOutputBool: BamlOutput_V2_FnOutputBool
+    V2_FnOutputClass: BamlOutput_V2_FnOutputClass
+    V2_FnOutputClassList: BamlOutput_V2_FnOutputClassList
+    V2_FnOutputStringList: BamlOutput_V2_FnOutputStringList
+    V2_FnStringOptional: BamlOutput_V2_FnStringOptional
+    V2_FnTestNamedArgsSingleEnum: BamlOutput_V2_FnTestNamedArgsSingleEnum
+    V2_TestFnNamedArgsSingleBool: BamlOutput_V2_TestFnNamedArgsSingleBool
+    V2_TestFnNamedArgsSingleClass: BamlOutput_V2_TestFnNamedArgsSingleClass
+    V2_TestFnNamedArgsSingleEnumList: BamlOutput_V2_TestFnNamedArgsSingleEnumList
+    V2_TestFnNamedArgsSingleFloat: BamlOutput_V2_TestFnNamedArgsSingleFloat
+    V2_TestFnNamedArgsSingleInt: BamlOutput_V2_TestFnNamedArgsSingleInt
+    V2_TestFnNamedArgsSingleString: BamlOutput_V2_TestFnNamedArgsSingleString
+    V2_TestFnNamedArgsSingleStringArray: BamlOutput_V2_TestFnNamedArgsSingleStringArray
+    V2_TestFnNamedArgsSingleStringList: BamlOutput_V2_TestFnNamedArgsSingleStringList
+    V2_TestFnNamedArgsSyntax: BamlOutput_V2_TestFnNamedArgsSyntax
+    V2_UnionTest_Function: BamlOutput_V2_UnionTest_Function
+
+    @staticmethod
+    def from_directory(path: str) -> "BamlClient":
+      return BamlClient(runtime=baml_py.BamlRuntimeFfi.from_directory(path))
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+      self.__runtime = runtime
+      self.ClassifyMessage = BamlOutput_ClassifyMessage(self.__runtime)
+      self.ClassifyMessage2 = BamlOutput_ClassifyMessage2(self.__runtime)
+      self.ClassifyMessage3 = BamlOutput_ClassifyMessage3(self.__runtime)
+      self.DescribeImage = BamlOutput_DescribeImage(self.__runtime)
+      self.DescribeImage2 = BamlOutput_DescribeImage2(self.__runtime)
+      self.DescribeImage3 = BamlOutput_DescribeImage3(self.__runtime)
+      self.DescribeImage4 = BamlOutput_DescribeImage4(self.__runtime)
+      self.ExtractNames = BamlOutput_ExtractNames(self.__runtime)
+      self.ExtractResume = BamlOutput_ExtractResume(self.__runtime)
+      self.ExtractResume2 = BamlOutput_ExtractResume2(self.__runtime)
+      self.FnClassOptionalOutput2_V2 = BamlOutput_FnClassOptionalOutput2_V2(self.__runtime)
+      self.FnOutputClassWithEnum_V2 = BamlOutput_FnOutputClassWithEnum_V2(self.__runtime)
+      self.GetDataType = BamlOutput_GetDataType(self.__runtime)
+      self.GetOrderInfo = BamlOutput_GetOrderInfo(self.__runtime)
+      self.GetQuery = BamlOutput_GetQuery(self.__runtime)
+      self.OptionalTest_Function_V2 = BamlOutput_OptionalTest_Function_V2(self.__runtime)
+      self.V2_FnClassOptional = BamlOutput_V2_FnClassOptional(self.__runtime)
+      self.V2_FnClassOptional2 = BamlOutput_V2_FnClassOptional2(self.__runtime)
+      self.V2_FnEnumListOutput = BamlOutput_V2_FnEnumListOutput(self.__runtime)
+      self.V2_FnEnumOutput = BamlOutput_V2_FnEnumOutput(self.__runtime)
+      self.V2_FnNamedArgsSingleStringOptional = BamlOutput_V2_FnNamedArgsSingleStringOptional(self.__runtime)
+      self.V2_FnOutputBool = BamlOutput_V2_FnOutputBool(self.__runtime)
+      self.V2_FnOutputClass = BamlOutput_V2_FnOutputClass(self.__runtime)
+      self.V2_FnOutputClassList = BamlOutput_V2_FnOutputClassList(self.__runtime)
+      self.V2_FnOutputStringList = BamlOutput_V2_FnOutputStringList(self.__runtime)
+      self.V2_FnStringOptional = BamlOutput_V2_FnStringOptional(self.__runtime)
+      self.V2_FnTestNamedArgsSingleEnum = BamlOutput_V2_FnTestNamedArgsSingleEnum(self.__runtime)
+      self.V2_TestFnNamedArgsSingleBool = BamlOutput_V2_TestFnNamedArgsSingleBool(self.__runtime)
+      self.V2_TestFnNamedArgsSingleClass = BamlOutput_V2_TestFnNamedArgsSingleClass(self.__runtime)
+      self.V2_TestFnNamedArgsSingleEnumList = BamlOutput_V2_TestFnNamedArgsSingleEnumList(self.__runtime)
+      self.V2_TestFnNamedArgsSingleFloat = BamlOutput_V2_TestFnNamedArgsSingleFloat(self.__runtime)
+      self.V2_TestFnNamedArgsSingleInt = BamlOutput_V2_TestFnNamedArgsSingleInt(self.__runtime)
+      self.V2_TestFnNamedArgsSingleString = BamlOutput_V2_TestFnNamedArgsSingleString(self.__runtime)
+      self.V2_TestFnNamedArgsSingleStringArray = BamlOutput_V2_TestFnNamedArgsSingleStringArray(self.__runtime)
+      self.V2_TestFnNamedArgsSingleStringList = BamlOutput_V2_TestFnNamedArgsSingleStringList(self.__runtime)
+      self.V2_TestFnNamedArgsSyntax = BamlOutput_V2_TestFnNamedArgsSyntax(self.__runtime)
+      self.V2_UnionTest_Function = BamlOutput_V2_UnionTest_Function(self.__runtime)

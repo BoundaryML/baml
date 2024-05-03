@@ -6,11 +6,7 @@
 /* eslint-disable */
 
 
-<<<<<<< HEAD
-import { Category, ClassOptionalFields, ClassOptionalFieldsv2, ClassOptionalOutput, ClassOptionalOutput2, ClassOptionalOutput2v2, DataType, Email, EnumOutput, EnumOutput2, NamedArgsSingleClass, NamedArgsSingleClass2, NamedArgsSingleClassList2, NamedArgsSingleEnum, NamedArgsSingleEnum2, NamedArgsSingleEnumList, NamedArgsSingleEnumList2, OptionalClass, OptionalClassv2, OptionalTest_ReturnType, OptionalTest_ReturnTypev2, OrderInfo, OverrideClass, OverrideEnum, RaysData, Resume, SearchParams, TestClassAlias, TestClassWithEnum, TestClassWithEnum2, TestEnum, TestOutputClass, TestOutputClass2, UnionTest_ReturnType, UnionTest_ReturnTypev2 } from './types';
-=======
-import { Category, ClassOptionalFields, ClassOptionalFieldsv2, ClassOptionalOutput, ClassOptionalOutput2, ClassOptionalOutput2v2, ClassWithImage, Email, EnumOutput, EnumOutput2, NamedArgsSingleClass, NamedArgsSingleClass2, NamedArgsSingleClassList2, NamedArgsSingleEnum, NamedArgsSingleEnum2, NamedArgsSingleEnumList, NamedArgsSingleEnumList2, OptionalClass, OptionalClassv2, OptionalTest_ReturnType, OptionalTest_ReturnTypev2, OrderInfo, OverrideClass, OverrideEnum, RaysData, Resume, SearchParams, TestClassAlias, TestClassWithEnum, TestClassWithEnum2, TestEnum, TestOutputClass, TestOutputClass2, UnionTest_ReturnType, UnionTest_ReturnTypev2 } from './types';
->>>>>>> 55f2eb9e (image works in python)
+import { Category, ClassOptionalFields, ClassOptionalFieldsv2, ClassOptionalOutput, ClassOptionalOutput2, ClassOptionalOutput2v2, ClassWithImage, DataType, Email, EnumOutput, EnumOutput2, NamedArgsSingleClass, NamedArgsSingleClass2, NamedArgsSingleClassList2, NamedArgsSingleEnum, NamedArgsSingleEnum2, NamedArgsSingleEnumList, NamedArgsSingleEnumList2, OptionalClass, OptionalClassv2, OptionalTest_ReturnType, OptionalTest_ReturnTypev2, OrderInfo, OverrideClass, OverrideEnum, RaysData, Resume, SearchParams, TestClassAlias, TestClassWithEnum, TestClassWithEnum2, TestEnum, TestOutputClass, TestOutputClass2, UnionTest_ReturnType, UnionTest_ReturnTypev2 } from './types';
 import { FireBamlEvent, traceAsync } from '@boundaryml/baml-core/ffi_layer';
 
 

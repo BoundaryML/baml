@@ -139,7 +139,7 @@ class ClassOptionalOutput2v2(BaseModel):
 
 class ClassWithImage(BaseModel):
     myImage: Image
-    param2: string
+    param2: str
     fake_image: "FakeImage"
 
 class DynamicPropsClass(BaseModel):
@@ -159,7 +159,7 @@ class Event(BaseModel):
     description: str
 
 class FakeImage(BaseModel):
-    url: string
+    url: str
 
 class ModifiedOutput(BaseModel):
     reasoning: str
