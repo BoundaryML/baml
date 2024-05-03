@@ -138,7 +138,7 @@ class ClassOptionalOutput2v2(BaseModel):
     prop3: Optional["Blah2"]
 
 class ClassWithImage(BaseModel):
-    myImage: Image
+    myImage: baml_py.Image
     param2: str
     fake_image: "FakeImage"
 

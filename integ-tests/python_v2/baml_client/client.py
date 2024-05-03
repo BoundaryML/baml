@@ -151,7 +151,7 @@ class BamlOutput_DescribeImage:
 
     async def __call__(
         self,
-        img: Image
+        img: baml_py.Image
     ) -> str:
       raw = await self.__runtime.call_function(
         "DescribeImage",
@@ -172,7 +172,7 @@ class BamlOutput_DescribeImage:
 
     async def unstable(
         self,
-        img: Image
+        img: baml_py.Image
     ) -> baml_py.FunctionResult:
       return await self.__runtime.call_function(
         "DescribeImage",
@@ -190,7 +190,7 @@ class BamlOutput_DescribeImage2:
 
     async def __call__(
         self,
-        classWithImage: types.ClassWithImage,img2: Image
+        classWithImage: types.ClassWithImage,img2: baml_py.Image
     ) -> str:
       raw = await self.__runtime.call_function(
         "DescribeImage2",
@@ -211,7 +211,7 @@ class BamlOutput_DescribeImage2:
 
     async def unstable(
         self,
-        classWithImage: types.ClassWithImage,img2: Image
+        classWithImage: types.ClassWithImage,img2: baml_py.Image
     ) -> baml_py.FunctionResult:
       return await self.__runtime.call_function(
         "DescribeImage2",
@@ -229,7 +229,7 @@ class BamlOutput_DescribeImage3:
 
     async def __call__(
         self,
-        classWithImage: types.ClassWithImage,img2: Image
+        classWithImage: types.ClassWithImage,img2: baml_py.Image
     ) -> str:
       raw = await self.__runtime.call_function(
         "DescribeImage3",
@@ -250,7 +250,7 @@ class BamlOutput_DescribeImage3:
 
     async def unstable(
         self,
-        classWithImage: types.ClassWithImage,img2: Image
+        classWithImage: types.ClassWithImage,img2: baml_py.Image
     ) -> baml_py.FunctionResult:
       return await self.__runtime.call_function(
         "DescribeImage3",
@@ -268,7 +268,7 @@ class BamlOutput_DescribeImage4:
 
     async def __call__(
         self,
-        classWithImage: types.ClassWithImage,img2: Image
+        classWithImage: types.ClassWithImage,img2: baml_py.Image
     ) -> str:
       raw = await self.__runtime.call_function(
         "DescribeImage4",
@@ -289,7 +289,7 @@ class BamlOutput_DescribeImage4:
 
     async def unstable(
         self,
-        classWithImage: types.ClassWithImage,img2: Image
+        classWithImage: types.ClassWithImage,img2: baml_py.Image
     ) -> baml_py.FunctionResult:
       return await self.__runtime.call_function(
         "DescribeImage4",
