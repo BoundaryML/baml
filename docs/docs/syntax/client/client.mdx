@@ -89,21 +89,15 @@ client<llm> MyAzureClient {
   provider baml-azure-chat
   options {
         api_key env.AZURE_OPENAI_KEY
-        api_base env.AZURE_OPENAI_ENDPOINT
         // This may change in the future
-        api_version '2023-05-15'
+        api_version "2023-05-15"
         api_type azure
-        engine REPLACE_WITH_YOUR_DEPLOYMENT_NAME
+        azure_endpoint env.AZURE_OPENAI_ENDPOINT
+        model "gpt-35-turbo-default"
     }
 }
 ```
 
-<Warning>
-  BAML uses `openai <= 0.28.1`! We're working on migrating our providers over
-  and ensuring you can use the latest version of openai regardless. The benefit
-  of BAML is that even if openai's SDK changes, you can still use the same BAML
-  code.
-</Warning>
 
 ### Anthropic
 
