@@ -9,6 +9,10 @@ permissions:
   contents: read
   id-token: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     strategy:
@@ -45,7 +49,7 @@ jobs:
 
       - name: Install openssl
         if: matrix._.runs_on == 'ubuntu-latest'
-        run: apt install libssl-dev
+        run: sudo apt install libssl-dev
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
