@@ -13,6 +13,7 @@
 # flake8: noqa: E501,F401
 # pylint: disable=unused-import,line-too-long
 # fmt: off
+import baml_py
 from enum import Enum
 from pydantic import BaseModel
 from typing import List, Optional, Union
