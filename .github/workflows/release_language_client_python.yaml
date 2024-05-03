@@ -1,6 +1,8 @@
 name: Release language_client_python
 
 on:
+  push:
+    branches: ["sam/rust-llm"]
   workflow_dispatch: {}
 
 permissions:
@@ -10,6 +12,7 @@ permissions:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         _:
           - runs_on: ubuntu-latest
@@ -39,6 +42,10 @@ jobs:
         with:
           python-version: "3.8"
           architecture: ${{ matrix._.runs_on == 'windows-latest' && 'x64' || null }}
+
+      - name: Install openssl
+        if: matrix._.runs_on == 'ubuntu-latest'
+        run: apt install libssl-dev
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
