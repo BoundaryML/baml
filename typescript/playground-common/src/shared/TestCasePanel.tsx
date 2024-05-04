@@ -21,6 +21,10 @@ import { TEMPLATES } from './TestCaseEditor/JsonEditorTemplates'
 import JsonView from 'react18-json-view'
 import { Badge } from '../components/ui/badge'
 
+const wasm = (await import("@gloo-ai/baml-schema-wasm-web/baml_schema_build"));
+
+
+
 const uiSchema: UiSchema = {
   'ui:submitButtonOptions': {
     submitText: 'Save',
@@ -272,6 +276,8 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
 
   const { root_path, test_results } = useContext(ASTContext)
 
+  const wasmkeys = wasm.version();
+
   return (
     <div className="flex flex-col w-full h-full tour-test-panel">
       <div className="flex flex-row gap-x-1">
@@ -333,7 +339,7 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
         >
           <Button className="flex flex-row text-sm gap-x-2 bg-vscode-dropdown-background text-vscode-dropdown-foreground hover:opacity-90 hover:bg-vscode-dropdown-background">
             <PlusIcon size={16} />
-            <div>Add test case</div>
+            <div>Add {wasmkeys} test case</div>
           </Button>
         </EditTestCaseForm>
 

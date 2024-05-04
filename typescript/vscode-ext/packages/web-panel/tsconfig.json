@@ -17,8 +17,9 @@
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@gloo-ai/baml-schema-wasm-web/*": ["../../../baml-schema-wasm-web/dist/*"]
     }
   },
-  "include": ["./src", "../../../common/src/parser_db.ts"]
+  "include": ["./src", "../../../common/src/parser_db.ts", "../../../baml-schema-wasm-web/dist"]
 }
