@@ -20,7 +20,7 @@
       "outputs": ["dist/**"]
     },
     "@gloo-ai/web-panel#build": {
-      "dependsOn": ["^build", "@baml/common#build"],
+      "dependsOn": ["^build", "@baml/common#build", "@gloo-ai/baml-schema-wasm-web#build"],
       "outputs": ["dist/**"]
     },
     "@baml/common#build": {

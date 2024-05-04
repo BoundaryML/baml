@@ -6,14 +6,7 @@ import CustomErrorBoundary from "../utils/ErrorFallback";
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react";
 import { WasmProject, WasmRuntimeContext, WasmRuntime } from "@gloo-ai/baml-schema-wasm-web";
 
-const wasm_loader = null;
-const wasm = async (): Promise<typeof import("@gloo-ai/baml-schema-wasm-web")> => {
-  if (!wasm_loader) {
-    const wasm = await import("@gloo-ai/baml-schema-wasm-web");
-    return wasm;
-  }
-  return wasm_loader;
-}
+const wasm = (await import("@gloo-ai/baml-schema-wasm-web/baml_schema_build"));
 
 // const wasm = await import("@gloo-ai/baml-schema-wasm-web");
 // const { WasmProject, WasmRuntime, WasmRuntimeContext, version: RuntimeVersion } = wasm;
@@ -30,16 +23,14 @@ type ASTContextType = {
   selected: Selection
 }
 
-const runtimeCtxRaw = atom<WasmRuntimeContext | null>(null)
-const runtimeCtx = atom((get) => {
-  let ctx = get(runtimeCtxRaw);
-  if (!ctx) {
-    throw new Error("Runtime context not initialized");
-  }
-  return ctx;
-}, (get, set, ctx: WasmRuntimeContext) => {
-  set(runtimeCtxRaw, ctx);
-});
+const runtimeCtx = atom<WasmRuntimeContext>(new wasm.WasmRuntimeContext())
+// const runtimeCtx = atom((get) => {
+//   let ctx = get(runtimeCtxRaw);
+//   if (!ctx) {
+//     throw new Error("WasmRuntimeContext was never called with set(...)");
+//   }
+//   return ctx;
+// });
 
 const availableProjectsAtom = atom<string[]>([]);
 const selectedProjectAtom = atom<string | null>(null);
@@ -81,13 +72,23 @@ const updateFileAtom = atom(null, async (get, set, { root_path, files }: { root_
       project.update_file(file.name, file.content);
     }
   } else {
-    project = (await wasm()).WasmProject.new(root_path, files);
+    projFiles = Object.fromEntries(files.filter(f => f.content !== undefined).map(f => [f.name, f.content as string]));
+    let rsFiles = Object.fromEntries(files.filter(f => f.content !== undefined && f.name.startsWith(root_path)).map(f => [f.name, f.content]));
+    project = wasm.WasmProject.new(root_path, rsFiles);
+    console.log("Created new project", project);
   }
   let rt = undefined;
   try {
     rt = project.runtime();
   } catch (e) {
-    console.error(e);
+    let WasmDiagnosticError = wasm.WasmDiagnosticError;
+    if (e instanceof Error) {
+      console.error(e.message);
+    } else if (e instanceof WasmDiagnosticError) {
+      diag = e;
+    } else {
+      console.error(e);
+    }
   }
 
   let pastRuntime = get(runtimeFamilyAtom(root_path));
@@ -114,7 +115,7 @@ const selectedRuntimeAtom = atom((get) => {
 });
 
 export const versionAtom = atom(async (get) => {
-  (await wasm()).version();
+  return wasm.version();
 });
 
 export const availableFunctionsAtom = atom((get) => {
@@ -169,6 +170,8 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
   const removeProject = useSetAtom(removeProjectAtom);
   const availableProjects = useAtomValue(availableProjectsAtom);
   const [selectedProject, setSelectedProject] = useAtom(selectedProjectAtom);
+  // const setRuntimeCtx = useSetAtom(runtimeCtxRaw);
+  const version = useAtomValue(versionAtom);
 
   useEffect(() => {
     let fn = (event: MessageEvent<{
