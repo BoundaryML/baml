@@ -30,7 +30,16 @@ const PromptPreview: React.FC = () => {
   const propmtPreview = useAtomValue(renderPromptAtom);
   if (!propmtPreview) return <div className="flex flex-col">No prompt preview!</div>
 
-  if (typeof propmtPreview === 'string') return <div className="flex flex-col">{propmtPreview}</div>
+  if (typeof propmtPreview === 'string') return <Snippet text={propmtPreview} type='error' client={{
+    identifier: {
+      end: 0,
+      source_file: '',
+      start: 0,
+      value: 'Error'
+    },
+    provider: 'baml-openai-chat',
+    model: 'gpt-4'
+  }} />
 
   return (
     <div className="flex flex-col w-full h-full gap-4">
