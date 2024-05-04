@@ -12,6 +12,8 @@ import ImplPanel from './ImplPanel'
 import TestCasePanel from './TestCasePanel'
 import TestResultPanel from './TestResultOutcomes'
 import { useSelections } from './hooks'
+import { useAtomValue } from 'jotai'
+import { renderPromptAtom, selectedFunctionAtom } from '@/baml_wasm_web/EventListener'
 
 function getTopPanelSize(showTests: boolean, test_results: TestResult[] | undefined): number {
   if (showTests) {
@@ -24,12 +26,32 @@ function getTopPanelSize(showTests: boolean, test_results: TestResult[] | undefi
   return 100
 }
 
+const PromptPreview: React.FC = () => {
+  const propmtPreview = useAtomValue(renderPromptAtom);
+  if (!propmtPreview) return <div className="flex flex-col">No prompt preview!</div>
+
+  if (typeof propmtPreview === 'string') return <div className="flex flex-col">{propmtPreview}</div>
+
+  return (
+    <div className="flex flex-col w-full h-full gap-4">
+      {propmtPreview.as_chat()?.map((chat, idx) => (
+        <div key={idx} className="flex flex-col">
+          <div className='flex flex-row'>{chat.role}</div>
+          {chat.parts.map((part, idx) => {
+            if (part.is_text()) return <div key={idx} className='flex flex-row'>{part.as_text()}</div>
+            if (part.is_image()) return <img key={idx} src={part.as_image()} className='max-w-40' />
+            return null;
+          })}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 const FunctionPanel: React.FC = () => {
-  const {
-    selections: { showTests },
-    setSelection,
-  } = useContext(ASTContext)
-  const { func, impl } = useSelections()
+  const showTests = true
+  const selectedFunc = useAtomValue(selectedFunctionAtom);
+
   const { test_results } = useSelections()
   const results = test_results ?? []
   const id = useId()
@@ -44,31 +66,8 @@ const FunctionPanel: React.FC = () => {
     }
   }, [showTests, testResultId])
 
-  if (!func)
+  if (!selectedFunc)
     return <div className="flex flex-col">No function selected. Create or select a function to get started</div>
-
-  let impls = <div />
-  if (!impl) {
-    impls = <div />
-  } else if (func.impls.length === 1) {
-    impls = <ImplPanel showTab={false} impl={func.impls[0]} />
-  } else {
-    impls = (
-      <VSCodePanels
-        activeid={`tab-${func.name.value}-${impl.name.value}`}
-        onChange={(e) => {
-          const selected: string | undefined = (e.target as any)?.activetab?.id
-          if (selected && selected.startsWith(`tab-${func.name.value}-`)) {
-            setSelection(undefined, undefined, selected.split('-', 3)[2], undefined, undefined)
-          }
-        }}
-      >
-        {func.impls.map((impl) => (
-          <ImplPanel showTab={true} impl={impl} key={`${func.name.value}-${impl.name.value}`} />
-        ))}
-      </VSCodePanels>
-    )
-  }
 
   let topPanelSize = getTopPanelSize(showTests, test_results)
 
@@ -84,21 +83,21 @@ const FunctionPanel: React.FC = () => {
           <ResizablePanel id="top-panel" ref={ref} className="flex w-full " defaultSize={topPanelSize}>
             <div className="w-full">
               <ResizablePanelGroup direction="horizontal" className="h-full">
-                {impl && (
-                  <ResizablePanel defaultSize={60} className="px-0 overflow-y-auto">
-                    <div className="relative w-full h-full overflow-y-auto">
-                      {/* <ScrollArea type="auto" className="flex w-full h-full pr-3 "> */}
-                      <div className="flex w-full h-full">{impls}</div>
-                      {/* </ScrollArea> */}
+                <ResizablePanel defaultSize={60} className="px-0 overflow-y-auto">
+                  <div className="relative w-full h-full overflow-y-auto">
+                    {/* <ScrollArea type="auto" className="flex w-full h-full pr-3 "> */}
+                    <div className="flex w-full h-full">
+                      <PromptPreview />
                     </div>
-                  </ResizablePanel>
-                )}
+                    {/* </ScrollArea> */}
+                  </div>
+                </ResizablePanel>
                 <ResizableHandle withHandle={false} className="bg-vscode-panel-border" />
                 <ResizablePanel minSize={20} className="pl-2 pr-0.5" hidden={!showTests}>
                   {/* <Allotment.Pane className="pl-2 pr-0.5" minSize={200} visible={showTests}> */}
                   <div className="flex flex-col h-full overflow-y-auto overflow-x-clip">
                     {/* On windows this scroll area extends beyond the wanted width, so we just use a normal scrollbar here vs using ScrollArea*/}
-                    <TestCasePanel func={func} />
+                    <TestCasePanel />
                   </div>
                 </ResizablePanel>
               </ResizablePanelGroup>

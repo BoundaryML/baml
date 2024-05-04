@@ -20,7 +20,7 @@ type Diagnostic = {
 type Notify = (params:
   { type: 'error' | 'warn' | 'info', message: string } |
   { type: 'diagnostic', errors: [string, Diagnostic[]][] } |
-  { type: 'runtime_updated', root_path: string }
+  { type: 'runtime_updated', root_path: string, files: Record<string, string> }
 ) => void
 
 function findTopLevelParent(filePath: string): string | null {
@@ -55,14 +55,14 @@ class Project {
   private last_successful_runtime?: BamlWasm.WasmRuntime
   private current_runtime?: BamlWasm.WasmRuntime
 
-  constructor(private files: BamlWasm.WasmProject, private ctx: BamlWasm.WasmRuntimeContext, private onSuccess: (e: WasmDiagnosticError) => void) {
+  constructor(private files: BamlWasm.WasmProject, private ctx: BamlWasm.WasmRuntimeContext, private onSuccess: (e: WasmDiagnosticError, files: Record<string, string>) => void) {
   }
 
   update_runtime() {
     if (this.current_runtime == undefined) {
       try {
         this.current_runtime = this.files.runtime()
-        this.onSuccess(this.files.diagnostics(this.current_runtime))
+        this.onSuccess(this.files.diagnostics(this.current_runtime), this.files.files() as Record<string, string>)
       } catch (e) {
         this.current_runtime = undefined
         throw e
@@ -212,9 +212,9 @@ class BamlProjectManager {
 
   private add_project(root_path: string, files: { [path: string]: string }) {
     const project = BamlWasm.WasmProject.new(root_path, files)
-    this.projects.set(root_path, new Project(project, new BamlWasm.WasmRuntimeContext(), (d) => {
+    this.projects.set(root_path, new Project(project, new BamlWasm.WasmRuntimeContext(), (d, files: Record<string, string>) => {
       this.handleMessage(d)
-      this.notify({ type: 'runtime_updated', root_path })
+      this.notify({ type: 'runtime_updated', root_path, files })
     }))
     return this.get_project(root_path)!
   }

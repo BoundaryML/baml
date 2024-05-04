@@ -21,6 +21,7 @@ baml-runtime = { path = "../baml-runtime", features = [
 ], default-features = false }
 anyhow = { version = "1" }
 serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1", features = [] }
 serde-wasm-bindgen = "0.4"
 
 [dependencies.web-sys]

@@ -82,7 +82,7 @@ export function startServer(options?: LSOptions): void {
   const bamlProjectManager = new BamlProjectManager((params) => {
     switch (params.type) {
       case 'runtime_updated':
-        connection.sendRequest('runtime_updated', params.root_path);
+        connection.sendRequest('runtime_updated', params);
         break;
       case "diagnostic":
         params.errors.forEach(([uri, diagnostics]) => {

@@ -20,6 +20,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../com
 import { TEMPLATES } from './TestCaseEditor/JsonEditorTemplates'
 import JsonView from 'react18-json-view'
 import { Badge } from '../components/ui/badge'
+import { useAtom, useAtomValue } from 'jotai'
+import { selectedFunctionAtom, selectedTestCaseAtom } from '@/baml_wasm_web/EventListener'
+import type { WasmTestCase } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 
 const uiSchema: UiSchema = {
   'ui:submitButtonOptions': {
@@ -37,47 +40,40 @@ const uiSchema: UiSchema = {
 type Func = ParserDatabase['functions'][number]
 type TestCase = Func['test_cases'][number]
 
-const TestCasePanelEntry: React.FC<{ func: Func; test_case: TestCase }> = ({ func, test_case }) => {
-  const { impl, input_json_schema, renderedTestCase } = useSelections()
-  const isRendered = renderedTestCase === test_case.name.value
-
-  if (input_json_schema) {
-    input_json_schema.definitions = Object.fromEntries(
-      Object.entries(input_json_schema.definitions as object).map(([k, v]) => [k, { ...v, title: k }]),
-    )
-  }
-  const { root_path, test_results } = useContext(ASTContext)
+const TestCasePanelEntry: React.FC<{ test_case: WasmTestCase }> = ({ test_case }) => {
+  const [selectedTestCase, setSelected] = useAtom(selectedTestCaseAtom)
+  const isRendered = useMemo(() => selectedTestCase?.name === test_case.name, [selectedTestCase, test_case])
 
   return (
-    <div key={test_case.name.value} className="flex flex-col w-full py-1 pr-2 overflow-x-clip group">
+    <div key={test_case.name} className="flex flex-col w-full py-1 pr-2 overflow-x-clip group">
       <div className="flex flex-row items-center justify-between">
         <div className="flex flex-row items-center justify-center gap-x-1">
           <Button
             variant={'ghost'}
             size={'icon'}
             className="p-1 rounded-md w-fit h-fit bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground"
-            disabled={impl === undefined || test_results?.run_status === 'RUNNING'}
+            disabled
             onClick={() => {
-              const runTestRequest: TestRequest = {
-                functions: [
-                  {
-                    name: func.name.value,
-                    tests: [
-                      {
-                        name: test_case.name.value,
-                        impls: impl ? [impl.name.value] : [],
-                      },
-                    ],
-                  },
-                ],
-              }
-              vscode.postMessage({
-                command: 'runTest',
-                data: {
-                  root_path,
-                  tests: runTestRequest,
-                },
-              })
+              // const runTestRequest: TestRequest = {
+              //   functions: [
+              //     {
+              //       name: func.name.value,
+              //       tests: [
+              //         {
+              //           name: test_case.name.value,
+              //           impls: impl ? [impl.name.value] : [],
+              //         },
+              //       ],
+              //     },
+              //   ],
+              // }
+              // vscode.postMessage({
+              //   command: 'runTest',
+              //   data: {
+              //     root_path,
+              //     tests: runTestRequest,
+              //   },
+              // })
             }}
           >
             <Play size={10} />
@@ -85,7 +81,7 @@ const TestCasePanelEntry: React.FC<{ func: Func; test_case: TestCase }> = ({ fun
           {/* IDK why it doesnt truncate. Probably cause of the allotment */}
           <div className="flex w-full flex-nowrap">
             <span className="h-[24px] max-w-[120px] text-center align-middle overflow-hidden flex-1 truncate">
-              {test_case.name.value}
+              {test_case.name}
             </span>
             {isRendered && (
               <Badge
@@ -104,20 +100,13 @@ const TestCasePanelEntry: React.FC<{ func: Func; test_case: TestCase }> = ({ fun
                   size="icon"
                   className="p-1 w-fit h-fit hover:bg-vscode-button-secondaryHoverBackground"
                   onClick={() => {
-                    vscode.postMessage({
-                      command: 'selectTestCase',
-                      data: {
-                        root_path,
-                        function_name: func.name.value,
-                        test_name: test_case.name.value,
-                      },
-                    })
+                    setSelected(test_case.name)
                   }}
                 >
                   <Pin size={12} />
                 </Button>
               )}
-              <EditTestCaseForm
+              {/* <EditTestCaseForm
                 testCase={test_case}
                 schema={input_json_schema}
                 func={func}
@@ -130,7 +119,7 @@ const TestCasePanelEntry: React.FC<{ func: Func; test_case: TestCase }> = ({ fun
                 >
                   <Edit2 className="w-3 h-3 text-vscode-descriptionForeground" />
                 </Button>
-              </EditTestCaseForm>
+              </EditTestCaseForm> */}
               <Tooltip delayDuration={100}>
                 <TooltipTrigger asChild>
                   <Button
@@ -146,7 +135,7 @@ const TestCasePanelEntry: React.FC<{ func: Func; test_case: TestCase }> = ({ fun
                 </TooltipTrigger>
                 <TooltipContent className="flex flex-col gap-y-1">Open test file</TooltipContent>
               </Tooltip>
-              <Tooltip delayDuration={100}>
+              {/* <Tooltip delayDuration={100}>
                 <TooltipTrigger>
                   <EditTestCaseForm
                     testCase={test_case}
@@ -165,7 +154,7 @@ const TestCasePanelEntry: React.FC<{ func: Func; test_case: TestCase }> = ({ fun
                   </EditTestCaseForm>
                 </TooltipTrigger>
                 <TooltipContent className="flex flex-col gap-y-1">Duplicate</TooltipContent>
-              </Tooltip>
+              </Tooltip> */}
             </div>
           </div>
         </div>
@@ -174,20 +163,21 @@ const TestCasePanelEntry: React.FC<{ func: Func; test_case: TestCase }> = ({ fun
           size={'icon'}
           className="p-1 w-fit h-fit text-vscode-input-foreground"
           onClick={() => {
-            vscode.postMessage({
-              command: 'removeTest',
-              data: {
-                root_path,
-                funcName: func.name.value,
-                testCaseName: test_case.name,
-              },
-            })
+            // vscode.postMessage({
+            //   command: 'removeTest',
+            //   data: {
+            //     root_path,
+            //     funcName: func.name.value,
+            //     testCaseName: test_case.name,
+            //   },
+            // })
           }}
         >
           <Trash2 size={10} />
         </Button>
       </div>
-      <EditTestCaseForm
+      <TestCaseCard test_case={test_case} isRendered={isRendered} />
+      {/* <EditTestCaseForm
         testCase={test_case}
         schema={input_json_schema}
         func={func}
@@ -197,9 +187,9 @@ const TestCasePanelEntry: React.FC<{ func: Func; test_case: TestCase }> = ({ fun
           variant={'ghost'}
           className="items-start justify-start w-full px-1 py-1 text-left hover:bg-vscode-button-secondaryHoverBackground h-fit"
         >
-          <TestCaseCard test_case={test_case} isRendered={isRendered} />
+          
         </Button>
-      </EditTestCaseForm>
+      </EditTestCaseForm> */}
     </div>
   )
 }
@@ -255,21 +245,12 @@ const autoGenTestCase = (func: Func, input_json_schema: any): TestCase => {
   }
 }
 
-const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
-  const { impl, input_json_schema } = useSelections()
+const TestCasePanel: React.FC = () => {
+  const { input_json_schema } = useSelections()
+  const selectedFunction = useAtomValue(selectedFunctionAtom);
+  const testCases = useMemo(() => selectedFunction?.test_cases ?? [], [selectedFunction])
 
   const [filter, setFilter] = useState<string>('')
-  // This should be re-generated when this test case is saved
-  const test_cases = useMemo(() => {
-    let test_cases = func.test_cases
-    if (filter) {
-      test_cases = test_cases.filter(
-        (test_case) => test_case.name.value.includes(filter) || test_case.content.includes(filter),
-      )
-    }
-    return test_cases
-  }, [filter, func])
-
   const { root_path, test_results } = useContext(ASTContext)
 
   return (
@@ -296,35 +277,35 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
               className="h-full px-1 py-1 text-xs bg-red-500 rounded-sm whitespace-nowrap bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground"
               // disabled={test_cases.length === 0}
               onClick={() => {
-                const runTestRequest: TestRequest = {
-                  functions: [
-                    {
-                      name: func.name.value,
-                      run_all_available_tests: filter === '' ? true : false,
-                      tests: test_cases.map((test_case) => ({
-                        name: test_case.name.value,
-                        impls: func.impls.map((i) => i.name.value),
-                      })),
-                    },
-                  ],
-                }
-                vscode.postMessage({
-                  command: 'runTest',
-                  data: {
-                    root_path,
-                    tests: runTestRequest,
-                  },
-                })
+                // const runTestRequest: TestRequest = {
+                //   functions: [
+                //     {
+                //       name: func.name.value,
+                //       run_all_available_tests: filter === '' ? true : false,
+                //       tests: test_cases.map((test_case) => ({
+                //         name: test_case.name.value,
+                //         impls: func.impls.map((i) => i.name.value),
+                //       })),
+                //     },
+                //   ],
+                // }
+                // vscode.postMessage({
+                //   command: 'runTest',
+                //   data: {
+                //     root_path,
+                //     tests: runTestRequest,
+                //   },
+                // })
               }}
             >
-              <>Run {filter ? test_cases.length : 'all'}</>
+              <>Run {filter ? testCases.length : 'all'}</>
             </Button>
           </>
         )}
       </div>
       <div className="flex flex-col py-2 divide-y gap-y-1 divide-vscode-textSeparator-foreground">
         {/* <pre>{JSON.stringify(input_json_schema, null, 2)}</pre> */}
-        <EditTestCaseForm
+        {/* <EditTestCaseForm
           key={'new'}
           testCase={undefined}
           schema={input_json_schema}
@@ -335,10 +316,10 @@ const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
             <PlusIcon size={16} />
             <div>Add test case</div>
           </Button>
-        </EditTestCaseForm>
+        </EditTestCaseForm> */}
 
-        {test_cases.map((t) => (
-          <TestCasePanelEntry func={func} test_case={t} />
+        {testCases.map((t) => (
+          <TestCasePanelEntry test_case={t} />
         ))}
       </div>
     </div>
@@ -449,12 +430,15 @@ const EditTestCaseForm = ({
   )
 }
 
-const TestCaseCard: React.FC<{ test_case: TestCase; isRendered: boolean }> = ({ test_case, isRendered }) => {
+const TestCaseCard: React.FC<{ test_case: WasmTestCase; isRendered: boolean }> = ({ test_case, isRendered }) => {
   return (
     <div className="flex flex-col max-w-full gap-2 text-xs text-left truncate text-vscode-descriptionForeground">
       <div className="break-all whitespace-pre-wrap">
-        {test_case.content.substring(0, 120)}
-        {test_case.content.length > 120 && '...'}
+        <div className='flex flex-col'>
+          {test_case.inputs.map((input) => <div key={input.name}><b>{input.name}:</b> {input.value}</div>)}
+        </div>
+        {/* {test_case.content.substring(0, 120)}
+        {test_case.content.length > 120 && '...'} */}
       </div>
     </div>
   )

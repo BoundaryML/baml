@@ -7,7 +7,7 @@ import { readFile } from 'fs/promises'
 type Notify = (params:
   { type: 'error' | 'warn' | 'info', message: string } |
   { type: 'diagnostic', errors: [string, Diagnostic[]][] } |
-  { type: 'runtime_updated', root_path: string }
+  { type: 'runtime_updated', root_path: string, files: Record<string, string> }
 ) => void
 
 const uriToRootPath = (uri: URI): string => {
@@ -80,21 +80,21 @@ class Project {
     this.current_runtime = undefined
   }
 
-  list_functions(): BamlWasm.WasmFunction[] {
-    let runtime = this.runtime()
+  // list_functions(): BamlWasm.WasmFunction[] {
+  //   let runtime = this.runtime()
 
-    return runtime.list_functions()
-  }
+  //   return runtime.list_functions()
+  // }
 
-  render_prompt(function_name: string, params: Record<string, any>): BamlWasm.WasmPrompt {
-    let rt = this.runtime();
-    let func = rt.get_function(function_name)
-    if (!func) {
-      throw new Error(`Function ${function_name} not found`)
-    }
+  // render_prompt(function_name: string, params: Record<string, any>): BamlWasm.WasmPrompt {
+  //   let rt = this.runtime();
+  //   let func = rt.get_function(function_name)
+  //   if (!func) {
+  //     throw new Error(`Function ${function_name} not found`)
+  //   }
 
-    return func.render_prompt(rt, this.ctx, params);
-  }
+  //   return func.render_prompt(rt, this.ctx, params);
+  // }
 }
 
 class BamlProjectManager {
@@ -178,7 +178,7 @@ class BamlProjectManager {
     const project = BamlWasm.WasmProject.new(root_path, files)
     this.projects.set(root_path, new Project(project, new BamlWasm.WasmRuntimeContext(), (d) => {
       this.handleMessage(d)
-      this.notifier({ type: 'runtime_updated', root_path })
+      this.notifier({ type: 'runtime_updated', root_path, files })
     }))
     return this.get_project(root_path)!
   }

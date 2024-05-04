@@ -114,6 +114,16 @@ impl WasmProject {
     }
 
     #[wasm_bindgen]
+    pub fn root_dir_name(&self) -> String {
+        self.root_dir_name.clone()
+    }
+
+    #[wasm_bindgen]
+    pub fn files(&self) -> JsValue {
+        serde_wasm_bindgen::to_value(&self.files).unwrap()
+    }
+
+    #[wasm_bindgen]
     pub fn update_file(&mut self, name: &str, content: Option<String>) {
         if let Some(content) = content {
             self.files.insert(name.to_string(), content);
@@ -210,14 +220,14 @@ impl WasmRuntime {
                 test_cases: f
                     .walk_tests()
                     .map(|tc| WasmTestCase {
-                        name: tc.name().to_string(),
+                        name: tc.test_case().name.clone(),
                         inputs: match tc.test_case_params(&ctx.ctx.env) {
                             Ok(params) => params
                                 .iter()
                                 .map(|(k, v)| WasmParam {
                                     name: k.to_string(),
                                     value: match v {
-                                        Ok(v) => serde_wasm_bindgen::to_value(v).unwrap(),
+                                        Ok(v) => serde_json::to_string_pretty(v).unwrap().into(),
                                         Err(e) => {
                                             serde_wasm_bindgen::to_value(&e.to_string()).unwrap()
                                         }
