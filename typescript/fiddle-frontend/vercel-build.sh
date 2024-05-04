@@ -11,7 +11,7 @@ cd ../../engine/baml-schema-wasm
 # cargo install
 rustup target add wasm32-unknown-unknown
 cargo update -p wasm-bindgen
-cargo install -f wasm-bindgen-cli@0.2.87
+cargo install -f wasm-bindgen-cli@0.2.92
 
 # cargo build
 cd ../../typescript/fiddle-frontend
