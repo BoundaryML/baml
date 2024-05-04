@@ -1,0 +1,13 @@
+diff --git a/dist/index.js b/dist/index.js
+index c099a844288ed7852eac0e97e480b7db7662071b..4c2af4d486368d8b65260bce38c68998bd6679e0 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -60,7 +60,7 @@ function wasm() {
+             }
+             // Get WASM's download URL by Vite's ?url import
+             const wasmUrlUrl = id + "?url";
+-            const wasmUrlDeclaration = options?.ssr || runningInVitest
++            const wasmUrlDeclaration = options?.ssr || runningInVitest || true
+                 ? `const __vite__wasmUrl = ${JSON.stringify(await (0, util_1.createBase64UriForWasm)(id))}`
+                 : `import __vite__wasmUrl from ${JSON.stringify(wasmUrlUrl)}`;
+             return `

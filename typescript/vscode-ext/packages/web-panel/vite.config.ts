@@ -5,6 +5,8 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
+import wasm from 'vite-plugin-wasm'
+import topLevelAwait from 'vite-plugin-top-level-await'
 
 const isWatchMode = process.argv.includes('--watch') || true;
 console.log('isWatchMode', isWatchMode);
@@ -12,13 +14,13 @@ console.log('isWatchMode', isWatchMode);
 export default defineConfig({
   plugins: [
     react(),
-    //wasm(),
-    //wasmPack("../../../../engine/baml-schema-wasm"),
-    //topLevelAwait()
+    wasm(),
+    topLevelAwait(),
   ],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      '@gloo-ai/baml-schema-wasm-web': path.resolve(__dirname, '../../../baml-schema-wasm-web/dist'),
     },
   },
   mode: isWatchMode ? 'development' : 'production',
