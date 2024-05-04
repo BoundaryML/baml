@@ -1,10 +1,12 @@
+'use client'
+
 import { useEffect } from "react";
 import BamlProjectManager from "./project_manager";
 import { atom, useSetAtom, useAtomValue, useAtom } from 'jotai';
-import { atomFamily } from 'jotai/utils';
+import { atomFamily, atomWithStorage, createJSONStorage } from 'jotai/utils';
 import CustomErrorBoundary from "../utils/ErrorFallback";
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react";
-import { WasmProject, WasmRuntimeContext, WasmRuntime } from "@gloo-ai/baml-schema-wasm-web";
+import type { WasmProject, WasmRuntimeContext, WasmRuntime, WasmDiagnosticError } from "@gloo-ai/baml-schema-wasm-web";
 
 const wasm_loader = null;
 const wasm = async (): Promise<typeof import("@gloo-ai/baml-schema-wasm-web")> => {
@@ -17,6 +19,11 @@ const wasm = async (): Promise<typeof import("@gloo-ai/baml-schema-wasm-web")> =
 
 // const wasm = await import("@gloo-ai/baml-schema-wasm-web");
 // const { WasmProject, WasmRuntime, WasmRuntimeContext, version: RuntimeVersion } = wasm;
+
+export const lintFn = async () => {
+  const wasm = await import("@gloo-ai/baml-schema-wasm-web");
+  return wasm.lint;
+}
 
 type Selection = {
   project?: string;
@@ -41,21 +48,26 @@ const runtimeCtx = atom((get) => {
   set(runtimeCtxRaw, ctx);
 });
 
+
 const availableProjectsAtom = atom<string[]>([]);
-const selectedProjectAtom = atom<string | null>(null);
-const selectedFunctionAtom = atom<string | null>(null);
-const selectedTestCaseAtom = atom<string | null>(null);
-const filesAtom = atom<Record<string, string>>({});
+const selectedProjectAtom = atomWithStorage<string | null>('baml-selected-project', null, sessionStore);
+const selectedFunctionAtom = atomWithStorage<string | null>('baml-selected-function', null, sessionStore);
+const selectedTestCaseAtom = atomWithStorage<string | null>('baml-selected-testcase', null, sessionStore);
+const filesAtom = atomWithStorage<Record<string, string>>('baml-files', {}, sessionStore);
+
 const projectAtom = atom<WasmProject | null>(null);
 const runtimesAtom = atom<{
   last_successful_runtime?: WasmRuntime,
   current_runtime?: WasmRuntime
+  diagnostics?: WasmDiagnosticError
 }>({});
+import deepEqual from 'fast-deep-equal'
+import { sessionStore } from "./JotaiProvider";
 
 
-const projectFamilyAtom = atomFamily((root_path: string) => projectAtom);
-const runtimeFamilyAtom = atomFamily((root_path: string) => runtimesAtom);
-const projectFilesAtom = atomFamily((root_path: string) => filesAtom);
+const projectFamilyAtom = atomFamily((root_path: string) => projectAtom, deepEqual);
+const runtimeFamilyAtom = atomFamily((root_path: string) => runtimesAtom, deepEqual);
+export const projectFilesAtom = atomFamily((root_path: string) => filesAtom, deepEqual);
 
 const removeProjectAtom = atom(null, (get, set, root_path: string) => {
   set(projectFilesAtom(root_path), {});
@@ -65,29 +77,56 @@ const removeProjectAtom = atom(null, (get, set, root_path: string) => {
   set(availableProjectsAtom, availableProjects.filter(p => p !== root_path));
 });
 
-const updateFileAtom = atom(null, async (get, set, { root_path, files }: { root_path: string, files: { name: string, content: string | undefined }[] }) => {
-  let projFiles = get(projectFilesAtom(root_path));
-  for (let file of files) {
-    if (file.content === undefined) {
-      delete projFiles[file.name];
-    } else {
-      projFiles[file.name] = file.content;
-    }
+export const updateFileAtom = atom(null, async (get, set, { reason, root_path, files, replace_all }: { reason: string, root_path: string, files: { name: string, content: string | undefined }[], replace_all?: true }) => {
+  let _projFiles = get(projectFilesAtom(root_path));
+  let project = get(projectFamilyAtom(root_path))
+
+  let projFiles = {
+    ..._projFiles
   }
 
-  let project = get(projectFamilyAtom(root_path))
+  let filesNames = files.map(f => f.name);
+  let filesToDelete = replace_all ? Object.keys(projFiles).filter(f => !filesNames.includes(f)) : [];
+
   if (project) {
     for (let file of files) {
       project.update_file(file.name, file.content);
     }
+    for (let f of filesToDelete) {
+      project.update_file(f, undefined);
+    }
   } else {
-    project = (await wasm()).WasmProject.new(root_path, files);
+    projFiles = Object.fromEntries(files.filter(f => f.content !== undefined).map(f => [f.name, f.content as string]));
+    let rsFiles = Object.fromEntries(files.filter(f => f.content !== undefined && f.name.startsWith(root_path)).map(f => [f.name, f.content]));
+    project = (await wasm()).WasmProject.new(root_path, rsFiles);
+    console.log("Created new project", project);
   }
+  if (replace_all) {
+    projFiles = Object.fromEntries(files.filter(f => f.content !== undefined).map(f => [f.name, f.content as string]));
+  } else {
+    for (let file of files) {
+      if (file.content === undefined) {
+        delete projFiles[file.name];
+      } else {
+        projFiles[file.name] = file.content;
+      }
+    }
+  }
+
   let rt = undefined;
+  let diag = undefined;
   try {
     rt = project.runtime();
+    diag = project.diagnostics(rt);
   } catch (e) {
-    console.error(e);
+    let WasmDiagnosticError = (await wasm()).WasmDiagnosticError;
+    if (e instanceof Error) {
+      console.error(e.message);
+    } else if (e instanceof WasmDiagnosticError) {
+      diag = e;
+    } else {
+      console.error(e);
+    }
   }
 
   let pastRuntime = get(runtimeFamilyAtom(root_path));
@@ -95,12 +134,14 @@ const updateFileAtom = atom(null, async (get, set, { root_path, files }: { root_
 
   let availableProjects = get(availableProjectsAtom);
   if (!availableProjects.includes(root_path)) {
+    console.log("Adding project", root_path);
     set(availableProjectsAtom, [...availableProjects, root_path]);
   }
 
+  console.log("Updated project", reason);
   set(projectFilesAtom(root_path), projFiles);
-  set(projectAtom, project);
-  set(runtimesAtom, { last_successful_runtime: lastSuccessRt, current_runtime: rt });
+  set(projectFamilyAtom(root_path), project);
+  set(runtimeFamilyAtom(root_path), { last_successful_runtime: lastSuccessRt, current_runtime: rt, diagnostics: diag });
 })
 
 const selectedRuntimeAtom = atom((get) => {
@@ -186,10 +227,10 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
     }>) => {
       switch (event.data.command) {
         case 'modify_file':
-          updateFile({ root_path: event.data.root_path, files: [{ name: event.data.name, content: event.data.content }] });
+          updateFile({ reason: 'modify_file', root_path: event.data.root_path, files: [{ name: event.data.name, content: event.data.content }] });
           break;
         case 'add_project':
-          updateFile({ root_path: event.data.root_path, files: Object.entries(event.data.files).map(([name, content]) => ({ name, content })) });
+          updateFile({ reason: 'add_project', root_path: event.data.root_path, files: Object.entries(event.data.files).map(([name, content]) => ({ name, content })), replace_all: true });
           break;
         case 'remove_project':
           removeProject(event.data.root_path)

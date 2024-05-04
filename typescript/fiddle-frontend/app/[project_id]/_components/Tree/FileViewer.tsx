@@ -6,9 +6,10 @@ import { MoveHandler, RenameHandler, Tree, TreeApi } from 'react-arborist'
 import Node from './Node'
 import { FilePlus, FolderPlus } from 'lucide-react'
 import useResizeObserver from 'use-resize-observer'
-import { useAtom, useAtomValue } from 'jotai'
-import { activeFileAtom, currentEditorFilesAtom, emptyDirsAtom } from '../../_atoms/atoms'
+import { useAtom, useAtomValue, useSetAtom } from 'jotai'
+import { activeFileAtom, currentEditorFilesAtom, emptyDirsAtom, project_root } from '../../_atoms/atoms'
 import { EditorFile } from '@/app/actions'
+import { updateFileAtom } from '@baml/playground-common'
 
 export const data = [
   {
@@ -112,6 +113,7 @@ const FileViewer = () => {
   const data2 = createTree(editorFiles.map((f) => f.path).concat(emptyDirs))
 
   const [term, setTerm] = useState('')
+  const updateFile = useSetAtom(updateFileAtom)
 
   const createFileFolder = (
     <div className="flex flex-row w-full pt-3 pl-1 gap-x-1">
@@ -157,28 +159,28 @@ const FileViewer = () => {
           width={width}
           selection={activeFile?.path}
           onMove={({ dragIds, parentId, index, dragNodes, parentNode }) => {
-            setEditorFiles((prev) => {
-              prev = prev as EditorFile[]
-              const prevFiles = [...prev]
-              const newFiles = prevFiles.filter((f) => !dragIds.includes(f.path))
+            // setEditorFiles((prev) => {
+            //   prev = prev as EditorFile[]
+            //   const prevFiles = [...prev]
+            //   const newFiles = prevFiles.filter((f) => !dragIds.includes(f.path))
 
-              dragIds.forEach((dragId) => {
-                const draggedFileIndex = prevFiles.findIndex((f) => f.path === dragId)
-                if (draggedFileIndex > -1) {
-                  const draggedFile = { ...prevFiles[draggedFileIndex] }
-                  if (!parentId?.includes('baml_src')) {
-                    //cant move outside baml_src
-                    return
-                  }
-                  const newParentPath = parentId
-                  draggedFile.path = `${newParentPath}/${draggedFile.path.split('/').pop()}`
-                  newFiles.splice(index, 0, draggedFile)
-                  index++ // Increment to maintain order if multiple files are moved
-                }
-              })
+            //   dragIds.forEach((dragId) => {
+            //     const draggedFileIndex = prevFiles.findIndex((f) => f.path === dragId)
+            //     if (draggedFileIndex > -1) {
+            //       const draggedFile = { ...prevFiles[draggedFileIndex] }
+            //       if (!parentId?.includes('baml_src')) {
+            //         //cant move outside baml_src
+            //         return
+            //       }
+            //       const newParentPath = parentId
+            //       draggedFile.path = `${newParentPath}/${draggedFile.path.split('/').pop()}`
+            //       newFiles.splice(index, 0, draggedFile)
+            //       index++ // Increment to maintain order if multiple files are moved
+            //     }
+            //   })
 
-              return newFiles
-            })
+            //   return newFiles
+            // })
           }}
           onCreate={({ parentId, parentNode, type }) => {
             if (type === 'internal') {
@@ -190,10 +192,12 @@ const FileViewer = () => {
             console.log('onCreate', parentId, parentNode)
             const newFileName = 'new.baml'
 
-            setEditorFiles((prev) => {
-              prev = prev as EditorFile[]
-              return [...prev, { path: `baml_src/${newFileName}`, content: '' }]
+            updateFile({
+              reason: `updating file due to new file: ${newFileName}`,
+              root_path: project_root,
+              files: [{ name: `baml_src/${newFileName}`, content: '' }],
             })
+
             return { id: `baml_src/${newFileName}`, name: newFileName }
           }}
           height={height}

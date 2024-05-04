@@ -1,3 +1,5 @@
+'use client'
+
 import { VSCodeDropdown, VSCodeLink, VSCodeOption } from '@vscode/webview-ui-toolkit/react'
 import { useSelections } from './hooks'
 import React, { useContext, useState } from 'react'

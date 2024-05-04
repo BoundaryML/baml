@@ -1,5 +1,4 @@
 'use client'
-import { atomStore } from '@/app/_components/JotaiProvider'
 import { EditorFile } from '@/app/actions'
 import { BAML_DIR } from '@/lib/constants'
 import { BAMLProject } from '@/lib/exampleProjects'
@@ -13,14 +12,17 @@ import Link from 'next/link'
 import { useEffect, useRef } from 'react'
 import {
   activeFileAtom,
+  activeFileNameAtom,
   currentEditorFilesAtom,
   currentParserDbAtom,
   fileDiagnostics,
   functionTestCaseAtom,
+  project_root,
   unsavedChangesAtom,
 } from '../_atoms/atoms'
 import { langs } from '@uiw/codemirror-extensions-langs'
 import { Language, LanguageSupport } from '@codemirror/language'
+import { lintFn, updateFileAtom } from '@baml/playground-common'
 
 type LintResponse = {
   diagnostics: LinterError[]
@@ -52,73 +54,75 @@ export interface LinterInput {
   selected_tests: Record<string, string>
 }
 
-let wasmModuleCache: any = null
 
 
-async function bamlLinter(_view: any): Promise<Diagnostic[]> {
-  if (!wasmModuleCache) {
-    wasmModuleCache = await import('@gloo-ai/baml-schema-wasm-web')
-  }
-  const lint = wasmModuleCache.lint
-  const currentFiles = atomStore.get(currentEditorFilesAtom) as EditorFile[]
-  const selectedTests = atomStore.get(functionTestCaseAtom) as Record<string, string>
-  const linterInput: LinterInput = {
-    root_path: `${BAML_DIR}`,
-    files: currentFiles.filter((f) => f.path.includes(BAML_DIR)).map((f) => ({ path: f.path, content: f.content })),
-    selected_tests: selectedTests,
-  }
+// async function bamlLinter(_view: any): Promise<Diagnostic[]> {
+//   const lint = await lintFn();
+//   const currentFiles = atomStore.get(currentEditorFilesAtom);
+//   const selectedTests = atomStore.get(functionTestCaseAtom)
 
-  const res = lint(JSON.stringify(linterInput))
-  const parsedRes = JSON.parse(res) as LintResponse
-  const BamlDB = new Map<string, any>()
-  BamlDB.set('baml_src', res)
+//   console.log('linting', currentFiles, selectedTests)
+//   const linterInput: LinterInput = {
+//     root_path: `${BAML_DIR}`,
+//     files: currentFiles.filter((f) => f.path.includes(BAML_DIR)).map((f) => ({ path: f.path, content: f.content })),
+//     selected_tests: selectedTests,
+//   }
 
-  if (parsedRes.ok) {
-    atomStore.set(currentParserDbAtom, parsedRes.response)
-  }
+//   const res = lint(JSON.stringify(linterInput))
+//   const parsedRes = JSON.parse(res) as LintResponse
+//   const BamlDB = new Map<string, any>()
+//   BamlDB.set('baml_src', res)
 
-  const allDiagnostics = parsedRes.diagnostics.map((d) => {
-    return {
-      from: d.start,
-      to: d.end,
-      message: d.text,
-      severity: d.is_warning ? 'warning' : ('error' as Diagnostic['severity']),
-      source: d.source_file,
-    }
-  })
+//   if (parsedRes.ok) {
+//     atomStore.set(currentParserDbAtom, parsedRes.response)
+//   }
 
-  atomStore.set(fileDiagnostics, allDiagnostics)
+//   const allDiagnostics = parsedRes.diagnostics.map((d) => {
+//     return {
+//       from: d.start,
+//       to: d.end,
+//       message: d.text,
+//       severity: d.is_warning ? 'warning' : ('error' as Diagnostic['severity']),
+//       source: d.source_file,
+//     }
+//   })
 
-  return allDiagnostics.filter((d) => d.source === atomStore.get(activeFileAtom)?.path)
-}
+//   atomStore.set(fileDiagnostics, allDiagnostics)
+
+//   const activeFileName = atomStore.get(activeFileNameAtom)
+
+//   return allDiagnostics.filter((d) => d.source === activeFileName)
+// }
 
 function makeLinter() {
-  return linter(bamlLinter, { delay: 200 })
+  // return linter(bamlLinter, { delay: 200 })
 }
 
 const comparment = new Compartment()
-const extensions: Extension[] = [BAML(), EditorView.lineWrapping, comparment.of(makeLinter())]
+// const extensions: Extension[] = [BAML(), EditorView.lineWrapping, comparment.of(makeLinter())]
 
 const extensionMap = {
   ts: [langs.tsx(), EditorView.lineWrapping],
   py: [langs.python(), EditorView.lineWrapping],
   json: [langs.json(), EditorView.lineWrapping],
-  baml: [extensions],
+  baml: [],
 }
-const getLanguage = (filePath: string | undefined): Extension[] => {
+const getLanguage = (filePath: string | null): Extension[] => {
   const extension = filePath?.split('.').pop()
   return extensionMap[extension as keyof typeof extensionMap] ?? []
 }
 export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
   const [editorFiles, setEditorFiles] = useAtom(currentEditorFilesAtom)
-  const [activeFile, setActiveFile] = useAtom(activeFileAtom)
+  const [activeFileName, setActiveFileName] = useAtom(activeFileNameAtom)
+  const activeFile = useAtomValue(activeFileAtom)
+
   const ref = useRef<ReactCodeMirrorRef>({})
 
   useEffect(() => {
     const mainBaml =
       project.files.find((f) => f.path.endsWith('.baml') && !f.path.endsWith('clients.baml')) ?? project.files[0]
     if (mainBaml) {
-      setActiveFile(mainBaml)
+      setActiveFileName(mainBaml.path)
     }
   }, [project.id])
 
@@ -127,7 +131,7 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
     if (ref.current?.view) {
       const view = ref.current.view
       view.dispatch({
-        effects: comparment.reconfigure([makeLinter()]),
+        // effects: comparment.reconfigure([makeLinter()]),
       })
     }
   }, [editorFiles])
@@ -136,20 +140,21 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
 
   const setUnsavedChanges = useSetAtom(unsavedChangesAtom)
 
-  const langExtensions = getLanguage(activeFile?.path)
+  const langExtensions = getLanguage(activeFileName)
+  const updateFile = useSetAtom(updateFileAtom)
 
   return (
     <div className="w-full">
       <div className="flex px-3 py-1 h-fit gap-x-6 overflow-clip min-h-[20px]">
         <>
           {editorFiles
-            .filter((f) => f.path === activeFile?.path)
+            .filter((f) => f.path === activeFileName)
             .map((file) => (
               <Button
                 variant={'ghost'}
                 key={file.path}
-                onClick={() => setActiveFile(file)}
-                className={`${activeFile?.path === file.path
+                onClick={() => setActiveFileName(file.path)}
+                className={`${activeFileName === file.path
                   ? '  border-b-[2px] border-b-blue-400 bg-background text-blue-500 hover:bg-vscode-selection-background hover:text-blue-500'
                   : 'hover:text-black/80 bg-background text-gray-500 hover:bg-vscode-selection-background hover:text-gray-5=400'
                   }  h-[20px] rounded-b-none rounded-tl-lg  border-r-0 px-1 text-xs  font-medium`}
@@ -176,31 +181,45 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
           maxWidth="100%"
           style={{ width: '100%', height: '100%' }}
           onChange={async (val, viewUpdate) => {
-            setEditorFiles((prev) => {
-              if (!activeFile) {
-                return prev
-              }
-              const files = prev as EditorFile[] // because of jotai jsonstorage this becomes a promise or a normal object and this isnt a promise.
-              if (!activeFile) {
-                return files
-              }
-              const fileIndex = files.findIndex((file) => file.path === activeFile.path)
+            if (activeFile) {
+              console.log('updating file due to onChange', activeFile.path)
+              updateFile({
+                reason: `updating file due to onChange: ${activeFile.path}`,
+                root_path: project_root,
+                files: [
+                  {
+                    name: activeFile.path,
+                    content: val,
+                  }
+                ]
+              })
+            }
 
-              const updatedFile: EditorFile = {
-                path: activeFile.path,
-                content: val,
-              }
+            // setEditorFiles((prev) => {
+            //   if (!activeFile) {
+            //     return prev
+            //   }
+            //   const files = prev as EditorFile[] // because of jotai jsonstorage this becomes a promise or a normal object and this isnt a promise.
+            //   if (!activeFile) {
+            //     return files
+            //   }
+            //   const fileIndex = files.findIndex((file) => file.path === activeFile.path)
 
-              // Update the file in place if it exists
-              if (fileIndex !== -1) {
-                files[fileIndex] = updatedFile
-              } else {
-                files.push(updatedFile)
-              }
+            //   const updatedFile: EditorFile = {
+            //     path: activeFile.path,
+            //     content: val,
+            //   }
 
-              // Return a new array to ensure React state update triggers re-render.
-              return [...files]
-            })
+            //   // Update the file in place if it exists
+            //   if (fileIndex !== -1) {
+            //     files[fileIndex] = updatedFile
+            //   } else {
+            //     files.push(updatedFile)
+            //   }
+
+            //   // Return a new array to ensure React state update triggers re-render.
+            //   return [...files]
+            // })
             window.history.replaceState(null, '', '/')
             setUnsavedChanges(true)
           }}

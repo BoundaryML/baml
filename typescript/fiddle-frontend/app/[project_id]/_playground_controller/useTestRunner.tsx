@@ -13,7 +13,7 @@ const baseUrl = prodBaseURL
 export const useTestRunner = () => {
   const setTestRunOutput = useSetAtom(testRunOutputAtom)
   const fetchData = useAtomCallback(async (get, set, testRequest: TestRequest) => {
-    const editorFiles = await get(currentEditorFilesAtom)
+    const editorFiles = get(currentEditorFilesAtom)
     const testState = new TestState()
 
     setTestRunOutput((prev) => {

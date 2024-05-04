@@ -1,4 +1,6 @@
-export { EventListener as ASTProvider } from "./baml_wasm_web/EventListener";
+export { default as JotaiProvider } from "./baml_wasm_web/JotaiProvider";
+
+export { EventListener as ASTProvider, selectedRtFunctionAtom, selectedRtTestCaseAtom, lintFn, availableFunctionsAtom, renderPromptAtom, versionAtom, projectFilesAtom, updateFileAtom } from "./baml_wasm_web/EventListener";
 // export { ASTProvider } from "./shared/ASTProvider";
 export { default as FunctionPanel } from "./shared/FunctionPanel";
 export { FunctionSelector } from "./shared/Selectors";

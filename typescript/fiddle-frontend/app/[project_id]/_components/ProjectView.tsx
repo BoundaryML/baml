@@ -14,9 +14,10 @@ import {
   CustomErrorBoundary,
   FunctionPanel,
   FunctionSelector,
+  selectedRtFunctionAtom,
+  updateFileAtom,
   useSelections,
 } from '@baml/playground-common'
-import { ASTContext } from '@baml/playground-common/shared/ASTProvider'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { useHydrateAtoms } from 'jotai/utils'
 import Image from 'next/image'
@@ -32,6 +33,7 @@ import {
   currentParserDbAtom,
   exploreProjectsOpenAtom,
   productTourDoneAtom,
+  project_root,
   testRunOutputAtom,
   unsavedChangesAtom,
 } from '../_atoms/atoms'
@@ -47,15 +49,20 @@ import posthog from 'posthog-js'
 import { isMobile } from 'react-device-detect'
 
 const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
-  const setEditorFiles = useSetAtom(currentEditorFilesAtom)
   const setTestRunOutput = useSetAtom(testRunOutputAtom)
   useKeybindingOverrides()
   // Tried to use url pathnames for this but nextjs hijacks the pathname state (even the window.location) so we have to manually track unsaved changes in the app.
   const [unsavedChanges, setUnsavedChanges] = useAtom(unsavedChangesAtom)
+  const updateFile = useSetAtom(updateFileAtom)
 
   useEffect(() => {
     if (project && project?.files?.length > 0) {
-      setEditorFiles([...project.files])
+      updateFile({
+        reason: 'new_project',
+        root_path: project_root,
+        files: project.files.map((f) => ({ name: f.path, content: f.content })),
+        replace_all: true,
+      })
     }
   }, [project.id])
   const [projectName, setProjectName] = useState(project.name)
@@ -70,7 +77,12 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
         setTestRunOutput(project.testRunOutput)
       }
       if (project.files) {
-        setEditorFiles(project.files)
+        updateFile({
+          reason: 'new_project_2',
+          root_path: project_root,
+          files: project.files.map((f) => ({ name: f.path, content: f.content })),
+          replace_all: true,
+        })
       }
     }
   }, [project.id])
@@ -353,39 +365,51 @@ const PlaygroundView = () => {
   // }, [testRunOutput])
   return <>
     <CustomErrorBoundary>
-      Hi!
+      <ASTProvider>
+        <div className="relative flex flex-col gap-2 px-2 pb-4">
+          <div className="absolute z-10 flex flex-col items-end gap-1 right-8 top-2 text-end">
+            <TestToggle />
+          </div>
+          {/* <FunctionSelector /> */}
+          {/* <Separator className="bg-vscode-textSeparator-foreground" /> */}
+          {/* <FunctionPanel /> */}
+        </div>
+        {/* <InitialTour /> */}
+        {/* <PostTestRunTour /> */}
+      </ASTProvider>
     </CustomErrorBoundary>
   </>
 
-  return (
-    <>
-      <CustomErrorBoundary>
-        <ASTProvider>
-          <div className="relative flex flex-col gap-2 px-2 pb-4">
-            <div className="absolute z-10 flex flex-col items-end gap-1 right-8 top-2 text-end">
-              <TestToggle />
-            </div>
-            <FunctionSelector />
+  // return (
+  //   <>
+  //     <CustomErrorBoundary>
+  //       <ASTProvider>
+  //         <div className="relative flex flex-col gap-2 px-2 pb-4">
+  //           <div className="absolute z-10 flex flex-col items-end gap-1 right-8 top-2 text-end">
+  //             <TestToggle />
+  //           </div>
+  //           <FunctionSelector />
 
-            {/* <Separator className="bg-vscode-textSeparator-foreground" /> */}
-            <FunctionPanel />
-          </div>
-          <InitialTour />
-          <PostTestRunTour />
-        </ASTProvider>
-      </CustomErrorBoundary>
-    </>
-  )
+  //           {/* <Separator className="bg-vscode-textSeparator-foreground" /> */}
+  //           <FunctionPanel />
+  //         </div>
+  //         <InitialTour />
+  //         <PostTestRunTour />
+  //       </ASTProvider>
+  //     </CustomErrorBoundary>
+  //   </>
+  // )
 }
 
 const TestToggle = () => {
-  const { setSelection } = useContext(ASTContext)
-  const { showTests, func } = useSelections()
+  // const { setSelection } = useContext(ASTContext)
+  const selectedFunc = useAtomValue(selectedRtFunctionAtom);
+  const showTests = true;
 
   // useEffect(() => {
   //   setSelection(undefined, undefined, undefined, undefined, false)
   // }, [])
-  const numTests = func?.test_cases?.length ?? 0
+  const numTests = selectedFunc?.test_cases?.length ?? 0
 
   return (
     <Button
@@ -394,7 +418,9 @@ const TestToggle = () => {
         'tour-test-button p-1 text-xs w-fit h-fit border-vscode-textSeparator-foreground bg-vscode-button-background gap-x-2 pr-2',
         [!showTests ? 'bg-vscode-button-background' : 'bg-vscode-panel-background'],
       )}
-      onClick={() => setSelection(undefined, undefined, undefined, undefined, !showTests)}
+      onClick={() => {
+        // TODO: @hellovai
+      }}
     >
       <FlaskConical size={16} />
       <span>{showTests ? 'Hide tests' : `Show  ${numTests > 0 ? numTests : ''} tests`}</span>

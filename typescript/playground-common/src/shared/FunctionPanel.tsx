@@ -1,3 +1,5 @@
+'use client'
+
 /// Content once a function has been selected.
 
 import { TestResult } from '@baml/common'

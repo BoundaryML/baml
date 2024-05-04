@@ -1,15 +1,27 @@
-import { atomStore, sessionStore } from "@/app/_components/JotaiProvider"
 import { EditorFile } from "@/app/actions"
 // import { ParserDBFunctionTestModel } from "@/lib/exampleProjects"
 import { ParserDatabase, TestState } from "@baml/common"
+import { projectFilesAtom, updateFileAtom } from "@baml/playground-common"
 import { Diagnostic } from "@codemirror/lint"
 import { atom } from "jotai"
 import { atomWithStorage } from "jotai/utils"
 
+
+export const project_root = "baml_src";
+export const currentEditorFilesAtom = atom(
+  (get) => {
+    const files = get(projectFilesAtom(project_root));
+    return Object.entries(files).map(([path, content]): EditorFile => ({
+      path, content
+    }));
+  }
+);
 export const currentParserDbAtom = atom<ParserDatabase | null>(null)
-export const currentEditorFilesAtom = atomWithStorage<EditorFile[]>('files', [], sessionStore as any)
+
 // Name of the function -> Name of currently rendered test
-export const functionTestCaseAtom = atomWithStorage<{ [key: string]: string }>('function_test_cases', {}, sessionStore as any)
+export const functionTestCaseAtom = atom<{ [key: string]: string }>({})
+
+
 // export const functionsAndTestsAtom = atomWithStorage<ParserDBFunctionTestModel[]>(
 //   'parserdb_functions',
 //   [],
@@ -18,7 +30,13 @@ export const functionTestCaseAtom = atomWithStorage<{ [key: string]: string }>('
 export const testRunOutputAtom = atom<TestRunOutput | null>(null)
 export const unsavedChangesAtom = atom<boolean>(false);
 
-export const activeFileAtom = atom<EditorFile | null>(null);
+export const activeFileNameAtom = atom<string | null>(null);
+export const activeFileAtom = atom((get) => {
+  const files = get(currentEditorFilesAtom);
+  const activeFileName = get(activeFileNameAtom);
+  return files.find(f => f.path === activeFileName);
+})
+
 export const fileDiagnostics = atom<Diagnostic[]>([]);
 export const emptyDirsAtom = atom<string[]>([]);
 export const exploreProjectsOpenAtom = atom<boolean>(false);

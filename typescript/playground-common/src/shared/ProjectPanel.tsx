@@ -1,3 +1,5 @@
+'use client'
+
 import { useContext, useState } from 'react'
 import { ASTContext } from './ASTProvider'
 import { VSCodeButton } from '@vscode/webview-ui-toolkit/react'

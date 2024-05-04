@@ -2,10 +2,11 @@ import clsx from 'clsx'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { ArrowDown, ArrowRight, ChevronDown, ChevronRight, Edit, Edit2, File, Folder, X } from 'lucide-react'
 import { NodeRendererProps } from 'react-arborist'
-import { activeFileAtom, currentEditorFilesAtom, emptyDirsAtom, fileDiagnostics } from '../../_atoms/atoms'
+import { activeFileAtom, activeFileNameAtom, currentEditorFilesAtom, emptyDirsAtom, fileDiagnostics, project_root } from '../../_atoms/atoms'
 import { EditorFile } from '@/app/actions'
 import { useEffect } from 'react'
 import { SiPython, SiTypescript } from 'react-icons/si'
+import { updateFileAtom } from '@baml/playground-common'
 
 export type Entity = {
   id: string
@@ -34,15 +35,16 @@ const Node = ({ node, style, dragHandle, tree }: NodeRendererProps<any>) => {
   const CustomIcon = node.data.icon
   const iconColor = node.data.iconColor
   const [editorFiles, setEditorFiles] = useAtom(currentEditorFilesAtom)
-  const setActiveFile = useSetAtom(activeFileAtom)
   const diagnostics = useAtomValue(fileDiagnostics)
   const setEmptyDirs = useSetAtom(emptyDirsAtom)
+  const updateFile = useSetAtom(updateFileAtom)
+  const [activeFileName, setActiveFileName] = useAtom(activeFileNameAtom)
 
   useEffect(() => {
     if (node.isSelected) {
       const editorFile = editorFiles.find((f) => f.path === node.id)
       if (!editorFile) return
-      setActiveFile(editorFile)
+      setActiveFileName(editorFile.path)
     }
   }, [node.isSelected, editorFiles])
 
@@ -69,8 +71,7 @@ const Node = ({ node, style, dragHandle, tree }: NodeRendererProps<any>) => {
   return (
     <div
       className={clsx(
-        `group relative px-2 py-1 cursor-pointer overflow-x-clip flex-flex-col text-xs ${
-          node.state.isSelected ? 'isSelected' : ''
+        `group relative px-2 py-1 cursor-pointer overflow-x-clip flex-flex-col text-xs ${node.state.isSelected ? 'isSelected' : ''
         }`,
         [node.state.isSelected ? 'bg-zinc-600' : ''],
       )}
@@ -102,15 +103,15 @@ const Node = ({ node, style, dragHandle, tree }: NodeRendererProps<any>) => {
                 if (e.key === 'Escape') node.reset()
                 if (e.key === 'Enter') {
                   node.submit(e.currentTarget.value)
-                  setEditorFiles((prev) => {
-                    prev = prev as EditorFile[]
-                    return prev.map((f) => {
-                      if (f.path === node.id) {
-                        const filePathWithNoFilename = f.path.split('/').slice(0, -1).join('/')
-                        return { ...f, path: `${filePathWithNoFilename}/${e.currentTarget.value}` }
-                      }
-                      return f
-                    })
+
+                  const filePathWithNoFilename = node.id.split('/').slice(0, -1).join('/');
+                  const newFilePath = `${filePathWithNoFilename}/${e.currentTarget.value}`
+
+                  // Rename action.
+                  updateFile({
+                    reason: 'renaming_file',
+                    root_path: project_root,
+                    files: [{ name: node.id, content: undefined }, { name: newFilePath, content: node.data.content }],
                   })
 
                   setEmptyDirs((prev) => {
@@ -154,9 +155,10 @@ const Node = ({ node, style, dragHandle, tree }: NodeRendererProps<any>) => {
               onClick={() => {
                 tree.delete(node.id)
 
-                setEditorFiles((prev) => {
-                  prev = prev as EditorFile[]
-                  return prev.filter((f) => f.path !== node.id)
+                updateFile({
+                  reason: 'deleting_file',
+                  root_path: project_root,
+                  files: [{ name: node.id, content: undefined }],
                 })
                 setEmptyDirs((prev) => {
                   prev = prev as string[]

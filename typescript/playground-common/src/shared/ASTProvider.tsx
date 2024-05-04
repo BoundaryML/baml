@@ -1,3 +1,5 @@
+'use client'
+
 import CustomErrorBoundary from '../utils/ErrorFallback'
 import { ParserDatabase, TestState } from '@baml/common'
 import { VSCodeButton } from '@vscode/webview-ui-toolkit/react'

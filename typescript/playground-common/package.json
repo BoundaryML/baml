@@ -88,6 +88,7 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.0.0",
     "cmdk": "^1.0.0",
+    "fast-deep-equal": "^3.1.3",
     "js-tiktoken": "^1.0.10",
     "json-schema-empty": "^1.1.1",
     "json-schema-faker": "^0.5.6",
