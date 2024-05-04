@@ -4,7 +4,7 @@ import { atom, useSetAtom, useAtomValue, useAtom } from 'jotai';
 import { atomFamily } from 'jotai/utils';
 import CustomErrorBoundary from "../utils/ErrorFallback";
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react";
-import { WasmProject, WasmRuntimeContext, WasmRuntime } from "@gloo-ai/baml-schema-wasm-web";
+import type { WasmProject, WasmRuntimeContext, WasmRuntime } from "@gloo-ai/baml-schema-wasm-web";
 
 const wasm = (await import("@gloo-ai/baml-schema-wasm-web/baml_schema_build"));
 
@@ -78,8 +78,10 @@ const updateFileAtom = atom(null, async (get, set, { root_path, files }: { root_
     console.log("Created new project", project);
   }
   let rt = undefined;
+  let diag = undefined;
   try {
     rt = project.runtime();
+    diag = project.diagnostics(rt);
   } catch (e) {
     let WasmDiagnosticError = wasm.WasmDiagnosticError;
     if (e instanceof Error) {
@@ -206,10 +208,11 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
 
   return (
     <>
+      <div className="absolute top-2 right-2 text-xs">Runtime Version: {version}</div>
       {selectedProject === null ? (
         availableProjects.length === 0 ? (
           <div>
-            No baml projects loaded yet.
+            No baml projects loaded yet
             <br />
             Open a baml file or wait for the extension to finish loading!
           </div>
