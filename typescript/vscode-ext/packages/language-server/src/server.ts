@@ -34,7 +34,7 @@ import type { LSOptions, LSSettings } from './lib/types'
 // import { getVersion, getEnginesVersion } from './lib/wasm/internals'
 import { BamlDirCache } from './file/fileCache'
 import { LinterInput } from './lib/wasm/lint'
-import { cliBuild, cliCheckForUpdates, cliVersion } from './baml-cli'
+// import { cliBuild, cliCheckForUpdates, cliVersion } from './baml-cli'
 import { ParserDatabase, TestRequest } from '@baml/common'
 // import { FileChangeType } from 'vscode'
 import fs from 'fs'
@@ -379,10 +379,10 @@ export function startServer(options?: LSOptions): void {
 
   documents.onDidSave(async (change: { document: TextDocument }) => {
     await bamlProjectManager.save_file(URI.parse(change.document.uri), change.document.getText())
-    connection.sendNotification('baml/message', {
-      type: 'info',
-      message: 'Saved BAML client!',
-    });
+    // connection.sendNotification('baml/message', {
+    //   type: 'info',
+    //   message: 'Saved BAML client!',
+    // });
 
     // try {
     //   const cliPath = config?.path || 'baml'
@@ -664,13 +664,14 @@ export function startServer(options?: LSOptions): void {
   connection.onRequest('cliVersion', async () => {
     console.log('Checking baml version at ' + config?.path)
     try {
-      const res = await new Promise<string>((resolve, reject) => {
-        cliVersion(config?.path || 'baml', reject, (ver) => {
-          resolve(ver)
-        })
-      })
+      // const res = await new Promise<string>((resolve, reject) => {
+      //   cliVersion(config?.path || 'baml', reject, (ver) => {
+      //     resolve(ver)
+      //   })
+      // })
 
-      return res
+      // return res
+      return undefined;
     } catch (e: any) {
       if (e instanceof Error) {
         console.log('Error getting cli version' + e.message + ' ' + e.stack)
@@ -684,13 +685,14 @@ export function startServer(options?: LSOptions): void {
   connection.onRequest('cliCheckForUpdates', async () => {
     console.log('Calling baml version --check using ' + config?.path)
     try {
-      const res = await new Promise<string>((resolve, reject) => {
-        cliCheckForUpdates(config?.path || 'baml', reject, (ver) => {
-          resolve(ver)
-        })
-      })
+      // const res = await new Promise<string>((resolve, reject) => {
+      //   cliCheckForUpdates(config?.path || 'baml', reject, (ver) => {
+      //     resolve(ver)
+      //   })
+      // })
 
-      return res
+      // return res
+      return undefined;
     } catch (e: any) {
       if (e instanceof Error) {
         console.log('Error getting cli version' + e.message + ' ' + e.stack)

@@ -37,7 +37,7 @@ const FunctionDropdown: React.FC = () => {
       </PopoverTrigger>
       <PopoverContent className="w-1/3 min-w-[400px] p-0">
         <SearchBarWithSelector
-          options={functions.map((func) => ({ value: func.name }))}
+          options={functions.map((func) => ({ value: func.name, label: func.test_cases.length > 0 ? `${func.name} (${func.test_cases.length})` : undefined }))}
           onChange={(value) => {
             setSelected(value);
             setOpen(false)
