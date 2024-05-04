@@ -41,19 +41,53 @@ const runtimeCtxRaw = atom<WasmRuntimeContext | null>(null)
 const runtimeCtx = atom((get) => {
   let ctx = get(runtimeCtxRaw);
   if (!ctx) {
-    throw new Error("Runtime context not initialized");
+    throw new Error("WasmRuntimeContext was never called with set(...)");
   }
   return ctx;
-}, (get, set, ctx: WasmRuntimeContext) => {
-  set(runtimeCtxRaw, ctx);
 });
 
 
+
 const availableProjectsAtom = atom<string[]>([]);
-const selectedProjectAtom = atomWithStorage<string | null>('baml-selected-project', null, sessionStore);
-const selectedFunctionAtom = atomWithStorage<string | null>('baml-selected-function', null, sessionStore);
-const selectedTestCaseAtom = atomWithStorage<string | null>('baml-selected-testcase', null, sessionStore);
+const selectedProjectAtomRaw = atomWithStorage<string | null>('baml-selected-project', null, sessionStore);
+const selectedFunctionAtomRaw = atomWithStorage<string | null>('baml-selected-function', null, sessionStore);
+const selectedTestCaseAtomRaw = atomWithStorage<string | null>('baml-selected-testcase', null, sessionStore);
 const filesAtom = atomWithStorage<Record<string, string>>('baml-files', {}, sessionStore);
+
+export const selectedFunctionAtom = atom((get) => {
+  let functions = get(availableFunctionsAtom);
+  let name = get(selectedFunctionAtomRaw)
+  if (functions.find(f => f.name == name) !== undefined) {
+    return name
+  }
+  return functions.at(0)?.name ?? null
+}, (get, set, name: string) => {
+  set(selectedFunctionAtomRaw, name)
+})
+export const selectedProjectAtom = atom((get) => {
+  let projects = get(availableProjectsAtom);
+  let name = get(selectedProjectAtomRaw);
+  if (projects.find(f => f === name)) {
+    return name
+  }
+  return projects.at(0) ?? null
+}, (get, set, name: string) => {
+  set(selectedFunctionAtomRaw, name)
+})
+export const selectedTestCaseAtom = atom((get) => {
+  let selected_function = get(selectedRtFunctionAtom);
+  if (!selected_function) {
+    return null
+  }
+  let test_case_name = get(selectedTestCaseAtomRaw);
+  if (selected_function.test_cases.find(t => t.name === test_case_name) !== undefined) {
+    return test_case_name
+  }
+
+  return selected_function.test_cases.at(0)?.name ?? null;
+}, (get, set, test_case_name: string) => {
+  set(selectedFunctionAtomRaw, test_case_name)
+})
 
 const projectAtom = atom<WasmProject | null>(null);
 const runtimesAtom = atom<{
@@ -155,7 +189,7 @@ const selectedRuntimeAtom = atom((get) => {
 });
 
 export const versionAtom = atom(async (get) => {
-  (await wasm()).version();
+  return (await wasm()).version();
 });
 
 export const availableFunctionsAtom = atom((get) => {
@@ -210,6 +244,8 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
   const removeProject = useSetAtom(removeProjectAtom);
   const availableProjects = useAtomValue(availableProjectsAtom);
   const [selectedProject, setSelectedProject] = useAtom(selectedProjectAtom);
+  const setRuntimeCtx = useSetAtom(runtimeCtxRaw);
+  const version = useAtomValue(versionAtom);
 
   useEffect(() => {
     let fn = (event: MessageEvent<{
@@ -239,11 +275,22 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
     }
 
     window.addEventListener('message', fn);
+    wasm().then((w) => {
+      setRuntimeCtx((prev) => {
+        if (prev) {
+          return prev
+        } else {
+          return new w.WasmRuntimeContext()
+        }
+      })
+    });
+
     () => window.removeEventListener('message', fn);
   });
 
   return (
     <>
+      <div className="absolute bottom-2 right-2 text-xs bg-background pl-2 pt-1">BAML Version: {version}</div>
       {selectedProject === null ? (
         availableProjects.length === 0 ? (
           <div>

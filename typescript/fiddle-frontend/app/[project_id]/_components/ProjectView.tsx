@@ -368,9 +368,9 @@ const PlaygroundView = () => {
       <ASTProvider>
         <div className="relative flex flex-col gap-2 px-2 pb-4">
           <div className="absolute z-10 flex flex-col items-end gap-1 right-8 top-2 text-end">
-            <TestToggle />
+            {/* <TestToggle /> */}
           </div>
-          {/* <FunctionSelector /> */}
+          <FunctionSelector />
           {/* <Separator className="bg-vscode-textSeparator-foreground" /> */}
           {/* <FunctionPanel /> */}
         </div>
