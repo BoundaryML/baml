@@ -13,7 +13,7 @@ import TestCasePanel from './TestCasePanel'
 import TestResultPanel from './TestResultOutcomes'
 import { useSelections } from './hooks'
 import { useAtomValue } from 'jotai'
-import { renderPromptAtom, selectedFunctionAtom } from '@/baml_wasm_web/EventListener'
+import { renderPromptAtom, selectedFunctionAtom } from '../baml_wasm_web/EventListener'
 
 function getTopPanelSize(showTests: boolean, test_results: TestResult[] | undefined): number {
   if (showTests) {
@@ -27,38 +27,52 @@ function getTopPanelSize(showTests: boolean, test_results: TestResult[] | undefi
 }
 
 const PromptPreview: React.FC = () => {
-  const propmtPreview = useAtomValue(renderPromptAtom);
+  const propmtPreview = useAtomValue(renderPromptAtom)
   if (!propmtPreview) return <div className="flex flex-col">No prompt preview!</div>
 
-  if (typeof propmtPreview === 'string') return <Snippet text={propmtPreview} type='error' client={{
-    identifier: {
-      end: 0,
-      source_file: '',
-      start: 0,
-      value: 'Error'
-    },
-    provider: 'baml-openai-chat',
-    model: 'gpt-4'
-  }} />
+  if (typeof propmtPreview === 'string')
+    return (
+      <Snippet
+        text={propmtPreview}
+        type="error"
+        client={{
+          identifier: {
+            end: 0,
+            source_file: '',
+            start: 0,
+            value: 'Error',
+          },
+          provider: 'baml-openai-chat',
+          model: 'gpt-4',
+        }}
+      />
+    )
 
   return (
     <div className="flex flex-col w-full h-full gap-4">
       {propmtPreview.as_chat()?.map((chat, idx) => (
         <div key={idx} className="flex flex-col">
-          <div className='flex flex-row'>{chat.role}</div>
+          <div className="flex flex-row">{chat.role}</div>
           {chat.parts.map((part, idx) => {
-            if (part.is_text()) return <Snippet key={idx} text={part.as_text()!} client={{
-              identifier: {
-                end: 0,
-                source_file: '',
-                start: 0,
-                value: propmtPreview.client_name
-              },
-              provider: 'baml-openai-chat',
-              model: 'gpt-4'
-            }} />
-            if (part.is_image()) return <img key={idx} src={part.as_image()} className='max-w-40' />
-            return null;
+            if (part.is_text())
+              return (
+                <Snippet
+                  key={idx}
+                  text={part.as_text()!}
+                  client={{
+                    identifier: {
+                      end: 0,
+                      source_file: '',
+                      start: 0,
+                      value: propmtPreview.client_name,
+                    },
+                    provider: 'baml-openai-chat',
+                    model: 'gpt-4',
+                  }}
+                />
+              )
+            if (part.is_image()) return <img key={idx} src={part.as_image()} className="max-w-40" />
+            return null
           })}
         </div>
       ))}
@@ -68,7 +82,7 @@ const PromptPreview: React.FC = () => {
 
 const FunctionPanel: React.FC = () => {
   const showTests = true
-  const selectedFunc = useAtomValue(selectedFunctionAtom);
+  const selectedFunc = useAtomValue(selectedFunctionAtom)
 
   const { test_results } = useSelections()
   const results = test_results ?? []
@@ -98,12 +112,12 @@ const FunctionPanel: React.FC = () => {
     >
       <TooltipProvider>
         <ResizablePanelGroup direction="vertical" className="h-full">
-          <ResizablePanel id="top-panel" ref={ref} className="flex w-full " defaultSize={topPanelSize}>
+          <ResizablePanel id="top-panel" ref={ref} className="flex w-full" defaultSize={topPanelSize}>
             <div className="w-full">
               <ResizablePanelGroup direction="horizontal" className="h-full">
                 <ResizablePanel defaultSize={60} className="px-0 overflow-y-auto">
                   <div className="relative w-full h-full overflow-y-auto">
-                    {/* <ScrollArea type="auto" className="flex w-full h-full pr-3 "> */}
+                    {/* <ScrollArea type="auto" className="flex w-full h-full pr-3"> */}
                     <div className="flex w-full h-full">
                       <PromptPreview />
                     </div>
@@ -126,7 +140,7 @@ const FunctionPanel: React.FC = () => {
           <ResizableHandle withHandle={false} className="bg-vscode-panel-border" />
           <ResizablePanel minSize={10} className="px-0 overflow-y-auto">
             <div
-              className={clsx('py-2 border-t h-full border-vscode-textSeparator-foreground', {
+              className={clsx('py-2 h-full border-t border-vscode-textSeparator-foreground', {
                 flex: showTests,
                 hidden: !showTests,
               })}

@@ -351,11 +351,11 @@ const PlaygroundView = () => {
   //     })
   //   }
   // }, [testRunOutput])
-  return <>
-    <CustomErrorBoundary>
-      Hi!
-    </CustomErrorBoundary>
-  </>
+  // return (
+  //   <>
+  //     <CustomErrorBoundary>TODO, implement playground view</CustomErrorBoundary>
+  //   </>
+  // )
 
   return (
     <>

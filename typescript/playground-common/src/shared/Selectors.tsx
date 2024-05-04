@@ -14,14 +14,14 @@ import { ChevronsUpDown, Check } from 'lucide-react'
 import SearchBarWithSelector from '../lib/searchbar'
 import { SFunction } from '@baml/common'
 import { useAtom, useAtomValue } from 'jotai'
-import { availableFunctionsAtom, selectedFunctionAtom } from '@/baml_wasm_web/EventListener'
+import { availableFunctionsAtom, selectedFunctionAtom } from '../baml_wasm_web/EventListener'
 
 const FunctionDropdown: React.FC = () => {
   const [open, setOpen] = useState(false)
-  const functions = useAtomValue(availableFunctionsAtom);
-  const [selected, setSelected] = useAtom(selectedFunctionAtom);
+  const functions = useAtomValue(availableFunctionsAtom)
+  const [selected, setSelected] = useAtom(selectedFunctionAtom)
 
-  const functionName = selected?.name;
+  const functionName = selected?.name
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -31,15 +31,18 @@ const FunctionDropdown: React.FC = () => {
           aria-expanded={open}
           className="max-w-[300px] justify-between flex hover:bg-vscode-editorSuggestWidget-selectedBackground hover:text-foreground"
         >
-          <span className="w-full -ml-2 text-left truncate">{functionName ?? 'Select a function...'}</span>
-          <ChevronsUpDown className="w-4 h-4 ml-2 opacity-50 shrink-0" />
+          <span className="-ml-2 w-full text-left truncate">{functionName ?? 'Select a function...'}</span>
+          <ChevronsUpDown className="ml-2 w-4 h-4 opacity-50 shrink-0" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-1/3 min-w-[400px] p-0">
         <SearchBarWithSelector
-          options={functions.map((func) => ({ value: func.name, label: func.test_cases.length > 0 ? `${func.name} (${func.test_cases.length})` : undefined }))}
+          options={functions.map((func) => ({
+            value: func.name,
+            label: func.test_cases.length > 0 ? `${func.name} (${func.test_cases.length})` : undefined,
+          }))}
           onChange={(value) => {
-            setSelected(value);
+            setSelected(value)
             setOpen(false)
           }}
         />
@@ -71,8 +74,8 @@ export const FunctionArgs: React.FC<{ func: SFunction }> = ({ func }) => {
 
 export const FunctionSelector: React.FC = () => {
   return (
-    <div className="flex flex-col items-start gap-1">
-      <div className="flex flex-row items-center gap-1">
+    <div className="flex flex-col gap-1 items-start">
+      <div className="flex flex-row gap-1 items-center">
         <ProjectToggle />
 
         <FunctionDropdown />
@@ -97,7 +100,7 @@ export const FunctionSelector: React.FC = () => {
         </VSCodeDropdown> */}
       </div>
       {/* {func && (
-        <div className="flex flex-row items-center gap-0 pl-2 text-xs text-vscode-descriptionForeground whitespace-nowrap">
+        <div className="flex flex-row gap-0 items-center pl-2 text-xs whitespace-nowrap text-vscode-descriptionForeground">
           <Link item={func.name} />
           {'('}
           <FunctionArgs func={func} /> {') → '}{' '}

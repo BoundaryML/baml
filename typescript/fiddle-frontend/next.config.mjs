@@ -7,6 +7,7 @@ const nextConfig = {
       asyncWebAssembly: true,
       syncWebAssembly: true,
       layers: true,
+      topLevelAwait: true,
     }
 
     if (!isServer) {

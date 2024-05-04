@@ -14,7 +14,7 @@ import {
 import { useMemo, useState } from 'react'
 import Link from './Link'
 import TypeComponent from './TypeComponent'
-import { Impl } from '@baml/common/src/parser_db'
+import { Impl } from '@baml/common'
 import clsx from 'clsx'
 import { TiktokenEncoding, Tiktoken, TiktokenModel, getEncoding, getEncodingNameForModel } from 'js-tiktoken'
 import { Checkbox } from '../components/ui/checkbox'
@@ -119,7 +119,7 @@ const CodeLine: React.FC<{
   return (
     <div>
       {lineNumberSpan}
-      <span className={clsx('font-mono text-xs inline-block', { 'whitespace-pre-wrap': wrapText })}>
+      <span className={clsx('inline-block font-mono text-xs', { 'whitespace-pre-wrap': wrapText })}>
         {renderLine({ text: line, showWhitespace, wrapText })}
       </span>
     </div>
@@ -190,7 +190,7 @@ export const Snippet: React.FC<{
   })
 
   const header = (
-    <div className="flex flex-wrap justify-start gap-4 px-2 py-2 text-xs whitespace-nowrap">
+    <div className="flex flex-wrap gap-4 justify-start px-2 py-2 text-xs whitespace-nowrap">
       {encodingName && (
         <PromptCheckbox checked={showTokens} onChange={(e) => setShowTokens(e)}>
           Show Tokens
@@ -221,7 +221,7 @@ export const Snippet: React.FC<{
     const tokenizedLines: [string, number][][] = [[]]
     tokenized.forEach((token, tokenIndex) => {
       const noNewlines = token.split('\n')
-        ; (tokenizedLines.at(-1) as [string, number][]).push([noNewlines.at(0) as string, tokenIndex])
+      ;(tokenizedLines.at(-1) as [string, number][]).push([noNewlines.at(0) as string, tokenIndex])
       for (let i = 1; i < noNewlines.length; i++) {
         tokenizedLines.push([['', tokenIndex]])
       }
@@ -239,7 +239,7 @@ export const Snippet: React.FC<{
     return (
       <div className={divStyle}>
         {header}
-        <pre className="w-full p-1 text-xs">{tokenizedContent}</pre>
+        <pre className="p-1 w-full text-xs">{tokenizedContent}</pre>
       </div>
     )
   } else {
@@ -247,7 +247,7 @@ export const Snippet: React.FC<{
     return (
       <div className={divStyle}>
         {header}
-        <pre className="w-full p-1 text-xs">
+        <pre className="p-1 w-full text-xs">
           {lines.map((line, index) => (
             <CodeLine
               key={index}
@@ -274,8 +274,8 @@ const PromptCheckbox = ({
   onChange: (e: any) => void
 }) => {
   return (
-    <div className="flex flex-row items-center gap-1">
-      <Checkbox checked={checked} onCheckedChange={onChange} className="border-vscode-descriptionForeground " />
+    <div className="flex flex-row gap-1 items-center">
+      <Checkbox checked={checked} onCheckedChange={onChange} className="border-vscode-descriptionForeground" />
       <span className="text-vscode-descriptionForeground">{children}</span>
     </div>
   )
@@ -329,10 +329,10 @@ const ImplPanel: React.FC<{ impl: Impl; showTab: boolean }> = ({ impl, showTab }
         id={`view-${func.name.value}-${impl.name.value}`}
         className="tour-prompt-preview"
       >
-        <div className="flex flex-col w-full gap-2">
+        <div className="flex flex-col gap-2 w-full">
           <div className="flex flex-col gap-1">
             <div className="flex flex-col items-start text-vscode-descriptionForeground">
-              <span className="flex flex-row items-center gap-1 text-sm font-semibold text-vscode-settings-headerForeground">
+              <span className="flex flex-row gap-1 items-center text-sm font-semibold text-vscode-settings-headerForeground">
                 <span>Prompt Preview</span>
                 <Link item={impl.name} display="Edit" />
               </span>

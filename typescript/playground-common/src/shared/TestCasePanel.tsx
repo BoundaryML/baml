@@ -21,7 +21,7 @@ import { TEMPLATES } from './TestCaseEditor/JsonEditorTemplates'
 import JsonView from 'react18-json-view'
 import { Badge } from '../components/ui/badge'
 import { useAtom, useAtomValue } from 'jotai'
-import { selectedFunctionAtom, selectedTestCaseAtom } from '@/baml_wasm_web/EventListener'
+import { selectedFunctionAtom, selectedTestCaseAtom } from '../baml_wasm_web/EventListener'
 import type { WasmTestCase } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 
 const uiSchema: UiSchema = {
@@ -45,9 +45,9 @@ const TestCasePanelEntry: React.FC<{ test_case: WasmTestCase }> = ({ test_case }
   const isRendered = useMemo(() => selectedTestCase?.name === test_case.name, [selectedTestCase, test_case])
 
   return (
-    <div key={test_case.name} className="flex flex-col w-full py-1 pr-2 overflow-x-clip group">
-      <div className="flex flex-row items-center justify-between">
-        <div className="flex flex-row items-center justify-center gap-x-1">
+    <div key={test_case.name} className="flex flex-col py-1 pr-2 w-full overflow-x-clip group">
+      <div className="flex flex-row justify-between items-center">
+        <div className="flex flex-row gap-x-1 justify-center items-center">
           <Button
             variant={'ghost'}
             size={'icon'}
@@ -79,7 +79,7 @@ const TestCasePanelEntry: React.FC<{ test_case: WasmTestCase }> = ({ test_case }
             <Play size={10} />
           </Button>
           {/* IDK why it doesnt truncate. Probably cause of the allotment */}
-          <div className="flex w-full flex-nowrap">
+          <div className="flex flex-nowrap w-full">
             <span className="h-[24px] max-w-[120px] text-center align-middle overflow-hidden flex-1 truncate">
               {test_case.name}
             </span>
@@ -88,7 +88,7 @@ const TestCasePanelEntry: React.FC<{ test_case: WasmTestCase }> = ({ test_case }
                 className="ml-2 bg-vscode-editorSuggestWidget-selectedBackground text-vscode-editorSuggestWidget-foreground hover:bg-vscode-editorSuggestWidget-selectedBackground"
                 variant="default"
               >
-                <div className="flex flex-row items-center gap-x-1">
+                <div className="flex flex-row gap-x-1 items-center">
                   <Pin size={12} /> Rendered
                 </div>
               </Badge>
@@ -185,7 +185,7 @@ const TestCasePanelEntry: React.FC<{ test_case: WasmTestCase }> = ({ test_case }
       >
         <Button
           variant={'ghost'}
-          className="items-start justify-start w-full px-1 py-1 text-left hover:bg-vscode-button-secondaryHoverBackground h-fit"
+          className="justify-start items-start px-1 py-1 w-full text-left hover:bg-vscode-button-secondaryHoverBackground h-fit"
         >
           
         </Button>
@@ -247,7 +247,7 @@ const autoGenTestCase = (func: Func, input_json_schema: any): TestCase => {
 
 const TestCasePanel: React.FC = () => {
   const { input_json_schema } = useSelections()
-  const selectedFunction = useAtomValue(selectedFunctionAtom);
+  const selectedFunction = useAtomValue(selectedFunctionAtom)
   const testCases = useMemo(() => selectedFunction?.test_cases ?? [], [selectedFunction])
 
   const [filter, setFilter] = useState<string>('')
@@ -274,7 +274,7 @@ const TestCasePanel: React.FC = () => {
         ) : (
           <>
             <Button
-              className="h-full px-1 py-1 text-xs bg-red-500 rounded-sm whitespace-nowrap bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground"
+              className="px-1 py-1 h-full text-xs whitespace-nowrap bg-red-500 rounded-sm bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground"
               // disabled={test_cases.length === 0}
               onClick={() => {
                 // const runTestRequest: TestRequest = {
@@ -303,7 +303,7 @@ const TestCasePanel: React.FC = () => {
           </>
         )}
       </div>
-      <div className="flex flex-col py-2 divide-y gap-y-1 divide-vscode-textSeparator-foreground">
+      <div className="flex flex-col gap-y-1 py-2 divide-y divide-vscode-textSeparator-foreground">
         {/* <pre>{JSON.stringify(input_json_schema, null, 2)}</pre> */}
         {/* <EditTestCaseForm
           key={'new'}
@@ -312,7 +312,7 @@ const TestCasePanel: React.FC = () => {
           func={func}
           getTestParams={(t) => getTestParams(func, t)}
         >
-          <Button className="flex flex-row text-sm gap-x-2 bg-vscode-dropdown-background text-vscode-dropdown-foreground hover:opacity-90 hover:bg-vscode-dropdown-background">
+          <Button className="flex flex-row gap-x-2 text-sm bg-vscode-dropdown-background text-vscode-dropdown-foreground hover:opacity-90 hover:bg-vscode-dropdown-background">
             <PlusIcon size={16} />
             <div>Add test case</div>
           </Button>
@@ -364,11 +364,11 @@ const EditTestCaseForm = ({
   return (
     <Dialog open={showForm} onOpenChange={setShowForm}>
       <DialogTrigger asChild={true}>{children}</DialogTrigger>
-      <DialogContent className="max-h-screen overflow-y-scroll bg-vscode-editorWidget-background border-vscode-textSeparator-foreground overflow-x-clip">
-        <DialogHeader className="flex flex-row items-center gap-x-4">
+      <DialogContent className="overflow-y-scroll max-h-screen bg-vscode-editorWidget-background border-vscode-textSeparator-foreground overflow-x-clip">
+        <DialogHeader className="flex flex-row gap-x-4 items-center">
           <DialogTitle className="text-xs font-semibold">{duplicate ? 'Duplicate test' : 'Edit test'}</DialogTitle>
 
-          <div className="flex flex-row items-center pb-1 gap-x-2">
+          <div className="flex flex-row gap-x-2 items-center pb-1">
             {testCase === undefined || duplicate ? (
               <VSCodeTextField
                 className="w-32"
@@ -432,10 +432,14 @@ const EditTestCaseForm = ({
 
 const TestCaseCard: React.FC<{ test_case: WasmTestCase; isRendered: boolean }> = ({ test_case, isRendered }) => {
   return (
-    <div className="flex flex-col max-w-full gap-2 text-xs text-left truncate text-vscode-descriptionForeground">
-      <div className="break-all whitespace-pre-wrap">
-        <div className='flex flex-col'>
-          {test_case.inputs.map((input) => <div key={input.name}><b>{input.name}:</b> {input.value}</div>)}
+    <div className="flex flex-col gap-2 max-w-full text-xs text-left truncate text-vscode-descriptionForeground">
+      <div className="whitespace-pre-wrap break-all">
+        <div className="flex flex-col">
+          {test_case.inputs.map((input) => (
+            <div key={input.name}>
+              <b>{input.name}:</b> {input.value}
+            </div>
+          ))}
         </div>
         {/* {test_case.content.substring(0, 120)}
         {test_case.content.length > 120 && '...'} */}
