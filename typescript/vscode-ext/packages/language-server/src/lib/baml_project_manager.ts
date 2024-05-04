@@ -26,14 +26,16 @@ class Project {
   private last_successful_runtime?: BamlWasm.WasmRuntime
   private current_runtime?: BamlWasm.WasmRuntime
 
-  constructor(private files: BamlWasm.WasmProject, private ctx: BamlWasm.WasmRuntimeContext, private onSuccess: (e: WasmDiagnosticError) => void) {
+  constructor(private files: BamlWasm.WasmProject, private ctx: BamlWasm.WasmRuntimeContext, private onSuccess: (e: WasmDiagnosticError, files: Record<string, string>) => void) {
   }
 
   update_runtime() {
     if (this.current_runtime == undefined) {
       try {
         this.current_runtime = this.files.runtime()
-        this.onSuccess(this.files.diagnostics(this.current_runtime))
+        const files = this.files.files()
+        const fileMap = Object.fromEntries(files.map((f): [string, string] => f.split("BAML_PATH_SPLTTER", 2) as [string, string]))
+        this.onSuccess(this.files.diagnostics(this.current_runtime), fileMap)
       } catch (e) {
         this.current_runtime = undefined
         throw e
@@ -176,7 +178,7 @@ class BamlProjectManager {
 
   private add_project(root_path: string, files: { [path: string]: string }) {
     const project = BamlWasm.WasmProject.new(root_path, files)
-    this.projects.set(root_path, new Project(project, new BamlWasm.WasmRuntimeContext(), (d) => {
+    this.projects.set(root_path, new Project(project, new BamlWasm.WasmRuntimeContext(), (d, files) => {
       this.handleMessage(d)
       this.notifier({ type: 'runtime_updated', root_path, files })
     }))

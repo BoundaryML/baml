@@ -2,14 +2,18 @@ use baml_runtime::{ChatMessagePart, RenderedPrompt};
 
 use wasm_bindgen::prelude::*;
 
-#[wasm_bindgen]
+#[wasm_bindgen(getter_with_clone)]
 pub struct WasmPrompt {
     prompt: RenderedPrompt,
+    pub client_name: String,
 }
 
-impl From<RenderedPrompt> for WasmPrompt {
-    fn from(prompt: RenderedPrompt) -> Self {
-        WasmPrompt { prompt }
+impl From<(RenderedPrompt, String)> for WasmPrompt {
+    fn from((prompt, client_name): (RenderedPrompt, String)) -> Self {
+        WasmPrompt {
+            prompt,
+            client_name,
+        }
     }
 }
 

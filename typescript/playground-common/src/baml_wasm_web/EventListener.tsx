@@ -6,6 +6,7 @@ import CustomErrorBoundary from "../utils/ErrorFallback";
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react";
 import type { WasmProject, WasmRuntimeContext, WasmRuntime, WasmDiagnosticError } from "@gloo-ai/baml-schema-wasm-web";
 import { AlertTriangle, CheckCircle, XCircle } from "lucide-react";
+import { projectFamilyAtom, projectFilesAtom, runtimeFamilyAtom } from "./baseAtoms";
 
 const wasm = (await import("@gloo-ai/baml-schema-wasm-web/baml_schema_build"));
 
@@ -60,19 +61,6 @@ export const selectedTestCaseAtom = atom((get) => {
 });
 
 
-const filesAtom = atom<Record<string, string>>({});
-const projectAtom = atom<WasmProject | null>(null);
-const runtimesAtom = atom<{
-  last_successful_runtime?: WasmRuntime,
-  current_runtime?: WasmRuntime,
-  diagnostics?: WasmDiagnosticError
-}>({});
-
-
-const projectFamilyAtom = atomFamily((root_path: string) => projectAtom);
-const runtimeFamilyAtom = atomFamily((root_path: string) => runtimesAtom);
-const projectFilesAtom = atomFamily((root_path: string) => filesAtom);
-
 const removeProjectAtom = atom(null, (get, set, root_path: string) => {
   set(projectFilesAtom(root_path), {});
   set(projectFamilyAtom(root_path), null);
@@ -81,9 +69,9 @@ const removeProjectAtom = atom(null, (get, set, root_path: string) => {
   set(availableProjectsAtom, availableProjects.filter(p => p !== root_path));
 });
 
-const updateFileAtom = atom(null, async (get, set, { root_path, files, replace_all }: { root_path: string, files: { name: string, content: string | undefined }[], replace_all?: true }) => {
+const updateFileAtom = atom(null, async (get, set, { reason, root_path, files, replace_all }: { reason: string, root_path: string, files: { name: string, content: string | undefined }[], replace_all?: true }) => {
+  console.debug(`Updating files due to ${reason}: ${files.length} files (${replace_all ? 'replace all' : 'update'})`);
   let _projFiles = get(projectFilesAtom(root_path));
-
   let filesToDelete = files.filter(f => f.content === undefined).map(f => f.name);
   let projFiles = {
     ..._projFiles
@@ -99,8 +87,9 @@ const updateFileAtom = atom(null, async (get, set, { root_path, files, replace_a
   }
 
 
+
   let project = get(projectFamilyAtom(root_path))
-  if (project) {
+  if (project && !replace_all) {
     for (let file of filesToDelete) {
       project.update_file(file, undefined);
     }
@@ -109,7 +98,6 @@ const updateFileAtom = atom(null, async (get, set, { root_path, files, replace_a
     }
   } else {
     project = wasm.WasmProject.new(root_path, projFiles);
-    console.log("Created new project", project);
   }
   let rt = undefined;
   let diag = undefined;
@@ -136,8 +124,8 @@ const updateFileAtom = atom(null, async (get, set, { root_path, files, replace_a
   }
 
   set(projectFilesAtom(root_path), projFiles);
-  set(projectAtom, project);
-  set(runtimesAtom, { last_successful_runtime: lastSuccessRt, current_runtime: rt, diagnostics: diag });
+  set(projectFamilyAtom(root_path), project);
+  set(runtimeFamilyAtom(root_path), { last_successful_runtime: lastSuccessRt, current_runtime: rt, diagnostics: diag });
 })
 
 const selectedRuntimeAtom = atom((get) => {
@@ -148,6 +136,16 @@ const selectedRuntimeAtom = atom((get) => {
 
   let runtime = get(runtimeFamilyAtom(project));
   return runtime.current_runtime ?? runtime.last_successful_runtime ?? null;
+});
+
+const selectedDiagnosticsAtom = atom((get) => {
+  let project = get(selectedProjectAtom);
+  if (!project) {
+    return null;
+  }
+
+  let runtime = get(runtimeFamilyAtom(project));
+  return runtime.diagnostics ?? null;
 });
 
 export const versionAtom = atom(async (get) => {
@@ -187,7 +185,7 @@ export const renderPromptAtom = atom((get) => {
 })
 
 export const numErrorsAtom = atom((get) => {
-  let diagnostics = get(runtimesAtom).diagnostics;
+  let diagnostics = get(selectedDiagnosticsAtom);
   if (!diagnostics) {
     return { errors: 0, warnings: 0 };
   }
@@ -242,10 +240,16 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
 
       switch (command) {
         case 'modify_file':
-          updateFile({ root_path: content.root_path, files: [{ name: content.name, content: content.content }] });
+          updateFile({
+            reason: 'modify_file',
+            root_path: content.root_path, files: [{ name: content.name, content: content.content }]
+          });
           break;
         case 'add_project':
-          updateFile({ root_path: content.root_path, files: Object.entries(content.files).map(([name, content]) => ({ name, content })) });
+          updateFile({
+            reason: 'add_project',
+            root_path: content.root_path, files: Object.entries(content.files).map(([name, content]) => ({ name, content })), replace_all: true
+          });
           break;
         case 'remove_project':
           removeProject(content.root_path)

@@ -39,7 +39,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         function_name: &str,
         ctx: &RuntimeContext,
         params: &HashMap<String, serde_json::Value>,
-    ) -> Result<RenderedPrompt> {
+    ) -> Result<(RenderedPrompt, String)> {
         let func = self.get_function(function_name, ctx)?;
         let baml_args = self.ir().check_function_params(&func, params)?;
 
@@ -47,7 +47,9 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         let client_name = renderer.client_name().to_string();
 
         let (client, _) = self.get_client(&client_name, ctx)?;
-        client.render_prompt(&renderer, &ctx, &baml_args)
+        let response = client.render_prompt(&renderer, &ctx, &baml_args)?;
+
+        Ok((response, client_name))
     }
 
     fn get_client(

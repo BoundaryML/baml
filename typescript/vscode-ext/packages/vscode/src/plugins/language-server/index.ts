@@ -274,8 +274,7 @@ const activateClient = (
       }
     })
 
-    client.onRequest('runtime_updated', (params: { root_path: string, files: Record<string, string> }) => {
-      console.log('runtime_updated', params)
+    client.onRequest('runtime_updated', (params: { root_path: string, files: Record<string, String> }) => {
       WebPanelView.currentPanel?.postMessage('add_project', params)
     })
 

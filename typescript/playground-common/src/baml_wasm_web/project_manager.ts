@@ -62,7 +62,7 @@ class Project {
     if (this.current_runtime == undefined) {
       try {
         this.current_runtime = this.files.runtime()
-        this.onSuccess(this.files.diagnostics(this.current_runtime), this.files.files() as Record<string, string>)
+        this.onSuccess(this.files.diagnostics(this.current_runtime), Object.fromEntries(this.files.files().map((f): [string, string] => f.split("BAML_PATH_SPLTTER", 1) as [string, string])))
       } catch (e) {
         this.current_runtime = undefined
         throw e

@@ -163,7 +163,7 @@ class TokenEncoderCache {
   }
 }
 
-const Snippet: React.FC<{
+export const Snippet: React.FC<{
   text: string
   type?: 'preview' | 'error'
   client: Impl['client']
@@ -221,7 +221,7 @@ const Snippet: React.FC<{
     const tokenizedLines: [string, number][][] = [[]]
     tokenized.forEach((token, tokenIndex) => {
       const noNewlines = token.split('\n')
-      ;(tokenizedLines.at(-1) as [string, number][]).push([noNewlines.at(0) as string, tokenIndex])
+        ; (tokenizedLines.at(-1) as [string, number][]).push([noNewlines.at(0) as string, tokenIndex])
       for (let i = 1; i < noNewlines.length; i++) {
         tokenizedLines.push([['', tokenIndex]])
       }

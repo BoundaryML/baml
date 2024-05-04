@@ -119,8 +119,15 @@ impl WasmProject {
     }
 
     #[wasm_bindgen]
-    pub fn files(&self) -> JsValue {
-        serde_wasm_bindgen::to_value(&self.files).unwrap()
+    pub fn files(&self) -> Vec<String> {
+        let mut saved_files = self.files.clone();
+        self.unsaved_files.iter().for_each(|(k, v)| {
+            saved_files.insert(k.clone(), v.clone());
+        });
+        saved_files
+            .iter()
+            .map(|(k, v)| format!("{}BAML_PATH_SPLTTER{}", k, v))
+            .collect()
     }
 
     #[wasm_bindgen]

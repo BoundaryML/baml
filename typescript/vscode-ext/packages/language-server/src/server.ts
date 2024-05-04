@@ -82,6 +82,7 @@ export function startServer(options?: LSOptions): void {
   const bamlProjectManager = new BamlProjectManager((params) => {
     switch (params.type) {
       case 'runtime_updated':
+        // console.log(`runtime_updated today! ${Object.keys(params.files).length}: ${Object.entries(params.files).length}`)
         connection.sendRequest('runtime_updated', params);
         break;
       case "diagnostic":

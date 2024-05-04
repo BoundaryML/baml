@@ -82,7 +82,7 @@ pub trait InternalRuntimeInterface {
         function_name: &str,
         ctx: &RuntimeContext,
         params: &HashMap<String, serde_json::Value>,
-    ) -> Result<RenderedPrompt>;
+    ) -> Result<(RenderedPrompt, String)>;
 
     fn ir(&self) -> &IntermediateRepr;
 }

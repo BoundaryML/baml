@@ -8,7 +8,7 @@ import { ImperativePanelHandle } from 'react-resizable-panels'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/ui/resizable'
 import { TooltipProvider } from '../components/ui/tooltip'
 import { ASTContext } from './ASTProvider'
-import ImplPanel from './ImplPanel'
+import ImplPanel, { Snippet } from './ImplPanel'
 import TestCasePanel from './TestCasePanel'
 import TestResultPanel from './TestResultOutcomes'
 import { useSelections } from './hooks'
@@ -38,7 +38,16 @@ const PromptPreview: React.FC = () => {
         <div key={idx} className="flex flex-col">
           <div className='flex flex-row'>{chat.role}</div>
           {chat.parts.map((part, idx) => {
-            if (part.is_text()) return <div key={idx} className='flex flex-row'>{part.as_text()}</div>
+            if (part.is_text()) return <Snippet key={idx} text={part.as_text()!} client={{
+              identifier: {
+                end: 0,
+                source_file: '',
+                start: 0,
+                value: propmtPreview.client_name
+              },
+              provider: 'baml-openai-chat',
+              model: 'gpt-4'
+            }} />
             if (part.is_image()) return <img key={idx} src={part.as_image()} className='max-w-40' />
             return null;
           })}
