@@ -155,6 +155,7 @@
     "watcher": "1.2.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "^1.7.3",
     "@types/glob": "8.1.0",
     "@types/mocha": "10.0.3",
     "@types/vscode": "1.63.0",

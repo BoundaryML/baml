@@ -93,8 +93,7 @@ export class WebPanelView {
         },
       )
 
-      WebPanelView.currentPanel = new WebPanelView(panel, extensionUri)
-    }
+    WebPanelView.currentPanel = new WebPanelView(panel, extensionUri)
   }
 
   public postMessage(command: string, content: any) {
