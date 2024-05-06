@@ -1,7 +1,7 @@
 import { ErrorBoundary, FallbackProps } from 'react-error-boundary'
 const ErrorFallback: React.FC<FallbackProps> = ({ error, resetErrorBoundary }) => {
   return (
-    <div role="alert">
+    <div role='alert'>
       <p>Something went wrong:</p>
       <pre>{error.message}</pre>
       <pre>{error.stack}</pre>

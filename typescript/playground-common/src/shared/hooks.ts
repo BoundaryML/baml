@@ -52,12 +52,15 @@ function removeUnreferencedDefinitions(schema: JSONSchema): JSONSchema {
   // Filter out definitions that are not referenced
   const newDefinitions = Object.keys(schema.definitions)
     .filter((def) => referencedDefs.has(def))
-    .reduce((newDefs, def) => {
-      if (schema.definitions) {
-        newDefs[def] = schema.definitions[def]
-      }
-      return newDefs
-    }, {} as { [key: string]: any })
+    .reduce(
+      (newDefs, def) => {
+        if (schema.definitions) {
+          newDefs[def] = schema.definitions[def]
+        }
+        return newDefs
+      },
+      {} as { [key: string]: any },
+    )
 
   return { ...schema, definitions: newDefinitions }
 }
@@ -98,9 +101,9 @@ function useSelections() {
 
   // TODO: we should just publish a global test status instead of relying
   // on this exit code.
-  const test_result_exit_status: TestState["run_status"] = useMemo(() => {
-    if (!test_results_raw) return "NOT_STARTED";
-    return test_results_raw.run_status;
+  const test_result_exit_status: TestState['run_status'] = useMemo(() => {
+    if (!test_results_raw) return 'NOT_STARTED'
+    return test_results_raw.run_status
   }, [test_results_raw, func?.name.value])
   const test_result_url = useMemo(() => {
     if (!test_results_raw) return undefined
@@ -115,24 +118,23 @@ function useSelections() {
   }, [test_results_raw, func?.name.value])
 
   const renderedTestCase = useMemo(() => {
-    let tc = func?.impls.flatMap((i) => i.prompt.test_case).filter((tc): tc is string => tc !== undefined);
-    if (!tc || tc.length === 0) return undefined;
-    return tc[0];
-  }, [func]);
+    let tc = func?.impls.flatMap((i) => i.prompt.test_case).filter((tc): tc is string => tc !== undefined)
+    if (!tc || tc.length === 0) return undefined
+    return tc[0]
+  }, [func])
 
-  const test_results: (TestResult[] & { span?: StringSpan }) | undefined = useMemo(
-    () => {
-      return test_results_raw?.results.filter((tr) => tr.functionName == func?.name.value).map((tr) => {
-        const relatedTest = func?.test_cases.find((tc) => tc.name.value == tr.testName);
+  const test_results: (TestResult[] & { span?: StringSpan }) | undefined = useMemo(() => {
+    return test_results_raw?.results
+      .filter((tr) => tr.functionName == func?.name.value)
+      .map((tr) => {
+        const relatedTest = func?.test_cases.find((tc) => tc.name.value == tr.testName)
         return {
           ...tr,
           input: relatedTest?.content,
-          span: relatedTest?.name
+          span: relatedTest?.name,
         }
       })
-    },
-    [test_results_raw, func?.name.value],
-  )
+  }, [test_results_raw, func?.name.value])
 
   const input_json_schema = useMemo(() => {
     if (!func) return undefined

@@ -28,13 +28,13 @@ function getTopPanelSize(showTests: boolean, test_results: TestResult[] | undefi
 
 const PromptPreview: React.FC = () => {
   const propmtPreview = useAtomValue(renderPromptAtom)
-  if (!propmtPreview) return <div className="flex flex-col">No prompt preview!</div>
+  if (!propmtPreview) return <div className='flex flex-col'>No prompt preview!</div>
 
   if (typeof propmtPreview === 'string')
     return (
       <Snippet
         text={propmtPreview}
-        type="error"
+        type='error'
         client={{
           identifier: {
             end: 0,
@@ -49,10 +49,10 @@ const PromptPreview: React.FC = () => {
     )
 
   return (
-    <div className="flex flex-col w-full h-full gap-4">
+    <div className='flex flex-col w-full h-full gap-4'>
       {propmtPreview.as_chat()?.map((chat, idx) => (
-        <div key={idx} className="flex flex-col">
-          <div className="flex flex-row">{chat.role}</div>
+        <div key={idx} className='flex flex-col'>
+          <div className='flex flex-row'>{chat.role}</div>
           {chat.parts.map((part, idx) => {
             if (part.is_text())
               return (
@@ -71,7 +71,7 @@ const PromptPreview: React.FC = () => {
                   }}
                 />
               )
-            if (part.is_image()) return <img key={idx} src={part.as_image()} className="max-w-40" />
+            if (part.is_image()) return <img key={idx} src={part.as_image()} className='max-w-40' />
             return null
           })}
         </div>
@@ -81,7 +81,7 @@ const PromptPreview: React.FC = () => {
 }
 
 const FunctionPanel: React.FC = () => {
-  const showTests = useAtomValue(showTestsAtom);
+  const showTests = useAtomValue(showTestsAtom)
   const selectedFunc = useAtomValue(selectedFunctionAtom)
   let topPanelSize = useMemo(() => getTopPanelSize(showTests, []), [showTests])
 
@@ -97,34 +97,33 @@ const FunctionPanel: React.FC = () => {
   }, [showTests])
 
   if (!selectedFunc)
-    return <div className="flex flex-col">No function selected. Create or select a function to get started</div>
-
+    return <div className='flex flex-col'>No function selected. Create or select a function to get started</div>
 
   return (
     <div
-      className="flex flex-col w-full overflow-auto"
+      className='flex flex-col w-full overflow-auto'
       style={{
         height: 'calc(100vh - 80px)',
       }}
     >
       <TooltipProvider>
-        <ResizablePanelGroup direction="vertical" className="h-full">
-          <ResizablePanel id="top-panel" ref={ref} className="flex w-full" defaultSize={topPanelSize}>
-            <div className="w-full">
-              <ResizablePanelGroup direction="horizontal" className="h-full">
-                <ResizablePanel defaultSize={60} className="px-0 overflow-y-auto">
-                  <div className="relative w-full h-full overflow-y-auto">
+        <ResizablePanelGroup direction='vertical' className='h-full'>
+          <ResizablePanel id='top-panel' ref={ref} className='flex w-full' defaultSize={topPanelSize}>
+            <div className='w-full'>
+              <ResizablePanelGroup direction='horizontal' className='h-full'>
+                <ResizablePanel defaultSize={60} className='px-0 overflow-y-auto'>
+                  <div className='relative w-full h-full overflow-y-auto'>
                     {/* <ScrollArea type="auto" className="flex w-full h-full pr-3"> */}
-                    <div className="flex w-full h-full">
+                    <div className='flex w-full h-full'>
                       <PromptPreview />
                     </div>
                     {/* </ScrollArea> */}
                   </div>
                 </ResizablePanel>
-                <ResizableHandle withHandle={false} className="bg-vscode-panel-border" />
-                <ResizablePanel minSize={20} className="pl-2 pr-0.5" hidden={!showTests}>
+                <ResizableHandle withHandle={false} className='bg-vscode-panel-border' />
+                <ResizablePanel minSize={20} className='pl-2 pr-0.5' hidden={!showTests}>
                   {/* <Allotment.Pane className="pl-2 pr-0.5" minSize={200} visible={showTests}> */}
-                  <div className="flex flex-col h-full overflow-y-auto overflow-x-clip">
+                  <div className='flex flex-col h-full overflow-y-auto overflow-x-clip'>
                     {/* On windows this scroll area extends beyond the wanted width, so we just use a normal scrollbar here vs using ScrollArea*/}
                     <TestCasePanel />
                   </div>
@@ -134,15 +133,15 @@ const FunctionPanel: React.FC = () => {
               {/* </Allotment> */}
             </div>
           </ResizablePanel>
-          <ResizableHandle withHandle={false} className="bg-vscode-panel-border" />
-          <ResizablePanel minSize={10} className="px-0 overflow-y-auto">
+          <ResizableHandle withHandle={false} className='bg-vscode-panel-border' />
+          <ResizablePanel minSize={10} className='px-0 overflow-y-auto'>
             <div
               className={clsx('py-2 h-full border-t border-vscode-textSeparator-foreground', {
                 flex: showTests,
                 hidden: !showTests,
               })}
             >
-              <div className="w-full h-full">
+              <div className='w-full h-full'>
                 <TestResultPanel />
               </div>
             </div>

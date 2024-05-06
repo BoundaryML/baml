@@ -249,20 +249,20 @@ const ErrorCount: React.FC = () => {
   const { errors, warnings } = useAtomValue(numErrorsAtom)
   if (errors === 0 && warnings === 0) {
     return (
-      <div className="flex flex-row items-center gap-1 text-green-600">
+      <div className='flex flex-row items-center gap-1 text-green-600'>
         <CheckCircle size={12} />
       </div>
     )
   }
   if (errors === 0) {
     return (
-      <div className="flex flex-row items-center gap-1 text-yellow-600">
+      <div className='flex flex-row items-center gap-1 text-yellow-600'>
         {warnings} <AlertTriangle size={12} />
       </div>
     )
   }
   return (
-    <div className="flex flex-row items-center gap-1 text-red-600">
+    <div className='flex flex-row items-center gap-1 text-red-600'>
       {errors} <XCircle size={12} /> {warnings} <AlertTriangle size={12} />{' '}
     </div>
   )
@@ -281,26 +281,26 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
     let fn = (
       event: MessageEvent<
         | {
-          command: 'modify_file'
-          content: {
-            root_path: string
-            name: string
-            content: string | undefined
+            command: 'modify_file'
+            content: {
+              root_path: string
+              name: string
+              content: string | undefined
+            }
           }
-        }
         | {
-          command: 'add_project'
-          content: {
-            root_path: string
-            files: Record<string, string>
+            command: 'add_project'
+            content: {
+              root_path: string
+              files: Record<string, string>
+            }
           }
-        }
         | {
-          command: 'remove_project'
-          content: {
-            root_path: string
+            command: 'remove_project'
+            content: {
+              root_path: string
+            }
           }
-        }
       >,
     ) => {
       const { command, content } = event.data
@@ -327,14 +327,14 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     }
 
-    window.addEventListener('message', fn);
+    window.addEventListener('message', fn)
 
-    return () => window.removeEventListener('message', fn);
+    return () => window.removeEventListener('message', fn)
   })
 
   return (
     <>
-      <div className="absolute flex flex-row gap-2 text-xs right-2 bottom-2">
+      <div className='absolute flex flex-row gap-2 text-xs right-2 bottom-2'>
         <ErrorCount /> <span>Runtime Version: {version}</span>
       </div>
       {selectedProject === null ? (

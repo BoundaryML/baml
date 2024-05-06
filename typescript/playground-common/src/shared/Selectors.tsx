@@ -26,15 +26,15 @@ const FunctionDropdown: React.FC = () => {
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
-          variant="ghost"
+          variant='ghost'
           aria-expanded={open}
-          className="max-w-[300px] justify-between flex hover:bg-vscode-editorSuggestWidget-selectedBackground hover:text-foreground"
+          className='max-w-[300px] justify-between flex hover:bg-vscode-editorSuggestWidget-selectedBackground hover:text-foreground'
         >
-          <span className="-ml-2 w-full text-left truncate">{functionName ?? 'Select a function...'}</span>
-          <ChevronsUpDown className="ml-2 w-4 h-4 opacity-50 shrink-0" />
+          <span className='-ml-2 w-full text-left truncate'>{functionName ?? 'Select a function...'}</span>
+          <ChevronsUpDown className='ml-2 w-4 h-4 opacity-50 shrink-0' />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-1/3 min-w-[400px] p-0">
+      <PopoverContent className='w-1/3 min-w-[400px] p-0'>
         <SearchBarWithSelector
           options={functions.map((func) => ({
             value: func.name,
@@ -53,7 +53,7 @@ const FunctionDropdown: React.FC = () => {
 export const FunctionArgs: React.FC<{ func: SFunction }> = ({ func }) => {
   if (func.input.arg_type === 'positional') {
     return (
-      <div className="flex flex-row gap-1 whitespace-nowrap">
+      <div className='flex flex-row gap-1 whitespace-nowrap'>
         arg: <TypeComponent typeString={func.input.type} />
       </div>
     )
@@ -61,9 +61,9 @@ export const FunctionArgs: React.FC<{ func: SFunction }> = ({ func }) => {
 
   const args = func.input.values
   return (
-    <div className="flex flex-wrap gap-1">
+    <div className='flex flex-wrap gap-1'>
       {Array.from(args.entries()).map(([i, v]) => (
-        <div key={v.name.value} className="whitespace-nowrap">
+        <div key={v.name.value} className='whitespace-nowrap'>
           {v.name.value}: <TypeComponent typeString={v.type} /> {i < args.length - 1 && ','}
         </div>
       ))}
@@ -73,8 +73,8 @@ export const FunctionArgs: React.FC<{ func: SFunction }> = ({ func }) => {
 
 export const FunctionSelector: React.FC = () => {
   return (
-    <div className="flex flex-col gap-1 items-start">
-      <div className="flex flex-row gap-1 items-center">
+    <div className='flex flex-col gap-1 items-start'>
+      <div className='flex flex-row gap-1 items-center'>
         <ProjectToggle />
 
         <FunctionDropdown />

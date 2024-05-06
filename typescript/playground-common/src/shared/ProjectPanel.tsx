@@ -39,11 +39,11 @@ export const ProjectToggle = () => {
   return (
     <Dialog open={show} onOpenChange={setShow}>
       <DialogTrigger asChild={true}>
-        <Button variant="outline" className="p-1 text-xs truncate w-fit h-fit border-vscode-textSeparator-foreground">
+        <Button variant='outline' className='p-1 text-xs truncate w-fit h-fit border-vscode-textSeparator-foreground'>
           {selectedProjectId?.split('/').at(-2) ?? 'Project'}
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-screen overflow-y-scroll bg-vscode-editorWidget-background border-vscode-textSeparator-foreground overflow-x-clip">
+      <DialogContent className='max-h-screen overflow-y-scroll bg-vscode-editorWidget-background border-vscode-textSeparator-foreground overflow-x-clip'>
         <ProjectPanel onClick={() => setShow(false)} />
       </DialogContent>
     </Dialog>

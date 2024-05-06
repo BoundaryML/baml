@@ -1,11 +1,7 @@
 {
   "compilerOptions": {
     "target": "esnext",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ],
+    "lib": ["dom", "dom.iterable", "esnext"],
     "useDefineForClassFields": true,
     "allowJs": false,
     "skipLibCheck": true,
@@ -21,17 +17,9 @@
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
-      "@/*": [
-        "./src/*"
-      ],
-      "@gloo-ai/baml-schema-wasm-web/*": [
-        "../../../baml-schema-wasm-web/dist/*"
-      ]
+      "@/*": ["./src/*"],
+      "@gloo-ai/baml-schema-wasm-web/*": ["../../../baml-schema-wasm-web/dist/*"]
     }
   },
-  "include": [
-    "./src",
-    "../../../common/src/parser_db.ts",
-    "../../../baml-schema-wasm-web/dist"
-  ]
+  "include": ["./src", "../../../common/src/parser_db.ts", "../../../baml-schema-wasm-web/dist"]
 }

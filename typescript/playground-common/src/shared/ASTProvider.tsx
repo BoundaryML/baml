@@ -47,7 +47,7 @@ export const ASTContext = createContext<{
     selectedTestCase: undefined,
     showTests: true,
   },
-  setSelection: () => { },
+  setSelection: () => {},
 })
 
 function useSelectionSetup() {
@@ -160,7 +160,7 @@ export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
 
       switch (command) {
         case 'runtime_updated': {
-          const project_path = messageContent;
+          const project_path = messageContent
           break
         }
         case 'test-stdout': {
@@ -213,7 +213,7 @@ export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
   }, [])
 
   return (
-    <main className="w-full h-screen px-0 py-2 overflow-y-clip">
+    <main className='w-full h-screen px-0 py-2 overflow-y-clip'>
       {selectedState === undefined ? (
         projects.length === 0 ? (
           <div>

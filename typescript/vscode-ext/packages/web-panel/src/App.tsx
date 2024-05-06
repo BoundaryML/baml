@@ -18,16 +18,14 @@ import { DevTools } from 'jotai-devtools'
 import 'jotai-devtools/styles.css'
 import { showTestsAtom } from './baml_wasm_web/test_uis/testHooks'
 
-
-
 const TestToggle = () => {
   // const { setSelection } = useContext(ASTContext)
-  const [showTests, setShowTests] = useAtom(showTestsAtom);
+  const [showTests, setShowTests] = useAtom(showTestsAtom)
 
   return (
     <Button
-      variant="outline"
-      className="p-1 text-xs w-fit h-fit border-vscode-textSeparator-foreground"
+      variant='outline'
+      className='p-1 text-xs w-fit h-fit border-vscode-textSeparator-foreground'
       onClick={() => setShowTests((prev) => !prev)}
     >
       {showTests ? 'Hide tests' : 'Show tests'}
@@ -41,13 +39,13 @@ function App() {
       <DevTools />
       <Suspense fallback={<div>Loading...</div>}>
         <EventListener>
-          <div className="absolute z-10 flex flex-col items-end gap-1 right-1 top-2 text-end">
+          <div className='absolute z-10 flex flex-col items-end gap-1 right-1 top-2 text-end'>
             <TestToggle />
-            <VSCodeLink href="https://docs.boundaryml.com">Docs</VSCodeLink>
+            <VSCodeLink href='https://docs.boundaryml.com'>Docs</VSCodeLink>
           </div>
-          <div className="flex flex-col gap-2 px-2 pb-4">
+          <div className='flex flex-col gap-2 px-2 pb-4'>
             <FunctionSelector />
-            <Separator className="bg-vscode-textSeparator-foreground" />
+            <Separator className='bg-vscode-textSeparator-foreground' />
             <FunctionPanel />
           </div>
         </EventListener>
