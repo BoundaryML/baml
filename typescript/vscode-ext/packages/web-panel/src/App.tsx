@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useContext } from 'react'
+import { Suspense, useEffect, useState, useMemo, useContext } from 'react'
 
 import './App.css'
 import 'allotment/dist/style.css'
@@ -36,17 +36,19 @@ const TestToggle = () => {
 function App() {
   return (
     <CustomErrorBoundary>
-      <EventListener>
-        <div className="absolute z-10 flex flex-col items-end gap-1 right-1 top-2 text-end">
-          <TestToggle />
-          <VSCodeLink href="https://docs.boundaryml.com">Docs</VSCodeLink>
-        </div>
-        <div className="flex flex-col gap-2 px-2 pb-4">
-          <FunctionSelector />
-          <Separator className="bg-vscode-textSeparator-foreground" />
-          <FunctionPanel />
-        </div>
-      </EventListener>
+      <Suspense fallback={<div>Loading...</div>}>
+        <EventListener>
+          <div className="absolute z-10 flex flex-col items-end gap-1 right-1 top-2 text-end">
+            <TestToggle />
+            <VSCodeLink href="https://docs.boundaryml.com">Docs</VSCodeLink>
+          </div>
+          <div className="flex flex-col gap-2 px-2 pb-4">
+            <FunctionSelector />
+            <Separator className="bg-vscode-textSeparator-foreground" />
+            <FunctionPanel />
+          </div>
+        </EventListener>
+      </Suspense>
     </CustomErrorBoundary>
   )
 }
