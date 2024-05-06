@@ -55,6 +55,9 @@ export const useRunHooks = () => {
     for (let batch of batches) {
       let promises = await Promise.allSettled(batch.map((testName) => {
         set(testStatusAtom(testName), { status: 'running' });
+        if (!func || !runtime || !ctx) {
+          return Promise.reject(new Error('Code potentially modified while running tests'));
+        }
         return func.run_test(runtime, ctx, testName);
       }));
       for (let i = 0; i < promises.length; i++) {

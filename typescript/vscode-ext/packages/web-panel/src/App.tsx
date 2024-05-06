@@ -13,8 +13,8 @@ import { Separator } from './components/ui/separator'
 import { Button } from './components/ui/button'
 import { FlaskConical, FlaskConicalOff } from 'lucide-react'
 import { ProjectToggle } from './shared/ProjectPanel'
-import { showTestsAtom } from './baml_wasm_web/hooks'
 import { useAtom } from 'jotai'
+import { showTestsAtom } from './baml_wasm_web/test_uis/testHooks'
 
 
 

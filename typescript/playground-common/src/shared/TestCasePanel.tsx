@@ -55,7 +55,7 @@ const TestCasePanelEntry: React.FC<{ test_case: WasmTestCase }> = ({ test_case }
             className="p-1 rounded-md w-fit h-fit bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground"
             disabled={isRunning}
             onClick={() => {
-              run(test_case.name)
+              run([test_case.name])
             }}
           >
             <Play size={10} />
