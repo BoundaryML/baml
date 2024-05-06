@@ -13,7 +13,7 @@ export const InitialTour = () => {
       content: (
         <>
           Welcome! PromptFiddle is a playground to share and test prompt templates.{' '}
-          <span className="font-semibold">Prompts here are modeled like functions</span>
+          <span className='font-semibold'>Prompts here are modeled like functions</span>
         </>
       ),
       disableBeacon: true,
@@ -31,7 +31,7 @@ export const InitialTour = () => {
         <div>
           <p>See a realtime preview of the exact prompt, even if you add loops, ifs, or change models</p>
           <br />
-          <p className="font-semibold"> No guessing what the prompt is!</p>
+          <p className='font-semibold'> No guessing what the prompt is!</p>
         </div>
       ),
       placement: 'left' as Placement,
@@ -40,7 +40,7 @@ export const InitialTour = () => {
       target: '.tour-test-panel',
       content: (
         <>
-          Click <span className="font-semibold">'Run all'</span> to test this LLM function! Close this dialog by
+          Click <span className='font-semibold'>'Run all'</span> to test this LLM function! Close this dialog by
           clicking next.
         </>
       ),
@@ -58,7 +58,7 @@ export const InitialTour = () => {
   }
 
   return (
-    <div className="">
+    <div className=''>
       <Joyride
         steps={steps}
         continuous={true}
@@ -95,10 +95,10 @@ export const PostTestRunTour = () => {
           These are the test results! BAML calls the LLM and parses the output into your function output type.
           <br />
           <br />
-          The JSON view is the <span className="font-semibold">parsed output</span>.
+          The JSON view is the <span className='font-semibold'>parsed output</span>.
           <br />
           <br />
-          Click on <span className="font-semibold">"Show raw output"</span> to see the string that the LLM returned.
+          Click on <span className='font-semibold'>"Show raw output"</span> to see the string that the LLM returned.
         </div>
       ),
       disableBeacon: true,
@@ -122,7 +122,7 @@ export const PostTestRunTour = () => {
         <div>
           Check out the main.py or main.ts file to see how the LLM function is called in Python or TypeScript. For more
           info, see the{' '}
-          <Link className="text-blue-600" href="https://docs.boundaryml.com">
+          <Link className='text-blue-600' href='https://docs.boundaryml.com'>
             docs
           </Link>{' '}
           , or reach out on Discord.
@@ -145,7 +145,7 @@ export const PostTestRunTour = () => {
   }
 
   return (
-    <div className="">
+    <div className=''>
       <Joyride
         steps={steps}
         continuous={true}

@@ -1,4 +1,4 @@
-import { ExtensionContext, OutputChannel } from 'vscode';
+import { ExtensionContext, OutputChannel } from 'vscode'
 
 export interface BamlVSCodePlugin {
   name: string

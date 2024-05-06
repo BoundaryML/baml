@@ -38,9 +38,9 @@ export const ExampleProjectCard = ({ project }: { project: BAMLProject }) => {
             }
           }}
         >
-          <CardHeader className="w-full px-1 py-4">
-            <CardTitle className="text-base text-left">{project.name}</CardTitle>
-            <CardDescription className="text-sm text-left">{project.description}</CardDescription>
+          <CardHeader className='w-full px-1 py-4'>
+            <CardTitle className='text-base text-left'>{project.name}</CardTitle>
+            <CardDescription className='text-sm text-left'>{project.description}</CardDescription>
           </CardHeader>
         </Card>
       </AlertDialogTrigger>

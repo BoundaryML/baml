@@ -21,7 +21,7 @@ import {
   Range,
   CodeLens,
   DidChangeWatchedFilesNotification,
-  FileSystemWatcher
+  FileSystemWatcher,
 } from 'vscode-languageserver'
 import { URI } from 'vscode-uri'
 
@@ -54,8 +54,6 @@ function getConnection(options?: LSOptions): Connection {
 let hasCodeActionLiteralsCapability = false
 let hasConfigurationCapability = true
 
-
-
 const BamlConfig = z.optional(
   z.object({
     path: z.string().optional(),
@@ -82,18 +80,18 @@ export function startServer(options?: LSOptions): void {
     switch (params.type) {
       case 'runtime_updated':
         // console.log(`runtime_updated today! ${Object.keys(params.files).length}: ${Object.entries(params.files).length}`)
-        connection.sendRequest('runtime_updated', params);
-        break;
-      case "diagnostic":
+        connection.sendRequest('runtime_updated', params)
+        break
+      case 'diagnostic':
         params.errors.forEach(([uri, diagnostics]) => {
           connection.sendDiagnostics({ uri, diagnostics })
         })
-        break;
-      case "error":
-      case "warn":
-      case "info":
+        break
+      case 'error':
+      case 'warn':
+      case 'info':
         connection.sendNotification('baml/message', { message: params.message, type: params.type ?? 'warn' })
-        break;
+        break
       default:
         console.error(`Unknown notification type ${params}`)
     }
@@ -231,7 +229,6 @@ export function startServer(options?: LSOptions): void {
   }
 
   connection.onDidChangeWatchedFiles(async (params) => {
-
     // let deleted_files = params.changes.filter((change) =>
     //   change.type == FileChangeType.Deleted
     // ).map((change) => change.uri);
@@ -246,11 +243,11 @@ export function startServer(options?: LSOptions): void {
     // If anything changes, then we need to revalidate all documents
     // let hasChanges = deleted_files.length > 0 || created_files.length > 0 || changed_files.length > 0;
 
-    let hasChanges = params.changes.length > 0;
+    let hasChanges = params.changes.length > 0
     if (hasChanges) {
       // TODO: @hellovai we should technically get all possible root paths
       // (someone could delete mutliple baml_src dirs at once)
-      await bamlProjectManager.reload_project_files(URI.parse(params.changes[0].uri));
+      await bamlProjectManager.reload_project_files(URI.parse(params.changes[0].uri))
     }
   })
 
@@ -296,13 +293,11 @@ export function startServer(options?: LSOptions): void {
       })
   }
 
-
   // TODO: dont actually debounce for now or strange out of sync things happen..
   // so we currently set to 0
   const updateClientDB = (rootPath: URI, db: ParserDatabase) => {
     void connection.sendRequest('set_database', { rootPath: rootPath.fsPath, db })
   }
-
 
   documents.onDidChangeContent(async (change: { document: TextDocument }) => {
     const textDocument = change.document
@@ -314,7 +309,6 @@ export function startServer(options?: LSOptions): void {
     //   trailing: true,
     // })
   })
-
 
   documents.onDidSave(async (change: { document: TextDocument }) => {
     await bamlProjectManager.save_file(URI.parse(change.document.uri), change.document.getText())
@@ -353,7 +347,7 @@ export function startServer(options?: LSOptions): void {
   }
 
   connection.onDefinition((params: DeclarationParams) => {
-    return undefined;
+    return undefined
     // const doc = getDocument(params.textDocument.uri)
     // if (doc) {
     //   const db = bamlCache.getFileCache(doc)
@@ -382,7 +376,7 @@ export function startServer(options?: LSOptions): void {
   // })
 
   connection.onHover((params: HoverParams) => {
-    return undefined;
+    return undefined
     // const doc = getDocument(params.textDocument.uri)
     // if (doc) {
     //   const db = bamlCache.getFileCache(doc)
@@ -393,7 +387,7 @@ export function startServer(options?: LSOptions): void {
   })
 
   connection.onCodeLens((params: CodeLensParams) => {
-    return undefined;
+    return undefined
 
     // const document = getDocument(params.textDocument.uri)
     // const codeLenses: CodeLens[] = []
@@ -535,7 +529,7 @@ export function startServer(options?: LSOptions): void {
   // })
 
   connection.onDocumentSymbol((params: DocumentSymbolParams) => {
-    return undefined;
+    return undefined
     // const doc = getDocument(params.textDocument.uri)
     // if (doc) {
     //   const db = bamlCache.getFileCache(doc)
@@ -546,47 +540,53 @@ export function startServer(options?: LSOptions): void {
     // }
   })
 
-  connection.onRequest('selectTestCase', ({ functionName, testCaseName }: {
-    functionName: string;
-    testCaseName: string;
-  }) => {
-    return;
-    // console.log('selectTestCase ' + functionName + ' ' + testCaseName)
-    // let lastDb = bamlCache.lastPaserDatabase;
+  connection.onRequest(
+    'selectTestCase',
+    ({
+      functionName,
+      testCaseName,
+    }: {
+      functionName: string
+      testCaseName: string
+    }) => {
+      return
+      // console.log('selectTestCase ' + functionName + ' ' + testCaseName)
+      // let lastDb = bamlCache.lastPaserDatabase;
 
-    // if (!lastDb) {
-    //   console.log('No last db found');
-    //   return
-    // }
+      // if (!lastDb) {
+      //   console.log('No last db found');
+      //   return
+      // }
 
-    // const selectedTests = Object.fromEntries(lastDb.db.functions.map((fn) => {
-    //   let uniqueTestNames = new Set(fn.impls.flatMap((impl) => impl.prompt.test_case).filter((t): t is string => t !== undefined && t !== null));
-    //   const testCases = new Array(...uniqueTestNames);
-    //   let testCaseName = testCases.length > 0 ? testCases[0] : undefined;
-    //   if (testCaseName === undefined) {
-    //     return undefined;
-    //   }
-    //   return [fn.name.value, testCaseName]
-    // }).filter((t): t is [string, string] => t !== undefined) ?? []);
-    // selectedTests[functionName] = testCaseName;
+      // const selectedTests = Object.fromEntries(lastDb.db.functions.map((fn) => {
+      //   let uniqueTestNames = new Set(fn.impls.flatMap((impl) => impl.prompt.test_case).filter((t): t is string => t !== undefined && t !== null));
+      //   const testCases = new Array(...uniqueTestNames);
+      //   let testCaseName = testCases.length > 0 ? testCases[0] : undefined;
+      //   if (testCaseName === undefined) {
+      //     return undefined;
+      //   }
+      //   return [fn.name.value, testCaseName]
+      // }).filter((t): t is [string, string] => t !== undefined) ?? []);
+      // selectedTests[functionName] = testCaseName;
 
-    // const response = MessageHandler.handleDiagnosticsRequest(lastDb.root_path, lastDb.cache.getDocuments(), selectedTests, showErrorToast)
-    // for (const [uri, diagnosticList] of response.diagnostics) {
-    //   void connection.sendDiagnostics({ uri, diagnostics: diagnosticList })
-    // }
+      // const response = MessageHandler.handleDiagnosticsRequest(lastDb.root_path, lastDb.cache.getDocuments(), selectedTests, showErrorToast)
+      // for (const [uri, diagnosticList] of response.diagnostics) {
+      //   void connection.sendDiagnostics({ uri, diagnostics: diagnosticList })
+      // }
 
-    // bamlCache.addDatabase(lastDb.root_path, response.state)
-    // if (response.state) {
-    //   lastDb.cache.setDB(response.state)
+      // bamlCache.addDatabase(lastDb.root_path, response.state)
+      // if (response.state) {
+      //   lastDb.cache.setDB(response.state)
 
-    //   updateClientDB(lastDb.root_path, response.state)
-    // } else {
-    //   void connection.sendRequest('rm_database', lastDb.root_path)
-    // }
-  });
+      //   updateClientDB(lastDb.root_path, response.state)
+      // } else {
+      //   void connection.sendRequest('rm_database', lastDb.root_path)
+      // }
+    },
+  )
 
   connection.onRequest('getDefinition', ({ sourceFile, name }: { sourceFile: string; name: string }) => {
-    return;
+    return
     // const fileCache = bamlCache.getCacheForUri(sourceFile)
     // if (fileCache) {
     //   let match = fileCache.define(name)
@@ -610,7 +610,7 @@ export function startServer(options?: LSOptions): void {
       // })
 
       // return res
-      return undefined;
+      return undefined
     } catch (e: any) {
       if (e instanceof Error) {
         console.log('Error getting cli version' + e.message + ' ' + e.stack)
@@ -631,7 +631,7 @@ export function startServer(options?: LSOptions): void {
       // })
 
       // return res
-      return undefined;
+      return undefined
     } catch (e: any) {
       if (e instanceof Error) {
         console.log('Error getting cli version' + e.message + ' ' + e.stack)
@@ -641,7 +641,6 @@ export function startServer(options?: LSOptions): void {
       return undefined
     }
   })
-
 
   console.log('Server-side -- listening to connection')
   // Make the text document manager listen on the connection

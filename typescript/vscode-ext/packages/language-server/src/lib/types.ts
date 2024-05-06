@@ -11,10 +11,9 @@ export interface LSOptions {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-empty-interface
-export interface LSSettings { }
-
+export interface LSSettings {}
 
 export interface BAMLMessage {
-  type: "warn" | "info" | "error"
+  type: 'warn' | 'info' | 'error'
   message: string
 }

@@ -14,6 +14,7 @@ import TestResultPanel from './TestResultOutcomes'
 import { useAtomValue } from 'jotai'
 import { renderPromptAtom, selectedFunctionAtom } from '../baml_wasm_web/EventListener'
 import { showTestsAtom } from '@/baml_wasm_web/test_uis/testHooks'
+import TestResults from '@/baml_wasm_web/test_uis/test_result'
 
 function getTopPanelSize(showTests: boolean, test_results: TestResult[] | undefined): number {
   if (showTests) {
@@ -141,9 +142,7 @@ const FunctionPanel: React.FC = () => {
                 hidden: !showTests,
               })}
             >
-              <div className='w-full h-full'>
-                <TestResultPanel />
-              </div>
+              <TestResults />
             </div>
           </ResizablePanel>
         </ResizablePanelGroup>

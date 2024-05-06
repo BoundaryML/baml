@@ -168,7 +168,6 @@ const checkForUpdates = async ({ showIfNoUpdates }: { showIfNoUpdates: boolean }
         updateAvailable: !!update,
         vscodeUpdateAvailable: shouldUpdateVscode,
       },
-
     })
   } catch (e) {
     console.error('Failed to check for updates', e)
@@ -274,7 +273,7 @@ const activateClient = (
       }
     })
 
-    client.onRequest('runtime_updated', (params: { root_path: string, files: Record<string, String> }) => {
+    client.onRequest('runtime_updated', (params: { root_path: string; files: Record<string, String> }) => {
       WebPanelView.currentPanel?.postMessage('add_project', params)
     })
 
@@ -299,10 +298,13 @@ const activateClient = (
     void checkForUpdates({ showIfNoUpdates: false })
     // And check again once every hour
     intervalTimers.push(
-      setInterval(async () => {
-        console.log(`checking for updates ${new Date()}`)
-        await checkForUpdates({ showIfNoUpdates: false })
-      }, 60 * 60 * 1000 /* 1h in milliseconds: min/hr * secs/min * ms/sec */),
+      setInterval(
+        async () => {
+          console.log(`checking for updates ${new Date()}`)
+          await checkForUpdates({ showIfNoUpdates: false })
+        },
+        60 * 60 * 1000 /* 1h in milliseconds: min/hr * secs/min * ms/sec */,
+      ),
     )
   })
 
@@ -390,18 +392,21 @@ const plugin: BamlVSCodePlugin = {
         })
       }),
 
-      commands.registerCommand('baml.selectTestCase', async (test_request: {
-        functionName?: string
-        testCaseName?: string
-      }) => {
-        const { functionName, testCaseName } = test_request
-        if (!functionName || !testCaseName) {
-          return
-        }
+      commands.registerCommand(
+        'baml.selectTestCase',
+        async (test_request: {
+          functionName?: string
+          testCaseName?: string
+        }) => {
+          const { functionName, testCaseName } = test_request
+          if (!functionName || !testCaseName) {
+            return
+          }
 
-        console.log('selectTestCase', functionName, testCaseName)
-        await client.sendRequest('selectTestCase', { functionName, testCaseName });
-      }),
+          console.log('selectTestCase', functionName, testCaseName)
+          await client.sendRequest('selectTestCase', { functionName, testCaseName })
+        },
+      ),
 
       commands.registerCommand('baml.jumpToDefinition', async (args: { sourceFile?: string; name?: string }) => {
         let { sourceFile, name } = args

@@ -25,8 +25,8 @@ export default async function Home({
 }) {
   let data: BAMLProject = await loadProject(params, true)
   return (
-    <main className="flex flex-col items-center justify-between min-h-screen font-sans">
-      <div className="w-screen h-screen dark:bg-black">
+    <main className='flex flex-col items-center justify-between min-h-screen font-sans'>
+      <div className='w-screen h-screen dark:bg-black'>
         <ProjectView project={data} />
 
         {/* <Suspense fallback={<div>Loading...</div>}>{children}</Suspense> */}

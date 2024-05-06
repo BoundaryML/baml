@@ -106,13 +106,15 @@ class TestState {
       // Data may be inadvertently concatenated together, but we actually send a \n delimiter between messages to be able to split msgs properly.
       const delimitedData = data.toString().split('<BAML_END_MSG>')
       console.log(`Got a ${delimitedData.length} message`)
-      delimitedData.map(d => d.trim()).forEach((data) => {
-        if (data) {
-          this.handleMessageLine(data)
-        } else {
-          console.log('Empty message')
-        }
-      })
+      delimitedData
+        .map((d) => d.trim())
+        .forEach((data) => {
+          if (data) {
+            this.handleMessageLine(data)
+          } else {
+            console.log('Empty message')
+          }
+        })
     } catch (e) {
       console.error(e)
 
@@ -192,7 +194,7 @@ class TestState {
   }
 
   private handlePartialResponse(data: PartialResponseEvent) {
-    const testResult = this.test_results.results.find((test) => test.fullTestName === this.active_full_test_name);
+    const testResult = this.test_results.results.find((test) => test.fullTestName === this.active_full_test_name)
 
     if (testResult) {
       testResult.partial_output.raw = `${testResult.partial_output.raw ?? ''}${data.delta}`
@@ -297,12 +299,11 @@ class TestExecutor {
     try {
       // root_path is the path to baml_src, so go up one level to get to the root of the project
       console.log(`Running tests in ${root_path}`)
-      await this.cancelExistingTestRun();
+      await this.cancelExistingTestRun()
       root_path = path.join(root_path, '../')
       this.testState.initializeTestCases(tests)
 
-
-      await vscode.commands.executeCommand('workbench.action.files.saveAll');
+      await vscode.commands.executeCommand('workbench.action.files.saveAll')
       // There is a bug where there are still some .tmp files that make the compiler bug out on `baml build` if we don't wait
       // a second before running the tests.
       // This is likely because VSCode adds the save event to the NodeJS event loop, so
@@ -310,9 +311,9 @@ class TestExecutor {
       // Awaiting a promise is the easiest way to do this.
       await new Promise((resolve, reject) => {
         setTimeout(() => {
-          resolve(undefined);
-        }, 200);
-      });
+          resolve(undefined)
+        }, 200)
+      })
 
       // Add filters.
       const selectedTests = tests.functions.flatMap((fn) =>
@@ -320,7 +321,10 @@ class TestExecutor {
       )
 
       const is_single_function = tests.functions.length === 1
-      const test_filter = is_single_function && tests.functions[0]?.run_all_available_tests ? `-i ${tests.functions[0].name}:` : selectedTests.join(' ')
+      const test_filter =
+        is_single_function && tests.functions[0]?.run_all_available_tests
+          ? `-i ${tests.functions[0].name}:`
+          : selectedTests.join(' ')
 
       // Run the Python script in a child process
       const command = `${bamlPath({ for_test: true })} test ${test_filter} run ${this.port_arg}`
@@ -329,7 +333,7 @@ class TestExecutor {
       // const process = spawn(pythonExecutable, [tempFilePath]);
       // Run the Python script using exec
       this.stdoutListener?.('<BAML_RESTART>')
-      this.stdoutListener?.(`\x1b[90mRunning BAML Test: ${command}\n\x1b[0m`);
+      this.stdoutListener?.(`\x1b[90mRunning BAML Test: ${command}\n\x1b[0m`)
       const cp = exec(command, {
         cwd: root_path,
         shell: bamlTestShell(),
@@ -354,12 +358,10 @@ class TestExecutor {
         // Dont mark it as an error if we killed it ourselves
         this.testState.setExitCode(code ?? (signal ? 0 : 5))
         if (code === null && signal === 'SIGTERM') {
-          this.testState.clearTestCases();
+          this.testState.clearTestCases()
         }
         this.currentProcess = undefined
       })
-
-
     } catch (e) {
       console.error(e)
       outputChannel.appendLine(JSON.stringify(e, null, 2))
@@ -369,34 +371,34 @@ class TestExecutor {
   }
 
   async cancelExistingTestRun() {
-    this.testState.clearTestCases();
-    this.testState.setExitCode(undefined);
+    this.testState.clearTestCases()
+    this.testState.setExitCode(undefined)
     if (!this.currentProcess) {
       return
     }
-    console.log("Killing existing process", this.currentProcess?.pid);
+    console.log('Killing existing process', this.currentProcess?.pid)
 
     const res = this.currentProcess.kill()
     if (!res) {
-      console.log("Failed to kill process", this.currentProcess?.pid);
+      console.log('Failed to kill process', this.currentProcess?.pid)
       vscode.window.showErrorMessage('Failed to kill existing test process')
     }
     // do an interval and check for the current process to be undefined and await
     // The var gets set to undefined in the .on('exit') handler
     await new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
-        clearInterval(interval);
-        resolve(undefined);
-      }, 10000);
+        clearInterval(interval)
+        resolve(undefined)
+      }, 10000)
 
       const interval = setInterval(() => {
         if (!this.currentProcess) {
-          clearTimeout(timeout);
-          clearInterval(interval);
-          resolve(undefined);
+          clearTimeout(timeout)
+          clearInterval(interval)
+          resolve(undefined)
         }
-      }, 100);
-    });
+      }, 100)
+    })
   }
 
   close() {

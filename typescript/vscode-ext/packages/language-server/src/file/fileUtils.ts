@@ -4,21 +4,21 @@ import { TextDocument } from 'vscode-languageserver-textdocument'
 import { URI } from 'vscode-uri'
 
 export function findTopLevelParent(filePath: string) {
-  let currentPath = filePath;
-  let parentDir: string | null = null;
+  let currentPath = filePath
+  let parentDir: string | null = null
 
   while (currentPath !== path.parse(currentPath).root) {
-    currentPath = path.dirname(currentPath);
+    currentPath = path.dirname(currentPath)
     if (path.basename(currentPath) === 'baml_src') {
-      parentDir = currentPath;
-      break;
+      parentDir = currentPath
+      break
     }
   }
 
   if (parentDir !== null) {
-    return parentDir;
+    return parentDir
   }
-  return null;
+  return null
 }
 
 /**

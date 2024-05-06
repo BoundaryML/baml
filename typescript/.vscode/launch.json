@@ -10,7 +10,6 @@
       "args": ["--extensionDevelopmentPath=${workspaceFolder}/vscode-ext/packages"],
       "outFiles": [
         "${workspaceFolder}/vscode-ext/packages/vscode/out/**",
-
         "${workspaceFolder}/vscode-ext/packages/language-server/out/**"
       ],
       "env": {

@@ -17,6 +17,11 @@
 		"lineEnding": "lf",
 		"lineWidth": 120
 	},
+	"json": {
+		"formatter": {
+			"enabled": false
+		}
+	},
 	"javascript": {
 		"formatter": {
 			"quoteStyle": "single",

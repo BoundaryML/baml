@@ -25,12 +25,12 @@ import { Language, LanguageSupport } from '@codemirror/language'
 type LintResponse = {
   diagnostics: LinterError[]
 } & (
-    | { ok: false }
-    | {
+  | { ok: false }
+  | {
       ok: true
       response: ParserDatabase
     }
-  )
+)
 
 export interface LinterError {
   start: number
@@ -53,7 +53,6 @@ export interface LinterInput {
 }
 
 let wasmModuleCache: any = null
-
 
 async function bamlLinter(_view: any): Promise<Diagnostic[]> {
   if (!wasmModuleCache) {
@@ -139,8 +138,8 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
   const langExtensions = getLanguage(activeFile?.path)
 
   return (
-    <div className="w-full">
-      <div className="flex px-3 py-1 h-fit gap-x-6 overflow-clip min-h-[20px]">
+    <div className='w-full'>
+      <div className='flex px-3 py-1 h-fit gap-x-6 overflow-clip min-h-[20px]'>
         <>
           {editorFiles
             .filter((f) => f.path === activeFile?.path)
@@ -149,10 +148,11 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
                 variant={'ghost'}
                 key={file.path}
                 onClick={() => setActiveFile(file)}
-                className={`${activeFile?.path === file.path
-                  ? '  border-b-[2px] border-b-blue-400 bg-background text-blue-500 hover:bg-vscode-selection-background hover:text-blue-500'
-                  : 'hover:text-black/80 bg-background text-gray-500 hover:bg-vscode-selection-background hover:text-gray-5=400'
-                  }  h-[20px] rounded-b-none rounded-tl-lg  border-r-0 px-1 text-xs  font-medium`}
+                className={`${
+                  activeFile?.path === file.path
+                    ? '  border-b-[2px] border-b-blue-400 bg-background text-blue-500 hover:bg-vscode-selection-background hover:text-blue-500'
+                    : 'hover:text-black/80 bg-background text-gray-500 hover:bg-vscode-selection-background hover:text-gray-5=400'
+                }  h-[20px] rounded-b-none rounded-tl-lg  border-r-0 px-1 text-xs  font-medium`}
               >
                 {file.path.replace(`${BAML_DIR}/`, '')}
               </Button>
@@ -170,10 +170,10 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
           value={activeFile?.content ?? ''}
           extensions={langExtensions}
           theme={theme}
-          className="text-sm"
-          height="100%"
-          width="100%"
-          maxWidth="100%"
+          className='text-sm'
+          height='100%'
+          width='100%'
+          maxWidth='100%'
           style={{ width: '100%', height: '100%' }}
           onChange={async (val, viewUpdate) => {
             setEditorFiles((prev) => {

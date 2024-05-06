@@ -57,7 +57,6 @@ import {
 // import { Range, Uri } from 'vscode'
 import BamlProjectManager from './baml_project_manager'
 
-
 /**
  * This handler provides the modification to the document to be formatted.
  */

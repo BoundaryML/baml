@@ -26,17 +26,17 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
+    <html lang='en'>
       <PHProvider>
         <body className={inter.className}>
           <PostHogPageView />
-          <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} disableTransitionOnChange={true}>
+          <ThemeProvider attribute='class' defaultTheme='dark' enableSystem={false} disableTransitionOnChange={true}>
             <Toaster />
 
             <JotaiProvider>
               <>
                 <Suspense fallback={<div>Loading...</div>}>{children}</Suspense>
-                <div className="fixed left-0 bottom-1/2 w-[12%] px-1 items-center justify-center flex">
+                <div className='fixed left-0 bottom-1/2 w-[12%] px-1 items-center justify-center flex'>
                   <BrowseSheet />
                 </div>
               </>

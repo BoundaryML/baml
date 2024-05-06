@@ -1,6 +1,5 @@
 import { getWasmError, isWasmPanic, WasmPanic } from './error/panic'
 
-
 // import { languageWasm } from '.'
 
 /* eslint-disable @typescript-eslint/no-unsafe-member-access,@typescript-eslint/no-unsafe-return */

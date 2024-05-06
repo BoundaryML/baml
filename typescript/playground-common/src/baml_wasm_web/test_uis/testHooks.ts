@@ -22,8 +22,16 @@ export type TestState =
 
 const statusAtom = atom<TestState>({ status: 'queued' })
 
-const testStatusAtom = atomFamily((testName: string) => statusAtom)
-const runningTestsAtom = atom<string[]>([])
+export const testStatusAtom = atomFamily((testName: string) => statusAtom)
+export const runningTestsAtom = atom<string[]>([])
+export const statusCountAtom = atom<{
+  [key in TestStatusType]: number
+}>({
+  queued: 0,
+  running: 0,
+  done: 0,
+  error: 0,
+})
 
 export const useRunHooks = () => {
   const isRunning = useAtomValue(isRunningAtom)
@@ -49,6 +57,12 @@ export const useRunHooks = () => {
     testStatusAtom.setShouldRemove(null)
 
     set(runningTestsAtom, testNames)
+    set(statusCountAtom, {
+      queued: testNames.length,
+      running: 0,
+      done: 0,
+      error: 0,
+    })
     // Batch into groups of 5
     let batches = []
     for (let i = 0; i < testNames.length; i += 5) {
@@ -58,6 +72,13 @@ export const useRunHooks = () => {
       let promises = await Promise.allSettled(
         batch.map((testName) => {
           set(testStatusAtom(testName), { status: 'running' })
+          set(statusCountAtom, (prev) => {
+            return {
+              ...prev,
+              running: prev.running + 1,
+              queued: prev.queued - 1,
+            }
+          })
           if (!func || !runtime || !ctx) {
             return Promise.reject(new Error('Code potentially modified while running tests'))
           }
@@ -69,8 +90,22 @@ export const useRunHooks = () => {
         if (result.status === 'fulfilled') {
           let res = result.value
           set(testStatusAtom(batch[i]), { status: 'done', response: res })
+          set(statusCountAtom, (prev) => {
+            return {
+              ...prev,
+              done: prev.done + 1,
+              running: prev.running - 1,
+            }
+          })
         } else {
           set(testStatusAtom(batch[i]), { status: 'error', message: `${result.reason}` })
+          set(statusCountAtom, (prev) => {
+            return {
+              ...prev,
+              error: prev.error + 1,
+              running: prev.running - 1,
+            }
+          })
         }
       }
     }

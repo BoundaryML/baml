@@ -56,6 +56,15 @@
     "[python]": {
       "editor.defaultFormatter": "ms-python.black-formatter"
     },
+    "[javascript]": {
+      "editor.defaultFormatter": "biomejs.biome"
+    },
+    "[typescript]": {
+      "editor.defaultFormatter": "biomejs.biome"
+    },
+    "[typescriptreact]": {
+      "editor.defaultFormatter": "biomejs.biome"
+    },
     "editor.colorDecoratorsLimit": 2000,
     "editor.formatOnSaveMode": "file",
     "editor.formatOnSave": true,

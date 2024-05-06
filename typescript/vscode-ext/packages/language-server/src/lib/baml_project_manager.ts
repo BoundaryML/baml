@@ -4,10 +4,11 @@ import { DiagnosticSeverity, Diagnostic } from 'vscode-languageserver'
 import { findTopLevelParent, gatherFiles } from '../file/fileUtils'
 import { readFile } from 'fs/promises'
 
-type Notify = (params:
-  { type: 'error' | 'warn' | 'info', message: string } |
-  { type: 'diagnostic', errors: [string, Diagnostic[]][] } |
-  { type: 'runtime_updated', root_path: string, files: Record<string, string> }
+type Notify = (
+  params:
+    | { type: 'error' | 'warn' | 'info'; message: string }
+    | { type: 'diagnostic'; errors: [string, Diagnostic[]][] }
+    | { type: 'runtime_updated'; root_path: string; files: Record<string, string> },
 ) => void
 
 const uriToRootPath = (uri: URI): string => {
@@ -15,7 +16,7 @@ const uriToRootPath = (uri: URI): string => {
   if (uri.scheme !== 'file') {
     throw new Error(`Unsupported scheme: ${uri.scheme}`)
   }
-  let found = findTopLevelParent(uri.fsPath);
+  let found = findTopLevelParent(uri.fsPath)
   if (!found) {
     throw new Error(`No baml_src directory found in path: ${uri.fsPath}`)
   }
@@ -26,15 +27,20 @@ class Project {
   private last_successful_runtime?: BamlWasm.WasmRuntime
   private current_runtime?: BamlWasm.WasmRuntime
 
-  constructor(private files: BamlWasm.WasmProject, private ctx: BamlWasm.WasmRuntimeContext, private onSuccess: (e: WasmDiagnosticError, files: Record<string, string>) => void) {
-  }
+  constructor(
+    private files: BamlWasm.WasmProject,
+    private ctx: BamlWasm.WasmRuntimeContext,
+    private onSuccess: (e: WasmDiagnosticError, files: Record<string, string>) => void,
+  ) {}
 
   update_runtime() {
     if (this.current_runtime == undefined) {
       try {
         this.current_runtime = this.files.runtime()
         const files = this.files.files()
-        const fileMap = Object.fromEntries(files.map((f): [string, string] => f.split("BAML_PATH_SPLTTER", 2) as [string, string]))
+        const fileMap = Object.fromEntries(
+          files.map((f): [string, string] => f.split('BAML_PATH_SPLTTER', 2) as [string, string]),
+        )
         this.onSuccess(this.files.diagnostics(this.current_runtime), fileMap)
       } catch (e) {
         this.current_runtime = undefined
@@ -44,7 +50,7 @@ class Project {
   }
 
   runtime(): BamlWasm.WasmRuntime {
-    let rt = this.current_runtime ?? this.last_successful_runtime;
+    let rt = this.current_runtime ?? this.last_successful_runtime
     if (!rt) {
       throw new Error(`Project is not valid.`)
     }
@@ -108,7 +114,6 @@ class BamlProjectManager {
     BamlWasm.enable_logs()
   }
 
-
   private handleMessage(e: any) {
     if (e instanceof BamlWasm.WasmDiagnosticError) {
       let diagnostics = new Map<string, Diagnostic[]>(e.all_files.map((f) => [f, []]))
@@ -117,33 +122,32 @@ class BamlProjectManager {
         if (err.type === 'error') {
           console.error(`${err.message}, ${err.start_line}, ${err.start_column}, ${err.end_line}, ${err.end_column}`)
         }
-        diagnostics.get(err.file_path)!.push(
-          {
-            range: {
-              start: {
-                line: err.start_line,
-                character: err.start_column
-              },
-              end: {
-                line: err.end_line,
-                character: err.end_column
-              }
+        diagnostics.get(err.file_path)!.push({
+          range: {
+            start: {
+              line: err.start_line,
+              character: err.start_column,
             },
-            message: err.message,
-            severity: err.type === 'error' ? DiagnosticSeverity.Error : DiagnosticSeverity.Warning,
-            source: 'baml'
-          });
-      });
+            end: {
+              line: err.end_line,
+              character: err.end_column,
+            },
+          },
+          message: err.message,
+          severity: err.type === 'error' ? DiagnosticSeverity.Error : DiagnosticSeverity.Warning,
+          source: 'baml',
+        })
+      })
       this.notifier({ errors: Array.from(diagnostics), type: 'diagnostic' })
     } else if (e instanceof Error) {
       this.notifier({ message: e.message, type: 'error' })
     } else {
       this.notifier({
         message: `${e}`,
-        type: 'error'
+        type: 'error',
       })
     }
-  };
+  }
 
   private wrapSync<T>(fn: () => T): T | undefined {
     try {
@@ -155,20 +159,18 @@ class BamlProjectManager {
   }
 
   private async wrapAsync<T>(fn: () => Promise<T>): Promise<T | undefined> {
-    return await fn().catch(e => {
+    return await fn().catch((e) => {
       this.handleMessage(e)
       return undefined
     })
   }
 
-
   static version(): string {
     return BamlWasm.version()
   }
 
-
   private get_project(root_path: string) {
-    const project = this.projects.get(root_path);
+    const project = this.projects.get(root_path)
     if (!project) {
       throw new Error(`Project not found for path: ${root_path}`)
     }
@@ -178,10 +180,13 @@ class BamlProjectManager {
 
   private add_project(root_path: string, files: { [path: string]: string }) {
     const project = BamlWasm.WasmProject.new(root_path, files)
-    this.projects.set(root_path, new Project(project, new BamlWasm.WasmRuntimeContext(), (d, files) => {
-      this.handleMessage(d)
-      this.notifier({ type: 'runtime_updated', root_path, files })
-    }))
+    this.projects.set(
+      root_path,
+      new Project(project, new BamlWasm.WasmRuntimeContext(), (d, files) => {
+        this.handleMessage(d)
+        this.notifier({ type: 'runtime_updated', root_path, files })
+      }),
+    )
     return this.get_project(root_path)!
   }
 
@@ -200,7 +205,7 @@ class BamlProjectManager {
       } else {
         await this.reload_project_files(path)
       }
-    });
+    })
   }
 
   async save_file(path: URI, content: string) {
@@ -214,7 +219,7 @@ class BamlProjectManager {
       } else {
         await this.reload_project_files(path)
       }
-    });
+    })
   }
 
   update_unsaved_file(path: URI, content: string) {
@@ -224,7 +229,7 @@ class BamlProjectManager {
       let project = this.get_project(rootPath)
       project.update_unsaved_file(path.fsPath, content)
       project.update_runtime()
-    });
+    })
   }
 
   async touch_project(path: URI) {
@@ -243,25 +248,30 @@ class BamlProjectManager {
     await this.wrapAsync(async () => {
       let rootPath = uriToRootPath(path)
 
-      let files = await Promise.all(gatherFiles(rootPath).map(async (uri): Promise<[string, string]> => {
-        let path = uri.fsPath
-        let content = await readFile(path, 'utf8')
-        return [path, content]
-      }));
+      let files = await Promise.all(
+        gatherFiles(rootPath).map(async (uri): Promise<[string, string]> => {
+          let path = uri.fsPath
+          let content = await readFile(path, 'utf8')
+          return [path, content]
+        }),
+      )
 
       if (files.length === 0) {
-        this.notifier({ type: 'warn', message: `Empty baml_src directory found: ${rootPath}. See Output panel -> BAML Language Server for more details.` })
+        this.notifier({
+          type: 'warn',
+          message: `Empty baml_src directory found: ${rootPath}. See Output panel -> BAML Language Server for more details.`,
+        })
       }
 
       if (!this.projects.has(rootPath)) {
-        let project = this.add_project(rootPath, Object.fromEntries(files));
+        let project = this.add_project(rootPath, Object.fromEntries(files))
         project.update_runtime()
       } else {
         let project = this.get_project(rootPath)
         project.replace_all_files(BamlWasm.WasmProject.new(rootPath, Object.fromEntries(files)))
         project.update_runtime()
       }
-    });
+    })
   }
 }
 

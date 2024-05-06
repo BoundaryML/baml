@@ -20,7 +20,7 @@ export class GlooCodeLensProvider implements vscode.CodeLensProvider {
         return []
       }
     } catch (e) {
-      console.log("Error providing code lenses" + JSON.stringify(e, null, 2))
+      console.log('Error providing code lenses' + JSON.stringify(e, null, 2))
       return []
     }
   }
