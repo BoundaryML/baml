@@ -14,6 +14,8 @@ import { Button } from './components/ui/button'
 import { FlaskConical, FlaskConicalOff } from 'lucide-react'
 import { ProjectToggle } from './shared/ProjectPanel'
 import { useAtom } from 'jotai'
+import { DevTools } from 'jotai-devtools'
+import 'jotai-devtools/styles.css'
 import { showTestsAtom } from './baml_wasm_web/test_uis/testHooks'
 
 
@@ -36,6 +38,7 @@ const TestToggle = () => {
 function App() {
   return (
     <CustomErrorBoundary>
+      <DevTools />
       <Suspense fallback={<div>Loading...</div>}>
         <EventListener>
           <div className="absolute z-10 flex flex-col items-end gap-1 right-1 top-2 text-end">

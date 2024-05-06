@@ -1,19 +1,18 @@
-import wasmPack from 'vite-plugin-wasm-pack';
-import topLevelAwait from "vite-plugin-top-level-await";
-import wasm from 'vite-plugin-wasm'
-
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
-import wasm from 'vite-plugin-wasm'
 import topLevelAwait from 'vite-plugin-top-level-await'
+import wasm from 'vite-plugin-wasm'
 
 const isWatchMode = process.argv.includes('--watch') || true;
-console.log('isWatchMode', isWatchMode);
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
-    react(),
+    react({
+      babel: {
+        presets: ['jotai/babel/preset'],
+      },
+    }),
     wasm(),
     topLevelAwait(),
   ],
