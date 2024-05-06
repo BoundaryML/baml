@@ -3,14 +3,15 @@ use internal_baml_jinja::{ChatOptions, RenderedChatMessage};
 
 use crate::{internal::llm_client::LLMResponse, RuntimeContext};
 
+#[cfg(feature = "wasm")]
+type ResponseType = Result<LLMResponse, wasm_bindgen::JsValue>;
+#[cfg(not(feature = "wasm"))]
+type ResponseType = Result<LLMResponse>;
+
 pub trait WithChat: Sync + Send {
     fn chat_options(&self, ctx: &RuntimeContext) -> Result<ChatOptions>;
 
-    async fn chat(
-        &self,
-        ctx: &RuntimeContext,
-        prompt: &Vec<RenderedChatMessage>,
-    ) -> Result<LLMResponse>;
+    async fn chat(&self, ctx: &RuntimeContext, prompt: &Vec<RenderedChatMessage>) -> ResponseType;
 }
 
 // pub trait WithChatStream: WithChat {
@@ -41,7 +42,15 @@ where
         anyhow::bail!("Chat prompts are not supported by this provider")
     }
 
-    async fn chat(&self, _: &RuntimeContext, _: &Vec<RenderedChatMessage>) -> Result<LLMResponse> {
+    #[cfg(feature = "wasm")]
+    async fn chat(&self, _: &RuntimeContext, _: &Vec<RenderedChatMessage>) -> ResponseType {
+        Err(wasm_bindgen::JsValue::from_str(
+            "Chat prompts are not supported by this provider",
+        ))
+    }
+
+    #[cfg(not(feature = "wasm"))]
+    async fn chat(&self, _: &RuntimeContext, _: &Vec<RenderedChatMessage>) -> ResponseType {
         anyhow::bail!("Chat prompts are not supported by this provider")
     }
 }

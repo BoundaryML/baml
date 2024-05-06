@@ -12,18 +12,21 @@ import CustomErrorBoundary from './utils/ErrorFallback'
 import { Separator } from './components/ui/separator'
 import { Button } from './components/ui/button'
 import { FlaskConical, FlaskConicalOff } from 'lucide-react'
-import { useSelections } from './shared/hooks'
 import { ProjectToggle } from './shared/ProjectPanel'
+import { showTestsAtom } from './baml_wasm_web/hooks'
+import { useAtom } from 'jotai'
+
+
 
 const TestToggle = () => {
   // const { setSelection } = useContext(ASTContext)
-  const { showTests } = useSelections()
+  const [showTests, setShowTests] = useAtom(showTestsAtom);
 
   return (
     <Button
       variant="outline"
       className="p-1 text-xs w-fit h-fit border-vscode-textSeparator-foreground"
-      onClick={() => { }}
+      onClick={() => setShowTests((prev) => !prev)}
     >
       {showTests ? 'Hide tests' : 'Show tests'}
     </Button>

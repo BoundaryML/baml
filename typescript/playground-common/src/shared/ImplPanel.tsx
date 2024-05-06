@@ -2,7 +2,7 @@
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip'
 import { TestStatus } from '@baml/common'
-import { useImplCtx, useSelections } from './hooks'
+import { useImplCtx } from './hooks'
 import {
   VSCodeBadge,
   VSCodeCheckbox,
@@ -221,7 +221,7 @@ export const Snippet: React.FC<{
     const tokenizedLines: [string, number][][] = [[]]
     tokenized.forEach((token, tokenIndex) => {
       const noNewlines = token.split('\n')
-      ;(tokenizedLines.at(-1) as [string, number][]).push([noNewlines.at(0) as string, tokenIndex])
+        ; (tokenizedLines.at(-1) as [string, number][]).push([noNewlines.at(0) as string, tokenIndex])
       for (let i = 1; i < noNewlines.length; i++) {
         tokenizedLines.push([['', tokenIndex]])
       }

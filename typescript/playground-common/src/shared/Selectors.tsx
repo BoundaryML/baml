@@ -1,5 +1,4 @@
 import { VSCodeDropdown, VSCodeLink, VSCodeOption } from '@vscode/webview-ui-toolkit/react'
-import { useSelections } from './hooks'
 import React, { useContext, useState } from 'react'
 import { ASTContext } from './ASTProvider'
 import { vscode } from '../utils/vscode'
@@ -39,7 +38,7 @@ const FunctionDropdown: React.FC = () => {
         <SearchBarWithSelector
           options={functions.map((func) => ({
             value: func.name,
-            label: func.test_cases.length > 0 ? `${func.name} (${func.test_cases.length})` : undefined,
+            label: func.test_cases.length > 0 ? `${func.name} (${func.test_cases.length} tests)` : undefined,
           }))}
           onChange={(value) => {
             setSelected(value)
@@ -108,34 +107,5 @@ export const FunctionSelector: React.FC = () => {
         </div>
       )} */}
     </div>
-  )
-}
-
-export const TestCaseSelector: React.FC = () => {
-  const PLACEHOLDER = '<new>'
-  const { setSelection } = useContext(ASTContext)
-  const { func, test_case: { name } = {} } = useSelections()
-  const test_cases = func?.test_cases.map((cases) => cases.name.value) ?? []
-
-  if (!func) return null
-
-  return (
-    <>
-      <VSCodeDropdown
-        value={name?.value ?? PLACEHOLDER}
-        onChange={(event) => {
-          let value = (event as React.FormEvent<HTMLSelectElement>).currentTarget.value
-          setSelection(undefined, undefined, undefined, value, undefined)
-        }}
-      >
-        {test_cases.map((cases, index) => (
-          <VSCodeOption key={index} value={cases}>
-            {cases}
-          </VSCodeOption>
-        ))}
-        <VSCodeOption value={PLACEHOLDER}>{PLACEHOLDER}</VSCodeOption>
-      </VSCodeDropdown>
-      {name && <Link item={name} display="Open File" />}
-    </>
   )
 }

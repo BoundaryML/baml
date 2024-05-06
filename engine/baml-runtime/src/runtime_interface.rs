@@ -23,6 +23,11 @@ pub(crate) trait RuntimeConstructor {
     ) -> Result<InternalBamlRuntime>;
 }
 
+#[cfg(feature = "wasm")]
+type ResponseType<T> = Result<T, wasm_bindgen::JsValue>;
+#[cfg(not(feature = "wasm"))]
+type ResponseType<T> = Result<T>;
+
 // This is a runtime that has full access (disk, network, etc) - feature full
 pub trait RuntimeInterface {
     fn run_test(
@@ -30,14 +35,14 @@ pub trait RuntimeInterface {
         function_name: &str,
         test_name: &str,
         ctx: &RuntimeContext,
-    ) -> impl std::future::Future<Output = Result<TestResponse>> + Send;
+    ) -> impl std::future::Future<Output = ResponseType<TestResponse>>;
 
     fn call_function(
         &self,
         function_name: String,
         params: HashMap<String, serde_json::Value>,
         ctx: &RuntimeContext,
-    ) -> impl std::future::Future<Output = Result<FunctionResult>> + Send;
+    ) -> impl std::future::Future<Output = ResponseType<FunctionResult>>;
 
     #[cfg(feature = "disk")]
     fn generate_client(

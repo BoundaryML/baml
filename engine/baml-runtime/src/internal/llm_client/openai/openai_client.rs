@@ -124,16 +124,149 @@ impl WithChat for OpenAIClient {
         ))
     }
 
-    #[cfg(not(feature = "network"))]
+    #[cfg(feature = "wasm")]
     async fn chat(
         &self,
-        _ctx: &RuntimeContext,
-        _prompt: &Vec<RenderedChatMessage>,
-    ) -> Result<LLMResponse> {
-        Err(anyhow::anyhow!("Network feature is not enabled"))
+        ctx: &RuntimeContext,
+        prompt: &Vec<RenderedChatMessage>,
+    ) -> Result<LLMResponse, wasm_bindgen::JsValue> {
+        use wasm_bindgen::{JsCast, JsValue};
+        use web_sys::{Request, RequestInit, RequestMode, Response};
+        use web_time::SystemTime;
+
+        use crate::internal::llm_client::{
+            openai::types::{ChatCompletionResponse, FinishReason, OpenAIErrorResponse},
+            ErrorCode, LLMCompleteResponse, LLMErrorResponse,
+        };
+        let request = self.build_http_request(ctx, "/chat/completions", prompt)?;
+        let window = match web_sys::window() {
+            Some(w) => w,
+            None => {
+                return Ok(LLMResponse::OtherFailures(JsValue::from_str(
+                    "Failed to get window object",
+                )));
+            }
+        };
+
+        let now = SystemTime::now();
+        let resp_value =
+            wasm_bindgen_futures::JsFuture::from(window.fetch_with_request(&request)).await?;
+
+        // `resp_value` is a `Response` object.
+        assert!(resp_value.is_instance_of::<Response>());
+        let resp: Response = resp_value.dyn_into()?;
+
+        let status = resp.status();
+        if status != 200 {
+            let err_message = match wasm_bindgen_futures::JsFuture::from(resp.json()?).await {
+                Ok(body) => {
+                    let body = body.into_serde::<serde_json::Value>().unwrap();
+                    let err_message = match serde_json::from_value::<OpenAIErrorResponse>(body) {
+                        Ok(err) => {
+                            format!("API Error ({}): {}", err.error.r#type, err.error.message)
+                        }
+                        Err(e) => format!("Does this support the OpenAI Response type?\n{:#?}", e),
+                    };
+                    err_message
+                }
+                Err(e) => {
+                    format!("Does this support the OpenAI Response type?\n{:#?}", e)
+                }
+            };
+            return Ok(LLMResponse::LLMFailure(LLMErrorResponse {
+                client: self.context.name.to_string(),
+                model: None,
+                prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
+                start_time_unix_ms: now
+                    .duration_since(web_time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis() as u64,
+                latency_ms: now.elapsed().unwrap().as_millis() as u64,
+                message: err_message,
+                code: ErrorCode::Other(status),
+            }));
+        }
+
+        let body = match (match wasm_bindgen_futures::JsFuture::from(resp.json()?).await {
+            Ok(body) => {
+                let body = body.into_serde::<serde_json::Value>().unwrap();
+                match serde_json::from_value::<ChatCompletionResponse>(body) {
+                    Ok(body) => Ok(body),
+                    Err(e) => Err(format!(
+                        "Does this support the OpenAI Response type?\n{:#?}",
+                        e
+                    )),
+                }
+            }
+            Err(e) => Err(format!(
+                "Does this support the OpenAI Response type?\n{:#?}",
+                e
+            )),
+        }) {
+            Ok(body) => body,
+            Err(e) => {
+                return Ok(LLMResponse::LLMFailure(LLMErrorResponse {
+                    client: self.context.name.to_string(),
+                    model: None,
+                    prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
+                    start_time_unix_ms: now
+                        .duration_since(web_time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_millis() as u64,
+                    latency_ms: now.elapsed().unwrap().as_millis() as u64,
+                    message: e,
+                    code: ErrorCode::UnsupportedResponse(status),
+                }));
+            }
+        };
+
+        if body.choices.len() < 1 {
+            return Ok(LLMResponse::LLMFailure(LLMErrorResponse {
+                client: self.context.name.to_string(),
+                model: None,
+                prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
+                start_time_unix_ms: now
+                    .duration_since(web_time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis() as u64,
+                latency_ms: now.elapsed().unwrap().as_millis() as u64,
+                message: format!("No content in response:\n{:#?}", body),
+                code: ErrorCode::Other(status),
+            }));
+        }
+
+        let usage = body.usage.as_ref();
+
+        Ok(LLMResponse::Success(LLMCompleteResponse {
+            client: self.context.name.to_string(),
+            prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
+            content: body.choices[0]
+                .message
+                .content
+                .as_ref()
+                .map_or("", |s| s.as_str())
+                .to_string(),
+            start_time_unix_ms: now
+                .duration_since(web_time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64,
+            latency_ms: now.elapsed().unwrap().as_millis() as u64,
+            model: body.model,
+            metadata: json!({
+                "baml_is_complete": match body.choices[0].finish_reason {
+                    None => true,
+                    Some(FinishReason::Stop) => true,
+                    _ => false,
+                },
+                "finish_reason": body.choices[0].finish_reason,
+                "prompt_tokens": usage.map(|u| u.prompt_tokens),
+                "output_tokens": usage.map(|u| u.completion_tokens),
+                "total_tokens": usage.map(|u| u.total_tokens),
+            }),
+        }))
     }
 
-    #[cfg(feature = "network")]
+    #[cfg(not(feature = "wasm"))]
     async fn chat(
         &self,
         ctx: &RuntimeContext,
@@ -273,7 +406,58 @@ impl OpenAIClient {
         })
     }
 
-    #[cfg(feature = "network")]
+    #[cfg(feature = "wasm")]
+    fn build_http_request(
+        &self,
+        ctx: &RuntimeContext,
+        path: &str,
+        prompt: &Vec<RenderedChatMessage>,
+    ) -> Result<web_sys::Request, wasm_bindgen::JsValue> {
+        use wasm_bindgen::JsValue;
+        use web_sys::RequestMode;
+
+        let mut body = json!(self.properties.properties);
+        body.as_object_mut().unwrap().insert(
+            "messages".into(),
+            prompt
+                .iter()
+                .map(|m| {
+                    json!({
+                        "role": m.role,
+                        "content": convert_message_parts_to_content(&m.parts)
+                    })
+                })
+                .collect::<serde_json::Value>(),
+        );
+
+        log::info!("Request body: {:#?}", body);
+
+        let mut init = web_sys::RequestInit::new();
+        init.method("POST");
+        init.mode(RequestMode::Cors);
+        init.body(Some(&JsValue::from_serde(&body).unwrap()));
+
+        let mut headers = web_sys::Headers::new().unwrap();
+        match &self.properties.api_key {
+            Some(key) => {
+                headers
+                    .set("Authorization", &format!("Bearer {}", key))
+                    .unwrap();
+            }
+            None => {}
+        }
+        for (k, v) in &self.properties.headers {
+            headers.set(k, v).unwrap();
+        }
+        init.headers(&headers);
+
+        web_sys::Request::new_with_str_and_init(
+            &format!("{}{}", self.properties.base_url, path),
+            &init,
+        )
+    }
+
+    #[cfg(not(feature = "wasm"))]
     fn build_http_request(
         &self,
         ctx: &RuntimeContext,

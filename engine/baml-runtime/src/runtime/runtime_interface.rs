@@ -22,6 +22,7 @@ use internal_baml_core::{
     validate,
 };
 use internal_baml_jinja::RenderedPrompt;
+use wasm_bindgen::JsValue;
 
 use super::InternalBamlRuntime;
 
@@ -200,17 +201,31 @@ impl RuntimeConstructor for InternalBamlRuntime {
     }
 }
 
+#[cfg(feature = "wasm")]
+type ResponseType<T> = Result<T, wasm_bindgen::JsValue>;
+#[cfg(not(feature = "wasm"))]
+type ResponseType<T> = Result<T>;
+
 impl RuntimeInterface for InternalBamlRuntime {
     async fn run_test(
         &self,
         function_name: &str,
         test_name: &str,
         ctx: &RuntimeContext,
-    ) -> Result<TestResponse> {
-        let func = self.get_function(function_name, ctx)?;
-        let test = self.ir().find_test(&func, test_name)?;
+    ) -> ResponseType<TestResponse> {
+        let func = self
+            .get_function(function_name, ctx)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let test = self
+            .ir()
+            .find_test(&func, test_name)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
 
-        let params = match test.content().as_json(&ctx.env)? {
+        let params = match test
+            .content()
+            .as_json(&ctx.env)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?
+        {
             serde_json::Value::Object(kv) => {
                 let mut params = HashMap::new();
                 for (k, v) in kv {
@@ -228,20 +243,32 @@ impl RuntimeInterface for InternalBamlRuntime {
             }
         };
         log::info!("Test params: {:#?}", params);
-        let baml_args = self.ir().check_function_params(&func, &params)?;
+        let baml_args = self
+            .ir()
+            .check_function_params(&func, &params)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
 
-        let renderer = PromptRenderer::from_function(&func)?;
+        let renderer =
+            PromptRenderer::from_function(&func).map_err(|e| JsValue::from_str(&e.to_string()))?;
         let client_name = renderer.client_name().to_string();
 
-        let (client, retry_policy) = self.get_client(&client_name, ctx)?;
-        let prompt = client.render_prompt(&renderer, &ctx, &baml_args)?;
+        let (client, retry_policy) = self
+            .get_client(&client_name, ctx)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let prompt = client
+            .render_prompt(&renderer, &ctx, &baml_args)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
         log::debug!("Prompt: {:#?}", prompt);
 
         let response = client.call(retry_policy, ctx, &prompt).await;
 
         // We need to get the function again because self is borrowed mutably.
-        let func = self.get_function(function_name, ctx)?;
-        let parsed = self.parse_response(&func, response, ctx)?;
+        let func = self
+            .get_function(function_name, ctx)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let parsed = self
+            .parse_response(&func, response, ctx)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
         Ok(TestResponse {
             function_response: Ok(parsed),
         })
@@ -252,21 +279,35 @@ impl RuntimeInterface for InternalBamlRuntime {
         function_name: String,
         params: HashMap<String, serde_json::Value>,
         ctx: &RuntimeContext,
-    ) -> Result<crate::FunctionResult> {
-        let func = self.get_function(&function_name, ctx)?;
-        let baml_args = self.ir().check_function_params(&func, &params)?;
+    ) -> ResponseType<crate::FunctionResult> {
+        let func = self
+            .get_function(&function_name, ctx)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let baml_args = self
+            .ir()
+            .check_function_params(&func, &params)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
 
-        let renderer = PromptRenderer::from_function(&func)?;
+        let renderer =
+            PromptRenderer::from_function(&func).map_err(|e| JsValue::from_str(&e.to_string()))?;
         let client_name = renderer.client_name().to_string();
 
-        let (client, retry_policy) = self.get_client(&client_name, ctx)?;
-        let prompt = client.render_prompt(&renderer, &ctx, &baml_args)?;
+        let (client, retry_policy) = self
+            .get_client(&client_name, ctx)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let prompt = client
+            .render_prompt(&renderer, &ctx, &baml_args)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
 
         let response = client.call(retry_policy, ctx, &prompt).await;
 
         // We need to get the function again because self is borrowed mutably.
-        let func = self.get_function(&function_name, ctx)?;
-        let parsed = self.parse_response(&func, response, ctx)?;
+        let func = self
+            .get_function(&function_name, ctx)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let parsed = self
+            .parse_response(&func, response, ctx)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
         Ok(parsed)
     }
 

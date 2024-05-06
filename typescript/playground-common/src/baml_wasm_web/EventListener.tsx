@@ -31,7 +31,7 @@ const wasmAtom = atom(async () => {
   return wasm
 })
 
-const runtimeCtx = atom<Promise<WasmRuntimeContext>>(async (get, { signal }) => {
+export const runtimeCtx = atom<Promise<WasmRuntimeContext>>(async (get, { signal }) => {
   const loadedWasm = await get(wasmAtom)
 
   return new loadedWasm.WasmRuntimeContext()
@@ -175,7 +175,7 @@ const updateFileAtom = atom(
   },
 )
 
-const selectedRuntimeAtom = atom((get) => {
+export const selectedRuntimeAtom = atom((get) => {
   let project = get(selectedProjectAtom)
   if (!project) {
     return null
@@ -281,26 +281,26 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
     let fn = (
       event: MessageEvent<
         | {
-            command: 'modify_file'
-            content: {
-              root_path: string
-              name: string
-              content: string | undefined
-            }
+          command: 'modify_file'
+          content: {
+            root_path: string
+            name: string
+            content: string | undefined
           }
+        }
         | {
-            command: 'add_project'
-            content: {
-              root_path: string
-              files: Record<string, string>
-            }
+          command: 'add_project'
+          content: {
+            root_path: string
+            files: Record<string, string>
           }
+        }
         | {
-            command: 'remove_project'
-            content: {
-              root_path: string
-            }
+          command: 'remove_project'
+          content: {
+            root_path: string
           }
+        }
       >,
     ) => {
       const { command, content } = event.data
@@ -327,8 +327,9 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     }
 
-    window.addEventListener('message', fn)
-    ;() => window.removeEventListener('message', fn)
+    window.addEventListener('message', fn);
+
+    return () => window.removeEventListener('message', fn);
   })
 
   return (

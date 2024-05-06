@@ -11,6 +11,7 @@ use internal_baml_jinja::RenderedPrompt;
 
 #[cfg(feature = "network")]
 use reqwest::StatusCode;
+use wasm_bindgen::JsValue;
 
 #[derive(Clone, Copy)]
 pub struct ModelFeatures {
@@ -30,6 +31,9 @@ pub enum LLMResponse {
     Success(LLMCompleteResponse),
     LLMFailure(LLMErrorResponse),
     Retry(RetryLLMResponse),
+    #[cfg(feature = "wasm")]
+    OtherFailures(JsValue),
+    #[cfg(not(feature = "wasm"))]
     OtherFailures(String),
 }
 

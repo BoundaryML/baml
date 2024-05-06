@@ -10,7 +10,6 @@ import { Copy, Edit2, FileJson2, Save, Play, PlusIcon, Trash2, XIcon } from 'luc
 import React, { ChangeEvent, FocusEvent, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { ASTContext } from '../ASTProvider'
 import TypeComponent from '../TypeComponent'
-import { useSelections } from '../hooks'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui/tooltip'
 import {
   ArrayFieldTemplateItemType,

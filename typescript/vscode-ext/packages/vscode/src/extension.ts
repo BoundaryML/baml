@@ -269,7 +269,7 @@ class DiagnosticCodeActionProvider implements vscode.CodeActionProvider {
       }
     });
 
-    console.log('Code actions:', codeActions);
+    console.debug('Code actions:', codeActions);
     return codeActions;
   }
 }

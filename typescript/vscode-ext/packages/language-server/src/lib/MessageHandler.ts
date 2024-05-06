@@ -21,7 +21,6 @@ import {
 } from 'vscode-languageserver'
 import type { TextDocument } from 'vscode-languageserver-textdocument'
 import { fullDocumentRange } from './ast'
-import lint, { LinterInput } from './wasm/lint'
 import { FileCache } from '../file/fileCache'
 import { ParserDatabase, TestRequest } from '@baml/common'
 import { URI } from 'vscode-uri'
@@ -58,68 +57,6 @@ import {
 // import { Range, Uri } from 'vscode'
 import BamlProjectManager from './baml_project_manager'
 
-
-export function handleDiagnosticsRequest(
-  rootPath: URI,
-  documents: { path: string; doc: TextDocument }[],
-  selectedTests: { [key: string]: string },
-  onError?: (errorMessage: string) => void,
-): { diagnostics: Map<string, Diagnostic[]>; state: ParserDatabase | undefined } {
-  const linterInput: LinterInput = {
-    root_path: rootPath.fsPath,
-    files: documents.map(({ path, doc }) => ({
-      path,
-      content: doc.getText(),
-    })),
-    selected_tests: selectedTests,
-  }
-
-
-  console.debug(`Linting ${linterInput.files.length} files in ${linterInput.root_path}`)
-  // console.log("linterInput " + JSON.stringify(linterInput, null, 2))
-
-  const res = lint(linterInput, (errorMessage: string) => {
-    if (onError) {
-      onError(errorMessage)
-    }
-  })
-
-  // console.log("res " + JSON.stringify(res, null, 2))
-  let allDiagnostics: Map<string, Diagnostic[]> = new Map()
-
-  documents.forEach((docDetails) => {
-    const documentDiagnostics: Diagnostic[] = []
-
-    try {
-      const filteredDiagnostics = res.diagnostics.filter((diag) => diag.source_file === docDetails.path)
-
-      for (const diag of filteredDiagnostics) {
-        const diagnostic: Diagnostic = {
-          range: {
-            start: docDetails.doc.positionAt(diag.start),
-            end: docDetails.doc.positionAt(diag.end),
-          },
-          message: diag.text,
-          source: 'baml',
-        }
-        if (diag.is_warning) {
-          diagnostic.severity = DiagnosticSeverity.Warning
-        } else {
-          diagnostic.severity = DiagnosticSeverity.Error
-        }
-        documentDiagnostics.push(diagnostic)
-      }
-    } catch (e: any) {
-      if (e instanceof Error) {
-        console.log('Error handling diagnostics' + e.message + ' ' + e.stack)
-      }
-      onError?.(e.message)
-    }
-    allDiagnostics.set(docDetails.doc.uri, documentDiagnostics)
-  })
-
-  return { diagnostics: allDiagnostics, state: res.ok ? res.response : undefined }
-}
 
 /**
  * This handler provides the modification to the document to be formatted.

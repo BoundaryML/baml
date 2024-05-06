@@ -17,7 +17,12 @@ pub trait WithRetryPolicy {
     fn retry_policy_name(&self) -> Option<&str>;
 }
 
-pub trait WithCallable {
+#[cfg(feature = "wasm")]
+type ResponseType = Result<LLMResponse, wasm_bindgen::JsValue>;
+#[cfg(not(feature = "wasm"))]
+type ResponseType = Result<LLMResponse>;
+
+pub trait WithCallable: Send {
     /// Call the model with the specified prompt, retrying as appropriate.
     ///
     /// retry_policy is a stateful iterator, so it's taken by value
@@ -30,11 +35,7 @@ pub trait WithCallable {
 }
 
 pub trait WithSingleCallable {
-    async fn single_call(
-        &self,
-        ctx: &RuntimeContext,
-        prompt: &RenderedPrompt,
-    ) -> Result<LLMResponse>;
+    async fn single_call(&self, ctx: &RuntimeContext, prompt: &RenderedPrompt) -> ResponseType;
 }
 
 pub trait WithClient {
@@ -54,7 +55,7 @@ pub trait WithPrompt<'ir> {
 
 impl<T> WithCallable for T
 where
-    T: WithSingleCallable,
+    T: WithSingleCallable + Send,
 {
     async fn call(
         &self,
@@ -66,19 +67,34 @@ where
             let retry_strategy = retry_strategy.clone();
 
             // TODO: @sxlijin collect all errors.
-            let mut err = vec![];
+            let err = std::sync::Arc::new(std::sync::Mutex::new(vec![]));
 
-            let to_final_response = |res: LLMResponse, err: Vec<LLMResponse>| {
-                if err.is_empty() {
-                    res
-                } else {
-                    LLMResponse::Retry(RetryLLMResponse {
-                        client: None,
-                        passed: Some(Box::new(res)),
-                        failed: err,
-                    })
-                }
-            };
+            let to_final_response =
+                |res: LLMResponse, err: std::sync::Arc<std::sync::Mutex<Vec<LLMResponse>>>| {
+                    let err = match std::sync::Arc::try_unwrap(err) {
+                        Ok(err) => match err.into_inner() {
+                            Ok(err) => err,
+                            Err(err) => {
+                                log::error!("Failed to unwrap error: {:?}", err);
+                                vec![]
+                            }
+                        },
+                        Err(err) => {
+                            log::error!("Failed to unwrap error: {:?}", err);
+                            vec![]
+                        }
+                    };
+
+                    if err.is_empty() {
+                        res
+                    } else {
+                        LLMResponse::Retry(RetryLLMResponse {
+                            client: None,
+                            passed: Some(Box::new(res)),
+                            failed: err,
+                        })
+                    }
+                };
 
             for delay in retry_strategy {
                 match self.single_call(ctx, prompt).await {
@@ -89,17 +105,33 @@ where
                         return to_final_response(LLMResponse::Retry(retry), err);
                     }
                     Ok(x) => {
-                        err.push(x);
+                        err.lock().unwrap().push(x);
                     }
                     Err(e) => {
-                        err.push(LLMResponse::OtherFailures(e.to_string()));
+                        err.lock()
+                            .unwrap()
+                            .push(LLMResponse::OtherFailures(e.into()));
                     }
                 }
                 tokio::time::sleep(delay).await;
             }
 
+            let err = match std::sync::Arc::try_unwrap(err) {
+                Ok(err) => match err.into_inner() {
+                    Ok(err) => err,
+                    Err(err) => {
+                        log::error!("Failed to unwrap error: {:?}", err);
+                        vec![]
+                    }
+                },
+                Err(err) => {
+                    log::error!("Failed to unwrap error: {:?}", err);
+                    vec![]
+                }
+            };
+
             if err.is_empty() {
-                LLMResponse::OtherFailures("No calls were made".to_string())
+                LLMResponse::OtherFailures("No calls were made".into())
             } else {
                 LLMResponse::Retry(RetryLLMResponse {
                     client: None,
@@ -110,7 +142,7 @@ where
         } else {
             match self.single_call(ctx, prompt).await {
                 Ok(x) => x,
-                Err(e) => LLMResponse::OtherFailures(e.to_string()),
+                Err(e) => LLMResponse::OtherFailures(e.into()),
             }
         }
     }
@@ -120,11 +152,7 @@ impl<T> WithSingleCallable for T
 where
     T: WithClient + WithChat + WithCompletion,
 {
-    async fn single_call(
-        &self,
-        ctx: &RuntimeContext,
-        prompt: &RenderedPrompt,
-    ) -> Result<LLMResponse> {
+    async fn single_call(&self, ctx: &RuntimeContext, prompt: &RenderedPrompt) -> ResponseType {
         match self.model_features() {
             ModelFeatures {
                 completion: true,
@@ -132,7 +160,18 @@ where
             } => {
                 let prompt = match prompt {
                     RenderedPrompt::Completion(p) => p,
-                    _ => anyhow::bail!("Expected completion prompt"),
+                    _ => {
+                        #[cfg(feature = "wasm")]
+                        {
+                            return Err(wasm_bindgen::JsValue::from_str(
+                                "Expected completion prompt",
+                            ));
+                        }
+                        #[cfg(not(feature = "wasm"))]
+                        {
+                            anyhow::bail!("Expected completion prompt")
+                        }
+                    }
                 };
                 self.completion(ctx, prompt).await
             }
@@ -142,7 +181,16 @@ where
             } => {
                 let prompt = match prompt {
                     RenderedPrompt::Chat(p) => p,
-                    _ => anyhow::bail!("Expected chat prompt"),
+                    _ => {
+                        #[cfg(feature = "wasm")]
+                        {
+                            return Err(wasm_bindgen::JsValue::from_str("Expected chat prompt"));
+                        }
+                        #[cfg(not(feature = "wasm"))]
+                        {
+                            anyhow::bail!("Expected chat prompt")
+                        }
+                    }
                 };
                 self.chat(ctx, prompt).await
             }
@@ -156,7 +204,16 @@ where
             ModelFeatures {
                 completion: false,
                 chat: false,
-            } => anyhow::bail!("No model type supported"),
+            } => {
+                #[cfg(feature = "wasm")]
+                {
+                    Err(wasm_bindgen::JsValue::from_str("No model type supported"))
+                }
+                #[cfg(not(feature = "wasm"))]
+                {
+                    anyhow::bail!("No model type supported")
+                }
+            }
         }
     }
 }

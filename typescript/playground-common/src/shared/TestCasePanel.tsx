@@ -15,14 +15,14 @@ import { Copy, Edit2, FileJson2, Save, Play, PlusIcon, Trash2, Pin } from 'lucid
 import React, { ChangeEvent, FocusEvent, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { ASTContext } from './ASTProvider'
 import TypeComponent from './TypeComponent'
-import { useSelections } from './hooks'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip'
 import { TEMPLATES } from './TestCaseEditor/JsonEditorTemplates'
 import JsonView from 'react18-json-view'
 import { Badge } from '../components/ui/badge'
 import { useAtom, useAtomValue } from 'jotai'
-import { selectedFunctionAtom, selectedTestCaseAtom } from '../baml_wasm_web/EventListener'
+import { selectedFunctionAtom, selectedTestCaseAtom } from '@/baml_wasm_web/EventListener'
 import type { WasmTestCase } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
+import { useRunHooks } from '@/baml_wasm_web/test_uis/testHooks'
 
 const uiSchema: UiSchema = {
   'ui:submitButtonOptions': {
@@ -43,6 +43,7 @@ type TestCase = Func['test_cases'][number]
 const TestCasePanelEntry: React.FC<{ test_case: WasmTestCase }> = ({ test_case }) => {
   const [selectedTestCase, setSelected] = useAtom(selectedTestCaseAtom)
   const isRendered = useMemo(() => selectedTestCase?.name === test_case.name, [selectedTestCase, test_case])
+  const { run, isRunning } = useRunHooks();
 
   return (
     <div key={test_case.name} className="flex flex-col py-1 pr-2 w-full overflow-x-clip group">
@@ -52,28 +53,9 @@ const TestCasePanelEntry: React.FC<{ test_case: WasmTestCase }> = ({ test_case }
             variant={'ghost'}
             size={'icon'}
             className="p-1 rounded-md w-fit h-fit bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground"
-            disabled
+            disabled={isRunning}
             onClick={() => {
-              // const runTestRequest: TestRequest = {
-              //   functions: [
-              //     {
-              //       name: func.name.value,
-              //       tests: [
-              //         {
-              //           name: test_case.name.value,
-              //           impls: impl ? [impl.name.value] : [],
-              //         },
-              //       ],
-              //     },
-              //   ],
-              // }
-              // vscode.postMessage({
-              //   command: 'runTest',
-              //   data: {
-              //     root_path,
-              //     tests: runTestRequest,
-              //   },
-              // })
+              run(test_case.name)
             }}
           >
             <Play size={10} />
@@ -246,7 +228,6 @@ const autoGenTestCase = (func: Func, input_json_schema: any): TestCase => {
 }
 
 const TestCasePanel: React.FC = () => {
-  const { input_json_schema } = useSelections()
   const selectedFunction = useAtomValue(selectedFunctionAtom)
   const testCases = useMemo(() => selectedFunction?.test_cases ?? [], [selectedFunction])
 

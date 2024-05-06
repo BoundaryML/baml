@@ -3,7 +3,7 @@
 import { TestResult } from '@baml/common'
 import { VSCodePanels } from '@vscode/webview-ui-toolkit/react'
 import clsx from 'clsx'
-import { createRef, useContext, useEffect, useId, useRef } from 'react'
+import { createRef, useContext, useEffect, useId, useMemo, useRef } from 'react'
 import { ImperativePanelHandle } from 'react-resizable-panels'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/ui/resizable'
 import { TooltipProvider } from '../components/ui/tooltip'
@@ -11,9 +11,9 @@ import { ASTContext } from './ASTProvider'
 import ImplPanel, { Snippet } from './ImplPanel'
 import TestCasePanel from './TestCasePanel'
 import TestResultPanel from './TestResultOutcomes'
-import { useSelections } from './hooks'
 import { useAtomValue } from 'jotai'
 import { renderPromptAtom, selectedFunctionAtom } from '../baml_wasm_web/EventListener'
+import { showTestsAtom } from '@/baml_wasm_web/test_uis/testHooks'
 
 function getTopPanelSize(showTests: boolean, test_results: TestResult[] | undefined): number {
   if (showTests) {
@@ -81,27 +81,24 @@ const PromptPreview: React.FC = () => {
 }
 
 const FunctionPanel: React.FC = () => {
-  const showTests = true
+  const showTests = useAtomValue(showTestsAtom);
   const selectedFunc = useAtomValue(selectedFunctionAtom)
+  let topPanelSize = useMemo(() => getTopPanelSize(showTests, []), [showTests])
 
-  const { test_results } = useSelections()
-  const results = test_results ?? []
   const id = useId()
   const refs = useRef()
-  const testResultId = test_results ? test_results[0]?.status : ''
   const ref = createRef<ImperativePanelHandle>()
 
   useEffect(() => {
-    let topPanelSize = getTopPanelSize(showTests, test_results)
+    let topPanelSize = getTopPanelSize(showTests, [])
     if (ref.current) {
       ref.current.resize(topPanelSize)
     }
-  }, [showTests, testResultId])
+  }, [showTests])
 
   if (!selectedFunc)
     return <div className="flex flex-col">No function selected. Create or select a function to get started</div>
 
-  let topPanelSize = getTopPanelSize(showTests, test_results)
 
   return (
     <div

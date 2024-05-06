@@ -33,7 +33,6 @@ import * as MessageHandler from './lib/MessageHandler'
 import type { LSOptions, LSSettings } from './lib/types'
 // import { getVersion, getEnginesVersion } from './lib/wasm/internals'
 import { BamlDirCache } from './file/fileCache'
-import { LinterInput } from './lib/wasm/lint'
 // import { cliBuild, cliCheckForUpdates, cliVersion } from './baml-cli'
 import { ParserDatabase, TestRequest } from '@baml/common'
 // import { FileChangeType } from 'vscode'
@@ -304,66 +303,6 @@ export function startServer(options?: LSOptions): void {
     void connection.sendRequest('set_database', { rootPath: rootPath.fsPath, db })
   }
 
-  function validateTextDocument(textDocument: TextDocument) {
-    try {
-      const rootPath = bamlCache.getBamlDir(textDocument)
-      if (!rootPath) {
-        return
-      }
-
-      const srcDocs = bamlCache.getDocuments(textDocument)
-
-      if (srcDocs.length === 0) {
-        console.log(`No BAML files found in the workspace. ${rootPath}`)
-        connection.sendNotification('baml/message', {
-          type: 'warn',
-          message: `Empty baml_src directory found: ${rootPath.fsPath}. See Output panel -> BAML Language Server for more details.`,
-        })
-        return
-      }
-
-      const selectedTests = Object.fromEntries(bamlCache.lastPaserDatabase?.db.functions.map((fn) => {
-        let uniqueTestNames = new Set(fn.impls.flatMap((impl) => impl.prompt.test_case).filter((t): t is string => t !== undefined && t !== null));
-        const testCases = new Array(...uniqueTestNames);
-        let testCaseName = testCases.length > 0 ? testCases[0] : undefined;
-        if (testCaseName === undefined) {
-          return undefined;
-        }
-        return [fn.name.value, testCaseName]
-      }).filter((t): t is [string, string] => t !== undefined) ?? []);
-
-      const response = MessageHandler.handleDiagnosticsRequest(rootPath, srcDocs, selectedTests, showErrorToast)
-      for (const [uri, diagnosticList] of response.diagnostics) {
-        void connection.sendDiagnostics({ uri, diagnostics: diagnosticList })
-      }
-
-      bamlCache.addDatabase(rootPath, response.state)
-      if (response.state) {
-        const filecache = bamlCache.getFileCache(textDocument)
-        if (filecache) {
-          filecache.setDB(response.state)
-        } else {
-          console.error('Could not find file cache for ' + textDocument.uri)
-        }
-
-        updateClientDB(rootPath, response.state)
-      } else {
-        void connection.sendRequest('rm_database', rootPath)
-      }
-    } catch (e: any) {
-      if (e instanceof Error) {
-        console.log('Error validating doc' + e.message + ' ' + e.stack)
-      } else {
-        console.log('Error validating doc' + e)
-      }
-    }
-  }
-
-  const debouncedValidateTextDocument = debounce(validateTextDocument, 800, {
-    maxWait: 4000,
-    leading: true,
-    trailing: true,
-  })
 
   documents.onDidChangeContent(async (change: { document: TextDocument }) => {
     const textDocument = change.document

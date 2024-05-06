@@ -61,7 +61,7 @@ function removeUnreferencedDefinitions(schema: JSONSchema): JSONSchema {
 
   return { ...schema, definitions: newDefinitions }
 }
-export function useSelections() {
+function useSelections() {
   const ctx = useContext(ASTContext)
   if (!ctx) {
     throw new Error('useSelections must be used within an ASTProvider')

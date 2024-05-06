@@ -7,7 +7,7 @@ use std::{
     path::PathBuf,
 };
 
-use baml_runtime::{BamlRuntime, DiagnosticsError, RenderedPrompt};
+use baml_runtime::{BamlRuntime, DiagnosticsError, RenderedPrompt, RuntimeInterface};
 use js_sys::{JsString, JSON};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
@@ -298,5 +298,33 @@ impl WasmFunction {
             .render_prompt(&self.name, &ctx, &params)
             .map(|p| p.into())
             .map_err(|e| wasm_bindgen::JsError::new(&e.to_string()))
+    }
+
+    #[wasm_bindgen]
+    pub async fn run_test(
+        &self,
+        rt: &mut WasmRuntime,
+        ctx: &runtime_ctx::WasmRuntimeContext,
+        test_name: String,
+    ) -> Result<JsValue, JsValue> {
+        // For anything env vars that are not provided, fill with empty strings
+        let ctx = ctx.ctx.clone();
+
+        let rt = &rt.runtime;
+
+        let function_name = self.name.clone();
+
+        let res = rt.run_test(&function_name, &test_name, &ctx).await;
+        match res {
+            Ok(res) => match res.status() {
+                baml_runtime::TestStatus::Pass => {
+                    Ok(serde_wasm_bindgen::to_value(&serde_json::json!(true)).unwrap())
+                }
+                baml_runtime::TestStatus::Fail(e) => {
+                    Err(serde_wasm_bindgen::to_value(&format!("{:#?}", e)).unwrap())
+                }
+            },
+            Err(e) => Err(e),
+        }
     }
 }

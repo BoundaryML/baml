@@ -30,6 +30,7 @@ tokio = { version = "1", default-features = false, features = [
   "time",
 ] }
 uuid = { version = "1.7.0", features = ["v4"] }
+web-time = "1.1.0"
 
 [dependencies.reqwest]
 version = "0.11"
@@ -45,6 +46,10 @@ version = "^0.2.74"
 optional = true
 features = ["serde-serialize"]
 
+[dependencies.wasm-bindgen-futures]
+version = "0.4"
+optional = true
+
 [dependencies.js-sys]
 version = "0.3.69"
 optional = true
@@ -52,16 +57,17 @@ optional = true
 [dependencies.web-sys]
 version = "0.3.69"
 optional = true
-features = ["Headers", "Request", "RequestInit", "RequestMode"]
+features = ["Headers", "Request", "RequestInit", "RequestMode", "Window"]
 
 [features]
-default = ["network", "disk"]
+default = ["wasm"]
 wasm = [
   "colored/no-color",
   "js-sys",
   "uuid/js",
   "wasm-bindgen",
   "web-sys",
+  "wasm-bindgen-futures",
 ] # Enable this feature for WASM build
 network = ["tokio/full", "reqwest"]
 disk = ["walkdir"]

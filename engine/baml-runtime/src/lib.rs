@@ -57,13 +57,18 @@ impl BamlRuntime {
     }
 }
 
+#[cfg(feature = "wasm")]
+type ResponseType<T> = Result<T, wasm_bindgen::JsValue>;
+#[cfg(not(feature = "wasm"))]
+type ResponseType<T> = Result<T>;
+
 impl RuntimeInterface for BamlRuntime {
     async fn run_test(
         &self,
         function_name: &str,
         test_name: &str,
         ctx: &RuntimeContext,
-    ) -> Result<TestResponse> {
+    ) -> ResponseType<TestResponse> {
         self.inner.run_test(function_name, test_name, ctx).await
     }
 
@@ -72,7 +77,7 @@ impl RuntimeInterface for BamlRuntime {
         function_name: String,
         params: HashMap<String, serde_json::Value>,
         ctx: &RuntimeContext,
-    ) -> Result<crate::FunctionResult> {
+    ) -> ResponseType<crate::FunctionResult> {
         self.inner.call_function(function_name, params, ctx).await
     }
 
