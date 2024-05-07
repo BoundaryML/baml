@@ -435,19 +435,20 @@ impl OpenAIClient {
         let mut init = web_sys::RequestInit::new();
         init.method("POST");
         init.mode(RequestMode::Cors);
-        init.body(Some(&JsValue::from_serde(&body).unwrap()));
+        init.body(Some(&JsValue::from_str(
+            &serde_json::to_string(&body).map_err(|e| JsValue::from_str(&format!("{:#}", e)))?,
+        )));
 
-        let headers = web_sys::Headers::new().unwrap();
+        let headers = web_sys::Headers::new()?;
+        headers.set("Content-Type", "application/json")?;
         match &self.properties.api_key {
             Some(key) => {
-                headers
-                    .set("Authorization", &format!("Bearer {}", key))
-                    .unwrap();
+                headers.set("Authorization", &format!("Bearer {}", key))?;
             }
             None => {}
         }
         for (k, v) in &self.properties.headers {
-            headers.set(k, v).unwrap();
+            headers.set(k, v)?;
         }
         init.headers(&headers);
 
