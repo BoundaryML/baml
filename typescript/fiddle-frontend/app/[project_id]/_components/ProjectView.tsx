@@ -8,7 +8,6 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { useKeybindingOverrides } from '@/hooks/command-s'
 import { BAML_DIR } from '@/lib/constants'
 import { BAMLProject } from '@/lib/exampleProjects'
-import { ExploreProjects } from './ExploreProjects'
 import {
   CustomErrorBoundary,
   EventListener,
@@ -16,16 +15,21 @@ import {
   FunctionSelector,
   //useSelections,
 } from '@baml/playground-common'
+import { Separator } from '@baml/playground-common/components/ui/separator'
+import clsx from 'clsx'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { useHydrateAtoms } from 'jotai/utils'
+import { AlertTriangleIcon, Compass, FlaskConical, GitForkIcon, LinkIcon, ShareIcon } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import posthog from 'posthog-js'
 import { useContext, useEffect, useRef, useState } from 'react'
+import { isMobile } from 'react-device-detect'
+import Joyride, { STATUS } from 'react-joyride'
 import { toast } from 'sonner'
 import { Editable } from '../../_components/EditableText'
 import { EditorFile, createUrl } from '../../actions'
-import Joyride, { STATUS } from 'react-joyride'
 import {
   currentEditorFilesAtom,
   currentParserDbAtom,
@@ -36,14 +40,10 @@ import {
 } from '../_atoms/atoms'
 import { usePlaygroundListener } from '../_playground_controller/usePlaygroundListener'
 import { CodeMirrorEditor } from './CodeMirrorEditor'
+import { ExploreProjects } from './ExploreProjects'
 import { GithubStars } from './GithubStars'
-import FileViewer from './Tree/FileViewer'
-import clsx from 'clsx'
-import { AlertTriangleIcon, Compass, FlaskConical, GitForkIcon, LinkIcon, ShareIcon } from 'lucide-react'
-import { Separator } from '@baml/playground-common/components/ui/separator'
 import { InitialTour, PostTestRunTour } from './Tour'
-import posthog from 'posthog-js'
-import { isMobile } from 'react-device-detect'
+import FileViewer from './Tree/FileViewer'
 
 const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
   const setEditorFiles = useSetAtom(currentEditorFilesAtom)

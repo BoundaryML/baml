@@ -1,7 +1,7 @@
 import { atom, useAtomValue } from 'jotai'
 import { atomFamily, useAtomCallback } from 'jotai/utils'
-import { runtimeCtx, selectedFunctionAtom, selectedRuntimeAtom } from '../EventListener'
 import React from 'react'
+import { runtimeCtx, selectedFunctionAtom, selectedRuntimeAtom } from '../EventListener'
 
 const isRunningAtom = atom(false)
 export const showTestsAtom = atom(true)

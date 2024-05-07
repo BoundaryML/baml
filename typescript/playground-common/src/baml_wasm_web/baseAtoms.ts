@@ -1,6 +1,6 @@
+import type { WasmDiagnosticError, WasmProject, WasmRuntime } from '@gloo-ai/baml-schema-wasm-web'
 import { atom } from 'jotai'
 import { atomFamily } from 'jotai/utils'
-import type { WasmProject, WasmRuntime, WasmDiagnosticError } from '@gloo-ai/baml-schema-wasm-web'
 
 export const availableProjectsAtom = atom<string[]>([])
 

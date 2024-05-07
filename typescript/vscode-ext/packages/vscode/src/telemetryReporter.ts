@@ -1,8 +1,8 @@
-import { Disposable, workspace } from 'vscode'
-import { getProjectHash } from './hashes'
-import { PostHog } from 'posthog-node'
-import * as vscode from 'vscode'
 import os from 'os'
+import { PostHog } from 'posthog-node'
+import { Disposable, workspace } from 'vscode'
+import * as vscode from 'vscode'
+import { getProjectHash } from './hashes'
 type TelemetryLevel = 'off' | 'crash' | 'error' | 'all' | undefined
 
 const client = new PostHog('phc_732PWG6HFZ75S7h0TK2AuqRVkqZDiD4WePE9gXYJkOu')

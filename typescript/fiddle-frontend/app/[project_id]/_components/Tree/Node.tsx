@@ -1,11 +1,11 @@
+import { EditorFile } from '@/app/actions'
 import clsx from 'clsx'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { ArrowDown, ArrowRight, ChevronDown, ChevronRight, Edit, Edit2, File, Folder, X } from 'lucide-react'
-import { NodeRendererProps } from 'react-arborist'
-import { activeFileAtom, currentEditorFilesAtom, emptyDirsAtom, fileDiagnostics } from '../../_atoms/atoms'
-import { EditorFile } from '@/app/actions'
 import { useEffect } from 'react'
+import { NodeRendererProps } from 'react-arborist'
 import { SiPython, SiTypescript } from 'react-icons/si'
+import { activeFileAtom, currentEditorFilesAtom, emptyDirsAtom, fileDiagnostics } from '../../_atoms/atoms'
 
 export type Entity = {
   id: string

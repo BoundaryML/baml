@@ -1,5 +1,5 @@
-import * as path from 'path'
 import * as fs from 'fs'
+import * as path from 'path'
 import { TextDocument } from 'vscode-languageserver-textdocument'
 import { URI } from 'vscode-uri'
 

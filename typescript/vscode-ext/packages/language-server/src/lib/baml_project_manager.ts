@@ -1,8 +1,8 @@
-import { URI } from 'vscode-uri'
 import BamlWasm, { WasmDiagnosticError } from '@gloo-ai/baml-schema-wasm-node'
-import { DiagnosticSeverity, Diagnostic } from 'vscode-languageserver'
-import { findTopLevelParent, gatherFiles } from '../file/fileUtils'
 import { readFile } from 'fs/promises'
+import { Diagnostic, DiagnosticSeverity } from 'vscode-languageserver'
+import { URI } from 'vscode-uri'
+import { findTopLevelParent, gatherFiles } from '../file/fileUtils'
 
 type Notify = (
   params:

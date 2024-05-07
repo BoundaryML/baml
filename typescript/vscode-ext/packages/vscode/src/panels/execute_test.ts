@@ -1,18 +1,18 @@
-import * as vscode from 'vscode'
-import net from 'net'
-import * as path from 'path'
-import * as fs from 'fs'
-import * as os from 'os'
 import { exec, spawn } from 'child_process'
+import * as fs from 'fs'
+import net from 'net'
+import * as os from 'os'
+import * as path from 'path'
 import {
   ClientEventLog,
   TestRequest,
   TestResult,
+  TestState as TestStateType,
   TestStatus,
   clientEventLogSchema,
   getFullTestName,
-  TestState as TestStateType,
 } from '@baml/common'
+import * as vscode from 'vscode'
 import { generateTestRequest } from '../plugins/language-server'
 import { bamlPath, bamlTestShell } from '../util'
 const outputChannel = vscode.window.createOutputChannel('baml-test-runner')

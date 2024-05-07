@@ -3,12 +3,12 @@ import { useEffect, useRef, useState } from 'react'
 
 import { MoveHandler, RenameHandler, Tree, TreeApi } from 'react-arborist'
 
-import Node from './Node'
+import { EditorFile } from '@/app/actions'
+import { useAtom, useAtomValue } from 'jotai'
 import { FilePlus, FolderPlus } from 'lucide-react'
 import useResizeObserver from 'use-resize-observer'
-import { useAtom, useAtomValue } from 'jotai'
 import { activeFileAtom, currentEditorFilesAtom, emptyDirsAtom } from '../../_atoms/atoms'
-import { EditorFile } from '@/app/actions'
+import Node from './Node'
 
 export const data = [
   {

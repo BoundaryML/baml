@@ -1,44 +1,44 @@
 import {
-  TextDocuments,
-  Diagnostic,
-  InitializeParams,
-  InitializeResult,
   CodeActionKind,
   CodeActionParams,
-  HoverParams,
-  CompletionItem,
-  CompletionParams,
-  DeclarationParams,
-  RenameParams,
-  DocumentFormattingParams,
-  DidChangeConfigurationNotification,
-  Connection,
-  DocumentSymbolParams,
-  TextDocumentSyncKind,
+  CodeLens,
   CodeLensParams,
   Command,
+  CompletionItem,
+  CompletionParams,
+  Connection,
+  DeclarationParams,
+  Diagnostic,
+  DidChangeConfigurationNotification,
+  DidChangeWatchedFilesNotification,
+  DocumentFormattingParams,
+  DocumentSymbolParams,
+  FileSystemWatcher,
+  HoverParams,
+  InitializeParams,
+  InitializeResult,
   Position,
   Range,
-  CodeLens,
-  DidChangeWatchedFilesNotification,
-  FileSystemWatcher,
+  RenameParams,
+  TextDocumentSyncKind,
+  TextDocuments,
 } from 'vscode-languageserver'
 import { URI } from 'vscode-uri'
 
 import debounce from 'lodash/debounce'
-import { createConnection, IPCMessageReader, IPCMessageWriter } from 'vscode-languageserver/node'
 import { TextDocument } from 'vscode-languageserver-textdocument'
+import { IPCMessageReader, IPCMessageWriter, createConnection } from 'vscode-languageserver/node'
 
-import * as MessageHandler from './lib/MessageHandler'
-import type { LSOptions, LSSettings } from './lib/types'
-// import { getVersion, getEnginesVersion } from './lib/wasm/internals'
-import { BamlDirCache } from './file/fileCache'
-// import { cliBuild, cliCheckForUpdates, cliVersion } from './baml-cli'
-import { ParserDatabase, TestRequest } from '@baml/common'
 // import { FileChangeType } from 'vscode'
 import fs from 'fs'
+// import { cliBuild, cliCheckForUpdates, cliVersion } from './baml-cli'
+import { ParserDatabase, TestRequest } from '@baml/common'
 import { z } from 'zod'
+// import { getVersion, getEnginesVersion } from './lib/wasm/internals'
+import { BamlDirCache } from './file/fileCache'
+import * as MessageHandler from './lib/MessageHandler'
 import BamlProjectManager from './lib/baml_project_manager'
+import type { LSOptions, LSSettings } from './lib/types'
 
 const packageJson = require('../../package.json') // eslint-disable-line
 function getConnection(options?: LSOptions): Connection {

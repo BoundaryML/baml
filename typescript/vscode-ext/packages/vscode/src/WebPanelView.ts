@@ -8,9 +8,9 @@ import {
   WebviewViewResolveContext,
   window,
 } from 'vscode'
-import { getUri } from './utils/getUri'
 import { Extension } from './helpers/extension'
 import { getNonce } from './utils/getNonce'
+import { getUri } from './utils/getUri'
 
 class WebPanelView implements WebviewViewProvider {
   public static readonly viewType = 'WebPanelView'

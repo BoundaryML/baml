@@ -1,9 +1,9 @@
-import { PropsWithChildren } from 'react'
-import { TestState, TestStatusType, runningTestsAtom, statusCountAtom, testStatusAtom } from './testHooks'
-import { VSCodeProgressRing } from '@vscode/webview-ui-toolkit/react'
-import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { VSCodeProgressRing } from '@vscode/webview-ui-toolkit/react'
+import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
+import { PropsWithChildren } from 'react'
+import { TestState, TestStatusType, runningTestsAtom, statusCountAtom, testStatusAtom } from './testHooks'
 
 const TestStatusIcon: React.FC<{ testStatus: TestStatusType }> = ({ testStatus }) => {
   return (

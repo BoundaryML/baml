@@ -1,5 +1,5 @@
-import React from 'react'
 import Anser from 'anser'
+import React from 'react'
 
 const getLinks = (text: string) => {
   let txt = text.replace(/[^<>\s]+\.log\b/gm, (str) => `<a href="vscode://file/${str}">${str}</a>`)

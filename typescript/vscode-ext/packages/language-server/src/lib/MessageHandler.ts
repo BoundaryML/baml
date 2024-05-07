@@ -1,29 +1,29 @@
+import { ParserDatabase, TestRequest } from '@baml/common'
 import {
-  DocumentFormattingParams,
-  TextEdit,
-  DeclarationParams,
-  CompletionParams,
-  CompletionList,
-  CompletionItem,
-  HoverParams,
-  Hover,
-  CodeActionParams,
   CodeAction,
+  CodeActionParams,
+  CompletionItem,
+  CompletionList,
+  CompletionParams,
+  DeclarationParams,
   Diagnostic,
   DiagnosticSeverity,
-  RenameParams,
-  WorkspaceEdit,
-  DocumentSymbolParams,
+  DocumentFormattingParams,
   DocumentSymbol,
-  SymbolKind,
+  DocumentSymbolParams,
+  Hover,
+  HoverParams,
   LocationLink,
+  RenameParams,
+  SymbolKind,
   TextDocuments,
+  TextEdit,
+  WorkspaceEdit,
 } from 'vscode-languageserver'
 import type { TextDocument } from 'vscode-languageserver-textdocument'
-import { fullDocumentRange } from './ast'
-import { FileCache } from '../file/fileCache'
-import { ParserDatabase, TestRequest } from '@baml/common'
 import { URI } from 'vscode-uri'
+import { FileCache } from '../file/fileCache'
+import { fullDocumentRange } from './ast'
 
 // import format from './prisma-schema-wasm/format'
 // import lint from './prisma-schema-wasm/lint'

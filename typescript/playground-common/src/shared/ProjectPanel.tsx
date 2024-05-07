@@ -1,8 +1,8 @@
-import { useContext, useState } from 'react'
-import { ASTContext } from './ASTProvider'
 import { VSCodeButton } from '@vscode/webview-ui-toolkit/react'
-import { Dialog, DialogContent, DialogTrigger } from '../components/ui/dialog'
+import { useContext, useState } from 'react'
 import { Button } from '../components/ui/button'
+import { Dialog, DialogContent, DialogTrigger } from '../components/ui/dialog'
+import { ASTContext } from './ASTProvider'
 
 const ProjectPanel: React.FC<{ onClick?: () => void }> = ({ onClick }) => {
   const { projects, selectedProjectId, setSelection } = useContext(ASTContext)

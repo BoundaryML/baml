@@ -1,8 +1,7 @@
 /// Content once a function has been selected.
 
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip'
 import { TestStatus } from '@baml/common'
-import { useImplCtx } from './hooks'
+import { Impl } from '@baml/common'
 import {
   VSCodeBadge,
   VSCodeCheckbox,
@@ -11,13 +10,14 @@ import {
   VSCodePanels,
   VSCodeProgressRing,
 } from '@vscode/webview-ui-toolkit/react'
+import clsx from 'clsx'
+import { Tiktoken, TiktokenEncoding, TiktokenModel, getEncoding, getEncodingNameForModel } from 'js-tiktoken'
 import { useMemo, useState } from 'react'
+import { Checkbox } from '../components/ui/checkbox'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip'
 import Link from './Link'
 import TypeComponent from './TypeComponent'
-import { Impl } from '@baml/common'
-import clsx from 'clsx'
-import { TiktokenEncoding, Tiktoken, TiktokenModel, getEncoding, getEncodingNameForModel } from 'js-tiktoken'
-import { Checkbox } from '../components/ui/checkbox'
+import { useImplCtx } from './hooks'
 
 const Whitespace: React.FC<{ char: 'space' | 'tab' }> = ({ char }) => (
   <span className='opacity-50 text-vscode-descriptionForeground'>{char === 'space' ? <>&middot;</> : <>&rarr;</>}</span>

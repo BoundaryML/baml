@@ -1,7 +1,7 @@
-import { vscode } from '../utils/vscode'
 import { StringSpan } from '@baml/common'
 import { VSCodeLink } from '@vscode/webview-ui-toolkit/react'
 import { cn } from '../lib/utils'
+import { vscode } from '../utils/vscode'
 
 const Link: React.FC<{ item: StringSpan; display?: string; className?: string }> = ({ item, display, className }) => (
   <VSCodeLink

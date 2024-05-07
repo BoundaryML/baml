@@ -1,13 +1,13 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
-import { ThemeProvider } from './_components/ThemeProvider'
+import { Toaster } from '@/components/ui/toaster'
+import dynamic from 'next/dynamic'
+import { Suspense } from 'react'
+import { BrowseSheet } from './_components/BrowseSheet'
 import JotaiProvider from './_components/JotaiProvider'
 import { PHProvider } from './_components/PosthogProvider'
-import dynamic from 'next/dynamic'
-import { Toaster } from '@/components/ui/toaster'
-import { BrowseSheet } from './_components/BrowseSheet'
-import { Suspense } from 'react'
+import { ThemeProvider } from './_components/ThemeProvider'
 
 const PostHogPageView = dynamic(() => import('./PostHogPageView'), {
   ssr: false,

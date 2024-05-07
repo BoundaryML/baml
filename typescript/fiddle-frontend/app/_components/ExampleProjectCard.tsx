@@ -1,10 +1,4 @@
 'use client'
-import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { BAMLProject } from '@/lib/exampleProjects'
-import clsx from 'clsx'
-import { useAtomValue } from 'jotai'
-import { usePathname, useRouter, useSearchParams, useSelectedLayoutSegment } from 'next/navigation'
-import { unsavedChangesAtom } from '../[project_id]/_atoms/atoms'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,6 +9,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { BAMLProject } from '@/lib/exampleProjects'
+import clsx from 'clsx'
+import { useAtomValue } from 'jotai'
+import { usePathname, useRouter, useSearchParams, useSelectedLayoutSegment } from 'next/navigation'
+import { unsavedChangesAtom } from '../[project_id]/_atoms/atoms'
 
 export const ExampleProjectCard = ({ project }: { project: BAMLProject }) => {
   // const searchParams = useSearchParams()

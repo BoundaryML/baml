@@ -2,13 +2,13 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import * as vscode from 'vscode'
 
-import plugins from './plugins'
-import { WebPanelView } from './panels/WebPanelView'
-import { BamlDB } from './plugins/language-server'
-import testExecutor from './panels/execute_test'
-import glooLens from './GlooCodeLensProvider'
-import { telemetry } from './plugins/language-server'
 import axios from 'axios'
+import glooLens from './GlooCodeLensProvider'
+import { WebPanelView } from './panels/WebPanelView'
+import testExecutor from './panels/execute_test'
+import plugins from './plugins'
+import { BamlDB } from './plugins/language-server'
+import { telemetry } from './plugins/language-server'
 const outputChannel = vscode.window.createOutputChannel('baml')
 const diagnosticsCollection = vscode.languages.createDiagnosticCollection('baml-diagnostics')
 const LANG_NAME = 'Baml'

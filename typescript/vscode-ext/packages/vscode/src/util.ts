@@ -1,18 +1,18 @@
-import {
-  WorkspaceEdit,
-  window,
-  TextEdit,
-  SnippetString,
-  TextEditorEdit,
-  env,
-  workspace,
-  ExtensionContext,
-} from 'vscode'
-import { CodeAction, TextDocumentIdentifier, LanguageClientOptions } from 'vscode-languageclient'
-import { LanguageClient, ServerOptions } from 'vscode-languageclient/node'
-import { homedir } from 'os'
 import { readdirSync } from 'fs'
+import { homedir } from 'os'
 import path from 'path'
+import {
+  ExtensionContext,
+  SnippetString,
+  TextEdit,
+  TextEditorEdit,
+  WorkspaceEdit,
+  env,
+  window,
+  workspace,
+} from 'vscode'
+import { CodeAction, LanguageClientOptions, TextDocumentIdentifier } from 'vscode-languageclient'
+import { LanguageClient, ServerOptions } from 'vscode-languageclient/node'
 export function isDebugOrTestSession(): boolean {
   return env.sessionId === 'someValue.sessionId'
 }

@@ -1,8 +1,8 @@
 import { BAMLProject } from '@/lib/exampleProjects'
 import { loadProject } from '@/lib/loadProject'
 import dynamic from 'next/dynamic'
-import { generateMetadata } from './[project_id]/page'
 import { Suspense } from 'react'
+import { generateMetadata } from './[project_id]/page'
 import { BrowseSheet } from './_components/BrowseSheet'
 const ProjectView = dynamic(() => import('./[project_id]/_components/ProjectView'), { ssr: false })
 

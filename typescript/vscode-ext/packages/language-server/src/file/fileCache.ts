@@ -2,9 +2,9 @@ import path from 'path'
 import { TextDocument } from 'vscode-languageserver-textdocument'
 import { convertToTextDocument, gatherFiles } from './fileUtils'
 const BAML_SRC = 'baml_src'
-import { URI } from 'vscode-uri'
 import { ParserDatabase } from '@baml/common'
 import { Position, Range } from 'vscode-languageserver'
+import { URI } from 'vscode-uri'
 import { getPositionFromIndex } from '../lib/ast'
 
 export class BamlDirCache {

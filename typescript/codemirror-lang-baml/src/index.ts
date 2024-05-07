@@ -1,21 +1,21 @@
-import { parser } from './syntax.grammar'
-import { vscodeDarkInit } from '@uiw/codemirror-theme-vscode'
+import { closeBrackets, completeFromList, snippetCompletion } from '@codemirror/autocomplete'
 import {
   LRLanguage,
   LanguageSupport,
   StreamLanguage,
-  indentNodeProp,
-  foldNodeProp,
-  foldInside,
-  delimitedIndent,
-  syntaxHighlighting,
   continuedIndent,
+  delimitedIndent,
+  foldInside,
+  foldNodeProp,
+  indentNodeProp,
   indentOnInput,
+  syntaxHighlighting,
 } from '@codemirror/language'
-import { classHighlighter, styleTags, tags as t, tagHighlighter } from '@lezer/highlight'
-import { closeBrackets, completeFromList, snippetCompletion } from '@codemirror/autocomplete'
 import { jinja2 } from '@codemirror/legacy-modes/mode/jinja2'
 import { parseMixed } from '@lezer/common'
+import { classHighlighter, styleTags, tags as t, tagHighlighter } from '@lezer/highlight'
+import { vscodeDarkInit } from '@uiw/codemirror-theme-vscode'
+import { parser } from './syntax.grammar'
 
 export const BAMLLanguage = LRLanguage.define({
   parser: parser.configure({

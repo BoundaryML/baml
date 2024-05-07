@@ -1,4 +1,4 @@
-import { Range, Position } from 'vscode-languageserver'
+import { Position, Range } from 'vscode-languageserver'
 import type { TextDocument } from 'vscode-languageserver-textdocument'
 import { MAX_SAFE_VALUE_i32 } from '../constants'
 

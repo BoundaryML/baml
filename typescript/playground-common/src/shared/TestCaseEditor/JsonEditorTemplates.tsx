@@ -1,16 +1,5 @@
-import { uniqueNamesGenerator, Config, adjectives, colors, animals } from 'unique-names-generator'
-import { Button } from '../../components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../../components/ui/dialog'
-import { vscode } from '../../utils/vscode'
 import { ParserDatabase, StringSpan, TestRequest } from '@baml/common'
 import Form, { getDefaultRegistry } from '@rjsf/core'
-import validator from '@rjsf/validator-ajv8'
-import { VSCodeButton, VSCodeProgressRing, VSCodeTextArea, VSCodeTextField } from '@vscode/webview-ui-toolkit/react'
-import { Copy, Edit2, FileJson2, Save, Play, PlusIcon, Trash2, XIcon } from 'lucide-react'
-import React, { ChangeEvent, FocusEvent, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { ASTContext } from '../ASTProvider'
-import TypeComponent from '../TypeComponent'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui/tooltip'
 import {
   ArrayFieldTemplateItemType,
   ArrayFieldTitleProps,
@@ -24,6 +13,17 @@ import {
   getInputProps,
   titleId,
 } from '@rjsf/utils'
+import validator from '@rjsf/validator-ajv8'
+import { VSCodeButton, VSCodeProgressRing, VSCodeTextArea, VSCodeTextField } from '@vscode/webview-ui-toolkit/react'
+import { Copy, Edit2, FileJson2, Play, PlusIcon, Save, Trash2, XIcon } from 'lucide-react'
+import React, { ChangeEvent, FocusEvent, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { Config, adjectives, animals, colors, uniqueNamesGenerator } from 'unique-names-generator'
+import { Button } from '../../components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../../components/ui/dialog'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui/tooltip'
+import { vscode } from '../../utils/vscode'
+import { ASTContext } from '../ASTProvider'
+import TypeComponent from '../TypeComponent'
 
 function BaseInputTemplate(props: BaseInputTemplateProps) {
   const {

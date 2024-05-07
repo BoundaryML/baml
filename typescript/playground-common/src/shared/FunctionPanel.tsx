@@ -3,18 +3,18 @@
 import { TestResult } from '@baml/common'
 import { VSCodePanels } from '@vscode/webview-ui-toolkit/react'
 import clsx from 'clsx'
+import { useAtomValue } from 'jotai'
 import { createRef, useContext, useEffect, useId, useMemo, useRef } from 'react'
 import { ImperativePanelHandle } from 'react-resizable-panels'
+import { renderPromptAtom, selectedFunctionAtom } from '../baml_wasm_web/EventListener'
+import { showTestsAtom } from '../baml_wasm_web/test_uis/testHooks'
+import TestResults from '../baml_wasm_web/test_uis/test_result'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/ui/resizable'
 import { TooltipProvider } from '../components/ui/tooltip'
 import { ASTContext } from './ASTProvider'
 import ImplPanel, { Snippet } from './ImplPanel'
 import TestCasePanel from './TestCasePanel'
 import TestResultPanel from './TestResultOutcomes'
-import { useAtomValue } from 'jotai'
-import { renderPromptAtom, selectedFunctionAtom } from '../baml_wasm_web/EventListener'
-import { showTestsAtom } from '../baml_wasm_web/test_uis/testHooks'
-import TestResults from '../baml_wasm_web/test_uis/test_result'
 
 function getTopPanelSize(showTests: boolean, test_results: TestResult[] | undefined): number {
   if (showTests) {

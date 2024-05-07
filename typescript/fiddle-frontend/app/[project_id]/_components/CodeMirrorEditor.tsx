@@ -6,7 +6,9 @@ import { BAMLProject } from '@/lib/exampleProjects'
 import { BAML, theme } from '@baml/codemirror-lang'
 import { ParserDatabase } from '@baml/common'
 import { Button } from '@baml/playground-common/components/ui/button'
-import { Diagnostic, linter, forceLinting } from '@codemirror/lint'
+import { Language, LanguageSupport } from '@codemirror/language'
+import { Diagnostic, forceLinting, linter } from '@codemirror/lint'
+import { langs } from '@uiw/codemirror-extensions-langs'
 import CodeMirror, { Compartment, EditorView, Extension, ReactCodeMirrorRef } from '@uiw/react-codemirror'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import Link from 'next/link'
@@ -19,8 +21,6 @@ import {
   functionTestCaseAtom,
   unsavedChangesAtom,
 } from '../_atoms/atoms'
-import { langs } from '@uiw/codemirror-extensions-langs'
-import { Language, LanguageSupport } from '@codemirror/language'
 
 type LintResponse = {
   diagnostics: LinterError[]

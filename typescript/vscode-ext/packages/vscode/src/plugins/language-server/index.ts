@@ -1,18 +1,18 @@
 import * as path from 'path'
 
-import { commands, ExtensionContext, OutputChannel, ViewColumn, Uri, window, workspace } from 'vscode'
+import { ParserDatabase, TestRequest } from '@baml/common'
+import fetch from 'node-fetch'
+import semver from 'semver'
+import { ExtensionContext, OutputChannel, Uri, ViewColumn, commands, window, workspace } from 'vscode'
+import * as vscode from 'vscode'
 import { LanguageClientOptions } from 'vscode-languageclient'
 import { LanguageClient, ServerOptions, TransportKind } from 'vscode-languageclient/node'
+import { z } from 'zod'
+import glooLens from '../../GlooCodeLensProvider'
+import { WebPanelView } from '../../panels/WebPanelView'
 import TelemetryReporter from '../../telemetryReporter'
 import { checkForMinimalColorTheme, createLanguageServer, isDebugOrTestSession, restartClient } from '../../util'
 import { BamlVSCodePlugin } from '../types'
-import * as vscode from 'vscode'
-import { WebPanelView } from '../../panels/WebPanelView'
-import { ParserDatabase, TestRequest } from '@baml/common'
-import glooLens from '../../GlooCodeLensProvider'
-import fetch from 'node-fetch'
-import semver from 'semver'
-import { z } from 'zod'
 
 const packageJson = require('../../../package.json') // eslint-disable-line
 

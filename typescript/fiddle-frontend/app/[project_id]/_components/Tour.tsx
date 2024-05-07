@@ -1,10 +1,10 @@
 import { Card, CardTitle } from '@/components/ui/card'
 //import { useSelections } from '@baml/playground-common'
 import { useAtom } from 'jotai'
+import Link from 'next/link'
+import { useParams } from 'next/navigation'
 import Joyride, { Placement, TooltipProps } from 'react-joyride'
 import { productTourDoneAtom, productTourTestDoneAtom } from '../_atoms/atoms'
-import { useParams } from 'next/navigation'
-import Link from 'next/link'
 
 export const InitialTour = () => {
   const steps = [

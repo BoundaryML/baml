@@ -1,13 +1,13 @@
-import { Disposable, Webview, WebviewPanel, window, Uri, ViewColumn, workspace } from 'vscode'
-import { getUri } from '../utils/getUri'
-import { getNonce } from '../utils/getNonce'
-import * as vscode from 'vscode'
 import { StringSpan, TestFileContent, TestRequest } from '@baml/common'
+import { Disposable, Uri, ViewColumn, Webview, WebviewPanel, window, workspace } from 'vscode'
+import * as vscode from 'vscode'
+import { getNonce } from '../utils/getNonce'
+import { getUri } from '../utils/getUri'
 import testExecutor from './execute_test'
 
-import { uniqueNamesGenerator, Config, adjectives, colors, animals } from 'unique-names-generator'
-import { BamlDB } from '../plugins/language-server'
+import { Config, adjectives, animals, colors, uniqueNamesGenerator } from 'unique-names-generator'
 import { URI } from 'vscode-uri'
+import { BamlDB } from '../plugins/language-server'
 
 const customConfig: Config = {
   dictionaries: [adjectives, colors, animals],

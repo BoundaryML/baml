@@ -1,18 +1,18 @@
-import { useEffect } from 'react'
-import BamlProjectManager from './project_manager'
-import { atom, useSetAtom, useAtomValue, useAtom } from 'jotai'
-import { atomFamily } from 'jotai/utils'
-import CustomErrorBoundary from '../utils/ErrorFallback'
+import { WasmDiagnosticError, WasmProject, WasmRuntime, WasmRuntimeContext } from '@gloo-ai/baml-schema-wasm-web'
 import { VSCodeButton } from '@vscode/webview-ui-toolkit/react'
-import { WasmProject, WasmRuntimeContext, WasmRuntime, WasmDiagnosticError } from '@gloo-ai/baml-schema-wasm-web'
+import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
+import { atomFamily } from 'jotai/utils'
 import { AlertTriangle, CheckCircle, XCircle } from 'lucide-react'
-import { projectFamilyAtom, projectFilesAtom, runtimeFamilyAtom } from './baseAtoms'
+import { useEffect } from 'react'
 import {
   availableProjectsStorageAtom as availableProjectsAtom,
   envvarStorageAtom,
   selectedFunctionStorageAtom,
   selectedProjectStorageAtom,
 } from '../shared/Storage'
+import CustomErrorBoundary from '../utils/ErrorFallback'
+import { projectFamilyAtom, projectFilesAtom, runtimeFamilyAtom } from './baseAtoms'
+import BamlProjectManager from './project_manager'
 
 // const wasm = await import("@gloo-ai/baml-schema-wasm-web/baml_schema_build");
 // const { WasmProject, WasmRuntime, WasmRuntimeContext, version: RuntimeVersion } = wasm;
