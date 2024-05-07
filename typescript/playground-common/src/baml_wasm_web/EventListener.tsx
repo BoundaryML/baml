@@ -7,6 +7,7 @@ import CustomErrorBoundary from '../utils/ErrorFallback'
 import { sessionStore } from './JotaiProvider'
 import { availableProjectsAtom, projectFamilyAtom, projectFilesAtom, runtimeFamilyAtom } from './baseAtoms'
 import type BamlProjectManager from './project_manager'
+import type { WasmDiagnosticError, WasmRuntime } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 
 // const wasm = await import("@gloo-ai/baml-schema-wasm-web/baml_schema_build");
 // const { WasmProject, WasmRuntime, WasmRuntimeContext, version: RuntimeVersion } = wasm;
@@ -178,8 +179,8 @@ export const updateFileAtom = atom(null, (get, set, params: WriteFileParams) => 
       project = wasm.WasmProject.new(root_path, onlyRelevantFiles)
     }
   }
-  let rt = undefined
-  let diag = undefined
+  let rt: WasmRuntime | undefined = undefined
+  let diag: WasmDiagnosticError | undefined = undefined
 
   if (project && wasm) {
     try {
