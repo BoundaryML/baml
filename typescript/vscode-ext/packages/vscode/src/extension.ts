@@ -137,7 +137,7 @@ async function runDiagnostics(): Promise<void> {
     console.error('Failed to run diagnostics:', error)
     vscode.window.showErrorMessage('Failed to run diagnostics')
   }
-  statusBarItem.text = `AI Linter Ready`
+  statusBarItem.text = 'AI Linter Ready'
 
   statusBarItem.hide()
 }
@@ -233,11 +233,11 @@ export function deactivate(): void {
   diagnosticsCollection.clear()
   diagnosticsCollection.dispose()
   statusBarItem.dispose()
-  plugins.forEach((plugin) => {
+  for (const plugin of plugins) {
     if (plugin.deactivate) {
       void plugin.deactivate()
     }
-  })
+  }
 }
 
 class DiagnosticCodeActionProvider implements vscode.CodeActionProvider {
@@ -249,7 +249,7 @@ class DiagnosticCodeActionProvider implements vscode.CodeActionProvider {
   ): vscode.ProviderResult<vscode.CodeAction[]> {
     const codeActions: vscode.CodeAction[] = []
 
-    context.diagnostics.forEach((diagnostic) => {
+    for (const diagnostic of context.diagnostics) {
       if (diagnostic.code?.toString().startsWith('[linter]')) {
         const fixString = diagnostic.code.toString().replace('[linter]', '')
         const fixAction = new vscode.CodeAction(`Apply fix: ${fixString}`, vscode.CodeActionKind.QuickFix)
@@ -262,7 +262,7 @@ class DiagnosticCodeActionProvider implements vscode.CodeActionProvider {
 
         codeActions.push(fixAction)
       }
-    })
+    }
 
     console.debug('Code actions:', codeActions)
     return codeActions

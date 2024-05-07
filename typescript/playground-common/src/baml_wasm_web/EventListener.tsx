@@ -278,7 +278,7 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
   const version = useAtomValue(versionAtom)
 
   useEffect(() => {
-    let fn = (
+    const fn = (
       event: MessageEvent<
         | {
             command: 'modify_file'
