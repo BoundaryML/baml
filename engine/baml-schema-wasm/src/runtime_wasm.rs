@@ -249,6 +249,17 @@ impl WasmRuntime {
             .collect()
     }
 
+    #[wasm_bindgen]
+    pub fn required_env_vars(&self) -> Vec<String> {
+        self.runtime
+            .internal()
+            .ir()
+            .required_env_vars()
+            .into_iter()
+            .map(|s| s.to_string())
+            .collect()
+    }
+
     // #[wasm_bindgen]
     // pub fn get_function(&self, name: &str, ctx: &WasmRuntimeContext) -> Option<WasmFunction> {
     //     self.runtime

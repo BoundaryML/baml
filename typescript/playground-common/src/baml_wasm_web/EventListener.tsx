@@ -9,6 +9,7 @@ import { AlertTriangle, CheckCircle, XCircle } from 'lucide-react'
 import { projectFamilyAtom, projectFilesAtom, runtimeFamilyAtom } from './baseAtoms'
 import {
   availableProjectsStorageAtom as availableProjectsAtom,
+  envvarStorageAtom,
   selectedFunctionStorageAtom,
   selectedProjectStorageAtom,
 } from '../shared/Storage'
@@ -39,7 +40,13 @@ const wasmAtom = atom(async () => {
 export const runtimeCtx = atom<Promise<WasmRuntimeContext>>(async (get, { signal }) => {
   const loadedWasm = await get(wasmAtom)
 
-  return new loadedWasm.WasmRuntimeContext()
+  const ctx = new loadedWasm.WasmRuntimeContext()
+
+  for (const [key, value] of Object.entries(get(envvarStorageAtom))) {
+    ctx.set_env(key, value)
+  }
+
+  return ctx
 })
 
 const selectedProjectAtom = atom(
@@ -193,6 +200,15 @@ export const selectedRuntimeAtom = atom((get) => {
   if (runtime.last_attempt === null) {
   }
   return null
+})
+
+export const runtimeRequiredEnvVarsAtom = atom((get) => {
+  let runtime = get(selectedRuntimeAtom)
+  if (!runtime) {
+    return []
+  }
+
+  return runtime.required_env_vars()
 })
 
 const selectedDiagnosticsAtom = atom((get) => {
