@@ -1,6 +1,6 @@
 import React from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
-import { atom, useAtom } from 'jotai'
+import { atom, useAtom, useAtomValue } from 'jotai'
 import { atomWithStorage, createJSONStorage } from 'jotai/utils'
 import Form from '@rjsf/core'
 import { FieldTemplateProps, IconButtonProps, ObjectFieldTemplateProps, RJSFSchema, UiSchema } from '@rjsf/utils'
@@ -66,10 +66,13 @@ function EnvvarFieldTemplate(props: FieldTemplateProps) {
 }
 
 const EnvVarFieldTemplate = (props: ObjectFieldTemplateProps) => {
+  const requiredEnvvars = useAtomValue(runtimeRequiredEnvVarsAtom)
   const renderedProps = []
 
   for (const { name, content } of props.properties) {
-    console.log('envvar field template', content)
+    if (name === 'key' && requiredEnvvars.includes(content.props.formData)) {
+      renderedProps.push(<p>(required)</p>)
+    }
     renderedProps.push(content)
     if (name === 'key') {
       renderedProps.push(<p>=</p>)
