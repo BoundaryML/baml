@@ -1,4 +1,4 @@
-import { ParserDatabase } from '@baml/common'
+import type { ParserDatabase } from '@baml/common'
 // import { languageWasm } from '.'
 import { lint as wasmLint } from '@gloo-ai/baml-schema-wasm-web'
 import { handleFormatPanic, handleWasmError } from './internals'

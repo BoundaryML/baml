@@ -1,6 +1,7 @@
-import { ParserDatabase, TestState } from '@baml/common'
+import type { ParserDatabase, TestState } from '@baml/common'
 import { VSCodeButton } from '@vscode/webview-ui-toolkit/react'
-import React, { PropsWithChildren, createContext, useCallback, useEffect, useMemo, useState } from 'react'
+import type React from 'react'
+import { type PropsWithChildren, createContext, useCallback, useEffect, useMemo, useState } from 'react'
 import CustomErrorBoundary from '../utils/ErrorFallback'
 
 export const ASTContext = createContext<{
@@ -108,9 +109,9 @@ export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
 
   const selectedState = useMemo(() => {
     if (selectedProjectId === undefined) return undefined
-    let match = projects.find((project) => project.root_dir === selectedProjectId)
+    const match = projects.find((project) => project.root_dir === selectedProjectId)
     if (match) {
-      let jsonSchema = {
+      const jsonSchema = {
         definitions: Object.fromEntries([
           ...match.db.classes.flatMap((c) => Object.entries(c.jsonSchema)),
           ...match.db.enums.flatMap((c) => Object.entries(c.jsonSchema)),
@@ -183,7 +184,7 @@ export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
           break
         }
         case 'setSelectedResource': {
-          let content = messageContent as {
+          const content = messageContent as {
             projectId: string | undefined
             functionName: string | undefined
             implName?: string

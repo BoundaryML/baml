@@ -3,7 +3,7 @@ import { Card, CardTitle } from '@/components/ui/card'
 import { useAtom } from 'jotai'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import Joyride, { Placement, TooltipProps } from 'react-joyride'
+import Joyride, { type Placement, TooltipProps } from 'react-joyride'
 import { productTourDoneAtom, productTourTestDoneAtom } from '../_atoms/atoms'
 
 export const InitialTour = () => {

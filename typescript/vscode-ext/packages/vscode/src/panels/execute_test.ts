@@ -4,10 +4,10 @@ import net from 'net'
 import * as os from 'os'
 import * as path from 'path'
 import {
-  ClientEventLog,
-  TestRequest,
+  type ClientEventLog,
+  type TestRequest,
   TestResult,
-  TestState as TestStateType,
+  type TestState as TestStateType,
   TestStatus,
   clientEventLogSchema,
   getFullTestName,
@@ -18,7 +18,7 @@ import { bamlPath, bamlTestShell } from '../util'
 const outputChannel = vscode.window.createOutputChannel('baml-test-runner')
 
 function __initServer(messageHandler: (data: Buffer) => void) {
-  let server = net.createServer((socket) => {
+  const server = net.createServer((socket) => {
     console.log('Python script connected')
 
     socket.on('data', messageHandler)
@@ -137,7 +137,7 @@ class TestState {
         this.handleUpdateTestCase(payload.data)
         break
       case 'log':
-        let res = clientEventLogSchema.safeParse(payload.data)
+        const res = clientEventLogSchema.safeParse(payload.data)
         if (!res.success) {
           console.error(`Failed to parse log event: ${JSON.stringify(payload.data, null, 2)}`)
           console.error(res.error)
@@ -259,7 +259,7 @@ class TestExecutor {
 
   private get port_arg() {
     if (this.server !== undefined) {
-      let addr = this.server.address()
+      const addr = this.server.address()
       // vscode.window.showInformationMessage(`Server address: ${JSON.stringify(addr)}`)
       if (typeof addr === 'string') {
         return `--playground-port ${addr}`
@@ -276,7 +276,7 @@ class TestExecutor {
     if (TestExecutor.pythonPath === undefined) {
       // Check if we should use python3 by seeing if shell has python3
       TestExecutor.pythonPath = await new Promise((resolve, reject) => {
-        let res = exec('python3 -s --version')
+        const res = exec('python3 -s --version')
         res.stdout?.on('data', (data) => {
           console.log(`stdout: ${data}`)
         })

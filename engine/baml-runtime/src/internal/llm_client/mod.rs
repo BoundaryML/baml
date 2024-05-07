@@ -33,9 +33,9 @@ pub enum LLMResponse {
     Success(LLMCompleteResponse),
     LLMFailure(LLMErrorResponse),
     Retry(RetryLLMResponse),
-    #[cfg(not(feature = "no_wasm"))]
-    OtherFailures(JsValue),
-    #[cfg(feature = "no_wasm")]
+    // #[cfg(not(feature = "no_wasm"))]
+    // OtherFailures(JsValue),
+    // #[cfg(feature = "no_wasm")]
     OtherFailures(String),
 }
 
@@ -106,6 +106,18 @@ pub enum ErrorCode {
 }
 
 impl ErrorCode {
+    pub fn to_string(&self) -> String {
+        match self {
+            ErrorCode::InvalidAuthentication => "InvalidAuthentication".into(),
+            ErrorCode::NotSupported => "NotSupported".into(),
+            ErrorCode::RateLimited => "RateLimited".into(),
+            ErrorCode::ServerError => "ServerError".into(),
+            ErrorCode::ServiceUnavailable => "ServiceUnavailable".into(),
+            ErrorCode::UnsupportedResponse(code) => format!("BadResponse {}", code),
+            ErrorCode::Other(code) => format!("Unspecified {}", code),
+        }
+    }
+
     #[cfg(feature = "no_wasm")]
     pub fn from_status(status: StatusCode) -> Self {
         match status.as_u16() {

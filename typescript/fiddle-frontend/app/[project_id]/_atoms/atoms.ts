@@ -1,4 +1,4 @@
-import { EditorFile } from '@/app/actions'
+import type { EditorFile } from '@/app/actions'
 // import { ParserDBFunctionTestModel } from "@/lib/exampleProjects"
 import { TestState } from '@baml/common'
 import { updateFileAtom } from '@baml/playground-common/baml_wasm_web/EventListener'

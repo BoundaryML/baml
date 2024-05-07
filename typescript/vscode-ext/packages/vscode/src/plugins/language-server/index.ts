@@ -1,18 +1,18 @@
 import * as path from 'path'
 
-import { ParserDatabase, TestRequest } from '@baml/common'
+import type { ParserDatabase, TestRequest } from '@baml/common'
 import fetch from 'node-fetch'
 import semver from 'semver'
-import { ExtensionContext, OutputChannel, Uri, ViewColumn, commands, window, workspace } from 'vscode'
+import { type ExtensionContext, OutputChannel, Uri, ViewColumn, commands, window, workspace } from 'vscode'
 import * as vscode from 'vscode'
-import { LanguageClientOptions } from 'vscode-languageclient'
-import { LanguageClient, ServerOptions, TransportKind } from 'vscode-languageclient/node'
+import type { LanguageClientOptions } from 'vscode-languageclient'
+import { type LanguageClient, type ServerOptions, TransportKind } from 'vscode-languageclient/node'
 import { z } from 'zod'
 import glooLens from '../../GlooCodeLensProvider'
 import { WebPanelView } from '../../panels/WebPanelView'
 import TelemetryReporter from '../../telemetryReporter'
 import { checkForMinimalColorTheme, createLanguageServer, isDebugOrTestSession, restartClient } from '../../util'
-import { BamlVSCodePlugin } from '../types'
+import type { BamlVSCodePlugin } from '../types'
 
 const packageJson = require('../../../package.json') // eslint-disable-line
 
@@ -31,7 +31,7 @@ let config: BamlConfig | null = null
 let client: LanguageClient
 let serverModule: string
 let telemetry: TelemetryReporter
-let intervalTimers: NodeJS.Timer[] = []
+const intervalTimers: NodeJS.Timer[] = []
 
 const isDebugMode = () => process.env.VSCODE_DEBUG_MODE === 'true'
 const isE2ETestOnPullRequest = () => process.env.PRISMA_USE_LOCAL_LS === 'true'
@@ -273,7 +273,7 @@ const activateClient = (
       }
     })
 
-    client.onRequest('runtime_updated', (params: { root_path: string; files: Record<string, String> }) => {
+    client.onRequest('runtime_updated', (params: { root_path: string; files: Record<string, string> }) => {
       WebPanelView.currentPanel?.postMessage('add_project', params)
     })
 
@@ -409,14 +409,14 @@ const plugin: BamlVSCodePlugin = {
       ),
 
       commands.registerCommand('baml.jumpToDefinition', async (args: { sourceFile?: string; name?: string }) => {
-        let { sourceFile, name } = args
+        const { sourceFile, name } = args
         if (!sourceFile || !name) {
           return
         }
 
-        let response = await client.sendRequest('getDefinition', { sourceFile, name })
+        const response = await client.sendRequest('getDefinition', { sourceFile, name })
         if (response) {
-          let { targetUri, targetRange, targetSelectionRange } = response as {
+          const { targetUri, targetRange, targetSelectionRange } = response as {
             targetUri: string
             targetRange: {
               start: { line: number; column: number }
@@ -427,10 +427,10 @@ const plugin: BamlVSCodePlugin = {
               end: { line: number; column: number }
             }
           }
-          let uri = Uri.parse(targetUri)
-          let doc = await workspace.openTextDocument(uri)
+          const uri = Uri.parse(targetUri)
+          const doc = await workspace.openTextDocument(uri)
           // go to line
-          let selection = new vscode.Selection(targetSelectionRange.start.line, 0, targetSelectionRange.end.line, 0)
+          const selection = new vscode.Selection(targetSelectionRange.start.line, 0, targetSelectionRange.end.line, 0)
           await window.showTextDocument(doc, { selection, viewColumn: ViewColumn.Beside })
         }
       }),

@@ -17,9 +17,9 @@ pub trait WithRetryPolicy {
     fn retry_policy_name(&self) -> Option<&str>;
 }
 
-#[cfg(not(feature = "no_wasm"))]
-type ResponseType = Result<LLMResponse, wasm_bindgen::JsValue>;
-#[cfg(feature = "no_wasm")]
+// #[cfg(not(feature = "no_wasm"))]
+// type ResponseType = Result<LLMResponse, wasm_bindgen::JsValue>;
+// #[cfg(feature = "no_wasm")]
 type ResponseType = Result<LLMResponse>;
 
 pub trait WithCallable: Send {
@@ -109,14 +109,14 @@ where
                     }
                     Err(e) => {
                         err.lock().unwrap().push({
-                            #[cfg(not(feature = "no_wasm"))]
-                            {
-                                LLMResponse::OtherFailures(e.into())
-                            }
-                            #[cfg(feature = "no_wasm")]
-                            {
-                                LLMResponse::OtherFailures(e.to_string())
-                            }
+                            // #[cfg(not(feature = "no_wasm"))]
+                            // {
+                            //     LLMResponse::OtherFailures(e.into())
+                            // }
+                            // #[cfg(feature = "no_wasm")]
+                            // {
+                            LLMResponse::OtherFailures(e.to_string())
+                            // }
                         });
                     }
                 }
@@ -150,11 +150,11 @@ where
             match self.single_call(ctx, prompt).await {
                 Ok(x) => x,
                 Err(e) => {
-                    #[cfg(not(feature = "no_wasm"))]
-                    {
-                        LLMResponse::OtherFailures(e.into())
-                    }
-                    #[cfg(feature = "no_wasm")]
+                    // #[cfg(not(feature = "no_wasm"))]
+                    // {
+                    //     LLMResponse::OtherFailures(e.into())
+                    // }
+                    // #[cfg(feature = "no_wasm")]
                     {
                         LLMResponse::OtherFailures(e.to_string())
                     }
@@ -177,13 +177,13 @@ where
                 let prompt = match prompt {
                     RenderedPrompt::Completion(p) => p,
                     _ => {
-                        #[cfg(not(feature = "no_wasm"))]
-                        {
-                            return Err(wasm_bindgen::JsValue::from_str(
-                                "Expected completion prompt",
-                            ));
-                        }
-                        #[cfg(feature = "no_wasm")]
+                        // #[cfg(not(feature = "no_wasm"))]
+                        // {
+                        //     return Err(wasm_bindgen::JsValue::from_str(
+                        //         "Expected completion prompt",
+                        //     ));
+                        // }
+                        // #[cfg(feature = "no_wasm")]
                         {
                             anyhow::bail!("Expected completion prompt")
                         }
@@ -198,11 +198,11 @@ where
                 let prompt = match prompt {
                     RenderedPrompt::Chat(p) => p,
                     _ => {
-                        #[cfg(not(feature = "no_wasm"))]
-                        {
-                            return Err(wasm_bindgen::JsValue::from_str("Expected chat prompt"));
-                        }
-                        #[cfg(feature = "no_wasm")]
+                        // #[cfg(not(feature = "no_wasm"))]
+                        // {
+                        //     return Err(wasm_bindgen::JsValue::from_str("Expected chat prompt"));
+                        // }
+                        // #[cfg(feature = "no_wasm")]
                         {
                             anyhow::bail!("Expected chat prompt")
                         }
@@ -221,11 +221,11 @@ where
                 completion: false,
                 chat: false,
             } => {
-                #[cfg(not(feature = "no_wasm"))]
-                {
-                    Err(wasm_bindgen::JsValue::from_str("No model type supported"))
-                }
-                #[cfg(feature = "no_wasm")]
+                // #[cfg(not(feature = "no_wasm"))]
+                // {
+                //     Err(wasm_bindgen::JsValue::from_str("No model type supported"))
+                // }
+                // #[cfg(feature = "no_wasm")]
                 {
                     anyhow::bail!("No model type supported")
                 }

@@ -1,4 +1,4 @@
-import { ErrorBoundary, FallbackProps } from 'react-error-boundary'
+import { ErrorBoundary, type FallbackProps } from 'react-error-boundary'
 const ErrorFallback: React.FC<FallbackProps> = ({ error, resetErrorBoundary }) => {
   return (
     <div role='alert'>

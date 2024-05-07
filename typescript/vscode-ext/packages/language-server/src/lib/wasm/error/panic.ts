@@ -17,7 +17,7 @@ export function isWasmPanic(error: Error): error is WasmPanic {
  * This allows us to retrieve the panic message from the Wasm panic hook,
  * which is not possible otherwise.
  */
-let globalWithWasm = globalThis as typeof global & {
+const globalWithWasm = globalThis as typeof global & {
   PRISMA_WASM_PANIC_REGISTRY: WasmPanicRegistry
 }
 

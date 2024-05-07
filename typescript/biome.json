@@ -4,7 +4,7 @@
     "enabled": true
   },
   "files": {
-    "ignore": ["*/.next/*"]
+    "ignore": ["*/.next/*", "*.json"]
   },
   "vcs": {
     "enabled": true,
@@ -12,7 +12,7 @@
     "useIgnoreFile": true
   },
   "linter": {
-    "enabled": false,
+    "enabled": true,
     "rules": {
       "recommended": false
     }

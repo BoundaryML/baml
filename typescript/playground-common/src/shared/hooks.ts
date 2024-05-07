@@ -1,4 +1,4 @@
-import { StringSpan, TestResult, TestState } from '@baml/common'
+import type { StringSpan, TestResult, TestState } from '@baml/common'
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { ASTContext } from './ASTProvider'
 
@@ -118,7 +118,7 @@ function useSelections() {
   }, [test_results_raw, func?.name.value])
 
   const renderedTestCase = useMemo(() => {
-    let tc = func?.impls.flatMap((i) => i.prompt.test_case).filter((tc): tc is string => tc !== undefined)
+    const tc = func?.impls.flatMap((i) => i.prompt.test_case).filter((tc): tc is string => tc !== undefined)
     if (!tc || tc.length === 0) return undefined
     return tc[0]
   }, [func])
@@ -139,7 +139,7 @@ function useSelections() {
   const input_json_schema = useMemo(() => {
     if (!func) return undefined
 
-    let base_schema = {
+    const base_schema = {
       title: `${func.name.value} Input`,
       ...jsonSchema,
     }

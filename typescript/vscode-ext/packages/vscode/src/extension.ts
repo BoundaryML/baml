@@ -102,7 +102,7 @@ async function runDiagnostics(): Promise<void> {
         }
 
         if (!found && phrase.length > 100) {
-          let subPhrase = phrase.substring(0, 100)
+          const subPhrase = phrase.substring(0, 100)
           index = 0 // Reset index for new search
           while ((index = text.indexOf(subPhrase, index)) !== -1) {
             const startPos = editor.document.positionAt(index)

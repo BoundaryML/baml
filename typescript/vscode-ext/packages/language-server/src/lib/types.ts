@@ -1,4 +1,4 @@
-import { Connection } from 'vscode-languageserver'
+import type { Connection } from 'vscode-languageserver'
 
 export type BlockType = 'generator' | 'datasource' | 'model' | 'type' | 'enum' | 'view'
 
@@ -11,7 +11,7 @@ export interface LSOptions {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-empty-interface
-export interface LSSettings {}
+export type LSSettings = {}
 
 export interface BAMLMessage {
   type: 'warn' | 'info' | 'error'

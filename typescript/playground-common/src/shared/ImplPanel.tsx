@@ -1,7 +1,7 @@
 /// Content once a function has been selected.
 
 import { TestStatus } from '@baml/common'
-import { Impl } from '@baml/common'
+import type { Impl } from '@baml/common'
 import {
   VSCodeBadge,
   VSCodeCheckbox,
@@ -11,7 +11,13 @@ import {
   VSCodeProgressRing,
 } from '@vscode/webview-ui-toolkit/react'
 import clsx from 'clsx'
-import { Tiktoken, TiktokenEncoding, TiktokenModel, getEncoding, getEncodingNameForModel } from 'js-tiktoken'
+import {
+  type Tiktoken,
+  type TiktokenEncoding,
+  type TiktokenModel,
+  getEncoding,
+  getEncodingNameForModel,
+} from 'js-tiktoken'
 import { useMemo, useState } from 'react'
 import { Checkbox } from '../components/ui/checkbox'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip'
@@ -86,7 +92,7 @@ const CodeLine: React.FC<{
   showWhitespace: boolean
   wrapText: boolean
   maxLineNumber: number
-}> = ({ line, lineNumber: lineNumber, showWhitespace, wrapText, maxLineNumber }) => {
+}> = ({ line, lineNumber, showWhitespace, wrapText, maxLineNumber }) => {
   // Function to render whitespace characters and invisible UTF characters with special styling
   const lineNumberSpan = (
     <span className='pr-1 font-mono text-xs text-right text-gray-500 select-none'>

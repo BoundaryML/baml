@@ -3,21 +3,21 @@ import { Button } from '@/components/ui/button'
 import { VSCodeProgressRing } from '@vscode/webview-ui-toolkit/react'
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { PropsWithChildren } from 'react'
-import { TestState, TestStatusType, runningTestsAtom, statusCountAtom, testStatusAtom } from './testHooks'
+import { TestState, type TestStatusType, runningTestsAtom, statusCountAtom, testStatusAtom } from './testHooks'
 
 const TestStatusIcon: React.FC<{ testStatus: TestStatusType }> = ({ testStatus }) => {
   return (
     <div className='text-vscode-descriptionForeground'>
       {
         {
-          ['queued']: 'Queued',
-          ['running']: <VSCodeProgressRing className='h-4' />,
-          ['done']: (
+          queued: 'Queued',
+          running: <VSCodeProgressRing className='h-4' />,
+          done: (
             <div className='flex flex-row items-center gap-1'>
               <div className='text-vscode-testing-iconPassed'>Passed</div>
             </div>
           ),
-          ['error']: (
+          error: (
             <div className='flex flex-row items-center gap-1'>
               <div className='text-vscode-testing-iconFailed'>Failed</div>
             </div>

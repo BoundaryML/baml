@@ -1,10 +1,10 @@
 'use client'
-import { StringSpan, TestResult, TestStatus } from '@baml/common'
+import { type StringSpan, type TestResult, TestStatus } from '@baml/common'
 import { CaretSortIcon } from '@radix-ui/react-icons'
-import { ColumnDef } from '@tanstack/react-table'
+import type { ColumnDef } from '@tanstack/react-table'
 import { VSCodeLink, VSCodeProgressRing } from '@vscode/webview-ui-toolkit/react'
 import { Braces, ExternalLink, File } from 'lucide-react'
-import { PropsWithChildren, useMemo, useState } from 'react'
+import { type PropsWithChildren, useMemo, useState } from 'react'
 import JsonView from 'react18-json-view'
 import { Button } from '../../components/ui/button'
 import 'react18-json-view/src/style.css'
@@ -191,7 +191,7 @@ export const columns: ColumnDef<TestResult & { span?: StringSpan }>[] = [
 
 const pretty_error = (obj: string) => {
   try {
-    let err: { error: string } = JSON.parse(obj)
+    const err: { error: string } = JSON.parse(obj)
     return err.error
   } catch (e) {
     return obj

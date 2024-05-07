@@ -1,11 +1,11 @@
 import {
-  CancellationToken,
-  Disposable,
-  Uri,
-  Webview,
-  WebviewView,
-  WebviewViewProvider,
-  WebviewViewResolveContext,
+  type CancellationToken,
+  type Disposable,
+  type Uri,
+  type Webview,
+  type WebviewView,
+  type WebviewViewProvider,
+  type WebviewViewResolveContext,
   window,
 } from 'vscode'
 import { Extension } from './helpers/extension'

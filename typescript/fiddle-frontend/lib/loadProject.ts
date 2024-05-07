@@ -1,9 +1,9 @@
 'use server'
 import { promises as fs } from 'fs'
 import path from 'path'
-import { EditorFile, loadUrl } from '@/app/actions'
-import { BAMLProject } from './exampleProjects'
-export async function loadProject(params: { project_id: string }, chooseDefault: boolean = false) {
+import { type EditorFile, loadUrl } from '@/app/actions'
+import type { BAMLProject } from './exampleProjects'
+export async function loadProject(params: { project_id: string }, chooseDefault = false) {
   const projectGroups = await loadExampleProjects()
   let data: BAMLProject = projectGroups.intros[0] //exampleProjects[0]
   const id = params.project_id

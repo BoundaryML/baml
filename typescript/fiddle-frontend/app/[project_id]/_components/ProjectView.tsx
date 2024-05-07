@@ -7,7 +7,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/componen
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useKeybindingOverrides } from '@/hooks/command-s'
 import { BAML_DIR } from '@/lib/constants'
-import { BAMLProject } from '@/lib/exampleProjects'
+import type { BAMLProject } from '@/lib/exampleProjects'
 import {
   CustomErrorBoundary,
   EventListener,
@@ -15,6 +15,7 @@ import {
   FunctionSelector,
   //useSelections,
 } from '@baml/playground-common'
+import { updateFileAtom } from '@baml/playground-common/baml_wasm_web/EventListener'
 import { Separator } from '@baml/playground-common/components/ui/separator'
 import clsx from 'clsx'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
@@ -29,7 +30,7 @@ import { isMobile } from 'react-device-detect'
 import Joyride, { STATUS } from 'react-joyride'
 import { toast } from 'sonner'
 import { Editable } from '../../_components/EditableText'
-import { EditorFile, createUrl } from '../../actions'
+import { type EditorFile, createUrl } from '../../actions'
 import {
   PROJECT_ROOT,
   currentEditorFilesAtom,
@@ -43,7 +44,6 @@ import { ExploreProjects } from './ExploreProjects'
 import { GithubStars } from './GithubStars'
 import { InitialTour, PostTestRunTour } from './Tour'
 import FileViewer from './Tree/FileViewer'
-import { updateFileAtom } from '@baml/playground-common/baml_wasm_web/EventListener'
 
 const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
   const setEditorFiles = useSetAtom(updateFileAtom)

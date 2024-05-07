@@ -1,14 +1,17 @@
 'use client'
 import { EditorFile } from '@/app/actions'
 import { BAML_DIR } from '@/lib/constants'
-import { BAMLProject } from '@/lib/exampleProjects'
+import type { BAMLProject } from '@/lib/exampleProjects'
 import { BAML, theme } from '@baml/codemirror-lang'
-import { ParserDatabase } from '@baml/common'
+import type { ParserDatabase } from '@baml/common'
+import { diagnositicsAtom, updateFileAtom } from '@baml/playground-common/baml_wasm_web/EventListener'
+import { atomStore } from '@baml/playground-common/baml_wasm_web/JotaiProvider'
+import { projectFamilyAtom, runtimeFamilyAtom } from '@baml/playground-common/baml_wasm_web/baseAtoms'
 import { Button } from '@baml/playground-common/components/ui/button'
 import { Language, LanguageSupport } from '@codemirror/language'
-import { Diagnostic, forceLinting, linter } from '@codemirror/lint'
+import { type Diagnostic, forceLinting, linter } from '@codemirror/lint'
 import { langs } from '@uiw/codemirror-extensions-langs'
-import CodeMirror, { Compartment, EditorView, Extension, ReactCodeMirrorRef } from '@uiw/react-codemirror'
+import CodeMirror, { Compartment, EditorView, type Extension, type ReactCodeMirrorRef } from '@uiw/react-codemirror'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import Link from 'next/link'
 import { useEffect, useRef } from 'react'
@@ -19,9 +22,6 @@ import {
   currentEditorFilesAtom,
   unsavedChangesAtom,
 } from '../_atoms/atoms'
-import { atomStore } from '@baml/playground-common/baml_wasm_web/JotaiProvider'
-import { projectFamilyAtom, runtimeFamilyAtom } from '@baml/playground-common/baml_wasm_web/baseAtoms'
-import { diagnositicsAtom, updateFileAtom } from '@baml/playground-common/baml_wasm_web/EventListener'
 
 type LintResponse = {
   diagnostics: LinterError[]
@@ -53,7 +53,7 @@ export interface LinterInput {
   selected_tests: Record<string, string>
 }
 
-let wasmModuleCache: any = null
+const wasmModuleCache: any = null
 
 // async function bamlLinter(_view: any): Promise<Diagnostic[]> {
 //   if (!wasmModuleCache) {

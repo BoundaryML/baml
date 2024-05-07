@@ -1,11 +1,11 @@
 /// Content once a function has been selected.
 
-import { TestResult } from '@baml/common'
+import type { TestResult } from '@baml/common'
 import { VSCodePanels } from '@vscode/webview-ui-toolkit/react'
 import clsx from 'clsx'
 import { useAtomValue } from 'jotai'
 import { createRef, useContext, useEffect, useId, useMemo, useRef } from 'react'
-import { ImperativePanelHandle } from 'react-resizable-panels'
+import type { ImperativePanelHandle } from 'react-resizable-panels'
 import { renderPromptAtom, selectedFunctionAtom } from '../baml_wasm_web/EventListener'
 import { showTestsAtom } from '../baml_wasm_web/test_uis/testHooks'
 import TestResults from '../baml_wasm_web/test_uis/test_result'
@@ -84,14 +84,14 @@ const PromptPreview: React.FC = () => {
 const FunctionPanel: React.FC = () => {
   const showTests = useAtomValue(showTestsAtom)
   const selectedFunc = useAtomValue(selectedFunctionAtom)
-  let topPanelSize = useMemo(() => getTopPanelSize(showTests, []), [showTests])
+  const topPanelSize = useMemo(() => getTopPanelSize(showTests, []), [showTests])
 
   const id = useId()
   const refs = useRef()
   const ref = createRef<ImperativePanelHandle>()
 
   useEffect(() => {
-    let topPanelSize = getTopPanelSize(showTests, [])
+    const topPanelSize = getTopPanelSize(showTests, [])
     if (ref.current) {
       ref.current.resize(topPanelSize)
     }

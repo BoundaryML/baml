@@ -1,9 +1,9 @@
-import { EditorFile } from '@/app/actions'
-import { StringSpan, TestFileContent, TestRequest } from '@baml/common'
+import type { EditorFile } from '@/app/actions'
+import type { StringSpan, TestFileContent, TestRequest } from '@baml/common'
 import { useAtom } from 'jotai'
 import posthog from 'posthog-js'
 import { useEffect } from 'react'
-import { Config, adjectives, animals, colors, uniqueNamesGenerator } from 'unique-names-generator'
+import { type Config, adjectives, animals, colors, uniqueNamesGenerator } from 'unique-names-generator'
 import { currentEditorFilesAtom } from '../_atoms/atoms'
 import { useTestRunner } from './useTestRunner'
 

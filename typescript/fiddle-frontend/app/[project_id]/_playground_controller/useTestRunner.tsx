@@ -1,4 +1,4 @@
-import { TestRequest } from '@baml/common'
+import type { TestRequest } from '@baml/common'
 import { fetchEventSource } from '@microsoft/fetch-event-source'
 import { useSetAtom } from 'jotai'
 import { useAtomCallback } from 'jotai/utils'

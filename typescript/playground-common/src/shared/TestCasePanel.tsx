@@ -1,8 +1,8 @@
 /// Content once a function has been selected.
 
-import { UiSchema } from '@rjsf/utils'
+import type { UiSchema } from '@rjsf/utils'
 
-import { ParserDatabase, StringSpan, TestRequest } from '@baml/common'
+import { type ParserDatabase, type StringSpan, TestRequest } from '@baml/common'
 import type { WasmTestCase } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 import Form, { getDefaultRegistry } from '@rjsf/core'
 import validator from '@rjsf/validator-ajv8'
@@ -10,7 +10,8 @@ import { VSCodeButton, VSCodeProgressRing, VSCodeTextArea, VSCodeTextField } fro
 import { useAtom, useAtomValue } from 'jotai'
 import { JSONSchemaFaker as jsf } from 'json-schema-faker'
 import { Copy, Edit2, FileJson2, Pin, Play, PlusIcon, Save, Trash2 } from 'lucide-react'
-import React, { ChangeEvent, FocusEvent, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import type React from 'react'
+import { ChangeEvent, FocusEvent, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import JsonView from 'react18-json-view'
 import { Config, adjectives, animals, colors, uniqueNamesGenerator } from 'unique-names-generator'
 import { selectedFunctionAtom, selectedTestCaseAtom } from '../baml_wasm_web/EventListener'
@@ -193,7 +194,7 @@ const getTestParams = (func: Func, testCase: Func['test_cases'][number]) => {
         })),
       }
     }
-    let parsed = JSON.parse(testCase.content)
+    const parsed = JSON.parse(testCase.content)
     let contentMap = new Map<string, string>()
     if (typeof parsed === 'object') {
       contentMap = new Map(

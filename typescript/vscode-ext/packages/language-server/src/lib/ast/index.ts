@@ -1,4 +1,4 @@
-import { TextDocument } from 'vscode-languageserver-textdocument'
+import type { TextDocument } from 'vscode-languageserver-textdocument'
 import { getCurrentLine } from './findAtPosition'
 
 export * from './findAtPosition'

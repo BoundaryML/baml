@@ -1,4 +1,4 @@
-import { ParserDatabase } from '@baml/common'
+import type { ParserDatabase } from '@baml/common'
 import * as vscode from 'vscode'
 import { URI } from 'vscode-languageclient'
 
@@ -33,7 +33,7 @@ export class GlooCodeLensProvider implements vscode.CodeLensProvider {
     }
 
     // Check if we imported baml_client in this file
-    let text = document.getText()
+    const text = document.getText()
     const bamlImport = text.includes('import baml_client') || text.includes('from baml_client')
     if (!bamlImport) {
       return codeLenses

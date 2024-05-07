@@ -29,9 +29,9 @@ export function findTopLevelParent(filePath: string) {
  * @param {boolean} debug - Flag to enable debug logging.
  * @returns {string[]} - An array of file URIs.
  */
-export function gatherFiles(rootPath: string, debug: boolean = false): URI[] {
-  let visitedDirs = new Set<string>()
-  let dirStack: URI[] = []
+export function gatherFiles(rootPath: string, debug = false): URI[] {
+  const visitedDirs = new Set<string>()
+  const dirStack: URI[] = []
   const addDir = (dir: URI) => {
     if (!visitedDirs.has(dir.toString())) {
       dirStack.push(dir)
@@ -41,7 +41,7 @@ export function gatherFiles(rootPath: string, debug: boolean = false): URI[] {
 
   addDir(URI.parse(rootPath))
 
-  let fileList: URI[] = []
+  const fileList: URI[] = []
 
   const MAX_DIRS = 1000
   let iterations = 0

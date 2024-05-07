@@ -1,5 +1,5 @@
 'use server'
-import { BAMLProject } from '@/lib/exampleProjects'
+import type { BAMLProject } from '@/lib/exampleProjects'
 import { kv } from '@vercel/kv'
 import { nanoid } from 'nanoid'
 import { revalidatePath } from 'next/cache'

@@ -1,8 +1,8 @@
 import Anser from 'anser'
-import React from 'react'
+import type React from 'react'
 
 const getLinks = (text: string) => {
-  let txt = text.replace(/[^<>\s]+\.log\b/gm, (str) => `<a href="vscode://file/${str}">${str}</a>`)
+  const txt = text.replace(/[^<>\s]+\.log\b/gm, (str) => `<a href="vscode://file/${str}">${str}</a>`)
   const urlRegex = /(<span class="ansi-(?:[^"]+)">)(https?:\/\/[^\s<]+)(<\/span>)/g
   // Replace log files with links (lines with only *.log)
   return txt.replace(urlRegex, (match, startTag, url, endTag) => {

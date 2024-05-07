@@ -1,4 +1,4 @@
-import { ExtensionContext, ExtensionMode } from 'vscode'
+import { type ExtensionContext, ExtensionMode } from 'vscode'
 
 export class Extension {
   private static instance: Extension

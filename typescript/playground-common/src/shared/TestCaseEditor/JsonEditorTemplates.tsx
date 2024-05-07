@@ -1,12 +1,12 @@
 import { ParserDatabase, StringSpan, TestRequest } from '@baml/common'
 import Form, { getDefaultRegistry } from '@rjsf/core'
 import {
-  ArrayFieldTemplateItemType,
-  ArrayFieldTitleProps,
-  BaseInputTemplateProps,
-  FieldTemplateProps,
-  IconButtonProps,
-  ObjectFieldTemplateProps,
+  type ArrayFieldTemplateItemType,
+  type ArrayFieldTitleProps,
+  type BaseInputTemplateProps,
+  type FieldTemplateProps,
+  type IconButtonProps,
+  type ObjectFieldTemplateProps,
   UiSchema,
   ariaDescribedByIds,
   examplesId,
@@ -16,7 +16,7 @@ import {
 import validator from '@rjsf/validator-ajv8'
 import { VSCodeButton, VSCodeProgressRing, VSCodeTextArea, VSCodeTextField } from '@vscode/webview-ui-toolkit/react'
 import { Copy, Edit2, FileJson2, Play, PlusIcon, Save, Trash2, XIcon } from 'lucide-react'
-import React, { ChangeEvent, FocusEvent, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import React, { type ChangeEvent, type FocusEvent, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { Config, adjectives, animals, colors, uniqueNamesGenerator } from 'unique-names-generator'
 import { Button } from '../../components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../../components/ui/dialog'

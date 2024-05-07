@@ -1,8 +1,8 @@
 import { ExampleProjectCard } from '@/app/_components/ExampleProjectCard'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
-import { BAMLProject } from '@/lib/exampleProjects'
-import { BamlProjectsGroupings, loadExampleProjects } from '@/lib/loadProject'
+import type { BAMLProject } from '@/lib/exampleProjects'
+import { type BamlProjectsGroupings, loadExampleProjects } from '@/lib/loadProject'
 import { useEffect, useState } from 'react'
 
 export const ExploreProjects = () => {

@@ -1,11 +1,11 @@
-import { StringSpan, TestFileContent, TestRequest } from '@baml/common'
-import { Disposable, Uri, ViewColumn, Webview, WebviewPanel, window, workspace } from 'vscode'
+import type { StringSpan, TestFileContent, TestRequest } from '@baml/common'
+import { type Disposable, Uri, ViewColumn, type Webview, type WebviewPanel, window, workspace } from 'vscode'
 import * as vscode from 'vscode'
 import { getNonce } from '../utils/getNonce'
 import { getUri } from '../utils/getUri'
 import testExecutor from './execute_test'
 
-import { Config, adjectives, animals, colors, uniqueNamesGenerator } from 'unique-names-generator'
+import { type Config, adjectives, animals, colors, uniqueNamesGenerator } from 'unique-names-generator'
 import { URI } from 'vscode-uri'
 import { BamlDB } from '../plugins/language-server'
 

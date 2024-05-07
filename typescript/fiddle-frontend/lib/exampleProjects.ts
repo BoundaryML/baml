@@ -1,5 +1,5 @@
-import { TestRunOutput } from '@/app/[project_id]/_atoms/atoms'
-import { EditorFile } from '@/app/actions'
+import type { TestRunOutput } from '@/app/[project_id]/_atoms/atoms'
+import type { EditorFile } from '@/app/actions'
 
 // export type ParserDBFunctionTestModel = Pick<ParserDatabase['functions'][0], 'name' | 'test_cases'>;
 

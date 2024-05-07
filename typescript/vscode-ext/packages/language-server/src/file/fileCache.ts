@@ -1,9 +1,9 @@
 import path from 'path'
-import { TextDocument } from 'vscode-languageserver-textdocument'
+import type { TextDocument } from 'vscode-languageserver-textdocument'
 import { convertToTextDocument, gatherFiles } from './fileUtils'
 const BAML_SRC = 'baml_src'
-import { ParserDatabase } from '@baml/common'
-import { Position, Range } from 'vscode-languageserver'
+import type { ParserDatabase } from '@baml/common'
+import { Position, type Range } from 'vscode-languageserver'
 import { URI } from 'vscode-uri'
 import { getPositionFromIndex } from '../lib/ast'
 
@@ -22,8 +22,8 @@ export class BamlDirCache {
 
   public get lastPaserDatabase(): { root_path: URI; db: ParserDatabase; cache: FileCache } | null {
     if (this.__lastBamlDir) {
-      let cache = this.cache.get(this.__lastBamlDir.toString())
-      let db = this.parserCache.get(this.__lastBamlDir.toString())
+      const cache = this.cache.get(this.__lastBamlDir.toString())
+      const db = this.parserCache.get(this.__lastBamlDir.toString())
       if (db && cache) {
         return { root_path: this.__lastBamlDir, db, cache }
       }
@@ -32,7 +32,7 @@ export class BamlDirCache {
   }
 
   public getBamlDir(textDocument: TextDocument): URI | null {
-    let uri = URI.parse(textDocument.uri)
+    const uri = URI.parse(textDocument.uri)
     return this.getBamlDirUri(uri)
   }
 
@@ -66,7 +66,7 @@ export class BamlDirCache {
       return null
     }
 
-    let cache = this.cache.get(key.toString()) ?? null
+    const cache = this.cache.get(key.toString()) ?? null
     if (cache) {
       this.__lastBamlDir = key
     }
@@ -79,7 +79,7 @@ export class BamlDirCache {
       return null
     }
 
-    let cache = this.cache.get(key.toString()) ?? null
+    const cache = this.cache.get(key.toString()) ?? null
     if (cache) {
       this.__lastBamlDir = key
     }
@@ -191,7 +191,7 @@ export class BamlDirCache {
   }
 }
 
-let counter = 0
+const counter = 0
 
 type Definition = {
   name: string
@@ -260,16 +260,16 @@ export class FileCache {
       { type: 'functions', v: parser.functions },
     ].forEach(({ type, v }) => {
       v.forEach((e) => {
-        let doc = this.getDocument(URI.file(e.name.source_file))
+        const doc = this.getDocument(URI.file(e.name.source_file))
         if (!doc) {
           return
         }
 
-        let start = getPositionFromIndex(doc, e.name.start)
-        let end = getPositionFromIndex(doc, e.name.end)
+        const start = getPositionFromIndex(doc, e.name.start)
+        const end = getPositionFromIndex(doc, e.name.end)
 
         if (type === 'functions') {
-          let func = e as ParserDatabase['functions'][0]
+          const func = e as ParserDatabase['functions'][0]
           const fromArgType = (arg: ParserDatabase['functions'][0]['input']) => {
             if (arg.arg_type === 'positional') {
               return `${arg.type}`

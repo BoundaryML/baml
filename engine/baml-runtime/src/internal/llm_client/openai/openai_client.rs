@@ -129,8 +129,8 @@ impl WithChat for OpenAIClient {
         &self,
         ctx: &RuntimeContext,
         prompt: &Vec<RenderedChatMessage>,
-    ) -> Result<LLMResponse, wasm_bindgen::JsValue> {
-        use wasm_bindgen::{JsCast, JsValue};
+    ) -> Result<LLMResponse> {
+        use wasm_bindgen::JsCast;
         use web_sys::Response;
         use web_time::SystemTime;
 
@@ -142,25 +142,29 @@ impl WithChat for OpenAIClient {
         let window = match web_sys::window() {
             Some(w) => w,
             None => {
-                return Ok(LLMResponse::OtherFailures(JsValue::from_str(
-                    "Failed to get window object",
-                )));
+                return Ok(LLMResponse::OtherFailures(
+                    "Failed to get window object".into(),
+                ));
             }
         };
 
         let now = SystemTime::now();
-        let resp_value =
-            wasm_bindgen_futures::JsFuture::from(window.fetch_with_request(&request)).await?;
+        let resp_value = wasm_bindgen_futures::JsFuture::from(window.fetch_with_request(&request))
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to fetch request: {:#?}", e))?;
 
         // `resp_value` is a `Response` object.
         assert!(resp_value.is_instance_of::<Response>());
-        let resp: Response = resp_value.dyn_into()?;
+        let resp: Response = resp_value
+            .dyn_into()
+            .map_err(|e| anyhow::anyhow!("Failed to convert response to Response: {:#?}", e))?;
 
         let status = resp.status();
         if status != 200 {
-            let err_message = match wasm_bindgen_futures::JsFuture::from(resp.json()?).await {
+            let json = resp.json().map_err(|e| anyhow::anyhow!("{:#?}", e))?;
+            let err_message = match wasm_bindgen_futures::JsFuture::from(json).await {
                 Ok(body) => {
-                    let body = body.into_serde::<serde_json::Value>().unwrap();
+                    let body = serde_wasm_bindgen::from_value::<serde_json::Value>(body)?;
                     let err_message = match serde_json::from_value::<OpenAIErrorResponse>(body) {
                         Ok(err) => {
                             format!("API Error ({}): {}", err.error.r#type, err.error.message)
@@ -187,22 +191,14 @@ impl WithChat for OpenAIClient {
             }));
         }
 
-        let body = match match wasm_bindgen_futures::JsFuture::from(resp.json()?).await {
-            Ok(body) => {
-                let body = body.into_serde::<serde_json::Value>().unwrap();
-                match serde_json::from_value::<ChatCompletionResponse>(body) {
-                    Ok(body) => Ok(body),
-                    Err(e) => Err(format!(
-                        "Does this support the OpenAI Response type?\n{:#?}",
-                        e
-                    )),
-                }
-            }
-            Err(e) => Err(format!(
-                "Does this support the OpenAI Response type?\n{:#?}",
-                e
-            )),
-        } {
+        let body = resp.json().map_err(|e| anyhow::anyhow!("{:#?}", e))?;
+        let response = wasm_bindgen_futures::JsFuture::from(body)
+            .await
+            .map_err(|e| {
+                anyhow::anyhow!("Does this support the OpenAI Response type?\n{:#?}", e)
+            })?;
+        let body = match serde_wasm_bindgen::from_value::<ChatCompletionResponse>(response.clone())
+        {
             Ok(body) => body,
             Err(e) => {
                 return Ok(LLMResponse::LLMFailure(LLMErrorResponse {
@@ -214,7 +210,7 @@ impl WithChat for OpenAIClient {
                         .unwrap()
                         .as_millis() as u64,
                     latency_ms: now.elapsed().unwrap().as_millis() as u64,
-                    message: e,
+                    message: e.to_string(),
                     code: ErrorCode::UnsupportedResponse(status),
                 }));
             }
@@ -412,8 +408,7 @@ impl OpenAIClient {
         _ctx: &RuntimeContext,
         path: &str,
         prompt: &Vec<RenderedChatMessage>,
-    ) -> Result<web_sys::Request, wasm_bindgen::JsValue> {
-        use wasm_bindgen::JsValue;
+    ) -> Result<web_sys::Request> {
         use web_sys::RequestMode;
 
         let mut body = json!(self.properties.properties);
@@ -452,10 +447,13 @@ impl OpenAIClient {
         }
         init.headers(&headers);
 
-        web_sys::Request::new_with_str_and_init(
+        match web_sys::Request::new_with_str_and_init(
             &format!("{}{}", self.properties.base_url, path),
             &init,
-        )
+        ) {
+            Ok(req) => Ok(req),
+            Err(e) => Err(anyhow::anyhow!("Failed to create request: {:#?}", e)),
+        }
     }
 
     #[cfg(feature = "no_wasm")]

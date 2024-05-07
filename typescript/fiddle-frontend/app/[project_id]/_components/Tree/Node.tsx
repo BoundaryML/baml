@@ -1,14 +1,14 @@
 import { EditorFile } from '@/app/actions'
+import { diagnositicsAtom, updateFileAtom } from '@baml/playground-common/baml_wasm_web/EventListener'
+import { runtimeFamilyAtom } from '@baml/playground-common/baml_wasm_web/baseAtoms'
 import clsx from 'clsx'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
+import { useAtomCallback } from 'jotai/utils'
 import { ArrowDown, ArrowRight, ChevronDown, ChevronRight, Edit, Edit2, File, Folder, X } from 'lucide-react'
 import { useEffect, useMemo } from 'react'
-import { NodeRendererProps } from 'react-arborist'
+import type { NodeRendererProps } from 'react-arborist'
 import { SiPython, SiTypescript } from 'react-icons/si'
 import { PROJECT_ROOT, activeFileNameAtom, currentEditorFilesAtom, emptyDirsAtom } from '../../_atoms/atoms'
-import { runtimeFamilyAtom } from '@baml/playground-common/baml_wasm_web/baseAtoms'
-import { useAtomCallback } from 'jotai/utils'
-import { diagnositicsAtom, updateFileAtom } from '@baml/playground-common/baml_wasm_web/EventListener'
 
 export type Entity = {
   id: string

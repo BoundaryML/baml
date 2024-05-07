@@ -1,15 +1,15 @@
 // 1: Uncontrolled Tree
 import { useEffect, useRef, useState } from 'react'
 
-import { MoveHandler, RenameHandler, Tree, TreeApi } from 'react-arborist'
+import { MoveHandler, RenameHandler, Tree, type TreeApi } from 'react-arborist'
 
 import { EditorFile } from '@/app/actions'
+import { updateFileAtom } from '@baml/playground-common/baml_wasm_web/EventListener'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { FilePlus, FolderPlus } from 'lucide-react'
 import useResizeObserver from 'use-resize-observer'
 import { PROJECT_ROOT, activeFileNameAtom, currentEditorFilesAtom, emptyDirsAtom } from '../../_atoms/atoms'
 import Node from './Node'
-import { updateFileAtom } from '@baml/playground-common/baml_wasm_web/EventListener'
 
 export const data = [
   {
@@ -92,7 +92,7 @@ function createTree(filePaths: string[]): TreeNode[] {
       currentLevel = node.children!
     })
 
-    let parentNode = pathMap.get(currentPath)
+    const parentNode = pathMap.get(currentPath)
     if (parentNode && parentNode.children && parentNode.children.length === 0) {
       if (isFile(path)) {
         delete parentNode.children

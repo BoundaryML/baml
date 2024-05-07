@@ -2,7 +2,7 @@
 
 import { Provider, createStore } from 'jotai'
 import { createJSONStorage } from 'jotai/utils'
-import { SyncStorage } from 'jotai/vanilla/utils/atomWithStorage'
+import type { SyncStorage } from 'jotai/vanilla/utils/atomWithStorage'
 
 export const atomStore = createStore()
 export const sessionStore: SyncStorage<any> = createJSONStorage(() => sessionStorage)

@@ -1,4 +1,4 @@
-import { StringSpan } from '@baml/common'
+import type { StringSpan } from '@baml/common'
 import { VSCodeLink } from '@vscode/webview-ui-toolkit/react'
 import { cn } from '../lib/utils'
 import { vscode } from '../utils/vscode'

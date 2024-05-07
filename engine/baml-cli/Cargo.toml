@@ -9,7 +9,10 @@ license-file.workspace = true
 
 [dependencies]
 anyhow.workspace = true
-baml-runtime = { path = "../baml-runtime", features = ["internal"] }
+baml-runtime = { path = "../baml-runtime", features = [
+  "internal",
+  "no_wasm",
+], default-features = false }
 baml-lib = { path = "../baml-lib/baml" }
 base64.workspace = true
 check-latest = "1.0.2"
@@ -42,7 +45,6 @@ internal-baml-codegen.workspace = true
 internal-baml-core.workspace = true
 
 [dev-dependencies]
-base64 = "0.13.0"
 dissimilar = "1.0.4"
 expect-test = "1.1.0"
 indoc.workspace = true

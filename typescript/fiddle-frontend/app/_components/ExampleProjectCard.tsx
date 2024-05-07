@@ -10,7 +10,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { BAMLProject } from '@/lib/exampleProjects'
+import type { BAMLProject } from '@/lib/exampleProjects'
 import clsx from 'clsx'
 import { useAtomValue } from 'jotai'
 import { usePathname, useRouter, useSearchParams, useSelectedLayoutSegment } from 'next/navigation'

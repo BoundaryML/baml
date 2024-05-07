@@ -37,8 +37,8 @@ export const useRunHooks = () => {
   const isRunning = useAtomValue(isRunningAtom)
 
   const runTest = useAtomCallback(async (get, set, testNames: string[]) => {
-    let runtime = get(selectedRuntimeAtom)
-    let func = await get(selectedFunctionAtom)
+    const runtime = get(selectedRuntimeAtom)
+    const func = await get(selectedFunctionAtom)
     if (!runtime || !func) {
       // Refuse to run a test if no runtime is selected
       return
@@ -50,7 +50,7 @@ export const useRunHooks = () => {
     }
     set(isRunningAtom, true)
 
-    let ctx = await get(runtimeCtx)
+    const ctx = await get(runtimeCtx)
     // First clear any previous test results
     testStatusAtom.setShouldRemove(() => true)
     // Remove the shouldRemove function so we don't remove future test results
@@ -64,12 +64,12 @@ export const useRunHooks = () => {
       error: 0,
     })
     // Batch into groups of 5
-    let batches = []
+    const batches = []
     for (let i = 0; i < testNames.length; i += 5) {
       batches.push(testNames.slice(i, i + 5))
     }
-    for (let batch of batches) {
-      let promises = await Promise.allSettled(
+    for (const batch of batches) {
+      const promises = await Promise.allSettled(
         batch.map((testName) => {
           set(testStatusAtom(testName), { status: 'running' })
           set(statusCountAtom, (prev) => {
@@ -86,9 +86,9 @@ export const useRunHooks = () => {
         }),
       )
       for (let i = 0; i < promises.length; i++) {
-        let result = promises[i]
+        const result = promises[i]
         if (result.status === 'fulfilled') {
-          let res = result.value
+          const res = result.value
           set(testStatusAtom(batch[i]), { status: 'done', response: res })
           set(statusCountAtom, (prev) => {
             return {

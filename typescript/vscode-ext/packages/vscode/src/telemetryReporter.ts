@@ -1,6 +1,6 @@
 import os from 'os'
 import { PostHog } from 'posthog-node'
-import { Disposable, workspace } from 'vscode'
+import { type Disposable, workspace } from 'vscode'
 import * as vscode from 'vscode'
 import { getProjectHash } from './hashes'
 type TelemetryLevel = 'off' | 'crash' | 'error' | 'all' | undefined

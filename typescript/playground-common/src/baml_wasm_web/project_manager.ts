@@ -1,4 +1,4 @@
-import BamlWasm, { WasmDiagnosticError } from '@gloo-ai/baml-schema-wasm-web'
+import BamlWasm, { type WasmDiagnosticError } from '@gloo-ai/baml-schema-wasm-web'
 import { readFile } from 'fs/promises'
 
 type URI = {
@@ -23,11 +23,11 @@ type Notify = (
 ) => void
 
 function findTopLevelParent(filePath: string): string | null {
-  let currentPath = filePath
-  let parentDir: string | null = null
+  const currentPath = filePath
+  const parentDir: string | null = null
 
   // Find the "baml_src" directory in the path
-  let parts = currentPath.split('/')
+  const parts = currentPath.split('/')
   for (let i = parts.length - 1; i >= 0; i--) {
     if (parts[i] === 'baml_src') {
       return parts.slice(0, i + 1).join('/')
@@ -43,7 +43,7 @@ const uriToRootPath = (uri: URI): string => {
   }
 
   // Find the "baml_src" directory in the path
-  let found = findTopLevelParent(uri.fsPath)
+  const found = findTopLevelParent(uri.fsPath)
   if (!found) {
     throw new Error(`No baml_src directory found in path: ${uri}`)
   }
@@ -78,7 +78,7 @@ class Project {
   }
 
   runtime(): BamlWasm.WasmRuntime {
-    let rt = this.current_runtime ?? this.last_successful_runtime
+    const rt = this.current_runtime ?? this.last_successful_runtime
     if (!rt) {
       throw new Error(`Project is not valid.`)
     }
@@ -152,7 +152,7 @@ class BamlProjectManager {
 
   private handleMessage(e: any) {
     if (e instanceof BamlWasm.WasmDiagnosticError) {
-      let diagnostics = new Map<string, Diagnostic[]>(e.all_files.map((f) => [f, []]))
+      const diagnostics = new Map<string, Diagnostic[]>(e.all_files.map((f) => [f, []]))
 
       e.errors().forEach((err) => {
         if (err.type === 'error') {
@@ -233,9 +233,9 @@ class BamlProjectManager {
   upsert_file(path: URI, content: string | undefined) {
     console.debug(`Upserting file: ${path}`)
     this.wrapSync(() => {
-      let rootPath = uriToRootPath(path)
+      const rootPath = uriToRootPath(path)
       if (this.projects.has(rootPath)) {
-        let project = this.get_project(rootPath)
+        const project = this.get_project(rootPath)
         project.upsert_file(path.fsPath, content)
         project.update_runtime()
       } else {
@@ -260,13 +260,13 @@ class BamlProjectManager {
         })
       }
 
-      let rootPath = uriToRootPath(files[0].path)
-      let objFiles = Object.fromEntries(files.map((f) => [f.path.fsPath, f.content]))
+      const rootPath = uriToRootPath(files[0].path)
+      const objFiles = Object.fromEntries(files.map((f) => [f.path.fsPath, f.content]))
       if (!this.projects.has(rootPath)) {
-        let project = this.add_project(rootPath, objFiles)
+        const project = this.add_project(rootPath, objFiles)
         project.update_runtime()
       } else {
-        let project = this.get_project(rootPath)
+        const project = this.get_project(rootPath)
         project.replace_all_files(BamlWasm.WasmProject.new(rootPath, objFiles))
         project.update_runtime()
       }

@@ -2,21 +2,21 @@ import {
   CodeActionKind,
   CodeActionParams,
   CodeLens,
-  CodeLensParams,
+  type CodeLensParams,
   Command,
   CompletionItem,
   CompletionParams,
-  Connection,
-  DeclarationParams,
+  type Connection,
+  type DeclarationParams,
   Diagnostic,
   DidChangeConfigurationNotification,
   DidChangeWatchedFilesNotification,
   DocumentFormattingParams,
-  DocumentSymbolParams,
+  type DocumentSymbolParams,
   FileSystemWatcher,
-  HoverParams,
-  InitializeParams,
-  InitializeResult,
+  type HoverParams,
+  type InitializeParams,
+  type InitializeResult,
   Position,
   Range,
   RenameParams,
@@ -32,7 +32,7 @@ import { IPCMessageReader, IPCMessageWriter, createConnection } from 'vscode-lan
 // import { FileChangeType } from 'vscode'
 import fs from 'fs'
 // import { cliBuild, cliCheckForUpdates, cliVersion } from './baml-cli'
-import { ParserDatabase, TestRequest } from '@baml/common'
+import { type ParserDatabase, TestRequest } from '@baml/common'
 import { z } from 'zod'
 // import { getVersion, getEnginesVersion } from './lib/wasm/internals'
 import { BamlDirCache } from './file/fileCache'
@@ -243,7 +243,7 @@ export function startServer(options?: LSOptions): void {
     // If anything changes, then we need to revalidate all documents
     // let hasChanges = deleted_files.length > 0 || created_files.length > 0 || changed_files.length > 0;
 
-    let hasChanges = params.changes.length > 0
+    const hasChanges = params.changes.length > 0
     if (hasChanges) {
       // TODO: @hellovai we should technically get all possible root paths
       // (someone could delete mutliple baml_src dirs at once)

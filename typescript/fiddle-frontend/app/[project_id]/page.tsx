@@ -1,4 +1,4 @@
-import { BAMLProject } from '@/lib/exampleProjects'
+import type { BAMLProject } from '@/lib/exampleProjects'
 import { loadProject } from '@/lib/loadProject'
 import type { Metadata, ResolvingMetadata } from 'next'
 import dynamic from 'next/dynamic'
@@ -28,7 +28,7 @@ export default async function Home({
   searchParams: SearchParams
   params: { project_id: string }
 }) {
-  let data: BAMLProject = await loadProject(params)
+  const data: BAMLProject = await loadProject(params)
   // console.log(data)
   return (
     <main className='flex flex-col items-center justify-between min-h-screen font-sans'>

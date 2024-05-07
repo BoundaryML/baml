@@ -1,4 +1,4 @@
-import { ArgType, ParserDatabase } from './parser_db'
+import { ArgType, type ParserDatabase } from './parser_db'
 export interface TestRequest {
   functions: {
     name: string

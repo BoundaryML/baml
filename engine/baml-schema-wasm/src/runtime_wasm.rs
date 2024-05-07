@@ -3,7 +3,10 @@ mod runtime_prompt;
 
 use std::collections::HashMap;
 
-use baml_runtime::{BamlRuntime, DiagnosticsError, RuntimeInterface};
+use baml_runtime::{
+    internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, RenderedPrompt,
+    RuntimeInterface,
+};
 use wasm_bindgen::prelude::*;
 
 use baml_runtime::InternalRuntimeInterface;
@@ -226,6 +229,126 @@ pub struct WasmParam {
 }
 
 #[wasm_bindgen]
+pub struct WasmTestResponse {
+    test_response: baml_runtime::TestResponse,
+}
+
+#[wasm_bindgen]
+pub enum TestStatus {
+    Passed,
+    LLMFailure,
+    ParseFailure,
+    UnableToRun,
+}
+
+#[wasm_bindgen(getter_with_clone)]
+pub struct WasmLLMResponse {
+    pub client: String,
+    pub model: String,
+    prompt: RenderedPrompt,
+    pub content: String,
+    pub start_time_unix_ms: u64,
+    pub latency_ms: u64,
+}
+
+impl WasmLLMResponse {
+    pub fn prompt(&self) -> WasmPrompt {
+        (self.prompt.clone(), self.client.clone()).into()
+    }
+}
+
+#[wasm_bindgen]
+impl WasmTestResponse {
+    #[wasm_bindgen]
+    pub fn status(&self) -> TestStatus {
+        match self.test_response.status() {
+            baml_runtime::TestStatus::Pass => TestStatus::Passed,
+            baml_runtime::TestStatus::Fail(r) => match r {
+                baml_runtime::TestFailReason::TestUnspecified(_) => TestStatus::UnableToRun,
+                baml_runtime::TestFailReason::TestLLMFailure(_) => TestStatus::LLMFailure,
+                baml_runtime::TestFailReason::TestParseFailure(_) => TestStatus::ParseFailure,
+            },
+        }
+    }
+
+    #[wasm_bindgen]
+    pub fn llm_response(&self) -> Option<WasmLLMResponse> {
+        match &self.test_response.function_response {
+            Ok(f) => f.llm_response.into_wasm(),
+            Err(e) => None,
+        }
+    }
+
+    #[wasm_bindgen]
+    pub fn failure_message(&self) -> Option<String> {
+        match self.test_response.status() {
+            baml_runtime::TestStatus::Pass => None,
+            baml_runtime::TestStatus::Fail(r) => r.render_error(),
+        }
+    }
+}
+trait IntoWasm {
+    type Output;
+    fn into_wasm(&self) -> Self::Output;
+}
+
+impl IntoWasm for baml_runtime::internal::llm_client::LLMResponse {
+    type Output = Option<WasmLLMResponse>;
+
+    fn into_wasm(&self) -> Self::Output {
+        match &self {
+            baml_runtime::internal::llm_client::LLMResponse::Success(s) => Some(WasmLLMResponse {
+                client: s.client.clone(),
+                model: s.model.clone(),
+                prompt: s.prompt.clone(),
+                content: s.content.clone(),
+                start_time_unix_ms: s.start_time_unix_ms,
+                latency_ms: s.latency_ms,
+            }),
+            baml_runtime::internal::llm_client::LLMResponse::Retry(r) if r.passed.is_some() => {
+                r.passed.as_ref().and_then(|p| p.into_wasm())
+            }
+            _ => None,
+        }
+    }
+}
+
+trait WithRenderError {
+    fn render_error(&self) -> Option<String>;
+}
+
+impl WithRenderError for baml_runtime::TestFailReason<'_> {
+    fn render_error(&self) -> Option<String> {
+        match self {
+            baml_runtime::TestFailReason::TestUnspecified(e) => Some(e.to_string()),
+            baml_runtime::TestFailReason::TestLLMFailure(f) => f.render_error(),
+            baml_runtime::TestFailReason::TestParseFailure(e) => Some(e.to_string()),
+        }
+    }
+}
+
+impl WithRenderError for baml_runtime::internal::llm_client::LLMResponse {
+    fn render_error(&self) -> Option<String> {
+        match self {
+            baml_runtime::internal::llm_client::LLMResponse::Success(_) => None,
+            baml_runtime::internal::llm_client::LLMResponse::LLMFailure(f) => {
+                format!("{} {}", f.message, f.code.to_string()).into()
+            }
+            baml_runtime::internal::llm_client::LLMResponse::Retry(r) => {
+                if let Some(passed) = &r.passed {
+                    None
+                } else {
+                    r.failed.last().and_then(|f| f.render_error())
+                }
+            }
+            baml_runtime::internal::llm_client::LLMResponse::OtherFailures(o) => {
+                Some(o.to_string())
+            }
+        }
+    }
+}
+
+#[wasm_bindgen]
 impl WasmRuntime {
     #[wasm_bindgen]
     pub fn list_functions(&self, ctx: &WasmRuntimeContext) -> Vec<WasmFunction> {
@@ -270,28 +393,6 @@ impl WasmRuntime {
             .map(|s| s.to_string())
             .collect()
     }
-
-    // #[wasm_bindgen]
-    // pub fn get_function(&self, name: &str, ctx: &WasmRuntimeContext) -> Option<WasmFunction> {
-    //     self.runtime
-    //         .internal()
-    //         .ir()
-    //         .walk_functions()
-    //         .find(|f| f.name() == name)
-    //         .map(|f| WasmFunction {
-    //             name: f.name().to_string(),
-    //             test_cases: f
-    //                 .walk_tests()
-    //                 .map(|tc| WasmTestCase {
-    //                     name: tc.name().to_string(),
-    //                     inputs: match tc.test_case().content {
-    //                         Map => vec![],
-    //                         _ => panic!(),
-    //                     },
-    //                 })
-    //                 .collect(),
-    //         })
-    // }
 }
 
 #[wasm_bindgen]
@@ -328,7 +429,7 @@ impl WasmFunction {
         rt: &mut WasmRuntime,
         ctx: &runtime_ctx::WasmRuntimeContext,
         test_name: String,
-    ) -> Result<JsValue, JsValue> {
+    ) -> Result<WasmTestResponse, JsValue> {
         // For anything env vars that are not provided, fill with empty strings
         let ctx = ctx.ctx.clone();
 
@@ -336,14 +437,11 @@ impl WasmFunction {
 
         let function_name = self.name.clone();
 
-        let res = rt.run_test(&function_name, &test_name, &ctx).await?;
-        match res.status() {
-            baml_runtime::TestStatus::Pass => {
-                Ok(serde_wasm_bindgen::to_value(&serde_json::json!(true)).unwrap())
-            }
-            baml_runtime::TestStatus::Fail(e) => {
-                Err(serde_wasm_bindgen::to_value(&format!("{:#?}", e)).unwrap())
-            }
-        }
+        let res = rt
+            .run_test(&function_name, &test_name, &ctx)
+            .await
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+        Ok(WasmTestResponse { test_response: res })
     }
 }

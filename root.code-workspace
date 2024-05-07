@@ -72,7 +72,7 @@
     "mypy.enabled": false,
     "git.openDiffOnClick": true,
     "python.analysis.typeCheckingMode": "strict",
-    "rust-analyzer.cargo.features": "all",
+    // "rust-analyzer.cargo.features": "all",
     "rust-analyzer.procMacro.ignored": {
       "napi-derive": [
         "napi"
@@ -86,14 +86,14 @@
         "description": "Stable Sorbet Ruby IDE features",
         "cwd": "${workspaceFolder}",
         "command": [
-            "bundle",
-            "exec",
-            "srb",
-            "typecheck",
-            "--lsp",
-            "--disable-watchman"
+          "bundle",
+          "exec",
+          "srb",
+          "typecheck",
+          "--lsp",
+          "--disable-watchman"
         ]
-      },
+      }
     ],
     "workbench.colorCustomizations": {
       "activityBar.background": "#630001",

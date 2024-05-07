@@ -372,7 +372,7 @@ pub enum ChatMessagePart {
     Image(BamlImage),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum RenderedPrompt {
     Completion(String),
     Chat(Vec<RenderedChatMessage>),
@@ -578,7 +578,7 @@ mod render_tests {
     use super::*;
 
     use env_logger;
-    use std::{sync::Once};
+    use std::sync::Once;
 
     static INIT: Once = Once::new();
 

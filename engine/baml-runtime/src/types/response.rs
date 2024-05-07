@@ -3,7 +3,14 @@ use anyhow::Result;
 use colored::*;
 
 pub struct FunctionResult {
+    #[cfg(feature = "internal")]
+    pub llm_response: LLMResponse,
+    #[cfg(not(feature = "internal"))]
     pub(crate) llm_response: LLMResponse,
+
+    #[cfg(feature = "internal")]
+    pub parsed: Option<Result<(serde_json::Value, jsonish::DeserializerConditions)>>,
+    #[cfg(not(feature = "internal"))]
     pub(crate) parsed: Option<Result<(serde_json::Value, jsonish::DeserializerConditions)>>,
 }
 
@@ -48,7 +55,7 @@ impl FunctionResult {
 }
 
 pub struct TestResponse {
-    pub(crate) function_response: Result<FunctionResult>,
+    pub function_response: Result<FunctionResult>,
 }
 
 impl std::fmt::Display for TestResponse {

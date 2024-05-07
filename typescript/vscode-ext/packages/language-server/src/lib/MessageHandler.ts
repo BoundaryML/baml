@@ -1,28 +1,28 @@
 import { ParserDatabase, TestRequest } from '@baml/common'
 import {
-  CodeAction,
-  CodeActionParams,
-  CompletionItem,
-  CompletionList,
-  CompletionParams,
-  DeclarationParams,
+  type CodeAction,
+  type CodeActionParams,
+  type CompletionItem,
+  type CompletionList,
+  type CompletionParams,
+  type DeclarationParams,
   Diagnostic,
   DiagnosticSeverity,
-  DocumentFormattingParams,
-  DocumentSymbol,
-  DocumentSymbolParams,
-  Hover,
-  HoverParams,
-  LocationLink,
-  RenameParams,
+  type DocumentFormattingParams,
+  type DocumentSymbol,
+  type DocumentSymbolParams,
+  type Hover,
+  type HoverParams,
+  type LocationLink,
+  type RenameParams,
   SymbolKind,
   TextDocuments,
-  TextEdit,
-  WorkspaceEdit,
+  type TextEdit,
+  type WorkspaceEdit,
 } from 'vscode-languageserver'
 import type { TextDocument } from 'vscode-languageserver-textdocument'
 import { URI } from 'vscode-uri'
-import { FileCache } from '../file/fileCache'
+import type { FileCache } from '../file/fileCache'
 import { fullDocumentRange } from './ast'
 
 // import format from './prisma-schema-wasm/format'
@@ -85,7 +85,7 @@ export function handleDefinitionRequest(
   }
 
   // TODO: Do block level definitions
-  let match = fileCache.define(word)
+  const match = fileCache.define(word)
 
   if (match) {
     return [
@@ -113,7 +113,7 @@ export function handleHoverRequest(
     return
   }
 
-  let match = fileCache.define(word)
+  const match = fileCache.define(word)
 
   if (match) {
     if (match.type === 'function') {

@@ -1,13 +1,13 @@
-import { WasmDiagnosticError, WasmProject, WasmRuntime, WasmRuntimeContext } from '@gloo-ai/baml-schema-wasm-web'
+import { WasmDiagnosticError, WasmProject, WasmRuntime, type WasmRuntimeContext } from '@gloo-ai/baml-schema-wasm-web'
 import { VSCodeButton } from '@vscode/webview-ui-toolkit/react'
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { atomFamily, atomWithStorage } from 'jotai/utils'
 import { AlertTriangle, CheckCircle, XCircle } from 'lucide-react'
 import { useEffect } from 'react'
 import CustomErrorBoundary from '../utils/ErrorFallback'
-import { availableProjectsAtom, projectFamilyAtom, projectFilesAtom, runtimeFamilyAtom } from './baseAtoms'
-import BamlProjectManager from './project_manager'
 import { sessionStore } from './JotaiProvider'
+import { availableProjectsAtom, projectFamilyAtom, projectFilesAtom, runtimeFamilyAtom } from './baseAtoms'
+import type BamlProjectManager from './project_manager'
 
 // const wasm = await import("@gloo-ai/baml-schema-wasm-web/baml_schema_build");
 // const { WasmProject, WasmRuntime, WasmRuntimeContext, version: RuntimeVersion } = wasm;
@@ -50,9 +50,9 @@ export const runtimeCtx = atom<Promise<WasmRuntimeContext>>(async (get, { signal
 
 const selectedProjectAtom = atom(
   (get) => {
-    let allProjects = get(availableProjectsAtom)
-    let project = get(selectedProjectStorageAtom)
-    let match = allProjects.find((p) => p === project) ?? allProjects.at(0) ?? null
+    const allProjects = get(availableProjectsAtom)
+    const project = get(selectedProjectStorageAtom)
+    const match = allProjects.find((p) => p === project) ?? allProjects.at(0) ?? null
     return match
   },
   (get, set, project: string) => {
@@ -66,7 +66,7 @@ export const selectedFunctionAtom = atom(
   async (get) => {
     const functions = await get(availableFunctionsAtom)
     const func = get(selectedFunctionStorageAtom)
-    let match = functions.find((f) => f.name === func) ?? functions.at(0)
+    const match = functions.find((f) => f.name === func) ?? functions.at(0)
     return match ?? null
   },
   (get, set, func: string) => {
@@ -82,7 +82,7 @@ export const selectedTestCaseAtom = atom(
     const func = await get(selectedFunctionAtom)
     const testCases = func?.test_cases ?? []
     const testCase = get(rawSelectedTestCaseAtom)
-    let match = testCases.find((tc) => tc.name === testCase) ?? testCases.at(0)
+    const match = testCases.find((tc) => tc.name === testCase) ?? testCases.at(0)
     return match ?? null
   },
   (get, set, testCase: string) => {
@@ -94,7 +94,7 @@ const removeProjectAtom = atom(null, (get, set, root_path: string) => {
   set(projectFilesAtom(root_path), {})
   set(projectFamilyAtom(root_path), null)
   set(runtimeFamilyAtom(root_path), { last_attempt: 'no_attempt_yet' })
-  let availableProjects = get(availableProjectsAtom)
+  const availableProjects = get(availableProjectsAtom)
   set(
     availableProjectsAtom,
     availableProjects.filter((p) => p !== root_path),
@@ -122,16 +122,16 @@ export const updateFileAtom = atom(
   ) => {
     const wasm = await get(wasmAtom)
     console.debug(`Updating files due to ${reason}: ${files.length} files (${replace_all ? 'replace all' : 'update'})`)
-    let _projFiles = get(projectFilesAtom(root_path))
-    let filesToDelete = files.filter((f) => f.content === undefined).map((f) => f.name)
+    const _projFiles = get(projectFilesAtom(root_path))
+    const filesToDelete = files.filter((f) => f.content === undefined).map((f) => f.name)
     let projFiles = {
       ..._projFiles,
     }
-    let filesToModify = files
+    const filesToModify = files
       .filter((f) => f.content !== undefined)
       .map((f): [string, string] => [f.name, f.content as string])
     if (replace_all) {
-      for (let file of Object.keys(_projFiles)) {
+      for (const file of Object.keys(_projFiles)) {
         if (!filesToDelete.includes(file)) {
           filesToDelete.push(file)
         }
@@ -141,12 +141,12 @@ export const updateFileAtom = atom(
 
     let project = get(projectFamilyAtom(root_path))
     if (project && !replace_all) {
-      for (let file of filesToDelete) {
+      for (const file of filesToDelete) {
         if (file.startsWith(root_path)) {
           project.update_file(file, undefined)
         }
       }
-      for (let [name, content] of filesToModify) {
+      for (const [name, content] of filesToModify) {
         if (name.startsWith(root_path)) {
           project.update_file(name, content)
         }
@@ -167,7 +167,7 @@ export const updateFileAtom = atom(
       rt = project.runtime()
       diag = project.diagnostics(rt)
     } catch (e) {
-      let WasmDiagnosticError = wasm.WasmDiagnosticError
+      const WasmDiagnosticError = wasm.WasmDiagnosticError
       if (e instanceof Error) {
         console.error(e.message)
       } else if (e instanceof WasmDiagnosticError) {
@@ -177,10 +177,10 @@ export const updateFileAtom = atom(
       }
     }
 
-    let pastRuntime = get(runtimeFamilyAtom(root_path))
-    let lastSuccessRt = pastRuntime.current_runtime ?? pastRuntime.last_successful_runtime
+    const pastRuntime = get(runtimeFamilyAtom(root_path))
+    const lastSuccessRt = pastRuntime.current_runtime ?? pastRuntime.last_successful_runtime
 
-    let availableProjects = get(availableProjectsAtom)
+    const availableProjects = get(availableProjectsAtom)
     if (!availableProjects.includes(root_path)) {
       set(availableProjectsAtom, [...availableProjects, root_path])
     }
@@ -197,12 +197,12 @@ export const updateFileAtom = atom(
 )
 
 export const selectedRuntimeAtom = atom((get) => {
-  let project = get(selectedProjectAtom)
+  const project = get(selectedProjectAtom)
   if (!project) {
     return null
   }
 
-  let runtime = get(runtimeFamilyAtom(project))
+  const runtime = get(runtimeFamilyAtom(project))
   if (runtime.current_runtime) return runtime.current_runtime
   if (runtime.last_successful_runtime) return runtime.last_successful_runtime
   if (runtime.last_attempt === null) {
@@ -211,7 +211,7 @@ export const selectedRuntimeAtom = atom((get) => {
 })
 
 export const runtimeRequiredEnvVarsAtom = atom((get) => {
-  let runtime = get(selectedRuntimeAtom)
+  const runtime = get(selectedRuntimeAtom)
   if (!runtime) {
     return []
   }
@@ -220,12 +220,12 @@ export const runtimeRequiredEnvVarsAtom = atom((get) => {
 })
 
 const selectedDiagnosticsAtom = atom((get) => {
-  let project = get(selectedProjectAtom)
+  const project = get(selectedProjectAtom)
   if (!project) {
     return null
   }
 
-  let runtime = get(runtimeFamilyAtom(project))
+  const runtime = get(runtimeFamilyAtom(project))
   return runtime.diagnostics ?? null
 })
 
@@ -236,7 +236,7 @@ export const versionAtom = atom(async (get) => {
 })
 
 export const availableFunctionsAtom = atom(async (get) => {
-  let runtime = get(selectedRuntimeAtom)
+  const runtime = get(selectedRuntimeAtom)
   if (!runtime) {
     return []
   }
@@ -245,16 +245,16 @@ export const availableFunctionsAtom = atom(async (get) => {
 })
 
 export const renderPromptAtom = atom(async (get) => {
-  let runtime = get(selectedRuntimeAtom)
-  let func = await get(selectedFunctionAtom)
-  let test_case = await get(selectedTestCaseAtom)
+  const runtime = get(selectedRuntimeAtom)
+  const func = await get(selectedFunctionAtom)
+  const test_case = await get(selectedTestCaseAtom)
   const ctx = await get(runtimeCtx)
 
   if (!runtime || !func || !test_case) {
     return null
   }
 
-  let params = Object.fromEntries(test_case.inputs.map((input) => [input.name, JSON.parse(input.value)]))
+  const params = Object.fromEntries(test_case.inputs.map((input) => [input.name, JSON.parse(input.value)]))
 
   try {
     return func.render_prompt(runtime, ctx, params)
@@ -268,7 +268,7 @@ export const renderPromptAtom = atom(async (get) => {
 })
 
 export const diagnositicsAtom = atom((get) => {
-  let diagnostics = get(selectedDiagnosticsAtom)
+  const diagnostics = get(selectedDiagnosticsAtom)
   if (!diagnostics) {
     return []
   }
@@ -277,7 +277,7 @@ export const diagnositicsAtom = atom((get) => {
 })
 
 export const numErrorsAtom = atom((get) => {
-  let errors = get(diagnositicsAtom)
+  const errors = get(diagnositicsAtom)
 
   const warningCount = errors.filter((e) => e.type === 'warning').length
 
