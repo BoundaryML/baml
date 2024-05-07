@@ -20,9 +20,9 @@ import { TEMPLATES } from './TestCaseEditor/JsonEditorTemplates'
 import JsonView from 'react18-json-view'
 import { Badge } from '../components/ui/badge'
 import { useAtom, useAtomValue } from 'jotai'
-import { selectedFunctionAtom, selectedTestCaseAtom } from '@/baml_wasm_web/EventListener'
+import { selectedFunctionAtom, selectedTestCaseAtom } from '../baml_wasm_web/EventListener'
 import type { WasmTestCase } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
-import { useRunHooks } from '@/baml_wasm_web/test_uis/testHooks'
+import { useRunHooks } from '../baml_wasm_web/test_uis/testHooks'
 
 const uiSchema: UiSchema = {
   'ui:submitButtonOptions': {

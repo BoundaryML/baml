@@ -14,7 +14,7 @@ import {
   CustomErrorBoundary,
   FunctionPanel,
   FunctionSelector,
-  useSelections,
+  //useSelections,
 } from '@baml/playground-common'
 import { ASTContext } from '@baml/playground-common/shared/ASTProvider'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
@@ -357,14 +357,13 @@ const PlaygroundView = () => {
   //   </>
   // )
 
+  //<TestToggle />
   return (
     <>
       <CustomErrorBoundary>
         <ASTProvider>
           <div className='relative flex flex-col gap-2 px-2 pb-4'>
-            <div className='absolute z-10 flex flex-col items-end gap-1 right-8 top-2 text-end'>
-              <TestToggle />
-            </div>
+            <div className='absolute z-10 flex flex-col items-end gap-1 right-8 top-2 text-end'></div>
             <FunctionSelector />
 
             {/* <Separator className="bg-vscode-textSeparator-foreground" /> */}
@@ -378,28 +377,28 @@ const PlaygroundView = () => {
   )
 }
 
-const TestToggle = () => {
-  const { setSelection } = useContext(ASTContext)
-  const { showTests, func } = useSelections()
-
-  // useEffect(() => {
-  //   setSelection(undefined, undefined, undefined, undefined, false)
-  // }, [])
-  const numTests = func?.test_cases?.length ?? 0
-
-  return (
-    <Button
-      variant='outline'
-      className={clsx(
-        'tour-test-button p-1 text-xs w-fit h-fit border-vscode-textSeparator-foreground bg-vscode-button-background gap-x-2 pr-2',
-        [!showTests ? 'bg-vscode-button-background' : 'bg-vscode-panel-background'],
-      )}
-      onClick={() => setSelection(undefined, undefined, undefined, undefined, !showTests)}
-    >
-      <FlaskConical size={16} />
-      <span>{showTests ? 'Hide tests' : `Show  ${numTests > 0 ? numTests : ''} tests`}</span>
-    </Button>
-  )
-}
+//const TestToggle = () => {
+//  const { setSelection } = useContext(ASTContext)
+//  const { showTests, func } = useSelections()
+//
+//  // useEffect(() => {
+//  //   setSelection(undefined, undefined, undefined, undefined, false)
+//  // }, [])
+//  const numTests = func?.test_cases?.length ?? 0
+//
+//  return (
+//    <Button
+//      variant='outline'
+//      className={clsx(
+//        'tour-test-button p-1 text-xs w-fit h-fit border-vscode-textSeparator-foreground bg-vscode-button-background gap-x-2 pr-2',
+//        [!showTests ? 'bg-vscode-button-background' : 'bg-vscode-panel-background'],
+//      )}
+//      onClick={() => setSelection(undefined, undefined, undefined, undefined, !showTests)}
+//    >
+//      <FlaskConical size={16} />
+//      <span>{showTests ? 'Hide tests' : `Show  ${numTests > 0 ? numTests : ''} tests`}</span>
+//    </Button>
+//  )
+//}
 
 export default ProjectView

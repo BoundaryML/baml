@@ -7,7 +7,7 @@ import { FieldTemplateProps, IconButtonProps, ObjectFieldTemplateProps, RJSFSche
 import validator from '@rjsf/validator-ajv8'
 import { Button } from '@/components/ui/button'
 import { envvarStorageAtom } from '@/shared/Storage'
-import { runtimeRequiredEnvVarsAtom } from '@/baml_wasm_web/EventListener'
+import { runtimeRequiredEnvVarsAtom } from '../baml_wasm_web/EventListener'
 //import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 //Using ShadCN, create a form that allows submitting record types mapping string to string
 import { Input } from '@/components/ui/input'

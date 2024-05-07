@@ -1,5 +1,5 @@
 import { Card, CardTitle } from '@/components/ui/card'
-import { useSelections } from '@baml/playground-common'
+//import { useSelections } from '@baml/playground-common'
 import { useAtom } from 'jotai'
 import Joyride, { Placement, TooltipProps } from 'react-joyride'
 import { productTourDoneAtom, productTourTestDoneAtom } from '../_atoms/atoms'
@@ -84,7 +84,7 @@ export const InitialTour = () => {
 }
 
 export const PostTestRunTour = () => {
-  const { test_results, test_result_url, test_result_exit_status } = useSelections()
+  //const { test_results, test_result_url, test_result_exit_status } = useSelections()
   const { project_id } = useParams()
 
   const steps = [
@@ -140,7 +140,7 @@ export const PostTestRunTour = () => {
     return null
   }
 
-  if (test_result_exit_status !== 'COMPLETED' || productTourTestDone) {
+  if (/*test_result_exit_status !== 'COMPLETED' || */ productTourTestDone) {
     return null
   }
 

@@ -18,6 +18,7 @@
       }
     ],
     "paths": {
+      "@/baml_wasm_web/*": ["../baml-schema-wasm-web/dist/*"],
       "@/*": ["./*"]
     }
   },
