@@ -10,13 +10,12 @@ import { BAML_DIR } from '@/lib/constants'
 import { BAMLProject } from '@/lib/exampleProjects'
 import { ExploreProjects } from './ExploreProjects'
 import {
-  ASTProvider,
   CustomErrorBoundary,
+  EventListener,
   FunctionPanel,
   FunctionSelector,
   //useSelections,
 } from '@baml/playground-common'
-import { ASTContext } from '@baml/playground-common/shared/ASTProvider'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { useHydrateAtoms } from 'jotai/utils'
 import Image from 'next/image'
@@ -361,7 +360,7 @@ const PlaygroundView = () => {
   return (
     <>
       <CustomErrorBoundary>
-        <ASTProvider>
+        <EventListener>
           <div className='relative flex flex-col gap-2 px-2 pb-4'>
             <div className='absolute z-10 flex flex-col items-end gap-1 right-8 top-2 text-end'></div>
             <FunctionSelector />
@@ -371,7 +370,7 @@ const PlaygroundView = () => {
           </div>
           <InitialTour />
           <PostTestRunTour />
-        </ASTProvider>
+        </EventListener>
       </CustomErrorBoundary>
     </>
   )
