@@ -1,8 +1,8 @@
 import { VSCodeButton } from '@vscode/webview-ui-toolkit/react'
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
-import { atomFamily, atomWithStorage, unwrap } from 'jotai/utils'
+import { atomFamily, atomWithStorage, unwrap, useAtomCallback } from 'jotai/utils'
 import { AlertTriangle, CheckCircle, XCircle } from 'lucide-react'
-import { useEffect } from 'react'
+import { useCallback, useEffect } from 'react'
 import CustomErrorBoundary from '../utils/ErrorFallback'
 import { sessionStore } from './JotaiProvider'
 import { availableProjectsAtom, projectFamilyAtom, projectFilesAtom, runtimeFamilyAtom } from './baseAtoms'
@@ -205,7 +205,6 @@ export const updateFileAtom = atom(null, (get, set, params: WriteFileParams) => 
   set(projectFilesAtom(root_path), projFiles)
   set(projectFamilyAtom(root_path), project)
   set(runtimeFamilyAtom(root_path), (prev) => ({
-    last_attempt: rt ? 'success' : 'error',
     last_successful_runtime: prev.current_runtime ?? prev.last_successful_runtime,
     current_runtime: rt,
     diagnostics: diag,
@@ -330,6 +329,38 @@ const ErrorCount: React.FC = () => {
     </div>
   )
 }
+const createRuntime = (
+  wasm: typeof import('@gloo-ai/baml-schema-wasm-web'),
+  root_path: string,
+  project_files: Record<string, string>,
+) => {
+  const only_project_files = Object.fromEntries(
+    Object.entries(project_files).filter(([name, _]) => name.startsWith(root_path)),
+  )
+  const project = wasm.WasmProject.new(root_path, only_project_files)
+
+  let rt = undefined
+  let diag = undefined
+  try {
+    rt = project.runtime()
+    diag = project.diagnostics(rt)
+  } catch (e) {
+    const WasmDiagnosticError = wasm.WasmDiagnosticError
+    if (e instanceof Error) {
+      console.error(e.message)
+    } else if (e instanceof WasmDiagnosticError) {
+      diag = e
+    } else {
+      console.error(e)
+    }
+  }
+
+  return {
+    project,
+    runtime: rt,
+    diagnostics: diag,
+  }
+}
 
 // We don't use ASTContext.provider because we should the default value of the context
 export const EventListener: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -339,6 +370,28 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
   const [selectedProject, setSelectedProject] = useAtom(selectedProjectAtom)
   // const setRuntimeCtx = useSetAtom(runtimeCtxRaw);
   const version = useAtomValue(versionAtom)
+  const wasm = useAtomValue(wasmAtom)
+
+  const createRuntimeCb = useAtomCallback((get, set, wasm: typeof import('@gloo-ai/baml-schema-wasm-web')) => {
+    const selectedProject = get(selectedProjectAtom)
+    if (!selectedProject) {
+      return
+    }
+    const project_files = get(projectFilesAtom(selectedProject))
+    const { project, runtime, diagnostics } = createRuntime(wasm, selectedProject, project_files)
+    set(projectFamilyAtom(selectedProject), project)
+    set(runtimeFamilyAtom(selectedProject), {
+      last_successful_runtime: undefined,
+      current_runtime: runtime,
+      diagnostics,
+    })
+  })
+
+  useEffect(() => {
+    if (wasm) {
+      createRuntimeCb(wasm)
+    }
+  }, [wasm])
 
   useEffect(() => {
     const fn = (
