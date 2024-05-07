@@ -3,6 +3,9 @@
   "organizeImports": {
     "enabled": true
   },
+  "files": {
+    "ignore": ["*/.next/*"]
+  },
   "vcs": {
     "enabled": true,
     "clientKind": "git",
