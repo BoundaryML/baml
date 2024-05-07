@@ -11,6 +11,7 @@ type ResponseType = Result<LLMResponse>;
 pub trait WithCompletion: Sync + Send {
     fn completion_options(&self, ctx: &RuntimeContext) -> Result<CompletionOptions>;
 
+    #[allow(async_fn_in_trait)]
     async fn completion(&self, ctx: &RuntimeContext, prompt: &String) -> ResponseType;
 }
 
@@ -43,6 +44,7 @@ where
     }
 
     // #[cfg(not(feature = "no_wasm"))]
+    // #[allow(async_fn_in_trait)]
     // async fn completion(&self, _: &RuntimeContext, _: &String) -> ResponseType {
     //     Err(wasm_bindgen::JsValue::from_str(
     //         "Completion prompts are not supported by this provider",
@@ -50,6 +52,7 @@ where
     // }
 
     // #[cfg(feature = "no_wasm")]
+    #[allow(async_fn_in_trait)]
     async fn completion(&self, _: &RuntimeContext, _: &String) -> ResponseType {
         anyhow::bail!("Completion prompts are not supported by this provider")
     }

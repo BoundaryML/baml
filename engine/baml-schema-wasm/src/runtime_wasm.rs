@@ -3,6 +3,7 @@ mod runtime_prompt;
 
 use std::collections::HashMap;
 
+#[allow(unused_imports)]
 use baml_runtime::{
     internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, RenderedPrompt,
     RuntimeInterface,
@@ -275,7 +276,7 @@ impl WasmTestResponse {
     pub fn llm_response(&self) -> Option<WasmLLMResponse> {
         match &self.test_response.function_response {
             Ok(f) => f.llm_response.into_wasm(),
-            Err(e) => None,
+            Err(_e) => None,
         }
     }
 

@@ -26,6 +26,7 @@ pub trait WithCallable: Send {
     /// Call the model with the specified prompt, retrying as appropriate.
     ///
     /// retry_policy is a stateful iterator, so it's taken by value
+    #[allow(async_fn_in_trait)]
     async fn call(
         &self,
         retry_policy: Option<CallablePolicy>,
@@ -35,6 +36,7 @@ pub trait WithCallable: Send {
 }
 
 pub trait WithSingleCallable {
+    #[allow(async_fn_in_trait)]
     async fn single_call(&self, ctx: &RuntimeContext, prompt: &RenderedPrompt) -> ResponseType;
 }
 
@@ -57,6 +59,7 @@ impl<T> WithCallable for T
 where
     T: WithSingleCallable + Send,
 {
+    #[allow(async_fn_in_trait)]
     async fn call(
         &self,
         retry_policy: Option<CallablePolicy>,
@@ -168,6 +171,7 @@ impl<T> WithSingleCallable for T
 where
     T: WithClient + WithChat + WithCompletion,
 {
+    #[allow(async_fn_in_trait)]
     async fn single_call(&self, ctx: &RuntimeContext, prompt: &RenderedPrompt) -> ResponseType {
         match self.model_features() {
             ModelFeatures {

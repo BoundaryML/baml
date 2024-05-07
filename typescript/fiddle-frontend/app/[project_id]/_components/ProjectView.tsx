@@ -38,10 +38,13 @@ import {
   productTourDoneAtom,
   unsavedChangesAtom,
 } from '../_atoms/atoms'
+import { usePlaygroundListener } from '../_playground_controller/usePlaygroundListener'
 import { CodeMirrorEditor } from './CodeMirrorEditor'
 import { ExploreProjects } from './ExploreProjects'
 import { GithubStars } from './GithubStars'
 import { InitialTour, PostTestRunTour } from './Tour'
+import SettingsDialog, { showSettingsAtom } from '@baml/playground-common/shared/SettingsDialog'
+import { SettingsIcon } from 'lucide-react'
 import FileViewer from './Tree/FileViewer'
 
 const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
@@ -323,6 +326,7 @@ const DummyHydrate = ({ files }: { files: EditorFile[] }) => {
 }
 
 const PlaygroundView = () => {
+  const setShowSettings = useSetAtom(showSettingsAtom)
   // const [parserDb] = useAtom(currentParserDbAtom)
   // usePlaygroundListener()
   // const testRunOutput = useAtomValue(testRunOutputAtom)
@@ -363,9 +367,16 @@ const PlaygroundView = () => {
       <CustomErrorBoundary>
         <Suspense fallback={<div>Loading...</div>}>
           <EventListener>
-            <div className='relative flex flex-col gap-2 px-2 pb-4'>
-              <div className='absolute z-10 flex flex-col items-end gap-1 right-8 top-2 text-end'></div>
-              <FunctionSelector />
+            <SettingsDialog />
+            <div className='relative flex flex-col gap-2'>
+              <div className='relative flex flex-row gap-2'>
+                <FunctionSelector />
+                <div className='relative flex flex-row items-end'>
+                  <Button className='h-8' onClick={() => setShowSettings(true)}>
+                    <SettingsIcon className='h-8' />
+                  </Button>
+                </div>
+              </div>
 
               {/* <Separator className="bg-vscode-textSeparator-foreground" /> */}
               <FunctionPanel />

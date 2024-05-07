@@ -4,7 +4,7 @@ import './App.css'
 import 'allotment/dist/style.css'
 
 import { VSCodeLink } from '@vscode/webview-ui-toolkit/react'
-import { atom, useAtom } from 'jotai'
+import { useAtom, useSetAtom } from 'jotai'
 import { DevTools } from 'jotai-devtools'
 import { FlaskConical, FlaskConicalOff } from 'lucide-react'
 import { EventListener } from './baml_wasm_web/EventListener'
@@ -18,7 +18,7 @@ import { FunctionSelector } from './shared/Selectors'
 import SettingsDialog, { showSettingsAtom } from './shared/SettingsDialog'
 import CustomErrorBoundary from './utils/ErrorFallback'
 import 'jotai-devtools/styles.css'
-import { Settings } from 'lucide-react'
+import { SettingsIcon } from 'lucide-react'
 import { showTestsAtom } from './baml_wasm_web/test_uis/testHooks'
 
 const TestToggle = () => {
@@ -37,7 +37,7 @@ const TestToggle = () => {
 }
 
 function App() {
-  const [showSettings, setShowSettings] = useAtom(showSettingsAtom)
+  const setShowSettings = useSetAtom(showSettingsAtom)
   return (
     <CustomErrorBoundary>
       <DevTools />
@@ -47,7 +47,7 @@ function App() {
             <TestToggle />
             <VSCodeLink href='https://docs.boundaryml.com'>Docs</VSCodeLink>
             <Button className='h-4' onClick={() => setShowSettings(true)}>
-              <Settings className='h-4' />
+              <SettingsIcon className='h-4' />
             </Button>
           </div>
           <SettingsDialog />

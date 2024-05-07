@@ -34,12 +34,10 @@ export default function RootLayout({
             <Toaster />
 
             <JotaiProvider>
-              <>
-                <Suspense fallback={<div>Loading...</div>}>{children}</Suspense>
-                <div className='fixed left-0 bottom-1/2 w-[12%] px-1 items-center justify-center flex'>
-                  <BrowseSheet />
-                </div>
-              </>
+              <Suspense fallback={<div>Loading...</div>}>{children}</Suspense>
+              <div className='fixed left-0 bottom-1/2 w-[12%] px-1 items-center justify-center flex'>
+                <BrowseSheet />
+              </div>
             </JotaiProvider>
           </ThemeProvider>
         </body>

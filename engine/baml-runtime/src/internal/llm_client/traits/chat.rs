@@ -11,6 +11,7 @@ type ResponseType = Result<LLMResponse>;
 pub trait WithChat: Sync + Send {
     fn chat_options(&self, ctx: &RuntimeContext) -> Result<ChatOptions>;
 
+    #[allow(async_fn_in_trait)]
     async fn chat(&self, ctx: &RuntimeContext, prompt: &Vec<RenderedChatMessage>) -> ResponseType;
 }
 
@@ -43,11 +44,13 @@ where
     }
 
     #[cfg(not(feature = "no_wasm"))]
+    #[allow(async_fn_in_trait)]
     async fn chat(&self, _: &RuntimeContext, _: &Vec<RenderedChatMessage>) -> ResponseType {
         anyhow::bail!("Chat prompts are not supported by this provider")
     }
 
     #[cfg(feature = "no_wasm")]
+    #[allow(async_fn_in_trait)]
     async fn chat(&self, _: &RuntimeContext, _: &Vec<RenderedChatMessage>) -> ResponseType {
         anyhow::bail!("Chat prompts are not supported by this provider")
     }
