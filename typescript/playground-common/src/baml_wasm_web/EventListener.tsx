@@ -14,7 +14,7 @@ import type BamlProjectManager from './project_manager'
 
 const selectedProjectStorageAtom = atomWithStorage<string | null>('selected-project', null, sessionStore)
 const selectedFunctionStorageAtom = atomWithStorage<string | null>('selected-function', null, sessionStore)
-const envvarStorageAtom = atomWithStorage<Record<string, string>>('environment-variables', {}, sessionStore)
+export const envvarStorageAtom = atomWithStorage<Record<string, string>>('environment-variables', {}, sessionStore)
 
 type Selection = {
   project?: string

@@ -38,7 +38,6 @@ import {
   productTourDoneAtom,
   unsavedChangesAtom,
 } from '../_atoms/atoms'
-import { usePlaygroundListener } from '../_playground_controller/usePlaygroundListener'
 import { CodeMirrorEditor } from './CodeMirrorEditor'
 import { ExploreProjects } from './ExploreProjects'
 import { GithubStars } from './GithubStars'

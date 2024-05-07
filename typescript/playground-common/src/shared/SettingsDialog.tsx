@@ -1,6 +1,5 @@
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { envvarStorageAtom } from '@/shared/Storage'
 import { zodResolver } from '@hookform/resolvers/zod'
 import Form from '@rjsf/core'
 import type { FieldTemplateProps, IconButtonProps, ObjectFieldTemplateProps, RJSFSchema, UiSchema } from '@rjsf/utils'
@@ -11,7 +10,7 @@ import { PlusIcon, Trash2Icon } from 'lucide-react'
 import type React from 'react'
 import { useForm } from 'react-hook-form'
 import z from 'zod'
-import { runtimeRequiredEnvVarsAtom } from '../baml_wasm_web/EventListener'
+import { envvarStorageAtom, runtimeRequiredEnvVarsAtom } from '../baml_wasm_web/EventListener'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
 
 const showSettingsAtom = atom(true)

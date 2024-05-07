@@ -23,9 +23,9 @@ pub(crate) trait RuntimeConstructor {
     ) -> Result<InternalBamlRuntime>;
 }
 
-#[cfg(not(feature = "no_wasm"))]
-type ResponseType<T> = Result<T, wasm_bindgen::JsValue>;
-#[cfg(feature = "no_wasm")]
+// #[cfg(not(feature = "no_wasm"))]
+// type ResponseType<T> = Result<T, wasm_bindgen::JsValue>;
+// #[cfg(feature = "no_wasm")]
 type ResponseType<T> = Result<T>;
 
 // This is a runtime that has full access (disk, network, etc) - feature full

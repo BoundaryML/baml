@@ -164,7 +164,10 @@ impl WithChat for OpenAIClient {
             let json = resp.json().map_err(|e| anyhow::anyhow!("{:#?}", e))?;
             let err_message = match wasm_bindgen_futures::JsFuture::from(json).await {
                 Ok(body) => {
-                    let body = serde_wasm_bindgen::from_value::<serde_json::Value>(body)?;
+                    let body =
+                        serde_wasm_bindgen::from_value::<serde_json::Value>(body).map_err(|e| {
+                            anyhow::anyhow!("Failed to convert response to JSON: {:#?}", e)
+                        })?;
                     let err_message = match serde_json::from_value::<OpenAIErrorResponse>(body) {
                         Ok(err) => {
                             format!("API Error ({}): {}", err.error.r#type, err.error.message)
@@ -430,20 +433,26 @@ impl OpenAIClient {
         let mut init = web_sys::RequestInit::new();
         init.method("POST");
         init.mode(RequestMode::Cors);
-        init.body(Some(&JsValue::from_str(
-            &serde_json::to_string(&body).map_err(|e| JsValue::from_str(&format!("{:#}", e)))?,
+        init.body(Some(&wasm_bindgen::JsValue::from_str(
+            &serde_json::to_string(&body).map_err(|e| anyhow::format_err!("{:#?}", e))?,
         )));
 
-        let headers = web_sys::Headers::new()?;
-        headers.set("Content-Type", "application/json")?;
+        let headers = web_sys::Headers::new().map_err(|e| anyhow::format_err!("{:#?}", e))?;
+        headers
+            .set("Content-Type", "application/json")
+            .map_err(|e| anyhow::format_err!("{:#?}", e))?;
         match &self.properties.api_key {
             Some(key) => {
-                headers.set("Authorization", &format!("Bearer {}", key))?;
+                headers
+                    .set("Authorization", &format!("Bearer {}", key))
+                    .map_err(|e| anyhow::format_err!("{:#?}", e))?;
             }
             None => {}
         }
         for (k, v) in &self.properties.headers {
-            headers.set(k, v)?;
+            headers
+                .set(k, v)
+                .map_err(|e| anyhow::format_err!("{:#?}", e))?;
         }
         init.headers(&headers);
 
