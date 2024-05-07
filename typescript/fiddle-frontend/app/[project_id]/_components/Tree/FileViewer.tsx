@@ -4,11 +4,12 @@ import { useEffect, useRef, useState } from 'react'
 import { MoveHandler, RenameHandler, Tree, TreeApi } from 'react-arborist'
 
 import { EditorFile } from '@/app/actions'
-import { useAtom, useAtomValue } from 'jotai'
+import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { FilePlus, FolderPlus } from 'lucide-react'
 import useResizeObserver from 'use-resize-observer'
-import { activeFileAtom, currentEditorFilesAtom, emptyDirsAtom } from '../../_atoms/atoms'
+import { PROJECT_ROOT, activeFileNameAtom, currentEditorFilesAtom, emptyDirsAtom } from '../../_atoms/atoms'
 import Node from './Node'
+import { updateFileAtom } from '@baml/playground-common/baml_wasm_web/EventListener'
 
 export const data = [
   {
@@ -104,9 +105,10 @@ function createTree(filePaths: string[]): TreeNode[] {
 
 const FileViewer = () => {
   const { width, height = 200, ref } = useResizeObserver()
-  const [editorFiles, setEditorFiles] = useAtom(currentEditorFilesAtom)
+  const editorFiles = useAtomValue(currentEditorFilesAtom)
+  const updateFile = useSetAtom(updateFileAtom)
   const treeRef = useRef<TreeApi<any> | null>(null)
-  const activeFile = useAtomValue(activeFileAtom)
+  const activeFile = useAtomValue(activeFileNameAtom)
   const [emptyDirs, setEmptydirs] = useAtom(emptyDirsAtom)
 
   const data2 = createTree(editorFiles.map((f) => f.path).concat(emptyDirs))
@@ -148,36 +150,30 @@ const FileViewer = () => {
         <Tree
           className='truncate '
           ref={treeRef}
-          key={activeFile?.path}
           openByDefault={false}
           // initialOpenState={{ baml_src: true }}
           data={data2}
           initialOpenState={{ baml_src: true }}
           rowHeight={24}
           width={width}
-          selection={activeFile?.path}
+          selection={activeFile ?? undefined}
           onMove={({ dragIds, parentId, index, dragNodes, parentNode }) => {
-            setEditorFiles((prev) => {
-              prev = prev as EditorFile[]
-              const prevFiles = [...prev]
-              const newFiles = prevFiles.filter((f) => !dragIds.includes(f.path))
+            if (!parentId?.includes('baml_src')) {
+              return
+            }
 
-              dragIds.forEach((dragId) => {
-                const draggedFileIndex = prevFiles.findIndex((f) => f.path === dragId)
-                if (draggedFileIndex > -1) {
-                  const draggedFile = { ...prevFiles[draggedFileIndex] }
-                  if (!parentId?.includes('baml_src')) {
-                    //cant move outside baml_src
-                    return
-                  }
-                  const newParentPath = parentId
-                  draggedFile.path = `${newParentPath}/${draggedFile.path.split('/').pop()}`
-                  newFiles.splice(index, 0, draggedFile)
-                  index++ // Increment to maintain order if multiple files are moved
-                }
-              })
+            const renames = dragIds
+              .filter((id) => id.endsWith('.baml') || id.endsWith('.json'))
+              .map((id) => ({
+                from: id,
+                to: `${parentId}/${id.split('/').pop() ?? ''}`,
+              }))
 
-              return newFiles
+            updateFile({
+              reason: 'move_files',
+              root_path: PROJECT_ROOT,
+              files: [],
+              renames,
             })
           }}
           onCreate={({ parentId, parentNode, type }) => {
@@ -188,12 +184,19 @@ const FileViewer = () => {
               return { id: newDir, name: 'new_folder' }
             }
             console.log('onCreate', parentId, parentNode)
-            const newFileName = 'new.baml'
 
-            setEditorFiles((prev) => {
-              prev = prev as EditorFile[]
-              return [...prev, { path: `baml_src/${newFileName}`, content: '' }]
+            const newFileName = 'new.baml'
+            updateFile({
+              reason: 'create_file',
+              root_path: PROJECT_ROOT,
+              files: [
+                {
+                  name: `baml_src/${newFileName}`,
+                  content: '',
+                },
+              ],
             })
+
             return { id: `baml_src/${newFileName}`, name: newFileName }
           }}
           height={height}

@@ -31,11 +31,10 @@ import { toast } from 'sonner'
 import { Editable } from '../../_components/EditableText'
 import { EditorFile, createUrl } from '../../actions'
 import {
+  PROJECT_ROOT,
   currentEditorFilesAtom,
-  currentParserDbAtom,
   exploreProjectsOpenAtom,
   productTourDoneAtom,
-  testRunOutputAtom,
   unsavedChangesAtom,
 } from '../_atoms/atoms'
 import { usePlaygroundListener } from '../_playground_controller/usePlaygroundListener'
@@ -44,35 +43,36 @@ import { ExploreProjects } from './ExploreProjects'
 import { GithubStars } from './GithubStars'
 import { InitialTour, PostTestRunTour } from './Tour'
 import FileViewer from './Tree/FileViewer'
+import { updateFileAtom } from '@baml/playground-common/baml_wasm_web/EventListener'
 
 const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
-  const setEditorFiles = useSetAtom(currentEditorFilesAtom)
-  const setTestRunOutput = useSetAtom(testRunOutputAtom)
+  const setEditorFiles = useSetAtom(updateFileAtom)
   useKeybindingOverrides()
   // Tried to use url pathnames for this but nextjs hijacks the pathname state (even the window.location) so we have to manually track unsaved changes in the app.
   const [unsavedChanges, setUnsavedChanges] = useAtom(unsavedChangesAtom)
 
   useEffect(() => {
-    if (project && project?.files?.length > 0) {
-      setEditorFiles([...project.files])
+    if (project) {
+      setUnsavedChanges(false)
+      setEditorFiles({
+        reason: 'project_reload',
+        replace_all: true,
+        root_path: PROJECT_ROOT,
+        files: project.files.map((f) => {
+          return {
+            name: f.path,
+            content: f.content,
+          }
+        }),
+      })
+      // TODO: @hellovai use this to set the test run output
+      // project.testRunOutput
     }
   }, [project.id])
   const [projectName, setProjectName] = useState(project.name)
   const projectNameInputRef = useRef(null)
   const [description, setDescription] = useState(project.description)
   const descriptionInputRef = useRef(null)
-
-  useEffect(() => {
-    setUnsavedChanges(false)
-    if (project) {
-      if (project.testRunOutput) {
-        setTestRunOutput(project.testRunOutput)
-      }
-      if (project.files) {
-        setEditorFiles(project.files)
-      }
-    }
-  }, [project.id])
   const setOpenExplorePanel = useSetAtom(exploreProjectsOpenAtom)
 
   return (
@@ -270,7 +270,7 @@ export const ProjectView = ({ project }: { project: BAMLProject }) => {
 const ShareButton = ({ project, projectName }: { project: BAMLProject; projectName: string }) => {
   const [loading, setLoading] = useState(false)
   const editorFiles = useAtomValue(currentEditorFilesAtom)
-  const runTestOutput = useAtomValue(testRunOutputAtom)
+  // const runTestOutput = useAtomValue(testRunOutputAtom)
   const pathname = usePathname()
   const [unsavedChanges, setUnsavedChanges] = useAtom(unsavedChangesAtom)
 
@@ -288,7 +288,8 @@ const ShareButton = ({ project, projectName }: { project: BAMLProject; projectNa
               ...project,
               name: projectName,
               files: editorFiles,
-              testRunOutput: runTestOutput ?? undefined,
+              // TODO: @hellovai use runTestOutput
+              testRunOutput: undefined,
             })
 
             posthog.capture('share_url', { id: urlId })

@@ -1,21 +1,20 @@
 import { WasmDiagnosticError, WasmProject, WasmRuntime, WasmRuntimeContext } from '@gloo-ai/baml-schema-wasm-web'
 import { VSCodeButton } from '@vscode/webview-ui-toolkit/react'
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
-import { atomFamily } from 'jotai/utils'
+import { atomFamily, atomWithStorage } from 'jotai/utils'
 import { AlertTriangle, CheckCircle, XCircle } from 'lucide-react'
 import { useEffect } from 'react'
-import {
-  availableProjectsStorageAtom as availableProjectsAtom,
-  envvarStorageAtom,
-  selectedFunctionStorageAtom,
-  selectedProjectStorageAtom,
-} from '../shared/Storage'
 import CustomErrorBoundary from '../utils/ErrorFallback'
-import { projectFamilyAtom, projectFilesAtom, runtimeFamilyAtom } from './baseAtoms'
+import { availableProjectsAtom, projectFamilyAtom, projectFilesAtom, runtimeFamilyAtom } from './baseAtoms'
 import BamlProjectManager from './project_manager'
+import { sessionStore } from './JotaiProvider'
 
 // const wasm = await import("@gloo-ai/baml-schema-wasm-web/baml_schema_build");
 // const { WasmProject, WasmRuntime, WasmRuntimeContext, version: RuntimeVersion } = wasm;
+
+const selectedProjectStorageAtom = atomWithStorage<string | null>('selected-project', null, sessionStore)
+const selectedFunctionStorageAtom = atomWithStorage<string | null>('selected-function', null, sessionStore)
+const envvarStorageAtom = atomWithStorage<Record<string, string>>('environment-variables', {}, sessionStore)
 
 type Selection = {
   project?: string
@@ -102,7 +101,7 @@ const removeProjectAtom = atom(null, (get, set, root_path: string) => {
   )
 })
 
-const updateFileAtom = atom(
+export const updateFileAtom = atom(
   null,
   async (
     get,
@@ -111,11 +110,13 @@ const updateFileAtom = atom(
       reason,
       root_path,
       files,
+      renames,
       replace_all,
     }: {
       reason: string
       root_path: string
       files: { name: string; content: string | undefined }[]
+      renames?: { from: string; to: string }[]
       replace_all?: true
     },
   ) => {
@@ -141,13 +142,20 @@ const updateFileAtom = atom(
     let project = get(projectFamilyAtom(root_path))
     if (project && !replace_all) {
       for (let file of filesToDelete) {
-        project.update_file(file, undefined)
+        if (file.startsWith(root_path)) {
+          project.update_file(file, undefined)
+        }
       }
       for (let [name, content] of filesToModify) {
-        project.update_file(name, content)
+        if (name.startsWith(root_path)) {
+          project.update_file(name, content)
+        }
       }
     } else {
-      project = wasm.WasmProject.new(root_path, projFiles)
+      const onlyRelevantFiles = Object.fromEntries(
+        Object.entries(projFiles).filter(([name, _]) => name.startsWith(root_path)),
+      )
+      project = wasm.WasmProject.new(root_path, onlyRelevantFiles)
     }
     let rt = undefined
     let diag = undefined
@@ -259,13 +267,18 @@ export const renderPromptAtom = atom(async (get) => {
   }
 })
 
-export const numErrorsAtom = atom((get) => {
+export const diagnositicsAtom = atom((get) => {
   let diagnostics = get(selectedDiagnosticsAtom)
   if (!diagnostics) {
-    return { errors: 0, warnings: 0 }
+    return []
   }
 
-  const errors = diagnostics.errors()
+  return diagnostics.errors()
+})
+
+export const numErrorsAtom = atom((get) => {
+  let errors = get(diagnositicsAtom)
+
   const warningCount = errors.filter((e) => e.type === 'warning').length
 
   return { errors: errors.length - warningCount, warnings: warningCount }

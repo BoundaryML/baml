@@ -56,6 +56,8 @@ impl WasmDiagnosticError {
 
                 WasmError {
                     file_path: e.span().file.path(),
+                    start_ch: e.span().start,
+                    end_ch: e.span().end,
                     start_line: start.0,
                     start_column: start.1,
                     end_line: end.0,
@@ -69,6 +71,8 @@ impl WasmDiagnosticError {
 
                 WasmError {
                     file_path: e.span().file.path(),
+                    start_ch: e.span().start,
+                    end_ch: e.span().end,
                     start_line: start.0,
                     start_column: start.1,
                     end_line: end.0,
@@ -87,6 +91,10 @@ pub struct WasmError {
     pub r#type: String,
     #[wasm_bindgen(readonly)]
     pub file_path: String,
+    #[wasm_bindgen(readonly)]
+    pub start_ch: usize,
+    #[wasm_bindgen(readonly)]
+    pub end_ch: usize,
     #[wasm_bindgen(readonly)]
     pub start_line: usize,
     #[wasm_bindgen(readonly)]

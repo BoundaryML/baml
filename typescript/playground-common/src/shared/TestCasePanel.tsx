@@ -300,7 +300,7 @@ const TestCasePanel: React.FC = () => {
         </EditTestCaseForm> */}
 
         {testCases.map((t) => (
-          <TestCasePanelEntry test_case={t} />
+          <TestCasePanelEntry key={t.name} test_case={t} />
         ))}
       </div>
     </div>

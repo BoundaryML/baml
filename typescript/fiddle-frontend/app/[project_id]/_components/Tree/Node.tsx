@@ -2,10 +2,13 @@ import { EditorFile } from '@/app/actions'
 import clsx from 'clsx'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { ArrowDown, ArrowRight, ChevronDown, ChevronRight, Edit, Edit2, File, Folder, X } from 'lucide-react'
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { NodeRendererProps } from 'react-arborist'
 import { SiPython, SiTypescript } from 'react-icons/si'
-import { activeFileAtom, currentEditorFilesAtom, emptyDirsAtom, fileDiagnostics } from '../../_atoms/atoms'
+import { PROJECT_ROOT, activeFileNameAtom, currentEditorFilesAtom, emptyDirsAtom } from '../../_atoms/atoms'
+import { runtimeFamilyAtom } from '@baml/playground-common/baml_wasm_web/baseAtoms'
+import { useAtomCallback } from 'jotai/utils'
+import { diagnositicsAtom, updateFileAtom } from '@baml/playground-common/baml_wasm_web/EventListener'
 
 export type Entity = {
   id: string
@@ -33,21 +36,15 @@ const renderIcon = (path: string) => {
 const Node = ({ node, style, dragHandle, tree }: NodeRendererProps<any>) => {
   const CustomIcon = node.data.icon
   const iconColor = node.data.iconColor
-  const [editorFiles, setEditorFiles] = useAtom(currentEditorFilesAtom)
-  const setActiveFile = useSetAtom(activeFileAtom)
-  const diagnostics = useAtomValue(fileDiagnostics)
-  const setEmptyDirs = useSetAtom(emptyDirsAtom)
+  const editorFiles = useAtomValue(currentEditorFilesAtom)
+  const setActiveFile = useSetAtom(activeFileNameAtom)
+  const updateFile = useSetAtom(updateFileAtom)
 
-  useEffect(() => {
-    if (node.isSelected) {
-      const editorFile = editorFiles.find((f) => f.path === node.id)
-      if (!editorFile) return
-      setActiveFile(editorFile)
-    }
-  }, [node.isSelected, editorFiles])
-
-  const hasErrorInChildren = (nodeId: string) => {
+  const hasErrorInChildren = useAtomCallback<boolean, string[]>((get, _set, nodeId: string) => {
     const nodes = [tree.get(nodeId)] // Start with the current node
+
+    const diagnosticErrors = get(diagnositicsAtom)
+    const errors = diagnosticErrors.filter((d) => d.type === 'error')
     while (nodes.length > 0) {
       const currentNode = nodes.pop()
       if (currentNode?.children) {
@@ -55,16 +52,23 @@ const Node = ({ node, style, dragHandle, tree }: NodeRendererProps<any>) => {
           nodes.push(tree.get(child.id))
         })
       }
-      if (diagnostics.filter((d) => d.severity === 'error').some((d) => d.source === currentNode?.id)) {
+      if (errors.some((d) => d.file_path === currentNode?.id)) {
         return true
       }
     }
     return false
-  }
+  })
+
+  const setEmptyDirs = useSetAtom(emptyDirsAtom)
+
+  useEffect(() => {
+    if (node.isSelected) {
+      setActiveFile(node.id)
+    }
+  }, [node.isSelected])
 
   // Check if the current file or any children have errors
-  const fileHasErrors =
-    diagnostics.filter((d) => d.severity === 'error').some((d) => d.source === node.id) || hasErrorInChildren(node.id)
+  const fileHasErrors = hasErrorInChildren(node.id)
 
   return (
     <div
@@ -101,16 +105,15 @@ const Node = ({ node, style, dragHandle, tree }: NodeRendererProps<any>) => {
               onKeyDown={(e) => {
                 if (e.key === 'Escape') node.reset()
                 if (e.key === 'Enter') {
+                  // Previous name folder name
                   node.submit(e.currentTarget.value)
-                  setEditorFiles((prev) => {
-                    prev = prev as EditorFile[]
-                    return prev.map((f) => {
-                      if (f.path === node.id) {
-                        const filePathWithNoFilename = f.path.split('/').slice(0, -1).join('/')
-                        return { ...f, path: `${filePathWithNoFilename}/${e.currentTarget.value}` }
-                      }
-                      return f
-                    })
+                  const filePathWithNoFilename = node.id.split('/').slice(0, -1).join('/')
+                  const fileName = `${filePathWithNoFilename}/${e.currentTarget.value}`
+                  updateFile({
+                    reason: 'rename_file',
+                    root_path: PROJECT_ROOT,
+                    files: [],
+                    renames: [{ from: node.id, to: fileName }],
                   })
 
                   setEmptyDirs((prev) => {
@@ -154,9 +157,15 @@ const Node = ({ node, style, dragHandle, tree }: NodeRendererProps<any>) => {
               onClick={() => {
                 tree.delete(node.id)
 
-                setEditorFiles((prev) => {
-                  prev = prev as EditorFile[]
-                  return prev.filter((f) => f.path !== node.id)
+                updateFile({
+                  reason: 'delete_file',
+                  root_path: PROJECT_ROOT,
+                  files: [
+                    {
+                      name: node.id,
+                      content: undefined,
+                    },
+                  ],
                 })
                 setEmptyDirs((prev) => {
                   prev = prev as string[]
