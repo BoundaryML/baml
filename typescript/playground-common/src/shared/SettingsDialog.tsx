@@ -1,6 +1,4 @@
 import { Button } from '@/components/ui/button'
-//import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
-//Using ShadCN, create a form that allows submitting record types mapping string to string
 import { Input } from '@/components/ui/input'
 import { envvarStorageAtom } from '@/shared/Storage'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -52,8 +50,13 @@ const schema: RJSFSchema = {
 const uiSchema: UiSchema = {
   items: {
     'ui:classNames': 'flex flex-row',
-    key: { 'ui:FieldTemplate': EnvvarFieldTemplate },
-    value: { 'ui:FieldTemplate': EnvvarFieldTemplate },
+    key: {
+      'ui:FieldTemplate': EnvvarFieldTemplate,
+    },
+    value: {
+      'ui:FieldTemplate': EnvvarFieldTemplate,
+      'ui:widget': 'password',
+    },
   },
   'ui:submitButtonOptions': {
     norender: true,

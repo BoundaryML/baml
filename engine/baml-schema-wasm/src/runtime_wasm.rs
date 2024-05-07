@@ -12,6 +12,13 @@ use crate::runtime_wasm::runtime_prompt::WasmPrompt;
 
 use self::runtime_ctx::WasmRuntimeContext;
 
+#[wasm_bindgen(start)]
+pub fn on_wasm_init() {
+    console_log::init_with_level(log::Level::Debug);
+    web_sys::console::log_1(&"WASM initialized".into());
+    log::info!("initialized WASM from log::info!");
+}
+
 #[wasm_bindgen]
 pub struct WasmProject {
     root_dir_name: String,
