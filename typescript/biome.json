@@ -6,7 +6,7 @@
 	"linter": {
 		"enabled": false,
 		"rules": {
-			"recommended": true
+			"recommended": false
 		}
 	},
 	"formatter": {
