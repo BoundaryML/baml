@@ -7,6 +7,11 @@ import { VSCodeButton } from '@vscode/webview-ui-toolkit/react'
 import { WasmProject, WasmRuntimeContext, WasmRuntime, WasmDiagnosticError } from '@gloo-ai/baml-schema-wasm-web'
 import { AlertTriangle, CheckCircle, XCircle } from 'lucide-react'
 import { projectFamilyAtom, projectFilesAtom, runtimeFamilyAtom } from './baseAtoms'
+import {
+  availableProjectsStorageAtom as availableProjectsAtom,
+  selectedFunctionStorageAtom,
+  selectedProjectStorageAtom,
+} from '../shared/Storage'
 
 // const wasm = await import("@gloo-ai/baml-schema-wasm-web/baml_schema_build");
 // const { WasmProject, WasmRuntime, WasmRuntimeContext, version: RuntimeVersion } = wasm;
@@ -37,31 +42,31 @@ export const runtimeCtx = atom<Promise<WasmRuntimeContext>>(async (get, { signal
   return new loadedWasm.WasmRuntimeContext()
 })
 
-const availableProjectsAtom = atom<string[]>([])
-
-const rawSelectedProjectAtom = atom<string | null>(null)
 const selectedProjectAtom = atom(
   (get) => {
     let allProjects = get(availableProjectsAtom)
-    let project = get(rawSelectedProjectAtom)
+    let project = get(selectedProjectStorageAtom)
     let match = allProjects.find((p) => p === project) ?? allProjects.at(0) ?? null
     return match
   },
   (get, set, project: string) => {
-    set(rawSelectedProjectAtom, project)
+    if (project !== null) {
+      set(selectedProjectStorageAtom, project)
+    }
   },
 )
 
-const rawSelectedFunctionAtom = atom<string | null>(null)
 export const selectedFunctionAtom = atom(
   async (get) => {
     const functions = await get(availableFunctionsAtom)
-    const func = get(rawSelectedFunctionAtom)
+    const func = get(selectedFunctionStorageAtom)
     let match = functions.find((f) => f.name === func) ?? functions.at(0)
     return match ?? null
   },
   (get, set, func: string) => {
-    set(rawSelectedFunctionAtom, func)
+    if (func !== null) {
+      set(selectedFunctionStorageAtom, func)
+    }
   },
 )
 
@@ -82,7 +87,7 @@ export const selectedTestCaseAtom = atom(
 const removeProjectAtom = atom(null, (get, set, root_path: string) => {
   set(projectFilesAtom(root_path), {})
   set(projectFamilyAtom(root_path), null)
-  set(runtimeFamilyAtom(root_path), {})
+  set(runtimeFamilyAtom(root_path), { last_attempt: 'no_attempt_yet' })
   let availableProjects = get(availableProjectsAtom)
   set(
     availableProjectsAtom,
@@ -168,6 +173,7 @@ const updateFileAtom = atom(
     set(projectFilesAtom(root_path), projFiles)
     set(projectFamilyAtom(root_path), project)
     set(runtimeFamilyAtom(root_path), {
+      last_attempt: 'success',
       last_successful_runtime: lastSuccessRt,
       current_runtime: rt,
       diagnostics: diag,
@@ -182,7 +188,11 @@ export const selectedRuntimeAtom = atom((get) => {
   }
 
   let runtime = get(runtimeFamilyAtom(project))
-  return runtime.current_runtime ?? runtime.last_successful_runtime ?? null
+  if (runtime.current_runtime) return runtime.current_runtime
+  if (runtime.last_successful_runtime) return runtime.last_successful_runtime
+  if (runtime.last_attempt === null) {
+  }
+  return null
 })
 
 const selectedDiagnosticsAtom = atom((get) => {

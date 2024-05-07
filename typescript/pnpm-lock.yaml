@@ -321,11 +321,14 @@ importers:
   playground-common:
     dependencies:
       '@baml/common':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../common
       '@gloo-ai/baml-schema-wasm-web':
         specifier: '*'
         version: link:../baml-schema-wasm-web
+      '@hookform/resolvers':
+        specifier: ^3.3.4
+        version: 3.3.4(react-hook-form@7.51.2)
       '@radix-ui/react-accordion':
         specifier: ^1.1.2
         version: 1.1.2(@types/react-dom@18.2.24)(@types/react@18.2.74)(react-dom@18.2.0)(react@18.2.0)
@@ -428,6 +431,9 @@ importers:
       react-error-boundary:
         specifier: ^4.0.11
         version: 4.0.11(react@18.2.0)
+      react-hook-form:
+        specifier: ^7.51.2
+        version: 7.51.2(react@18.2.0)
       react-resizable-panels:
         specifier: ^2.0.16
         version: 2.0.16(react-dom@18.2.0)(react@18.2.0)
@@ -443,6 +449,9 @@ importers:
       unique-names-generator:
         specifier: ^4.7.1
         version: 4.7.1
+      zod:
+        specifier: ^3.22.4
+        version: 3.22.4
     devDependencies:
       '@githubocto/tailwind-vscode':
         specifier: ^1.0.5
@@ -709,11 +718,14 @@ importers:
   vscode-ext/packages/web-panel:
     dependencies:
       '@baml/common':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../common
       '@gloo-ai/baml-schema-wasm-web':
         specifier: workspace:*
         version: link:../../../baml-schema-wasm-web
+      '@hookform/resolvers':
+        specifier: ^3.3.4
+        version: 3.3.4(react-hook-form@7.51.2)
       '@radix-ui/react-accordion':
         specifier: ^1.1.2
         version: 1.1.2(@types/react-dom@18.2.24)(@types/react@18.2.74)(react-dom@18.2.0)(react@18.2.0)
@@ -822,6 +834,9 @@ importers:
       react-error-boundary:
         specifier: ^4.0.11
         version: 4.0.11(react@18.2.0)
+      react-hook-form:
+        specifier: ^7.51.2
+        version: 7.51.2(react@18.2.0)
       react-resizable-panels:
         specifier: ^2.0.16
         version: 2.0.16(react-dom@18.2.0)(react@18.2.0)
@@ -837,6 +852,9 @@ importers:
       unique-names-generator:
         specifier: ^4.7.1
         version: 4.7.1
+      zod:
+        specifier: ^3.22.4
+        version: 3.22.4
     devDependencies:
       '@githubocto/tailwind-vscode':
         specifier: ^1.0.5

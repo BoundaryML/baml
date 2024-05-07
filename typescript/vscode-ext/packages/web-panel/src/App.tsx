@@ -14,13 +14,12 @@ import { Button } from './components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './components/ui/dialog'
 import { FlaskConical, FlaskConicalOff } from 'lucide-react'
 import { ProjectToggle } from './shared/ProjectPanel'
+import SettingsDialog, { showSettingsAtom } from './shared/SettingsDialog'
 import { atom, useAtom } from 'jotai'
 import { DevTools } from 'jotai-devtools'
 import 'jotai-devtools/styles.css'
 import { Settings } from 'lucide-react'
 import { showTestsAtom } from './baml_wasm_web/test_uis/testHooks'
-
-const showSettingsAtom = atom(false)
 
 const TestToggle = () => {
   // const { setSelection } = useContext(ASTContext)
@@ -37,30 +36,8 @@ const TestToggle = () => {
   )
 }
 
-export const SettingsDialog: React.FC = () => {
-  const [showSettings, setShowSettings] = useAtom(showSettingsAtom)
-  const duplicate = false
-
-  //<DialogTrigger asChild={true}>{children}</DialogTrigger>
-  return (
-    <Dialog open={showSettings} onOpenChange={setShowSettings}>
-      <DialogContent className='overflow-y-scroll max-h-screen bg-vscode-editorWidget-background border-vscode-textSeparator-foreground overflow-x-clip'>
-        <DialogHeader className='flex flex-row gap-x-4 items-center'>
-          <DialogTitle className='text-xs font-semibold'>{duplicate ? 'Duplicate test' : 'Edit test'}</DialogTitle>
-
-          <div className='flex flex-row gap-x-2 items-center pb-1'>
-            <div>renaming tests not supported right now</div>
-          </div>
-        </DialogHeader>
-        <p> contents of the form</p>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
 function App() {
   const [showSettings, setShowSettings] = useAtom(showSettingsAtom)
-
   return (
     <CustomErrorBoundary>
       <DevTools />
