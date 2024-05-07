@@ -72,6 +72,7 @@
     "mypy.enabled": false,
     "git.openDiffOnClick": true,
     "python.analysis.typeCheckingMode": "strict",
+    "rust-analyzer.cargo.features": "all",
     "rust-analyzer.procMacro.ignored": {
       "napi-derive": [
         "napi"
