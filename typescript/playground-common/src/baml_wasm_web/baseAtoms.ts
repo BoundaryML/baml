@@ -8,11 +8,10 @@ const filesAtom = atomWithStorage<Record<string, string>>('files', {}, sessionSt
 
 const projectAtom = atom<WasmProject | null>(null)
 const runtimesAtom = atom<{
-  last_attempt: 'success' | 'error' | 'no_attempt_yet'
   last_successful_runtime?: WasmRuntime
   current_runtime?: WasmRuntime
   diagnostics?: WasmDiagnosticError
-}>({ last_attempt: 'no_attempt_yet' })
+}>({})
 
 export const projectFamilyAtom = atomFamily((root_path: string) => projectAtom)
 export const runtimeFamilyAtom = atomFamily((root_path: string) => runtimesAtom)

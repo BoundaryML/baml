@@ -25,7 +25,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import posthog from 'posthog-js'
-import { useContext, useEffect, useRef, useState } from 'react'
+import { Suspense, useContext, useEffect, useRef, useState } from 'react'
 import { isMobile } from 'react-device-detect'
 import Joyride, { STATUS } from 'react-joyride'
 import { toast } from 'sonner'
@@ -52,6 +52,7 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
 
   useEffect(() => {
     if (project) {
+      console.log('Updating files due: project', project.id)
       setUnsavedChanges(false)
       setEditorFiles({
         reason: 'project_reload',
@@ -360,17 +361,19 @@ const PlaygroundView = () => {
   return (
     <>
       <CustomErrorBoundary>
-        <EventListener>
-          <div className='relative flex flex-col gap-2 px-2 pb-4'>
-            <div className='absolute z-10 flex flex-col items-end gap-1 right-8 top-2 text-end'></div>
-            <FunctionSelector />
+        <Suspense fallback={<div>Loading...</div>}>
+          <EventListener>
+            <div className='relative flex flex-col gap-2 px-2 pb-4'>
+              <div className='absolute z-10 flex flex-col items-end gap-1 right-8 top-2 text-end'></div>
+              <FunctionSelector />
 
-            {/* <Separator className="bg-vscode-textSeparator-foreground" /> */}
-            <FunctionPanel />
-          </div>
-          <InitialTour />
-          <PostTestRunTour />
-        </EventListener>
+              {/* <Separator className="bg-vscode-textSeparator-foreground" /> */}
+              <FunctionPanel />
+            </div>
+            <InitialTour />
+            <PostTestRunTour />
+          </EventListener>
+        </Suspense>
       </CustomErrorBoundary>
     </>
   )

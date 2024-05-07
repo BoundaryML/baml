@@ -1,7 +1,6 @@
-import { WasmDiagnosticError, WasmProject, WasmRuntime, type WasmRuntimeContext } from '@gloo-ai/baml-schema-wasm-web'
 import { VSCodeButton } from '@vscode/webview-ui-toolkit/react'
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
-import { atomFamily, atomWithStorage } from 'jotai/utils'
+import { atomFamily, atomWithStorage, unwrap } from 'jotai/utils'
 import { AlertTriangle, CheckCircle, XCircle } from 'lucide-react'
 import { useEffect } from 'react'
 import CustomErrorBoundary from '../utils/ErrorFallback'
@@ -30,20 +29,28 @@ type ASTContextType = {
 // const wasm = await import('@gloo-ai/baml-schema-wasm-web')
 // const wasm = undefined
 
-const wasmAtom = atom(async () => {
+const wasmAtomAsync = atom(async () => {
+  console.debug('test BAML: Loading baml')
   const wasm = await import('@gloo-ai/baml-schema-wasm-web/baml_schema_build')
-
   return wasm
 })
 
-export const runtimeCtx = atom<Promise<WasmRuntimeContext>>(async (get, { signal }) => {
-  const loadedWasm = await get(wasmAtom)
+const wasmAtom = unwrap(wasmAtomAsync)
+
+export const runtimeCtx = atom((get) => {
+  const loadedWasm = get(wasmAtom)
+
+  if (loadedWasm === undefined) {
+    return null
+  }
 
   const ctx = new loadedWasm.WasmRuntimeContext()
 
   for (const [key, value] of Object.entries(get(envvarStorageAtom))) {
     ctx.set_env(key, value)
   }
+
+  console.debug('test BAML: runtime context created')
 
   return ctx
 })
@@ -63,8 +70,9 @@ const selectedProjectAtom = atom(
 )
 
 export const selectedFunctionAtom = atom(
-  async (get) => {
-    const functions = await get(availableFunctionsAtom)
+  (get) => {
+    console.debug('test BAML: selectedFunctionAtom')
+    const functions = get(availableFunctionsAtom)
     const func = get(selectedFunctionStorageAtom)
     const match = functions.find((f) => f.name === func) ?? functions.at(0)
     return match ?? null
@@ -78,8 +86,9 @@ export const selectedFunctionAtom = atom(
 
 const rawSelectedTestCaseAtom = atom<string | null>(null)
 export const selectedTestCaseAtom = atom(
-  async (get) => {
-    const func = await get(selectedFunctionAtom)
+  (get) => {
+    console.debug('test BAML: selectedTestCaseAtom')
+    const func = get(selectedFunctionAtom)
     const testCases = func?.test_cases ?? []
     const testCase = get(rawSelectedTestCaseAtom)
     const match = testCases.find((tc) => tc.name === testCase) ?? testCases.at(0)
@@ -93,7 +102,7 @@ export const selectedTestCaseAtom = atom(
 const removeProjectAtom = atom(null, (get, set, root_path: string) => {
   set(projectFilesAtom(root_path), {})
   set(projectFamilyAtom(root_path), null)
-  set(runtimeFamilyAtom(root_path), { last_attempt: 'no_attempt_yet' })
+  set(runtimeFamilyAtom(root_path), {})
   const availableProjects = get(availableProjectsAtom)
   set(
     availableProjectsAtom,
@@ -101,69 +110,79 @@ const removeProjectAtom = atom(null, (get, set, root_path: string) => {
   )
 })
 
-export const updateFileAtom = atom(
-  null,
-  async (
-    get,
-    set,
-    {
-      reason,
-      root_path,
-      files,
-      renames,
-      replace_all,
-    }: {
-      reason: string
-      root_path: string
-      files: { name: string; content: string | undefined }[]
-      renames?: { from: string; to: string }[]
+type WriteFileParams = {
+  reason: string
+  root_path: string
+  files: { name: string; content: string | undefined }[]
+} & (
+  | {
       replace_all?: true
-    },
-  ) => {
-    const wasm = await get(wasmAtom)
-    console.debug(`Updating files due to ${reason}: ${files.length} files (${replace_all ? 'replace all' : 'update'})`)
-    const _projFiles = get(projectFilesAtom(root_path))
-    const filesToDelete = files.filter((f) => f.content === undefined).map((f) => f.name)
-    let projFiles = {
-      ..._projFiles,
     }
-    const filesToModify = files
-      .filter((f) => f.content !== undefined)
-      .map((f): [string, string] => [f.name, f.content as string])
-    if (replace_all) {
-      for (const file of Object.keys(_projFiles)) {
-        if (!filesToDelete.includes(file)) {
-          filesToDelete.push(file)
-        }
-      }
-      projFiles = Object.fromEntries(filesToModify)
+  | {
+      renames?: { from: string; to: string }[]
     }
+)
 
-    let project = get(projectFamilyAtom(root_path))
-    if (project && !replace_all) {
-      for (const file of filesToDelete) {
-        if (file.startsWith(root_path)) {
-          project.update_file(file, undefined)
-        }
+export const updateFileAtom = atom(null, (get, set, params: WriteFileParams) => {
+  const { reason, root_path, files } = params
+  const replace_all = 'replace_all' in params
+  const renames = 'renames' in params ? params.renames ?? [] : []
+  console.debug(
+    `test BAML: Updating files due to ${reason}: ${files.length} files (${replace_all ? 'replace all' : 'update'})`,
+  )
+  const _projFiles = get(projectFilesAtom(root_path))
+  const filesToDelete = files.filter((f) => f.content === undefined).map((f) => f.name)
+
+  let projFiles = {
+    ..._projFiles,
+  }
+  const filesToModify = files
+    .filter((f) => f.content !== undefined)
+    .map((f): [string, string] => [f.name, f.content as string])
+
+  renames.forEach(({ from, to }) => {
+    if (from in projFiles) {
+      projFiles[to] = projFiles[from]
+      delete projFiles[from]
+      filesToDelete.push(from)
+    }
+  })
+
+  if (replace_all) {
+    for (const file of Object.keys(_projFiles)) {
+      if (!filesToDelete.includes(file)) {
+        filesToDelete.push(file)
       }
-      for (const [name, content] of filesToModify) {
-        if (name.startsWith(root_path)) {
-          project.update_file(name, content)
-        }
+    }
+    projFiles = Object.fromEntries(filesToModify)
+  }
+
+  let project = get(projectFamilyAtom(root_path))
+  const wasm = get(wasmAtom)
+  if (project && !replace_all) {
+    for (const file of filesToDelete) {
+      if (file.startsWith(root_path)) {
+        project.update_file(file, undefined)
       }
-    } else {
-      const onlyRelevantFiles = Object.fromEntries(
-        Object.entries(projFiles).filter(([name, _]) => name.startsWith(root_path)),
-      )
+    }
+    for (const [name, content] of filesToModify) {
+      if (name.startsWith(root_path)) {
+        project.update_file(name, content)
+      }
+    }
+  } else {
+    const onlyRelevantFiles = Object.fromEntries(
+      Object.entries(projFiles).filter(([name, _]) => name.startsWith(root_path)),
+    )
+    if (wasm) {
       project = wasm.WasmProject.new(root_path, onlyRelevantFiles)
     }
-    let rt = undefined
-    let diag = undefined
+  }
+  let rt = undefined
+  let diag = undefined
 
+  if (project && wasm) {
     try {
-      if (!project) {
-        throw new Error('couldnt load wasm')
-      }
       rt = project.runtime()
       diag = project.diagnostics(rt)
     } catch (e) {
@@ -176,25 +195,22 @@ export const updateFileAtom = atom(
         console.error(e)
       }
     }
+  }
 
-    const pastRuntime = get(runtimeFamilyAtom(root_path))
-    const lastSuccessRt = pastRuntime.current_runtime ?? pastRuntime.last_successful_runtime
+  const availableProjects = get(availableProjectsAtom)
+  if (!availableProjects.includes(root_path)) {
+    set(availableProjectsAtom, [...availableProjects, root_path])
+  }
 
-    const availableProjects = get(availableProjectsAtom)
-    if (!availableProjects.includes(root_path)) {
-      set(availableProjectsAtom, [...availableProjects, root_path])
-    }
-
-    set(projectFilesAtom(root_path), projFiles)
-    set(projectFamilyAtom(root_path), project)
-    set(runtimeFamilyAtom(root_path), {
-      last_attempt: 'success',
-      last_successful_runtime: lastSuccessRt,
-      current_runtime: rt,
-      diagnostics: diag,
-    })
-  },
-)
+  set(projectFilesAtom(root_path), projFiles)
+  set(projectFamilyAtom(root_path), project)
+  set(runtimeFamilyAtom(root_path), (prev) => ({
+    last_attempt: rt ? 'success' : 'error',
+    last_successful_runtime: prev.current_runtime ?? prev.last_successful_runtime,
+    current_runtime: rt,
+    diagnostics: diag,
+  }))
+})
 
 export const selectedRuntimeAtom = atom((get) => {
   const project = get(selectedProjectAtom)
@@ -205,8 +221,6 @@ export const selectedRuntimeAtom = atom((get) => {
   const runtime = get(runtimeFamilyAtom(project))
   if (runtime.current_runtime) return runtime.current_runtime
   if (runtime.last_successful_runtime) return runtime.last_successful_runtime
-  if (runtime.last_attempt === null) {
-  }
   return null
 })
 
@@ -229,28 +243,38 @@ const selectedDiagnosticsAtom = atom((get) => {
   return runtime.diagnostics ?? null
 })
 
-export const versionAtom = atom(async (get) => {
-  const wasm = await get(wasmAtom)
+export const versionAtom = atom((get) => {
+  console.debug('test BAML: versionAtom')
+  const wasm = get(wasmAtom)
+
+  if (wasm === undefined) {
+    return 'Loading...'
+  }
 
   return wasm.version()
 })
 
-export const availableFunctionsAtom = atom(async (get) => {
+export const availableFunctionsAtom = atom((get) => {
+  console.debug('test BAML: availableFunctionsAtom')
   const runtime = get(selectedRuntimeAtom)
   if (!runtime) {
     return []
   }
-  const ctx = await get(runtimeCtx)
+  const ctx = get(runtimeCtx)
+  if (!ctx) {
+    return []
+  }
   return runtime.list_functions(ctx)
 })
 
-export const renderPromptAtom = atom(async (get) => {
+export const renderPromptAtom = atom((get) => {
+  console.debug('test BAML: renderPromptAtom')
   const runtime = get(selectedRuntimeAtom)
-  const func = await get(selectedFunctionAtom)
-  const test_case = await get(selectedTestCaseAtom)
-  const ctx = await get(runtimeCtx)
+  const func = get(selectedFunctionAtom)
+  const test_case = get(selectedTestCaseAtom)
+  const ctx = get(runtimeCtx)
 
-  if (!runtime || !func || !test_case) {
+  if (!runtime || !func || !test_case || !ctx) {
     return null
   }
 
