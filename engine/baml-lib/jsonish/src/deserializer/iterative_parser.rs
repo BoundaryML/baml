@@ -379,7 +379,7 @@ impl JsonParseState {
             };
 
         if let Some((idx, next_char)) = next.peek() {
-            let idx = *idx;
+            let _idx = *idx;
             match next_char {
                 '\n' => true,
                 ':' | '}' if in_object_key => true,
@@ -667,7 +667,7 @@ pub fn try_fix_jsonish<'a>(str: &str) -> Result<serde_json::Value> {
     match state.completed_values.len() {
         0 => Err(anyhow::anyhow!("No JSON objects found")),
         1 => {
-            let (name, value) = state.completed_values.pop().unwrap();
+            let (_name, value) = state.completed_values.pop().unwrap();
             Ok(value)
         }
         _ => {
@@ -732,7 +732,7 @@ pub fn parse_jsonish_value<'a>(str: &'a str, options: JSONishOptions) -> Result<
     // Try naive parsing first to see if it's valid JSON
     match serde_json::from_str(str) {
         Ok(value) => return Ok(value),
-        Err(e) => {
+        Err(_e) => {
             // println!("Failed to parse JSON: {:?}\n{str}", e);
         }
     }

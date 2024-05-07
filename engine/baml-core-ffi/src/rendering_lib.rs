@@ -161,11 +161,11 @@ impl NapiRenderer {
   /// These elements are all dynamic and must be passed in by the caller
   pub fn render(
     &self,
-    args: HashMap<String, serde_json::Value>,
+    _args: HashMap<String, serde_json::Value>,
     client: &NapiClient,
     env: HashMap<String, String>,
   ) -> Result<NapiRenderedPrompt> {
-    let ctx = RenderContext {
+    let _ctx = RenderContext {
       client: client.internal.clone(),
       output_format: self.output_format.clone(),
       env,

@@ -1,4 +1,4 @@
-use crate::dir_writer::{FileCollector, LanguageFeatures};
+use crate::dir_writer::{LanguageFeatures};
 
 #[derive(Default)]
 pub(super) struct RubyLanguageFeatures {}

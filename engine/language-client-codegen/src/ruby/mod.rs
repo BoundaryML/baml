@@ -3,7 +3,7 @@ mod field_type;
 mod generate_types;
 mod ruby_language_features;
 
-use std::path::Path;
+
 
 use anyhow::Result;
 use askama::Template;
@@ -80,12 +80,12 @@ impl TryFrom<&IntermediateRepr> for RubyClient {
                 };
                 let funcs = configs
                     .map(|c| {
-                        let (function, impl_) = c.item;
+                        let (_function, _impl_) = c.item;
                         Ok(RubyFunction {
                             name: f.name().to_string(),
                             return_type: f.elem().output().to_ruby(),
                             args: match f.inputs() {
-                                either::Either::Left(args) => anyhow::bail!("Ruby codegen does not support unnamed args: please add names to all arguments of BAML function '{}'", f.name().to_string()),
+                                either::Either::Left(_args) => anyhow::bail!("Ruby codegen does not support unnamed args: please add names to all arguments of BAML function '{}'", f.name().to_string()),
                                 either::Either::Right(args) => args
                                     .iter()
                                     .map(|(name, r#type)| (name.to_string(), r#type.to_ruby()))

@@ -1,4 +1,4 @@
-#[cfg(not(feature = "wasm"))]
+#[cfg(feature = "no_wasm")]
 #[cfg(test)]
 mod tests;
 

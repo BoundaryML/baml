@@ -10,7 +10,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 anyhow.workspace = true
-baml-runtime.workspace = true
+baml-runtime = { path = "../../../baml-runtime", features = ["internal"] }
 base64.workspace = true
 env_logger.workspace = true
 futures.workspace = true

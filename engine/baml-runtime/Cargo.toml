@@ -60,7 +60,7 @@ optional = true
 features = ["Headers", "Request", "RequestInit", "RequestMode", "Window"]
 
 [features]
-default = ["wasm"]
+default = ["no_wasm"]
 wasm = [
   "colored/no-color",
   "js-sys",
@@ -69,8 +69,7 @@ wasm = [
   "web-sys",
   "wasm-bindgen-futures",
 ] # Enable this feature for WASM build
-network = ["tokio/full", "reqwest"]
-disk = ["walkdir"]
+no_wasm = ["tokio/full", "reqwest", "walkdir"]
 internal = []
 
 [dev-dependencies]

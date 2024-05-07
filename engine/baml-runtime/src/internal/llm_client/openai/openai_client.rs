@@ -124,14 +124,14 @@ impl WithChat for OpenAIClient {
         ))
     }
 
-    #[cfg(feature = "wasm")]
+    #[cfg(not(feature = "no_wasm"))]
     async fn chat(
         &self,
         ctx: &RuntimeContext,
         prompt: &Vec<RenderedChatMessage>,
     ) -> Result<LLMResponse, wasm_bindgen::JsValue> {
         use wasm_bindgen::{JsCast, JsValue};
-        use web_sys::{Request, RequestInit, RequestMode, Response};
+        use web_sys::Response;
         use web_time::SystemTime;
 
         use crate::internal::llm_client::{
@@ -187,7 +187,7 @@ impl WithChat for OpenAIClient {
             }));
         }
 
-        let body = match (match wasm_bindgen_futures::JsFuture::from(resp.json()?).await {
+        let body = match match wasm_bindgen_futures::JsFuture::from(resp.json()?).await {
             Ok(body) => {
                 let body = body.into_serde::<serde_json::Value>().unwrap();
                 match serde_json::from_value::<ChatCompletionResponse>(body) {
@@ -202,7 +202,7 @@ impl WithChat for OpenAIClient {
                 "Does this support the OpenAI Response type?\n{:#?}",
                 e
             )),
-        }) {
+        } {
             Ok(body) => body,
             Err(e) => {
                 return Ok(LLMResponse::LLMFailure(LLMErrorResponse {
@@ -266,7 +266,7 @@ impl WithChat for OpenAIClient {
         }))
     }
 
-    #[cfg(not(feature = "wasm"))]
+    #[cfg(feature = "no_wasm")]
     async fn chat(
         &self,
         ctx: &RuntimeContext,
@@ -406,10 +406,10 @@ impl OpenAIClient {
         })
     }
 
-    #[cfg(feature = "wasm")]
+    #[cfg(not(feature = "no_wasm"))]
     fn build_http_request(
         &self,
-        ctx: &RuntimeContext,
+        _ctx: &RuntimeContext,
         path: &str,
         prompt: &Vec<RenderedChatMessage>,
     ) -> Result<web_sys::Request, wasm_bindgen::JsValue> {
@@ -437,7 +437,7 @@ impl OpenAIClient {
         init.mode(RequestMode::Cors);
         init.body(Some(&JsValue::from_serde(&body).unwrap()));
 
-        let mut headers = web_sys::Headers::new().unwrap();
+        let headers = web_sys::Headers::new().unwrap();
         match &self.properties.api_key {
             Some(key) => {
                 headers
@@ -457,7 +457,7 @@ impl OpenAIClient {
         )
     }
 
-    #[cfg(not(feature = "wasm"))]
+    #[cfg(feature = "no_wasm")]
     fn build_http_request(
         &self,
         ctx: &RuntimeContext,

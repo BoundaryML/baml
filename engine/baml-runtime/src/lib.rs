@@ -1,3 +1,8 @@
+// #[cfg(all(feature = "wasm", feature = "no_wasm"))]
+// compile_error!(
+//     "The features 'wasm' and 'no_wasm' are mutually exclusive. You can only use one at a time."
+// );
+
 pub(crate) mod internal;
 
 mod macros;
@@ -6,7 +11,6 @@ mod runtime_interface;
 mod types;
 
 use std::collections::HashMap;
-use std::path::PathBuf;
 
 use anyhow::Result;
 
@@ -15,6 +19,9 @@ use runtime::InternalBamlRuntime;
 use runtime_interface::RuntimeConstructor;
 pub use runtime_interface::RuntimeInterface;
 pub use types::*;
+
+use internal_baml_codegen::{GeneratorArgs, LanguageClientType};
+use std::path::PathBuf;
 
 #[cfg(feature = "internal")]
 pub use internal_baml_jinja::{BamlImage, ChatMessagePart, RenderedPrompt};
@@ -26,7 +33,6 @@ pub(crate) use internal_baml_jinja::{BamlImage, ChatMessagePart, RenderedPrompt}
 #[cfg(not(feature = "internal"))]
 pub(crate) use runtime_interface::InternalRuntimeInterface;
 
-use internal_baml_codegen::{GeneratorArgs, LanguageClientType};
 pub use internal_baml_core::internal_baml_diagnostics::Diagnostics as DiagnosticsError;
 
 pub struct BamlRuntime {
@@ -35,7 +41,7 @@ pub struct BamlRuntime {
 
 impl BamlRuntime {
     /// Load a runtime from a directory
-    #[cfg(feature = "disk")]
+    #[cfg(feature = "no_wasm")]
     pub fn from_directory(path: &PathBuf) -> Result<Self> {
         Ok(BamlRuntime {
             inner: InternalBamlRuntime::from_directory(path)?,
@@ -57,9 +63,9 @@ impl BamlRuntime {
     }
 }
 
-#[cfg(feature = "wasm")]
+#[cfg(not(feature = "no_wasm"))]
 type ResponseType<T> = Result<T, wasm_bindgen::JsValue>;
-#[cfg(not(feature = "wasm"))]
+#[cfg(feature = "no_wasm")]
 type ResponseType<T> = Result<T>;
 
 impl RuntimeInterface for BamlRuntime {
@@ -81,7 +87,7 @@ impl RuntimeInterface for BamlRuntime {
         self.inner.call_function(function_name, params, ctx).await
     }
 
-    #[cfg(feature = "disk")]
+    #[cfg(feature = "no_wasm")]
     fn generate_client(
         &self,
         client_type: &LanguageClientType,

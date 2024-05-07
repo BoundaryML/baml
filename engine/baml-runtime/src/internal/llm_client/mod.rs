@@ -9,8 +9,10 @@ pub mod traits;
 use anyhow::Result;
 use internal_baml_jinja::RenderedPrompt;
 
-#[cfg(feature = "network")]
+#[cfg(feature = "no_wasm")]
 use reqwest::StatusCode;
+
+#[cfg(not(feature = "no_wasm"))]
 use wasm_bindgen::JsValue;
 
 #[derive(Clone, Copy)]
@@ -31,9 +33,9 @@ pub enum LLMResponse {
     Success(LLMCompleteResponse),
     LLMFailure(LLMErrorResponse),
     Retry(RetryLLMResponse),
-    #[cfg(feature = "wasm")]
+    #[cfg(not(feature = "no_wasm"))]
     OtherFailures(JsValue),
-    #[cfg(not(feature = "wasm"))]
+    #[cfg(feature = "no_wasm")]
     OtherFailures(String),
 }
 
@@ -104,7 +106,7 @@ pub enum ErrorCode {
 }
 
 impl ErrorCode {
-    #[cfg(feature = "network")]
+    #[cfg(feature = "no_wasm")]
     pub fn from_status(status: StatusCode) -> Self {
         match status.as_u16() {
             401 => ErrorCode::InvalidAuthentication,

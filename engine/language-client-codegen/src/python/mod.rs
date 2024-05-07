@@ -5,7 +5,7 @@ use anyhow::Result;
 use askama::Template;
 use either::Either;
 use internal_baml_core::ir::{repr::IntermediateRepr, FieldType};
-use std::path::Path;
+
 
 use self::python_language_features::{PythonLanguageFeatures, ToPython};
 use crate::dir_writer::FileCollector;
@@ -99,12 +99,12 @@ impl TryFrom<&IntermediateRepr> for PythonClient {
                 };
                 let funcs = configs
                     .map(|c| {
-                        let (function, impl_) = c.item;
+                        let (_function, _impl_) = c.item;
                         Ok(PythonFunction {
                             name: f.name().to_string(),
                             return_type: f.elem().output().to_type_hint(),
                             args: match f.inputs() {
-                                either::Either::Left(args) => anyhow::bail!("Python codegen does not support unnamed args: please add names to all arguments of BAML function '{}'", f.name().to_string()),
+                                either::Either::Left(_args) => anyhow::bail!("Python codegen does not support unnamed args: please add names to all arguments of BAML function '{}'", f.name().to_string()),
                                 either::Either::Right(args) => args
                                     .iter()
                                     .map(|(name, r#type)| (name.to_string(), r#type.to_type_hint()))

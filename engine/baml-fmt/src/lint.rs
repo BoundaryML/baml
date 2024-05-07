@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use internal_baml_jinja::{
-    render_prompt, ChatMessagePart, RenderContext, RenderContext_Client, RenderedChatMessage,
+    ChatMessagePart, RenderContext, RenderContext_Client, RenderedChatMessage,
     TemplateStringMacro,
 };
 use serde::{Deserialize, Serialize};
@@ -342,7 +342,7 @@ fn choose_client(
 fn serialize_impls(
     schema: &ValidatedSchema,
     func: FunctionWalker,
-    template_string_macros: &[TemplateStringMacro],
+    _template_string_macros: &[TemplateStringMacro],
     selected_test_name: Option<&String>,
 ) -> Vec<Impl> {
     if func.is_old_function() {
@@ -396,8 +396,8 @@ fn serialize_impls(
             })
             .collect::<Vec<_>>()
     } else {
-        let prompt = func.metadata().prompt.as_ref().unwrap();
-        let (client_span, client_ctx, client_options) = choose_client(schema, func, None)
+        let _prompt = func.metadata().prompt.as_ref().unwrap();
+        let (_client_span, client_ctx, _client_options) = choose_client(schema, func, None)
             .unwrap_or((
                 ImplClient {
                     identifier: StringSpan::new(
@@ -420,10 +420,10 @@ fn serialize_impls(
         })
         .or(func.walk_tests().next());
 
-        let test_case_name = selected_test.map(|t| t.name().to_string());
+        let _test_case_name = selected_test.map(|t| t.name().to_string());
         // TODO: find out which properties in the testcase inputs are images, recursively.
 
-        let args = selected_test
+        let _args = selected_test
             .map(
                 // DO NOT LAND
                 |t| match serde_json::from_str(&t.test_case().content.to_string()) {
@@ -433,7 +433,7 @@ fn serialize_impls(
             )
             .unwrap_or(serde_json::Map::new());
 
-        let render_ctx = RenderContext {
+        let _render_ctx = RenderContext {
             client: client_ctx,
             output_format: func
                 .output_format(&schema.db, func.identifier().span())

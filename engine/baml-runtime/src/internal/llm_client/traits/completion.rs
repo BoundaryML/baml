@@ -3,9 +3,9 @@ use internal_baml_jinja::CompletionOptions;
 
 use crate::{internal::llm_client::LLMResponse, RuntimeContext};
 
-#[cfg(feature = "wasm")]
+#[cfg(not(feature = "no_wasm"))]
 type ResponseType = Result<LLMResponse, wasm_bindgen::JsValue>;
-#[cfg(not(feature = "wasm"))]
+#[cfg(feature = "no_wasm")]
 type ResponseType = Result<LLMResponse>;
 
 pub trait WithCompletion: Sync + Send {
@@ -42,14 +42,14 @@ where
         anyhow::bail!("Completion prompts are not supported by this provider")
     }
 
-    #[cfg(feature = "wasm")]
+    #[cfg(not(feature = "no_wasm"))]
     async fn completion(&self, _: &RuntimeContext, _: &String) -> ResponseType {
         Err(wasm_bindgen::JsValue::from_str(
             "Completion prompts are not supported by this provider",
         ))
     }
 
-    #[cfg(not(feature = "wasm"))]
+    #[cfg(feature = "no_wasm")]
     async fn completion(&self, _: &RuntimeContext, _: &String) -> ResponseType {
         anyhow::bail!("Completion prompts are not supported by this provider")
     }

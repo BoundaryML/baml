@@ -12,11 +12,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 anyhow.workspace = true
-baml-runtime = { path = "../baml-runtime", features = [
-  "network",
-  "disk",
-  "internal",
-] }
+baml-runtime = { path = "../baml-runtime", features = ["internal"] }
 internal-baml-codegen.workspace = true
 internal-baml-jinja = { path = "../baml-lib/jinja" }
 env_logger.workspace = true

@@ -487,7 +487,7 @@ fn parse_class(
 
                             match parse_class(scope, ir, env, name, Some(v)) {
                                 Ok(v) => complete_class.push(Ok(v)),
-                                Err(e) => {}
+                                Err(_e) => {}
                             };
 
                             approach1

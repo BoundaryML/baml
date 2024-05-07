@@ -2,7 +2,7 @@ use anyhow::Result;
 use internal_baml_core::internal_baml_diagnostics::Diagnostics;
 use internal_baml_core::ir::{repr::IntermediateRepr, FunctionWalker};
 use internal_baml_jinja::RenderedPrompt;
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     internal::{
@@ -14,8 +14,8 @@ use crate::{
 };
 
 pub(crate) trait RuntimeConstructor {
-    #[cfg(feature = "disk")]
-    fn from_directory(dir: &PathBuf) -> Result<InternalBamlRuntime>;
+    #[cfg(feature = "no_wasm")]
+    fn from_directory(dir: &std::path::PathBuf) -> Result<InternalBamlRuntime>;
 
     fn from_file_content<T: AsRef<str>>(
         root_path: &str,
@@ -23,9 +23,9 @@ pub(crate) trait RuntimeConstructor {
     ) -> Result<InternalBamlRuntime>;
 }
 
-#[cfg(feature = "wasm")]
+#[cfg(not(feature = "no_wasm"))]
 type ResponseType<T> = Result<T, wasm_bindgen::JsValue>;
-#[cfg(not(feature = "wasm"))]
+#[cfg(feature = "no_wasm")]
 type ResponseType<T> = Result<T>;
 
 // This is a runtime that has full access (disk, network, etc) - feature full
@@ -44,7 +44,7 @@ pub trait RuntimeInterface {
         ctx: &RuntimeContext,
     ) -> impl std::future::Future<Output = ResponseType<FunctionResult>>;
 
-    #[cfg(feature = "disk")]
+    #[cfg(feature = "no_wasm")]
     fn generate_client(
         &self,
         client_type: &internal_baml_codegen::LanguageClientType,

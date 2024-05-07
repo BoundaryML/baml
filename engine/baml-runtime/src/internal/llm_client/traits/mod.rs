@@ -17,9 +17,9 @@ pub trait WithRetryPolicy {
     fn retry_policy_name(&self) -> Option<&str>;
 }
 
-#[cfg(feature = "wasm")]
+#[cfg(not(feature = "no_wasm"))]
 type ResponseType = Result<LLMResponse, wasm_bindgen::JsValue>;
-#[cfg(not(feature = "wasm"))]
+#[cfg(feature = "no_wasm")]
 type ResponseType = Result<LLMResponse>;
 
 pub trait WithCallable: Send {
@@ -108,9 +108,16 @@ where
                         err.lock().unwrap().push(x);
                     }
                     Err(e) => {
-                        err.lock()
-                            .unwrap()
-                            .push(LLMResponse::OtherFailures(e.into()));
+                        err.lock().unwrap().push({
+                            #[cfg(not(feature = "no_wasm"))]
+                            {
+                                LLMResponse::OtherFailures(e.into())
+                            }
+                            #[cfg(feature = "no_wasm")]
+                            {
+                                LLMResponse::OtherFailures(e.to_string())
+                            }
+                        });
                     }
                 }
                 tokio::time::sleep(delay).await;
@@ -142,7 +149,16 @@ where
         } else {
             match self.single_call(ctx, prompt).await {
                 Ok(x) => x,
-                Err(e) => LLMResponse::OtherFailures(e.into()),
+                Err(e) => {
+                    #[cfg(not(feature = "no_wasm"))]
+                    {
+                        LLMResponse::OtherFailures(e.into())
+                    }
+                    #[cfg(feature = "no_wasm")]
+                    {
+                        LLMResponse::OtherFailures(e.to_string())
+                    }
+                }
             }
         }
     }
@@ -161,13 +177,13 @@ where
                 let prompt = match prompt {
                     RenderedPrompt::Completion(p) => p,
                     _ => {
-                        #[cfg(feature = "wasm")]
+                        #[cfg(not(feature = "no_wasm"))]
                         {
                             return Err(wasm_bindgen::JsValue::from_str(
                                 "Expected completion prompt",
                             ));
                         }
-                        #[cfg(not(feature = "wasm"))]
+                        #[cfg(feature = "no_wasm")]
                         {
                             anyhow::bail!("Expected completion prompt")
                         }
@@ -182,11 +198,11 @@ where
                 let prompt = match prompt {
                     RenderedPrompt::Chat(p) => p,
                     _ => {
-                        #[cfg(feature = "wasm")]
+                        #[cfg(not(feature = "no_wasm"))]
                         {
                             return Err(wasm_bindgen::JsValue::from_str("Expected chat prompt"));
                         }
-                        #[cfg(not(feature = "wasm"))]
+                        #[cfg(feature = "no_wasm")]
                         {
                             anyhow::bail!("Expected chat prompt")
                         }
@@ -205,11 +221,11 @@ where
                 completion: false,
                 chat: false,
             } => {
-                #[cfg(feature = "wasm")]
+                #[cfg(not(feature = "no_wasm"))]
                 {
                     Err(wasm_bindgen::JsValue::from_str("No model type supported"))
                 }
-                #[cfg(not(feature = "wasm"))]
+                #[cfg(feature = "no_wasm")]
                 {
                     anyhow::bail!("No model type supported")
                 }

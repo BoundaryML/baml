@@ -1,17 +1,10 @@
 mod runtime_ctx;
 mod runtime_prompt;
 
-use std::{
-    collections::{HashMap, HashSet},
-    ops::Deref,
-    path::PathBuf,
-};
+use std::collections::HashMap;
 
-use baml_runtime::{BamlRuntime, DiagnosticsError, RenderedPrompt, RuntimeInterface};
-use js_sys::{JsString, JSON};
+use baml_runtime::{BamlRuntime, DiagnosticsError, RuntimeInterface};
 use wasm_bindgen::prelude::*;
-use wasm_bindgen_futures::JsFuture;
-use web_sys::{Request, RequestInit, RequestMode, Response};
 
 use baml_runtime::InternalRuntimeInterface;
 
@@ -325,17 +318,14 @@ impl WasmFunction {
 
         let function_name = self.name.clone();
 
-        let res = rt.run_test(&function_name, &test_name, &ctx).await;
-        match res {
-            Ok(res) => match res.status() {
-                baml_runtime::TestStatus::Pass => {
-                    Ok(serde_wasm_bindgen::to_value(&serde_json::json!(true)).unwrap())
-                }
-                baml_runtime::TestStatus::Fail(e) => {
-                    Err(serde_wasm_bindgen::to_value(&format!("{:#?}", e)).unwrap())
-                }
-            },
-            Err(e) => Err(e),
+        let res = rt.run_test(&function_name, &test_name, &ctx).await?;
+        match res.status() {
+            baml_runtime::TestStatus::Pass => {
+                Ok(serde_wasm_bindgen::to_value(&serde_json::json!(true)).unwrap())
+            }
+            baml_runtime::TestStatus::Fail(e) => {
+                Err(serde_wasm_bindgen::to_value(&format!("{:#?}", e)).unwrap())
+            }
         }
     }
 }

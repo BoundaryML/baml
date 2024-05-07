@@ -578,7 +578,7 @@ mod render_tests {
     use super::*;
 
     use env_logger;
-    use std::{env::Args, sync::Once};
+    use std::{sync::Once};
 
     static INIT: Once = Once::new();
 
@@ -792,7 +792,7 @@ mod render_tests {
     fn render_completion() -> anyhow::Result<()> {
         setup_logging();
 
-        let args = context! {
+        let _args = context! {
             haiku_subject => "sakura"
         };
 
