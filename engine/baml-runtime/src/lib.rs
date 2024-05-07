@@ -64,9 +64,9 @@ impl BamlRuntime {
 }
 
 #[cfg(not(feature = "no_wasm"))]
-type ResponseType<T> = Result<T, wasm_bindgen::JsValue>;
+type ResponseType<T> = core::result::Result<T, wasm_bindgen::JsValue>;
 #[cfg(feature = "no_wasm")]
-type ResponseType<T> = Result<T>;
+type ResponseType<T> = anyhow::Result<T>;
 
 impl RuntimeInterface for BamlRuntime {
     async fn run_test(

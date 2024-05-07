@@ -14,9 +14,12 @@ use self::runtime_ctx::WasmRuntimeContext;
 
 #[wasm_bindgen(start)]
 pub fn on_wasm_init() {
-    console_log::init_with_level(log::Level::Debug);
-    web_sys::console::log_1(&"WASM initialized".into());
-    log::info!("initialized WASM from log::info!");
+    match console_log::init_with_level(log::Level::Debug) {
+        Ok(_) => web_sys::console::log_1(&"Initialized BAML runtime logging".into()),
+        Err(e) => web_sys::console::log_1(
+            &format!("Failed to initialize BAML runtime logging: {:?}", e).into(),
+        ),
+    }
 }
 
 #[wasm_bindgen]
