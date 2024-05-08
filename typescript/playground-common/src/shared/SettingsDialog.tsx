@@ -42,23 +42,23 @@ const envvarsAtom = atom(
   },
 )
 
-const EnvvarKeyInput: React.FC<InputProps> = ({ className, type, ...props }) => {
-  const requiredEnvvars = useAtomValue(runtimeRequiredEnvVarsAtom)
-  if (requiredEnvvars.includes(props.formData.value)) {
-    return (
-      <div className='bg-grey-500 font-mono outline-none focus:outline focus:outline-1 focus:outline-white'>
-        {props.formData.value}
-      </div>
-    )
-  }
-  return (
-    <Input
-      {...props}
-      className='bg-grey-500 font-mono outline-none focus:outline focus:outline-1 focus:outline-white'
-      autoComplete='none'
-    />
-  )
-}
+// const EnvvarKeyInput: React.FC<InputProps> = ({ className, type, ...props }) => {
+//   const requiredEnvvars = useAtomValue(runtimeRequiredEnvVarsAtom)
+//   if (requiredEnvvars.includes(props.formData)) {
+//     return (
+//       <div className='bg-grey-500 font-mono outline-none focus:outline focus:outline-1 focus:outline-white'>
+//         {props.formData.value}
+//       </div>
+//     )
+//   }
+//   return (
+//     <Input
+//       {...props}
+//       className='bg-grey-500 font-mono outline-none focus:outline focus:outline-1 focus:outline-white'
+//       autoComplete='none'
+//     />
+//   )
+// }
 
 const EnvvarValueInput: React.FC<InputProps> = ({ className, type, ...props }) => {
   const showEnvvarValues = useAtomValue(showEnvvarValuesAtom)

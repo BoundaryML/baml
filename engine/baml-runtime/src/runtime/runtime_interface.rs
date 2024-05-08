@@ -248,6 +248,8 @@ impl RuntimeInterface for InternalBamlRuntime {
 
         let response = client.call(retry_policy, ctx, &prompt).await;
 
+        log::debug!("RESPONSE: {:#?}", response);
+
         // We need to get the function again because self is borrowed mutably.
         let func = self.get_function(function_name, ctx)?;
         let parsed = self.parse_response(&func, response, ctx)?;

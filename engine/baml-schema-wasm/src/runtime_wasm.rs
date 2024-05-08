@@ -306,18 +306,7 @@ impl WasmTestResponse {
     #[wasm_bindgen]
     pub fn llm_failure(&self) -> Option<WasmLLMFailure> {
         match &self.test_response.function_response {
-            Ok(f) => match &f.llm_response {
-                LLMResponse::LLMFailure(f) => Some(WasmLLMFailure {
-                    client: f.client.clone(),
-                    model: f.model.clone(),
-                    prompt: f.prompt.clone(),
-                    start_time_unix_ms: f.start_time_unix_ms,
-                    latency_ms: f.latency_ms,
-                    message: f.message.clone(),
-                    code: f.code.to_string(),
-                }),
-                _ => None,
-            },
+            Ok(f) => llm_response_to_wasm_error(&f.llm_response),
             Err(_) => None,
         }
     }
@@ -338,6 +327,27 @@ impl WasmTestResponse {
         }
     }
 }
+
+fn llm_response_to_wasm_error(
+    r: &baml_runtime::internal::llm_client::LLMResponse,
+) -> Option<WasmLLMFailure> {
+    match &r {
+        LLMResponse::LLMFailure(f) => Some(WasmLLMFailure {
+            client: f.client.clone(),
+            model: f.model.clone(),
+            prompt: f.prompt.clone(),
+            start_time_unix_ms: f.start_time_unix_ms,
+            latency_ms: f.latency_ms,
+            message: f.message.clone(),
+            code: f.code.to_string(),
+        }),
+        LLMResponse::Retry(f) if f.passed.is_none() => {
+            f.failed.last().and_then(|e| llm_response_to_wasm_error(e))
+        }
+        _ => None,
+    }
+}
+
 trait IntoWasm {
     type Output;
     fn into_wasm(&self) -> Self::Output;

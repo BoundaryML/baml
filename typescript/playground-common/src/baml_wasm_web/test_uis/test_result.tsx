@@ -85,16 +85,17 @@ const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStat
 
   return (
     <div className='flex flex-col gap-1 w-full'>
-      {failure && doneStatus !== 'parse_failed' && doneStatus !== 'llm_failed' && (
-        <div className='text-xs text-vscode-errorForeground'>{failure}</div>
-      )}
+      {failure &&
+        !(doneStatus === 'parse_failed' || (doneStatus === 'llm_failed' && (llm_response || llm_failure))) && (
+          <div className='text-xs text-vscode-errorForeground'>{failure}</div>
+        )}
       {(llm_response || llm_failure) && (
         <div className='text-xs text-vscode-descriptionForeground w-full'>
           <div>
             Took <b>{latencyMs?.toString()}ms</b> using <b>{client}</b> {model && <>(model: {model})</>}
           </div>
           <div className='flex flex-row gap-2'>
-            <div className='w-1/2 flex flex-col'>
+            <div className='flex flex-col'>
               Raw LLM Response:
               {llm_response && (
                 <pre className='whitespace-pre-wrap bg-vscode-input-background py-2 px-1'>{llm_response.content}</pre>
@@ -108,7 +109,7 @@ const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStat
               )}
             </div>
             {(doneStatus === 'parse_failed' || parsed !== undefined) && (
-              <div className='w-1/2 flex flex-col'>
+              <div className='flex flex-col'>
                 Parsed LLM Response:
                 <div className='px-1 py-2'>
                   {failure && <pre className='text-xs text-vscode-errorForeground whitespace-pre-wrap'>{failure}</pre>}
