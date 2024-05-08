@@ -42,7 +42,7 @@ import { CodeMirrorEditor } from './CodeMirrorEditor'
 import { ExploreProjects } from './ExploreProjects'
 import { GithubStars } from './GithubStars'
 import { InitialTour, PostTestRunTour } from './Tour'
-import SettingsDialog, { showSettingsAtom } from '@baml/playground-common/shared/SettingsDialog'
+import SettingsDialog, { ShowSettingsButton, showSettingsAtom } from '@baml/playground-common/shared/SettingsDialog'
 import { SettingsIcon } from 'lucide-react'
 import FileViewer from './Tree/FileViewer'
 
@@ -370,10 +370,14 @@ const PlaygroundView = () => {
             <div className='relative flex flex-col gap-2'>
               <div className='relative flex flex-row gap-2'>
                 <FunctionSelector />
-                <div className='relative flex flex-row items-end'>
-                  <Button className='h-8' onClick={() => setShowSettings(true)}>
+                <div className='relative flex flex-row grow items-center justify-end gap-2 pr-1'>
+                  <Button
+                    className='h-8 bg-black/70 hover:bg-white text-white hover:text-black'
+                    onClick={() => setShowSettings(true)}
+                  >
                     <SettingsIcon className='h-8' />
                   </Button>
+                  <ShowSettingsButton />
                 </div>
               </div>
 

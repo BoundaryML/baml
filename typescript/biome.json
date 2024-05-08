@@ -1,21 +1,7 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
-  "organizeImports": {
-    "enabled": true
-  },
   "files": {
     "ignore": ["*/.next/*", "*.json"]
-  },
-  "vcs": {
-    "enabled": true,
-    "clientKind": "git",
-    "useIgnoreFile": true
-  },
-  "linter": {
-    "enabled": true,
-    "rules": {
-      "recommended": false
-    }
   },
   "formatter": {
     "enabled": true,
@@ -25,11 +11,6 @@
     "lineEnding": "lf",
     "lineWidth": 120
   },
-  "json": {
-    "formatter": {
-      "enabled": false
-    }
-  },
   "javascript": {
     "formatter": {
       "quoteStyle": "single",
@@ -37,5 +18,24 @@
       "semicolons": "asNeeded",
       "trailingComma": "all"
     }
+  },
+  "json": {
+    "formatter": {
+      "enabled": false
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": false
+    }
+  },
+  "organizeImports": {
+    "enabled": true
+  },
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
   }
 }

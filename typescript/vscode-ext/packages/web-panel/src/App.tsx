@@ -15,7 +15,7 @@ import { Separator } from './components/ui/separator'
 import FunctionPanel from './shared/FunctionPanel'
 import { ProjectToggle } from './shared/ProjectPanel'
 import { FunctionSelector } from './shared/Selectors'
-import SettingsDialog, { showSettingsAtom } from './shared/SettingsDialog'
+import SettingsDialog, { ShowSettingsButton, showSettingsAtom } from './shared/SettingsDialog'
 import CustomErrorBoundary from './utils/ErrorFallback'
 import 'jotai-devtools/styles.css'
 import { SettingsIcon } from 'lucide-react'
@@ -49,6 +49,7 @@ function App() {
             <Button className='h-4' onClick={() => setShowSettings(true)}>
               <SettingsIcon className='h-4' />
             </Button>
+            <ShowSettingsButton />
           </div>
           <SettingsDialog />
           <div className='flex flex-col gap-2 px-2 pb-4'>

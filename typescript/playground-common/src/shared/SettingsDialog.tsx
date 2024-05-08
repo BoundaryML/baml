@@ -1,18 +1,25 @@
+import React from 'react'
 import { Button } from '@/components/ui/button'
-import { zodResolver } from '@hookform/resolvers/zod'
+import { Input, InputProps } from '../components/ui/input'
 import Form from '@rjsf/core'
-import type { FieldTemplateProps, IconButtonProps, ObjectFieldTemplateProps, RJSFSchema, UiSchema } from '@rjsf/utils'
+import type {
+  ArrayFieldTemplateItemType,
+  FieldTemplateProps,
+  IconButtonProps,
+  ObjectFieldTemplateProps,
+  RJSFSchema,
+  UiSchema,
+} from '@rjsf/utils'
 import validator from '@rjsf/validator-ajv8'
-import { atom, useAtom, useAtomValue } from 'jotai'
+import { atom, useAtom, useSetAtom, useAtomValue } from 'jotai'
 import { atomWithStorage, createJSONStorage } from 'jotai/utils'
-import { PlusIcon, Trash2Icon } from 'lucide-react'
-import type React from 'react'
-import { useForm } from 'react-hook-form'
-import z from 'zod'
+import { EyeOffIcon as HideIcon, EyeIcon as ShowIcon, PlusIcon, SettingsIcon, Trash2Icon } from 'lucide-react'
 import { envvarStorageAtom, runtimeRequiredEnvVarsAtom } from '../baml_wasm_web/EventListener'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
+import clsx from 'clsx'
 
-const showSettingsAtom = atom(true)
+export const showSettingsAtom = atom(true)
+export const showEnvvarValuesAtom = atom(false)
 
 const envvarsAtom = atom(
   (get) => {
@@ -23,10 +30,47 @@ const envvarsAtom = atom(
 
     return Object.entries(allEnvvars).map(([key, value]) => ({ key, value }))
   },
-  (get, set, envvarsFormData: { key: string; value: string }[]) => {
-    set(envvarStorageAtom, Object.fromEntries(envvarsFormData.map(({ key, value }) => [key, value])))
+  (get, set, envvarsFormData: { key?: string; value?: string }[]) => {
+    set(
+      envvarStorageAtom,
+      Object.fromEntries(
+        envvarsFormData
+          .filter(({ key }) => typeof key === 'string' && key.length)
+          .map(({ key, value }) => [key, value]),
+      ),
+    )
   },
 )
+
+const EnvvarKeyInput: React.FC<InputProps> = ({ className, type, ...props }) => {
+  const requiredEnvvars = useAtomValue(runtimeRequiredEnvVarsAtom)
+  if (requiredEnvvars.includes(props.value as string)) {
+    return (
+      <div className='bg-grey-500 font-mono outline-none focus:outline focus:outline-1 focus:outline-white'>
+        {props.value}
+      </div>
+    )
+  }
+  return (
+    <Input
+      {...props}
+      className='bg-grey-500 font-mono outline-none focus:outline focus:outline-1 focus:outline-white'
+      autoComplete='none'
+    />
+  )
+}
+
+const EnvvarValueInput: React.FC<InputProps> = ({ className, type, ...props }) => {
+  const showEnvvarValues = useAtomValue(showEnvvarValuesAtom)
+  return (
+    <Input
+      {...props}
+      className='bg-grey-500 font-mono outline-none focus:outline focus:outline-1 focus:outline-white'
+      autoComplete='off'
+      type={showEnvvarValues ? 'text' : 'password'}
+    />
+  )
+}
 
 const schema: RJSFSchema = {
   type: 'array',
@@ -50,33 +94,59 @@ const uiSchema: UiSchema = {
     'ui:classNames': 'flex flex-row',
     key: {
       'ui:FieldTemplate': EnvvarFieldTemplate,
+      'ui:widget': EnvvarKeyInput,
     },
     value: {
       'ui:FieldTemplate': EnvvarFieldTemplate,
-      'ui:widget': 'password',
+      'ui:widget': EnvvarValueInput,
     },
+  },
+  'ui:options': {
+    orderable: false,
   },
   'ui:submitButtonOptions': {
     norender: true,
   },
 }
 
-function EnvvarFieldTemplate(props: FieldTemplateProps) {
-  const { children } = props
-  return <div className='font-mono'>{children}</div>
+function ArrayFieldItemTemplate(props: ArrayFieldTemplateItemType) {
+  const requiredEnvvars = useAtomValue(runtimeRequiredEnvVarsAtom)
+  const { children, className, index, onDropIndexClick } = props
+  const fieldItemIsRequired = requiredEnvvars.includes(children.props.formData.key)
+  return (
+    <div className='flex flex-row items-center'>
+      {children}
+      <div className='grow'>
+        {fieldItemIsRequired ? (
+          <p className='justify-self-end text-xs'>(required)</p>
+        ) : (
+          <Button
+            size={'icon'}
+            className='!flex flex-col !px-0 !py-0 hover:bg-red-700 h-fit !max-w-[48px] ml-auto'
+            onClick={onDropIndexClick(index)}
+            disabled={fieldItemIsRequired}
+          >
+            <Trash2Icon size={14} />
+          </Button>
+        )}
+      </div>
+    </div>
+  )
 }
 
-const EnvVarFieldTemplate = (props: ObjectFieldTemplateProps) => {
+function EnvvarFieldTemplate(props: FieldTemplateProps) {
+  const { children } = props
+  return children
+}
+
+const EnvvarEntryTemplate = (props: ObjectFieldTemplateProps) => {
   const requiredEnvvars = useAtomValue(runtimeRequiredEnvVarsAtom)
   const renderedProps = []
 
   for (const { name, content } of props.properties) {
-    if (name === 'key' && requiredEnvvars.includes(content.props.formData)) {
-      renderedProps.push(<p>(required)</p>)
-    }
     renderedProps.push(content)
     if (name === 'key') {
-      renderedProps.push(<p>=</p>)
+      renderedProps.push(<p className='h-4'>=</p>)
     }
   }
   return <div className='flex flex-row'>{renderedProps}</div>
@@ -111,8 +181,17 @@ function RemoveButton(props: IconButtonProps) {
   )
 }
 
+export const ShowSettingsButton: React.FC = () => {
+  const setShowSettings = useSetAtom(showSettingsAtom)
+  return (
+    <Button className='h-4' onClick={() => setShowSettings(true)}>
+      <SettingsIcon className='h-4' />
+    </Button>
+  )
+}
 export const SettingsDialog: React.FC = () => {
   const [showSettings, setShowSettings] = useAtom(showSettingsAtom)
+  const [showEnvvarValues, setShowEnvvarValues] = useAtom(showEnvvarValuesAtom)
   const duplicate = false
 
   const [envvars, setEnvvars] = useAtom(envvarsAtom)
@@ -120,17 +199,27 @@ export const SettingsDialog: React.FC = () => {
   return (
     <Dialog open={showSettings} onOpenChange={setShowSettings}>
       <DialogContent className='overflow-y-scroll max-h-screen bg-vscode-editorWidget-background border-vscode-textSeparator-foreground overflow-x-clip'>
-        <DialogHeader className='flex flex-row gap-x-4 items-center'>
+        <DialogHeader className='flex flex-row gap-x-4 items-end'>
           <DialogTitle className='text-s font-semibold'>Environment variables</DialogTitle>
+          <Button
+            variant='ghost'
+            size='icon'
+            className='flex flex-row items-center p-1 text-xs w-fit h-fit gap-x-2 hover:bg-vscode-descriptionForeground'
+            onClick={() => setShowEnvvarValues((prev) => !prev)}
+          >
+            {showEnvvarValues ? <ShowIcon className='h-4' /> : <HideIcon className='h-4' />}
+          </Button>
         </DialogHeader>
         <Form
+          autoComplete='off'
           schema={schema}
           uiSchema={uiSchema}
           validator={validator}
           formData={envvars}
           onChange={(d) => setEnvvars(d.formData)}
           templates={{
-            ObjectFieldTemplate: EnvVarFieldTemplate,
+            ObjectFieldTemplate: EnvvarEntryTemplate,
+            ArrayFieldItemTemplate,
             ButtonTemplates: {
               AddButton,
               RemoveButton,
@@ -143,5 +232,3 @@ export const SettingsDialog: React.FC = () => {
 }
 
 export default SettingsDialog
-
-export { showSettingsAtom }
