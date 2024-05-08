@@ -13,7 +13,14 @@ import type {
 import validator from '@rjsf/validator-ajv8'
 import { atom, useAtom, useSetAtom, useAtomValue } from 'jotai'
 import { atomWithStorage, createJSONStorage } from 'jotai/utils'
-import { EyeOffIcon as HideIcon, EyeIcon as ShowIcon, PlusIcon, SettingsIcon, Trash2Icon } from 'lucide-react'
+import {
+  EyeOffIcon as HideIcon,
+  EyeIcon as ShowIcon,
+  EqualIcon,
+  PlusIcon,
+  SettingsIcon,
+  Trash2Icon,
+} from 'lucide-react'
 import { envvarStorageAtom, runtimeRequiredEnvVarsAtom } from '../baml_wasm_web/EventListener'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
 import clsx from 'clsx'
@@ -42,23 +49,24 @@ const envvarsAtom = atom(
   },
 )
 
-// const EnvvarKeyInput: React.FC<InputProps> = ({ className, type, ...props }) => {
-//   const requiredEnvvars = useAtomValue(runtimeRequiredEnvVarsAtom)
-//   if (requiredEnvvars.includes(props.formData)) {
-//     return (
-//       <div className='bg-grey-500 font-mono outline-none focus:outline focus:outline-1 focus:outline-white'>
-//         {props.formData.value}
-//       </div>
-//     )
-//   }
-//   return (
-//     <Input
-//       {...props}
-//       className='bg-grey-500 font-mono outline-none focus:outline focus:outline-1 focus:outline-white'
-//       autoComplete='none'
-//     />
-//   )
-// }
+const EnvvarKeyInput: React.FC<InputProps> = ({ className, type, ...props }) => {
+  console.log('envvar key input', props)
+  const requiredEnvvars = useAtomValue(runtimeRequiredEnvVarsAtom)
+  if (typeof props.value === 'string' && requiredEnvvars.includes(props.value)) {
+    //  return (
+    //    <div className='bg-grey-500 font-mono outline-none focus:outline focus:outline-1 focus:outline-white'>
+    //      {props.value}
+    //    </div>
+    //  )
+  }
+  return (
+    <Input
+      {...props}
+      className='bg-grey-500 font-mono outline-none focus:outline focus:outline-1 focus:outline-white'
+      autoComplete='none'
+    />
+  )
+}
 
 const EnvvarValueInput: React.FC<InputProps> = ({ className, type, ...props }) => {
   const showEnvvarValues = useAtomValue(showEnvvarValuesAtom)
@@ -93,12 +101,12 @@ const uiSchema: UiSchema = {
   items: {
     'ui:classNames': 'flex flex-row',
     key: {
-      //'ui:FieldTemplate': EnvvarFieldTemplate,
-      //'ui:widget': EnvvarKeyInput,
+      'ui:FieldTemplate': EnvvarFieldTemplate,
+      'ui:widget': EnvvarKeyInput,
     },
     value: {
-      //'ui:FieldTemplate': EnvvarFieldTemplate,
-      //'ui:widget': EnvvarValueInput,
+      'ui:FieldTemplate': EnvvarFieldTemplate,
+      'ui:widget': EnvvarValueInput,
     },
   },
   'ui:options': {
@@ -114,15 +122,15 @@ function ArrayFieldItemTemplate(props: ArrayFieldTemplateItemType) {
   const { key, children, className, index, onDropIndexClick } = props
   const fieldItemIsRequired = requiredEnvvars.includes(children.props.formData.key)
   return (
-    <div key={key} className='flex flex-row items-center'>
+    <div key={key} className='flex flex-row items-center gap-2 border-none pb-2'>
       {children}
       <div className='grow'>
         {fieldItemIsRequired ? (
-          <p className='justify-self-end text-xs'>(required)</p>
+          <p className='justify-self-end text-xs min-w-24'>(used in BAML)</p>
         ) : (
           <Button
             size={'icon'}
-            className='!flex flex-col !px-0 !py-0 hover:bg-red-700 h-fit !max-w-[48px] ml-auto'
+            className='!flex flex-col p-1 text-color-white bg-transparent hover:bg-red-600 h-fit !max-w-[48px] ml-auto'
             onClick={onDropIndexClick(index)}
             disabled={fieldItemIsRequired}
           >
@@ -140,16 +148,15 @@ function EnvvarFieldTemplate(props: FieldTemplateProps) {
 }
 
 const EnvvarEntryTemplate = (props: ObjectFieldTemplateProps) => {
-  const requiredEnvvars = useAtomValue(runtimeRequiredEnvVarsAtom)
   const renderedProps = []
 
   for (const { name, content } of props.properties) {
     renderedProps.push(content)
     if (name === 'key') {
-      renderedProps.push(<p className='h-4'>=</p>)
+      renderedProps.push(<div className='h-9 py-1'>=</div>)
     }
   }
-  return <div className='flex flex-row'>{renderedProps}</div>
+  return <div className='flex flex-row items-center'>{renderedProps}</div>
 }
 
 function AddButton(props: IconButtonProps) {
@@ -220,6 +227,8 @@ export const SettingsDialog: React.FC = () => {
           formData={envvars}
           onChange={(d) => setEnvvars(d.formData)}
           templates={{
+            ObjectFieldTemplate: EnvvarEntryTemplate,
+            ArrayFieldItemTemplate,
             ButtonTemplates: {
               AddButton,
               RemoveButton,
@@ -231,6 +240,4 @@ export const SettingsDialog: React.FC = () => {
   )
 }
 
-//ObjectFieldTemplate: EnvvarEntryTemplate,
-//ArrayFieldItemTemplate,
 export default SettingsDialog
