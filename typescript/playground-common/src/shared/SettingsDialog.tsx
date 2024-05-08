@@ -130,14 +130,11 @@ function ArrayFieldItemTemplate(props: ArrayFieldTemplateItemType) {
     <div key={key} className='flex flex-row items-center gap-2 border-none pb-2'>
       {children}
       <div className='grow'>
-        {fieldItemIsRequired ? (
-          <p className='justify-self-end text-xs min-w-24'>(used in BAML)</p>
-        ) : (
+        {!fieldItemIsRequired && (
           <Button
             size={'icon'}
             className='!flex flex-col px-2 py-2 mr-2 text-color-white bg-transparent hover:bg-red-600 h-fit !max-w-[48px] ml-auto'
             onClick={onDropIndexClick(index)}
-            disabled={fieldItemIsRequired}
           >
             <Trash2Icon size={14} />
           </Button>
