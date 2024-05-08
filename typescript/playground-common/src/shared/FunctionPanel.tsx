@@ -87,7 +87,7 @@ const FunctionPanel: React.FC = () => {
     >
       <TooltipProvider>
         <ResizablePanelGroup direction='vertical' className='h-full'>
-          <ResizablePanel id='top-panel' className='flex w-full' defaultSize={85}>
+          <ResizablePanel id='top-panel' className='flex w-full' defaultSize={50}>
             <div className='w-full'>
               <ResizablePanelGroup direction='horizontal' className='h-full'>
                 <ResizablePanel defaultSize={60} className='px-2 overflow-y-auto'>

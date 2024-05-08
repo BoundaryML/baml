@@ -32,7 +32,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip'
 import clsx from 'clsx'
 
-export const showSettingsAtom = atom(true)
+export const showSettingsAtom = atom(false)
 const showEnvvarValuesAtom = atom(false)
 
 const envvarsAtom = atom(
@@ -254,6 +254,11 @@ export const SettingsDialog: React.FC = () => {
             {showEnvvarValues ? <ShowIcon className='h-4' /> : <HideIcon className='h-4' />}
           </Button>
         </DialogHeader>
+
+        <p className='text-sm text-vscode-descriptionForeground'>
+          Environment variables are loaded lazily. If a test/client/prompt requires an environment variable that is
+          unset, it will raise an error.
+        </p>
         <Form
           autoComplete='off'
           schema={schema}
