@@ -371,13 +371,10 @@ const PlaygroundView = () => {
               <div className='relative flex flex-row gap-2'>
                 <FunctionSelector />
                 <div className='relative flex flex-row grow items-center justify-end gap-2 pr-1'>
-                  <Button
-                    className='h-8 bg-black/70 hover:bg-white text-white hover:text-black'
-                    onClick={() => setShowSettings(true)}
-                  >
-                    <SettingsIcon className='h-8' />
-                  </Button>
-                  <ShowSettingsButton />
+                  <ShowSettingsButton
+                    buttonClassName='h-8 px-2 bg-black/70 hover:bg-white text-white hover:text-black'
+                    iconClassName='h-5'
+                  />
                 </div>
               </div>
 

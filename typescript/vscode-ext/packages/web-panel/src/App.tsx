@@ -46,10 +46,7 @@ function App() {
           <div className='absolute z-10 flex flex-row items-end gap-1 right-1 top-2 text-end'>
             <TestToggle />
             <VSCodeLink href='https://docs.boundaryml.com'>Docs</VSCodeLink>
-            <Button className='h-4' onClick={() => setShowSettings(true)}>
-              <SettingsIcon className='h-4' />
-            </Button>
-            <ShowSettingsButton />
+            <ShowSettingsButton buttonClassName='h-4' iconClassName='h-4' />
           </div>
           <SettingsDialog />
           <div className='flex flex-col gap-2 px-2 pb-4'>

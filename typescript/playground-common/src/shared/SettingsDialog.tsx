@@ -44,10 +44,10 @@ const envvarsAtom = atom(
 
 const EnvvarKeyInput: React.FC<InputProps> = ({ className, type, ...props }) => {
   const requiredEnvvars = useAtomValue(runtimeRequiredEnvVarsAtom)
-  if (requiredEnvvars.includes(props.value as string)) {
+  if (requiredEnvvars.includes(props.formData.value)) {
     return (
       <div className='bg-grey-500 font-mono outline-none focus:outline focus:outline-1 focus:outline-white'>
-        {props.value}
+        {props.formData.value}
       </div>
     )
   }
@@ -93,12 +93,12 @@ const uiSchema: UiSchema = {
   items: {
     'ui:classNames': 'flex flex-row',
     key: {
-      'ui:FieldTemplate': EnvvarFieldTemplate,
-      'ui:widget': EnvvarKeyInput,
+      //'ui:FieldTemplate': EnvvarFieldTemplate,
+      //'ui:widget': EnvvarKeyInput,
     },
     value: {
-      'ui:FieldTemplate': EnvvarFieldTemplate,
-      'ui:widget': EnvvarValueInput,
+      //'ui:FieldTemplate': EnvvarFieldTemplate,
+      //'ui:widget': EnvvarValueInput,
     },
   },
   'ui:options': {
@@ -111,10 +111,10 @@ const uiSchema: UiSchema = {
 
 function ArrayFieldItemTemplate(props: ArrayFieldTemplateItemType) {
   const requiredEnvvars = useAtomValue(runtimeRequiredEnvVarsAtom)
-  const { children, className, index, onDropIndexClick } = props
+  const { key, children, className, index, onDropIndexClick } = props
   const fieldItemIsRequired = requiredEnvvars.includes(children.props.formData.key)
   return (
-    <div className='flex flex-row items-center'>
+    <div key={key} className='flex flex-row items-center'>
       {children}
       <div className='grow'>
         {fieldItemIsRequired ? (
@@ -181,18 +181,20 @@ function RemoveButton(props: IconButtonProps) {
   )
 }
 
-export const ShowSettingsButton: React.FC = () => {
+export const ShowSettingsButton: React.FC<{ buttonClassName: string; iconClassName: string }> = ({
+  buttonClassName,
+  iconClassName,
+}) => {
   const setShowSettings = useSetAtom(showSettingsAtom)
   return (
-    <Button className='h-4' onClick={() => setShowSettings(true)}>
-      <SettingsIcon className='h-4' />
+    <Button className={buttonClassName} onClick={() => setShowSettings(true)}>
+      <SettingsIcon className={iconClassName} />
     </Button>
   )
 }
 export const SettingsDialog: React.FC = () => {
   const [showSettings, setShowSettings] = useAtom(showSettingsAtom)
   const [showEnvvarValues, setShowEnvvarValues] = useAtom(showEnvvarValuesAtom)
-  const duplicate = false
 
   const [envvars, setEnvvars] = useAtom(envvarsAtom)
 
@@ -218,8 +220,6 @@ export const SettingsDialog: React.FC = () => {
           formData={envvars}
           onChange={(d) => setEnvvars(d.formData)}
           templates={{
-            ObjectFieldTemplate: EnvvarEntryTemplate,
-            ArrayFieldItemTemplate,
             ButtonTemplates: {
               AddButton,
               RemoveButton,
@@ -231,4 +231,6 @@ export const SettingsDialog: React.FC = () => {
   )
 }
 
+//ObjectFieldTemplate: EnvvarEntryTemplate,
+//ArrayFieldItemTemplate,
 export default SettingsDialog
