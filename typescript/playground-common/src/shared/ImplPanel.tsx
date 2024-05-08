@@ -79,9 +79,9 @@ const renderLine = ({
     }
   })
   return showWhitespace ? (
-    <div className={clsx('flex text-xs', { 'flex-wrap': wrapText })}>{formattedText}</div>
+    <div className={clsx('inline-flex text-xs', { 'flex-wrap': wrapText })}>{formattedText}</div>
   ) : (
-    <>{formattedText}</>
+    <div className='whitespace-pre-wrap'>{formattedText}</div>
   )
 }
 
@@ -103,27 +103,30 @@ const CodeLine: React.FC<{
   const isTokenized = Array.isArray(line[0])
 
   if (Array.isArray(line)) {
+    console.log('line', line)
     return (
-      <div>
+      <div className='flex flex-row items-start'>
         {lineNumberSpan}
-        {line.map(([token, tokenIndex], index) => (
-          <span
-            className={clsx('font-mono text-xs', TOKEN_BG_STYLES[tokenIndex % TOKEN_BG_STYLES.length], {
-              'whitespace-pre-wrap': wrapText || isTokenized,
-              'text-white': isTokenized,
-              "after:content-['↵']": index === line.length - 1,
-              'after:opacity-50': index === line.length - 1,
-            })}
-          >
-            {renderLine({ text: token, showWhitespace, wrapText })}
-          </span>
-        ))}
+        <div className='text-wrap'>
+          {line.map(([token, tokenIndex], index) => (
+            <span
+              className={clsx('inline-flex font-mono text-xs', TOKEN_BG_STYLES[tokenIndex % TOKEN_BG_STYLES.length], {
+                'whitespace-pre-wrap': wrapText || isTokenized,
+                'text-white': isTokenized,
+                "after:content-['↵']": index === line.length - 1,
+                'after:opacity-50': index === line.length - 1,
+              })}
+            >
+              {renderLine({ text: token, showWhitespace, wrapText })}
+            </span>
+          ))}
+        </div>
       </div>
     )
   }
 
   return (
-    <div>
+    <div className='flex flex-row items-start'>
       {lineNumberSpan}
       <span className={clsx('inline-block font-mono text-xs', { 'whitespace-pre-wrap': wrapText })}>
         {renderLine({ text: line, showWhitespace, wrapText })}
@@ -212,7 +215,7 @@ export const Snippet: React.FC<{
       {showTokens && encodingName && tokenizer && (
         <Tooltip delayDuration={0}>
           <TooltipTrigger asChild>
-            <div className='flex-grow r-full ps-2 pt-1.5'>{(tokenizer.tokens as []).length} tokens</div>
+            <div className='flex-grow r-full ps-2 p-0'>{(tokenizer.tokens as []).length} tokens</div>
           </TooltipTrigger>
           <TooltipContent className='flex flex-col gap-y-1'>
             Tokenizer {encodingName} for model {client.model}
