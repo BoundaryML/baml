@@ -21,6 +21,7 @@ export const envvarStorageAtom = atomWithStorage<{ key: string; value: string }[
   [],
   sessionStore,
 )
+envvarStorageAtom.debugLabel = 'envvarStorageAtom'
 
 type Selection = {
   project?: string
@@ -57,10 +58,9 @@ export const runtimeCtx = atom((get) => {
     if (key) ctx.set_env(key, value)
   }
 
-  console.debug('test BAML: runtime context created')
-
   return ctx
 })
+runtimeCtx.debugLabel = 'runtimeCtx'
 
 const selectedProjectAtom = atom(
   (get) => {

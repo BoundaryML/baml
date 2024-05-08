@@ -378,10 +378,9 @@ const TestCaseList: React.FC = () => {
       <hr className=' border-muted-foreground w-full' />
       <div className='flex flex-col gap-1 overflow-y-auto h-full'>
         {testCases.map((test) => (
-          <div className='flex flex-row gap-2 items-start group'>
+          <div key={test.name} className='flex flex-row gap-2 items-start group'>
             <TestCaseActions testName={test.name} />
             <div
-              key={test.name}
               className={clsx(
                 'flex flex-col gap-1 p-1 w-full',
                 selectedTestCase?.name !== test.name ? 'cursor-pointer hover:bg-vscode-input-background' : '',
