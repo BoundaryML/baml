@@ -330,7 +330,8 @@ const TestCaseList: React.FC = () => {
   const testCases = useMemo(() => {
     return allTestCases.filter((t) => t.name.includes(filter) || t.inputs.some((i) => i.value?.includes(filter)))
   }, [allTestCases, filter])
-  const setSelectedTestCase = useSetAtom(selectedTestCaseAtom)
+
+  const [selectedTestCase, setSelectedTestCase] = useAtom(selectedTestCaseAtom)
 
   const { isRunning, run } = useRunHooks()
 
@@ -377,10 +378,17 @@ const TestCaseList: React.FC = () => {
             <TestCaseActions testName={test.name} />
             <div
               key={test.name}
-              className='flex flex-col gap-1 cursor-pointer p-1 w-full hover:bg-vscode-input-background'
-              onClick={() => {
-                setSelectedTestCase(test.name)
-              }}
+              className={clsx(
+                'flex flex-col gap-1 p-1 w-full',
+                selectedTestCase?.name !== test.name ? 'cursor-pointer hover:bg-vscode-input-background' : '',
+              )}
+              onClick={
+                selectedTestCase?.name === test.name
+                  ? undefined
+                  : () => {
+                      setSelectedTestCase(test.name)
+                    }
+              }
             >
               <div className='text-xs'>{test.name}</div>
               <TestCaseCard test_case={test} />
