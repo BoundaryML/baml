@@ -1,14 +1,20 @@
-import React from 'react'
+import React, { type ChangeEvent, type FocusEvent, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input, InputProps } from '../components/ui/input'
 import Form from '@rjsf/core'
-import type {
+import {
   ArrayFieldTemplateItemType,
+  BaseInputTemplateProps,
   FieldTemplateProps,
   IconButtonProps,
   ObjectFieldTemplateProps,
   RJSFSchema,
   UiSchema,
+  WidgetProps,
+  ariaDescribedByIds,
+  examplesId,
+  getInputProps,
+  titleId,
 } from '@rjsf/utils'
 import validator from '@rjsf/validator-ajv8'
 import { atom, useAtom, useSetAtom, useAtomValue } from 'jotai'
@@ -30,52 +36,44 @@ export const showEnvvarValuesAtom = atom(false)
 
 const envvarsAtom = atom(
   (get) => {
-    const requiredEnvvars = get(runtimeRequiredEnvVarsAtom).map((envvar) => [envvar, ''])
-    const storedEnvvars = Object.entries(get(envvarStorageAtom))
+    const storedEnvvars = get(envvarStorageAtom)
+    const requiredButUnset = get(runtimeRequiredEnvVarsAtom)
+      .filter((k) => !storedEnvvars.some(({ key }) => k === key))
+      .map((key) => ({ key, value: '' }))
 
-    const allEnvvars = Object.fromEntries(requiredEnvvars.concat(storedEnvvars))
-
-    return Object.entries(allEnvvars).map(([key, value]) => ({ key, value }))
+    return requiredButUnset.concat(storedEnvvars)
   },
-  (get, set, envvarsFormData: { key?: string; value?: string }[]) => {
-    set(
-      envvarStorageAtom,
-      Object.fromEntries(
-        envvarsFormData
-          .filter(({ key }) => typeof key === 'string' && key.length)
-          .map(({ key, value }) => [key, value]),
-      ),
-    )
+  (get, set, envvarsFormData: { key: string; value: string }[]) => {
+    set(envvarStorageAtom, envvarsFormData)
   },
 )
 
-const EnvvarKeyInput: React.FC<InputProps> = ({ className, type, ...props }) => {
-  console.log('envvar key input', props)
+const EnvvarKeyInput: React.FC<WidgetProps> = (props) => {
   const requiredEnvvars = useAtomValue(runtimeRequiredEnvVarsAtom)
-  if (typeof props.value === 'string' && requiredEnvvars.includes(props.value)) {
-    //  return (
-    //    <div className='bg-grey-500 font-mono outline-none focus:outline focus:outline-1 focus:outline-white'>
-    //      {props.value}
-    //    </div>
-    //  )
-  }
   return (
     <Input
-      {...props}
-      className='bg-grey-500 font-mono outline-none focus:outline focus:outline-1 focus:outline-white'
-      autoComplete='none'
+      id={props.id}
+      name={props.name}
+      type='text'
+      className='bg-grey-500 outline-none focus:outline focus:outline-1 focus:outline-white'
+      value={props.value}
+      disabled={requiredEnvvars.includes(props.value)}
+      onChange={(event) => props.onChange(event.target.value)}
     />
   )
 }
 
-const EnvvarValueInput: React.FC<InputProps> = ({ className, type, ...props }) => {
+const EnvvarValueInput: React.FC<WidgetProps> = (props) => {
   const showEnvvarValues = useAtomValue(showEnvvarValuesAtom)
   return (
     <Input
-      {...props}
-      className='bg-grey-500 font-mono outline-none focus:outline focus:outline-1 focus:outline-white'
-      autoComplete='off'
+      id={props.id}
+      name={props.name}
       type={showEnvvarValues ? 'text' : 'password'}
+      placeholder='(unset)'
+      className='bg-grey-500 group-[.required-env-var-not-set]:outline group-[.required-env-var-not-set]:outline-yellow-500 focus:outline focus:outline-3 focus:outline-white'
+      value={props.value}
+      onChange={(event) => props.onChange(event.target.value)}
     />
   )
 }
@@ -130,7 +128,7 @@ function ArrayFieldItemTemplate(props: ArrayFieldTemplateItemType) {
         ) : (
           <Button
             size={'icon'}
-            className='!flex flex-col p-1 text-color-white bg-transparent hover:bg-red-600 h-fit !max-w-[48px] ml-auto'
+            className='!flex flex-col px-2 py-2 mr-2 text-color-white bg-transparent hover:bg-red-600 h-fit !max-w-[48px] ml-auto'
             onClick={onDropIndexClick(index)}
             disabled={fieldItemIsRequired}
           >
@@ -143,20 +141,27 @@ function ArrayFieldItemTemplate(props: ArrayFieldTemplateItemType) {
 }
 
 function EnvvarFieldTemplate(props: FieldTemplateProps) {
-  const { children } = props
-  return children
+  return <div>{props.children}</div>
 }
 
 const EnvvarEntryTemplate = (props: ObjectFieldTemplateProps) => {
+  const requiredEnvvars = useAtomValue(runtimeRequiredEnvVarsAtom)
+
   const renderedProps = []
+
+  const classNames = []
+
+  if (requiredEnvvars.includes(props.formData.key) && props.formData.value === '') {
+    classNames.push('required-env-var-not-set')
+  }
 
   for (const { name, content } of props.properties) {
     renderedProps.push(content)
     if (name === 'key') {
-      renderedProps.push(<div className='h-9 py-1'>=</div>)
+      renderedProps.push(<div className='h-9 py-1.5'>=</div>)
     }
   }
-  return <div className='flex flex-row items-center'>{renderedProps}</div>
+  return <div className={clsx('flex flex-row items-center gap-2 font-mono group', classNames)}>{renderedProps}</div>
 }
 
 function AddButton(props: IconButtonProps) {
