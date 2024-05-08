@@ -29,10 +29,11 @@ import {
 } from 'lucide-react'
 import { envvarStorageAtom, runtimeRequiredEnvVarsAtom } from '../baml_wasm_web/EventListener'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip'
 import clsx from 'clsx'
 
 export const showSettingsAtom = atom(true)
-export const showEnvvarValuesAtom = atom(false)
+const showEnvvarValuesAtom = atom(false)
 
 const envvarsAtom = atom(
   (get) => {
@@ -48,6 +49,13 @@ const envvarsAtom = atom(
   },
 )
 
+const requiredButUnsetAtom = atom((get) => {
+  const envvars = get(envvarsAtom)
+  return get(runtimeRequiredEnvVarsAtom).filter(
+    (k) => !envvars.some(({ key, value }) => k === key && value && value.length > 0),
+  )
+})
+
 const EnvvarKeyInput: React.FC<WidgetProps> = (props) => {
   const requiredEnvvars = useAtomValue(runtimeRequiredEnvVarsAtom)
   return (
@@ -55,7 +63,7 @@ const EnvvarKeyInput: React.FC<WidgetProps> = (props) => {
       id={props.id}
       name={props.name}
       type='text'
-      className='bg-grey-500 outline-none focus:outline focus:outline-1 focus:outline-white'
+      className='bg-grey-500 outline-none outline-offset-0 focus-visible:outline focus:outline-2 focus:outline-white'
       value={props.value}
       disabled={requiredEnvvars.includes(props.value)}
       onChange={(event) => props.onChange(event.target.value)}
@@ -71,7 +79,7 @@ const EnvvarValueInput: React.FC<WidgetProps> = (props) => {
       name={props.name}
       type={showEnvvarValues ? 'text' : 'password'}
       placeholder='(unset)'
-      className='bg-grey-500 group-[.required-env-var-not-set]:outline group-[.required-env-var-not-set]:outline-yellow-500 focus:outline focus:outline-3 focus:outline-white'
+      className='bg-grey-500 outline-none outline-offset-0 group-[.required-env-var-not-set]:outline group-[.required-env-var-not-set]:outline-2 group-[.required-env-var-not-set]:outline-yellow-500 focus-visible:outline focus:outline-2 focus:outline-white'
       value={props.value}
       onChange={(event) => props.onChange(event.target.value)}
     />
@@ -97,7 +105,6 @@ const schema: RJSFSchema = {
 
 const uiSchema: UiSchema = {
   items: {
-    'ui:classNames': 'flex flex-row',
     key: {
       'ui:FieldTemplate': EnvvarFieldTemplate,
       'ui:widget': EnvvarKeyInput,
@@ -198,10 +205,36 @@ export const ShowSettingsButton: React.FC<{ buttonClassName: string; iconClassNa
   iconClassName,
 }) => {
   const setShowSettings = useSetAtom(showSettingsAtom)
-  return (
+  const requiredButUnset = useAtomValue(requiredButUnsetAtom)
+  const requiredButUnsetCount = requiredButUnset.length
+
+  const button = (
     <Button className={buttonClassName} onClick={() => setShowSettings(true)}>
       <SettingsIcon className={iconClassName} />
+      {requiredButUnsetCount > 0 && (
+        <div className='absolute inline-flex items-center justify-center w-6 h-6 text-xs font-bold text-white bg-yellow-500 border-2 border-white rounded-full -top-0 -end-0 dark:border-gray-900'>
+          {requiredButUnsetCount}
+        </div>
+      )}
     </Button>
+  )
+  if (requiredButUnsetCount === 0) {
+    return button
+  }
+
+  const message =
+    requiredButUnsetCount === 1
+      ? `env.${requiredButUnset[0]} is used but not set`
+      : requiredButUnsetCount === 2
+        ? `${requiredButUnset.map((k) => `env.${k}`).join(' and ')} are used but not set`
+        : `${requiredButUnsetCount} environment variables are used but not set`
+  return (
+    <TooltipProvider>
+      <Tooltip delayDuration={100}>
+        <TooltipTrigger asChild>{button}</TooltipTrigger>
+        <TooltipContent className='flex flex-col gap-y-1'>{message}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   )
 }
 export const SettingsDialog: React.FC = () => {
