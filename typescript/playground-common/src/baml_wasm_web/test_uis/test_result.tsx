@@ -124,8 +124,10 @@ const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStat
                   {parsed !== undefined && (
                     <JsonView
                       enableClipboard={false}
+                      className='bg-[#1E1E1E] px-1 py-1 rounded-sm'
                       theme='a11y'
                       collapseStringsAfterLength={200}
+                      matchesURL
                       src={JSON.parse(parsed)}
                     />
                   )}

@@ -327,10 +327,11 @@ const TestCaseCard: React.FC<{ test_case: WasmTestCase; isRendered: boolean }> =
               <b>{input.name}:</b>
               {input.value !== undefined && (
                 <JsonView
-                  enableClipboard={false}
-                  className='bg-[#1E1E1E] '
+                  enableClipboard
+                  className='bg-[#1E1E1E] px-1 py-1 rounded-sm'
                   theme='a11y'
                   collapseStringsAfterLength={600}
+                  matchesURL
                   src={JSON.parse(input.value)}
                 />
               )}
