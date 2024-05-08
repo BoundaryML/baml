@@ -252,6 +252,23 @@ pub struct WasmLLMResponse {
     pub latency_ms: u64,
 }
 
+#[wasm_bindgen(getter_with_clone)]
+pub struct WasmLLMFailure {
+    pub client: String,
+    pub model: Option<String>,
+    prompt: RenderedPrompt,
+    pub start_time_unix_ms: u64,
+    pub latency_ms: u64,
+    pub message: String,
+    pub code: String,
+}
+
+impl WasmLLMFailure {
+    pub fn prompt(&self) -> WasmPrompt {
+        (self.prompt.clone(), self.client.clone()).into()
+    }
+}
+
 impl WasmLLMResponse {
     pub fn prompt(&self) -> WasmPrompt {
         (self.prompt.clone(), self.client.clone()).into()
@@ -280,6 +297,25 @@ impl WasmTestResponse {
                     Ok(s) => Some(s),
                     Err(_) => None,
                 },
+                _ => None,
+            },
+            Err(_) => None,
+        }
+    }
+
+    #[wasm_bindgen]
+    pub fn llm_failure(&self) -> Option<WasmLLMFailure> {
+        match &self.test_response.function_response {
+            Ok(f) => match &f.llm_response {
+                LLMResponse::LLMFailure(f) => Some(WasmLLMFailure {
+                    client: f.client.clone(),
+                    model: f.model.clone(),
+                    prompt: f.prompt.clone(),
+                    start_time_unix_ms: f.start_time_unix_ms,
+                    latency_ms: f.latency_ms,
+                    message: f.message.clone(),
+                    code: f.code.to_string(),
+                }),
                 _ => None,
             },
             Err(_) => None,

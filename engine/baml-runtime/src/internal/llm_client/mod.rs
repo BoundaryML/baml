@@ -108,11 +108,11 @@ pub enum ErrorCode {
 impl ErrorCode {
     pub fn to_string(&self) -> String {
         match self {
-            ErrorCode::InvalidAuthentication => "InvalidAuthentication".into(),
-            ErrorCode::NotSupported => "NotSupported".into(),
-            ErrorCode::RateLimited => "RateLimited".into(),
-            ErrorCode::ServerError => "ServerError".into(),
-            ErrorCode::ServiceUnavailable => "ServiceUnavailable".into(),
+            ErrorCode::InvalidAuthentication => "InvalidAuthentication (401)".into(),
+            ErrorCode::NotSupported => "NotSupported (403)".into(),
+            ErrorCode::RateLimited => "RateLimited (429)".into(),
+            ErrorCode::ServerError => "ServerError (500)".into(),
+            ErrorCode::ServiceUnavailable => "ServiceUnavailable (503)".into(),
             ErrorCode::UnsupportedResponse(code) => format!("BadResponse {}", code),
             ErrorCode::Other(code) => format!("Unspecified {}", code),
         }

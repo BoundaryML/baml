@@ -75,21 +75,37 @@ const checkFilter = (filter: Set<FilterValues>, status: TestStatusType, test_sta
 
 const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStatusType }> = ({ test, doneStatus }) => {
   const failure = test.failure_message()
-  const other = test.llm_response()
+  const llm_response = test.llm_response()
+  const llm_failure = test.llm_failure()
   const parsed = test.parsed_response()
+
+  const latencyMs = llm_response?.latency_ms ?? llm_failure?.latency_ms
+  const client = llm_response?.client ?? llm_failure?.client
+  const model = llm_response?.model ?? llm_failure?.model
 
   return (
     <div className='flex flex-col gap-1 w-full'>
-      {failure && doneStatus !== 'parse_failed' && <div className='text-xs text-vscode-errorForeground'>{failure}</div>}
-      {other && (
+      {failure && doneStatus !== 'parse_failed' && doneStatus !== 'llm_failed' && (
+        <div className='text-xs text-vscode-errorForeground'>{failure}</div>
+      )}
+      {(llm_response || llm_failure) && (
         <div className='text-xs text-vscode-descriptionForeground w-full'>
           <div>
-            Took <b>{other.latency_ms.toString()}ms</b> using <b>{other.client}</b> (model: {other.model})
+            Took <b>{latencyMs?.toString()}ms</b> using <b>{client}</b> {model && <>(model: {model})</>}
           </div>
           <div className='flex flex-row gap-2'>
             <div className='w-1/2 flex flex-col'>
               Raw LLM Response:
-              <pre className='whitespace-pre-wrap bg-vscode-input-background py-2 px-1'>{other.content}</pre>
+              {llm_response && (
+                <pre className='whitespace-pre-wrap bg-vscode-input-background py-2 px-1'>{llm_response.content}</pre>
+              )}
+              {llm_failure && (
+                <pre className='text-xs text-vscode-errorForeground whitespace-pre-wrap'>
+                  <b>{llm_failure.code}</b>
+                  <br />
+                  {llm_failure.message}
+                </pre>
+              )}
             </div>
             {(doneStatus === 'parse_failed' || parsed !== undefined) && (
               <div className='w-1/2 flex flex-col'>
