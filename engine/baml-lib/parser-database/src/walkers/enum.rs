@@ -1,6 +1,6 @@
 use internal_baml_diagnostics::DatamodelError;
 
-use internal_baml_schema_ast::ast::{WithDocumentation, WithIdentifier, WithName};
+use internal_baml_schema_ast::ast::{WithDocumentation, WithIdentifier, WithName, WithSpan};
 use serde_json::json;
 
 use crate::{
@@ -45,6 +45,12 @@ impl<'db> EnumWalker<'db> {
 impl<'db> WithIdentifier for EnumWalker<'db> {
     fn identifier(&self) -> &ast::Identifier {
         self.ast_enum().identifier()
+    }
+}
+
+impl<'db> WithSpan for EnumWalker<'db> {
+    fn span(&self) -> &internal_baml_diagnostics::Span {
+        &self.ast_enum().span
     }
 }
 
@@ -119,6 +125,12 @@ impl<'db> EnumValueWalker<'db> {
     /// The enum documentation
     pub fn documentation(self) -> Option<&'db str> {
         self.r#enum().ast_enum()[self.id.1].documentation()
+    }
+}
+
+impl<'db> WithSpan for EnumValueWalker<'db> {
+    fn span(&self) -> &internal_baml_diagnostics::Span {
+        &self.r#enum().ast_enum()[self.id.1].span
     }
 }
 

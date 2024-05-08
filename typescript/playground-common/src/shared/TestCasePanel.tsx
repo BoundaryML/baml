@@ -42,67 +42,37 @@ type Func = ParserDatabase['functions'][number]
 type TestCase = Func['test_cases'][number]
 
 const TestCasePanelEntry: React.FC<{ test_case: WasmTestCase }> = ({ test_case }) => {
-  const [selectedTestCase, setSelected] = useAtom(selectedTestCaseAtom)
-  const isRendered = useMemo(() => selectedTestCase?.name === test_case.name, [selectedTestCase, test_case])
   const { run, isRunning } = useRunHooks()
-
   return (
-    <div key={test_case.name} className='flex flex-col py-1 pr-2 w-full overflow-x-clip group'>
+    <div key={test_case.name} className='flex flex-col py-1 pr-2 w-full overflow-x-clip gap-1 group'>
+      <div className='flex flex-row gap-1 items-center'>
+        <Badge
+          className='bg-vscode-editorSuggestWidget-selectedBackground text-vscode-editorSuggestWidget-foreground hover:bg-vscode-editorSuggestWidget-selectedBackground'
+          variant='default'
+        >
+          <div className='flex flex-row gap-x-1 items-center'>
+            <Pin size={12} /> Pinned
+          </div>
+        </Badge>
+        <div>{test_case.name}</div>
+      </div>
       <div className='flex flex-row justify-between items-center'>
         <div className='flex flex-row gap-x-1 justify-center items-center'>
           <Button
             variant={'ghost'}
             size={'icon'}
-            className='p-1 rounded-md w-fit h-fit bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground'
+            className='p-1 rounded-md w-fit h-fit bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground text-xs'
             disabled={isRunning}
             onClick={() => {
               run([test_case.name])
             }}
           >
-            <Play size={10} />
+            <div className='flex flex-row gap-1 items-center'>
+              <Play size={10} /> <span className='hidden group-hover:flex'>Run</span>
+            </div>
           </Button>
-          {/* IDK why it doesnt truncate. Probably cause of the allotment */}
           <div className='flex flex-nowrap w-full'>
-            <span className='h-[24px] max-w-[120px] text-center align-middle overflow-hidden flex-1 truncate'>
-              {test_case.name}
-            </span>
-            {isRendered && (
-              <Badge
-                className='ml-2 bg-vscode-editorSuggestWidget-selectedBackground text-vscode-editorSuggestWidget-foreground hover:bg-vscode-editorSuggestWidget-selectedBackground'
-                variant='default'
-              >
-                <div className='flex flex-row gap-x-1 items-center'>
-                  <Pin size={12} /> Rendered
-                </div>
-              </Badge>
-            )}
             <div className='hidden gap-x-1 group-hover:flex'>
-              {!isRendered && (
-                <Button
-                  variant={'ghost'}
-                  size='icon'
-                  className='p-1 w-fit h-fit hover:bg-vscode-button-secondaryHoverBackground'
-                  onClick={() => {
-                    setSelected(test_case.name)
-                  }}
-                >
-                  <Pin size={12} />
-                </Button>
-              )}
-              {/* <EditTestCaseForm
-                testCase={test_case}
-                schema={input_json_schema}
-                func={func}
-                getTestParams={(t) => getTestParams(func, t)}
-              >
-                <Button
-                  variant={'ghost'}
-                  size="icon"
-                  className="p-1 w-fit h-fit hover:bg-vscode-button-secondaryHoverBackground"
-                >
-                  <Edit2 className="w-3 h-3 text-vscode-descriptionForeground" />
-                </Button>
-              </EditTestCaseForm> */}
               <Tooltip delayDuration={100}>
                 <TooltipTrigger asChild>
                   <Button
@@ -159,7 +129,7 @@ const TestCasePanelEntry: React.FC<{ test_case: WasmTestCase }> = ({ test_case }
           <Trash2 size={10} />
         </Button>
       </div>
-      <TestCaseCard test_case={test_case} isRendered={isRendered} />
+      <TestCaseCard test_case={test_case} isRendered />
       {/* <EditTestCaseForm
         testCase={test_case}
         schema={input_json_schema}
@@ -229,83 +199,13 @@ const autoGenTestCase = (func: Func, input_json_schema: any): TestCase => {
 }
 
 const TestCasePanel: React.FC = () => {
-  const selectedFunction = useAtomValue(selectedFunctionAtom)
-  const testCases = useMemo(() => selectedFunction?.test_cases ?? [], [selectedFunction])
+  const selectedTestCase = useAtomValue(selectedTestCaseAtom)
 
-  const [filter, setFilter] = useState<string>('')
-  const { root_path, test_results } = useContext(ASTContext)
+  if (selectedTestCase === null) {
+    return <div className='flex flex-col w-full h-full'></div>
+  }
 
-  return (
-    <div className='flex flex-col w-full h-full tour-test-panel'>
-      <div className='flex flex-row gap-x-1'>
-        <VSCodeTextField
-          placeholder='Search test cases'
-          className='w-32 shrink'
-          value={filter}
-          onInput={(e) => {
-            setFilter((e as React.FormEvent<HTMLInputElement>).currentTarget.value)
-          }}
-        />
-        {test_results?.run_status === 'RUNNING' ? (
-          <VSCodeButton
-            className='bg-vscode-statusBarItem-errorBackground'
-            onClick={() => vscode.postMessage({ command: 'cancelTestRun' })}
-          >
-            Cancel
-          </VSCodeButton>
-        ) : (
-          <>
-            <Button
-              className='px-1 py-1 h-full text-xs whitespace-nowrap bg-red-500 rounded-sm bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground'
-              // disabled={test_cases.length === 0}
-              onClick={() => {
-                // const runTestRequest: TestRequest = {
-                //   functions: [
-                //     {
-                //       name: func.name.value,
-                //       run_all_available_tests: filter === '' ? true : false,
-                //       tests: test_cases.map((test_case) => ({
-                //         name: test_case.name.value,
-                //         impls: func.impls.map((i) => i.name.value),
-                //       })),
-                //     },
-                //   ],
-                // }
-                // vscode.postMessage({
-                //   command: 'runTest',
-                //   data: {
-                //     root_path,
-                //     tests: runTestRequest,
-                //   },
-                // })
-              }}
-            >
-              <>Run {filter ? testCases.length : 'all'}</>
-            </Button>
-          </>
-        )}
-      </div>
-      <div className='flex flex-col gap-y-1 py-2 divide-y divide-vscode-textSeparator-foreground'>
-        {/* <pre>{JSON.stringify(input_json_schema, null, 2)}</pre> */}
-        {/* <EditTestCaseForm
-          key={'new'}
-          testCase={undefined}
-          schema={input_json_schema}
-          func={func}
-          getTestParams={(t) => getTestParams(func, t)}
-        >
-          <Button className="flex flex-row gap-x-2 text-sm bg-vscode-dropdown-background text-vscode-dropdown-foreground hover:opacity-90 hover:bg-vscode-dropdown-background">
-            <PlusIcon size={16} />
-            <div>Add test case</div>
-          </Button>
-        </EditTestCaseForm> */}
-
-        {testCases.map((t) => (
-          <TestCasePanelEntry key={t.name} test_case={t} />
-        ))}
-      </div>
-    </div>
-  )
+  return <TestCasePanelEntry test_case={selectedTestCase} />
 }
 
 const EditTestCaseForm = ({
@@ -415,11 +315,30 @@ const EditTestCaseForm = ({
 const TestCaseCard: React.FC<{ test_case: WasmTestCase; isRendered: boolean }> = ({ test_case, isRendered }) => {
   return (
     <div className='flex flex-col gap-2 max-w-full text-xs text-left truncate text-vscode-descriptionForeground'>
+      {test_case.error && (
+        <pre className='break-words whitespace-pre-wrap w-full border-vscode-textSeparator-foreground rounded-md border p-0.5'>
+          {test_case.error}
+        </pre>
+      )}
       <div className='whitespace-pre-wrap break-all'>
         <div className='flex flex-col'>
           {test_case.inputs.map((input) => (
             <div key={input.name}>
-              <b>{input.name}:</b> {input.value}
+              <b>{input.name}:</b>
+              {input.value !== undefined && (
+                <JsonView
+                  enableClipboard={false}
+                  className='bg-[#1E1E1E] '
+                  theme='a11y'
+                  collapseStringsAfterLength={600}
+                  src={JSON.parse(input.value)}
+                />
+              )}
+              {input.error && (
+                <pre className='break-words whitespace-pre-wrap w-full border-vscode-textSeparator-foreground rounded-md border p-0.5'>
+                  {input.error}
+                </pre>
+              )}
             </div>
           ))}
         </div>

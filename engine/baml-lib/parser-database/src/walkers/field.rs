@@ -8,7 +8,7 @@ use crate::{
 
 use super::{ClassWalker, VariantWalker, Walker};
 
-use internal_baml_schema_ast::ast::{self, FieldType, Identifier, WithName};
+use internal_baml_schema_ast::ast::{self, FieldType, Identifier, WithName, WithSpan};
 use serde_json::json;
 
 /// A model field, scalar or relation.
@@ -73,6 +73,12 @@ impl<'db> WithName for FieldWalker<'db> {
     /// The field name.
     fn name(&self) -> &'db str {
         self.ast_field().name()
+    }
+}
+
+impl<'db> WithSpan for FieldWalker<'db> {
+    fn span(&self) -> &internal_baml_diagnostics::Span {
+        self.ast_field().span()
     }
 }
 

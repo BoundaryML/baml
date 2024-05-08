@@ -1,8 +1,8 @@
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { VSCodeProgressRing } from '@vscode/webview-ui-toolkit/react'
+import { VSCodeButton, VSCodeProgressRing, VSCodeTextField } from '@vscode/webview-ui-toolkit/react'
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
-import { PropsWithChildren } from 'react'
+import { PropsWithChildren, useMemo, useState } from 'react'
 import {
   TestState,
   type TestStatusType,
@@ -10,11 +10,19 @@ import {
   statusCountAtom,
   testStatusAtom,
   DoneTestStatusType,
+  useRunHooks,
+  showTestsAtom,
 } from './testHooks'
 import CustomErrorBoundary from '../../utils/ErrorFallback'
-import { type TestStatus, type WasmTestResponse } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
+import {
+  type WasmTestCase,
+  type TestStatus,
+  type WasmTestResponse,
+} from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 import JsonView from 'react18-json-view'
-import 'react18-json-view/src/style.css'
+import clsx from 'clsx'
+import { Filter, Pin, Play } from 'lucide-react'
+import { selectedFunctionAtom, selectedTestCaseAtom } from '../EventListener'
 
 const TestStatusMessage: React.FC<{ testStatus: DoneTestStatusType }> = ({ testStatus }) => {
   switch (testStatus) {
@@ -140,20 +148,23 @@ const TestRow: React.FC<{ name: string }> = ({ name }) => {
   }
 
   return (
-    <div className='flex flex-col'>
-      <div className='flex flex-row items-center gap-2 text-xs'>
-        <b>{name}</b>
-        <TestStatusIcon
-          testRunStatus={test.status}
-          testStatus={test.status === 'done' ? test.response_status : undefined}
-        />
-      </div>
-      {test.status === 'error' && <div className='text-xs text-vscode-errorForeground'>{test.message}</div>}
-      {test.status === 'done' && (
-        <div className='text-xs text-vscode-descriptionForeground'>
-          <LLMTestResult test={test.response} doneStatus={test.response_status} />
+    <div className='flex flex-row gap-2 items-start group'>
+      <TestCaseActions testName={name} />
+      <div className='flex flex-col'>
+        <div className='flex flex-row items-center gap-2 text-xs'>
+          <b>{name}</b>
+          <TestStatusIcon
+            testRunStatus={test.status}
+            testStatus={test.status === 'done' ? test.response_status : undefined}
+          />
         </div>
-      )}
+        {test.status === 'error' && <div className='text-xs text-vscode-errorForeground'>{test.message}</div>}
+        {test.status === 'done' && (
+          <div className='text-xs text-vscode-descriptionForeground'>
+            <LLMTestResult test={test.response} doneStatus={test.response_status} />
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -196,7 +207,8 @@ const TestStatusBanner: React.FC = () => {
   }
 
   return (
-    <div className='flex flex-row gap-2'>
+    <div className='flex flex-row gap-2 items-center flex-wrap'>
+      <Filter size={16} />
       <FilterButton
         selected={filter.has('queued')}
         name='Queued'
@@ -238,11 +250,188 @@ const TestStatusBanner: React.FC = () => {
 }
 
 const TestResults: React.FC = () => {
+  const [showTests, setShowTests] = useAtom(showTestsAtom)
+
+  return (
+    <div className='flex flex-col gap-2 px-1 w-full'>
+      <div className='flex flex-row items-center gap-2'>
+        <Badge
+          className={clsx('cursor-pointer', showTests ? 'bg-vscode-button-backgroundHover text-muted-foreground' : '')}
+          onClick={() => setShowTests(false)}
+        >
+          All Tests
+        </Badge>
+        <Badge
+          className={clsx('cursor-pointer', showTests ? '' : 'bg-vscode-button-backgroundHover text-muted-foreground')}
+          onClick={() => setShowTests(true)}
+        >
+          Test Results
+        </Badge>
+      </div>
+
+      {showTests ? <TestResultContent /> : <TestCaseList />}
+    </div>
+  )
+}
+
+const TestCaseActions: React.FC<{ testName: string }> = ({ testName }) => {
+  const [selectedTestCase, setSelectedTestCase] = useAtom(selectedTestCaseAtom)
+
+  const { isRunning, run } = useRunHooks()
+
+  return (
+    <div className='flex flex-col gap-1'>
+      <Button
+        variant={'ghost'}
+        size={'icon'}
+        className='p-1 rounded-md w-fit h-fit bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground'
+        disabled={isRunning}
+        onClick={() => {
+          run([testName])
+        }}
+      >
+        <Play size={10} />
+      </Button>
+      {selectedTestCase?.name === testName ? (
+        <Button
+          variant={'ghost'}
+          size={'icon'}
+          className='p-1 rounded-md w-fit h-fit   bg-vscode-button-background
+                  text-vscode-button-foreground
+                  flex'
+          disabled
+        >
+          <Pin size={10} />
+        </Button>
+      ) : (
+        <Button
+          variant={'ghost'}
+          size={'icon'}
+          className='p-1 rounded-md w-fit h-fit   hover:bg-vscode-button-background
+                hover:text-vscode-button-foreground
+                hidden
+                group-hover:flex'
+          onClick={() => {
+            setSelectedTestCase(testName)
+          }}
+        >
+          <Pin size={10} />
+        </Button>
+      )}
+    </div>
+  )
+}
+
+const TestCaseList: React.FC = () => {
+  const allTestCases = useAtomValue(selectedFunctionAtom)?.test_cases ?? []
+  const [filter, setFilter] = useState('')
+  const testCases = useMemo(() => {
+    return allTestCases.filter((t) => t.name.includes(filter) || t.inputs.some((i) => i.value?.includes(filter)))
+  }, [allTestCases, filter])
+  const setSelectedTestCase = useSetAtom(selectedTestCaseAtom)
+
+  const { isRunning, run } = useRunHooks()
+
+  return (
+    <div className='flex flex-col gap-2 px-2'>
+      <div className='flex flex-row gap-2 items-center flex-wrap'>
+        <Filter size={16} />
+        <VSCodeTextField
+          placeholder='Filter test cases'
+          className='w-32 shrink'
+          value={filter}
+          onInput={(e) => {
+            setFilter((e as React.FormEvent<HTMLInputElement>).currentTarget.value)
+          }}
+        />
+        {isRunning ? (
+          <VSCodeButton className='bg-vscode-statusBarItem-errorBackground' disabled onClick={() => {}}>
+            Cancel Not Supported
+          </VSCodeButton>
+        ) : (
+          <>
+            <Button
+              className='px-1 py-1 h-full text-xs whitespace-nowrap bg-red-500 rounded-sm bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground'
+              disabled={testCases.length === 0}
+              onClick={() => {
+                run(testCases.map((t) => t.name))
+              }}
+            >
+              <div className='flex flex-row gap-1 items-center'>
+                <Play size={10} />
+                Run {filter ? testCases.length : 'all'} tests
+              </div>
+            </Button>
+          </>
+        )}
+        {filter && (
+          <div className='text-xs text-muted-foreground'>{allTestCases.length - testCases.length} filtered out</div>
+        )}
+      </div>
+      <hr className=' border-muted-foreground w-full' />
+      <div className='flex flex-col gap-1 overflow-y-auto'>
+        {testCases.map((test) => (
+          <div className='flex flex-row gap-2 items-start group'>
+            <TestCaseActions testName={test.name} />
+            <div
+              key={test.name}
+              className='flex flex-col gap-1 cursor-pointer p-1 w-full hover:bg-vscode-input-background'
+              onClick={() => {
+                setSelectedTestCase(test.name)
+              }}
+            >
+              <div className='text-xs'>{test.name}</div>
+              <TestCaseCard test_case={test} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+const TestCaseCard: React.FC<{ test_case: WasmTestCase }> = ({ test_case }) => {
+  return (
+    <div
+      className='flex flex-col gap-2 max-w-full text-xs text-left truncate 
+      text-vscode-descriptionForeground '
+    >
+      <div className='whitespace-pre-wrap break-all'>
+        <div className='flex flex-col'>
+          {test_case.inputs.map((input) => (
+            <div key={input.name}>
+              <b>{input.name}:</b>
+              {input.value !== undefined && (
+                <JsonView
+                  enableClipboard={false}
+                  className='bg-[#1E1E1E] px-1 py-1 rounded-sm'
+                  theme='a11y'
+                  collapseStringsAfterLength={50}
+                  collapseObjectsAfterLength={2}
+                  matchesURL
+                  src={JSON.parse(input.value)}
+                />
+              )}
+              {input.error && (
+                <pre className='break-words whitespace-pre-wrap w-full border-vscode-textSeparator-foreground rounded-md border p-0.5'>
+                  {input.error}
+                </pre>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const TestResultContent: React.FC = () => {
   const testsRunning = useAtomValue(runningTestsAtom)
   return (
-    <div className='flex flex-col gap-2'>
+    <div className='flex flex-col gap-2 px-2'>
       <TestStatusBanner />
-      <div className='flex flex-col gap-1 overflow-y-auto px-2'>
+      <hr className=' border-muted-foreground' />
+      <div className='flex flex-col gap-1 overflow-y-auto'>
         {testsRunning.map((testName) => (
           <TestRow key={testName} name={testName} />
         ))}

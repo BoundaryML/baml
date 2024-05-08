@@ -162,13 +162,13 @@ impl IntermediateRepr {
 //   [x] rename lockfile/mod.rs to ir/mod.rs
 //   [x] wire Result<> type through, need this to be more sane
 
-#[derive(Default, Debug, serde::Serialize)]
+#[derive(Debug, serde::Serialize)]
 pub struct NodeAttributes {
     /// Map of attributes on the corresponding IR node.
     ///
     /// Some follow special conventions:
     ///
-    ///   - @skip becomes ("skip", "")
+    ///   - @skip becomes ("skip", bool)
     ///   - @alias(...) becomes ("alias", ...)
     ///   - @get(python code) becomes ("get/python", python code)
     #[serde(with = "indexmap::map::serde_seq")]
@@ -180,6 +180,10 @@ pub struct NodeAttributes {
     /// accessed from that node, rather than through a different IR node.
     #[serde(with = "indexmap::map::serde_seq")]
     overrides: IndexMap<(FunctionId, ImplementationId), IndexMap<String, Expression>>,
+
+    // Spans
+    #[serde(skip)]
+    span: Option<ast::Span>,
 }
 
 impl NodeAttributes {
@@ -232,7 +236,11 @@ pub struct Node<T> {
 pub trait WithRepr<T> {
     /// Represents block or field attributes - @@ for enums and classes, @ for enum values and class fields
     fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
-        NodeAttributes::default()
+        NodeAttributes {
+            meta: IndexMap::new(),
+            overrides: IndexMap::new(),
+            span: None,
+        }
     }
 
     fn repr(&self, db: &ParserDatabase) -> Result<T>;
@@ -467,9 +475,11 @@ pub struct Enum {
 
 impl WithRepr<EnumValue> for EnumValueWalker<'_> {
     fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
-        let mut attributes = NodeAttributes::default();
-
-        attributes.meta = to_ir_attributes(db, self.get_default_attributes());
+        let mut attributes = NodeAttributes {
+            meta: to_ir_attributes(db, self.get_default_attributes()),
+            overrides: IndexMap::new(),
+            span: Some(self.span().clone()),
+        };
 
         for r#fn in db.walk_old_functions() {
             for r#impl in r#fn.walk_variants() {
@@ -494,7 +504,11 @@ impl WithRepr<EnumValue> for EnumValueWalker<'_> {
 
 impl WithRepr<Enum> for EnumWalker<'_> {
     fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
-        let mut attributes = NodeAttributes::default();
+        let mut attributes = NodeAttributes {
+            meta: to_ir_attributes(db, self.get_default_attributes()),
+            overrides: IndexMap::new(),
+            span: Some(self.span().clone()),
+        };
 
         attributes.meta = to_ir_attributes(db, self.get_default_attributes());
 
@@ -533,9 +547,11 @@ pub struct Field {
 
 impl WithRepr<Field> for FieldWalker<'_> {
     fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
-        let mut attributes = NodeAttributes::default();
-
-        attributes.meta = to_ir_attributes(db, self.get_default_attributes());
+        let mut attributes = NodeAttributes {
+            meta: to_ir_attributes(db, self.get_default_attributes()),
+            overrides: IndexMap::new(),
+            span: Some(self.span().clone()),
+        };
 
         for r#fn in db.walk_old_functions() {
             for r#impl in r#fn.walk_variants() {
@@ -571,7 +587,11 @@ pub struct Class {
 
 impl WithRepr<Class> for ClassWalker<'_> {
     fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
-        let mut attributes = NodeAttributes::default();
+        let mut attributes = NodeAttributes {
+            meta: to_ir_attributes(db, self.get_default_attributes()),
+            overrides: IndexMap::new(),
+            span: Some(self.span().clone()),
+        };
 
         attributes.meta = to_ir_attributes(db, self.get_default_attributes());
 
@@ -730,7 +750,11 @@ pub struct FunctionConfig {
 
 impl WithRepr<Implementation> for VariantWalker<'_> {
     fn attributes(&self, _db: &ParserDatabase) -> NodeAttributes {
-        NodeAttributes::default()
+        NodeAttributes {
+            meta: IndexMap::new(),
+            overrides: IndexMap::new(),
+            span: Some(self.span().clone()),
+        }
     }
 
     fn repr(&self, db: &ParserDatabase) -> Result<Implementation> {
@@ -974,7 +998,11 @@ pub struct Client {
 
 impl WithRepr<Client> for ClientWalker<'_> {
     fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
-        NodeAttributes::default()
+        NodeAttributes {
+            meta: IndexMap::new(),
+            overrides: IndexMap::new(),
+            span: Some(self.span().clone()),
+        }
     }
 
     fn repr(&self, db: &ParserDatabase) -> Result<Client> {
@@ -1011,7 +1039,11 @@ pub struct RetryPolicy {
 
 impl WithRepr<RetryPolicy> for ConfigurationWalker<'_> {
     fn attributes(&self, _db: &ParserDatabase) -> NodeAttributes {
-        NodeAttributes::default()
+        NodeAttributes {
+            meta: IndexMap::new(),
+            overrides: IndexMap::new(),
+            span: Some(self.span().clone()),
+        }
     }
 
     fn repr(&self, db: &ParserDatabase) -> Result<RetryPolicy> {

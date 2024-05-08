@@ -5,7 +5,7 @@ import { runtimeCtx, selectedFunctionAtom, selectedRuntimeAtom } from '../EventL
 import { WasmTestResponse } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 
 const isRunningAtom = atom(false)
-export const showTestsAtom = atom(true)
+export const showTestsAtom = atom(false)
 
 export type TestStatusType = 'queued' | 'running' | 'done' | 'error'
 export type DoneTestStatusType = 'passed' | 'llm_failed' | 'parse_failed' | 'error'
@@ -55,6 +55,7 @@ export const useRunHooks = () => {
       return
     }
     set(isRunningAtom, true)
+    set(showTestsAtom, true)
 
     const ctx = get(runtimeCtx)
     // First clear any previous test results

@@ -1,4 +1,4 @@
-use internal_baml_schema_ast::ast::{self, WithIdentifier};
+use internal_baml_schema_ast::ast::{self, WithIdentifier, WithSpan};
 
 use crate::types::{PrinterType, RetryPolicy, TestCase};
 
@@ -55,5 +55,11 @@ impl ConfigurationWalker<'_> {
 impl WithIdentifier for ConfigurationWalker<'_> {
     fn identifier(&self) -> &ast::Identifier {
         self.ast_node().identifier()
+    }
+}
+
+impl<'db> WithSpan for ConfigurationWalker<'db> {
+    fn span(&self) -> &internal_baml_diagnostics::Span {
+        self.ast_node().span()
     }
 }

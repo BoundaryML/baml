@@ -8,6 +8,7 @@ use baml_runtime::{
     internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, RenderedPrompt,
     RuntimeInterface,
 };
+use serde_json::error;
 use wasm_bindgen::prelude::*;
 
 use baml_runtime::InternalRuntimeInterface;
@@ -218,6 +219,8 @@ pub struct WasmTestCase {
     pub name: String,
     #[wasm_bindgen(readonly)]
     pub inputs: Vec<WasmParam>,
+    #[wasm_bindgen(readonly)]
+    pub error: Option<String>,
 }
 
 #[wasm_bindgen(getter_with_clone)]
@@ -226,7 +229,9 @@ pub struct WasmParam {
     #[wasm_bindgen(readonly)]
     pub name: String,
     #[wasm_bindgen(readonly)]
-    pub value: JsValue,
+    pub value: Option<String>,
+    #[wasm_bindgen(readonly)]
+    pub error: Option<String>,
 }
 
 #[wasm_bindgen]
@@ -421,23 +426,60 @@ impl WasmRuntime {
                 name: f.name().to_string(),
                 test_cases: f
                     .walk_tests()
-                    .map(|tc| WasmTestCase {
-                        name: tc.test_case().name.clone(),
-                        inputs: match tc.test_case_params(&ctx.ctx.env) {
-                            Ok(params) => params
+                    .map(|tc| {
+                        let params = match tc.test_case_params(&ctx.ctx.env) {
+                            Ok(params) => Ok(params
                                 .iter()
-                                .map(|(k, v)| WasmParam {
-                                    name: k.to_string(),
-                                    value: match v {
-                                        Ok(v) => serde_json::to_string_pretty(v).unwrap().into(),
-                                        Err(e) => {
-                                            serde_wasm_bindgen::to_value(&e.to_string()).unwrap()
-                                        }
-                                    },
+                                .map(|(k, v)| {
+                                    let as_str = match v {
+                                        Ok(v) => match serde_json::to_string(v) {
+                                            Ok(s) => Ok(s),
+                                            Err(e) => Err(e.to_string()),
+                                        },
+                                        Err(e) => Err(e.to_string()),
+                                    };
+
+                                    let (value, error) = match as_str {
+                                        Ok(s) => (Some(s), None),
+                                        Err(e) => (None, Some(e)),
+                                    };
+
+                                    WasmParam {
+                                        name: k.to_string(),
+                                        value,
+                                        error,
+                                    }
                                 })
-                                .collect(),
-                            Err(_) => vec![],
-                        },
+                                .collect()),
+                            Err(e) => Err(e.to_string()),
+                        };
+
+                        let (mut params, error) = match params {
+                            Ok(p) => (p, None),
+                            Err(e) => (Vec::new(), Some(e)),
+                        };
+
+                        // Any missing params should be set to an error
+                        let _ = f.inputs().right().map(|func_params| {
+                            for (param_name, _) in func_params {
+                                if !params.iter().any(|p| p.name.cmp(param_name).is_eq()) {
+                                    params.insert(
+                                        0,
+                                        WasmParam {
+                                            name: param_name.to_string(),
+                                            value: None,
+                                            error: Some("Missing parameter".to_string()),
+                                        },
+                                    );
+                                }
+                            }
+                        });
+
+                        WasmTestCase {
+                            name: tc.test_case().name.clone(),
+                            inputs: params,
+                            error,
+                        }
                     })
                     .collect(),
             })
@@ -465,7 +507,8 @@ impl WasmFunction {
         ctx: &runtime_ctx::WasmRuntimeContext,
         params: JsValue,
     ) -> Result<WasmPrompt, wasm_bindgen::JsError> {
-        let params = serde_wasm_bindgen::from_value(params)?;
+        let mut params =
+            serde_wasm_bindgen::from_value::<HashMap<String, serde_json::Value>>(params)?;
         let env_vars = rt.runtime.internal().ir().required_env_vars();
 
         // For anything env vars that are not provided, fill with empty strings
@@ -474,6 +517,17 @@ impl WasmFunction {
         for var in env_vars {
             if !ctx.env.contains_key(var) {
                 ctx.env.insert(var.into(), "".to_string());
+            }
+        }
+
+        // Fill any missing params with empty strings
+        for var in self
+            .test_cases
+            .iter()
+            .flat_map(|tc| tc.inputs.iter().map(|p| &p.name))
+        {
+            if !params.contains_key(var) {
+                params.insert(var.clone(), serde_json::Value::Null);
             }
         }
 

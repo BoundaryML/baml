@@ -7,7 +7,6 @@ import { useAtomValue } from 'jotai'
 import { createRef, useContext, useEffect, useId, useMemo, useRef } from 'react'
 import type { ImperativePanelHandle } from 'react-resizable-panels'
 import { renderPromptAtom, selectedFunctionAtom } from '../baml_wasm_web/EventListener'
-import { showTestsAtom } from '../baml_wasm_web/test_uis/testHooks'
 import TestResults from '../baml_wasm_web/test_uis/test_result'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/ui/resizable'
 import { TooltipProvider } from '../components/ui/tooltip'
@@ -15,17 +14,6 @@ import { ASTContext } from './ASTProvider'
 import ImplPanel, { Snippet } from './ImplPanel'
 import TestCasePanel from './TestCasePanel'
 import TestResultPanel from './TestResultOutcomes'
-
-function getTopPanelSize(showTests: boolean, test_results: TestResult[] | undefined): number {
-  if (showTests) {
-    if (test_results && test_results.length > 0) {
-      return 40
-    } else {
-      return 85
-    }
-  }
-  return 100
-}
 
 const PromptPreview: React.FC = () => {
   const propmtPreview = useAtomValue(renderPromptAtom)
@@ -82,20 +70,10 @@ const PromptPreview: React.FC = () => {
 }
 
 const FunctionPanel: React.FC = () => {
-  const showTests = useAtomValue(showTestsAtom)
   const selectedFunc = useAtomValue(selectedFunctionAtom)
-  const topPanelSize = useMemo(() => getTopPanelSize(showTests, []), [showTests])
 
   const id = useId()
   const refs = useRef()
-  const ref = createRef<ImperativePanelHandle>()
-
-  useEffect(() => {
-    const topPanelSize = getTopPanelSize(showTests, [])
-    if (ref.current) {
-      ref.current.resize(topPanelSize)
-    }
-  }, [showTests])
 
   if (!selectedFunc)
     return <div className='flex flex-col'>No function selected. Create or select a function to get started</div>
@@ -109,10 +87,10 @@ const FunctionPanel: React.FC = () => {
     >
       <TooltipProvider>
         <ResizablePanelGroup direction='vertical' className='h-full'>
-          <ResizablePanel id='top-panel' ref={ref} className='flex w-full' defaultSize={topPanelSize}>
+          <ResizablePanel id='top-panel' className='flex w-full' defaultSize={85}>
             <div className='w-full'>
               <ResizablePanelGroup direction='horizontal' className='h-full'>
-                <ResizablePanel defaultSize={60} className='px-0 overflow-y-auto'>
+                <ResizablePanel defaultSize={60} className='px-2 overflow-y-auto'>
                   <div className='relative w-full h-full overflow-y-auto'>
                     {/* <ScrollArea type="auto" className="flex w-full h-full pr-3"> */}
                     <div className='flex w-full h-full'>
@@ -122,7 +100,7 @@ const FunctionPanel: React.FC = () => {
                   </div>
                 </ResizablePanel>
                 <ResizableHandle withHandle={false} className='bg-vscode-panel-border' />
-                <ResizablePanel minSize={20} className='pl-2 pr-0.5' hidden={!showTests}>
+                <ResizablePanel minSize={20} className='pl-2 pr-0.5'>
                   {/* <Allotment.Pane className="pl-2 pr-0.5" minSize={200} visible={showTests}> */}
                   <div className='flex flex-col h-full overflow-y-auto overflow-x-clip'>
                     {/* On windows this scroll area extends beyond the wanted width, so we just use a normal scrollbar here vs using ScrollArea*/}
@@ -136,12 +114,7 @@ const FunctionPanel: React.FC = () => {
           </ResizablePanel>
           <ResizableHandle withHandle={false} className='bg-vscode-panel-border' />
           <ResizablePanel minSize={10} className='px-0 overflow-y-auto'>
-            <div
-              className={clsx('py-2 h-full border-t border-vscode-textSeparator-foreground', {
-                flex: showTests,
-                hidden: !showTests,
-              })}
-            >
+            <div className={clsx('py-2 h-full border-t border-vscode-textSeparator-foreground flex')}>
               <TestResults />
             </div>
           </ResizablePanel>

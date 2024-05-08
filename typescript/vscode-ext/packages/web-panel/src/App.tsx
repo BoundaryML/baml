@@ -19,22 +19,6 @@ import SettingsDialog, { ShowSettingsButton, showSettingsAtom } from './shared/S
 import CustomErrorBoundary from './utils/ErrorFallback'
 import 'jotai-devtools/styles.css'
 import { SettingsIcon } from 'lucide-react'
-import { showTestsAtom } from './baml_wasm_web/test_uis/testHooks'
-
-const TestToggle = () => {
-  // const { setSelection } = useContext(ASTContext)
-  const [showTests, setShowTests] = useAtom(showTestsAtom)
-
-  return (
-    <Button
-      variant='outline'
-      className='p-1 text-xs w-fit h-4 border-vscode-textSeparator-foreground'
-      onClick={() => setShowTests((prev) => !prev)}
-    >
-      {showTests ? 'Hide tests' : 'Show tests'}
-    </Button>
-  )
-}
 
 function App() {
   const setShowSettings = useSetAtom(showSettingsAtom)
@@ -44,7 +28,6 @@ function App() {
       <Suspense fallback={<div>Loading...</div>}>
         <EventListener>
           <div className='absolute z-10 flex flex-row items-end gap-1 right-1 top-2 text-end'>
-            <TestToggle />
             <VSCodeLink href='https://docs.boundaryml.com'>Docs</VSCodeLink>
             <ShowSettingsButton buttonClassName='h-4' iconClassName='h-4' />
           </div>

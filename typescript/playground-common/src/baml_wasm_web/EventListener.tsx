@@ -1,3 +1,5 @@
+import 'react18-json-view/src/style.css'
+
 import { VSCodeButton } from '@vscode/webview-ui-toolkit/react'
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { atomFamily, atomWithStorage, unwrap, useAtomCallback } from 'jotai/utils'
@@ -7,7 +9,7 @@ import CustomErrorBoundary from '../utils/ErrorFallback'
 import { sessionStore } from './JotaiProvider'
 import { availableProjectsAtom, projectFamilyAtom, projectFilesAtom, runtimeFamilyAtom } from './baseAtoms'
 import type BamlProjectManager from './project_manager'
-import type { WasmDiagnosticError, WasmRuntime } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
+import type { WasmDiagnosticError, WasmParam, WasmRuntime } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 
 // const wasm = await import("@gloo-ai/baml-schema-wasm-web/baml_schema_build");
 // const { WasmProject, WasmRuntime, WasmRuntimeContext, version: RuntimeVersion } = wasm;
@@ -282,7 +284,11 @@ export const renderPromptAtom = atom((get) => {
     return null
   }
 
-  const params = Object.fromEntries(test_case.inputs.map((input) => [input.name, JSON.parse(input.value)]))
+  const params = Object.fromEntries(
+    test_case.inputs
+      .filter((i): i is WasmParam & { value: string } => i.value !== undefined)
+      .map((input) => [input.name, JSON.parse(input.value)]),
+  )
 
   try {
     return func.render_prompt(runtime, ctx, params)
