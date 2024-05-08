@@ -273,6 +273,20 @@ impl WasmTestResponse {
     }
 
     #[wasm_bindgen]
+    pub fn parsed_response(&self) -> Option<String> {
+        match &self.test_response.function_response {
+            Ok(f) => match &f.parsed {
+                Some(Ok((p, _))) => match serde_json::to_string(p) {
+                    Ok(s) => Some(s),
+                    Err(_) => None,
+                },
+                _ => None,
+            },
+            Err(_) => None,
+        }
+    }
+
+    #[wasm_bindgen]
     pub fn llm_response(&self) -> Option<WasmLLMResponse> {
         match &self.test_response.function_response {
             Ok(f) => f.llm_response.into_wasm(),

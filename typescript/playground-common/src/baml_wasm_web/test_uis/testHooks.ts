@@ -2,18 +2,21 @@ import { atom, useAtomValue } from 'jotai'
 import { atomFamily, useAtomCallback } from 'jotai/utils'
 import React from 'react'
 import { runtimeCtx, selectedFunctionAtom, selectedRuntimeAtom } from '../EventListener'
+import { WasmTestResponse } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 
 const isRunningAtom = atom(false)
 export const showTestsAtom = atom(true)
 
 export type TestStatusType = 'queued' | 'running' | 'done' | 'error'
+export type DoneTestStatusType = 'passed' | 'llm_failed' | 'parse_failed' | 'error'
 export type TestState =
   | {
       status: 'queued' | 'running'
     }
   | {
       status: 'done'
-      response: any
+      response_status: DoneTestStatusType
+      response: WasmTestResponse
     }
   | {
       status: 'error'
@@ -24,12 +27,15 @@ const statusAtom = atom<TestState>({ status: 'queued' })
 
 export const testStatusAtom = atomFamily((testName: string) => statusAtom)
 export const runningTestsAtom = atom<string[]>([])
-export const statusCountAtom = atom<{
-  [key in TestStatusType]: number
-}>({
+export const statusCountAtom = atom({
   queued: 0,
   running: 0,
-  done: 0,
+  done: {
+    passed: 0,
+    llm_failed: 0,
+    parse_failed: 0,
+    error: 0,
+  },
   error: 0,
 })
 
@@ -38,7 +44,7 @@ export const useRunHooks = () => {
 
   const runTest = useAtomCallback(async (get, set, testNames: string[]) => {
     const runtime = get(selectedRuntimeAtom)
-    const func = await get(selectedFunctionAtom)
+    const func = get(selectedFunctionAtom)
     if (!runtime || !func) {
       // Refuse to run a test if no runtime is selected
       return
@@ -50,7 +56,7 @@ export const useRunHooks = () => {
     }
     set(isRunningAtom, true)
 
-    const ctx = await get(runtimeCtx)
+    const ctx = get(runtimeCtx)
     // First clear any previous test results
     testStatusAtom.setShouldRemove(() => true)
     // Remove the shouldRemove function so we don't remove future test results
@@ -60,7 +66,12 @@ export const useRunHooks = () => {
     set(statusCountAtom, {
       queued: testNames.length,
       running: 0,
-      done: 0,
+      done: {
+        passed: 0,
+        llm_failed: 0,
+        parse_failed: 0,
+        error: 0,
+      },
       error: 0,
     })
     // Batch into groups of 5
@@ -89,11 +100,25 @@ export const useRunHooks = () => {
         const result = promises[i]
         if (result.status === 'fulfilled') {
           const res = result.value
-          set(testStatusAtom(batch[i]), { status: 'done', response: res })
+          let status = res.status()
+          let response_status: DoneTestStatusType = 'error'
+          if (status === 0) {
+            response_status = 'passed'
+          } else if (status === 1) {
+            response_status = 'llm_failed'
+          } else if (status === 2) {
+            response_status = 'parse_failed'
+          } else {
+            response_status = 'error'
+          }
+          set(testStatusAtom(batch[i]), { status: 'done', response_status, response: res })
           set(statusCountAtom, (prev) => {
             return {
               ...prev,
-              done: prev.done + 1,
+              done: {
+                ...prev.done,
+                [response_status]: prev.done[response_status] + 1,
+              },
               running: prev.running - 1,
             }
           })
