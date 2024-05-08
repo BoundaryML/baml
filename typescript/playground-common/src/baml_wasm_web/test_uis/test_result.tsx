@@ -105,16 +105,20 @@ const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStat
           <div className='flex flex-row gap-2'>
             <div className='flex flex-col'>
               Raw LLM Response:
-              {llm_response && (
-                <pre className='whitespace-pre-wrap bg-vscode-input-background py-2 px-1'>{llm_response.content}</pre>
-              )}
-              {llm_failure && (
-                <pre className='text-xs text-vscode-errorForeground whitespace-pre-wrap'>
-                  <b>{llm_failure.code}</b>
-                  <br />
-                  {llm_failure.message}
-                </pre>
-              )}
+              <div className='px-1 py-2'>
+                {llm_response && (
+                  <pre className='whitespace-pre-wrap bg-vscode-input-background py-2 px-1 rounded-sm'>
+                    {llm_response.content}
+                  </pre>
+                )}
+                {llm_failure && (
+                  <pre className='text-xs text-vscode-errorForeground whitespace-pre-wrap'>
+                    <b>{llm_failure.code}</b>
+                    <br />
+                    {llm_failure.message}
+                  </pre>
+                )}
+              </div>
             </div>
             {(doneStatus === 'parse_failed' || parsed !== undefined) && (
               <div className='flex flex-col'>
@@ -336,7 +340,7 @@ const TestCaseList: React.FC = () => {
   const { isRunning, run } = useRunHooks()
 
   return (
-    <div className='flex flex-col gap-2 px-2'>
+    <div className='flex flex-col gap-2 px-2 w-full h-full'>
       <div className='flex flex-row gap-2 items-center flex-wrap'>
         <Filter size={16} />
         <VSCodeTextField
@@ -372,7 +376,7 @@ const TestCaseList: React.FC = () => {
         )}
       </div>
       <hr className=' border-muted-foreground w-full' />
-      <div className='flex flex-col gap-1 overflow-y-auto'>
+      <div className='flex flex-col gap-1 overflow-y-auto h-full'>
         {testCases.map((test) => (
           <div className='flex flex-row gap-2 items-start group'>
             <TestCaseActions testName={test.name} />
@@ -438,10 +442,10 @@ const TestCaseCard: React.FC<{ test_case: WasmTestCase }> = ({ test_case }) => {
 const TestResultContent: React.FC = () => {
   const testsRunning = useAtomValue(runningTestsAtom)
   return (
-    <div className='flex flex-col gap-2 px-2'>
+    <div className='flex flex-col gap-2 px-2 w-full h-full'>
       <TestStatusBanner />
       <hr className=' border-muted-foreground' />
-      <div className='flex flex-col gap-1 overflow-y-auto'>
+      <div className='flex flex-col gap-1 w-full h-full overflow-y-auto'>
         {testsRunning.map((testName) => (
           <TestRow key={testName} name={testName} />
         ))}

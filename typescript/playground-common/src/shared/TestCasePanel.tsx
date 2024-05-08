@@ -54,7 +54,10 @@ const TestCasePanelEntry: React.FC<{ test_case: WasmTestCase }> = ({ test_case }
             <Pin size={12} /> Pinned
           </div>
         </Badge>
-        <div>{test_case.name}</div>
+        <div>
+          <b>Test Case: </b>
+          {test_case.name}
+        </div>
       </div>
       <div className='flex flex-row justify-between items-center'>
         <div className='flex flex-row gap-x-1 justify-center items-center'>
@@ -332,6 +335,7 @@ const TestCaseCard: React.FC<{ test_case: WasmTestCase; isRendered: boolean }> =
                   theme='a11y'
                   collapseStringsAfterLength={600}
                   matchesURL
+                  editable={true}
                   src={JSON.parse(input.value)}
                 />
               )}
