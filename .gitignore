@@ -105,3 +105,6 @@ tmp/
 # Used for mypy stubs
 clients/python/out/*
 .vercel
+
+# tsc build cache
+*.tsbuildinfo
