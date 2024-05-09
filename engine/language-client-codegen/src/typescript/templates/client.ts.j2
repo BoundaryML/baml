@@ -1,0 +1,66 @@
+import baml_ts from "baml-ts"
+import types from "./types"
+
+const type_cast = <O>(input: baml_ts.ParsedType): O => {
+  throw Error('unimplemented')
+};
+
+export class BamlClient {
+  private _runtime: baml_ts.BamlRuntimeFfi
+  private _unstableClient: BamlUnstableClient
+  private _streamClient: BamlStreamClient
+
+  static from_directory(path: string): BamlClient {
+    return new BamlClient(baml_ts.BamlRuntimeFfi.from_directory(path))
+  }
+
+  constructor(private _runtime: baml_ts.BamlRuntimeFfi) {
+    this._unstableClient = new UnstableBamlClient(this._runtime)
+    this._streamClient = new BamlStreamClient(this._runtime)
+  }
+
+  get unstable(): UnstableBamlClient { return this._unstableClient; }
+  get stream(): BamlStreamClient { return this._streamClient; }
+
+{% for fn in funcs %}
+  {{fn.name}} = async (args: {
+    {%- for (name, type) in fn.args %}
+    {{name}}: {{type}},
+    {%- endfor %}
+  }): {{fn.return_type}} => {
+    const raw = this._runtime.call_function("{{fn.name}}", args, {})
+    return type_cast<{{fn.return_type}}>(raw.parsed)
+  }
+{% endfor %}
+}
+
+export class BamlUnstableClient {
+  constructor(private _runtime: baml_ts.BamlRuntimeFfi) {}
+
+{% for fn in funcs %}
+  {{fn.name}} = async (args: {
+    {%- for (name, type) in fn.args %}
+    {{name}}: {{type}},
+    {%- endfor %}
+  }): baml_ts.FunctionResult => {
+    return this._runtime.call_function("{{fn.name}}", args, {})
+  }
+{% endfor %}
+}
+
+export class BamlStreamClient {
+  constructor(private _runtime: baml_ts.BamlRuntimeFfi) {}
+
+{% for fn in funcs %}
+  {{fn.name}} = async function* (args: {
+    {%- for (name, type) in fn.args %}
+    {{name}}: {{type}},
+    {%- endfor %}
+  }): {{fn.return_type}} {
+    const stream = this._runtime.call_stream("{{fn.name}}", args, {})
+    for await (const raw of stream) {
+      yield UNSUPPORTED_DO_NOT_SHIP_type_cast<{{fn.return_type}}>(raw.parsed)
+    }
+  }
+{% endfor %}
+}

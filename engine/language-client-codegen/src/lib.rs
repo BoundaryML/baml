@@ -4,11 +4,10 @@ use anyhow::Result;
 use internal_baml_core::ir::repr::IntermediateRepr;
 use serde::Deserialize;
 
-
-
 mod dir_writer;
 mod python;
 mod ruby;
+mod typescript;
 
 #[derive(Deserialize)]
 pub struct GeneratorArgs {
@@ -23,6 +22,9 @@ pub enum LanguageClientType {
 
     #[serde(rename = "ruby")]
     Ruby,
+
+    #[serde(rename = "typescript")]
+    Typescript,
 }
 
 impl LanguageClientType {
@@ -30,6 +32,7 @@ impl LanguageClientType {
         match self {
             LanguageClientType::Ruby => ruby::generate(ir, gen),
             LanguageClientType::PythonPydantic => python::generate(ir, gen),
+            LanguageClientType::Typescript => typescript::generate(ir, gen),
         }
     }
 }

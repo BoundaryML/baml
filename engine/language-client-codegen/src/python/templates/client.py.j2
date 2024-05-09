@@ -68,10 +68,6 @@ class BamlClient:
     {%- endfor %}
 
     @staticmethod
-    def from_encoded(encoded: str) -> "BamlClient":
-      return BamlClient(runtime=baml_py.BamlRuntimeFfi.from_encoded(encoded))
-
-    @staticmethod
     def from_directory(path: str) -> "BamlClient":
       return BamlClient(runtime=baml_py.BamlRuntimeFfi.from_directory(path))
 

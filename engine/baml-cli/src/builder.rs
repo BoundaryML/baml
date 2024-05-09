@@ -1,6 +1,7 @@
 mod dir_utils;
 
 use anyhow::Result;
+use internal_baml_codegen::LanguageClientType;
 use internal_baml_core::LockfileVersion;
 use std::path::PathBuf;
 
@@ -41,7 +42,12 @@ pub fn build(baml_dir: &Option<String>) -> Result<(PathBuf, Configuration, Valid
     let ir = internal_baml_core::ir::to_ir(&parsed.db)
         .map_err(|e| e.context("Failed to build BAML (IR stage)"))?;
     for (gen, lockfile) in config.generators.iter() {
-        internal_baml_core::generate_pipeline(&parsed.db, gen, &ir, lockfile)?
+        //let generator_args = internal_baml_codegen::GeneratorArgs {
+        //    output_root: gen.output_path.clone(),
+        //    encoded_baml_files: None,
+        //};
+        //LanguageClientType::Typescript.generate_client(&ir, &generator_args)?;
+        internal_baml_core::generate_pipeline(&parsed.db, gen, &ir, lockfile)?;
     }
 
     config.generators.iter().for_each(|(_, lockfile)| {
