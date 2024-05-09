@@ -361,4 +361,5 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-module.exports.sum = nativeBinding.sum
+module.exports.BamlRuntimeFfi = nativeBinding.BamlRuntimeFfi
+module.exports.FunctionResult = nativeBinding.FunctionResult

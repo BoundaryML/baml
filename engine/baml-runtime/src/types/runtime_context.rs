@@ -14,6 +14,26 @@ pub struct RuntimeContext {
 }
 
 impl RuntimeContext {
+    pub fn from_env() -> Self {
+        Self {
+            env: std::env::vars_os()
+                .map(|(k, v)| {
+                    (
+                        k.to_string_lossy().to_string(),
+                        v.to_string_lossy().to_string(),
+                    )
+                })
+                .collect(),
+            tags: HashMap::new(),
+        }
+    }
+
+    pub fn merge(mut self, other: RuntimeContext) -> Self {
+        self.env.extend(other.env.into_iter());
+        self.tags.extend(other.tags.into_iter());
+        self
+    }
+
     pub fn new() -> Self {
         Self::default()
     }

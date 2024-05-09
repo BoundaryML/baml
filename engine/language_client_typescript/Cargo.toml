@@ -7,9 +7,16 @@ version = "0.0.1"
 crate-type = ["cdylib"]
 
 [dependencies]
+baml-runtime = { path = "../baml-runtime", features = ["no_wasm"] }
+env_logger.workspace = true
+futures.workspace = true
+log.workspace = true
 # Default enable napi4 feature, see https://nodejs.org/api/n-api.html#node-api-version-matrix
-napi = { version = "2.12.2", default-features = false, features = ["napi4"] }
-napi-derive = "2.12.2"
+napi = { version = "2", features = ["serde-json", "anyhow", "tokio_rt"] }
+napi-derive = "2"
+serde.workspace = true
+serde_json.workspace = true
+tokio = { version = "1", features = ["full"] }
 
 [build-dependencies]
 napi-build = "2.0.1"

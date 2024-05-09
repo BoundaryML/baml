@@ -10,6 +10,7 @@ members = [
   "language-client-codegen",
   "language_client_python",
   "language_client_ruby/ext/ruby_ffi",
+  "language_client_typescript",
 ]
 default-members = [
   "baml-cli",
@@ -20,6 +21,7 @@ default-members = [
   "baml-schema-wasm",
   "language-client-codegen",
   "language_client_python",
+  "language_client_typescript",
 ]
 
 [workspace.dependencies]

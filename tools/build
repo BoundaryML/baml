@@ -66,6 +66,22 @@ echo "Building in REPO${_path} (cwd: $(pwd))"
 
 case "$_path" in
 
+  /engine/language_client_typescript | /engine/language_client_typescript/* )
+    command="pnpm build; date"
+    command="${command} && BAML_LOG=debug pnpm ts-node test.ts"
+
+    if [ "$_watch_mode" -eq 1 ]; then
+      npx nodemon \
+        --ext rs,hb,hbs,toml,baml,rb \
+        --watch "${_repo_root}/engine" \
+        --ignore 'target' \
+        --ignore 'tmp' \
+        --exec "${command}"
+    else
+      eval "${command}"
+    fi
+    ;;
+
   /engine/language_client_ruby | /engine/language_client_ruby/* )
     command="rake compile; date"
 
