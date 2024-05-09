@@ -1,10 +1,8 @@
-import { BamlRuntimeFfi } from './index'
+import baml_ts from './index'
 ;(async () => {
-  //const content = await readFileAsync('Cargo.toml')
+  const b = baml_ts.BamlRuntimeFfi.fromDirectory('/home/sam/baml/integ-tests/baml_src')
 
-  const b = BamlRuntimeFfi.fromDirectory('/home/sam/baml/integ-tests/baml_src')
-
-  const result = await b.call_function('ExtractNames', { input: 'hello this is patrick' }, {})
+  const result = await b.callFunction('ExtractNames', { input: 'hello this is patrick' }, {})
 
   console.log(result)
 })()

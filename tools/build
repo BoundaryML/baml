@@ -67,7 +67,7 @@ echo "Building in REPO${_path} (cwd: $(pwd))"
 case "$_path" in
 
   /engine/language_client_typescript | /engine/language_client_typescript/* )
-    command="pnpm build; date"
+    command="pnpm build:debug; date"
     command="${command} && BAML_LOG=debug pnpm ts-node test.ts"
 
     if [ "$_watch_mode" -eq 1 ]; then

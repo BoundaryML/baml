@@ -422,6 +422,7 @@ dependencies = [
  "baml-runtime",
  "env_logger",
  "futures",
+ "internal-baml-codegen",
  "log",
  "napi",
  "napi-build",

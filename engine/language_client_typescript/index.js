@@ -363,3 +363,4 @@ if (!nativeBinding) {
 
 module.exports.BamlRuntimeFfi = nativeBinding.BamlRuntimeFfi
 module.exports.FunctionResult = nativeBinding.FunctionResult
+module.exports.LanguageClientType = nativeBinding.LanguageClientType

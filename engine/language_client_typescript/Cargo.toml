@@ -10,6 +10,7 @@ crate-type = ["cdylib"]
 baml-runtime = { path = "../baml-runtime", features = ["no_wasm"] }
 env_logger.workspace = true
 futures.workspace = true
+internal-baml-codegen.workspace = true
 log.workspace = true
 # Default enable napi4 feature, see https://nodejs.org/api/n-api.html#node-api-version-matrix
 napi = { version = "2", features = ["serde-json", "anyhow", "tokio_rt"] }

@@ -108,3 +108,8 @@ clients/python/out/*
 
 # tsc build cache
 *.tsbuildinfo
+
+*.whl
+*.tar.gz
+
+**/dist
