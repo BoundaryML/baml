@@ -8,7 +8,6 @@ use std::{collections::HashMap, path::PathBuf};
 // Add a trait per language that can be used to convert an Import into a string
 pub(super) trait LanguageFeatures {
     fn content_prefix(&self) -> &'static str;
-    fn to_file_path(&self, path: &str) -> PathBuf;
 }
 
 pub(super) struct FileCollector<L: LanguageFeatures + Default> {

@@ -28,10 +28,6 @@ $ pnpm add baml_ts
         "#
         .trim()
     }
-
-    fn to_file_path(&self, name: &str) -> std::path::PathBuf {
-        std::path::PathBuf::from(name.to_lowercase()).with_extension("ts")
-    }
 }
 
 pub(super) trait ToTypescript {

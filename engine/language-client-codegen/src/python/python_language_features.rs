@@ -26,10 +26,6 @@ impl LanguageFeatures for PythonLanguageFeatures {
         "#
         .trim()
     }
-
-    fn to_file_path(&self, name: &str) -> std::path::PathBuf {
-        std::path::PathBuf::from(name.to_lowercase()).with_extension("rb")
-    }
 }
 
 pub(super) trait ToPython {

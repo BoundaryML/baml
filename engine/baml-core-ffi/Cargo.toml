@@ -12,20 +12,20 @@ license-file.workspace = true
 crate-type = ["cdylib"]
 
 [dependencies]
+anyhow.workspace = true
+chrono = "0.4.35"
+colored = "2.1.0"
+envy = "0.4.2"
+hostname = "0.3.1"
 internal-baml-jinja = { path = "../baml-lib/jinja" }
 napi = { version = "2", features = ["serde-json", "anyhow", "async"] }
 napi-derive = "2"
-anyhow.workspace = true
+reqwest = { version = "0.11.24", features = ["json", "native-tls-vendored"] }
 serde.workspace = true
 serde_json.workspace = true
 tracing = "0.1.40"
-colored = "2.1.0"
-hostname = "0.3.1"
-reqwest = { version = "0.11.24", features = ["json", "native-tls-vendored"] }
-uuid = { version = "1.7.0", features = ["v4"] }
 tracing-subscriber = "0.3.18"
-envy = "0.4.2"
-chrono = "0.4.35"
+uuid = { version = "1.7.0", features = ["v4"] }
 
 [build-dependencies]
 napi-build = "2"

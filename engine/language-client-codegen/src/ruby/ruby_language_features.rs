@@ -1,4 +1,4 @@
-use crate::dir_writer::{LanguageFeatures};
+use crate::dir_writer::LanguageFeatures;
 
 #[derive(Default)]
 pub(super) struct RubyLanguageFeatures {}
@@ -23,10 +23,6 @@ impl LanguageFeatures for RubyLanguageFeatures {
 # formatter:off
         "#
         .trim()
-    }
-
-    fn to_file_path(&self, name: &str) -> std::path::PathBuf {
-        std::path::PathBuf::from(name.to_lowercase()).with_extension("rb")
     }
 }
 
