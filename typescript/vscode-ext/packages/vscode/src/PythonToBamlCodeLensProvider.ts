@@ -2,7 +2,7 @@ import type { ParserDatabase } from '@baml/common'
 import * as vscode from 'vscode'
 import { URI } from 'vscode-languageclient'
 
-export class GlooCodeLensProvider implements vscode.CodeLensProvider {
+export class PythonToBamlCodeLensProvider implements vscode.CodeLensProvider {
   private db: ParserDatabase | undefined
   private path: string | undefined
 
@@ -86,4 +86,4 @@ export class GlooCodeLensProvider implements vscode.CodeLensProvider {
   }
 }
 
-export default new GlooCodeLensProvider()
+export default new PythonToBamlCodeLensProvider()

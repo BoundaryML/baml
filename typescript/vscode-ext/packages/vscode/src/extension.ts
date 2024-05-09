@@ -3,7 +3,7 @@
 import * as vscode from 'vscode'
 
 import axios from 'axios'
-import glooLens from './GlooCodeLensProvider'
+import glooLens from './PythonToBamlCodeLensProvider'
 import { WebPanelView } from './panels/WebPanelView'
 import testExecutor from './panels/execute_test'
 import plugins from './plugins'
@@ -170,10 +170,12 @@ export function activate(context: vscode.ExtensionContext) {
       const config = vscode.workspace.getConfiguration()
       config.update('baml.bamlPanelOpen', true, vscode.ConfigurationTarget.Global)
       WebPanelView.render(context.extensionUri)
-      telemetry.sendTelemetryEvent({
-        event: 'baml.openBamlPanel',
-        properties: {},
-      })
+      if (telemetry) {
+        telemetry.sendTelemetryEvent({
+          event: 'baml.openBamlPanel',
+          properties: {},
+        })
+      }
 
       WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
       // send another request for reliability on slower machines

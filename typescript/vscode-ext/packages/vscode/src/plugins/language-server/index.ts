@@ -8,7 +8,7 @@ import * as vscode from 'vscode'
 import type { LanguageClientOptions } from 'vscode-languageclient'
 import { type LanguageClient, type ServerOptions, TransportKind } from 'vscode-languageclient/node'
 import { z } from 'zod'
-import glooLens from '../../GlooCodeLensProvider'
+import pythonToBamlCodeLens from '../../PythonToBamlCodeLensProvider'
 import { WebPanelView } from '../../panels/WebPanelView'
 import TelemetryReporter from '../../telemetryReporter'
 import { checkForMinimalColorTheme, createLanguageServer, isDebugOrTestSession, restartClient } from '../../util'
@@ -159,16 +159,18 @@ const checkForUpdates = async ({ showIfNoUpdates }: { showIfNoUpdates: boolean }
         })
     }
 
-    telemetry.sendTelemetryEvent({
-      event: 'baml.checkForUpdates',
-      properties: {
-        is_typescript: latestVersions.generators.find((g) => g.language === 'typescript'),
-        is_python: latestVersions.generators.find((g) => g.language === 'python'),
-        baml_check: latestVersions,
-        updateAvailable: !!update,
-        vscodeUpdateAvailable: shouldUpdateVscode,
-      },
-    })
+    if (telemetry) {
+      telemetry.sendTelemetryEvent({
+        event: 'baml.checkForUpdates',
+        properties: {
+          is_typescript: latestVersions.generators.find((g) => g.language === 'typescript'),
+          is_python: latestVersions.generators.find((g) => g.language === 'python'),
+          baml_check: latestVersions,
+          updateAvailable: !!update,
+          vscodeUpdateAvailable: shouldUpdateVscode,
+        },
+      })
+    }
   } catch (e) {
     console.error('Failed to check for updates', e)
   }
@@ -280,7 +282,7 @@ const activateClient = (
     client.onRequest('set_database', ({ rootPath, db }: { rootPath: string; db: ParserDatabase }) => {
       try {
         BamlDB.set(rootPath, db)
-        glooLens.setDB(rootPath, db)
+        pythonToBamlCodeLens.setDB(rootPath, db)
         console.log('set_database')
         WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
       } catch (e) {
