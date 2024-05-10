@@ -54,6 +54,7 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
+          cache-dependency-path: engine/language_client_typescript/pnpm-lock.yaml
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -63,32 +64,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Setup node x86
-        uses: actions/setup-node@v4
-        if: matrix.settings.target == 'i686-pc-windows-msvc'
-        with:
-          node-version: 20
-          cache: pnpm
-          architecture: x86
-
       - name: Build
         run: ${{ matrix.settings.build }}
         shell: bash
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
-        if: matrix.settings.target != 'wasm32-wasip1-threads'
         with:
           name: bindings-${{ matrix.settings.target }}
           path: "*.node"
-          if-no-files-found: error
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        if: matrix.settings.target == 'wasm32-wasip1-threads'
-        with:
-          name: bindings-${{ matrix.settings.target }}
-          path: "*.wasm"
           if-no-files-found: error
 
   test-macOS-windows-binding:
@@ -127,6 +111,7 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: pnpm
+          cache-dependency-path: engine/language_client_typescript/pnpm-lock.yaml
           architecture: ${{ matrix.settings.architecture }}
 
       - name: Install dependencies
@@ -172,6 +157,7 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: pnpm
+          cache-dependency-path: engine/language_client_typescript/pnpm-lock.yaml
       - name: Output docker params
         id: docker
         run: |
@@ -236,6 +222,7 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
+          cache-dependency-path: engine/language_client_typescript/pnpm-lock.yaml
       - name: Install dependencies
         run: pnpm install
       - name: Download all artifacts
