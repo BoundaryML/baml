@@ -46,7 +46,7 @@ jobs:
 
       - uses: pnpm/action-setup@v3
         with:
-          version: 9
+          version: 9.0.6
           package_json_file: engine/language_client_typescript/package.json
           run_install: false
 
@@ -102,7 +102,7 @@ jobs:
       - name: setup pnpm
         uses: pnpm/action-setup@v2
         with:
-          version: 9
+          version: 9.0.6
           package_json_file: engine/language_client_typescript/package.json
           run_install: false
 
@@ -149,7 +149,7 @@ jobs:
       - name: setup pnpm
         uses: pnpm/action-setup@v2
         with:
-          version: 9
+          version: 9.0.6
           package_json_file: engine/language_client_typescript/package.json
           run_install: false
       - name: Setup node
@@ -214,7 +214,7 @@ jobs:
       - name: setup pnpm
         uses: pnpm/action-setup@v2
         with:
-          version: 9
+          version: 9.0.6
           package_json_file: engine/language_client_typescript/package.json
           run_install: false
       - name: Setup node
