@@ -48,6 +48,7 @@
     "format:biome": "biome --write .",
     "format:rs": "cargo fmt",
     "prepublishOnly": "napi prepublish -t npm",
+    "test": "echo no tests implemented",
     "version": "napi version"
   },
   "devDependencies": {

@@ -40,21 +40,29 @@ jobs:
     runs-on: ${{ matrix.settings.host }}
     steps:
       - uses: actions/checkout@v4
+
+      - run: cd engine/language_client_typescript
+
       - uses: pnpm/action-setup@v2
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: pnpm
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
           targets: ${{ matrix.settings.target }}
+
       - name: Setup toolchain
         run: ${{ matrix.settings.setup }}
         if: ${{ matrix.settings.setup }}
         shell: bash
+
       - name: Install dependencies
         run: pnpm install
+
       - name: Setup node x86
         uses: actions/setup-node@v4
         if: matrix.settings.target == 'i686-pc-windows-msvc'
@@ -62,9 +70,11 @@ jobs:
           node-version: 20
           cache: pnpm
           architecture: x86
+
       - name: Build
         run: ${{ matrix.settings.build }}
         shell: bash
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         if: matrix.settings.target != 'wasm32-wasip1-threads'
@@ -104,24 +114,32 @@ jobs:
     runs-on: ${{ matrix.settings.host }}
     steps:
       - uses: actions/checkout@v4
+
+      - run: cd engine/language_client_typescript
+
       - name: setup pnpm
         uses: pnpm/action-setup@v2
+
       - name: Setup node
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
           cache: pnpm
           architecture: ${{ matrix.settings.architecture }}
+
       - name: Install dependencies
         run: pnpm install
+
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           name: bindings-${{ matrix.settings.target }}
           path: .
+
       - name: List packages
         run: ls -R .
         shell: bash
+
       - name: Test bindings
         run: pnpm test
 
