@@ -6,6 +6,9 @@ on:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+defaults:
+  run:
+    working-directory: engine/language_client_typescript
 jobs:
   build:
     strategy:
@@ -41,8 +44,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - run: cd engine/language_client_typescript
-
       - uses: pnpm/action-setup@v2
 
       - uses: actions/setup-node@v4
@@ -54,11 +55,6 @@ jobs:
         with:
           toolchain: stable
           targets: ${{ matrix.settings.target }}
-
-      - name: Setup toolchain
-        run: ${{ matrix.settings.setup }}
-        if: ${{ matrix.settings.setup }}
-        shell: bash
 
       - name: Install dependencies
         run: pnpm install
@@ -114,8 +110,6 @@ jobs:
     runs-on: ${{ matrix.settings.host }}
     steps:
       - uses: actions/checkout@v4
-
-      - run: cd engine/language_client_typescript
 
       - name: setup pnpm
         uses: pnpm/action-setup@v2
