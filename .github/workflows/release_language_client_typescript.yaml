@@ -6,11 +6,11 @@ on:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-defaults:
-  run:
-    working-directory: engine/language_client_typescript
 jobs:
   build:
+    defaults:
+      run:
+        working-directory: engine/language_client_typescript
     strategy:
       fail-fast: false
       matrix:
@@ -88,6 +88,9 @@ jobs:
           if-no-files-found: error
 
   test-macOS-windows-binding:
+    defaults:
+      run:
+        working-directory: engine/language_client_typescript
     name: Test bindings on ${{ matrix.settings.target }} - node@${{ matrix.node }}
     needs:
       - build
@@ -138,6 +141,9 @@ jobs:
         run: pnpm test
 
   test-linux-binding:
+    defaults:
+      run:
+        working-directory: engine/language_client_typescript
     name: Test ${{ matrix.target }} - node@${{ matrix.node }}
     needs:
       - build
@@ -204,6 +210,9 @@ jobs:
           run: npm run test
 
   publish:
+    defaults:
+      run:
+        working-directory: engine/language_client_typescript
     permissions:
       contents: write
       id-token: write
