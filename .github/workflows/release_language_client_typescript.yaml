@@ -1,8 +1,4 @@
-name: CI
-env:
-  DEBUG: napi:*
-  APP_NAME: package-template
-  MACOSX_DEPLOYMENT_TARGET: '10.13'
+name: Release engine/language_client_typescript
 permissions:
   contents: write
   id-token: write
@@ -28,76 +24,43 @@ jobs:
       fail-fast: false
       matrix:
         settings:
-          - host: macos-latest
-            target: x86_64-apple-darwin
-            build: pnpm build --target x86_64-apple-darwin
-          - host: windows-latest
-            build: pnpm build --target x86_64-pc-windows-msvc
-            target: x86_64-pc-windows-msvc
-          - host: windows-latest
-            build: pnpm build --target i686-pc-windows-msvc
-            target: i686-pc-windows-msvc
-          - host: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            build: pnpm build --target x86_64-unknown-linux-gnu --use-napi-cross
-          - host: ubuntu-latest
-            target: x86_64-unknown-linux-musl
-            build: pnpm build --target x86_64-unknown-linux-musl -x
-          - host: macos-14
-            target: aarch64-apple-darwin
+          - target: aarch64-apple-darwin
+            host: macos-14
             build: pnpm build --target aarch64-apple-darwin
-          - host: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
-            build: pnpm build --target aarch64-unknown-linux-gnu --use-napi-cross
-          - host: ubuntu-latest
-            target: armv7-unknown-linux-gnueabihf
-            build: pnpm build --target armv7-unknown-linux-gnueabihf --use-napi-cross
-          - host: ubuntu-latest
-            target: aarch64-linux-android
-            build: pnpm build --target aarch64-linux-android
-          - host: ubuntu-latest
-            target: armv7-linux-androideabi
-            build: pnpm build --target armv7-linux-androideabi
-          - host: ubuntu-latest
-            target: aarch64-unknown-linux-musl
-            build: pnpm build --target aarch64-unknown-linux-musl -x
-          - host: windows-latest
-            target: aarch64-pc-windows-msvc
+
+          - target: aarch64-pc-windows-msvc
+            host: windows-latest
             build: pnpm build --target aarch64-pc-windows-msvc
-          - host: ubuntu-latest
-            target: wasm32-wasip1-threads
-            build: pnpm build --target wasm32-wasip1-threads
+
+          - target: aarch64-unknown-linux-gnu
+            host: ubuntu-latest
+            build: pnpm build --target aarch64-unknown-linux-gnu --use-napi-cross
+
+          - target: x86_64-apple-darwin
+            host: macos-latest
+            build: pnpm build --target x86_64-apple-darwin
+
+          - target: x86_64-pc-windows-msvc
+            host: windows-latest
+            build: pnpm build --target x86_64-pc-windows-msvc
+
+          - target: x86_64-unknown-linux-gnu
+            host: ubuntu-latest
+            build: pnpm build --target x86_64-unknown-linux-gnu --use-napi-cross
+
     name: stable - ${{ matrix.settings.target }} - node@20
     runs-on: ${{ matrix.settings.host }}
     steps:
       - uses: actions/checkout@v4
-      - name: setup pnpm
-        uses: pnpm/action-setup@v2
-      - name: Setup node
-        uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@v2
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: pnpm
-      - name: Install
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
           targets: ${{ matrix.settings.target }}
-      - name: Cache cargo
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            ~/.napi-rs
-            .cargo-cache
-            target/
-          key: ${{ matrix.settings.target }}-cargo-${{ matrix.settings.host }}
-      - uses: goto-bus-stop/setup-zig@v2
-        if: ${{ contains(matrix.settings.target, 'musl') }}
-        with:
-          version: 0.12.0
       - name: Setup toolchain
         run: ${{ matrix.settings.setup }}
         if: ${{ matrix.settings.setup }}
@@ -129,53 +92,7 @@ jobs:
           name: bindings-${{ matrix.settings.target }}
           path: "*.wasm"
           if-no-files-found: error
-  build-freebsd:
-    runs-on: macos-13
-    name: Build FreeBSD
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build
-        id: build
-        uses: cross-platform-actions/action@v0.24.0
-        env:
-          DEBUG: napi:*
-          RUSTUP_IO_THREADS: 1
-        with:
-          operating_system: freebsd
-          version: '13.2'
-          memory: 8G
-          cpu_count: 3
-          environment_variables: 'DEBUG RUSTUP_IO_THREADS'
-          shell: bash
-          run: |
-            sudo pkg install -y -f curl node libnghttp2 npm
-            sudo npm install -g corepack
-            curl https://sh.rustup.rs -sSf --output rustup.sh
-            sh rustup.sh -y --profile minimal --default-toolchain beta
-            corepack prepare
-            corepack enable
-            source "$HOME/.cargo/env"
-            echo "~~~~ rustc --version ~~~~"
-            rustc --version
-            echo "~~~~ node -v ~~~~"
-            node -v
-            echo "~~~~ pnpm --version ~~~~"
-            pnpm --version
-            pwd
-            ls -lah
-            whoami
-            env
-            freebsd-version
-            pnpm install
-            pnpm build
-            rm -rf node_modules
-            rm -rf target
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: bindings-freebsd
-          path: ${{ env.APP_NAME }}.*.node
-          if-no-files-found: error
+
   test-macOS-windows-binding:
     name: Test bindings on ${{ matrix.settings.target }} - node@${{ matrix.node }}
     needs:
@@ -219,6 +136,7 @@ jobs:
         shell: bash
       - name: Test bindings
         run: pnpm test
+
   test-linux-binding:
     name: Test ${{ matrix.target }} - node@${{ matrix.node }}
     needs:
@@ -228,10 +146,7 @@ jobs:
       matrix:
         target:
           - x86_64-unknown-linux-gnu
-          - x86_64-unknown-linux-musl
           - aarch64-unknown-linux-gnu
-          - aarch64-unknown-linux-musl
-          - armv7-unknown-linux-gnueabihf
         node:
           - '18'
           - '20'
@@ -287,42 +202,13 @@ jobs:
           image: ${{ steps.docker.outputs.IMAGE }}
           options: -v ${{ steps.docker.outputs.PNPM_STORE_PATH }}:${{ steps.docker.outputs.PNPM_STORE_PATH }} -v ${{ github.workspace }}:${{ github.workspace }} -w ${{ github.workspace }} --platform ${{ steps.docker.outputs.PLATFORM }}
           run: npm run test
-  test-wasi:
-    name: Test WASI target
-    needs:
-      - build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: setup pnpm
-        uses: pnpm/action-setup@v2
-      - name: Setup node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-      - name: Install dependencies
-        run: pnpm install
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: bindings-wasm32-wasip1-threads
-          path: .
-      - name: List packages
-        run: ls -R .
-        shell: bash
-      - name: Test bindings
-        run: pnpm test
-        env:
-          NAPI_RS_FORCE_WASI: 1
+
   publish:
     name: Publish
     runs-on: ubuntu-latest
     needs:
-      - build-freebsd
       - test-macOS-windows-binding
       - test-linux-binding
-      - test-wasi
     steps:
       - uses: actions/checkout@v4
       - name: setup pnpm
