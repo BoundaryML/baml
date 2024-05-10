@@ -20,7 +20,7 @@ pub struct GenerateOutput {
     pub files: Vec<PathBuf>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum LanguageClientType {
     PythonPydantic,
     Ruby,

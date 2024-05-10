@@ -1,8 +1,5 @@
-use crate::{internal, BamlRuntime, RuntimeInterface};
+use crate::{BamlRuntime, RuntimeContext, RuntimeInterface};
 use anyhow::Result;
-use clap::ValueEnum;
-use std::fmt::Display;
-use std::path::PathBuf;
 
 #[derive(clap::Args, Debug)]
 pub struct GenerateArgs {
@@ -18,7 +15,8 @@ pub struct GenerateArgs {
 
 impl GenerateArgs {
     pub fn run(&self, caller_type: super::CallerType) -> Result<()> {
-        let runtime = BamlRuntime::from_directory(&self.from.clone().into())?;
+        let ctx = RuntimeContext::from_env();
+        let runtime = BamlRuntime::from_directory(&self.from.clone().into(), &ctx)?;
 
         let client_type: internal_baml_codegen::LanguageClientType =
             match (self.client_type.as_ref(), caller_type) {

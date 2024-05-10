@@ -6,7 +6,7 @@ import { LLMException } from "./client_manager/errors";
 const setTags = FireBamlEvent.tags;
 
 const loadEnvVars = () => {
-  dotenv.config();
+  // dotenv.config();
 }
 
 

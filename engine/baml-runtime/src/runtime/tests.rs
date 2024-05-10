@@ -1,3 +1,4 @@
+use indexmap::IndexMap;
 use serde_json::json;
 
 use super::*;
@@ -38,7 +39,7 @@ async fn test_call_function() -> Result<FunctionResult> {
     // to actually run this you need to replace the OPENAI_API_KEY value with the actual key
     let ctx = RuntimeContext::new().add_env("OPENAI_API_KEY".into(), "OPENAI_API_KEY".to_string());
 
-    let mut params = HashMap::new();
+    let mut params = IndexMap::new();
     params.insert(
         "input".to_string(),
         json!("Attention Is All You Need. Mark. Hello."),
@@ -49,7 +50,7 @@ async fn test_call_function() -> Result<FunctionResult> {
     // )]));
 
     let res = runtime
-        .call_function("ExtractNames".to_string(), params, &ctx)
+        .call_function("ExtractNames".to_string(), &params, &ctx)
         .await?;
 
     log::info!("Result: {}", res);

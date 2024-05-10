@@ -11,7 +11,7 @@ use baml_runtime::{
 use serde_json::error;
 use wasm_bindgen::prelude::*;
 
-use baml_runtime::InternalRuntimeInterface;
+use baml_runtime::{InternalRuntimeInterface, RuntimeContext};
 
 use crate::runtime_wasm::runtime_prompt::WasmPrompt;
 
@@ -182,11 +182,11 @@ impl WasmProject {
     }
 
     #[wasm_bindgen]
-    pub fn runtime(&self) -> Result<WasmRuntime, JsValue> {
+    pub fn runtime(&self, ctx: &WasmRuntimeContext) -> Result<WasmRuntime, JsValue> {
         let mut hm = self.files.iter().collect::<HashMap<_, _>>();
         hm.extend(self.unsaved_files.iter());
 
-        BamlRuntime::from_file_content(&self.root_dir_name, &hm)
+        BamlRuntime::from_file_content(&self.root_dir_name, &hm, &ctx.ctx)
             .map(|r| WasmRuntime { runtime: r })
             .map_err(|e| match e.downcast::<DiagnosticsError>() {
                 Ok(e) => WasmDiagnosticError {
@@ -507,8 +507,9 @@ impl WasmFunction {
         ctx: &runtime_ctx::WasmRuntimeContext,
         params: JsValue,
     ) -> Result<WasmPrompt, wasm_bindgen::JsError> {
-        let mut params =
-            serde_wasm_bindgen::from_value::<HashMap<String, serde_json::Value>>(params)?;
+        let mut params = serde_wasm_bindgen::from_value::<
+            indexmap::IndexMap<String, serde_json::Value>,
+        >(params)?;
         let env_vars = rt.runtime.internal().ir().required_env_vars();
 
         // For anything env vars that are not provided, fill with empty strings

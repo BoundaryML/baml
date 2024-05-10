@@ -63,7 +63,7 @@ class Project {
   update_runtime() {
     if (this.current_runtime == undefined) {
       try {
-        this.current_runtime = this.files.runtime()
+        this.current_runtime = this.files.runtime(this.ctx)
         this.onSuccess(
           this.files.diagnostics(this.current_runtime),
           Object.fromEntries(

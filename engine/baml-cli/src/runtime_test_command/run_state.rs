@@ -254,17 +254,14 @@ impl TestCommand {
         &self,
         semaphore: Arc<Semaphore>,
         test: &TestCaseWalker,
-        env_vars: &HashMap<String, String>,
+        ctx: &RuntimeContext,
         state: Arc<Mutex<TestRunState>>,
         progress_bar: TestRunBar,
     ) -> task::JoinHandle<()> {
         let function_name = test.function().name().to_string();
         let test_name = test.test_case().name.clone();
 
-        let ctx = RuntimeContext {
-            env: env_vars.clone(),
-            tags: Default::default(),
-        };
+        let ctx = ctx.clone();
 
         let runtime = self.runtime.clone();
 
@@ -276,7 +273,7 @@ impl TestCommand {
                 .expect("Failed to acquire semaphore permit");
 
             let result = {
-                let mut rt = runtime.lock().await;
+                let rt = runtime.lock().await;
                 // println!("Got semaphore: {} {}", function_name, test_name);
                 state.lock().await.update(
                     &function_name,
@@ -314,7 +311,7 @@ impl TestCommand {
     pub async fn run_parallel(
         &self,
         max_parallel: usize,
-        env_vars: &HashMap<String, String>,
+        ctx: &baml_runtime::RuntimeContext,
     ) -> Result<TestRunState> {
         // Start a thread pool with max_parallel threads
         // Each thread will take a test from the queue and run it
@@ -334,7 +331,7 @@ impl TestCommand {
 
             let state_clone = locked_state.clone();
 
-            let handle = self.test_handler(sem_clone, &test, env_vars, state_clone, bars.clone());
+            let handle = self.test_handler(sem_clone, &test, ctx, state_clone, bars.clone());
 
             handles.push(handle);
         }

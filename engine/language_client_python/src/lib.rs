@@ -2,6 +2,7 @@ mod parse_py_type;
 mod python_types;
 
 use baml_runtime::{BamlRuntime, RuntimeContext, RuntimeInterface};
+use indexmap::IndexMap;
 use internal_baml_codegen::GeneratorArgs;
 use parse_py_type::parse_py_type;
 use pyo3::exceptions::{PyRuntimeError, PyTypeError};
@@ -117,7 +118,7 @@ ret = get_schema()
     }
 }
 
-fn convert_to_hashmap(value: Value) -> Option<HashMap<String, Value>> {
+fn convert_to_hashmap(value: Value) -> Option<IndexMap<String, Value>> {
     match value {
         Value::Object(map) => Some(map.into_iter().collect()),
         _ => None,
@@ -127,10 +128,14 @@ fn convert_to_hashmap(value: Value) -> Option<HashMap<String, Value>> {
 #[pymethods]
 impl BamlRuntimeFfi {
     #[staticmethod]
-    fn from_directory(directory: PathBuf) -> PyResult<Self> {
+    fn from_directory(py: Python<'_>, directory: PathBuf, ctx: PyObject) -> PyResult<Self> {
+        let ctx: RuntimeContext = RuntimeContext::from_env().merge(Some(depythonize::<
+            baml_runtime::RuntimeContext,
+        >(ctx.as_ref(py))?));
+
         Ok(BamlRuntimeFfi {
             internal: Arc::new(
-                BamlRuntime::from_directory(&directory).map_err(BamlError::from_anyhow)?,
+                BamlRuntime::from_directory(&directory, &ctx).map_err(BamlError::from_anyhow)?,
             ),
         })
     }
@@ -147,19 +152,17 @@ impl BamlRuntimeFfi {
         let args = parse_py_type(args.as_ref(py).to_object(py))?;
         let args_map = convert_to_hashmap(args);
         log::debug!("pyo3 call_function parsed args into: {:#?}", args_map);
-
-        let ctx: RuntimeContext = RuntimeContext::from_env().merge(Some(depythonize::<
+        let ctx = RuntimeContext::from_env().merge(Some(depythonize::<
             baml_runtime::RuntimeContext,
         >(ctx.as_ref(py))?));
-
         match args_map {
             None => Err(BamlError::new_err("Failed to parse args")),
             Some(args_map) => {
-                let baml_runtime = Arc::clone(&self.internal);
+                let baml_runtime = self.internal.clone();
 
                 pyo3_asyncio::tokio::future_into_py(py, async move {
                     let result = baml_runtime
-                        .call_function(function_name, args_map, &ctx)
+                        .call_function(function_name, &args_map, &ctx)
                         .await
                         .map(python_types::FunctionResult::new)
                         .map_err(BamlError::from_anyhow);

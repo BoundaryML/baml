@@ -1,9 +1,12 @@
 use anyhow::Result;
+use indexmap::IndexMap;
 use internal_baml_core::internal_baml_diagnostics::Diagnostics;
 use internal_baml_core::ir::{repr::IntermediateRepr, FunctionWalker};
 use internal_baml_jinja::RenderedPrompt;
 use std::{collections::HashMap, sync::Arc};
+use uuid::Uuid;
 
+use crate::tracing::TracingSpan;
 use crate::{
     internal::{
         ir_features::IrFeatures,
@@ -40,7 +43,7 @@ pub trait RuntimeInterface {
     fn call_function(
         &self,
         function_name: String,
-        params: HashMap<String, serde_json::Value>,
+        params: &IndexMap<String, serde_json::Value>,
         ctx: &RuntimeContext,
     ) -> impl std::future::Future<Output = ResponseType<FunctionResult>>;
 
@@ -55,6 +58,23 @@ pub trait RuntimeInterface {
 //
 // These are UNSTABLE, and should be considered as a work in progress
 //
+
+pub trait ExerimentalTracingInterface {
+    fn start_span(
+        &self,
+        function_name: &str,
+        ctx: &RuntimeContext,
+        params: &IndexMap<String, serde_json::Value>,
+    ) -> Option<TracingSpan>;
+
+    async fn finish_function_span(
+        &self,
+        span: TracingSpan,
+        result: &Result<FunctionResult>,
+    ) -> Result<()>;
+
+    fn flush(&self) -> Result<()>;
+}
 
 // Define your composite trait with a generic parameter that must implement all the required traits.
 // This is a runtime that has no access to the disk or network
@@ -86,7 +106,7 @@ pub trait InternalRuntimeInterface {
         &self,
         function_name: &str,
         ctx: &RuntimeContext,
-        params: &HashMap<String, serde_json::Value>,
+        params: &IndexMap<String, serde_json::Value>,
     ) -> Result<(RenderedPrompt, String)>;
 
     fn ir(&self) -> &IntermediateRepr;

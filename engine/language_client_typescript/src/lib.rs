@@ -1,7 +1,8 @@
 mod ts_types;
 
-use baml_runtime::RuntimeInterface;
+use baml_runtime::{RuntimeContext, RuntimeInterface};
 use futures::prelude::*;
+use indexmap::IndexMap;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use std::collections::HashMap;
@@ -19,10 +20,13 @@ pub struct BamlRuntimeFfi {
 impl BamlRuntimeFfi {
     #[napi]
     pub fn from_directory(directory: String) -> Result<BamlRuntimeFfi> {
+        let ctx = baml_runtime::RuntimeContext::from_env();
+
         Ok(BamlRuntimeFfi {
-            internal: Arc::new(baml_runtime::BamlRuntime::from_directory(&PathBuf::from(
-                directory,
-            ))?),
+            internal: Arc::new(baml_runtime::BamlRuntime::from_directory(
+                &PathBuf::from(directory),
+                &ctx,
+            )?),
         })
     }
 
@@ -33,15 +37,13 @@ impl BamlRuntimeFfi {
         &self,
         function_name: String,
         args: HashMap<String, serde_json::Value>,
-        ctx: Option<ts_types::RuntimeContext>,
     ) -> Result<ts_types::FunctionResult> {
-        let result = Arc::clone(&self.internal)
-            .call_function(
-                function_name,
-                args,
-                &baml_runtime::RuntimeContext::from_env().merge(ctx),
-            )
-            .await?;
+        let args = args.into_iter().collect::<IndexMap<_, _>>();
+
+        let rt = self.internal.clone();
+        let ctx = baml_runtime::RuntimeContext::from_env();
+
+        let result = rt.call_function(function_name, &args, &ctx).await?;
 
         Ok(ts_types::FunctionResult::new(result))
     }

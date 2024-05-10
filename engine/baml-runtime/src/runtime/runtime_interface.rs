@@ -15,6 +15,7 @@ use crate::{
 };
 use anyhow::Result;
 use dashmap::DashMap;
+use indexmap::IndexMap;
 use internal_baml_codegen::{GeneratorArgs, LanguageClientType};
 
 use internal_baml_core::{
@@ -42,7 +43,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         &self,
         function_name: &str,
         ctx: &RuntimeContext,
-        params: &HashMap<String, serde_json::Value>,
+        params: &IndexMap<String, serde_json::Value>,
     ) -> Result<(RenderedPrompt, String)> {
         let func = self.get_function(function_name, ctx)?;
         let baml_args = self.ir().check_function_params(&func, params)?;
@@ -221,7 +222,7 @@ impl RuntimeInterface for InternalBamlRuntime {
 
         let params = match test.content().as_json(&ctx.env)? {
             serde_json::Value::Object(kv) => {
-                let mut params = HashMap::new();
+                let mut params = IndexMap::new();
                 for (k, v) in kv {
                     params.insert(k, v);
                 }
@@ -261,11 +262,11 @@ impl RuntimeInterface for InternalBamlRuntime {
     async fn call_function(
         &self,
         function_name: String,
-        params: HashMap<String, serde_json::Value>,
+        params: &IndexMap<String, serde_json::Value>,
         ctx: &RuntimeContext,
     ) -> ResponseType<crate::FunctionResult> {
         let func = self.get_function(&function_name, ctx)?;
-        let baml_args = self.ir().check_function_params(&func, &params)?;
+        let baml_args = self.ir().check_function_params(&func, params)?;
 
         let renderer = PromptRenderer::from_function(&func)?;
         let client_name = renderer.client_name().to_string();

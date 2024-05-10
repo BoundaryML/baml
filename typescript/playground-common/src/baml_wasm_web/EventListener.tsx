@@ -9,7 +9,12 @@ import CustomErrorBoundary from '../utils/ErrorFallback'
 import { sessionStore } from './JotaiProvider'
 import { availableProjectsAtom, projectFamilyAtom, projectFilesAtom, runtimeFamilyAtom } from './baseAtoms'
 import type BamlProjectManager from './project_manager'
-import type { WasmDiagnosticError, WasmParam, WasmRuntime } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
+import type {
+  WasmDiagnosticError,
+  WasmParam,
+  WasmRuntime,
+  WasmRuntimeContext,
+} from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 
 // const wasm = await import("@gloo-ai/baml-schema-wasm-web/baml_schema_build");
 // const { WasmProject, WasmRuntime, WasmRuntimeContext, version: RuntimeVersion } = wasm;
@@ -188,9 +193,10 @@ export const updateFileAtom = atom(null, (get, set, params: WriteFileParams) => 
   let rt: WasmRuntime | undefined = undefined
   let diag: WasmDiagnosticError | undefined = undefined
 
-  if (project && wasm) {
+  const ctx = get(runtimeCtx)
+  if (project && wasm && ctx) {
     try {
-      rt = project.runtime()
+      rt = project.runtime(ctx)
       diag = project.diagnostics(rt)
     } catch (e) {
       const WasmDiagnosticError = wasm.WasmDiagnosticError
@@ -342,6 +348,7 @@ const ErrorCount: React.FC = () => {
 }
 const createRuntime = (
   wasm: typeof import('@gloo-ai/baml-schema-wasm-web'),
+  ctx: WasmRuntimeContext,
   root_path: string,
   project_files: Record<string, string>,
 ) => {
@@ -353,7 +360,7 @@ const createRuntime = (
   let rt = undefined
   let diag = undefined
   try {
-    rt = project.runtime()
+    rt = project.runtime(ctx)
     diag = project.diagnostics(rt)
   } catch (e) {
     const WasmDiagnosticError = wasm.WasmDiagnosticError
@@ -382,27 +389,31 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
   // const setRuntimeCtx = useSetAtom(runtimeCtxRaw);
   const version = useAtomValue(versionAtom)
   const wasm = useAtomValue(wasmAtom)
+  const ctx = useAtomValue(runtimeCtx)
 
-  const createRuntimeCb = useAtomCallback((get, set, wasm: typeof import('@gloo-ai/baml-schema-wasm-web')) => {
-    const selectedProject = get(selectedProjectAtom)
-    if (!selectedProject) {
-      return
-    }
-    const project_files = get(projectFilesAtom(selectedProject))
-    const { project, runtime, diagnostics } = createRuntime(wasm, selectedProject, project_files)
-    set(projectFamilyAtom(selectedProject), project)
-    set(runtimeFamilyAtom(selectedProject), {
-      last_successful_runtime: undefined,
-      current_runtime: runtime,
-      diagnostics,
-    })
-  })
+  const createRuntimeCb = useAtomCallback(
+    (get, set, wasm: typeof import('@gloo-ai/baml-schema-wasm-web'), ctx: WasmRuntimeContext) => {
+      const selectedProject = get(selectedProjectAtom)
+      if (!selectedProject) {
+        return
+      }
+
+      const project_files = get(projectFilesAtom(selectedProject))
+      const { project, runtime, diagnostics } = createRuntime(wasm, ctx, selectedProject, project_files)
+      set(projectFamilyAtom(selectedProject), project)
+      set(runtimeFamilyAtom(selectedProject), {
+        last_successful_runtime: undefined,
+        current_runtime: runtime,
+        diagnostics,
+      })
+    },
+  )
 
   useEffect(() => {
-    if (wasm) {
-      createRuntimeCb(wasm)
+    if (wasm && ctx) {
+      createRuntimeCb(wasm, ctx)
     }
-  }, [wasm])
+  }, [wasm, ctx])
 
   useEffect(() => {
     const fn = (

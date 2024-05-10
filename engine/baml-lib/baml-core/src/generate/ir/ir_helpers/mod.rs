@@ -42,7 +42,7 @@ pub trait IRHelper {
     fn check_function_params<'a>(
         &'a self,
         function: &'a FunctionWalker<'a>,
-        params: &HashMap<String, serde_json::Value>,
+        params: &IndexMap<String, serde_json::Value>,
     ) -> Result<BamlArgType, Error>;
 }
 
@@ -128,7 +128,7 @@ impl IRHelper for IntermediateRepr {
     fn check_function_params<'a>(
         &'a self,
         function: &'a FunctionWalker<'a>,
-        params: &HashMap<String, serde_json::Value>,
+        params: &IndexMap<String, serde_json::Value>,
     ) -> Result<BamlArgType, Error> {
         let function_params = match function.inputs() {
             either::Either::Left(_) => {
