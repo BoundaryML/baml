@@ -53,10 +53,8 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^1.7.3",
-    "@commander-js/extra-typings": "^12.0.1",
     "@napi-rs/cli": "^3.0.0-alpha.54",
     "@types/node": "^20.12.11",
-    "commander": "^12.0.0",
     "npm-run-all2": "^6.1.2",
     "ts-node": "^10.9.2",
     "tsc": "^2.0.4",
