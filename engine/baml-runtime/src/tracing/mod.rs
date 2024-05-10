@@ -45,7 +45,8 @@ pub struct BamlTracer {
 impl BamlTracer {
     pub fn new(options: Option<APIWrapper>, ctx: &RuntimeContext) -> Self {
         #[cfg(not(feature = "wasm"))]
-        let options = options.unwrap_or_default();
+        /// TODO(vbv): handle the unwrap case, this panics right now
+        let options = options.unwrap();
         #[cfg(feature = "wasm")]
         let options = options.unwrap_or_else(|| ctx.into());
 

@@ -36,13 +36,14 @@ use clap::Parser;
 use internal_baml_codegen::{GeneratorArgs, LanguageClientType};
 use std::path::PathBuf;
 
+pub use internal_baml_jinja::BamlImage;
 #[cfg(feature = "internal")]
-pub use internal_baml_jinja::{BamlImage, ChatMessagePart, RenderedPrompt};
+pub use internal_baml_jinja::{ChatMessagePart, RenderedPrompt};
 #[cfg(feature = "internal")]
 pub use runtime_interface::InternalRuntimeInterface;
 
 #[cfg(not(feature = "internal"))]
-pub(crate) use internal_baml_jinja::{BamlImage, ChatMessagePart, RenderedPrompt};
+pub(crate) use internal_baml_jinja::{ChatMessagePart, RenderedPrompt};
 #[cfg(not(feature = "internal"))]
 pub(crate) use runtime_interface::InternalRuntimeInterface;
 
@@ -50,7 +51,7 @@ pub use internal_baml_core::internal_baml_diagnostics::Diagnostics as Diagnostic
 
 pub struct BamlRuntime {
     inner: InternalBamlRuntime,
-    //tracer: BamlTracer,
+    tracer: BamlTracer,
 }
 
 impl BamlRuntime {
@@ -59,7 +60,7 @@ impl BamlRuntime {
     pub fn from_directory(path: &PathBuf, ctx: &RuntimeContext) -> Result<Self> {
         Ok(BamlRuntime {
             inner: InternalBamlRuntime::from_directory(path)?,
-            //tracer: BamlTracer::new(None, ctx),
+            tracer: BamlTracer::new(None, ctx),
         })
     }
 
@@ -70,7 +71,7 @@ impl BamlRuntime {
     ) -> Result<Self> {
         Ok(BamlRuntime {
             inner: InternalBamlRuntime::from_file_content(root_path, files)?,
-            //tracer: BamlTracer::new(None, ctx),
+            tracer: BamlTracer::new(None, ctx),
         })
     }
 
@@ -106,13 +107,13 @@ impl RuntimeInterface for BamlRuntime {
         params: &IndexMap<String, serde_json::Value>,
         ctx: &RuntimeContext,
     ) -> ResponseType<crate::FunctionResult> {
-        //let span = self.tracer.start_span(&function_name, ctx, params, None);
+        let span = self.tracer.start_span(&function_name, ctx, params, None);
         let response = self.inner.call_function(function_name, params, ctx).await;
-        //if let Some(span) = span {
-        //    if let Err(e) = self.tracer.finish_baml_span(span, &response).await {
-        //        log::debug!("Error during logging: {}", e);
-        //    }
-        //}
+        if let Some(span) = span {
+            if let Err(e) = self.tracer.finish_baml_span(span, &response).await {
+                log::debug!("Error during logging: {}", e);
+            }
+        }
         response
     }
 
@@ -133,8 +134,7 @@ impl ExerimentalTracingInterface for BamlRuntime {
         ctx: &RuntimeContext,
         params: &IndexMap<String, serde_json::Value>,
     ) -> Option<TracingSpan> {
-        //self.tracer.start_span(function_name, ctx, params, None)
-        todo!()
+        self.tracer.start_span(function_name, ctx, params, None)
     }
 
     async fn finish_function_span(
@@ -142,12 +142,10 @@ impl ExerimentalTracingInterface for BamlRuntime {
         span: TracingSpan,
         result: &Result<FunctionResult>,
     ) -> Result<()> {
-        //self.tracer.finish_baml_span(span, result).await
-        todo!()
+        self.tracer.finish_baml_span(span, result).await
     }
 
     fn flush(&self) -> Result<()> {
-        //self.tracer.flush()
-        todo!()
+        self.tracer.flush()
     }
 }

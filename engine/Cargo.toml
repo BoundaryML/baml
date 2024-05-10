@@ -18,7 +18,7 @@ default-members = [
   "baml-core-ffi",
   "baml-fmt",
   "baml-runtime",
-  "baml-schema-wasm",
+  #"baml-schema-wasm",
   "language-client-codegen",
   "language_client_python",
   # "language_client_typescript",

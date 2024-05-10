@@ -73,11 +73,11 @@ features = ["Headers", "Request", "RequestInit", "RequestMode", "Window"]
 defaults = []
 wasm = [
   "colored/no-color",
-  "js-sys",
+  "dep:js-sys",
   "uuid/js",
-  "wasm-bindgen",
-  "web-sys",
-  "wasm-bindgen-futures",
+  "dep:wasm-bindgen",
+  "dep:web-sys",
+  "dep:wasm-bindgen-futures",
 ] # Enable this feature for WASM build
 no_wasm = ["tokio/full", "reqwest", "walkdir", "hostname"]
 internal = []

@@ -2632,6 +2632,7 @@ dependencies = [
  "base64 0.22.1",
  "env_logger",
  "futures",
+ "indexmap 2.2.5",
  "log",
  "magnus",
  "rb-sys",

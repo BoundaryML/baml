@@ -1,4 +1,5 @@
 use baml_runtime::{BamlRuntime, RuntimeContext, RuntimeInterface};
+use indexmap::IndexMap;
 use magnus::IntoValue;
 use magnus::{
     class, error::RubyUnavailableError, exception::runtime_error, function, method, prelude::*,
@@ -43,15 +44,16 @@ impl BamlRuntimeFfi {
     pub fn from_directory(directory: PathBuf) -> Result<Self> {
         let ruby = BamlRuntimeFfi::try_lock_gvl()?;
 
-        let baml_runtime = match BamlRuntime::from_directory(&directory) {
-            Ok(br) => br,
-            Err(e) => {
-                return Err(Error::new(
-                    ruby.exception_runtime_error(),
-                    format!("{:?}", e.context("Failed to initialize BAML runtime")),
-                ))
-            }
-        };
+        let baml_runtime =
+            match BamlRuntime::from_directory(&directory, &RuntimeContext::from_env()) {
+                Ok(br) => br,
+                Err(e) => {
+                    return Err(Error::new(
+                        ruby.exception_runtime_error(),
+                        format!("{:?}", e.context("Failed to initialize BAML runtime")),
+                    ))
+                }
+            };
 
         // NB: libruby will panic if called from a non-Ruby thread, so we stick to the current thread
         // to avoid causing issues
@@ -88,7 +90,7 @@ impl BamlRuntimeFfi {
         }
 
         let args = match ruby_to_json::RubyToJson::convert_hash_to_json(args) {
-            Ok(args) => args.into_iter().collect::<HashMap<_, _>>(),
+            Ok(args) => args.into_iter().collect::<IndexMap<_, _>>(),
             Err(e) => {
                 return Err(Error::new(
                     ruby.exception_syntax_error(),
@@ -114,7 +116,7 @@ impl BamlRuntimeFfi {
 
         let retval = match self.t.block_on(self.internal.borrow_mut().call_function(
             function_name.clone(),
-            args,
+            &args,
             &ctx,
         )) {
             Ok(res) => Ok(ruby_types::FunctionResult::new(res)),

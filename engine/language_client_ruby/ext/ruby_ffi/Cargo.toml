@@ -10,10 +10,11 @@ crate-type = ["cdylib"]
 
 [dependencies]
 anyhow.workspace = true
-baml-runtime = { path = "../../../baml-runtime", features = ["internal"] }
+baml-runtime = { path = "../../../baml-runtime", features = ["no_wasm"] }
 base64.workspace = true
 env_logger.workspace = true
 futures.workspace = true
+indexmap.workspace = true
 log.workspace = true
 magnus = { version = "0.6", features = ["rb-sys"] }
 # Must be kept in sync with ../../Gemfile
