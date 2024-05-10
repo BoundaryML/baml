@@ -21,7 +21,7 @@ default-members = [
   #"baml-schema-wasm",
   "language-client-codegen",
   "language_client_python",
-  # "language_client_typescript",
+  "language_client_typescript",
 ]
 
 [workspace.dependencies]
