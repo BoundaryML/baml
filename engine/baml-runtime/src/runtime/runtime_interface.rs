@@ -286,7 +286,7 @@ impl RuntimeInterface for InternalBamlRuntime {
         &self,
         client_type: &LanguageClientType,
         args: &GeneratorArgs,
-    ) -> Result<()> {
+    ) -> Result<internal_baml_codegen::GenerateOutput> {
         client_type.generate_client(self.ir(), args)
     }
 

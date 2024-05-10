@@ -49,7 +49,7 @@ pub trait RuntimeInterface {
         &self,
         client_type: &internal_baml_codegen::LanguageClientType,
         args: &internal_baml_codegen::GeneratorArgs,
-    ) -> Result<()>;
+    ) -> Result<internal_baml_codegen::GenerateOutput>;
 }
 
 //

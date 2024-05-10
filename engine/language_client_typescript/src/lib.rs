@@ -1,14 +1,3 @@
-use tokio::time::{sleep, Duration};
-
-//#[macro_use]
-//extern crate napi_derive;
-//
-//#[napi]
-//pub async fn sum(a: i32, b: i32) -> Result<i32> {
-//    sleep(Duration::from_secs(1)).await;
-//    a + b
-//}
-
 mod ts_types;
 
 use baml_runtime::RuntimeInterface;
@@ -37,30 +26,29 @@ impl BamlRuntimeFfi {
         })
     }
 
-    /// TODO: ctx should be optional
-    #[napi(ts_args_type = "function_name: string, args: unknown, ctx: unknown")]
+    #[napi(
+        ts_args_type = "function_name: string, args: Record<string, unknown>, ctx?: RuntimeContext"
+    )]
     pub async fn call_function(
         &self,
         function_name: String,
         args: HashMap<String, serde_json::Value>,
-        ctx: ts_types::RuntimeContext,
+        ctx: Option<ts_types::RuntimeContext>,
     ) -> Result<ts_types::FunctionResult> {
         let result = Arc::clone(&self.internal)
             .call_function(
                 function_name,
                 args,
-                &baml_runtime::RuntimeContext::from_env().merge(ctx.into()),
+                &baml_runtime::RuntimeContext::from_env().merge(ctx),
             )
             .await?;
 
         Ok(ts_types::FunctionResult::new(result))
     }
 
-    fn generate_client(&self, args: ts_types::GenerateArgs) -> Result<()> {
-        self.internal
-            .generate_client(&args.client_type(), &args.as_codegen_args())?;
-
-        Ok(())
+    #[napi]
+    pub fn run_cli(args: Vec<String>) -> Result<()> {
+        Ok(baml_runtime::BamlRuntime::run_cli(args.into())?)
     }
 }
 

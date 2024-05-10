@@ -8,6 +8,7 @@ pub mod internal;
 #[cfg(not(feature = "internal"))]
 pub(crate) mod internal;
 
+mod cli;
 mod macros;
 mod runtime;
 mod runtime_interface;
@@ -23,6 +24,7 @@ use runtime_interface::RuntimeConstructor;
 pub use runtime_interface::RuntimeInterface;
 pub use types::*;
 
+use clap::Parser;
 use internal_baml_codegen::{GeneratorArgs, LanguageClientType};
 use std::path::PathBuf;
 
@@ -64,6 +66,10 @@ impl BamlRuntime {
     pub fn internal(&self) -> &impl InternalRuntimeInterface {
         &self.inner
     }
+
+    pub fn run_cli(argv: Vec<String>) -> Result<()> {
+        cli::RuntimeCli::parse_from(argv.into_iter()).run()
+    }
 }
 
 // #[cfg(not(feature = "no_wasm"))]
@@ -95,7 +101,7 @@ impl RuntimeInterface for BamlRuntime {
         &self,
         client_type: &LanguageClientType,
         args: &GeneratorArgs,
-    ) -> Result<()> {
+    ) -> Result<internal_baml_codegen::GenerateOutput> {
         self.inner.generate_client(client_type, args)
     }
 }

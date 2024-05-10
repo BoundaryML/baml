@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use internal_baml_core::ir::repr::IntermediateRepr;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 mod dir_writer;
 mod python;
@@ -15,7 +15,12 @@ pub struct GeneratorArgs {
     pub encoded_baml_files: Option<String>,
 }
 
-#[derive(Clone, Deserialize)]
+pub struct GenerateOutput {
+    pub client_type: String,
+    pub files: Vec<PathBuf>,
+}
+
+#[derive(Clone, Debug, Serialize)]
 pub enum LanguageClientType {
     #[serde(rename = "python/pydantic")]
     PythonPydantic,
@@ -28,11 +33,20 @@ pub enum LanguageClientType {
 }
 
 impl LanguageClientType {
-    pub fn generate_client(&self, ir: &IntermediateRepr, gen: &GeneratorArgs) -> Result<()> {
-        match self {
+    pub fn generate_client(
+        &self,
+        ir: &IntermediateRepr,
+        gen: &GeneratorArgs,
+    ) -> Result<GenerateOutput> {
+        let files = match self {
             LanguageClientType::Ruby => ruby::generate(ir, gen),
             LanguageClientType::PythonPydantic => python::generate(ir, gen),
             LanguageClientType::Typescript => typescript::generate(ir, gen),
-        }
+        }?;
+
+        Ok(GenerateOutput {
+            client_type: serde_json::to_string(self)?,
+            files,
+        })
     }
 }

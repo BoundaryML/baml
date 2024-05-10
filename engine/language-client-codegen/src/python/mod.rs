@@ -1,6 +1,8 @@
 mod generate_types;
 mod python_language_features;
 
+use std::path::PathBuf;
+
 use anyhow::Result;
 use askama::Template;
 use either::Either;
@@ -26,7 +28,10 @@ struct PythonInit {
     encoded_baml_src: String,
 }
 
-pub(crate) fn generate(ir: &IntermediateRepr, generator: &crate::GeneratorArgs) -> Result<()> {
+pub(crate) fn generate(
+    ir: &IntermediateRepr,
+    generator: &crate::GeneratorArgs,
+) -> Result<Vec<PathBuf>> {
     let mut collector = FileCollector::<PythonLanguageFeatures>::new();
 
     collector.add_file(
@@ -34,15 +39,7 @@ pub(crate) fn generate(ir: &IntermediateRepr, generator: &crate::GeneratorArgs) 
         TryInto::<generate_types::PythonTypes>::try_into(ir)
             .map_err(|e| e.context("Error while building types.py"))?
             .render()
-            .map_or_else(
-                |e| {
-                    format!(
-                        "/*\n\n{:?}\n\n*/",
-                        anyhow::Error::new(e).context("Error while rendering types.py")
-                    )
-                },
-                |r| r,
-            ),
+            .map_err(|e| anyhow::Error::from(e).context("Error while rendering types.py"))?,
     );
 
     collector.add_file(
@@ -50,15 +47,7 @@ pub(crate) fn generate(ir: &IntermediateRepr, generator: &crate::GeneratorArgs) 
         TryInto::<PythonClient>::try_into(ir)
             .map_err(|e| e.context("Error while building client.py"))?
             .render()
-            .map_or_else(
-                |e| {
-                    format!(
-                        "/*\n\n{:?}\n\n*/",
-                        anyhow::Error::new(e).context("Error while rendering client.py")
-                    )
-                },
-                |r| r,
-            ),
+            .map_err(|e| anyhow::Error::from(e).context("Error while rendering client.py"))?,
     );
 
     collector.add_file(
@@ -70,20 +59,10 @@ pub(crate) fn generate(ir: &IntermediateRepr, generator: &crate::GeneratorArgs) 
                 .unwrap_or("".to_string()),
         }
         .render()
-        .map_or_else(
-            |e| {
-                format!(
-                    "/*\n\n{:?}\n\n*/",
-                    anyhow::Error::new(e).context("Error while rendering client.py")
-                )
-            },
-            |r| r,
-        ),
+        .map_err(|e| anyhow::Error::from(e).context("Error while rendering __init__.py"))?,
     );
 
-    collector.commit(&generator.output_root)?;
-
-    Ok(())
+    collector.commit(&generator.output_root)
 }
 
 impl TryFrom<&IntermediateRepr> for PythonClient {

@@ -1,6 +1,8 @@
 mod generate_types;
 mod typescript_language_features;
 
+use std::path::PathBuf;
+
 use anyhow::Result;
 use askama::Template;
 use either::Either;
@@ -26,7 +28,10 @@ struct TypescriptInit {
     encoded_baml_src: String,
 }
 
-pub(crate) fn generate(ir: &IntermediateRepr, generator: &crate::GeneratorArgs) -> Result<()> {
+pub(crate) fn generate(
+    ir: &IntermediateRepr,
+    generator: &crate::GeneratorArgs,
+) -> Result<Vec<PathBuf>> {
     let mut collector = FileCollector::<TypescriptLanguageFeatures>::new();
 
     collector.add_file(
@@ -34,15 +39,7 @@ pub(crate) fn generate(ir: &IntermediateRepr, generator: &crate::GeneratorArgs) 
         TryInto::<generate_types::TypescriptTypes>::try_into(ir)
             .map_err(|e| e.context("Error while building types.ts"))?
             .render()
-            .map_or_else(
-                |e| {
-                    format!(
-                        "/*\n\n{:?}\n\n*/",
-                        anyhow::Error::new(e).context("Error while rendering types.ts")
-                    )
-                },
-                |r| r,
-            ),
+            .map_err(|e| anyhow::Error::from(e).context("Error while rendering types.ts"))?,
     );
 
     collector.add_file(
@@ -50,15 +47,7 @@ pub(crate) fn generate(ir: &IntermediateRepr, generator: &crate::GeneratorArgs) 
         TryInto::<TypescriptClient>::try_into(ir)
             .map_err(|e| e.context("Error while building client.ts"))?
             .render()
-            .map_or_else(
-                |e| {
-                    format!(
-                        "/*\n\n{:?}\n\n*/",
-                        anyhow::Error::new(e).context("Error while rendering client.ts")
-                    )
-                },
-                |r| r,
-            ),
+            .map_err(|e| anyhow::Error::from(e).context("Error while rendering client.ts"))?,
     );
 
     collector.add_file(
@@ -70,20 +59,10 @@ pub(crate) fn generate(ir: &IntermediateRepr, generator: &crate::GeneratorArgs) 
                 .unwrap_or("".to_string()),
         }
         .render()
-        .map_or_else(
-            |e| {
-                format!(
-                    "/*\n\n{:?}\n\n*/",
-                    anyhow::Error::new(e).context("Error while rendering client.ts")
-                )
-            },
-            |r| r,
-        ),
+        .map_err(|e| anyhow::Error::from(e).context("Error while rendering index.ts"))?,
     );
 
-    collector.commit(&generator.output_root)?;
-
-    Ok(())
+    collector.commit(&generator.output_root)
 }
 
 impl TryFrom<&IntermediateRepr> for TypescriptClient {

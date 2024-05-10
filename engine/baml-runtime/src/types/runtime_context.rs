@@ -28,7 +28,11 @@ impl RuntimeContext {
         }
     }
 
-    pub fn merge(mut self, other: RuntimeContext) -> Self {
+    pub fn merge<O: Into<RuntimeContext>>(mut self, other: Option<O>) -> Self {
+        let Some(other) = other else {
+            return self;
+        };
+        let other = other.into();
         self.env.extend(other.env.into_iter());
         self.tags.extend(other.tags.into_iter());
         self

@@ -33,6 +33,10 @@
       "path": "clients/ts"
     },
     {
+      "name": "clients/ts-cli",
+      "path": "clients/ts-cli"
+    },
+    {
       "name": "Docs",
       "path": "docs"
     },

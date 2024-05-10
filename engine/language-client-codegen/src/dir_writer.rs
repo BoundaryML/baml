@@ -32,7 +32,7 @@ impl<L: LanguageFeatures + Default> FileCollector<L> {
         );
     }
 
-    pub(super) fn commit(&self, dir: &Path) -> Result<()> {
+    pub(super) fn commit(&self, dir: &Path) -> Result<Vec<PathBuf>> {
         let output_path = dir;
         log::debug!("Writing files to {}", output_path.to_string_lossy());
 
@@ -94,6 +94,7 @@ impl<L: LanguageFeatures + Default> FileCollector<L> {
         std::fs::rename(&temp_path, output_path)?;
 
         log::info!("Wrote {} files to {}", files.len(), dir.display());
-        Ok(())
+
+        Ok(self.files.keys().cloned().collect())
     }
 }

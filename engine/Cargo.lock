@@ -367,6 +367,7 @@ dependencies = [
  "anyhow",
  "base64 0.13.1",
  "base64 0.22.1",
+ "clap 4.5.1",
  "colored",
  "dashmap",
  "dissimilar",

@@ -3,7 +3,7 @@ mod field_type;
 mod generate_types;
 mod ruby_language_features;
 
-
+use std::path::PathBuf;
 
 use anyhow::Result;
 use askama::Template;
@@ -28,7 +28,10 @@ struct RubyFunction {
     args: Vec<(String, String)>,
 }
 
-pub(crate) fn generate(ir: &IntermediateRepr, generator: &crate::GeneratorArgs) -> Result<()> {
+pub(crate) fn generate(
+    ir: &IntermediateRepr,
+    generator: &crate::GeneratorArgs,
+) -> Result<Vec<PathBuf>> {
     let mut collector = FileCollector::<RubyLanguageFeatures>::new();
 
     collector.add_file(
@@ -36,15 +39,7 @@ pub(crate) fn generate(ir: &IntermediateRepr, generator: &crate::GeneratorArgs) 
         TryInto::<generate_types::RubyTypes>::try_into(ir)
             .map_err(|e| e.context("Error while building types.rb"))?
             .render()
-            .map_or_else(
-                |e| {
-                    format!(
-                        "=begin\n{:?}\n=end",
-                        anyhow::Error::new(e).context("Error while rendering types.rb")
-                    )
-                },
-                |r| r,
-            ),
+            .map_err(|e| anyhow::Error::from(e).context("Error while rendering types.rb"))?,
     );
 
     collector.add_file(
@@ -52,20 +47,10 @@ pub(crate) fn generate(ir: &IntermediateRepr, generator: &crate::GeneratorArgs) 
         TryInto::<RubyClient>::try_into(ir)
             .map_err(|e| e.context("Error while building client.rb"))?
             .render()
-            .map_or_else(
-                |e| {
-                    format!(
-                        "=begin\n{:?}\n=end",
-                        anyhow::Error::new(e).context("Error while rendering client.rb")
-                    )
-                },
-                |r| r,
-            ),
+            .map_err(|e| anyhow::Error::from(e).context("Error while rendering client.rb"))?,
     );
 
-    collector.commit(&generator.output_root)?;
-
-    Ok(())
+    collector.commit(&generator.output_root)
 }
 
 impl TryFrom<&IntermediateRepr> for RubyClient {

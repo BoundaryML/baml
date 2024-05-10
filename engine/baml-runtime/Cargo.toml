@@ -10,6 +10,7 @@ license-file.workspace = true
 [dependencies]
 anyhow.workspace = true
 base64.workspace = true
+clap = { version = "4.4.6", features = ["cargo", "derive"] }
 colored = "2.1.0"
 dashmap.workspace = true
 dunce = "1.0.4"

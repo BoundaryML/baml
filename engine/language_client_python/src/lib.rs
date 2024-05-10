@@ -148,8 +148,9 @@ impl BamlRuntimeFfi {
         let args_map = convert_to_hashmap(args);
         log::debug!("pyo3 call_function parsed args into: {:#?}", args_map);
 
-        let ctx: RuntimeContext = RuntimeContext::from_env()
-            .merge(depythonize::<baml_runtime::RuntimeContext>(ctx.as_ref(py))?);
+        let ctx: RuntimeContext = RuntimeContext::from_env().merge(Some(depythonize::<
+            baml_runtime::RuntimeContext,
+        >(ctx.as_ref(py))?));
 
         match args_map {
             None => Err(BamlError::new_err("Failed to parse args")),
