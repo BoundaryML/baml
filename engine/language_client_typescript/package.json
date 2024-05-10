@@ -58,13 +58,5 @@
     "npm-run-all2": "^6.1.2",
     "ts-node": "^10.9.2"
   },
-  "packageManager": "pnpm@9.0.6",
-  "optionalDependencies": {
-    "@boundaryml/baml-darwin-arm64": "0.0.1",
-    "@boundaryml/baml-win32-arm64-msvc": "0.0.1",
-    "@boundaryml/baml-linux-arm64-gnu": "0.0.1",
-    "@boundaryml/baml-darwin-x64": "0.0.1",
-    "@boundaryml/baml-win32-x64-msvc": "0.0.1",
-    "@boundaryml/baml-linux-x64-gnu": "0.0.1"
-  }
+  "packageManager": "pnpm@9.0.6"
 }
