@@ -42,7 +42,7 @@
   },
   "scripts": {
     "artifacts": "napi artifacts",
-    "build": "build:debug --release",
+    "build": "pnpm build:debug --release",
     "build:debug": "mkdir -p dist && napi build --platform",
     "format": "run-p format:biome format:rs format:toml",
     "format:biome": "biome --write .",
