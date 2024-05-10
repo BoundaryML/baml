@@ -1,7 +1,7 @@
-// #[cfg(all(feature = "wasm", feature = "no_wasm"))]
-// compile_error!(
-//     "The features 'wasm' and 'no_wasm' are mutually exclusive. You can only use one at a time."
-// );
+#[cfg(all(feature = "wasm", feature = "no_wasm"))]
+compile_error!(
+    "The features 'wasm' and 'no_wasm' are mutually exclusive. You can only use one at a time."
+);
 
 #[cfg(feature = "internal")]
 pub mod internal;

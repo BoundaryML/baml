@@ -18,9 +18,15 @@ default-members = [
   "baml-core-ffi",
   "baml-fmt",
   "baml-runtime",
-  #"baml-schema-wasm",
+  # Disabled by default: --features no_wasm and --features wasm are mutually exclusive
+  # Building baml-schema-wasm in combination with everything else triggers feature unification,
+  # and it's OK to not build this by default because we have to build ts separately (this may
+  # also have something to do with resolver=2 and how duplicate dep builds are handled)
+  # "baml-schema-wasm",
   "language-client-codegen",
   "language_client_python",
+  # requires ruby to be installed, does not build for <3.1
+  # "language_client_ruby/ext/ruby_ffi",
   "language_client_typescript",
 ]
 
