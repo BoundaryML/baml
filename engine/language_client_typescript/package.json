@@ -55,25 +55,12 @@
     "@biomejs/biome": "^1.7.3",
     "@commander-js/extra-typings": "^12.0.1",
     "@napi-rs/cli": "^3.0.0-alpha.54",
-    "@rollup/plugin-typescript": "^11.1.6",
-    "@swc-node/register": "^1.9.0",
-    "@swc/cli": "^0.3.12",
-    "@swc/core": "^1.5.5",
     "@types/node": "^20.12.11",
     "commander": "^12.0.0",
     "npm-run-all2": "^6.1.2",
-    "rollup": "^4.17.2",
     "ts-node": "^10.9.2",
     "tsc": "^2.0.4",
     "typescript": "^5.4.5"
   },
-  "packageManager": "pnpm@9.0.6",
-  "optionalDependencies": {
-    "@boundaryml/baml-darwin-arm64": "0.0.1",
-    "@boundaryml/baml-win32-arm64-msvc": "0.0.1",
-    "@boundaryml/baml-linux-arm64-gnu": "0.0.1",
-    "@boundaryml/baml-darwin-x64": "0.0.1",
-    "@boundaryml/baml-win32-x64-msvc": "0.0.1",
-    "@boundaryml/baml-linux-x64-gnu": "0.0.1"
-  }
+  "packageManager": "pnpm@9.0.6"
 }
