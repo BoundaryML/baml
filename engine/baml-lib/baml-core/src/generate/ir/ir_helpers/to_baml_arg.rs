@@ -65,9 +65,20 @@ pub fn to_baml_arg(
                         }
                     } else if let Some(base64) = map.get("base64") {
                         if let Some(base64_str) = base64.as_str() {
-                            BamlArgType::Image(BamlImage::Base64(ImageBase64::new(
-                                base64_str.to_string(),
-                            )))
+                            // get the media_type from the map
+                            if let Some(media_type) = map.get("media_type") {
+                                if let Some(media_type_str) = media_type.as_str() {
+                                    BamlArgType::Image(BamlImage::Base64(ImageBase64::new(
+                                        base64_str.to_string(),
+                                        media_type_str.to_string(),
+                                    )))
+                                } else {
+                                    error()
+                                }
+                            } else {
+                                scope.push_error("Missing media_type for base64 image".to_string());
+                                BamlArgType::Unsupported("Error".to_string())
+                            }
                         } else {
                             error()
                         }

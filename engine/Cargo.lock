@@ -305,7 +305,6 @@ name = "baml-runtime"
 version = "0.20.0-canary.0"
 dependencies = [
  "anyhow",
- "base64 0.13.1",
  "base64 0.22.1",
  "chrono",
  "clap 4.5.1",
@@ -326,6 +325,8 @@ dependencies = [
  "json_comments",
  "jsonish",
  "log",
+ "mime",
+ "mime_guess",
  "reqwest",
  "serde",
  "serde-wasm-bindgen 0.6.5",
@@ -361,7 +362,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "baml_ts"
+name = "baml-typescript-ffi"
 version = "0.0.1"
 dependencies = [
  "baml-runtime",

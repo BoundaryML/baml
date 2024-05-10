@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 pub struct ChatCompletionResponse {
     /// A unique identifier for the chat completion.
     pub id: String,
-    /// A list of chat completion choices. Can be more than one if `n` is greater than 1.
+    /// A list of chat completion choices. Can be more than one if `n` is greater than 1.s
     pub choices: Vec<ChatChoice>,
     /// The Unix timestamp (in seconds) of when the chat completion was created.
     pub created: u32,

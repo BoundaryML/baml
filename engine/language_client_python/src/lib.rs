@@ -47,14 +47,19 @@ struct BamlRuntimeFfi {
 struct BamlImagePy {
     url: Option<String>,
     base64: Option<String>,
+    media_type: Option<String>,
 }
 
 // Implement constructor for BamlImage
 #[pymethods]
 impl BamlImagePy {
     #[new]
-    fn new(url: Option<String>, base64: Option<String>) -> Self {
-        BamlImagePy { url, base64 }
+    fn new(url: Option<String>, base64: Option<String>, media_type: Option<String>) -> Self {
+        BamlImagePy {
+            url,
+            base64,
+            media_type,
+        }
     }
 
     #[getter]

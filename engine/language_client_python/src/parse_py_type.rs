@@ -71,11 +71,13 @@ impl TryFrom<BamlImagePy> for BamlImage {
             BamlImagePy {
                 url: Some(url),
                 base64: None,
+                media_type: None,
             } => Ok(BamlImage::Url(ImageUrl { url })),
             BamlImagePy {
                 url: None,
                 base64: Some(base64),
-            } => Ok(BamlImage::Base64(ImageBase64 { base64 })),
+                media_type: Some(media_type),
+            } => Ok(BamlImage::Base64(ImageBase64 { base64, media_type })),
             _ => Err("Invalid BamlImagePy"),
         }
     }

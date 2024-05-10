@@ -71,7 +71,9 @@ impl From<BamlImagePy> for BamlImage {
     fn from(value: BamlImagePy) -> Self {
         match value {
             BamlImagePy::Url { url } => BamlImage::Url(ImageUrl { url }),
-            BamlImagePy::Base64 { base64 } => BamlImage::Base64(ImageBase64 { base64 }),
+            BamlImagePy::Base64 { base64, media_type } => {
+                BamlImage::Base64(ImageBase64 { base64, media_type })
+            }
         }
     }
 }

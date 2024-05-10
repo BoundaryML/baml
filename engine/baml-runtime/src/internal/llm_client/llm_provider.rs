@@ -6,6 +6,7 @@ use crate::RuntimeContext;
 
 use super::{
     super::prompt_renderer::PromptRenderer,
+    anthropic::AnthropicClient,
     openai::OpenAIClient,
     retry_policy::CallablePolicy,
     traits::{WithCallable, WithPrompt, WithRetryPolicy},
@@ -14,7 +15,7 @@ use super::{
 
 pub enum LLMProvider {
     OpenAI(OpenAIClient),
-    // Anthropic(AnthropicClient<'ir>),
+    Anthropic(AnthropicClient),
 }
 
 impl LLMProvider {
@@ -23,9 +24,9 @@ impl LLMProvider {
             "baml-openai-chat" | "openai" => {
                 OpenAIClient::new(client, ctx).map(LLMProvider::OpenAI)
             }
-            // "baml-anthropic-chat" | "anthropic" => {
-            //     AnthropicClient::new(client, ctx).map(LLMProvider::Anthropic)
-            // }
+            "baml-anthropic-chat" | "anthropic" => {
+                AnthropicClient::new(client, ctx).map(LLMProvider::Anthropic)
+            }
             other => {
                 let options = ["openai"];
                 anyhow::bail!(
@@ -47,6 +48,7 @@ impl<'ir> WithPrompt<'ir> for LLMProvider {
     ) -> Result<internal_baml_jinja::RenderedPrompt> {
         match self {
             LLMProvider::OpenAI(client) => client.render_prompt(renderer, ctx, params),
+            LLMProvider::Anthropic(client) => client.render_prompt(renderer, ctx, params),
         }
     }
 }
@@ -55,6 +57,7 @@ impl WithRetryPolicy for LLMProvider {
     fn retry_policy_name(&self) -> Option<&str> {
         match self {
             LLMProvider::OpenAI(client) => client.retry_policy_name(),
+            LLMProvider::Anthropic(client) => client.retry_policy_name(),
         }
     }
 }
@@ -68,6 +71,7 @@ impl WithCallable for LLMProvider {
     ) -> LLMResponse {
         match self {
             LLMProvider::OpenAI(client) => client.call(retry_policy, ctx, prompt).await,
+            LLMProvider::Anthropic(client) => client.call(retry_policy, ctx, prompt).await,
         }
     }
 }

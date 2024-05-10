@@ -125,19 +125,19 @@ impl RenderData {
 pub enum BamlImagePy {
     // struct
     Url { url: String },
-    Base64 { base64: String },
+    Base64 { base64: String, media_type: String },
 }
 
 // Implement constructor for BamlImage
 #[pymethods]
 impl BamlImagePy {
     #[new]
-    fn new(url: Option<String>, base64: Option<String>) -> Self {
-        match (url, base64) {
-            (Some(url), None) => BamlImagePy::Url { url },
-            (None, Some(base64)) => BamlImagePy::Base64 { base64 },
+    fn new(url: Option<String>, base64: Option<String>, media_type: Option<String>) -> Self {
+        match (url, base64, media_type) {
+            (Some(url), None, None) => BamlImagePy::Url { url },
+            (None, Some(base64), Some(media_type)) => BamlImagePy::Base64 { base64, media_type },
             // TODO throw an error instead
-            _ => panic!("Either url or base64 must be provided"),
+            _ => panic!("Either url or base64 (with media_type) must be provided"),
         }
     }
 
@@ -202,6 +202,7 @@ impl From<internal_baml_jinja::RenderedChatMessage> for RenderedChatMessage {
                             }
                             internal_baml_jinja::BamlImage::Base64(image) => BamlImagePy::Base64 {
                                 base64: image.base64,
+                                media_type: image.media_type,
                             },
                         },
                     },

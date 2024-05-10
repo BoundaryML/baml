@@ -357,11 +357,12 @@ impl ImageUrl {
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct ImageBase64 {
     pub base64: String,
+    pub media_type: String,
 }
 
 impl ImageBase64 {
-    pub fn new(base64: String) -> ImageBase64 {
-        ImageBase64 { base64 }
+    pub fn new(base64: String, media_type: String) -> ImageBase64 {
+        ImageBase64 { base64, media_type }
     }
 }
 
