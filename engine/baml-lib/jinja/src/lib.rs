@@ -1,4 +1,3 @@
-mod baml_image;
 use colored::*;
 mod evaluate_type;
 mod get_vars;
