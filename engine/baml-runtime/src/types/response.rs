@@ -41,6 +41,7 @@ impl FunctionResult {
     }
 
     pub fn parsed_content(&self) -> Result<&serde_json::Value> {
+        log::debug!("FunctionResult::parsed_content {:#?}", self.parsed);
         self.parsed
             .as_ref()
             .map(|res| {

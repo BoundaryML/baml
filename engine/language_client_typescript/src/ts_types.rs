@@ -28,9 +28,16 @@ pub struct FunctionResult {
     inner: baml_runtime::FunctionResult,
 }
 
+#[napi]
 impl FunctionResult {
     pub fn new(inner: baml_runtime::FunctionResult) -> Self {
         Self { inner }
+    }
+
+    #[napi(getter)]
+    pub fn parsed(&self) -> Result<serde_json::Value> {
+        log::debug!("parsed content");
+        Ok(self.inner.parsed_content()?.clone())
     }
 }
 

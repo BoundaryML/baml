@@ -68,13 +68,16 @@ case "$_path" in
 
   /engine/language_client_typescript | /engine/language_client_typescript/* )
     command="pnpm build:debug; date"
-    command="${command} && BAML_LOG=debug pnpm ts-node test.ts"
+    command="${command} && BAML_LOG=debug node cli.js generate --from ../../integ-tests/baml_src --to integ-tests-ts-v2"
+    command="${command} && BAML_LOG=debug infisical run -- pnpm ts-node test.ts"
 
     if [ "$_watch_mode" -eq 1 ]; then
       npx nodemon \
-        --ext rs,hb,hbs,toml,baml,rb \
+        --ext rs,ts,json,j2,hb,hbs,toml,baml,rb \
         --watch "${_repo_root}/engine" \
         --ignore 'target' \
+        --ignore 'index.d.ts' \
+        --ignore 'index.js' \
         --ignore 'tmp' \
         --exec "${command}"
     else

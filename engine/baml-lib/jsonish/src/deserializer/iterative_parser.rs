@@ -87,7 +87,7 @@ fn find_all_json_objects(input: &str) -> Result<serde_json::Value> {
                         Ok(json) => json_objects.push(json),
                         Err(e) => {
                             // Ignore errors
-                            eprintln!("Failed to parse JSON object: {:?}", e);
+                            log::error!("Failed to parse JSON object: {:?}", e);
                         }
                     }
                 }
@@ -174,7 +174,7 @@ impl JsonParseState {
 
         let name = collection.name();
 
-        // println!("Completed: {:?} -> {:?}", name, collection);
+        log::debug!("Completed: {:?} -> {:?}", name, collection);
 
         let value: serde_json::Value = match collection.into() {
             Some(value) => value,
@@ -727,13 +727,13 @@ impl JSONishOptions {
 }
 
 pub fn parse_jsonish_value<'a>(str: &'a str, options: JSONishOptions) -> Result<serde_json::Value> {
-    println!("Parsing:\n{:?}\n-------\n{:?}\n-------", options, str);
+    log::debug!("Parsing:\n{:?}\n-------\n{:?}\n-------", options, str);
 
     // Try naive parsing first to see if it's valid JSON
     match serde_json::from_str(str) {
         Ok(value) => return Ok(value),
-        Err(_e) => {
-            // println!("Failed to parse JSON: {:?}\n{str}", e);
+        Err(e) => {
+            log::trace!("Failed to parse JSON: {:?}\n{str}", e);
         }
     }
 
@@ -755,8 +755,8 @@ pub fn parse_jsonish_value<'a>(str: &'a str, options: JSONishOptions) -> Result<
     if options.allow_fixes {
         match try_fix_jsonish(str) {
             Ok(value) => return Ok(value),
-            Err(_) => {
-                // eprintln!("Failed to fix JSON: {:?}", e);
+            Err(e) => {
+                log::trace!("Failed to fix JSON: {:?}", e);
             }
         }
     }
