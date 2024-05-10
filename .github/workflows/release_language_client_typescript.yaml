@@ -6,11 +6,11 @@ on:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+defaults:
+  run:
+    working-directory: engine/language_client_typescript
 jobs:
   build:
-    defaults:
-      run:
-        working-directory: engine/language_client_typescript
     strategy:
       fail-fast: false
       matrix:
@@ -44,7 +44,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v2
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+          package_json_file: engine/language_client_typescript/package.json
+          run_install: false
 
       - uses: actions/setup-node@v4
         with:
@@ -88,9 +92,6 @@ jobs:
           if-no-files-found: error
 
   test-macOS-windows-binding:
-    defaults:
-      run:
-        working-directory: engine/language_client_typescript
     name: Test bindings on ${{ matrix.settings.target }} - node@${{ matrix.node }}
     needs:
       - build
@@ -116,6 +117,10 @@ jobs:
 
       - name: setup pnpm
         uses: pnpm/action-setup@v2
+        with:
+          version: 9
+          package_json_file: engine/language_client_typescript/package.json
+          run_install: false
 
       - name: Setup node
         uses: actions/setup-node@v4
@@ -141,9 +146,6 @@ jobs:
         run: pnpm test
 
   test-linux-binding:
-    defaults:
-      run:
-        working-directory: engine/language_client_typescript
     name: Test ${{ matrix.target }} - node@${{ matrix.node }}
     needs:
       - build
@@ -161,6 +163,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: setup pnpm
         uses: pnpm/action-setup@v2
+        with:
+          version: 9
+          package_json_file: engine/language_client_typescript/package.json
+          run_install: false
       - name: Setup node
         uses: actions/setup-node@v4
         with:
@@ -210,9 +216,6 @@ jobs:
           run: npm run test
 
   publish:
-    defaults:
-      run:
-        working-directory: engine/language_client_typescript
     permissions:
       contents: write
       id-token: write
@@ -224,6 +227,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: setup pnpm
         uses: pnpm/action-setup@v2
+        with:
+          version: 9
+          package_json_file: engine/language_client_typescript/package.json
+          run_install: false
       - name: Setup node
         uses: actions/setup-node@v4
         with:
