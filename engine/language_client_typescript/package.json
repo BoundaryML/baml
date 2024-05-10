@@ -1,5 +1,5 @@
 {
-  "name": "@boundaryml/baml-ts",
+  "name": "@boundaryml/baml",
   "version": "0.0.1",
   "description": "BAML typescript bindings (package.json)",
   "repository": {
@@ -15,13 +15,15 @@
     "node-addon",
     "node-addon-api"
   ],
+  "bin": "cli.js",
   "files": [
+    "cli.js",
     "index.d.ts",
     "index.js"
   ],
   "main": "index.js",
   "napi": {
-    "binaryName": "dist/baml-ts",
+    "binaryName": "baml",
     "targets": [
       "aarch64-apple-darwin",
       "aarch64-pc-windows-msvc",

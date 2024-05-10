@@ -1,4 +1,4 @@
-use crate::{BamlRuntime, RuntimeInterface};
+use crate::{internal, BamlRuntime, RuntimeInterface};
 use anyhow::Result;
 use clap::ValueEnum;
 use std::fmt::Display;
@@ -13,15 +13,27 @@ pub struct GenerateArgs {
     to: String,
 
     #[arg(long, help = "type of BAML client to generate")]
-    client_type: LanguageClientType,
+    client_type: Option<LanguageClientType>,
 }
 
 impl GenerateArgs {
-    pub fn run(&self) -> Result<()> {
+    pub fn run(&self, caller_type: super::CallerType) -> Result<()> {
         let runtime = BamlRuntime::from_directory(&self.from.clone().into())?;
 
+        let client_type: internal_baml_codegen::LanguageClientType =
+            match (self.client_type.as_ref(), caller_type) {
+                (Some(explicit_client_type), _) => explicit_client_type.into(),
+                (None, super::CallerType::Python) => {
+                    internal_baml_codegen::LanguageClientType::PythonPydantic
+                }
+                (None, super::CallerType::Ruby) => internal_baml_codegen::LanguageClientType::Ruby,
+                (None, super::CallerType::Typescript) => {
+                    internal_baml_codegen::LanguageClientType::Typescript
+                }
+            };
+
         let generate_output = runtime.generate_client(
-            &(&self.client_type).into(),
+            &client_type,
             &internal_baml_codegen::GeneratorArgs {
                 output_root: self.to.clone().into(),
                 encoded_baml_files: None,

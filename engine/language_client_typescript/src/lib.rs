@@ -48,7 +48,10 @@ impl BamlRuntimeFfi {
 
     #[napi]
     pub fn run_cli(args: Vec<String>) -> Result<()> {
-        Ok(baml_runtime::BamlRuntime::run_cli(args.into())?)
+        Ok(baml_runtime::BamlRuntime::run_cli(
+            args.into(),
+            baml_runtime::CallerType::Typescript,
+        )?)
     }
 }
 

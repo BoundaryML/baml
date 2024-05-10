@@ -22,13 +22,8 @@ pub struct GenerateOutput {
 
 #[derive(Clone, Debug, Serialize)]
 pub enum LanguageClientType {
-    #[serde(rename = "python/pydantic")]
     PythonPydantic,
-
-    #[serde(rename = "ruby")]
     Ruby,
-
-    #[serde(rename = "typescript")]
     Typescript,
 }
 
@@ -45,7 +40,12 @@ impl LanguageClientType {
         }?;
 
         Ok(GenerateOutput {
-            client_type: serde_json::to_string(self)?,
+            client_type: match self {
+                LanguageClientType::Ruby => "Ruby",
+                LanguageClientType::PythonPydantic => "Python",
+                LanguageClientType::Typescript => "Typescript",
+            }
+            .to_string(),
             files,
         })
     }

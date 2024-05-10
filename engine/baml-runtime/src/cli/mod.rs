@@ -18,10 +18,16 @@ enum Commands {
     Generate(generate::GenerateArgs),
 }
 
+pub enum CallerType {
+    Python,
+    Ruby,
+    Typescript,
+}
+
 impl RuntimeCli {
-    pub fn run(&self) -> Result<()> {
+    pub fn run(&self, caller_type: CallerType) -> Result<()> {
         match self.command {
-            Commands::Generate(ref args) => args.run(),
+            Commands::Generate(ref args) => args.run(caller_type),
         }
     }
 }

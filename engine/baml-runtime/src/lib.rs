@@ -20,6 +20,7 @@ use anyhow::Result;
 
 use runtime::InternalBamlRuntime;
 
+pub use cli::CallerType;
 use runtime_interface::RuntimeConstructor;
 pub use runtime_interface::RuntimeInterface;
 pub use types::*;
@@ -67,8 +68,8 @@ impl BamlRuntime {
         &self.inner
     }
 
-    pub fn run_cli(argv: Vec<String>) -> Result<()> {
-        cli::RuntimeCli::parse_from(argv.into_iter()).run()
+    pub fn run_cli(argv: Vec<String>, caller_type: cli::CallerType) -> Result<()> {
+        cli::RuntimeCli::parse_from(argv.into_iter()).run(caller_type)
     }
 }
 
