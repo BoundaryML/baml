@@ -9,7 +9,10 @@ use pyo3::exceptions::{PyRuntimeError, PyTypeError};
 use pyo3::prelude::{pyclass, pyfunction, pymethods, pymodule, PyModule, PyResult};
 
 use pyo3::types::{IntoPyDict, PyType};
-use pyo3::{create_exception, wrap_pymodule, Py, PyAny, PyErr, PyObject, Python, ToPyObject};
+use pyo3::{
+    create_exception, wrap_pyfunction, wrap_pymodule, Py, PyAny, PyErr, PyObject, Python,
+    ToPyObject,
+};
 use pythonize::depythonize;
 use serde::de;
 use serde::{Deserialize, Serialize};
@@ -178,11 +181,12 @@ impl BamlRuntimeFfi {
 #[pyfunction]
 fn invoke_runtime_cli(py: Python) -> PyResult<()> {
     Ok(baml_runtime::BamlRuntime::run_cli(
-        py.import_bound("sys")?
+        py.import("sys")?
             .getattr("argv")?
             .extract::<Vec<String>>()?,
         baml_runtime::CallerType::Python,
-    )?)
+    )
+    .map_err(BamlError::from_anyhow)?)
 }
 
 #[pymodule]
