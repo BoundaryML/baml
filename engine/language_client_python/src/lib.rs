@@ -173,14 +173,16 @@ impl BamlRuntimeFfi {
             }
         }
     }
+}
 
-    fn generate_client(&self, py: Python<'_>, args: python_types::GenerateArgs) -> PyResult<()> {
-        self.internal
-            .generate_client(&args.client_type, &(&args).into())
-            .map_err(BamlError::from_anyhow)?;
-
-        Ok(())
-    }
+#[pyfunction]
+fn invoke_runtime_cli(py: Python) -> PyResult<()> {
+    Ok(baml_runtime::BamlRuntime::run_cli(
+        py.import_bound("sys")?
+            .getattr("argv")?
+            .extract::<Vec<String>>()?,
+        baml_runtime::CallerType::Python,
+    )?)
 }
 
 #[pymodule]
@@ -197,6 +199,8 @@ fn baml_py(_: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<python_types::FunctionResult>()?;
     m.add_class::<BamlImagePy>()?;
     m.add_class::<python_types::GenerateArgs>()?;
+
+    m.add_wrapped(wrap_pyfunction!(invoke_runtime_cli))?;
 
     Ok(())
 }
