@@ -56,9 +56,7 @@
     "@napi-rs/cli": "^3.0.0-alpha.54",
     "@types/node": "^20.12.11",
     "npm-run-all2": "^6.1.2",
-    "ts-node": "^10.9.2",
-    "tsc": "^2.0.4",
-    "typescript": "^5.4.5"
+    "ts-node": "^10.9.2"
   },
   "packageManager": "pnpm@9.0.6"
 }

@@ -8,30 +8,18 @@ devDependencies:
   '@biomejs/biome':
     specifier: ^1.7.3
     version: 1.7.3
-  '@commander-js/extra-typings':
-    specifier: ^12.0.1
-    version: 12.0.1(commander@12.0.0)
   '@napi-rs/cli':
     specifier: ^3.0.0-alpha.54
     version: 3.0.0-alpha.54
   '@types/node':
     specifier: ^20.12.11
     version: 20.12.11
-  commander:
-    specifier: ^12.0.0
-    version: 12.0.0
   npm-run-all2:
     specifier: ^6.1.2
     version: 6.1.2
   ts-node:
     specifier: ^10.9.2
     version: 10.9.2(@types/node@20.12.11)(typescript@5.4.5)
-  tsc:
-    specifier: ^2.0.4
-    version: 2.0.4
-  typescript:
-    specifier: ^5.4.5
-    version: 5.4.5
 
 packages:
 
@@ -122,14 +110,6 @@ packages:
     requiresBuild: true
     dev: true
     optional: true
-
-  /@commander-js/extra-typings@12.0.1(commander@12.0.0):
-    resolution: {integrity: sha512-OvkMobb1eMqOCuJdbuSin/KJkkZr7n24/UNV+Lcz/0Dhepf3r2p9PaGwpRpAWej7A+gQnny4h8mGhpFl4giKkg==}
-    peerDependencies:
-      commander: ~12.0.0
-    dependencies:
-      commander: 12.0.0
-    dev: true
 
   /@cspotcode/source-map-support@0.8.1:
     resolution: {integrity: sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw==}
@@ -981,11 +961,6 @@ packages:
     resolution: {integrity: sha512-IfEDxwoWIjkeXL1eXcDiow4UbKjhLdq6/EuSVR9GMN7KVH3r9gQ83e73hsz1Nd1T3ijd5xv1wcWRYO+D6kCI2w==}
     dev: true
 
-  /commander@12.0.0:
-    resolution: {integrity: sha512-MwVNWlYjDTtOjX5PiD7o5pK0UrFU/OYgcJfjjK4RaHZETNtjJqrZa9Y9ds88+A+f+d5lv+561eZ+yCKoS3gbAA==}
-    engines: {node: '>=18'}
-    dev: true
-
   /create-require@1.1.1:
     resolution: {integrity: sha512-dcKFX3jn0MpIaXjisoRvexIJVEKzaq7z2rZKxf+MSr9TkdmHmsU4m2lcLojrj/FHl8mk5VxMmYA+ftRkP/3oKQ==}
     dev: true
@@ -1436,11 +1411,6 @@ packages:
       typescript: 5.4.5
       v8-compile-cache-lib: 3.0.1
       yn: 3.1.1
-    dev: true
-
-  /tsc@2.0.4:
-    resolution: {integrity: sha512-fzoSieZI5KKJVBYGvwbVZs/J5za84f2lSTLPYf6AGiIf43tZ3GNrI1QzTLcjtyDDP4aLxd46RTZq1nQxe7+k5Q==}
-    hasBin: true
     dev: true
 
   /tslib@2.6.2:
