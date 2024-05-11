@@ -25,18 +25,15 @@
   ],
   "main": "index.js",
   "napi": {
-    "name": "baml",
-    "triples": {
-      "defaults": false,
-      "additional": [
-        "aarch64-apple-darwin",
-        "aarch64-pc-windows-msvc",
-        "aarch64-unknown-linux-gnu",
-        "x86_64-apple-darwin",
-        "x86_64-pc-windows-msvc",
-        "x86_64-unknown-linux-gnu"
-      ]
-    }
+    "binaryName": "baml",
+    "targets": [
+      "aarch64-apple-darwin",
+      "aarch64-pc-windows-msvc",
+      "aarch64-unknown-linux-gnu",
+      "x86_64-apple-darwin",
+      "x86_64-pc-windows-msvc",
+      "x86_64-unknown-linux-gnu"
+    ]
   },
   "engines": {
     "node": ">= 10"
@@ -48,7 +45,7 @@
   "scripts": {
     "artifacts": "napi artifacts",
     "build": "pnpm build:debug --release",
-    "build:debug": "mkdir -p dist && napi build --platform",
+    "build:debug": "napi build --platform",
     "format": "run-p format:biome format:rs format:toml",
     "format:biome": "biome --write .",
     "format:rs": "cargo fmt",
@@ -58,7 +55,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^1.7.3",
-    "@napi-rs/cli": "^2.16.4",
+    "@napi-rs/cli": "^3.0.0-alpha.54",
     "@types/node": "^20.12.11",
     "npm-run-all2": "^6.1.2",
     "ts-node": "^10.9.2"

@@ -1,9 +1,10 @@
 [package]
 edition = "2021"
-name = "baml_ts"
+name = "baml-typescript-ffi"
 version = "0.0.1"
 
 [lib]
+name = "baml"
 crate-type = ["cdylib"]
 
 [dependencies]

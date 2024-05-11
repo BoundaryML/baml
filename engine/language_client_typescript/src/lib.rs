@@ -4,12 +4,18 @@ use baml_runtime::{RuntimeContext, RuntimeInterface};
 use futures::prelude::*;
 use indexmap::IndexMap;
 use napi::bindgen_prelude::*;
+use napi::{CallContext, JsUnknown};
 use napi_derive::napi;
 use std::collections::HashMap;
 use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
 use ts_types::FunctionResult;
+
+#[napi]
+pub fn rust_is_instance(env: Env, val: Unknown) -> Result<bool> {
+    BamlRuntimeFfi::instance_of(env, val)
+}
 
 #[napi]
 pub struct BamlRuntimeFfi {
