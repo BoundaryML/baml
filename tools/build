@@ -78,6 +78,7 @@ case "$_path" in
         --ignore 'target' \
         --ignore 'index.d.ts' \
         --ignore 'index.js' \
+        --ignore 'dist' \
         --ignore 'tmp' \
         --exec "${command}"
     else

@@ -16,14 +16,15 @@
     "node-addon-api"
   ],
   "bin": {
-    "baml-cli": "cli.js"
+    "baml-cli": "./cli.js"
   },
   "files": [
-    "cli.js",
-    "index.d.ts",
-    "index.js"
+    "./cli.js",
+    "./dist/index.d.ts",
+    "./dist/index.js"
   ],
-  "main": "index.js",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "napi": {
     "binaryName": "baml",
     "targets": [
@@ -45,7 +46,7 @@
   "scripts": {
     "artifacts": "napi artifacts",
     "build": "pnpm build:debug --release",
-    "build:debug": "napi build --platform",
+    "build:debug": "napi build --output-dir dist --platform",
     "format": "run-p format:biome format:rs format:toml",
     "format:biome": "biome --write .",
     "format:rs": "cargo fmt",
@@ -69,7 +70,6 @@
     "@boundaryml/baml-win32-x64-msvc": "0.0.2",
     "@boundaryml/baml-linux-x64-gnu": "0.0.2"
   },
-  "types": "./index.d.ts",
   "bugs": {
     "url": "https://github.com/BoundaryML/baml/issues"
   },
