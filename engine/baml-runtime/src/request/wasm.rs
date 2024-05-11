@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use wasm_bindgen::JsCast;
+use wasm_bindgen::{JsCast, JsValue};
 
 #[derive(Debug)]
 pub enum WasmRequestError {
@@ -61,16 +61,18 @@ pub async fn call_request_with_json<T: serde::de::DeserializeOwned, Body: serde:
     let window = web_sys::window().unwrap();
     let mut opts = web_sys::RequestInit::new();
     opts.method("POST");
-    opts.mode(web_sys::RequestMode::Cors);
+    opts.mode(web_sys::RequestMode::NoCors);
     if let Some(headers) = headers {
         opts.headers(
             &serde_wasm_bindgen::to_value(&headers)
                 .map_err(|e| WasmRequestError::BuildError(e.into()))?,
         );
     }
-    opts.body(Some(
-        &serde_wasm_bindgen::to_value(body).map_err(|e| WasmRequestError::BuildError(e.into()))?,
-    ));
+
+    let body_str = serde_json::to_string(body)
+        .map_err(|e| WasmRequestError::BuildError(e.to_string().into()))?;
+
+    opts.body(Some(&JsValue::from_str(&body_str)));
 
     let request = web_sys::Request::new_with_str_and_init(url, &opts)
         .map_err(|e| WasmRequestError::BuildError(e))?;

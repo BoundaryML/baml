@@ -36,6 +36,7 @@ serde-wasm-bindgen = "0.6.5"
 
 # For tracing
 envy = "0.4.2"
+chrono = "0.4.38"
 
 
 [dependencies.hostname]

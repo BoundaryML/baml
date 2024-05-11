@@ -6,11 +6,11 @@ mod wasm_tracer;
 
 use anyhow::Result;
 use indexmap::IndexMap;
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Debug};
 
 use uuid::Uuid;
 
-use crate::{FunctionResult, RuntimeContext};
+use crate::{FunctionResult, RuntimeContext, TestResponse};
 
 use self::api_wrapper::{
     core_types::{EventChain, IOValue, LogSchema, LogSchemaContext, TypeSchema, IO},
@@ -32,7 +32,7 @@ pub struct TracingSpan {
     function_name: String,
     params: IndexMap<String, serde_json::Value>,
     parent_ids: Option<Vec<(String, Uuid)>>,
-    start_time: std::time::Instant,
+    start_time: web_time::SystemTime,
     ctx: RuntimeContext,
 }
 
@@ -87,7 +87,7 @@ impl BamlTracer {
             function_name: function_name.to_string(),
             params: params.clone(),
             parent_ids: parent.map(|p| vec![(p.function_name.clone(), p.span_id)]),
-            start_time: std::time::Instant::now(),
+            start_time: web_time::SystemTime::now(),
             ctx: ctx.clone(),
         })
     }
@@ -115,6 +115,27 @@ impl BamlTracer {
             Ok(())
         }
     }
+
+    pub(crate) async fn finish_test_span(
+        &self,
+        span: TracingSpan,
+        response: &Result<TestResponse>,
+    ) -> Result<()> {
+        if let Some(tracer) = &self.tracer {
+            tracer.submit((&self.options, span, response).into()).await
+        } else {
+            Ok(())
+        }
+    }
+}
+
+// Function to convert web_time::SystemTime to ISO 8601 string
+fn to_iso_string(web_time: &web_time::SystemTime) -> String {
+    let time = web_time.duration_since(web_time::UNIX_EPOCH).unwrap();
+    // Convert to ISO 8601 string
+    chrono::DateTime::from_timestamp_millis(time.as_millis() as i64)
+        .unwrap()
+        .to_rfc3339_opts(chrono::SecondsFormat::AutoSi, true)
 }
 
 impl From<(&APIWrapper, &TracingSpan)> for LogSchemaContext {
@@ -123,7 +144,11 @@ impl From<(&APIWrapper, &TracingSpan)> for LogSchemaContext {
         LogSchemaContext {
             hostname: api.host_name().to_string(),
             stage: Some(api.stage().to_string()),
-            latency_ms: span.start_time.elapsed().as_millis() as i128,
+            latency_ms: span
+                .start_time
+                .elapsed()
+                .map(|d| d.as_millis() as i128)
+                .unwrap_or(0),
             process_id: api.session_id().to_string(),
             tags: HashMap::new(),
             event_chain: parents
@@ -136,7 +161,7 @@ impl From<(&APIWrapper, &TracingSpan)> for LogSchemaContext {
                         .collect()
                 })
                 .unwrap_or_default(),
-            start_time: "o".into(),
+            start_time: to_iso_string(&span.start_time),
         }
     }
 }
@@ -262,6 +287,32 @@ impl From<(&APIWrapper, TracingSpan, &Result<FunctionResult>)> for LogSchema {
             },
             error: error_from_result(result),
             metadata: None,
+        }
+    }
+}
+impl From<(&APIWrapper, TracingSpan, &Result<TestResponse>)> for LogSchema {
+    fn from((api, span, result): (&APIWrapper, TracingSpan, &Result<TestResponse>)) -> Self {
+        match result {
+            Ok(r) => (api, span, &r.function_response).into(),
+            Err(e) => LogSchema {
+                project_id: api.project_id().map(|s| s.to_string()),
+                event_type: api_wrapper::core_types::EventType::FuncCode,
+                root_event_id: span.span_id.to_string(),
+                event_id: span.span_id.to_string(),
+                parent_event_id: None,
+                context: (api, &span).into(),
+                io: IO {
+                    input: Some((&span.params).into()),
+                    output: None,
+                },
+                error: Some(api_wrapper::core_types::Error {
+                    code: -2,
+                    message: e.to_string(),
+                    traceback: None,
+                    r#override: None,
+                }),
+                metadata: None,
+            },
         }
     }
 }

@@ -98,7 +98,16 @@ impl RuntimeInterface for BamlRuntime {
         test_name: &str,
         ctx: &RuntimeContext,
     ) -> ResponseType<TestResponse> {
-        self.inner.run_test(function_name, test_name, ctx).await
+        let span = self
+            .tracer
+            .start_span(function_name, ctx, &IndexMap::new(), None);
+        let response = self.inner.run_test(function_name, test_name, ctx).await;
+        if let Some(span) = span {
+            if let Err(e) = self.tracer.finish_test_span(span, &response).await {
+                log::debug!("Error during logging: {}", e);
+            }
+        }
+        response
     }
 
     async fn call_function(

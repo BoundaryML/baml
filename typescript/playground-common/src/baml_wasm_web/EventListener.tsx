@@ -21,12 +21,47 @@ import type {
 
 const selectedProjectStorageAtom = atomWithStorage<string | null>('selected-project', null, sessionStore)
 const selectedFunctionStorageAtom = atomWithStorage<string | null>('selected-function', null, sessionStore)
-export const envvarStorageAtom = atomWithStorage<{ key: string; value: string }[]>(
-  'environment-variables',
-  [],
-  sessionStore,
+const envKeyValueStorage = atomWithStorage<[string, string][]>('env-key-values', [], sessionStore)
+
+export const resetEnvKeyValuesAtom = atom(null, (get, set) => {
+  set(envKeyValueStorage, [])
+})
+export const envKeyValuesAtom = atom(
+  (get) => {
+    return get(envKeyValueStorage).map(([k, v], idx): [string, string, number] => [k, v, idx])
+  },
+  (
+    get,
+    set,
+    update: // Update value
+      | { itemIndex: number; value: string }
+      // Update key
+      | { itemIndex: number; newKey: string }
+      // Remove key
+      | { itemIndex: number; remove: true }
+      // Insert key
+      | {
+          itemIndex: null
+          key: string
+          value?: string
+        },
+  ) => {
+    if (update.itemIndex !== null) {
+      const keyValues = [...get(envKeyValueStorage)]
+      if ('value' in update) {
+        keyValues[update.itemIndex][1] = update.value
+      } else if ('newKey' in update) {
+        keyValues[update.itemIndex][0] = update.newKey
+      } else if ('remove' in update) {
+        keyValues.splice(update.itemIndex, 1)
+      }
+      console.log('Setting env key values', keyValues)
+      set(envKeyValueStorage, keyValues)
+    } else {
+      set(envKeyValueStorage, (prev) => [...prev, [update.key, update.value ?? '']])
+    }
+  },
 )
-envvarStorageAtom.debugLabel = 'envvarStorageAtom'
 
 type Selection = {
   project?: string
@@ -58,9 +93,10 @@ export const runtimeCtx = atom((get) => {
   }
 
   const ctx = new loadedWasm.WasmRuntimeContext()
-
-  for (const { key, value } of get(envvarStorageAtom)) {
-    if (key) ctx.set_env(key, value)
+  for (const [key, value] of get(envKeyValuesAtom)) {
+    if (value !== null) {
+      ctx.set_env(key, value)
+    }
   }
 
   return ctx

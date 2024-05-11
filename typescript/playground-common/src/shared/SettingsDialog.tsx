@@ -27,27 +27,67 @@ import {
   SettingsIcon,
   Trash2Icon,
 } from 'lucide-react'
-import { envvarStorageAtom, runtimeRequiredEnvVarsAtom } from '../baml_wasm_web/EventListener'
+import { envKeyValuesAtom, runtimeRequiredEnvVarsAtom } from '../baml_wasm_web/EventListener'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip'
 import clsx from 'clsx'
+import { Checkbox } from '../components/ui/checkbox'
 
-export const showSettingsAtom = atom(false)
+export const showSettingsAtom = atom(true)
 const showEnvvarValuesAtom = atom(false)
 
-const envvarsAtom = atom(
-  (get) => {
-    const storedEnvvars = get(envvarStorageAtom)
-    const requiredButUnset = get(runtimeRequiredEnvVarsAtom)
-      .filter((k) => !storedEnvvars.some(({ key }) => k === key))
-      .map((key) => ({ key, value: '' }))
+const tracingEnvVarsAtom = atom(['BOUNDARY_PROJECT_ID', 'BOUNDARY_SECRET'])
 
-    return requiredButUnset.concat(storedEnvvars)
-  },
-  (get, set, envvarsFormData: { key: string; value: string }[]) => {
-    set(envvarStorageAtom, envvarsFormData)
-  },
-)
+const envvarsAtom = atom((get) => {
+  const storedEnvvars = get(envKeyValuesAtom)
+  const requiredVarNames = get(runtimeRequiredEnvVarsAtom)
+  const tracingVarNames = get(tracingEnvVarsAtom)
+
+  // Create a copy of requiredVarNames and tracingVarNames to manipulate
+  let requiredVarNamesCopy = [...requiredVarNames]
+  let tracingVarNamesCopy = [...tracingVarNames]
+
+  // Update the stored envvars type for the runtime.
+  const envVars = storedEnvvars.map(([key, value, index]): EnvVar => {
+    if (requiredVarNamesCopy.includes(key)) {
+      // Remove the key from the copy of requiredVarNames
+      requiredVarNamesCopy = requiredVarNamesCopy.filter((varName) => varName !== key)
+      return { key, value, type: 'baml', index }
+    }
+    if (tracingVarNamesCopy.includes(key)) {
+      // Remove the key from the copy of tracingVarNames
+      tracingVarNamesCopy = tracingVarNamesCopy.filter((varName) => varName !== key)
+      return { key, value, type: 'tracing', index }
+    }
+    return { key, value, type: 'user', index }
+  })
+
+  // Add required but unset envvars
+  const requiredButUnset = requiredVarNamesCopy
+    .filter((k) => !envVars.some(({ key }) => k === key))
+    .map((k): EnvVar => ({ key: k, value: '', type: 'baml', index: null }))
+  const tracingEnvVars = tracingVarNamesCopy
+    .filter((k) => !envVars.some(({ key }) => k === key))
+    .map((k): EnvVar => ({ key: k, value: '', type: 'tracing', index: null }))
+
+  // Sort by type (baml, tracing) are sorted by name, user is sorted by index
+
+  const keys = [...envVars, ...requiredButUnset, ...tracingEnvVars].sort((a, b) => {
+    if (a.type === 'user' && b.type === 'user') {
+      return a.index! - b.index!
+    }
+    if (a.type === 'user') {
+      return 1
+    }
+    if (b.type === 'user') {
+      return -1
+    }
+    return a.key.localeCompare(b.key)
+  })
+  console.log('keys', keys)
+
+  return keys
+})
 
 const requiredButUnsetAtom = atom((get) => {
   const envvars = get(envvarsAtom)
@@ -56,143 +96,60 @@ const requiredButUnsetAtom = atom((get) => {
   )
 })
 
-const EnvvarKeyInput: React.FC<WidgetProps> = (props) => {
-  const requiredEnvvars = useAtomValue(runtimeRequiredEnvVarsAtom)
+type EnvVar = { key: string; value: string; type: 'baml' | 'tracing' | 'user'; index: number | null }
+const EnvvarInput: React.FC<{ envvar: EnvVar }> = ({ envvar }) => {
+  const [showEnvvarValues] = useAtom(showEnvvarValuesAtom)
+  const setEnvKeyValue = useSetAtom(envKeyValuesAtom)
   return (
-    <Input
-      id={props.id}
-      name={props.name}
-      type='text'
-      className='bg-grey-500 outline-none outline-offset-0 focus-visible:outline focus:outline-2 focus:outline-white'
-      value={props.value}
-      disabled={requiredEnvvars.includes(props.value)}
-      onChange={(event) => props.onChange(event.target.value)}
-    />
-  )
-}
-
-const EnvvarValueInput: React.FC<WidgetProps> = (props) => {
-  const showEnvvarValues = useAtomValue(showEnvvarValuesAtom)
-  return (
-    <Input
-      id={props.id}
-      name={props.name}
-      type={showEnvvarValues ? 'text' : 'password'}
-      placeholder='(unset)'
-      className='bg-grey-500 outline-none outline-offset-0 group-[.required-env-var-not-set]:outline group-[.required-env-var-not-set]:outline-2 group-[.required-env-var-not-set]:outline-yellow-500 focus-visible:outline focus:outline-2 focus:outline-white'
-      value={props.value}
-      onChange={(event) => props.onChange(event.target.value)}
-    />
-  )
-}
-
-const schema: RJSFSchema = {
-  type: 'array',
-  items: {
-    type: 'object',
-    properties: {
-      key: {
-        type: 'string',
-        title: 'Key',
-      },
-      value: {
-        type: 'string',
-        title: 'Value',
-      },
-    },
-  },
-}
-
-const uiSchema: UiSchema = {
-  items: {
-    key: {
-      'ui:FieldTemplate': EnvvarFieldTemplate,
-      'ui:widget': EnvvarKeyInput,
-    },
-    value: {
-      'ui:FieldTemplate': EnvvarFieldTemplate,
-      'ui:widget': EnvvarValueInput,
-    },
-  },
-  'ui:options': {
-    orderable: false,
-  },
-  'ui:submitButtonOptions': {
-    norender: true,
-  },
-}
-
-function ArrayFieldItemTemplate(props: ArrayFieldTemplateItemType) {
-  const requiredEnvvars = useAtomValue(runtimeRequiredEnvVarsAtom)
-  const { key, children, className, index, onDropIndexClick } = props
-  const fieldItemIsRequired = requiredEnvvars.includes(children.props.formData.key)
-  return (
-    <div key={key} className='flex flex-row items-center gap-2 border-none pb-2'>
-      {children}
-      <div className='grow'>
-        {!fieldItemIsRequired && (
-          <Button
-            size={'icon'}
-            className='!flex flex-col px-2 py-2 mr-2 text-color-white bg-transparent hover:bg-red-600 h-fit !max-w-[48px] ml-auto'
-            onClick={onDropIndexClick(index)}
-          >
-            <Trash2Icon size={14} />
-          </Button>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function EnvvarFieldTemplate(props: FieldTemplateProps) {
-  return <div>{props.children}</div>
-}
-
-const EnvvarEntryTemplate = (props: ObjectFieldTemplateProps) => {
-  const requiredEnvvars = useAtomValue(runtimeRequiredEnvVarsAtom)
-
-  const renderedProps = []
-
-  const classNames = []
-
-  if (requiredEnvvars.includes(props.formData.key) && props.formData.value === '') {
-    classNames.push('required-env-var-not-set')
-  }
-
-  for (const { name, content } of props.properties) {
-    renderedProps.push(content)
-    if (name === 'key') {
-      renderedProps.push(<div className='h-9 py-1.5'>=</div>)
-    }
-  }
-  return <div className={clsx('flex flex-row items-center gap-2 font-mono group', classNames)}>{renderedProps}</div>
-}
-
-function AddButton(props: IconButtonProps) {
-  const { icon, iconType, ...btnProps } = props
-  return (
-    <Button
-      variant='ghost'
-      size='icon'
-      {...btnProps}
-      className='flex flex-row items-center p-1 text-xs w-fit h-fit gap-x-2 hover:bg-vscode-descriptionForeground'
-    >
-      <PlusIcon size={14} /> <div>Add item</div>
-    </Button>
-  )
-}
-
-function RemoveButton(props: IconButtonProps) {
-  const { icon, iconType, ...btnProps } = props
-  return (
-    <div className='flex w-fit h-fit'>
-      <Button
-        {...btnProps}
-        size={'icon'}
-        className='!flex flex-col !px-0 !py-0 hover:bg-red-700 h-fit !max-w-[48px] ml-auto'
-      >
-        <Trash2Icon size={14} />
-      </Button>
+    <div className='flex flex-row items-center gap-2 my-2'>
+      <Input
+        type='text'
+        value={envvar.key}
+        disabled={envvar.type !== 'user'}
+        onChange={(e) => {
+          if (envvar.index !== null) {
+            setEnvKeyValue({
+              itemIndex: envvar.index,
+              newKey: e.target.value,
+            })
+          } else {
+            setEnvKeyValue({ itemIndex: null, key: e.target.value })
+          }
+        }}
+        className='bg-grey-500 outline-none focus-visible:outline focus:outline-2 focus:outline-white'
+      />
+      <span>=</span>
+      <Input
+        type={showEnvvarValues ? 'text' : 'password'}
+        value={envvar.value}
+        placeholder='(unset)'
+        onChange={(e) => {
+          if (envvar.index !== null) {
+            setEnvKeyValue({
+              itemIndex: envvar.index,
+              value: e.target.value,
+            })
+          } else {
+            setEnvKeyValue({ itemIndex: null, key: envvar.key, value: e.target.value })
+          }
+        }}
+        className={`bg-grey-500 outline-none focus-visible:outline focus:outline-2 focus:outline-white ${
+          !envvar.value && envvar.type === 'baml' ? 'outline outline-2 outline-yellow-500' : ''
+        }`}
+      />
+      {envvar.type === 'user' && envvar.index !== null && (
+        <Button
+          size={'icon'}
+          className='!flex flex-col px-2 py-2 text-color-white bg-transparent hover:bg-red-600 h-fit !max-w-[48px] ml-auto'
+          onClick={() => {
+            if (envvar.index !== null) {
+              setEnvKeyValue({ itemIndex: envvar.index, remove: true })
+            }
+          }}
+        >
+          <Trash2Icon size={14} />
+        </Button>
+      )}
     </div>
   )
 }
@@ -237,12 +194,15 @@ export const ShowSettingsButton: React.FC<{ buttonClassName: string; iconClassNa
 export const SettingsDialog: React.FC = () => {
   const [showSettings, setShowSettings] = useAtom(showSettingsAtom)
   const [showEnvvarValues, setShowEnvvarValues] = useAtom(showEnvvarValuesAtom)
-
-  const [envvars, setEnvvars] = useAtom(envvarsAtom)
+  const envvars = useAtomValue(envvarsAtom)
+  const setEnvKeyValue = useSetAtom(envKeyValuesAtom)
+  const [enableObservability, setEnableObservability] = useState(
+    envvars.some((t) => t.type === 'tracing' && t.value.length > 0),
+  )
 
   return (
     <Dialog open={showSettings} onOpenChange={setShowSettings}>
-      <DialogContent className='overflow-y-scroll max-h-screen bg-vscode-editorWidget-background border-vscode-textSeparator-foreground overflow-x-clip'>
+      <DialogContent className='max-h-screen bg-vscode-editorWidget-background border-vscode-textSeparator-foreground overflow-x-clip overflow-y-auto'>
         <DialogHeader className='flex flex-row gap-x-4 items-end'>
           <DialogTitle className='text-s font-semibold'>Environment variables</DialogTitle>
           <Button
@@ -254,27 +214,58 @@ export const SettingsDialog: React.FC = () => {
             {showEnvvarValues ? <ShowIcon className='h-4' /> : <HideIcon className='h-4' />}
           </Button>
         </DialogHeader>
-
-        <p className='text-sm text-vscode-descriptionForeground'>
-          Environment variables are loaded lazily. If a test/client/prompt requires an environment variable that is
-          unset, it will raise an error.
-        </p>
-        <Form
-          autoComplete='off'
-          schema={schema}
-          uiSchema={uiSchema}
-          validator={validator}
-          formData={envvars}
-          onChange={(d) => setEnvvars(d.formData)}
-          templates={{
-            ObjectFieldTemplate: EnvvarEntryTemplate,
-            ArrayFieldItemTemplate,
-            ButtonTemplates: {
-              AddButton,
-              RemoveButton,
-            },
-          }}
-        />
+        <div className='flex flex-col gap-2'>
+          <div className='flex flex-col gap-1'>
+            <div className='flex flex-row gap-2'>
+              <span className='text-sm text-muted-foreground'>
+                Observability {enableObservability ? 'Enabled' : 'Disabled'}
+              </span>
+              <Checkbox checked={enableObservability} onCheckedChange={(e) => setEnableObservability((p) => !p)} />
+            </div>
+            {enableObservability && (
+              <>
+                <p className='text-xs text-muted-foreground italic'>
+                  You can get these from{' '}
+                  <a className='underline text-blue-400' href='https://app.boundaryml.com'>
+                    Boundary Studio
+                  </a>
+                </p>
+                {envvars
+                  .filter((t) => t.type === 'tracing')
+                  .map((envvar) => (
+                    <EnvvarInput key={envvar.key} envvar={envvar} />
+                  ))}
+              </>
+            )}
+          </div>
+          <div className='flex flex-col gap-1'>
+            <span className='text-sm text-muted-foreground'>From .baml files</span>
+            <p className='text-xs text-muted-foreground italic'>
+              Environment variables are loaded lazily, only set any you want to use.
+            </p>
+            {envvars
+              .filter((t) => t.type === 'baml')
+              .map((envvar) => (
+                <EnvvarInput key={envvar.key} envvar={envvar} />
+              ))}
+          </div>
+          <div className='flex flex-col gap-1'>
+            <span className='text-sm text-muted-foreground'>Extra environment variables</span>
+            {envvars
+              .filter((t) => t.type === 'user')
+              .map((envvar) => (
+                <EnvvarInput key={envvar.index} envvar={envvar} />
+              ))}
+            <Button
+              variant='ghost'
+              size='icon'
+              className='flex flex-row items-center p-1 text-xs w-fit h-fit gap-x-2 hover:bg-vscode-descriptionForeground'
+              onClick={() => setEnvKeyValue({ itemIndex: null, key: 'NEW_ENV_VAR' })}
+            >
+              <PlusIcon size={14} /> <div>Add item</div>
+            </Button>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   )
