@@ -1,6 +1,6 @@
 {
   "name": "@boundaryml/baml",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "BAML typescript bindings (package.json)",
   "repository": {
     "type": "git",
@@ -15,7 +15,9 @@
     "node-addon",
     "node-addon-api"
   ],
-  "bin": "cli.js",
+  "bin": {
+    "baml-cli": "cli.js"
+  },
   "files": [
     "cli.js",
     "index.d.ts",
@@ -61,5 +63,19 @@
     "npm-run-all2": "^6.1.2",
     "ts-node": "^10.9.2"
   },
-  "packageManager": "pnpm@9.0.6"
+  "packageManager": "pnpm@9.0.6",
+  "optionalDependencies": {
+    "@boundaryml/baml-darwin-arm64": "0.0.1",
+    "@boundaryml/baml-win32-arm64-msvc": "0.0.1",
+    "@boundaryml/baml-linux-arm64-gnu": "0.0.1",
+    "@boundaryml/baml-darwin-x64": "0.0.1",
+    "@boundaryml/baml-win32-x64-msvc": "0.0.1",
+    "@boundaryml/baml-linux-x64-gnu": "0.0.1"
+  },
+  "types": "./index.d.ts",
+  "bugs": {
+    "url": "https://github.com/BoundaryML/baml/issues"
+  },
+  "homepage": "https://github.com/BoundaryML/baml#readme",
+  "author": ""
 }
