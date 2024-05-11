@@ -56,25 +56,33 @@ async fn call_request<T: serde::de::DeserializeOwned>(
 pub async fn call_request_with_json<T: serde::de::DeserializeOwned, Body: serde::ser::Serialize>(
     url: &str,
     body: &Body,
-    headers: Option<HashMap<String, String>>,
+    pass_headers: Option<HashMap<String, String>>,
 ) -> Result<T, WasmRequestError> {
     let window = web_sys::window().unwrap();
-    let mut opts = web_sys::RequestInit::new();
-    opts.method("POST");
-    opts.mode(web_sys::RequestMode::NoCors);
-    if let Some(headers) = headers {
-        opts.headers(
-            &serde_wasm_bindgen::to_value(&headers)
-                .map_err(|e| WasmRequestError::BuildError(e.into()))?,
-        );
+    let mut init = web_sys::RequestInit::new();
+    init.method("POST");
+    init.mode(web_sys::RequestMode::Cors);
+    init.body(Some(&wasm_bindgen::JsValue::from_str(
+        &serde_json::to_string(&body).unwrap_or("{}".to_string()),
+    )));
+    let headers = web_sys::Headers::new().map_err(|e| WasmRequestError::BuildError(e))?;
+    headers
+        .set("Content-Type", "application/json")
+        .map_err(|e| WasmRequestError::BuildError(e))?;
+    match pass_headers {
+        Some(pass_headers) => {
+            for (k, v) in &pass_headers {
+                headers
+                    .set(k, v)
+                    .map_err(|e| WasmRequestError::BuildError(e))?;
+            }
+        }
+        None => {}
     }
 
-    let body_str = serde_json::to_string(body)
-        .map_err(|e| WasmRequestError::BuildError(e.to_string().into()))?;
+    init.headers(&headers);
 
-    opts.body(Some(&JsValue::from_str(&body_str)));
-
-    let request = web_sys::Request::new_with_str_and_init(url, &opts)
+    let request = web_sys::Request::new_with_str_and_init(url, &init)
         .map_err(|e| WasmRequestError::BuildError(e))?;
 
     call_request(window, &request).await

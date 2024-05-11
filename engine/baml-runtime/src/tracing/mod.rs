@@ -137,6 +137,20 @@ fn to_iso_string(web_time: &web_time::SystemTime) -> String {
 impl From<(&APIWrapper, &TracingSpan)> for LogSchemaContext {
     fn from((api, span): (&APIWrapper, &TracingSpan)) -> Self {
         let parents = &span.parent_ids.as_ref();
+        let mut parent_chain = parents
+            .map(|p| {
+                p.iter()
+                    .map(|(name, id)| EventChain {
+                        function_name: name.clone(),
+                        variant_name: Some(id.to_string()),
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        parent_chain.push(EventChain {
+            function_name: span.function_name.clone(),
+            variant_name: None,
+        });
         LogSchemaContext {
             hostname: api.host_name().to_string(),
             stage: Some(api.stage().to_string()),
@@ -147,16 +161,7 @@ impl From<(&APIWrapper, &TracingSpan)> for LogSchemaContext {
                 .unwrap_or(0),
             process_id: api.session_id().to_string(),
             tags: HashMap::new(),
-            event_chain: parents
-                .map(|p| {
-                    p.iter()
-                        .map(|(name, _)| EventChain {
-                            function_name: name.clone(),
-                            variant_name: None,
-                        })
-                        .collect()
-                })
-                .unwrap_or_default(),
+            event_chain: parent_chain,
             start_time: to_iso_string(&span.start_time),
         }
     }
@@ -244,7 +249,7 @@ fn error_from_result(result: &Result<FunctionResult>) -> Option<api_wrapper::cor
     match result {
         Ok(r) if r.parsed.is_some() => None,
         Ok(r) => Some(api_wrapper::core_types::Error {
-            code: -2,
+            code: 2,
             message: r
                 .parsed
                 .as_ref()
@@ -255,7 +260,7 @@ fn error_from_result(result: &Result<FunctionResult>) -> Option<api_wrapper::cor
             r#override: None,
         }),
         Err(e) => Some(api_wrapper::core_types::Error {
-            code: -2,
+            code: 2,
             message: e.to_string(),
             traceback: None,
             r#override: None,
@@ -302,7 +307,7 @@ impl From<(&APIWrapper, TracingSpan, &Result<TestResponse>)> for LogSchema {
                     output: None,
                 },
                 error: Some(api_wrapper::core_types::Error {
-                    code: -2,
+                    code: 2,
                     message: e.to_string(),
                     traceback: None,
                     r#override: None,

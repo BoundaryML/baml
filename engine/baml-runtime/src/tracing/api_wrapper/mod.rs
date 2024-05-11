@@ -174,13 +174,10 @@ impl CompleteAPIConfig {
             &url,
             body,
             Some(
-                vec![
-                    (
-                        "Authorization".to_string(),
-                        format!("Bearer {}", self.api_key),
-                    ),
-                    ("Content-Type".to_string(), "application/json".to_string()),
-                ]
+                vec![(
+                    "Authorization".to_string(),
+                    format!("Bearer {}", self.api_key),
+                )]
                 .into_iter()
                 .collect(),
             ),
