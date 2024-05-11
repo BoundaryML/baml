@@ -70,7 +70,7 @@ optional = true
 [dependencies.web-sys]
 version = "0.3.69"
 optional = true
-features = ["Headers", "Request", "RequestInit", "RequestMode", "Window"]
+features = ["Headers", "Request", "RequestInit", "Response", "RequestMode", "Window"]
 
 [features]
 defaults = []

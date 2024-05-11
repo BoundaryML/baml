@@ -251,7 +251,7 @@ impl WithChat for AnthropicClient {
         prompt: &Vec<RenderedChatMessage>,
     ) -> Result<LLMResponse> {
         use wasm_bindgen::JsCast;
-        use web_sys::Response;
+        use web_sys::{console::log, Response};
         use web_time::SystemTime;
 
         use crate::internal::llm_client::{
@@ -260,7 +260,7 @@ impl WithChat for AnthropicClient {
         };
 
         use super::types::AnthropicMessageResponse;
-        let request = self.build_http_request(ctx, "/chat/completions", prompt)?;
+        let request = self.build_http_request(ctx, "/messages", prompt)?;
         let window = match web_sys::window() {
             Some(w) => w,
             None => {
@@ -324,6 +324,7 @@ impl WithChat for AnthropicClient {
             .map_err(|e| {
                 anyhow::anyhow!("Does this support the Anthropic Response type?\n{:#?}", e)
             })?;
+        log::info!("Response: {:#?}", response);
         let body =
             match serde_wasm_bindgen::from_value::<AnthropicMessageResponse>(response.clone()) {
                 Ok(body) => body,
@@ -349,7 +350,7 @@ impl WithChat for AnthropicClient {
                 model: None,
                 prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
                 start_time_unix_ms: now
-                    .duration_since(std::time::UNIX_EPOCH)
+                    .duration_since(web_time::UNIX_EPOCH)
                     .unwrap()
                     .as_millis() as u64,
                 latency_ms: now.elapsed().unwrap().as_millis() as u64,
@@ -365,7 +366,7 @@ impl WithChat for AnthropicClient {
             prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
             content: body.content[0].text.clone(),
             start_time_unix_ms: now
-                .duration_since(std::time::UNIX_EPOCH)
+                .duration_since(web_time::UNIX_EPOCH)
                 .unwrap()
                 .as_millis() as u64,
             latency_ms: now.elapsed().unwrap().as_millis() as u64,
@@ -399,7 +400,7 @@ impl WithChat for AnthropicClient {
             ErrorCode, LLMCompleteResponse, LLMErrorResponse,
         };
 
-        let req = self.build_http_request(ctx, "/chat/completions", prompt)?;
+        let req = self.build_http_request(ctx, "/messages", prompt)?;
 
         match self.internal_state.clone().lock() {
             Ok(mut state) => {
@@ -549,23 +550,24 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> Result<Valu
                 "text": text
             })),
             ChatMessagePart::Image(image) => match image {
-                internal_baml_jinja::BamlImage::Url(image_url) => {
-                    let rt = tokio::runtime::Builder::new_current_thread()
-                        .enable_all()
-                        .build()?;
+                // internal_baml_jinja::BamlImage::Url(image_url) => {
+                //     let rt = tokio::runtime::Builder::new_current_thread()
+                //         .enable_all()
+                //         .build()?;
 
-                    let (media_type, base64_data) = rt
-                        .block_on(download_image_as_base64(&image_url.url))
-                        .map_err(|e| anyhow!("Failed to fetch image: {}", e))?;
-                    Ok(json!({
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": media_type,
-                            "data": base64_data
-                        }
-                    }))
-                }
+                //     let (media_type, base64_data) = rt
+                //         .block_on(download_image_as_base64(&image_url.url))
+                //         .map_err(|e| anyhow!("Failed to fetch image: {}", e))?;
+                //     Ok(json!({
+                //         "type": "image",
+                //         "source": {
+                //             "type": "base64",
+                //             "media_type": media_type,
+                //             "data": base64_data
+                //         }
+                //     }))
+                // }
+                _ => Err(anyhow!("Unsupported image type")),
                 internal_baml_jinja::BamlImage::Base64(image) => Ok(json!({
                     "type": "image",
                     "source": {

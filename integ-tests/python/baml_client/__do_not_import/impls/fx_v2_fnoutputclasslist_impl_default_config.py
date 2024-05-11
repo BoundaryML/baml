@@ -24,7 +24,7 @@ import typing
 # An implementation of V2_FnOutputClassList.
 
 __prompt_template = """\
-Return a JSON array that follows this schema: 
+Return a JSON array that follows this schema:
 {{ ctx.output_format(prefix=null) }}
 JSON:\
 """

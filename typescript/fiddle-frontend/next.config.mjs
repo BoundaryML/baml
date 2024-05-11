@@ -1,6 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   transpilePackages: ['jotai-devtools', '@baml/playground-common', '@gloo-ai/baml-schema-wasm-web', '@baml/common'],
+  rewrites: async () => [
+    {
+      source: '/anthropic/:path*',
+      destination: 'https://api.anthropic.com/:path*',
+    },
+  ],
   webpack(config, { isServer, dev }) {
     config.experiments = {
       ...config.experiments,

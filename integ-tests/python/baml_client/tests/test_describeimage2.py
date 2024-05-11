@@ -22,7 +22,7 @@ async def test_test1(DescribeImage2Impl: IDescribeImage2Stream, baml_ipc_channel
             return item
         return dumps(item)
 
-    case = {""classWithImage"": {""myImage"": {""url"": "https://i.kym-cdn.com/photos/images/original/002/807/304/a0b.jpeg", }, ""param2"": "ocean", }, ""img2"": {""url"": "https://i.kym-cdn.com/entries/icons/original/000/033/100/eht0m1qg8dk21.jpg", }, }
+    case = {""classWithImage"": {""myImage"": {""url"": "https://i.kym-cdn.com/photos/images/original/002/807/304/a0b.jpeg", }, ""param2"": "ocean", ""fake_image"": {""url"": "https://i.kym-cdn.com/photos/images/original/002/807/304/a0b.jpeg", }, }, ""img2"": {""url"": "https://i.kym-cdn.com/entries/icons/original/000/033/100/eht0m1qg8dk21.jpg", }, }
     deserializer_classWithImage = Deserializer[ClassWithImage](ClassWithImage) # type: ignore
     classWithImage = deserializer_classWithImage.from_string(to_str(case["classWithImage"]))
     deserializer_img2 = Deserializer[Image](Image) # type: ignore
