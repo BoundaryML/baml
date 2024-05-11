@@ -56,18 +56,10 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^1.7.3",
-    "@napi-rs/cli": "^2.18.3",
+    "@napi-rs/cli": "^2.16.4",
     "@types/node": "^20.12.11",
     "npm-run-all2": "^6.1.2",
     "ts-node": "^10.9.2"
   },
-  "packageManager": "pnpm@9.0.6",
-  "optionalDependencies": {
-    "@boundaryml/baml-darwin-arm64": "0.0.1",
-    "@boundaryml/baml-win32-arm64-msvc": "0.0.1",
-    "@boundaryml/baml-linux-arm64-gnu": "0.0.1",
-    "@boundaryml/baml-darwin-x64": "0.0.1",
-    "@boundaryml/baml-win32-x64-msvc": "0.0.1",
-    "@boundaryml/baml-linux-x64-gnu": "0.0.1"
-  }
+  "packageManager": "pnpm@9.0.6"
 }
