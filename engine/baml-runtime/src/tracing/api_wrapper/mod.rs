@@ -1,7 +1,7 @@
+mod env_setup;
 use anyhow::Result;
 pub(super) mod api_interface;
 pub(super) mod core_types;
-mod env_setup;
 use serde_json::{json, Value};
 
 use crate::RuntimeContext;
@@ -137,31 +137,6 @@ impl APIConfig {
                 stage: stage.to_string(),
                 sessions_id: sessions_id.to_string(),
                 host_name: host_name.to_string(),
-            }),
-        }
-    }
-}
-
-#[cfg(not(feature = "wasm"))]
-impl Default for APIConfig {
-    fn default() -> Self {
-        let config = env_setup::Config::from_env().unwrap();
-        match (&config.secret, &config.project_id) {
-            (Some(api_key), Some(project_id)) => Self::Web(CompleteAPIConfig {
-                base_url: config.base_url,
-                api_key: api_key.to_string(),
-                project_id: project_id.to_string(),
-                stage: config.stage,
-                sessions_id: config.sessions_id,
-                host_name: config.host_name,
-            }),
-            _ => Self::LocalOnly(PartialAPIConfig {
-                base_url: config.base_url,
-                api_key: config.secret,
-                project_id: config.project_id,
-                stage: config.stage,
-                sessions_id: config.sessions_id,
-                host_name: config.host_name,
             }),
         }
     }
