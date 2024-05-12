@@ -84,7 +84,6 @@ const envvarsAtom = atom((get) => {
     }
     return a.key.localeCompare(b.key)
   })
-  console.log('keys', keys)
 
   return keys
 })

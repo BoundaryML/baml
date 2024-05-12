@@ -14,10 +14,18 @@ import { ASTContext } from './ASTProvider'
 import ImplPanel, { Snippet } from './ImplPanel'
 import TestCasePanel from './TestCasePanel'
 import TestResultPanel from './TestResultOutcomes'
+import FunctionTestSnippet from './TestSnippet'
 
 const PromptPreview: React.FC = () => {
   const propmtPreview = useAtomValue(renderPromptAtom)
-  if (!propmtPreview) return <div className='flex flex-col'>No prompt preview!</div>
+  if (!propmtPreview) {
+    return (
+      <div className='flex flex-col w-full h-full items-center justify-center gap-2'>
+        <span className='text-center'>No prompt preview available!</span>
+        <FunctionTestSnippet />
+      </div>
+    )
+  }
 
   if (typeof propmtPreview === 'string')
     return (
@@ -75,8 +83,36 @@ const FunctionPanel: React.FC = () => {
   const id = useId()
   const refs = useRef()
 
-  if (!selectedFunc)
-    return <div className='flex flex-col'>No function selected. Create or select a function to get started</div>
+  if (!selectedFunc) {
+    const bamlFunctionSnippet = `
+function ClassifyConversation(convo: string[]) -> Topic[] {
+  client GPT4
+  prompt #"
+    Classify the CONVERSATION.
+
+    {{ ctx.output_format }}
+
+    CONVERSATION:
+    {% for c in convo %}
+    {{ c }}
+    {% endfor %}
+  "#
+}
+
+enum Topic {
+  TechnicalSupport
+  Sales
+  CustomerService
+  Other
+}
+  `.trim()
+    return (
+      <div className='flex flex-col w-full h-full items-center justify-center gap-2'>
+        No functions found! You can create a new function like:
+        <pre className='bg-vscode-input-background p-2 rounded-sm text-xs'>{bamlFunctionSnippet}</pre>
+      </div>
+    )
+  }
 
   return (
     <div
@@ -90,18 +126,9 @@ const FunctionPanel: React.FC = () => {
           <ResizablePanel id='top-panel' className='flex w-full px-2' defaultSize={50}>
             <div className='w-full'>
               <ResizablePanelGroup direction='horizontal' className='h-full'>
-                <ResizablePanel defaultSize={60} className='overflow-y-auto'>
-                  <div className='relative w-full h-full overflow-y-auto'>
-                    <PromptPreview />
-                  </div>
-                </ResizablePanel>
-                <ResizableHandle withHandle={false} className='bg-vscode-panel-border' />
-                <ResizablePanel minSize={20} className='pl-2'>
-                  <div className='flex flex-col h-full overflow-x-clip overflow-y-auto'>
-                    {/* On windows this scroll area extends beyond the wanted width, so we just use a normal scrollbar here vs using ScrollArea*/}
-                    <TestCasePanel />
-                  </div>
-                </ResizablePanel>
+                <div className='relative w-full h-full overflow-y-auto'>
+                  <PromptPreview />
+                </div>
               </ResizablePanelGroup>
 
               {/* </Allotment> */}

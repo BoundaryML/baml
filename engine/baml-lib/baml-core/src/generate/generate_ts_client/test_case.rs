@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde_json::json;
 
 use crate::generate::{
@@ -47,7 +49,7 @@ impl WithFileContentTs<TSLanguageFeatures> for Walker<'_, (&Function, &TestCase)
           "function_name": function.elem.name(),
           "test_name": test_case.elem.name,
           "impl_names": impls,
-          "test_content": test_case.elem.content.to_ts(),
+          "test_content": test_case.elem.args.iter().map(|(key, value)| (key, value.to_ts())).collect::<HashMap<_, _>>(),
         });
 
         file.trim_append(render_with_hbs(

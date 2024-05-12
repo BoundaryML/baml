@@ -32,7 +32,7 @@ function App() {
             <ShowSettingsButton buttonClassName='h-4' iconClassName='h-4' />
           </div>
           <SettingsDialog />
-          <div className='flex flex-col gap-2 px-2 pb-4'>
+          <div className='flex flex-col gap-2 px-2 pb-4 w-full'>
             <FunctionSelector />
             <Separator className='bg-vscode-textSeparator-foreground' />
             <FunctionPanel />

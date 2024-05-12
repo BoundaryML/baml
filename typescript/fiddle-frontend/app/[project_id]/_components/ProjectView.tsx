@@ -367,7 +367,7 @@ const PlaygroundView = () => {
         <Suspense fallback={<div>Loading...</div>}>
           <EventListener>
             <SettingsDialog />
-            <div className='relative flex flex-col gap-2'>
+            <div className='relative flex flex-col gap-2 w-full pr-2'>
               <div className='relative flex flex-row gap-2'>
                 <FunctionSelector />
                 <div className='relative flex flex-row grow items-center justify-end gap-2 pr-1'>

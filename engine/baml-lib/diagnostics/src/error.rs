@@ -204,6 +204,16 @@ impl DatamodelError {
         Self::new(msg, span)
     }
 
+    pub fn new_duplicate_test_error(
+        test_name: &str,
+        function_name: &str,
+        span: Span,
+    ) -> DatamodelError {
+        let msg =
+            format!("Test \"{test_name}\" is already defined for function \"{function_name}\".");
+        Self::new(msg, span)
+    }
+
     pub fn new_duplicate_top_error(
         name: &str,
         top_type: &str,
@@ -238,6 +248,11 @@ impl DatamodelError {
 
     pub fn new_duplicate_default_argument_error(arg_name: &str, span: Span) -> DatamodelError {
         let msg = format!("Argument \"{arg_name}\" is already specified as unnamed argument.");
+        Self::new(msg, span)
+    }
+
+    pub fn new_duplicate_function_errors(func_name: &str, span: Span) -> DatamodelError {
+        let msg = format!("Function \"{func_name}\" is already specified for this test case.");
         Self::new(msg, span)
     }
 

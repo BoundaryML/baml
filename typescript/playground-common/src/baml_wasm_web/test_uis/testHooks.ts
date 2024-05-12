@@ -76,10 +76,12 @@ export const useRunHooks = () => {
       },
       error: 0,
     })
-    // Batch into groups of 5
+
+    // TODO: @hellovai find out why large batch sizes don't work
+    const batchSize = 1
     const batches = []
-    for (let i = 0; i < testNames.length; i += 5) {
-      batches.push(testNames.slice(i, i + 5))
+    for (let i = 0; i < testNames.length; i += batchSize) {
+      batches.push(testNames.slice(i, i + batchSize))
     }
     for (const batch of batches) {
       const promises = await Promise.allSettled(

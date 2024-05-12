@@ -297,7 +297,7 @@ impl TopId {
 
     pub fn as_test_case_id(self) -> Option<ConfigurationId> {
         match self {
-            TopId::Config((id, "test_case")) => Some(id),
+            TopId::Config((id, "test")) => Some(id),
             _ => None,
         }
     }

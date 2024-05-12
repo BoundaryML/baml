@@ -1065,14 +1065,19 @@ impl WithRepr<RetryPolicy> for ConfigurationWalker<'_> {
 #[derive(serde::Serialize)]
 pub struct TestCase {
     pub name: String,
-    pub content: Expression,
+    pub args: IndexMap<String, Expression>,
 }
 
 impl WithRepr<TestCase> for ConfigurationWalker<'_> {
     fn repr(&self, db: &ParserDatabase) -> Result<TestCase> {
         Ok(TestCase {
             name: self.name().to_string(),
-            content: self.test_case().content.repr(db)?,
+            args: self
+                .test_case()
+                .args
+                .iter()
+                .map(|(k, (_, v))| Ok((k.clone(), v.repr(db)?)))
+                .collect::<Result<IndexMap<_, _>>>()?,
         })
     }
 }

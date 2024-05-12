@@ -78,7 +78,6 @@ type ASTContextType = {
 // const wasm = undefined
 
 const wasmAtomAsync = atom(async () => {
-  console.debug('test BAML: Loading baml')
   const wasm = await import('@gloo-ai/baml-schema-wasm-web/baml_schema_build')
   return wasm
 })
@@ -119,7 +118,6 @@ const selectedProjectAtom = atom(
 
 export const selectedFunctionAtom = atom(
   (get) => {
-    console.debug('test BAML: selectedFunctionAtom')
     const functions = get(availableFunctionsAtom)
     const func = get(selectedFunctionStorageAtom)
     const match = functions.find((f) => f.name === func) ?? functions.at(0)
@@ -135,7 +133,6 @@ export const selectedFunctionAtom = atom(
 const rawSelectedTestCaseAtom = atom<string | null>(null)
 export const selectedTestCaseAtom = atom(
   (get) => {
-    console.debug('test BAML: selectedTestCaseAtom')
     const func = get(selectedFunctionAtom)
     const testCases = func?.test_cases ?? []
     const testCase = get(rawSelectedTestCaseAtom)
@@ -175,9 +172,7 @@ export const updateFileAtom = atom(null, (get, set, params: WriteFileParams) => 
   const { reason, root_path, files } = params
   const replace_all = 'replace_all' in params
   const renames = 'renames' in params ? params.renames ?? [] : []
-  console.debug(
-    `test BAML: Updating files due to ${reason}: ${files.length} files (${replace_all ? 'replace all' : 'update'})`,
-  )
+  console.debug(`Updating files due to ${reason}: ${files.length} files (${replace_all ? 'replace all' : 'update'})`)
   const _projFiles = get(projectFilesAtom(root_path))
   const filesToDelete = files.filter((f) => f.content === undefined).map((f) => f.name)
 
@@ -292,7 +287,6 @@ const selectedDiagnosticsAtom = atom((get) => {
 })
 
 export const versionAtom = atom((get) => {
-  console.debug('test BAML: versionAtom')
   const wasm = get(wasmAtom)
 
   if (wasm === undefined) {
@@ -303,7 +297,6 @@ export const versionAtom = atom((get) => {
 })
 
 export const availableFunctionsAtom = atom((get) => {
-  console.debug('test BAML: availableFunctionsAtom')
   const runtime = get(selectedRuntimeAtom)
   if (!runtime) {
     return []
@@ -316,7 +309,6 @@ export const availableFunctionsAtom = atom((get) => {
 })
 
 export const renderPromptAtom = atom((get) => {
-  console.debug('test BAML: renderPromptAtom')
   const runtime = get(selectedRuntimeAtom)
   const func = get(selectedFunctionAtom)
   const test_case = get(selectedTestCaseAtom)

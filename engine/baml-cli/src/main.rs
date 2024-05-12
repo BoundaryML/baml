@@ -7,7 +7,6 @@ mod command;
 mod errors;
 mod import_command;
 mod init_command;
-mod legacy_test_command;
 mod runtime_test_command;
 mod shell;
 mod update;
@@ -79,18 +78,6 @@ pub struct TestArgs {
     /// Sets the default action to perform. Can be either 'run' to execute tests or 'list' to list available tests.
     #[arg(default_value_t = TestAction::List)]
     action: TestAction,
-
-    /// Specifies a port for the test playground. Hidden from help text.
-    #[arg(long, hide = true)]
-    playground_port: Option<u16>,
-
-    /// Specify which generator (and therefore language) you want to use to run the tests.
-    #[arg(long, short = 'g')]
-    generator: Option<String>,
-
-    // Use the runtime or not (default is false) (flag is named --runtime)
-    #[arg(long = "runtime", action = clap::ArgAction::SetTrue)]
-    use_runtime: bool,
 }
 
 impl fmt::Display for TestAction {
@@ -172,16 +159,7 @@ pub(crate) fn main() {
                     "Documentation: https://docs.boundaryml.com".cyan()
                 );
             }),
-        Commands::Test(args) => {
-            if args.use_runtime {
-                runtime_test_command::run(args)
-            } else {
-                builder::build(&args.baml_dir).and_then(|(baml_dir, config, schema)| {
-                    legacy_test_command::run(args, &baml_dir, &config, schema)
-                        .map_err(anyhow::Error::new)
-                })
-            }
-        }
+        Commands::Test(args) => runtime_test_command::run(args),
         Commands::Import(args) => {
             builder::build(&args.baml_dir).and_then(|(baml_dir, config, schema)| {
                 import_command::run(&args.content, &baml_dir, &config, schema)

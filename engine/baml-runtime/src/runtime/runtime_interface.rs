@@ -220,23 +220,39 @@ impl RuntimeInterface for InternalBamlRuntime {
         let func = self.get_function(function_name, ctx)?;
         let test = self.ir().find_test(&func, test_name)?;
 
-        let params = match test.content().as_json(&ctx.env)? {
-            serde_json::Value::Object(kv) => {
-                let mut params = IndexMap::new();
-                for (k, v) in kv {
-                    params.insert(k, v);
+        let params = match test.test_case_params(&ctx.env) {
+            Ok(params) => {
+                // Collect all errors and return them as a single error.
+                let mut errors = Vec::new();
+                let params = params
+                    .into_iter()
+                    .map(|(k, v)| match v {
+                        Ok(v) => (k, v),
+                        Err(e) => {
+                            errors.push(e);
+                            (k, serde_json::Value::Null)
+                        }
+                    })
+                    .collect::<IndexMap<_, _>>();
+
+                if !errors.is_empty() {
+                    return Err(anyhow::anyhow!(
+                        "Unable to resolve test params: {:?}",
+                        errors
+                    ));
                 }
                 params
             }
-            x => {
+            Err(e) => {
                 return Ok(TestResponse {
                     function_response: Err(anyhow::anyhow!(
-                        "Test content must be an object, found: {:?}",
-                        x
+                        "Unable to resolve test params: {:?}",
+                        e
                     )),
                 })
             }
         };
+
         log::info!("Test params: {:#?}", params);
         let baml_args = self.ir().check_function_params(&func, &params)?;
 

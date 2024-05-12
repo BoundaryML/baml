@@ -1,4 +1,5 @@
 use anyhow::Result;
+use indexmap::IndexMap;
 use internal_baml_parser_database::RetryPolicyStrategy;
 use serde_json::json;
 use std::collections::HashMap;
@@ -218,8 +219,8 @@ impl<'a> Walker<'a, (&'a Function, &'a TestCase)> {
         format!("{}::{}", self.item.0.elem.name(), self.item.1.elem.name)
     }
 
-    pub fn content(&self) -> &Expression {
-        &self.item.1.elem.content
+    pub fn args(&self) -> &IndexMap<String, Expression> {
+        &self.item.1.elem.args
     }
 
     pub fn test_case(&self) -> &repr::TestCase {
@@ -229,17 +230,11 @@ impl<'a> Walker<'a, (&'a Function, &'a TestCase)> {
     pub fn test_case_params(
         &self,
         env_values: &HashMap<String, String>,
-    ) -> Result<Vec<(String, Result<serde_json::Value>)>> {
-        match self.content() {
-            Expression::Map(m) => {
-                let mut params = Vec::new();
-                for (k, v) in m {
-                    params.push((k.as_string_value(env_values)?, v.as_json(env_values)));
-                }
-                Ok(params)
-            }
-            _ => anyhow::bail!("Expected map, got {:?}", self.content()),
-        }
+    ) -> Result<IndexMap<String, Result<serde_json::Value>>> {
+        self.args()
+            .iter()
+            .map(|(k, v)| Ok((k.clone(), v.as_json(env_values))))
+            .collect()
     }
 
     pub fn function(&'a self) -> Walker<'a, &'a Function> {

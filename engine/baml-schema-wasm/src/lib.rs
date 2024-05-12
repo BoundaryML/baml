@@ -38,12 +38,6 @@ pub fn call_llm(input: String) -> String {
 }
 
 #[wasm_bindgen]
-pub fn lint(input: String) -> String {
-    register_panic_hook();
-    baml_fmt::lint(input)
-}
-
-#[wasm_bindgen]
 pub fn validate(params: String) -> Result<(), JsError> {
     register_panic_hook();
     baml_fmt::validate(params).map_err(|e| JsError::new(&e))

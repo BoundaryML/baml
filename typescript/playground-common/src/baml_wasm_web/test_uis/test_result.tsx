@@ -21,8 +21,10 @@ import {
 } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 import JsonView from 'react18-json-view'
 import clsx from 'clsx'
-import { Filter, Pin, Play } from 'lucide-react'
+import { Filter, Pin, Play, Plus } from 'lucide-react'
 import { selectedFunctionAtom, selectedTestCaseAtom } from '../EventListener'
+import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog'
+import FunctionTestSnippet from '../../shared/TestSnippet'
 
 const TestStatusMessage: React.FC<{ testStatus: DoneTestStatusType }> = ({ testStatus }) => {
   switch (testStatus) {
@@ -328,6 +330,28 @@ const TestCaseActions: React.FC<{ testName: string }> = ({ testName }) => {
   )
 }
 
+const NewTestCaseDialog: React.FC = () => {
+  const [show, setShow] = useState(false)
+  const selectedFunction = useAtomValue(selectedFunctionAtom)
+
+  if (!selectedFunction) {
+    return null
+  }
+
+  return (
+    <Dialog open={show} onOpenChange={setShow}>
+      <DialogTrigger asChild={true}>
+        <Button variant='outline' className='p-1 text-xs truncate w-fit h-fit border-vscode-textSeparator-foreground'>
+          <Plus size={16} /> New Test
+        </Button>
+      </DialogTrigger>
+      <DialogContent className='max-h-screen bg-vscode-editorWidget-background border-vscode-textSeparator-foreground overflow-x-clip'>
+        <FunctionTestSnippet />
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 const TestCaseList: React.FC = () => {
   const allTestCases = useAtomValue(selectedFunctionAtom)?.test_cases ?? []
   const [filter, setFilter] = useState('')
@@ -341,16 +365,24 @@ const TestCaseList: React.FC = () => {
 
   return (
     <div className='flex flex-col gap-2 px-2 w-full h-full'>
-      <div className='flex flex-row gap-2 items-center flex-wrap'>
-        <Filter size={16} />
-        <VSCodeTextField
-          placeholder='Filter test cases'
-          className='w-32 shrink'
-          value={filter}
-          onInput={(e) => {
-            setFilter((e as React.FormEvent<HTMLInputElement>).currentTarget.value)
-          }}
-        />
+      <div className='flex gap-2 items-start flex-wrap h-fit'>
+        <div className='flex flex-col'>
+          <div className='flex gap-2 items-center flex-wrap'>
+            <Filter size={16} />
+            <VSCodeTextField
+              placeholder='Filter test cases'
+              className='w-32 shrink'
+              value={filter}
+              onInput={(e) => {
+                setFilter((e as React.FormEvent<HTMLInputElement>).currentTarget.value)
+              }}
+            />
+          </div>
+
+          {filter && (
+            <div className='text-xs text-muted-foreground'>{allTestCases.length - testCases.length} filtered out</div>
+          )}
+        </div>
         {isRunning ? (
           <VSCodeButton className='bg-vscode-statusBarItem-errorBackground' disabled onClick={() => {}}>
             Cancel Not Supported
@@ -358,7 +390,7 @@ const TestCaseList: React.FC = () => {
         ) : (
           <>
             <Button
-              className='px-1 py-1 h-full text-xs whitespace-nowrap bg-red-500 rounded-sm bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground'
+              className='px-1 py-1 h-fit text-xs whitespace-nowrap bg-red-500 rounded-sm bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground'
               disabled={testCases.length === 0}
               onClick={() => {
                 run(testCases.map((t) => t.name))
@@ -371,9 +403,7 @@ const TestCaseList: React.FC = () => {
             </Button>
           </>
         )}
-        {filter && (
-          <div className='text-xs text-muted-foreground'>{allTestCases.length - testCases.length} filtered out</div>
-        )}
+        <NewTestCaseDialog />
       </div>
       <hr className=' border-muted-foreground w-full' />
       <div className='flex flex-col gap-1 overflow-y-auto h-full'>
@@ -382,8 +412,10 @@ const TestCaseList: React.FC = () => {
             <TestCaseActions testName={test.name} />
             <div
               className={clsx(
-                'flex flex-col gap-1 p-1 w-full',
-                selectedTestCase?.name !== test.name ? 'cursor-pointer hover:bg-vscode-input-background' : '',
+                'flex flex-col gap-1 p-2 w-full',
+                selectedTestCase?.name !== test.name
+                  ? 'cursor-pointer hover:bg-vscode-input-background'
+                  : 'border-vscode-input-background border rounded-sm',
               )}
               onClick={
                 selectedTestCase?.name === test.name

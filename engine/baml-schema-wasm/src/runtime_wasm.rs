@@ -210,6 +210,8 @@ pub struct WasmFunction {
     pub name: String,
     #[wasm_bindgen(readonly)]
     pub test_cases: Vec<WasmTestCase>,
+    #[wasm_bindgen(readonly)]
+    pub test_snippet: String,
 }
 
 #[wasm_bindgen(getter_with_clone)]
@@ -414,6 +416,101 @@ impl WithRenderError for baml_runtime::internal::llm_client::LLMResponse {
     }
 }
 
+fn get_dummy_value(
+    indent: usize,
+    allow_multiline: bool,
+    t: &baml_runtime::FieldType,
+) -> Option<String> {
+    let indent_str = "  ".repeat(indent);
+    match t {
+        baml_runtime::FieldType::Primitive(t) => {
+            let dummy = match t {
+                baml_runtime::TypeValue::String => {
+                    if allow_multiline {
+                        format!(
+                            "#\"\n{indent1}hello world\n{indent_str}\"#",
+                            indent1 = "  ".repeat(indent + 1)
+                        )
+                    } else {
+                        "\"a_string\"".to_string()
+                    }
+                }
+                baml_runtime::TypeValue::Int => "123".to_string(),
+                baml_runtime::TypeValue::Float => "0.5".to_string(),
+                baml_runtime::TypeValue::Bool => "true".to_string(),
+                baml_runtime::TypeValue::Char => "'a'".to_string(),
+                baml_runtime::TypeValue::Null => "null".to_string(),
+                baml_runtime::TypeValue::Image => {
+                    "{ url \"https://imgs.xkcd.com/comics/standards.png\"}".to_string()
+                }
+            };
+
+            Some(dummy)
+        }
+        baml_runtime::FieldType::Enum(EnumId) => None,
+        baml_runtime::FieldType::Class(ClassId) => None,
+        baml_runtime::FieldType::List(item) => {
+            let dummy = get_dummy_value(indent + 1, allow_multiline, item);
+            // Repeat it 2 times
+            match dummy {
+                Some(dummy) => {
+                    if allow_multiline {
+                        Some(format!(
+                            "[\n{indent1}{dummy},\n{indent1}{dummy}\n{indent_str}]",
+                            dummy = dummy,
+                            indent1 = "  ".repeat(indent + 1)
+                        ))
+                    } else {
+                        Some(format!("[{}, {}]", dummy, dummy))
+                    }
+                }
+                _ => None,
+            }
+        }
+        baml_runtime::FieldType::Map(k, v) => {
+            let dummy_k = get_dummy_value(indent, false, k);
+            let dummy_v = get_dummy_value(indent + 1, allow_multiline, v);
+            match (dummy_k, dummy_v) {
+                (Some(k), Some(v)) => {
+                    if allow_multiline {
+                        Some(format!(
+                            r#"{{
+{indent1}{k} {v}
+{indent_str}}}"#,
+                            indent1 = "  ".repeat(indent + 1),
+                        ))
+                    } else {
+                        Some(format!("{{ {k} {v} }}"))
+                    }
+                }
+                _ => None,
+            }
+        }
+        baml_runtime::FieldType::Union(fields) => fields
+            .iter()
+            .filter_map(|f| get_dummy_value(indent, allow_multiline, f))
+            .next(),
+        baml_runtime::FieldType::Tuple(vals) => {
+            let dummy = vals
+                .iter()
+                .filter_map(|f| get_dummy_value(0, false, f))
+                .collect::<Vec<_>>()
+                .join(", ");
+            Some(format!("({},)", dummy))
+        }
+        baml_runtime::FieldType::Optional(_) => None,
+    }
+}
+
+fn get_dummy_field(indent: usize, name: &str, t: &baml_runtime::FieldType) -> Option<String> {
+    let indent_str = "  ".repeat(indent);
+    let dummy = get_dummy_value(indent, true, t);
+    match dummy {
+        Some(dummy) => Some(format!("{indent_str}{name} {dummy}")),
+        _ => None,
+    }
+}
+
 #[wasm_bindgen]
 impl WasmRuntime {
     #[wasm_bindgen]
@@ -422,66 +519,91 @@ impl WasmRuntime {
             .internal()
             .ir()
             .walk_functions()
-            .map(|f| WasmFunction {
-                name: f.name().to_string(),
-                test_cases: f
-                    .walk_tests()
-                    .map(|tc| {
-                        let params = match tc.test_case_params(&ctx.ctx.env) {
-                            Ok(params) => Ok(params
+            .map(|f| {
+                let snippet = format!(
+                    r#"
+test TestName {{
+  functions [{name}]
+  args {{
+{args}
+  }}
+}}
+"#,
+                    name = f.name(),
+                    args = f
+                        .inputs()
+                        .right()
+                        .map(|func_params| {
+                            func_params
                                 .iter()
-                                .map(|(k, v)| {
-                                    let as_str = match v {
-                                        Ok(v) => match serde_json::to_string(v) {
-                                            Ok(s) => Ok(s),
+                                .filter_map(|(k, t)| get_dummy_field(2, k, t))
+                                .collect::<Vec<_>>()
+                                .join("\n")
+                        })
+                        .unwrap_or_default()
+                );
+                WasmFunction {
+                    name: f.name().to_string(),
+                    test_snippet: snippet,
+                    test_cases: f
+                        .walk_tests()
+                        .map(|tc| {
+                            let params = match tc.test_case_params(&ctx.ctx.env) {
+                                Ok(params) => Ok(params
+                                    .iter()
+                                    .map(|(k, v)| {
+                                        let as_str = match v {
+                                            Ok(v) => match serde_json::to_string(v) {
+                                                Ok(s) => Ok(s),
+                                                Err(e) => Err(e.to_string()),
+                                            },
                                             Err(e) => Err(e.to_string()),
-                                        },
-                                        Err(e) => Err(e.to_string()),
-                                    };
+                                        };
 
-                                    let (value, error) = match as_str {
-                                        Ok(s) => (Some(s), None),
-                                        Err(e) => (None, Some(e)),
-                                    };
+                                        let (value, error) = match as_str {
+                                            Ok(s) => (Some(s), None),
+                                            Err(e) => (None, Some(e)),
+                                        };
 
-                                    WasmParam {
-                                        name: k.to_string(),
-                                        value,
-                                        error,
-                                    }
-                                })
-                                .collect()),
-                            Err(e) => Err(e.to_string()),
-                        };
-
-                        let (mut params, error) = match params {
-                            Ok(p) => (p, None),
-                            Err(e) => (Vec::new(), Some(e)),
-                        };
-
-                        // Any missing params should be set to an error
-                        let _ = f.inputs().right().map(|func_params| {
-                            for (param_name, _) in func_params {
-                                if !params.iter().any(|p| p.name.cmp(param_name).is_eq()) {
-                                    params.insert(
-                                        0,
                                         WasmParam {
-                                            name: param_name.to_string(),
-                                            value: None,
-                                            error: Some("Missing parameter".to_string()),
-                                        },
-                                    );
-                                }
-                            }
-                        });
+                                            name: k.to_string(),
+                                            value,
+                                            error,
+                                        }
+                                    })
+                                    .collect()),
+                                Err(e) => Err(e.to_string()),
+                            };
 
-                        WasmTestCase {
-                            name: tc.test_case().name.clone(),
-                            inputs: params,
-                            error,
-                        }
-                    })
-                    .collect(),
+                            let (mut params, error) = match params {
+                                Ok(p) => (p, None),
+                                Err(e) => (Vec::new(), Some(e)),
+                            };
+
+                            // Any missing params should be set to an error
+                            let _ = f.inputs().right().map(|func_params| {
+                                for (param_name, _) in func_params {
+                                    if !params.iter().any(|p| p.name.cmp(param_name).is_eq()) {
+                                        params.insert(
+                                            0,
+                                            WasmParam {
+                                                name: param_name.to_string(),
+                                                value: None,
+                                                error: Some("Missing parameter".to_string()),
+                                            },
+                                        );
+                                    }
+                                }
+                            });
+
+                            WasmTestCase {
+                                name: tc.test_case().name.clone(),
+                                inputs: params,
+                                error,
+                            }
+                        })
+                        .collect(),
+                }
             })
             .collect()
     }

@@ -293,7 +293,7 @@ impl<'db> crate::ParserDatabase {
             .filter_map(|(top_id, _)| top_id.as_test_case_id())
             .map(move |top_id| Walker {
                 db: self,
-                id: (top_id, "test_case"),
+                id: (top_id, "test"),
             })
     }
 

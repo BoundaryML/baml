@@ -110,7 +110,7 @@ function makeLinter() {
           .map((err): Diagnostic => {
             return {
               from: err.start_ch,
-              to: err.end_ch,
+              to: err.start_ch === err.end_ch ? err.end_ch + 1 : err.end_ch,
               message: err.message,
               severity: err.type === 'warning' ? 'warning' : 'error',
               source: 'baml',

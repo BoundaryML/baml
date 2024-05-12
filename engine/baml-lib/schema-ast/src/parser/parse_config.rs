@@ -53,7 +53,8 @@ pub(crate) fn parse_config_block(
                 }
             }
             Rule::identifier => name = Some(parse_identifier(current, diagnostics)),
-            Rule::PRINTER_KEYWORD
+            Rule::TEST_KEYWORD
+            | Rule::PRINTER_KEYWORD
             | Rule::RETRY_POLICY_KEYWORD
             | Rule::GENERATOR_KEYWORD
             | Rule::CLIENT_KEYWORD => kw = Some(current.as_str()),
@@ -127,6 +128,23 @@ pub(crate) fn parse_config_block(
             documentation: doc_comment.and_then(parse_comment_block),
             span,
         })),
+        (Some("test"), _, Some(_)) => Err(DatamodelError::new_validation_error(
+            "Template arguments are not allowed for test.",
+            span,
+        )),
+        (Some("test"), None, None) => Err(DatamodelError::new_validation_error(
+            "Missing name for test.",
+            span,
+        )),
+        (Some("test"), Some(name), None) => {
+            Ok(Top::Config(Configuration::TestCase(RetryPolicyConfig {
+                name,
+                fields,
+                attributes,
+                documentation: doc_comment.and_then(parse_comment_block),
+                span,
+            })))
+        }
         _ => unreachable!("Encountered impossible model declaration during parsing",),
     }
 }
