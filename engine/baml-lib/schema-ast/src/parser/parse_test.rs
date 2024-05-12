@@ -152,7 +152,7 @@ pub(crate) fn parse_test_from_json(
                 Span::empty(source.clone()),
             ));
             diagnostics.to_result()?;
-            unreachable!()
+            unreachable!("Failed to parse JSON for test:");
         }
     };
     let test_input = file_content.input.to_string();

@@ -348,7 +348,7 @@ impl JsonParseState {
                 }
                 Some(counter)
             }
-            _ => unreachable!(),
+            _ => unreachable!("Invalid position"),
         }
     }
 

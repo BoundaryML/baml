@@ -139,7 +139,7 @@ impl WithLoader<Vec<LanguageConfig>> for LanguageConfig {
                     .map(LanguageConfig::Python),
                 1 => TypeScriptConfig::from_dialoguer(no_prompt, project_root, writer)
                     .map(LanguageConfig::TypeScript),
-                _ => unreachable!(),
+                _ => unreachable!("Invalid language selection"),
             })
             .collect()
     }

@@ -36,7 +36,7 @@ class Project {
   update_runtime() {
     if (this.current_runtime == undefined) {
       try {
-        this.current_runtime = this.files.runtime()
+        this.current_runtime = this.files.runtime(this.ctx)
         const files = this.files.files()
         const fileMap = Object.fromEntries(
           files.map((f): [string, string] => f.split('BAML_PATH_SPLTTER', 2) as [string, string]),
@@ -140,8 +140,10 @@ class BamlProjectManager {
       })
       this.notifier({ errors: Array.from(diagnostics), type: 'diagnostic' })
     } else if (e instanceof Error) {
+      console.error('Error linting, got error ' + e.message)
       this.notifier({ message: e.message, type: 'error' })
     } else {
+      console.error('Error linting ' + JSON.stringify(e))
       this.notifier({
         message: `${e}`,
         type: 'error',

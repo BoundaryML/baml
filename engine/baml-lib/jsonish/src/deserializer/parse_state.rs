@@ -97,7 +97,7 @@ impl<'a> ParseState<'a> {
                     Ok(value) => value,
                     Err(_) => self.record_string(raw, raw.to_string()),
                 },
-                _ => unreachable!(),
+                _ => unreachable!("Error in deserializer. Reached unreachable state"),
             },
         }
     }
