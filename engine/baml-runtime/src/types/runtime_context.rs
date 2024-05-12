@@ -14,6 +14,7 @@ pub struct RuntimeContext {
 }
 
 impl RuntimeContext {
+    #[cfg(feature = "no_wasm")]
     pub fn from_env() -> Self {
         Self {
             env: std::env::vars_os()

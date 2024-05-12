@@ -251,7 +251,7 @@ impl WithChat for AnthropicClient {
         prompt: &Vec<RenderedChatMessage>,
     ) -> Result<LLMResponse> {
         use wasm_bindgen::JsCast;
-        use web_sys::{console::log, Response};
+        use web_sys::Response;
         use web_time::SystemTime;
 
         use crate::internal::llm_client::{
@@ -324,7 +324,7 @@ impl WithChat for AnthropicClient {
             .map_err(|e| {
                 anyhow::anyhow!("Does this support the Anthropic Response type?\n{:#?}", e)
             })?;
-        log::info!("Response: {:#?}", response);
+
         let body =
             match serde_wasm_bindgen::from_value::<AnthropicMessageResponse>(response.clone()) {
                 Ok(body) => body,

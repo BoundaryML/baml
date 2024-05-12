@@ -13,7 +13,7 @@ mod cli;
 mod macros;
 mod request;
 mod runtime;
-mod runtime_interface;
+pub mod runtime_interface;
 pub mod tracing;
 mod types;
 

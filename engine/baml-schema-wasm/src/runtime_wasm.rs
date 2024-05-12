@@ -1,5 +1,5 @@
 mod runtime_ctx;
-mod runtime_prompt;
+pub mod runtime_prompt;
 
 use std::collections::HashMap;
 
@@ -15,7 +15,11 @@ use baml_runtime::{InternalRuntimeInterface, RuntimeContext};
 
 use crate::runtime_wasm::runtime_prompt::WasmPrompt;
 
-use self::runtime_ctx::WasmRuntimeContext;
+pub use self::runtime_ctx::WasmRuntimeContext;
+
+//Run: wasm-pack test --firefox --headless  --features internal,wasm
+// but for browser we likely need to do         wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+// Node is run using: wasm-pack test --node --features internal,wasm
 
 #[wasm_bindgen(start)]
 pub fn on_wasm_init() {
@@ -140,10 +144,11 @@ impl WasmProject {
         self.unsaved_files.iter().for_each(|(k, v)| {
             saved_files.insert(k.clone(), v.clone());
         });
-        saved_files
+        let formatted_files = saved_files
             .iter()
             .map(|(k, v)| format!("{}BAML_PATH_SPLTTER{}", k, v))
-            .collect()
+            .collect::<Vec<String>>();
+        formatted_files
     }
 
     #[wasm_bindgen]

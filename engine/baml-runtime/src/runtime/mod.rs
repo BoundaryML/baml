@@ -3,7 +3,7 @@
 mod tests;
 
 mod ir_features;
-mod runtime_interface;
+pub(crate) mod runtime_interface;
 
 use anyhow::Result;
 use std::{collections::HashMap, path::PathBuf};
