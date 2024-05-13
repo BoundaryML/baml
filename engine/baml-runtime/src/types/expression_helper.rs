@@ -32,7 +32,7 @@ pub fn to_value(ctx: &RuntimeContext, expr: &Expression) -> Result<serde_json::V
                 .map(|(k, v)| {
                     let k = match k {
                         Expression::String(s) => s.clone(),
-                        _ => todo!(),
+                        _ => anyhow::bail!("invalid key type"),
                     };
                     let v = to_value(ctx, v)?;
                     Ok((k, v))
