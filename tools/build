@@ -117,11 +117,31 @@ case "$_path" in
     ;;
 
   # Subdirectories of engine must be matched before this line
-  /engine | /engine/* )
+  /engine/baml-runtime | /engine/baml-runtime/* )
     if [ "$_test_mode" -eq 1 ]; then
-      command="cargo build && cargo test; date"
+      command="wasm-pack test --chrome . --features=wasm"
     else
-      command="cargo build; date"
+      command="cargo build --features=wasm --target=wasm32-unknown-unknown"
+    fi
+
+    if [ "$_watch_mode" -eq 1 ]; then
+      npx nodemon \
+        --ext rs,hb,hbs,j2,toml,baml \
+        --watch "${_repo_root}/engine" \
+        --ignore 'target' \
+        --exec "${command}"
+    else
+      eval "${command}"
+    fi
+    ;;
+
+  # Subdirectories of engine must be matched before this line
+  /engine | /engine/* )
+    command=""
+    if [ "$_test_mode" -eq 1 ]; then
+      command="cargo test ${command}"
+    else
+      command="cargo build ${command}"
     fi
 
     if [ "$_watch_mode" -eq 1 ]; then

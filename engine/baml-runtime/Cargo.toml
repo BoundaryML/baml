@@ -15,6 +15,7 @@ colored = "2.1.0"
 dashmap.workspace = true
 dunce = "1.0.4"
 either.workspace = true
+futures.workspace = true
 indexmap.workspace = true
 json_comments = "0.2.2"
 jsonish = { path = "../baml-lib/jsonish" }
@@ -39,6 +40,8 @@ mime = "0.3.17"
 # For tracing
 envy = "0.4.2"
 chrono = "0.4.38"
+reqwest-eventsource = "0.6.0"
+eventsource-stream = "0.2.3"
 
 
 [dependencies.hostname]
@@ -70,7 +73,14 @@ optional = true
 [dependencies.web-sys]
 version = "0.3.69"
 optional = true
-features = ["Headers", "Request", "RequestInit", "Response", "RequestMode", "Window"]
+features = [
+  "Headers",
+  "Request",
+  "RequestInit",
+  "Response",
+  "RequestMode",
+  "Window",
+]
 
 [features]
 defaults = []
@@ -78,14 +88,23 @@ wasm = [
   "colored/no-color",
   "dep:js-sys",
   "uuid/js",
+  "dep:reqwest",
+  "reqwest/stream",
   "dep:wasm-bindgen",
   "dep:web-sys",
   "dep:wasm-bindgen-futures",
 ] # Enable this feature for WASM build
-no_wasm = ["tokio/full", "reqwest", "walkdir", "hostname"]
+no_wasm = [
+  "tokio/full",
+  "dep:reqwest",
+  "reqwest/native-tls-vendored",
+  "walkdir",
+  "hostname",
+]
 internal = []
 
 [dev-dependencies]
+console_log = { version = "1" }
 dissimilar = "1.0.4"
 expect-test = "1.1.0"
 indoc.workspace = true
