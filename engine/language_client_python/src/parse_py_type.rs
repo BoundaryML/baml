@@ -35,7 +35,7 @@ impl Into<PyErr> for Errors {
         let errs = self.errors;
         match errs.len() {
             0 => PyRuntimeError::new_err(
-                "Unexpected error! Report this bug to the github.com/boundaryml/baml",
+                "Unexpected error! Report this bug to github.com/boundaryml/baml (code: pyo3-zero)",
             ),
             1 => PyTypeError::new_err(errs.get(0).unwrap().to_string()),
             _ => {

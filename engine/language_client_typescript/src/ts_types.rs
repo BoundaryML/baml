@@ -72,3 +72,39 @@ impl GenerateArgs {
         }
     }
 }
+
+//#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+//#[serde(rename = "Image")]
+//#[pyclass(name = "Image")]
+#[derive(Debug)]
+enum ImageRepr {
+    Url(String),
+    Base64(String),
+}
+
+#[napi]
+struct Image {
+    repr: ImageRepr,
+}
+
+#[napi]
+impl Image {
+    #[napi(factory)]
+    pub fn from_base64(base64: String) -> Self {
+        Self {
+            repr: ImageRepr::Base64(base64),
+        }
+    }
+
+    #[napi(factory)]
+    pub fn from_url(url: String) -> Self {
+        Self {
+            repr: ImageRepr::Url(url),
+        }
+    }
+
+    /// Returns the debug representation of the image.
+    fn to_string(&self) -> String {
+        format!("{:?}", self.repr)
+    }
+}

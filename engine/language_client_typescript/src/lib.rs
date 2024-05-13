@@ -1,3 +1,4 @@
+mod parse_ts_types;
 mod ts_types;
 
 use baml_runtime::{RuntimeContext, RuntimeInterface};
