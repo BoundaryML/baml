@@ -350,6 +350,7 @@ dependencies = [
  "anyhow",
  "baml-fmt",
  "baml-runtime",
+ "console_error_panic_hook",
  "console_log",
  "dissimilar",
  "either",

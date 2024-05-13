@@ -8,13 +8,12 @@ use baml_runtime::{
     internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, RenderedPrompt,
     RuntimeInterface,
 };
+use baml_runtime::{InternalRuntimeInterface, RuntimeContext};
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::error;
 use serde_wasm_bindgen::{from_value, to_value};
 use wasm_bindgen::prelude::*;
-
-use baml_runtime::{InternalRuntimeInterface, RuntimeContext};
 
 use crate::runtime_wasm::runtime_prompt::WasmPrompt;
 
@@ -32,6 +31,8 @@ pub fn on_wasm_init() {
             &format!("Failed to initialize BAML runtime logging: {:?}", e).into(),
         ),
     }
+
+    console_error_panic_hook::set_once();
 }
 
 #[wasm_bindgen(inspectable)]

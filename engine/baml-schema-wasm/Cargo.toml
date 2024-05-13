@@ -26,6 +26,7 @@ wasm-bindgen = "=0.2.92"
 wasm-bindgen-futures = "0.4.42"
 wasm-logger = { version = "0.2.0" }
 indexmap.workspace = true
+console_error_panic_hook = "0.1.7"
 
 [dependencies.web-sys]
 version = "0.3.69"
