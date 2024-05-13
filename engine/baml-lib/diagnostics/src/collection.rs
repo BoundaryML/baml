@@ -85,7 +85,6 @@ impl Diagnostics {
 
     pub fn to_result(&mut self) -> Result<(), Diagnostics> {
         if self.has_errors() {
-            log::debug!("Diagnostic has Errors: {:?}", self.errors);
             Err(std::mem::take(self))
         } else {
             Ok(())

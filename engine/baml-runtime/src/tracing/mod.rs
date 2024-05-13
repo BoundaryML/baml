@@ -58,7 +58,6 @@ impl BamlTracer {
             enabled: options.enabled(),
             options,
         };
-        log::debug!("Tracer enabled: {}", tracer.enabled);
         tracer
     }
 

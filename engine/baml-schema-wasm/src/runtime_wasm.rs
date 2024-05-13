@@ -66,7 +66,6 @@ pub struct WasmDiagnosticError {
 impl WasmDiagnosticError {
     #[wasm_bindgen]
     pub fn errors(&self) -> Vec<WasmError> {
-        log::debug!("Errors: {:#?}", self.errors.errors());
         self.errors
             .errors()
             .iter()
@@ -185,8 +184,6 @@ impl WasmProject {
 
     #[wasm_bindgen]
     pub fn diagnostics(&self, rt: &WasmRuntime) -> WasmDiagnosticError {
-        log::info!("Getting diagnostics for files");
-        log::info!("Runtime: {:#?}", rt.runtime.internal().ir().clone());
         let mut hm = self.files.iter().collect::<HashMap<_, _>>();
         hm.extend(self.unsaved_files.iter());
 
@@ -198,8 +195,6 @@ impl WasmProject {
 
     #[wasm_bindgen]
     pub fn runtime(&self, ctx: &WasmRuntimeContext) -> Result<WasmRuntime, JsValue> {
-        log::info!("Creating runtime");
-
         let mut hm = self.files.iter().collect::<HashMap<_, _>>();
         hm.extend(self.unsaved_files.iter());
 
@@ -207,13 +202,11 @@ impl WasmProject {
             .map(|r| WasmRuntime { runtime: r })
             .map_err(|e| match e.downcast::<DiagnosticsError>() {
                 Ok(e) => {
-                    log::debug!("Matched diagnostic error: {:#?}", e);
                     let wasm_error = WasmDiagnosticError {
                         errors: e,
                         all_files: hm.keys().map(|s| s.to_string()).collect(),
                     }
                     .into();
-                    log::debug!("Wasm diagnostic Error: {:#?}", wasm_error);
                     wasm_error
                 }
                 Err(e) => {

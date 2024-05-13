@@ -134,7 +134,7 @@ impl<'db> FunctionWalker<'db> {
             .filter(|w| w.test_case().functions.iter().any(|f| f.0 == self.name()))
             .collect::<Vec<_>>();
 
-        log::debug!("Found {} tests for function {}", tests.len(), self.name());
+        // log::debug!("Found {} tests for function {}", tests.len(), self.name());
 
         tests.sort_by(|a, b| a.name().cmp(b.name()));
 

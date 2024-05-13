@@ -27,6 +27,8 @@ wasm-bindgen-futures = "0.4.42"
 wasm-logger = { version = "0.2.0" }
 indexmap.workspace = true
 console_error_panic_hook = "0.1.7"
+getrandom = { version = "0.2.15", features = ["js"] }
+uuid = { version = "1.8", features = ["v4", "js"] }
 
 [dependencies.web-sys]
 version = "0.3.69"

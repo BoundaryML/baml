@@ -40,6 +40,8 @@ import * as MessageHandler from './lib/MessageHandler'
 import BamlProjectManager from './lib/baml_project_manager'
 import type { LSOptions, LSSettings } from './lib/types'
 
+;(globalThis as any).crypto = require('node:crypto').webcrypto
+
 const packageJson = require('../../package.json') // eslint-disable-line
 function getConnection(options?: LSOptions): Connection {
   let connection = options?.connection

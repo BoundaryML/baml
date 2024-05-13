@@ -36,20 +36,15 @@ class Project {
   update_runtime() {
     if (this.current_runtime == undefined) {
       try {
-        console.debug(`Updating runtime`)
         this.current_runtime = this.files.runtime(this.ctx)
-        console.debug(`Successfully updated runtime`)
 
         const files = this.files.files()
-        console.debug(`Running diagnostics on runtime ${files.length} files`)
         const fileMap = Object.fromEntries(
           files.map((f): [string, string] => f.split('BAML_PATH_SPLTTER', 2) as [string, string]),
         )
-        console.debug(`Running diagnostics on runtime ${files.length} files`)
         this.onSuccess(this.files.diagnostics(this.current_runtime), fileMap)
       } catch (e) {
         console.error(`Error updating runtime: ${e}`)
-        console.error(e)
         this.current_runtime = undefined
         throw e
       }

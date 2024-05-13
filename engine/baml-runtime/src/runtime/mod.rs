@@ -33,7 +33,6 @@ impl InternalBamlRuntime {
         directory: &str,
         files: &HashMap<T, T>,
     ) -> Result<Self> {
-        log::debug!("Loading runtime from directory: {}", directory);
         let contents = files
             .iter()
             .map(|(path, contents)| {
@@ -44,15 +43,9 @@ impl InternalBamlRuntime {
             })
             .collect::<Result<Vec<_>>>()?;
         let mut schema = validate(&PathBuf::from(directory), contents);
-        log::debug!("Validating schema");
         schema.diagnostics.to_result()?;
 
         let ir = IntermediateRepr::from_parser_database(&schema.db)?;
-        log::debug!("Built IR ");
-        log::debug!("Diagnostics: {:?}", schema.diagnostics);
-        let clients_map: DashMap<String, (Arc<LLMProvider>, Option<CallablePolicy>)> =
-            DashMap::new();
-        log::debug!("dashmap createD");
         Ok(InternalBamlRuntime {
             ir,
             diagnostics: schema.diagnostics,
