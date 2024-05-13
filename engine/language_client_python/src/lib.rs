@@ -13,6 +13,7 @@ use pyo3::{
     create_exception, wrap_pyfunction, wrap_pymodule, Py, PyAny, PyErr, PyObject, Python,
     ToPyObject,
 };
+use python_types::BamlImagePy;
 use pythonize::depythonize;
 use serde::de;
 use serde::{Deserialize, Serialize};
@@ -32,98 +33,6 @@ impl BamlError {
 #[pyclass]
 struct BamlRuntimeFfi {
     internal: Arc<BamlRuntime>,
-}
-
-// Use this once we update pyo3. Current version doesn't support this struct enum.
-// pub enum BamlImagePy {
-//     // struct
-//     Url { url: String },
-//     Base64 { base64: String },
-// }
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-#[serde(rename = "Image")]
-#[pyclass(name = "Image")]
-struct BamlImagePy {
-    url: Option<String>,
-    base64: Option<String>,
-    media_type: Option<String>,
-}
-
-// Implement constructor for BamlImage
-#[pymethods]
-impl BamlImagePy {
-    #[new]
-    fn new(url: Option<String>, base64: Option<String>, media_type: Option<String>) -> Self {
-        BamlImagePy {
-            url,
-            base64,
-            media_type,
-        }
-    }
-
-    #[getter]
-    fn get_url(&self) -> PyResult<Option<String>> {
-        Ok(self.url.clone())
-    }
-
-    #[getter]
-    fn get_base64(&self) -> PyResult<Option<String>> {
-        Ok(self.base64.clone())
-    }
-
-    #[setter]
-    fn set_url(&mut self, url: Option<String>) {
-        self.url = url;
-    }
-
-    #[setter]
-    fn set_base64(&mut self, base64: Option<String>) {
-        self.base64 = base64;
-    }
-
-    fn __repr__(&self) -> String {
-        let url_repr = match &self.url {
-            Some(url) => format!("Optional(\"{}\")", url),
-            None => "None".to_string(),
-        };
-        let base64_repr = match &self.base64 {
-            Some(base64) => format!("Optional(\"{}\")", base64),
-            None => "None".to_string(),
-        };
-        format!("Image(url={}, base64={})", url_repr, base64_repr)
-    }
-
-    // Makes it work with Pydantic
-    #[classmethod]
-    fn __get_pydantic_core_schema__(
-        cls: &PyType,
-        source_type: &PyAny,
-        handler: &PyAny,
-    ) -> PyResult<PyObject> {
-        Python::with_gil(|py| {
-            let code = r#"
-from pydantic_core import core_schema
-
-def get_schema():
-    # No validation
-    return core_schema.any_schema()
-
-ret = get_schema()
-    "#;
-            // py.run(code, None, Some(ret_dict));
-            let fun: Py<PyAny> = PyModule::from_code(py, code, "", "")
-                .unwrap()
-                .getattr("ret")
-                .unwrap()
-                .into();
-            Ok(fun.to_object(py)) // Return the PyObject
-        })
-    }
-
-    fn __eq__(&self, other: &Self) -> bool {
-        self == other
-    }
 }
 
 fn convert_to_hashmap(value: Value) -> Option<IndexMap<String, Value>> {

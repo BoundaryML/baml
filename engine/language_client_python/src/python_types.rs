@@ -1,8 +1,14 @@
 use std::ffi::OsString;
 
+use indexmap::IndexMap;
 use pyo3::prelude::{pyclass, pymethods, pymodule, PyModule, PyResult};
-use pyo3::{create_exception, PyErr, PyObject, Python};
+use pyo3::types::{IntoPyDict, PyType};
+use pyo3::{
+    create_exception, wrap_pyfunction, wrap_pymodule, Py, PyAny, PyErr, PyObject, Python,
+    ToPyObject,
+};
 use pythonize::pythonize;
+use serde::{Deserialize, Serialize};
 
 use crate::BamlError;
 
@@ -63,5 +69,97 @@ impl Into<internal_baml_codegen::GeneratorArgs> for &GenerateArgs {
             output_root: self.output_path.clone().into(),
             encoded_baml_files: None,
         }
+    }
+}
+
+// Use this once we update pyo3. Current version doesn't support this struct enum.
+// pub enum BamlImagePy {
+//     // struct
+//     Url { url: String },
+//     Base64 { base64: String },
+// }
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename = "Image")]
+#[pyclass(name = "Image")]
+pub struct BamlImagePy {
+    pub(crate) url: Option<String>,
+    pub(crate) base64: Option<String>,
+    pub(crate) media_type: Option<String>,
+}
+
+// Implement constructor for BamlImage
+#[pymethods]
+impl BamlImagePy {
+    #[new]
+    fn new(url: Option<String>, base64: Option<String>, media_type: Option<String>) -> Self {
+        BamlImagePy {
+            url,
+            base64,
+            media_type,
+        }
+    }
+
+    #[getter]
+    pub fn get_url(&self) -> PyResult<Option<String>> {
+        Ok(self.url.clone())
+    }
+
+    #[getter]
+    pub fn get_base64(&self) -> PyResult<Option<String>> {
+        Ok(self.base64.clone())
+    }
+
+    #[setter]
+    pub fn set_url(&mut self, url: Option<String>) {
+        self.url = url;
+    }
+
+    #[setter]
+    pub fn set_base64(&mut self, base64: Option<String>) {
+        self.base64 = base64;
+    }
+
+    pub fn __repr__(&self) -> String {
+        let url_repr = match &self.url {
+            Some(url) => format!("Optional(\"{}\")", url),
+            None => "None".to_string(),
+        };
+        let base64_repr = match &self.base64 {
+            Some(base64) => format!("Optional(\"{}\")", base64),
+            None => "None".to_string(),
+        };
+        format!("Image(url={}, base64={})", url_repr, base64_repr)
+    }
+
+    // Makes it work with Pydantic
+    #[classmethod]
+    pub fn __get_pydantic_core_schema__(
+        cls: &PyType,
+        source_type: &PyAny,
+        handler: &PyAny,
+    ) -> PyResult<PyObject> {
+        Python::with_gil(|py| {
+            let code = r#"
+from pydantic_core import core_schema
+
+def get_schema():
+    # No validation
+    return core_schema.any_schema()
+
+ret = get_schema()
+    "#;
+            // py.run(code, None, Some(ret_dict));
+            let fun: Py<PyAny> = PyModule::from_code(py, code, "", "")
+                .unwrap()
+                .getattr("ret")
+                .unwrap()
+                .into();
+            Ok(fun.to_object(py)) // Return the PyObject
+        })
+    }
+
+    pub fn __eq__(&self, other: &Self) -> bool {
+        self == other
     }
 }
