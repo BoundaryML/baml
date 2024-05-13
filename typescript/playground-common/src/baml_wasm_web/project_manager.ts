@@ -71,6 +71,7 @@ class Project {
           ),
         )
       } catch (e) {
+        console.error(`Error updating runtime: ${e}`)
         this.current_runtime = undefined
         throw e
       }

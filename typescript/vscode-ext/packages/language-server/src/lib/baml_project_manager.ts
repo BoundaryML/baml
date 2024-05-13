@@ -36,13 +36,20 @@ class Project {
   update_runtime() {
     if (this.current_runtime == undefined) {
       try {
+        console.debug(`Updating runtime`)
         this.current_runtime = this.files.runtime(this.ctx)
+        console.debug(`Successfully updated runtime`)
+
         const files = this.files.files()
+        console.debug(`Running diagnostics on runtime ${files.length} files`)
         const fileMap = Object.fromEntries(
           files.map((f): [string, string] => f.split('BAML_PATH_SPLTTER', 2) as [string, string]),
         )
+        console.debug(`Running diagnostics on runtime ${files.length} files`)
         this.onSuccess(this.files.diagnostics(this.current_runtime), fileMap)
       } catch (e) {
+        console.error(`Error updating runtime: ${e}`)
+        console.error(e)
         this.current_runtime = undefined
         throw e
       }
@@ -85,6 +92,7 @@ class Project {
     if (this.current_runtime) {
       this.last_successful_runtime = this.current_runtime
     }
+    this.current_runtime?.free()
     this.current_runtime = undefined
   }
 
@@ -181,6 +189,7 @@ class BamlProjectManager {
   }
 
   private add_project(root_path: string, files: { [path: string]: string }) {
+    console.debug(`Adding project: ${root_path}, files: ${JSON.stringify(files, null, 2)}`)
     const project = BamlWasm.WasmProject.new(root_path, files)
     this.projects.set(
       root_path,
@@ -197,8 +206,13 @@ class BamlProjectManager {
   }
 
   async upsert_file(path: URI, content: string | undefined) {
-    console.debug(`Upserting file: ${path}`)
+    console.debug(
+      `Upserting file: ${path}. Current projects ${this.projects.size} ${JSON.stringify(this.projects, null, 2)}`,
+    )
     await this.wrapAsync(async () => {
+      console.debug(
+        `Upserting file: ${path}. current projects  ${this.projects.size}  ${JSON.stringify(this.projects, null, 2)}`,
+      )
       const rootPath = uriToRootPath(path)
       if (this.projects.has(rootPath)) {
         const project = this.get_project(rootPath)
@@ -264,12 +278,15 @@ class BamlProjectManager {
           message: `Empty baml_src directory found: ${rootPath}. See Output panel -> BAML Language Server for more details.`,
         })
       }
+      console.debug(`projects ${this.projects.size}: ${JSON.stringify(this.projects, null, 2)},`)
+      console.info(this.projects)
 
       if (!this.projects.has(rootPath)) {
         const project = this.add_project(rootPath, Object.fromEntries(files))
         project.update_runtime()
       } else {
         const project = this.get_project(rootPath)
+
         project.replace_all_files(BamlWasm.WasmProject.new(rootPath, Object.fromEntries(files)))
         project.update_runtime()
       }

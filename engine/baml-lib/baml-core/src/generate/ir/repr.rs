@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use either::Either;
 
 use indexmap::IndexMap;
@@ -20,7 +20,7 @@ use serde::Serialize;
 /// It is a representation of the BAML AST that is easier to work with than the
 /// raw BAML AST, and should include all information necessary to generate
 /// code in any target language.
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Debug)]
 pub struct IntermediateRepr {
     enums: Vec<Node<Enum>>,
     classes: Vec<Node<Class>>,
@@ -626,11 +626,11 @@ impl WithRepr<Class> for ClassWalker<'_> {
     }
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Debug)]
 pub enum OracleType {
     LLM,
 }
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Debug)]
 pub struct AliasOverride {
     pub name: String,
     // This is used to generate deserializers with aliased keys (see .overload in python deserializer)
@@ -638,7 +638,7 @@ pub struct AliasOverride {
 }
 
 // TODO, also add skips
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Debug)]
 pub struct AliasedKey {
     pub key: String,
     pub alias: Expression,
@@ -646,7 +646,7 @@ pub struct AliasedKey {
 
 type ImplementationId = String;
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Debug)]
 pub struct Implementation {
     r#type: OracleType,
     pub name: ImplementationId,
@@ -673,7 +673,7 @@ pub struct Implementation {
 }
 
 /// BAML does not allow UnnamedArgList nor a lone NamedArg
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Debug)]
 pub enum FunctionArgs {
     UnnamedArg(FieldType),
     NamedArgList(Vec<(String, FieldType)>),
@@ -681,7 +681,7 @@ pub enum FunctionArgs {
 
 type FunctionId = String;
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Debug)]
 #[serde(tag = "version")]
 pub enum Function {
     V1(FunctionV1),
@@ -718,7 +718,7 @@ impl Function {
     }
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Debug)]
 pub struct FunctionV1 {
     pub name: FunctionId,
     pub inputs: FunctionArgs,
@@ -728,7 +728,7 @@ pub struct FunctionV1 {
     pub default_impl: Option<ImplementationId>,
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Debug)]
 pub struct FunctionV2 {
     pub name: FunctionId,
     pub inputs: Vec<(String, FieldType)>,
@@ -738,7 +738,7 @@ pub struct FunctionV2 {
     pub default_config: String,
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Debug)]
 pub struct FunctionConfig {
     pub name: String,
     // TODO: We technically have alll the information given output type
@@ -975,7 +975,11 @@ impl WithRepr<FunctionV2> for FunctionWalker<'_> {
                     .output_format(self.db, self.identifier().span())
                     .unwrap_or("{{{ Unable to generate ctx.output_format }}}".into()),
                 prompt_template: self.jinja_prompt().to_string(),
-                client: self.client().unwrap().name().to_string(),
+                client: self
+                    .client()
+                    .context("Unable to generate ctx.client")?
+                    .name()
+                    .to_string(),
             }],
             default_config: "default_config".to_string(),
             tests: self
@@ -1062,7 +1066,7 @@ impl WithRepr<RetryPolicy> for ConfigurationWalker<'_> {
     }
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Debug)]
 pub struct TestCase {
     pub name: String,
     pub args: IndexMap<String, Expression>,

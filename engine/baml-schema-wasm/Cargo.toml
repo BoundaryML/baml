@@ -48,5 +48,5 @@ wasm-bindgen-test = "0.3.42"
 walkdir = "2.5.0"
 wasm-logger = "0.2.0"
 
-# [profile.release]
-# debug = true
+[profile.release]
+debug = true

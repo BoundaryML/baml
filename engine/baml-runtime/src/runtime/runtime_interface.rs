@@ -144,6 +144,8 @@ impl RuntimeConstructor for InternalBamlRuntime {
         schema.diagnostics.to_result()?;
 
         let ir = IntermediateRepr::from_parser_database(&schema.db)?;
+        log::info!("Successfully loaded BAML schema");
+        log::info!("Diagnostics: {:#?}", schema.diagnostics);
 
         Ok(Self {
             ir,

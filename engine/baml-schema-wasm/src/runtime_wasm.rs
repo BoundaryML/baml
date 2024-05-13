@@ -8,7 +8,10 @@ use baml_runtime::{
     internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, RenderedPrompt,
     RuntimeInterface,
 };
+use serde::Deserialize;
+use serde::Serialize;
 use serde_json::error;
+use serde_wasm_bindgen::{from_value, to_value};
 use wasm_bindgen::prelude::*;
 
 use baml_runtime::{InternalRuntimeInterface, RuntimeContext};
@@ -31,7 +34,9 @@ pub fn on_wasm_init() {
     }
 }
 
-#[wasm_bindgen]
+#[wasm_bindgen(inspectable)]
+#[derive(Serialize, Deserialize)]
+
 pub struct WasmProject {
     root_dir_name: String,
     // This is the version of the file on disk
@@ -41,25 +46,26 @@ pub struct WasmProject {
     unsaved_files: HashMap<String, String>,
 }
 
-#[wasm_bindgen(getter_with_clone)]
+#[wasm_bindgen(getter_with_clone, inspectable)]
 #[derive(Debug)]
 pub struct WasmDiagnosticError {
     errors: DiagnosticsError,
     pub all_files: Vec<String>,
 }
 
-impl std::error::Error for WasmDiagnosticError {}
+// impl std::error::Error for WasmDiagnosticError {}
 
-impl std::fmt::Display for WasmDiagnosticError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.errors)
-    }
-}
+// impl std::fmt::Display for WasmDiagnosticError {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "{:?}", self.errors)
+//     }
+// }
 
 #[wasm_bindgen]
 impl WasmDiagnosticError {
     #[wasm_bindgen]
     pub fn errors(&self) -> Vec<WasmError> {
+        log::debug!("Errors: {:#?}", self.errors.errors());
         self.errors
             .errors()
             .iter()
@@ -97,7 +103,7 @@ impl WasmDiagnosticError {
     }
 }
 
-#[wasm_bindgen(getter_with_clone)]
+#[wasm_bindgen(getter_with_clone, inspectable)]
 pub struct WasmError {
     #[wasm_bindgen(readonly)]
     pub r#type: String,
@@ -162,6 +168,7 @@ impl WasmProject {
 
     #[wasm_bindgen]
     pub fn save_file(&mut self, name: &str, content: &str) {
+        log::info!("Saving file: {}", name);
         self.files.insert(name.to_string(), content.to_string());
         self.unsaved_files.remove(name);
     }
@@ -177,6 +184,8 @@ impl WasmProject {
 
     #[wasm_bindgen]
     pub fn diagnostics(&self, rt: &WasmRuntime) -> WasmDiagnosticError {
+        log::info!("Getting diagnostics for files");
+        log::info!("Runtime: {:#?}", rt.runtime.internal().ir().clone());
         let mut hm = self.files.iter().collect::<HashMap<_, _>>();
         hm.extend(self.unsaved_files.iter());
 
@@ -188,28 +197,38 @@ impl WasmProject {
 
     #[wasm_bindgen]
     pub fn runtime(&self, ctx: &WasmRuntimeContext) -> Result<WasmRuntime, JsValue> {
+        log::info!("Creating runtime");
+
         let mut hm = self.files.iter().collect::<HashMap<_, _>>();
         hm.extend(self.unsaved_files.iter());
 
         BamlRuntime::from_file_content(&self.root_dir_name, &hm, &ctx.ctx)
             .map(|r| WasmRuntime { runtime: r })
             .map_err(|e| match e.downcast::<DiagnosticsError>() {
-                Ok(e) => WasmDiagnosticError {
-                    errors: e,
-                    all_files: hm.keys().map(|s| s.to_string()).collect(),
+                Ok(e) => {
+                    log::debug!("Matched diagnostic error: {:#?}", e);
+                    let wasm_error = WasmDiagnosticError {
+                        errors: e,
+                        all_files: hm.keys().map(|s| s.to_string()).collect(),
+                    }
+                    .into();
+                    log::debug!("Wasm diagnostic Error: {:#?}", wasm_error);
+                    wasm_error
                 }
-                .into(),
-                Err(e) => JsValue::from_str(&e.to_string()),
+                Err(e) => {
+                    log::debug!("Error: {:#?}", e);
+                    JsValue::from_str(&e.to_string())
+                }
             })
     }
 }
 
-#[wasm_bindgen]
+#[wasm_bindgen(inspectable, getter_with_clone)]
 pub struct WasmRuntime {
     runtime: BamlRuntime,
 }
 
-#[wasm_bindgen(getter_with_clone)]
+#[wasm_bindgen(getter_with_clone, inspectable)]
 pub struct WasmFunction {
     #[wasm_bindgen(readonly)]
     pub name: String,
@@ -219,7 +238,7 @@ pub struct WasmFunction {
     pub test_snippet: String,
 }
 
-#[wasm_bindgen(getter_with_clone)]
+#[wasm_bindgen(getter_with_clone, inspectable)]
 #[derive(Clone)]
 pub struct WasmTestCase {
     #[wasm_bindgen(readonly)]
@@ -230,7 +249,7 @@ pub struct WasmTestCase {
     pub error: Option<String>,
 }
 
-#[wasm_bindgen(getter_with_clone)]
+#[wasm_bindgen(getter_with_clone, inspectable)]
 #[derive(Clone)]
 pub struct WasmParam {
     #[wasm_bindgen(readonly)]
@@ -254,7 +273,7 @@ pub enum TestStatus {
     UnableToRun,
 }
 
-#[wasm_bindgen(getter_with_clone)]
+#[wasm_bindgen(getter_with_clone, inspectable)]
 pub struct WasmLLMResponse {
     pub client: String,
     pub model: String,
@@ -264,7 +283,7 @@ pub struct WasmLLMResponse {
     pub latency_ms: u64,
 }
 
-#[wasm_bindgen(getter_with_clone)]
+#[wasm_bindgen(getter_with_clone, inspectable)]
 pub struct WasmLLMFailure {
     pub client: String,
     pub model: Option<String>,

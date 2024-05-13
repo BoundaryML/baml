@@ -46,7 +46,7 @@ impl BamlTracer {
     pub fn new(options: Option<APIWrapper>, ctx: &RuntimeContext) -> Self {
         let options = options.unwrap_or_else(|| ctx.into());
 
-        BamlTracer {
+        let tracer = BamlTracer {
             tracer: if options.enabled() {
                 Some(TracerImpl::new(
                     &options,
@@ -57,7 +57,9 @@ impl BamlTracer {
             },
             enabled: options.enabled(),
             options,
-        }
+        };
+        log::debug!("Tracer enabled: {}", tracer.enabled);
+        tracer
     }
 
     pub(crate) fn flush(&self) -> Result<()> {
