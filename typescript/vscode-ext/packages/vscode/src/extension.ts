@@ -7,7 +7,7 @@ import glooLens from './PythonToBamlCodeLensProvider'
 import { WebPanelView } from './panels/WebPanelView'
 import testExecutor from './panels/execute_test'
 import plugins from './plugins'
-import { BamlDB } from './plugins/language-server'
+import { BamlDB, requestDiagnostics } from './plugins/language-server'
 import { telemetry } from './plugins/language-server'
 const outputChannel = vscode.window.createOutputChannel('baml')
 const diagnosticsCollection = vscode.languages.createDiagnosticCollection('baml-diagnostics')
@@ -182,6 +182,7 @@ export function activate(context: vscode.ExtensionContext) {
       // A more resilient way is to get a msg for it to finish loading but this is good enough for now
       setTimeout(() => {
         WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
+        // requestDiagnostics()
       }, 2000)
       WebPanelView.currentPanel?.postMessage('setSelectedResource', {
         projectId: projectId,
@@ -190,6 +191,8 @@ export function activate(context: vscode.ExtensionContext) {
         testCaseName: undefined,
         showTests: showTests,
       })
+      console.info('Opening BAML panel')
+      requestDiagnostics()
     },
   )
 

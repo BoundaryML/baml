@@ -94,27 +94,27 @@ const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStat
   const model = llm_response?.model ?? llm_failure?.model
 
   return (
-    <div className='flex flex-col gap-1 w-full'>
+    <div className='flex flex-col w-full gap-1'>
       {failure &&
         !(doneStatus === 'parse_failed' || (doneStatus === 'llm_failed' && (llm_response || llm_failure))) && (
           <div className='text-xs text-vscode-errorForeground'>{failure}</div>
         )}
       {(llm_response || llm_failure) && (
-        <div className='text-xs text-vscode-descriptionForeground w-full'>
+        <div className='w-full text-xs text-vscode-descriptionForeground'>
           <div>
-            Took <b>{latencyMs?.toString()}ms</b> using <b>{client}</b> {model && <>(model: {model})</>}
+            <b>{latencyMs?.toString()}ms</b> using <b>{client}</b> {model && <>(model: {model})</>}
           </div>
           <div className='flex flex-row gap-2'>
             <div className='flex flex-col'>
               Raw LLM Response:
               <div className='px-1 py-2'>
                 {llm_response && (
-                  <pre className='whitespace-pre-wrap bg-vscode-input-background py-2 px-1 rounded-sm'>
+                  <pre className='px-1 py-2 whitespace-pre-wrap rounded-sm bg-vscode-input-background'>
                     {llm_response.content}
                   </pre>
                 )}
                 {llm_failure && (
-                  <pre className='text-xs text-vscode-errorForeground whitespace-pre-wrap'>
+                  <pre className='text-xs whitespace-pre-wrap text-vscode-errorForeground'>
                     <b>{llm_failure.code}</b>
                     <br />
                     {llm_failure.message}
@@ -126,7 +126,7 @@ const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStat
               <div className='flex flex-col'>
                 Parsed LLM Response:
                 <div className='px-1 py-2'>
-                  {failure && <pre className='text-xs text-vscode-errorForeground whitespace-pre-wrap'>{failure}</pre>}
+                  {failure && <pre className='text-xs whitespace-pre-wrap text-vscode-errorForeground'>{failure}</pre>}
                   {parsed !== undefined && (
                     <JsonView
                       enableClipboard={false}
@@ -156,7 +156,7 @@ const TestRow: React.FC<{ name: string }> = ({ name }) => {
   }
 
   return (
-    <div className='flex flex-row gap-2 items-start group'>
+    <div className='flex flex-row items-start gap-2 group'>
       <TestCaseActions testName={name} />
       <div className='flex flex-col'>
         <div className='flex flex-row items-center gap-2 text-xs'>
@@ -185,13 +185,15 @@ const FilterButton: React.FC<{ selected: boolean; name: string; count: number; o
 }) => {
   return (
     <Badge
-      className={`flex flex-row items-center gap-1 cursor-pointer ${
-        selected ? '' : 'text-muted-foreground bg-vscode-button-backgroundHover'
+      className={`flex flex-row items-center gap-1 cursor-pointer bg-vscode-list-inactiveSelectionBackground ${
+        selected
+          ? 'text-vscode-list-activeSelectionForeground'
+          : 'text-vscode-list-inactiveSelectionForeground bg-vscode-button-backgroundHover'
       }`}
       onClick={onClick}
     >
       <span className='text-xs'>
-        {name}: {count}
+        {name} {count}
       </span>
     </Badge>
   )
@@ -215,7 +217,7 @@ const TestStatusBanner: React.FC = () => {
   }
 
   return (
-    <div className='flex flex-row gap-2 items-center flex-wrap'>
+    <div className='flex flex-row flex-wrap items-center gap-2'>
       <Filter size={16} />
       <FilterButton
         selected={filter.has('queued')}
@@ -261,7 +263,7 @@ const TestResults: React.FC = () => {
   const [showTests, setShowTests] = useAtom(showTestsAtom)
 
   return (
-    <div className='flex flex-col gap-2 px-1 w-full'>
+    <div className='flex flex-col w-full gap-2 px-1'>
       <div className='flex flex-row items-center gap-2'>
         <Badge
           className={clsx('cursor-pointer', showTests ? 'bg-vscode-button-backgroundHover text-muted-foreground' : '')}
@@ -304,9 +306,7 @@ const TestCaseActions: React.FC<{ testName: string }> = ({ testName }) => {
         <Button
           variant={'ghost'}
           size={'icon'}
-          className='p-1 rounded-md w-fit h-fit   bg-vscode-button-background
-                  text-vscode-button-foreground
-                  flex'
+          className='flex p-1 rounded-md w-fit h-fit bg-vscode-button-background text-vscode-button-foreground'
           disabled
         >
           <Pin size={10} />
@@ -315,10 +315,7 @@ const TestCaseActions: React.FC<{ testName: string }> = ({ testName }) => {
         <Button
           variant={'ghost'}
           size={'icon'}
-          className='p-1 rounded-md w-fit h-fit   hover:bg-vscode-button-background
-                hover:text-vscode-button-foreground
-                hidden
-                group-hover:flex'
+          className='hidden p-1 rounded-md w-fit h-fit hover:bg-vscode-button-background hover:text-vscode-button-foreground group-hover:flex'
           onClick={() => {
             setSelectedTestCase(testName)
           }}
@@ -364,10 +361,10 @@ const TestCaseList: React.FC = () => {
   const { isRunning, run } = useRunHooks()
 
   return (
-    <div className='flex flex-col gap-2 px-2 w-full h-full'>
-      <div className='flex gap-2 items-start flex-wrap h-fit'>
+    <div className='flex flex-col w-full h-full gap-2 px-2'>
+      <div className='flex flex-wrap items-start gap-2 h-fit'>
         <div className='flex flex-col'>
-          <div className='flex gap-2 items-center flex-wrap'>
+          <div className='flex flex-wrap items-center gap-2'>
             <Filter size={16} />
             <VSCodeTextField
               placeholder='Filter test cases'
@@ -390,13 +387,13 @@ const TestCaseList: React.FC = () => {
         ) : (
           <>
             <Button
-              className='px-1 py-1 h-fit text-xs whitespace-nowrap bg-red-500 rounded-sm bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground'
+              className='px-1 py-1 text-xs bg-red-500 rounded-sm h-fit whitespace-nowrap bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground'
               disabled={testCases.length === 0}
               onClick={() => {
                 run(testCases.map((t) => t.name))
               }}
             >
-              <div className='flex flex-row gap-1 items-center'>
+              <div className='flex flex-row items-center gap-1'>
                 <Play size={10} />
                 Run {filter ? testCases.length : 'all'} tests
               </div>
@@ -405,10 +402,10 @@ const TestCaseList: React.FC = () => {
         )}
         <NewTestCaseDialog />
       </div>
-      <hr className=' border-muted-foreground w-full' />
-      <div className='flex flex-col gap-1 overflow-y-auto h-full'>
+      <hr className='w-full border-muted-foreground' />
+      <div className='flex flex-col h-full gap-1 overflow-y-auto'>
         {testCases.map((test) => (
-          <div key={test.name} className='flex flex-row gap-2 items-start group'>
+          <div key={test.name} className='flex flex-row items-start gap-2 group'>
             <TestCaseActions testName={test.name} />
             <div
               className={clsx(
@@ -437,11 +434,8 @@ const TestCaseList: React.FC = () => {
 
 const TestCaseCard: React.FC<{ test_case: WasmTestCase }> = ({ test_case }) => {
   return (
-    <div
-      className='flex flex-col gap-2 max-w-full text-xs text-left truncate 
-      text-vscode-descriptionForeground '
-    >
-      <div className='whitespace-pre-wrap break-all'>
+    <div className='flex flex-col max-w-full gap-2 text-xs text-left truncate text-vscode-descriptionForeground '>
+      <div className='break-all whitespace-pre-wrap'>
         <div className='flex flex-col'>
           {test_case.inputs.map((input) => (
             <div key={input.name}>
@@ -473,10 +467,10 @@ const TestCaseCard: React.FC<{ test_case: WasmTestCase }> = ({ test_case }) => {
 const TestResultContent: React.FC = () => {
   const testsRunning = useAtomValue(runningTestsAtom)
   return (
-    <div className='flex flex-col gap-2 px-2 w-full h-full'>
+    <div className='flex flex-col w-full h-full gap-2 px-2'>
       <TestStatusBanner />
       <hr className=' border-muted-foreground' />
-      <div className='flex flex-col gap-1 w-full h-full overflow-y-auto'>
+      <div className='flex flex-col w-full h-full gap-1 overflow-y-auto'>
         {testsRunning.map((testName) => (
           <TestRow key={testName} name={testName} />
         ))}

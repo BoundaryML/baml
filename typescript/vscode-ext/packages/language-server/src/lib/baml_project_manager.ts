@@ -51,6 +51,16 @@ class Project {
     }
   }
 
+  requestDiagnostics() {
+    if (this.current_runtime) {
+      const files = this.files.files()
+      const fileMap = Object.fromEntries(
+        files.map((f): [string, string] => f.split('BAML_PATH_SPLTTER', 2) as [string, string]),
+      )
+      this.onSuccess(this.files.diagnostics(this.current_runtime), fileMap)
+    }
+  }
+
   runtime(): BamlWasm.WasmRuntime {
     const rt = this.current_runtime ?? this.last_successful_runtime
     if (!rt) {
@@ -184,7 +194,7 @@ class BamlProjectManager {
   }
 
   private add_project(root_path: string, files: { [path: string]: string }) {
-    console.debug(`Adding project: ${root_path}, files: ${JSON.stringify(files, null, 2)}`)
+    console.debug(`Adding project: ${root_path}`)
     const project = BamlWasm.WasmProject.new(root_path, files)
     this.projects.set(
       root_path,
@@ -248,6 +258,15 @@ class BamlProjectManager {
       const rootPath = uriToRootPath(path)
       if (!this.projects.has(rootPath)) {
         await this.reload_project_files(path)
+      }
+    })
+  }
+
+  async requestDiagnostics() {
+    console.debug('Requesting diagnostics')
+    await this.wrapAsync(async () => {
+      for (const project of this.projects.values()) {
+        project.requestDiagnostics()
       }
     })
   }

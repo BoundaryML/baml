@@ -42,6 +42,10 @@ export const generateTestRequest = async (test_request: TestRequest): Promise<st
   return await client.sendRequest('generatePythonTests', test_request)
 }
 
+export const requestDiagnostics = async () => {
+  await client.sendRequest('requestDiagnostics')
+}
+
 const LatestVersions = z.object({
   cli: z.object({
     current_version: z.string(),
