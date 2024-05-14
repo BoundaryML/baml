@@ -27,6 +27,9 @@ impl LLMProvider {
             "baml-anthropic-chat" | "anthropic" => {
                 AnthropicClient::new(client, ctx).map(LLMProvider::Anthropic)
             }
+            "baml-ollama-chat" | "ollama" => {
+                OpenAIClient::new(client, ctx).map(LLMProvider::OpenAI)
+            }
             other => {
                 let options = ["openai"];
                 anyhow::bail!(

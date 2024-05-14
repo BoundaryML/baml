@@ -202,6 +202,7 @@ export const ShowSettingsButton: React.FC<{ buttonClassName: string; iconClassNa
   )
 }
 export const SettingsDialog: React.FC = () => {
+  console.log('window location origin is', window.location.origin)
   const [showSettings, setShowSettings] = useAtom(showSettingsAtom)
   const [showEnvvarValues, setShowEnvvarValues] = useAtom(showEnvvarValuesAtom)
   const envvars = useAtomValue(envvarsAtom)

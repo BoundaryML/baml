@@ -41,7 +41,7 @@ fn resolve_properties(
     let base_url = properties
         .remove("base_url")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .unwrap_or_else(|| "https://api.openai.com/v1".to_string());
+        .unwrap_or_else(|| "https://api.openai.com".to_string());
 
     let api_key = properties
         .remove("api_key")
@@ -138,7 +138,7 @@ impl WithChat for OpenAIClient {
             openai::types::{ChatCompletionResponse, FinishReason, OpenAIErrorResponse},
             ErrorCode, LLMCompleteResponse, LLMErrorResponse,
         };
-        let request = self.build_http_request(ctx, "/chat/completions", prompt)?;
+        let request = self.build_http_request(ctx, "/v1/chat/completions", prompt)?;
         let window = match web_sys::window() {
             Some(w) => w,
             None => {
@@ -276,7 +276,7 @@ impl WithChat for OpenAIClient {
             ErrorCode, LLMCompleteResponse, LLMErrorResponse,
         };
 
-        let req = self.build_http_request(ctx, "/chat/completions", prompt)?;
+        let req = self.build_http_request(ctx, "/v1/chat/completions", prompt)?;
 
         match self.internal_state.clone().lock() {
             Ok(mut state) => {

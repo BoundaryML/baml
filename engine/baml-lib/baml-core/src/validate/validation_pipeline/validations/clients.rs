@@ -6,12 +6,31 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
     // required props are already validated in visit_client. No other validations here.
     ctx.db.walk_clients().for_each(|f| {
         let (provider, span) = &f.properties().provider;
-        // if !provider.starts_with("baml") {
-        //     ctx.push_warning(DatamodelWarning::new(
-        //         "Baml Providers are: baml-azure-[chat,completion], baml-openai-[chat,completion], baml-anthropic.".into(),
-        //         span.clone(),
-        //     ))
-        // }
+        let allowed_providers = [
+            "baml-openai-chat",
+            "openai",
+            "baml-anthropic-chat",
+            "anthropic",
+            "baml-ollama-chat",
+            "ollama",
+        ];
+
+        let suggestions: Vec<&str> = allowed_providers
+            .iter()
+            .filter(|&&p| !p.starts_with("baml-"))
+            .cloned()
+            .collect();
+
+        if !allowed_providers.contains(&provider.as_str()) {
+            ctx.push_warning(DatamodelWarning::new(
+                format!(
+                    "Unsupported provider: {}. Available ones are: {}",
+                    provider,
+                    suggestions.join(", ")
+                ),
+                span.clone(),
+            ));
+        }
 
         if let Some((retry_policy, span)) = &f.properties().retry_policy {
             if ctx.db.find_retry_policy(retry_policy).is_none() {
