@@ -3,6 +3,7 @@ mod chat;
 mod completion;
 
 use internal_baml_jinja::{BamlArgType, RenderContext_Client, RenderedPrompt};
+use std::sync::{Arc, Mutex};
 
 use crate::{internal::prompt_renderer::PromptRenderer, RuntimeContext};
 
@@ -35,9 +36,27 @@ pub trait WithCallable: Send {
     ) -> LLMResponse;
 }
 
+pub trait WithStreamable: Send {
+    /// Call the model with the specified prompt, retrying as appropriate.
+    ///
+    /// retry_policy is a stateful iterator, so it's taken by value
+    #[allow(async_fn_in_trait)]
+    async fn call(
+        &self,
+        retry_policy: Option<CallablePolicy>,
+        ctx: &RuntimeContext,
+        prompt: &RenderedPrompt,
+    ) -> LLMResponse;
+}
+
 pub trait WithSingleCallable {
     #[allow(async_fn_in_trait)]
     async fn single_call(&self, ctx: &RuntimeContext, prompt: &RenderedPrompt) -> ResponseType;
+}
+
+pub trait WithSingleStreamable {
+    #[allow(async_fn_in_trait)]
+    async fn single_stream(&self, ctx: &RuntimeContext, prompt: &RenderedPrompt) -> ResponseType;
 }
 
 pub trait WithClient {
@@ -70,34 +89,33 @@ where
             let retry_strategy = retry_strategy.clone();
 
             // TODO: @sxlijin collect all errors.
-            let err = std::sync::Arc::new(std::sync::Mutex::new(vec![]));
+            let err = Arc::new(Mutex::new(vec![]));
 
-            let to_final_response =
-                |res: LLMResponse, err: std::sync::Arc<std::sync::Mutex<Vec<LLMResponse>>>| {
-                    let err = match std::sync::Arc::try_unwrap(err) {
-                        Ok(err) => match err.into_inner() {
-                            Ok(err) => err,
-                            Err(err) => {
-                                log::error!("Failed to unwrap error: {:?}", err);
-                                vec![]
-                            }
-                        },
+            let to_final_response = |res: LLMResponse, err: Arc<Mutex<Vec<LLMResponse>>>| {
+                let err = match Arc::try_unwrap(err) {
+                    Ok(err) => match err.into_inner() {
+                        Ok(err) => err,
                         Err(err) => {
                             log::error!("Failed to unwrap error: {:?}", err);
                             vec![]
                         }
-                    };
-
-                    if err.is_empty() {
-                        res
-                    } else {
-                        LLMResponse::Retry(RetryLLMResponse {
-                            client: None,
-                            passed: Some(Box::new(res)),
-                            failed: err,
-                        })
+                    },
+                    Err(err) => {
+                        log::error!("Failed to unwrap error: {:?}", err);
+                        vec![]
                     }
                 };
+
+                if err.is_empty() {
+                    res
+                } else {
+                    LLMResponse::Retry(RetryLLMResponse {
+                        client: None,
+                        passed: Some(Box::new(res)),
+                        failed: err,
+                    })
+                }
+            };
 
             for delay in retry_strategy {
                 match self.single_call(ctx, prompt).await {
@@ -111,16 +129,9 @@ where
                         err.lock().unwrap().push(x);
                     }
                     Err(e) => {
-                        err.lock().unwrap().push({
-                            // #[cfg(not(feature = "no_wasm"))]
-                            // {
-                            //     LLMResponse::OtherFailures(e.into())
-                            // }
-                            // #[cfg(feature = "no_wasm")]
-                            // {
-                            LLMResponse::OtherFailures(e.to_string())
-                            // }
-                        });
+                        err.lock()
+                            .unwrap()
+                            .push(LLMResponse::OtherFailures(e.to_string()));
                     }
                 }
                 tokio::time::sleep(delay).await;
@@ -152,16 +163,7 @@ where
         } else {
             match self.single_call(ctx, prompt).await {
                 Ok(x) => x,
-                Err(e) => {
-                    // #[cfg(not(feature = "no_wasm"))]
-                    // {
-                    //     LLMResponse::OtherFailures(e.into())
-                    // }
-                    // #[cfg(feature = "no_wasm")]
-                    {
-                        LLMResponse::OtherFailures(e.to_string())
-                    }
-                }
+                Err(e) => LLMResponse::OtherFailures(e.to_string()),
             }
         }
     }
@@ -180,18 +182,7 @@ where
             } => {
                 let prompt = match prompt {
                     RenderedPrompt::Completion(p) => p,
-                    _ => {
-                        // #[cfg(not(feature = "no_wasm"))]
-                        // {
-                        //     return Err(wasm_bindgen::JsValue::from_str(
-                        //         "Expected completion prompt",
-                        //     ));
-                        // }
-                        // #[cfg(feature = "no_wasm")]
-                        {
-                            anyhow::bail!("Expected completion prompt")
-                        }
-                    }
+                    _ => anyhow::bail!("Expected completion prompt"),
                 };
                 self.completion(ctx, prompt).await
             }
@@ -201,16 +192,7 @@ where
             } => {
                 let prompt = match prompt {
                     RenderedPrompt::Chat(p) => p,
-                    _ => {
-                        // #[cfg(not(feature = "no_wasm"))]
-                        // {
-                        //     return Err(wasm_bindgen::JsValue::from_str("Expected chat prompt"));
-                        // }
-                        // #[cfg(feature = "no_wasm")]
-                        {
-                            anyhow::bail!("Expected chat prompt")
-                        }
-                    }
+                    _ => anyhow::bail!("Expected chat prompt"),
                 };
                 self.chat(ctx, prompt).await
             }
@@ -224,16 +206,7 @@ where
             ModelFeatures {
                 completion: false,
                 chat: false,
-            } => {
-                // #[cfg(not(feature = "no_wasm"))]
-                // {
-                //     Err(wasm_bindgen::JsValue::from_str("No model type supported"))
-                // }
-                // #[cfg(feature = "no_wasm")]
-                {
-                    anyhow::bail!("No model type supported")
-                }
-            }
+            } => anyhow::bail!("No model type supported"),
         }
     }
 }

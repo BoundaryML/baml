@@ -473,6 +473,16 @@ impl OpenAIClient {
         prompt: &Vec<RenderedChatMessage>,
     ) -> Result<reqwest::RequestBuilder> {
         // TODO: ideally like to keep this alive longer.
+        self.build_http_request_universal(ctx, path, prompt)
+    }
+
+    fn build_http_request_universal(
+        &self,
+        ctx: &RuntimeContext,
+        path: &str,
+        prompt: &Vec<RenderedChatMessage>,
+    ) -> Result<reqwest::RequestBuilder> {
+        // TODO: ideally like to keep this alive longer.
         let client = reqwest::Client::new();
 
         let mut body = json!(self.properties.properties);
