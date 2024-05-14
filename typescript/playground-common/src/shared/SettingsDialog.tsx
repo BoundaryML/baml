@@ -115,7 +115,7 @@ const EnvvarInput: React.FC<{ envvar: EnvVar }> = ({ envvar }) => {
             setEnvKeyValue({ itemIndex: null, key: e.target.value })
           }
         }}
-        className='bg-grey-500 outline-none focus-visible:outline focus:outline-2 focus:outline-white'
+        className='outline-none bg-vscode-input-background focus-visible:outline focus:outline-2 focus:outline-vscode-input-border'
       />
       <span>=</span>
       <Input
@@ -132,7 +132,7 @@ const EnvvarInput: React.FC<{ envvar: EnvVar }> = ({ envvar }) => {
             setEnvKeyValue({ itemIndex: null, key: envvar.key, value: e.target.value })
           }
         }}
-        className={`bg-grey-500 outline-none focus-visible:outline focus:outline-2 focus:outline-white ${
+        className={`bg-vscode-input-background outline-none focus-visible:outline focus:outline-0 focus:outline-white ${
           !envvar.value && envvar.type === 'baml' ? 'outline outline-2 outline-yellow-500' : ''
         }`}
       />
@@ -201,9 +201,9 @@ export const SettingsDialog: React.FC = () => {
 
   return (
     <Dialog open={showSettings} onOpenChange={setShowSettings}>
-      <DialogContent className='max-h-screen bg-vscode-editorWidget-background border-vscode-textSeparator-foreground overflow-x-clip overflow-y-auto'>
-        <DialogHeader className='flex flex-row gap-x-4 items-end'>
-          <DialogTitle className='text-s font-semibold'>Environment variables</DialogTitle>
+      <DialogContent className='max-h-screen overflow-y-auto bg-vscode-editorWidget-background border-vscode-textSeparator-foreground overflow-x-clip'>
+        <DialogHeader className='flex flex-row items-end gap-x-4'>
+          <DialogTitle className='font-semibold text-s'>Environment variables</DialogTitle>
           <Button
             variant='ghost'
             size='icon'
@@ -223,9 +223,9 @@ export const SettingsDialog: React.FC = () => {
             </div>
             {enableObservability && (
               <>
-                <p className='text-xs text-muted-foreground italic'>
+                <p className='text-xs italic text-muted-foreground'>
                   You can get these from{' '}
-                  <a className='underline text-blue-400' href='https://app.boundaryml.com'>
+                  <a className='text-blue-400 underline' href='https://app.boundaryml.com'>
                     Boundary Studio
                   </a>
                 </p>
@@ -239,7 +239,7 @@ export const SettingsDialog: React.FC = () => {
           </div>
           <div className='flex flex-col gap-1'>
             <span className='text-sm text-muted-foreground'>From .baml files</span>
-            <p className='text-xs text-muted-foreground italic'>
+            <p className='text-xs italic text-muted-foreground'>
               Environment variables are loaded lazily, only set any you want to use.
             </p>
             {envvars

@@ -9,11 +9,16 @@ import testExecutor from './panels/execute_test'
 import plugins from './plugins'
 import { BamlDB, requestDiagnostics } from './plugins/language-server'
 import { telemetry } from './plugins/language-server'
+import httpProxy from 'http-proxy'
+import express from 'express'
+import cors from 'cors'
+import { createProxyMiddleware } from 'http-proxy-middleware'
 const outputChannel = vscode.window.createOutputChannel('baml')
 const diagnosticsCollection = vscode.languages.createDiagnosticCollection('baml-diagnostics')
 const LANG_NAME = 'Baml'
 let timeout: NodeJS.Timeout | undefined
 let statusBarItem: vscode.StatusBarItem
+let server: any
 
 function scheduleDiagnostics(): void {
   if (timeout) {
@@ -221,20 +226,31 @@ export function activate(context: vscode.ExtensionContext) {
     }
   })
 
-  testExecutor.start()
+  // testExecutor.start()
 
   if (process.env.VSCODE_DEBUG_MODE === 'true') {
     console.log(`vscode env: ${JSON.stringify(process.env, null, 2)}`)
     vscode.commands.executeCommand('baml.openBamlPanel')
   }
 
+  const server = express()
+  server.use(cors())
+  server.use(
+    '/',
+    createProxyMiddleware({
+      target: 'https://api.anthropic.com',
+      changeOrigin: true,
+    }),
+  )
+
+  server.listen(8001)
   // TODO: Reactivate linter.
   // runDiagnostics();
 }
 
 export function deactivate(): void {
   console.log('BAML extension deactivating')
-  testExecutor.close()
+  // testExecutor.close()
   diagnosticsCollection.clear()
   diagnosticsCollection.dispose()
   statusBarItem.dispose()
@@ -243,6 +259,7 @@ export function deactivate(): void {
       void plugin.deactivate()
     }
   }
+  server?.close()
 }
 
 class DiagnosticCodeActionProvider implements vscode.CodeActionProvider {
