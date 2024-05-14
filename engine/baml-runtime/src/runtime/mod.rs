@@ -6,11 +6,7 @@ mod ir_features;
 pub(crate) mod runtime_interface;
 
 use anyhow::Result;
-use std::{
-    collections::HashMap,
-    hash::{Hash, RandomState},
-    path::PathBuf,
-};
+use std::{collections::HashMap, path::PathBuf};
 
 use dashmap::DashMap;
 use internal_baml_core::{

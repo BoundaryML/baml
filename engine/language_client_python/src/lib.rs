@@ -3,22 +3,12 @@ mod python_types;
 
 use baml_runtime::{BamlRuntime, RuntimeContext, RuntimeInterface};
 use indexmap::IndexMap;
-use internal_baml_codegen::GeneratorArgs;
 use parse_py_type::parse_py_type;
-use pyo3::exceptions::{PyRuntimeError, PyTypeError};
 use pyo3::prelude::{pyclass, pyfunction, pymethods, pymodule, PyModule, PyResult};
-
-use pyo3::types::{IntoPyDict, PyType};
-use pyo3::{
-    create_exception, wrap_pyfunction, wrap_pymodule, Py, PyAny, PyErr, PyObject, Python,
-    ToPyObject,
-};
+use pyo3::{create_exception, wrap_pyfunction, PyErr, PyObject, Python, ToPyObject};
 use python_types::BamlImagePy;
 use pythonize::depythonize;
-use serde::de;
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 

@@ -1,4 +1,4 @@
-use std::{any::Any, borrow::Borrow, collections::HashMap};
+use std::collections::HashMap;
 
 use crate::BamlImagePy;
 use anyhow::{bail, Result};
@@ -6,7 +6,7 @@ use baml_runtime::BamlImage;
 use internal_baml_jinja::{ImageBase64, ImageUrl};
 use pyo3::{
     exceptions::{PyRuntimeError, PyTypeError},
-    types::{PyAny, PyDict, PyList},
+    types::{PyDict, PyList},
     PyErr, PyObject, PyResult, Python, ToPyObject,
 };
 use serde_json::json;

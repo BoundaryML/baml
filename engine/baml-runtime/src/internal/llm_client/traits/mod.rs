@@ -12,7 +12,9 @@ pub use self::{
     completion::{WithCompletion, WithNoCompletion, WithStreamCompletion},
 };
 
-use super::{retry_policy::CallablePolicy, LLMResponse, ModelFeatures, RetryLLMResponse};
+use super::{
+    retry_policy::CallablePolicy, LLMResponse, LLMResponseStream, ModelFeatures, RetryLLMResponse,
+};
 
 pub trait WithRetryPolicy {
     fn retry_policy_name(&self) -> Option<&str>;
@@ -44,7 +46,7 @@ pub trait WithStreamable: Send {
         retry_policy: Option<CallablePolicy>,
         ctx: &RuntimeContext,
         prompt: &RenderedPrompt,
-    ) -> LLMResponse;
+    ) -> LLMResponseStream;
 }
 
 pub trait WithSingleCallable {

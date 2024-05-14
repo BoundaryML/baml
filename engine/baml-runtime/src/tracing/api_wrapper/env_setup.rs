@@ -41,18 +41,6 @@ fn default_host_name() -> String {
 }
 
 impl Config {
-    pub fn from_env() -> Result<Self> {
-        let config = envy::prefixed("BOUNDARY_").from_env::<Config>();
-
-        match config {
-            Ok(config) => Ok(config),
-            Err(err) => Err(anyhow::anyhow!(
-                "Failed to parse config from environment: {}",
-                err
-            )),
-        }
-    }
-
     pub fn from_ctx(ctx: &RuntimeContext) -> Result<Self> {
         let config: Result<Config, envy::Error> = envy::prefixed("BOUNDARY_")
             .from_iter(ctx.env.iter().map(|(k, v)| (k.to_string(), v.to_string())));

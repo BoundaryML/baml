@@ -6,7 +6,7 @@ mod wasm_tracer;
 
 use anyhow::Result;
 use indexmap::IndexMap;
-use std::{collections::HashMap, fmt::Debug};
+use std::collections::HashMap;
 
 use uuid::Uuid;
 

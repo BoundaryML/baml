@@ -4,15 +4,11 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Error, Result};
-use internal_baml_core::ir::{repr::Expression, ClientWalker, RetryPolicyWalker};
-use internal_baml_jinja::{
-    ChatMessagePart, RenderContext_Client, RenderedChatMessage, RenderedPrompt,
-};
+use internal_baml_core::ir::ClientWalker;
+use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
 use serde_json::{json, Value};
 
 use crate::internal::llm_client::{
-    anthropic::types::StopReason,
-    common::images::{self, download_image_as_base64},
     state::LlmClientState,
     traits::{
         WithChat, WithClient, WithNoCompletion, WithRetryPolicy, WithStreamChat,
@@ -21,7 +17,6 @@ use crate::internal::llm_client::{
     LLMResponse, LLMResponseStream, ModelFeatures,
 };
 
-use crate::request::call_request_with_json;
 use crate::RuntimeContext;
 
 struct PostRequestProperities {

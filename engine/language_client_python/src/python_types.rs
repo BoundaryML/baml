@@ -1,12 +1,8 @@
 use std::ffi::OsString;
 
-use indexmap::IndexMap;
-use pyo3::prelude::{pyclass, pymethods, pymodule, PyModule, PyResult};
-use pyo3::types::{IntoPyDict, PyType};
-use pyo3::{
-    create_exception, wrap_pyfunction, wrap_pymodule, Py, PyAny, PyErr, PyObject, Python,
-    ToPyObject,
-};
+use pyo3::prelude::{pyclass, pymethods, PyModule, PyResult};
+use pyo3::types::PyType;
+use pyo3::{Py, PyAny, PyObject, Python, ToPyObject};
 use pythonize::pythonize;
 use serde::{Deserialize, Serialize};
 
@@ -135,9 +131,9 @@ impl BamlImagePy {
     // Makes it work with Pydantic
     #[classmethod]
     pub fn __get_pydantic_core_schema__(
-        cls: &PyType,
-        source_type: &PyAny,
-        handler: &PyAny,
+        _cls: &PyType,
+        _source_type: &PyAny,
+        _handler: &PyAny,
     ) -> PyResult<PyObject> {
         Python::with_gil(|py| {
             let code = r#"

@@ -1,6 +1,6 @@
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use web_time::Duration;
 
 use super::api_wrapper::{core_types::LogSchema, APIWrapper, BoundaryAPI};

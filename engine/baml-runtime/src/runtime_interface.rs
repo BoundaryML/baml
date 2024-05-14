@@ -67,6 +67,7 @@ pub trait ExerimentalTracingInterface {
         params: &IndexMap<String, serde_json::Value>,
     ) -> Option<TracingSpan>;
 
+    #[allow(async_fn_in_trait)]
     async fn finish_function_span(
         &self,
         span: TracingSpan,
