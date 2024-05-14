@@ -3,7 +3,7 @@ use eventsource_stream::Eventsource;
 use futures::channel::oneshot;
 use futures::stream::StreamExt;
 use reqwest::Client;
-use std::sync::Arc;
+use std::{ops::DerefMut, sync::Arc};
 use stream_cancel::{StreamExt as CancellableStreamExt, Trigger, Tripwire};
 use tokio::sync::Mutex;
 
@@ -12,7 +12,9 @@ type StreamCallback = Box<dyn Fn(String) -> Result<String>>;
 //where
 //    T: FnMut(String) -> Result<String>,
 pub struct OpenAiStream {
-    pub callback: Option<Box<StreamCallback>>,
+    //pub callback: Option<Box<StreamCallback>>,
+    trigger: Arc<Mutex<Option<Box<Trigger>>>>,
+    tripwire: Tripwire,
 }
 
 impl OpenAiStream
@@ -21,31 +23,37 @@ impl OpenAiStream
 //    T: FnMut(String) -> Result<String>,
 {
     pub fn new() -> Self {
-        Self { callback: None }
+        let (trigger, tripwire) = Tripwire::new();
+        Self {
+            //callback: None,
+            trigger: Arc::new(Mutex::new(Some(Box::new(trigger)))),
+            tripwire: tripwire,
+        }
     }
 
     pub fn on_event(&mut self, callback: StreamCallback) {
-        self.callback = Some(Box::new(callback));
+        //self.callback = Some(Box::new(callback));
     }
 
-    pub async fn stream(mut self, tripwire: Tripwire) -> Result<String> {
+    pub async fn stream(&self) -> Result<String> {
         let mut stream = reqwest::Client::new()
             .get("http://localhost:7331/events")
             .send()
             .await?
             .bytes_stream()
             .eventsource()
-            .take_until_if(tripwire);
+            .take_until_if(self.tripwire.clone());
 
         log::info!("stream created inside");
         while let Some(event) = stream.next().await {
             match event {
-                Ok(event) => match self.callback {
-                    Some(ref c) => {
-                        log::info!("applied callback to event: {}", c(event.data)?)
-                    }
-                    None => log::info!("received event[type={}]: {}", event.event, event.data),
-                },
+                //Ok(event) => match self.callback {
+                //    Some(ref c) => {
+                //        log::info!("applied callback to event: {}", c(event.data)?)
+                //    }
+                //    None => log::info!("received event[type={}]: {}", event.event, event.data),
+                //},
+                Ok(event) => log::info!("received event[type={}]: {}", event.event, event.data),
                 Err(e) => log::warn!("stream error occurred: {}", e),
             }
         }
@@ -54,10 +62,20 @@ impl OpenAiStream
         Ok("lorem ipsum dolor".into())
     }
 
-    pub fn cancel(&self) {
-        //self.tx.send(())
+    pub async fn cancel(&self) {
+        log::info!("stream.cancel: 1");
+        let mut locked_trigger = self.trigger.lock().await;
+        let owned_trigger = std::mem::replace(locked_trigger.deref_mut(), None);
+        log::info!("stream.cancel: 2");
+        match owned_trigger {
+            Some(trigger) => trigger.cancel(),
+            None => log::warn!("trigger not found"),
+        }
     }
 }
+
+#[cfg(test)]
+static_assertions::assert_impl_all!(OpenAiStream: Sync, Send);
 
 #[cfg(test)]
 pub mod tests {
@@ -71,14 +89,15 @@ pub mod tests {
         console_log::init_with_level(log::Level::Debug)?;
         log::info!("test started");
 
-        let mut stream = OpenAiStream::new();
-        stream.on_event(Box::new(|data| {
-            log::info!("on_event received data: {}", data);
-            Ok(data)
-        }));
-        let (trigger, tripwire) = Tripwire::new();
+        let mut stream = Arc::new(OpenAiStream::new());
+        //stream.on_event(Box::new(|data| {
+        //    log::info!("on_event received data: {}", data);
+        //    Ok(data)
+        //}));
+        //let (trigger, tripwire) = Tripwire::new();
 
         log::info!("stream created");
+        let stream_copy = stream.clone();
         let cancel_stream = async move {
             let duration_secs = 3;
             log::info!("cancelling stream after {duration_secs}s");
@@ -93,11 +112,11 @@ pub mod tests {
                         .unwrap();
                 }))
                 .await;
-            trigger.cancel();
+            stream_copy.cancel().await;
             log::info!("cancelled stream after {duration_secs}s");
         };
 
-        let (_, final_output) = futures::join!(cancel_stream, stream.stream(tripwire));
+        let (_, final_output) = futures::join!(cancel_stream, stream.stream());
         log::info!("stream end with final={:#?}", final_output?);
         anyhow::bail!("test not implemented")
     }
