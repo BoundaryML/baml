@@ -8,8 +8,8 @@ use std::sync::{Arc, Mutex};
 use crate::{internal::prompt_renderer::PromptRenderer, RuntimeContext};
 
 pub use self::{
-    chat::WithChat,
-    completion::{WithCompletion, WithNoCompletion},
+    chat::{WithChat, WithStreamChat},
+    completion::{WithCompletion, WithNoCompletion, WithStreamCompletion},
 };
 
 use super::{retry_policy::CallablePolicy, LLMResponse, ModelFeatures, RetryLLMResponse};
@@ -37,11 +37,9 @@ pub trait WithCallable: Send {
 }
 
 pub trait WithStreamable: Send {
-    /// Call the model with the specified prompt, retrying as appropriate.
-    ///
-    /// retry_policy is a stateful iterator, so it's taken by value
+    /// Retries are not supported for streaming calls.
     #[allow(async_fn_in_trait)]
-    async fn call(
+    async fn stream(
         &self,
         retry_policy: Option<CallablePolicy>,
         ctx: &RuntimeContext,
@@ -52,11 +50,6 @@ pub trait WithStreamable: Send {
 pub trait WithSingleCallable {
     #[allow(async_fn_in_trait)]
     async fn single_call(&self, ctx: &RuntimeContext, prompt: &RenderedPrompt) -> ResponseType;
-}
-
-pub trait WithSingleStreamable {
-    #[allow(async_fn_in_trait)]
-    async fn single_stream(&self, ctx: &RuntimeContext, prompt: &RenderedPrompt) -> ResponseType;
 }
 
 pub trait WithClient {

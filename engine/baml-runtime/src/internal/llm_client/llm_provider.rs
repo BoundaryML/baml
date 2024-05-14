@@ -9,7 +9,7 @@ use super::{
     anthropic::AnthropicClient,
     openai::OpenAIClient,
     retry_policy::CallablePolicy,
-    traits::{WithCallable, WithPrompt, WithRetryPolicy},
+    traits::{WithCallable, WithPrompt, WithRetryPolicy, WithStreamable},
     LLMResponse,
 };
 
@@ -31,7 +31,7 @@ impl LLMProvider {
                 OpenAIClient::new(client, ctx).map(LLMProvider::OpenAI)
             }
             other => {
-                let options = ["openai"];
+                let options = ["openai", "anthropic", "ollama"];
                 anyhow::bail!(
                     "Unsupported provider: {}. Available ones are: {}",
                     other,
@@ -78,3 +78,17 @@ impl WithCallable for LLMProvider {
         }
     }
 }
+
+// impl WithStreamable for LLMProvider {
+//     async fn stream(
+//         &self,
+//         retry_policy: Option<CallablePolicy>,
+//         ctx: &RuntimeContext,
+//         prompt: &internal_baml_jinja::RenderedPrompt,
+//     ) -> LLMResponse {
+//         match self {
+//             LLMProvider::OpenAI(client) => client.stream(retry_policy, ctx, prompt).await,
+//             LLMProvider::Anthropic(client) => client.stream(retry_policy, ctx, prompt).await,
+//         }
+//     }
+// }

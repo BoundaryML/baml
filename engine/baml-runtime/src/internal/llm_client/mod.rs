@@ -9,6 +9,8 @@ mod state;
 pub mod traits;
 
 use anyhow::Result;
+use core::pin::Pin;
+use futures::stream::Stream;
 use internal_baml_jinja::RenderedPrompt;
 
 #[cfg(feature = "no_wasm")]
@@ -162,9 +164,4 @@ impl std::fmt::Display for LLMCompleteResponse {
     }
 }
 
-pub struct LLMStreamResponse {
-    pub delta: String,
-    pub start_time_unix_ms: u64,
-    pub latency_ms: u64,
-    pub metadata: serde_json::Value,
-}
+pub type LLMResponseStream = Pin<Box<dyn Stream<Item = LLMCompleteResponse> + Send>>;

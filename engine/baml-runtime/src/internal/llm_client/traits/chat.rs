@@ -1,11 +1,11 @@
 use anyhow::Result;
 use internal_baml_jinja::{ChatOptions, RenderedChatMessage};
 
-use crate::{internal::llm_client::LLMResponse, RuntimeContext};
+use crate::{
+    internal::llm_client::{LLMResponse, LLMResponseStream},
+    RuntimeContext,
+};
 
-// #[cfg(not(feature = "no_wasm"))]
-// type ResponseType = Result<LLMResponse, wasm_bindgen::JsValue>;
-// #[cfg(feature = "no_wasm")]
 type ResponseType = Result<LLMResponse>;
 
 pub trait WithChat: Sync + Send {
@@ -13,6 +13,15 @@ pub trait WithChat: Sync + Send {
 
     #[allow(async_fn_in_trait)]
     async fn chat(&self, ctx: &RuntimeContext, prompt: &Vec<RenderedChatMessage>) -> ResponseType;
+}
+
+pub trait WithStreamChat: Sync + Send {
+    #[allow(async_fn_in_trait)]
+    async fn stream_chat(
+        &self,
+        ctx: &RuntimeContext,
+        prompt: &Vec<RenderedChatMessage>,
+    ) -> LLMResponseStream;
 }
 
 // pub trait WithChatStream: WithChat {

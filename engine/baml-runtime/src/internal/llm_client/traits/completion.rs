@@ -1,11 +1,11 @@
 use anyhow::Result;
 use internal_baml_jinja::CompletionOptions;
 
-use crate::{internal::llm_client::LLMResponse, RuntimeContext};
+use crate::{
+    internal::llm_client::{LLMResponse, LLMResponseStream},
+    RuntimeContext,
+};
 
-// #[cfg(not(feature = "no_wasm"))]
-// type ResponseType = Result<LLMResponse, wasm_bindgen::JsValue>;
-// #[cfg(feature = "no_wasm")]
 type ResponseType = Result<LLMResponse>;
 
 pub trait WithCompletion: Sync + Send {
@@ -13,6 +13,11 @@ pub trait WithCompletion: Sync + Send {
 
     #[allow(async_fn_in_trait)]
     async fn completion(&self, ctx: &RuntimeContext, prompt: &String) -> ResponseType;
+}
+
+pub trait WithStreamCompletion: Sync + Send {
+    #[allow(async_fn_in_trait)]
+    async fn stream_completion(&self, ctx: &RuntimeContext, prompt: &String) -> LLMResponseStream;
 }
 
 // pub trait WithCompletionStream: WithCompletion {

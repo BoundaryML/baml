@@ -14,8 +14,11 @@ use crate::internal::llm_client::{
     anthropic::types::StopReason,
     common::images::{self, download_image_as_base64},
     state::LlmClientState,
-    traits::{WithChat, WithClient, WithNoCompletion, WithRetryPolicy},
-    LLMResponse, ModelFeatures,
+    traits::{
+        WithChat, WithClient, WithNoCompletion, WithRetryPolicy, WithStreamChat,
+        WithStreamCompletion,
+    },
+    LLMResponse, LLMResponseStream, ModelFeatures,
 };
 
 use crate::request::call_request_with_json;
@@ -513,6 +516,22 @@ impl WithChat for AnthropicClient {
                 "total_tokens": usage.input_tokens + usage.output_tokens,
             }),
         }))
+    }
+}
+
+impl WithStreamCompletion for AnthropicClient {
+    async fn stream_completion(&self, ctx: &RuntimeContext, prompt: &String) -> LLMResponseStream {
+        todo!()
+    }
+}
+
+impl WithStreamChat for AnthropicClient {
+    async fn stream_chat(
+        &self,
+        ctx: &RuntimeContext,
+        prompt: &Vec<RenderedChatMessage>,
+    ) -> LLMResponseStream {
+        todo!()
     }
 }
 
