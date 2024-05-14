@@ -85,6 +85,13 @@ impl BamlRuntime {
     pub fn run_cli(argv: Vec<String>, caller_type: cli::CallerType) -> Result<()> {
         cli::RuntimeCli::parse_from(argv.into_iter()).run(caller_type)
     }
+
+    pub async fn stream(&self) -> Result<String> {
+        //crate::request::stream::OpenAiStream { callback: None }
+        //    .stream()
+        //    .await
+        Ok("".to_string())
+    }
 }
 
 // #[cfg(not(feature = "no_wasm"))]

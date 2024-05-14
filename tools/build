@@ -198,7 +198,7 @@ case "$_path" in
     #command="${command} && poetry run mypy ."
     #command="${command} && poetry run ruff check"
     #command="${command} && poetry run ruff format"
-    command="${command} && poetry run python -m baml_py.cli"
+    command="${command} && poetry run baml-cli generate --from /home/sam/baml/integ-tests --to /home/sam/baml/integ-tests/python_v2"
     #command="${command} && infisical run poetry run python main.py"
     if [ "$_test_mode" -eq 1 ]; then
       command="${command} && poetry run -- pytest baml_core"

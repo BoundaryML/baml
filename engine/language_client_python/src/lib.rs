@@ -90,6 +90,17 @@ impl BamlRuntimeFfi {
             }
         }
     }
+
+    //fn stream(&self, py: Python<'_>) -> PyResult<PyObject> {
+    //    let baml_runtime = self.internal.clone();
+
+    //    pyo3_asyncio::tokio::future_into_py(py, async move {
+    //        let result = baml_runtime.stream().await.map_err(BamlError::from_anyhow);
+
+    //        result
+    //    })
+    //    .map(|f| f.into())
+    //}
 }
 
 #[pyfunction]

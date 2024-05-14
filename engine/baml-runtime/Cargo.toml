@@ -42,6 +42,8 @@ envy = "0.4.2"
 chrono = "0.4.38"
 reqwest-eventsource = "0.6.0"
 eventsource-stream = "0.2.3"
+stream-cancel = "0.8.2"
+async-std = "1.12.0"
 
 
 [dependencies.hostname]
@@ -98,6 +100,7 @@ no_wasm = [
   "tokio/full",
   "dep:reqwest",
   "reqwest/native-tls-vendored",
+  "reqwest/stream",
   "walkdir",
   "hostname",
 ]
