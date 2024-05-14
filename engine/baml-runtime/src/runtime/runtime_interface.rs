@@ -11,7 +11,7 @@ use crate::{
         prompt_renderer::PromptRenderer,
     },
     runtime_interface::RuntimeConstructor,
-    InternalRuntimeInterface, LLMResponseStream, RuntimeContext, RuntimeInterface, TestResponse,
+    FunctionResultStream, InternalRuntimeInterface, RuntimeContext, RuntimeInterface, TestResponse,
 };
 use anyhow::Result;
 use dashmap::DashMap;
@@ -307,8 +307,9 @@ impl RuntimeInterface for InternalBamlRuntime {
         _function_name: String,
         _params: &IndexMap<String, serde_json::Value>,
         _ctx: &RuntimeContext,
-    ) -> LLMResponseStream {
-        LLMResponseStream::new()
+    ) -> FunctionResultStream {
+        todo!()
+        //LLMResponseStream::new()
     }
 
     #[cfg(feature = "no_wasm")]

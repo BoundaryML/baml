@@ -52,6 +52,23 @@ async def main2():
     print("retval", retval)
     
 
+async def main3():
+
+    # simple form
+    await b.stream.ExtractResumes(text='asdf')
+        .withEventHandlers()
+        .done()
+    
+    # more complex form
+    stream_manager = b.stream.ExtractResumes(text='asdf')
+    stream_manager = stream_manager.withEventHandlers(...)
+
+    stream = await stream_manager.start()
+    final = await stream.end()
+
+
+
+
 
 start_time = time.perf_counter()
 

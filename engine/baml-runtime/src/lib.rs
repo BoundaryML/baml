@@ -138,7 +138,7 @@ impl RuntimeInterface for BamlRuntime {
         function_name: String,
         params: &IndexMap<String, serde_json::Value>,
         ctx: &RuntimeContext,
-    ) -> LLMResponseStream {
+    ) -> FunctionResultStream {
         self.inner.stream_function(function_name, params, ctx)
     }
 

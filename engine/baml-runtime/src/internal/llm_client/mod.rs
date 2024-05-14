@@ -19,6 +19,8 @@ use reqwest::StatusCode;
 #[cfg(not(feature = "no_wasm"))]
 use wasm_bindgen::JsValue;
 
+use crate::FunctionResult;
+
 #[derive(Clone, Copy)]
 pub struct ModelFeatures {
     pub completion: bool,
@@ -164,4 +166,4 @@ impl std::fmt::Display for LLMCompleteResponse {
     }
 }
 
-pub type LLMCompleteResponseStream = Pin<Box<dyn Stream<Item = LLMCompleteResponse> + Send>>;
+pub type FunctionResultStream = Pin<Box<dyn Stream<Item = FunctionResult> + Send>>;

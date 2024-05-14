@@ -12,7 +12,7 @@ use crate::{
         llm_client::{llm_provider::LLMProvider, retry_policy::CallablePolicy, LLMResponse},
     },
     runtime::InternalBamlRuntime,
-    types::LLMResponseStream,
+    types::FunctionResultStream,
     FunctionResult, RuntimeContext, TestResponse,
 };
 
@@ -52,7 +52,7 @@ pub trait RuntimeInterface {
         function_name: String,
         params: &IndexMap<String, serde_json::Value>,
         ctx: &RuntimeContext,
-    ) -> LLMResponseStream;
+    ) -> FunctionResultStream;
 
     #[cfg(feature = "no_wasm")]
     fn generate_client(

@@ -13,7 +13,7 @@ use crate::internal::llm_client::{
         WithChat, WithClient, WithNoCompletion, WithRetryPolicy, WithStreamChat,
         WithStreamCompletion,
     },
-    LLMCompleteResponseStream, LLMResponse, ModelFeatures,
+    FunctionResultStream, LLMResponse, ModelFeatures,
 };
 
 use crate::RuntimeContext;
@@ -390,9 +390,9 @@ impl WithChat for OpenAIClient {
 impl WithStreamCompletion for OpenAIClient {
     async fn stream_completion(
         &self,
-        ctx: &RuntimeContext,
-        prompt: &String,
-    ) -> LLMCompleteResponseStream {
+        _ctx: &RuntimeContext,
+        _prompt: &String,
+    ) -> FunctionResultStream {
         todo!()
     }
 }
@@ -400,9 +400,9 @@ impl WithStreamCompletion for OpenAIClient {
 impl WithStreamChat for OpenAIClient {
     async fn stream_chat(
         &self,
-        ctx: &RuntimeContext,
-        prompt: &Vec<RenderedChatMessage>,
-    ) -> LLMCompleteResponseStream {
+        _ctx: &RuntimeContext,
+        _prompt: &Vec<RenderedChatMessage>,
+    ) -> FunctionResultStream {
         todo!()
     }
 }
