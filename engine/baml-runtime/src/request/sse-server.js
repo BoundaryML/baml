@@ -28,7 +28,7 @@ http
           clearInterval(sendEvent)
           res.end()
         }
-      }, 3000)
+      }, 1000)
 
       req.on('close', () => {
         console.log('connection closed')
