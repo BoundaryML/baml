@@ -33,6 +33,7 @@ pub struct TracingSpan {
     params: IndexMap<String, serde_json::Value>,
     parent_ids: Option<Vec<(String, Uuid)>>,
     start_time: web_time::SystemTime,
+    #[allow(dead_code)]
     ctx: RuntimeContext,
 }
 

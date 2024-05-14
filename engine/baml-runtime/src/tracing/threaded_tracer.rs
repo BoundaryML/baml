@@ -84,6 +84,7 @@ fn batch_processor(
 pub(super) struct ThreadedTracer {
     tx: std::sync::Arc<std::sync::Mutex<std::sync::mpsc::Sender<TxEventSignal>>>,
     rx: std::sync::Arc<std::sync::Mutex<std::sync::mpsc::Receiver<RxEventSignal>>>,
+    #[allow(dead_code)]
     join_handle: std::thread::JoinHandle<()>,
 }
 

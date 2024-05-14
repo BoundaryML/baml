@@ -68,6 +68,7 @@ pub(crate) enum ValueType {
 //
 
 #[derive(Serialize, Debug, PartialEq, Eq, Clone, Copy)]
+#[allow(dead_code)]
 pub enum TestCaseStatus {
     #[serde(rename = "QUEUED")]
     Queued,
@@ -84,6 +85,7 @@ pub enum TestCaseStatus {
 }
 
 #[derive(Serialize, Debug, Clone)]
+#[allow(dead_code)]
 pub enum EventType {
     #[serde(rename = "log")]
     Log,
@@ -144,6 +146,7 @@ pub(crate) struct LLMChat {
 
 #[derive(Serialize, Debug)]
 #[serde(untagged)]
+#[allow(dead_code)]
 pub(crate) enum Role {
     #[serde(rename = "assistant")]
     Assistant,
@@ -170,6 +173,7 @@ pub(crate) struct LLMEventSchema {
 
 #[derive(Serialize, Debug)]
 #[serde(untagged)]
+#[allow(dead_code)]
 pub(crate) enum MetadataType {
     Single(LLMEventSchema),
     Multi(Vec<LLMEventSchema>),
@@ -183,6 +187,7 @@ pub(crate) struct LLMEventInputPrompt {
 
 #[derive(Serialize, Debug)]
 #[serde(untagged)]
+#[allow(dead_code)]
 pub enum Template {
     Single(String),
     Multiple(Vec<LLMChat>),
