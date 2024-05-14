@@ -44,6 +44,7 @@ indoc = "2.0.1"
 regex = "1.10.4"
 serde_json = { version = "1", features = ["float_roundtrip", "preserve_order"] }
 serde = { version = "1", features = ["derive"] }
+static_assertions = "1.1.0"
 
 internal-baml-codegen = { path = "language-client-codegen" }
 internal-baml-core = { path = "baml-lib/baml-core" }

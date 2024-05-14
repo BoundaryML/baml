@@ -50,6 +50,8 @@ pub(crate) use runtime_interface::InternalRuntimeInterface;
 pub use internal_baml_core::internal_baml_diagnostics::Diagnostics as DiagnosticsError;
 pub use internal_baml_core::ir::{FieldType, TypeValue};
 
+pub use request::stream::OpenAiStream;
+
 pub struct BamlRuntime {
     inner: InternalBamlRuntime,
     tracer: BamlTracer,
@@ -86,11 +88,8 @@ impl BamlRuntime {
         cli::RuntimeCli::parse_from(argv.into_iter()).run(caller_type)
     }
 
-    pub async fn stream(&self) -> Result<String> {
-        //crate::request::stream::OpenAiStream { callback: None }
-        //    .stream()
-        //    .await
-        Ok("".to_string())
+    pub fn stream(&self) -> OpenAiStream {
+        OpenAiStream::new()
     }
 }
 

@@ -91,16 +91,28 @@ impl BamlRuntimeFfi {
         }
     }
 
-    //fn stream(&self, py: Python<'_>) -> PyResult<PyObject> {
-    //    let baml_runtime = self.internal.clone();
+    fn stream(&self, py: Python<'_>, cb: PyObject) -> PyResult<PyObject> {
+        let baml_runtime = self.internal.clone();
 
-    //    pyo3_asyncio::tokio::future_into_py(py, async move {
-    //        let result = baml_runtime.stream().await.map_err(BamlError::from_anyhow);
+        pyo3_asyncio::tokio::future_into_py(py, async move {
+            let stream = baml_runtime.stream();
+            let cb = cb.clone();
+            stream.callback.lock().await.push(Box::new(move |data| {
+                log::info!("Received data: {}", data);
+                Python::with_gil(|py| {
+                    cb.clone()
+                        .call1(py, ("cb.call1:arg0", "cb.call1:arg1", data.clone()))?;
+                    Ok::<String, PyErr>("".to_string())
+                })?;
+                Ok(data)
+            }));
+            //let result = baml_runtime.stream().await.map_err(BamlError::from_anyhow);
 
-    //        result
-    //    })
-    //    .map(|f| f.into())
-    //}
+            //result
+            stream.stream().await.map_err(BamlError::from_anyhow)
+        })
+        .map(|f| f.into())
+    }
 }
 
 #[pyfunction]

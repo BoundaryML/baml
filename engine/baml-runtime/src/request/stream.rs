@@ -7,15 +7,17 @@ use std::{ops::DerefMut, sync::Arc};
 use stream_cancel::{StreamExt as CancellableStreamExt, Trigger, Tripwire};
 use tokio::sync::Mutex;
 
-type StreamCallback = Box<dyn Fn(String) -> Result<String>>;
+type StreamCallback = Box<dyn Fn(String) -> Result<String> + Send>;
 //pub struct OpenAiStream<T>
 //where
 //    T: FnMut(String) -> Result<String>,
 pub struct OpenAiStream {
-    //pub callback: Option<Box<StreamCallback>>,
+    pub callback: Arc<Mutex<Vec<StreamCallback>>>,
     trigger: Arc<Mutex<Option<Box<Trigger>>>>,
     tripwire: Tripwire,
 }
+
+static_assertions::assert_impl_all!(OpenAiStream: Sync, Send);
 
 impl OpenAiStream
 //impl<T> OpenAiStream<T>
@@ -26,13 +28,10 @@ impl OpenAiStream
         let (trigger, tripwire) = Tripwire::new();
         Self {
             //callback: None,
+            callback: Arc::new(Mutex::new(vec![])),
             trigger: Arc::new(Mutex::new(Some(Box::new(trigger)))),
             tripwire: tripwire,
         }
-    }
-
-    pub fn on_event(&mut self, callback: StreamCallback) {
-        //self.callback = Some(Box::new(callback));
     }
 
     pub async fn stream(&self) -> Result<String> {
@@ -53,7 +52,12 @@ impl OpenAiStream
                 //    }
                 //    None => log::info!("received event[type={}]: {}", event.event, event.data),
                 //},
-                Ok(event) => log::info!("received event[type={}]: {}", event.event, event.data),
+                Ok(event) => {
+                    log::info!("received event[type={}]: {}", event.event, event.data);
+                    for cb in self.callback.lock().await.iter() {
+                        cb(event.data.clone());
+                    }
+                }
                 Err(e) => log::warn!("stream error occurred: {}", e),
             }
         }
@@ -73,9 +77,6 @@ impl OpenAiStream
         }
     }
 }
-
-#[cfg(test)]
-static_assertions::assert_impl_all!(OpenAiStream: Sync, Send);
 
 #[cfg(test)]
 pub mod tests {

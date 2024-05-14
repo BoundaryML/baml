@@ -1,10 +1,10 @@
 import asyncio
 import baml_py
-from baml_py import Image
-from pydantic import BaseModel
+#from baml_py import Image
+#from pydantic import BaseModel
 import time
-from baml_client import client
-from baml_client.types import ClassWithImage, FakeImage
+#from baml_client import client
+#from baml_client.types import ClassWithImage, FakeImage
 
 async def fetch_data(url: str):
     print(f"Fetching data from {url}...")
@@ -44,12 +44,18 @@ async def main():
     res2 = await runtime.DescribeImage2(classWithImage=full_obj, img2=orc_image)
     print("res2-------\n", res2)
 
+async def main2():
+    b = baml_py.BamlRuntimeFfi.from_directory("/home/sam/repos/baml-examples/nextjs-starter-v1/baml_src", {})
+
+    retval = await b.stream(lambda d, e, f: print(f"<in python cb>cb arg: {f}</in python cb>"))
+
+    print("retval", retval)
     
 
 
 start_time = time.perf_counter()
 
-asyncio.run(main())
+asyncio.run(main2())
 
 end_time = time.perf_counter()
 elapsed_time = end_time - start_time
