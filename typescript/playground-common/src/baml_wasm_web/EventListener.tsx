@@ -18,10 +18,21 @@ import type {
 
 // const wasm = await import("@gloo-ai/baml-schema-wasm-web/baml_schema_build");
 // const { WasmProject, WasmRuntime, WasmRuntimeContext, version: RuntimeVersion } = wasm;
+const defaultEnvKeyValues: [string, string][] = (() => {
+  if (typeof process !== 'undefined' && process.env.NEXT_PUBLIC) {
+    // Running in a Next.js environment, no default value
+    console.log('Running in a Next.js environment, no default value')
+    return []
+  } else {
+    console.log('Not running in a Next.js environment, set default value')
+    // Not running in a Next.js environment, set default value
+    return [['BOUNDARY_ANTHROPIC_PROXY_URL', 'http://localhost:8003']]
+  }
+})()
 
 const selectedProjectStorageAtom = atomWithStorage<string | null>('selected-project', null, sessionStore)
 const selectedFunctionStorageAtom = atomWithStorage<string | null>('selected-function', null, sessionStore)
-const envKeyValueStorage = atomWithStorage<[string, string][]>('env-key-values', [], sessionStore)
+const envKeyValueStorage = atomWithStorage<[string, string][]>('env-key-values', defaultEnvKeyValues, sessionStore)
 
 export const resetEnvKeyValuesAtom = atom(null, (get, set) => {
   set(envKeyValueStorage, [])
@@ -74,8 +85,6 @@ type ASTContextType = {
   // Things associated with selection
   selected: Selection
 }
-// const wasm = await import('@gloo-ai/baml-schema-wasm-web')
-// const wasm = undefined
 
 const wasmAtomAsync = atom(async () => {
   const wasm = await import('@gloo-ai/baml-schema-wasm-web/baml_schema_build')
@@ -92,8 +101,10 @@ export const runtimeCtx = atom((get) => {
   }
 
   const ctx = new loadedWasm.WasmRuntimeContext()
+  console.log('Setting env key values', get(envKeyValuesAtom))
   for (const [key, value] of get(envKeyValuesAtom)) {
     if (value !== null) {
+      console.log('Setting env', key, value)
       ctx.set_env(key, value)
     }
   }

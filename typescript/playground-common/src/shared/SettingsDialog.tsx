@@ -37,15 +37,18 @@ export const showSettingsAtom = atom(true)
 const showEnvvarValuesAtom = atom(false)
 
 const tracingEnvVarsAtom = atom(['BOUNDARY_PROJECT_ID', 'BOUNDARY_SECRET'])
+const configEnvVarsAtom = atom(['BOUNDARY_ANTHROPIC_PROXY_URL'])
 
 const envvarsAtom = atom((get) => {
   const storedEnvvars = get(envKeyValuesAtom)
   const requiredVarNames = get(runtimeRequiredEnvVarsAtom)
   const tracingVarNames = get(tracingEnvVarsAtom)
+  const configVarNames = get(configEnvVarsAtom)
 
   // Create a copy of requiredVarNames and tracingVarNames to manipulate
   let requiredVarNamesCopy = [...requiredVarNames]
   let tracingVarNamesCopy = [...tracingVarNames]
+  let configVarNamesCopy = [...configVarNames]
 
   // Update the stored envvars type for the runtime.
   const envVars = storedEnvvars.map(([key, value, index]): EnvVar => {
@@ -59,6 +62,11 @@ const envvarsAtom = atom((get) => {
       tracingVarNamesCopy = tracingVarNamesCopy.filter((varName) => varName !== key)
       return { key, value, type: 'tracing', index }
     }
+    if (configVarNamesCopy.includes(key)) {
+      // Remove the key from the copy of configVarNames
+      configVarNamesCopy = configVarNamesCopy.filter((varName) => varName !== key)
+      return { key, value, type: 'config', index }
+    }
     return { key, value, type: 'user', index }
   })
 
@@ -69,10 +77,13 @@ const envvarsAtom = atom((get) => {
   const tracingEnvVars = tracingVarNamesCopy
     .filter((k) => !envVars.some(({ key }) => k === key))
     .map((k): EnvVar => ({ key: k, value: '', type: 'tracing', index: null }))
+  const configEnvVars = configVarNamesCopy
+    .filter((k) => !envVars.some(({ key }) => k === key))
+    .map((k): EnvVar => ({ key: k, value: '', type: 'config', index: null }))
 
   // Sort by type (baml, tracing) are sorted by name, user is sorted by index
 
-  const keys = [...envVars, ...requiredButUnset, ...tracingEnvVars].sort((a, b) => {
+  const keys = [...envVars, ...requiredButUnset, ...tracingEnvVars, ...configEnvVars].sort((a, b) => {
     if (a.type === 'user' && b.type === 'user') {
       return a.index! - b.index!
     }
@@ -95,7 +106,7 @@ const requiredButUnsetAtom = atom((get) => {
   )
 })
 
-type EnvVar = { key: string; value: string; type: 'baml' | 'tracing' | 'user'; index: number | null }
+type EnvVar = { key: string; value: string; type: 'baml' | 'tracing' | 'user' | 'config'; index: number | null }
 const EnvvarInput: React.FC<{ envvar: EnvVar }> = ({ envvar }) => {
   const [showEnvvarValues] = useAtom(showEnvvarValuesAtom)
   const setEnvKeyValue = useSetAtom(envKeyValuesAtom)
@@ -263,6 +274,17 @@ export const SettingsDialog: React.FC = () => {
             >
               <PlusIcon size={14} /> <div>Add item</div>
             </Button>
+          </div>
+          <div className='flex flex-col gap-1'>
+            <span className='text-sm text-muted-foreground'>Internal config vars.</span>
+            <span className='text-xs text-muted-foreground/60'>
+              Anthropic doesn't support client-side web calls, so we proxy the calls.
+            </span>
+            {envvars
+              .filter((t) => t.type === 'config')
+              .map((envvar) => (
+                <EnvvarInput key={envvar.index} envvar={envvar} />
+              ))}
           </div>
         </div>
       </DialogContent>

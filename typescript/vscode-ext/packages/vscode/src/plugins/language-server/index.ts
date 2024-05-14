@@ -43,7 +43,7 @@ export const generateTestRequest = async (test_request: TestRequest): Promise<st
 }
 
 export const requestDiagnostics = async () => {
-  await client.sendRequest('requestDiagnostics')
+  await client?.sendRequest('requestDiagnostics')
 }
 
 const LatestVersions = z.object({

@@ -57,6 +57,10 @@ fn resolve_properties(
             ))
         })
         .collect::<Result<HashMap<_, _>>>()?;
+    // this is a required field
+    properties
+        .entry("max_tokens".into())
+        .or_insert_with(|| 4096.into());
 
     let default_role = properties
         .remove("default_role")
@@ -66,7 +70,12 @@ fn resolve_properties(
     let base_url = properties
         .remove("base_url")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .unwrap_or_else(|| " https://api.anthropic.com/v1".to_string());
+        .or_else(|| {
+            ctx.env
+                .get("BOUNDARY_ANTHROPIC_PROXY_URL")
+                .map(|s| s.to_string())
+        })
+        .unwrap_or_else(|| "https://api.anthropic.com".to_string());
 
     let api_key = properties
         .remove("api_key")
@@ -260,7 +269,7 @@ impl WithChat for AnthropicClient {
         };
 
         use super::types::AnthropicMessageResponse;
-        let request = self.build_http_request(ctx, "/messages", prompt)?;
+        let request = self.build_http_request(ctx, "/v1/messages", prompt)?;
         let window = match web_sys::window() {
             Some(w) => w,
             None => {
@@ -400,7 +409,7 @@ impl WithChat for AnthropicClient {
             ErrorCode, LLMCompleteResponse, LLMErrorResponse,
         };
 
-        let req = self.build_http_request(ctx, "/messages", prompt)?;
+        let req = self.build_http_request(ctx, "/v1/messages", prompt)?;
 
         match self.internal_state.clone().lock() {
             Ok(mut state) => {
