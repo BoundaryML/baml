@@ -11,7 +11,7 @@ use crate::{
         prompt_renderer::PromptRenderer,
     },
     runtime_interface::RuntimeConstructor,
-    InternalRuntimeInterface, RuntimeContext, RuntimeInterface, TestResponse,
+    InternalRuntimeInterface, LLMResponseStream, RuntimeContext, RuntimeInterface, TestResponse,
 };
 use anyhow::Result;
 use dashmap::DashMap;
@@ -302,6 +302,15 @@ impl RuntimeInterface for InternalBamlRuntime {
         Ok(parsed)
     }
 
+    fn stream_function(
+        &self,
+        _function_name: String,
+        _params: &IndexMap<String, serde_json::Value>,
+        _ctx: &RuntimeContext,
+    ) -> LLMResponseStream {
+        LLMResponseStream::new()
+    }
+
     #[cfg(feature = "no_wasm")]
     fn generate_client(
         &self,
@@ -310,71 +319,4 @@ impl RuntimeInterface for InternalBamlRuntime {
     ) -> Result<internal_baml_codegen::GenerateOutput> {
         client_type.generate_client(self.ir(), args)
     }
-
-    // async fn run_test(
-    //     &self,
-    //     function_name: &str,
-    //     test_name: &str,
-    //     ctx: &RuntimeContext,
-    // ) -> Result<crate::TestResponse> {
-    //     let function = self.ir.find_function(&function_name)?;
-
-    //     let test = self.ir.find_test(&function, test_name)?;
-
-    //     let params = match test.content().as_json(&ctx.env)? {
-    //         serde_json::Value::Object(kv) => {
-    //             let mut params = HashMap::new();
-    //             for (k, v) in kv {
-    //                 params.insert(k, v);
-    //             }
-    //             params
-    //         }
-    //         x => {
-    //             return Ok(TestResponse {
-    //                 function_response: Err(anyhow::anyhow!(
-    //                     "Test content must be an object, found: {:?}",
-    //                     x
-    //                 )),
-    //             })
-    //         }
-    //     };
-
-    //     let (mut client, propmt) = self.get_prompt(&function, params, ctx)?;
-
-    //     let response = client.call(&self.ir, ctx, &propmt).await;
-
-    //     let parsed = response
-    //         .content()
-    //         .ok()
-    //         .map(|content| jsonish::from_str(content, &self.ir, function.output(), &ctx.env));
-
-    //     Ok(crate::TestResponse {
-    //         function_response: Ok(crate::FunctionResult {
-    //             llm_response: response,
-    //             parsed,
-    //         }),
-    //     })
-    // }
-
-    // async fn call_function(
-    //     &self,
-    //     function_name: String,
-    //     params: std::collections::HashMap<String, serde_json::Value>,
-    //     ctx: &RuntimeContext,
-    // ) -> Result<crate::FunctionResult> {
-    //     let function = self.ir.find_function(&function_name)?;
-    //     let (mut client, propmt) = self.get_prompt(&function, params, ctx)?;
-
-    //     let response = client.call(&self.ir, ctx, &propmt).await;
-
-    //     let parsed = response
-    //         .content()
-    //         .ok()
-    //         .map(|content| jsonish::from_str(content, &self.ir, function.output(), &ctx.env));
-
-    //     Ok(crate::FunctionResult {
-    //         llm_response: response,
-    //         parsed,
-    //     })
-    // }
 }

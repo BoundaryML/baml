@@ -14,7 +14,7 @@ use crate::internal::llm_client::{
         WithChat, WithClient, WithNoCompletion, WithRetryPolicy, WithStreamChat,
         WithStreamCompletion,
     },
-    LLMResponse, LLMResponseStream, ModelFeatures,
+    LLMResponse, LLMCompleteResponseStream, ModelFeatures,
 };
 
 use crate::RuntimeContext;
@@ -515,7 +515,7 @@ impl WithChat for AnthropicClient {
 }
 
 impl WithStreamCompletion for AnthropicClient {
-    async fn stream_completion(&self, ctx: &RuntimeContext, prompt: &String) -> LLMResponseStream {
+    async fn stream_completion(&self, ctx: &RuntimeContext, prompt: &String) -> LLMCompleteResponseStream {
         todo!()
     }
 }
@@ -525,7 +525,7 @@ impl WithStreamChat for AnthropicClient {
         &self,
         ctx: &RuntimeContext,
         prompt: &Vec<RenderedChatMessage>,
-    ) -> LLMResponseStream {
+    ) -> LLMCompleteResponseStream {
         todo!()
     }
 }

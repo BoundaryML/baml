@@ -164,4 +164,4 @@ impl std::fmt::Display for LLMCompleteResponse {
     }
 }
 
-pub type LLMResponseStream = Pin<Box<dyn Stream<Item = LLMCompleteResponse> + Send>>;
+pub type LLMCompleteResponseStream = Pin<Box<dyn Stream<Item = LLMCompleteResponse> + Send>>;

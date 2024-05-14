@@ -2,7 +2,7 @@ use anyhow::Result;
 use internal_baml_jinja::CompletionOptions;
 
 use crate::{
-    internal::llm_client::{LLMResponse, LLMResponseStream},
+    internal::llm_client::{LLMResponse, LLMCompleteResponseStream},
     RuntimeContext,
 };
 
@@ -17,7 +17,7 @@ pub trait WithCompletion: Sync + Send {
 
 pub trait WithStreamCompletion: Sync + Send {
     #[allow(async_fn_in_trait)]
-    async fn stream_completion(&self, ctx: &RuntimeContext, prompt: &String) -> LLMResponseStream;
+    async fn stream_completion(&self, ctx: &RuntimeContext, prompt: &String) -> LLMCompleteResponseStream;
 }
 
 // pub trait WithCompletionStream: WithCompletion {

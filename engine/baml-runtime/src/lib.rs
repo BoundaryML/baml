@@ -133,6 +133,15 @@ impl RuntimeInterface for BamlRuntime {
         response
     }
 
+    fn stream_function(
+        &self,
+        function_name: String,
+        params: &IndexMap<String, serde_json::Value>,
+        ctx: &RuntimeContext,
+    ) -> LLMResponseStream {
+        self.inner.stream_function(function_name, params, ctx)
+    }
+
     #[cfg(feature = "no_wasm")]
     fn generate_client(
         &self,

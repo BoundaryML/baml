@@ -4,7 +4,6 @@ use internal_baml_core::internal_baml_diagnostics::Diagnostics;
 use internal_baml_core::ir::{repr::IntermediateRepr, FunctionWalker};
 use internal_baml_jinja::RenderedPrompt;
 use std::{collections::HashMap, sync::Arc};
-use uuid::Uuid;
 
 use crate::tracing::TracingSpan;
 use crate::{
@@ -13,6 +12,7 @@ use crate::{
         llm_client::{llm_provider::LLMProvider, retry_policy::CallablePolicy, LLMResponse},
     },
     runtime::InternalBamlRuntime,
+    types::LLMResponseStream,
     FunctionResult, RuntimeContext, TestResponse,
 };
 
@@ -46,6 +46,13 @@ pub trait RuntimeInterface {
         params: &IndexMap<String, serde_json::Value>,
         ctx: &RuntimeContext,
     ) -> impl std::future::Future<Output = ResponseType<FunctionResult>>;
+
+    fn stream_function(
+        &self,
+        function_name: String,
+        params: &IndexMap<String, serde_json::Value>,
+        ctx: &RuntimeContext,
+    ) -> LLMResponseStream;
 
     #[cfg(feature = "no_wasm")]
     fn generate_client(
