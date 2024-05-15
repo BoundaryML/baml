@@ -37,7 +37,7 @@ pub trait WithCallable: Send {
         retry_policy: Option<CallablePolicy>,
         ctx: &RuntimeContext,
         prompt_renderer: &PromptRenderer,
-        baml_args: &BamlArgType,
+        baml_args: &BamlValue,
     ) -> LLMResponse;
 }
 
@@ -58,7 +58,7 @@ pub trait WithSingleCallable {
         &self,
         ctx: &RuntimeContext,
         prompt_renderer: &PromptRenderer,
-        baml_args: &BamlArgType,
+        baml_args: &BamlValue,
     ) -> ResponseType;
 }
 
@@ -87,7 +87,7 @@ where
         retry_policy: Option<CallablePolicy>,
         ctx: &RuntimeContext,
         prompt_renderer: &PromptRenderer,
-        baml_args: &BamlArgType,
+        baml_args: &BamlValue,
     ) -> LLMResponse {
         let mut errors = Vec::new(); // Vector to store errors
         let mut success_response = None;
@@ -138,7 +138,7 @@ where
         &self,
         ctx: &RuntimeContext,
         prompt_renderer: &PromptRenderer,
-        baml_args: &BamlArgType,
+        baml_args: &BamlValue,
     ) -> ResponseType {
         let rendered_prompt = self.render_prompt(prompt_renderer, ctx, baml_args)?;
         match self.model_features() {

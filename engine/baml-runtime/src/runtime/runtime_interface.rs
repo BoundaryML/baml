@@ -59,18 +59,29 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         Ok((response, client_name))
     }
 
-    fn get_client(
-        &self,
+    fn get_client<'a>(
+        &'a self, // ref lifetime 1
         client_name: &str,
-        ctx: &RuntimeContext,
+        ctx: &RuntimeContext, // ref lifetime 2
     ) -> Result<(Arc<LLMProvider>, Option<CallablePolicy>)> {
+        //lifetime may not live long enough
+        // cast requires that `'1` must outlive `'static`rustcClick for full compiler diagnostic
+        // runtime_interface.rs(62, 9): let's call the lifetime of this reference `'1`
+        // lifetime may not live long enough
+        // cast requires that `'2` must outlive `'static`rustcClick for full compiler diagnostic
+        // runtime_interface.rs(64, 14): let's call the lifetime of this reference `'2`
+
         let client_ref = self
             .clients
             .entry(client_name.into())
             .or_try_insert_with(|| {
                 let walker = self.ir().find_client(client_name)?;
-                let client =
-                    LLMProvider::from_ir(&walker, ctx, self.create_client_config_callback(&ctx))?;
+                let ctx_clone = ctx.clone();
+                let client = LLMProvider::from_ir(
+                    &walker,
+                    ctx,
+                    Box::new(move |client_name| self.get_client(client_name, &ctx_clone)),
+                )?;
 
                 let retry_policy = match client.retry_policy_name() {
                     Some(name) => match self
@@ -96,16 +107,6 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         let (client, retry_policy) = client_ref.value();
 
         Ok((Arc::clone(&client), retry_policy.clone()))
-    }
-
-    fn create_client_config_callback<'a>(&'a self, ctx: &RuntimeContext) -> FnGetClientConfig<'a> {
-        // let self_clone = self.clone();
-        // let ctx_clone = ctx.clone();
-        let cb = move |client_name: &str| {
-            // Now, `self` and `ctx` are explicitly tied to the lifetime `'a`
-            self.get_client(client_name, ctx)
-        };
-        Box::new(cb)
     }
 
     fn get_function<'ir>(

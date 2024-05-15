@@ -97,7 +97,6 @@ pub trait InternalRuntimeInterface {
         &self,
         client_name: &str,
         ctx: &RuntimeContext,
-        // get_client_config_fn: Option<FnGetClientConfig>,
     ) -> Result<(Arc<LLMProvider>, Option<CallablePolicy>)>;
 
     fn get_function<'ir>(
@@ -106,7 +105,10 @@ pub trait InternalRuntimeInterface {
         ctx: &RuntimeContext,
     ) -> Result<FunctionWalker<'ir>>;
 
-    fn create_client_config_callback(&self, ctx: &RuntimeContext) -> FnGetClientConfig;
+    // fn create_client_config_callback(
+    //     self: Arc<Self>,
+    //     ctx: Arc<RuntimeContext>,
+    // ) -> FnGetClientConfig;
 
     fn parse_response<'ir>(
         &'ir self,

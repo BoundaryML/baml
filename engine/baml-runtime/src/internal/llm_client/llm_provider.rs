@@ -11,7 +11,7 @@ use super::{
     retry_policy::CallablePolicy,
     roundrobin::{roundrobin_client::FnGetClientConfig, RoundRobinClient},
     traits::{WithCallable, WithPrompt, WithRetryPolicy, WithStreamable},
-    FunctionResultStream, LLMResponse, LLMResponse,
+    FunctionResultStream, LLMResponse,
 };
 
 pub enum LLMProvider {
@@ -61,6 +61,7 @@ impl<'ir> WithPrompt<'ir> for LLMProvider {
         ctx: &RuntimeContext,
         params: &BamlValue,
     ) -> Result<internal_baml_jinja::RenderedPrompt> {
+        // TODO: pass in the list of clients to roundrobin
         match self {
             LLMProvider::OpenAI(client) => client.render_prompt(renderer, ctx, params),
             LLMProvider::Anthropic(client) => client.render_prompt(renderer, ctx, params),
@@ -85,7 +86,7 @@ impl WithCallable for LLMProvider {
         retry_policy: Option<CallablePolicy>,
         ctx: &RuntimeContext,
         prompt: &PromptRenderer,
-        baml_args: &BamlArgType,
+        baml_args: &BamlValue,
     ) -> LLMResponse {
         match self {
             LLMProvider::OpenAI(client) => client.call(retry_policy, ctx, prompt, baml_args).await,

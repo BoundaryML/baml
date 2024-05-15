@@ -1,5 +1,6 @@
 use anyhow::Context;
 use anyhow::Result;
+use baml_types::BamlValue;
 use internal_baml_core::ir::ClientWalker;
 
 use std::sync::{Arc, Mutex};
@@ -15,25 +16,22 @@ use crate::internal::llm_client::{
     LLMResponse, RenderedPrompt,
 };
 use crate::{internal::prompt_renderer::PromptRenderer, RuntimeContext};
-use internal_baml_jinja::BamlArgType;
 
 pub(crate) type FnGetClientConfig<'a> =
     Box<dyn Fn(&str) -> Result<(Arc<LLMProvider>, Option<CallablePolicy>)> + Send + Sync + 'a>;
 
-pub struct RoundRobinClient<'a> {
-    // client: ClientWalker<'ir>,
+pub struct RoundRobinClient {
     retry_policy: Option<String>,
     clients: Vec<String>,
-    get_client_config_callback: FnGetClientConfig<'a>,
     internal_state: Arc<Mutex<RoundRobinState>>,
 }
 
-impl<'a> RoundRobinClient<'a> {
+impl RoundRobinClient {
     pub fn new(
         client: &ClientWalker,
         ctx: &RuntimeContext,
-        get_client_config_cb: FnGetClientConfig<'a>,
-    ) -> Result<RoundRobinClient<'a>> {
+        get_client_config_cb: FnGetClientConfig,
+    ) -> Result<RoundRobinClient> {
         let mut properties = (&client.item.elem.options);
         let properties = &client.item.elem.options;
 
@@ -65,6 +63,7 @@ impl<'a> RoundRobinClient<'a> {
         let resolved_expression = ctx
             .resolve_expression(strategy_expr)
             .context("Failed to resolve strategy expression")?;
+
         let strategy_value: Option<&Vec<serde_json::Value>> = resolved_expression.as_array();
 
         let clients: Vec<String> = strategy_value
@@ -84,7 +83,6 @@ impl<'a> RoundRobinClient<'a> {
                 .as_ref()
                 .map(|s| s.to_string()),
             internal_state: Arc::new(Mutex::new(RoundRobinState { idx: start_value })),
-            get_client_config_callback: get_client_config_cb,
         })
     }
     // used to render the prompt. Choose the current one from list of clients
@@ -105,7 +103,7 @@ impl<'a> RoundRobinClient<'a> {
     }
 }
 
-impl<'a> WithRetryPolicy for RoundRobinClient<'a> {
+impl WithRetryPolicy for RoundRobinClient {
     fn retry_policy_name(&self) -> Option<&str> {
         self.retry_policy.as_deref()
     }
@@ -118,7 +116,7 @@ impl<'ir> WithPrompt<'ir> for RoundRobinClient {
         &'ir self,
         renderer: &PromptRenderer,
         ctx: &RuntimeContext,
-        params: &BamlArgType,
+        params: &BamlValue,
     ) -> Result<RenderedPrompt> {
         let res = self.get_client();
         match res {
@@ -133,7 +131,7 @@ impl WithSingleCallable for RoundRobinClient {
         &self,
         ctx: &RuntimeContext,
         prompt_renderer: &PromptRenderer, // TODO: PromptRenderer should be this. We should call render_prompt at the latest step, in the callable + with chat + withcompletion.
-        baml_args: &BamlArgType,
+        baml_args: &BamlValue,
     ) -> Result<LLMResponse> {
         let res = self.get_client();
         match res {
