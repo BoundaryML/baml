@@ -18,7 +18,10 @@ use crate::internal::llm_client::{
     LLMResponse, LLMResponseStream, ModelFeatures,
 };
 
+use crate::FunctionResultStream;
 use crate::RuntimeContext;
+use eventsource_stream::Eventsource;
+use futures::{Stream, StreamExt};
 
 fn resolve_properties(
     client: &ClientWalker,
@@ -257,23 +260,49 @@ impl WithChat for OpenAIClient {
     }
 }
 
-impl WithStreamCompletion for OpenAIClient {
-    async fn stream_completion(
-        &self,
-        _ctx: &RuntimeContext,
-        _prompt: &String,
-    ) -> FunctionResultStream {
-        todo!()
-    }
+struct SseResponse {
+    req: RequestBuilder,
+    client: String,
+    prompt: Vec<RenderedChatMessage>,
 }
 
-impl WithStreamChat for OpenAIClient {
-    async fn stream_chat(
-        &self,
-        _ctx: &RuntimeContext,
-        _prompt: &Vec<RenderedChatMessage>,
-    ) -> FunctionResultStream {
-        todo!()
+impl SseResponse {
+    pub async fn stream(self) -> Result<impl Stream<Item = Result<LLMResponse>>> {
+        use crate::internal::llm_client::{
+            openai::types::{ChatCompletionResponse, FinishReason, OpenAIErrorResponse},
+            ErrorCode, LLMCompleteResponse, LLMErrorResponse,
+        };
+        Ok(self.req.send().await?.bytes_stream().eventsource().map(
+            move |event| -> Result<LLMResponse> {
+                let body: ChatCompletionResponse = serde_json::from_str(&event?.data)?;
+
+                Ok(LLMResponse::Success(LLMCompleteResponse {
+                    client: self.client.clone(),
+                    prompt: internal_baml_jinja::RenderedPrompt::Chat(self.prompt.clone()),
+                    content: body.choices[0]
+                        .message
+                        .content
+                        .as_ref()
+                        .map_or("", |s| s.as_str())
+                        .to_string(),
+                    // TODO: compute start_time_unix_ms
+                    start_time_unix_ms: 0,
+                    // TODO: compute latency_ms
+                    latency_ms: 0,
+                    model: body.model,
+                    metadata: json!({
+                        "baml_is_complete": match body.choices[0].finish_reason {
+                            _ => false,
+                        },
+                        "finish_reason": body.choices[0].finish_reason,
+                       // TODO: implement these
+                       // "prompt_tokens": usage.map(|u| u.prompt_tokens),
+                       // "output_tokens": usage.map(|u| u.completion_tokens),
+                       // "total_tokens": usage.map(|u| u.total_tokens),
+                    }),
+                }))
+            },
+        ))
     }
 }
 
@@ -287,8 +316,37 @@ impl OpenAIClient {
             openai::types::{ChatCompletionResponse, FinishReason, OpenAIErrorResponse},
             ErrorCode, LLMCompleteResponse, LLMErrorResponse,
         };
+        let mut body = json!(self.properties.properties);
+        body.as_object_mut().unwrap().insert(
+            "messages".into(),
+            prompt
+                .iter()
+                .map(|m| {
+                    json!({
+                        "role": m.role,
+                        "content": convert_message_parts_to_content(&m.parts)
+                    })
+                })
+                .collect::<serde_json::Value>(),
+        );
 
-        let req = self.build_http_request_universal(ctx, "/v1/chat/completions", prompt)?;
+        let mut headers: HashMap<String, String> = HashMap::default();
+        match &self.properties.api_key {
+            Some(key) => {
+                headers.insert("Authorization".to_string(), format!("Bearer {}", key));
+            }
+            None => {}
+        }
+        for (k, v) in &self.properties.headers {
+            headers.insert(k.to_string(), v.to_string());
+        }
+
+        let mut request = reqwest::Client::new()
+            .post(format!("{}/v1/chat/completions", self.properties.base_url))
+            .json(&body);
+        for (key, value) in headers {
+            request = request.header(key, value);
+        }
 
         match self.internal_state.clone().lock() {
             Ok(mut state) => {
@@ -299,7 +357,7 @@ impl OpenAIClient {
             }
         }
         Ok(SseResponse {
-            req,
+            req: request,
             prompt: prompt.clone(),
             client: self.context.name.to_string(),
         })

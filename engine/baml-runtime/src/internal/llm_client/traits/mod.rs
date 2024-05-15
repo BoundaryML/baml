@@ -14,9 +14,9 @@ pub use self::{
 };
 
 use super::{
-    retry_policy::CallablePolicy, FunctionResultStream, LLMResponse, ModelFeatures,
-    RetryLLMResponse,
+    retry_policy::CallablePolicy, LLMResponse, LLMResponseStream, ModelFeatures, RetryLLMResponse,
 };
+use crate::FunctionResultStream;
 
 pub trait WithRetryPolicy {
     fn retry_policy_name(&self) -> Option<&str>;

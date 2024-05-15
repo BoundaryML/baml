@@ -1,7 +1,7 @@
 use anyhow::Result;
 use baml_types::BamlValue;
 
-use futures::stream::{StreamExt, TryStreamExt};
+use futures::stream::{BoxStream, StreamExt, TryStreamExt};
 use std::ops::DerefMut;
 use std::sync::Arc;
 use stream_cancel::{StreamExt as CancellableStreamExt, TakeUntilIf, Trigger, Tripwire};

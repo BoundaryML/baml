@@ -13,10 +13,7 @@ use serde_json::{json, Value};
 use crate::internal::llm_client::{
     anthropic::types::{AnthropicErrorResponse, AnthropicMessageResponse, StopReason},
     state::LlmClientState,
-    traits::{
-        WithChat, WithClient, WithNoCompletion, WithRetryPolicy, WithStreamChat,
-        WithStreamCompletion,
-    },
+    traits::{WithChat, WithClient, WithNoCompletion, WithRetryPolicy},
     LLMResponse, LLMResponseStream, ModelFeatures,
 };
 
@@ -279,26 +276,6 @@ impl WithChat for AnthropicClient {
                 }
             },
         }
-    }
-}
-
-impl WithStreamCompletion for AnthropicClient {
-    async fn stream_completion(
-        &self,
-        _ctx: &RuntimeContext,
-        _prompt: &String,
-    ) -> FunctionResultStream {
-        todo!()
-    }
-}
-
-impl WithStreamChat for AnthropicClient {
-    async fn stream_chat(
-        &self,
-        _ctx: &RuntimeContext,
-        _prompt: &Vec<RenderedChatMessage>,
-    ) -> FunctionResultStream {
-        todo!()
     }
 }
 
