@@ -6,6 +6,7 @@ use crate::{
         llm_client::{
             llm_provider::LLMProvider,
             retry_policy::CallablePolicy,
+            roundrobin::roundrobin_client::FnGetClientConfig,
             traits::{WithCallable, WithPrompt, WithRetryPolicy},
         },
         prompt_renderer::PromptRenderer,
@@ -68,7 +69,8 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
             .entry(client_name.into())
             .or_try_insert_with(|| {
                 let walker = self.ir().find_client(client_name)?;
-                let client = LLMProvider::from_ir(&walker, ctx)?;
+                let client =
+                    LLMProvider::from_ir(&walker, ctx, self.create_client_config_callback(&ctx))?;
 
                 let retry_policy = match client.retry_policy_name() {
                     Some(name) => match self
@@ -94,6 +96,16 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         let (client, retry_policy) = client_ref.value();
 
         Ok((Arc::clone(&client), retry_policy.clone()))
+    }
+
+    fn create_client_config_callback<'a>(&'a self, ctx: &RuntimeContext) -> FnGetClientConfig<'a> {
+        // let self_clone = self.clone();
+        // let ctx_clone = ctx.clone();
+        let cb = move |client_name: &str| {
+            // Now, `self` and `ctx` are explicitly tied to the lifetime `'a`
+            self.get_client(client_name, ctx)
+        };
+        Box::new(cb)
     }
 
     fn get_function<'ir>(
@@ -262,11 +274,20 @@ impl RuntimeInterface for InternalBamlRuntime {
         let renderer = PromptRenderer::from_function(&func)?;
         let client_name = renderer.client_name().to_string();
 
+        // let get_client_config_callback = |client_name: &str| -> Result<
+        //     (Arc<LLMProvider>, Option<CallablePolicy>),
+        //     anyhow::Error,
+        // > {
+        //     //let ir = self.ir();
+        //     let (client, retry_policy) = self.get_client(client_name, ctx, None)?;
+        //     Ok((client, retry_policy))
+        // };
+
         let (client, retry_policy) = self.get_client(&client_name, ctx)?;
         let prompt = client.render_prompt(&renderer, &ctx, &baml_args)?;
         log::debug!("Prompt: {:#?}", prompt);
 
-        let response = client.call(retry_policy, ctx, &prompt).await;
+        let response = client.call(retry_policy, ctx, &renderer, &baml_args).await;
 
         log::debug!("RESPONSE: {:#?}", response);
 
@@ -291,9 +312,8 @@ impl RuntimeInterface for InternalBamlRuntime {
         let client_name = renderer.client_name().to_string();
 
         let (client, retry_policy) = self.get_client(&client_name, ctx)?;
-        let prompt = client.render_prompt(&renderer, &ctx, &baml_args)?;
 
-        let response = client.call(retry_policy, ctx, &prompt).await;
+        let response = client.call(retry_policy, ctx, &renderer, &baml_args).await;
 
         log::debug!("call_function(\"{}\") -> {:#?}", function_name, response);
 

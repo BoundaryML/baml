@@ -101,10 +101,8 @@ export const runtimeCtx = atom((get) => {
   }
 
   const ctx = new loadedWasm.WasmRuntimeContext()
-  console.log('Setting env key values', get(envKeyValuesAtom))
   for (const [key, value] of get(envKeyValuesAtom)) {
     if (value !== null) {
-      console.log('Setting env', key, value)
       ctx.set_env(key, value)
     }
   }

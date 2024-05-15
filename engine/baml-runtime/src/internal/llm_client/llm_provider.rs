@@ -9,17 +9,25 @@ use super::{
     anthropic::AnthropicClient,
     openai::OpenAIClient,
     retry_policy::CallablePolicy,
+    roundrobin::{roundrobin_client::FnGetClientConfig, RoundRobinClient},
     traits::{WithCallable, WithPrompt, WithRetryPolicy, WithStreamable},
-    FunctionResultStream, LLMResponse,
+    FunctionResultStream, LLMResponse, LLMResponse,
 };
 
 pub enum LLMProvider {
     OpenAI(OpenAIClient),
     Anthropic(AnthropicClient),
+    RoundRobin(RoundRobinClient),
+    // Fallback(FallbackClient),
 }
 
 impl LLMProvider {
-    pub fn from_ir(client: &ClientWalker, ctx: &RuntimeContext) -> Result<LLMProvider> {
+    pub fn from_ir(
+        client: &ClientWalker,
+        ctx: &RuntimeContext,
+        get_client_config_cb: FnGetClientConfig,
+    ) -> Result<LLMProvider> {
+        // figure out if its roundrobin, later figure out fallback client
         match client.elem().provider.as_str() {
             "baml-openai-chat" | "openai" => {
                 OpenAIClient::new(client, ctx).map(LLMProvider::OpenAI)
@@ -29,6 +37,10 @@ impl LLMProvider {
             }
             "baml-ollama-chat" | "ollama" => {
                 OpenAIClient::new(client, ctx).map(LLMProvider::OpenAI)
+            }
+            "baml-roundrobin" | "roundrobin" => {
+                RoundRobinClient::new(client, ctx, get_client_config_cb)
+                    .map(LLMProvider::RoundRobin)
             }
             other => {
                 let options = ["openai", "anthropic", "ollama"];
@@ -52,6 +64,7 @@ impl<'ir> WithPrompt<'ir> for LLMProvider {
         match self {
             LLMProvider::OpenAI(client) => client.render_prompt(renderer, ctx, params),
             LLMProvider::Anthropic(client) => client.render_prompt(renderer, ctx, params),
+            LLMProvider::RoundRobin(client) => client.render_prompt(renderer, ctx, params),
         }
     }
 }
@@ -61,6 +74,7 @@ impl WithRetryPolicy for LLMProvider {
         match self {
             LLMProvider::OpenAI(client) => client.retry_policy_name(),
             LLMProvider::Anthropic(client) => client.retry_policy_name(),
+            LLMProvider::RoundRobin(client) => client.retry_policy_name(),
         }
     }
 }
@@ -70,11 +84,17 @@ impl WithCallable for LLMProvider {
         &self,
         retry_policy: Option<CallablePolicy>,
         ctx: &RuntimeContext,
-        prompt: &internal_baml_jinja::RenderedPrompt,
+        prompt: &PromptRenderer,
+        baml_args: &BamlArgType,
     ) -> LLMResponse {
         match self {
-            LLMProvider::OpenAI(client) => client.call(retry_policy, ctx, prompt).await,
-            LLMProvider::Anthropic(client) => client.call(retry_policy, ctx, prompt).await,
+            LLMProvider::OpenAI(client) => client.call(retry_policy, ctx, prompt, baml_args).await,
+            LLMProvider::Anthropic(client) => {
+                client.call(retry_policy, ctx, prompt, baml_args).await
+            }
+            LLMProvider::RoundRobin(client) => {
+                client.call(retry_policy, ctx, prompt, baml_args).await
+            }
         }
     }
 }

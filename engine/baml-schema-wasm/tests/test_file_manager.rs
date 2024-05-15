@@ -1,22 +1,25 @@
-#[cfg(test)]
-mod tests {
-    use std::collections::HashMap;
+// mod tests {
+use std::collections::HashMap;
 
-    use baml_schema_build::runtime_wasm::{WasmProject, WasmRuntime, WasmRuntimeContext};
+use baml_runtime::{FunctionResult, RuntimeContext, RuntimeInterface, TestResponse};
+use baml_schema_build::runtime_wasm::{WasmProject, WasmRuntime, WasmRuntimeContext};
 
-    use baml_runtime::{BamlRuntime, RuntimeContext};
-    use serde_wasm_bindgen::to_value;
-    use wasm_bindgen::JsValue;
-    use wasm_bindgen_test::*;
-    use wasm_logger;
+use baml_runtime::BamlRuntime;
 
-    // instantiate logger
+use indexmap::IndexMap;
+use serde_json::json;
+use serde_wasm_bindgen::to_value;
+use wasm_bindgen::JsValue;
+use wasm_bindgen_test::*;
+use wasm_logger;
 
-    // wasm_bindgen_test_configure!(run_in_browser);
+// instantiate logger
 
-    /// Sample BAML content for testing.
-    fn sample_baml_content() -> String {
-        r##"
+wasm_bindgen_test_configure!(run_in_browser);
+
+/// Sample BAML content for testing.
+fn sample_baml_content() -> String {
+    r##"
         generator lang_python {
             language python
             project_root "../"
@@ -43,9 +46,19 @@ mod tests {
             tracking_number string?
             estimated_arrival_date string?
         }
+
+        retry_policy RetryPolicy {
+            max_retries 3
+            strategy {
+              type constant_delay
+              delay_ms 1000
+            }
+          }
+          
         
         client<llm> GPT4Turbo {
             provider baml-openai-chat
+            retry_policy RetryPolicy
             options {
                 model gpt-4-1106-preview
                 api_key env.OPENAI_API_KEY
@@ -65,76 +78,110 @@ mod tests {
             }'
           "#
         }
+
+        
         "##
-        .to_string()
-    }
-
-    /// Tests the `new` constructor for successful creation with BAML content.
-    #[wasm_bindgen_test]
-    fn test_new_project_with_baml_content() {
-        wasm_logger::init(wasm_logger::Config::new(log::Level::Info));
-        let mut files = HashMap::new();
-        files.insert("main.baml".to_string(), sample_baml_content());
-        let files_js = to_value(&files).unwrap();
-        let project = WasmProject::new("baml_src", files_js);
-        assert!(project.is_ok());
-    }
-
-    /// Tests retrieving BAML files correctly with `files` method.
-    #[wasm_bindgen_test]
-    fn test_files_method_with_baml() {
-        let mut files = HashMap::new();
-        files.insert("main.baml".to_string(), sample_baml_content());
-        let files_js = to_value(&files).unwrap();
-        let project = WasmProject::new("baml_src", files_js)
-            .map_err(JsValue::from)
-            .unwrap();
-        assert_eq!(project.files().len(), 1);
-    }
-
-    /// Tests updating and removing BAML files.
-    #[wasm_bindgen_test]
-    fn test_update_and_remove_baml_file() {
-        wasm_logger::init(wasm_logger::Config::new(log::Level::Info));
-
-        let mut files = HashMap::new();
-        files.insert("main.baml".to_string(), sample_baml_content());
-        let files_js = to_value(&files).unwrap();
-        let mut project = WasmProject::new("baml_src", files_js)
-            .map_err(JsValue::from)
-            .unwrap();
-
-        // Update BAML file
-        let updated_content = "// A COMMENT".to_string();
-        project.update_file("main.baml", Some(updated_content.clone()));
-        let project_files = project.files();
-        assert!(project
-            .files()
-            .contains(&"main.bamlBAML_PATH_SPLTTER// A COMMENT".to_string()));
-
-        // Remove BAML file
-        project.update_file("main.baml", None);
-        assert!(project.files().is_empty());
-    }
-
-    #[wasm_bindgen_test]
-    fn test_diagnostics_no_errors() {
-        wasm_logger::init(wasm_logger::Config::new(log::Level::Info));
-
-        let mut files = HashMap::new();
-        files.insert("error.baml".to_string(), sample_baml_content());
-        let files_js = to_value(&files).unwrap();
-        let project = WasmProject::new("baml_src", files_js)
-            .map_err(JsValue::from)
-            .unwrap();
-
-        let wasm_runtime_ctx = WasmRuntimeContext::new();
-        let current_runtime = project
-            .runtime(&wasm_runtime_ctx)
-            .map_err(JsValue::from)
-            .unwrap();
-        let diagnostics = project.diagnostics(&current_runtime);
-
-        assert!(diagnostics.errors().is_empty());
-    }
+    .to_string()
 }
+
+/// Tests the `new` constructor for successful creation with BAML content.
+#[wasm_bindgen_test]
+fn test_new_project_with_baml_content() {
+    wasm_logger::init(wasm_logger::Config::new(log::Level::Info));
+    let mut files = HashMap::new();
+    files.insert("main.baml".to_string(), sample_baml_content());
+    let files_js = to_value(&files).unwrap();
+    let project = WasmProject::new("baml_src", files_js);
+    assert!(project.is_ok());
+}
+
+/// Tests retrieving BAML files correctly with `files` method.
+#[wasm_bindgen_test]
+fn test_files_method_with_baml() {
+    let mut files = HashMap::new();
+    files.insert("main.baml".to_string(), sample_baml_content());
+    let files_js = to_value(&files).unwrap();
+    let project = WasmProject::new("baml_src", files_js)
+        .map_err(JsValue::from)
+        .unwrap();
+    assert_eq!(project.files().len(), 1);
+}
+
+/// Tests updating and removing BAML files.
+#[wasm_bindgen_test]
+fn test_update_and_remove_baml_file() {
+    wasm_logger::init(wasm_logger::Config::new(log::Level::Info));
+
+    let mut files = HashMap::new();
+    files.insert("main.baml".to_string(), sample_baml_content());
+    let files_js = to_value(&files).unwrap();
+    let mut project = WasmProject::new("baml_src", files_js)
+        .map_err(JsValue::from)
+        .unwrap();
+
+    // Update BAML file
+    let updated_content = "// A COMMENT".to_string();
+    project.update_file("main.baml", Some(updated_content.clone()));
+    let project_files = project.files();
+    assert!(project
+        .files()
+        .contains(&"main.bamlBAML_PATH_SPLTTER// A COMMENT".to_string()));
+
+    // Remove BAML file
+    project.update_file("main.baml", None);
+    assert!(project.files().is_empty());
+}
+
+#[wasm_bindgen_test]
+fn test_diagnostics_no_errors() {
+    wasm_logger::init(wasm_logger::Config::new(log::Level::Info));
+
+    let mut files = HashMap::new();
+    files.insert("error.baml".to_string(), sample_baml_content());
+    let files_js = to_value(&files).unwrap();
+    let project = WasmProject::new("baml_src", files_js)
+        .map_err(JsValue::from)
+        .unwrap();
+
+    let wasm_runtime_ctx = WasmRuntimeContext::new();
+    let current_runtime = project
+        .runtime(&wasm_runtime_ctx)
+        .map_err(JsValue::from)
+        .unwrap();
+    let diagnostics = project.diagnostics(&current_runtime);
+
+    assert!(diagnostics.errors().is_empty());
+}
+// run with
+// baml-schema-wasm % wasm-pack test --firefox --headless --test test_file_manager -- test_call_function_retries
+#[wasm_bindgen_test]
+async fn test_call_function_retries() -> Result<(), Box<dyn std::error::Error>> {
+    wasm_logger::init(wasm_logger::Config::new(log::Level::Info));
+    let mut files: HashMap<&str, &str> = HashMap::new();
+    let sample_content = sample_baml_content();
+    files.insert("main.baml", &sample_content);
+
+    let ctx = RuntimeContext::new().add_env("OPENAI_API_KEY".into(), "API_KEY".to_string());
+    log::info!("Context: {:?}", ctx);
+
+    let mut runtime = BamlRuntime::from_file_content("baml_src", &files, &ctx);
+
+    // Replace the OPENAI_API_KEY value with the actual key
+    let ctx = RuntimeContext::new().add_env("OPENAI_API_KEY".into(), "OPENAI_API_KEY".to_string());
+
+    let mut params = IndexMap::new();
+
+    params.insert(
+        "input".to_string(),
+        json!("Attention Is All You Need. Mark. Hello."),
+    );
+
+    let res = runtime?
+        .call_function("GetOrderInfo".to_string(), &params, &ctx)
+        .await?;
+
+    log::info!("Result: {}", res);
+
+    Ok(())
+}
+//}

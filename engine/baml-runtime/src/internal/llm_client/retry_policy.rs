@@ -6,7 +6,7 @@ use internal_baml_core::{
 pub struct CallablePolicy {
     max_retries: u32,
     strategy: RetryPolicyStrategy,
-    current: std::time::Duration,
+    current: web_time::Duration,
     counter: u32,
 }
 
@@ -15,16 +15,16 @@ impl From<RetryPolicyWalker<'_>> for CallablePolicy {
         CallablePolicy {
             max_retries: policy.max_retries(),
             strategy: policy.strategy().clone(),
-            current: std::time::Duration::from_secs(0),
+            current: web_time::Duration::from_millis(0),
             counter: 0,
         }
     }
 }
 impl Iterator for CallablePolicy {
-    type Item = std::time::Duration;
+    type Item = web_time::Duration;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.counter > self.max_retries {
+        if self.counter >= self.max_retries {
             return None;
         }
 
@@ -40,7 +40,7 @@ impl Iterator for CallablePolicy {
             RetryPolicyStrategy::ConstantDelay(strategy) => strategy.delay_ms,
         };
 
-        self.current = std::time::Duration::from_millis(delay as u64);
+        self.current = web_time::Duration::from_millis(delay as u64);
         self.counter += 1;
 
         Some(self.current)

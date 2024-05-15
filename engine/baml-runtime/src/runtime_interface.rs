@@ -6,6 +6,7 @@ use internal_baml_core::ir::{repr::IntermediateRepr, FunctionWalker};
 use internal_baml_jinja::RenderedPrompt;
 use std::{collections::HashMap, sync::Arc};
 
+use crate::internal::llm_client::roundrobin::roundrobin_client::FnGetClientConfig;
 use crate::tracing::TracingSpan;
 use crate::{
     internal::{
@@ -96,6 +97,7 @@ pub trait InternalRuntimeInterface {
         &self,
         client_name: &str,
         ctx: &RuntimeContext,
+        // get_client_config_fn: Option<FnGetClientConfig>,
     ) -> Result<(Arc<LLMProvider>, Option<CallablePolicy>)>;
 
     fn get_function<'ir>(
@@ -103,6 +105,8 @@ pub trait InternalRuntimeInterface {
         function_name: &str,
         ctx: &RuntimeContext,
     ) -> Result<FunctionWalker<'ir>>;
+
+    fn create_client_config_callback(&self, ctx: &RuntimeContext) -> FnGetClientConfig;
 
     fn parse_response<'ir>(
         &'ir self,

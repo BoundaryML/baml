@@ -5,6 +5,7 @@ mod common;
 pub mod llm_provider;
 mod openai;
 pub mod retry_policy;
+pub mod roundrobin;
 mod state;
 pub mod traits;
 

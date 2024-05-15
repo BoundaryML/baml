@@ -2,8 +2,6 @@ mod error_utils;
 mod scope_diagnostics;
 mod to_baml_arg;
 
-
-
 use crate::{
     error_not_found, error_unsupported,
     ir::{

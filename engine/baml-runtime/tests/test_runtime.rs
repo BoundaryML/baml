@@ -25,7 +25,7 @@ mod internal_tests {
         //         "/Users/aaronvillalpando/Projects/baml/integ-tests/baml_src/ExtractNames.baml",
         //     ),
         // ];
-        let mut files = HashMap::new();
+        let mut files: HashMap<&str, &str> = HashMap::new();
         files.insert(
             "main.baml",
             r##"
