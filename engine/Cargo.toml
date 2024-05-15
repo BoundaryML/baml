@@ -41,6 +41,7 @@ futures = { version = "0.3.30", features = ["executor"] }
 log = "0.4.20"
 indexmap = { version = "2.1.0", features = ["serde"] }
 indoc = "2.0.1"
+instant = "0.1"
 regex = "1.10.4"
 serde_json = { version = "1", features = ["float_roundtrip", "preserve_order"] }
 serde = { version = "1", features = ["derive"] }

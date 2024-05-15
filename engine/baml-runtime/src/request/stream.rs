@@ -80,6 +80,7 @@ impl OpenAiStream
 
 #[cfg(feature = "wasm")]
 #[cfg(test)]
+//#[cfg(features = "wasm")]
 pub mod tests {
     use super::*;
     use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};

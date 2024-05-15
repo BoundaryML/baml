@@ -177,4 +177,4 @@ impl std::fmt::Display for LLMCompleteResponse {
     }
 }
 
-pub type FunctionResultStream = Pin<Box<dyn Stream<Item = FunctionResult> + Send>>;
+pub type LLMResponseStream = futures::stream::LocalBoxStream<'static, anyhow::Result<LLMResponse>>;

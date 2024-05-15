@@ -6,6 +6,7 @@ use baml_types::BamlImage;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
 
+use reqwest::RequestBuilder;
 use serde_json::json;
 
 use crate::internal::llm_client::{
@@ -14,7 +15,7 @@ use crate::internal::llm_client::{
         WithChat, WithClient, WithNoCompletion, WithRetryPolicy, WithStreamChat,
         WithStreamCompletion,
     },
-    FunctionResultStream, LLMResponse, ModelFeatures,
+    LLMResponse, LLMResponseStream, ModelFeatures,
 };
 
 use crate::RuntimeContext;
@@ -277,6 +278,127 @@ impl WithStreamChat for OpenAIClient {
 }
 
 impl OpenAIClient {
+    async fn stream_chat2(
+        &self,
+        ctx: &RuntimeContext,
+        prompt: &Vec<RenderedChatMessage>,
+    ) -> Result<SseResponse> {
+        use crate::internal::llm_client::{
+            openai::types::{ChatCompletionResponse, FinishReason, OpenAIErrorResponse},
+            ErrorCode, LLMCompleteResponse, LLMErrorResponse,
+        };
+
+        let req = self.build_http_request_universal(ctx, "/v1/chat/completions", prompt)?;
+
+        match self.internal_state.clone().lock() {
+            Ok(mut state) => {
+                state.call_count += 1;
+            }
+            Err(e) => {
+                log::warn!("Failed to increment call count for OpenAIClient: {:#?}", e);
+            }
+        }
+        Ok(SseResponse {
+            req,
+            prompt: prompt.clone(),
+            client: self.context.name.to_string(),
+        })
+        //Ok(SseResponse { req, stream: res })
+        //Ok(Box::pin(res))
+
+        //let status = res.status();
+
+        // Raise for status.
+        // if !status.is_success() {
+        //     let err_code = ErrorCode::from_status(status);
+
+        //     let err_message = match res.json::<serde_json::Value>().await {
+        //         Ok(body) => match serde_json::from_value::<OpenAIErrorResponse>(body) {
+        //             Ok(err) => format!("API Error ({}): {}", err.error.r#type, err.error.message),
+        //             Err(e) => format!("Does this support the OpenAI Response type?\n{:#?}", e),
+        //         },
+        //         Err(e) => {
+        //             format!("Does this support the OpenAI Response type?\n{:#?}", e)
+        //         }
+        //     };
+
+        //     return Ok(LLMResponse::LLMFailure(LLMErrorResponse {
+        //         client: self.context.name.to_string(),
+        //         model: None,
+        //         prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
+        //         start_time_unix_ms: now
+        //             .duration_since(std::time::UNIX_EPOCH)
+        //             .unwrap()
+        //             .as_millis() as u64,
+        //         latency_ms: now.elapsed().unwrap().as_millis() as u64,
+        //         message: err_message,
+        //         code: err_code,
+        //     }));
+        // }
+
+        // let body = match res.json::<ChatCompletionResponse>().await {
+        //     Ok(body) => body,
+        //     Err(e) => {
+        //         return Ok(LLMResponse::LLMFailure(LLMErrorResponse {
+        //             client: self.context.name.to_string(),
+        //             model: None,
+        //             prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
+        //             start_time_unix_ms: now
+        //                 .duration_since(std::time::UNIX_EPOCH)
+        //                 .unwrap()
+        //                 .as_millis() as u64,
+        //             latency_ms: now.elapsed().unwrap().as_millis() as u64,
+        //             message: format!("Does this support the OpenAI Response type?\n{:#?}", e),
+        //             code: ErrorCode::UnsupportedResponse(status.as_u16()),
+        //         }));
+        //     }
+        // };
+
+        // if body.choices.len() < 1 {
+        //     return Ok(LLMResponse::LLMFailure(LLMErrorResponse {
+        //         client: self.context.name.to_string(),
+        //         model: None,
+        //         prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
+        //         start_time_unix_ms: now
+        //             .duration_since(std::time::UNIX_EPOCH)
+        //             .unwrap()
+        //             .as_millis() as u64,
+        //         latency_ms: now.elapsed().unwrap().as_millis() as u64,
+        //         message: format!("No content in response:\n{:#?}", body),
+        //         code: ErrorCode::Other(status.as_u16()),
+        //     }));
+        // }
+
+        // let usage = body.usage.as_ref();
+
+        // Ok(LLMResponse::Success(LLMCompleteResponse {
+        //     client: self.context.name.to_string(),
+        //     prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
+        //     content: body.choices[0]
+        //         .message
+        //         .content
+        //         .as_ref()
+        //         .map_or("", |s| s.as_str())
+        //         .to_string(),
+        //     start_time_unix_ms: now
+        //         .duration_since(std::time::UNIX_EPOCH)
+        //         .unwrap()
+        //         .as_millis() as u64,
+        //     latency_ms: now.elapsed().unwrap().as_millis() as u64,
+        //     model: body.model,
+        //     metadata: json!({
+        //         "baml_is_complete": match body.choices[0].finish_reason {
+        //             None => true,
+        //             Some(FinishReason::Stop) => true,
+        //             _ => false,
+        //         },
+        //         "finish_reason": body.choices[0].finish_reason,
+        //         "prompt_tokens": usage.map(|u| u.prompt_tokens),
+        //         "output_tokens": usage.map(|u| u.completion_tokens),
+        //         "total_tokens": usage.map(|u| u.total_tokens),
+        //     }),
+        // }))
+    }
     pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<OpenAIClient> {
         Ok(Self {
             properties: resolve_properties(client, ctx)?,

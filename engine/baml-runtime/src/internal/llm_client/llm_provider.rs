@@ -10,7 +10,7 @@ use super::{
     openai::OpenAIClient,
     retry_policy::CallablePolicy,
     traits::{WithCallable, WithPrompt, WithRetryPolicy, WithStreamable},
-    FunctionResultStream, LLMResponse,
+    LLMResponse, LLMResponseStream,
 };
 
 pub enum LLMProvider {
@@ -85,7 +85,7 @@ impl WithStreamable for LLMProvider {
         _retry_policy: Option<CallablePolicy>,
         _ctx: &RuntimeContext,
         _prompt: &internal_baml_jinja::RenderedPrompt,
-    ) -> FunctionResultStream {
+    ) -> LLMResponseStream {
         todo!()
     }
 }

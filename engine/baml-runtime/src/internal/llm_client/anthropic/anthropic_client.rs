@@ -17,7 +17,7 @@ use crate::internal::llm_client::{
         WithChat, WithClient, WithNoCompletion, WithRetryPolicy, WithStreamChat,
         WithStreamCompletion,
     },
-    FunctionResultStream, LLMResponse, ModelFeatures,
+    LLMResponse, LLMResponseStream, ModelFeatures,
 };
 
 use crate::RuntimeContext;

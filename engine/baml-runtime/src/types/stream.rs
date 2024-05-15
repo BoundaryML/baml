@@ -7,7 +7,6 @@ use std::sync::Arc;
 use stream_cancel::{StreamExt as CancellableStreamExt, TakeUntilIf, Trigger, Tripwire};
 use tokio::sync::Mutex;
 
-use crate::internal::llm_client::FunctionResultStream as InternalFunctionResultStream;
 use crate::FunctionResult;
 
 type StreamCallback = Box<dyn Fn(BamlValue) -> Result<()> + Send>;
@@ -34,7 +33,7 @@ impl CancelStreamTrigger {
 }
 
 pub struct FunctionResultStream {
-    inner: TakeUntilIf<InternalFunctionResultStream, Tripwire>,
+    inner: TakeUntilIf<BoxStream<'static, FunctionResult>, Tripwire>,
     on_event: Option<StreamCallback>,
     cancelme: CancelStreamTrigger,
 }
@@ -42,7 +41,7 @@ pub struct FunctionResultStream {
 static_assertions::assert_impl_all!(FunctionResultStream: Send);
 
 impl FunctionResultStream {
-    pub fn from(inner: InternalFunctionResultStream) -> Self {
+    pub fn from(inner: BoxStream<'static, FunctionResult>) -> Self {
         let (trigger, tripwire) = Tripwire::new();
         Self {
             inner: inner.take_until_if(tripwire),

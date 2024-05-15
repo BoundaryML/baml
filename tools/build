@@ -120,9 +120,11 @@ case "$_path" in
   /engine/baml-runtime | /engine/baml-runtime/* )
     if [ "$_test_mode" -eq 1 ]; then
       command="wasm-pack test --chrome . --features=wasm"
+      #command="wasm-pack test --node . --features=wasm"
     else
       command="cargo build --features=wasm --target=wasm32-unknown-unknown"
     fi
+    #command="cargo test --features=no_wasm"
 
     if [ "$_watch_mode" -eq 1 ]; then
       npx nodemon \

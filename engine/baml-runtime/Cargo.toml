@@ -19,6 +19,7 @@ futures.workspace = true
 indexmap.workspace = true
 json_comments = "0.2.2"
 jsonish = { path = "../baml-lib/jsonish" }
+instant.workspace = true
 internal-baml-codegen.workspace = true
 baml-types = { path = "../baml-lib/baml-types" }
 internal-baml-core = { path = "../baml-lib/baml-core" }

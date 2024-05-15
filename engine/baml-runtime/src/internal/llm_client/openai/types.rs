@@ -16,7 +16,7 @@ pub struct ChatCompletionResponse {
     /// Can be used in conjunction with the `seed` request parameter to understand when backend changes have been made that might impact determinism.
     pub system_fingerprint: Option<String>,
 
-    /// The object type, which is always `chat.completion`.
+    /// The object type, which is `chat.completion` for non-streaming chat completion, `chat.completion.chunk` for streaming chat completion.
     pub object: String,
     pub usage: Option<CompletionUsage>,
 }

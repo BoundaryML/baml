@@ -48,7 +48,7 @@ pub trait WithStreamable: Send {
         retry_policy: Option<CallablePolicy>,
         ctx: &RuntimeContext,
         prompt: &RenderedPrompt,
-    ) -> FunctionResultStream;
+    ) -> LLMResponseStream;
 }
 
 pub trait WithSingleCallable {

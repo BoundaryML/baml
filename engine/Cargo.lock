@@ -473,6 +473,7 @@ dependencies = [
  "hostname",
  "indexmap 2.2.5",
  "indoc",
+ "instant",
  "internal-baml-codegen",
  "internal-baml-core",
  "internal-baml-jinja",

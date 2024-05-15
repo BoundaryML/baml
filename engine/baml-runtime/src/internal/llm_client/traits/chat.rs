@@ -2,7 +2,7 @@ use anyhow::Result;
 use internal_baml_jinja::{ChatOptions, RenderedChatMessage};
 
 use crate::{
-    internal::llm_client::{FunctionResultStream, LLMResponse},
+    internal::llm_client::{LLMResponse, LLMResponseStream},
     RuntimeContext,
 };
 
@@ -21,7 +21,7 @@ pub trait WithStreamChat: Sync + Send {
         &self,
         ctx: &RuntimeContext,
         prompt: &Vec<RenderedChatMessage>,
-    ) -> FunctionResultStream;
+    ) -> Result<LLMResponseStream>;
 }
 
 // pub trait WithChatStream: WithChat {
