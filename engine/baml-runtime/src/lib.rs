@@ -28,7 +28,7 @@ use runtime::InternalBamlRuntime;
 
 #[cfg(feature = "no_wasm")]
 pub use cli::CallerType;
-use runtime_interface::ExerimentalTracingInterface;
+use runtime_interface::ExperimentalTracingInterface;
 use runtime_interface::RuntimeConstructor;
 pub use runtime_interface::RuntimeInterface;
 use tracing::{BamlTracer, TracingSpan};
@@ -153,7 +153,7 @@ impl RuntimeInterface for BamlRuntime {
     }
 }
 
-impl ExerimentalTracingInterface for BamlRuntime {
+impl ExperimentalTracingInterface for BamlRuntime {
     fn start_span(
         &self,
         function_name: &str,

@@ -6,13 +6,15 @@ use crate::{
     RuntimeContext,
 };
 
-type ResponseType = Result<LLMResponse>;
-
 pub trait WithChat: Sync + Send {
     fn chat_options(&self, ctx: &RuntimeContext) -> Result<ChatOptions>;
 
     #[allow(async_fn_in_trait)]
-    async fn chat(&self, ctx: &RuntimeContext, prompt: &Vec<RenderedChatMessage>) -> ResponseType;
+    async fn chat(
+        &self,
+        ctx: &RuntimeContext,
+        prompt: &Vec<RenderedChatMessage>,
+    ) -> Result<LLMResponse>;
 }
 
 pub trait WithStreamChat: Sync + Send {
@@ -23,24 +25,6 @@ pub trait WithStreamChat: Sync + Send {
         prompt: &Vec<RenderedChatMessage>,
     ) -> Result<LLMResponseStream>;
 }
-
-// pub trait WithChatStream: WithChat {
-//     fn stream_chat(
-//         &mut self,
-//         ctx: &RuntimeContext,
-//         prompt: &Vec<RenderedChatMessage>,
-//     ) -> impl Stream<Item = Result<LLMStreamResponse>> {
-//         stream! {
-//             let response = self.chat(ctx, prompt).await?;
-//             yield Ok(LLMStreamResponse {
-//                 delta: response.content(),
-//                 start_time_unix_ms: response.start_time_unix_ms,
-//                 latency_ms: response.latency_ms,
-//                 metadata: response.metadata,
-//             });
-//         }
-//     }
-// }
 
 pub trait WithNoChat {}
 
@@ -54,13 +38,13 @@ where
 
     #[cfg(not(feature = "no_wasm"))]
     #[allow(async_fn_in_trait)]
-    async fn chat(&self, _: &RuntimeContext, _: &Vec<RenderedChatMessage>) -> ResponseType {
+    async fn chat(&self, _: &RuntimeContext, _: &Vec<RenderedChatMessage>) -> Result<LLMResponse> {
         anyhow::bail!("Chat prompts are not supported by this provider")
     }
 
     #[cfg(feature = "no_wasm")]
     #[allow(async_fn_in_trait)]
-    async fn chat(&self, _: &RuntimeContext, _: &Vec<RenderedChatMessage>) -> ResponseType {
+    async fn chat(&self, _: &RuntimeContext, _: &Vec<RenderedChatMessage>) -> Result<LLMResponse> {
         anyhow::bail!("Chat prompts are not supported by this provider")
     }
 }

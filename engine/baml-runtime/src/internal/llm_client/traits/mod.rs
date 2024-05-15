@@ -22,11 +22,6 @@ pub trait WithRetryPolicy {
     fn retry_policy_name(&self) -> Option<&str>;
 }
 
-// #[cfg(not(feature = "no_wasm"))]
-// type ResponseType = Result<LLMResponse, wasm_bindgen::JsValue>;
-// #[cfg(feature = "no_wasm")]
-type ResponseType = Result<LLMResponse>;
-
 pub trait WithCallable: Send {
     /// Call the model with the specified prompt, retrying as appropriate.
     ///
@@ -53,7 +48,11 @@ pub trait WithStreamable: Send {
 
 pub trait WithSingleCallable {
     #[allow(async_fn_in_trait)]
-    async fn single_call(&self, ctx: &RuntimeContext, prompt: &RenderedPrompt) -> ResponseType;
+    async fn single_call(
+        &self,
+        ctx: &RuntimeContext,
+        prompt: &RenderedPrompt,
+    ) -> Result<LLMResponse>;
 }
 
 pub trait WithClient {
@@ -171,7 +170,11 @@ where
     T: WithClient + WithChat + WithCompletion,
 {
     #[allow(async_fn_in_trait)]
-    async fn single_call(&self, ctx: &RuntimeContext, prompt: &RenderedPrompt) -> ResponseType {
+    async fn single_call(
+        &self,
+        ctx: &RuntimeContext,
+        prompt: &RenderedPrompt,
+    ) -> Result<LLMResponse> {
         match self.model_features() {
             ModelFeatures {
                 completion: true,

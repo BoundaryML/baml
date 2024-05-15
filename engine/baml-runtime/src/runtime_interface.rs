@@ -27,11 +27,6 @@ pub(crate) trait RuntimeConstructor {
     ) -> Result<InternalBamlRuntime>;
 }
 
-// #[cfg(not(feature = "no_wasm"))]
-// type ResponseType<T> = Result<T, wasm_bindgen::JsValue>;
-// #[cfg(feature = "no_wasm")]
-type ResponseType<T> = Result<T>;
-
 // This is a runtime that has full access (disk, network, etc) - feature full
 pub trait RuntimeInterface {
     fn run_test(
@@ -39,14 +34,14 @@ pub trait RuntimeInterface {
         function_name: &str,
         test_name: &str,
         ctx: &RuntimeContext,
-    ) -> impl std::future::Future<Output = ResponseType<TestResponse>>;
+    ) -> impl std::future::Future<Output = Result<TestResponse>>;
 
     fn call_function(
         &self,
         function_name: String,
         params: IndexMap<String, BamlValue>,
         ctx: &RuntimeContext,
-    ) -> impl std::future::Future<Output = ResponseType<FunctionResult>>;
+    ) -> impl std::future::Future<Output = Result<FunctionResult>>;
 
     fn stream_function(
         &self,
@@ -67,7 +62,7 @@ pub trait RuntimeInterface {
 // These are UNSTABLE, and should be considered as a work in progress
 //
 
-pub trait ExerimentalTracingInterface {
+pub trait ExperimentalTracingInterface {
     fn start_span(
         &self,
         function_name: &str,

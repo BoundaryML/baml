@@ -208,18 +208,13 @@ impl RuntimeConstructor for InternalBamlRuntime {
     }
 }
 
-// #[cfg(not(feature = "no_wasm"))]
-// type ResponseType<T> = Result<T, wasm_bindgen::JsValue>;
-// #[cfg(feature = "no_wasm")]
-type ResponseType<T> = Result<T>;
-
 impl RuntimeInterface for InternalBamlRuntime {
     async fn run_test(
         &self,
         function_name: &str,
         test_name: &str,
         ctx: &RuntimeContext,
-    ) -> ResponseType<TestResponse> {
+    ) -> Result<TestResponse> {
         let func = self.get_function(function_name, ctx)?;
         let test = self.ir().find_test(&func, test_name)?;
 
@@ -283,7 +278,7 @@ impl RuntimeInterface for InternalBamlRuntime {
         function_name: String,
         params: IndexMap<String, BamlValue>,
         ctx: &RuntimeContext,
-    ) -> ResponseType<crate::FunctionResult> {
+    ) -> Result<crate::FunctionResult> {
         let func = self.get_function(&function_name, ctx)?;
         let baml_args = self.ir().check_function_params(&func, &params)?;
 
