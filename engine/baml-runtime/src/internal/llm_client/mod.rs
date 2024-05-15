@@ -178,3 +178,4 @@ impl std::fmt::Display for LLMCompleteResponse {
 }
 
 pub type LLMResponseStream = futures::stream::LocalBoxStream<'static, anyhow::Result<LLMResponse>>;
+pub use openai::SseResponse;

@@ -78,14 +78,3 @@ impl WithCallable for LLMProvider {
         }
     }
 }
-
-impl WithStreamable for LLMProvider {
-    async fn stream(
-        &self,
-        _retry_policy: Option<CallablePolicy>,
-        _ctx: &RuntimeContext,
-        _prompt: &internal_baml_jinja::RenderedPrompt,
-    ) -> LLMResponseStream {
-        todo!()
-    }
-}

@@ -19,7 +19,7 @@ use std::sync::Arc;
 use crate::internal::llm_client::{llm_provider::LLMProvider, retry_policy::CallablePolicy};
 
 pub struct InternalBamlRuntime {
-    ir: IntermediateRepr,
+    ir: Arc<IntermediateRepr>,
     diagnostics: Diagnostics,
     clients: DashMap<String, (Arc<LLMProvider>, Option<CallablePolicy>)>,
 }
@@ -43,7 +43,7 @@ impl InternalBamlRuntime {
 
         let ir = IntermediateRepr::from_parser_database(&schema.db)?;
         Ok(InternalBamlRuntime {
-            ir,
+            ir: Arc::new(ir),
             diagnostics: schema.diagnostics,
             clients: DashMap::new(),
         })
@@ -64,7 +64,7 @@ impl InternalBamlRuntime {
         let ir = IntermediateRepr::from_parser_database(&schema.db)?;
 
         Ok(Self {
-            ir,
+            ir: Arc::new(ir),
             diagnostics: schema.diagnostics,
             clients: DashMap::new(),
         })

@@ -122,7 +122,8 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
     }
 
     fn ir(&self) -> &IntermediateRepr {
-        &self.ir
+        use std::ops::Deref;
+        &self.ir.deref()
     }
 }
 
@@ -149,7 +150,7 @@ impl RuntimeConstructor for InternalBamlRuntime {
         log::info!("Diagnostics: {:#?}", schema.diagnostics);
 
         Ok(Self {
-            ir,
+            ir: Arc::new(ir),
             diagnostics: schema.diagnostics,
             clients: DashMap::new(),
         })
@@ -298,14 +299,29 @@ impl RuntimeInterface for InternalBamlRuntime {
         Ok(parsed)
     }
 
-    fn stream_function(
+    async fn stream_function(
         &self,
-        _function_name: String,
-        _params: &IndexMap<String, serde_json::Value>,
-        _ctx: &RuntimeContext,
-    ) -> FunctionResultStream {
-        todo!()
-        //LLMResponseStream::new()
+        function_name: String,
+        params: IndexMap<String, BamlValue>,
+        ctx: &RuntimeContext,
+    ) -> Result<FunctionResultStream> {
+        let func = self.get_function(&function_name, ctx)?;
+        let baml_args = self.ir().check_function_params(&func, &params)?;
+
+        let renderer = PromptRenderer::from_function(&func)?;
+        let client_name = renderer.client_name().to_string();
+
+        let (llm_provider, retry_policy) = self.get_client(&client_name, ctx)?;
+        let prompt = llm_provider.render_prompt(&renderer, &ctx, &baml_args)?;
+
+        use std::ops::Deref;
+        let stream = match llm_provider.deref() {
+            LLMProvider::OpenAI(client) => client.stream_chat2(retry_policy, ctx, &prompt),
+            LLMProvider::Anthropic(client) => todo!(),
+        }?;
+
+        use futures::StreamExt;
+        FunctionResultStream::from(stream)
     }
 
     #[cfg(feature = "no_wasm")]

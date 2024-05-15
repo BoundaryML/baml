@@ -46,9 +46,9 @@ pub trait RuntimeInterface {
     fn stream_function(
         &self,
         function_name: String,
-        params: &IndexMap<String, serde_json::Value>,
+        params: IndexMap<String, BamlValue>,
         ctx: &RuntimeContext,
-    ) -> FunctionResultStream;
+    ) -> impl std::future::Future<Output = Result<FunctionResultStream>>;
 
     #[cfg(feature = "no_wasm")]
     fn generate_client(

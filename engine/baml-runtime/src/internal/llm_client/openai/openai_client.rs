@@ -4,11 +4,14 @@ use std::sync::{Arc, Mutex};
 use anyhow::{Context, Result};
 use baml_types::BamlImage;
 use internal_baml_core::ir::ClientWalker;
-use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
+use internal_baml_jinja::{
+    ChatMessagePart, RenderContext_Client, RenderedChatMessage, RenderedPrompt,
+};
 
 use reqwest::RequestBuilder;
 use serde_json::json;
 
+use crate::internal::llm_client::retry_policy::CallablePolicy;
 use crate::internal::llm_client::{
     state::LlmClientState,
     traits::{
@@ -260,7 +263,7 @@ impl WithChat for OpenAIClient {
     }
 }
 
-struct SseResponse {
+pub struct SseResponse {
     req: RequestBuilder,
     client: String,
     prompt: Vec<RenderedChatMessage>,
@@ -307,11 +310,15 @@ impl SseResponse {
 }
 
 impl OpenAIClient {
-    async fn stream_chat2(
+    pub fn stream_chat2(
         &self,
+        _retry_policy: Option<CallablePolicy>,
         ctx: &RuntimeContext,
-        prompt: &Vec<RenderedChatMessage>,
+        prompt: &internal_baml_jinja::RenderedPrompt,
     ) -> Result<SseResponse> {
+        let RenderedPrompt::Chat(prompt) = prompt else {
+            anyhow::bail!("Expected a chat prompt, got: {:#?}", prompt);
+        };
         use crate::internal::llm_client::{
             openai::types::{ChatCompletionResponse, FinishReason, OpenAIErrorResponse},
             ErrorCode, LLMCompleteResponse, LLMErrorResponse,

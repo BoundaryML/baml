@@ -1,13 +1,19 @@
 use anyhow::Result;
 use baml_types::BamlValue;
 
-use futures::stream::{BoxStream, StreamExt, TryStreamExt};
+use futures::{
+    stream::{BoxStream, StreamExt, TryStreamExt},
+    Stream,
+};
+use internal_baml_jinja::RenderedChatMessage;
 use std::ops::DerefMut;
 use std::sync::Arc;
 use stream_cancel::{StreamExt as CancellableStreamExt, TakeUntilIf, Trigger, Tripwire};
 use tokio::sync::Mutex;
 
-use crate::FunctionResult;
+use crate::{internal::llm_client::SseResponse, FunctionResult};
+
+use super::response::LLMResponse;
 
 type StreamCallback = Box<dyn Fn(BamlValue) -> Result<()> + Send>;
 
@@ -33,7 +39,7 @@ impl CancelStreamTrigger {
 }
 
 pub struct FunctionResultStream {
-    inner: TakeUntilIf<BoxStream<'static, FunctionResult>, Tripwire>,
+    inner: SseResponse,
     on_event: Option<StreamCallback>,
     cancelme: CancelStreamTrigger,
 }
@@ -41,35 +47,38 @@ pub struct FunctionResultStream {
 static_assertions::assert_impl_all!(FunctionResultStream: Send);
 
 impl FunctionResultStream {
-    pub fn from(inner: BoxStream<'static, FunctionResult>) -> Self {
+    pub fn from(inner: SseResponse) -> Result<Self> {
         let (trigger, tripwire) = Tripwire::new();
-        Self {
-            inner: inner.take_until_if(tripwire),
+        Ok(Self {
+            inner: inner,
             on_event: None,
             cancelme: CancelStreamTrigger {
                 trigger: Arc::new(Mutex::new(Some(trigger))),
             },
-        }
+        })
     }
 
     pub async fn run(self) -> Result<FunctionResult> {
-        self.inner
-            .then(|fn_result| async {
-                let parsed = BamlValue::from(fn_result.parsed_content()?);
-                match self.on_event {
-                    None => Ok(fn_result),
-                    Some(ref cb) => match cb(parsed) {
-                        Ok(_) => Ok(fn_result),
-                        Err(e) => Err(e),
-                    },
-                }
-            })
-            .into_stream()
-            .fold(
-                Err(anyhow::anyhow!("Stream failed to start")),
-                |_, event| async move { Ok(event) },
-            )
-            .await?
+        todo!()
+        //self.inner
+        //    .stream()
+        //    .await?
+        //    .then(|fn_result| async {
+        //        let parsed = BamlValue::from(fn_result?.content()?);
+        //        match self.on_event {
+        //            None => Ok(fn_result),
+        //            Some(ref cb) => match cb(parsed) {
+        //                Ok(_) => Ok(fn_result),
+        //                Err(e) => Err(e),
+        //            },
+        //        }
+        //    })
+        //    .into_stream()
+        //    .fold(
+        //        Err(anyhow::anyhow!("Stream failed to start")),
+        //        |_, event| async move { Ok(event) },
+        //    )
+        //    .await
     }
 
     pub async fn get_cancel_trigger(&self) -> CancelStreamTrigger {
