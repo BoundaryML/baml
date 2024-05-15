@@ -128,263 +128,131 @@ impl WithChat for OpenAIClient {
         ))
     }
 
-    #[cfg(not(feature = "no_wasm"))]
     async fn chat(
         &self,
         ctx: &RuntimeContext,
         prompt: &Vec<RenderedChatMessage>,
     ) -> Result<LLMResponse> {
-        use wasm_bindgen::JsCast;
-        use web_sys::Response;
-        use web_time::SystemTime;
-
-        use crate::internal::llm_client::{
-            openai::types::{ChatCompletionResponse, FinishReason, OpenAIErrorResponse},
-            ErrorCode, LLMCompleteResponse, LLMErrorResponse,
+        use crate::{
+            internal::llm_client::{
+                openai::types::{ChatCompletionResponse, FinishReason, OpenAIErrorResponse},
+                ErrorCode, LLMCompleteResponse, LLMErrorResponse,
+            },
+            request::{self, RequestError},
         };
-        let request = self.build_http_request(ctx, "/v1/chat/completions", prompt)?;
-        let window = match web_sys::window() {
-            Some(w) => w,
-            None => {
-                return Ok(LLMResponse::OtherFailures(
-                    "Failed to get window object".into(),
-                ));
+
+        let mut body = json!(self.properties.properties);
+        body.as_object_mut().unwrap().insert(
+            "messages".into(),
+            prompt
+                .iter()
+                .map(|m| {
+                    json!({
+                        "role": m.role,
+                        "content": convert_message_parts_to_content(&m.parts)
+                    })
+                })
+                .collect::<serde_json::Value>(),
+        );
+
+        let mut headers = HashMap::default();
+        match &self.properties.api_key {
+            Some(key) => {
+                headers.insert("Authorization".to_string(), format!("Bearer {}", key));
             }
-        };
-
-        let now = SystemTime::now();
-        let resp_value = wasm_bindgen_futures::JsFuture::from(window.fetch_with_request(&request))
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to fetch request: {:#?}", e))?;
-
-        // `resp_value` is a `Response` object.
-        assert!(resp_value.is_instance_of::<Response>());
-        let resp: Response = resp_value
-            .dyn_into()
-            .map_err(|e| anyhow::anyhow!("Failed to convert response to Response: {:#?}", e))?;
-
-        let status = resp.status();
-        if status != 200 {
-            let json = resp.json().map_err(|e| anyhow::anyhow!("{:#?}", e))?;
-            let err_message = match wasm_bindgen_futures::JsFuture::from(json).await {
-                Ok(body) => {
-                    let body =
-                        serde_wasm_bindgen::from_value::<serde_json::Value>(body).map_err(|e| {
-                            anyhow::anyhow!("Failed to convert response to JSON: {:#?}", e)
-                        })?;
-                    let err_message = match serde_json::from_value::<OpenAIErrorResponse>(body) {
-                        Ok(err) => {
-                            format!("API Error ({}): {}", err.error.r#type, err.error.message)
-                        }
-                        Err(e) => format!("Does this support the OpenAI Response type?\n{:#?}", e),
-                    };
-                    err_message
-                }
-                Err(e) => {
-                    format!("Does this support the OpenAI Response type?\n{:#?}", e)
-                }
-            };
-            return Ok(LLMResponse::LLMFailure(LLMErrorResponse {
-                client: self.context.name.to_string(),
-                model: None,
-                prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
-                start_time_unix_ms: now
-                    .duration_since(web_time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_millis() as u64,
-                latency_ms: now.elapsed().unwrap().as_millis() as u64,
-                message: err_message,
-                code: ErrorCode::Other(status),
-            }));
+            None => {}
+        }
+        for (k, v) in &self.properties.headers {
+            headers.insert(k.to_string(), v.to_string());
         }
 
-        let body = resp.json().map_err(|e| anyhow::anyhow!("{:#?}", e))?;
-        let response = wasm_bindgen_futures::JsFuture::from(body)
-            .await
-            .map_err(|e| {
-                anyhow::anyhow!("Does this support the OpenAI Response type?\n{:#?}", e)
-            })?;
-        let body = match serde_wasm_bindgen::from_value::<ChatCompletionResponse>(response.clone())
+        let now = web_time::SystemTime::now();
+        match request::call_request_with_json::<ChatCompletionResponse, _>(
+            &format!("{}{}", self.properties.base_url, "/v1/chat/completions"),
+            &body,
+            Some(headers),
+        )
+        .await
         {
-            Ok(body) => body,
-            Err(e) => {
-                return Ok(LLMResponse::LLMFailure(LLMErrorResponse {
+            Ok(body) => {
+                if body.choices.len() < 1 {
+                    return Ok(LLMResponse::LLMFailure(LLMErrorResponse {
+                        client: self.context.name.to_string(),
+                        model: None,
+                        prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
+                        start_time_unix_ms: now
+                            .duration_since(web_time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_millis() as u64,
+                        latency_ms: now.elapsed().unwrap().as_millis() as u64,
+                        message: format!("No content in response:\n{:#?}", body),
+                        code: ErrorCode::Other(200),
+                    }));
+                }
+
+                let usage = body.usage.as_ref();
+
+                Ok(LLMResponse::Success(LLMCompleteResponse {
                     client: self.context.name.to_string(),
-                    model: None,
                     prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
+                    content: body.choices[0]
+                        .message
+                        .content
+                        .as_ref()
+                        .map_or("", |s| s.as_str())
+                        .to_string(),
                     start_time_unix_ms: now
                         .duration_since(web_time::UNIX_EPOCH)
                         .unwrap()
                         .as_millis() as u64,
                     latency_ms: now.elapsed().unwrap().as_millis() as u64,
-                    message: e.to_string(),
-                    code: ErrorCode::UnsupportedResponse(status),
-                }));
+                    model: body.model,
+                    metadata: json!({
+                        "baml_is_complete": match body.choices[0].finish_reason {
+                            None => true,
+                            Some(FinishReason::Stop) => true,
+                            _ => false,
+                        },
+                        "finish_reason": body.choices[0].finish_reason,
+                        "prompt_tokens": usage.map(|u| u.prompt_tokens),
+                        "output_tokens": usage.map(|u| u.completion_tokens),
+                        "total_tokens": usage.map(|u| u.total_tokens),
+                    }),
+                }))
             }
-        };
-
-        if body.choices.len() < 1 {
-            return Ok(LLMResponse::LLMFailure(LLMErrorResponse {
-                client: self.context.name.to_string(),
-                model: None,
-                prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
-                start_time_unix_ms: now
-                    .duration_since(web_time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_millis() as u64,
-                latency_ms: now.elapsed().unwrap().as_millis() as u64,
-                message: format!("No content in response:\n{:#?}", body),
-                code: ErrorCode::Other(status),
-            }));
-        }
-
-        let usage = body.usage.as_ref();
-
-        Ok(LLMResponse::Success(LLMCompleteResponse {
-            client: self.context.name.to_string(),
-            prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
-            content: body.choices[0]
-                .message
-                .content
-                .as_ref()
-                .map_or("", |s| s.as_str())
-                .to_string(),
-            start_time_unix_ms: now
-                .duration_since(web_time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as u64,
-            latency_ms: now.elapsed().unwrap().as_millis() as u64,
-            model: body.model,
-            metadata: json!({
-                "baml_is_complete": match body.choices[0].finish_reason {
-                    None => true,
-                    Some(FinishReason::Stop) => true,
-                    _ => false,
-                },
-                "finish_reason": body.choices[0].finish_reason,
-                "prompt_tokens": usage.map(|u| u.prompt_tokens),
-                "output_tokens": usage.map(|u| u.completion_tokens),
-                "total_tokens": usage.map(|u| u.total_tokens),
-            }),
-        }))
-    }
-
-    #[cfg(feature = "no_wasm")]
-    async fn chat(
-        &self,
-        ctx: &RuntimeContext,
-        prompt: &Vec<RenderedChatMessage>,
-    ) -> Result<LLMResponse> {
-        use crate::internal::llm_client::{
-            openai::types::{ChatCompletionResponse, FinishReason, OpenAIErrorResponse},
-            ErrorCode, LLMCompleteResponse, LLMErrorResponse,
-        };
-
-        let req = self.build_http_request(ctx, "/v1/chat/completions", prompt)?;
-
-        match self.internal_state.clone().lock() {
-            Ok(mut state) => {
-                state.call_count += 1;
-            }
-            Err(e) => {
-                log::warn!("Failed to increment call count for OpenAIClient: {:#?}", e);
-            }
-        }
-        let now = std::time::SystemTime::now();
-        let res = req.send().await?;
-
-        let status = res.status();
-
-        // Raise for status.
-        if !status.is_success() {
-            let err_code = ErrorCode::from_status(status);
-
-            let err_message = match res.json::<serde_json::Value>().await {
-                Ok(body) => match serde_json::from_value::<OpenAIErrorResponse>(body) {
-                    Ok(err) => format!("API Error ({}): {}", err.error.r#type, err.error.message),
-                    Err(e) => format!("Does this support the OpenAI Response type?\n{:#?}", e),
-                },
-                Err(e) => {
-                    format!("Does this support the OpenAI Response type?\n{:#?}", e)
+            Err(e) => match e {
+                RequestError::BuildError(e)
+                | RequestError::FetchError(e)
+                | RequestError::JsonError(e)
+                | RequestError::SerdeError(e) => {
+                    Err(anyhow::anyhow!("Failed to make request: {:#?}", e))
                 }
-            };
-
-            return Ok(LLMResponse::LLMFailure(LLMErrorResponse {
-                client: self.context.name.to_string(),
-                model: None,
-                prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
-                start_time_unix_ms: now
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_millis() as u64,
-                latency_ms: now.elapsed().unwrap().as_millis() as u64,
-                message: err_message,
-                code: err_code,
-            }));
+                RequestError::ResponseError(status, res) => {
+                    match request::response_json::<OpenAIErrorResponse>(res).await {
+                        Ok(err) => {
+                            let err_message =
+                                format!("API Error ({}): {}", err.error.r#type, err.error.message);
+                            Ok(LLMResponse::LLMFailure(LLMErrorResponse {
+                                client: self.context.name.to_string(),
+                                model: None,
+                                prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
+                                start_time_unix_ms: now
+                                    .duration_since(web_time::UNIX_EPOCH)
+                                    .unwrap()
+                                    .as_millis()
+                                    as u64,
+                                latency_ms: now.elapsed().unwrap().as_millis() as u64,
+                                message: err_message,
+                                code: ErrorCode::from_u16(status),
+                            }))
+                        }
+                        Err(e) => {
+                            anyhow::bail!("Does this support the OpenAI Response type?\n{:#?}", e)
+                        }
+                    }
+                }
+            },
         }
-
-        let body = match res.json::<ChatCompletionResponse>().await {
-            Ok(body) => body,
-            Err(e) => {
-                return Ok(LLMResponse::LLMFailure(LLMErrorResponse {
-                    client: self.context.name.to_string(),
-                    model: None,
-                    prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
-                    start_time_unix_ms: now
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap()
-                        .as_millis() as u64,
-                    latency_ms: now.elapsed().unwrap().as_millis() as u64,
-                    message: format!("Does this support the OpenAI Response type?\n{:#?}", e),
-                    code: ErrorCode::UnsupportedResponse(status.as_u16()),
-                }));
-            }
-        };
-
-        if body.choices.len() < 1 {
-            return Ok(LLMResponse::LLMFailure(LLMErrorResponse {
-                client: self.context.name.to_string(),
-                model: None,
-                prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
-                start_time_unix_ms: now
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_millis() as u64,
-                latency_ms: now.elapsed().unwrap().as_millis() as u64,
-                message: format!("No content in response:\n{:#?}", body),
-                code: ErrorCode::Other(status.as_u16()),
-            }));
-        }
-
-        let usage = body.usage.as_ref();
-
-        Ok(LLMResponse::Success(LLMCompleteResponse {
-            client: self.context.name.to_string(),
-            prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
-            content: body.choices[0]
-                .message
-                .content
-                .as_ref()
-                .map_or("", |s| s.as_str())
-                .to_string(),
-            start_time_unix_ms: now
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as u64,
-            latency_ms: now.elapsed().unwrap().as_millis() as u64,
-            model: body.model,
-            metadata: json!({
-                "baml_is_complete": match body.choices[0].finish_reason {
-                    None => true,
-                    Some(FinishReason::Stop) => true,
-                    _ => false,
-                },
-                "finish_reason": body.choices[0].finish_reason,
-                "prompt_tokens": usage.map(|u| u.prompt_tokens),
-                "output_tokens": usage.map(|u| u.completion_tokens),
-                "total_tokens": usage.map(|u| u.total_tokens),
-            }),
-        }))
     }
 }
 
@@ -427,119 +295,6 @@ impl OpenAIClient {
                 .map(|s| s.to_string()),
             internal_state: Arc::new(Mutex::new(LlmClientState::new())),
         })
-    }
-
-    #[cfg(not(feature = "no_wasm"))]
-    fn build_http_request(
-        &self,
-        _ctx: &RuntimeContext,
-        path: &str,
-        prompt: &Vec<RenderedChatMessage>,
-    ) -> Result<web_sys::Request> {
-        use web_sys::RequestMode;
-
-        let mut body = json!(self.properties.properties);
-        body.as_object_mut().unwrap().insert(
-            "messages".into(),
-            prompt
-                .iter()
-                .map(|m| {
-                    json!({
-                        "role": m.role,
-                        "content": convert_message_parts_to_content(&m.parts)
-                    })
-                })
-                .collect::<serde_json::Value>(),
-        );
-
-        log::info!("Request body: {:#?}", body);
-
-        let mut init = web_sys::RequestInit::new();
-        init.method("POST");
-        init.mode(RequestMode::Cors);
-        init.body(Some(&wasm_bindgen::JsValue::from_str(
-            &serde_json::to_string(&body).map_err(|e| anyhow::format_err!("{:#?}", e))?,
-        )));
-
-        let headers = web_sys::Headers::new().map_err(|e| anyhow::format_err!("{:#?}", e))?;
-        headers
-            .set("Content-Type", "application/json")
-            .map_err(|e| anyhow::format_err!("{:#?}", e))?;
-        match &self.properties.api_key {
-            Some(key) => {
-                headers
-                    .set("Authorization", &format!("Bearer {}", key))
-                    .map_err(|e| anyhow::format_err!("{:#?}", e))?;
-            }
-            None => {}
-        }
-        for (k, v) in &self.properties.headers {
-            headers
-                .set(k, v)
-                .map_err(|e| anyhow::format_err!("{:#?}", e))?;
-        }
-        init.headers(&headers);
-
-        match web_sys::Request::new_with_str_and_init(
-            &format!("{}{}", self.properties.base_url, path),
-            &init,
-        ) {
-            Ok(req) => Ok(req),
-            Err(e) => Err(anyhow::anyhow!("Failed to create request: {:#?}", e)),
-        }
-    }
-
-    #[cfg(feature = "no_wasm")]
-    fn build_http_request(
-        &self,
-        ctx: &RuntimeContext,
-        path: &str,
-        prompt: &Vec<RenderedChatMessage>,
-    ) -> Result<reqwest::RequestBuilder> {
-        // TODO: ideally like to keep this alive longer.
-        self.build_http_request_universal(ctx, path, prompt)
-    }
-
-    fn build_http_request_universal(
-        &self,
-        _ctx: &RuntimeContext,
-        path: &str,
-        prompt: &Vec<RenderedChatMessage>,
-    ) -> Result<reqwest::RequestBuilder> {
-        // TODO: ideally like to keep this alive longer.
-        let client = reqwest::Client::new();
-
-        let mut body = json!(self.properties.properties);
-        body.as_object_mut().unwrap().insert(
-            "messages".into(),
-            prompt
-                .iter()
-                .map(|m| {
-                    json!({
-                        "role": m.role,
-                        "content": convert_message_parts_to_content(&m.parts)
-                    })
-                })
-                .collect::<serde_json::Value>(),
-        );
-
-        log::info!("Request body: {:#?}", body);
-
-        let mut req = client
-            .post(format!("{}{}", self.properties.base_url, path))
-            .json(&body);
-        match self.properties.api_key {
-            Some(ref key) => {
-                req = req.header("Authorization", format!("Bearer {}", key));
-            }
-            None => {}
-        }
-        for (k, v) in &self.properties.headers {
-            req = req.header(k, v);
-        }
-
-        // Add all the properties as data parameters.
-        Ok(req)
     }
 }
 
