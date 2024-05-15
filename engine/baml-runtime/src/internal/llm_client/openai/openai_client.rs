@@ -130,7 +130,7 @@ impl WithChat for OpenAIClient {
 
     async fn chat(
         &self,
-        ctx: &RuntimeContext,
+        _ctx: &RuntimeContext,
         prompt: &Vec<RenderedChatMessage>,
     ) -> Result<LLMResponse> {
         use crate::{
