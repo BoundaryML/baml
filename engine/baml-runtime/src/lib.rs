@@ -94,18 +94,13 @@ impl BamlRuntime {
     }
 }
 
-// #[cfg(not(feature = "no_wasm"))]
-// type ResponseType<T> = core::result::Result<T, wasm_bindgen::JsValue>;
-// #[cfg(feature = "no_wasm")]
-type ResponseType<T> = anyhow::Result<T>;
-
 impl RuntimeInterface for BamlRuntime {
     async fn run_test(
         &self,
         function_name: &str,
         test_name: &str,
         ctx: &RuntimeContext,
-    ) -> ResponseType<TestResponse> {
+    ) -> Result<TestResponse> {
         let span = self
             .tracer
             .start_span(function_name, ctx, &IndexMap::new(), None);
@@ -123,7 +118,7 @@ impl RuntimeInterface for BamlRuntime {
         function_name: String,
         params: IndexMap<String, BamlValue>,
         ctx: &RuntimeContext,
-    ) -> ResponseType<crate::FunctionResult> {
+    ) -> Result<crate::FunctionResult> {
         let span = self.tracer.start_span(&function_name, ctx, &params, None);
         let response = self.inner.call_function(function_name, params, ctx).await;
         if let Some(span) = span {
