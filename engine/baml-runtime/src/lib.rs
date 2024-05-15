@@ -35,8 +35,6 @@ use tracing::{BamlTracer, TracingSpan};
 pub use types::*;
 
 use clap::Parser;
-use internal_baml_codegen::{GeneratorArgs, LanguageClientType};
-use std::path::PathBuf;
 
 #[cfg(feature = "internal")]
 pub use internal_baml_jinja::{ChatMessagePart, RenderedPrompt};
@@ -61,7 +59,7 @@ pub struct BamlRuntime {
 impl BamlRuntime {
     /// Load a runtime from a directory
     #[cfg(feature = "no_wasm")]
-    pub fn from_directory(path: &PathBuf, ctx: &RuntimeContext) -> Result<Self> {
+    pub fn from_directory(path: &std::path::PathBuf, ctx: &RuntimeContext) -> Result<Self> {
         Ok(BamlRuntime {
             inner: InternalBamlRuntime::from_directory(path)?,
             tracer: BamlTracer::new(None, ctx),
@@ -134,15 +132,15 @@ impl RuntimeInterface for BamlRuntime {
         function_name: String,
         params: IndexMap<String, BamlValue>,
         ctx: &RuntimeContext,
-    ) -> Result<FunctionResultStream> {
+    ) -> Result<FunctionResult> {
         self.inner.stream_function(function_name, params, ctx).await
     }
 
     #[cfg(feature = "no_wasm")]
     fn generate_client(
         &self,
-        client_type: &LanguageClientType,
-        args: &GeneratorArgs,
+        client_type: &internal_baml_codegen::LanguageClientType,
+        args: &internal_baml_codegen::GeneratorArgs,
     ) -> Result<internal_baml_codegen::GenerateOutput> {
         self.inner.generate_client(client_type, args)
     }

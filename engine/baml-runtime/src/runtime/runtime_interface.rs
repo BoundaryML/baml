@@ -304,7 +304,7 @@ impl RuntimeInterface for InternalBamlRuntime {
         function_name: String,
         params: IndexMap<String, BamlValue>,
         ctx: &RuntimeContext,
-    ) -> Result<FunctionResultStream> {
+    ) -> Result<crate::FunctionResult> {
         let func = self.get_function(&function_name, ctx)?;
         let baml_args = self.ir().check_function_params(&func, &params)?;
 
@@ -317,11 +317,12 @@ impl RuntimeInterface for InternalBamlRuntime {
         use std::ops::Deref;
         let stream = match llm_provider.deref() {
             LLMProvider::OpenAI(client) => client.stream_chat2(retry_policy, ctx, &prompt),
-            LLMProvider::Anthropic(client) => todo!(),
+            LLMProvider::Anthropic(_) => todo!(),
         }?;
 
-        use futures::StreamExt;
-        FunctionResultStream::from(stream)
+        FunctionResultStream::from(function_name, stream, self.ir.clone())?
+            .run(ctx)
+            .await
     }
 
     #[cfg(feature = "no_wasm")]
