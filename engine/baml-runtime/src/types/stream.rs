@@ -39,11 +39,17 @@ impl CancelStreamTrigger {
     }
 }
 
+/// Wrapper that holds a stream of responses from a BAML function call.
+///
+/// Needs to hold a reference to the IR so that it can parse each response from the LLM.
+/// We decouple its lifetime from that of BamlRuntime because we want to make it easy for
+/// users to cancel the stream.
 pub struct FunctionResultStream {
     function_name: String,
     inner: SseResponse,
     ir: Arc<IntermediateRepr>,
     on_event: Option<StreamCallback>,
+    tripwire: Tripwire,
     cancelme: CancelStreamTrigger,
 }
 
@@ -61,6 +67,7 @@ impl FunctionResultStream {
             inner: inner,
             ir: ir,
             on_event: None,
+            tripwire,
             cancelme: CancelStreamTrigger {
                 trigger: Arc::new(Mutex::new(Some(trigger))),
             },
@@ -73,6 +80,7 @@ impl FunctionResultStream {
             .inner
             .stream()
             .await?
+            .take_until_if(self.tripwire)
             .then(|fn_result| async {
                 let response = fn_result?;
 
