@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use wasm_bindgen::{JsCast, JsValue};
+use wasm_bindgen::JsCast;
 
 #[derive(Debug)]
 pub enum WasmRequestError {

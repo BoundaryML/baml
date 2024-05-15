@@ -17,6 +17,7 @@ export type TestState =
       status: 'done'
       response_status: DoneTestStatusType
       response: WasmTestResponse
+      latency_ms: number
     }
   | {
       status: 'error'
@@ -97,13 +98,17 @@ export const useRunHooks = () => {
           if (!func || !runtime || !ctx) {
             return Promise.reject(new Error('Code potentially modified while running tests'))
           }
-          return func.run_test(runtime, ctx, testName)
+          let now = new Date().getTime()
+          return func.run_test(runtime, ctx, testName).then((res) => {
+            let elapsed = new Date().getTime() - now
+            return { res, elapsed }
+          })
         }),
       )
       for (let i = 0; i < promises.length; i++) {
         const result = promises[i]
         if (result.status === 'fulfilled') {
-          const res = result.value
+          const { res, elapsed } = result.value
           let status = res.status()
           let response_status: DoneTestStatusType = 'error'
           if (status === 0) {
@@ -115,7 +120,12 @@ export const useRunHooks = () => {
           } else {
             response_status = 'error'
           }
-          set(testStatusAtom(batch[i]), { status: 'done', response_status, response: res })
+          set(testStatusAtom(batch[i]), {
+            status: 'done',
+            response_status,
+            response: res,
+            latency_ms: elapsed,
+          })
           set(statusCountAtom, (prev) => {
             return {
               ...prev,

@@ -83,7 +83,11 @@ const checkFilter = (filter: Set<FilterValues>, status: TestStatusType, test_sta
   return filter.has(status)
 }
 
-const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStatusType }> = ({ test, doneStatus }) => {
+const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStatusType; testLatency: number }> = ({
+  test,
+  doneStatus,
+  testLatency,
+}) => {
   const failure = test.failure_message()
   const llm_response = test.llm_response()
   const llm_failure = test.llm_failure()
@@ -92,6 +96,7 @@ const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStat
   const latencyMs = llm_response?.latency_ms ?? llm_failure?.latency_ms
   const client = llm_response?.client ?? llm_failure?.client
   const model = llm_response?.model ?? llm_failure?.model
+  const bamlOverheadLatency = testLatency - (latencyMs ? Number(latencyMs) : 0)
 
   return (
     <div className='flex flex-col w-full gap-1'>
@@ -102,7 +107,8 @@ const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStat
       {(llm_response || llm_failure) && (
         <div className='w-full text-xs text-vscode-descriptionForeground'>
           <div>
-            <b>{latencyMs?.toString()}ms</b> using <b>{client}</b> {model && <>(model: {model})</>}
+            <b>{latencyMs?.toString()}ms</b> using <b>{client}</b> {model && <>(model: {model})</>}{' '}
+            {latencyMs !== undefined && bamlOverheadLatency > 0 && <>(+ {bamlOverheadLatency}ms for BAML)</>}
           </div>
           <div className='flex flex-row gap-2'>
             <div className='flex flex-col'>
@@ -169,7 +175,7 @@ const TestRow: React.FC<{ name: string }> = ({ name }) => {
         {test.status === 'error' && <div className='text-xs text-vscode-errorForeground'>{test.message}</div>}
         {test.status === 'done' && (
           <div className='text-xs text-vscode-descriptionForeground'>
-            <LLMTestResult test={test.response} doneStatus={test.response_status} />
+            <LLMTestResult test={test.response} doneStatus={test.response_status} testLatency={test.latency_ms} />
           </div>
         )}
       </div>

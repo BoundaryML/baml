@@ -90,7 +90,7 @@ pub mod tests {
         console_log::init_with_level(log::Level::Debug)?;
         log::info!("test started");
 
-        let mut stream = Arc::new(OpenAiStream::new());
+        let stream = Arc::new(OpenAiStream::new());
         //stream.on_event(Box::new(|data| {
         //    log::info!("on_event received data: {}", data);
         //    Ok(data)
