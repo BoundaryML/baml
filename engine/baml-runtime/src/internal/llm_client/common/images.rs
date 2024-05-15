@@ -1,5 +1,4 @@
-use crate::request::call_request_with_json;
-use anyhow::{anyhow, Context, Error, Result};
+use anyhow::Result;
 use base64::prelude::*;
 use mime_guess::MimeGuess;
 
@@ -21,7 +20,8 @@ async fn fetch_image(url: &str) -> Result<Vec<u8>> {
     opts.method("GET");
     opts.mode(RequestMode::Cors);
 
-    let request = Request::new_with_str_and_init(url, &opts).map_err(|e| anyhow!("{:#?}", e))?;
+    let request =
+        Request::new_with_str_and_init(url, &opts).map_err(|e| anyhow::anyhow!("{:#?}", e))?;
 
     let window = web_sys::window().unwrap();
     let resp_value = JsFuture::from(window.fetch_with_request(&request))
@@ -29,9 +29,12 @@ async fn fetch_image(url: &str) -> Result<Vec<u8>> {
         .map_err(|e| anyhow::anyhow!("Failed to fetch request: {:#?}", e))?;
 
     let resp: Response = resp_value.dyn_into().unwrap();
-    let buf = JsFuture::from(resp.array_buffer().map_err(|e| anyhow!("{:#?}", e))?)
-        .await
-        .map_err(|e| anyhow!("{:#?}", e))?;
+    let buf = JsFuture::from(
+        resp.array_buffer()
+            .map_err(|e| anyhow::anyhow!("{:#?}", e))?,
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!("{:#?}", e))?;
     let array = js_sys::Uint8Array::new(&buf);
     Ok(array.to_vec())
 }

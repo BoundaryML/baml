@@ -25,7 +25,7 @@ impl WithPartial for Identifier {
 impl WithPartial for TypeValue {
     fn to_partial_py_string(&self, _f: &mut File) -> String {
         match self {
-            TypeValue::Char | TypeValue::String => "str".to_string(),
+            TypeValue::String => "str".to_string(),
             TypeValue::Int => "int".to_string(),
             TypeValue::Float => "float".to_string(),
             TypeValue::Bool => "bool".to_string(),

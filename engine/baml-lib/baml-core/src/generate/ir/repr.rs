@@ -16,6 +16,8 @@ use internal_baml_parser_database::{
 use internal_baml_schema_ast::ast::{self, FieldArity, WithName, WithSpan};
 use serde::Serialize;
 
+
+
 /// This class represents the intermediate representation of the BAML AST.
 /// It is a representation of the BAML AST that is easier to work with than the
 /// raw BAML AST, and should include all information necessary to generate
@@ -40,6 +42,17 @@ pub struct Walker<'db, I> {
 }
 
 impl IntermediateRepr {
+    pub fn create_empty() -> IntermediateRepr {
+        IntermediateRepr {
+            enums: vec![],
+            classes: vec![],
+            functions: vec![],
+            clients: vec![],
+            retry_policies: vec![],
+            template_strings: vec![],
+        }
+    }
+
     pub fn required_env_vars(&self) -> HashSet<&str> {
         // TODO: We should likely check the full IR.
 
@@ -264,6 +277,43 @@ pub enum FieldType {
     Union(Vec<FieldType>),
     Tuple(Vec<FieldType>),
     Optional(Box<FieldType>),
+}
+
+// Impl display for FieldType
+impl std::fmt::Display for FieldType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FieldType::Enum(name) | FieldType::Class(name) => {
+                write!(f, "{}", name)
+            }
+            FieldType::Primitive(t) => write!(f, "{}", t),
+            FieldType::Union(choices) => {
+                write!(
+                    f,
+                    "({})",
+                    choices
+                        .iter()
+                        .map(|t| t.to_string())
+                        .collect::<Vec<_>>()
+                        .join(" | ")
+                )
+            }
+            FieldType::Tuple(choices) => {
+                write!(
+                    f,
+                    "({})",
+                    choices
+                        .iter()
+                        .map(|t| t.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+            FieldType::Map(k, v) => write!(f, "map<{}, {}>", k.to_string(), v.to_string()),
+            FieldType::List(t) => write!(f, "{}[]", t.to_string()),
+            FieldType::Optional(t) => write!(f, "{}?", t.to_string()),
+        }
+    }
 }
 
 impl FieldType {

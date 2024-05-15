@@ -2,7 +2,7 @@ mod error_utils;
 mod scope_diagnostics;
 mod to_baml_arg;
 
-use std::collections::HashMap;
+
 
 use crate::{
     error_not_found, error_unsupported,
@@ -11,9 +11,9 @@ use crate::{
         Class, Client, Enum, EnumValue, Field, Function, RetryPolicy, TemplateString, TestCase,
     },
 };
-use anyhow::{Error, Result};
+use anyhow::Result;
+use baml_types::{BamlMap, BamlValue};
 use indexmap::IndexMap;
-use internal_baml_jinja::BamlArgType;
 
 use self::scope_diagnostics::ScopeStack;
 
@@ -42,8 +42,8 @@ pub trait IRHelper {
     fn check_function_params<'a>(
         &'a self,
         function: &'a FunctionWalker<'a>,
-        params: &IndexMap<String, serde_json::Value>,
-    ) -> Result<BamlArgType, Error>;
+        params: &IndexMap<String, BamlValue>,
+    ) -> Result<BamlValue>;
 }
 
 impl IRHelper for IntermediateRepr {
@@ -128,8 +128,8 @@ impl IRHelper for IntermediateRepr {
     fn check_function_params<'a>(
         &'a self,
         function: &'a FunctionWalker<'a>,
-        params: &IndexMap<String, serde_json::Value>,
-    ) -> Result<BamlArgType, Error> {
+        params: &IndexMap<String, BamlValue>,
+    ) -> Result<BamlValue> {
         let function_params = match function.inputs() {
             either::Either::Left(_) => {
                 // legacy functions are not supported
@@ -144,18 +144,14 @@ impl IRHelper for IntermediateRepr {
 
         // Now check that all required parameters are present.
         let mut scope = ScopeStack::new();
-        let mut baml_arg_map = IndexMap::new();
+        let mut baml_arg_map = BamlMap::new();
         for (param_name, param_type) in function_params {
             scope.push(param_name.to_string());
             if let Some(param_value) = params.get(param_name.as_str()) {
-                let baml_arg = to_baml_arg::to_baml_arg(self, param_type, param_value, &mut scope);
-                match baml_arg {
-                    BamlArgType::Unsupported(_) => {
-                        scope.push_error(format!("Ran into an error: {}", param_name));
-                    }
-                    _ => {
-                        baml_arg_map.insert(param_name.to_string(), baml_arg);
-                    }
+                if let Some(baml_arg) =
+                    to_baml_arg::validate_arg(self, param_type, param_value, &mut scope)
+                {
+                    baml_arg_map.insert(param_name.to_string(), baml_arg);
                 }
             } else {
                 // Check if the parameter is optional.
@@ -170,6 +166,6 @@ impl IRHelper for IntermediateRepr {
             anyhow::bail!(scope);
         }
 
-        Ok(BamlArgType::Map(baml_arg_map))
+        Ok(BamlValue::Map(baml_arg_map))
     }
 }

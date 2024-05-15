@@ -3,9 +3,9 @@ mod internal_tests {
     use std::collections::HashMap;
 
     use baml_runtime::BamlRuntime;
-    use baml_runtime::{FunctionResult, RuntimeContext, RuntimeInterface, TestResponse};
+    use baml_runtime::{RuntimeContext, RuntimeInterface};
     use indexmap::IndexMap;
-    use serde_json::json;
+    
 
     use wasm_bindgen_test::*;
     use wasm_logger;
@@ -93,7 +93,7 @@ mod internal_tests {
         let ctx = RuntimeContext::new().add_env("OPENAI_API_KEY".into(), "API_KEY".to_string());
         log::info!("Context: {:?}", ctx);
 
-        let mut runtime = BamlRuntime::from_file_content("baml_src", &files, &ctx);
+        let runtime = BamlRuntime::from_file_content("baml_src", &files, &ctx);
         log::info!("Runtime:");
 
         // Replace the OPENAI_API_KEY value with the actual key
@@ -104,11 +104,11 @@ mod internal_tests {
 
         params.insert(
             "input".to_string(),
-            json!("Attention Is All You Need. Mark. Hello."),
+            baml_types::BamlValue::String("Attention Is All You Need. Mark. Hello.".into()),
         );
 
         let res = runtime?
-            .call_function("GetOrderInfo".to_string(), &params, &ctx)
+            .call_function("GetOrderInfo".to_string(), params, &ctx)
             .await?;
 
         log::info!("Result: {}", res);

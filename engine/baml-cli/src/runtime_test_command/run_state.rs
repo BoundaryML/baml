@@ -3,7 +3,7 @@ use baml_lib::internal_baml_core::ir::TestCaseWalker;
 use colored::*;
 use indexmap::{IndexMap, IndexSet};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 use tokio::{
     sync::{Mutex, MutexGuard, Semaphore},
     task,
@@ -80,8 +80,8 @@ impl TestRunBar {
 
     fn start_test(
         &self,
-        function_name: &str,
-        test_name: &str,
+        _function_name: &str,
+        _test_name: &str,
         active_tests: &IndexSet<(String, String)>,
     ) {
         self.update_bars(active_tests);
@@ -89,8 +89,8 @@ impl TestRunBar {
 
     fn end_test(
         &self,
-        function_name: &str,
-        test_name: &str,
+        _function_name: &str,
+        _test_name: &str,
         active_tests: &IndexSet<(String, String)>,
     ) {
         self.primary_bar.inc(1);

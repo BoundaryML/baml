@@ -40,7 +40,6 @@ impl ToPython for TypeValue {
             TypeValue::Int => "int".to_string(),
             TypeValue::String => "str".to_string(),
             TypeValue::Null => "None".to_string(),
-            TypeValue::Char => "str".to_string(),
             TypeValue::Image => "baml_py.Image".to_string(),
         }
     }

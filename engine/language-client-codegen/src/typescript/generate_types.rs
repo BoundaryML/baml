@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use super::typescript_language_features::ToTypescript;
+
 use internal_baml_core::ir::{repr::IntermediateRepr, ClassWalker, EnumWalker, FieldType};
 
 #[derive(askama::Template)]

@@ -1,10 +1,11 @@
+use baml_types::{BamlImage, BamlValue};
 use colored::*;
 mod evaluate_type;
 mod get_vars;
 
 use evaluate_type::get_variable_types;
 pub use evaluate_type::{PredefinedTypes, Type, TypeError};
-use indexmap::IndexMap;
+
 use minijinja::{self, value::Kwargs};
 use minijinja::{context, ErrorKind, Value};
 use serde::{Deserialize, Serialize};
@@ -313,37 +314,6 @@ pub struct RenderedChatMessage {
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "PascalCase")]
-// #[serde(untagged)]
-pub enum BamlImage {
-    Url(ImageUrl),
-    Base64(ImageBase64),
-}
-
-impl std::fmt::Display for BamlImage {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "{MAGIC_IMAGE_DELIMITER}:baml-start-image:{}:baml-end-image:{MAGIC_IMAGE_DELIMITER}",
-            serde_json::to_string(&self).unwrap()
-        )
-    }
-}
-
-impl minijinja::value::Object for BamlImage {
-    fn call(
-        &self,
-        _state: &minijinja::State<'_, '_>,
-        _args: &[minijinja::value::Value],
-    ) -> Result<minijinja::value::Value, minijinja::Error> {
-        Err(minijinja::Error::new(
-            ErrorKind::UnknownMethod,
-            format!("baml image has no callable attribute '{}'", "blah"),
-        ))
-    }
-}
-
-#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct ImageUrl {
     pub url: String,
 }
@@ -494,60 +464,13 @@ impl RenderedPrompt {
 //     }
 // }
 
-#[derive(Debug, PartialEq, Serialize, Clone)]
-pub enum BamlArgType {
-    String(String),
-    Int(i64),
-    Float(f64),
-    Bool(bool),
-    Map(IndexMap<String, BamlArgType>),
-    List(Vec<BamlArgType>),
-    Image(BamlImage),
-    Enum(String, String),
-    Class(String, IndexMap<String, BamlArgType>),
-    None,
-    Unsupported(String),
-}
-
-impl From<BamlArgType> for minijinja::Value {
-    fn from(arg: BamlArgType) -> minijinja::Value {
-        match arg {
-            BamlArgType::String(s) => minijinja::Value::from(s),
-            BamlArgType::Int(n) => minijinja::Value::from(n),
-            BamlArgType::Float(n) => minijinja::Value::from(n),
-            BamlArgType::Bool(b) => minijinja::Value::from(b),
-            BamlArgType::Map(m) => {
-                let map: IndexMap<String, minijinja::Value> = m
-                    .into_iter()
-                    .map(|(k, v)| (k, minijinja::Value::from(v)))
-                    .collect();
-                minijinja::Value::from_iter(map.into_iter())
-            }
-            BamlArgType::List(l) => {
-                let list: Vec<minijinja::Value> = l.into_iter().map(|v| v.into()).collect();
-                minijinja::Value::from(list)
-            }
-            BamlArgType::Image(i) => minijinja::Value::from_object(i),
-            BamlArgType::Enum(_, v) => minijinja::Value::from(v),
-            BamlArgType::Class(_, m) => {
-                let map: IndexMap<String, minijinja::Value> =
-                    m.into_iter().map(|(k, v)| (k, v.into())).collect();
-                minijinja::Value::from_iter(map.into_iter())
-            }
-            BamlArgType::None => minijinja::Value::from(()),
-            // TODO: shouldnt this fail?
-            BamlArgType::Unsupported(s) => minijinja::Value::from(s),
-        }
-    }
-}
-
 pub fn render_prompt(
     template: &str,
-    args: &BamlArgType,
+    args: &BamlValue,
     ctx: &RenderContext,
     template_string_macros: &[TemplateStringMacro],
 ) -> anyhow::Result<RenderedPrompt> {
-    if !matches!(args, BamlArgType::Map(_)) {
+    if !matches!(args, BamlValue::Map(_)) {
         anyhow::bail!("args must be a map");
     }
 
@@ -577,6 +500,7 @@ mod render_tests {
 
     use super::*;
 
+    use baml_types::BamlMap;
     use env_logger;
     use std::sync::Once;
 
@@ -592,11 +516,9 @@ mod render_tests {
     fn render_image() -> anyhow::Result<()> {
         setup_logging();
 
-        let args: BamlArgType = BamlArgType::Map(IndexMap::from([(
+        let args = BamlValue::Map(BamlMap::from([(
             "img".to_string(),
-            BamlArgType::Image(BamlImage::Url(ImageUrl::new(
-                "https://example.com/image.jpg".to_string(),
-            ))),
+            BamlValue::Image(BamlImage::url("https://example.com/image.jpg".to_string())),
         )]));
 
         let rendered = render_prompt(
@@ -620,9 +542,9 @@ mod render_tests {
                 role: "system".to_string(),
                 parts: vec![
                     ChatMessagePart::Text(vec!["Here is an image:",].join("\n")),
-                    ChatMessagePart::Image(BamlImage::Url(ImageUrl::new(
+                    ChatMessagePart::Image(BamlImage::url(
                         "https://example.com/image.jpg".to_string()
-                    )),),
+                    ),),
                 ]
             },])
         );
@@ -634,13 +556,11 @@ mod render_tests {
     fn render_image_nested() -> anyhow::Result<()> {
         setup_logging();
 
-        let args: BamlArgType = BamlArgType::Map(IndexMap::from([(
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
             "myObject".to_string(),
-            BamlArgType::Map(IndexMap::from([(
+            BamlValue::Map(BamlMap::from([(
                 "img".to_string(),
-                BamlArgType::Image(BamlImage::Url(ImageUrl::new(
-                    "https://example.com/image.jpg".to_string(),
-                ))),
+                BamlValue::Image(BamlImage::url("https://example.com/image.jpg".to_string())),
             )])),
         )]));
 
@@ -665,9 +585,9 @@ mod render_tests {
                 role: "system".to_string(),
                 parts: vec![
                     ChatMessagePart::Text(vec!["Here is an image:",].join("\n")),
-                    ChatMessagePart::Image(BamlImage::Url(ImageUrl::new(
+                    ChatMessagePart::Image(BamlImage::url(
                         "https://example.com/image.jpg".to_string()
-                    )),),
+                    ),),
                 ]
             },])
         );
@@ -679,11 +599,9 @@ mod render_tests {
     fn render_image_suffix() -> anyhow::Result<()> {
         setup_logging();
 
-        let args: BamlArgType = BamlArgType::Map(IndexMap::from([(
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
             "img".to_string(),
-            BamlArgType::Image(BamlImage::Url(ImageUrl::new(
-                "https://example.com/image.jpg".to_string(),
-            ))),
+            BamlValue::Image(BamlImage::url("https://example.com/image.jpg".to_string())),
         )]));
 
         let rendered = render_prompt(
@@ -707,9 +625,9 @@ mod render_tests {
                 role: "system".to_string(),
                 parts: vec![
                     ChatMessagePart::Text(vec!["Here is an image:",].join("\n")),
-                    ChatMessagePart::Image(BamlImage::Url(ImageUrl::new(
+                    ChatMessagePart::Image(BamlImage::url(
                         "https://example.com/image.jpg".to_string()
-                    )),),
+                    ),),
                     ChatMessagePart::Text(vec![". Please help me.",].join("\n")),
                 ]
             },])
@@ -722,9 +640,9 @@ mod render_tests {
     fn render_chat() -> anyhow::Result<()> {
         setup_logging();
 
-        let args = BamlArgType::Map(IndexMap::from([(
+        let args = BamlValue::Map(BamlMap::from([(
             "haiku_subject".to_string(),
-            BamlArgType::String("sakura".to_string()),
+            BamlValue::String("sakura".to_string()),
         )]));
 
         let rendered = render_prompt(
@@ -796,9 +714,9 @@ mod render_tests {
             haiku_subject => "sakura"
         };
 
-        let args: BamlArgType = BamlArgType::Map(IndexMap::from([(
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
             "haiku_subject".to_string(),
-            BamlArgType::String("sakura".to_string()),
+            BamlValue::String("sakura".to_string()),
         )]));
 
         let rendered = render_prompt(
@@ -840,9 +758,9 @@ mod render_tests {
     fn render_output_format_directly() -> anyhow::Result<()> {
         setup_logging();
 
-        let args: BamlArgType = BamlArgType::Map(IndexMap::from([(
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
             "haiku_subject".to_string(),
-            BamlArgType::String("sakura".to_string()),
+            BamlValue::String("sakura".to_string()),
         )]));
 
         let rendered = render_prompt(
@@ -873,9 +791,9 @@ mod render_tests {
     fn render_output_format_prefix_unspecified() -> anyhow::Result<()> {
         setup_logging();
 
-        let args: BamlArgType = BamlArgType::Map(IndexMap::from([(
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
             "haiku_subject".to_string(),
-            BamlArgType::String("sakura".to_string()),
+            BamlValue::String("sakura".to_string()),
         )]));
 
         let rendered = render_prompt(
@@ -906,9 +824,9 @@ mod render_tests {
     fn render_output_format_prefix_null() -> anyhow::Result<()> {
         setup_logging();
 
-        let args: BamlArgType = BamlArgType::Map(IndexMap::from([(
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
             "haiku_subject".to_string(),
-            BamlArgType::String("sakura".to_string()),
+            BamlValue::String("sakura".to_string()),
         )]));
 
         let rendered = render_prompt(
@@ -937,9 +855,9 @@ mod render_tests {
     fn render_output_format_prefix_str() -> anyhow::Result<()> {
         setup_logging();
 
-        let args: BamlArgType = BamlArgType::Map(IndexMap::from([(
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
             "haiku_subject".to_string(),
-            BamlArgType::String("sakura".to_string()),
+            BamlValue::String("sakura".to_string()),
         )]));
 
         let rendered = render_prompt(
@@ -968,9 +886,9 @@ mod render_tests {
     fn render_chat_param_failures() -> anyhow::Result<()> {
         setup_logging();
 
-        let args: BamlArgType = BamlArgType::Map(IndexMap::from([(
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
             "name".to_string(),
-            BamlArgType::String("world".to_string()),
+            BamlValue::String("world".to_string()),
         )]));
 
         // rendering should fail: template contains '{{ name }' (missing '}' at the end)
@@ -1022,9 +940,9 @@ mod render_tests {
     fn render_with_kwargs() -> anyhow::Result<()> {
         setup_logging();
 
-        let args: BamlArgType = BamlArgType::Map(IndexMap::from([(
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
             "haiku_subject".to_string(),
-            BamlArgType::String("sakura".to_string()),
+            BamlValue::String("sakura".to_string()),
         )]));
 
         let rendered = render_prompt(
@@ -1089,9 +1007,9 @@ mod render_tests {
     fn render_chat_starts_with_system() -> anyhow::Result<()> {
         setup_logging();
 
-        let args: BamlArgType = BamlArgType::Map(IndexMap::from([(
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
             "haiku_subject".to_string(),
-            BamlArgType::String("sakura".to_string()),
+            BamlValue::String("sakura".to_string()),
         )]));
 
         let rendered = render_prompt(
@@ -1137,9 +1055,9 @@ mod render_tests {
     #[test]
     fn render_malformed_jinja() -> anyhow::Result<()> {
         setup_logging();
-        let args: BamlArgType = BamlArgType::Map(IndexMap::from([(
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
             "name".to_string(),
-            BamlArgType::String("world".to_string()),
+            BamlValue::String("world".to_string()),
         )]));
 
         // rendering should fail: template contains '{{ name }' (missing '}' at the end)

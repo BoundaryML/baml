@@ -11,7 +11,7 @@ use anyhow::Result;
  * ```
  * block.
  */
-fn find_in_json_markdown(str: &str) -> Result<serde_json::Value> {
+fn find_in_json_markdown(str: &str, options: &JSONishOptions) -> Result<serde_json::Value> {
     let mut values = vec![];
 
     let mut remaining = str;
@@ -23,7 +23,7 @@ fn find_in_json_markdown(str: &str) -> Result<serde_json::Value> {
             let end_idx = end_idx + start_idx;
             let json_str = str[start_idx..end_idx].trim();
             if json_str.len() > 0 {
-                match parse_jsonish_value(json_str, JSONishOptions::recursive()) {
+                match parse_jsonish_value(json_str, options.recursive()) {
                     Ok(value) => {
                         values.push(value);
                     }
@@ -38,7 +38,7 @@ fn find_in_json_markdown(str: &str) -> Result<serde_json::Value> {
         } else {
             let json_str = str[start_idx..].trim();
             if json_str.len() > 0 {
-                match parse_jsonish_value(json_str, JSONishOptions::recursive()) {
+                match parse_jsonish_value(json_str, options.recursive()) {
                     Ok(value) => {
                         values.push(value);
                     }
@@ -56,7 +56,7 @@ fn find_in_json_markdown(str: &str) -> Result<serde_json::Value> {
     }
 }
 
-fn find_all_json_objects(input: &str) -> Result<serde_json::Value> {
+fn find_all_json_objects(input: &str, options: &JSONishOptions) -> Result<serde_json::Value> {
     let mut stack = Vec::new();
     let mut json_str_start = None;
     let mut json_objects = Vec::new();
@@ -83,7 +83,7 @@ fn find_all_json_objects(input: &str) -> Result<serde_json::Value> {
                     // Assuming json_str_start is never None when stack is empty
                     let end_index = index + 1;
                     let json_str = &input[json_str_start.unwrap()..end_index];
-                    match parse_jsonish_value(json_str, JSONishOptions::recursive()) {
+                    match parse_jsonish_value(json_str, options.recursive()) {
                         Ok(json) => json_objects.push(json),
                         Err(e) => {
                             // Ignore errors
@@ -146,7 +146,24 @@ impl From<JsonCollection> for Option<serde_json::Value> {
             JsonCollection::Array(values) => serde_json::Value::Array(values),
             JsonCollection::QuotedString(s) => serde_json::Value::String(s),
             JsonCollection::SingleQuotedString(s) => serde_json::Value::String(s),
-            JsonCollection::UnquotedString(s) => serde_json::Value::String(s.trim().into()),
+            JsonCollection::UnquotedString(s) => {
+                let s = s.trim();
+                if s == "true" {
+                    serde_json::Value::Bool(true)
+                } else if s == "false" {
+                    serde_json::Value::Bool(false)
+                } else if s == "null" {
+                    serde_json::Value::Null
+                } else if let Ok(n) = s.parse::<i64>() {
+                    serde_json::Value::Number(n.into())
+                } else if let Ok(n) = s.parse::<u64>() {
+                    serde_json::Value::Number(n.into())
+                } else if let Ok(n) = s.parse::<f64>() {
+                    serde_json::Value::Number(serde_json::Number::from_f64(n).unwrap())
+                } else {
+                    serde_json::Value::String(s.into())
+                }
+            }
         })
     }
 }
@@ -381,11 +398,22 @@ impl JsonParseState {
         if let Some((idx, next_char)) = next.peek() {
             let _idx = *idx;
             match next_char {
-                '\n' => true,
-                ':' | '}' if in_object_key => true,
-                ',' | '}' if in_object_value => true,
-                ',' | ']' if in_array => true,
-                ' ' | '\t' => {
+                ':' | '}' if in_object_key => {
+                    // We're ready to close the key
+                    log::debug!("Closing due to: key");
+                    true
+                }
+                ',' | '}' if in_object_value => {
+                    // We're ready to close the value
+                    log::debug!("Closing due to: value",);
+                    true
+                }
+                ',' | ']' if in_array => {
+                    // We're ready to close the value
+                    log::debug!("Closing due to: array");
+                    true
+                }
+                ' ' | '\t' | '\n' => {
                     // look ahead and see if we can find a closing bracket or comma
                     while let Some((_, c)) = next.next() {
                         match c {
@@ -578,10 +606,6 @@ impl JsonParseState {
             '[' => {
                 self.collection_stack.push(JsonCollection::Array(vec![]));
             }
-            ']' | '}' => {
-                // Extra closing bracket
-                return Err(anyhow::anyhow!("Unexpected closing bracket"));
-            }
             '"' => {
                 self.collection_stack
                     .push(JsonCollection::QuotedString(String::new()));
@@ -704,6 +728,7 @@ pub struct JSONishOptions {
     allow_markdown_json: bool,
     allow_fixes: bool,
     allow_as_string: bool,
+    depth: usize,
 }
 
 impl JSONishOptions {
@@ -713,21 +738,29 @@ impl JSONishOptions {
             allow_markdown_json: true,
             allow_fixes: true,
             allow_as_string: true,
+            depth: 0,
         }
     }
 
-    fn recursive() -> Self {
+    fn recursive(&self) -> Self {
         JSONishOptions {
             all_finding_all_json_objects: false,
             allow_markdown_json: false,
             allow_fixes: true,
             allow_as_string: false,
+            depth: self.depth + 1,
         }
     }
 }
 
+// Responsible for taking a string --> valid JSON
+// TODO: @hellovai add max recursive loop
 pub fn parse_jsonish_value<'a>(str: &'a str, options: JSONishOptions) -> Result<serde_json::Value> {
     log::debug!("Parsing:\n{:?}\n-------\n{:?}\n-------", options, str);
+
+    if options.depth > 10 {
+        return Err(anyhow::anyhow!("Max recursion depth reached"));
+    }
 
     // Try naive parsing first to see if it's valid JSON
     match serde_json::from_str(str) {
@@ -739,33 +772,50 @@ pub fn parse_jsonish_value<'a>(str: &'a str, options: JSONishOptions) -> Result<
 
     if options.allow_markdown_json {
         // Then try searching for json-like objects recursively
-        if let Ok(value) = find_in_json_markdown(str) {
-            return Ok(value);
+        if let Ok(value) = find_in_json_markdown(str, &options) {
+            if options.depth > 0 {
+                return Ok(value);
+            }
+            return Ok(serde_json::Value::Array(vec![
+                value,
+                serde_json::Value::String(str.into()),
+            ]));
         }
     }
 
     if options.all_finding_all_json_objects {
         // Then try searching for json-like objects recursively
-        if let Ok(value) = find_all_json_objects(str) {
-            return Ok(value);
+        if let Ok(value) = find_all_json_objects(str, &options) {
+            if options.depth > 0 {
+                return Ok(value);
+            }
+            return Ok(serde_json::Value::Array(vec![
+                value,
+                serde_json::Value::String(str.into()),
+            ]));
         }
     }
 
     // Finally, try to fix common JSON issues
     if options.allow_fixes {
         match try_fix_jsonish(str) {
-            Ok(value) => return Ok(value),
+            Ok(value) => {
+                return Ok(serde_json::Value::Array(vec![
+                    value,
+                    serde_json::Value::String(str.into()),
+                ]));
+            }
             Err(e) => {
                 log::trace!("Failed to fix JSON: {:?}", e);
             }
         }
     }
 
+    // If all else fails, return the original string
     if options.allow_as_string {
         // If all else fails, return the original string
         Ok(serde_json::Value::String(str.into()))
     } else {
         Err(anyhow::anyhow!("Failed to parse JSON"))
     }
-    // If all else fails, return the original string
 }

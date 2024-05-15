@@ -1,0 +1,42 @@
+[package]
+edition = "2021"
+name = "baml-types"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+license-file.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+
+[dependencies.indexmap]
+workspace = true
+optional = true
+
+[dependencies.minijinja]
+optional = true
+version = "1.0.16"
+default-features = false
+features = [
+  "macros",
+  "builtins",
+  "debug",
+  "preserve_order",
+  "adjacent_loop_items",
+  "unicode",
+  "json",
+  "unstable_machinery",
+  "unstable_machinery_serde",
+  "custom_syntax",
+  "internal_debug",
+  # We don't want to use these features:
+  # multi_template
+  # loader
+  #
+]
+
+[features]
+default = ["stable_sort"]
+stable_sort = ["indexmap"]
+mini-jinja = ["minijinja"]

@@ -4,8 +4,10 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Error, Result};
+use baml_types::BamlImage;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
+
 use serde_json::{json, Value};
 
 use crate::internal::llm_client::{
@@ -210,7 +212,7 @@ impl AnthropicClient {
     #[cfg(feature = "no_wasm")]
     fn build_http_request(
         &self,
-        ctx: &RuntimeContext,
+        _ctx: &RuntimeContext,
         path: &str,
         prompt: &Vec<RenderedChatMessage>,
     ) -> Result<reqwest::RequestBuilder> {
@@ -262,11 +264,10 @@ impl WithChat for AnthropicClient {
         use web_time::SystemTime;
 
         use crate::internal::llm_client::{
-            anthropic::types::AnthropicErrorResponse, ErrorCode, LLMCompleteResponse,
-            LLMErrorResponse,
+            anthropic::types::{AnthropicErrorResponse, AnthropicMessageResponse, StopReason},
+            ErrorCode, LLMCompleteResponse, LLMErrorResponse,
         };
 
-        use super::types::AnthropicMessageResponse;
         let request = self.build_http_request(ctx, "/v1/messages", prompt)?;
         let window = match web_sys::window() {
             Some(w) => w,
@@ -400,10 +401,7 @@ impl WithChat for AnthropicClient {
         prompt: &Vec<RenderedChatMessage>,
     ) -> Result<LLMResponse> {
         use crate::internal::llm_client::{
-            anthropic::types::{
-                AnthropicErrorResponse, AnthropicMessageContent, AnthropicMessageResponse,
-                StopReason,
-            },
+            anthropic::types::{AnthropicErrorResponse, AnthropicMessageResponse, StopReason},
             ErrorCode, LLMCompleteResponse, LLMErrorResponse,
         };
 
@@ -594,8 +592,7 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> Result<Valu
                 //         }
                 //     }))
                 // }
-                _ => Err(anyhow!("Unsupported image type")),
-                internal_baml_jinja::BamlImage::Base64(image) => Ok(json!({
+                BamlImage::Base64(image) => Ok(json!({
                     "type": "image",
                     "source": {
                         "type": "base64",
@@ -603,6 +600,7 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> Result<Valu
                         "data": image.base64
                     }
                 })),
+                _ => Err(anyhow!("Unsupported image type")),
             },
         })
         .collect::<Result<Vec<Value>, Error>>()?;

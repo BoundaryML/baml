@@ -433,6 +433,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "baml-runtime",
+ "baml-types",
  "env_logger",
  "futures",
  "indexmap 2.2.5",
@@ -455,6 +456,7 @@ version = "0.20.0-canary.0"
 dependencies = [
  "anyhow",
  "async-std",
+ "baml-types",
  "base64 0.22.1",
  "chrono",
  "clap 4.5.1",
@@ -506,6 +508,7 @@ dependencies = [
  "anyhow",
  "baml-fmt",
  "baml-runtime",
+ "baml-types",
  "console_error_panic_hook",
  "console_log",
  "dissimilar",
@@ -529,10 +532,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml-types"
+version = "0.20.0-canary.0"
+dependencies = [
+ "indexmap 2.2.5",
+ "minijinja",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "baml-typescript-ffi"
 version = "0.0.1"
 dependencies = [
  "baml-runtime",
+ "baml-types",
  "env_logger",
  "futures",
  "indexmap 2.2.5",
@@ -1703,6 +1717,7 @@ version = "0.20.0-canary.0"
 dependencies = [
  "anyhow",
  "askama",
+ "baml-types",
  "base64 0.13.1",
  "chrono",
  "dissimilar",
@@ -1746,6 +1761,7 @@ name = "internal-baml-jinja"
 version = "0.20.0-canary.0"
 dependencies = [
  "anyhow",
+ "baml-types",
  "colored",
  "env_logger",
  "indexmap 2.2.5",
@@ -1854,15 +1870,18 @@ name = "jsonish"
 version = "0.20.0-canary.0"
 dependencies = [
  "anyhow",
+ "baml-types",
  "colored",
  "either",
  "indoc",
  "internal-baml-core",
  "log",
  "pest",
+ "regex",
  "serde",
  "serde_json",
  "strsim 0.10.0",
+ "test-log",
 ]
 
 [[package]]
@@ -1980,6 +1999,15 @@ name = "match_cfg"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ffbee8634e0d45d258acb448e7eaab3fce7a0a467395d4d9f228e3c1f01fb2e4"
+
+[[package]]
+name = "matchers"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8263075bb86c5a1b1427b5ae862e8889656f126e9f77c484496e8b47cf5c5558"
+dependencies = [
+ "regex-automata 0.1.10",
+]
 
 [[package]]
 name = "memchr"
@@ -2633,8 +2661,17 @@ checksum = "c117dbdfde9c8308975b6a18d71f3f385c89461f7b3fb054288ecf2a2058ba4c"
 dependencies = [
  "aho-corasick",
  "memchr",
- "regex-automata",
- "regex-syntax",
+ "regex-automata 0.4.6",
+ "regex-syntax 0.8.2",
+]
+
+[[package]]
+name = "regex-automata"
+version = "0.1.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c230d73fb8d8c1b9c0b3135c5142a8acee3a0558fb8db5cf1cb65f8d7862132"
+dependencies = [
+ "regex-syntax 0.6.29",
 ]
 
 [[package]]
@@ -2645,8 +2682,14 @@ checksum = "86b83b8b9847f9bf95ef68afb0b8e6cdb80f498442f5179a29fad448fcc1eaea"
 dependencies = [
  "aho-corasick",
  "memchr",
- "regex-syntax",
+ "regex-syntax 0.8.2",
 ]
+
+[[package]]
+name = "regex-syntax"
+version = "0.6.29"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f162c6dd7b008981e4d40210aca20b4bd0f9b60ca9271061b07f78537722f2e1"
 
 [[package]]
 name = "regex-syntax"
@@ -3270,6 +3313,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "test-log"
+version = "0.2.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3dffced63c2b5c7be278154d76b479f9f9920ed34e7574201407f0b14e2bbb93"
+dependencies = [
+ "env_logger",
+ "test-log-macros",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "test-log-macros"
+version = "0.2.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5999e24eaa32083191ba4e425deb75cdf25efefabe5aaccb7446dd0d4122a3f5"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.52",
+]
+
+[[package]]
 name = "textwrap"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3476,10 +3541,14 @@ version = "0.3.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ad0f048c97dbd9faa9b7df56362b8ebcaa52adb06b498c050d2f4e32f90a7a8b"
 dependencies = [
+ "matchers",
  "nu-ansi-term",
+ "once_cell",
+ "regex",
  "sharded-slab",
  "smallvec",
  "thread_local",
+ "tracing",
  "tracing-core",
  "tracing-log",
 ]

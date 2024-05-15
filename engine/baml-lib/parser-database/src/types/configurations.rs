@@ -1,4 +1,4 @@
-use indexmap::IndexMap;
+
 use internal_baml_diagnostics::{DatamodelError, Span};
 use internal_baml_schema_ast::ast::{
     ConfigurationId, PrinterConfig, RetryPolicyConfig, WithIdentifier, WithName, WithSpan,
@@ -352,7 +352,7 @@ pub(crate) fn visit_test_case<'db>(
             "Missing `functions` property",
             config.identifier().span().clone(),
         )),
-        (Some(function_name), None) => ctx.push_error(DatamodelError::new_validation_error(
+        (Some(_function_name), None) => ctx.push_error(DatamodelError::new_validation_error(
             "Missing `args` property",
             config.identifier().span().clone(),
         )),

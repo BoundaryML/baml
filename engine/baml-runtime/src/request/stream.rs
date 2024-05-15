@@ -1,8 +1,8 @@
 use anyhow::Result;
 use eventsource_stream::Eventsource;
-use futures::channel::oneshot;
+
 use futures::stream::StreamExt;
-use reqwest::Client;
+
 use std::{ops::DerefMut, sync::Arc};
 use stream_cancel::{StreamExt as CancellableStreamExt, Trigger, Tripwire};
 use tokio::sync::Mutex;
@@ -78,10 +78,10 @@ impl OpenAiStream
     }
 }
 
+#[cfg(feature = "wasm")]
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use std::time::Duration;
     use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 
     #[wasm_bindgen_test]

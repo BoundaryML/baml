@@ -1,14 +1,14 @@
 mod dir_utils;
 
 use anyhow::Result;
-use internal_baml_codegen::LanguageClientType;
-use internal_baml_core::LockfileVersion;
+
+
 use std::path::PathBuf;
 
 use baml_lib::{parse_and_validate_schema, Configuration, SourceFile, ValidatedSchema};
 use colored::*;
 
-use crate::{builder::dir_utils::get_src_files, errors::CliError, update::version_check};
+use crate::{builder::dir_utils::get_src_files, update::version_check};
 
 pub(crate) use crate::builder::dir_utils::{get_baml_src, get_src_dir};
 

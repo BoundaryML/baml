@@ -1,10 +1,8 @@
 use anyhow::Result;
-use internal_baml_core::{
-    error_unsupported,
-    ir::{FunctionWalker},
-};
+use baml_types::BamlValue;
+use internal_baml_core::{error_unsupported, ir::FunctionWalker};
 use internal_baml_jinja::{
-    BamlArgType, RenderContext, RenderContext_Client, RenderedPrompt, TemplateStringMacro,
+    RenderContext, RenderContext_Client, RenderedPrompt, TemplateStringMacro,
 };
 
 use crate::RuntimeContext;
@@ -77,7 +75,7 @@ impl PromptRenderer {
     pub fn render_prompt(
         &self,
         ctx: &RuntimeContext,
-        params: &BamlArgType,
+        params: &BamlValue,
         client_ctx: &RenderContext_Client,
     ) -> Result<RenderedPrompt> {
         internal_baml_jinja::render_prompt(

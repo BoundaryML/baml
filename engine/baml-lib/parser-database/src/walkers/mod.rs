@@ -319,7 +319,6 @@ impl<'db> crate::ParserDatabase {
                         ast::TypeValue::Int => Type::Int,
                         ast::TypeValue::Float => Type::Float,
                         ast::TypeValue::Bool => Type::Bool,
-                        ast::TypeValue::Char => Type::String,
                         ast::TypeValue::Null => Type::None,
                         ast::TypeValue::Image => Type::Image,
                     },

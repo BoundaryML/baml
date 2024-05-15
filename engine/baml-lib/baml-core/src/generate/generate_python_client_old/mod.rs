@@ -24,7 +24,7 @@ mod types_partial;
 mod value;
 mod variants;
 pub(super) use r#file::FileCollector;
-pub(super) use traits::WithToCode;
+
 
 fn generate_py_file<'a>(obj: &impl WithWritePythonString, fc: &'a mut FileCollector) {
     obj.write_py_file(fc);

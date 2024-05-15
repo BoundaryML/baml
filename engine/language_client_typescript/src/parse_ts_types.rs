@@ -1,12 +1,12 @@
 use napi::bindgen_prelude::*;
 use napi::JsBoolean;
-use napi::JsNull;
-use napi::JsNumber;
+
+
 use napi::JsUnknown;
-use napi_derive::napi;
-use serde::Deserialize;
-use std::collections::HashMap;
-use std::path::PathBuf;
+
+
+
+
 
 struct SerializationError {
     position: Vec<String>,
@@ -60,10 +60,10 @@ pub fn to_baml_arg_json(
         Ok(value_type) => value_type,
     };
 
-    let mut errs = vec![];
+    let errs = vec![];
 
     use napi::ValueType;
-    let to_baml_arg = match value_type {
+    let _to_baml_arg = match value_type {
         ValueType::Undefined => todo!(),
         ValueType::Null => serde_json::Value::Null,
         ValueType::Boolean => match unsafe { value.cast::<JsBoolean>() }.get_value() {

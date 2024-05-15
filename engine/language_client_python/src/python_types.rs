@@ -1,5 +1,6 @@
 use std::ffi::OsString;
 
+use baml_types::BamlValue;
 use pyo3::prelude::{pyclass, pymethods, PyModule, PyResult};
 use pyo3::types::PyType;
 use pyo3::{Py, PyAny, PyObject, Python, ToPyObject};
@@ -31,7 +32,7 @@ impl FunctionResult {
             .parsed_content()
             .map_err(crate::BamlError::from_anyhow)?;
 
-        Ok(pythonize(py, parsed)?)
+        Ok(pythonize(py, &BamlValue::from(parsed))?)
     }
 }
 

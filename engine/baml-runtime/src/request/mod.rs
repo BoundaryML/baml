@@ -3,7 +3,7 @@ mod no_wasm;
 #[cfg(not(feature = "wasm"))]
 pub(crate) type RequestError = no_wasm::NoWasmRequestError;
 #[cfg(not(feature = "wasm"))]
-pub(crate) use no_wasm::{call_request_with_json, response_json, response_text};
+pub(crate) use no_wasm::{call_request_with_json, response_text};
 
 #[cfg(feature = "wasm")]
 mod wasm;

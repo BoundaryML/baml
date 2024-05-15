@@ -94,7 +94,7 @@ impl APIConfig {
         sessions_id: Option<&str>,
         stage: Option<&str>,
         host_name: Option<&str>,
-        debug_level: Option<bool>,
+        _debug_level: Option<bool>,
     ) -> Self {
         let base_url = base_url.unwrap_or(match self {
             Self::LocalOnly(config) => config.base_url.as_str(),
@@ -214,7 +214,7 @@ impl CompleteAPIConfig {
 impl BoundaryAPI for CompleteAPIConfig {
     async fn check_cache(
         &self,
-        payload: &api_interface::CacheRequest,
+        _payload: &api_interface::CacheRequest,
     ) -> Result<Option<api_interface::CacheResponse>> {
         // TODO: @hellovai Implement this
         Ok(None)

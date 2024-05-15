@@ -1,113 +1,82 @@
-// use serde_json::json;
+#[macro_use]
+pub mod macros;
 
-// use crate::from_str;
+mod test_class;
+mod test_enum;
+mod test_lists;
 
-// macro_rules! valided_parses {
-//     ($raw:expr, $expected:expr, $schema:expr) => {
-//         let res = from_str($raw, $schema.to_string());
-//         match res {
-//             Ok(v) => assert_eq!(v, $expected),
-//             Err(e) => assert!(false, "Failed to parse: {:?}", e),
-//         }
-//     };
-// }
+use std::path::PathBuf;
 
-// #[test]
-// fn test_null() {
-//     let expectation = json!(null);
-//     let schema = json!({
-//         "type": "null",
-//     });
-//     valided_parses!("null", expectation, schema);
-//     valided_parses!("NULL", expectation, schema);
-//     valided_parses!(" \tnull  ", expectation, schema);
-//     valided_parses!(" NULL ", expectation, schema);
-// }
+use baml_types::BamlValue;
+use internal_baml_core::{
+    internal_baml_diagnostics::SourceFile,
+    ir::{repr::IntermediateRepr, FieldType, TypeValue},
+    validate,
+};
+use serde_json::json;
 
-// #[test]
-// fn test_string() {
-//     let expectation = json!("hello");
-//     let schema = json!({
-//         "type": "string",
-//     });
-//     // Quoted json strings
-//     valided_parses!(r#""hello""#, expectation, schema);
-// }
+use crate::from_str;
 
-// #[test]
-// fn test_unquoted_string() {
-//     let schema = json!({
-//         "type": "string",
-//     });
-//     // Single word strings don't get treated differently
-//     valided_parses!(" hello ", json!(" hello "), schema);
-// }
+fn load_test_ir(file_content: &str) -> IntermediateRepr {
+    let mut schema = validate(
+        &PathBuf::from("./baml_src"),
+        vec![SourceFile::from((
+            PathBuf::from("./baml_src/example.baml"),
+            file_content.to_string(),
+        ))],
+    );
+    schema.diagnostics.to_result().unwrap();
 
-// #[test]
-// fn test_multi_unquoted_string() {
-//     let expectation = json!("hello world");
-//     let schema = json!({
-//         "type": "string",
-//     });
-//     // Multi word strings
-//     valided_parses!(" hello world ", expectation, schema);
-// }
+    IntermediateRepr::from_parser_database(&schema.db).unwrap()
+}
 
-// // TODO: Fix this.
-// // This test should panic because we don't yet handle single quote strings.
-// fn test_single_quote_string() {
-//     let expectation = json!("hello");
-//     let schema = json!({
-//         "type": "string",
-//     });
-//     valided_parses!("'hello'", expectation, schema);
-//     valided_parses!(" 'hello' ", expectation, schema);
-// }
+const EMPTY_FILE: &str = r#"
+"#;
 
-// #[test]
-// fn test_bool() {
-//     let schema = json!({
-//         "type": "bool",
-//     });
-//     valided_parses!("true", json!(true), schema);
-//     valided_parses!("false", json!(false), schema);
-//     valided_parses!(" true ", json!(true), schema);
-//     valided_parses!(" false ", json!(false), schema);
-//     // Test case insensitivity
-//     valided_parses!("True", json!(true), schema);
-//     valided_parses!("False", json!(false), schema);
-// }
+test_deserializer!(
+    test_string_from_string,
+    EMPTY_FILE,
+    r#"hello"#,
+    FieldType::Primitive(TypeValue::String),
+    "hello"
+);
 
-// #[test]
-// fn test_float() {
-//     let schema = json!({
-//         "type": "float",
-//     });
-//     valided_parses!("123", json!(123.0), schema);
-//     valided_parses!("-123", json!(-123.0), schema);
-//     valided_parses!("123.45", json!(123.45), schema);
-// }
+test_deserializer!(
+    test_string_from_string_with_quotes,
+    EMPTY_FILE,
+    r#""hello""#,
+    FieldType::Primitive(TypeValue::String),
+    "\"hello\""
+);
 
-// #[test]
-// fn test_int() {
-//     let schema = json!({
-//         "type": "int",
-//     });
-//     valided_parses!("123", json!(123), schema);
-//     valided_parses!("-123", json!(-123), schema);
-//     valided_parses!(" 123 ", json!(123), schema);
-//     valided_parses!("1.222", json!(1), schema);
-//     // Always rounds
-//     valided_parses!("1.55", json!(2), schema);
-// }
+test_deserializer!(
+    test_string_from_object,
+    EMPTY_FILE,
+    r#"{"hi":    "hello"}"#,
+    FieldType::Primitive(TypeValue::String),
+    r#"{"hi":    "hello"}"#
+);
 
-// #[test]
-// fn test_array() {
-//     let schema = json!({
-//         "type": "array",
-//         "inner": {
-//             "type": "int",
-//         },
-//     });
-//     valided_parses!("[1, 2, 3]", json!([1, 2, 3]), schema);
-// }
+test_deserializer!(
+    test_string_from_obj_and_string,
+    EMPTY_FILE,
+    r#"The output is: {"hello": "world"}"#,
+    FieldType::Primitive(TypeValue::String),
+    "The output is: {\"hello\": \"world\"}"
+);
+
+test_deserializer!(
+    test_string_from_list,
+    EMPTY_FILE,
+    r#"["hello", "world"]"#,
+    FieldType::Primitive(TypeValue::String),
+    "[\"hello\", \"world\"]"
+);
+
+test_deserializer!(
+    test_string_from_int,
+    EMPTY_FILE,
+    r#"1"#,
+    FieldType::Primitive(TypeValue::String),
+    "1"
+);

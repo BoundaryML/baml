@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
+use baml_types::BamlImage;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
 
@@ -501,7 +502,7 @@ impl OpenAIClient {
 
     fn build_http_request_universal(
         &self,
-        ctx: &RuntimeContext,
+        _ctx: &RuntimeContext,
         path: &str,
         prompt: &Vec<RenderedChatMessage>,
     ) -> Result<reqwest::RequestBuilder> {
@@ -548,12 +549,12 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json:
         .map(|part| match part {
             ChatMessagePart::Text(text) => json!({"type": "text", "text": text}),
             ChatMessagePart::Image(image) => match image {
-                internal_baml_jinja::BamlImage::Url(image) => {
+                BamlImage::Url(image) => {
                     json!({"type": "image_url", "image_url": json!({
                         "url": image.url
                     })})
                 }
-                internal_baml_jinja::BamlImage::Base64(image) => {
+                BamlImage::Base64(image) => {
                     json!({"type": "image_url", "image_url": json!({
                         "base64": image.base64
                     })})

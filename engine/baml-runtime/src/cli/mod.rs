@@ -1,8 +1,8 @@
 mod generate;
 
 use anyhow::Result;
-use clap::{Args, Parser, Subcommand, ValueEnum};
-use std::fmt;
+use clap::{Parser, Subcommand};
+
 
 #[derive(Parser, Debug)]
 #[command(author, version, about = "A CLI tool for working with the BAML runtime.", long_about = None)]

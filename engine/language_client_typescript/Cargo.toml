@@ -8,6 +8,7 @@ name = "baml"
 crate-type = ["cdylib"]
 
 [dependencies]
+baml-types = { path = "../baml-lib/baml-types" }
 baml-runtime = { path = "../baml-runtime", features = ["no_wasm"] }
 env_logger.workspace = true
 futures.workspace = true

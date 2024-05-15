@@ -27,7 +27,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
         case.functions
             .iter()
             .for_each(|(name, s)| match ctx.db.find_function_by_name(name) {
-                Some(f) => {
+                Some(_f) => {
                     // TODO: Check args.
                 }
                 None => {

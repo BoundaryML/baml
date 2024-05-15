@@ -1,5 +1,6 @@
 use anyhow::Result;
-use futures::stream::Stream;
+use baml_types::BamlValue;
+
 use futures::stream::{StreamExt, TryStreamExt};
 use std::ops::DerefMut;
 use std::sync::Arc;
@@ -9,7 +10,7 @@ use tokio::sync::Mutex;
 use crate::internal::llm_client::FunctionResultStream as InternalFunctionResultStream;
 use crate::FunctionResult;
 
-type StreamCallback = Box<dyn Fn(serde_json::Value) -> Result<()> + Send>;
+type StreamCallback = Box<dyn Fn(BamlValue) -> Result<()> + Send>;
 
 /// Wraps a stream_cancel::Trigger with an idempotent cancel.
 #[derive(Clone)]
@@ -55,7 +56,7 @@ impl FunctionResultStream {
     pub async fn run(self) -> Result<FunctionResult> {
         self.inner
             .then(|fn_result| async {
-                let parsed = fn_result.parsed_content()?.clone();
+                let parsed = BamlValue::from(fn_result.parsed_content()?);
                 match self.on_event {
                     None => Ok(fn_result),
                     Some(ref cb) => match cb(parsed) {

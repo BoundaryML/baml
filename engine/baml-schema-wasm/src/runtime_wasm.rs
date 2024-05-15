@@ -9,6 +9,8 @@ use baml_runtime::{
     RuntimeInterface,
 };
 use baml_runtime::{InternalRuntimeInterface, RuntimeContext};
+use baml_types::BamlMap;
+use baml_types::BamlValue;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::error;
@@ -318,7 +320,7 @@ impl WasmTestResponse {
     pub fn parsed_response(&self) -> Option<String> {
         match &self.test_response.function_response {
             Ok(f) => match &f.parsed {
-                Some(Ok((p, _))) => match serde_json::to_string(p) {
+                Some(Ok(p)) => match serde_json::to_string(&BamlValue::from(p)) {
                     Ok(s) => Some(s),
                     Err(_) => None,
                 },
@@ -456,7 +458,6 @@ fn get_dummy_value(
                 baml_runtime::TypeValue::Int => "123".to_string(),
                 baml_runtime::TypeValue::Float => "0.5".to_string(),
                 baml_runtime::TypeValue::Bool => "true".to_string(),
-                baml_runtime::TypeValue::Char => "'a'".to_string(),
                 baml_runtime::TypeValue::Null => "null".to_string(),
                 baml_runtime::TypeValue::Image => {
                     "{ url \"https://imgs.xkcd.com/comics/standards.png\"}".to_string()
@@ -647,9 +648,7 @@ impl WasmFunction {
         ctx: &runtime_ctx::WasmRuntimeContext,
         params: JsValue,
     ) -> Result<WasmPrompt, wasm_bindgen::JsError> {
-        let mut params = serde_wasm_bindgen::from_value::<
-            indexmap::IndexMap<String, serde_json::Value>,
-        >(params)?;
+        let mut params = serde_wasm_bindgen::from_value::<BamlMap<String, BamlValue>>(params)?;
         let env_vars = rt.runtime.internal().ir().required_env_vars();
 
         // For anything env vars that are not provided, fill with empty strings
@@ -658,17 +657,6 @@ impl WasmFunction {
         for var in env_vars {
             if !ctx.env.contains_key(var) {
                 ctx.env.insert(var.into(), "".to_string());
-            }
-        }
-
-        // Fill any missing params with empty strings
-        for var in self
-            .test_cases
-            .iter()
-            .flat_map(|tc| tc.inputs.iter().map(|p| &p.name))
-        {
-            if !params.contains_key(var) {
-                params.insert(var.clone(), serde_json::Value::Null);
             }
         }
 

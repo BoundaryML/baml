@@ -5,6 +5,7 @@ mod threaded_tracer;
 mod wasm_tracer;
 
 use anyhow::Result;
+use baml_types::BamlValue;
 use indexmap::IndexMap;
 use std::collections::HashMap;
 
@@ -30,7 +31,7 @@ type TracerImpl = NonThreadedTracer;
 pub struct TracingSpan {
     span_id: Uuid,
     function_name: String,
-    params: IndexMap<String, serde_json::Value>,
+    params: IndexMap<String, BamlValue>,
     parent_ids: Option<Vec<(String, Uuid)>>,
     start_time: web_time::SystemTime,
     #[allow(dead_code)]
@@ -74,7 +75,7 @@ impl BamlTracer {
         &self,
         function_name: &str,
         ctx: &RuntimeContext,
-        params: &IndexMap<String, serde_json::Value>,
+        params: &IndexMap<String, BamlValue>,
         parent: Option<&TracingSpan>,
     ) -> Option<TracingSpan> {
         if !self.enabled {
@@ -93,7 +94,7 @@ impl BamlTracer {
     pub(crate) async fn finish_span(
         &self,
         span: TracingSpan,
-        response: Option<serde_json::Value>,
+        response: Option<BamlValue>,
     ) -> Result<()> {
         if let Some(tracer) = &self.tracer {
             tracer.submit((&self.options, span, response).into()).await
@@ -169,15 +170,15 @@ impl From<(&APIWrapper, &TracingSpan)> for LogSchemaContext {
     }
 }
 
-impl From<&IndexMap<String, serde_json::Value>> for IOValue {
-    fn from(items: &IndexMap<String, serde_json::Value>) -> Self {
+impl From<&IndexMap<String, BamlValue>> for IOValue {
+    fn from(items: &IndexMap<String, BamlValue>) -> Self {
         IOValue {
             r#type: TypeSchema {
                 name: api_wrapper::core_types::TypeSchemaName::Multi,
                 fields: items
                     .iter()
                     // TODO: @hellovai do better types
-                    .map(|(k, v)| (k.clone(), "unknown".into()))
+                    .map(|(k, _v)| (k.clone(), "unknown".into()))
                     .collect::<IndexMap<_, _>>(),
             },
             value: api_wrapper::core_types::ValueType::List(
@@ -191,13 +192,13 @@ impl From<&IndexMap<String, serde_json::Value>> for IOValue {
     }
 }
 
-impl From<&serde_json::Value> for IOValue {
-    fn from(value: &serde_json::Value) -> Self {
+impl From<&BamlValue> for IOValue {
+    fn from(value: &BamlValue) -> Self {
         match value {
-            serde_json::Value::Object(obj) => {
+            BamlValue::Map(obj) => {
                 let fields = obj
                     .iter()
-                    .map(|(k, v)| (k.clone(), "unknown".into()))
+                    .map(|(k, _v)| (k.clone(), "unknown".into()))
                     .collect::<IndexMap<_, _>>();
                 IOValue {
                     r#type: TypeSchema {
@@ -206,7 +207,10 @@ impl From<&serde_json::Value> for IOValue {
                     },
                     value: api_wrapper::core_types::ValueType::List(
                         obj.iter()
-                            .map(|(_, v)| serde_json::to_string(v).unwrap())
+                            .map(|(_, v)| {
+                                serde_json::to_string(&serde_json::json!(v))
+                                    .unwrap_or_else(|_| "<unknown>".to_string())
+                            })
                             .collect::<Vec<_>>(),
                     ),
                     r#override: None,
@@ -217,15 +221,18 @@ impl From<&serde_json::Value> for IOValue {
                     name: api_wrapper::core_types::TypeSchemaName::Single,
                     fields: [("value".into(), "unknown".into())].into(),
                 },
-                value: api_wrapper::core_types::ValueType::String(value.to_string()),
+                value: api_wrapper::core_types::ValueType::String(
+                    serde_json::to_string(&serde_json::json!(value))
+                        .unwrap_or_else(|_| "<unknown>".to_string()),
+                ),
                 r#override: None,
             },
         }
     }
 }
 
-impl From<(&APIWrapper, TracingSpan, Option<serde_json::Value>)> for LogSchema {
-    fn from((api, span, result): (&APIWrapper, TracingSpan, Option<serde_json::Value>)) -> Self {
+impl From<(&APIWrapper, TracingSpan, Option<BamlValue>)> for LogSchema {
+    fn from((api, span, result): (&APIWrapper, TracingSpan, Option<BamlValue>)) -> Self {
         let parent_ids = &span.parent_ids.as_ref();
         LogSchema {
             project_id: api.project_id().map(|s| s.to_string()),
@@ -286,7 +293,10 @@ impl From<(&APIWrapper, TracingSpan, &Result<FunctionResult>)> for LogSchema {
                     .ok()
                     .and_then(|r| r.parsed.as_ref())
                     .and_then(|r| r.as_ref().ok())
-                    .map(|(r, _)| r.into()),
+                    .map(|r| {
+                        let v: BamlValue = r.into();
+                        (&v).into()
+                    }),
             },
             error: error_from_result(result),
             metadata: None,

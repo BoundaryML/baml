@@ -1,5 +1,6 @@
 use baml_runtime::{ChatMessagePart, RenderedPrompt};
 
+use baml_types::BamlImage;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(getter_with_clone)]
@@ -62,8 +63,8 @@ impl WasmChatMessagePart {
     pub fn as_image(&self) -> Option<String> {
         if let ChatMessagePart::Image(s) = &self.part {
             Some(match s {
-                baml_runtime::BamlImage::Url(u) => u.url.clone(),
-                baml_runtime::BamlImage::Base64(b) => b.base64.clone(),
+                BamlImage::Url(u) => u.url.clone(),
+                BamlImage::Base64(b) => b.base64.clone(),
             })
         } else {
             None

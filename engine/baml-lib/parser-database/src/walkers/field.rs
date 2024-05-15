@@ -111,7 +111,6 @@ impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
                         ast::TypeValue::Bool => "bool",
                         ast::TypeValue::Int => "int",
                         ast::TypeValue::Float => "float",
-                        ast::TypeValue::Char => "char",
                         ast::TypeValue::String => "string",
                         ast::TypeValue::Null => "null",
                         ast::TypeValue::Image => "image",

@@ -1,4 +1,5 @@
 use anyhow::Result;
+use baml_types::{BamlMap, BamlValue};
 use indexmap::IndexMap;
 use internal_baml_core::internal_baml_diagnostics::Diagnostics;
 use internal_baml_core::ir::{repr::IntermediateRepr, FunctionWalker};
@@ -43,7 +44,7 @@ pub trait RuntimeInterface {
     fn call_function(
         &self,
         function_name: String,
-        params: &IndexMap<String, serde_json::Value>,
+        params: IndexMap<String, BamlValue>,
         ctx: &RuntimeContext,
     ) -> impl std::future::Future<Output = ResponseType<FunctionResult>>;
 
@@ -71,7 +72,7 @@ pub trait ExerimentalTracingInterface {
         &self,
         function_name: &str,
         ctx: &RuntimeContext,
-        params: &IndexMap<String, serde_json::Value>,
+        params: &BamlMap<String, BamlValue>,
     ) -> Option<TracingSpan>;
 
     #[allow(async_fn_in_trait)]
@@ -114,7 +115,7 @@ pub trait InternalRuntimeInterface {
         &self,
         function_name: &str,
         ctx: &RuntimeContext,
-        params: &IndexMap<String, serde_json::Value>,
+        params: &IndexMap<String, BamlValue>,
     ) -> Result<(RenderedPrompt, String)>;
 
     fn ir(&self) -> &IntermediateRepr;

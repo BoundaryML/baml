@@ -2,13 +2,16 @@ mod parse_py_type;
 mod python_types;
 
 use baml_runtime::{BamlRuntime, RuntimeContext, RuntimeInterface};
+use baml_types::BamlValue;
 use indexmap::IndexMap;
 use parse_py_type::parse_py_type;
 use pyo3::prelude::{pyclass, pyfunction, pymethods, pymodule, PyModule, PyResult};
 use pyo3::{create_exception, wrap_pyfunction, PyErr, PyObject, Python, ToPyObject};
 use python_types::BamlImagePy;
 use pythonize::depythonize;
-use serde_json::Value;
+
+
+
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -25,9 +28,9 @@ struct BamlRuntimeFfi {
     internal: Arc<BamlRuntime>,
 }
 
-fn convert_to_hashmap(value: Value) -> Option<IndexMap<String, Value>> {
+fn convert_to_hashmap(value: BamlValue) -> Option<IndexMap<String, BamlValue>> {
     match value {
-        Value::Object(map) => Some(map.into_iter().collect()),
+        BamlValue::Map(map) => Some(map.into_iter().collect()),
         _ => None,
     }
 }
@@ -69,7 +72,7 @@ impl BamlRuntimeFfi {
 
                 pyo3_asyncio::tokio::future_into_py(py, async move {
                     let result = baml_runtime
-                        .call_function(function_name, &args_map, &ctx)
+                        .call_function(function_name, args_map, &ctx)
                         .await
                         .map(python_types::FunctionResult::new)
                         .map_err(BamlError::from_anyhow);

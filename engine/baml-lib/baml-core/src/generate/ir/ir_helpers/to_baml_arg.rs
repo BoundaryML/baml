@@ -1,7 +1,7 @@
-use indexmap::IndexMap;
-use internal_baml_jinja::{BamlArgType, BamlImage, ImageBase64, ImageUrl};
+use baml_types::{BamlMap, BamlValue};
+use internal_baml_schema_ast::ast::TypeValue;
 
-use crate::ir::{FieldType, IntermediateRepr, TypeValue};
+use crate::ir::{FieldType, IntermediateRepr};
 
 use super::{scope_diagnostics::ScopeStack, IRHelper};
 
@@ -25,147 +25,122 @@ impl ParameterError {
     }
 }
 
-pub fn to_baml_arg(
+pub fn validate_arg(
     ir: &IntermediateRepr,
     field_type: &FieldType,
-    value: &serde_json::Value,
+    value: &BamlValue,
     scope: &mut ScopeStack,
-) -> BamlArgType {
+) -> Option<BamlValue> {
     match field_type {
-        FieldType::Primitive(t) => {
-            let mut error = || {
-                scope.push_error(format!("Expected type {:?}, got `{}`", t, value));
-                BamlArgType::Unsupported("Error".to_string())
-            };
-            match t {
-                TypeValue::String if value.is_string() => {
-                    BamlArgType::String(value.as_str().unwrap().to_string())
-                }
-                TypeValue::Int if value.is_i64() => BamlArgType::Int(value.as_i64().unwrap()),
-                // TODO: should we use as_u64()?
-                TypeValue::Int if value.is_u64() => BamlArgType::Int(value.as_i64().unwrap()),
-                TypeValue::Float if value.is_f64() => BamlArgType::Float(value.as_f64().unwrap()),
-                TypeValue::Bool if value.is_boolean() => {
-                    BamlArgType::Bool(value.as_bool().unwrap())
-                }
-                TypeValue::Char
-                    if value.is_string() && value.as_str().unwrap().chars().count() == 1 =>
-                {
-                    // TODO: create char type?
-                    BamlArgType::String(value.as_str().unwrap().chars().next().unwrap().to_string())
-                }
-                TypeValue::Null if value.is_null() => BamlArgType::None,
-                TypeValue::Image if value.is_object() => {
-                    let map = value.as_object().unwrap(); // assuming value is an object
-                    if let Some(url) = map.get("url") {
-                        if let Some(url_str) = url.as_str() {
-                            BamlArgType::Image(BamlImage::Url(ImageUrl::new(url_str.to_string())))
-                        } else {
-                            error()
-                        }
-                    } else if let Some(base64) = map.get("base64") {
-                        if let Some(base64_str) = base64.as_str() {
-                            // get the media_type from the map
-                            if let Some(media_type) = map.get("media_type") {
-                                if let Some(media_type_str) = media_type.as_str() {
-                                    BamlArgType::Image(BamlImage::Base64(ImageBase64::new(
-                                        base64_str.to_string(),
-                                        media_type_str.to_string(),
-                                    )))
-                                } else {
-                                    error()
-                                }
-                            } else {
-                                scope.push_error("Missing media_type for base64 image".to_string());
-                                BamlArgType::Unsupported("Error".to_string())
-                            }
-                        } else {
-                            error()
-                        }
+        FieldType::Primitive(t) => match t {
+            TypeValue::String if matches!(value, BamlValue::String(_)) => Some(value.clone()),
+            TypeValue::Int if matches!(value, BamlValue::Int(_)) => Some(value.clone()),
+            TypeValue::Float if matches!(value, BamlValue::Float(_)) => Some(value.clone()),
+            TypeValue::Bool if matches!(value, BamlValue::Bool(_)) => Some(value.clone()),
+            TypeValue::Null if matches!(value, BamlValue::Null) => Some(value.clone()),
+            TypeValue::Image => match value {
+                BamlValue::Image(v) => Some(BamlValue::Image(v.clone())),
+                BamlValue::Map(kv) => {
+                    if let Some(BamlValue::String(s)) = kv.get("url") {
+                        Some(BamlValue::Image(baml_types::BamlImage::url(s.to_string())))
+                    } else if let (
+                        Some(BamlValue::String(s)),
+                        Some(BamlValue::String(media_type)),
+                    ) = (kv.get("base64"), kv.get("media_type"))
+                    {
+                        Some(BamlValue::Image(baml_types::BamlImage::base64(
+                            s.to_string(),
+                            media_type.to_string(),
+                        )))
                     } else {
-                        error()
-                    }
-                }
-                _ => error(),
-            }
-        }
-        FieldType::Enum(name) => {
-            if let Ok(e) = ir.find_enum(name) {
-                match value.as_str() {
-                    Some(s) => {
-                        if e.walk_values().find(|v| v.item.elem.0 == s).is_some() {
-                            BamlArgType::Enum(name.to_string(), s.to_string())
-                        } else {
-                            scope.push_error(format!(
-                                "Invalid enum value for {}: expected one of ({}), got `{}`",
-                                name,
-                                e.walk_values()
-                                    .map(|v| v.item.elem.0.as_str())
-                                    .collect::<Vec<&str>>()
-                                    .join(" | "),
-                                s
+                        scope.push_error(format!(
+                                "Invalid image: expected `url` or (`base64` and `media_type`), got `{}`",
+                                value
                             ));
-                            BamlArgType::Unsupported("Error".to_string())
-                        }
-                    }
-                    None => {
-                        scope.push_error(format!(
-                            "Expected enum value for {}, got `{}`",
-                            name, value
-                        ));
-                        BamlArgType::Unsupported("Error".to_string())
+                        None
                     }
                 }
-            } else {
-                scope.push_error(format!("Enum {} not found", name));
-                BamlArgType::Unsupported("Error".to_string())
+                _ => {
+                    scope.push_error(format!("Expected type {:?}, got `{}`", t, value));
+                    None
+                }
+            },
+            _ => {
+                scope.push_error(format!("Expected type {:?}, got `{}`", t, value));
+                None
             }
-        }
-        FieldType::Class(name) => {
-            if let Ok(c) = ir.find_class(name) {
-                match value {
-                    serde_json::Value::Object(obj) => {
-                        let mut fields = IndexMap::new();
-                        for f in c.walk_fields() {
-                            if let Some(v) = obj.get(f.name()) {
-                                fields.insert(
-                                    f.name().to_string(),
-                                    to_baml_arg(ir, f.r#type(), v, scope),
-                                );
-                            } else if !f.r#type().is_optional() {
-                                scope.push_error(format!(
-                                    "Missing required field `{}` for class {}",
-                                    f.name(),
-                                    name
-                                ));
+        },
+        FieldType::Enum(name) => match value {
+            BamlValue::String(s) => {
+                if let Ok(e) = ir.find_enum(name) {
+                    if e.walk_values().find(|v| v.item.elem.0 == *s).is_some() {
+                        Some(BamlValue::Enum(name.to_string(), s.to_string()))
+                    } else {
+                        scope.push_error(format!(
+                            "Invalid enum {}: expected one of ({}), got `{}`",
+                            name,
+                            e.walk_values()
+                                .map(|v| v.item.elem.0.as_str())
+                                .collect::<Vec<&str>>()
+                                .join(" | "),
+                            s
+                        ));
+                        None
+                    }
+                } else {
+                    scope.push_error(format!("Enum {} not found", name));
+                    None
+                }
+            }
+            BamlValue::Enum(n, _) if n == name => Some(value.clone()),
+            _ => {
+                scope.push_error(format!("Invalid enum {}: Got `{}`", name, value));
+                None
+            }
+        },
+        FieldType::Class(name) => match value {
+            BamlValue::Class(n, _) if n == name => return Some(value.clone()),
+            BamlValue::Map(obj) => match ir.find_class(name) {
+                Ok(c) => {
+                    let mut fields = BamlMap::new();
+                    for f in c.walk_fields() {
+                        if let Some(v) = obj.get(f.name()) {
+                            if let Some(v) = validate_arg(ir, f.r#type(), v, scope) {
+                                fields.insert(f.name().to_string(), v);
                             }
+                        } else if !f.r#type().is_optional() {
+                            scope.push_error(format!(
+                                "Missing required field `{}` for class {}",
+                                f.name(),
+                                name
+                            ));
                         }
-                        BamlArgType::Class(name.to_string(), fields)
                     }
-                    _ => {
-                        scope.push_error(format!(
-                            "Expected object for class {}, got `{}`",
-                            name, value
-                        ));
-                        BamlArgType::Unsupported("Error".to_string())
-                    }
+                    Some(BamlValue::Class(name.to_string(), fields))
                 }
-            } else {
-                scope.push_error(format!("Class {} not found", name));
-                BamlArgType::Unsupported("Error".to_string())
+                Err(_) => {
+                    scope.push_error(format!("Class {} not found", name));
+                    None
+                }
+            },
+            _ => {
+                scope.push_error(format!("Expected class {}, got `{}`", name, value));
+                None
             }
-        }
-        FieldType::List(item) => match value.as_array() {
-            Some(arr) => {
+        },
+        FieldType::List(item) => match value {
+            BamlValue::List(arr) => {
                 let mut items = Vec::new();
                 for v in arr {
-                    items.push(to_baml_arg(ir, item, v, scope));
+                    if let Some(v) = validate_arg(ir, item, v, scope) {
+                        items.push(v);
+                    }
                 }
-                BamlArgType::List(items)
+                Some(BamlValue::List(items))
             }
-            None => {
+            _ => {
                 scope.push_error(format!("Expected array, got `{}`", value));
-                BamlArgType::Unsupported("Error".to_string())
+                None
             }
         },
         FieldType::Tuple(_) => unimplemented!("Tuples are not yet supported"),
@@ -173,26 +148,26 @@ pub fn to_baml_arg(
         FieldType::Union(options) => {
             for option in options {
                 let mut scope = ScopeStack::new();
-                let result = to_baml_arg(ir, option, value, &mut scope);
+                let result = validate_arg(ir, option, value, &mut scope);
                 if !scope.has_errors() {
                     return result;
                 }
             }
             scope.push_error(format!("Expected one of {:?}, got `{}`", options, value));
-            BamlArgType::Unsupported("Error".to_string())
+            None
         }
         FieldType::Optional(inner) => {
-            if !value.is_null() {
+            if matches!(value, BamlValue::Null) {
                 let mut inner_scope = ScopeStack::new();
-                let baml_arg = to_baml_arg(ir, inner, value, &mut inner_scope);
+                let baml_arg = validate_arg(ir, inner, value, &mut inner_scope);
                 if inner_scope.has_errors() {
                     scope.push_error(format!("Expected optional {}, got `{}`", inner, value));
-                    BamlArgType::Unsupported("Error".to_string())
+                    None
                 } else {
                     baml_arg
                 }
             } else {
-                BamlArgType::None
+                Some(value.clone())
             }
         }
     }

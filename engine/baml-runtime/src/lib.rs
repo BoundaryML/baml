@@ -21,6 +21,8 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 
+use baml_types::BamlMap;
+use baml_types::BamlValue;
 use indexmap::IndexMap;
 use runtime::InternalBamlRuntime;
 
@@ -36,7 +38,6 @@ use clap::Parser;
 use internal_baml_codegen::{GeneratorArgs, LanguageClientType};
 use std::path::PathBuf;
 
-pub use internal_baml_jinja::BamlImage;
 #[cfg(feature = "internal")]
 pub use internal_baml_jinja::{ChatMessagePart, RenderedPrompt};
 #[cfg(feature = "internal")]
@@ -120,10 +121,10 @@ impl RuntimeInterface for BamlRuntime {
     async fn call_function(
         &self,
         function_name: String,
-        params: &IndexMap<String, serde_json::Value>,
+        params: IndexMap<String, BamlValue>,
         ctx: &RuntimeContext,
     ) -> ResponseType<crate::FunctionResult> {
-        let span = self.tracer.start_span(&function_name, ctx, params, None);
+        let span = self.tracer.start_span(&function_name, ctx, &params, None);
         let response = self.inner.call_function(function_name, params, ctx).await;
         if let Some(span) = span {
             if let Err(e) = self.tracer.finish_baml_span(span, &response).await {
@@ -157,7 +158,7 @@ impl ExerimentalTracingInterface for BamlRuntime {
         &self,
         function_name: &str,
         ctx: &RuntimeContext,
-        params: &IndexMap<String, serde_json::Value>,
+        params: &BamlMap<String, BamlValue>,
     ) -> Option<TracingSpan> {
         self.tracer.start_span(function_name, ctx, params, None)
     }

@@ -2,14 +2,13 @@ use std::collections::HashMap;
 
 use crate::BamlImagePy;
 use anyhow::{bail, Result};
-use baml_runtime::BamlImage;
-use internal_baml_jinja::{ImageBase64, ImageUrl};
+use baml_types::{BamlImage, BamlMap, BamlValue};
+
 use pyo3::{
     exceptions::{PyRuntimeError, PyTypeError},
     types::{PyDict, PyList},
     PyErr, PyObject, PyResult, Python, ToPyObject,
 };
-use serde_json::json;
 
 struct SerializationError {
     position: Vec<String>,
@@ -72,12 +71,12 @@ impl TryFrom<BamlImagePy> for BamlImage {
                 url: Some(url),
                 base64: None,
                 media_type: None,
-            } => Ok(BamlImage::Url(ImageUrl { url })),
+            } => Ok(BamlImage::url(url)),
             BamlImagePy {
                 url: None,
                 base64: Some(base64),
                 media_type: Some(media_type),
-            } => Ok(BamlImage::Base64(ImageBase64 { base64, media_type })),
+            } => Ok(BamlImage::base64(base64, media_type)),
             _ => Err("Invalid BamlImagePy"),
         }
     }
@@ -87,7 +86,7 @@ fn pyobject_to_json<'py, F>(
     py: Python<'py>,
     to_type: &mut F,
     prefix: Vec<String>,
-) -> Result<serde_json::Value, Vec<SerializationError>>
+) -> Result<BamlValue, Vec<SerializationError>>
 where
     F: FnMut(Python<'py>, PyObject) -> Result<MappedPyType>,
 {
@@ -101,10 +100,10 @@ where
         }
     };
     match infered {
-        MappedPyType::Enum(_, values) => Ok(json!(values)),
-        MappedPyType::Class(_, kvs) => {
+        MappedPyType::Enum(e, value) => Ok(BamlValue::Enum(e, value)),
+        MappedPyType::Class(c, kvs) => {
             let mut errs = vec![];
-            let mut obj = serde_json::Map::new();
+            let mut obj = BamlMap::new();
             for (k, v) in kvs {
                 let mut prefix = prefix.clone();
                 prefix.push(k.clone());
@@ -118,12 +117,12 @@ where
             if !errs.is_empty() {
                 Err(errs)
             } else {
-                Ok(serde_json::Value::Object(obj))
+                Ok(BamlValue::Class(c, obj))
             }
         }
         MappedPyType::Map(kvs) => {
             let mut errs = vec![];
-            let mut obj = serde_json::Map::new();
+            let mut obj = BamlMap::new();
             for (k, v) in kvs {
                 let mut prefix = prefix.clone();
                 prefix.push(k.clone());
@@ -137,7 +136,7 @@ where
             if !errs.is_empty() {
                 Err(errs)
             } else {
-                Ok(serde_json::Value::Object(obj))
+                Ok(BamlValue::Map(obj))
             }
         }
         MappedPyType::List(items) => {
@@ -156,15 +155,24 @@ where
             if !errs.is_empty() {
                 Err(errs)
             } else {
-                Ok(serde_json::Value::Array(arr))
+                Ok(BamlValue::List(arr))
             }
         }
-        MappedPyType::String(v) => Ok(json!(v)),
-        MappedPyType::Int(v) => Ok(json!(v)),
-        MappedPyType::Float(v) => Ok(json!(v)),
-        MappedPyType::Bool(v) => Ok(json!(v)),
-        MappedPyType::BamlImage(v) => Ok(json!(v)),
-        MappedPyType::None => Ok(serde_json::Value::Null),
+        MappedPyType::String(v) => Ok(BamlValue::String(v)),
+        MappedPyType::Int(v) => Ok(BamlValue::Int(v)),
+        MappedPyType::Float(v) => Ok(BamlValue::Float(v)),
+        MappedPyType::Bool(v) => Ok(BamlValue::Bool(v)),
+        MappedPyType::BamlImage(v) => {
+            if let Ok(v) = BamlImage::try_from(v) {
+                Ok(BamlValue::Image(v))
+            } else {
+                Err(vec![SerializationError {
+                    position: prefix,
+                    message: "Invalid BamlImagePy".to_string(),
+                }])
+            }
+        }
+        MappedPyType::None => Ok(BamlValue::Null),
         MappedPyType::Unsupported(r#type) => Err(vec![SerializationError {
             position: prefix,
             message: format!("Unsupported type: {}", r#type),
@@ -172,7 +180,7 @@ where
     }
 }
 
-pub fn parse_py_type(any: PyObject) -> PyResult<serde_json::Value> {
+pub fn parse_py_type(any: PyObject) -> PyResult<BamlValue> {
     Python::with_gil(|py| {
         let enum_type = py.import("enum").and_then(|m| m.getattr("Enum"))?;
         let base_model = py.import("pydantic").and_then(|m| m.getattr("BaseModel"))?;

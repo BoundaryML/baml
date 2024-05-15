@@ -166,10 +166,6 @@ impl<'db> WithJsonSchema for FieldType {
                 "$ref": format!("#/definitions/{}", name),
             }),
             FieldType::Primitive(t) => match t {
-                TypeValue::Char => json!({
-                    "type": "string",
-                    "maxLength": 1,
-                }),
                 TypeValue::String => json!({
                     "type": "string",
                 }),
@@ -245,51 +241,6 @@ impl<'db> WithJsonSchema for FieldType {
                     }
                 }
             }
-        }
-    }
-}
-
-// Impl display for FieldType
-impl std::fmt::Display for FieldType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            FieldType::Enum(name) | FieldType::Class(name) => {
-                write!(f, "{}", name)
-            }
-            FieldType::Primitive(t) => match t {
-                TypeValue::Char => write!(f, "char"),
-                TypeValue::String => write!(f, "string"),
-                TypeValue::Int => write!(f, "int"),
-                TypeValue::Float => write!(f, "float"),
-                TypeValue::Bool => write!(f, "bool"),
-                TypeValue::Null => write!(f, "null"),
-                TypeValue::Image => write!(f, "image"),
-            },
-            FieldType::Union(choices) => {
-                write!(
-                    f,
-                    "({})",
-                    choices
-                        .iter()
-                        .map(|t| t.to_string())
-                        .collect::<Vec<_>>()
-                        .join(" | ")
-                )
-            }
-            FieldType::Tuple(choices) => {
-                write!(
-                    f,
-                    "({})",
-                    choices
-                        .iter()
-                        .map(|t| t.to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-            }
-            FieldType::Map(k, v) => write!(f, "map<{}, {}>", k.to_string(), v.to_string()),
-            FieldType::List(t) => write!(f, "{}[]", t.to_string()),
-            FieldType::Optional(t) => write!(f, "{}?", t.to_string()),
         }
     }
 }

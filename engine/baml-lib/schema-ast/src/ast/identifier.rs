@@ -15,7 +15,7 @@ pub enum TypeValue {
     Int,
     Float,
     Bool,
-    Char,
+    // Char,
     Null,
     Image,
 }
@@ -27,7 +27,6 @@ impl std::fmt::Display for TypeValue {
             TypeValue::Int => write!(f, "int"),
             TypeValue::Float => write!(f, "float"),
             TypeValue::Bool => write!(f, "bool"),
-            TypeValue::Char => write!(f, "char"),
             TypeValue::Null => write!(f, "null"),
             TypeValue::Image => write!(f, "image"),
         }
@@ -108,7 +107,6 @@ impl WithName for Identifier {
                 TypeValue::Int => "int",
                 TypeValue::Float => "float",
                 TypeValue::Bool => "bool",
-                TypeValue::Char => "char",
                 TypeValue::Null => "null",
                 TypeValue::Image => "image",
             },
@@ -138,7 +136,6 @@ impl From<(&str, Span)> for Identifier {
             "float" => Identifier::Primitive(TypeValue::Float, span),
             "bool" => Identifier::Primitive(TypeValue::Bool, span),
             "null" => Identifier::Primitive(TypeValue::Null, span),
-            "char" => Identifier::Primitive(TypeValue::Char, span),
             "image" => Identifier::Primitive(TypeValue::Image, span),
             "env" => Identifier::Invalid("env".into(), span),
             other if other.contains('-') => Identifier::String(other.to_string(), span),

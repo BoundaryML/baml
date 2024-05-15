@@ -14,6 +14,7 @@ use crate::{
     FunctionResultStream, InternalRuntimeInterface, RuntimeContext, RuntimeInterface, TestResponse,
 };
 use anyhow::Result;
+use baml_types::{BamlMap, BamlValue};
 use dashmap::DashMap;
 use indexmap::IndexMap;
 use internal_baml_codegen::{GeneratorArgs, LanguageClientType};
@@ -43,7 +44,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         &self,
         function_name: &str,
         ctx: &RuntimeContext,
-        params: &IndexMap<String, serde_json::Value>,
+        params: &IndexMap<String, BamlValue>,
     ) -> Result<(RenderedPrompt, String)> {
         let func = self.get_function(function_name, ctx)?;
         let baml_args = self.ir().check_function_params(&func, params)?;
@@ -113,7 +114,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         let parsed = response
             .content()
             .ok()
-            .map(|content| jsonish::from_str(content, &self.ir(), function.output(), &ctx.env));
+            .map(|content| jsonish::from_str(&self.ir(), &ctx.env, function.output(), content));
         Ok(crate::FunctionResult {
             llm_response: response,
             parsed,
@@ -232,10 +233,10 @@ impl RuntimeInterface for InternalBamlRuntime {
                         Ok(v) => (k, v),
                         Err(e) => {
                             errors.push(e);
-                            (k, serde_json::Value::Null)
+                            (k, BamlValue::Null)
                         }
                     })
-                    .collect::<IndexMap<_, _>>();
+                    .collect::<BamlMap<_, _>>();
 
                 if !errors.is_empty() {
                     return Err(anyhow::anyhow!(
@@ -280,11 +281,11 @@ impl RuntimeInterface for InternalBamlRuntime {
     async fn call_function(
         &self,
         function_name: String,
-        params: &IndexMap<String, serde_json::Value>,
+        params: IndexMap<String, BamlValue>,
         ctx: &RuntimeContext,
     ) -> ResponseType<crate::FunctionResult> {
         let func = self.get_function(&function_name, ctx)?;
-        let baml_args = self.ir().check_function_params(&func, params)?;
+        let baml_args = self.ir().check_function_params(&func, &params)?;
 
         let renderer = PromptRenderer::from_function(&func)?;
         let client_name = renderer.client_name().to_string();

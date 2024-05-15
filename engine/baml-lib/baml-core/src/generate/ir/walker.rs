@@ -1,7 +1,8 @@
 use anyhow::Result;
+use baml_types::BamlValue;
 use indexmap::IndexMap;
 use internal_baml_parser_database::RetryPolicyStrategy;
-use serde_json::json;
+
 use std::collections::HashMap;
 
 use super::{
@@ -167,31 +168,39 @@ impl Expression {
         }
     }
 
-    pub fn as_json(&self, env_values: &HashMap<String, String>) -> Result<serde_json::Value> {
+    pub fn resolve(&self, env_values: &HashMap<String, String>) -> Result<BamlValue> {
         match self {
             Expression::Identifier(Identifier::ENV(s)) => match env_values.get(s) {
-                Some(v) => Ok(json!(v)),
+                Some(v) => Ok(BamlValue::String(v.clone())),
                 None => anyhow::bail!("Environment variable {} not found", s),
             },
-            Expression::String(s) => Ok(json!(s)),
-            Expression::RawString(s) => Ok(json!(s)),
-            Expression::Bool(b) => Ok(json!(*b)),
+            Expression::String(s) => Ok(BamlValue::String(s.clone())),
+            Expression::RawString(s) => Ok(BamlValue::String(s.clone())),
+            Expression::Bool(b) => Ok(BamlValue::Bool(*b)),
             Expression::Map(m) => {
-                let mut map = serde_json::Map::new();
+                let mut map = baml_types::BamlMap::new();
                 for (k, v) in m {
-                    map.insert(k.as_string_value(env_values)?, v.as_json(env_values)?);
+                    map.insert(k.as_string_value(env_values)?, v.resolve(env_values)?);
                 }
-                Ok(json!(map))
+                Ok(BamlValue::Map(map))
             }
             Expression::List(l) => {
                 let mut list = Vec::new();
                 for v in l {
-                    list.push(v.as_json(env_values)?);
+                    list.push(v.resolve(env_values)?);
                 }
-                Ok(json!(list))
+                Ok(BamlValue::List(list))
             }
-            repr::Expression::Identifier(idn) => Ok(json!(idn.name())),
-            repr::Expression::Numeric(n) => Ok(serde_json::Value::Number(n.parse()?)),
+            repr::Expression::Identifier(idn) => Ok(BamlValue::String(idn.name().to_string())),
+            repr::Expression::Numeric(n) => {
+                if let Ok(n) = n.parse::<i64>() {
+                    Ok(BamlValue::Int(n))
+                } else if let Ok(n) = n.parse::<f64>() {
+                    Ok(BamlValue::Float(n))
+                } else {
+                    anyhow::bail!("Invalid numeric value: {}", n)
+                }
+            }
         }
     }
 }
@@ -230,10 +239,10 @@ impl<'a> Walker<'a, (&'a Function, &'a TestCase)> {
     pub fn test_case_params(
         &self,
         env_values: &HashMap<String, String>,
-    ) -> Result<IndexMap<String, Result<serde_json::Value>>> {
+    ) -> Result<IndexMap<String, Result<BamlValue>>> {
         self.args()
             .iter()
-            .map(|(k, v)| Ok((k.clone(), v.as_json(env_values))))
+            .map(|(k, v)| Ok((k.clone(), v.resolve(env_values))))
             .collect()
     }
 

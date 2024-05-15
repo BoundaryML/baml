@@ -2,7 +2,8 @@ use anyhow::Result;
 mod chat;
 mod completion;
 
-use internal_baml_jinja::{BamlArgType, RenderContext_Client, RenderedPrompt};
+use baml_types::BamlValue;
+use internal_baml_jinja::{RenderContext_Client, RenderedPrompt};
 use std::sync::{Arc, Mutex};
 
 use crate::{internal::prompt_renderer::PromptRenderer, RuntimeContext};
@@ -13,7 +14,8 @@ pub use self::{
 };
 
 use super::{
-    retry_policy::CallablePolicy, LLMResponse, FunctionResultStream, ModelFeatures, RetryLLMResponse,
+    retry_policy::CallablePolicy, FunctionResultStream, LLMResponse, ModelFeatures,
+    RetryLLMResponse,
 };
 
 pub trait WithRetryPolicy {
@@ -65,7 +67,7 @@ pub trait WithPrompt<'ir> {
         &'ir self,
         renderer: &PromptRenderer,
         ctx: &RuntimeContext,
-        params: &BamlArgType,
+        params: &BamlValue,
     ) -> Result<RenderedPrompt>;
 }
 
@@ -214,7 +216,7 @@ where
         &'ir self,
         renderer: &PromptRenderer,
         ctx: &RuntimeContext,
-        params: &BamlArgType,
+        params: &BamlValue,
     ) -> Result<RenderedPrompt> {
         let prompt = renderer.render_prompt(ctx, params, self.context())?;
         log::debug!("WithPrompt.render_prompt => {:#?}", prompt);

@@ -19,7 +19,6 @@ impl ToRuby for FieldType {
                 TypeValue::Int => "Integer".to_string(),
                 TypeValue::String => "String".to_string(),
                 TypeValue::Null => "NilClass".to_string(),
-                TypeValue::Char => "String".to_string(),
                 // TODO: Create Baml::Types::Image
                 TypeValue::Image => "Baml::Types::Image".to_string(),
             },

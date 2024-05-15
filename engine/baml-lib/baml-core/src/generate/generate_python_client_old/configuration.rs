@@ -1,16 +1,14 @@
 use internal_baml_parser_database::walkers::ConfigurationWalker;
 use internal_baml_parser_database::RetryPolicyStrategy;
-use internal_baml_schema_ast::ast::{Configuration, FunctionArgs, WithName};
+use internal_baml_schema_ast::ast::{Configuration, WithName};
 use serde_json::json;
 
 use crate::generate::generate_python_client_old::file::clean_file_name;
 
 use super::{
     file::FileCollector,
-    template::{render_template, HSTemplate},
+    template::{render_template},
     traits::{JsonHelper, WithWritePythonString},
-    value::expr_to_py_value,
-    WithToCode,
 };
 
 impl WithWritePythonString for ConfigurationWalker<'_> {
@@ -46,7 +44,7 @@ impl WithWritePythonString for ConfigurationWalker<'_> {
                 fc.complete_file();
             }
             Configuration::Printer(_) => {}
-            Configuration::TestCase(tc) => {
+            Configuration::TestCase(_tc) => {
                 panic!("Test cases are not supported")
                 // let func = match self.walk_functions() {
                 //     Some(func) => func,

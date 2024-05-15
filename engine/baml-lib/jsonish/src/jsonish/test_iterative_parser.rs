@@ -34,7 +34,7 @@ test_jsonish!(test_nested, r#"{"key": [1, 2, 3]}"#, {"key": [1, 2, 3]});
 test_jsonish!(test_nested_whitespace, r#" { "key" : [ 1 , 2 , 3 ] } "#, {"key": [1, 2, 3]});
 
 // Now with leading and suffix text.
-test_jsonish!(test_nested_whitespace_prefix_suffix, r#"prefix { "key" : [ 1 , 2 , 3 ] } suffix"#, {"key": ["1", "2", "3"]});
+test_jsonish!(test_nested_whitespace_prefix_suffix, r#"prefix { "key" : [ 1 , 2 , 3 ] } suffix"#, {"key": [1, 2, 3]});
 
 // Now with multiple top level objects
 test_jsonish!(test_multiple_top_level, r#"{"key": "value"} {"key": "value"}"#, [{"key": "value"}, {"key": "value"}]);
@@ -44,13 +44,13 @@ test_jsonish!(test_multiple_top_level_prefix_suffix, r#"prefix {"key": "value"} 
 
 // Trailing comma
 // The jsonish parser will return the value as a string as we do our best not to cast or modify the input when types are not clear.
-test_jsonish!(test_trailing_comma_array, r#"[1, 2, 3,]"#, ["1", "2", "3"]);
+test_jsonish!(test_trailing_comma_array, r#"[1, 2, 3,]"#, [1, 2, 3]);
 test_jsonish!(test_trailing_comma_object, r#"{"key": "value",}"#, {"key": "value"});
 
 // Test cases for invalid JSONish
-test_jsonish!(test_invalid_array, "[1, 2, 3", ["1", "2", "3"]);
+test_jsonish!(test_invalid_array, "[1, 2, 3", [1, 2, 3]);
 
-test_jsonish!(test_invalid_array_in_object, r#"{"key": [1, 2, 3"#, {"key": ["1", "2", "3"]});
+test_jsonish!(test_invalid_array_in_object, r#"{"key": [1, 2, 3"#, {"key": [1, 2, 3]});
 
 // Extra quote is not allowed
 test_jsonish!(test_incomplete_string, r#""hello"#, "hello");
@@ -142,7 +142,7 @@ test_jsonish!(
   "#,
   {
     "key": "value",
-    "array": ["1", "2", "3"],
+    "array": [1, 2, 3],
     "object": {
       "key": "value"
     }
@@ -165,7 +165,7 @@ test_jsonish!(
   "#,
   {
     "key": "value",
-    "array": ["1", "2", "3", "some stinrg\"with quotes"],
+    "array": [1, 2, 3, "some stinrg\"with quotes"],
     "object": {
       "key": "value"
     }
@@ -188,7 +188,7 @@ test_jsonish!(
   "#,
   {
     "key": "value",
-    "array": ["1", "2", "3", "some stinrg'   with quotes"],
+    "array": [1, 2, 3, "some stinrg'   with quotes"],
     "object": {
       "key": "value"
     }
@@ -208,7 +208,7 @@ test_jsonish!(
   "#,
   {
     "key": "value",
-    "array": ["1", "2", "3"],
+    "array": [1, 2, 3],
     "object": {
       "key": "value"
     }
@@ -228,7 +228,7 @@ test_jsonish!(
   "#,
   {
     "key": "value with space",
-    "array": ["1", "2", "3"],
+    "array": [1, 2, 3],
     "object": {
       "key": "value"
     }
@@ -251,7 +251,7 @@ lines",
   "#,
   {
     "key": "test a long\nthing with new\n\nlines",
-    "array": ["1", "2", "3"],
+    "array": [1, 2, 3],
     "object": {
       "key": "value"
     }
@@ -273,7 +273,7 @@ Then would add a summary of sorts.
   }
   "#,
     {
-      "my_field_0": "true",
+      "my_field_0": true,
       "my_field_1": "**First fragment, Another fragment**\n\nFrag 2, frag 3. Frag 4, Frag 5, Frag 5.\n\nFrag 6, the rest, of the sentence. Then i would quote something \"like this\" or this.\n\nThen would add a summary of sorts."
     }
 );
@@ -345,16 +345,16 @@ test_jsonish!(test_mal_formed_json_sequence, r#"```json
 }"#, {
   "foo1": {
     "field1": "Something horrible has happened!!",
-    "field2": "null",
-    "field3": "null",
-    "field4": "null",
-    "field5": "null",
-    "field6": "null"
+    "field2": null,
+    "field3": null,
+    "field4": null,
+    "field5": null,
+    "field6": null
   },
   "foo2": [
     {
       "field26": "The bad thing is confirmed.",
-      "field27": "null"
+      "field27": null
     }
   ],
   "foo3": {
@@ -363,10 +363,10 @@ test_jsonish!(test_mal_formed_json_sequence, r#"```json
     "field30": [],
     "field31": [],
     "field32": [],
-    "field33": "null",
-    "field34": "null",
-    "field35": "null",
-    "field36": "null"
+    "field33": null,
+    "field34": null,
+    "field35": null,
+    "field36": null
   }
 });
 

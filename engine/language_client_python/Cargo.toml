@@ -12,6 +12,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 anyhow.workspace = true
+baml-types = { path = "../baml-lib/baml-types" }
 baml-runtime = { path = "../baml-runtime", default-features = false, features = [
   "no_wasm",
 ] }

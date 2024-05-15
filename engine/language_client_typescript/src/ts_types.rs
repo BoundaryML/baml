@@ -1,6 +1,7 @@
+use baml_types::BamlValue;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
-use serde::Deserialize;
+
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -37,7 +38,9 @@ impl FunctionResult {
     #[napi(getter)]
     pub fn parsed(&self) -> Result<serde_json::Value> {
         log::debug!("parsed content");
-        Ok(self.inner.parsed_content()?.clone())
+        Ok(serde_json::json!(BamlValue::from(
+            self.inner.parsed_content()?
+        )))
     }
 }
 

@@ -2,6 +2,9 @@ pub use crate::internal::llm_client::LLMResponse;
 use anyhow::Result;
 use colored::*;
 
+use baml_types::BamlValue;
+use jsonish::BamlValueWithFlags;
+
 pub struct FunctionResult {
     #[cfg(feature = "internal")]
     pub llm_response: LLMResponse,
@@ -9,22 +12,19 @@ pub struct FunctionResult {
     pub(crate) llm_response: LLMResponse,
 
     #[cfg(feature = "internal")]
-    pub parsed: Option<Result<(serde_json::Value, jsonish::DeserializerConditions)>>,
+    pub parsed: Option<Result<jsonish::BamlValueWithFlags>>,
     #[cfg(not(feature = "internal"))]
-    pub(crate) parsed: Option<Result<(serde_json::Value, jsonish::DeserializerConditions)>>,
+    pub(crate) parsed: Option<Result<jsonish::BamlValueWithFlags>>,
 }
 
 impl std::fmt::Display for FunctionResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "{}", self.llm_response)?;
         match &self.parsed {
-            Some(Ok((val, _))) => {
+            Some(Ok(val)) => {
                 writeln!(f, "{}", "---Parsed Response---".blue())?;
-                write!(
-                    f,
-                    "{}",
-                    serde_json::to_string_pretty(val).unwrap_or_else(|_| val.to_string())
-                )
+                let val: BamlValue = val.into();
+                write!(f, "{:#}", serde_json::json!(val))
             }
             Some(Err(e)) => {
                 writeln!(f, "{}", "---Parsed Response---".blue())?;
@@ -40,12 +40,12 @@ impl FunctionResult {
         self.llm_response.content()
     }
 
-    pub fn parsed_content(&self) -> Result<&serde_json::Value> {
+    pub fn parsed_content(&self) -> Result<&BamlValueWithFlags> {
         log::debug!("FunctionResult::parsed_content {:#?}", self.parsed);
         self.parsed
             .as_ref()
             .map(|res| {
-                if let Ok((val, _)) = res {
+                if let Ok(val) = res {
                     Ok(val)
                 } else {
                     anyhow::bail!("{}", self)
