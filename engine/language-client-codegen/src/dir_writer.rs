@@ -17,6 +17,49 @@ pub(super) struct FileCollector<L: LanguageFeatures + Default> {
     lang: L,
 }
 
+fn try_delete_tmp_dir(temp_path: &Path) -> Result<()> {
+    // if the .tmp dir exists, delete it so we can get back to a working state without user intervention.
+    let delete_attempts = 3; // Number of attempts to delete the directory
+    let attempt_interval = Duration::from_millis(200); // Wait time between attempts
+
+    for attempt in 1..=delete_attempts {
+        if temp_path.exists() {
+            match std::fs::remove_dir_all(&temp_path) {
+                Ok(_) => {
+                    println!("Temp directory successfully removed.");
+                    break; // Exit loop after successful deletion
+                }
+                Err(e) if e.kind() == ErrorKind::Other && attempt < delete_attempts => {
+                    log::warn!(
+                        "Attempt {}: Failed to delete temp directory: {}",
+                        attempt,
+                        e
+                    );
+                    sleep(attempt_interval); // Wait before retrying
+                }
+                Err(e) => {
+                    // For other errors or if it's the last attempt, fail with an error
+                    return Err(anyhow::Error::new(e).context(format!(
+                        "Failed to delete temp directory '{:?}' after {} attempts",
+                        temp_path, attempt
+                    )));
+                }
+            }
+        } else {
+            break;
+        }
+    }
+
+    if temp_path.exists() {
+        // If the directory still exists after the loop, return an error
+        anyhow::bail!(
+            "Failed to delete existing temp directory '{:?}' within the timeout",
+            temp_path
+        );
+    }
+    Ok(())
+}
+
 impl<L: LanguageFeatures + Default> FileCollector<L> {
     pub(super) fn new() -> Self {
         Self {
@@ -32,57 +75,80 @@ impl<L: LanguageFeatures + Default> FileCollector<L> {
         );
     }
 
-    pub(super) fn commit(&self, dir: &Path) -> Result<Vec<PathBuf>> {
-        let output_path = dir;
-        log::debug!("Writing files to {}", output_path.to_string_lossy());
+    fn remove_dir_safe(&self, output_path: &Path) -> Result<()> {
+        if !output_path.exists() {
+            return Ok(());
+        }
 
-        let temp_path = PathBuf::from(format!("{}.tmp", output_path.to_string_lossy().to_string()));
-
-        // if the .tmp dir exists, delete it so we can get back to a working state without user intervention.
-        let delete_attempts = 3; // Number of attempts to delete the directory
-        let attempt_interval = Duration::from_millis(200); // Wait time between attempts
-
-        for attempt in 1..=delete_attempts {
-            if temp_path.exists() {
-                match std::fs::remove_dir_all(&temp_path) {
-                    Ok(_) => {
-                        println!("Temp directory successfully removed.");
-                        break; // Exit loop after successful deletion
-                    }
-                    Err(e) if e.kind() == ErrorKind::Other && attempt < delete_attempts => {
-                        log::warn!(
-                            "Attempt {}: Failed to delete temp directory: {}",
-                            attempt,
-                            e
-                        );
-                        sleep(attempt_interval); // Wait before retrying
-                    }
-                    Err(e) => {
-                        // For other errors or if it's the last attempt, fail with an error
-                        return Err(anyhow::Error::new(e).context(format!(
-                            "Failed to delete temp directory '{:?}' after {} attempts",
-                            temp_path, attempt
-                        )));
-                    }
-                }
-            } else {
+        const MAX_UNKNOWN_FILES: usize = 4;
+        let mut unknown_files = vec![];
+        for entry in walkdir::WalkDir::new(output_path) {
+            if unknown_files.len() > MAX_UNKNOWN_FILES {
                 break;
             }
+            let entry = entry?;
+            if entry.file_type().is_dir() {
+                // Skip files for the pre-existence check
+                continue;
+            }
+            let path = entry.path().strip_prefix(output_path)?.to_path_buf();
+            if self.files.contains_key(&path) {
+                continue;
+            }
+            unknown_files.push(path);
         }
+        unknown_files.sort();
+        match unknown_files.len() {
+            0 => (),
+            1 => anyhow::bail!(
+                "directory contains unrecognized file\n\n\
+                The output directory contains a file that BAML did not generate.\n\
+                Please remove it and re-run codegen.\n\n\
+                File: {}",
+                output_path.join(&unknown_files[0]).display()
+            ),
+            n => {
+                if n < MAX_UNKNOWN_FILES {
+                    anyhow::bail!(
+                        "directory contains unrecognized files\n\n\
+                    The output directory contains {n} files that BAML did not generate.\n\
+                    Please remove them and re-run codegen.\n\n\
+                    Files:\n{}",
+                        unknown_files
+                            .iter()
+                            .map(|p| format!("  - {}", output_path.join(p).display()))
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    )
+                } else {
+                    anyhow::bail!(
+                        "directory contains unrecognized files\n\n\
+                    The output directory contains at least {n} files that BAML did not generate.\n\
+                    Please remove all files not generated by BAML and re-run codegen.\n\n\
+                    Files:\n{}",
+                        unknown_files
+                            .iter()
+                            .map(|p| format!("  - {}", output_path.join(p).display()))
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    )
+                }
+            }
+        }
+        std::fs::remove_dir_all(output_path)?;
+        Ok(())
+    }
 
-        if temp_path.exists() {
-            // If the directory still exists after the loop, return an error
-            anyhow::bail!(
-                "Failed to delete existing temp directory '{:?}' within the timeout",
-                temp_path
-            );
-        }
+    pub(super) fn commit(&self, output_path: &Path) -> Result<Vec<PathBuf>> {
+        log::debug!("Writing files to {}", output_path.display());
+
+        let temp_path = PathBuf::from(format!("{}.tmp", output_path.display()));
+
+        // if the .tmp dir exists, delete it so we can get back to a working state without user intervention.
+        try_delete_tmp_dir(temp_path.as_path())?;
 
         // Sort the files by path so that we always write to the same file
-        let mut files = self.files.iter().collect::<Vec<_>>();
-        files.sort_by(|(a, _), (b, _)| a.cmp(b));
-
-        for (relative_file_path, contents) in files.iter() {
+        for (relative_file_path, contents) in self.files.iter() {
             let full_file_path = temp_path.join(relative_file_path);
             if let Some(parent) = full_file_path.parent() {
                 std::fs::create_dir_all(parent)?;
@@ -90,10 +156,14 @@ impl<L: LanguageFeatures + Default> FileCollector<L> {
             std::fs::write(&full_file_path, contents)?;
         }
 
-        let _ = std::fs::remove_dir_all(dir);
+        self.remove_dir_safe(output_path)?;
         std::fs::rename(&temp_path, output_path)?;
 
-        log::info!("Wrote {} files to {}", files.len(), dir.display());
+        log::info!(
+            "Wrote {} files to {}",
+            self.files.len(),
+            output_path.display()
+        );
 
         Ok(self.files.keys().cloned().collect())
     }
