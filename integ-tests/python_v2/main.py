@@ -6,6 +6,9 @@ import time
 #from baml_client import client
 #from baml_client.types import ClassWithImage, FakeImage
 
+def throwing_cb(d):
+    raise Exception("oops")
+
 async def fetch_data(url: str):
     print(f"Fetching data from {url}...")
     await asyncio.sleep(1)
@@ -49,11 +52,15 @@ async def main2():
 
     #retval = await b.stream(lambda d, e, f: print(f"<in python cb>cb arg: {f}</in python cb>"))
     print("starting stream")
-    stream = b.stream_function("ExtractResume", {"raw_text": "john doe is a skilled carpenter in the Dada style"}, ctx={}, cb=lambda d: print(f"<in py-cb>cb arg: {d}</in py-cb>"))
-    retval = await stream.on_event(lambda d: print(f"<on-event>{d}</on-event>")).done()
+    stream = b.stream_function("ExtractResume", {"raw_text": "john doe is a skilled carpenter in the Dada style"}, ctx={}, on_event=lambda d: print(f"<in py-cb1>cb arg: {d}</in py-cb>"))
+    stream2 = b.stream_function("ExtractResume", {"raw_text": "jane smith is a skilled carpenter in the Dada style"}, ctx={}, on_event=throwing_cb)
+    retval = await asyncio.gather(
+        #asyncio.wait_for(stream.on_event(lambda d: print(f"<on-event>{d}</on-event>")).done(), timeout=1.7),
+        stream.on_event(lambda d: print(f"<on-event>{d}</on-event>")).done(),
+        stream2.done())
     print("ending stream")
 
-    print("retval", retval)
+    print("retval", retval[0], retval[1])
     
 
 async def main3():

@@ -79,14 +79,14 @@ impl BamlRuntimeFfi {
         .map(|f| f.into())
     }
 
-    #[pyo3(signature = (function_name, args, *, ctx, cb))]
+    #[pyo3(signature = (function_name, args, *, ctx, on_event))]
     fn stream_function(
         &self,
         py: Python<'_>,
         function_name: String,
         args: PyObject,
         ctx: PyObject,
-        cb: PyObject,
+        on_event: Option<PyObject>,
     ) -> PyResult<python_types::FunctionResultStream> {
         let args = parse_py_type(args.as_ref(py).to_object(py))?;
         let Some(args_map) = convert_to_hashmap(args) else {
@@ -97,36 +97,12 @@ impl BamlRuntimeFfi {
             baml_runtime::RuntimeContext,
         >(ctx.as_ref(py))?));
 
-        Ok(python_types::FunctionResultStream {
-            runtime: self.internal.clone(),
-            function_name,
-            args: args_map,
-            ctx: ctx,
-            on_event_cb: Arc::new(None),
-        })
-    }
+        let mut stream = self
+            .internal
+            .stream_function(function_name, args_map, ctx)
+            .map_err(BamlError::from_anyhow)?;
 
-    fn stream(&self, py: Python<'_>, cb: PyObject) -> PyResult<PyObject> {
-        let baml_runtime = self.internal.clone();
-
-        pyo3_asyncio::tokio::future_into_py(py, async move {
-            let stream = baml_runtime.stream();
-            let cb = cb.clone();
-            stream.callback.lock().await.push(Box::new(move |data| {
-                log::info!("Received data: {}", data);
-                Python::with_gil(|py| {
-                    cb.clone()
-                        .call1(py, ("cb.call1:arg0", "cb.call1:arg1", data.clone()))?;
-                    Ok::<String, PyErr>("".to_string())
-                })?;
-                Ok(data)
-            }));
-            //let result = baml_runtime.stream().await.map_err(BamlError::from_anyhow);
-
-            //result
-            stream.stream().await.map_err(BamlError::from_anyhow)
-        })
-        .map(|f| f.into())
+        Ok(python_types::FunctionResultStream::new(stream, on_event))
     }
 }
 

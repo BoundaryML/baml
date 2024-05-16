@@ -1,11 +1,8 @@
-use std::ffi::OsString;
-
 use anyhow::Result;
 use baml_types::BamlValue;
-use indexmap::IndexMap;
 use pyo3::prelude::{pyclass, pymethods, PyModule, PyResult};
 use pyo3::types::PyType;
-use pyo3::{Py, PyAny, PyErr, PyObject, PyRefMut, Python, ToPyObject};
+use pyo3::{Py, PyAny, PyErr, PyObject, PyRef, PyRefMut, Python, ToPyObject};
 use pythonize::pythonize;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -42,13 +39,17 @@ impl FunctionResult {
 
 #[pyclass]
 pub struct FunctionResultStream {
-    pub(crate) runtime: Arc<baml_runtime::BamlRuntime>,
-    pub(crate) function_name: String,
-    pub(crate) args: IndexMap<String, BamlValue>,
-    pub(crate) ctx: baml_runtime::RuntimeContext,
+    inner: Arc<Mutex<baml_runtime::FunctionResultStream>>,
+    on_event: Option<PyObject>,
+}
 
-    //pub(crate) on_event_cb: Arc<Option<baml_runtime::StreamCallback>>,
-    pub(crate) on_event_cb: Arc<Option<PyObject>>,
+impl FunctionResultStream {
+    pub fn new(inner: baml_runtime::FunctionResultStream, on_event: Option<PyObject>) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(inner)),
+            on_event,
+        }
+    }
 }
 
 #[pymethods]
@@ -63,48 +64,34 @@ impl FunctionResultStream {
     fn on_event<'p>(
         mut slf: PyRefMut<'p, Self>,
         py: Python<'p>,
-        cb: PyObject,
+        on_event_cb: PyObject,
     ) -> PyRefMut<'p, Self> {
-        //slf.on_event_cb = Arc::new(Some(Box::new(move |event| -> Result<()> {
-        //    let partial = FunctionResult::new(event);
-        //    Python::with_gil(|py| cb.call1(py, (partial,)))
-        //        .map(|_| ())
-        //        .map_err(|e| e.into())
-        //})));
-        slf.on_event_cb = Arc::new(Some(cb));
+        slf.on_event = Some(on_event_cb.clone_ref(py));
 
         slf
     }
 
     fn done(&self, py: Python<'_>) -> PyResult<PyObject> {
-        use baml_runtime::RuntimeInterface;
+        let inner = self.inner.clone();
 
-        let on_event_cb = self.on_event_cb.clone();
-        let runtime = self.runtime.clone();
-        let function_name = self.function_name.clone();
-        let args = self.args.clone();
-        let ctx = self.ctx.clone();
-        pyo3_asyncio::tokio::future_into_py(py, async move {
-            let mut stream = runtime
-                .stream_function(function_name, args, ctx)
-                // TODO: FIX THIS FIX THIS FIX THIS
-                .unwrap();
-
-            stream.on_event = Some(Box::new(move |event| -> Result<()> {
+        let on_event = self.on_event.as_ref().map(|cb| {
+            let cb = cb.clone_ref(py);
+            Box::new(move |event| {
                 let partial = FunctionResult::new(event);
-                let Some(ref on_event) = *on_event_cb else {
-                    return Ok(());
-                };
                 Python::with_gil(|py| {
                     let parsed_partial = partial.parsed(py)?;
-                    on_event.call1(py, (parsed_partial,))
+                    cb.call1(py, (parsed_partial,))
                 })
                 .map(|_| ())
                 .map_err(|e| e.into())
-            }));
+            }) as _
+        });
 
-            stream
-                .run()
+        pyo3_asyncio::tokio::future_into_py(py, async move {
+            let ref mut locked = inner.lock().await;
+
+            locked
+                .run(on_event)
                 .await
                 .map(FunctionResult::new)
                 .map_err(BamlError::from_anyhow)
