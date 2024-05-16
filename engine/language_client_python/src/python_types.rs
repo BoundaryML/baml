@@ -1,11 +1,15 @@
 use std::ffi::OsString;
 
+use anyhow::Result;
 use baml_types::BamlValue;
+use indexmap::IndexMap;
 use pyo3::prelude::{pyclass, pymethods, PyModule, PyResult};
 use pyo3::types::PyType;
-use pyo3::{Py, PyAny, PyObject, Python, ToPyObject};
+use pyo3::{Py, PyAny, PyErr, PyObject, PyRefMut, Python, ToPyObject};
 use pythonize::pythonize;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use tokio::sync::{Mutex, MutexGuard};
 
 use crate::BamlError;
 
@@ -36,36 +40,76 @@ impl FunctionResult {
     }
 }
 
-#[derive(Clone)]
 #[pyclass]
-pub struct GenerateArgs {
-    pub client_type: internal_baml_codegen::LanguageClientType,
-    pub output_path: OsString,
+pub struct FunctionResultStream {
+    pub(crate) runtime: Arc<baml_runtime::BamlRuntime>,
+    pub(crate) function_name: String,
+    pub(crate) args: IndexMap<String, BamlValue>,
+    pub(crate) ctx: baml_runtime::RuntimeContext,
+
+    //pub(crate) on_event_cb: Arc<Option<baml_runtime::StreamCallback>>,
+    pub(crate) on_event_cb: Arc<Option<PyObject>>,
 }
 
 #[pymethods]
-impl GenerateArgs {
-    #[staticmethod]
-    #[pyo3(signature = (*, client_type, output_path))]
-    fn new(client_type: String, output_path: OsString) -> PyResult<Self> {
-        let client_type = serde_json::from_str(&format!("\"{client_type}\"")).map_err(|e| {
-            BamlError::from_anyhow(
-                Into::<anyhow::Error>::into(e).context("Failed to parse client_type"),
-            )
-        })?;
-        Ok(Self {
-            client_type,
-            output_path,
-        })
+impl FunctionResultStream {
+    fn __str__(&self) -> String {
+        format!("FunctionResultStream")
     }
-}
 
-impl Into<internal_baml_codegen::GeneratorArgs> for &GenerateArgs {
-    fn into(self) -> internal_baml_codegen::GeneratorArgs {
-        internal_baml_codegen::GeneratorArgs {
-            output_root: self.output_path.clone().into(),
-            encoded_baml_files: None,
-        }
+    /// Set the callback to be called when an event is received
+    ///
+    /// Callback will take an instance of FunctionResult
+    fn on_event<'p>(
+        mut slf: PyRefMut<'p, Self>,
+        py: Python<'p>,
+        cb: PyObject,
+    ) -> PyRefMut<'p, Self> {
+        //slf.on_event_cb = Arc::new(Some(Box::new(move |event| -> Result<()> {
+        //    let partial = FunctionResult::new(event);
+        //    Python::with_gil(|py| cb.call1(py, (partial,)))
+        //        .map(|_| ())
+        //        .map_err(|e| e.into())
+        //})));
+        slf.on_event_cb = Arc::new(Some(cb));
+
+        slf
+    }
+
+    fn done(&self, py: Python<'_>) -> PyResult<PyObject> {
+        use baml_runtime::RuntimeInterface;
+
+        let on_event_cb = self.on_event_cb.clone();
+        let runtime = self.runtime.clone();
+        let function_name = self.function_name.clone();
+        let args = self.args.clone();
+        let ctx = self.ctx.clone();
+        pyo3_asyncio::tokio::future_into_py(py, async move {
+            let mut stream = runtime
+                .stream_function(function_name, args, ctx)
+                // TODO: FIX THIS FIX THIS FIX THIS
+                .unwrap();
+
+            stream.on_event = Some(Box::new(move |event| -> Result<()> {
+                let partial = FunctionResult::new(event);
+                let Some(ref on_event) = *on_event_cb else {
+                    return Ok(());
+                };
+                Python::with_gil(|py| {
+                    let parsed_partial = partial.parsed(py)?;
+                    on_event.call1(py, (parsed_partial,))
+                })
+                .map(|_| ())
+                .map_err(|e| e.into())
+            }));
+
+            stream
+                .run()
+                .await
+                .map(FunctionResult::new)
+                .map_err(BamlError::from_anyhow)
+        })
+        .map(|f| f.into())
     }
 }
 

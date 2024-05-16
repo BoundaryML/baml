@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 
-use crate::BamlImagePy;
+use crate::python_types::BamlImagePy;
 use anyhow::{bail, Result};
 use baml_types::{BamlImage, BamlMap, BamlValue};
-
 use pyo3::{
     exceptions::{PyRuntimeError, PyTypeError},
     types::{PyDict, PyList},

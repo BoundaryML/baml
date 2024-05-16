@@ -47,8 +47,8 @@ pub trait RuntimeInterface {
         &self,
         function_name: String,
         params: IndexMap<String, BamlValue>,
-        ctx: &RuntimeContext,
-    ) -> impl std::future::Future<Output = Result<FunctionResult>>;
+        ctx: RuntimeContext,
+    ) -> Result<FunctionResultStream>;
 
     #[cfg(feature = "no_wasm")]
     fn generate_client(

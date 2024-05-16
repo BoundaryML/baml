@@ -148,7 +148,7 @@ impl ErrorCode {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct LLMCompleteResponse {
     pub client: String,
     pub model: String,

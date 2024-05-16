@@ -127,13 +127,13 @@ impl RuntimeInterface for BamlRuntime {
         response
     }
 
-    async fn stream_function(
+    fn stream_function(
         &self,
         function_name: String,
         params: IndexMap<String, BamlValue>,
-        ctx: &RuntimeContext,
-    ) -> Result<FunctionResult> {
-        self.inner.stream_function(function_name, params, ctx).await
+        ctx: RuntimeContext,
+    ) -> Result<FunctionResultStream> {
+        self.inner.stream_function(function_name, params, ctx)
     }
 
     #[cfg(feature = "no_wasm")]

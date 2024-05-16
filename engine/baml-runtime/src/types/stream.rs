@@ -16,7 +16,11 @@ use crate::{internal::llm_client::SseResponse, FunctionResult, RuntimeContext};
 
 use super::response::LLMResponse;
 
-type StreamCallback = Box<dyn Fn(BamlValue) -> Result<()> + Send>;
+#[cfg(feature = "wasm")]
+// JsFuture is !Send, so when building for WASM, we have to drop that requirement from StreamCallback
+pub type StreamCallback = Box<dyn Fn(FunctionResult) -> Result<()> + Send>;
+#[cfg(not(feature = "wasm"))]
+pub type StreamCallback = Box<dyn Fn(FunctionResult) -> Result<()> + Send + Sync>;
 
 /// Wraps a stream_cancel::Trigger with an idempotent cancel.
 #[derive(Clone)]
@@ -48,9 +52,10 @@ pub struct FunctionResultStream {
     function_name: String,
     inner: SseResponse,
     ir: Arc<IntermediateRepr>,
-    on_event: Option<StreamCallback>,
+    pub on_event: Option<StreamCallback>,
     tripwire: Tripwire,
     cancelme: CancelStreamTrigger,
+    ctx: RuntimeContext,
 }
 
 static_assertions::assert_impl_all!(FunctionResultStream: Send);
@@ -60,6 +65,7 @@ impl FunctionResultStream {
         function_name: String,
         inner: SseResponse,
         ir: Arc<IntermediateRepr>,
+        ctx: RuntimeContext,
     ) -> Result<Self> {
         let (trigger, tripwire) = Tripwire::new();
         Ok(Self {
@@ -71,31 +77,41 @@ impl FunctionResultStream {
             cancelme: CancelStreamTrigger {
                 trigger: Arc::new(Mutex::new(Some(trigger))),
             },
+            ctx,
         })
     }
 
-    pub async fn run(self, ctx: &RuntimeContext) -> Result<FunctionResult> {
+    pub async fn run(self) -> Result<FunctionResult> {
         use internal_baml_core::ir::IRHelper;
         let final_response = self
             .inner
             .stream()
             .await?
+            .inspect(|event| log::debug!("Received event: {:#?}", event))
             .take_until_if(self.tripwire)
             .then(|fn_result| async {
                 let response = fn_result?;
 
                 let func = self.ir.find_function(self.function_name.as_str())?;
-                let parsed = response
-                    .content()
-                    .ok()
-                    // TODO: partial-ify func.output
-                    .map(|content| jsonish::from_str(&*self.ir, &ctx.env, func.output(), content));
+                // TODO: partial-ify func.output
+                let parsed = jsonish::from_str(
+                    &*self.ir,
+                    &self.ctx.env,
+                    func.output(),
+                    response.content.as_str(),
+                );
 
                 if let Some(ref on_event) = self.on_event {
-                    if let Some(Ok(parsed)) = parsed {
-                        return match on_event(parsed.into()) {
+                    if let Ok(parsed) = parsed {
+                        return match on_event(FunctionResult {
+                            llm_response: LLMResponse::Success(response.clone()),
+                            parsed: Some(Ok(parsed)),
+                        }) {
                             Ok(()) => Ok(response),
-                            Err(e) => Err(e),
+                            Err(e) => {
+                                log::debug!("User-provided on_event errored: {:?}", e);
+                                Err(e)
+                            }
                         };
                     }
                 }
@@ -109,13 +125,15 @@ impl FunctionResultStream {
             .map_err(|e| e.context("Error while processing stream"))?;
 
         let func = self.ir.find_function(self.function_name.as_str())?;
-        let final_parsed = final_response
-            .content()
-            .ok()
-            .map(|content| jsonish::from_str(&*self.ir, &ctx.env, func.output(), content));
+        let final_parsed = jsonish::from_str(
+            &*self.ir,
+            &self.ctx.env,
+            func.output(),
+            final_response.content.as_str(),
+        );
         Ok(FunctionResult {
-            llm_response: final_response,
-            parsed: final_parsed,
+            llm_response: LLMResponse::Success(final_response),
+            parsed: Some(final_parsed),
         })
     }
 

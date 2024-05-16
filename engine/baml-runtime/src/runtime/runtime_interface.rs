@@ -299,30 +299,28 @@ impl RuntimeInterface for InternalBamlRuntime {
         Ok(parsed)
     }
 
-    async fn stream_function(
+    fn stream_function(
         &self,
         function_name: String,
         params: IndexMap<String, BamlValue>,
-        ctx: &RuntimeContext,
-    ) -> Result<crate::FunctionResult> {
-        let func = self.get_function(&function_name, ctx)?;
+        ctx: RuntimeContext,
+    ) -> Result<FunctionResultStream> {
+        let func = self.get_function(&function_name, &ctx)?;
         let baml_args = self.ir().check_function_params(&func, &params)?;
 
         let renderer = PromptRenderer::from_function(&func)?;
         let client_name = renderer.client_name().to_string();
 
-        let (llm_provider, retry_policy) = self.get_client(&client_name, ctx)?;
+        let (llm_provider, retry_policy) = self.get_client(&client_name, &ctx)?;
         let prompt = llm_provider.render_prompt(&renderer, &ctx, &baml_args)?;
 
         use std::ops::Deref;
         let stream = match llm_provider.deref() {
-            LLMProvider::OpenAI(client) => client.stream_chat2(retry_policy, ctx, &prompt),
+            LLMProvider::OpenAI(client) => client.stream_chat2(retry_policy, &ctx, &prompt),
             LLMProvider::Anthropic(_) => todo!(),
         }?;
 
-        FunctionResultStream::from(function_name, stream, self.ir.clone())?
-            .run(ctx)
-            .await
+        FunctionResultStream::from(function_name, stream, self.ir.clone(), ctx)
     }
 
     #[cfg(feature = "no_wasm")]

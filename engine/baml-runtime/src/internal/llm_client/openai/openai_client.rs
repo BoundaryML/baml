@@ -24,7 +24,7 @@ use crate::internal::llm_client::{
 use crate::FunctionResultStream;
 use crate::RuntimeContext;
 use eventsource_stream::Eventsource;
-use futures::{Stream, StreamExt};
+use futures::{Stream, StreamExt, TryStreamExt};
 
 fn resolve_properties(
     client: &ClientWalker,
@@ -269,43 +269,70 @@ pub struct SseResponse {
     prompt: Vec<RenderedChatMessage>,
 }
 
+use crate::internal::llm_client::{
+    openai::types::{ChatCompletionResponseDelta, FinishReason, OpenAIErrorResponse},
+    ErrorCode, LLMCompleteResponse, LLMErrorResponse,
+};
 impl SseResponse {
-    pub async fn stream(self) -> Result<impl Stream<Item = Result<LLMResponse>>> {
-        use crate::internal::llm_client::{
-            openai::types::{ChatCompletionResponse, FinishReason, OpenAIErrorResponse},
-            ErrorCode, LLMCompleteResponse, LLMErrorResponse,
-        };
-        Ok(self.req.send().await?.bytes_stream().eventsource().map(
-            move |event| -> Result<LLMResponse> {
-                let body: ChatCompletionResponse = serde_json::from_str(&event?.data)?;
+    pub async fn stream(self) -> Result<impl Stream<Item = Result<LLMCompleteResponse>>> {
+        Ok(self
+            .req
+            .send()
+            .await?
+            .bytes_stream()
+            .eventsource()
+            .take_while(|event| { std::future::ready(event.as_ref().is_ok_and(|e| e.data != "[DONE]"))})
+            .map(|event| -> Result<ChatCompletionResponseDelta> {
+                Ok(serde_json::from_str::<ChatCompletionResponseDelta>(
+                    &event?.data,
+                )?)
+            })
+            .inspect(|event| log::trace!("{:#?}", event))
+            .scan(
+                Ok(
+LLMCompleteResponse {
+                        client: "".to_string(),
+                        prompt: internal_baml_jinja::RenderedPrompt::Chat(vec![]),
+                        content: "".to_string(),
+                        // TODO: compute start_time_unix_ms
+                        start_time_unix_ms: 0,
+                        // TODO: compute latency_ms
+                        latency_ms: 0,
+                        // TODO: figure out how to extract this from the response
+                        model: "".to_string(),
+                        metadata: json!({
+                            //"baml_is_complete": false,
+                            //"finish_reason": "".to_string(),
+                            // TODO: define behavior for these (openai doesn't)
+                            // "prompt_tokens": usage.map(|u| u.prompt_tokens),
+                            // "output_tokens": usage.map(|u| u.completion_tokens),
+                            // "total_tokens": usage.map(|u| u.total_tokens),
+                        }),
+                    }
+                ),
+                |accumulated: &mut Result<LLMCompleteResponse>, event| {
+                    let Ok(ref mut inner) = accumulated else {
+                        // halt the stream: the last stream event failed to parse
+                        return std::future::ready(None);
+                    };
+                    let event = match event {
+                        Ok(event) => event,
+                        Err(e) => {
+                            *accumulated = Err(anyhow::anyhow!(
+                                "Failed to accumulate response (failed to parse previous event from EventSource)"
+                            ));
+                            return std::future::ready(Some(Err(e.context("Failed to parse event from EventSource"))));
+                        }
+                    };
+                    if let Some(content) = event.choices[0].delta.content.as_ref() {
+                        inner.content += content.as_str();
+                        inner.model = event.model;
+                        // TODO: set inner.metadata.finish_reason
+                    }
 
-                Ok(LLMResponse::Success(LLMCompleteResponse {
-                    client: self.client.clone(),
-                    prompt: internal_baml_jinja::RenderedPrompt::Chat(self.prompt.clone()),
-                    content: body.choices[0]
-                        .message
-                        .content
-                        .as_ref()
-                        .map_or("", |s| s.as_str())
-                        .to_string(),
-                    // TODO: compute start_time_unix_ms
-                    start_time_unix_ms: 0,
-                    // TODO: compute latency_ms
-                    latency_ms: 0,
-                    model: body.model,
-                    metadata: json!({
-                        "baml_is_complete": match body.choices[0].finish_reason {
-                            _ => false,
-                        },
-                        "finish_reason": body.choices[0].finish_reason,
-                       // TODO: implement these
-                       // "prompt_tokens": usage.map(|u| u.prompt_tokens),
-                       // "output_tokens": usage.map(|u| u.completion_tokens),
-                       // "total_tokens": usage.map(|u| u.total_tokens),
-                    }),
-                }))
-            },
-        ))
+                    std::future::ready(Some(Ok(inner.clone())))
+                },
+            ))
     }
 }
 
@@ -316,6 +343,7 @@ impl OpenAIClient {
         ctx: &RuntimeContext,
         prompt: &internal_baml_jinja::RenderedPrompt,
     ) -> Result<SseResponse> {
+        log::info!("stream chat starting");
         let RenderedPrompt::Chat(prompt) = prompt else {
             anyhow::bail!("Expected a chat prompt, got: {:#?}", prompt);
         };
@@ -324,6 +352,9 @@ impl OpenAIClient {
             ErrorCode, LLMCompleteResponse, LLMErrorResponse,
         };
         let mut body = json!(self.properties.properties);
+        body.as_object_mut()
+            .unwrap()
+            .insert("stream".into(), json!(true));
         body.as_object_mut().unwrap().insert(
             "messages".into(),
             prompt
@@ -363,107 +394,14 @@ impl OpenAIClient {
                 log::warn!("Failed to increment call count for OpenAIClient: {:#?}", e);
             }
         }
+        log::info!("stream chat successfully built request");
         Ok(SseResponse {
             req: request,
             prompt: prompt.clone(),
             client: self.context.name.to_string(),
         })
-        //Ok(SseResponse { req, stream: res })
-        //Ok(Box::pin(res))
-
-        //let status = res.status();
-
-        // Raise for status.
-        // if !status.is_success() {
-        //     let err_code = ErrorCode::from_status(status);
-
-        //     let err_message = match res.json::<serde_json::Value>().await {
-        //         Ok(body) => match serde_json::from_value::<OpenAIErrorResponse>(body) {
-        //             Ok(err) => format!("API Error ({}): {}", err.error.r#type, err.error.message),
-        //             Err(e) => format!("Does this support the OpenAI Response type?\n{:#?}", e),
-        //         },
-        //         Err(e) => {
-        //             format!("Does this support the OpenAI Response type?\n{:#?}", e)
-        //         }
-        //     };
-
-        //     return Ok(LLMResponse::LLMFailure(LLMErrorResponse {
-        //         client: self.context.name.to_string(),
-        //         model: None,
-        //         prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
-        //         start_time_unix_ms: now
-        //             .duration_since(std::time::UNIX_EPOCH)
-        //             .unwrap()
-        //             .as_millis() as u64,
-        //         latency_ms: now.elapsed().unwrap().as_millis() as u64,
-        //         message: err_message,
-        //         code: err_code,
-        //     }));
-        // }
-
-        // let body = match res.json::<ChatCompletionResponse>().await {
-        //     Ok(body) => body,
-        //     Err(e) => {
-        //         return Ok(LLMResponse::LLMFailure(LLMErrorResponse {
-        //             client: self.context.name.to_string(),
-        //             model: None,
-        //             prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
-        //             start_time_unix_ms: now
-        //                 .duration_since(std::time::UNIX_EPOCH)
-        //                 .unwrap()
-        //                 .as_millis() as u64,
-        //             latency_ms: now.elapsed().unwrap().as_millis() as u64,
-        //             message: format!("Does this support the OpenAI Response type?\n{:#?}", e),
-        //             code: ErrorCode::UnsupportedResponse(status.as_u16()),
-        //         }));
-        //     }
-        // };
-
-        // if body.choices.len() < 1 {
-        //     return Ok(LLMResponse::LLMFailure(LLMErrorResponse {
-        //         client: self.context.name.to_string(),
-        //         model: None,
-        //         prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
-        //         start_time_unix_ms: now
-        //             .duration_since(std::time::UNIX_EPOCH)
-        //             .unwrap()
-        //             .as_millis() as u64,
-        //         latency_ms: now.elapsed().unwrap().as_millis() as u64,
-        //         message: format!("No content in response:\n{:#?}", body),
-        //         code: ErrorCode::Other(status.as_u16()),
-        //     }));
-        // }
-
-        // let usage = body.usage.as_ref();
-
-        // Ok(LLMResponse::Success(LLMCompleteResponse {
-        //     client: self.context.name.to_string(),
-        //     prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
-        //     content: body.choices[0]
-        //         .message
-        //         .content
-        //         .as_ref()
-        //         .map_or("", |s| s.as_str())
-        //         .to_string(),
-        //     start_time_unix_ms: now
-        //         .duration_since(std::time::UNIX_EPOCH)
-        //         .unwrap()
-        //         .as_millis() as u64,
-        //     latency_ms: now.elapsed().unwrap().as_millis() as u64,
-        //     model: body.model,
-        //     metadata: json!({
-        //         "baml_is_complete": match body.choices[0].finish_reason {
-        //             None => true,
-        //             Some(FinishReason::Stop) => true,
-        //             _ => false,
-        //         },
-        //         "finish_reason": body.choices[0].finish_reason,
-        //         "prompt_tokens": usage.map(|u| u.prompt_tokens),
-        //         "output_tokens": usage.map(|u| u.completion_tokens),
-        //         "total_tokens": usage.map(|u| u.total_tokens),
-        //     }),
-        // }))
     }
+
     pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<OpenAIClient> {
         Ok(Self {
             properties: resolve_properties(client, ctx)?,

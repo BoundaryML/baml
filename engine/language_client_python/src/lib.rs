@@ -7,10 +7,7 @@ use indexmap::IndexMap;
 use parse_py_type::parse_py_type;
 use pyo3::prelude::{pyclass, pyfunction, pymethods, pymodule, PyModule, PyResult};
 use pyo3::{create_exception, wrap_pyfunction, PyErr, PyObject, Python, ToPyObject};
-use python_types::BamlImagePy;
 use pythonize::depythonize;
-
-
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -60,28 +57,53 @@ impl BamlRuntimeFfi {
         ctx: PyObject,
     ) -> PyResult<PyObject> {
         let args = parse_py_type(args.as_ref(py).to_object(py))?;
-        let args_map = convert_to_hashmap(args);
+        let Some(args_map) = convert_to_hashmap(args) else {
+            return Err(BamlError::new_err("Failed to parse args"));
+        };
         log::debug!("pyo3 call_function parsed args into: {:#?}", args_map);
         let ctx = RuntimeContext::from_env().merge(Some(depythonize::<
             baml_runtime::RuntimeContext,
         >(ctx.as_ref(py))?));
-        match args_map {
-            None => Err(BamlError::new_err("Failed to parse args")),
-            Some(args_map) => {
-                let baml_runtime = self.internal.clone();
 
-                pyo3_asyncio::tokio::future_into_py(py, async move {
-                    let result = baml_runtime
-                        .call_function(function_name, args_map, &ctx)
-                        .await
-                        .map(python_types::FunctionResult::new)
-                        .map_err(BamlError::from_anyhow);
+        let baml_runtime = self.internal.clone();
 
-                    result
-                })
-                .map(|f| f.into())
-            }
-        }
+        pyo3_asyncio::tokio::future_into_py(py, async move {
+            let result = baml_runtime
+                .call_function(function_name, args_map, &ctx)
+                .await
+                .map(python_types::FunctionResult::new)
+                .map_err(BamlError::from_anyhow);
+
+            result
+        })
+        .map(|f| f.into())
+    }
+
+    #[pyo3(signature = (function_name, args, *, ctx, cb))]
+    fn stream_function(
+        &self,
+        py: Python<'_>,
+        function_name: String,
+        args: PyObject,
+        ctx: PyObject,
+        cb: PyObject,
+    ) -> PyResult<python_types::FunctionResultStream> {
+        let args = parse_py_type(args.as_ref(py).to_object(py))?;
+        let Some(args_map) = convert_to_hashmap(args) else {
+            return Err(BamlError::new_err("Failed to parse args"));
+        };
+        log::debug!("pyo3 stream_function parsed args into: {:#?}", args_map);
+        let ctx = RuntimeContext::from_env().merge(Some(depythonize::<
+            baml_runtime::RuntimeContext,
+        >(ctx.as_ref(py))?));
+
+        Ok(python_types::FunctionResultStream {
+            runtime: self.internal.clone(),
+            function_name,
+            args: args_map,
+            ctx: ctx,
+            on_event_cb: Arc::new(None),
+        })
     }
 
     fn stream(&self, py: Python<'_>, cb: PyObject) -> PyResult<PyObject> {
@@ -131,8 +153,8 @@ fn baml_py(_: Python<'_>, m: &PyModule) -> PyResult<()> {
 
     m.add_class::<BamlRuntimeFfi>()?;
     m.add_class::<python_types::FunctionResult>()?;
-    m.add_class::<BamlImagePy>()?;
-    m.add_class::<python_types::GenerateArgs>()?;
+    m.add_class::<python_types::FunctionResultStream>()?;
+    m.add_class::<python_types::BamlImagePy>()?;
 
     m.add_wrapped(wrap_pyfunction!(invoke_runtime_cli))?;
 

@@ -47,7 +47,11 @@ async def main():
 async def main2():
     b = baml_py.BamlRuntimeFfi.from_directory("/home/sam/repos/baml-examples/nextjs-starter-v1/baml_src", {})
 
-    retval = await b.stream(lambda d, e, f: print(f"<in python cb>cb arg: {f}</in python cb>"))
+    #retval = await b.stream(lambda d, e, f: print(f"<in python cb>cb arg: {f}</in python cb>"))
+    print("starting stream")
+    stream = b.stream_function("ExtractResume", {"raw_text": "john doe is a skilled carpenter in the Dada style"}, ctx={}, cb=lambda d: print(f"<in py-cb>cb arg: {d}</in py-cb>"))
+    retval = await stream.on_event(lambda d: print(f"<on-event>{d}</on-event>")).done()
+    print("ending stream")
 
     print("retval", retval)
     
@@ -55,9 +59,9 @@ async def main2():
 async def main3():
 
     # simple form
-    await b.stream.ExtractResumes(text='asdf')
+    await (b.stream.ExtractResumes(text='asdf')
         .withEventHandlers()
-        .done()
+        .done())
     
     # more complex form
     stream_manager = b.stream.ExtractResumes(text='asdf')
