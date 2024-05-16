@@ -4,7 +4,7 @@ use crate::dir_writer::LanguageFeatures;
 pub(super) struct RubyLanguageFeatures {}
 
 impl LanguageFeatures for RubyLanguageFeatures {
-    fn content_prefix(&self) -> &'static str {
+    const CONTENT_PREFIX: &'static str =
         // "typed: strict" is set on a per-file basis in Ruby
         r#"
 ###############################################################################
@@ -21,9 +21,7 @@ impl LanguageFeatures for RubyLanguageFeatures {
 # frozen_string_literal: true
 # rubocop: disable
 # formatter:off
-        "#
-        .trim()
-    }
+        "#;
 }
 
 pub(super) trait ToRuby {

@@ -5,9 +5,7 @@ use internal_baml_core::ir::TypeValue;
 pub(super) struct PythonLanguageFeatures {}
 
 impl LanguageFeatures for PythonLanguageFeatures {
-    fn content_prefix(&self) -> &'static str {
-        // "typed: strict" is set on a per-file basis in Python
-        r#"
+    const CONTENT_PREFIX: &'static str = r#"
 ###############################################################################
 #
 #  Welcome to Baml! To use this generated code, please run the following:
@@ -23,9 +21,7 @@ impl LanguageFeatures for PythonLanguageFeatures {
 # flake8: noqa: E501,F401
 # pylint: disable=unused-import,line-too-long
 # fmt: off
-        "#
-        .trim()
-    }
+        "#;
 }
 
 pub(super) trait ToPython {
