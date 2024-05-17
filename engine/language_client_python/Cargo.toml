@@ -22,23 +22,24 @@ env_logger.workspace = true
 futures.workspace = true
 indexmap.workspace = true
 log.workspace = true
-# pyo3 0.21 introduces the Bound<> API, which is a massive breaking change
-# 0.21 is currently out, but pyo3-asyncio is stuck on the pre-Bound API, so we're also stuck on the pre-Bound API
-pyo3 = { version = "0.20.3", features = [
+pyo3 = { version = "0.21.2", default-features = false, features = [
   "abi3-py38",
   "extension-module",
   "generate-import-lib",
   "serde",
 ] }
-#pyo3-asyncio = { git = "https://github.com/jopemachine/pyo3-asyncio.git", branch = "migration-pyo3-0.21", features = [
-#  "tokio-runtime",
-#] }
-pyo3-asyncio = { version = "0.20.0", features = ["tokio-runtime"] }
-pythonize = "0.20.0"
+# pyo3-asyncio head is still on 0.20.0; someone's done the work of updating it to 0.21 and Bound<>,
+# but that work hasn't been merged yet. it builds though, and looks good to me!
+# https://github.com/awestlake87/pyo3-asyncio/pull/121
+pyo3-asyncio = { git = "https://github.com/awestlake87/pyo3-asyncio.git", rev = "d1ec64076dd1b5c797db4b7b811f588466956d20", features = [
+  "tokio-runtime",
+] }
+#pyo3-asyncio = { version = "0.20.0", features = ["tokio-runtime"] }
+pythonize = "0.21.1"
 regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio = { version = "1", features = ["full"] }
 
 [build-dependencies]
-pyo3-build-config = "0.20.3"
+pyo3-build-config = "0.21.2"

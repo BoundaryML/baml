@@ -1,12 +1,11 @@
-use anyhow::Result;
 use baml_types::BamlValue;
-use pyo3::prelude::{pyclass, pymethods, PyModule, PyResult};
+use pyo3::prelude::{pyclass, pymethods, PyAnyMethods, PyModule, PyResult};
 use pyo3::types::PyType;
-use pyo3::{Py, PyAny, PyErr, PyObject, PyRef, PyRefMut, Python, ToPyObject};
+use pyo3::{Bound, Py, PyAny, PyObject, PyRefMut, Python, ToPyObject};
 use pythonize::pythonize;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio::sync::{Mutex, MutexGuard};
+use tokio::sync::Mutex;
 
 use crate::BamlError;
 
@@ -163,9 +162,9 @@ impl BamlImagePy {
     // Makes it work with Pydantic
     #[classmethod]
     pub fn __get_pydantic_core_schema__(
-        _cls: &PyType,
-        _source_type: &PyAny,
-        _handler: &PyAny,
+        _cls: Bound<'_, PyType>,
+        _source_type: Bound<'_, PyAny>,
+        _handler: Bound<'_, PyAny>,
     ) -> PyResult<PyObject> {
         Python::with_gil(|py| {
             let code = r#"
@@ -178,10 +177,8 @@ def get_schema():
 ret = get_schema()
     "#;
             // py.run(code, None, Some(ret_dict));
-            let fun: Py<PyAny> = PyModule::from_code(py, code, "", "")
-                .unwrap()
-                .getattr("ret")
-                .unwrap()
+            let fun: Py<PyAny> = PyModule::from_code_bound(py, code, "", "")?
+                .getattr("ret")?
                 .into();
             Ok(fun.to_object(py)) // Return the PyObject
         })

@@ -5,9 +5,9 @@ use baml_runtime::{BamlRuntime, RuntimeContext, RuntimeInterface};
 use baml_types::BamlValue;
 use indexmap::IndexMap;
 use parse_py_type::parse_py_type;
-use pyo3::prelude::{pyclass, pyfunction, pymethods, pymodule, PyModule, PyResult};
-use pyo3::{create_exception, wrap_pyfunction, PyErr, PyObject, Python, ToPyObject};
-use pythonize::depythonize;
+use pyo3::prelude::{pyclass, pyfunction, pymethods, pymodule, PyAnyMethods, PyModule, PyResult};
+use pyo3::{create_exception, wrap_pyfunction, Bound, PyErr, PyObject, Python, ToPyObject};
+use pythonize::depythonize_bound;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -36,9 +36,10 @@ fn convert_to_hashmap(value: BamlValue) -> Option<IndexMap<String, BamlValue>> {
 impl BamlRuntimeFfi {
     #[staticmethod]
     fn from_directory(py: Python<'_>, directory: PathBuf, ctx: PyObject) -> PyResult<Self> {
-        let ctx: RuntimeContext = RuntimeContext::from_env().merge(Some(depythonize::<
-            baml_runtime::RuntimeContext,
-        >(ctx.as_ref(py))?));
+        let ctx: RuntimeContext =
+            RuntimeContext::from_env().merge(Some(depythonize_bound::<
+                baml_runtime::RuntimeContext,
+            >(ctx.into_bound(py))?));
 
         Ok(BamlRuntimeFfi {
             internal: Arc::new(
@@ -56,14 +57,14 @@ impl BamlRuntimeFfi {
         args: PyObject,
         ctx: PyObject,
     ) -> PyResult<PyObject> {
-        let args = parse_py_type(args.as_ref(py).to_object(py))?;
+        let args = parse_py_type(args.into_bound(py).to_object(py))?;
         let Some(args_map) = convert_to_hashmap(args) else {
             return Err(BamlError::new_err("Failed to parse args"));
         };
         log::debug!("pyo3 call_function parsed args into: {:#?}", args_map);
-        let ctx = RuntimeContext::from_env().merge(Some(depythonize::<
+        let ctx = RuntimeContext::from_env().merge(Some(depythonize_bound::<
             baml_runtime::RuntimeContext,
-        >(ctx.as_ref(py))?));
+        >(ctx.into_bound(py))?));
 
         let baml_runtime = self.internal.clone();
 
@@ -88,16 +89,16 @@ impl BamlRuntimeFfi {
         ctx: PyObject,
         on_event: Option<PyObject>,
     ) -> PyResult<python_types::FunctionResultStream> {
-        let args = parse_py_type(args.as_ref(py).to_object(py))?;
+        let args = parse_py_type(args.into_bound(py).to_object(py))?;
         let Some(args_map) = convert_to_hashmap(args) else {
             return Err(BamlError::new_err("Failed to parse args"));
         };
         log::debug!("pyo3 stream_function parsed args into: {:#?}", args_map);
-        let ctx = RuntimeContext::from_env().merge(Some(depythonize::<
+        let ctx = RuntimeContext::from_env().merge(Some(depythonize_bound::<
             baml_runtime::RuntimeContext,
-        >(ctx.as_ref(py))?));
+        >(ctx.into_bound(py))?));
 
-        let mut stream = self
+        let stream = self
             .internal
             .stream_function(function_name, args_map, ctx)
             .map_err(BamlError::from_anyhow)?;
@@ -109,7 +110,7 @@ impl BamlRuntimeFfi {
 #[pyfunction]
 fn invoke_runtime_cli(py: Python) -> PyResult<()> {
     Ok(baml_runtime::BamlRuntime::run_cli(
-        py.import("sys")?
+        py.import_bound("sys")?
             .getattr("argv")?
             .extract::<Vec<String>>()?,
         baml_runtime::CallerType::Python,
@@ -118,7 +119,7 @@ fn invoke_runtime_cli(py: Python) -> PyResult<()> {
 }
 
 #[pymodule]
-fn baml_py(_: Python<'_>, m: &PyModule) -> PyResult<()> {
+fn baml_py(_: Python<'_>, m: Bound<'_, PyModule>) -> PyResult<()> {
     if let Err(e) = env_logger::try_init_from_env(
         env_logger::Env::new()
             .filter("BAML_LOG")

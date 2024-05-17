@@ -5,7 +5,8 @@ use anyhow::{bail, Result};
 use baml_types::{BamlImage, BamlMap, BamlValue};
 use pyo3::{
     exceptions::{PyRuntimeError, PyTypeError},
-    types::{PyDict, PyList},
+    prelude::{PyAnyMethods, PyTypeMethods},
+    types::PyList,
     PyErr, PyObject, PyResult, Python, ToPyObject,
 };
 
@@ -181,16 +182,18 @@ where
 
 pub fn parse_py_type(any: PyObject) -> PyResult<BamlValue> {
     Python::with_gil(|py| {
-        let enum_type = py.import("enum").and_then(|m| m.getattr("Enum"))?;
-        let base_model = py.import("pydantic").and_then(|m| m.getattr("BaseModel"))?;
+        let enum_type = py.import_bound("enum").and_then(|m| m.getattr("Enum"))?;
+        let base_model = py
+            .import_bound("pydantic")
+            .and_then(|m| m.getattr("BaseModel"))?;
 
         let mut get_type = |py: Python<'_>, any: PyObject| -> Result<MappedPyType> {
             // Call the type() function on the object
-            let t = any.as_ref(py).get_type();
+            let t = any.bind(py).get_type();
             // let t = any.bind_borrowed(py).get_type();
             // let t = t.as_gil_ref();
 
-            if t.is_subclass(enum_type).unwrap_or(false) {
+            if t.is_subclass(&enum_type).unwrap_or(false) {
                 let name = t
                     .name()
                     .map(|n| n.to_string())
@@ -198,7 +201,7 @@ pub fn parse_py_type(any: PyObject) -> PyResult<BamlValue> {
                 let value = any.getattr(py, "value")?;
                 let value = value.extract::<String>(py)?;
                 Ok(MappedPyType::Enum(name, value))
-            } else if t.is_subclass(base_model).unwrap_or(false) {
+            } else if t.is_subclass(&base_model).unwrap_or(false) {
                 let name = t
                     .name()
                     .map(|n| n.to_string())
@@ -224,15 +227,14 @@ pub fn parse_py_type(any: PyObject) -> PyResult<BamlValue> {
                 };
                 Ok(MappedPyType::Class(name, fields))
                 // use downcast only
-            } else if let Ok(list) = any.downcast::<PyList>(py) {
+            } else if let Ok(list) = any.downcast_bound::<PyList>(py) {
                 let mut items = vec![];
-                let len = list.len();
+                let len = list.len()?;
                 for idx in 0..len {
                     items.push(list.get_item(idx)?.to_object(py));
                 }
                 Ok(MappedPyType::List(items))
-            } else if let Ok(dict) = any.downcast::<PyDict>(py) {
-                let kv = dict.extract()?;
+            } else if let Ok(kv) = any.extract::<HashMap<String, PyObject>>(py) {
                 Ok(MappedPyType::Map(kv))
             } else if let Ok(s) = any.extract::<String>(py) {
                 Ok(MappedPyType::String(s))

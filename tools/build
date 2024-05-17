@@ -209,7 +209,7 @@ case "$_path" in
     command="${command}; date"
     if [ "$_watch_mode" -eq 1 ]; then
       npx nodemon \
-        --ext py,pyi,rs,j2 \
+        --ext py,pyi,rs,j2,toml \
         --watch "${_repo_root}/engine" \
         --watch "${_repo_root}/clients/python-ffi" \
         --watch . \
