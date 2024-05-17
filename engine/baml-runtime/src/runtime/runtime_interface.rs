@@ -267,42 +267,11 @@ impl RuntimeInterface for InternalBamlRuntime {
             Err(e) => return Err(anyhow::anyhow!("Unable to resolve test params: {:?}", e)),
         };
 
-        let baml_args = self.ir().check_function_params(&func, &params)?;
-        let renderer = PromptRenderer::from_function(&func)?;
-        let client_name = renderer.client_name().to_string();
-        let orchestrator = self.orchestration_graph(&client_name, ctx)?;
-
-        // Now actually execute the code.
-        let (mut history, _) = orchestrate(orchestrator, ctx, &renderer, &baml_args, |s, ctx| {
-            jsonish::from_str(self.ir(), &ctx.env, func.output(), s)
+        Ok(TestResponse {
+            function_response: self
+                .call_function(function_name.into(), params, ctx)
+                .await?,
         })
-        .await;
-
-        let (scope, result, parsed_response) = history.pop().unwrap();
-
-        result.map(|r| TestResponse {
-            function_response: FunctionResult {
-                history,
-                scope,
-                llm_response: r,
-                parsed: parsed_response,
-            },
-        })
-
-        // let (client, retry_policy) = self.get_client(&client_name, ctx)?;
-        // let prompt = client.render_prompt(&renderer, &ctx, &baml_args)?;
-        // log::debug!("Prompt: {:#?}", prompt);
-
-        // let response = client.call(retry_policy, ctx, &prompt).await;
-
-        // log::debug!("RESPONSE: {:#?}", response);
-
-        // // We need to get the function again because self is borrowed mutably.
-        // let func = self.get_function(function_name, ctx)?;
-        // let parsed = self.parse_response(&func, response, ctx)?;
-        // Ok(TestResponse {
-        //     function_response: Ok(parsed),
-        // })
     }
 
     async fn call_function(
