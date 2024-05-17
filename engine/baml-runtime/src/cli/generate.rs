@@ -1,5 +1,6 @@
 use crate::{BamlRuntime, RuntimeContext, RuntimeInterface};
 use anyhow::Result;
+use std::path::PathBuf;
 
 #[derive(clap::Args, Debug)]
 pub struct GenerateArgs {
@@ -33,7 +34,7 @@ impl GenerateArgs {
         let generate_output = runtime.generate_client(
             &client_type,
             &internal_baml_codegen::GeneratorArgs {
-                output_root: self.to.clone().into(),
+                output_root: PathBuf::from(&self.to).join("baml_client"),
                 encoded_baml_files: None,
             },
         )?;
