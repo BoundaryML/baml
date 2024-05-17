@@ -201,7 +201,7 @@ case "$_path" in
     #command="${command} && poetry run ruff check"
     #command="${command} && poetry run ruff format"
     #command="${command} && poetry run baml-cli generate --from /home/sam/baml/integ-tests/baml_src --to /home/sam/baml/integ-tests/python_v2"
-    command="${command} && poetry run baml-cli generate --from /home/sam/repos/baml-examples/nextjs-starter-v1/baml_src --to /home/sam/baml/integ-tests/python_v3"
+    # command="${command} && poetry run baml-cli generate --from /home/sam/repos/baml-examples/nextjs-starter-v1/baml_src --to /home/sam/baml/integ-tests/python_v3"
     command="${command} && BAML_LOG=baml_runtime=off infisical run poetry run python main.py"
     if [ "$_test_mode" -eq 1 ]; then
       command="${command} && poetry run -- pytest baml_core"

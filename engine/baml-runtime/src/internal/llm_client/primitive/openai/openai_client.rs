@@ -267,15 +267,10 @@ impl WithChat for OpenAIClient {
     }
 }
 
-pub struct SseResponse {
-    req: RequestBuilder,
-    client: String,
-    prompt: Vec<RenderedChatMessage>,
-}
-
-use crate::internal::llm_client::{ErrorCode, LLMCompleteResponse, LLMErrorResponse};
+use crate::internal::llm_client::{ErrorCode, LLMCompleteResponse, LLMErrorResponse, SseResponse};
 
 use super::types::ChatCompletionResponseDelta;
+
 impl SseResponse {
     pub async fn stream(self) -> Result<impl Stream<Item = Result<LLMCompleteResponse>>> {
         Ok(self
@@ -342,7 +337,6 @@ LLMCompleteResponse {
 impl OpenAIClient {
     pub fn stream_chat2(
         &self,
-        _retry_policy: Option<CallablePolicy>,
         ctx: &RuntimeContext,
         prompt: &internal_baml_jinja::RenderedPrompt,
     ) -> Result<SseResponse> {

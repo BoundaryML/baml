@@ -12,7 +12,8 @@ pub mod traits;
 use anyhow::Result;
 use core::pin::Pin;
 use futures::stream::Stream;
-use internal_baml_jinja::RenderedPrompt;
+use internal_baml_jinja::{RenderedChatMessage, RenderedPrompt};
+use reqwest::RequestBuilder;
 
 #[cfg(feature = "no_wasm")]
 use reqwest::StatusCode;
@@ -159,4 +160,9 @@ impl std::fmt::Display for LLMCompleteResponse {
 }
 
 pub type LLMResponseStream = futures::stream::LocalBoxStream<'static, anyhow::Result<LLMResponse>>;
-pub use openai::SseResponse;
+
+pub struct SseResponse {
+    req: RequestBuilder,
+    client: String,
+    prompt: Vec<RenderedChatMessage>,
+}

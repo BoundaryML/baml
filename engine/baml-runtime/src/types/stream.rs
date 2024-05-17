@@ -7,7 +7,10 @@ use std::ops::DerefMut;
 use std::sync::Arc;
 use tokio::sync::{Mutex, MutexGuard};
 
-use crate::{internal::llm_client::SseResponse, FunctionResult, RuntimeContext};
+use crate::{
+    internal::llm_client::{orchestrator::OrchestrationScope, SseResponse},
+    FunctionResult, RuntimeContext,
+};
 
 use super::response::LLMResponse;
 
@@ -24,6 +27,7 @@ pub type StreamCallback = Box<dyn Fn(FunctionResult) -> Result<()> + Send + Sync
 /// users to cancel the stream.
 pub struct FunctionResultStream {
     function_name: String,
+    scope: OrchestrationScope,
     inner: Arc<Mutex<Option<SseResponse>>>,
     ir: Arc<IntermediateRepr>,
     pub on_event: Option<StreamCallback>,
@@ -40,13 +44,15 @@ impl FunctionResultStream {
     pub fn from(
         function_name: String,
         inner: SseResponse,
+        scope: OrchestrationScope,
         ir: Arc<IntermediateRepr>,
         ctx: RuntimeContext,
     ) -> Result<Self> {
         Ok(Self {
             function_name,
             inner: Arc::new(Mutex::new(Some(inner))),
-            ir: ir,
+            ir,
+            scope,
             on_event: None,
             ctx,
         })
@@ -80,6 +86,8 @@ impl FunctionResultStream {
                 if let Some(ref on_event) = on_event {
                     if let Ok(parsed) = parsed {
                         return match on_event(FunctionResult {
+                            scope: self.scope.clone(),
+                            history: vec![],
                             llm_response: LLMResponse::Success(response.clone()),
                             parsed: Some(Ok(parsed)),
                         }) {
@@ -105,6 +113,8 @@ impl FunctionResultStream {
             final_response.content.as_str(),
         );
         Ok(FunctionResult {
+            history: vec![],
+            scope: self.scope.clone(),
             llm_response: LLMResponse::Success(final_response),
             parsed: Some(final_parsed),
         })

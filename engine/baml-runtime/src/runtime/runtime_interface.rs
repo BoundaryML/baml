@@ -5,7 +5,10 @@ use crate::{
         ir_features::{IrFeatures, WithInternal},
         llm_client::{
             llm_provider::LLMProvider,
-            orchestrator::{orchestrate, IterOrchestrator, OrchestrationScope, OrchestratorNode},
+            orchestrator::{
+                orchestrate, IterOrchestrator, LLMPrimitiveProvider, OrchestrationScope,
+                OrchestratorNode,
+            },
             retry_policy::CallablePolicy,
             traits::WithPrompt,
             LLMResponse,
@@ -344,16 +347,26 @@ impl RuntimeInterface for InternalBamlRuntime {
         let renderer = PromptRenderer::from_function(&func)?;
         let client_name = renderer.client_name().to_string();
 
-        let (llm_provider, retry_policy) = self.get_client(&client_name, &ctx)?;
-        let prompt = llm_provider.render_prompt(&renderer, &ctx, &baml_args)?;
+        let orchestrator = self.orchestration_graph(&client_name, &ctx)?;
+        let first = orchestrator.first().ok_or(anyhow::anyhow!(
+            "No orchestrator nodes found for client {}",
+            client_name
+        ))?;
 
-        use std::ops::Deref;
-        let stream = match llm_provider.deref() {
-            LLMProvider::OpenAI(client) => client.stream_chat2(retry_policy, &ctx, &prompt),
-            LLMProvider::Anthropic(_) => todo!(),
-        }?;
-
-        FunctionResultStream::from(function_name, stream, self.ir.clone(), ctx)
+        match first.provider.as_ref() {
+            LLMPrimitiveProvider::OpenAI(c) => {
+                let prompt = c.render_prompt(&renderer, &ctx, &baml_args)?;
+                let stream = c.stream_chat2(&ctx, &prompt)?;
+                FunctionResultStream::from(
+                    function_name,
+                    stream,
+                    first.scope.clone(),
+                    self.ir.clone(),
+                    ctx,
+                )
+            }
+            _ => anyhow::bail!("Streaming not supported for this client"),
+        }
     }
 
     #[cfg(feature = "no_wasm")]

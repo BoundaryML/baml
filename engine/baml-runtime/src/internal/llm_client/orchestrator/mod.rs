@@ -13,11 +13,12 @@ use crate::{
 };
 
 use super::{
-    primitive::LLMPrimitiveProvider,
     strategy::roundrobin::RoundRobinStrategy,
     traits::{WithPrompt, WithSingleCallable},
     LLMResponse,
 };
+
+pub use super::primitive::LLMPrimitiveProvider;
 
 pub struct OrchestratorNode {
     pub scope: OrchestrationScope,
