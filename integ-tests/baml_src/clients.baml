@@ -1,3 +1,18 @@
+retry_policy Bar {
+  max_retries 3
+  strategy {
+    type exponential_backoff
+  }
+}
+
+retry_policy Foo {
+  max_retries 3
+  strategy {
+    type constant_delay
+    delay_ms 100
+  }
+}
+
 client<llm> GPT4 {
   provider baml-openai-chat
   options {
@@ -7,6 +22,7 @@ client<llm> GPT4 {
 } 
 
 client<llm> GPT4Turbo {
+  retry_policy Bar
   provider baml-openai-chat
   options {
     model gpt-4-turbo
@@ -39,12 +55,13 @@ client<llm> Ollama {
 }
 
 client<llm> Resilient_SimpleSyntax {
+  retry_policy Foo
   provider baml-fallback
   options {
     strategy [
       GPT4Turbo
       GPT35
-      Claude
+      Lottery_SimpleSyntax
     ]
   }
 } 

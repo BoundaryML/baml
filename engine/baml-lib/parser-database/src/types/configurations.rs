@@ -1,5 +1,4 @@
-
-use internal_baml_diagnostics::{DatamodelError, Span};
+use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span};
 use internal_baml_schema_ast::ast::{
     ConfigurationId, PrinterConfig, RetryPolicyConfig, WithIdentifier, WithName, WithSpan,
 };
@@ -313,19 +312,27 @@ pub(crate) fn visit_test_case<'db>(
                 }
             }
             ("input", Some(val)) => {
-                match coerce_map(val, &coerce::string_with_span, ctx.diagnostics) {
-                    Some(val) => {
-                        let params = val
-                            .iter()
-                            .map(|(k, v)| ((k.0.to_string(), (k.1.clone(), (*v).clone()))))
-                            .collect();
-                        args = Some((f.span(), params));
+                if !val.is_map() {
+                    ctx.diagnostics.push_warning(DatamodelWarning::new(
+                        "Direct values are not supported. Please pass in parameters by name".into(),
+                        val.span().clone(),
+                    ));
+                    args = Some((f.span(), Default::default()));
+                } else {
+                    match coerce_map(val, &coerce::string_with_span, ctx.diagnostics) {
+                        Some(val) => {
+                            let params = val
+                                .iter()
+                                .map(|(k, v)| ((k.0.to_string(), (k.1.clone(), (*v).clone()))))
+                                .collect();
+                            args = Some((f.span(), params));
+                        }
+                        None => ctx.push_error(DatamodelError::new_property_not_known_error(
+                            "input",
+                            f.identifier().span().clone(),
+                            ["functions", "args"].to_vec(),
+                        )),
                     }
-                    None => ctx.push_error(DatamodelError::new_property_not_known_error(
-                        "input",
-                        f.identifier().span().clone(),
-                        ["functions", "args"].to_vec(),
-                    )),
                 }
             }
             ("args", Some(val)) => {

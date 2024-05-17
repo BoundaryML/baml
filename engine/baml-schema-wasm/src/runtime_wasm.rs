@@ -3,6 +3,7 @@ pub mod runtime_prompt;
 
 use std::collections::HashMap;
 
+use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
 #[allow(unused_imports)]
 use baml_runtime::{
     internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, RenderedPrompt,
@@ -271,7 +272,7 @@ pub enum TestStatus {
 
 #[wasm_bindgen(getter_with_clone, inspectable)]
 pub struct WasmLLMResponse {
-    pub client: String,
+    scope: OrchestrationScope,
     pub model: String,
     prompt: RenderedPrompt,
     pub content: String,
@@ -281,7 +282,7 @@ pub struct WasmLLMResponse {
 
 #[wasm_bindgen(getter_with_clone, inspectable)]
 pub struct WasmLLMFailure {
-    pub client: String,
+    scope: OrchestrationScope,
     pub model: Option<String>,
     prompt: RenderedPrompt,
     pub start_time_unix_ms: u64,
@@ -290,15 +291,26 @@ pub struct WasmLLMFailure {
     pub code: String,
 }
 
+#[wasm_bindgen]
 impl WasmLLMFailure {
+    #[wasm_bindgen]
+    pub fn client_name(&self) -> String {
+        self.scope.name()
+    }
     pub fn prompt(&self) -> WasmPrompt {
-        (self.prompt.clone(), self.client.clone()).into()
+        (&self.prompt, &self.scope).into()
     }
 }
 
+#[wasm_bindgen]
 impl WasmLLMResponse {
+    #[wasm_bindgen]
+    pub fn client_name(&self) -> String {
+        self.scope.name()
+    }
+
     pub fn prompt(&self) -> WasmPrompt {
-        (self.prompt.clone(), self.client.clone()).into()
+        (&self.prompt, &self.scope).into()
     }
 }
 
@@ -318,32 +330,43 @@ impl WasmTestResponse {
 
     #[wasm_bindgen]
     pub fn parsed_response(&self) -> Option<String> {
-        match &self.test_response.function_response {
-            Ok(f) => match &f.parsed {
-                Some(Ok(p)) => match serde_json::to_string(&BamlValue::from(p)) {
-                    Ok(s) => Some(s),
-                    Err(_) => None,
-                },
-                _ => None,
-            },
-            Err(_) => None,
-        }
+        self.test_response
+            .function_response
+            .parsed
+            .as_ref()
+            .map(|p| {
+                p.as_ref()
+                    .map(|p| serde_json::to_string(&BamlValue::from(p)))
+                    .map_or_else(|_| None, |s| s.ok())
+            })
+            .flatten()
+        // match & {
+        //     Ok(f) => match &f.parsed {
+        //         Some(Ok(p)) => match serde_json::to_string(&BamlValue::from(p)) {
+        //             Ok(s) => Some(s),
+        //             Err(_) => None,
+        //         },
+        //         _ => None,
+        //     },
+        //     Err(_) => None,
+        // }
     }
 
     #[wasm_bindgen]
     pub fn llm_failure(&self) -> Option<WasmLLMFailure> {
-        match &self.test_response.function_response {
-            Ok(f) => llm_response_to_wasm_error(&f.llm_response),
-            Err(_) => None,
-        }
+        llm_response_to_wasm_error(
+            &self.test_response.function_response.llm_response,
+            &self.test_response.function_response.scope,
+        )
     }
 
     #[wasm_bindgen]
     pub fn llm_response(&self) -> Option<WasmLLMResponse> {
-        match &self.test_response.function_response {
-            Ok(f) => f.llm_response.into_wasm(),
-            Err(_e) => None,
-        }
+        (
+            &self.test_response.function_response.llm_response,
+            &self.test_response.function_response.scope,
+        )
+            .into_wasm()
     }
 
     #[wasm_bindgen]
@@ -357,10 +380,11 @@ impl WasmTestResponse {
 
 fn llm_response_to_wasm_error(
     r: &baml_runtime::internal::llm_client::LLMResponse,
+    scope: &OrchestrationScope,
 ) -> Option<WasmLLMFailure> {
     match &r {
         LLMResponse::LLMFailure(f) => Some(WasmLLMFailure {
-            client: f.client.clone(),
+            scope: scope.clone(),
             model: f.model.clone(),
             prompt: f.prompt.clone(),
             start_time_unix_ms: f.start_time_unix_ms,
@@ -368,9 +392,6 @@ fn llm_response_to_wasm_error(
             message: f.message.clone(),
             code: f.code.to_string(),
         }),
-        LLMResponse::Retry(f) if f.passed.is_none() => {
-            f.failed.last().and_then(|e| llm_response_to_wasm_error(e))
-        }
         _ => None,
     }
 }
@@ -380,22 +401,24 @@ trait IntoWasm {
     fn into_wasm(&self) -> Self::Output;
 }
 
-impl IntoWasm for baml_runtime::internal::llm_client::LLMResponse {
+impl IntoWasm
+    for (
+        &baml_runtime::internal::llm_client::LLMResponse,
+        &OrchestrationScope,
+    )
+{
     type Output = Option<WasmLLMResponse>;
 
     fn into_wasm(&self) -> Self::Output {
-        match &self {
+        match &self.0 {
             baml_runtime::internal::llm_client::LLMResponse::Success(s) => Some(WasmLLMResponse {
-                client: s.client.clone(),
+                scope: self.1.clone(),
                 model: s.model.clone(),
                 prompt: s.prompt.clone(),
                 content: s.content.clone(),
                 start_time_unix_ms: s.start_time_unix_ms,
                 latency_ms: s.latency_ms,
             }),
-            baml_runtime::internal::llm_client::LLMResponse::Retry(r) if r.passed.is_some() => {
-                r.passed.as_ref().and_then(|p| p.into_wasm())
-            }
             _ => None,
         }
     }
@@ -421,13 +444,6 @@ impl WithRenderError for baml_runtime::internal::llm_client::LLMResponse {
             baml_runtime::internal::llm_client::LLMResponse::Success(_) => None,
             baml_runtime::internal::llm_client::LLMResponse::LLMFailure(f) => {
                 format!("{} {}", f.message, f.code.to_string()).into()
-            }
-            baml_runtime::internal::llm_client::LLMResponse::Retry(r) => {
-                if let Some(passed) = &r.passed {
-                    None
-                } else {
-                    r.failed.last().and_then(|f| f.render_error())
-                }
             }
             baml_runtime::internal::llm_client::LLMResponse::OtherFailures(o) => {
                 Some(o.to_string())
@@ -662,8 +678,9 @@ impl WasmFunction {
 
         rt.runtime
             .internal()
-            .render_prompt(&self.name, &ctx, &params)
-            .map(|p| p.into())
+            .render_prompt(&self.name, &ctx, &params, None)
+            .as_ref()
+            .map(|(p, scope)| (p, scope).into())
             .map_err(|e| wasm_bindgen::JsError::new(&e.to_string()))
     }
 

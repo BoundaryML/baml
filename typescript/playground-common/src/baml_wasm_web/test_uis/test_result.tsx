@@ -94,7 +94,7 @@ const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStat
   const parsed = test.parsed_response()
 
   const latencyMs = llm_response?.latency_ms ?? llm_failure?.latency_ms
-  const client = llm_response?.client ?? llm_failure?.client
+  const client = llm_response?.client_name() ?? llm_failure?.client_name()
   const model = llm_response?.model ?? llm_failure?.model
   const bamlOverheadLatency = testLatency - (latencyMs ? Number(latencyMs) : 0)
 

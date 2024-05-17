@@ -58,7 +58,16 @@ impl RuntimeContext {
         self
     }
 
-    pub fn resolve_expression(&self, expr: &Expression) -> Result<serde_json::Value> {
-        super::expression_helper::to_value(self, expr)
+    pub fn resolve_expression<T: serde::de::DeserializeOwned>(
+        &self,
+        expr: &Expression,
+    ) -> Result<T> {
+        serde_json::from_value::<T>(super::expression_helper::to_value(self, expr)?).map_err(|e| {
+            anyhow::anyhow!(
+                "Failed to resolve expression {:?} with error: {:?}",
+                expr,
+                e
+            )
+        })
     }
 }

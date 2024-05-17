@@ -1,11 +1,12 @@
 use colored::*;
 // mod anthropic;
-mod anthropic;
 mod common;
 pub mod llm_provider;
-mod openai;
+pub mod orchestrator;
+mod primitive;
 pub mod retry_policy;
 mod state;
+mod strategy;
 pub mod traits;
 
 use anyhow::Result;
@@ -38,10 +39,6 @@ pub struct RetryLLMResponse {
 pub enum LLMResponse {
     Success(LLMCompleteResponse),
     LLMFailure(LLMErrorResponse),
-    Retry(RetryLLMResponse),
-    // #[cfg(not(feature = "no_wasm"))]
-    // OtherFailures(JsValue),
-    // #[cfg(feature = "no_wasm")]
     OtherFailures(String),
 }
 
@@ -49,13 +46,6 @@ impl std::fmt::Display for LLMResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Success(response) => write!(f, "{}", response),
-            Self::Retry(retry) => match retry.passed.as_ref() {
-                Some(passed) => write!(f, "{}", passed),
-                None => match retry.failed.last() {
-                    Some(failed) => write!(f, "{}", failed),
-                    None => write!(f, "retry policy specified, but 0 requests were issued"),
-                },
-            },
             Self::LLMFailure(failure) => write!(f, "LLM call failed: {failure:?}"),
             Self::OtherFailures(e) => write!(f, "LLM call failed for unknown reason: {e:?}"),
         }
@@ -66,15 +56,6 @@ impl LLMResponse {
     pub fn content(&self) -> Result<&str> {
         match self {
             Self::Success(response) => Ok(&response.content),
-            Self::Retry(retry) => match retry.passed.as_ref() {
-                Some(passed) => passed.content(),
-                None => match retry.failed.last() {
-                    Some(failed) => failed.content(),
-                    None => Err(anyhow::anyhow!(
-                        "retry policy specified, but 0 requests were issued"
-                    )),
-                },
-            },
             Self::LLMFailure(failure) => Err(anyhow::anyhow!("LLM call failed: {failure:?}")),
             Self::OtherFailures(e) => {
                 Err(anyhow::anyhow!("LLM call failed for unknown reason: {e:?}"))

@@ -109,7 +109,9 @@ impl BamlTracer {
         response: &Result<FunctionResult>,
     ) -> Result<()> {
         if let Some(tracer) = &self.tracer {
-            tracer.submit((&self.options, span, response).into()).await
+            tracer
+                .submit(response.to_log_schema(&self.options, span))
+                .await
         } else {
             Ok(())
         }
@@ -121,7 +123,9 @@ impl BamlTracer {
         response: &Result<TestResponse>,
     ) -> Result<()> {
         if let Some(tracer) = &self.tracer {
-            tracer.submit((&self.options, span, response).into()).await
+            tracer
+                .submit(response.to_log_schema(&self.options, span))
+                .await
         } else {
             Ok(())
         }
@@ -254,59 +258,37 @@ impl From<(&APIWrapper, TracingSpan, Option<BamlValue>)> for LogSchema {
     }
 }
 
-fn error_from_result(result: &Result<FunctionResult>) -> Option<api_wrapper::core_types::Error> {
-    match result {
-        Ok(r) if r.parsed.is_some() => None,
-        Ok(r) => Some(api_wrapper::core_types::Error {
+fn error_from_result(result: &FunctionResult) -> Option<api_wrapper::core_types::Error> {
+    match &result.parsed {
+        Some(Ok(_)) => None,
+        Some(Err(e)) => Some(api_wrapper::core_types::Error {
             code: 2,
-            message: r
-                .parsed
-                .as_ref()
-                .and_then(|r| r.as_ref().err().map(|e| e.to_string()))
-                .or_else(|| r.llm_response.content().err().map(|e| e.to_string()))
-                .unwrap_or_else(|| "Unknown error".to_string()),
+            message: e.to_string(),
             traceback: None,
             r#override: None,
         }),
-        Err(e) => Some(api_wrapper::core_types::Error {
+        None => Some(api_wrapper::core_types::Error {
             code: 2,
-            message: e.to_string(),
+            message: result
+                .llm_response
+                .content()
+                .err()
+                .map(|e| e.to_string())
+                .unwrap_or_else(|| "Unknown error".to_string()),
             traceback: None,
             r#override: None,
         }),
     }
 }
 
-impl From<(&APIWrapper, TracingSpan, &Result<FunctionResult>)> for LogSchema {
-    fn from((api, span, result): (&APIWrapper, TracingSpan, &Result<FunctionResult>)) -> Self {
-        LogSchema {
-            project_id: api.project_id().map(|s| s.to_string()),
-            event_type: api_wrapper::core_types::EventType::FuncCode,
-            root_event_id: span.span_id.to_string(),
-            event_id: span.span_id.to_string(),
-            parent_event_id: None,
-            context: (api, &span).into(),
-            io: IO {
-                input: Some((&span.params).into()),
-                output: result
-                    .as_ref()
-                    .ok()
-                    .and_then(|r| r.parsed.as_ref())
-                    .and_then(|r| r.as_ref().ok())
-                    .map(|r| {
-                        let v: BamlValue = r.into();
-                        (&v).into()
-                    }),
-            },
-            error: error_from_result(result),
-            metadata: None,
-        }
-    }
+trait ToLogSchema {
+    fn to_log_schema(&self, api: &APIWrapper, span: TracingSpan) -> LogSchema;
 }
-impl From<(&APIWrapper, TracingSpan, &Result<TestResponse>)> for LogSchema {
-    fn from((api, span, result): (&APIWrapper, TracingSpan, &Result<TestResponse>)) -> Self {
-        match result {
-            Ok(r) => (api, span, &r.function_response).into(),
+
+impl<T: ToLogSchema> ToLogSchema for Result<T> {
+    fn to_log_schema(&self, api: &APIWrapper, span: TracingSpan) -> LogSchema {
+        match self {
+            Ok(r) => r.to_log_schema(api, span),
             Err(e) => LogSchema {
                 project_id: api.project_id().map(|s| s.to_string()),
                 event_type: api_wrapper::core_types::EventType::FuncCode,
@@ -326,6 +308,39 @@ impl From<(&APIWrapper, TracingSpan, &Result<TestResponse>)> for LogSchema {
                 }),
                 metadata: None,
             },
+        }
+    }
+}
+
+impl ToLogSchema for TestResponse {
+    fn to_log_schema(&self, api: &APIWrapper, span: TracingSpan) -> LogSchema {
+        self.function_response.to_log_schema(api, span)
+    }
+}
+
+impl ToLogSchema for FunctionResult {
+    fn to_log_schema(&self, api: &APIWrapper, span: TracingSpan) -> LogSchema {
+        LogSchema {
+            project_id: api.project_id().map(|s| s.to_string()),
+            event_type: api_wrapper::core_types::EventType::FuncCode,
+            root_event_id: span.span_id.to_string(),
+            event_id: span.span_id.to_string(),
+            parent_event_id: None,
+            context: (api, &span).into(),
+            io: IO {
+                input: Some((&span.params).into()),
+                output: self
+                    .parsed
+                    .as_ref()
+                    .map(|r| r.as_ref().ok())
+                    .flatten()
+                    .and_then(|r| {
+                        let v: BamlValue = r.into();
+                        Some(IOValue::from(&v))
+                    }),
+            },
+            error: error_from_result(self),
+            metadata: None,
         }
     }
 }

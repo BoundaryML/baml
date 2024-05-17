@@ -8,14 +8,13 @@ use baml_types::BamlImage;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
 
-use serde_json::{json, Value};
-
 use crate::internal::llm_client::{
-    anthropic::types::{AnthropicErrorResponse, AnthropicMessageResponse, StopReason},
+    primitive::anthropic::types::{AnthropicErrorResponse, AnthropicMessageResponse, StopReason},
     state::LlmClientState,
     traits::{WithChat, WithClient, WithNoCompletion, WithRetryPolicy},
     LLMResponse, LLMResponseStream, ModelFeatures,
 };
+use serde_json::{json, Value};
 
 use crate::RuntimeContext;
 
@@ -30,6 +29,7 @@ struct PostRequestProperities {
 }
 
 pub struct AnthropicClient {
+    pub name: String,
     retry_policy: Option<String>,
     context: RenderContext_Client,
     features: ModelFeatures,
@@ -47,11 +47,12 @@ fn resolve_properties(
         .map(|(k, v)| {
             Ok((
                 k.into(),
-                ctx.resolve_expression(v).context(format!(
-                    "client {} could not resolve options.{}",
-                    client.name(),
-                    k
-                ))?,
+                ctx.resolve_expression::<serde_json::Value>(v)
+                    .context(format!(
+                        "client {} could not resolve options.{}",
+                        client.name(),
+                        k
+                    ))?,
             ))
         })
         .collect::<Result<HashMap<_, _>>>()?;
@@ -137,6 +138,7 @@ impl WithNoCompletion for AnthropicClient {}
 impl AnthropicClient {
     pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<AnthropicClient> {
         Ok(Self {
+            name: client.name().into(),
             properties: resolve_properties(client, ctx)?,
             context: RenderContext_Client {
                 name: client.name().into(),

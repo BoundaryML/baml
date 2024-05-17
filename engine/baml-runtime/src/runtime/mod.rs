@@ -1,5 +1,4 @@
-#[cfg(feature = "no_wasm")]
-#[cfg(test)]
+#[cfg(all(test, feature = "no_wasm"))]
 mod tests;
 
 mod ir_features;
@@ -21,7 +20,8 @@ use crate::internal::llm_client::{llm_provider::LLMProvider, retry_policy::Calla
 pub struct InternalBamlRuntime {
     ir: Arc<IntermediateRepr>,
     diagnostics: Diagnostics,
-    clients: DashMap<String, (Arc<LLMProvider>, Option<CallablePolicy>)>,
+    clients: DashMap<String, Arc<LLMProvider>>,
+    retry_policies: DashMap<String, CallablePolicy>,
 }
 
 impl InternalBamlRuntime {
@@ -46,6 +46,7 @@ impl InternalBamlRuntime {
             ir: Arc::new(ir),
             diagnostics: schema.diagnostics,
             clients: DashMap::new(),
+            retry_policies: DashMap::new(),
         })
     }
 
@@ -67,6 +68,7 @@ impl InternalBamlRuntime {
             ir: Arc::new(ir),
             diagnostics: schema.diagnostics,
             clients: DashMap::new(),
+            retry_policies: DashMap::new(),
         })
     }
 }

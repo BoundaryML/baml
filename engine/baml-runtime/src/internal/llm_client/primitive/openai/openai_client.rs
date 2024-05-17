@@ -35,11 +35,12 @@ fn resolve_properties(
         .map(|(k, v)| {
             Ok((
                 k.into(),
-                ctx.resolve_expression(v).context(format!(
-                    "client {} could not resolve options.{}",
-                    client.name(),
-                    k
-                ))?,
+                ctx.resolve_expression::<serde_json::Value>(v)
+                    .context(format!(
+                        "client {} could not resolve options.{}",
+                        client.name(),
+                        k
+                    ))?,
             ))
         })
         .collect::<Result<HashMap<_, _>>>()?;
@@ -100,6 +101,7 @@ struct PostRequestProperities {
 }
 
 pub struct OpenAIClient {
+    pub name: String,
     // client: ClientWalker<'ir>,
     retry_policy: Option<String>,
     context: RenderContext_Client,
@@ -142,7 +144,9 @@ impl WithChat for OpenAIClient {
     ) -> Result<LLMResponse> {
         use crate::{
             internal::llm_client::{
-                openai::types::{ChatCompletionResponse, FinishReason, OpenAIErrorResponse},
+                primitive::openai::types::{
+                    ChatCompletionResponse, FinishReason, OpenAIErrorResponse,
+                },
                 ErrorCode, LLMCompleteResponse, LLMErrorResponse,
             },
             request::{self, RequestError},
@@ -269,10 +273,9 @@ pub struct SseResponse {
     prompt: Vec<RenderedChatMessage>,
 }
 
-use crate::internal::llm_client::{
-    openai::types::{ChatCompletionResponseDelta, FinishReason, OpenAIErrorResponse},
-    ErrorCode, LLMCompleteResponse, LLMErrorResponse,
-};
+use crate::internal::llm_client::{ErrorCode, LLMCompleteResponse, LLMErrorResponse};
+
+use super::types::ChatCompletionResponseDelta;
 impl SseResponse {
     pub async fn stream(self) -> Result<impl Stream<Item = Result<LLMCompleteResponse>>> {
         Ok(self
@@ -348,7 +351,7 @@ impl OpenAIClient {
             anyhow::bail!("Expected a chat prompt, got: {:#?}", prompt);
         };
         use crate::internal::llm_client::{
-            openai::types::{ChatCompletionResponse, FinishReason, OpenAIErrorResponse},
+            primitive::openai::types::{ChatCompletionResponse, FinishReason, OpenAIErrorResponse},
             ErrorCode, LLMCompleteResponse, LLMErrorResponse,
         };
         let mut body = json!(self.properties.properties);
@@ -404,6 +407,7 @@ impl OpenAIClient {
 
     pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<OpenAIClient> {
         Ok(Self {
+            name: client.name().into(),
             properties: resolve_properties(client, ctx)?,
             context: RenderContext_Client {
                 name: client.name().into(),

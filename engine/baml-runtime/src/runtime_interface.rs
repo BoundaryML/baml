@@ -6,11 +6,13 @@ use internal_baml_core::ir::{repr::IntermediateRepr, FunctionWalker};
 use internal_baml_jinja::RenderedPrompt;
 use std::{collections::HashMap, sync::Arc};
 
+use crate::internal::llm_client::llm_provider::LLMProvider;
+use crate::internal::llm_client::orchestrator::{OrchestrationScope, OrchestratorNode};
 use crate::tracing::TracingSpan;
 use crate::{
     internal::{
         ir_features::IrFeatures,
-        llm_client::{llm_provider::LLMProvider, retry_policy::CallablePolicy, LLMResponse},
+        llm_client::{retry_policy::CallablePolicy, LLMResponse},
     },
     runtime::InternalBamlRuntime,
     types::FunctionResultStream,
@@ -80,6 +82,17 @@ pub trait ExperimentalTracingInterface {
     fn flush(&self) -> Result<()>;
 }
 
+pub trait InternalClientLookup<'a> {
+    // Gets a top-level client/strategy by name
+    fn get_llm_provider(
+        &'a self,
+        client_name: &str,
+        ctx: &RuntimeContext,
+    ) -> Result<dashmap::mapref::one::Ref<String, Arc<LLMProvider>>>;
+
+    fn get_retry_policy(&self, policy_name: &str, ctx: &RuntimeContext) -> Result<CallablePolicy>;
+}
+
 // Define your composite trait with a generic parameter that must implement all the required traits.
 // This is a runtime that has no access to the disk or network
 pub trait InternalRuntimeInterface {
@@ -87,11 +100,11 @@ pub trait InternalRuntimeInterface {
 
     fn diagnostics(&self) -> &Diagnostics;
 
-    fn get_client(
+    fn orchestration_graph(
         &self,
         client_name: &str,
         ctx: &RuntimeContext,
-    ) -> Result<(Arc<LLMProvider>, Option<CallablePolicy>)>;
+    ) -> Result<Vec<OrchestratorNode>>;
 
     fn get_function<'ir>(
         &'ir self,
@@ -102,16 +115,17 @@ pub trait InternalRuntimeInterface {
     fn parse_response<'ir>(
         &'ir self,
         function: &FunctionWalker<'ir>,
-        response: LLMResponse,
+        response: &crate::internal::llm_client::LLMCompleteResponse,
         ctx: &RuntimeContext,
-    ) -> Result<FunctionResult>;
+    ) -> Result<jsonish::BamlValueWithFlags>;
 
     fn render_prompt(
         &self,
         function_name: &str,
         ctx: &RuntimeContext,
         params: &IndexMap<String, BamlValue>,
-    ) -> Result<(RenderedPrompt, String)>;
+        node_index: Option<usize>,
+    ) -> Result<(RenderedPrompt, OrchestrationScope)>;
 
     fn ir(&self) -> &IntermediateRepr;
 }

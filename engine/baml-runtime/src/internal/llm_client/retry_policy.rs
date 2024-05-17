@@ -15,11 +15,19 @@ impl From<RetryPolicyWalker<'_>> for CallablePolicy {
         CallablePolicy {
             max_retries: policy.max_retries(),
             strategy: policy.strategy().clone(),
-            current: std::time::Duration::from_secs(0),
+            current: match policy.strategy() {
+                RetryPolicyStrategy::ExponentialBackoff(strategy) => {
+                    std::time::Duration::from_millis(strategy.delay_ms as u64)
+                }
+                RetryPolicyStrategy::ConstantDelay(strategy) => {
+                    std::time::Duration::from_millis(strategy.delay_ms as u64)
+                }
+            },
             counter: 0,
         }
     }
 }
+
 impl Iterator for CallablePolicy {
     type Item = std::time::Duration;
 
@@ -40,7 +48,12 @@ impl Iterator for CallablePolicy {
             RetryPolicyStrategy::ConstantDelay(strategy) => strategy.delay_ms,
         };
 
-        self.current = std::time::Duration::from_millis(delay as u64);
+        if self.counter == self.max_retries {
+            // Last element has no delay
+            self.current = std::time::Duration::from_millis(0);
+        } else {
+            self.current = std::time::Duration::from_millis(delay as u64);
+        }
         self.counter += 1;
 
         Some(self.current)

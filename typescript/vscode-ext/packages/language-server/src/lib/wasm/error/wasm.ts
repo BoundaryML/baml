@@ -6,8 +6,8 @@ import { WasmPanicRegistry } from './WasmPanicRegistry'
  * which is not possible otherwise.
  */
 
-const globalWithWasm = globalThis as typeof global & {
-  PRISMA_WASM_PANIC_REGISTRY: WasmPanicRegistry
-}
+// const globalWithWasm = globalThis as typeof global & {
+//   PRISMA_WASM_PANIC_REGISTRY: WasmPanicRegistry
+// }
 
-globalWithWasm.PRISMA_WASM_PANIC_REGISTRY = new WasmPanicRegistry()
+// globalWithWasm.PRISMA_WASM_PANIC_REGISTRY = new WasmPanicRegistry()

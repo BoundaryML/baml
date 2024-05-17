@@ -5,15 +5,18 @@ use crate::{
         ir_features::{IrFeatures, WithInternal},
         llm_client::{
             llm_provider::LLMProvider,
+            orchestrator::{orchestrate, IterOrchestrator, OrchestrationScope, OrchestratorNode},
             retry_policy::CallablePolicy,
-            traits::{WithCallable, WithPrompt, WithRetryPolicy},
+            traits::WithPrompt,
+            LLMResponse,
         },
         prompt_renderer::PromptRenderer,
     },
-    runtime_interface::RuntimeConstructor,
-    FunctionResultStream, InternalRuntimeInterface, RuntimeContext, RuntimeInterface, TestResponse,
+    runtime_interface::{InternalClientLookup, RuntimeConstructor},
+    FunctionResult, FunctionResultStream, InternalRuntimeInterface, RuntimeContext,
+    RuntimeInterface, TestResponse,
 };
-use anyhow::Result;
+use anyhow::{Context, Result};
 use baml_types::{BamlMap, BamlValue};
 use dashmap::DashMap;
 use indexmap::IndexMap;
@@ -26,14 +29,58 @@ use internal_baml_core::{
 };
 use internal_baml_jinja::RenderedPrompt;
 
-#[cfg(not(feature = "no_wasm"))]
-use wasm_bindgen::JsValue;
-
 use super::InternalBamlRuntime;
+
+impl<'a> InternalClientLookup<'a> for InternalBamlRuntime {
+    // Gets a top-level client/strategy by name
+    fn get_llm_provider(
+        &'a self,
+        client_name: &str,
+        ctx: &RuntimeContext,
+    ) -> Result<dashmap::mapref::one::Ref<String, Arc<LLMProvider>>> {
+        if let Some(client) = self.clients.get(client_name) {
+            return Ok(client);
+        } else {
+            let walker = self
+                .ir()
+                .find_client(client_name)
+                .context(format!("Could not find client with name: {}", client_name))?;
+            let client = LLMProvider::try_from((&walker, ctx)).map(Arc::new)?;
+            self.clients.insert(client_name.into(), client.clone());
+            Ok(self.clients.get(client_name).unwrap())
+        }
+    }
+
+    fn get_retry_policy(&self, policy_name: &str, ctx: &RuntimeContext) -> Result<CallablePolicy> {
+        let policy_ref = self
+            .retry_policies
+            .entry(policy_name.into())
+            .or_try_insert_with(|| {
+                self.ir()
+                    .walk_retry_policies()
+                    .find(|walker| walker.name() == policy_name)
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("Could not find retry policy with name: {}", policy_name)
+                    })
+                    .map(CallablePolicy::from)
+            })?;
+
+        Ok(policy_ref.value().clone())
+    }
+}
 
 impl InternalRuntimeInterface for InternalBamlRuntime {
     fn diagnostics(&self) -> &internal_baml_core::internal_baml_diagnostics::Diagnostics {
         &self.diagnostics
+    }
+
+    fn orchestration_graph(
+        &self,
+        client_name: &str,
+        ctx: &RuntimeContext,
+    ) -> Result<Vec<OrchestratorNode>> {
+        let client = self.get_llm_provider(client_name, ctx)?;
+        Ok(client.iter_orchestrator(&mut Default::default(), Default::default(), ctx, self))
     }
 
     fn features(&self) -> IrFeatures {
@@ -45,55 +92,33 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         function_name: &str,
         ctx: &RuntimeContext,
         params: &IndexMap<String, BamlValue>,
-    ) -> Result<(RenderedPrompt, String)> {
+        node_index: Option<usize>,
+    ) -> Result<(RenderedPrompt, OrchestrationScope)> {
         let func = self.get_function(function_name, ctx)?;
         let baml_args = self.ir().check_function_params(&func, params)?;
 
         let renderer = PromptRenderer::from_function(&func)?;
         let client_name = renderer.client_name().to_string();
 
-        let (client, _) = self.get_client(&client_name, ctx)?;
-        let response = client.render_prompt(&renderer, &ctx, &baml_args)?;
+        let client = self.get_llm_provider(&client_name, ctx)?;
+        let mut selected =
+            client.iter_orchestrator(&mut Default::default(), Default::default(), ctx, self);
+        let node_index = node_index.unwrap_or(0);
 
-        Ok((response, client_name))
-    }
+        if node_index >= selected.len() {
+            return Err(anyhow::anyhow!(
+                "Execution Node out of bounds: {} >= {} for client {}",
+                node_index,
+                selected.len(),
+                client_name
+            ));
+        }
 
-    fn get_client(
-        &self,
-        client_name: &str,
-        ctx: &RuntimeContext,
-    ) -> Result<(Arc<LLMProvider>, Option<CallablePolicy>)> {
-        let client_ref = self
-            .clients
-            .entry(client_name.into())
-            .or_try_insert_with(|| {
-                let walker = self.ir().find_client(client_name)?;
-                let client = LLMProvider::from_ir(&walker, ctx)?;
-
-                let retry_policy = match client.retry_policy_name() {
-                    Some(name) => match self
-                        .ir()
-                        .walk_retry_policies()
-                        .find(|walker| walker.name() == name)
-                        .map(|walker| CallablePolicy::from(walker))
-                    {
-                        Some(policy) => Some(policy),
-                        None => {
-                            return Err(anyhow::anyhow!(
-                                "Could not find retry policy with name: {}",
-                                name
-                            ))
-                        }
-                    },
-                    None => None,
-                };
-
-                Ok((Arc::new(client), retry_policy))
-            })?;
-
-        let (client, retry_policy) = client_ref.value();
-
-        Ok((Arc::clone(&client), retry_policy.clone()))
+        let node = selected.swap_remove(node_index);
+        return node
+            .provider
+            .render_prompt(&renderer, ctx, &baml_args)
+            .map(|prompt| (prompt, node.scope));
     }
 
     fn get_function<'ir>(
@@ -108,17 +133,10 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
     fn parse_response<'ir>(
         &'ir self,
         function: &FunctionWalker<'ir>,
-        response: crate::internal::llm_client::LLMResponse,
+        response: &crate::internal::llm_client::LLMCompleteResponse,
         ctx: &RuntimeContext,
-    ) -> Result<crate::FunctionResult> {
-        let parsed = response
-            .content()
-            .ok()
-            .map(|content| jsonish::from_str(&self.ir(), &ctx.env, function.output(), content));
-        Ok(crate::FunctionResult {
-            llm_response: response,
-            parsed,
-        })
+    ) -> Result<jsonish::BamlValueWithFlags> {
+        jsonish::from_str(self.ir(), &ctx.env, function.output(), &response.content)
     }
 
     fn ir(&self) -> &IntermediateRepr {
@@ -153,6 +171,7 @@ impl RuntimeConstructor for InternalBamlRuntime {
             ir: Arc::new(ir),
             diagnostics: schema.diagnostics,
             clients: DashMap::new(),
+            retry_policies: DashMap::new(),
         })
     }
 
@@ -242,36 +261,45 @@ impl RuntimeInterface for InternalBamlRuntime {
                 }
                 params
             }
-            Err(e) => {
-                return Ok(TestResponse {
-                    function_response: Err(anyhow::anyhow!(
-                        "Unable to resolve test params: {:?}",
-                        e
-                    )),
-                })
-            }
+            Err(e) => return Err(anyhow::anyhow!("Unable to resolve test params: {:?}", e)),
         };
 
-        log::info!("Test params: {:#?}", params);
         let baml_args = self.ir().check_function_params(&func, &params)?;
-
         let renderer = PromptRenderer::from_function(&func)?;
         let client_name = renderer.client_name().to_string();
+        let orchestrator = self.orchestration_graph(&client_name, ctx)?;
 
-        let (client, retry_policy) = self.get_client(&client_name, ctx)?;
-        let prompt = client.render_prompt(&renderer, &ctx, &baml_args)?;
-        log::debug!("Prompt: {:#?}", prompt);
-
-        let response = client.call(retry_policy, ctx, &prompt).await;
-
-        log::debug!("RESPONSE: {:#?}", response);
-
-        // We need to get the function again because self is borrowed mutably.
-        let func = self.get_function(function_name, ctx)?;
-        let parsed = self.parse_response(&func, response, ctx)?;
-        Ok(TestResponse {
-            function_response: Ok(parsed),
+        // Now actually execute the code.
+        let (mut history, _) = orchestrate(orchestrator, ctx, &renderer, &baml_args, |s, ctx| {
+            jsonish::from_str(self.ir(), &ctx.env, func.output(), s)
         })
+        .await;
+
+        let (scope, result, parsed_response) = history.pop().unwrap();
+
+        result.map(|r| TestResponse {
+            function_response: FunctionResult {
+                history,
+                scope,
+                llm_response: r,
+                parsed: parsed_response,
+            },
+        })
+
+        // let (client, retry_policy) = self.get_client(&client_name, ctx)?;
+        // let prompt = client.render_prompt(&renderer, &ctx, &baml_args)?;
+        // log::debug!("Prompt: {:#?}", prompt);
+
+        // let response = client.call(retry_policy, ctx, &prompt).await;
+
+        // log::debug!("RESPONSE: {:#?}", response);
+
+        // // We need to get the function again because self is borrowed mutably.
+        // let func = self.get_function(function_name, ctx)?;
+        // let parsed = self.parse_response(&func, response, ctx)?;
+        // Ok(TestResponse {
+        //     function_response: Ok(parsed),
+        // })
     }
 
     async fn call_function(
@@ -285,18 +313,23 @@ impl RuntimeInterface for InternalBamlRuntime {
 
         let renderer = PromptRenderer::from_function(&func)?;
         let client_name = renderer.client_name().to_string();
+        let orchestrator = self.orchestration_graph(&client_name, ctx)?;
 
-        let (client, retry_policy) = self.get_client(&client_name, ctx)?;
-        let prompt = client.render_prompt(&renderer, &ctx, &baml_args)?;
+        // Now actually execute the code.
+        let (mut history, sleep_duration) =
+            orchestrate(orchestrator, ctx, &renderer, &baml_args, |s, ctx| {
+                jsonish::from_str(self.ir(), &ctx.env, func.output(), s)
+            })
+            .await;
 
-        let response = client.call(retry_policy, ctx, &prompt).await;
+        let (scope, result, parsed_response) = history.pop().unwrap();
 
-        log::debug!("call_function(\"{}\") -> {:#?}", function_name, response);
-
-        // We need to get the function again because self is borrowed mutably.
-        let func = self.get_function(&function_name, ctx)?;
-        let parsed = self.parse_response(&func, response, ctx)?;
-        Ok(parsed)
+        result.map(|r| FunctionResult {
+            history,
+            scope,
+            llm_response: r,
+            parsed: parsed_response,
+        })
     }
 
     fn stream_function(

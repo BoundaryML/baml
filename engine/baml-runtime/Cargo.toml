@@ -47,6 +47,8 @@ reqwest-eventsource = "0.6.0"
 eventsource-stream = "0.2.3"
 stream-cancel = "0.8.2"
 async-std = "1.12.0"
+fastrand = "2.1.0"
+test-log = "0.2.16"
 
 [dependencies.hostname]
 version = "0.3.1"

@@ -1,37 +1,52 @@
+use std::sync::Arc;
+
 use anyhow::Result;
-use baml_types::BamlValue;
 use internal_baml_core::ir::ClientWalker;
 
-use crate::RuntimeContext;
+use crate::{runtime_interface::InternalClientLookup, RuntimeContext};
 
 use super::{
-    super::prompt_renderer::PromptRenderer,
-    anthropic::AnthropicClient,
-    openai::OpenAIClient,
-    retry_policy::CallablePolicy,
-    traits::{WithCallable, WithPrompt, WithRetryPolicy, WithStreamable},
-    LLMResponse, LLMResponseStream,
+    orchestrator::{
+        ExecutionScope, IterOrchestrator, OrchestrationScope, OrchestrationState, OrchestratorNode,
+        OrchestratorNodeIterator,
+    },
+    primitive::LLMPrimitiveProvider,
+    strategy::LLMStrategyProvider,
+    traits::WithRetryPolicy,
 };
 
 pub enum LLMProvider {
-    OpenAI(OpenAIClient),
-    Anthropic(AnthropicClient),
+    Primitive(Arc<LLMPrimitiveProvider>),
+    Strategy(LLMStrategyProvider),
 }
 
-impl LLMProvider {
-    pub fn from_ir(client: &ClientWalker, ctx: &RuntimeContext) -> Result<LLMProvider> {
+impl WithRetryPolicy for LLMProvider {
+    fn retry_policy_name(&self) -> Option<&str> {
+        match self {
+            LLMProvider::Primitive(provider) => provider.retry_policy_name(),
+            LLMProvider::Strategy(provider) => provider.retry_policy_name(),
+        }
+    }
+}
+
+impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for LLMProvider {
+    type Error = anyhow::Error;
+
+    fn try_from((client, ctx): (&ClientWalker, &RuntimeContext)) -> Result<Self> {
         match client.elem().provider.as_str() {
-            "baml-openai-chat" | "openai" => {
-                OpenAIClient::new(client, ctx).map(LLMProvider::OpenAI)
+            "baml-fallback" | "fallback" | "baml-round-robin" | "round-robin" => {
+                LLMStrategyProvider::try_from((client, ctx)).map(LLMProvider::Strategy)
             }
-            "baml-anthropic-chat" | "anthropic" => {
-                AnthropicClient::new(client, ctx).map(LLMProvider::Anthropic)
-            }
-            "baml-ollama-chat" | "ollama" => {
-                OpenAIClient::new(client, ctx).map(LLMProvider::OpenAI)
-            }
+            "baml-openai-chat"
+            | "openai"
+            | "baml-anthropic-chat"
+            | "anthropic"
+            | "baml-ollama-chat"
+            | "ollama" => LLMPrimitiveProvider::try_from((client, ctx))
+                .map(Arc::new)
+                .map(LLMProvider::Primitive),
             other => {
-                let options = ["openai", "anthropic", "ollama"];
+                let options = ["openai", "anthropic", "ollama", "round-robin", "fallback"];
                 anyhow::bail!(
                     "Unsupported provider: {}. Available ones are: {}",
                     other,
@@ -42,39 +57,59 @@ impl LLMProvider {
     }
 }
 
-impl<'ir> WithPrompt<'ir> for LLMProvider {
-    fn render_prompt(
-        &'ir self,
-        renderer: &PromptRenderer,
-        ctx: &RuntimeContext,
-        params: &BamlValue,
-    ) -> Result<internal_baml_jinja::RenderedPrompt> {
-        match self {
-            LLMProvider::OpenAI(client) => client.render_prompt(renderer, ctx, params),
-            LLMProvider::Anthropic(client) => client.render_prompt(renderer, ctx, params),
-        }
-    }
-}
-
-impl WithRetryPolicy for LLMProvider {
-    fn retry_policy_name(&self) -> Option<&str> {
-        match self {
-            LLMProvider::OpenAI(client) => client.retry_policy_name(),
-            LLMProvider::Anthropic(client) => client.retry_policy_name(),
-        }
-    }
-}
-
-impl WithCallable for LLMProvider {
-    async fn call(
+impl IterOrchestrator for Arc<LLMProvider> {
+    fn iter_orchestrator<'a>(
         &self,
-        retry_policy: Option<CallablePolicy>,
+        state: &mut OrchestrationState,
+        previous: OrchestrationScope,
         ctx: &RuntimeContext,
-        prompt: &internal_baml_jinja::RenderedPrompt,
-    ) -> LLMResponse {
-        match self {
-            LLMProvider::OpenAI(client) => client.call(retry_policy, ctx, prompt).await,
-            LLMProvider::Anthropic(client) => client.call(retry_policy, ctx, prompt).await,
+        client_lookup: &'a dyn InternalClientLookup<'a>,
+    ) -> OrchestratorNodeIterator {
+        if let Some(retry_policy) = self.retry_policy_name() {
+            let policy = client_lookup.get_retry_policy(retry_policy, ctx).unwrap();
+            policy
+                .into_iter()
+                .enumerate()
+                .map(move |(idx, node)| {
+                    previous
+                        .clone()
+                        .extend(ExecutionScope::Retry(retry_policy.into(), idx, node))
+                })
+                .flat_map(|scope| {
+                    // repeat the same provider for each retry policy
+
+                    // We can pass in empty previous.
+                    match self.as_ref() {
+                        LLMProvider::Primitive(provider) => provider.iter_orchestrator(
+                            state,
+                            Default::default(),
+                            ctx,
+                            client_lookup,
+                        ),
+                        LLMProvider::Strategy(provider) => provider.iter_orchestrator(
+                            state,
+                            Default::default(),
+                            ctx,
+                            client_lookup,
+                        ),
+                    }
+                    .iter()
+                    .map(move |node| node.prefix(scope.clone()))
+                    .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>()
+        } else {
+            match self.as_ref() {
+                LLMProvider::Primitive(provider) => {
+                    provider.iter_orchestrator(state, Default::default(), ctx, client_lookup)
+                }
+                LLMProvider::Strategy(provider) => {
+                    provider.iter_orchestrator(state, Default::default(), ctx, client_lookup)
+                }
+            }
+            .iter()
+            .map(|node| node.prefix(previous.clone()))
+            .collect()
         }
     }
 }

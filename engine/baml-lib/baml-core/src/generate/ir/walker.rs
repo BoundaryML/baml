@@ -31,6 +31,16 @@ impl<'a> Walker<'a, &'a Function> {
         }
     }
 
+    pub fn client_name(&self) -> Option<&'a str> {
+        if let Some(v2) = self.as_v2() {
+            if let Some(c) = v2.configs.first() {
+                return Some(c.client.as_str());
+            }
+        }
+
+        None
+    }
+
     pub fn walk_impls(
         &'a self,
     ) -> either::Either<

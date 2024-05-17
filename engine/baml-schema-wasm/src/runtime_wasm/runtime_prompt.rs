@@ -1,4 +1,6 @@
-use baml_runtime::{ChatMessagePart, RenderedPrompt};
+use baml_runtime::{
+    internal::llm_client::orchestrator::OrchestrationScope, ChatMessagePart, RenderedPrompt,
+};
 
 use baml_types::BamlImage;
 use wasm_bindgen::prelude::*;
@@ -9,11 +11,11 @@ pub struct WasmPrompt {
     pub client_name: String,
 }
 
-impl From<(RenderedPrompt, String)> for WasmPrompt {
-    fn from((prompt, client_name): (RenderedPrompt, String)) -> Self {
+impl From<(&RenderedPrompt, &OrchestrationScope)> for WasmPrompt {
+    fn from((prompt, client_name): (&RenderedPrompt, &OrchestrationScope)) -> Self {
         WasmPrompt {
-            prompt,
-            client_name,
+            prompt: prompt.clone(),
+            client_name: client_name.name(),
         }
     }
 }

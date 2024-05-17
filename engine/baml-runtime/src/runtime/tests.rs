@@ -1,11 +1,11 @@
 use baml_types::BamlValue;
 
-
-
 use super::*;
 use crate::runtime_interface::RuntimeConstructor;
 use crate::types::TestStatus;
-use crate::{FunctionResult, RuntimeContext, RuntimeInterface, TestResponse};
+use crate::{
+    FunctionResult, InternalRuntimeInterface, RuntimeContext, RuntimeInterface, TestResponse,
+};
 
 use std::path::PathBuf;
 
@@ -15,6 +15,38 @@ fn assert_passed(test: &TestResponse) {
 
 fn assert_failed(test: &TestResponse) {
     assert_ne!(test.status(), TestStatus::Pass);
+}
+
+#[test_log::test]
+fn test_graph_test() -> Result<()> {
+    let directory = PathBuf::from("/Users/vbv/repos/gloo-lang/integ-tests/baml_src");
+    let runtime = InternalBamlRuntime::from_directory(&directory)?;
+
+    let ctx = RuntimeContext::new()
+        .add_env("OPENAI_API_KEY".into(), "API_KEY".to_string())
+        .add_env("ANTHROPIC_API_KEY".into(), "API_KEY".to_string());
+
+    let graph = runtime.orchestration_graph("GPT4Turbo", &ctx)?;
+    for node in graph.iter() {
+        log::info!("Node: {:#}", node);
+    }
+
+    for name in [
+        "GPT4Turbo",
+        "Resilient_SimpleSyntax",
+        "Lottery_SimpleSyntax",
+    ]
+    .iter()
+    {
+        log::info!("Graph: {}", name);
+        let graph = runtime.orchestration_graph(name, &ctx)?;
+        for node in graph.iter() {
+            log::info!("Node: {:#}", node);
+        }
+        log::info!("Graph: ----");
+    }
+
+    Ok(())
 }
 
 #[tokio::test]

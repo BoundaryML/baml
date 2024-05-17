@@ -1,3 +1,4 @@
+use crate::internal::llm_client::orchestrator::OrchestrationScope;
 pub use crate::internal::llm_client::LLMResponse;
 use anyhow::Result;
 use colored::*;
@@ -6,6 +7,17 @@ use baml_types::BamlValue;
 use jsonish::BamlValueWithFlags;
 
 pub struct FunctionResult {
+    pub history: Vec<(
+        OrchestrationScope,
+        Result<LLMResponse>,
+        Option<Result<jsonish::BamlValueWithFlags>>,
+    )>,
+
+    #[cfg(feature = "internal")]
+    pub scope: OrchestrationScope,
+    #[cfg(not(feature = "internal"))]
+    pub(crate) scope: OrchestrationScope,
+
     #[cfg(feature = "internal")]
     pub llm_response: LLMResponse,
     #[cfg(not(feature = "internal"))]
@@ -56,15 +68,12 @@ impl FunctionResult {
 }
 
 pub struct TestResponse {
-    pub function_response: Result<FunctionResult>,
+    pub function_response: FunctionResult,
 }
 
 impl std::fmt::Display for TestResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.function_response {
-            Ok(r) => write!(f, "{}", r),
-            Err(e) => write!(f, "{}", e.to_string().red()),
-        }
+        writeln!(f, "{}", self.function_response)
     }
 }
 
@@ -98,21 +107,17 @@ impl Eq for TestFailReason<'_> {}
 
 impl TestResponse {
     pub fn status(&self) -> TestStatus {
-        match &self.function_response {
-            Ok(func_res) => {
-                if let Some(parsed) = &func_res.parsed {
-                    if parsed.is_ok() {
-                        TestStatus::Pass
-                    } else {
-                        TestStatus::Fail(TestFailReason::TestParseFailure(
-                            parsed.as_ref().unwrap_err(),
-                        ))
-                    }
-                } else {
-                    TestStatus::Fail(TestFailReason::TestLLMFailure(&func_res.llm_response))
-                }
+        let func_res = &self.function_response;
+        if let Some(parsed) = &func_res.parsed {
+            if parsed.is_ok() {
+                TestStatus::Pass
+            } else {
+                TestStatus::Fail(TestFailReason::TestParseFailure(
+                    parsed.as_ref().unwrap_err(),
+                ))
             }
-            Err(e) => TestStatus::Fail(TestFailReason::TestUnspecified(e)),
+        } else {
+            TestStatus::Fail(TestFailReason::TestLLMFailure(&func_res.llm_response))
         }
     }
 }
