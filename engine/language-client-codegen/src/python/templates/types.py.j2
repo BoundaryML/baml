@@ -1,16 +1,19 @@
+{#- baml_py must be imported to enable access to baml_py.Image -#}
 import baml_py
 from enum import Enum
 from pydantic import BaseModel
 from typing import List, Optional, Union
 
-{%- for enum in enums %}
+{# Enums -#}
+{% for enum in enums %}
 class {{enum.name}}(str, Enum):
     {%- for value in enum.values %}
     {{ value }} = "{{ value }}"
     {%- endfor %}
 {% endfor %}
 
-{%- for cls in classes %}
+{#- Classes -#}
+{% for cls in classes %}
 class {{cls.name}}(BaseModel):
     {%- for (name, type) in cls.fields %}
     {{name}}: {{type}}

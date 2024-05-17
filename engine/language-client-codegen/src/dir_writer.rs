@@ -1,4 +1,5 @@
 use anyhow::Result;
+use internal_baml_core::ir::repr::IntermediateRepr;
 use std::io::ErrorKind;
 use std::path::Path;
 use std::thread::sleep;
@@ -70,6 +71,27 @@ impl<L: LanguageFeatures + Default> FileCollector<L> {
             files: HashMap::new(),
             lang: L::default(),
         }
+    }
+
+    pub(super) fn add_template<
+        'ir,
+        V: TryFrom<&'ir IntermediateRepr, Error = anyhow::Error> + askama::Template,
+    >(
+        &mut self,
+        name: impl Into<PathBuf> + std::fmt::Display,
+        ir: &'ir IntermediateRepr,
+    ) -> Result<()> {
+        let rendered = V::try_from(ir)
+            .map_err(|e| e.context(format!("Error while building {}", name)))?
+            .render()
+            .map_err(|e| {
+                anyhow::Error::from(e).context(format!("Error while rendering {}", name))
+            })?;
+        self.files.insert(
+            name.into(),
+            format!("{}\n{}", self.lang.content_prefix(), rendered),
+        );
+        Ok(())
     }
 
     pub(super) fn add_file<K: AsRef<str>, V: AsRef<str>>(&mut self, name: K, contents: V) {

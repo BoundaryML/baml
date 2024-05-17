@@ -34,21 +34,9 @@ pub(crate) fn generate(
 ) -> Result<Vec<PathBuf>> {
     let mut collector = FileCollector::<PythonLanguageFeatures>::new();
 
-    collector.add_file(
-        "types.py",
-        TryInto::<generate_types::PythonTypes>::try_into(ir)
-            .map_err(|e| e.context("Error while building types.py"))?
-            .render()
-            .map_err(|e| anyhow::Error::from(e).context("Error while rendering types.py"))?,
-    );
-
-    collector.add_file(
-        "client.py",
-        TryInto::<PythonClient>::try_into(ir)
-            .map_err(|e| e.context("Error while building client.py"))?
-            .render()
-            .map_err(|e| anyhow::Error::from(e).context("Error while rendering client.py"))?,
-    );
+    collector.add_template::<generate_types::PythonStreamTypes>("partial_types.py", ir)?;
+    collector.add_template::<generate_types::PythonTypes>("types.py", ir)?;
+    collector.add_template::<PythonClient>("client.py", ir)?;
 
     collector.add_file(
         "__init__.py",
@@ -80,12 +68,12 @@ impl TryFrom<&IntermediateRepr> for PythonClient {
                         let (_function, _impl_) = c.item;
                         Ok(PythonFunction {
                             name: f.name().to_string(),
-                            return_type: f.elem().output().to_type_reference(),
+                            return_type: f.elem().output().to_type_ref(),
                             args: match f.inputs() {
                                 either::Either::Left(_args) => anyhow::bail!("Python codegen does not support unnamed args: please add names to all arguments of BAML function '{}'", f.name().to_string()),
                                 either::Either::Right(args) => args
                                     .iter()
-                                    .map(|(name, r#type)| (name.to_string(), r#type.to_type_reference()))
+                                    .map(|(name, r#type)| (name.to_string(), r#type.to_type_ref()))
                                     .collect(),
                             },
                         })
@@ -100,28 +88,24 @@ impl TryFrom<&IntermediateRepr> for PythonClient {
     }
 }
 
-trait ToTypeReference {
-    fn to_type_reference(&self) -> String;
+trait ToTypeReferenceInClientDefinition {
+    fn to_type_ref(&self) -> String;
 }
 
-impl ToTypeReference for FieldType {
-    fn to_type_reference(&self) -> String {
+impl ToTypeReferenceInClientDefinition for FieldType {
+    fn to_type_ref(&self) -> String {
         match self {
             FieldType::Class(name) | FieldType::Enum(name) => format!("types.{name}"),
-            FieldType::List(inner) => format!("List[{}]", inner.to_type_reference()),
+            FieldType::List(inner) => format!("List[{}]", inner.to_type_ref()),
             FieldType::Map(key, value) => {
-                format!(
-                    "Dict[{}, {}]",
-                    key.to_type_reference(),
-                    value.to_type_reference()
-                )
+                format!("Dict[{}, {}]", key.to_type_ref(), value.to_type_ref())
             }
             FieldType::Primitive(r#type) => r#type.to_python(),
             FieldType::Union(inner) => format!(
                 "Union[{}]",
                 inner
                     .iter()
-                    .map(|t| t.to_type_reference())
+                    .map(|t| t.to_type_ref())
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
@@ -129,11 +113,11 @@ impl ToTypeReference for FieldType {
                 "Tuple[{}]",
                 inner
                     .iter()
-                    .map(|t| t.to_type_reference())
+                    .map(|t| t.to_type_ref())
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            FieldType::Optional(inner) => format!("Optional[{}]", inner.to_type_reference()),
+            FieldType::Optional(inner) => format!("Optional[{}]", inner.to_type_ref()),
         }
     }
 }

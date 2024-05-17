@@ -39,7 +39,9 @@ impl GenerateArgs {
         )?;
 
         println!(
-            "Generated {} BAML client ({} files) in {} from {}",
+            "Generated {} BAML client ({} files)\n\
+            output: {}\n\
+            baml_src: {}",
             generate_output.client_type,
             generate_output.files.len(),
             self.to,
