@@ -422,6 +422,13 @@ impl OpenAIClient {
 }
 
 fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json::Value {
+    if parts.len() == 1 {
+        match &parts[0] {
+            ChatMessagePart::Text(text) => return json!(text),
+            _ => {}
+        }
+    }
+
     let content: Vec<serde_json::Value> = parts
         .into_iter()
         .map(|part| match part {
@@ -440,11 +447,6 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json:
             },
         })
         .collect();
-
-    // This is for non-image apis, where there is no "type", and the content is returned as a string instead of the list of parts.
-    if content.len() == 1 && content[0].get("type").unwrap() == "text" {
-        return serde_json::Value::String(content[0].get("text").unwrap().to_string());
-    }
 
     json!(content)
 }
