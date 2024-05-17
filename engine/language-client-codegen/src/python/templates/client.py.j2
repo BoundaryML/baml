@@ -23,14 +23,20 @@ class BamlOutputWrapper(BaseModel, Generic[OutputType]):
           )
         ) from e
 
-{% for fn in funcs -%}
-class BamlOutput_{{fn.name}}:
+class BamlClient:
     __runtime: baml_py.BamlRuntimeFfi
+    __stream_client: "BamlStreamClient"
+
+    @staticmethod
+    def from_directory(path: str) -> "BamlClient":
+      return BamlClient(runtime=baml_py.BamlRuntimeFfi.from_directory(path))
 
     def __init__(self, runtime: baml_py.BamlRuntimeFfi):
       self.__runtime = runtime
+      self.__stream_client = BamlStreamClient(self.__runtime)
 
-    async def __call__(
+    {% for fn in funcs %}
+    async def {{ fn.name }}(
         self,
         {% for (name, type) in fn.args -%}
         {{name}}: {{type}}{% if !loop.last %},{% endif %}
@@ -46,40 +52,13 @@ class BamlOutput_{{fn.name}}:
         ctx={}
       )
       return BamlOutputWrapper[{{ fn.return_type }}].coerce("{{fn.name}}", raw.parsed())
+    {% endfor %}
 
-    async def unstable(
-        self,
-        {% for (name, type) in fn.args -%}
-        {{name}}: {{type}}{% if !loop.last %},{% endif %}
-        {%- endfor %}
-    ) -> baml_py.FunctionResult:
-      return await self.__runtime.call_function(
-        "{{fn.name}}",
-        {
-          {% for (name, _) in fn.args -%}
-          "{{name}}": {{name}},
-          {%- endfor %}
-        },
-        ctx={}
-      )
-
-{% endfor %}
-
-class BamlClient:
+class BamlStreamClient:
     __runtime: baml_py.BamlRuntimeFfi
-    {%- for fn in funcs %}
-    {{fn.name}}: BamlOutput_{{fn.name}}
-    {%- endfor %}
-
-    @staticmethod
-    def from_directory(path: str) -> "BamlClient":
-      return BamlClient(runtime=baml_py.BamlRuntimeFfi.from_directory(path))
 
     def __init__(self, runtime: baml_py.BamlRuntimeFfi):
       self.__runtime = runtime
-      {%- for fn in funcs %}
-      self.{{fn.name}} = BamlOutput_{{fn.name}}(self.__runtime)
-      {%- endfor %}
 
     {% for fn in funcs %}
     async def {{ fn.name }}(
