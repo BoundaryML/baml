@@ -1,3 +1,4 @@
+use anyhow::Result;
 use baml_types::BamlValue;
 use pyo3::prelude::{pyclass, pymethods, PyAnyMethods, PyModule, PyResult};
 use pyo3::types::PyType;
@@ -51,6 +52,16 @@ impl FunctionResultStream {
     }
 }
 
+struct CallAndAwait {
+    inner: PyObject,
+}
+
+impl CallAndAwait {
+    async fn call_and_await(&self) -> Result<()> {
+        Ok(())
+    }
+}
+
 #[pymethods]
 impl FunctionResultStream {
     fn __str__(&self) -> String {
@@ -71,19 +82,19 @@ impl FunctionResultStream {
     }
 
     fn done(&self, py: Python<'_>) -> PyResult<PyObject> {
+        use core::future::Future;
         let inner = self.inner.clone();
 
         let on_event = self.on_event.as_ref().map(|cb| {
             let cb = cb.clone_ref(py);
-            Box::new(move |event| {
+            move |event| {
                 let partial = FunctionResult::new(event);
-                Python::with_gil(|py| {
-                    let parsed_partial = partial.parsed(py)?;
-                    cb.call1(py, (parsed_partial,))
-                })
-                .map(|_| ())
-                .map_err(|e| e.into())
-            }) as _
+                std::future::ready(
+                    Python::with_gil(|py| cb.call1(py, (partial,)))
+                        .map(|_| ())
+                        .map_err(|e| e.into()),
+                )
+            }
         });
 
         pyo3_asyncio::tokio::future_into_py(py, async move {

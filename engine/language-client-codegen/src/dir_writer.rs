@@ -116,7 +116,10 @@ impl<L: LanguageFeatures + Default> FileCollector<L> {
 
         const MAX_UNKNOWN_FILES: usize = 4;
         let mut unknown_files = vec![];
-        for entry in walkdir::WalkDir::new(output_path) {
+        for entry in walkdir::WalkDir::new(output_path)
+            .into_iter()
+            .filter_entry(|e| e.path().file_name().is_some_and(|f| f != "__pycache__"))
+        {
             if unknown_files.len() > MAX_UNKNOWN_FILES {
                 break;
             }

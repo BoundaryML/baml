@@ -1,9 +1,11 @@
 use anyhow::Result;
 
+use core::future::Future;
 use futures::stream::{StreamExt, TryStreamExt};
 use internal_baml_core::ir::repr::IntermediateRepr;
 use internal_baml_jinja::RenderedChatMessage;
 use std::ops::DerefMut;
+use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::{Mutex, MutexGuard};
 
@@ -14,11 +16,8 @@ use crate::{
 
 use super::response::LLMResponse;
 
-#[cfg(feature = "wasm")]
-// JsFuture is !Send, so when building for WASM, we have to drop that requirement from StreamCallback
-pub type StreamCallback = Box<dyn Fn(FunctionResult) -> Result<()> + Send>;
-#[cfg(not(feature = "wasm"))]
-pub type StreamCallback = Box<dyn Fn(FunctionResult) -> Result<()> + Send + Sync>;
+/// unused
+pub type StreamCallback = ();
 
 /// Wrapper that holds a stream of responses from a BAML function call.
 ///
@@ -58,7 +57,11 @@ impl FunctionResultStream {
         })
     }
 
-    pub async fn run(&self, on_event: Option<StreamCallback>) -> Result<FunctionResult> {
+    pub async fn run<F, O>(&self, on_event: Option<F>) -> Result<FunctionResult>
+    where
+        F: Fn(FunctionResult) -> O,
+        O: Future<Output = Result<()>>,
+    {
         use internal_baml_core::ir::IRHelper;
 
         let Some(stream) =
@@ -84,17 +87,17 @@ impl FunctionResultStream {
                 );
 
                 if let Some(ref on_event) = on_event {
-                    if let Ok(parsed) = parsed {
-                        return match on_event(FunctionResult {
-                            scope: self.scope.clone(),
-                            history: vec![],
-                            llm_response: LLMResponse::Success(response.clone()),
-                            parsed: Some(Ok(parsed)),
-                        }) {
-                            Ok(()) => Ok(response),
-                            Err(e) => Err(e.context("Error in on_event callback")),
-                        };
-                    }
+                    return match on_event(FunctionResult {
+                        scope: self.scope.clone(),
+                        history: vec![],
+                        llm_response: LLMResponse::Success(response.clone()),
+                        parsed: Some(parsed),
+                    })
+                    .await
+                    {
+                        Ok(()) => Ok(response),
+                        Err(e) => Err(e.context("Error in on_event callback")),
+                    };
                 }
 
                 Ok(response)

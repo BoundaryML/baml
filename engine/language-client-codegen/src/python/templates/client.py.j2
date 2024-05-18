@@ -4,7 +4,7 @@ import pprint
 import baml_py
 from pydantic import BaseModel, ValidationError
 
-from . import types
+from . import partial_types, types
 
 OutputType = TypeVar('OutputType')
 
@@ -12,13 +12,13 @@ class BamlOutputWrapper(BaseModel, Generic[OutputType]):
     wrapped: OutputType
     
     @classmethod
-    def coerce(cls, fn_name: str, parsed: Any) -> OutputType:
+    def coerce(cls, parsed: Any) -> OutputType:
       try:
         return cls.model_validate(obj={'wrapped': parsed}).wrapped
       except ValidationError as e:
+        {# TODO(sam): can I surface {{ fn.name }} here? #}
         raise TypeError(
-          "Internal BAML error while casting the output type of {}:\n{}".format(
-            fn_name,
+          "Internal BAML error while casting output type:\n{}".format(
             pprint.pformat(parsed)
           )
         ) from e
@@ -28,12 +28,16 @@ class BamlClient:
     __stream_client: "BamlStreamClient"
 
     @staticmethod
-    def from_directory(path: str) -> "BamlClient":
-      return BamlClient(runtime=baml_py.BamlRuntimeFfi.from_directory(path))
+    def from_directory(path: str, ctx: Dict[str, Any] = {}) -> "BamlClient":
+      return BamlClient(runtime=baml_py.BamlRuntimeFfi.from_directory(path, ctx))
 
     def __init__(self, runtime: baml_py.BamlRuntimeFfi):
       self.__runtime = runtime
       self.__stream_client = BamlStreamClient(self.__runtime)
+
+    @property
+    def stream(self):
+      return self.__stream_client
 
     {% for fn in funcs %}
     async def {{ fn.name }}(
@@ -51,7 +55,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[{{ fn.return_type }}].coerce("{{fn.name}}", raw.parsed())
+      return BamlOutputWrapper[{{ fn.return_type }}].coerce(raw.parsed())
     {% endfor %}
 
 class BamlStreamClient:
@@ -61,20 +65,24 @@ class BamlStreamClient:
       self.__runtime = runtime
 
     {% for fn in funcs %}
-    async def {{ fn.name }}(
+    def {{ fn.name }}(
         self,
         {% for (name, type) in fn.args -%}
         {{name}}: {{type}}{% if !loop.last %},{% endif %}
         {%- endfor %}
-    ) -> {{fn.return_type}}:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[{{ fn.partial_return_type }}, {{ fn.return_type }}]:
+      raw = self.__runtime.stream_function(
         "{{fn.name}}",
         {
-          {% for (name, _) in fn.args -%}
+          {%- for (name, _) in fn.args %}
           "{{name}}": {{name}},
           {%- endfor %}
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[{{ fn.return_type }}].coerce("{{fn.name}}", raw.parsed())
+      return baml_py.BamlStream[{{ fn.partial_return_type }}, {{ fn.return_type }}](
+        raw,
+        BamlOutputWrapper[{{ fn.partial_return_type }}].coerce,
+        BamlOutputWrapper[{{ fn.return_type }}].coerce,
+      )
     {% endfor %}

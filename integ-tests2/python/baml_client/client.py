@@ -19,7 +19,7 @@ import pprint
 import baml_py
 from pydantic import BaseModel, ValidationError
 
-from . import types
+from . import partial_types, types
 
 OutputType = TypeVar('OutputType')
 
@@ -27,13 +27,13 @@ class BamlOutputWrapper(BaseModel, Generic[OutputType]):
     wrapped: OutputType
     
     @classmethod
-    def coerce(cls, fn_name: str, parsed: Any) -> OutputType:
+    def coerce(cls, parsed: Any) -> OutputType:
       try:
         return cls.model_validate(obj={'wrapped': parsed}).wrapped
       except ValidationError as e:
+        
         raise TypeError(
-          "Internal BAML error while casting the output type of {}:\n{}".format(
-            fn_name,
+          "Internal BAML error while casting output type:\n{}".format(
             pprint.pformat(parsed)
           )
         ) from e
@@ -43,12 +43,16 @@ class BamlClient:
     __stream_client: "BamlStreamClient"
 
     @staticmethod
-    def from_directory(path: str) -> "BamlClient":
-      return BamlClient(runtime=baml_py.BamlRuntimeFfi.from_directory(path))
+    def from_directory(path: str, ctx: Dict[str, Any] = {}) -> "BamlClient":
+      return BamlClient(runtime=baml_py.BamlRuntimeFfi.from_directory(path, ctx))
 
     def __init__(self, runtime: baml_py.BamlRuntimeFfi):
       self.__runtime = runtime
       self.__stream_client = BamlStreamClient(self.__runtime)
+
+    @property
+    def stream(self):
+      return self.__stream_client
 
     
     async def ClassifyMessage(
@@ -62,7 +66,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[types.Category].coerce("ClassifyMessage", raw.parsed())
+      return BamlOutputWrapper[types.Category].coerce(raw.parsed())
     
     async def ClassifyMessage2(
         self,
@@ -75,7 +79,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[types.Category].coerce("ClassifyMessage2", raw.parsed())
+      return BamlOutputWrapper[types.Category].coerce(raw.parsed())
     
     async def ClassifyMessage3(
         self,
@@ -88,7 +92,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[types.Category].coerce("ClassifyMessage3", raw.parsed())
+      return BamlOutputWrapper[types.Category].coerce(raw.parsed())
     
     async def DescribeImage(
         self,
@@ -101,7 +105,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[str].coerce("DescribeImage", raw.parsed())
+      return BamlOutputWrapper[str].coerce(raw.parsed())
     
     async def DescribeImage2(
         self,
@@ -114,7 +118,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[str].coerce("DescribeImage2", raw.parsed())
+      return BamlOutputWrapper[str].coerce(raw.parsed())
     
     async def DescribeImage3(
         self,
@@ -127,7 +131,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[str].coerce("DescribeImage3", raw.parsed())
+      return BamlOutputWrapper[str].coerce(raw.parsed())
     
     async def DescribeImage4(
         self,
@@ -140,7 +144,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[str].coerce("DescribeImage4", raw.parsed())
+      return BamlOutputWrapper[str].coerce(raw.parsed())
     
     async def ExtractNames(
         self,
@@ -153,7 +157,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[List[str]].coerce("ExtractNames", raw.parsed())
+      return BamlOutputWrapper[List[str]].coerce(raw.parsed())
     
     async def ExtractResume(
         self,
@@ -166,7 +170,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[types.Resume].coerce("ExtractResume", raw.parsed())
+      return BamlOutputWrapper[types.Resume].coerce(raw.parsed())
     
     async def ExtractResume2(
         self,
@@ -179,7 +183,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[types.Resume].coerce("ExtractResume2", raw.parsed())
+      return BamlOutputWrapper[types.Resume].coerce(raw.parsed())
     
     async def FnClassOptionalOutput2_V2(
         self,
@@ -192,7 +196,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[Optional[types.ClassOptionalOutput2v2]].coerce("FnClassOptionalOutput2_V2", raw.parsed())
+      return BamlOutputWrapper[Optional[types.ClassOptionalOutput2v2]].coerce(raw.parsed())
     
     async def FnOutputClassWithEnum_V2(
         self,
@@ -205,7 +209,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[types.TestClassWithEnum2].coerce("FnOutputClassWithEnum_V2", raw.parsed())
+      return BamlOutputWrapper[types.TestClassWithEnum2].coerce(raw.parsed())
     
     async def GetDataType(
         self,
@@ -218,7 +222,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[types.RaysData].coerce("GetDataType", raw.parsed())
+      return BamlOutputWrapper[types.RaysData].coerce(raw.parsed())
     
     async def GetOrderInfo(
         self,
@@ -231,7 +235,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[types.OrderInfo].coerce("GetOrderInfo", raw.parsed())
+      return BamlOutputWrapper[types.OrderInfo].coerce(raw.parsed())
     
     async def GetQuery(
         self,
@@ -244,7 +248,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[types.SearchParams].coerce("GetQuery", raw.parsed())
+      return BamlOutputWrapper[types.SearchParams].coerce(raw.parsed())
     
     async def OptionalTest_Function_V2(
         self,
@@ -257,7 +261,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[List[Optional[types.OptionalTest_ReturnTypev2]]].coerce("OptionalTest_Function_V2", raw.parsed())
+      return BamlOutputWrapper[List[Optional[types.OptionalTest_ReturnTypev2]]].coerce(raw.parsed())
     
     async def V2_FnClassOptional(
         self,
@@ -270,7 +274,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[str].coerce("V2_FnClassOptional", raw.parsed())
+      return BamlOutputWrapper[str].coerce(raw.parsed())
     
     async def V2_FnClassOptional2(
         self,
@@ -283,7 +287,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[str].coerce("V2_FnClassOptional2", raw.parsed())
+      return BamlOutputWrapper[str].coerce(raw.parsed())
     
     async def V2_FnEnumListOutput(
         self,
@@ -296,7 +300,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[List[types.EnumOutput]].coerce("V2_FnEnumListOutput", raw.parsed())
+      return BamlOutputWrapper[List[types.EnumOutput]].coerce(raw.parsed())
     
     async def V2_FnEnumOutput(
         self,
@@ -309,7 +313,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[types.EnumOutput2].coerce("V2_FnEnumOutput", raw.parsed())
+      return BamlOutputWrapper[types.EnumOutput2].coerce(raw.parsed())
     
     async def V2_FnNamedArgsSingleStringOptional(
         self,
@@ -322,7 +326,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[str].coerce("V2_FnNamedArgsSingleStringOptional", raw.parsed())
+      return BamlOutputWrapper[str].coerce(raw.parsed())
     
     async def V2_FnOutputBool(
         self,
@@ -335,7 +339,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[bool].coerce("V2_FnOutputBool", raw.parsed())
+      return BamlOutputWrapper[bool].coerce(raw.parsed())
     
     async def V2_FnOutputClass(
         self,
@@ -348,7 +352,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[types.TestOutputClass2].coerce("V2_FnOutputClass", raw.parsed())
+      return BamlOutputWrapper[types.TestOutputClass2].coerce(raw.parsed())
     
     async def V2_FnOutputClassList(
         self,
@@ -361,7 +365,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[List[types.TestOutputClass]].coerce("V2_FnOutputClassList", raw.parsed())
+      return BamlOutputWrapper[List[types.TestOutputClass]].coerce(raw.parsed())
     
     async def V2_FnOutputStringList(
         self,
@@ -374,7 +378,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[List[str]].coerce("V2_FnOutputStringList", raw.parsed())
+      return BamlOutputWrapper[List[str]].coerce(raw.parsed())
     
     async def V2_FnStringOptional(
         self,
@@ -387,7 +391,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[str].coerce("V2_FnStringOptional", raw.parsed())
+      return BamlOutputWrapper[str].coerce(raw.parsed())
     
     async def V2_FnTestNamedArgsSingleEnum(
         self,
@@ -400,7 +404,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[str].coerce("V2_FnTestNamedArgsSingleEnum", raw.parsed())
+      return BamlOutputWrapper[str].coerce(raw.parsed())
     
     async def V2_TestFnNamedArgsSingleBool(
         self,
@@ -413,7 +417,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[str].coerce("V2_TestFnNamedArgsSingleBool", raw.parsed())
+      return BamlOutputWrapper[str].coerce(raw.parsed())
     
     async def V2_TestFnNamedArgsSingleClass(
         self,
@@ -426,7 +430,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[str].coerce("V2_TestFnNamedArgsSingleClass", raw.parsed())
+      return BamlOutputWrapper[str].coerce(raw.parsed())
     
     async def V2_TestFnNamedArgsSingleEnumList(
         self,
@@ -439,7 +443,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[str].coerce("V2_TestFnNamedArgsSingleEnumList", raw.parsed())
+      return BamlOutputWrapper[str].coerce(raw.parsed())
     
     async def V2_TestFnNamedArgsSingleFloat(
         self,
@@ -452,7 +456,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[str].coerce("V2_TestFnNamedArgsSingleFloat", raw.parsed())
+      return BamlOutputWrapper[str].coerce(raw.parsed())
     
     async def V2_TestFnNamedArgsSingleInt(
         self,
@@ -465,7 +469,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[str].coerce("V2_TestFnNamedArgsSingleInt", raw.parsed())
+      return BamlOutputWrapper[str].coerce(raw.parsed())
     
     async def V2_TestFnNamedArgsSingleString(
         self,
@@ -478,7 +482,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[str].coerce("V2_TestFnNamedArgsSingleString", raw.parsed())
+      return BamlOutputWrapper[str].coerce(raw.parsed())
     
     async def V2_TestFnNamedArgsSingleStringArray(
         self,
@@ -491,7 +495,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[str].coerce("V2_TestFnNamedArgsSingleStringArray", raw.parsed())
+      return BamlOutputWrapper[str].coerce(raw.parsed())
     
     async def V2_TestFnNamedArgsSingleStringList(
         self,
@@ -504,7 +508,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[str].coerce("V2_TestFnNamedArgsSingleStringList", raw.parsed())
+      return BamlOutputWrapper[str].coerce(raw.parsed())
     
     async def V2_TestFnNamedArgsSyntax(
         self,
@@ -517,7 +521,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[str].coerce("V2_TestFnNamedArgsSyntax", raw.parsed())
+      return BamlOutputWrapper[str].coerce(raw.parsed())
     
     async def V2_UnionTest_Function(
         self,
@@ -530,7 +534,7 @@ class BamlClient:
         },
         ctx={}
       )
-      return BamlOutputWrapper[Union[types.UnionTest_ReturnTypev2, types.DataType]].coerce("V2_UnionTest_Function", raw.parsed())
+      return BamlOutputWrapper[Union[types.UnionTest_ReturnTypev2, types.DataType]].coerce(raw.parsed())
     
 
 class BamlStreamClient:
@@ -540,484 +544,636 @@ class BamlStreamClient:
       self.__runtime = runtime
 
     
-    async def ClassifyMessage(
+    def ClassifyMessage(
         self,
         input: str
-    ) -> types.Category:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[Optional[types.Category], types.Category]:
+      raw = self.__runtime.stream_function(
         "ClassifyMessage",
         {
           "input": input,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[types.Category].coerce("ClassifyMessage", raw.parsed())
+      return baml_py.BamlStream[Optional[types.Category], types.Category](
+        raw,
+        BamlOutputWrapper[Optional[types.Category]].coerce,
+        BamlOutputWrapper[types.Category].coerce,
+      )
     
-    async def ClassifyMessage2(
+    def ClassifyMessage2(
         self,
         input: str
-    ) -> types.Category:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[Optional[types.Category], types.Category]:
+      raw = self.__runtime.stream_function(
         "ClassifyMessage2",
         {
           "input": input,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[types.Category].coerce("ClassifyMessage2", raw.parsed())
+      return baml_py.BamlStream[Optional[types.Category], types.Category](
+        raw,
+        BamlOutputWrapper[Optional[types.Category]].coerce,
+        BamlOutputWrapper[types.Category].coerce,
+      )
     
-    async def ClassifyMessage3(
+    def ClassifyMessage3(
         self,
         input: str
-    ) -> types.Category:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[Optional[types.Category], types.Category]:
+      raw = self.__runtime.stream_function(
         "ClassifyMessage3",
         {
           "input": input,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[types.Category].coerce("ClassifyMessage3", raw.parsed())
+      return baml_py.BamlStream[Optional[types.Category], types.Category](
+        raw,
+        BamlOutputWrapper[Optional[types.Category]].coerce,
+        BamlOutputWrapper[types.Category].coerce,
+      )
     
-    async def DescribeImage(
+    def DescribeImage(
         self,
         img: baml_py.Image
-    ) -> str:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
         "DescribeImage",
         {
           "img": img,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[str].coerce("DescribeImage", raw.parsed())
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        BamlOutputWrapper[Optional[str]].coerce,
+        BamlOutputWrapper[str].coerce,
+      )
     
-    async def DescribeImage2(
+    def DescribeImage2(
         self,
         classWithImage: types.ClassWithImage,img2: baml_py.Image
-    ) -> str:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
         "DescribeImage2",
         {
-          "classWithImage": classWithImage,"img2": img2,
+          "classWithImage": classWithImage,
+          "img2": img2,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[str].coerce("DescribeImage2", raw.parsed())
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        BamlOutputWrapper[Optional[str]].coerce,
+        BamlOutputWrapper[str].coerce,
+      )
     
-    async def DescribeImage3(
+    def DescribeImage3(
         self,
         classWithImage: types.ClassWithImage,img2: baml_py.Image
-    ) -> str:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
         "DescribeImage3",
         {
-          "classWithImage": classWithImage,"img2": img2,
+          "classWithImage": classWithImage,
+          "img2": img2,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[str].coerce("DescribeImage3", raw.parsed())
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        BamlOutputWrapper[Optional[str]].coerce,
+        BamlOutputWrapper[str].coerce,
+      )
     
-    async def DescribeImage4(
+    def DescribeImage4(
         self,
         classWithImage: types.ClassWithImage,img2: baml_py.Image
-    ) -> str:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
         "DescribeImage4",
         {
-          "classWithImage": classWithImage,"img2": img2,
+          "classWithImage": classWithImage,
+          "img2": img2,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[str].coerce("DescribeImage4", raw.parsed())
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        BamlOutputWrapper[Optional[str]].coerce,
+        BamlOutputWrapper[str].coerce,
+      )
     
-    async def ExtractNames(
+    def ExtractNames(
         self,
         input: str
-    ) -> List[str]:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[List[Optional[str]], List[str]]:
+      raw = self.__runtime.stream_function(
         "ExtractNames",
         {
           "input": input,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[List[str]].coerce("ExtractNames", raw.parsed())
+      return baml_py.BamlStream[List[Optional[str]], List[str]](
+        raw,
+        BamlOutputWrapper[List[Optional[str]]].coerce,
+        BamlOutputWrapper[List[str]].coerce,
+      )
     
-    async def ExtractResume(
+    def ExtractResume(
         self,
         resume: str
-    ) -> types.Resume:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[partial_types.Resume, types.Resume]:
+      raw = self.__runtime.stream_function(
         "ExtractResume",
         {
           "resume": resume,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[types.Resume].coerce("ExtractResume", raw.parsed())
+      return baml_py.BamlStream[partial_types.Resume, types.Resume](
+        raw,
+        BamlOutputWrapper[partial_types.Resume].coerce,
+        BamlOutputWrapper[types.Resume].coerce,
+      )
     
-    async def ExtractResume2(
+    def ExtractResume2(
         self,
         resume: str
-    ) -> types.Resume:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[partial_types.Resume, types.Resume]:
+      raw = self.__runtime.stream_function(
         "ExtractResume2",
         {
           "resume": resume,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[types.Resume].coerce("ExtractResume2", raw.parsed())
+      return baml_py.BamlStream[partial_types.Resume, types.Resume](
+        raw,
+        BamlOutputWrapper[partial_types.Resume].coerce,
+        BamlOutputWrapper[types.Resume].coerce,
+      )
     
-    async def FnClassOptionalOutput2_V2(
+    def FnClassOptionalOutput2_V2(
         self,
         input: str
-    ) -> Optional[types.ClassOptionalOutput2v2]:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[partial_types.ClassOptionalOutput2v2, Optional[types.ClassOptionalOutput2v2]]:
+      raw = self.__runtime.stream_function(
         "FnClassOptionalOutput2_V2",
         {
           "input": input,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[Optional[types.ClassOptionalOutput2v2]].coerce("FnClassOptionalOutput2_V2", raw.parsed())
+      return baml_py.BamlStream[partial_types.ClassOptionalOutput2v2, Optional[types.ClassOptionalOutput2v2]](
+        raw,
+        BamlOutputWrapper[partial_types.ClassOptionalOutput2v2].coerce,
+        BamlOutputWrapper[Optional[types.ClassOptionalOutput2v2]].coerce,
+      )
     
-    async def FnOutputClassWithEnum_V2(
+    def FnOutputClassWithEnum_V2(
         self,
         input: str
-    ) -> types.TestClassWithEnum2:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[partial_types.TestClassWithEnum2, types.TestClassWithEnum2]:
+      raw = self.__runtime.stream_function(
         "FnOutputClassWithEnum_V2",
         {
           "input": input,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[types.TestClassWithEnum2].coerce("FnOutputClassWithEnum_V2", raw.parsed())
+      return baml_py.BamlStream[partial_types.TestClassWithEnum2, types.TestClassWithEnum2](
+        raw,
+        BamlOutputWrapper[partial_types.TestClassWithEnum2].coerce,
+        BamlOutputWrapper[types.TestClassWithEnum2].coerce,
+      )
     
-    async def GetDataType(
+    def GetDataType(
         self,
         text: str
-    ) -> types.RaysData:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[partial_types.RaysData, types.RaysData]:
+      raw = self.__runtime.stream_function(
         "GetDataType",
         {
           "text": text,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[types.RaysData].coerce("GetDataType", raw.parsed())
+      return baml_py.BamlStream[partial_types.RaysData, types.RaysData](
+        raw,
+        BamlOutputWrapper[partial_types.RaysData].coerce,
+        BamlOutputWrapper[types.RaysData].coerce,
+      )
     
-    async def GetOrderInfo(
+    def GetOrderInfo(
         self,
         email: types.Email
-    ) -> types.OrderInfo:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[partial_types.OrderInfo, types.OrderInfo]:
+      raw = self.__runtime.stream_function(
         "GetOrderInfo",
         {
           "email": email,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[types.OrderInfo].coerce("GetOrderInfo", raw.parsed())
+      return baml_py.BamlStream[partial_types.OrderInfo, types.OrderInfo](
+        raw,
+        BamlOutputWrapper[partial_types.OrderInfo].coerce,
+        BamlOutputWrapper[types.OrderInfo].coerce,
+      )
     
-    async def GetQuery(
+    def GetQuery(
         self,
         query: str
-    ) -> types.SearchParams:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[partial_types.SearchParams, types.SearchParams]:
+      raw = self.__runtime.stream_function(
         "GetQuery",
         {
           "query": query,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[types.SearchParams].coerce("GetQuery", raw.parsed())
+      return baml_py.BamlStream[partial_types.SearchParams, types.SearchParams](
+        raw,
+        BamlOutputWrapper[partial_types.SearchParams].coerce,
+        BamlOutputWrapper[types.SearchParams].coerce,
+      )
     
-    async def OptionalTest_Function_V2(
+    def OptionalTest_Function_V2(
         self,
         input: str
-    ) -> List[Optional[types.OptionalTest_ReturnTypev2]]:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[List[partial_types.OptionalTest_ReturnTypev2], List[Optional[types.OptionalTest_ReturnTypev2]]]:
+      raw = self.__runtime.stream_function(
         "OptionalTest_Function_V2",
         {
           "input": input,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[List[Optional[types.OptionalTest_ReturnTypev2]]].coerce("OptionalTest_Function_V2", raw.parsed())
+      return baml_py.BamlStream[List[partial_types.OptionalTest_ReturnTypev2], List[Optional[types.OptionalTest_ReturnTypev2]]](
+        raw,
+        BamlOutputWrapper[List[partial_types.OptionalTest_ReturnTypev2]].coerce,
+        BamlOutputWrapper[List[Optional[types.OptionalTest_ReturnTypev2]]].coerce,
+      )
     
-    async def V2_FnClassOptional(
+    def V2_FnClassOptional(
         self,
         input: Optional[types.OptionalClassv2]
-    ) -> str:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
         "V2_FnClassOptional",
         {
           "input": input,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[str].coerce("V2_FnClassOptional", raw.parsed())
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        BamlOutputWrapper[Optional[str]].coerce,
+        BamlOutputWrapper[str].coerce,
+      )
     
-    async def V2_FnClassOptional2(
+    def V2_FnClassOptional2(
         self,
         input: types.ClassOptionalFieldsv2
-    ) -> str:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
         "V2_FnClassOptional2",
         {
           "input": input,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[str].coerce("V2_FnClassOptional2", raw.parsed())
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        BamlOutputWrapper[Optional[str]].coerce,
+        BamlOutputWrapper[str].coerce,
+      )
     
-    async def V2_FnEnumListOutput(
+    def V2_FnEnumListOutput(
         self,
         input: str
-    ) -> List[types.EnumOutput]:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[List[Optional[types.EnumOutput]], List[types.EnumOutput]]:
+      raw = self.__runtime.stream_function(
         "V2_FnEnumListOutput",
         {
           "input": input,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[List[types.EnumOutput]].coerce("V2_FnEnumListOutput", raw.parsed())
+      return baml_py.BamlStream[List[Optional[types.EnumOutput]], List[types.EnumOutput]](
+        raw,
+        BamlOutputWrapper[List[Optional[types.EnumOutput]]].coerce,
+        BamlOutputWrapper[List[types.EnumOutput]].coerce,
+      )
     
-    async def V2_FnEnumOutput(
+    def V2_FnEnumOutput(
         self,
         input: str
-    ) -> types.EnumOutput2:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[Optional[types.EnumOutput2], types.EnumOutput2]:
+      raw = self.__runtime.stream_function(
         "V2_FnEnumOutput",
         {
           "input": input,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[types.EnumOutput2].coerce("V2_FnEnumOutput", raw.parsed())
+      return baml_py.BamlStream[Optional[types.EnumOutput2], types.EnumOutput2](
+        raw,
+        BamlOutputWrapper[Optional[types.EnumOutput2]].coerce,
+        BamlOutputWrapper[types.EnumOutput2].coerce,
+      )
     
-    async def V2_FnNamedArgsSingleStringOptional(
+    def V2_FnNamedArgsSingleStringOptional(
         self,
         myString: Optional[str]
-    ) -> str:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
         "V2_FnNamedArgsSingleStringOptional",
         {
           "myString": myString,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[str].coerce("V2_FnNamedArgsSingleStringOptional", raw.parsed())
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        BamlOutputWrapper[Optional[str]].coerce,
+        BamlOutputWrapper[str].coerce,
+      )
     
-    async def V2_FnOutputBool(
+    def V2_FnOutputBool(
         self,
         input: str
-    ) -> bool:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[Optional[bool], bool]:
+      raw = self.__runtime.stream_function(
         "V2_FnOutputBool",
         {
           "input": input,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[bool].coerce("V2_FnOutputBool", raw.parsed())
+      return baml_py.BamlStream[Optional[bool], bool](
+        raw,
+        BamlOutputWrapper[Optional[bool]].coerce,
+        BamlOutputWrapper[bool].coerce,
+      )
     
-    async def V2_FnOutputClass(
+    def V2_FnOutputClass(
         self,
         input: str
-    ) -> types.TestOutputClass2:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[partial_types.TestOutputClass2, types.TestOutputClass2]:
+      raw = self.__runtime.stream_function(
         "V2_FnOutputClass",
         {
           "input": input,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[types.TestOutputClass2].coerce("V2_FnOutputClass", raw.parsed())
+      return baml_py.BamlStream[partial_types.TestOutputClass2, types.TestOutputClass2](
+        raw,
+        BamlOutputWrapper[partial_types.TestOutputClass2].coerce,
+        BamlOutputWrapper[types.TestOutputClass2].coerce,
+      )
     
-    async def V2_FnOutputClassList(
+    def V2_FnOutputClassList(
         self,
         input: str
-    ) -> List[types.TestOutputClass]:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[List[partial_types.TestOutputClass], List[types.TestOutputClass]]:
+      raw = self.__runtime.stream_function(
         "V2_FnOutputClassList",
         {
           "input": input,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[List[types.TestOutputClass]].coerce("V2_FnOutputClassList", raw.parsed())
+      return baml_py.BamlStream[List[partial_types.TestOutputClass], List[types.TestOutputClass]](
+        raw,
+        BamlOutputWrapper[List[partial_types.TestOutputClass]].coerce,
+        BamlOutputWrapper[List[types.TestOutputClass]].coerce,
+      )
     
-    async def V2_FnOutputStringList(
+    def V2_FnOutputStringList(
         self,
         input: str
-    ) -> List[str]:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[List[Optional[str]], List[str]]:
+      raw = self.__runtime.stream_function(
         "V2_FnOutputStringList",
         {
           "input": input,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[List[str]].coerce("V2_FnOutputStringList", raw.parsed())
+      return baml_py.BamlStream[List[Optional[str]], List[str]](
+        raw,
+        BamlOutputWrapper[List[Optional[str]]].coerce,
+        BamlOutputWrapper[List[str]].coerce,
+      )
     
-    async def V2_FnStringOptional(
+    def V2_FnStringOptional(
         self,
         input: Optional[str]
-    ) -> str:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
         "V2_FnStringOptional",
         {
           "input": input,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[str].coerce("V2_FnStringOptional", raw.parsed())
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        BamlOutputWrapper[Optional[str]].coerce,
+        BamlOutputWrapper[str].coerce,
+      )
     
-    async def V2_FnTestNamedArgsSingleEnum(
+    def V2_FnTestNamedArgsSingleEnum(
         self,
         myArg: types.NamedArgsSingleEnum2
-    ) -> str:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
         "V2_FnTestNamedArgsSingleEnum",
         {
           "myArg": myArg,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[str].coerce("V2_FnTestNamedArgsSingleEnum", raw.parsed())
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        BamlOutputWrapper[Optional[str]].coerce,
+        BamlOutputWrapper[str].coerce,
+      )
     
-    async def V2_TestFnNamedArgsSingleBool(
+    def V2_TestFnNamedArgsSingleBool(
         self,
         myBool: bool
-    ) -> str:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
         "V2_TestFnNamedArgsSingleBool",
         {
           "myBool": myBool,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[str].coerce("V2_TestFnNamedArgsSingleBool", raw.parsed())
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        BamlOutputWrapper[Optional[str]].coerce,
+        BamlOutputWrapper[str].coerce,
+      )
     
-    async def V2_TestFnNamedArgsSingleClass(
+    def V2_TestFnNamedArgsSingleClass(
         self,
         myArg: types.NamedArgsSingleClass2
-    ) -> str:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
         "V2_TestFnNamedArgsSingleClass",
         {
           "myArg": myArg,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[str].coerce("V2_TestFnNamedArgsSingleClass", raw.parsed())
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        BamlOutputWrapper[Optional[str]].coerce,
+        BamlOutputWrapper[str].coerce,
+      )
     
-    async def V2_TestFnNamedArgsSingleEnumList(
+    def V2_TestFnNamedArgsSingleEnumList(
         self,
         myArg: List[types.NamedArgsSingleEnumList2]
-    ) -> str:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
         "V2_TestFnNamedArgsSingleEnumList",
         {
           "myArg": myArg,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[str].coerce("V2_TestFnNamedArgsSingleEnumList", raw.parsed())
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        BamlOutputWrapper[Optional[str]].coerce,
+        BamlOutputWrapper[str].coerce,
+      )
     
-    async def V2_TestFnNamedArgsSingleFloat(
+    def V2_TestFnNamedArgsSingleFloat(
         self,
         myFloat: float
-    ) -> str:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
         "V2_TestFnNamedArgsSingleFloat",
         {
           "myFloat": myFloat,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[str].coerce("V2_TestFnNamedArgsSingleFloat", raw.parsed())
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        BamlOutputWrapper[Optional[str]].coerce,
+        BamlOutputWrapper[str].coerce,
+      )
     
-    async def V2_TestFnNamedArgsSingleInt(
+    def V2_TestFnNamedArgsSingleInt(
         self,
         myInt: int
-    ) -> str:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
         "V2_TestFnNamedArgsSingleInt",
         {
           "myInt": myInt,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[str].coerce("V2_TestFnNamedArgsSingleInt", raw.parsed())
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        BamlOutputWrapper[Optional[str]].coerce,
+        BamlOutputWrapper[str].coerce,
+      )
     
-    async def V2_TestFnNamedArgsSingleString(
+    def V2_TestFnNamedArgsSingleString(
         self,
         myString: str
-    ) -> str:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
         "V2_TestFnNamedArgsSingleString",
         {
           "myString": myString,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[str].coerce("V2_TestFnNamedArgsSingleString", raw.parsed())
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        BamlOutputWrapper[Optional[str]].coerce,
+        BamlOutputWrapper[str].coerce,
+      )
     
-    async def V2_TestFnNamedArgsSingleStringArray(
+    def V2_TestFnNamedArgsSingleStringArray(
         self,
         myStringArray: List[str]
-    ) -> str:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
         "V2_TestFnNamedArgsSingleStringArray",
         {
           "myStringArray": myStringArray,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[str].coerce("V2_TestFnNamedArgsSingleStringArray", raw.parsed())
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        BamlOutputWrapper[Optional[str]].coerce,
+        BamlOutputWrapper[str].coerce,
+      )
     
-    async def V2_TestFnNamedArgsSingleStringList(
+    def V2_TestFnNamedArgsSingleStringList(
         self,
         myArg: List[types.NamedArgsSingleClassList2]
-    ) -> str:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
         "V2_TestFnNamedArgsSingleStringList",
         {
           "myArg": myArg,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[str].coerce("V2_TestFnNamedArgsSingleStringList", raw.parsed())
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        BamlOutputWrapper[Optional[str]].coerce,
+        BamlOutputWrapper[str].coerce,
+      )
     
-    async def V2_TestFnNamedArgsSyntax(
+    def V2_TestFnNamedArgsSyntax(
         self,
         var: str,var_with_underscores: str
-    ) -> str:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
         "V2_TestFnNamedArgsSyntax",
         {
-          "var": var,"var_with_underscores": var_with_underscores,
+          "var": var,
+          "var_with_underscores": var_with_underscores,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[str].coerce("V2_TestFnNamedArgsSyntax", raw.parsed())
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        BamlOutputWrapper[Optional[str]].coerce,
+        BamlOutputWrapper[str].coerce,
+      )
     
-    async def V2_UnionTest_Function(
+    def V2_UnionTest_Function(
         self,
         input: Union[str, bool]
-    ) -> Union[types.UnionTest_ReturnTypev2, types.DataType]:
-      raw = await self.__runtime.call_function(
+    ) -> baml_py.BamlStream[Optional[Union[partial_types.UnionTest_ReturnTypev2, Optional[types.DataType]]], Union[types.UnionTest_ReturnTypev2, types.DataType]]:
+      raw = self.__runtime.stream_function(
         "V2_UnionTest_Function",
         {
           "input": input,
         },
-        ctx={}
+        ctx={},
       )
-      return BamlOutputWrapper[Union[types.UnionTest_ReturnTypev2, types.DataType]].coerce("V2_UnionTest_Function", raw.parsed())
+      return baml_py.BamlStream[Optional[Union[partial_types.UnionTest_ReturnTypev2, Optional[types.DataType]]], Union[types.UnionTest_ReturnTypev2, types.DataType]](
+        raw,
+        BamlOutputWrapper[Optional[Union[partial_types.UnionTest_ReturnTypev2, Optional[types.DataType]]]].coerce,
+        BamlOutputWrapper[Union[types.UnionTest_ReturnTypev2, types.DataType]].coerce,
+      )
     

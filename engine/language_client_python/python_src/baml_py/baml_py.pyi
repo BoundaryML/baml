@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 class FunctionResult:
     """The result of a BAML function call.
@@ -16,6 +16,18 @@ class FunctionResult:
 
     def __str__(self) -> str: ...
     def parsed(self) -> Any: ...
+
+class FunctionResultStream:
+    """The result of a BAML function stream.
+
+    Provides a callback interface to receive events from a BAML result stream.
+
+    Use `on_event` to set the callback, and `done` to drive the stream to completion.
+    """
+
+    def __str__(self) -> str: ...
+    def on_event(self, on_event: Callable[[FunctionResult], None]) -> FunctionResultStream: ...
+    async def done(self) -> Any: ...
 
 class Image:
     def __init__(
@@ -37,7 +49,7 @@ class Image:
 
 class BamlRuntimeFfi:
     @staticmethod
-    def from_directory(directory: str) -> BamlRuntimeFfi: ...
+    def from_directory(directory: str, ctx: Dict[str, Any] = {}) -> BamlRuntimeFfi: ...
 
     @staticmethod
     def from_encoded(encoded: str) -> BamlRuntimeFfi: ...
@@ -48,3 +60,13 @@ class BamlRuntimeFfi:
         args: Dict[str, Any],
         ctx: Dict[str, Any],
     ) -> FunctionResult: ...
+
+    def stream_function(
+        self,
+        function_name: str,
+        args: Dict[str, Any],
+        ctx: Dict[str, Any],
+        on_event: Optional[Callable[[FunctionResult], None]] = None,
+    ) -> FunctionResultStream: ...
+
+def invoke_runtime_cli() -> None: ...

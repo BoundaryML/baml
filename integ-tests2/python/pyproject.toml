@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "python-v2"
+name = "integ-tests2-python"
 version = "0.1.0"
 description = ""
 authors = ["Sam Lijin <sam@boundaryml.com>"]
@@ -9,6 +9,9 @@ readme = "README.md"
 python = "^3.10"
 pydantic = "^2.7.1"
 
+
+[tool.poetry.group.dev.dependencies]
+maturin = {extras = ["patchelf"], version = "^1.5.1"}
 
 [build-system]
 requires = ["poetry-core"]

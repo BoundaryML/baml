@@ -223,9 +223,9 @@ class RaysData(BaseModel):
     value: Union["Resume", "Event"]
 
 class Resume(BaseModel):
-    name: str
-    email: str
-    phone: str
+    name: Optional[str]
+    email: Optional[str]
+    phone: Optional[str]
     experience: List[str]
     education: List[str]
     skills: List[str]

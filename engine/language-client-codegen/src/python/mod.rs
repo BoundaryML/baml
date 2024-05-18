@@ -18,6 +18,7 @@ struct PythonClient {
 }
 struct PythonFunction {
     name: String,
+    partial_return_type: String,
     return_type: String,
     args: Vec<(String, String)>,
 }
@@ -68,6 +69,7 @@ impl TryFrom<&IntermediateRepr> for PythonClient {
                         let (_function, _impl_) = c.item;
                         Ok(PythonFunction {
                             name: f.name().to_string(),
+                            partial_return_type: f.elem().output().to_partial_type_ref(),
                             return_type: f.elem().output().to_type_ref(),
                             args: match f.inputs() {
                                 either::Either::Left(_args) => anyhow::bail!("Python codegen does not support unnamed args: please add names to all arguments of BAML function '{}'", f.name().to_string()),
@@ -90,6 +92,8 @@ impl TryFrom<&IntermediateRepr> for PythonClient {
 
 trait ToTypeReferenceInClientDefinition {
     fn to_type_ref(&self) -> String;
+
+    fn to_partial_type_ref(&self) -> String;
 }
 
 impl ToTypeReferenceInClientDefinition for FieldType {
@@ -118,6 +122,39 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                     .join(", ")
             ),
             FieldType::Optional(inner) => format!("Optional[{}]", inner.to_type_ref()),
+        }
+    }
+
+    fn to_partial_type_ref(&self) -> String {
+        match self {
+            FieldType::Class(name) => format!("partial_types.{name}"),
+            FieldType::Enum(name) => format!("Optional[types.{name}]"),
+            FieldType::List(inner) => format!("List[{}]", inner.to_partial_type_ref()),
+            FieldType::Map(key, value) => {
+                format!(
+                    "Dict[{}, {}]",
+                    key.to_partial_type_ref(),
+                    value.to_type_ref()
+                )
+            }
+            FieldType::Primitive(r#type) => format!("Optional[{}]", r#type.to_python()),
+            FieldType::Union(inner) => format!(
+                "Optional[Union[{}]]",
+                inner
+                    .iter()
+                    .map(|t| t.to_partial_type_ref())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            FieldType::Tuple(inner) => format!(
+                "Optional[Tuple[{}]]",
+                inner
+                    .iter()
+                    .map(|t| t.to_partial_type_ref())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            FieldType::Optional(inner) => inner.to_partial_type_ref(),
         }
     }
 }

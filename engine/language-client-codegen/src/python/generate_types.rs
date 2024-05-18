@@ -162,7 +162,7 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
                     .join(", ")
             ),
             FieldType::Tuple(inner) => format!(
-                "Tuple[{}]",
+                "Optional[Tuple[{}]]",
                 inner
                     .iter()
                     .map(|t| t.to_partial_type_ref())

@@ -80,7 +80,7 @@ impl BamlRuntimeFfi {
         .map(|f| f.into())
     }
 
-    #[pyo3(signature = (function_name, args, *, ctx, on_event))]
+    #[pyo3(signature = (function_name, args, *, ctx, on_event = None))]
     fn stream_function(
         &self,
         py: Python<'_>,
