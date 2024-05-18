@@ -1,6 +1,0 @@
-{
-  "python.testing.pytestArgs": ["."],
-  "python.testing.unittestEnabled": false,
-  "python.testing.pytestEnabled": true
-  // "baml.path": "/Users/vbv/repos/gloo-lang/engine/target/debug/baml"
-}

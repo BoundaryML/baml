@@ -49,13 +49,6 @@
     {
       "name": "release (Release Tools)",
       "path": "release"
-    },
-    {
-      "name": "client-tests/test1/python",
-      "path": "client-tests/test1/python"
-    },
-    {
-      "path": "client-tests/test2"
     }
   ],
   "settings": {
