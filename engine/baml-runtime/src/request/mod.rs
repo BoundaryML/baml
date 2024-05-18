@@ -11,5 +11,3 @@ mod wasm;
 pub(crate) type RequestError = wasm::WasmRequestError;
 #[cfg(feature = "wasm")]
 pub(crate) use wasm::{call_request_with_json, response_json, response_text};
-
-pub(crate) mod stream;

@@ -52,16 +52,6 @@ impl FunctionResultStream {
     }
 }
 
-struct CallAndAwait {
-    inner: PyObject,
-}
-
-impl CallAndAwait {
-    async fn call_and_await(&self) -> Result<()> {
-        Ok(())
-    }
-}
-
 #[pymethods]
 impl FunctionResultStream {
     fn __str__(&self) -> String {
