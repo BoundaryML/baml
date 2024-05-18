@@ -91,6 +91,7 @@ impl BamlTracer {
         })
     }
 
+    #[allow(dead_code)]
     pub(crate) async fn finish_span(
         &self,
         span: TracingSpan,

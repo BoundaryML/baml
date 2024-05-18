@@ -5,7 +5,6 @@ mod completion;
 use baml_types::BamlValue;
 use internal_baml_jinja::{RenderContext_Client, RenderedPrompt};
 
-
 use crate::{internal::prompt_renderer::PromptRenderer, RuntimeContext};
 
 pub use self::{
@@ -13,16 +12,11 @@ pub use self::{
     completion::{WithCompletion, WithNoCompletion, WithStreamCompletion},
 };
 
-use super::{
-    retry_policy::CallablePolicy, LLMResponse, LLMResponseStream, ModelFeatures,
-};
-
+use super::{retry_policy::CallablePolicy, LLMResponse, LLMResponseStream, ModelFeatures};
 
 pub trait WithRetryPolicy {
     fn retry_policy_name(&self) -> Option<&str>;
 }
-
-type ResponseType = Result<LLMResponse>;
 
 pub trait WithStreamable: Send {
     /// Retries are not supported for streaming calls.

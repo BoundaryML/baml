@@ -3,14 +3,13 @@ mod generate;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
-
 #[derive(Parser, Debug)]
 #[command(author, version, about = "A CLI tool for working with the BAML runtime.", long_about = None)]
 #[command(propagate_version = true)]
 pub(crate) struct RuntimeCli {
     /// Specifies a subcommand to run.
     #[command(subcommand)]
-    pub(crate) command: Commands,
+    command: Commands,
 }
 
 #[derive(Subcommand, Debug)]
