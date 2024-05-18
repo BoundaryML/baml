@@ -82,7 +82,6 @@ impl FunctionResultStream {
     }
 
     fn done(&self, py: Python<'_>) -> PyResult<PyObject> {
-        use core::future::Future;
         let inner = self.inner.clone();
 
         let on_event = self.on_event.as_ref().map(|cb| {

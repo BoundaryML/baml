@@ -1,6 +1,5 @@
 use anyhow::Result;
 
-
 use internal_baml_core::ir::{repr::IntermediateRepr, ClassWalker, EnumWalker, FieldType};
 
 #[derive(askama::Template)]
