@@ -1,4 +1,3 @@
-use anyhow::Result;
 use baml_types::BamlValue;
 use pyo3::prelude::{pyclass, pymethods, PyAnyMethods, PyModule, PyResult};
 use pyo3::types::PyType;
