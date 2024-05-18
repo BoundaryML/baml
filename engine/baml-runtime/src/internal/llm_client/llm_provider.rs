@@ -7,7 +7,7 @@ use crate::{runtime_interface::InternalClientLookup, RuntimeContext};
 
 use super::{
     orchestrator::{
-        ExecutionScope, IterOrchestrator, OrchestrationScope, OrchestrationState, OrchestratorNode,
+        ExecutionScope, IterOrchestrator, OrchestrationScope, OrchestrationState,
         OrchestratorNodeIterator,
     },
     primitive::LLMPrimitiveProvider,

@@ -8,20 +8,19 @@ use internal_baml_jinja::{
     ChatMessagePart, RenderContext_Client, RenderedChatMessage, RenderedPrompt,
 };
 
-use reqwest::RequestBuilder;
+
 use serde_json::json;
 
-use crate::internal::llm_client::retry_policy::CallablePolicy;
+
 use crate::internal::llm_client::{
     state::LlmClientState,
     traits::{
-        WithChat, WithClient, WithNoCompletion, WithRetryPolicy, WithStreamChat,
-        WithStreamCompletion,
+        WithChat, WithClient, WithNoCompletion, WithRetryPolicy,
     },
-    LLMResponse, LLMResponseStream, ModelFeatures,
+    LLMResponse, ModelFeatures,
 };
 
-use crate::FunctionResultStream;
+
 use crate::RuntimeContext;
 use eventsource_stream::Eventsource;
 use futures::{Stream, StreamExt, TryStreamExt};
@@ -267,7 +266,7 @@ impl WithChat for OpenAIClient {
     }
 }
 
-use crate::internal::llm_client::{ErrorCode, LLMCompleteResponse, LLMErrorResponse, SseResponse};
+use crate::internal::llm_client::{LLMCompleteResponse, SseResponse};
 
 use super::types::ChatCompletionResponseDelta;
 
@@ -337,17 +336,14 @@ LLMCompleteResponse {
 impl OpenAIClient {
     pub fn stream_chat2(
         &self,
-        ctx: &RuntimeContext,
+        _ctx: &RuntimeContext,
         prompt: &internal_baml_jinja::RenderedPrompt,
     ) -> Result<SseResponse> {
         log::info!("stream chat starting");
         let RenderedPrompt::Chat(prompt) = prompt else {
             anyhow::bail!("Expected a chat prompt, got: {:#?}", prompt);
         };
-        use crate::internal::llm_client::{
-            primitive::openai::types::{ChatCompletionResponse, FinishReason, OpenAIErrorResponse},
-            ErrorCode, LLMCompleteResponse, LLMErrorResponse,
-        };
+        
         let mut body = json!(self.properties.properties);
         body.as_object_mut()
             .unwrap()

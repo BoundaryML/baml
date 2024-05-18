@@ -3,9 +3,9 @@ use anyhow::Result;
 use core::future::Future;
 use futures::stream::{StreamExt, TryStreamExt};
 use internal_baml_core::ir::repr::IntermediateRepr;
-use internal_baml_jinja::RenderedChatMessage;
+
 use std::ops::DerefMut;
-use std::pin::Pin;
+
 use std::sync::Arc;
 use tokio::sync::{Mutex, MutexGuard};
 

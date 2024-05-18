@@ -10,8 +10,8 @@ mod strategy;
 pub mod traits;
 
 use anyhow::Result;
-use core::pin::Pin;
-use futures::stream::Stream;
+
+
 use internal_baml_jinja::{RenderedChatMessage, RenderedPrompt};
 use reqwest::RequestBuilder;
 
@@ -21,7 +21,7 @@ use reqwest::StatusCode;
 #[cfg(not(feature = "no_wasm"))]
 use wasm_bindgen::JsValue;
 
-use crate::FunctionResult;
+
 
 #[derive(Clone, Copy)]
 pub struct ModelFeatures {

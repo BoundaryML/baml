@@ -12,7 +12,7 @@ use crate::tracing::TracingSpan;
 use crate::{
     internal::{
         ir_features::IrFeatures,
-        llm_client::{retry_policy::CallablePolicy, LLMResponse},
+        llm_client::{retry_policy::CallablePolicy},
     },
     runtime::InternalBamlRuntime,
     types::FunctionResultStream,

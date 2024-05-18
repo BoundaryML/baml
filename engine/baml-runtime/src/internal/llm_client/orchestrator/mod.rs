@@ -1,6 +1,6 @@
 use anyhow::Result;
 use baml_types::BamlValue;
-use internal_baml_core::ir::FieldType;
+
 use internal_baml_jinja::RenderedPrompt;
 use jsonish::BamlValueWithFlags;
 use std::{collections::HashMap, sync::Arc};

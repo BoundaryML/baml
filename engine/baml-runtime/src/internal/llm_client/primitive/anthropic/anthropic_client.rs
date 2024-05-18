@@ -12,7 +12,7 @@ use crate::internal::llm_client::{
     primitive::anthropic::types::{AnthropicErrorResponse, AnthropicMessageResponse, StopReason},
     state::LlmClientState,
     traits::{WithChat, WithClient, WithNoCompletion, WithRetryPolicy},
-    LLMResponse, LLMResponseStream, ModelFeatures,
+    LLMResponse, ModelFeatures,
 };
 use serde_json::{json, Value};
 

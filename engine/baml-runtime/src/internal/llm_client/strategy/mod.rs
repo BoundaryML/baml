@@ -12,7 +12,7 @@ use self::{fallback::FallbackStrategy, roundrobin::RoundRobinStrategy};
 
 use super::{
     orchestrator::{
-        IterOrchestrator, OrchestrationScope, OrchestrationState, OrchestratorNode,
+        IterOrchestrator, OrchestrationScope, OrchestrationState,
         OrchestratorNodeIterator,
     },
     traits::WithRetryPolicy,

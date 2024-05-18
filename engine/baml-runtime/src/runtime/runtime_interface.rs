@@ -11,7 +11,6 @@ use crate::{
             },
             retry_policy::CallablePolicy,
             traits::WithPrompt,
-            LLMResponse,
         },
         prompt_renderer::PromptRenderer,
     },
@@ -54,7 +53,7 @@ impl<'a> InternalClientLookup<'a> for InternalBamlRuntime {
         }
     }
 
-    fn get_retry_policy(&self, policy_name: &str, ctx: &RuntimeContext) -> Result<CallablePolicy> {
+    fn get_retry_policy(&self, policy_name: &str, _ctx: &RuntimeContext) -> Result<CallablePolicy> {
         let policy_ref = self
             .retry_policies
             .entry(policy_name.into())
@@ -288,7 +287,7 @@ impl RuntimeInterface for InternalBamlRuntime {
         let orchestrator = self.orchestration_graph(&client_name, ctx)?;
 
         // Now actually execute the code.
-        let (mut history, sleep_duration) =
+        let (mut history, _sleep_duration) =
             orchestrate(orchestrator, ctx, &renderer, &baml_args, |s, ctx| {
                 jsonish::from_str(self.ir(), &ctx.env, func.output(), s)
             })

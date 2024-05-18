@@ -4,7 +4,7 @@ mod completion;
 
 use baml_types::BamlValue;
 use internal_baml_jinja::{RenderContext_Client, RenderedPrompt};
-use std::sync::{Arc, Mutex};
+
 
 use crate::{internal::prompt_renderer::PromptRenderer, RuntimeContext};
 
@@ -14,9 +14,9 @@ pub use self::{
 };
 
 use super::{
-    retry_policy::CallablePolicy, LLMResponse, LLMResponseStream, ModelFeatures, RetryLLMResponse,
+    retry_policy::CallablePolicy, LLMResponse, LLMResponseStream, ModelFeatures,
 };
-use crate::FunctionResultStream;
+
 
 pub trait WithRetryPolicy {
     fn retry_policy_name(&self) -> Option<&str>;

@@ -4,7 +4,7 @@ use internal_baml_core::ir::ClientWalker;
 
 use crate::{
     internal::llm_client::orchestrator::{
-        ExecutionScope, IterOrchestrator, OrchestrationScope, OrchestrationState, OrchestratorNode,
+        ExecutionScope, IterOrchestrator, OrchestrationScope, OrchestrationState,
     },
     runtime_interface::InternalClientLookup,
     RuntimeContext,
