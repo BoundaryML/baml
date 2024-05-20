@@ -11,7 +11,7 @@ pub mod traits;
 
 use anyhow::Result;
 
-
+use core::future::Future;
 use internal_baml_jinja::{RenderedChatMessage, RenderedPrompt};
 use reqwest::RequestBuilder;
 
@@ -20,8 +20,6 @@ use reqwest::StatusCode;
 
 #[cfg(not(feature = "no_wasm"))]
 use wasm_bindgen::JsValue;
-
-
 
 #[derive(Clone, Copy)]
 pub struct ModelFeatures {
@@ -160,8 +158,15 @@ impl std::fmt::Display for LLMCompleteResponse {
 
 pub type LLMResponseStream = futures::stream::LocalBoxStream<'static, anyhow::Result<LLMResponse>>;
 
-pub struct SseResponse {
-    req: RequestBuilder,
-    client: String,
-    prompt: Vec<RenderedChatMessage>,
+pub trait SseResponseTrait {
+    fn build_request_for_stream(
+        &self,
+        _ctx: &crate::RuntimeContext,
+        prompt: &internal_baml_jinja::RenderedPrompt,
+    ) -> Result<reqwest::RequestBuilder>;
+
+    fn response_stream(
+        &self,
+        resp: reqwest::Response,
+    ) -> impl futures::Stream<Item = Result<LLMCompleteResponse>>;
 }

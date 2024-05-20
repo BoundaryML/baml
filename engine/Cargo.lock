@@ -466,6 +466,7 @@ dependencies = [
  "dissimilar",
  "dunce",
  "either",
+ "env_logger",
  "envy",
  "eventsource-stream",
  "expect-test",
@@ -484,6 +485,7 @@ dependencies = [
  "log",
  "mime",
  "mime_guess",
+ "pin-project-lite",
  "reqwest 0.11.24",
  "reqwest-eventsource",
  "serde",
@@ -2385,9 +2387,9 @@ dependencies = [
 
 [[package]]
 name = "pin-project-lite"
-version = "0.2.13"
+version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8afb450f006bf6385ca15ef45d71d2288452bc3683ce2e2cacc0d18e4be60b58"
+checksum = "bda66fc9667c18cb2758a2ac84d1167245054bcf85d5d1aaa6923f45801bdd02"
 
 [[package]]
 name = "pin-utils"

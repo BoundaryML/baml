@@ -313,19 +313,15 @@ impl RuntimeInterface for InternalBamlRuntime {
             client_name
         ))?;
 
-        match first.provider.as_ref() {
-            LLMPrimitiveProvider::OpenAI(c) => {
-                let prompt = c.render_prompt(&renderer, &ctx, &baml_args)?;
-                let stream = c.stream_chat2(&ctx, &prompt)?;
-                FunctionResultStream::from(
-                    function_name,
-                    stream,
-                    first.scope.clone(),
-                    self.ir.clone(),
-                    ctx,
-                )
-            }
-            _ => anyhow::bail!("Streaming not supported for this client"),
-        }
+        Ok(FunctionResultStream {
+            provider: first.provider.clone(),
+            prompt: first.provider.render_prompt(&renderer, &ctx, &baml_args)?,
+            function_name,
+            //inner: Arc::new(Mutex::new(Some(stream))),
+            scope: first.scope.clone(),
+            ir: self.ir.clone(),
+            on_event: None,
+            ctx,
+        })
     }
 }

@@ -8,18 +8,13 @@ use internal_baml_jinja::{
     ChatMessagePart, RenderContext_Client, RenderedChatMessage, RenderedPrompt,
 };
 
-
 use serde_json::json;
-
 
 use crate::internal::llm_client::{
     state::LlmClientState,
-    traits::{
-        WithChat, WithClient, WithNoCompletion, WithRetryPolicy,
-    },
+    traits::{WithChat, WithClient, WithNoCompletion, WithRetryPolicy},
     LLMResponse, ModelFeatures,
 };
-
 
 use crate::RuntimeContext;
 use eventsource_stream::Eventsource;
@@ -280,17 +275,76 @@ impl WithChat for OpenAIClient {
     }
 }
 
-use crate::internal::llm_client::{LLMCompleteResponse, SseResponse};
+use crate::internal::llm_client::{LLMCompleteResponse, SseResponseTrait};
 
 use super::types::ChatCompletionResponseDelta;
 
-impl SseResponse {
-    pub async fn stream(self) -> Result<impl Stream<Item = Result<LLMCompleteResponse>>> {
-        Ok(self
-            .req
-            .send()
-            .await?
-            .bytes_stream()
+impl SseResponseTrait for OpenAIClient {
+    fn build_request_for_stream(
+        &self,
+        _ctx: &RuntimeContext,
+        prompt: &internal_baml_jinja::RenderedPrompt,
+    ) -> Result<reqwest::RequestBuilder> {
+        log::info!("stream chat starting");
+        let RenderedPrompt::Chat(prompt) = prompt else {
+            anyhow::bail!("Expected a chat prompt, got: {:#?}", prompt);
+        };
+
+        let mut body = json!(self.properties.properties);
+        body.as_object_mut()
+            .unwrap()
+            .insert("stream".into(), json!(true));
+        body.as_object_mut().unwrap().insert(
+            "messages".into(),
+            prompt
+                .iter()
+                .map(|m| {
+                    json!({
+                        "role": m.role,
+                        "content": convert_message_parts_to_content(&m.parts)
+                    })
+                })
+                .collect::<serde_json::Value>(),
+        );
+
+        let mut headers: HashMap<String, String> = HashMap::default();
+        match &self.properties.api_key {
+            Some(key) => {
+                headers.insert("Authorization".to_string(), format!("Bearer {}", key));
+            }
+            None => {}
+        }
+        for (k, v) in &self.properties.headers {
+            headers.insert(k.to_string(), v.to_string());
+        }
+
+        let mut request = reqwest::Client::new()
+            .post(format!("{}/v1/chat/completions", self.properties.base_url))
+            .json(&body);
+        for (key, value) in headers {
+            request = request.header(key, value);
+        }
+
+        match self.internal_state.clone().lock() {
+            Ok(mut state) => {
+                state.call_count += 1;
+            }
+            Err(e) => {
+                log::warn!(
+                    "Failed to increment call count for OpejkjknAIClient: {:#?}",
+                    e
+                );
+            }
+        }
+        log::info!("stream chat successfully built request");
+        Ok(request)
+    }
+
+    fn response_stream(
+        &self,
+        resp: reqwest::Response,
+    ) -> impl Stream<Item = Result<LLMCompleteResponse>> {
+        resp.bytes_stream()
             .eventsource()
             .take_while(|event| { std::future::ready(event.as_ref().is_ok_and(|e| e.data != "[DONE]"))})
             .map(|event| -> Result<ChatCompletionResponseDelta> {
@@ -343,72 +397,11 @@ LLMCompleteResponse {
 
                     std::future::ready(Some(Ok(inner.clone())))
                 },
-            ))
+            )
     }
 }
 
 impl OpenAIClient {
-    pub fn stream_chat2(
-        &self,
-        _ctx: &RuntimeContext,
-        prompt: &internal_baml_jinja::RenderedPrompt,
-    ) -> Result<SseResponse> {
-        log::info!("stream chat starting");
-        let RenderedPrompt::Chat(prompt) = prompt else {
-            anyhow::bail!("Expected a chat prompt, got: {:#?}", prompt);
-        };
-        
-        let mut body = json!(self.properties.properties);
-        body.as_object_mut()
-            .unwrap()
-            .insert("stream".into(), json!(true));
-        body.as_object_mut().unwrap().insert(
-            "messages".into(),
-            prompt
-                .iter()
-                .map(|m| {
-                    json!({
-                        "role": m.role,
-                        "content": convert_message_parts_to_content(&m.parts)
-                    })
-                })
-                .collect::<serde_json::Value>(),
-        );
-
-        let mut headers: HashMap<String, String> = HashMap::default();
-        match &self.properties.api_key {
-            Some(key) => {
-                headers.insert("Authorization".to_string(), format!("Bearer {}", key));
-            }
-            None => {}
-        }
-        for (k, v) in &self.properties.headers {
-            headers.insert(k.to_string(), v.to_string());
-        }
-
-        let mut request = reqwest::Client::new()
-            .post(format!("{}/v1/chat/completions", self.properties.base_url))
-            .json(&body);
-        for (key, value) in headers {
-            request = request.header(key, value);
-        }
-
-        match self.internal_state.clone().lock() {
-            Ok(mut state) => {
-                state.call_count += 1;
-            }
-            Err(e) => {
-                log::warn!("Failed to increment call count for OpenAIClient: {:#?}", e);
-            }
-        }
-        log::info!("stream chat successfully built request");
-        Ok(SseResponse {
-            req: request,
-            prompt: prompt.clone(),
-            client: self.context.name.to_string(),
-        })
-    }
-
     pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<OpenAIClient> {
         Ok(Self {
             name: client.name().into(),

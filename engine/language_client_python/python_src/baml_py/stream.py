@@ -1,5 +1,6 @@
 from .baml_py import FunctionResult, FunctionResultStream
-from typing import Callable, Generic, Optional, TypeVar
+from enum import Enum
+from typing import Callable, Generic, Optional, TypeVar, Union
 import asyncio
 
 
@@ -19,15 +20,19 @@ class CallbackOnTimer:
 PartialOutputType = TypeVar("PartialOutputType")
 FinalOutputType = TypeVar("FinalOutputType")
 
+class EventType(Enum):
+    EVENT = 'event'
+    DONE = 'done'
+
 
 class BamlStream(Generic[PartialOutputType, FinalOutputType]):
     __ffi_stream: FunctionResultStream
     __partial_coerce: Callable[[FunctionResult], PartialOutputType]
     __final_coerce: Callable[[FunctionResult], FinalOutputType]
 
-    __started: bool = False
+    __task: Optional[asyncio.Task] = None
     __event_queue: asyncio.Queue[Optional[FunctionResult]] = asyncio.Queue()
-    __done_queue: asyncio.Queue[FunctionResult] = asyncio.Queue(1)
+    __done_queue: asyncio.Queue[Union[FunctionResult, Exception]] = asyncio.Queue(1)
 
     def __init__(
         self,
@@ -43,18 +48,19 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
         self.__event_queue.put_nowait(data)
 
     async def __drive_to_completion(self) -> None:
-        retval = await self.__ffi_stream.done()
-        self.__event_queue.put_nowait(None)
-        self.__done_queue.put_nowait(retval)
+        try:
+            retval = await self.__ffi_stream.done()
+            return retval
+        finally:
+            self.__event_queue.put_nowait(None)
       
-    def __drive_to_completion_in_bg(self) -> None:
+    def __drive_to_completion_in_bg(self) -> asyncio.Task:
         # Doing this without using a compare-and-swap or lock is safe,
         # because we don't cross an await point during it
-        if self.__started:
-            return
-        self.__started = True
+        if self.__task is None:
+            self.__task = asyncio.create_task(self.__drive_to_completion())
 
-        asyncio.create_task(self.__drive_to_completion())
+        return self.__task
 
     async def __aiter__(self):
         self.__drive_to_completion_in_bg()
@@ -65,5 +71,5 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
             yield self.__partial_coerce(event.parsed())
 
     async def done(self):
-        self.__drive_to_completion_in_bg()
-        return self.__final_coerce((await self.__done_queue.get()).parsed())
+        final = await self.__drive_to_completion_in_bg()
+        return self.__final_coerce(final.parsed())

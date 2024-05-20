@@ -1,16 +1,20 @@
 use anyhow::Result;
 
 use core::future::Future;
-use futures::stream::{StreamExt, TryStreamExt};
+use futures::{
+    stream::{StreamExt, TryStreamExt},
+    Stream,
+};
 use internal_baml_core::ir::repr::IntermediateRepr;
-
-use std::ops::DerefMut;
+use internal_baml_core::ir::IRHelper;
 
 use std::sync::Arc;
-use tokio::sync::{Mutex, MutexGuard};
 
 use crate::{
-    internal::llm_client::{orchestrator::OrchestrationScope, SseResponse},
+    internal::llm_client::{
+        orchestrator::{LLMPrimitiveProvider, OrchestrationScope},
+        LLMCompleteResponse, SseResponseTrait,
+    },
     FunctionResult, RuntimeContext,
 };
 
@@ -25,12 +29,14 @@ pub type StreamCallback = ();
 /// We decouple its lifetime from that of BamlRuntime because we want to make it easy for
 /// users to cancel the stream.
 pub struct FunctionResultStream {
-    function_name: String,
-    scope: OrchestrationScope,
-    inner: Arc<Mutex<Option<SseResponse>>>,
-    ir: Arc<IntermediateRepr>,
+    pub(crate) provider: Arc<LLMPrimitiveProvider>,
+    pub(crate) prompt: internal_baml_jinja::RenderedPrompt,
+    pub(crate) function_name: String,
+    pub(crate) scope: OrchestrationScope,
+    //pub(crate) inner: Arc<Mutex<Option<SseResponse>>>,
+    pub(crate) ir: Arc<IntermediateRepr>,
     pub on_event: Option<StreamCallback>,
-    ctx: RuntimeContext,
+    pub(crate) ctx: RuntimeContext,
 }
 
 #[cfg(feature = "wasm")]
@@ -40,23 +46,6 @@ static_assertions::assert_impl_all!(FunctionResultStream: Send);
 static_assertions::assert_impl_all!(FunctionResultStream: Send, Sync);
 
 impl FunctionResultStream {
-    pub fn from(
-        function_name: String,
-        inner: SseResponse,
-        scope: OrchestrationScope,
-        ir: Arc<IntermediateRepr>,
-        ctx: RuntimeContext,
-    ) -> Result<Self> {
-        Ok(Self {
-            function_name,
-            inner: Arc::new(Mutex::new(Some(inner))),
-            ir,
-            scope,
-            on_event: None,
-            ctx,
-        })
-    }
-
     pub async fn run<F, O>(&self, on_event: Option<F>) -> Result<FunctionResult>
     where
         F: Fn(FunctionResult) -> O,
@@ -64,16 +53,44 @@ impl FunctionResultStream {
     {
         use internal_baml_core::ir::IRHelper;
 
-        let Some(stream) =
-            std::mem::replace(MutexGuard::deref_mut(&mut self.inner.lock().await), None)
-        else {
-            anyhow::bail!("Stream is already consumed");
-        };
+        //let Some(stream) =
+        //    std::mem::replace(MutexGuard::deref_mut(&mut self.inner.lock().await), None)
+        //else {
+        //    anyhow::bail!("Stream is already consumed");
+        //};
+        match self.provider.as_ref() {
+            LLMPrimitiveProvider::OpenAI(c) => {
+                let resp = c
+                    .build_request_for_stream(&self.ctx, &self.prompt)?
+                    .send()
+                    .await?;
+                self.run_internal(c.response_stream(resp), on_event).await
+            }
+            LLMPrimitiveProvider::Anthropic(c) => {
+                let resp = c
+                    .build_request_for_stream(&self.ctx, &self.prompt)?
+                    .send()
+                    .await?;
+                log::info!("is the response coming back at all? if seeing this, yes");
+                self.run_internal(c.response_stream(resp), on_event).await
+            }
+            _ => {
+                anyhow::bail!("Only OpenAI supports streaming right now");
+            }
+        }
+    }
 
-        let final_response = stream
-            .stream()
-            .await?
-            .inspect(|event| log::debug!("Recieved event: {:#?}", event))
+    async fn run_internal<F, O>(
+        &self,
+        response_stream: impl Stream<Item = Result<LLMCompleteResponse>>,
+        on_event: Option<F>,
+    ) -> Result<FunctionResult>
+    where
+        F: Fn(FunctionResult) -> O,
+        O: Future<Output = Result<()>>,
+    {
+        let final_response = response_stream
+            .inspect(|event| log::debug!("Received event: {:#?}", event))
             .then(|fn_result| async {
                 let response = fn_result?;
 

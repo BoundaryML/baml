@@ -5,18 +5,24 @@ use std::{
 
 use anyhow::{anyhow, Context, Result};
 use baml_types::BamlImage;
+use eventsource_stream::Eventsource;
+use futures::{Stream, StreamExt};
 use internal_baml_core::ir::ClientWalker;
-use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
+use internal_baml_jinja::{
+    ChatMessagePart, RenderContext_Client, RenderedChatMessage, RenderedPrompt,
+};
 
 use crate::internal::llm_client::{
     primitive::anthropic::types::{AnthropicErrorResponse, AnthropicMessageResponse, StopReason},
     state::LlmClientState,
     traits::{WithChat, WithClient, WithNoCompletion, WithRetryPolicy},
-    LLMResponse, ModelFeatures,
+    LLMCompleteResponse, LLMResponse, ModelFeatures, SseResponseTrait,
 };
 use serde_json::{json, Value};
 
 use crate::RuntimeContext;
+
+use super::types::MessageChunk;
 
 struct PostRequestProperities {
     default_role: String,
@@ -135,6 +141,129 @@ impl WithClient for AnthropicClient {
 
 impl WithNoCompletion for AnthropicClient {}
 
+impl SseResponseTrait for AnthropicClient {
+    fn build_request_for_stream(
+        &self,
+        _ctx: &RuntimeContext,
+        prompt: &internal_baml_jinja::RenderedPrompt,
+    ) -> Result<reqwest::RequestBuilder> {
+        log::trace!("stream chat starting");
+        let RenderedPrompt::Chat(prompt) = prompt else {
+            anyhow::bail!("Expected a chat prompt, got: {:#?}", prompt);
+        };
+
+        let mut body = json!(self.properties.properties);
+        body.as_object_mut()
+            .unwrap()
+            .extend(convert_chat_prompt_to_body(prompt));
+        body.as_object_mut()
+            .unwrap()
+            .insert("stream".into(), json!(true));
+        log::trace!("anthropic stream body {:#?}", body);
+
+        let mut headers: HashMap<String, String> = HashMap::default();
+        match &self.properties.api_key {
+            Some(key) => {
+                headers.insert("x-api-key".to_string(), key.to_string());
+            }
+            None => {}
+        }
+        for (k, v) in &self.properties.headers {
+            headers.insert(k.to_string(), v.to_string());
+        }
+
+        let mut request = reqwest::Client::new()
+            .post(format!("{}/v1/messages", self.properties.base_url))
+            .json(&body);
+        for (key, value) in headers {
+            request = request.header(key, value);
+        }
+
+        match self.internal_state.clone().lock() {
+            Ok(mut state) => {
+                state.call_count += 1;
+            }
+            Err(e) => {
+                log::warn!(
+                    "Failed to increment call count for AnthropicClient: {:#?}",
+                    e
+                );
+            }
+        }
+        log::trace!("stream chat successfully built request {:#?}", request);
+        Ok(request)
+    }
+
+    fn response_stream(
+        &self,
+        resp: reqwest::Response,
+    ) -> impl Stream<Item = Result<LLMCompleteResponse>> {
+        log::info!("response object {:#?}", resp);
+        resp.bytes_stream()
+            .inspect(|event| log::trace!("anthropic event bytes: {:#?}", event))
+            .eventsource()
+            .map(|event| -> Result<MessageChunk> { Ok(serde_json::from_str(&event?.data)?) })
+            .inspect(|event| log::trace!("anthropic eventsource: {:#?}", event))
+            .scan(
+                Ok(LLMCompleteResponse {
+                    client: "".to_string(),
+                    prompt: internal_baml_jinja::RenderedPrompt::Chat(vec![]),
+                    content: "".to_string(),
+                    // TODO: compute start_time_unix_ms
+                    start_time_unix_ms: 0,
+                    // TODO: compute latency_ms
+                    latency_ms: 0,
+                    // TODO: figure out how to extract this from the response
+                    model: "".to_string(),
+                    metadata: json!({
+                        //"baml_is_complete": false,
+                        //"finish_reason": "".to_string(),
+                        // TODO: define behavior for these (openai doesn't)
+                        // "prompt_tokens": usage.map(|u| u.prompt_tokens),
+                        // "output_tokens": usage.map(|u| u.completion_tokens),
+                        // "total_tokens": usage.map(|u| u.total_tokens),
+                    }),
+                }),
+                |accumulated: &mut Result<LLMCompleteResponse>, event| {
+                    let Ok(ref mut inner) = accumulated else {
+                        // halt the stream: the last stream event failed to parse
+                        return std::future::ready(None);
+                    };
+                    let event = match event {
+                        Ok(event) => event,
+                        Err(e) => {
+                            *accumulated = Err(anyhow::anyhow!(
+                                "Failed to accumulate response (failed to parse previous event from EventSource)"
+                            ));
+                            return std::future::ready(Some(Err(e.context("Failed to parse event from EventSource"))));
+                        }
+                    };
+                    match event {
+                        MessageChunk::MessageStart(_) => (),
+                        MessageChunk::ContentBlockDelta(event) => {
+                            inner.content += &event.delta.text;
+                        }
+                        MessageChunk::ContentBlockStart(_) => (),
+                        MessageChunk::ContentBlockStop(_) => (),
+                        MessageChunk::Ping => (),
+                        MessageChunk::MessageDelta(_) => (),
+                        MessageChunk::MessageStop => (),
+                        MessageChunk::Error(err) => {
+                            return std::future::ready(Some(Err(anyhow::anyhow!("Anthropic API Error: {:#?}", err))));
+                        }
+                    };
+                    //if let Some(content) = event.choices[0].delta.content.as_ref() {
+                    //    inner.content += content.as_str();
+                    //    inner.model = event.model;
+                    //    // TODO: set inner.metadata.finish_reason
+                    //}
+
+                    std::future::ready(Some(Ok(inner.clone())))
+                },
+            )
+    }
+}
+
 impl AnthropicClient {
     pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<AnthropicClient> {
         Ok(Self {
@@ -174,18 +303,9 @@ impl WithChat for AnthropicClient {
         };
 
         let mut body = json!(self.properties.properties);
-        body.as_object_mut().unwrap().insert(
-            "messages".into(),
-            prompt
-                .iter()
-                .map(|m| {
-                    json!({
-                        "role": m.role,
-                        "content": convert_message_parts_to_content(&m.parts)
-                    })
-                })
-                .collect::<serde_json::Value>(),
-        );
+        body.as_object_mut()
+            .unwrap()
+            .extend(convert_chat_prompt_to_body(prompt));
 
         let mut headers = HashMap::default();
         match &self.properties.api_key {
@@ -237,8 +357,8 @@ impl WithChat for AnthropicClient {
                     metadata: json!({
                         "baml_is_complete": match body.stop_reason {
                             None => true,
-                            Some(StopReason::STOP_SEQUENCE) => true,
-                            Some(StopReason::END_TURN)  => true,
+                            Some(StopReason::StopSequence) => true,
+                            Some(StopReason::EndTurn)  => true,
                             _ => false,
                         },
                         "finish_reason": body.stop_reason,
@@ -300,6 +420,49 @@ impl WithChat for AnthropicClient {
             },
         }
     }
+}
+
+fn convert_chat_prompt_to_body(
+    prompt: &Vec<RenderedChatMessage>,
+) -> HashMap<String, serde_json::Value> {
+    let mut map = HashMap::new();
+
+    if let Some(first) = prompt.get(0) {
+        if first.role == "system" {
+            map.insert(
+                "system".into(),
+                convert_message_parts_to_content(&first.parts),
+            );
+            map.insert(
+                "messages".into(),
+                prompt
+                    .iter()
+                    .skip(1)
+                    .map(|m| {
+                        json!({
+                            "role": m.role,
+                            "content": convert_message_parts_to_content(&m.parts)
+                        })
+                    })
+                    .collect::<serde_json::Value>(),
+            );
+        }
+    } else {
+        map.insert(
+            "messages".into(),
+            prompt
+                .iter()
+                .map(|m| {
+                    json!({
+                        "role": m.role,
+                        "content": convert_message_parts_to_content(&m.parts)
+                    })
+                })
+                .collect::<serde_json::Value>(),
+        );
+    }
+
+    return map;
 }
 
 fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json::Value {

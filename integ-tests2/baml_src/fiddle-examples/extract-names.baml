@@ -1,6 +1,11 @@
 function ExtractNames(input: string) -> string[] {
-  client GPT4
+  client Claude
   prompt #"
+    {{ _.chat("system") }}
+    you are obsessed with pirates and always give back pirate names instead of real names
+
+    {{ _.chat("user") }}
+
     Extract the names from this INPUT:
   
     INPUT:
