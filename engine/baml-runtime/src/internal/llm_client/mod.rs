@@ -27,6 +27,7 @@ use wasm_bindgen::JsValue;
 pub struct ModelFeatures {
     pub completion: bool,
     pub chat: bool,
+    pub anthropic_system_constraints: bool,
 }
 
 #[derive(Debug)]
@@ -36,11 +37,11 @@ pub struct RetryLLMResponse {
     pub failed: Vec<LLMResponse>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum LLMResponse {
     Success(LLMCompleteResponse),
     LLMFailure(LLMErrorResponse),
-    OtherFailures(String),
+    OtherFailure(String),
 }
 
 impl std::fmt::Display for LLMResponse {
@@ -48,7 +49,7 @@ impl std::fmt::Display for LLMResponse {
         match self {
             Self::Success(response) => write!(f, "{}", response),
             Self::LLMFailure(failure) => write!(f, "LLM call failed: {failure:?}"),
-            Self::OtherFailures(e) => write!(f, "LLM call failed for unknown reason: {e:?}"),
+            Self::OtherFailure(message) => write!(f, "LLM call failed: {message}"),
         }
     }
 }
@@ -58,14 +59,12 @@ impl LLMResponse {
         match self {
             Self::Success(response) => Ok(&response.content),
             Self::LLMFailure(failure) => Err(anyhow::anyhow!("LLM call failed: {failure:?}")),
-            Self::OtherFailures(e) => {
-                Err(anyhow::anyhow!("LLM call failed for unknown reason: {e:?}"))
-            }
+            Self::OtherFailure(message) => Err(anyhow::anyhow!("LLM failed to call: {message}")),
         }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LLMErrorResponse {
     pub client: String,
     pub model: Option<String>,
@@ -78,7 +77,7 @@ pub struct LLMErrorResponse {
     pub code: ErrorCode,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ErrorCode {
     InvalidAuthentication, // 401
     NotSupported,          // 403

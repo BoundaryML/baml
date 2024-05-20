@@ -31,11 +31,7 @@ pub trait WithStreamable: Send {
 
 pub trait WithSingleCallable {
     #[allow(async_fn_in_trait)]
-    async fn single_call(
-        &self,
-        ctx: &RuntimeContext,
-        prompt: &RenderedPrompt,
-    ) -> Result<LLMResponse>;
+    async fn single_call(&self, ctx: &RuntimeContext, prompt: &RenderedPrompt) -> LLMResponse;
 }
 
 pub trait WithClient {
@@ -58,43 +54,10 @@ where
     T: WithClient + WithChat + WithCompletion,
 {
     #[allow(async_fn_in_trait)]
-    async fn single_call(
-        &self,
-        ctx: &RuntimeContext,
-        prompt: &RenderedPrompt,
-    ) -> Result<LLMResponse> {
-        match self.model_features() {
-            ModelFeatures {
-                completion: true,
-                chat: false,
-            } => {
-                let prompt = match prompt {
-                    RenderedPrompt::Completion(p) => p,
-                    _ => anyhow::bail!("Expected completion prompt"),
-                };
-                self.completion(ctx, prompt).await
-            }
-            ModelFeatures {
-                completion: false,
-                chat: true,
-            } => {
-                let prompt = match prompt {
-                    RenderedPrompt::Chat(p) => p,
-                    _ => anyhow::bail!("Expected chat prompt"),
-                };
-                self.chat(ctx, prompt).await
-            }
-            ModelFeatures {
-                completion: true,
-                chat: true,
-            } => match prompt {
-                RenderedPrompt::Chat(p) => self.chat(ctx, p).await,
-                RenderedPrompt::Completion(p) => self.completion(ctx, p).await,
-            },
-            ModelFeatures {
-                completion: false,
-                chat: false,
-            } => anyhow::bail!("No model type supported"),
+    async fn single_call(&self, ctx: &RuntimeContext, prompt: &RenderedPrompt) -> LLMResponse {
+        match prompt {
+            RenderedPrompt::Chat(p) => self.chat(ctx, p).await,
+            RenderedPrompt::Completion(p) => self.completion(ctx, p).await,
         }
     }
 }
@@ -109,32 +72,38 @@ where
         ctx: &RuntimeContext,
         params: &BamlValue,
     ) -> Result<RenderedPrompt> {
+        let features = self.model_features();
+
         let prompt = renderer.render_prompt(ctx, params, self.context())?;
         log::debug!("WithPrompt.render_prompt => {:#?}", prompt);
 
-        match self.model_features() {
-            ModelFeatures {
-                completion: true,
-                chat: false,
-            } => {
+        let mut prompt = match (features.completion, features.chat) {
+            (true, false) => {
                 let options = self.completion_options(ctx)?;
-                Ok(prompt.as_completion(&options))
+                prompt.as_completion(&options)
             }
-            ModelFeatures {
-                completion: false,
-                chat: true,
-            } => {
+            (false, true) => {
                 let options = self.chat_options(ctx)?;
-                Ok(prompt.as_chat(&options))
+                prompt.as_chat(&options)
             }
-            ModelFeatures {
-                completion: true,
-                chat: true,
-            } => Ok(prompt),
-            ModelFeatures {
-                completion: false,
-                chat: false,
-            } => anyhow::bail!("No model type supported"),
+            (true, true) => prompt,
+            (false, false) => anyhow::bail!("No model type supported"),
+        };
+
+        if features.anthropic_system_constraints {
+            // Do some more fixes.
+            match &mut prompt {
+                RenderedPrompt::Chat(chat) => {
+                    chat.iter_mut().skip(1).for_each(|c| {
+                        if c.role == "system" {
+                            c.role = "assistant".into();
+                        }
+                    });
+                }
+                _ => {}
+            }
         }
+
+        Ok(prompt)
     }
 }

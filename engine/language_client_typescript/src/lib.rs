@@ -1,7 +1,7 @@
 mod parse_ts_types;
 mod ts_types;
 
-use baml_runtime::{RuntimeInterface};
+use baml_runtime::PublicInterface;
 use baml_types::{BamlMap, BamlValue};
 use futures::prelude::*;
 use indexmap::IndexMap;
@@ -12,7 +12,6 @@ use std::collections::HashMap;
 
 use std::path::PathBuf;
 use std::sync::Arc;
-
 
 #[napi]
 pub fn rust_is_instance(env: Env, val: Unknown) -> Result<bool> {
@@ -72,7 +71,7 @@ impl BamlRuntimeFfi {
             .into_iter()
             .map(|(k, v)| (k.clone(), v.unwrap().clone()))
             .collect::<BamlMap<_, _>>();
-        let _result = rt.call_function(function_name, args, &ctx).await?;
+        let _result = rt.call_function(function_name, args, ctx).await;
 
         // Ok(ts_types::FunctionResult::new(result))
         Err(Error::new(

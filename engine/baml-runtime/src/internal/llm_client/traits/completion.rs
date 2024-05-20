@@ -10,7 +10,7 @@ pub trait WithCompletion: Sync + Send {
     fn completion_options(&self, ctx: &RuntimeContext) -> Result<CompletionOptions>;
 
     #[allow(async_fn_in_trait)]
-    async fn completion(&self, ctx: &RuntimeContext, prompt: &String) -> Result<LLMResponse>;
+    async fn completion(&self, ctx: &RuntimeContext, prompt: &String) -> LLMResponse;
 }
 
 pub trait WithStreamCompletion: Sync + Send {
@@ -29,7 +29,7 @@ where
     }
 
     #[allow(async_fn_in_trait)]
-    async fn completion(&self, _: &RuntimeContext, _: &String) -> Result<LLMResponse> {
-        anyhow::bail!("Completion prompts are not supported by this provider")
+    async fn completion(&self, _: &RuntimeContext, _: &String) -> LLMResponse {
+        LLMResponse::OtherFailure("Completion prompts are not supported by this provider".into())
     }
 }

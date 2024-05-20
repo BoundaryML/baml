@@ -114,7 +114,7 @@ impl BamlRuntimeFfi {
             .chain(ctx.env.into_iter())
             .collect();
 
-        let retval = match self.t.block_on(self.internal.borrow_mut().call_function(
+        let retval = match self.t.block_on(self.internal.borrow_mut().call_function_impl(
             function_name.clone(),
             &args,
             &ctx,

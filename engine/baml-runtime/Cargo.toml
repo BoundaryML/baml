@@ -33,7 +33,7 @@ tokio = { version = "1", default-features = false, features = [
   "macros",
   "time",
 ] }
-uuid = { version = "1.8.0", features = ["v4"] }
+uuid = { version = "1.8.0", features = ["v4", "serde"] }
 web-time = "1.1.0"
 serde-wasm-bindgen = "0.6.5"
 static_assertions.workspace = true

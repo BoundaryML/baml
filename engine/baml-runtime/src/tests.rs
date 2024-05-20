@@ -52,13 +52,11 @@ fn test_graph_test() -> Result<()> {
 #[tokio::test]
 async fn test_run_test() -> Result<()> {
     let directory = PathBuf::from("/Users/vbv/repos/gloo-lang/integ-tests/baml_src");
-    let runtime = InternalBamlRuntime::from_directory(&directory).unwrap();
-
     let ctx = RuntimeContext::new().add_env("OPENAI_API_KEY".into(), "API_KEY".to_string());
+    let runtime = BamlRuntime::from_directory(&directory, &ctx).unwrap();
 
-    let res = runtime
-        .run_test("ExtractNames", "pale_maroon", &ctx)
-        .await?;
+    let (res, _) = runtime.run_test("ExtractNames", "pale_maroon", ctx).await;
+    let res = res?;
 
     assert_passed(&res);
     Ok(())
@@ -79,7 +77,7 @@ async fn test_call_function() -> Result<FunctionResult> {
     );
 
     let res = runtime
-        .call_function("ExtractNames".to_string(), params, &ctx)
+        .call_function_impl("ExtractNames".to_string(), params, ctx)
         .await?;
 
     log::info!("Result: {}", res);

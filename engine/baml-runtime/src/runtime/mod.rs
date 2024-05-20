@@ -1,6 +1,3 @@
-#[cfg(all(test, feature = "no_wasm"))]
-mod tests;
-
 mod ir_features;
 pub(crate) mod runtime_interface;
 

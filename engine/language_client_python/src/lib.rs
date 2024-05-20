@@ -1,7 +1,7 @@
 mod parse_py_type;
 mod python_types;
 
-use baml_runtime::{BamlRuntime, RuntimeContext, RuntimeInterface};
+use baml_runtime::{BamlRuntime, PublicInterface, RuntimeContext};
 use baml_types::BamlValue;
 use indexmap::IndexMap;
 use parse_py_type::parse_py_type;
@@ -70,12 +70,13 @@ impl BamlRuntimeFfi {
 
         pyo3_asyncio::tokio::future_into_py(py, async move {
             let result = baml_runtime
-                .call_function(function_name, args_map, &ctx)
-                .await
-                .map(python_types::FunctionResult::new)
-                .map_err(BamlError::from_anyhow);
+                .call_function(function_name, args_map, ctx)
+                .await;
 
             result
+                .0
+                .map(python_types::FunctionResult::new)
+                .map_err(BamlError::from_anyhow)
         })
         .map(|f| f.into())
     }

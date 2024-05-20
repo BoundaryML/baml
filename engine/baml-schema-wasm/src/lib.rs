@@ -17,34 +17,34 @@ extern "C" {
 /// with no reference to the Rust function and line that panicked.
 /// This function should be manually called before any other public function in this module.
 /// Note: no method is safe to call after a panic has occurred.
-fn register_panic_hook() {
-    use std::sync::Once;
-    static SET_HOOK: Once = Once::new();
+// fn register_panic_hook() {
+//     use std::sync::Once;
+//     static SET_HOOK: Once = Once::new();
 
-    SET_HOOK.call_once(|| {
-        panic::set_hook(Box::new(|info| {
-            let message = &info.to_string();
-            log(message);
-            prisma_set_wasm_panic_message(message);
-        }));
-    });
-}
+//     SET_HOOK.call_once(|| {
+//         panic::set_hook(Box::new(|info| {
+//             let message = &info.to_string();
+//             log(message);
+//             prisma_set_wasm_panic_message(message);
+//         }));
+//     });
+// }
 
 #[wasm_bindgen]
 pub fn call_llm(input: String) -> String {
-    register_panic_hook();
+    // register_panic_hook();
     baml_fmt::call_llm(input)
 }
 
 #[wasm_bindgen]
 pub fn validate(params: String) -> Result<(), JsError> {
-    register_panic_hook();
+    // register_panic_hook();
     baml_fmt::validate(params).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen]
 pub fn version() -> String {
-    register_panic_hook();
+    // register_panic_hook();
     env!("CARGO_PKG_VERSION").to_string()
 }
 
@@ -91,7 +91,7 @@ pub fn version() -> String {
 /// handling.
 #[wasm_bindgen]
 pub fn debug_panic() {
-    register_panic_hook();
+    // register_panic_hook();
     panic!("This is the panic triggered by `baml_fmt::debug_panic()`");
 }
 

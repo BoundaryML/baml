@@ -1,5 +1,5 @@
-use crate::internal::llm_client::orchestrator::OrchestrationScope;
 pub use crate::internal::llm_client::LLMResponse;
+use crate::{internal::llm_client::orchestrator::OrchestrationScope, tracing::TracingSpan};
 use anyhow::Result;
 use colored::*;
 
@@ -7,32 +7,17 @@ use baml_types::BamlValue;
 use jsonish::BamlValueWithFlags;
 
 pub struct FunctionResult {
-    pub history: Vec<(
+    event_chain: Vec<(
         OrchestrationScope,
-        Result<LLMResponse>,
+        LLMResponse,
         Option<Result<jsonish::BamlValueWithFlags>>,
     )>,
-
-    #[cfg(feature = "internal")]
-    pub scope: OrchestrationScope,
-    #[cfg(not(feature = "internal"))]
-    pub(crate) scope: OrchestrationScope,
-
-    #[cfg(feature = "internal")]
-    pub llm_response: LLMResponse,
-    #[cfg(not(feature = "internal"))]
-    pub(crate) llm_response: LLMResponse,
-
-    #[cfg(feature = "internal")]
-    pub parsed: Option<Result<jsonish::BamlValueWithFlags>>,
-    #[cfg(not(feature = "internal"))]
-    pub(crate) parsed: Option<Result<jsonish::BamlValueWithFlags>>,
 }
 
 impl std::fmt::Display for FunctionResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "{}", self.llm_response)?;
-        match &self.parsed {
+        writeln!(f, "{}", self.llm_response())?;
+        match &self.parsed() {
             Some(Ok(val)) => {
                 writeln!(f, "{}", "---Parsed Response---".blue())?;
                 let val: BamlValue = val.into();
@@ -48,13 +33,59 @@ impl std::fmt::Display for FunctionResult {
 }
 
 impl FunctionResult {
+    pub fn new(
+        scope: OrchestrationScope,
+        response: LLMResponse,
+        parsed: Option<Result<BamlValueWithFlags>>,
+    ) -> Self {
+        Self {
+            event_chain: vec![(scope, response, parsed)],
+        }
+    }
+
+    pub(crate) fn event_chain(
+        &self,
+    ) -> &Vec<(
+        OrchestrationScope,
+        LLMResponse,
+        Option<Result<BamlValueWithFlags>>,
+    )> {
+        &self.event_chain
+    }
+
+    pub fn new_chain(
+        chain: Vec<(
+            OrchestrationScope,
+            LLMResponse,
+            Option<Result<BamlValueWithFlags>>,
+        )>,
+    ) -> Result<Self> {
+        if chain.is_empty() {
+            anyhow::bail!("No events in the chain");
+        }
+
+        Ok(Self { event_chain: chain })
+    }
+
     pub fn content(&self) -> Result<&str> {
-        self.llm_response.content()
+        self.llm_response().content()
+    }
+
+    pub fn llm_response(&self) -> &LLMResponse {
+        &self.event_chain.last().unwrap().1
+    }
+
+    pub fn scope(&self) -> &OrchestrationScope {
+        &self.event_chain.last().unwrap().0
+    }
+
+    pub fn parsed(&self) -> &Option<Result<BamlValueWithFlags>> {
+        &self.event_chain.last().unwrap().2
     }
 
     pub fn parsed_content(&self) -> Result<&BamlValueWithFlags> {
-        log::debug!("FunctionResult::parsed_content {:#?}", self.parsed);
-        self.parsed
+        log::debug!("FunctionResult::parsed_content {:#?}", self.parsed());
+        self.parsed()
             .as_ref()
             .map(|res| {
                 if let Ok(val) = res {
@@ -69,6 +100,7 @@ impl FunctionResult {
 
 pub struct TestResponse {
     pub function_response: FunctionResult,
+    pub function_span: Option<uuid::Uuid>,
 }
 
 impl std::fmt::Display for TestResponse {
@@ -81,6 +113,15 @@ impl std::fmt::Display for TestResponse {
 pub enum TestStatus<'a> {
     Pass,
     Fail(TestFailReason<'a>),
+}
+
+impl From<TestStatus<'_>> for BamlValue {
+    fn from(status: TestStatus) -> Self {
+        match status {
+            TestStatus::Pass => BamlValue::String("pass".to_string()),
+            TestStatus::Fail(r) => BamlValue::String(format!("failed! {:?}", r)),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -108,7 +149,7 @@ impl Eq for TestFailReason<'_> {}
 impl TestResponse {
     pub fn status(&self) -> TestStatus {
         let func_res = &self.function_response;
-        if let Some(parsed) = &func_res.parsed {
+        if let Some(parsed) = func_res.parsed() {
             if parsed.is_ok() {
                 TestStatus::Pass
             } else {
@@ -117,7 +158,7 @@ impl TestResponse {
                 ))
             }
         } else {
-            TestStatus::Fail(TestFailReason::TestLLMFailure(&func_res.llm_response))
+            TestStatus::Fail(TestFailReason::TestLLMFailure(func_res.llm_response()))
         }
     }
 }

@@ -5,8 +5,16 @@ use serde_json::{self};
 use std::collections::HashMap;
 
 #[derive(Deserialize, Debug, Default, Clone)]
+pub struct SpanCtx {
+    pub span_id: uuid::Uuid,
+    pub name: String,
+}
+
+#[derive(Deserialize, Debug, Default, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct RuntimeContext {
+    pub parent_thread: Option<Vec<SpanCtx>>,
+
     #[serde(default = "HashMap::new")]
     pub env: HashMap<String, String>,
     #[serde(default = "HashMap::new")]
@@ -17,6 +25,7 @@ impl RuntimeContext {
     #[cfg(feature = "no_wasm")]
     pub fn from_env() -> Self {
         Self {
+            parent_thread: None,
             env: std::env::vars_os()
                 .map(|(k, v)| {
                     (

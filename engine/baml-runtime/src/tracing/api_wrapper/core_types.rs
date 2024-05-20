@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use indexmap::IndexMap;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 #[derive(Serialize, Debug)]
@@ -122,7 +122,7 @@ pub(crate) struct Error {
     pub r#override: Option<HashMap<String, Value>>,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Deserialize, Default)]
 pub(crate) struct LLMOutputModelMetadata {
     pub logprobs: Option<Value>,
     pub prompt_tokens: Option<i32>,
@@ -141,12 +141,21 @@ pub(crate) struct LLMOutputModel {
 #[derive(Serialize, Debug)]
 pub(crate) struct LLMChat {
     pub role: Role,
-    pub content: String,
+    pub content: Vec<ContentPart>,
 }
 
 #[derive(Serialize, Debug)]
+pub(crate) enum ContentPart {
+    #[serde(rename = "text")]
+    Text(String),
+    #[serde(rename = "url_image")]
+    UrlImage(String),
+    #[serde(rename = "b64_image")]
+    B64Image(String),
+}
+
+#[derive(Serialize, Debug, Deserialize)]
 #[serde(untagged)]
-#[allow(dead_code)]
 pub(crate) enum Role {
     #[serde(rename = "assistant")]
     Assistant,
@@ -169,11 +178,11 @@ pub(crate) struct LLMEventSchema {
     pub provider: String,
     pub input: LLMEventInput,
     pub output: Option<LLMOutputModel>,
+    pub error: Option<String>,
 }
 
 #[derive(Serialize, Debug)]
 #[serde(untagged)]
-#[allow(dead_code)]
 pub(crate) enum MetadataType {
     Single(LLMEventSchema),
     Multi(Vec<LLMEventSchema>),

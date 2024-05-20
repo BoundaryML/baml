@@ -5,7 +5,7 @@ use baml_types::BamlMap;
 use internal_baml_core::ir::{ClassFieldWalker, ClassWalker, FieldType};
 
 use crate::deserializer::{
-    coercer::{array_helper, ParsingError, TypeCoercer},
+    coercer::{array_helper, DefaultValue, ParsingError, TypeCoercer},
     deserialize_flags::{DeserializerConditions, Flag},
     types::BamlValueWithFlags,
 };
@@ -110,13 +110,61 @@ impl TypeCoercer for ClassWalker<'_> {
 
         // Check what we have / what we need
         {
+            field_with_names.iter().for_each(|(f, _)| {
+                if f.r#type().is_optional() {
+                    if let Some(v) = optional_values.get(f.name()) {
+                        let next = match v {
+                            Some(Ok(_)) => None,
+                            Some(Err(e)) => {
+                                log::info!("Error in optional field {}: {}", f.name(), e);
+                                f.r#type().default_value(Some(e))
+                            }
+                            // If we're missing a field, thats ok!
+                            None => Some(BamlValueWithFlags::Null(
+                                DeserializerConditions::new().with_flag(Flag::DefaultFromNoValue),
+                            )),
+                        };
+
+                        if let Some(next) = next {
+                            optional_values.insert(f.name().into(), Some(Ok(next)));
+                        }
+                    }
+                } else {
+                    if let Some(v) = required_values.get(f.name()) {
+                        let next = match v {
+                            Some(Ok(_)) => None,
+                            Some(Err(e)) => f.r#type().default_value(Some(e)),
+                            None => f.r#type().default_value(None),
+                        };
+
+                        if let Some(next) = next {
+                            required_values.insert(f.name().into(), Some(Ok(next)));
+                        }
+                    }
+                }
+            });
+
+            log::info!("---");
+            for (k, v) in optional_values.iter() {
+                log::info!("  Optional field: {} = {:?}", k, v.is_none());
+            }
+            for (k, v) in required_values.iter() {
+                log::info!("  Required field: {} = {:?}", k, v.is_none());
+            }
+            log::info!("----");
+
             let missing_required_fields = required_values
                 .iter()
                 .filter(|(_, v)| v.is_none())
                 .map(|(k, _)| k.clone())
                 .collect::<Vec<_>>();
+
             if !missing_required_fields.is_empty() {
-                log::info!("Missing required fields: {:?}", missing_required_fields);
+                log::info!(
+                    "Missing required fields: {:?} in  {:?}",
+                    missing_required_fields,
+                    value
+                );
                 if completed_cls.is_empty() {
                     return Err(ctx.error_missing_required_field(&missing_required_fields, value));
                 }
@@ -147,7 +195,7 @@ impl TypeCoercer for ClassWalker<'_> {
                                 k.clone(),
                                 BamlValueWithFlags::Null(
                                     DeserializerConditions::new()
-                                        .with_flag(Flag::NullButHadUnparseableValue(e)),
+                                        .with_flag(Flag::DefaultButHadUnparseableValue(e)),
                                 ),
                             ),
                         }
@@ -182,6 +230,8 @@ fn parse_field<'a>(
     value: Option<&crate::jsonish::Value>,
     completed_cls: &mut Vec<Result<BamlValueWithFlags, ParsingError>>,
 ) -> Result<BamlValueWithFlags, ParsingError> {
+    log::info!("Parsing field: {} from {:?}", field.name(), value);
+
     match value {
         Some(crate::jsonish::Value::Array(items)) => {
             // This could be either the case that:
@@ -244,7 +294,7 @@ fn parse_field<'a>(
             if obj.is_empty() && field.r#type().is_optional() {
                 // If the object is empty, and the field is optional, then we can just return null
                 candidates.push(Ok(BamlValueWithFlags::Null(
-                    DeserializerConditions::new().with_flag(Flag::DefaultToNull),
+                    DeserializerConditions::new().with_flag(Flag::OptionalDefaultFromNoValue),
                 )));
             }
 

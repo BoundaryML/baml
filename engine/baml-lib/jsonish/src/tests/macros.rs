@@ -27,7 +27,10 @@ macro_rules! test_deserializer {
             );
 
             assert!(result.is_ok(), "Failed to parse: {:?}", result);
-            let value: BamlValue = result.unwrap().into();
+
+            let value = result.unwrap();
+            println!("{}", value);
+            let value: BamlValue = value.into();
             let json_value = json!(value);
 
             let expected = serde_json::json!($($json)+);

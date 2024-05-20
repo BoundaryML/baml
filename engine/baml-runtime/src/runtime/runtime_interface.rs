@@ -145,6 +145,42 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         use std::ops::Deref;
         &self.ir.deref()
     }
+
+    fn get_test_params(
+        &self,
+        function_name: &str,
+        test_name: &str,
+        ctx: &RuntimeContext,
+    ) -> Result<IndexMap<String, BamlValue>> {
+        let func = self.get_function(function_name, ctx)?;
+        let test = self.ir().find_test(&func, test_name)?;
+
+        match test.test_case_params(&ctx.env) {
+            Ok(params) => {
+                // Collect all errors and return them as a single error.
+                let mut errors = Vec::new();
+                let params = params
+                    .into_iter()
+                    .map(|(k, v)| match v {
+                        Ok(v) => (k, v),
+                        Err(e) => {
+                            errors.push(e);
+                            (k, BamlValue::Null)
+                        }
+                    })
+                    .collect::<BamlMap<_, _>>();
+
+                if !errors.is_empty() {
+                    return Err(anyhow::anyhow!(
+                        "Unable to resolve test params: {:?}",
+                        errors
+                    ));
+                }
+                Ok(params)
+            }
+            Err(e) => return Err(anyhow::anyhow!("Unable to resolve test params: {:?}", e)),
+        }
+    }
 }
 
 impl RuntimeConstructor for InternalBamlRuntime {
@@ -231,79 +267,29 @@ impl RuntimeConstructor for InternalBamlRuntime {
 }
 
 impl RuntimeInterface for InternalBamlRuntime {
-    async fn run_test(
-        &self,
-        function_name: &str,
-        test_name: &str,
-        ctx: &RuntimeContext,
-    ) -> Result<TestResponse> {
-        let func = self.get_function(function_name, ctx)?;
-        let test = self.ir().find_test(&func, test_name)?;
-
-        let params = match test.test_case_params(&ctx.env) {
-            Ok(params) => {
-                // Collect all errors and return them as a single error.
-                let mut errors = Vec::new();
-                let params = params
-                    .into_iter()
-                    .map(|(k, v)| match v {
-                        Ok(v) => (k, v),
-                        Err(e) => {
-                            errors.push(e);
-                            (k, BamlValue::Null)
-                        }
-                    })
-                    .collect::<BamlMap<_, _>>();
-
-                if !errors.is_empty() {
-                    return Err(anyhow::anyhow!(
-                        "Unable to resolve test params: {:?}",
-                        errors
-                    ));
-                }
-                params
-            }
-            Err(e) => return Err(anyhow::anyhow!("Unable to resolve test params: {:?}", e)),
-        };
-
-        Ok(TestResponse {
-            function_response: self
-                .call_function(function_name.into(), params, ctx)
-                .await?,
-        })
-    }
-
-    async fn call_function(
+    async fn call_function_impl(
         &self,
         function_name: String,
         params: IndexMap<String, BamlValue>,
-        ctx: &RuntimeContext,
+        ctx: RuntimeContext,
     ) -> Result<crate::FunctionResult> {
-        let func = self.get_function(&function_name, ctx)?;
+        let func = self.get_function(&function_name, &ctx)?;
         let baml_args = self.ir().check_function_params(&func, &params)?;
 
         let renderer = PromptRenderer::from_function(&func)?;
         let client_name = renderer.client_name().to_string();
-        let orchestrator = self.orchestration_graph(&client_name, ctx)?;
+        let orchestrator = self.orchestration_graph(&client_name, &ctx)?;
 
         // Now actually execute the code.
-        let (mut history, _sleep_duration) =
-            orchestrate(orchestrator, ctx, &renderer, &baml_args, |s, ctx| {
-                jsonish::from_str(self.ir(), &ctx.env, func.output(), s)
-            })
-            .await;
-
-        let (scope, result, parsed_response) = history.pop().unwrap();
-
-        result.map(|r| FunctionResult {
-            history,
-            scope,
-            llm_response: r,
-            parsed: parsed_response,
+        let (history, _) = orchestrate(orchestrator, &ctx, &renderer, &baml_args, |s, ctx| {
+            jsonish::from_str(self.ir(), &ctx.env, func.output(), s)
         })
+        .await;
+
+        FunctionResult::new_chain(history)
     }
 
-    fn stream_function(
+    fn stream_function_impl(
         &self,
         function_name: String,
         params: IndexMap<String, BamlValue>,
@@ -335,14 +321,5 @@ impl RuntimeInterface for InternalBamlRuntime {
             }
             _ => anyhow::bail!("Streaming not supported for this client"),
         }
-    }
-
-    #[cfg(feature = "no_wasm")]
-    fn generate_client(
-        &self,
-        client_type: &LanguageClientType,
-        args: &GeneratorArgs,
-    ) -> Result<internal_baml_codegen::GenerateOutput> {
-        client_type.generate_client(self.ir(), args)
     }
 }

@@ -1,3 +1,6 @@
+#[cfg(all(test, feature = "no_wasm"))]
+mod tests;
+
 // #[cfg(all(feature = "wasm", feature = "no_wasm"))]
 // compile_error!(
 //     "The features 'wasm' and 'no_wasm' are mutually exclusive. You can only use one at a time."
@@ -29,8 +32,9 @@ use runtime::InternalBamlRuntime;
 #[cfg(feature = "no_wasm")]
 pub use cli::CallerType;
 use runtime_interface::ExperimentalTracingInterface;
+pub use runtime_interface::PublicInterface;
 use runtime_interface::RuntimeConstructor;
-pub use runtime_interface::RuntimeInterface;
+use runtime_interface::RuntimeInterface;
 use tracing::{BamlTracer, TracingSpan};
 pub use types::*;
 
@@ -86,39 +90,64 @@ impl BamlRuntime {
     }
 }
 
-impl RuntimeInterface for BamlRuntime {
+impl PublicInterface for BamlRuntime {
     async fn run_test(
         &self,
         function_name: &str,
         test_name: &str,
-        ctx: &RuntimeContext,
-    ) -> Result<TestResponse> {
-        let span = self
-            .tracer
-            .start_span(function_name, ctx, &IndexMap::new(), None);
-        let response = self.inner.run_test(function_name, test_name, ctx).await;
+        ctx: RuntimeContext,
+    ) -> (Result<TestResponse>, Option<uuid::Uuid>) {
+        let (span, ctx) = self.tracer.start_span(test_name, ctx, &Default::default());
+
+        let params = self.inner.get_test_params(function_name, test_name, &ctx);
+
+        let response = match params {
+            Ok(params) => {
+                let (response, function_span) = self
+                    .call_function(function_name.into(), params.clone(), ctx)
+                    .await;
+
+                let response = response.map(|res| TestResponse {
+                    function_response: res,
+                    function_span,
+                });
+
+                response
+            }
+            Err(e) => Err(e),
+        };
+
+        let mut target_id = None;
         if let Some(span) = span {
-            if let Err(e) = self.tracer.finish_test_span(span, &response).await {
-                log::debug!("Error during logging: {}", e);
+            match self.tracer.finish_span(span, None).await {
+                Ok(id) => target_id = id,
+                Err(e) => log::debug!("Error during logging: {}", e),
             }
         }
-        response
+
+        (response, target_id)
     }
 
     async fn call_function(
         &self,
         function_name: String,
         params: IndexMap<String, BamlValue>,
-        ctx: &RuntimeContext,
-    ) -> Result<crate::FunctionResult> {
-        let span = self.tracer.start_span(&function_name, ctx, &params, None);
-        let response = self.inner.call_function(function_name, params, ctx).await;
+        ctx: RuntimeContext,
+    ) -> (Result<FunctionResult>, Option<uuid::Uuid>) {
+        let (span, ctx) = self.tracer.start_span(&function_name, ctx, &params);
+        let response = self
+            .inner
+            .call_function_impl(function_name, params, ctx)
+            .await;
+
+        let mut target_id = None;
         if let Some(span) = span {
-            if let Err(e) = self.tracer.finish_baml_span(span, &response).await {
-                log::debug!("Error during logging: {}", e);
+            match self.tracer.finish_baml_span(span, &response).await {
+                Ok(id) => target_id = id,
+                Err(e) => log::debug!("Error during logging: {}", e),
             }
         }
-        response
+        (response, target_id)
     }
 
     fn stream_function(
@@ -127,7 +156,7 @@ impl RuntimeInterface for BamlRuntime {
         params: IndexMap<String, BamlValue>,
         ctx: RuntimeContext,
     ) -> Result<FunctionResultStream> {
-        self.inner.stream_function(function_name, params, ctx)
+        self.inner.stream_function_impl(function_name, params, ctx)
     }
 
     #[cfg(feature = "no_wasm")]
@@ -136,7 +165,7 @@ impl RuntimeInterface for BamlRuntime {
         client_type: &internal_baml_codegen::LanguageClientType,
         args: &internal_baml_codegen::GeneratorArgs,
     ) -> Result<internal_baml_codegen::GenerateOutput> {
-        self.inner.generate_client(client_type, args)
+        client_type.generate_client(self.inner.ir(), args)
     }
 }
 
@@ -144,18 +173,26 @@ impl ExperimentalTracingInterface for BamlRuntime {
     fn start_span(
         &self,
         function_name: &str,
-        ctx: &RuntimeContext,
+        ctx: RuntimeContext,
         params: &BamlMap<String, BamlValue>,
-    ) -> Option<TracingSpan> {
-        self.tracer.start_span(function_name, ctx, params, None)
+    ) -> (Option<TracingSpan>, RuntimeContext) {
+        self.tracer.start_span(function_name, ctx, params)
     }
 
     async fn finish_function_span(
         &self,
         span: TracingSpan,
         result: &Result<FunctionResult>,
-    ) -> Result<()> {
+    ) -> Result<Option<uuid::Uuid>> {
         self.tracer.finish_baml_span(span, result).await
+    }
+
+    async fn finish_span(
+        &self,
+        span: TracingSpan,
+        result: Option<BamlValue>,
+    ) -> Result<Option<uuid::Uuid>> {
+        self.tracer.finish_span(span, result).await
     }
 
     fn flush(&self) -> Result<()> {

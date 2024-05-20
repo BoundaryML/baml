@@ -31,19 +31,45 @@ pub(crate) trait RuntimeConstructor {
 
 // This is a runtime that has full access (disk, network, etc) - feature full
 pub trait RuntimeInterface {
-    fn run_test(
-        &self,
-        function_name: &str,
-        test_name: &str,
-        ctx: &RuntimeContext,
-    ) -> impl std::future::Future<Output = Result<TestResponse>>;
-
-    fn call_function(
+    #[allow(async_fn_in_trait)]
+    async fn call_function_impl(
         &self,
         function_name: String,
         params: IndexMap<String, BamlValue>,
-        ctx: &RuntimeContext,
-    ) -> impl std::future::Future<Output = Result<FunctionResult>>;
+        ctx: RuntimeContext,
+    ) -> Result<FunctionResult>;
+
+    fn stream_function_impl(
+        &self,
+        function_name: String,
+        params: IndexMap<String, BamlValue>,
+        ctx: RuntimeContext,
+    ) -> Result<FunctionResultStream>;
+}
+
+pub trait PublicInterface {
+    #[cfg(feature = "no_wasm")]
+    fn generate_client(
+        &self,
+        client_type: &internal_baml_codegen::LanguageClientType,
+        args: &internal_baml_codegen::GeneratorArgs,
+    ) -> Result<internal_baml_codegen::GenerateOutput>;
+
+    #[allow(async_fn_in_trait)]
+    async fn run_test(
+        &self,
+        function_name: &str,
+        test_name: &str,
+        ctx: RuntimeContext,
+    ) -> (Result<TestResponse>, Option<uuid::Uuid>);
+
+    #[allow(async_fn_in_trait)]
+    async fn call_function(
+        &self,
+        function_name: String,
+        params: IndexMap<String, BamlValue>,
+        ctx: RuntimeContext,
+    ) -> (Result<FunctionResult>, Option<uuid::Uuid>);
 
     fn stream_function(
         &self,
@@ -51,13 +77,6 @@ pub trait RuntimeInterface {
         params: IndexMap<String, BamlValue>,
         ctx: RuntimeContext,
     ) -> Result<FunctionResultStream>;
-
-    #[cfg(feature = "no_wasm")]
-    fn generate_client(
-        &self,
-        client_type: &internal_baml_codegen::LanguageClientType,
-        args: &internal_baml_codegen::GeneratorArgs,
-    ) -> Result<internal_baml_codegen::GenerateOutput>;
 }
 
 //
@@ -68,16 +87,23 @@ pub trait ExperimentalTracingInterface {
     fn start_span(
         &self,
         function_name: &str,
-        ctx: &RuntimeContext,
+        ctx: RuntimeContext,
         params: &BamlMap<String, BamlValue>,
-    ) -> Option<TracingSpan>;
+    ) -> (Option<TracingSpan>, RuntimeContext);
 
     #[allow(async_fn_in_trait)]
     async fn finish_function_span(
         &self,
         span: TracingSpan,
         result: &Result<FunctionResult>,
-    ) -> Result<()>;
+    ) -> Result<Option<uuid::Uuid>>;
+
+    #[allow(async_fn_in_trait)]
+    async fn finish_span(
+        &self,
+        span: TracingSpan,
+        result: Option<BamlValue>,
+    ) -> Result<Option<uuid::Uuid>>;
 
     fn flush(&self) -> Result<()>;
 }
@@ -128,4 +154,11 @@ pub trait InternalRuntimeInterface {
     ) -> Result<(RenderedPrompt, OrchestrationScope)>;
 
     fn ir(&self) -> &IntermediateRepr;
+
+    fn get_test_params(
+        &self,
+        function_name: &str,
+        test_name: &str,
+        ctx: &RuntimeContext,
+    ) -> Result<IndexMap<String, BamlValue>>;
 }

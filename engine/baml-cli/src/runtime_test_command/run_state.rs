@@ -10,7 +10,7 @@ use tokio::{
 };
 
 use baml_runtime::{
-    BamlRuntime, InternalRuntimeInterface, RuntimeContext, RuntimeInterface, TestResponse,
+    BamlRuntime, InternalRuntimeInterface, PublicInterface, RuntimeContext, TestResponse,
 };
 
 use super::filter::FilterArgs;
@@ -283,10 +283,10 @@ impl TestCommand {
                 );
                 // println!("Updated state: {} {}", function_name, test_name);
 
-                rt.run_test(&function_name, &test_name, &ctx).await
+                rt.run_test(&function_name, &test_name, ctx).await
             };
 
-            let test_state = match result {
+            let test_state = match result.0 {
                 Ok(r) => TestState::Finished(r),
                 Err(e) => TestState::UnableToRun(e.to_string()),
             };

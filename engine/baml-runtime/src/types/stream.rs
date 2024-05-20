@@ -87,17 +87,18 @@ impl FunctionResultStream {
                 );
 
                 if let Some(ref on_event) = on_event {
-                    return match on_event(FunctionResult {
-                        scope: self.scope.clone(),
-                        history: vec![],
-                        llm_response: LLMResponse::Success(response.clone()),
-                        parsed: Some(parsed),
-                    })
-                    .await
-                    {
-                        Ok(()) => Ok(response),
-                        Err(e) => Err(e.context("Error in on_event callback")),
-                    };
+                    if let Ok(parsed) = parsed {
+                        return match on_event(FunctionResult::new(
+                            self.scope.clone(),
+                            LLMResponse::Success(response.clone()),
+                            Some(Ok(parsed)),
+                        ))
+                        .await
+                        {
+                            Ok(()) => Ok(response),
+                            Err(e) => Err(e.context("Error in on_event callback")),
+                        };
+                    }
                 }
 
                 Ok(response)
@@ -115,11 +116,10 @@ impl FunctionResultStream {
             func.output(),
             final_response.content.as_str(),
         );
-        Ok(FunctionResult {
-            history: vec![],
-            scope: self.scope.clone(),
-            llm_response: LLMResponse::Success(final_response),
-            parsed: Some(final_parsed),
-        })
+        Ok(FunctionResult::new(
+            self.scope.clone(),
+            LLMResponse::Success(final_response.clone()),
+            Some(final_parsed),
+        ))
     }
 }

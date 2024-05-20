@@ -186,3 +186,7 @@ pub trait TypeCoercer {
         value: Option<&crate::jsonish::Value>,
     ) -> Result<BamlValueWithFlags, ParsingError>;
 }
+
+pub trait DefaultValue {
+    fn default_value(&self, error: Option<&ParsingError>) -> Option<BamlValueWithFlags>;
+}

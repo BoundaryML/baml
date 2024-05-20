@@ -3,7 +3,7 @@ mod map;
 #[cfg(feature = "mini-jinja")]
 mod minijinja;
 
-use std::fmt;
+use std::{collections::HashSet, fmt};
 
 pub use image::{BamlImage, ImageBase64, ImageUrl};
 pub use map::Map as BamlMap;
@@ -48,6 +48,49 @@ impl serde::Serialize for BamlValue {
             BamlValue::Enum(_, v) => serializer.serialize_str(v),
             BamlValue::Class(_, m) => m.serialize(serializer),
             BamlValue::Null => serializer.serialize_none(),
+        }
+    }
+}
+
+impl BamlValue {
+    pub fn r#type(&self) -> String {
+        match self {
+            BamlValue::String(_) => "string".into(),
+            BamlValue::Int(_) => "int".into(),
+            BamlValue::Float(_) => "float".into(),
+            BamlValue::Bool(_) => "bool".into(),
+            BamlValue::Map(kv) => {
+                let value_types = kv
+                    .values()
+                    .map(|v| v.r#type())
+                    .collect::<HashSet<_>>()
+                    .into_iter()
+                    .collect::<Vec<_>>()
+                    .join(" | ");
+                if value_types.is_empty() {
+                    "map<string, ?>".into()
+                } else {
+                    format!("map<string, {}>", value_types)
+                }
+            }
+            BamlValue::List(k) => {
+                let value_type = k
+                    .iter()
+                    .map(|v| v.r#type())
+                    .collect::<HashSet<_>>()
+                    .into_iter()
+                    .collect::<Vec<_>>()
+                    .join(" | ");
+                if value_type.is_empty() {
+                    "list<?>".into()
+                } else {
+                    format!("list<{}>", value_type)
+                }
+            }
+            BamlValue::Image(_) => "image".into(),
+            BamlValue::Enum(e, _) => format!("enum {}", e),
+            BamlValue::Class(c, _) => format!("class {}", c),
+            BamlValue::Null => "null".into(),
         }
     }
 }

@@ -5,7 +5,7 @@ pub enum Flag {
     ObjectFromMarkdown(i32),
     ObjectFromFixedJson(Vec<crate::jsonish::Fixes>),
 
-    NullButHadUnparseableValue(ParsingError),
+    DefaultButHadUnparseableValue(ParsingError),
     ObjectToString(crate::jsonish::Value),
     ObjectToPrimitive(crate::jsonish::Value),
     ExtraKey(String, crate::jsonish::Value),
@@ -22,8 +22,9 @@ pub enum Flag {
 
     EnumOneFromMany(Vec<(usize, String)>),
 
-    DefaultToNull,
-    NullButHadValue(crate::jsonish::Value),
+    DefaultFromNoValue,
+    DefaultButHadValue(crate::jsonish::Value),
+    OptionalDefaultFromNoValue,
 
     // String -> X convertions.
     StringToBool(String),
@@ -66,8 +67,11 @@ impl std::fmt::Display for DeserializerConditions {
 impl std::fmt::Display for Flag {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Flag::DefaultToNull => {
-                write!(f, "Default to null")?;
+            Flag::OptionalDefaultFromNoValue => {
+                write!(f, "Optional Default value")?;
+            }
+            Flag::DefaultFromNoValue => {
+                write!(f, "Default value")?;
             }
             Flag::ObjectFromFixedJson(fixes) => {
                 write!(f, "JSON (Fixed {} mistakes)", fixes.len())?;
@@ -100,7 +104,7 @@ impl std::fmt::Display for Flag {
                     writeln!(f, "Item {}: {}", idx, value)?;
                 }
             }
-            Flag::NullButHadUnparseableValue(value) => {
+            Flag::DefaultButHadUnparseableValue(value) => {
                 write!(f, "Null but had unparseable value")?;
                 writeln!(f, "----RAW----")?;
                 writeln!(f, "{}", value)?;
@@ -128,7 +132,7 @@ impl std::fmt::Display for Flag {
                     }
                 }
             }
-            Flag::NullButHadValue(value) => {
+            Flag::DefaultButHadValue(value) => {
                 write!(f, "Null but had value: ")?;
                 writeln!(f, "{:#?}", value)?;
             }

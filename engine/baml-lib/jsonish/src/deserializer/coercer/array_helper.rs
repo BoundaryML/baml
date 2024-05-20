@@ -30,27 +30,25 @@ pub(super) fn pick_best(
         return res.first().unwrap().clone();
     }
 
-    let mut res_index = (0..res.len()).collect::<Vec<_>>();
-    // Sort by score
-    res_index.sort_by(|&a, &b| {
-        let a_res = &res[a];
-        let b_res = &res[b];
+    let mut res_index = (0..res.len())
+        .map(|i| match res[i] {
+            Ok(ref v) => (i, v.score()),
+            Err(_) => (i, i32::max_value()),
+        })
+        .collect::<Vec<_>>();
 
-        match (a_res, b_res) {
-            (Err(_), Err(_)) => a.cmp(&b),
-            (Ok(_), Err(_)) => std::cmp::Ordering::Less,
-            (Err(_), Ok(_)) => std::cmp::Ordering::Greater,
-            (Ok(a_val), Ok(b_val)) => match a_val.score().cmp(&b_val.score()) {
-                std::cmp::Ordering::Equal => a.cmp(&b),
-                other => other,
-            },
-        }
+    // Sort by score
+    res_index.sort_by(|&(a, a_score), &(b, b_score)| match a_score.cmp(&b_score) {
+        std::cmp::Ordering::Equal => a.cmp(&b),
+        std::cmp::Ordering::Less => std::cmp::Ordering::Less,
+        std::cmp::Ordering::Greater => std::cmp::Ordering::Greater,
     });
 
     log::warn!(
-        "Picking {} from {:?} items:\n{}",
+        "Picking {} from {:?} items. Picked({:?}):\n{}",
         target,
         res_index,
+        res_index.first().unwrap(),
         res.as_ref()
             .iter()
             .enumerate()
@@ -62,8 +60,9 @@ pub(super) fn pick_best(
             .join("\n")
     );
 
+    // Take the best one
     match res_index.first() {
-        Some(&i) => match res.get(i) {
+        Some(&(i, _)) => match res.get(i) {
             Some(Ok(v)) => {
                 // Add some flags so we know which value we picked
                 let mut v = v.clone();

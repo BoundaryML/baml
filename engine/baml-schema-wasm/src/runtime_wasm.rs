@@ -4,18 +4,16 @@ pub mod runtime_prompt;
 use std::collections::HashMap;
 
 use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
-#[allow(unused_imports)]
+use baml_runtime::runtime_interface::PublicInterface;
+use baml_runtime::tracing::TracingSpan;
+use baml_runtime::InternalRuntimeInterface;
 use baml_runtime::{
     internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, RenderedPrompt,
-    RuntimeInterface,
 };
-use baml_runtime::{InternalRuntimeInterface, RuntimeContext};
 use baml_types::BamlMap;
 use baml_types::BamlValue;
 use serde::Deserialize;
 use serde::Serialize;
-use serde_json::error;
-use serde_wasm_bindgen::{from_value, to_value};
 use wasm_bindgen::prelude::*;
 
 use crate::runtime_wasm::runtime_prompt::WasmPrompt;
@@ -259,7 +257,8 @@ pub struct WasmParam {
 
 #[wasm_bindgen]
 pub struct WasmTestResponse {
-    test_response: baml_runtime::TestResponse,
+    test_response: anyhow::Result<baml_runtime::TestResponse>,
+    span: Option<uuid::Uuid>,
 }
 
 #[wasm_bindgen]
@@ -318,63 +317,64 @@ impl WasmLLMResponse {
 impl WasmTestResponse {
     #[wasm_bindgen]
     pub fn status(&self) -> TestStatus {
-        match self.test_response.status() {
-            baml_runtime::TestStatus::Pass => TestStatus::Passed,
-            baml_runtime::TestStatus::Fail(r) => match r {
-                baml_runtime::TestFailReason::TestUnspecified(_) => TestStatus::UnableToRun,
-                baml_runtime::TestFailReason::TestLLMFailure(_) => TestStatus::LLMFailure,
-                baml_runtime::TestFailReason::TestParseFailure(_) => TestStatus::ParseFailure,
+        match &self.test_response {
+            Ok(t) => match t.status() {
+                baml_runtime::TestStatus::Pass => TestStatus::Passed,
+                baml_runtime::TestStatus::Fail(r) => match r {
+                    baml_runtime::TestFailReason::TestUnspecified(_) => TestStatus::UnableToRun,
+                    baml_runtime::TestFailReason::TestLLMFailure(_) => TestStatus::LLMFailure,
+                    baml_runtime::TestFailReason::TestParseFailure(_) => TestStatus::ParseFailure,
+                },
             },
+            Err(_) => TestStatus::UnableToRun,
         }
     }
 
     #[wasm_bindgen]
     pub fn parsed_response(&self) -> Option<String> {
-        self.test_response
-            .function_response
-            .parsed
-            .as_ref()
-            .map(|p| {
-                p.as_ref()
-                    .map(|p| serde_json::to_string(&BamlValue::from(p)))
-                    .map_or_else(|_| None, |s| s.ok())
-            })
-            .flatten()
-        // match & {
-        //     Ok(f) => match &f.parsed {
-        //         Some(Ok(p)) => match serde_json::to_string(&BamlValue::from(p)) {
-        //             Ok(s) => Some(s),
-        //             Err(_) => None,
-        //         },
-        //         _ => None,
-        //     },
-        //     Err(_) => None,
-        // }
+        self.test_response.as_ref().ok().and_then(|r| {
+            r.function_response
+                .parsed()
+                .as_ref()
+                .map(|p| {
+                    p.as_ref()
+                        .map(|p| serde_json::to_string(&BamlValue::from(p)))
+                        .map_or_else(|_| None, |s| s.ok())
+                })
+                .flatten()
+        })
     }
 
     #[wasm_bindgen]
     pub fn llm_failure(&self) -> Option<WasmLLMFailure> {
-        llm_response_to_wasm_error(
-            &self.test_response.function_response.llm_response,
-            &self.test_response.function_response.scope,
-        )
+        self.test_response.as_ref().ok().and_then(|r| {
+            llm_response_to_wasm_error(
+                r.function_response.llm_response(),
+                r.function_response.scope(),
+            )
+        })
     }
 
     #[wasm_bindgen]
     pub fn llm_response(&self) -> Option<WasmLLMResponse> {
-        (
-            &self.test_response.function_response.llm_response,
-            &self.test_response.function_response.scope,
-        )
-            .into_wasm()
+        self.test_response.as_ref().ok().and_then(|r| {
+            (
+                r.function_response.llm_response(),
+                r.function_response.scope(),
+            )
+                .into_wasm()
+        })
     }
 
     #[wasm_bindgen]
     pub fn failure_message(&self) -> Option<String> {
-        match self.test_response.status() {
-            baml_runtime::TestStatus::Pass => None,
-            baml_runtime::TestStatus::Fail(r) => r.render_error(),
-        }
+        self.test_response
+            .as_ref()
+            .ok()
+            .and_then(|r| match r.status() {
+                baml_runtime::TestStatus::Pass => None,
+                baml_runtime::TestStatus::Fail(r) => r.render_error(),
+            })
     }
 }
 
@@ -445,8 +445,8 @@ impl WithRenderError for baml_runtime::internal::llm_client::LLMResponse {
             baml_runtime::internal::llm_client::LLMResponse::LLMFailure(f) => {
                 format!("{} {}", f.message, f.code.to_string()).into()
             }
-            baml_runtime::internal::llm_client::LLMResponse::OtherFailures(o) => {
-                Some(o.to_string())
+            baml_runtime::internal::llm_client::LLMResponse::OtherFailure(e) => {
+                format!("{}", e).into()
             }
         }
     }
@@ -691,18 +691,17 @@ impl WasmFunction {
         ctx: &runtime_ctx::WasmRuntimeContext,
         test_name: String,
     ) -> Result<WasmTestResponse, JsValue> {
-        // For anything env vars that are not provided, fill with empty strings
-        let ctx = ctx.ctx.clone();
-
         let rt = &rt.runtime;
 
         let function_name = self.name.clone();
 
-        let res = rt
-            .run_test(&function_name, &test_name, &ctx)
-            .await
-            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let (test_response, span) = rt
+            .run_test(&function_name, &test_name, ctx.ctx.clone())
+            .await;
 
-        Ok(WasmTestResponse { test_response: res })
+        Ok(WasmTestResponse {
+            test_response,
+            span,
+        })
     }
 }

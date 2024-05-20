@@ -7,10 +7,7 @@ use crate::deserializer::{
     types::BamlValueWithFlags,
 };
 
-use super::{
-    array_helper::{coerce_array_to_singular},
-    ParsingContext, ParsingError,
-};
+use super::{array_helper::coerce_array_to_singular, ParsingContext, ParsingError};
 
 impl TypeCoercer for TypeValue {
     fn coerce(
@@ -41,7 +38,7 @@ fn coerce_null(
             Ok(BamlValueWithFlags::Null(Default::default()))
         }
         Some(v) => Ok(BamlValueWithFlags::Null(
-            DeserializerConditions::new().with_flag(Flag::NullButHadValue(v.clone())),
+            DeserializerConditions::new().with_flag(Flag::DefaultButHadValue(v.clone())),
         )),
     }
 }

@@ -1,4 +1,4 @@
-use crate::{BamlRuntime, RuntimeContext, RuntimeInterface};
+use crate::{runtime_interface::PublicInterface, BamlRuntime, RuntimeContext};
 use anyhow::Result;
 use std::path::PathBuf;
 

@@ -7,14 +7,23 @@ mod wasm_tracer;
 use anyhow::Result;
 use baml_types::BamlValue;
 use indexmap::IndexMap;
+use internal_baml_core::ast::Span;
+use internal_baml_jinja::RenderedPrompt;
 use std::collections::HashMap;
 
 use uuid::Uuid;
 
-use crate::{FunctionResult, RuntimeContext, TestResponse};
+use crate::{
+    internal::llm_client::LLMResponse, tracing::api_wrapper::core_types::Role, FunctionResult,
+    RuntimeContext, SpanCtx, TestResponse,
+};
 
 use self::api_wrapper::{
-    core_types::{EventChain, IOValue, LogSchema, LogSchemaContext, TypeSchema, IO},
+    core_types::{
+        ContentPart, EventChain, IOValue, LLMChat, LLMEventInput, LLMEventInputPrompt,
+        LLMEventSchema, LLMOutputModel, LogSchema, LogSchemaContext, MetadataType, Template,
+        TypeSchema, IO,
+    },
     APIWrapper,
 };
 #[cfg(not(feature = "wasm"))]
@@ -34,8 +43,7 @@ pub struct TracingSpan {
     params: IndexMap<String, BamlValue>,
     parent_ids: Option<Vec<(String, Uuid)>>,
     start_time: web_time::SystemTime,
-    #[allow(dead_code)]
-    ctx: RuntimeContext,
+    tags: HashMap<String, serde_json::Value>,
 }
 
 pub struct BamlTracer {
@@ -74,21 +82,48 @@ impl BamlTracer {
     pub(crate) fn start_span(
         &self,
         function_name: &str,
-        ctx: &RuntimeContext,
+        ctx: RuntimeContext,
         params: &IndexMap<String, BamlValue>,
-        parent: Option<&TracingSpan>,
-    ) -> Option<TracingSpan> {
+    ) -> (Option<TracingSpan>, RuntimeContext) {
         if !self.enabled {
-            return None;
+            return (None, ctx);
         }
-        Some(TracingSpan {
+        log::debug!(
+            "Starting span: {} {} {:#?}",
+            function_name,
+            params.len(),
+            params,
+        );
+        let span = TracingSpan {
             span_id: Uuid::new_v4(),
             function_name: function_name.to_string(),
             params: params.clone(),
-            parent_ids: parent.map(|p| vec![(p.function_name.clone(), p.span_id)]),
+            parent_ids: ctx.parent_thread.as_ref().map(|p| {
+                p.iter()
+                    .map(|p| (p.name.clone(), p.span_id))
+                    .collect::<Vec<_>>()
+            }),
             start_time: web_time::SystemTime::now(),
-            ctx: ctx.clone(),
-        })
+            tags: ctx.tags.clone(),
+        };
+
+        let mut new_ctx = ctx.clone();
+        match &mut new_ctx.parent_thread {
+            Some(parent_thread) => {
+                parent_thread.push(SpanCtx {
+                    span_id: span.span_id,
+                    name: function_name.to_string(),
+                });
+            }
+            None => {
+                new_ctx.parent_thread = Some(vec![SpanCtx {
+                    span_id: span.span_id,
+                    name: function_name.to_string(),
+                }]);
+            }
+        }
+
+        (Some(span), new_ctx)
     }
 
     #[allow(dead_code)]
@@ -96,11 +131,15 @@ impl BamlTracer {
         &self,
         span: TracingSpan,
         response: Option<BamlValue>,
-    ) -> Result<()> {
+    ) -> Result<Option<uuid::Uuid>> {
+        let target = span.span_id;
         if let Some(tracer) = &self.tracer {
-            tracer.submit((&self.options, span, response).into()).await
+            tracer
+                .submit((&self.options, span, response).into())
+                .await?;
+            Ok(Some(target))
         } else {
-            Ok(())
+            Ok(None)
         }
     }
 
@@ -108,27 +147,15 @@ impl BamlTracer {
         &self,
         span: TracingSpan,
         response: &Result<FunctionResult>,
-    ) -> Result<()> {
+    ) -> Result<Option<uuid::Uuid>> {
+        let target = span.span_id;
         if let Some(tracer) = &self.tracer {
             tracer
                 .submit(response.to_log_schema(&self.options, span))
-                .await
+                .await?;
+            Ok(Some(target))
         } else {
-            Ok(())
-        }
-    }
-
-    pub(crate) async fn finish_test_span(
-        &self,
-        span: TracingSpan,
-        response: &Result<TestResponse>,
-    ) -> Result<()> {
-        if let Some(tracer) = &self.tracer {
-            tracer
-                .submit(response.to_log_schema(&self.options, span))
-                .await
-        } else {
-            Ok(())
+            Ok(None)
         }
     }
 }
@@ -177,20 +204,19 @@ impl From<(&APIWrapper, &TracingSpan)> for LogSchemaContext {
 
 impl From<&IndexMap<String, BamlValue>> for IOValue {
     fn from(items: &IndexMap<String, BamlValue>) -> Self {
+        log::info!("Converting IOValue from IndexMap: {:#?}", items);
         IOValue {
             r#type: TypeSchema {
                 name: api_wrapper::core_types::TypeSchemaName::Multi,
-                fields: items
-                    .iter()
-                    // TODO: @hellovai do better types
-                    .map(|(k, _v)| (k.clone(), "unknown".into()))
-                    .collect::<IndexMap<_, _>>(),
+                fields: items.iter().map(|(k, v)| (k.clone(), v.r#type())).collect(),
             },
             value: api_wrapper::core_types::ValueType::List(
                 items
                     .iter()
-                    .map(|(_, v)| serde_json::to_string(v).unwrap())
-                    .collect::<Vec<_>>(),
+                    .map(|(_, v)| {
+                        serde_json::to_string(v).unwrap_or_else(|_| "<unknown>".to_string())
+                    })
+                    .collect(),
             ),
             r#override: None,
         }
@@ -200,35 +226,14 @@ impl From<&IndexMap<String, BamlValue>> for IOValue {
 impl From<&BamlValue> for IOValue {
     fn from(value: &BamlValue) -> Self {
         match value {
-            BamlValue::Map(obj) => {
-                let fields = obj
-                    .iter()
-                    .map(|(k, _v)| (k.clone(), "unknown".into()))
-                    .collect::<IndexMap<_, _>>();
-                IOValue {
-                    r#type: TypeSchema {
-                        name: api_wrapper::core_types::TypeSchemaName::Multi,
-                        fields,
-                    },
-                    value: api_wrapper::core_types::ValueType::List(
-                        obj.iter()
-                            .map(|(_, v)| {
-                                serde_json::to_string(&serde_json::json!(v))
-                                    .unwrap_or_else(|_| "<unknown>".to_string())
-                            })
-                            .collect::<Vec<_>>(),
-                    ),
-                    r#override: None,
-                }
-            }
+            BamlValue::Map(obj) => obj.into(),
             _ => IOValue {
                 r#type: TypeSchema {
                     name: api_wrapper::core_types::TypeSchemaName::Single,
-                    fields: [("value".into(), "unknown".into())].into(),
+                    fields: [("value".into(), value.r#type())].into(),
                 },
                 value: api_wrapper::core_types::ValueType::String(
-                    serde_json::to_string(&serde_json::json!(value))
-                        .unwrap_or_else(|_| "<unknown>".to_string()),
+                    serde_json::to_string(value).unwrap_or_else(|_| "<unknown>".to_string()),
                 ),
                 r#override: None,
             },
@@ -260,7 +265,7 @@ impl From<(&APIWrapper, TracingSpan, Option<BamlValue>)> for LogSchema {
 }
 
 fn error_from_result(result: &FunctionResult) -> Option<api_wrapper::core_types::Error> {
-    match &result.parsed {
+    match result.parsed() {
         Some(Ok(_)) => None,
         Some(Err(e)) => Some(api_wrapper::core_types::Error {
             code: 2,
@@ -268,17 +273,21 @@ fn error_from_result(result: &FunctionResult) -> Option<api_wrapper::core_types:
             traceback: None,
             r#override: None,
         }),
-        None => Some(api_wrapper::core_types::Error {
-            code: 2,
-            message: result
-                .llm_response
-                .content()
-                .err()
-                .map(|e| e.to_string())
-                .unwrap_or_else(|| "Unknown error".to_string()),
-            traceback: None,
-            r#override: None,
-        }),
+        None => match result.llm_response() {
+            LLMResponse::Success(_) => None,
+            LLMResponse::LLMFailure(s) => Some(api_wrapper::core_types::Error {
+                code: 2,
+                message: s.message.clone(),
+                traceback: None,
+                r#override: None,
+            }),
+            LLMResponse::OtherFailure(s) => Some(api_wrapper::core_types::Error {
+                code: 2,
+                message: s.clone(),
+                traceback: None,
+                r#override: None,
+            }),
+        },
     }
 }
 
@@ -290,25 +299,29 @@ impl<T: ToLogSchema> ToLogSchema for Result<T> {
     fn to_log_schema(&self, api: &APIWrapper, span: TracingSpan) -> LogSchema {
         match self {
             Ok(r) => r.to_log_schema(api, span),
-            Err(e) => LogSchema {
-                project_id: api.project_id().map(|s| s.to_string()),
-                event_type: api_wrapper::core_types::EventType::FuncCode,
-                root_event_id: span.span_id.to_string(),
-                event_id: span.span_id.to_string(),
-                parent_event_id: None,
-                context: (api, &span).into(),
-                io: IO {
-                    input: Some((&span.params).into()),
-                    output: None,
-                },
-                error: Some(api_wrapper::core_types::Error {
-                    code: 2,
-                    message: e.to_string(),
-                    traceback: None,
-                    r#override: None,
-                }),
-                metadata: None,
-            },
+            Err(e) => {
+                log::info!("Logging a failure: {:#?}", e);
+
+                LogSchema {
+                    project_id: api.project_id().map(|s| s.to_string()),
+                    event_type: api_wrapper::core_types::EventType::FuncCode,
+                    root_event_id: span.span_id.to_string(),
+                    event_id: span.span_id.to_string(),
+                    parent_event_id: None,
+                    context: (api, &span).into(),
+                    io: IO {
+                        input: Some((&span.params).into()),
+                        output: None,
+                    },
+                    error: Some(api_wrapper::core_types::Error {
+                        code: 2,
+                        message: e.to_string(),
+                        traceback: None,
+                        r#override: None,
+                    }),
+                    metadata: None,
+                }
+            }
         }
     }
 }
@@ -323,15 +336,23 @@ impl ToLogSchema for FunctionResult {
     fn to_log_schema(&self, api: &APIWrapper, span: TracingSpan) -> LogSchema {
         LogSchema {
             project_id: api.project_id().map(|s| s.to_string()),
-            event_type: api_wrapper::core_types::EventType::FuncCode,
-            root_event_id: span.span_id.to_string(),
+            event_type: api_wrapper::core_types::EventType::FuncLlm,
+            root_event_id: span
+                .parent_ids
+                .as_ref()
+                .and_then(|p| p.first().map(|(_, id)| *id))
+                .unwrap_or(span.span_id)
+                .to_string(),
             event_id: span.span_id.to_string(),
-            parent_event_id: None,
+            parent_event_id: span
+                .parent_ids
+                .as_ref()
+                .and_then(|p| p.last().map(|(_, id)| id.to_string())),
             context: (api, &span).into(),
             io: IO {
                 input: Some((&span.params).into()),
                 output: self
-                    .parsed
+                    .parsed()
                     .as_ref()
                     .map(|r| r.as_ref().ok())
                     .flatten()
@@ -341,7 +362,112 @@ impl ToLogSchema for FunctionResult {
                     }),
             },
             error: error_from_result(self),
-            metadata: None,
+            metadata: Some(self.into()),
+        }
+    }
+}
+
+impl From<&FunctionResult> for MetadataType {
+    fn from(result: &FunctionResult) -> Self {
+        MetadataType::Multi(
+            result
+                .event_chain()
+                .iter()
+                .map(|(_, r, _)| r.into())
+                .collect::<Vec<_>>(),
+        )
+    }
+}
+
+impl From<&LLMResponse> for LLMEventSchema {
+    fn from(response: &LLMResponse) -> Self {
+        match response {
+            LLMResponse::OtherFailure(s) => LLMEventSchema {
+                model_name: "<unknown>".into(),
+                provider: "<unknown>".into(),
+                input: LLMEventInput {
+                    prompt: LLMEventInputPrompt {
+                        template: Template::Single("<unable to render prompt>".into()),
+                        template_args: Default::default(),
+                        r#override: None,
+                    },
+                    invocation_params: Default::default(),
+                },
+                output: None,
+                error: Some(s.clone()),
+            },
+            LLMResponse::Success(s) => LLMEventSchema {
+                model_name: s.model.clone(),
+                provider: s.client.clone(),
+                input: LLMEventInput {
+                    prompt: LLMEventInputPrompt {
+                        template: (&s.prompt).into(),
+                        template_args: Default::default(),
+                        r#override: None,
+                    },
+                    invocation_params: Default::default(),
+                },
+                output: Some(LLMOutputModel {
+                    raw_text: s.content.clone(),
+                    metadata: serde_json::from_value(s.metadata.clone()).unwrap_or_default(),
+                    r#override: None,
+                }),
+                error: None,
+            },
+            LLMResponse::LLMFailure(s) => LLMEventSchema {
+                model_name: s
+                    .model
+                    .as_ref()
+                    .map_or_else(|| "<unknown>", |f| f.as_str())
+                    .into(),
+                provider: s.client.clone(),
+                input: LLMEventInput {
+                    prompt: LLMEventInputPrompt {
+                        template: (&s.prompt).into(),
+                        template_args: Default::default(),
+                        r#override: None,
+                    },
+                    invocation_params: Default::default(),
+                },
+                output: None,
+                error: Some(s.message.clone()),
+            },
+        }
+    }
+}
+
+impl From<&RenderedPrompt> for Template {
+    fn from(value: &RenderedPrompt) -> Self {
+        match value {
+            RenderedPrompt::Completion(c) => Template::Single(c.clone()),
+            RenderedPrompt::Chat(c) => Template::Multiple(
+                c.iter()
+                    .map(|c| LLMChat {
+                        role: match serde_json::from_value::<Role>(serde_json::json!(c.role)) {
+                            Ok(r) => r,
+                            Err(e) => {
+                                log::error!("Failed to parse role: {} {:#?}", e, c.role);
+                                Role::Other(c.role.clone())
+                            }
+                        },
+                        content: c
+                            .parts
+                            .iter()
+                            .map(|p| match p {
+                                internal_baml_jinja::ChatMessagePart::Text(t) => {
+                                    ContentPart::Text(t.clone())
+                                }
+                                internal_baml_jinja::ChatMessagePart::Image(
+                                    baml_types::BamlImage::Base64(u),
+                                ) => ContentPart::B64Image(u.base64.clone()),
+                                internal_baml_jinja::ChatMessagePart::Image(
+                                    baml_types::BamlImage::Url(u),
+                                ) => ContentPart::UrlImage(u.url.clone()),
+                            })
+                            .collect::<Vec<_>>(),
+                    })
+                    .collect::<Vec<_>>(),
+            ),
         }
     }
 }

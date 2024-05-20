@@ -1,8 +1,11 @@
 use anyhow::Result;
-use internal_baml_core::ir::{FieldType, TypeValue};
+use baml_types::BamlMap;
+use internal_baml_core::{ir::FieldType, ir::TypeValue};
 
 use crate::deserializer::{
-    coercer::TypeCoercer, deserialize_flags::Flag, types::BamlValueWithFlags,
+    coercer::{DefaultValue, TypeCoercer},
+    deserialize_flags::{DeserializerConditions, Flag},
+    types::BamlValueWithFlags,
 };
 
 use super::{
@@ -62,6 +65,39 @@ impl TypeCoercer for FieldType {
                 FieldType::Map(_, _) => Err(ctx.error_internal("Map not supported")),
                 FieldType::Tuple(_) => Err(ctx.error_internal("Tuple not supported")),
             },
+        }
+    }
+}
+
+impl DefaultValue for FieldType {
+    fn default_value(&self, error: Option<&ParsingError>) -> Option<BamlValueWithFlags> {
+        let get_flags = || {
+            DeserializerConditions::new().with_flag(error.map_or(Flag::DefaultFromNoValue, |e| {
+                Flag::DefaultButHadUnparseableValue(e.clone())
+            }))
+        };
+
+        match self {
+            FieldType::Enum(e) => None,
+            FieldType::Class(c) => None,
+            FieldType::List(_) => Some(BamlValueWithFlags::List(get_flags(), Vec::new())),
+            FieldType::Union(items) => items.iter().find_map(|i| i.default_value(error)),
+            FieldType::Primitive(TypeValue::Null) | FieldType::Optional(_) => {
+                Some(BamlValueWithFlags::Null(get_flags()))
+            }
+            FieldType::Map(_, _) => Some(BamlValueWithFlags::Map(get_flags(), BamlMap::new())),
+            FieldType::Tuple(v) => {
+                let default_values: Vec<_> = v.iter().map(|f| f.default_value(error)).collect();
+                if default_values.iter().all(Option::is_some) {
+                    Some(BamlValueWithFlags::List(
+                        get_flags(),
+                        default_values.into_iter().map(Option::unwrap).collect(),
+                    ))
+                } else {
+                    None
+                }
+            }
+            FieldType::Primitive(_) => None,
         }
     }
 }

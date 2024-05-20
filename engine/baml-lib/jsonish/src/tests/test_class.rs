@@ -226,3 +226,72 @@ test_deserializer!(
     FieldType::Class("Bar".to_string()),
     { "foo": { "a": "hi" } }
 );
+
+const NEST_CLASS_WITH_LIST: &str = r#"
+class Resume {
+    name string?
+    email string?
+    phone string?
+    experience string[] 
+    education string[] 
+    skills string[] 
+}
+"#;
+
+test_deserializer!(
+    test_resume,
+    NEST_CLASS_WITH_LIST,
+    r#"{
+        "name": "Lee Hsien Loong",
+        "email": null,
+        "phone": null,
+        "experience": [
+            "Senior Minister of Singapore since 2024",
+            "Prime Minister of Singapore from 2004 to 2024",
+            "Member of Parliament (MP) for the Teck Ghee division of Ang Mo Kio GRC since 1991",
+            "Teck Ghee SMC between 1984 and 1991",
+            "Secretary-General of the People's Action Party (PAP) since 2004"
+        ],
+        "education": [],
+        "skills": ["politician", "former brigadier-general"]
+    }"#,
+    FieldType::Class("Resume".to_string()),
+    {
+        "name": "Lee Hsien Loong",
+        "email": null,
+        "phone": null,
+        "experience": [
+            "Senior Minister of Singapore since 2024",
+            "Prime Minister of Singapore from 2004 to 2024",
+            "Member of Parliament (MP) for the Teck Ghee division of Ang Mo Kio GRC since 1991",
+            "Teck Ghee SMC between 1984 and 1991",
+            "Secretary-General of the People's Action Party (PAP) since 2004"
+        ],
+        "education": [],
+        "skills": ["politician", "former brigadier-general"]
+    }
+);
+
+test_deserializer!(
+    test_resume_partial,
+    NEST_CLASS_WITH_LIST,
+    r#"{
+        "name": "Lee Hsien Loong",
+        "email": null,
+        "phone": null,
+        "experience": [
+            "Senior Minister of Singapore since 2024",
+            "Prime Minister of Singapore from 2004 to "#,
+    FieldType::Class("Resume".to_string()),
+    {
+        "name": "Lee Hsien Loong",
+        "email": null,
+        "phone": null,
+        "experience": [
+            "Senior Minister of Singapore since 2024",
+            "Prime Minister of Singapore from 2004 to "
+        ],
+        "education": [],
+        "skills": []
+    }
+);

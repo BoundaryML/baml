@@ -5,22 +5,34 @@ use napi_derive::napi;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-#[napi(object)]
-//#[derive(Deserialize)]
-//#[serde(deny_unknown_fields)]
-pub struct RuntimeContext {
-    //#[serde(default = "HashMap::new")]
-    pub env: Option<HashMap<String, String>>,
-    //#[serde(default = "HashMap::new")]
-    pub tags: Option<HashMap<String, serde_json::Value>>,
+#[napi]
+pub struct NapiRuntimeContext {
+    inner: baml_runtime::RuntimeContext,
 }
 
-impl Into<baml_runtime::RuntimeContext> for RuntimeContext {
-    fn into(self) -> baml_runtime::RuntimeContext {
-        baml_runtime::RuntimeContext {
-            env: self.env.unwrap_or(HashMap::new()),
-            tags: self.tags.unwrap_or(HashMap::new()),
+#[napi]
+impl NapiRuntimeContext {
+    #[napi(constructor)]
+    pub fn new() -> Self {
+        Self {
+            inner: baml_runtime::RuntimeContext::default(),
         }
+    }
+
+    #[napi(getter)]
+    pub fn env(&self) -> Option<HashMap<String, String>> {
+        Some(self.inner.env.clone())
+    }
+
+    #[napi(getter)]
+    pub fn tags(&self) -> Option<HashMap<String, serde_json::Value>> {
+        Some(self.inner.tags.clone())
+    }
+}
+
+impl Into<baml_runtime::RuntimeContext> for NapiRuntimeContext {
+    fn into(self) -> baml_runtime::RuntimeContext {
+        self.inner.clone()
     }
 }
 

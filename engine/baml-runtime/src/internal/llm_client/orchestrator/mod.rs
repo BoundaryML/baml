@@ -176,11 +176,7 @@ impl<'ir> WithPrompt<'ir> for OrchestratorNode {
 }
 
 impl WithSingleCallable for OrchestratorNode {
-    async fn single_call(
-        &self,
-        ctx: &RuntimeContext,
-        prompt: &RenderedPrompt,
-    ) -> Result<LLMResponse> {
+    async fn single_call(&self, ctx: &RuntimeContext, prompt: &RenderedPrompt) -> LLMResponse {
         self.scope
             .scope
             .iter()
@@ -203,7 +199,7 @@ pub async fn orchestrate(
 ) -> (
     Vec<(
         OrchestrationScope,
-        Result<LLMResponse>,
+        LLMResponse,
         Option<Result<BamlValueWithFlags>>,
     )>,
     Duration,
@@ -215,13 +211,13 @@ pub async fn orchestrate(
         let prompt = match node.render_prompt(prompt, ctx, params) {
             Ok(p) => p,
             Err(e) => {
-                results.push((node.scope, Err(e), None));
+                results.push((node.scope, LLMResponse::OtherFailure(e.to_string()), None));
                 continue;
             }
         };
         let response = node.single_call(&ctx, &prompt).await;
         let parsed_response = match &response {
-            Ok(LLMResponse::Success(s)) => Some(parse_fn(&s.content, ctx)),
+            LLMResponse::Success(s) => Some(parse_fn(&s.content, ctx)),
             _ => None,
         };
 
@@ -231,7 +227,7 @@ pub async fn orchestrate(
         // Currently, we break out of the loop if an LLM responded, even if we couldn't parse the result.
         if results
             .last()
-            .map_or(false, |(_, r, _)| matches!(r, Ok(LLMResponse::Success(_))))
+            .map_or(false, |(_, r, _)| matches!(r, LLMResponse::Success(_)))
         {
             break;
         } else {

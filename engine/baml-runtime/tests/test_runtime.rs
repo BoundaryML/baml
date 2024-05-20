@@ -3,9 +3,8 @@ mod internal_tests {
     use std::collections::HashMap;
 
     use baml_runtime::BamlRuntime;
-    use baml_runtime::{RuntimeContext, RuntimeInterface};
+    use baml_runtime::{PublicInterface, RuntimeContext};
     use indexmap::IndexMap;
-    
 
     use wasm_bindgen_test::*;
     use wasm_logger;
@@ -107,11 +106,12 @@ mod internal_tests {
             baml_types::BamlValue::String("Attention Is All You Need. Mark. Hello.".into()),
         );
 
-        let res = runtime?
-            .call_function("GetOrderInfo".to_string(), params, &ctx)
-            .await?;
+        let (res, _) = runtime?
+            .call_function("GetOrderInfo".to_string(), params, ctx)
+            .await;
 
-        log::info!("Result: {}", res);
+        assert!(res.is_ok(), "Result: {:#?}", res.err());
+        log::info!("Result: {}", res.ok().unwrap());
 
         Ok(())
     }

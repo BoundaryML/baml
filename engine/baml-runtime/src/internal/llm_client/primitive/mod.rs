@@ -83,7 +83,7 @@ impl WithSingleCallable for LLMPrimitiveProvider {
         &self,
         ctx: &RuntimeContext,
         prompt: &internal_baml_jinja::RenderedPrompt,
-    ) -> Result<LLMResponse> {
+    ) -> LLMResponse {
         match self {
             LLMPrimitiveProvider::OpenAI(client) => client.single_call(ctx, prompt).await,
             LLMPrimitiveProvider::Anthropic(client) => client.single_call(ctx, prompt).await,

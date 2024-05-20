@@ -147,6 +147,7 @@ impl AnthropicClient {
             features: ModelFeatures {
                 chat: true,
                 completion: false,
+                anthropic_system_constraints: true,
             },
             retry_policy: client
                 .elem()
@@ -166,20 +167,25 @@ impl WithChat for AnthropicClient {
         ))
     }
 
-    async fn chat(
-        &self,
-        _ctx: &RuntimeContext,
-        prompt: &Vec<RenderedChatMessage>,
-    ) -> Result<LLMResponse> {
+    async fn chat(&self, _ctx: &RuntimeContext, prompt: &Vec<RenderedChatMessage>) -> LLMResponse {
         use crate::{
             internal::llm_client::{ErrorCode, LLMCompleteResponse, LLMErrorResponse},
             request::{self, RequestError},
         };
 
         let mut body = json!(self.properties.properties);
-        body.as_object_mut()
-            .unwrap()
-            .extend(build_anthropic_chat_request(prompt)?.into_iter());
+        body.as_object_mut().unwrap().insert(
+            "messages".into(),
+            prompt
+                .iter()
+                .map(|m| {
+                    json!({
+                        "role": m.role,
+                        "content": convert_message_parts_to_content(&m.parts)
+                    })
+                })
+                .collect::<serde_json::Value>(),
+        );
 
         let mut headers = HashMap::default();
         match &self.properties.api_key {
@@ -202,7 +208,7 @@ impl WithChat for AnthropicClient {
         {
             Ok(body) => {
                 if body.content.len() < 1 {
-                    return Ok(LLMResponse::LLMFailure(LLMErrorResponse {
+                    return LLMResponse::LLMFailure(LLMErrorResponse {
                         client: self.context.name.to_string(),
                         model: None,
                         prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
@@ -213,12 +219,12 @@ impl WithChat for AnthropicClient {
                         latency_ms: now.elapsed().unwrap().as_millis() as u64,
                         message: format!("No content in response:\n{:#?}", body),
                         code: ErrorCode::Other(200),
-                    }));
+                    });
                 }
 
                 let usage = body.usage;
 
-                Ok(LLMResponse::Success(LLMCompleteResponse {
+                LLMResponse::Success(LLMCompleteResponse {
                     client: self.context.name.to_string(),
                     prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
                     content: body.content[0].text.clone(),
@@ -240,21 +246,30 @@ impl WithChat for AnthropicClient {
                         "output_tokens": usage.output_tokens,
                         "total_tokens": usage.input_tokens + usage.output_tokens,
                     }),
-                }))
+                })
             }
             Err(e) => match e {
                 RequestError::BuildError(e)
                 | RequestError::FetchError(e)
                 | RequestError::JsonError(e)
-                | RequestError::SerdeError(e) => {
-                    Err(anyhow::anyhow!("Failed to make request: {:#?}", e))
-                }
+                | RequestError::SerdeError(e) => LLMResponse::LLMFailure(LLMErrorResponse {
+                    client: self.context.name.to_string(),
+                    model: None,
+                    prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
+                    start_time_unix_ms: now
+                        .duration_since(web_time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_millis() as u64,
+                    latency_ms: now.elapsed().unwrap().as_millis() as u64,
+                    message: format!("Failed to make request: {:#?}", e),
+                    code: ErrorCode::Other(2),
+                }),
                 RequestError::ResponseError(status, res) => {
                     match request::response_json::<AnthropicErrorResponse>(res).await {
                         Ok(err) => {
                             let err_message =
                                 format!("API Error ({}): {}", err.error.r#type, err.error.message);
-                            Ok(LLMResponse::LLMFailure(LLMErrorResponse {
+                            LLMResponse::LLMFailure(LLMErrorResponse {
                                 client: self.context.name.to_string(),
                                 model: None,
                                 prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
@@ -266,14 +281,20 @@ impl WithChat for AnthropicClient {
                                 latency_ms: now.elapsed().unwrap().as_millis() as u64,
                                 message: err_message,
                                 code: ErrorCode::from_u16(status),
-                            }))
+                            })
                         }
-                        Err(e) => {
-                            anyhow::bail!(
-                                "Does this support the Anthropic Response type?\n{:#?}",
-                                e
-                            )
-                        }
+                        Err(e) => LLMResponse::LLMFailure(LLMErrorResponse {
+                            client: self.context.name.to_string(),
+                            model: None,
+                            prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
+                            start_time_unix_ms: now
+                                .duration_since(web_time::UNIX_EPOCH)
+                                .unwrap()
+                                .as_millis() as u64,
+                            latency_ms: now.elapsed().unwrap().as_millis() as u64,
+                            message: format!("Failed to parse error response: {:#?}", e),
+                            code: ErrorCode::from_u16(status),
+                        }),
                     }
                 }
             },
@@ -281,94 +302,37 @@ impl WithChat for AnthropicClient {
     }
 }
 
-fn build_anthropic_chat_request(
-    prompt: &Vec<RenderedChatMessage>,
-) -> Result<serde_json::Map<String, Value>> {
-    // ensure the number of system messages is <= 1.
-    // if there is a system message in the prompt, extract it out of the list and put it in the top-level "system" property of the request.
-    let (system, messages): (Vec<&RenderedChatMessage>, Vec<&RenderedChatMessage>) =
-        prompt.iter().partition(|m| m.role == "system");
-
-    if system.len() > 1 {
-        return Err(anyhow!("Too many system messages in prompt"));
+fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json::Value {
+    if parts.len() == 1 {
+        if let ChatMessagePart::Text(text) = &parts[0] {
+            return json!(text);
+        }
     }
 
-    let mut request = json!({
-        "messages": messages
-            .iter()
-            .map(|m| {
-                // Use `convert_message_parts_to_content` with `?` to handle errors
-                match convert_message_parts_to_content(&m.parts) {
-                    Ok(content) => Ok(json!({
-                        "role": m.role,
-                        "content": content,
-                    })),
-                    Err(err) => return Err(err),
-                }
-            })
-            .collect::<Result<Vec<Value>>>()?, // Collect results, propagate error if any
-    });
-
-    if let Some(system_message) = system.first() {
-        let system_content = convert_system_message_parts_to_text(&system_message.parts)?;
-        request["system"] = json!(system_content);
-    }
-
-    match request {
-        Value::Object(obj) => Ok(obj),
-        _ => unreachable!(),
-    }
-}
-
-fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> Result<Vec<Value>> {
-    let content: Vec<Value> = parts
+    parts
         .iter()
         .map(|part| match part {
-            ChatMessagePart::Text(text) => Ok(json!({
+            ChatMessagePart::Text(text) => json!({
                 "type": "text",
                 "text": text
-            })),
+            }),
             ChatMessagePart::Image(image) => match image {
-                // internal_baml_jinja::BamlImage::Url(image_url) => {
-                //     let rt = tokio::runtime::Builder::new_current_thread()
-                //         .enable_all()
-                //         .build()?;
-
-                //     let (media_type, base64_data) = rt
-                //         .block_on(download_image_as_base64(&image_url.url))
-                //         .map_err(|e| anyhow!("Failed to fetch image: {}", e))?;
-                //     Ok(json!({
-                //         "type": "image",
-                //         "source": {
-                //             "type": "base64",
-                //             "media_type": media_type,
-                //             "data": base64_data
-                //         }
-                //     }))
-                // }
-                BamlImage::Base64(image) => Ok(json!({
+                BamlImage::Base64(image) => json!({
                     "type": "image",
                     "source": {
                         "type": "base64",
                         "media_type": image.media_type,
                         "data": image.base64
                     }
-                })),
-                _ => Err(anyhow!("Unsupported image type")),
+                }),
+                BamlImage::Url(image) => json!({
+                    "type": "image",
+                    "source": {
+                        "type": "url",
+                        "url": image.url
+                    }
+                }),
             },
         })
-        .collect::<Result<Vec<Value>>>()?;
-
-    Ok(content)
-}
-
-fn convert_system_message_parts_to_text(parts: &Vec<ChatMessagePart>) -> Result<String> {
-    if parts.len() != 1 {
-        return Err(anyhow!("System message must contain exactly one text part, but we detected a file-type in the system message."));
-    }
-
-    match &parts[0] {
-        ChatMessagePart::Text(text) => Ok(text.clone()),
-        _ => Err(anyhow!("System message contains non-text parts")),
-    }
+        .collect()
 }

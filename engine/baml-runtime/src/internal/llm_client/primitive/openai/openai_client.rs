@@ -136,11 +136,7 @@ impl WithChat for OpenAIClient {
         ))
     }
 
-    async fn chat(
-        &self,
-        _ctx: &RuntimeContext,
-        prompt: &Vec<RenderedChatMessage>,
-    ) -> Result<LLMResponse> {
+    async fn chat(&self, _ctx: &RuntimeContext, prompt: &Vec<RenderedChatMessage>) -> LLMResponse {
         use crate::{
             internal::llm_client::{
                 primitive::openai::types::{
@@ -186,7 +182,7 @@ impl WithChat for OpenAIClient {
         {
             Ok(body) => {
                 if body.choices.len() < 1 {
-                    return Ok(LLMResponse::LLMFailure(LLMErrorResponse {
+                    return LLMResponse::LLMFailure(LLMErrorResponse {
                         client: self.context.name.to_string(),
                         model: None,
                         prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
@@ -197,12 +193,12 @@ impl WithChat for OpenAIClient {
                         latency_ms: now.elapsed().unwrap().as_millis() as u64,
                         message: format!("No content in response:\n{:#?}", body),
                         code: ErrorCode::Other(200),
-                    }));
+                    });
                 }
 
                 let usage = body.usage.as_ref();
 
-                Ok(LLMResponse::Success(LLMCompleteResponse {
+                LLMResponse::Success(LLMCompleteResponse {
                     client: self.context.name.to_string(),
                     prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
                     content: body.choices[0]
@@ -228,21 +224,30 @@ impl WithChat for OpenAIClient {
                         "output_tokens": usage.map(|u| u.completion_tokens),
                         "total_tokens": usage.map(|u| u.total_tokens),
                     }),
-                }))
+                })
             }
             Err(e) => match e {
                 RequestError::BuildError(e)
                 | RequestError::FetchError(e)
                 | RequestError::JsonError(e)
-                | RequestError::SerdeError(e) => {
-                    Err(anyhow::anyhow!("Failed to make request: {:#?}", e))
-                }
+                | RequestError::SerdeError(e) => LLMResponse::LLMFailure(LLMErrorResponse {
+                    client: self.context.name.to_string(),
+                    model: None,
+                    prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
+                    start_time_unix_ms: now
+                        .duration_since(web_time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_millis() as u64,
+                    latency_ms: now.elapsed().unwrap().as_millis() as u64,
+                    message: format!("Failed to make request: {:#?}", e),
+                    code: ErrorCode::Other(2),
+                }),
                 RequestError::ResponseError(status, res) => {
                     match request::response_json::<OpenAIErrorResponse>(res).await {
                         Ok(err) => {
                             let err_message =
                                 format!("API Error ({}): {}", err.error.r#type, err.error.message);
-                            Ok(LLMResponse::LLMFailure(LLMErrorResponse {
+                            LLMResponse::LLMFailure(LLMErrorResponse {
                                 client: self.context.name.to_string(),
                                 model: None,
                                 prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
@@ -254,11 +259,20 @@ impl WithChat for OpenAIClient {
                                 latency_ms: now.elapsed().unwrap().as_millis() as u64,
                                 message: err_message,
                                 code: ErrorCode::from_u16(status),
-                            }))
+                            })
                         }
-                        Err(e) => {
-                            anyhow::bail!("Does this support the OpenAI Response type?\n{:#?}", e)
-                        }
+                        Err(e) => LLMResponse::LLMFailure(LLMErrorResponse {
+                            client: self.context.name.to_string(),
+                            model: None,
+                            prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
+                            start_time_unix_ms: now
+                                .duration_since(web_time::UNIX_EPOCH)
+                                .unwrap()
+                                .as_millis() as u64,
+                            latency_ms: now.elapsed().unwrap().as_millis() as u64,
+                            message: format!("Failed to parse error response: {:#?}", e),
+                            code: ErrorCode::from_u16(status),
+                        }),
                     }
                 }
             },
@@ -406,6 +420,7 @@ impl OpenAIClient {
             features: ModelFeatures {
                 chat: true,
                 completion: false,
+                anthropic_system_constraints: false,
             },
             retry_policy: client
                 .elem()

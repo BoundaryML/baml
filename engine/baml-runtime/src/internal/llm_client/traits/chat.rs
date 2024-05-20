@@ -10,11 +10,7 @@ pub trait WithChat: Sync + Send {
     fn chat_options(&self, ctx: &RuntimeContext) -> Result<ChatOptions>;
 
     #[allow(async_fn_in_trait)]
-    async fn chat(
-        &self,
-        ctx: &RuntimeContext,
-        prompt: &Vec<RenderedChatMessage>,
-    ) -> Result<LLMResponse>;
+    async fn chat(&self, ctx: &RuntimeContext, prompt: &Vec<RenderedChatMessage>) -> LLMResponse;
 }
 
 pub trait WithStreamChat: Sync + Send {
@@ -36,15 +32,8 @@ where
         anyhow::bail!("Chat prompts are not supported by this provider")
     }
 
-    #[cfg(not(feature = "no_wasm"))]
     #[allow(async_fn_in_trait)]
-    async fn chat(&self, _: &RuntimeContext, _: &Vec<RenderedChatMessage>) -> Result<LLMResponse> {
-        anyhow::bail!("Chat prompts are not supported by this provider")
-    }
-
-    #[cfg(feature = "no_wasm")]
-    #[allow(async_fn_in_trait)]
-    async fn chat(&self, _: &RuntimeContext, _: &Vec<RenderedChatMessage>) -> Result<LLMResponse> {
-        anyhow::bail!("Chat prompts are not supported by this provider")
+    async fn chat(&self, _: &RuntimeContext, _: &Vec<RenderedChatMessage>) -> LLMResponse {
+        LLMResponse::OtherFailure("Chat prompts are not supported by this provider".to_string())
     }
 }
