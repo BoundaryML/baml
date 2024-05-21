@@ -76,19 +76,26 @@ impl FunctionResultStream {
     {
         match self.provider.as_ref() {
             LLMPrimitiveProvider::OpenAI(c) => {
-                let resp = c
-                    .build_request_for_stream(&ctx, &self.prompt)?
-                    .send()
-                    .await?;
-                self.run_internal(c.response_stream(resp), on_event).await
+                let req = c.build_request_for_stream(&ctx, &self.prompt)?;
+                let (system_start, instant_start) =
+                    (web_time::SystemTime::now(), web_time::Instant::now());
+                let resp = req.send().await?;
+                self.run_internal(
+                    c.response_stream(resp, system_start, instant_start),
+                    on_event,
+                )
+                .await
             }
             LLMPrimitiveProvider::Anthropic(c) => {
-                let resp = c
-                    .build_request_for_stream(&ctx, &self.prompt)?
-                    .send()
-                    .await?;
-                log::info!("is the response coming back at all? if seeing this, yes");
-                self.run_internal(c.response_stream(resp), on_event).await
+                let req = c.build_request_for_stream(&ctx, &self.prompt)?;
+                let (system_start, instant_start) =
+                    (web_time::SystemTime::now(), web_time::Instant::now());
+                let resp = req.send().await?;
+                self.run_internal(
+                    c.response_stream(resp, system_start, instant_start),
+                    on_event,
+                )
+                .await
             }
         }
     }

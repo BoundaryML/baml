@@ -197,6 +197,8 @@ impl SseResponseTrait for AnthropicClient {
     fn response_stream(
         &self,
         resp: reqwest::Response,
+        system_start: web_time::SystemTime,
+        instant_start: web_time::Instant,
     ) -> impl Stream<Item = Result<LLMCompleteResponse>> {
         log::info!("response object {:#?}", resp);
         resp.bytes_stream()
@@ -209,10 +211,8 @@ impl SseResponseTrait for AnthropicClient {
                     client: "".to_string(),
                     prompt: internal_baml_jinja::RenderedPrompt::Chat(vec![]),
                     content: "".to_string(),
-                    // TODO: compute start_time_unix_ms
-                    start_time_unix_ms: 0,
-                    // TODO: compute latency_ms
-                    latency_ms: 0,
+                    start_time: system_start,
+                    latency: instant_start.elapsed(),
                     // TODO: figure out how to extract this from the response
                     model: "".to_string(),
                     metadata: json!({
@@ -318,7 +318,7 @@ impl WithChat for AnthropicClient {
             headers.insert(k.to_string(), v.to_string());
         }
 
-        let now = web_time::SystemTime::now();
+        let (system_now, instant_now) = (web_time::SystemTime::now(), web_time::Instant::now());
         match request::call_request_with_json::<AnthropicMessageResponse, _>(
             &format!("{}{}", self.properties.base_url, "/v1/messages"),
             &body,
@@ -332,11 +332,8 @@ impl WithChat for AnthropicClient {
                         client: self.context.name.to_string(),
                         model: None,
                         prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
-                        start_time_unix_ms: now
-                            .duration_since(web_time::UNIX_EPOCH)
-                            .unwrap()
-                            .as_millis() as u64,
-                        latency_ms: now.elapsed().unwrap().as_millis() as u64,
+                        start_time: system_now,
+                        latency: instant_now.elapsed(),
                         message: format!("No content in response:\n{:#?}", body),
                         code: ErrorCode::Other(200),
                     });
@@ -348,11 +345,8 @@ impl WithChat for AnthropicClient {
                     client: self.context.name.to_string(),
                     prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
                     content: body.content[0].text.clone(),
-                    start_time_unix_ms: now
-                        .duration_since(web_time::UNIX_EPOCH)
-                        .unwrap()
-                        .as_millis() as u64,
-                    latency_ms: now.elapsed().unwrap().as_millis() as u64,
+                    start_time: system_now,
+                    latency: instant_now.elapsed(),
                     model: body.model,
                     metadata: json!({
                         "baml_is_complete": match body.stop_reason {
@@ -376,11 +370,8 @@ impl WithChat for AnthropicClient {
                     client: self.context.name.to_string(),
                     model: None,
                     prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
-                    start_time_unix_ms: now
-                        .duration_since(web_time::UNIX_EPOCH)
-                        .unwrap()
-                        .as_millis() as u64,
-                    latency_ms: now.elapsed().unwrap().as_millis() as u64,
+                    start_time: system_now,
+                    latency: instant_now.elapsed(),
                     message: format!("Failed to make request: {:#?}", e),
                     code: ErrorCode::Other(2),
                 }),
@@ -393,12 +384,8 @@ impl WithChat for AnthropicClient {
                                 client: self.context.name.to_string(),
                                 model: None,
                                 prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
-                                start_time_unix_ms: now
-                                    .duration_since(web_time::UNIX_EPOCH)
-                                    .unwrap()
-                                    .as_millis()
-                                    as u64,
-                                latency_ms: now.elapsed().unwrap().as_millis() as u64,
+                                start_time: system_now,
+                                latency: instant_now.elapsed(),
                                 message: err_message,
                                 code: ErrorCode::from_u16(status),
                             })
@@ -407,11 +394,8 @@ impl WithChat for AnthropicClient {
                             client: self.context.name.to_string(),
                             model: None,
                             prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
-                            start_time_unix_ms: now
-                                .duration_since(web_time::UNIX_EPOCH)
-                                .unwrap()
-                                .as_millis() as u64,
-                            latency_ms: now.elapsed().unwrap().as_millis() as u64,
+                            start_time: system_now,
+                            latency: instant_now.elapsed(),
                             message: format!("Failed to parse error response: {:#?}", e),
                             code: ErrorCode::from_u16(status),
                         }),

@@ -2,7 +2,6 @@ mod runtime_ctx;
 pub mod runtime_prompt;
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 
 use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
 use baml_runtime::runtime_interface::PublicInterface;
@@ -419,8 +418,12 @@ fn llm_response_to_wasm_error(
             scope: scope.clone(),
             model: f.model.clone(),
             prompt: f.prompt.clone(),
-            start_time_unix_ms: f.start_time_unix_ms,
-            latency_ms: f.latency_ms,
+            start_time_unix_ms: f
+                .start_time
+                .duration_since(web_time::UNIX_EPOCH)
+                .unwrap_or(web_time::Duration::ZERO)
+                .as_millis() as u64,
+            latency_ms: f.latency.as_millis() as u64,
             message: f.message.clone(),
             code: f.code.to_string(),
         }),
@@ -448,8 +451,12 @@ impl IntoWasm
                 model: s.model.clone(),
                 prompt: s.prompt.clone(),
                 content: s.content.clone(),
-                start_time_unix_ms: s.start_time_unix_ms,
-                latency_ms: s.latency_ms,
+                start_time_unix_ms: s
+                    .start_time
+                    .duration_since(web_time::UNIX_EPOCH)
+                    .unwrap_or(web_time::Duration::ZERO)
+                    .as_millis() as u64,
+                latency_ms: s.latency.as_millis() as u64,
             }),
             _ => None,
         }

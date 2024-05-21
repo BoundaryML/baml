@@ -67,8 +67,8 @@ pub struct LLMErrorResponse {
     pub client: String,
     pub model: Option<String>,
     pub prompt: RenderedPrompt,
-    pub start_time_unix_ms: u64,
-    pub latency_ms: u64,
+    pub start_time: web_time::SystemTime,
+    pub latency: web_time::Duration,
 
     // Short error message
     pub message: String,
@@ -133,8 +133,8 @@ pub struct LLMCompleteResponse {
     pub model: String,
     pub prompt: RenderedPrompt,
     pub content: String,
-    pub start_time_unix_ms: u64,
-    pub latency_ms: u64,
+    pub start_time: web_time::SystemTime,
+    pub latency: web_time::Duration,
     pub metadata: serde_json::Value,
 }
 
@@ -145,7 +145,9 @@ impl std::fmt::Display for LLMCompleteResponse {
             "{}",
             format!(
                 "Client: {} ({}) - {}ms",
-                self.client, self.model, self.latency_ms
+                self.client,
+                self.model,
+                self.latency.as_millis()
             )
             .yellow()
         )?;
@@ -168,5 +170,7 @@ pub trait SseResponseTrait {
     fn response_stream(
         &self,
         resp: reqwest::Response,
+        system_start: web_time::SystemTime,
+        instant_start: web_time::Instant,
     ) -> impl futures::Stream<Item = Result<LLMCompleteResponse>>;
 }
