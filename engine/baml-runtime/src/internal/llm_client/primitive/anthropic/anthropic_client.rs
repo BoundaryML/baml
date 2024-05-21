@@ -13,10 +13,12 @@ use internal_baml_jinja::{
 };
 
 use crate::internal::llm_client::{
-    primitive::anthropic::types::{AnthropicErrorResponse, AnthropicMessageResponse, StopReason},
+    primitive::anthropic::types::{
+        AnthropicErrorResponse, AnthropicMessageResponse, MessageStartChunk, StopReason,
+    },
     state::LlmClientState,
     traits::{WithChat, WithClient, WithNoCompletion, WithRetryPolicy},
-    LLMCompleteResponse, LLMResponse, ModelFeatures, SseResponseTrait,
+    LLMCompleteResponse, LLMCompleteResponseMetadata, LLMResponse, ModelFeatures, SseResponseTrait,
 };
 use serde_json::{json, Value};
 
@@ -144,7 +146,6 @@ impl WithNoCompletion for AnthropicClient {}
 impl SseResponseTrait for AnthropicClient {
     fn build_request_for_stream(
         &self,
-        _ctx: &RuntimeContext,
         prompt: &internal_baml_jinja::RenderedPrompt,
     ) -> Result<reqwest::RequestBuilder> {
         log::trace!("stream chat starting");
@@ -197,6 +198,7 @@ impl SseResponseTrait for AnthropicClient {
     fn response_stream(
         &self,
         resp: reqwest::Response,
+        prompt: &internal_baml_jinja::RenderedPrompt,
         system_start: web_time::SystemTime,
         instant_start: web_time::Instant,
     ) -> impl Stream<Item = Result<LLMCompleteResponse>> {
@@ -208,21 +210,19 @@ impl SseResponseTrait for AnthropicClient {
             .inspect(|event| log::trace!("anthropic eventsource: {:#?}", event))
             .scan(
                 Ok(LLMCompleteResponse {
-                    client: "".to_string(),
-                    prompt: internal_baml_jinja::RenderedPrompt::Chat(vec![]),
+                    client: self.context.name.to_string(),
+                    prompt: prompt.clone(),
                     content: "".to_string(),
                     start_time: system_start,
                     latency: instant_start.elapsed(),
-                    // TODO: figure out how to extract this from the response
                     model: "".to_string(),
-                    metadata: json!({
-                        //"baml_is_complete": false,
-                        //"finish_reason": "".to_string(),
-                        // TODO: define behavior for these (openai doesn't)
-                        // "prompt_tokens": usage.map(|u| u.prompt_tokens),
-                        // "output_tokens": usage.map(|u| u.completion_tokens),
-                        // "total_tokens": usage.map(|u| u.total_tokens),
-                    }),
+                    metadata: LLMCompleteResponseMetadata {
+                        baml_is_complete: false,
+                        finish_reason: None,
+                        prompt_tokens: None,
+                        output_tokens: None,
+                        total_tokens: None,
+                    },
                 }),
                 |accumulated: &mut Result<LLMCompleteResponse>, event| {
                     let Ok(ref mut inner) = accumulated else {
@@ -239,14 +239,42 @@ impl SseResponseTrait for AnthropicClient {
                         }
                     };
                     match event {
-                        MessageChunk::MessageStart(_) => (),
+                        MessageChunk::MessageStart(chunk) => {
+                            let body = chunk.message;
+                            inner.model = body.model;
+                            let ref mut inner = inner.metadata;
+                            inner.baml_is_complete = match body.stop_reason {
+                                Some(StopReason::StopSequence) | Some(StopReason::EndTurn) => true,
+                                _ => false,
+                            };
+                            inner.finish_reason = body
+                                .stop_reason
+                                .as_ref()
+                                .map(ToString::to_string);
+                            inner.prompt_tokens = Some(body.usage.input_tokens);
+                            inner.output_tokens = Some(body.usage.output_tokens);
+                            inner.total_tokens = Some(body.usage.input_tokens + body.usage.output_tokens);
+                        },
                         MessageChunk::ContentBlockDelta(event) => {
                             inner.content += &event.delta.text;
                         }
                         MessageChunk::ContentBlockStart(_) => (),
                         MessageChunk::ContentBlockStop(_) => (),
                         MessageChunk::Ping => (),
-                        MessageChunk::MessageDelta(_) => (),
+                        MessageChunk::MessageDelta(body) => {
+                            let ref mut inner = inner.metadata;
+
+                            inner.baml_is_complete = match body.delta.stop_reason {
+                                Some(StopReason::StopSequence) | Some(StopReason::EndTurn) => true,
+                                _ => false,
+                            };
+                            inner.finish_reason = body.delta
+                                .stop_reason
+                                .as_ref()
+                                .map(|r| serde_json::to_string(r).unwrap_or("".into()));
+                            inner.output_tokens = Some(body.usage.output_tokens);
+                            inner.total_tokens = Some(inner.prompt_tokens.unwrap_or(0) + body.usage.output_tokens);
+                        },
                         MessageChunk::MessageStop => (),
                         MessageChunk::Error(err) => {
                             return std::future::ready(Some(Err(anyhow::anyhow!("Anthropic API Error: {:#?}", err))));
@@ -339,8 +367,6 @@ impl WithChat for AnthropicClient {
                     });
                 }
 
-                let usage = body.usage;
-
                 LLMResponse::Success(LLMCompleteResponse {
                     client: self.context.name.to_string(),
                     prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
@@ -348,18 +374,19 @@ impl WithChat for AnthropicClient {
                     start_time: system_now,
                     latency: instant_now.elapsed(),
                     model: body.model,
-                    metadata: json!({
-                        "baml_is_complete": match body.stop_reason {
-                            None => true,
-                            Some(StopReason::StopSequence) => true,
-                            Some(StopReason::EndTurn)  => true,
+                    metadata: LLMCompleteResponseMetadata {
+                        baml_is_complete: match body.stop_reason {
+                            Some(StopReason::StopSequence) | Some(StopReason::EndTurn) => true,
                             _ => false,
                         },
-                        "finish_reason": body.stop_reason,
-                        "prompt_tokens": usage.input_tokens,
-                        "output_tokens": usage.output_tokens,
-                        "total_tokens": usage.input_tokens + usage.output_tokens,
-                    }),
+                        finish_reason: body
+                            .stop_reason
+                            .as_ref()
+                            .map(|r| serde_json::to_string(r).unwrap_or("".into())),
+                        prompt_tokens: Some(body.usage.input_tokens),
+                        output_tokens: Some(body.usage.output_tokens),
+                        total_tokens: Some(body.usage.input_tokens + body.usage.output_tokens),
+                    },
                 })
             }
             Err(e) => match e {

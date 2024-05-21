@@ -11,9 +11,8 @@ pub mod traits;
 
 use anyhow::Result;
 
-use core::future::Future;
-use internal_baml_jinja::{RenderedChatMessage, RenderedPrompt};
-use reqwest::RequestBuilder;
+use internal_baml_jinja::RenderedPrompt;
+use serde::Serialize;
 
 #[cfg(feature = "no_wasm")]
 use reqwest::StatusCode;
@@ -135,7 +134,16 @@ pub struct LLMCompleteResponse {
     pub content: String,
     pub start_time: web_time::SystemTime,
     pub latency: web_time::Duration,
-    pub metadata: serde_json::Value,
+    pub metadata: LLMCompleteResponseMetadata,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct LLMCompleteResponseMetadata {
+    pub baml_is_complete: bool,
+    pub finish_reason: Option<String>,
+    pub prompt_tokens: Option<u64>,
+    pub output_tokens: Option<u64>,
+    pub total_tokens: Option<u64>,
 }
 
 impl std::fmt::Display for LLMCompleteResponse {
@@ -163,13 +171,13 @@ pub type LLMResponseStream = futures::stream::LocalBoxStream<'static, anyhow::Re
 pub trait SseResponseTrait {
     fn build_request_for_stream(
         &self,
-        _ctx: &crate::RuntimeContext,
         prompt: &internal_baml_jinja::RenderedPrompt,
     ) -> Result<reqwest::RequestBuilder>;
 
     fn response_stream(
         &self,
         resp: reqwest::Response,
+        prompt: &internal_baml_jinja::RenderedPrompt,
         system_start: web_time::SystemTime,
         instant_start: web_time::Instant,
     ) -> impl futures::Stream<Item = Result<LLMCompleteResponse>>;

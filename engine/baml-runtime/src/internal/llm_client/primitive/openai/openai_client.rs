@@ -18,7 +18,7 @@ use crate::internal::llm_client::{
 
 use crate::RuntimeContext;
 use eventsource_stream::Eventsource;
-use futures::{Stream, StreamExt, TryStreamExt};
+use futures::{Stream, StreamExt};
 
 fn resolve_properties(
     client: &ClientWalker,
@@ -202,17 +202,23 @@ impl WithChat for OpenAIClient {
                     start_time: system_now,
                     latency: instant_now.elapsed(),
                     model: body.model,
-                    metadata: json!({
-                        "baml_is_complete": match body.choices[0].finish_reason {
+                    metadata: LLMCompleteResponseMetadata {
+                        baml_is_complete: match body.choices[0].finish_reason {
                             None => true,
                             Some(FinishReason::Stop) => true,
                             _ => false,
                         },
-                        "finish_reason": body.choices[0].finish_reason,
-                        "prompt_tokens": usage.map(|u| u.prompt_tokens),
-                        "output_tokens": usage.map(|u| u.completion_tokens),
-                        "total_tokens": usage.map(|u| u.total_tokens),
-                    }),
+                        finish_reason: match body.choices.get(0) {
+                            Some(c) => match c.finish_reason {
+                                Some(FinishReason::Stop) => Some("stop".to_string()),
+                                _ => None,
+                            },
+                            None => None,
+                        },
+                        prompt_tokens: usage.map(|u| u.prompt_tokens),
+                        output_tokens: usage.map(|u| u.completion_tokens),
+                        total_tokens: usage.map(|u| u.total_tokens),
+                    },
                 })
             }
             Err(e) => match e {
@@ -259,14 +265,15 @@ impl WithChat for OpenAIClient {
     }
 }
 
-use crate::internal::llm_client::{LLMCompleteResponse, SseResponseTrait};
+use crate::internal::llm_client::{
+    LLMCompleteResponse, LLMCompleteResponseMetadata, SseResponseTrait,
+};
 
 use super::types::ChatCompletionResponseDelta;
 
 impl SseResponseTrait for OpenAIClient {
     fn build_request_for_stream(
         &self,
-        _ctx: &RuntimeContext,
         prompt: &internal_baml_jinja::RenderedPrompt,
     ) -> Result<reqwest::RequestBuilder> {
         log::info!("stream chat starting");
@@ -327,6 +334,7 @@ impl SseResponseTrait for OpenAIClient {
     fn response_stream(
         &self,
         resp: reqwest::Response,
+        prompt: &internal_baml_jinja::RenderedPrompt,
         system_start: web_time::SystemTime,
         instant_start: web_time::Instant,
     ) -> impl Stream<Item = Result<LLMCompleteResponse>> {
@@ -342,20 +350,19 @@ impl SseResponseTrait for OpenAIClient {
             .scan(
                 Ok(
 LLMCompleteResponse {
-                        client: "".to_string(),
-                        prompt: internal_baml_jinja::RenderedPrompt::Chat(vec![]),
+                        client: self.context.name.to_string(),
+                        prompt: prompt.clone(),
                         content: "".to_string(),
                         start_time: system_start,
                         latency: instant_start.elapsed(),
                         model: "".to_string(),
-                        metadata: json!({
-                            //"baml_is_complete": false,
-                            //"finish_reason": "".to_string(),
-                            // TODO: define behavior for these (openai doesn't)
-                            // "prompt_tokens": usage.map(|u| u.prompt_tokens),
-                            // "output_tokens": usage.map(|u| u.completion_tokens),
-                            // "total_tokens": usage.map(|u| u.total_tokens),
-                        }),
+                        metadata: LLMCompleteResponseMetadata {
+                            baml_is_complete: false,
+                            finish_reason: None,
+                            prompt_tokens: None,
+                            output_tokens: None,
+                            total_tokens: None,
+                        },
                     }
                 ),
                 |accumulated: &mut Result<LLMCompleteResponse>, event| {

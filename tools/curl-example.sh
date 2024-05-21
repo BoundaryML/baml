@@ -76,5 +76,4 @@ case "$1" in
             "stream": true
           }'
         ;;
-
 esac

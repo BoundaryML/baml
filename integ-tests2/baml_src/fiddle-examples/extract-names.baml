@@ -1,5 +1,5 @@
 function ExtractNames(input: string) -> string[] {
-  client Claude
+  client GPT35
   prompt #"
     {{ _.chat("system") }}
     you are obsessed with pirates and always give back pirate names instead of real names

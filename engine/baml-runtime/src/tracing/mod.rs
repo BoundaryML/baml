@@ -9,6 +9,7 @@ use baml_types::BamlValue;
 use indexmap::IndexMap;
 use internal_baml_core::ast::Span;
 use internal_baml_jinja::RenderedPrompt;
+use serde_json::json;
 use std::collections::HashMap;
 
 use uuid::Uuid;
@@ -409,7 +410,9 @@ impl From<&LLMResponse> for LLMEventSchema {
                 },
                 output: Some(LLMOutputModel {
                     raw_text: s.content.clone(),
-                    metadata: serde_json::from_value(s.metadata.clone()).unwrap_or_default(),
+                    metadata: serde_json::to_value(&s.metadata)
+                        .map_or_else(Err, serde_json::from_value)
+                        .unwrap_or_default(),
                     r#override: None,
                 }),
                 error: None,

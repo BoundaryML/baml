@@ -9,8 +9,8 @@ pub struct AnthropicMessageContent {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct AnthropicUsage {
-    pub input_tokens: u32,
-    pub output_tokens: u32,
+    pub input_tokens: u64,
+    pub output_tokens: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -25,8 +25,9 @@ pub struct AnthropicMessageResponse {
     pub usage: AnthropicUsage,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, strum_macros::Display, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum StopReason {
     MaxTokens,
     StopSequence,
@@ -77,23 +78,6 @@ pub struct AnthropicErrorInner {
     pub r#type: String,
     pub message: String,
 }
-
-//============================= begin copy from clust
-//============================= begin copy from clust
-//============================= begin copy from clust
-//============================= begin copy from clust
-//============================= begin copy from clust
-//============================= begin copy from clust
-//============================= begin copy from clust
-//============================= begin copy from clust
-//============================= begin copy from clust
-//============================= begin copy from clust
-//============================= begin copy from clust
-
-// use crate::messages::{
-//     ContentType, MessageChunkTypeError, MessagesResponseBody, StopReason, StopSequence,
-//     StreamError, TextContentBlock,
-// };
 
 /// The stream chunk of messages.
 #[derive(Debug, Deserialize, Clone, PartialEq, Serialize)]
@@ -180,7 +164,7 @@ pub struct StreamStop {
 #[derive(Debug, Deserialize, Clone, PartialEq, Serialize)]
 pub struct DeltaUsage {
     /// The number of output tokens which were used.
-    pub output_tokens: u32,
+    pub output_tokens: u64,
 }
 
 #[cfg(test)]

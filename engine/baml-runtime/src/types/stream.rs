@@ -53,7 +53,7 @@ impl FunctionResultStream {
         let (span, ctx) =
             self.tracer
                 .start_span(&self.function_name, self.ctx.clone(), &Default::default());
-        let res = self.run_impl(on_event, ctx).await;
+        let res = self.run_impl(on_event).await;
 
         let mut target_id = None;
         if let Some(span) = span {
@@ -66,33 +66,29 @@ impl FunctionResultStream {
         (res, target_id)
     }
 
-    async fn run_impl<F>(
-        &mut self,
-        on_event: Option<F>,
-        ctx: RuntimeContext,
-    ) -> Result<FunctionResult>
+    async fn run_impl<F>(&mut self, on_event: Option<F>) -> Result<FunctionResult>
     where
         F: Fn(FunctionResult) -> (),
     {
         match self.provider.as_ref() {
             LLMPrimitiveProvider::OpenAI(c) => {
-                let req = c.build_request_for_stream(&ctx, &self.prompt)?;
+                let req = c.build_request_for_stream(&self.prompt)?;
                 let (system_start, instant_start) =
                     (web_time::SystemTime::now(), web_time::Instant::now());
                 let resp = req.send().await?;
-                self.run_internal(
-                    c.response_stream(resp, system_start, instant_start),
+                self.run_stream(
+                    c.response_stream(resp, &self.prompt, system_start, instant_start),
                     on_event,
                 )
                 .await
             }
             LLMPrimitiveProvider::Anthropic(c) => {
-                let req = c.build_request_for_stream(&ctx, &self.prompt)?;
+                let req = c.build_request_for_stream(&self.prompt)?;
                 let (system_start, instant_start) =
                     (web_time::SystemTime::now(), web_time::Instant::now());
                 let resp = req.send().await?;
-                self.run_internal(
-                    c.response_stream(resp, system_start, instant_start),
+                self.run_stream(
+                    c.response_stream(resp, &self.prompt, system_start, instant_start),
                     on_event,
                 )
                 .await
@@ -100,7 +96,7 @@ impl FunctionResultStream {
         }
     }
 
-    async fn run_internal<F>(
+    async fn run_stream<F>(
         &self,
         response_stream: impl Stream<Item = Result<LLMCompleteResponse>>,
         on_event: Option<F>,

@@ -125,9 +125,9 @@ pub(crate) struct Error {
 #[derive(Serialize, Debug, Deserialize, Default)]
 pub(crate) struct LLMOutputModelMetadata {
     pub logprobs: Option<Value>,
-    pub prompt_tokens: Option<i32>,
-    pub output_tokens: Option<i32>,
-    pub total_tokens: Option<i32>,
+    pub prompt_tokens: Option<i64>,
+    pub output_tokens: Option<i64>,
+    pub total_tokens: Option<i64>,
     pub finish_reason: Option<String>,
 }
 
