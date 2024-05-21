@@ -126,7 +126,7 @@ const EnvvarInput: React.FC<{ envvar: EnvVar }> = ({ envvar }) => {
             setEnvKeyValue({ itemIndex: null, key: e.target.value })
           }
         }}
-        className='outline-none bg-vscode-input-background focus-visible:outline focus:outline-2 focus:outline-vscode-input-border'
+        className='outline-none bg-vscode-input-background focus-visible:outline focus:outline-2 focus:outline-vscode-input-border font-mono'
       />
       <span>=</span>
       <Input
@@ -143,7 +143,7 @@ const EnvvarInput: React.FC<{ envvar: EnvVar }> = ({ envvar }) => {
             setEnvKeyValue({ itemIndex: null, key: envvar.key, value: e.target.value })
           }
         }}
-        className={`bg-vscode-input-background outline-none focus-visible:outline focus:outline-0 focus:outline-white ${
+        className={`bg-vscode-input-background outline-none focus-visible:outline focus:outline-0 focus:outline-white font-mono ${
           !envvar.value && envvar.type === 'baml' ? 'outline outline-2 outline-yellow-500' : ''
         }`}
       />
