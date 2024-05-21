@@ -73,17 +73,17 @@ impl FunctionResultStream {
         let final_response = stream
             .stream()
             .await?
-            .inspect(|event| log::debug!("Received event: {:#?}", event))
+            .inspect(|event| log::debug!("Recieved event: {:#?}", event))
             .then(|fn_result| async {
                 let response = fn_result?;
 
                 let func = self.ir.find_function(self.function_name.as_str())?;
-                // TODO: partial-ify func.output
                 let parsed = jsonish::from_str(
                     &*self.ir,
                     &self.ctx.env,
                     func.output(),
                     response.content.as_str(),
+                    true,
                 );
 
                 if let Some(ref on_event) = on_event {
@@ -115,6 +115,7 @@ impl FunctionResultStream {
             &self.ctx.env,
             func.output(),
             final_response.content.as_str(),
+            false,
         );
         Ok(FunctionResult::new(
             self.scope.clone(),

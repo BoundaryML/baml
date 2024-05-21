@@ -9,9 +9,7 @@ mod jsonish;
 
 use deserializer::coercer::{ParsingContext, TypeCoercer};
 
-use internal_baml_core::{
-    ir::repr::{FieldType, IntermediateRepr},
-};
+use internal_baml_core::ir::repr::{FieldType, IntermediateRepr};
 
 pub use deserializer::types::BamlValueWithFlags;
 
@@ -20,13 +18,14 @@ pub fn from_str(
     env: &HashMap<String, String>,
     target: &FieldType,
     raw_string: &str,
+    allow_partials: bool,
 ) -> Result<BamlValueWithFlags> {
     // When the schema is just a string, i should really just return the raw_string w/o parsing it.
     let value = jsonish::parse(raw_string, jsonish::ParseOptions::default())?;
 
     log::info!("Parsed value: {:?}", value);
 
-    let ctx = ParsingContext::new(ir, env);
+    let ctx = ParsingContext::new(ir, env, allow_partials);
 
     // Lets try to now coerce the value into the expected schema.
     match target.coerce(&ctx, target, Some(&value)) {

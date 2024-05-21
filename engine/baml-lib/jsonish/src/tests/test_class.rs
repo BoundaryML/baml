@@ -229,7 +229,7 @@ test_deserializer!(
 
 const NEST_CLASS_WITH_LIST: &str = r#"
 class Resume {
-    name string?
+    name string
     email string?
     phone string?
     experience string[] 
@@ -272,7 +272,7 @@ test_deserializer!(
     }
 );
 
-test_deserializer!(
+test_partial_deserializer!(
     test_resume_partial,
     NEST_CLASS_WITH_LIST,
     r#"{

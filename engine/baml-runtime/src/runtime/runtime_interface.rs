@@ -138,7 +138,13 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         response: &crate::internal::llm_client::LLMCompleteResponse,
         ctx: &RuntimeContext,
     ) -> Result<jsonish::BamlValueWithFlags> {
-        jsonish::from_str(self.ir(), &ctx.env, function.output(), &response.content)
+        jsonish::from_str(
+            self.ir(),
+            &ctx.env,
+            function.output(),
+            &response.content,
+            false,
+        )
     }
 
     fn ir(&self) -> &IntermediateRepr {
@@ -282,7 +288,7 @@ impl RuntimeInterface for InternalBamlRuntime {
 
         // Now actually execute the code.
         let (history, _) = orchestrate(orchestrator, &ctx, &renderer, &baml_args, |s, ctx| {
-            jsonish::from_str(self.ir(), &ctx.env, func.output(), s)
+            jsonish::from_str(self.ir(), &ctx.env, func.output(), s, false)
         })
         .await;
 

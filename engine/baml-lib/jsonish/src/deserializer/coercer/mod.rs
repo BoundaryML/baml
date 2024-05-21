@@ -16,17 +16,20 @@ pub struct ParsingContext<'a> {
     scope: Vec<String>,
     env: &'a HashMap<String, String>,
     ir: &'a IntermediateRepr,
+    allow_partials: bool,
 }
 
 impl ParsingContext<'_> {
     pub(crate) fn new<'a>(
         ir: &'a IntermediateRepr,
         env: &'a HashMap<String, String>,
+        allow_partials: bool,
     ) -> ParsingContext<'a> {
         ParsingContext {
             scope: Vec::new(),
             env,
             ir,
+            allow_partials,
         }
     }
 
@@ -37,6 +40,7 @@ impl ParsingContext<'_> {
             scope: new_scope,
             env: self.env,
             ir: self.ir,
+            allow_partials: self.allow_partials,
         }
     }
 

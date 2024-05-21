@@ -159,7 +159,7 @@ impl TypeCoercer for ClassWalker<'_> {
                 .map(|(k, _)| k.clone())
                 .collect::<Vec<_>>();
 
-            if !missing_required_fields.is_empty() {
+            if !ctx.allow_partials && !missing_required_fields.is_empty() {
                 log::info!(
                     "Missing required fields: {:?} in  {:?}",
                     missing_required_fields,
@@ -201,9 +201,6 @@ impl TypeCoercer for ClassWalker<'_> {
                         }
                     }))
                     .collect::<BamlMap<String, _>>();
-
-                log::info!("Merged errors: {:?}", merged_errors);
-                log::info!("Valid fields: {:?}", valid_fields);
 
                 completed_cls.insert(
                     0,
