@@ -92,13 +92,16 @@ impl BamlRuntime {
 }
 
 impl PublicInterface for BamlRuntime {
-    async fn run_test(
+    async fn run_test<F>(
         &self,
         function_name: &str,
         test_name: &str,
         ctx: RuntimeContext,
-        on_event: Option<Box<dyn Fn(FunctionResult) -> () + Send + Sync>>,
-    ) -> (Result<TestResponse>, Option<uuid::Uuid>) {
+        on_event: Option<F>,
+    ) -> (Result<TestResponse>, Option<uuid::Uuid>)
+    where
+        F: Fn(FunctionResult) -> (),
+    {
         let (span, ctx) = self.tracer.start_span(test_name, ctx, &Default::default());
 
         let params = self.inner.get_test_params(function_name, test_name, &ctx);

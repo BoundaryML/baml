@@ -283,7 +283,9 @@ impl TestCommand {
                 );
                 // println!("Updated state: {} {}", function_name, test_name);
 
-                let (res, _) = rt.run_test(&function_name, &test_name, ctx, None).await;
+                let (res, _) = rt
+                    .run_test(&function_name, &test_name, ctx, Some(|_| ()))
+                    .await;
                 res
             };
 

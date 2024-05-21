@@ -54,13 +54,15 @@ pub trait PublicInterface {
     ) -> Result<internal_baml_codegen::GenerateOutput>;
 
     #[allow(async_fn_in_trait)]
-    async fn run_test(
+    async fn run_test<F>(
         &self,
         function_name: &str,
         test_name: &str,
         ctx: RuntimeContext,
-        on_event: Option<Box<dyn Fn(FunctionResult) -> () + Send + Sync>>,
-    ) -> (Result<TestResponse>, Option<uuid::Uuid>);
+        on_event: Option<F>,
+    ) -> (Result<TestResponse>, Option<uuid::Uuid>)
+    where
+        F: Fn(FunctionResult) -> ();
 
     #[allow(async_fn_in_trait)]
     async fn call_function(

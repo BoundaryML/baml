@@ -2,6 +2,7 @@ mod runtime_ctx;
 pub mod runtime_prompt;
 
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
 use baml_runtime::runtime_interface::PublicInterface;
@@ -727,16 +728,13 @@ impl WasmFunction {
 
         let function_name = self.name.clone();
 
-        let cb = Box::new({
-            move |r| {
-                let this = JsValue::NULL;
-                let res = WasmFunctionResponse {
-                    function_response: r,
-                }
-                .into();
-                let _ = cb.call1(&this, &res);
-                Ok(())
+        let cb = Box::new(move |r| {
+            let this = JsValue::NULL;
+            let res = WasmFunctionResponse {
+                function_response: r,
             }
+            .into();
+            cb.call1(&this, &res).unwrap();
         });
         let (test_response, span) = rt
             .run_test(&function_name, &test_name, ctx.ctx.clone(), Some(cb))
