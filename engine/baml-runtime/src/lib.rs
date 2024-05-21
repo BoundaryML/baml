@@ -21,6 +21,7 @@ pub mod tracing;
 mod types;
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use anyhow::Result;
 
@@ -55,7 +56,7 @@ pub use internal_baml_core::ir::{FieldType, TypeValue};
 
 pub struct BamlRuntime {
     inner: InternalBamlRuntime,
-    tracer: BamlTracer,
+    tracer: Arc<BamlTracer>,
 }
 
 impl BamlRuntime {
@@ -64,7 +65,7 @@ impl BamlRuntime {
     pub fn from_directory(path: &std::path::PathBuf, ctx: &RuntimeContext) -> Result<Self> {
         Ok(BamlRuntime {
             inner: InternalBamlRuntime::from_directory(path)?,
-            tracer: BamlTracer::new(None, ctx),
+            tracer: BamlTracer::new(None, ctx).into(),
         })
     }
 
@@ -75,7 +76,7 @@ impl BamlRuntime {
     ) -> Result<Self> {
         Ok(BamlRuntime {
             inner: InternalBamlRuntime::from_file_content(root_path, files)?,
-            tracer: BamlTracer::new(None, ctx),
+            tracer: BamlTracer::new(None, ctx).into(),
         })
     }
 
@@ -96,24 +97,25 @@ impl PublicInterface for BamlRuntime {
         function_name: &str,
         test_name: &str,
         ctx: RuntimeContext,
+        on_event: Option<Box<dyn Fn(FunctionResult) -> () + Send + Sync>>,
     ) -> (Result<TestResponse>, Option<uuid::Uuid>) {
         let (span, ctx) = self.tracer.start_span(test_name, ctx, &Default::default());
 
         let params = self.inner.get_test_params(function_name, test_name, &ctx);
 
         let response = match params {
-            Ok(params) => {
-                let (response, function_span) = self
-                    .call_function(function_name.into(), params.clone(), ctx)
-                    .await;
+            Ok(params) => match self.stream_function(function_name.into(), params.clone(), ctx) {
+                Ok(mut stream) => {
+                    let (response, span) = stream.run(on_event).await;
+                    let response = response.map(|res| TestResponse {
+                        function_response: res,
+                        function_span: span,
+                    });
 
-                let response = response.map(|res| TestResponse {
-                    function_response: res,
-                    function_span,
-                });
-
-                response
-            }
+                    response
+                }
+                Err(e) => Err(e),
+            },
             Err(e) => Err(e),
         };
 
@@ -156,7 +158,8 @@ impl PublicInterface for BamlRuntime {
         params: IndexMap<String, BamlValue>,
         ctx: RuntimeContext,
     ) -> Result<FunctionResultStream> {
-        self.inner.stream_function_impl(function_name, params, ctx)
+        self.inner
+            .stream_function_impl(function_name, params, ctx, self.tracer.clone())
     }
 
     #[cfg(feature = "no_wasm")]

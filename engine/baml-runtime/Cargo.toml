@@ -51,6 +51,7 @@ async-std = "1.12.0"
 fastrand = "2.1.0"
 test-log = "0.2.16"
 pin-project-lite = "0.2.14"
+async-trait = "0.1.80"
 
 [dependencies.hostname]
 version = "0.3.1"

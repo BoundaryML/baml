@@ -5,4 +5,4 @@ mod stream;
 
 pub use response::{FunctionResult, TestFailReason, TestResponse, TestStatus};
 pub use runtime_context::{RuntimeContext, SpanCtx};
-pub use stream::{FunctionResultStream, StreamCallback};
+pub use stream::FunctionResultStream;

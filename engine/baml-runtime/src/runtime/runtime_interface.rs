@@ -15,6 +15,7 @@ use crate::{
         prompt_renderer::PromptRenderer,
     },
     runtime_interface::{InternalClientLookup, RuntimeConstructor},
+    tracing::{BamlTracer, TracingSpan},
     FunctionResult, FunctionResultStream, InternalRuntimeInterface, RuntimeContext,
     RuntimeInterface, TestResponse,
 };
@@ -300,6 +301,7 @@ impl RuntimeInterface for InternalBamlRuntime {
         function_name: String,
         params: IndexMap<String, BamlValue>,
         ctx: RuntimeContext,
+        tracer: Arc<BamlTracer>,
     ) -> Result<FunctionResultStream> {
         let func = self.get_function(&function_name, &ctx)?;
         let baml_args = self.ir().check_function_params(&func, &params)?;
@@ -320,8 +322,8 @@ impl RuntimeInterface for InternalBamlRuntime {
             //inner: Arc::new(Mutex::new(Some(stream))),
             scope: first.scope.clone(),
             ir: self.ir.clone(),
-            on_event: None,
             ctx,
+            tracer,
         })
     }
 }

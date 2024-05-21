@@ -2,7 +2,7 @@ import { atom, useAtomValue } from 'jotai'
 import { atomFamily, useAtomCallback } from 'jotai/utils'
 import React from 'react'
 import { runtimeCtx, selectedFunctionAtom, selectedRuntimeAtom } from '../EventListener'
-import { WasmTestResponse } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
+import type { WasmFunctionResponse, WasmTestResponse } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 
 const isRunningAtom = atom(false)
 export const showTestsAtom = atom(false)
@@ -11,7 +11,11 @@ export type TestStatusType = 'queued' | 'running' | 'done' | 'error'
 export type DoneTestStatusType = 'passed' | 'llm_failed' | 'parse_failed' | 'error'
 export type TestState =
   | {
-      status: 'queued' | 'running'
+      status: 'queued'
+    }
+  | {
+      status: 'running'
+      response?: WasmFunctionResponse
     }
   | {
       status: 'done'
@@ -99,10 +103,17 @@ export const useRunHooks = () => {
             return Promise.reject(new Error('Code potentially modified while running tests'))
           }
           let now = new Date().getTime()
-          return func.run_test(runtime, ctx, testName).then((res) => {
-            let elapsed = new Date().getTime() - now
-            return { res, elapsed }
-          })
+          return func
+            .run_test(runtime, ctx, testName, (intermediate: WasmFunctionResponse) => {
+              set(testStatusAtom(testName), {
+                status: 'running',
+                response: intermediate,
+              })
+            })
+            .then((res) => {
+              let elapsed = new Date().getTime() - now
+              return { res, elapsed }
+            })
         }),
       )
       for (let i = 0; i < promises.length; i++) {

@@ -55,7 +55,9 @@ async fn test_run_test() -> Result<()> {
     let ctx = RuntimeContext::new().add_env("OPENAI_API_KEY".into(), "API_KEY".to_string());
     let runtime = BamlRuntime::from_directory(&directory, &ctx).unwrap();
 
-    let (res, _) = runtime.run_test("ExtractNames", "pale_maroon", ctx).await;
+    let (res, _) = runtime
+        .run_test("ExtractNames", "pale_maroon", ctx, None)
+        .await;
     let res = res?;
 
     assert_passed(&res);

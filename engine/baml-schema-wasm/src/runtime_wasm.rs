@@ -5,7 +5,6 @@ use std::collections::HashMap;
 
 use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
 use baml_runtime::runtime_interface::PublicInterface;
-use baml_runtime::tracing::TracingSpan;
 use baml_runtime::InternalRuntimeInterface;
 use baml_runtime::{
     internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, RenderedPrompt,
@@ -256,6 +255,11 @@ pub struct WasmParam {
 }
 
 #[wasm_bindgen]
+pub struct WasmFunctionResponse {
+    function_response: baml_runtime::FunctionResult,
+}
+
+#[wasm_bindgen]
 pub struct WasmTestResponse {
     test_response: anyhow::Result<baml_runtime::TestResponse>,
     span: Option<uuid::Uuid>,
@@ -310,6 +314,33 @@ impl WasmLLMResponse {
 
     pub fn prompt(&self) -> WasmPrompt {
         (&self.prompt, &self.scope).into()
+    }
+}
+
+#[wasm_bindgen]
+impl WasmFunctionResponse {
+    pub fn parsed_response(&self) -> Option<String> {
+        self.function_response
+            .parsed_content()
+            .map(|p| serde_json::to_string(&BamlValue::from(p)))
+            .map_or_else(|_| None, |s| s.ok())
+    }
+
+    #[wasm_bindgen]
+    pub fn llm_failure(&self) -> Option<WasmLLMFailure> {
+        llm_response_to_wasm_error(
+            self.function_response.llm_response(),
+            self.function_response.scope(),
+        )
+    }
+
+    #[wasm_bindgen]
+    pub fn llm_response(&self) -> Option<WasmLLMResponse> {
+        (
+            self.function_response.llm_response(),
+            self.function_response.scope(),
+        )
+            .into_wasm()
     }
 }
 
@@ -690,13 +721,25 @@ impl WasmFunction {
         rt: &mut WasmRuntime,
         ctx: &runtime_ctx::WasmRuntimeContext,
         test_name: String,
+        cb: js_sys::Function,
     ) -> Result<WasmTestResponse, JsValue> {
         let rt = &rt.runtime;
 
         let function_name = self.name.clone();
 
+        let cb = Box::new({
+            move |r| {
+                let this = JsValue::NULL;
+                let res = WasmFunctionResponse {
+                    function_response: r,
+                }
+                .into();
+                let _ = cb.call1(&this, &res);
+                Ok(())
+            }
+        });
         let (test_response, span) = rt
-            .run_test(&function_name, &test_name, ctx.ctx.clone())
+            .run_test(&function_name, &test_name, ctx.ctx.clone(), Some(cb))
             .await;
 
         Ok(WasmTestResponse {

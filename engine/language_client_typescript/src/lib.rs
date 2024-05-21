@@ -71,13 +71,14 @@ impl BamlRuntimeFfi {
             .into_iter()
             .map(|(k, v)| (k.clone(), v.unwrap().clone()))
             .collect::<BamlMap<_, _>>();
-        let _result = rt.call_function(function_name, args, ctx).await;
+        let (result, _) = rt.call_function(function_name, args, ctx).await;
 
-        // Ok(ts_types::FunctionResult::new(result))
-        Err(Error::new(
-            Status::GenericFailure,
-            "Not implemented".to_string(),
-        ))
+        result.map(ts_types::FunctionResult::new).map_err(|e| {
+            Error::new(
+                Status::InvalidArg,
+                format!("Failed to call function: {:#}", e),
+            )
+        })
     }
 
     #[napi]

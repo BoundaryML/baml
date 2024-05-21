@@ -283,10 +283,11 @@ impl TestCommand {
                 );
                 // println!("Updated state: {} {}", function_name, test_name);
 
-                rt.run_test(&function_name, &test_name, ctx).await
+                let (res, _) = rt.run_test(&function_name, &test_name, ctx, None).await;
+                res
             };
 
-            let test_state = match result.0 {
+            let test_state = match result {
                 Ok(r) => TestState::Finished(r),
                 Err(e) => TestState::UnableToRun(e.to_string()),
             };

@@ -77,22 +77,19 @@ impl FunctionResultStream {
             let cb = cb.clone_ref(py);
             move |event| {
                 let partial = FunctionResult::new(event);
-                std::future::ready(
-                    Python::with_gil(|py| cb.call1(py, (partial,)))
-                        .map(|_| ())
-                        .map_err(|e| e.into()),
-                )
+                let res = Python::with_gil(|py| cb.call1(py, (partial,))).map(|_| ());
+                if let Err(e) = res {
+                    log::error!("Error calling on_event callback: {:?}", e);
+                }
             }
         });
 
         pyo3_asyncio::tokio::future_into_py(py, async move {
             let ref mut locked = inner.lock().await;
 
-            locked
-                .run(on_event)
-                .await
-                .map(FunctionResult::new)
-                .map_err(BamlError::from_anyhow)
+            let (res, _) = locked.run(on_event).await;
+
+            res.map(FunctionResult::new).map_err(BamlError::from_anyhow)
         })
         .map(|f| f.into())
     }

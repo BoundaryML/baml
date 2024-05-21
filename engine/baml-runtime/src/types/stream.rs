@@ -1,6 +1,5 @@
 use anyhow::Result;
 
-use core::future::Future;
 use futures::{
     stream::{StreamExt, TryStreamExt},
     Stream,
@@ -15,13 +14,11 @@ use crate::{
         orchestrator::{LLMPrimitiveProvider, OrchestrationScope},
         LLMCompleteResponse, SseResponseTrait,
     },
+    tracing::BamlTracer,
     FunctionResult, RuntimeContext,
 };
 
-use super::response::LLMResponse;
-
-/// unused
-pub type StreamCallback = ();
+use super::response::{self, LLMResponse};
 
 /// Wrapper that holds a stream of responses from a BAML function call.
 ///
@@ -35,8 +32,8 @@ pub struct FunctionResultStream {
     pub(crate) scope: OrchestrationScope,
     //pub(crate) inner: Arc<Mutex<Option<SseResponse>>>,
     pub(crate) ir: Arc<IntermediateRepr>,
-    pub on_event: Option<StreamCallback>,
     pub(crate) ctx: RuntimeContext,
+    pub(crate) tracer: Arc<BamlTracer>,
 }
 
 #[cfg(feature = "wasm")]
@@ -46,98 +43,113 @@ static_assertions::assert_impl_all!(FunctionResultStream: Send);
 static_assertions::assert_impl_all!(FunctionResultStream: Send, Sync);
 
 impl FunctionResultStream {
-    pub async fn run<F, O>(&self, on_event: Option<F>) -> Result<FunctionResult>
+    pub async fn run<F>(
+        &mut self,
+        on_event: Option<F>,
+    ) -> (Result<FunctionResult>, Option<uuid::Uuid>)
     where
-        F: Fn(FunctionResult) -> O,
-        O: Future<Output = Result<()>>,
+        F: Fn(FunctionResult) -> (),
     {
-        use internal_baml_core::ir::IRHelper;
+        let (span, ctx) =
+            self.tracer
+                .start_span(&self.function_name, self.ctx.clone(), &Default::default());
+        let res = self.run_impl(on_event, ctx).await;
 
-        //let Some(stream) =
-        //    std::mem::replace(MutexGuard::deref_mut(&mut self.inner.lock().await), None)
-        //else {
-        //    anyhow::bail!("Stream is already consumed");
-        //};
+        let mut target_id = None;
+        if let Some(span) = span {
+            match self.tracer.finish_baml_span(span, &res).await {
+                Ok(id) => target_id = id,
+                Err(e) => log::debug!("Error during logging: {}", e),
+            }
+        };
+
+        (res, target_id)
+    }
+
+    async fn run_impl<F>(
+        &mut self,
+        on_event: Option<F>,
+        ctx: RuntimeContext,
+    ) -> Result<FunctionResult>
+    where
+        F: Fn(FunctionResult) -> (),
+    {
         match self.provider.as_ref() {
             LLMPrimitiveProvider::OpenAI(c) => {
                 let resp = c
-                    .build_request_for_stream(&self.ctx, &self.prompt)?
+                    .build_request_for_stream(&ctx, &self.prompt)?
                     .send()
                     .await?;
                 self.run_internal(c.response_stream(resp), on_event).await
             }
             LLMPrimitiveProvider::Anthropic(c) => {
                 let resp = c
-                    .build_request_for_stream(&self.ctx, &self.prompt)?
+                    .build_request_for_stream(&ctx, &self.prompt)?
                     .send()
                     .await?;
                 log::info!("is the response coming back at all? if seeing this, yes");
                 self.run_internal(c.response_stream(resp), on_event).await
             }
-            _ => {
-                anyhow::bail!("Only OpenAI supports streaming right now");
-            }
         }
     }
 
-    async fn run_internal<F, O>(
+    async fn run_internal<F>(
         &self,
         response_stream: impl Stream<Item = Result<LLMCompleteResponse>>,
         on_event: Option<F>,
     ) -> Result<FunctionResult>
     where
-        F: Fn(FunctionResult) -> O,
-        O: Future<Output = Result<()>>,
+        F: Fn(FunctionResult) -> (),
     {
         let final_response = response_stream
             .inspect(|event| log::debug!("Received event: {:#?}", event))
-            .then(|fn_result| async {
-                let response = fn_result?;
+            .map(|stream_part| match stream_part {
+                Ok(response) => {
+                    let func = self.ir.find_function(self.function_name.as_str()).unwrap();
+                    let parsed = jsonish::from_str(
+                        self.ir.as_ref(),
+                        &self.ctx.env,
+                        func.output(),
+                        response.content.as_str(),
+                        true,
+                    );
 
+                    if let Some(on_event) = on_event.as_ref() {
+                        on_event(FunctionResult::new(
+                            self.scope.clone(),
+                            LLMResponse::Success(response.clone()),
+                            Some(parsed),
+                        ));
+                    }
+                    Ok(response)
+                }
+                Err(e) => Err(e),
+            })
+            .fold(None, |_, current| async { Some(current) })
+            .await
+            .ok_or(anyhow::anyhow!("Stream ended before receiving responses"))?;
+
+        match final_response {
+            Ok(response) => {
                 let func = self.ir.find_function(self.function_name.as_str())?;
-                let parsed = jsonish::from_str(
+                let final_parsed = jsonish::from_str(
                     &*self.ir,
                     &self.ctx.env,
                     func.output(),
                     response.content.as_str(),
-                    true,
+                    false,
                 );
-
-                if let Some(ref on_event) = on_event {
-                    if let Ok(parsed) = parsed {
-                        return match on_event(FunctionResult::new(
-                            self.scope.clone(),
-                            LLMResponse::Success(response.clone()),
-                            Some(Ok(parsed)),
-                        ))
-                        .await
-                        {
-                            Ok(()) => Ok(response),
-                            Err(e) => Err(e.context("Error in on_event callback")),
-                        };
-                    }
-                }
-
-                Ok(response)
-            })
-            .into_stream()
-            .fold(None, |_, event| async { Some(event) })
-            .await
-            .ok_or(anyhow::anyhow!("Stream ended before receiving responses"))?
-            .map_err(|e| e.context("Error while processing stream"))?;
-
-        let func = self.ir.find_function(self.function_name.as_str())?;
-        let final_parsed = jsonish::from_str(
-            &*self.ir,
-            &self.ctx.env,
-            func.output(),
-            final_response.content.as_str(),
-            false,
-        );
-        Ok(FunctionResult::new(
-            self.scope.clone(),
-            LLMResponse::Success(final_response.clone()),
-            Some(final_parsed),
-        ))
+                Ok(FunctionResult::new(
+                    self.scope.clone(),
+                    LLMResponse::Success(response),
+                    Some(final_parsed),
+                ))
+            }
+            Err(e) => Ok(FunctionResult::new(
+                self.scope.clone(),
+                LLMResponse::OtherFailure(e.to_string()),
+                None,
+            )),
+        }
     }
 }

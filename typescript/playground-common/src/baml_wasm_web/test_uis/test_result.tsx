@@ -18,6 +18,7 @@ import {
   type WasmTestCase,
   type TestStatus,
   type WasmTestResponse,
+  WasmFunctionResponse,
 } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 import JsonView from 'react18-json-view'
 import clsx from 'clsx'
@@ -153,6 +154,66 @@ const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStat
   )
 }
 
+const LLMFunctionResult: React.FC<{ test: WasmFunctionResponse }> = ({ test }) => {
+  const llm_response = test.llm_response()
+  const llm_failure = test.llm_failure()
+  const parsed = test.parsed_response()
+
+  const latencyMs = llm_response?.latency_ms ?? llm_failure?.latency_ms
+  const client = llm_response?.client_name() ?? llm_failure?.client_name()
+  const model = llm_response?.model ?? llm_failure?.model
+
+  return (
+    <div className='flex flex-col w-full gap-1'>
+      {(llm_response || llm_failure) && (
+        <div className='w-full text-xs text-vscode-descriptionForeground'>
+          <div>
+            <b>{latencyMs?.toString()}ms</b> using <b>{client}</b> {model && <>(model: {model})</>}{' '}
+          </div>
+          <div className='flex flex-row gap-2'>
+            <div className='flex flex-col'>
+              Raw LLM Response:
+              <div className='px-1 py-2'>
+                {llm_response && (
+                  <pre className='px-1 py-2 whitespace-pre-wrap rounded-sm bg-vscode-input-background'>
+                    {llm_response.content}
+                  </pre>
+                )}
+                {llm_failure && (
+                  <pre className='text-xs whitespace-pre-wrap text-vscode-errorForeground'>
+                    <b>{llm_failure.code}</b>
+                    <br />
+                    {llm_failure.message}
+                  </pre>
+                )}
+              </div>
+            </div>
+            <div className='flex flex-col'>
+              Parsed LLM Response:
+              <div className='px-1 py-2'>
+                {parsed !== undefined ? (
+                  <JsonView
+                    enableClipboard={false}
+                    className='bg-[#1E1E1E] px-1 py-1 rounded-sm'
+                    theme='a11y'
+                    collapseStringsAfterLength={200}
+                    matchesURL
+                    src={JSON.parse(parsed)}
+                  />
+                ) : (
+                  <pre className='text-xs whitespace-pre-wrap text-vscode-errorForeground'>
+                    Waiting for a parsable-reply
+                  </pre>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const TestRow: React.FC<{ name: string }> = ({ name }) => {
   const test = useAtomValue(testStatusAtom(name))
   const filter = useAtomValue(filterAtom)
@@ -173,6 +234,11 @@ const TestRow: React.FC<{ name: string }> = ({ name }) => {
           />
         </div>
         {test.status === 'error' && <div className='text-xs text-vscode-errorForeground'>{test.message}</div>}
+        {test.status === 'running' && test.response && (
+          <div className='text-xs text-vscode-descriptionForeground'>
+            <LLMFunctionResult test={test.response} />
+          </div>
+        )}
         {test.status === 'done' && (
           <div className='text-xs text-vscode-descriptionForeground'>
             <LLMTestResult test={test.response} doneStatus={test.response_status} testLatency={test.latency_ms} />

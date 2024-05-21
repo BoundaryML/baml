@@ -8,7 +8,7 @@ class Resume {
 }
 
 function ExtractResume(resume: string) -> Resume {
-    client Resilient_ComplexSyntax
+    client GPT4
     prompt #"
         Extract the following information from the resume:
 
@@ -17,9 +17,9 @@ function ExtractResume(resume: string) -> Resume {
         {{ resume }}
         <<<<
 
-        Output JSON schema:
         {{ ctx.output_format }}
 
-        JSON:
+        Before replying, please summarize the most impressive part of the resume.
+
     "#
 }

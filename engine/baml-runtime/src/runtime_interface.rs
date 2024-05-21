@@ -8,12 +8,9 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::internal::llm_client::llm_provider::LLMProvider;
 use crate::internal::llm_client::orchestrator::{OrchestrationScope, OrchestratorNode};
-use crate::tracing::TracingSpan;
+use crate::tracing::{BamlTracer, TracingSpan};
 use crate::{
-    internal::{
-        ir_features::IrFeatures,
-        llm_client::{retry_policy::CallablePolicy},
-    },
+    internal::{ir_features::IrFeatures, llm_client::retry_policy::CallablePolicy},
     runtime::InternalBamlRuntime,
     types::FunctionResultStream,
     FunctionResult, RuntimeContext, TestResponse,
@@ -44,6 +41,7 @@ pub trait RuntimeInterface {
         function_name: String,
         params: IndexMap<String, BamlValue>,
         ctx: RuntimeContext,
+        tracer: Arc<BamlTracer>,
     ) -> Result<FunctionResultStream>;
 }
 
@@ -61,6 +59,7 @@ pub trait PublicInterface {
         function_name: &str,
         test_name: &str,
         ctx: RuntimeContext,
+        on_event: Option<Box<dyn Fn(FunctionResult) -> () + Send + Sync>>,
     ) -> (Result<TestResponse>, Option<uuid::Uuid>);
 
     #[allow(async_fn_in_trait)]
