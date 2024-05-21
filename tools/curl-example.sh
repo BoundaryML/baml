@@ -42,7 +42,7 @@ case "$1" in
           -H "Content-Type: application/json" \
           -H "Authorization: Bearer $OPENAI_API_KEY" \
           -d '{
-            "model": "No models available",
+            "model": "gpt-3.5-turbo",
             "messages": [
               {
                 "role": "system",
@@ -62,7 +62,7 @@ case "$1" in
           -H "Content-Type: application/json" \
           -H "Authorization: Bearer $OPENAI_API_KEY" \
           -d '{
-            "model": "No models available",
+            "model": "gpt-3.5-turbo",
             "messages": [
               {
                 "role": "system",

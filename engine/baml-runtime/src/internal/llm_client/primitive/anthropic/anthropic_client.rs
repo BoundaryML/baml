@@ -224,7 +224,7 @@ impl SseResponseTrait for AnthropicClient {
                         total_tokens: None,
                     },
                 }),
-                |accumulated: &mut Result<LLMCompleteResponse>, event| {
+                move |accumulated: &mut Result<LLMCompleteResponse>, event| {
                     let Ok(ref mut inner) = accumulated else {
                         // halt the stream: the last stream event failed to parse
                         return std::future::ready(None);
@@ -280,11 +280,7 @@ impl SseResponseTrait for AnthropicClient {
                             return std::future::ready(Some(Err(anyhow::anyhow!("Anthropic API Error: {:#?}", err))));
                         }
                     };
-                    //if let Some(content) = event.choices[0].delta.content.as_ref() {
-                    //    inner.content += content.as_str();
-                    //    inner.model = event.model;
-                    //    // TODO: set inner.metadata.finish_reason
-                    //}
+                    inner.latency = instant_start.elapsed();
 
                     std::future::ready(Some(Ok(inner.clone())))
                 },

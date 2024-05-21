@@ -70,7 +70,7 @@ pub struct ChatCompletionResponseMessage {
 #[derive(Deserialize, Clone, Debug)]
 pub struct ChatCompletionChoiceDelta {
     pub index: u64,
-    pub finish_reason: Option<String>,
+    pub finish_reason: Option<FinishReason>,
     pub delta: ChatCompletionMessageDelta,
 }
 
@@ -102,8 +102,9 @@ pub enum ChatCompletionMessageRole {
     Function,
 }
 
-#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, strum_macros::Display, Clone, Copy, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum FinishReason {
     Stop,
     Length,

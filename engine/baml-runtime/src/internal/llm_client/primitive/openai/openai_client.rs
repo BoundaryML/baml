@@ -16,7 +16,8 @@ use crate::internal::llm_client::{
     LLMResponse, ModelFeatures,
 };
 
-use crate::RuntimeContext;
+use crate::request::RequestError;
+use crate::{request, RuntimeContext};
 use eventsource_stream::Eventsource;
 use futures::{Stream, StreamExt};
 
@@ -132,16 +133,6 @@ impl WithChat for OpenAIClient {
     }
 
     async fn chat(&self, _ctx: &RuntimeContext, prompt: &Vec<RenderedChatMessage>) -> LLMResponse {
-        use crate::{
-            internal::llm_client::{
-                primitive::openai::types::{
-                    ChatCompletionResponse, FinishReason, OpenAIErrorResponse,
-                },
-                ErrorCode, LLMCompleteResponse, LLMErrorResponse,
-            },
-            request::{self, RequestError},
-        };
-
         let mut body = json!(self.properties.properties);
         body.as_object_mut().unwrap().insert(
             "messages".into(),
@@ -203,14 +194,16 @@ impl WithChat for OpenAIClient {
                     latency: instant_now.elapsed(),
                     model: body.model,
                     metadata: LLMCompleteResponseMetadata {
-                        baml_is_complete: match body.choices[0].finish_reason {
-                            None => true,
-                            Some(FinishReason::Stop) => true,
-                            _ => false,
+                        baml_is_complete: match body.choices.get(0) {
+                            Some(c) => match c.finish_reason {
+                                Some(FinishReason::Stop) => true,
+                                _ => false,
+                            },
+                            None => false,
                         },
                         finish_reason: match body.choices.get(0) {
                             Some(c) => match c.finish_reason {
-                                Some(FinishReason::Stop) => Some("stop".to_string()),
+                                Some(FinishReason::Stop) => Some(FinishReason::Stop.to_string()),
                                 _ => None,
                             },
                             None => None,
@@ -266,10 +259,12 @@ impl WithChat for OpenAIClient {
 }
 
 use crate::internal::llm_client::{
-    LLMCompleteResponse, LLMCompleteResponseMetadata, SseResponseTrait,
+    ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, SseResponseTrait,
 };
 
-use super::types::ChatCompletionResponseDelta;
+use super::types::{
+    ChatCompletionResponse, ChatCompletionResponseDelta, FinishReason, OpenAIErrorResponse,
+};
 
 impl SseResponseTrait for OpenAIClient {
     fn build_request_for_stream(
@@ -365,7 +360,7 @@ LLMCompleteResponse {
                         },
                     }
                 ),
-                |accumulated: &mut Result<LLMCompleteResponse>, event| {
+                move |accumulated: &mut Result<LLMCompleteResponse>, event| {
                     let Ok(ref mut inner) = accumulated else {
                         // halt the stream: the last stream event failed to parse
                         return std::future::ready(None);
@@ -379,11 +374,20 @@ LLMCompleteResponse {
                             return std::future::ready(Some(Err(e.context("Failed to parse event from EventSource"))));
                         }
                     };
-                    if let Some(content) = event.choices[0].delta.content.as_ref() {
-                        inner.content += content.as_str();
+                    if let Some(choice) = event.choices.get(0) {
+                        if let Some(content) = choice.delta.content.as_ref() {
+                            inner.content += content.as_str();
+                        }
                         inner.model = event.model;
-                        // TODO: set inner.metadata.finish_reason
+                        match choice.finish_reason.as_ref() {
+                            Some(FinishReason::Stop) => {
+                                inner.metadata.baml_is_complete = true;
+                                inner.metadata.finish_reason = Some(FinishReason::Stop.to_string());
+                            }
+                            _ => (),
+                        }
                     }
+                    inner.latency = instant_start.elapsed();
 
                     std::future::ready(Some(Ok(inner.clone())))
                 },
