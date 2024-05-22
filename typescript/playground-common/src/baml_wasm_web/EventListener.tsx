@@ -140,7 +140,12 @@ export const selectedFunctionAtom = atom(
   },
   (get, set, func: string) => {
     if (func !== null) {
-      set(selectedFunctionStorageAtom, func)
+      const functions = get(availableFunctionsAtom)
+      if (functions.find((f) => f.name === func)) {
+        set(selectedFunctionStorageAtom, func)
+      } else {
+        console.error(`Function ${func} not found in ${functions.map((f) => f.name).join(', ')}`)
+      }
     }
   },
 )
@@ -433,6 +438,7 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
   const version = useAtomValue(versionAtom)
   const wasm = useAtomValue(wasmAtom)
   const ctx = useAtomValue(runtimeCtx)
+  const setSelectedFunction = useSetAtom(selectedFunctionAtom)
 
   const createRuntimeCb = useAtomCallback(
     (get, set, wasm: typeof import('@gloo-ai/baml-schema-wasm-web'), ctx: WasmRuntimeContext) => {
@@ -482,9 +488,17 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
               root_path: string
             }
           }
+        | {
+            command: 'select_function'
+            content: {
+              root_path: string
+              function_name: string
+            }
+          }
       >,
     ) => {
       const { command, content } = event.data
+      console.log('select Received message', command, content)
 
       switch (command) {
         case 'modify_file':
@@ -501,6 +515,10 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
             files: Object.entries(content.files).map(([name, content]) => ({ name, content })),
             replace_all: true,
           })
+          break
+        case 'select_function':
+          console.log('Selecting function', content.function_name)
+          setSelectedFunction(content.function_name)
           break
         case 'remove_project':
           removeProject(content.root_path)

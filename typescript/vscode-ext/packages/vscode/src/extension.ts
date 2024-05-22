@@ -182,19 +182,24 @@ export function activate(context: vscode.ExtensionContext) {
         })
       }
 
-      WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
-      // send another request for reliability on slower machines
-      // A more resilient way is to get a msg for it to finish loading but this is good enough for now
-      setTimeout(() => {
-        WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
-        // requestDiagnostics()
-      }, 2000)
-      WebPanelView.currentPanel?.postMessage('setSelectedResource', {
-        projectId: projectId,
-        functionName: initialFunctionName,
-        implName: initialImplName,
-        testCaseName: undefined,
-        showTests: showTests,
+      // WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
+      // // send another request for reliability on slower machines
+      // // A more resilient way is to get a msg for it to finish loading but this is good enough for now
+      // setTimeout(() => {
+      //   WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
+      //   // requestDiagnostics()
+      // }, 2000)
+      // WebPanelView.currentPanel?.postMessage('setSelectedResource', {
+      //   projectId: projectId,
+      //   functionName: initialFunctionName,
+      //   implName: initialImplName,
+      //   testCaseName: undefined,
+      //   showTests: showTests,
+      // })
+
+      WebPanelView.currentPanel?.postMessage('select_function', {
+        root_path: 'default',
+        function_name: args?.functionName ?? 'default',
       })
       console.info('Opening BAML panel')
       requestDiagnostics()
