@@ -60,6 +60,7 @@ impl Span {
 
         match (start, end) {
             (Some(start), Some(end)) => (start, end),
+            (Some(start), None) => (start, (line, column)),
             _ => ((0, 0), (0, 0)),
         }
     }

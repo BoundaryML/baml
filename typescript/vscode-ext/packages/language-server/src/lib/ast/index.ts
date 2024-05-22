@@ -8,3 +8,7 @@ export function convertDocumentTextToTrimmedLineArray(document: TextDocument): s
     .fill(0)
     .map((_, i) => getCurrentLine(document, i).trim())
 }
+
+export function trimLine(line: string): string {
+  return line.trim().replace(/[^a-zA-Z0-9_.]/g, '');
+}

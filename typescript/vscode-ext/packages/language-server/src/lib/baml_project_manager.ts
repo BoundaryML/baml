@@ -1,8 +1,11 @@
 import BamlWasm, { type WasmDiagnosticError } from '@gloo-ai/baml-schema-wasm-node'
 import { readFile } from 'fs/promises'
-import { type Diagnostic, DiagnosticSeverity } from 'vscode-languageserver'
+import { type Diagnostic, DiagnosticSeverity, Position, LocationLink } from 'vscode-languageserver'
+import { TextDocument } from 'vscode-languageserver-textdocument' 
 import type { URI } from 'vscode-uri'
 import { findTopLevelParent, gatherFiles } from '../file/fileUtils'
+import { getWordAtPosition, convertDocumentTextToTrimmedLineArray, trimLine } from './ast'
+
 
 type Notify = (
   params:
@@ -99,6 +102,50 @@ class Project {
     }
     this.current_runtime?.free()
     this.current_runtime = undefined
+  }
+
+  handleDefinitionRequest(doc: TextDocument, position: Position): LocationLink[] {
+  
+  
+  
+    
+    const word = getWordAtPosition(doc, position)
+    
+    //clean non-alphanumeric characters besides underscores and periods
+    const cleaned_word = trimLine(word)
+    
+
+    if (cleaned_word === '') {
+      
+      return []
+    }
+
+    // Search for the symbol in the runtime
+    const match = this.runtime().searchForSymbol(cleaned_word)
+
+    
+    
+    
+    // If we found a match, return the location
+    if (match) {
+      return [
+        {
+          targetUri: match.uri.toString(),
+          //unused default values for now
+          targetRange: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 }
+          },
+          targetSelectionRange: {
+            start: { line: match.start_line, character: match.start_character },
+            end: { line: match.end_line, character: match.end_character }
+          }
+        }
+      ];
+    }
+    
+    
+    return [];
   }
 
   // list_functions(): BamlWasm.WasmFunction[] {
@@ -306,6 +353,18 @@ class BamlProjectManager {
       }
     })
   }
+
+  getProjectById(id: URI): Project {
+    console.log("Getting project by id")
+    console.log(`rebuild changed ${id.toString()} -> ${uriToRootPath(id)}`)
+    const project = this.get_project(uriToRootPath(id));
+    console.log("got project id")
+    return project;
+  }
+
+
+
+  
 }
 
 export default BamlProjectManager

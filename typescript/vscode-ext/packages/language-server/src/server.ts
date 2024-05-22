@@ -348,20 +348,33 @@ export function startServer(options?: LSOptions): void {
   }
 
   connection.onDefinition((params: DeclarationParams) => {
-    return undefined
-    // const doc = getDocument(params.textDocument.uri)
-    // if (doc) {
-    //   const db = bamlCache.getFileCache(doc)
-    //   if (db) {
-    //     return MessageHandler.handleDefinitionRequest(db, doc, params)
-    //   } else if (doc.languageId === 'python') {
-    //     const db = bamlCache.lastBamlDir?.cache
-    //     console.log(` python: ${doc.uri} files: ${db?.getDocuments().length}`)
-    //     if (db) {
-    //       return MessageHandler.handleDefinitionRequest(db, doc, params)
-    //     }
-    //   }
-    // }
+    
+    
+    
+    //accesses document from uri
+    const doc = getDocument(params.textDocument.uri)
+    
+    if (doc) {
+      
+      //accesses project from uri via bamlProjectManager
+      const proj = bamlProjectManager.getProjectById((URI.parse(doc.uri)))
+      if (proj) {
+
+        //returns the definition of reference within the project
+        return proj.handleDefinitionRequest(doc, params.position)
+
+      } 
+  
+
+      
+      else if (doc.languageId === 'python') {
+        const db = bamlCache.lastBamlDir?.cache
+        
+        if (db) {
+          return MessageHandler.handleDefinitionRequest(db, doc, params)
+        }
+      }
+    }
   })
 
   // connection.onCompletion((params: CompletionParams) => {
@@ -399,7 +412,7 @@ export function startServer(options?: LSOptions): void {
     // bamlCache.addDocument(document)
     // // Dont debounce this! We need to give VSCode the most up to date info.
     // // VSCode will actually do adaptive debouncing for us https://github.com/microsoft/vscode/issues/106267
-    // validateTextDocument(document)
+    // // validateTextDocument(document)
 
     // const db = bamlCache.getParserDatabase(document)
     // const docFsPath = URI.parse(document.uri).fsPath

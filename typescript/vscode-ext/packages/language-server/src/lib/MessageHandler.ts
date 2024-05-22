@@ -20,7 +20,7 @@ import {
   type TextEdit,
   type WorkspaceEdit,
 } from 'vscode-languageserver'
-import type { TextDocument } from 'vscode-languageserver-textdocument'
+import { TextDocument } from 'vscode-languageserver-textdocument'
 import { URI } from 'vscode-uri'
 import type { FileCache } from '../file/fileCache'
 import { fullDocumentRange } from './ast'
@@ -78,15 +78,22 @@ export function handleDefinitionRequest(
   const position = params.position
 
   const lines = convertDocumentTextToTrimmedLineArray(document)
-  const word = getWordAtPosition(document, position)
-
+  let result = lines.join('\n');
+  console.log(result)
+  const newDoc =  TextDocument.create(document.uri, document.languageId, document.version, result);
+  const word = getWordAtPosition(newDoc, position)
+  console.log('handleDefinitionRequest')
   if (word === '') {
+    console.log('word is empty')
     return
   }
+  console.log('word is not empty')
+  console.log(word)
 
   // TODO: Do block level definitions
   const match = fileCache.define(word)
-
+  
+  console.log(match)
   if (match) {
     return [
       {

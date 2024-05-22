@@ -194,7 +194,7 @@ pub struct NodeAttributes {
 
     // Spans
     #[serde(skip)]
-    span: Option<ast::Span>,
+    pub span: Option<ast::Span>,
 }
 
 impl NodeAttributes {
@@ -477,6 +477,7 @@ impl WithRepr<Expression> for ast::Expression {
 type TemplateStringId = String;
 
 #[derive(serde::Serialize, Debug)]
+
 pub struct TemplateString {
     pub name: TemplateStringId,
     pub params: Vec<Field>,
@@ -484,6 +485,14 @@ pub struct TemplateString {
 }
 
 impl WithRepr<TemplateString> for TemplateStringWalker<'_> {
+    fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
+        NodeAttributes {
+            meta: Default::default(),
+            overrides: Default::default(),
+            span: Some(self.span().clone()),
+        }
+    }
+
     fn repr(&self, _db: &ParserDatabase) -> Result<TemplateString> {
         Ok(TemplateString {
             name: self.name().to_string(),
@@ -949,6 +958,14 @@ fn process_field(
 }
 
 impl WithRepr<Function> for FunctionWalker<'_> {
+    fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
+        NodeAttributes {
+            meta: Default::default(),
+            overrides: Default::default(),
+            span: Some(self.span().clone()),
+        }
+    }
+
     fn repr(&self, db: &ParserDatabase) -> Result<Function> {
         if self.is_old_function() {
             Ok(Function::V1(self.repr(db)?))

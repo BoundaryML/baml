@@ -4,21 +4,20 @@ pub mod runtime_prompt;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+pub use self::runtime_ctx::WasmRuntimeContext;
+use crate::runtime_wasm::runtime_prompt::WasmPrompt;
 use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
 use baml_runtime::runtime_interface::PublicInterface;
 use baml_runtime::InternalRuntimeInterface;
 use baml_runtime::{
-    internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, RenderedPrompt,
+    internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, IRHelper, RenderedPrompt,
 };
 use baml_types::BamlMap;
 use baml_types::BamlValue;
+use js_sys::JsString;
 use serde::Deserialize;
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
-
-use crate::runtime_wasm::runtime_prompt::WasmPrompt;
-
-pub use self::runtime_ctx::WasmRuntimeContext;
 
 //Run: wasm-pack test --firefox --headless  --features internal,wasm
 // but for browser we likely need to do         wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
@@ -53,6 +52,18 @@ pub struct WasmProject {
 pub struct WasmDiagnosticError {
     errors: DiagnosticsError,
     pub all_files: Vec<String>,
+}
+
+// use serde::Serialize;
+use wasm_bindgen::prelude::*;
+
+#[wasm_bindgen(getter_with_clone)]
+pub struct SymbolLocation {
+    pub uri: String,
+    pub start_line: usize,
+    pub start_character: usize,
+    pub end_line: usize,
+    pub end_character: usize,
 }
 
 // impl std::error::Error for WasmDiagnosticError {}
@@ -684,6 +695,92 @@ test TestName {{
             .into_iter()
             .map(|s| s.to_string())
             .collect()
+    }
+
+    #[wasm_bindgen]
+    pub fn searchForSymbol(&self, symbol: &str) -> Option<SymbolLocation> {
+        log::info!("Searching for symbol: {}", symbol);
+        let runtime = self.runtime.internal().ir();
+
+        if let Ok(walker) = runtime.find_enum(symbol) {
+            let elem = walker.span().unwrap();
+
+            let ((s_line, s_character), (e_line, e_character)) = elem.line_and_column();
+            return Some(SymbolLocation {
+                uri: elem.file.path().to_string(), // Use the variable here
+                start_line: s_line,
+                start_character: s_character,
+                end_line: e_line,
+                end_character: e_character,
+            });
+        }
+        if let Ok(walker) = runtime.find_class(symbol) {
+            let elem = walker.span().unwrap();
+            let uri_str = elem.file.path().to_string(); // Store the String in a variable
+            let ((s_line, s_character), (e_line, e_character)) = elem.line_and_column();
+            return Some(SymbolLocation {
+                uri: elem.file.path().to_string(), // Use the variable here
+                start_line: s_line,
+                start_character: s_character,
+                end_line: e_line,
+                end_character: e_character,
+            });
+        }
+
+        if let Ok(walker) = runtime.find_function(symbol) {
+            let elem = walker.span().unwrap();
+            let uri_str = elem.file.path().to_string(); // Store the String in a variable
+            let ((s_line, s_character), (e_line, e_character)) = elem.line_and_column();
+            return Some(SymbolLocation {
+                uri: elem.file.path().to_string(), // Use the variable here
+                start_line: s_line,
+                start_character: s_character,
+                end_line: e_line,
+                end_character: e_character,
+            });
+        }
+
+        if let Ok(walker) = runtime.find_client(symbol) {
+            let elem = walker.span().unwrap();
+            let uri_str = elem.file.path().to_string(); // Store the String in a variable
+            let ((s_line, s_character), (e_line, e_character)) = elem.line_and_column();
+            return Some(SymbolLocation {
+                uri: elem.file.path().to_string(), // Use the variable here
+                start_line: s_line,
+                start_character: s_character,
+                end_line: e_line,
+                end_character: e_character,
+            });
+        }
+
+        if let Ok(walker) = runtime.find_retry_policy(symbol) {
+            let elem = walker.span().unwrap();
+            let uri_str = elem.file.path().to_string(); // Store the String in a variable
+            let ((s_line, s_character), (e_line, e_character)) = elem.line_and_column();
+            return Some(SymbolLocation {
+                uri: elem.file.path().to_string(), // Use the variable here
+                start_line: s_line,
+                start_character: s_character,
+                end_line: e_line,
+                end_character: e_character,
+            });
+        }
+
+        if let Ok(walker) = runtime.find_template_string(symbol) {
+            let elem = walker.span().unwrap();
+            log::info!("Found template string: {:?}", elem);
+            let uri_str = elem.file.path().to_string(); // Store the String in a variable
+            let ((s_line, s_character), (e_line, e_character)) = elem.line_and_column();
+            return Some(SymbolLocation {
+                uri: elem.file.path().to_string(), // Use the variable here
+                start_line: s_line,
+                start_character: s_character,
+                end_line: e_line,
+                end_character: e_character,
+            });
+        }
+
+        None
     }
 }
 
