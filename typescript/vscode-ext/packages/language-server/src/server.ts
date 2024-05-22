@@ -365,15 +365,6 @@ export function startServer(options?: LSOptions): void {
 
       } 
   
-
-      
-      else if (doc.languageId === 'python') {
-        const db = bamlCache.lastBamlDir?.cache
-        
-        if (db) {
-          return MessageHandler.handleDefinitionRequest(db, doc, params)
-        }
-      }
     }
   })
 
