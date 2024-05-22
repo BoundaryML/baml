@@ -28,12 +28,12 @@ import {
   Trash2Icon,
 } from 'lucide-react'
 import { envKeyValuesAtom, runtimeRequiredEnvVarsAtom } from '../baml_wasm_web/EventListener'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip'
 import clsx from 'clsx'
 import { Checkbox } from '../components/ui/checkbox'
 
-export const showSettingsAtom = atom(true)
+export const showSettingsAtom = atom(false)
 const showEnvvarValuesAtom = atom(false)
 
 const tracingEnvVarsAtom = atom(['BOUNDARY_PROJECT_ID', 'BOUNDARY_SECRET'])
@@ -202,7 +202,6 @@ export const ShowSettingsButton: React.FC<{ buttonClassName: string; iconClassNa
   )
 }
 export const SettingsDialog: React.FC = () => {
-  console.log('window location origin is', window.location.origin)
   const [showSettings, setShowSettings] = useAtom(showSettingsAtom)
   const [showEnvvarValues, setShowEnvvarValues] = useAtom(showEnvvarValuesAtom)
   const envvars = useAtomValue(envvarsAtom)
@@ -292,6 +291,14 @@ export const SettingsDialog: React.FC = () => {
               ))}
           </div>
         </div>
+        <DialogFooter>
+          <Button
+            className='bg-vscode-button-hoverBackground text-vscode-button-foreground hover:bg-vscode-button-hoverBackground'
+            onClick={() => setShowSettings(false)}
+          >
+            Save
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

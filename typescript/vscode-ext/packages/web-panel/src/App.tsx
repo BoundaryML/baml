@@ -27,12 +27,12 @@ function App() {
       <DevTools />
       <Suspense fallback={<div>Loading...</div>}>
         <EventListener>
-          <div className='absolute z-10 flex flex-row items-end gap-1 right-1 top-2 text-end'>
+          <div className='absolute z-10 flex flex-row items-center justify-center gap-1 right-1 top-2 text-end'>
             <VSCodeLink href='https://docs.boundaryml.com'>Docs</VSCodeLink>
-            <ShowSettingsButton buttonClassName='h-4' iconClassName='h-4' />
+            <ShowSettingsButton buttonClassName='h-12 w-12 bg-transparent p-1' iconClassName='h-8 w-8' />
           </div>
           <SettingsDialog />
-          <div className='flex flex-col gap-2 px-2 pb-4 w-full'>
+          <div className='flex flex-col w-full gap-2 px-2 pb-4'>
             <FunctionSelector />
             <Separator className='bg-vscode-textSeparator-foreground' />
             <FunctionPanel />

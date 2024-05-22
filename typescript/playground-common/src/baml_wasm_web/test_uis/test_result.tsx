@@ -26,6 +26,8 @@ import { Filter, Pin, Play, Plus } from 'lucide-react'
 import { selectedFunctionAtom, selectedTestCaseAtom } from '../EventListener'
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog'
 import FunctionTestSnippet from '../../shared/TestSnippet'
+import { Tooltip, TooltipContent } from '../../components/ui/tooltip'
+import { TooltipTrigger } from '../../components/ui/tooltip'
 
 const TestStatusMessage: React.FC<{ testStatus: DoneTestStatusType }> = ({ testStatus }) => {
   switch (testStatus) {
@@ -338,13 +340,23 @@ const TestResults: React.FC = () => {
     <div className='flex flex-col w-full gap-2 px-1'>
       <div className='flex flex-row items-center gap-2'>
         <Badge
-          className={clsx('cursor-pointer', showTests ? 'bg-vscode-button-backgroundHover text-muted-foreground' : '')}
+          className={clsx(
+            'cursor-pointer hover:bg-vscode-tab-activeBackground',
+            showTests
+              ? 'bg-transparent  text-vscode-foreground'
+              : 'bg-vscode-tab-activeBackground text-vscode-tab-activeForeground',
+          )}
           onClick={() => setShowTests(false)}
         >
           All Tests
         </Badge>
         <Badge
-          className={clsx('cursor-pointer', showTests ? '' : 'bg-vscode-button-backgroundHover text-muted-foreground')}
+          className={clsx(
+            'cursor-pointer hover:bg-vscode-tab-activeBackground',
+            showTests
+              ? 'bg-vscode-tab-activeBackground text-vscode-tab-activeForeground'
+              : 'bg-transparent text-vscode-foreground',
+          )}
           onClick={() => setShowTests(true)}
         >
           Test Results
@@ -362,7 +374,7 @@ const TestCaseActions: React.FC<{ testName: string }> = ({ testName }) => {
   const { isRunning, run } = useRunHooks()
 
   return (
-    <div className='flex flex-col gap-1'>
+    <div className='flex flex-col gap-1 pt-2'>
       <Button
         variant={'ghost'}
         size={'icon'}
@@ -374,7 +386,7 @@ const TestCaseActions: React.FC<{ testName: string }> = ({ testName }) => {
       >
         <Play size={10} />
       </Button>
-      {selectedTestCase?.name === testName ? (
+      {/* {selectedTestCase?.name === testName ? (
         <Button
           variant={'ghost'}
           size={'icon'}
@@ -394,7 +406,7 @@ const TestCaseActions: React.FC<{ testName: string }> = ({ testName }) => {
         >
           <Pin size={10} />
         </Button>
-      )}
+      )} */}
     </div>
   )
 }
@@ -481,24 +493,29 @@ const TestCaseList: React.FC = () => {
         {testCases.map((test) => (
           <div key={test.name} className='flex flex-row items-start gap-2 group'>
             <TestCaseActions testName={test.name} />
-            <div
-              className={clsx(
-                'flex flex-col gap-1 p-2 w-full',
-                selectedTestCase?.name !== test.name
-                  ? 'cursor-pointer hover:bg-vscode-input-background'
-                  : 'border-vscode-input-background border rounded-sm',
-              )}
-              onClick={
-                selectedTestCase?.name === test.name
-                  ? undefined
-                  : () => {
-                      setSelectedTestCase(test.name)
-                    }
-              }
-            >
-              <div className='text-xs'>{test.name}</div>
-              <TestCaseCard test_case={test} />
-            </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div
+                  className={clsx(
+                    'flex flex-col gap-1 p-2 w-full',
+                    selectedTestCase?.name !== test.name
+                      ? 'cursor-pointer hover:bg-vscode-input-background'
+                      : 'border-vscode-input-background border rounded-sm bg-vscode-input-background',
+                  )}
+                  onClick={
+                    selectedTestCase?.name === test.name
+                      ? undefined
+                      : () => {
+                          setSelectedTestCase(test.name)
+                        }
+                  }
+                >
+                  <div className='text-xs'>{test.name}</div>
+                  <TestCaseCard test_case={test} />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent className=''>Render this test in the prompt</TooltipContent>
+            </Tooltip>
           </div>
         ))}
       </div>
@@ -519,8 +536,8 @@ const TestCaseCard: React.FC<{ test_case: WasmTestCase }> = ({ test_case }) => {
                   enableClipboard={false}
                   className='bg-[#1E1E1E] px-1 py-1 rounded-sm'
                   theme='a11y'
-                  collapseStringsAfterLength={50}
-                  collapseObjectsAfterLength={2}
+                  collapseStringsAfterLength={150}
+                  collapseObjectsAfterLength={4}
                   matchesURL
                   src={JSON.parse(input.value)}
                 />
