@@ -160,7 +160,7 @@ impl SseResponseTrait for AnthropicClient {
         body.as_object_mut()
             .unwrap()
             .insert("stream".into(), json!(true));
-        log::trace!("anthropic stream body {:#?}", body);
+        log::debug!("anthropic stream body {:#?}", body);
 
         let mut headers: HashMap<String, String> = HashMap::default();
         match &self.properties.api_key {
@@ -433,6 +433,7 @@ fn convert_chat_prompt_to_body(
     prompt: &Vec<RenderedChatMessage>,
 ) -> HashMap<String, serde_json::Value> {
     let mut map = HashMap::new();
+    log::debug!("converting chat prompt to body: {:#?}", prompt);
 
     if let Some(first) = prompt.get(0) {
         if first.role == "system" {
@@ -445,6 +446,19 @@ fn convert_chat_prompt_to_body(
                 prompt
                     .iter()
                     .skip(1)
+                    .map(|m| {
+                        json!({
+                            "role": m.role,
+                            "content": convert_message_parts_to_content(&m.parts)
+                        })
+                    })
+                    .collect::<serde_json::Value>(),
+            );
+        } else {
+            map.insert(
+                "messages".into(),
+                prompt
+                    .iter()
                     .map(|m| {
                         json!({
                             "role": m.role,
@@ -468,6 +482,7 @@ fn convert_chat_prompt_to_body(
                 .collect::<serde_json::Value>(),
         );
     }
+    log::debug!("converted chat prompt to body: {:#?}", map);
 
     return map;
 }
