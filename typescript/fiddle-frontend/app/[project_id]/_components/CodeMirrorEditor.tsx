@@ -4,12 +4,12 @@ import { BAML_DIR } from '@/lib/constants'
 import type { BAMLProject } from '@/lib/exampleProjects'
 import { BAML, theme } from '@baml/codemirror-lang'
 import type { ParserDatabase } from '@baml/common'
-import { diagnositicsAtom, updateFileAtom } from '@baml/playground-common/baml_wasm_web/EventListener'
+import { diagnositicsAtom, numErrorsAtom, updateFileAtom } from '@baml/playground-common/baml_wasm_web/EventListener'
 import { atomStore } from '@baml/playground-common/baml_wasm_web/JotaiProvider'
 import { projectFamilyAtom, runtimeFamilyAtom } from '@baml/playground-common/baml_wasm_web/baseAtoms'
 import { Button } from '@baml/playground-common/components/ui/button'
 import { Language, LanguageSupport } from '@codemirror/language'
-import { type Diagnostic, forceLinting, linter } from '@codemirror/lint'
+import { type Diagnostic, forceLinting, linter, openLintPanel } from '@codemirror/lint'
 import { langs } from '@uiw/codemirror-extensions-langs'
 import CodeMirror, { Compartment, EditorView, type Extension, type ReactCodeMirrorRef } from '@uiw/react-codemirror'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
@@ -153,11 +153,10 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
     }
   }, [editorFiles])
 
-  // ref.current.view.
-
   const setUnsavedChanges = useSetAtom(unsavedChangesAtom)
 
   const langExtensions = getLanguage(activeFile)
+  const numErrors = useAtomValue(numErrorsAtom)
 
   return (
     <div className='w-full'>
@@ -183,8 +182,9 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
         </>
       </div>
       <div
+        className='relative'
         style={{
-          height: 'calc(100% - 30px)',
+          height: 'calc(100% - 64px)',
         }}
       >
         <CodeMirror
@@ -217,6 +217,13 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
             setUnsavedChanges(true)
           }}
         />
+        <div className='absolute bottom-4 right-2 h-[20px] p-2'>
+          {numErrors.errors > 0 && (
+            <div className='p-1 text-xs text-white bg-red-500 rounded-md'>
+              {numErrors.errors} {numErrors.errors === 1 ? 'error' : 'errors'}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
