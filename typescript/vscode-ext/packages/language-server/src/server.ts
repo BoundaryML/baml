@@ -348,23 +348,15 @@ export function startServer(options?: LSOptions): void {
   }
 
   connection.onDefinition((params: DeclarationParams) => {
-    
-    
-    
-    //accesses document from uri
     const doc = getDocument(params.textDocument.uri)
-    
-    if (doc) {
-      
-      //accesses project from uri via bamlProjectManager
-      const proj = bamlProjectManager.getProjectById((URI.parse(doc.uri)))
-      if (proj) {
 
+    if (doc) {
+      //accesses project from uri via bamlProjectManager
+      const proj = bamlProjectManager.getProjectById(URI.parse(doc.uri))
+      if (proj) {
         //returns the definition of reference within the project
         return proj.handleDefinitionRequest(doc, params.position)
-
-      } 
-  
+      }
     }
   })
 
@@ -381,14 +373,16 @@ export function startServer(options?: LSOptions): void {
   // })
 
   connection.onHover((params: HoverParams) => {
+    // return undefined
+    const doc = getDocument(params.textDocument.uri)
+    if (doc) {
+      const proj = bamlProjectManager.getProjectById(URI.parse(doc.uri))
+
+      if (proj) {
+        return proj.handleHoverRequest(doc, params.position)
+      }
+    }
     return undefined
-    // const doc = getDocument(params.textDocument.uri)
-    // if (doc) {
-    //   const db = bamlCache.getFileCache(doc)
-    //   if (db) {
-    //     return MessageHandler.handleHoverRequest(db, doc, params)
-    //   }
-    // }
   })
 
   connection.onCodeLens((params: CodeLensParams) => {

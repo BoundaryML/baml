@@ -79,21 +79,21 @@ export function handleDefinitionRequest(
 
   const lines = convertDocumentTextToTrimmedLineArray(document)
   let result = lines.join('\n');
-  console.log(result)
+  
   const newDoc =  TextDocument.create(document.uri, document.languageId, document.version, result);
   const word = getWordAtPosition(newDoc, position)
-  console.log('handleDefinitionRequest')
+  
   if (word === '') {
-    console.log('word is empty')
+    
     return
   }
   console.log('word is not empty')
-  console.log(word)
+
 
   // TODO: Do block level definitions
   const match = fileCache.define(word)
   
-  console.log(match)
+  
   if (match) {
     return [
       {
