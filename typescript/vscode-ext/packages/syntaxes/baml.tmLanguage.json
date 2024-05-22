@@ -41,6 +41,7 @@
         }
       ]
     },
+
     "enum_declaration": {
       "begin": "(enum)\\s+(\\w+)",
       "beginCaptures": {
@@ -312,7 +313,7 @@
       "name": "variable.other.readwrite"
     },
     "config_block": {
-      "begin": "(client|generator|retry_policy|printer)\\s*(<([^>]+)>)?\\s+(\\w+)\\s*\\{",
+      "begin": "(client|generator|retry_policy|printer|test)\\s*(<([^>]+)>)?\\s+(\\w+)\\s*\\{",
       "beginCaptures": {
         "1": { "name": "storage.type.declaration" },
         "3": { "name": "storage.type.declaration" },
