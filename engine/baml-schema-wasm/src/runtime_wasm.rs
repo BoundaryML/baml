@@ -238,9 +238,21 @@ pub struct WasmFunction {
     #[wasm_bindgen(readonly)]
     pub name: String,
     #[wasm_bindgen(readonly)]
+    pub span: WasmSpan,
+    #[wasm_bindgen(readonly)]
     pub test_cases: Vec<WasmTestCase>,
     #[wasm_bindgen(readonly)]
     pub test_snippet: String,
+}
+#[wasm_bindgen(getter_with_clone, inspectable)]
+#[derive(Clone)]
+pub struct WasmSpan {
+    #[wasm_bindgen(readonly)]
+    pub file_path: String,
+    #[wasm_bindgen(readonly)]
+    pub start: usize,
+    #[wasm_bindgen(readonly)]
+    pub end: usize,
 }
 
 #[wasm_bindgen(getter_with_clone, inspectable)]
@@ -606,8 +618,7 @@ impl WasmRuntime {
             .walk_functions()
             .map(|f| {
                 let snippet = format!(
-                    r#"
-test TestName {{
+                    r#"test TestName {{
   functions [{name}]
   args {{
 {args}
@@ -627,8 +638,23 @@ test TestName {{
                         })
                         .unwrap_or_default()
                 );
+
+                let wasm_span = match f.span() {
+                    Some(span) => WasmSpan {
+                        file_path: span.file.path().to_string(),
+                        start: span.start,
+                        end: span.end,
+                    },
+                    None => WasmSpan {
+                        file_path: "".to_string(),
+                        start: 0,
+                        end: 0,
+                    },
+                };
+
                 WasmFunction {
                     name: f.name().to_string(),
+                    span: wasm_span,
                     test_snippet: snippet,
                     test_cases: f
                         .walk_tests()

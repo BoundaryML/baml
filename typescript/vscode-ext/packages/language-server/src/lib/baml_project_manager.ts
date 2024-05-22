@@ -190,11 +190,11 @@ class Project {
     return { contents: [] }
   }
 
-  // list_functions(): BamlWasm.WasmFunction[] {
-  //   let runtime = this.runtime()
+  list_functions(): BamlWasm.WasmFunction[] {
+    let runtime = this.runtime()
 
-  //   return runtime.list_functions()
-  // }
+    return runtime.list_functions(this.ctx)
+  }
 
   // render_prompt(function_name: string, params: Record<string, any>): BamlWasm.WasmPrompt {
   //   let rt = this.runtime();

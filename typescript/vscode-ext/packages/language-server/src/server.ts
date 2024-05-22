@@ -386,7 +386,35 @@ export function startServer(options?: LSOptions): void {
   })
 
   connection.onCodeLens((params: CodeLensParams) => {
-    return undefined
+    const document = getDocument(params.textDocument.uri)
+    const codelenses = []
+    if (document) {
+      const proj = bamlProjectManager.getProjectById(URI.parse(document.uri))
+
+      if (proj) {
+        for (const func of proj.list_functions()) {
+          if (URI.parse(func.span.file_path).toString() === document.uri) {
+            const range = Range.create(document.positionAt(func.span.start), document.positionAt(func.span.end))
+            const command: Command = {
+              title: '▶ Open Playground ✨',
+              command: 'baml.openBamlPanel',
+              arguments: [
+                {
+                  projectId: undefined,
+                  functionName: func.name,
+                  showTests: true,
+                },
+              ],
+            }
+            codelenses.push({
+              range,
+              command,
+            })
+          }
+        }
+      }
+    }
+    return codelenses
 
     // const document = getDocument(params.textDocument.uri)
     // const codeLenses: CodeLens[] = []
