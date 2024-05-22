@@ -1,10 +1,8 @@
-mod generate;
 mod ir_helpers;
 mod json_schema;
 pub mod repr;
 mod walker;
 
-pub use generate::to_ir;
 use internal_baml_schema_ast::ast;
 pub use ir_helpers::{
     ClassFieldWalker, ClassWalker, ClientWalker, EnumValueWalker, EnumWalker, FunctionWalker,

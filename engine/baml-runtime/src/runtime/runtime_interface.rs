@@ -23,7 +23,6 @@ use anyhow::{Context, Result};
 use baml_types::{BamlMap, BamlValue};
 use dashmap::DashMap;
 use indexmap::IndexMap;
-use internal_baml_codegen::{GeneratorArgs, LanguageClientType};
 
 use internal_baml_core::{
     internal_baml_diagnostics::SourceFile,
@@ -208,7 +207,7 @@ impl RuntimeConstructor for InternalBamlRuntime {
         let mut schema = validate(&PathBuf::from(directory), contents);
         schema.diagnostics.to_result()?;
 
-        let ir = IntermediateRepr::from_parser_database(&schema.db)?;
+        let ir = IntermediateRepr::from_parser_database(&schema.db, schema.configuration)?;
         log::info!("Successfully loaded BAML schema");
         log::info!("Diagnostics: {:#?}", schema.diagnostics);
 

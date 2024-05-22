@@ -24,38 +24,6 @@ impl FunctionResult {
     }
 }
 
-#[napi(string_enum)]
-pub enum LanguageClientType {
-    PythonPydantic,
-    Ruby,
-    Typescript,
-}
-
-#[napi(object)]
-pub struct GenerateArgs {
-    pub client_type: LanguageClientType,
-    pub output_path: String,
-}
-
-impl GenerateArgs {
-    pub fn client_type(&self) -> internal_baml_codegen::LanguageClientType {
-        match self.client_type {
-            LanguageClientType::Ruby => internal_baml_codegen::LanguageClientType::Ruby,
-            LanguageClientType::PythonPydantic => {
-                internal_baml_codegen::LanguageClientType::PythonPydantic
-            }
-            LanguageClientType::Typescript => internal_baml_codegen::LanguageClientType::Typescript,
-        }
-    }
-
-    pub fn as_codegen_args(&self) -> internal_baml_codegen::GeneratorArgs {
-        internal_baml_codegen::GeneratorArgs {
-            output_root: PathBuf::from(self.output_path.clone()),
-            encoded_baml_files: None,
-        }
-    }
-}
-
 //#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 //#[serde(rename = "Image")]
 //#[pyclass(name = "Image")]

@@ -1,4 +1,4 @@
-use std::{collections::HashSet};
+use std::collections::HashSet;
 
 use baml_types::{BamlImage, BamlMap, BamlValue};
 

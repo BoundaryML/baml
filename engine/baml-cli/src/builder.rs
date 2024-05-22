@@ -2,7 +2,6 @@ mod dir_utils;
 
 use anyhow::Result;
 
-
 use std::path::PathBuf;
 
 use baml_lib::{parse_and_validate_schema, Configuration, SourceFile, ValidatedSchema};
@@ -39,15 +38,14 @@ pub fn build(baml_dir: &Option<String>) -> Result<(PathBuf, Configuration, Valid
         log::warn!("{}", diagnostics.warnings_to_pretty_string());
     }
 
-    let ir = internal_baml_core::ir::to_ir(&parsed.db)
-        .map_err(|e| e.context("Failed to build BAML (IR stage)"))?;
-    for (gen, lockfile) in config.generators.iter() {
-        //let generator_args = internal_baml_codegen::GeneratorArgs {
-        //    output_root: gen.output_path.clone(),
-        //    encoded_baml_files: None,
-        //};
-        //LanguageClientType::Typescript.generate_client(&ir, &generator_args)?;
-        internal_baml_core::generate_pipeline(&parsed.db, gen, &ir, lockfile)?;
+    let ir = internal_baml_core::ir::repr::IntermediateRepr::from_parser_database(
+        &parsed.db,
+        // TODO(sam): this should really be parsed.configuration
+        Configuration::default(),
+    )
+    .map_err(|e| e.context("Failed to build BAML (IR stage)"))?;
+    if !config.generators.is_empty() {
+        log::warn!("Generators are no longer supported via this CLI. Please use the BAML CLI installed with your runtime.");
     }
 
     config.generators.iter().for_each(|(_, lockfile)| {

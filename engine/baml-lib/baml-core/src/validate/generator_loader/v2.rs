@@ -2,22 +2,17 @@ use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
 use internal_baml_diagnostics::DatamodelError;
 use internal_baml_schema_ast::ast::{self, WithName, WithSpan};
+use strum::{VariantArray, VariantNames};
 
 use crate::configuration::{Generator, GeneratorBuilder, GeneratorOutputType};
 
-const FIRST_CLASS_PROPERTIES: &[&str] = &[
-    "language",
-    "project_root",
-    "test_command",
-    "install_command",
-    "package_version_command",
-];
+const FIRST_CLASS_PROPERTIES: &[&str] = &["output_type", "output_dir"];
 
 fn parse_required_key<'a>(
     map: &'a HashMap<&str, &ast::Expression>,
     key: &str,
     generator_span: &ast::Span,
-) -> Result<&'a str, DatamodelError> {
+) -> Result<(&'a str, &'a ast::Span), DatamodelError> {
     let expr = match map.get(key) {
         Some(expr) => expr,
         None => {
@@ -29,7 +24,7 @@ fn parse_required_key<'a>(
     };
 
     match expr.as_string_value() {
-        Some((name, _)) => Ok(name),
+        Some((name, _)) => Ok((name, expr.span())),
         None => Err(DatamodelError::new_validation_error(
             &format!("`{}` must be a string.", key),
             expr.span().clone(),
@@ -62,6 +57,7 @@ pub(crate) fn parse_generator(
     _baml_src_path: &PathBuf,
 ) -> Result<Generator, Vec<DatamodelError>> {
     let generator_name = ast_generator.name();
+
     let mut builder = GeneratorBuilder::default();
 
     builder
@@ -104,18 +100,20 @@ pub(crate) fn parse_generator(
         return Err(errors);
     }
 
-    match parse_required_key(&args, "language", ast_generator.span()) {
-        Ok("python") => {
-            builder.output_type(GeneratorOutputType::PythonPydantic);
-        }
-        Ok(name) => match GeneratorOutputType::from_str(name) {
+    match parse_required_key(&args, "output_type", ast_generator.span()) {
+        Ok((name, name_span)) => match GeneratorOutputType::from_str(name) {
             Ok(lang) => {
                 builder.output_type(lang);
             }
             Err(_) => {
-                errors.push(DatamodelError::new_validation_error(
-                    &format!("The language '{}' is not supported.", name),
-                    ast_generator.span().clone(),
+                errors.push(DatamodelError::not_found_error(
+                    "output_type",
+                    name,
+                    name_span.clone(),
+                    GeneratorOutputType::VARIANTS
+                        .iter()
+                        .map(|s| s.to_string())
+                        .collect(),
                 ));
             }
         },
@@ -124,7 +122,7 @@ pub(crate) fn parse_generator(
         }
     };
 
-    match parse_optional_key(&args, "project_root") {
+    match parse_optional_key(&args, "output_dir") {
         Ok(Some(name)) => {
             builder.output_dir(name.into());
         }
@@ -136,35 +134,13 @@ pub(crate) fn parse_generator(
         }
     };
 
-    match parse_required_key(&args, "test_command", ast_generator.span()) {
-        Ok(name) => (),
-        Err(err) => {
-            errors.push(err);
-        }
-    };
-
-    match parse_required_key(&args, "install_command", ast_generator.span()) {
-        Ok(name) => (),
-        Err(err) => {
-            errors.push(err);
-        }
-    };
-
-    match parse_required_key(&args, "package_version_command", ast_generator.span()) {
-        Ok(name) => (),
-        Err(err) => {
-            errors.push(err);
-        }
-    };
-
     if !errors.is_empty() {
         return Err(errors);
     }
 
     builder.build().map_err(|e| {
         vec![DatamodelError::new_internal_error(
-            anyhow::Error::from(e)
-                .context("Internal error while parsing generator (v1 syntax)"),
+            anyhow::Error::from(e).context("Internal error while parsing generator (v1 syntax)"),
             ast_generator.span().clone(),
         )]
     })

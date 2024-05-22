@@ -15,14 +15,12 @@ use internal_baml_diagnostics::{DatamodelError, Diagnostics, SourceFile, Span};
 
 mod common;
 pub mod configuration;
-mod generate;
+pub mod ir;
 mod lockfile;
 mod validate;
 
 use self::validate::generator_loader;
 
-pub use generate::generate_pipeline::generate_pipeline;
-pub use generate::ir;
 pub use lockfile::LockfileVersion;
 
 pub use crate::{
@@ -35,16 +33,13 @@ pub use lockfile::LockFileWrapper;
 pub struct ValidatedSchema {
     pub db: internal_baml_parser_database::ParserDatabase,
     pub diagnostics: Diagnostics,
+    pub configuration: Configuration,
 }
 
 impl std::fmt::Debug for ValidatedSchema {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("<Prisma schema>")
     }
-}
-
-pub fn to_ir(db: &ParserDatabase) -> anyhow::Result<ir::repr::IntermediateRepr> {
-    ir::repr::IntermediateRepr::from_parser_database(db)
 }
 
 /// The most general API for dealing with Prisma schemas. It accumulates what analysis and
@@ -73,31 +68,51 @@ pub fn validate(root_path: &PathBuf, files: Vec<SourceFile>) -> ValidatedSchema 
     }
 
     if diagnostics.has_errors() {
-        return ValidatedSchema { db, diagnostics };
+        return ValidatedSchema {
+            db,
+            diagnostics,
+            configuration: Configuration::default(),
+        };
     }
 
     if let Err(d) = db.validate(&mut diagnostics) {
-        return ValidatedSchema { db, diagnostics: d };
+        return ValidatedSchema {
+            db,
+            diagnostics: d,
+            configuration: Configuration::default(),
+        };
     }
 
     let (configuration, diag) = validate_configuration(root_path, db.ast());
     diagnostics.push(diag);
 
     if diagnostics.has_errors() {
-        return ValidatedSchema { db, diagnostics };
+        return ValidatedSchema {
+            db,
+            diagnostics,
+            configuration,
+        };
     }
 
     // actually run the validation pipeline
     validate::validate(&db, configuration.preview_features(), &mut diagnostics);
 
     if diagnostics.has_errors() {
-        return ValidatedSchema { db, diagnostics };
+        return ValidatedSchema {
+            db,
+            diagnostics,
+            configuration,
+        };
     }
 
     // Some last linker stuff can only happen post validation.
     db.finalize(&mut diagnostics);
 
-    ValidatedSchema { db, diagnostics }
+    ValidatedSchema {
+        db,
+        diagnostics,
+        configuration,
+    }
 }
 
 /// Loads all configuration blocks from a datamodel using the built-in source definitions.
@@ -142,7 +157,7 @@ fn validate_configuration(
             |gen| match lockfile::LockFileWrapper::from_generator(&gen) {
                 Ok(lock_file) => {
                     if let Ok(prev) =
-                        lockfile::LockFileWrapper::from_path(gen.output_path.join("baml.lock"))
+                        lockfile::LockFileWrapper::from_path(gen.output_dir().join("baml.lock"))
                     {
                         lock_file.validate(&prev, &mut diagnostics);
                     }

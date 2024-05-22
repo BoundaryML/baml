@@ -16,6 +16,8 @@ use internal_baml_parser_database::{
 use internal_baml_schema_ast::ast::{self, FieldArity, WithName, WithSpan};
 use serde::Serialize;
 
+use crate::Configuration;
+
 /// This class represents the intermediate representation of the BAML AST.
 /// It is a representation of the BAML AST that is easier to work with than the
 /// raw BAML AST, and should include all information necessary to generate
@@ -28,6 +30,9 @@ pub struct IntermediateRepr {
     clients: Vec<Node<Client>>,
     retry_policies: Vec<Node<RetryPolicy>>,
     template_strings: Vec<Node<TemplateString>>,
+
+    #[serde(skip)]
+    configuration: Configuration,
 }
 
 /// A generic walker. Only walkers instantiated with a concrete ID type (`I`) are useful.
@@ -48,7 +53,12 @@ impl IntermediateRepr {
             clients: vec![],
             retry_policies: vec![],
             template_strings: vec![],
+            configuration: Configuration::default(),
         }
+    }
+
+    pub fn configuration(&self) -> &Configuration {
+        &self.configuration
     }
 
     pub fn required_env_vars(&self) -> HashSet<&str> {
@@ -115,7 +125,10 @@ impl IntermediateRepr {
             .map(|e| Walker { db: self, item: e })
     }
 
-    pub fn from_parser_database(db: &ParserDatabase) -> Result<IntermediateRepr> {
+    pub fn from_parser_database(
+        db: &ParserDatabase,
+        configuration: Configuration,
+    ) -> Result<IntermediateRepr> {
         let mut repr = IntermediateRepr {
             enums: db
                 .walk_enums()
@@ -142,6 +155,7 @@ impl IntermediateRepr {
                 .walk_templates()
                 .map(|e| e.node(db))
                 .collect::<Result<Vec<_>>>()?,
+            configuration,
         };
 
         // Sort each item by name.

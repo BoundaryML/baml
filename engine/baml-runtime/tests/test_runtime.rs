@@ -3,7 +3,7 @@ mod internal_tests {
     use std::collections::HashMap;
 
     use baml_runtime::BamlRuntime;
-    use baml_runtime::{PublicInterface, RuntimeContext};
+    use baml_runtime::RuntimeContext;
     use indexmap::IndexMap;
 
     use wasm_bindgen_test::*;

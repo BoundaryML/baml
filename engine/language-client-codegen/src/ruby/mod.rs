@@ -7,6 +7,7 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use askama::Template;
+use indexmap::IndexMap;
 use ruby_language_features::ToRuby;
 
 use either::Either;
@@ -31,7 +32,7 @@ struct RubyFunction {
 pub(crate) fn generate(
     ir: &IntermediateRepr,
     generator: &crate::GeneratorArgs,
-) -> Result<Vec<PathBuf>> {
+) -> Result<IndexMap<PathBuf, String>> {
     let mut collector = FileCollector::<RubyLanguageFeatures>::new();
 
     collector.add_file(
@@ -50,7 +51,7 @@ pub(crate) fn generate(
             .map_err(|e| anyhow::Error::from(e).context("Error while rendering client.rb"))?,
     );
 
-    collector.commit(&generator.output_root)
+    collector.commit(&generator.output_dir)
 }
 
 impl TryFrom<&IntermediateRepr> for RubyClient {

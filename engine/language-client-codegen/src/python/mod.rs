@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use askama::Template;
 use either::Either;
+use indexmap::IndexMap;
 use internal_baml_core::ir::{repr::IntermediateRepr, FieldType};
 
 use self::python_language_features::{PythonLanguageFeatures, ToPython};
@@ -32,7 +33,7 @@ struct PythonInit {
 pub(crate) fn generate(
     ir: &IntermediateRepr,
     generator: &crate::GeneratorArgs,
-) -> Result<Vec<PathBuf>> {
+) -> Result<IndexMap<PathBuf, String>> {
     let mut collector = FileCollector::<PythonLanguageFeatures>::new();
 
     collector.add_template::<generate_types::PythonStreamTypes>("partial_types.py", ir)?;
@@ -51,7 +52,7 @@ pub(crate) fn generate(
         .map_err(|e| anyhow::Error::from(e).context("Error while rendering __init__.py"))?,
     );
 
-    collector.commit(&generator.output_root)
+    collector.commit(&generator.output_dir)
 }
 
 impl TryFrom<&IntermediateRepr> for PythonClient {

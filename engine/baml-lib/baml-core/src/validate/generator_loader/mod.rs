@@ -1,5 +1,6 @@
 mod v0;
 mod v1;
+mod v2;
 
 use crate::{configuration::Generator, internal_baml_diagnostics::*};
 use internal_baml_parser_database::ast;
@@ -25,43 +26,42 @@ fn parse_generator(
     ast_generator: &ast::GeneratorConfig,
     diagnostics: &mut Diagnostics,
 ) -> Option<Generator> {
-    match v1::parse_generator(ast_generator, &diagnostics.root_path) {
-        Ok(gen) => Some(gen),
-        Err(errors) => match v0::parse_generator(ast_generator, &diagnostics.root_path) {
-            Ok(gen) => {
-                // Convert the generator to the new format:
+    let errors = match v2::parse_generator(ast_generator, &diagnostics.root_path) {
+        Ok(gen) => {
+            return Some(gen);
+        }
+        Err(errors) => errors,
+    };
 
-                let updated_client = format!(
-                    r#"generator {} {{
-    language "{}"
-    project_root "{}"
-    test_command "{}"
-    install_command "{}"
-    package_version_command "{}"
-}}"#,
-                    gen.name,
-                    gen.language.as_str(),
-                    gen.project_root.display(),
-                    gen.test_command,
-                    gen.install_command,
-                    gen.package_version_command,
-                );
+    log::info!("Failed to parse generator as v2 generator, moving on to v1 and v0.");
 
-                diagnostics.push_warning(DatamodelWarning::new(
-                    format!(
-                        "The generator format is deprecated. Please use the new format.\n{}",
-                        updated_client
-                    ),
-                    ast_generator.span().clone(),
-                ));
-                Some(gen)
-            }
-            Err(_) => {
-                for error in errors {
-                    diagnostics.push_error(error);
-                }
-                None
-            }
-        },
+    if let Ok(gen) = v1::parse_generator(ast_generator, &diagnostics.root_path) {
+        diagnostics.push_warning(DatamodelWarning::new(
+            format!(
+                "This generator format is deprecated. Please use the new format.\n\n{}",
+                gen.as_baml(),
+            ),
+            ast_generator.span().clone(),
+        ));
+        return None;
+    };
+
+    log::info!("Failed to parse generator as v1 generator, moving on to v0.");
+
+    if let Ok(gen) = v0::parse_generator(ast_generator, &diagnostics.root_path) {
+        diagnostics.push_warning(DatamodelWarning::new(
+            format!(
+                "This generator format is deprecated. Please use the new format.\n{}",
+                gen.as_baml(),
+            ),
+            ast_generator.span().clone(),
+        ));
+        return None;
+    };
+
+    for error in errors {
+        diagnostics.push_error(error);
     }
+
+    None
 }

@@ -32,7 +32,6 @@ use runtime::InternalBamlRuntime;
 #[cfg(not(target = "wasm32"))]
 pub use cli::CallerType;
 use runtime_interface::ExperimentalTracingInterface;
-pub use runtime_interface::PublicInterface;
 use runtime_interface::RuntimeConstructor;
 use runtime_interface::RuntimeInterface;
 use tracing::{BamlTracer, TracingSpan};
@@ -112,8 +111,8 @@ impl BamlRuntime {
     }
 }
 
-impl PublicInterface for BamlRuntime {
-    async fn run_test<F>(
+impl BamlRuntime {
+    pub async fn run_test<F>(
         &self,
         function_name: &str,
         test_name: &str,
@@ -154,7 +153,7 @@ impl PublicInterface for BamlRuntime {
         (response, target_id)
     }
 
-    async fn call_function(
+    pub async fn call_function(
         &self,
         function_name: String,
         params: &BamlMap<String, BamlValue>,
@@ -176,7 +175,7 @@ impl PublicInterface for BamlRuntime {
         (response, target_id)
     }
 
-    fn stream_function(
+    pub fn stream_function(
         &self,
         function_name: String,
         params: &BamlMap<String, BamlValue>,
@@ -189,10 +188,38 @@ impl PublicInterface for BamlRuntime {
     #[cfg(not(target = "wasm32"))]
     fn generate_client(
         &self,
-        client_type: &internal_baml_codegen::LanguageClientType,
+        client_type: &GeneratorOutputType,
         args: &internal_baml_codegen::GeneratorArgs,
     ) -> Result<internal_baml_codegen::GenerateOutput> {
+        use internal_baml_codegen::GenerateClient;
+
         client_type.generate_client(self.inner.ir(), args)
+    }
+
+    pub fn run_generators(&self) -> Result<Vec<internal_baml_codegen::GenerateOutput>> {
+        use internal_baml_codegen::GenerateClient;
+
+        let client_types: Vec<(GeneratorOutputType, internal_baml_codegen::GeneratorArgs)> = self
+            .inner
+            .ir()
+            .configuration()
+            .generators
+            .iter()
+            .map(|(generator, _)| {
+                (
+                    generator.output_type.clone(),
+                    internal_baml_codegen::GeneratorArgs {
+                        output_dir: generator.output_dir(),
+                        encoded_baml_files: None,
+                    },
+                )
+            })
+            .collect();
+
+        client_types
+            .iter()
+            .map(|(client_type, args)| client_type.generate_client(self.inner.ir(), args))
+            .collect()
     }
 }
 

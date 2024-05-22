@@ -45,41 +45,6 @@ pub trait RuntimeInterface {
     ) -> Result<FunctionResultStream>;
 }
 
-pub trait PublicInterface {
-    #[cfg(not(target = "wasm32"))]
-    fn generate_client(
-        &self,
-        client_type: &internal_baml_codegen::LanguageClientType,
-        args: &internal_baml_codegen::GeneratorArgs,
-    ) -> Result<internal_baml_codegen::GenerateOutput>;
-
-    #[allow(async_fn_in_trait)]
-    async fn run_test<F>(
-        &self,
-        function_name: &str,
-        test_name: &str,
-        ctx: &RuntimeContextManager,
-        on_event: Option<F>,
-    ) -> (Result<TestResponse>, Option<uuid::Uuid>)
-    where
-        F: Fn(FunctionResult) -> ();
-
-    #[allow(async_fn_in_trait)]
-    async fn call_function(
-        &self,
-        function_name: String,
-        params: &BamlMap<String, BamlValue>,
-        ctx: &RuntimeContextManager,
-    ) -> (Result<FunctionResult>, Option<uuid::Uuid>);
-
-    fn stream_function(
-        &self,
-        function_name: String,
-        params: &BamlMap<String, BamlValue>,
-        ctx: &RuntimeContextManager,
-    ) -> Result<FunctionResultStream>;
-}
-
 //
 // These are UNSTABLE, and should be considered as a work in progress
 //

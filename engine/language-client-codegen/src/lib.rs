@@ -1,7 +1,8 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
-use internal_baml_core::ir::repr::IntermediateRepr;
+use indexmap::IndexMap;
+use internal_baml_core::{configuration::GeneratorOutputType, ir::repr::IntermediateRepr};
 use serde::{Deserialize, Serialize};
 
 mod dir_writer;
@@ -11,41 +12,34 @@ mod typescript;
 
 #[derive(Deserialize)]
 pub struct GeneratorArgs {
-    pub output_root: PathBuf,
+    pub output_dir: PathBuf,
     pub encoded_baml_files: Option<String>,
 }
 
 pub struct GenerateOutput {
-    pub client_type: String,
-    pub files: Vec<PathBuf>,
+    pub client_type: GeneratorOutputType,
+    pub files: IndexMap<PathBuf, String>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum LanguageClientType {
-    PythonPydantic,
-    Ruby,
-    Typescript,
+pub trait GenerateClient {
+    fn generate_client(&self, ir: &IntermediateRepr, gen: &GeneratorArgs)
+        -> Result<GenerateOutput>;
 }
 
-impl LanguageClientType {
-    pub fn generate_client(
+impl GenerateClient for GeneratorOutputType {
+    fn generate_client(
         &self,
         ir: &IntermediateRepr,
         gen: &GeneratorArgs,
     ) -> Result<GenerateOutput> {
         let files = match self {
-            LanguageClientType::Ruby => ruby::generate(ir, gen),
-            LanguageClientType::PythonPydantic => python::generate(ir, gen),
-            LanguageClientType::Typescript => typescript::generate(ir, gen),
+            GeneratorOutputType::Ruby => ruby::generate(ir, gen),
+            GeneratorOutputType::PythonPydantic => python::generate(ir, gen),
+            GeneratorOutputType::Typescript => typescript::generate(ir, gen),
         }?;
 
         Ok(GenerateOutput {
-            client_type: match self {
-                LanguageClientType::Ruby => "Ruby",
-                LanguageClientType::PythonPydantic => "Python",
-                LanguageClientType::Typescript => "Typescript",
-            }
-            .to_string(),
+            client_type: self.clone(),
             files,
         })
     }

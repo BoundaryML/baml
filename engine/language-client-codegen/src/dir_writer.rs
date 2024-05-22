@@ -1,10 +1,11 @@
 use anyhow::Result;
+use indexmap::IndexMap;
 use internal_baml_core::ir::repr::IntermediateRepr;
 use std::io::ErrorKind;
 use std::path::Path;
+use std::path::PathBuf;
 use std::thread::sleep;
 use std::time::Duration;
-use std::{collections::HashMap, path::PathBuf};
 
 // Add a trait per language that can be used to convert an Import into a string
 pub(super) trait LanguageFeatures {
@@ -17,7 +18,7 @@ pub(super) trait LanguageFeatures {
 
 pub(super) struct FileCollector<L: LanguageFeatures + Default> {
     // map of path to a an object that has the trail File
-    files: HashMap<PathBuf, String>,
+    files: IndexMap<PathBuf, String>,
 
     lang: L,
 }
@@ -68,7 +69,7 @@ fn try_delete_tmp_dir(temp_path: &Path) -> Result<()> {
 impl<L: LanguageFeatures + Default> FileCollector<L> {
     pub(super) fn new() -> Self {
         Self {
-            files: HashMap::new(),
+            files: IndexMap::new(),
             lang: L::default(),
         }
     }
@@ -180,7 +181,7 @@ impl<L: LanguageFeatures + Default> FileCollector<L> {
         Ok(())
     }
 
-    pub(super) fn commit(&self, output_path: &Path) -> Result<Vec<PathBuf>> {
+    pub(super) fn commit(&self, output_path: &Path) -> Result<IndexMap<PathBuf, String>> {
         log::debug!("Writing files to {}", output_path.display());
 
         let temp_path = PathBuf::from(format!("{}.tmp", output_path.display()));
@@ -206,6 +207,6 @@ impl<L: LanguageFeatures + Default> FileCollector<L> {
             output_path.display()
         );
 
-        Ok(self.files.keys().cloned().collect())
+        Ok(self.files.clone())
     }
 }

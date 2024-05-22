@@ -38,7 +38,7 @@ impl InternalBamlRuntime {
         let mut schema = validate(&PathBuf::from(directory), contents);
         schema.diagnostics.to_result()?;
 
-        let ir = IntermediateRepr::from_parser_database(&schema.db)?;
+        let ir = IntermediateRepr::from_parser_database(&schema.db, schema.configuration)?;
         Ok(InternalBamlRuntime {
             ir: Arc::new(ir),
             diagnostics: schema.diagnostics,
@@ -59,7 +59,7 @@ impl InternalBamlRuntime {
         let mut schema = validate(directory, contents);
         schema.diagnostics.to_result()?;
 
-        let ir = IntermediateRepr::from_parser_database(&schema.db)?;
+        let ir = IntermediateRepr::from_parser_database(&schema.db, schema.configuration)?;
 
         Ok(Self {
             ir: Arc::new(ir),

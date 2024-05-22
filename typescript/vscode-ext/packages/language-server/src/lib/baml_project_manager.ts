@@ -212,9 +212,7 @@ class BamlProjectManager {
 
   private projects: Map<string, Project> = new Map()
 
-  constructor(private notifier: Notify) {
-    BamlWasm.enable_logs()
-  }
+  constructor(private notifier: Notify) {}
 
   private handleMessage(e: any) {
     if (e instanceof BamlWasm.WasmDiagnosticError) {

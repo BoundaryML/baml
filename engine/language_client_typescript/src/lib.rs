@@ -1,7 +1,7 @@
 mod parse_ts_types;
 mod ts_types;
 
-use baml_runtime::{PublicInterface, RuntimeContextManager};
+use baml_runtime::RuntimeContextManager;
 use baml_types::{BamlMap, BamlValue};
 use indexmap::IndexMap;
 use napi::bindgen_prelude::*;

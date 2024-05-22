@@ -10,7 +10,6 @@ mod init_command;
 mod runtime_test_command;
 mod shell;
 mod update;
-mod update_client;
 mod version_command;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
@@ -32,8 +31,6 @@ enum Commands {
     Build(BuildArgs),
     /// Updates the CLI to the latest version.
     Update(UpdateArgs),
-    /// Updates client libraries for a specified BAML project.
-    UpdateClient(BuildArgs),
     /// Initializes a new BAML project in the current directory.
     Init(InitArgs),
     /// Runs tests for a BAML project.
@@ -143,14 +140,9 @@ pub(crate) fn main() {
     let response = match &args.command {
         Commands::Update(_args) => update::update().map_err(anyhow::Error::new),
         Commands::Build(args) => builder::build(&args.baml_dir).map(|_| ()),
-        Commands::UpdateClient(args) => {
-            update_client::update_client(&args.baml_dir).map_err(anyhow::Error::new)
-        }
         Commands::Init(args) => init_command::init_command(args.no_prompt)
             .map_err(anyhow::Error::new)
             .and_then(|_| builder::build(&None))
-            // Note: double check this runs in the right dir
-            .and_then(|_| update_client::update_client(&None).map_err(anyhow::Error::new))
             .map(|_| {
                 println!(
                     "\n{}\n{}\n{}",

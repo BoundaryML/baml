@@ -69,6 +69,10 @@ impl DatamodelError {
         DatamodelError { message, span }
     }
 
+    pub fn new_internal_error(error: anyhow::Error, span: Span) -> Self {
+        Self::new(format!("Internal error occurred: {error}"), span)
+    }
+
     pub fn new_static(message: &'static str, span: Span) -> Self {
         Self::new(message, span)
     }

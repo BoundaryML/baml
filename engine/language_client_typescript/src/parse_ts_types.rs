@@ -1,12 +1,7 @@
 use napi::bindgen_prelude::*;
 use napi::JsBoolean;
 
-
 use napi::JsUnknown;
-
-
-
-
 
 struct SerializationError {
     position: Vec<String>,

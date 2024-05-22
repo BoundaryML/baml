@@ -35,6 +35,7 @@ anyhow = "1.0"
 askama = "0.12.1"
 base64 = "0.22.1"
 dashmap = "5.5.3"
+derive_builder = "0.20.0"
 either = "1.8.1"
 env_logger = "0.11.3"
 futures = { version = "0.3.30", features = ["executor"] }
@@ -46,7 +47,7 @@ regex = "1.10.4"
 serde_json = { version = "1", features = ["float_roundtrip", "preserve_order"] }
 serde = { version = "1", features = ["derive"] }
 static_assertions = "1.1.0"
-strum = "0.26.2"
+strum = { version = "0.26.2", features = ["derive"] }
 strum_macros = "0.26.2"
 walkdir = "2.5.0"
 web-time = "1.1.0"

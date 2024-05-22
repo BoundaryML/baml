@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use askama::Template;
 use either::Either;
+use indexmap::IndexMap;
 use internal_baml_core::ir::{repr::IntermediateRepr, FieldType};
 
 use self::typescript_language_features::{ToTypescript, TypescriptLanguageFeatures};
@@ -31,7 +32,7 @@ struct TypescriptInit {
 pub(crate) fn generate(
     ir: &IntermediateRepr,
     generator: &crate::GeneratorArgs,
-) -> Result<Vec<PathBuf>> {
+) -> Result<IndexMap<PathBuf, String>> {
     let mut collector = FileCollector::<TypescriptLanguageFeatures>::new();
 
     collector.add_file(
@@ -62,7 +63,7 @@ pub(crate) fn generate(
         .map_err(|e| anyhow::Error::from(e).context("Error while rendering index.ts"))?,
     );
 
-    collector.commit(&generator.output_root)
+    collector.commit(&generator.output_dir)
 }
 
 impl TryFrom<&IntermediateRepr> for TypescriptClient {
