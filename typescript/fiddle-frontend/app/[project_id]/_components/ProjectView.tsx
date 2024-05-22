@@ -45,6 +45,7 @@ import { InitialTour, PostTestRunTour } from './Tour'
 import SettingsDialog, { ShowSettingsButton, showSettingsAtom } from '@baml/playground-common/shared/SettingsDialog'
 import { SettingsIcon } from 'lucide-react'
 import FileViewer from './Tree/FileViewer'
+import { Toaster } from '@/components/ui/toaster'
 
 const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
   const setEditorFiles = useSetAtom(updateFileAtom)
@@ -199,7 +200,7 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
                   >
                     <div className='flex flex-row items-center text-xs 2xl:text-sm gap-x-4'>
                       <Image src='/vscode_logo.svg' width={18} height={18} alt='VSCode extension' />
-                      <div className='whitespace-nowrap'>Get VSCode extension</div>
+                      <div className='whitespace-nowrap'>VSCode extension</div>
                     </div>
                   </Link>
                 </div>
@@ -367,10 +368,10 @@ const PlaygroundView = () => {
         <Suspense fallback={<div>Loading...</div>}>
           <EventListener>
             <SettingsDialog />
-            <div className='relative flex flex-col gap-2 w-full pr-2'>
+            <div className='relative flex flex-col w-full gap-2 pr-2'>
               <div className='relative flex flex-row gap-2'>
                 <FunctionSelector />
-                <div className='relative flex flex-row grow items-center justify-end gap-2 pr-1'>
+                <div className='relative flex flex-row items-center justify-end gap-2 pr-1 grow'>
                   <ShowSettingsButton
                     buttonClassName='h-8 px-2 bg-black/70 hover:bg-white text-white hover:text-black'
                     iconClassName='h-5'

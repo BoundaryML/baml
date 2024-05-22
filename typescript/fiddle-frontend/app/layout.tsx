@@ -31,14 +31,13 @@ export default function RootLayout({
         <body className={inter.className}>
           <PostHogPageView />
           <ThemeProvider attribute='class' defaultTheme='dark' enableSystem={false} disableTransitionOnChange={true}>
-            <Toaster />
-
             <JotaiProvider>
               <Suspense fallback={<div>Loading...</div>}>{children}</Suspense>
               <div className='fixed left-0 bottom-1/2 w-[12%] px-1 items-center justify-center flex'>
                 <BrowseSheet />
               </div>
             </JotaiProvider>
+            <Toaster />
           </ThemeProvider>
         </body>
       </PHProvider>

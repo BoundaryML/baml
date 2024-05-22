@@ -126,7 +126,7 @@ const EnvvarInput: React.FC<{ envvar: EnvVar }> = ({ envvar }) => {
             setEnvKeyValue({ itemIndex: null, key: e.target.value })
           }
         }}
-        className='outline-none bg-vscode-input-background focus-visible:outline focus:outline-2 focus:outline-vscode-input-border font-mono'
+        className='font-mono outline-none bg-vscode-input-background focus-visible:outline focus:outline-2 focus:outline-vscode-input-border'
       />
       <span>=</span>
       <Input
@@ -213,31 +213,35 @@ export const SettingsDialog: React.FC = () => {
 
   return (
     <Dialog open={showSettings} onOpenChange={setShowSettings}>
-      <DialogContent className='max-h-screen overflow-y-auto bg-vscode-editorWidget-background border-vscode-textSeparator-foreground overflow-x-clip'>
+      <DialogContent className=' min-h-[550px] max-h-[550px] overflow-y-auto bg-vscode-editorWidget-background flex flex-col border-vscode-textSeparator-foreground overflow-x-clip'>
         <DialogHeader className='flex flex-row items-end gap-x-4'>
-          <DialogTitle className='font-semibold text-s'>Environment variables</DialogTitle>
+          <DialogTitle className='font-semibold'>Environment variables</DialogTitle>
           <Button
             variant='ghost'
             size='icon'
-            className='flex flex-row items-center p-1 text-xs w-fit h-fit gap-x-2 hover:bg-vscode-descriptionForeground'
+            className='flex flex-row items-center p-1 py-0 text-xs w-fit h-fit gap-x-2 hover:bg-vscode-descriptionForeground'
             onClick={() => setShowEnvvarValues((prev) => !prev)}
           >
             {showEnvvarValues ? <ShowIcon className='h-4' /> : <HideIcon className='h-4' />}
           </Button>
         </DialogHeader>
-        <div className='flex flex-col gap-2'>
+        <div className='flex flex-col gap-2 gap-y-6'>
           <div className='flex flex-col gap-1'>
             <div className='flex flex-row gap-2'>
-              <span className='text-sm text-muted-foreground'>
+              <span className='text-sm text-vscode-foreground'>
                 Observability {enableObservability ? 'Enabled' : 'Disabled'}
               </span>
-              <Checkbox checked={enableObservability} onCheckedChange={(e) => setEnableObservability((p) => !p)} />
+              <Checkbox
+                className='border'
+                checked={enableObservability}
+                onCheckedChange={(e) => setEnableObservability((p) => !p)}
+              />
             </div>
             {enableObservability && (
               <>
-                <p className='text-xs italic text-muted-foreground'>
+                <p className='text-xs italic text-vscode-descriptionForeground'>
                   You can get these from{' '}
-                  <a className='text-blue-400 underline' href='https://app.boundaryml.com'>
+                  <a className='text-blue-400 underline' target='_blank' href='https://app.boundaryml.com'>
                     Boundary Studio
                   </a>
                 </p>
@@ -250,8 +254,8 @@ export const SettingsDialog: React.FC = () => {
             )}
           </div>
           <div className='flex flex-col gap-1'>
-            <span className='text-sm text-muted-foreground'>From .baml files</span>
-            <p className='text-xs italic text-muted-foreground'>
+            <span className='text-sm text-vscode-foreground'>From .baml files</span>
+            <p className='text-xs italic text-vscode-descriptionForeground'>
               Environment variables are loaded lazily, only set any you want to use.
             </p>
             {envvars
@@ -261,7 +265,7 @@ export const SettingsDialog: React.FC = () => {
               ))}
           </div>
           <div className='flex flex-col gap-1'>
-            <span className='text-sm text-muted-foreground'>Extra environment variables</span>
+            <span className='text-sm text-vscode-foreground'>Extra environment variables</span>
             {envvars
               .filter((t) => t.type === 'user')
               .map((envvar) => (
@@ -277,8 +281,8 @@ export const SettingsDialog: React.FC = () => {
             </Button>
           </div>
           <div className='flex flex-col gap-1'>
-            <span className='text-sm text-muted-foreground'>Internal config vars.</span>
-            <span className='text-xs text-muted-foreground/60'>
+            <span className='text-sm text-vscode-foreground'>Internal vars</span>
+            <span className='text-xs text-vscode-descriptionForeground'>
               Anthropic doesn't support client-side web calls, so we proxy the calls.
             </span>
             {envvars

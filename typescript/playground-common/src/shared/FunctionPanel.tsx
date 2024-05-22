@@ -1,27 +1,20 @@
 /// Content once a function has been selected.
 
-import type { TestResult } from '@baml/common'
-import { VSCodePanels } from '@vscode/webview-ui-toolkit/react'
-import clsx from 'clsx'
 import { useAtomValue } from 'jotai'
-import { createRef, useContext, useEffect, useId, useMemo, useRef } from 'react'
-import type { ImperativePanelHandle } from 'react-resizable-panels'
+import { useId, useRef } from 'react'
 import { renderPromptAtom, selectedFunctionAtom } from '../baml_wasm_web/EventListener'
 import TestResults from '../baml_wasm_web/test_uis/test_result'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/ui/resizable'
 import { TooltipProvider } from '../components/ui/tooltip'
-import { ASTContext } from './ASTProvider'
-import ImplPanel, { Snippet } from './ImplPanel'
-import TestCasePanel from './TestCasePanel'
-import TestResultPanel from './TestResultOutcomes'
+import { Snippet } from './ImplPanel'
 import FunctionTestSnippet from './TestSnippet'
 
 const PromptPreview: React.FC = () => {
   const propmtPreview = useAtomValue(renderPromptAtom)
   if (!propmtPreview) {
     return (
-      <div className='flex flex-col w-full h-full items-center justify-center gap-2'>
-        <span className='text-center'>No prompt preview available!</span>
+      <div className='flex flex-col items-center justify-center w-full h-full gap-2'>
+        <span className='text-center'>No prompt preview available! Add a test to see it!</span>
         <FunctionTestSnippet />
       </div>
     )
@@ -107,9 +100,9 @@ enum Topic {
 }
   `.trim()
     return (
-      <div className='flex flex-col w-full h-full items-center justify-center gap-2'>
+      <div className='flex flex-col items-center justify-center w-full h-full gap-2'>
         No functions found! You can create a new function like:
-        <pre className='bg-vscode-input-background p-2 rounded-sm text-xs'>{bamlFunctionSnippet}</pre>
+        <pre className='p-2 text-xs rounded-sm bg-vscode-input-background'>{bamlFunctionSnippet}</pre>
       </div>
     )
   }
@@ -137,7 +130,7 @@ enum Topic {
           <ResizableHandle withHandle={false} className='bg-vscode-panel-border' />
           <ResizablePanel
             minSize={10}
-            className='px-0 py-2 h-full border-t border-vscode-textSeparator-foreground flex mb-6'
+            className='flex h-full px-0 py-2 mb-6 border-t border-vscode-textSeparator-foreground'
           >
             <TestResults />
           </ResizablePanel>

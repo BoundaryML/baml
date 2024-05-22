@@ -414,8 +414,10 @@ const NewTestCaseDialog: React.FC = () => {
           <Plus size={16} /> New Test
         </Button>
       </DialogTrigger>
-      <DialogContent className='max-h-screen bg-vscode-editorWidget-background border-vscode-textSeparator-foreground overflow-x-clip'>
-        <FunctionTestSnippet />
+      <DialogContent className='max-h-screen min-h-[50%] overflow-y-auto bg-purple-400 bg-vscode-editorWidget-background border-vscode-textSeparator-foreground overflow-x-clip'>
+        <div className='flex flex-col w-full h-full'>
+          <FunctionTestSnippet />
+        </div>
       </DialogContent>
     </Dialog>
   )
