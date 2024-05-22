@@ -193,7 +193,8 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
           value={activeFileContent}
           extensions={langExtensions}
           theme={theme}
-          className='text-sm'
+          readOnly={!activeFile?.endsWith('.baml')}
+          className='text-xs lg:text-sm'
           height='100%'
           width='100%'
           maxWidth='100%'
@@ -221,6 +222,13 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
           {numErrors.errors > 0 && (
             <div className='p-1 text-xs text-white bg-red-500 rounded-md'>
               {numErrors.errors} {numErrors.errors === 1 ? 'error' : 'errors'}
+            </div>
+          )}
+        </div>
+        <div className='absolute bottom-12 right-2 h-[20px] p-2'>
+          {!activeFile?.endsWith('.baml') && (
+            <div className='p-1 text-xs bg-gray-500 rounded-md text-primary'>
+              This is an example read-only file. To modify tests, modify the .baml files.
             </div>
           )}
         </div>
