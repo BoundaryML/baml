@@ -14,7 +14,6 @@ use anyhow::Result;
 use internal_baml_jinja::RenderedPrompt;
 use serde::Serialize;
 
-#[cfg(feature = "no_wasm")]
 use reqwest::StatusCode;
 
 #[cfg(not(feature = "no_wasm"))]
@@ -102,7 +101,6 @@ impl ErrorCode {
         }
     }
 
-    #[cfg(feature = "no_wasm")]
     pub fn from_status(status: StatusCode) -> Self {
         match status.as_u16() {
             401 => ErrorCode::InvalidAuthentication,
@@ -180,5 +178,5 @@ pub trait SseResponseTrait {
         prompt: &internal_baml_jinja::RenderedPrompt,
         system_start: web_time::SystemTime,
         instant_start: web_time::Instant,
-    ) -> impl futures::Stream<Item = Result<LLMCompleteResponse>>;
+    ) -> impl futures::Stream<Item = Result<LLMResponse>>;
 }

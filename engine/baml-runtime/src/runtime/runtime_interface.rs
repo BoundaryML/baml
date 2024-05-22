@@ -319,7 +319,6 @@ impl RuntimeInterface for InternalBamlRuntime {
             provider: first.provider.clone(),
             prompt: first.provider.render_prompt(&renderer, &ctx, &baml_args)?,
             function_name,
-            //inner: Arc::new(Mutex::new(Some(stream))),
             scope: first.scope.clone(),
             ir: self.ir.clone(),
             ctx,

@@ -201,7 +201,7 @@ impl SseResponseTrait for AnthropicClient {
         prompt: &internal_baml_jinja::RenderedPrompt,
         system_start: web_time::SystemTime,
         instant_start: web_time::Instant,
-    ) -> impl Stream<Item = Result<LLMCompleteResponse>> {
+    ) -> impl Stream<Item = Result<LLMResponse>> {
         log::info!("response object {:#?}", resp);
         resp.bytes_stream()
             .inspect(|event| log::trace!("anthropic event bytes: {:#?}", event))
@@ -282,7 +282,7 @@ impl SseResponseTrait for AnthropicClient {
                     };
                     inner.latency = instant_start.elapsed();
 
-                    std::future::ready(Some(Ok(inner.clone())))
+                    std::future::ready(Some(Ok(LLMResponse::Success(inner.clone()))))
                 },
             )
     }

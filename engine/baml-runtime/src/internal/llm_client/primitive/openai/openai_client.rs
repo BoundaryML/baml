@@ -332,7 +332,7 @@ impl SseResponseTrait for OpenAIClient {
         prompt: &internal_baml_jinja::RenderedPrompt,
         system_start: web_time::SystemTime,
         instant_start: web_time::Instant,
-    ) -> impl Stream<Item = Result<LLMCompleteResponse>> {
+    ) -> impl Stream<Item = Result<LLMResponse>> {
         resp.bytes_stream()
             .eventsource()
             .take_while(|event| { std::future::ready(event.as_ref().is_ok_and(|e| e.data != "[DONE]"))})
@@ -389,7 +389,7 @@ LLMCompleteResponse {
                     }
                     inner.latency = instant_start.elapsed();
 
-                    std::future::ready(Some(Ok(inner.clone())))
+                    std::future::ready(Some(Ok(LLMResponse::Success(inner.clone()))))
                 },
             )
     }

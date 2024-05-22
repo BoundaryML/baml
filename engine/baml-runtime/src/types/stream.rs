@@ -12,7 +12,7 @@ use std::sync::Arc;
 use crate::{
     internal::llm_client::{
         orchestrator::{LLMPrimitiveProvider, OrchestrationScope},
-        LLMCompleteResponse, SseResponseTrait,
+        ErrorCode, LLMCompleteResponse, LLMErrorResponse, SseResponseTrait,
     },
     tracing::BamlTracer,
     FunctionResult, RuntimeContext,
@@ -50,10 +50,13 @@ impl FunctionResultStream {
     where
         F: Fn(FunctionResult) -> (),
     {
-        let (span, ctx) =
+        let (span, _ctx) =
             self.tracer
                 .start_span(&self.function_name, self.ctx.clone(), &Default::default());
-        let res = self.run_impl(on_event).await;
+        let res = match self.provider.as_ref() {
+            LLMPrimitiveProvider::OpenAI(c) => self.run_impl(c, on_event).await,
+            LLMPrimitiveProvider::Anthropic(c) => self.run_impl(c, on_event).await,
+        };
 
         let mut target_id = None;
         if let Some(span) = span {
@@ -66,39 +69,77 @@ impl FunctionResultStream {
         (res, target_id)
     }
 
-    async fn run_impl<F>(&mut self, on_event: Option<F>) -> Result<FunctionResult>
-    where
-        F: Fn(FunctionResult) -> (),
-    {
-        match self.provider.as_ref() {
-            LLMPrimitiveProvider::OpenAI(c) => {
-                let req = c.build_request_for_stream(&self.prompt)?;
-                let (system_start, instant_start) =
-                    (web_time::SystemTime::now(), web_time::Instant::now());
-                let resp = req.send().await?;
-                self.run_stream(
-                    c.response_stream(resp, &self.prompt, system_start, instant_start),
-                    on_event,
-                )
-                .await
+    async fn run_impl<C: SseResponseTrait, F: Fn(FunctionResult) -> ()>(
+        &self,
+        c: &C,
+        on_event: Option<F>,
+    ) -> Result<FunctionResult> {
+        let Ok(req) = c.build_request_for_stream(&self.prompt) else {
+            return Ok(FunctionResult::new(
+                self.scope.clone(),
+                LLMResponse::LLMFailure(LLMErrorResponse {
+                    client: self.provider.name().into(),
+                    model: None,
+                    prompt: self.prompt.clone(),
+                    start_time: web_time::SystemTime::now(),
+                    latency: web_time::Duration::ZERO,
+                    message: "Failed to build stream request".into(),
+                    code: ErrorCode::Other(4),
+                }),
+                None,
+            ));
+        };
+        let (system_start, instant_start) = (web_time::SystemTime::now(), web_time::Instant::now());
+        match req.send().await {
+            Ok(resp) => {
+                let status = resp.status();
+                if status == 200 {
+                    self.run_stream(
+                        c.response_stream(resp, &self.prompt, system_start, instant_start),
+                        on_event,
+                    )
+                    .await
+                } else {
+                    Ok(FunctionResult::new(
+                        self.scope.clone(),
+                        LLMResponse::LLMFailure(LLMErrorResponse {
+                            client: self.provider.name().into(),
+                            model: None,
+                            prompt: self.prompt.clone(),
+                            start_time: system_start,
+                            latency: instant_start.elapsed(),
+                            message: resp
+                                .text()
+                                .await
+                                .unwrap_or("Failed to decode response".into()),
+                            code: ErrorCode::from_status(status),
+                        }),
+                        None,
+                    ))
+                }
             }
-            LLMPrimitiveProvider::Anthropic(c) => {
-                let req = c.build_request_for_stream(&self.prompt)?;
-                let (system_start, instant_start) =
-                    (web_time::SystemTime::now(), web_time::Instant::now());
-                let resp = req.send().await?;
-                self.run_stream(
-                    c.response_stream(resp, &self.prompt, system_start, instant_start),
-                    on_event,
-                )
-                .await
-            }
+            Err(e) => Ok(FunctionResult::new(
+                self.scope.clone(),
+                LLMResponse::LLMFailure(LLMErrorResponse {
+                    client: self.provider.name().into(),
+                    model: None,
+                    prompt: self.prompt.clone(),
+                    start_time: system_start,
+                    latency: instant_start.elapsed(),
+                    message: e.to_string(),
+                    code: e
+                        .status()
+                        .map(ErrorCode::from_status)
+                        .unwrap_or(ErrorCode::Other(3)),
+                }),
+                None,
+            )),
         }
     }
 
     async fn run_stream<F>(
         &self,
-        response_stream: impl Stream<Item = Result<LLMCompleteResponse>>,
+        response_stream: impl Stream<Item = Result<LLMResponse>>,
         on_event: Option<F>,
     ) -> Result<FunctionResult>
     where
@@ -107,7 +148,7 @@ impl FunctionResultStream {
         let final_response = response_stream
             .inspect(|event| log::debug!("Received event: {:#?}", event))
             .map(|stream_part| match stream_part {
-                Ok(response) => {
+                Ok(LLMResponse::Success(response)) => {
                     let func = self.ir.find_function(self.function_name.as_str()).unwrap();
                     let parsed = jsonish::from_str(
                         self.ir.as_ref(),
@@ -124,16 +165,20 @@ impl FunctionResultStream {
                             Some(parsed),
                         ));
                     }
-                    Ok(response)
+                    Ok(LLMResponse::Success(response))
                 }
+                Ok(other) => Ok(other),
                 Err(e) => Err(e),
             })
             .fold(None, |_, current| async { Some(current) })
             .await
-            .ok_or(anyhow::anyhow!("Stream ended before receiving responses"))?;
+            .ok_or_else(|| {
+                log::info!("in the ok-or-else stream ended no responses");
+                anyhow::anyhow!("Stream ended before receiving responses")
+            })?;
 
         match final_response {
-            Ok(response) => {
+            Ok(LLMResponse::Success(response)) => {
                 let func = self.ir.find_function(self.function_name.as_str())?;
                 let final_parsed = jsonish::from_str(
                     &*self.ir,
@@ -148,6 +193,7 @@ impl FunctionResultStream {
                     Some(final_parsed),
                 ))
             }
+            Ok(other) => Ok(FunctionResult::new(self.scope.clone(), other, None)),
             Err(e) => Ok(FunctionResult::new(
                 self.scope.clone(),
                 LLMResponse::OtherFailure(e.to_string()),
