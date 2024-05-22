@@ -27,3 +27,25 @@ function ClassifyMessage2(input: string) -> Category {
     Response:
   "#
 }
+
+
+test TestName {
+  functions [ClassifyMessage2]
+  args {
+    input #"
+      hello world
+    "#
+  }
+}
+
+
+
+test TestName2 {
+  functions [ClassifyMessage2]
+  args {
+    input #"
+      hello world
+    "#
+  }
+}
+

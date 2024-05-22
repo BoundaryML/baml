@@ -6,7 +6,7 @@ import { atomFamily, atomWithStorage, unwrap, useAtomCallback } from 'jotai/util
 import { AlertTriangle, CheckCircle, XCircle } from 'lucide-react'
 import { useCallback, useEffect } from 'react'
 import CustomErrorBoundary from '../utils/ErrorFallback'
-import { sessionStore } from './JotaiProvider'
+import { sessionStore, vscodeLocalStorageStore } from './JotaiProvider'
 import { availableProjectsAtom, projectFamilyAtom, projectFilesAtom, runtimeFamilyAtom } from './baseAtoms'
 import type BamlProjectManager from './project_manager'
 import type {
@@ -32,7 +32,11 @@ const defaultEnvKeyValues: [string, string][] = (() => {
 
 const selectedProjectStorageAtom = atomWithStorage<string | null>('selected-project', null, sessionStore)
 const selectedFunctionStorageAtom = atomWithStorage<string | null>('selected-function', null, sessionStore)
-const envKeyValueStorage = atomWithStorage<[string, string][]>('env-key-values', defaultEnvKeyValues, sessionStore)
+const envKeyValueStorage = atomWithStorage<[string, string][]>(
+  'env-key-values',
+  defaultEnvKeyValues,
+  vscodeLocalStorageStore,
+)
 
 export const resetEnvKeyValuesAtom = atom(null, (get, set) => {
   set(envKeyValueStorage, [])
