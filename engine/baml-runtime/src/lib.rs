@@ -52,7 +52,7 @@ pub(crate) use internal_baml_jinja::{ChatMessagePart, RenderedPrompt};
 pub(crate) use runtime_interface::InternalRuntimeInterface;
 
 pub use internal_baml_core::internal_baml_diagnostics::Diagnostics as DiagnosticsError;
-pub use internal_baml_core::ir::{FieldType, TypeValue};
+pub use internal_baml_core::ir::{FieldType, IRHelper, TypeValue};
 
 pub struct BamlRuntime {
     inner: InternalBamlRuntime,

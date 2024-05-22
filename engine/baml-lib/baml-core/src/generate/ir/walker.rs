@@ -1,6 +1,7 @@
 use anyhow::Result;
 use baml_types::BamlValue;
 use indexmap::IndexMap;
+
 use internal_baml_parser_database::RetryPolicyStrategy;
 
 use std::collections::HashMap;
@@ -89,6 +90,10 @@ impl<'a> Walker<'a, &'a Function> {
     ) -> either::Either<&'a repr::FunctionArgs, &'a Vec<(String, repr::FieldType)>> {
         self.item.elem.inputs()
     }
+
+    pub fn span(&self) -> Option<&crate::Span> {
+        self.item.attributes.span.as_ref()
+    }
 }
 
 impl<'a> Walker<'a, &'a Enum> {
@@ -105,6 +110,10 @@ impl<'a> Walker<'a, &'a Enum> {
 
     pub fn elem(&self) -> &'a repr::Enum {
         &self.item.elem
+    }
+
+    pub fn span(&self) -> Option<&crate::Span> {
+        self.item.attributes.span.as_ref()
     }
 }
 
@@ -279,6 +288,10 @@ impl<'a> Walker<'a, &'a Class> {
     pub fn elem(&self) -> &'a repr::Class {
         &self.item.elem
     }
+
+    pub fn span(&self) -> Option<&crate::Span> {
+        self.item.attributes.span.as_ref()
+    }
 }
 
 impl<'a> Walker<'a, &'a Client> {
@@ -292,6 +305,10 @@ impl<'a> Walker<'a, &'a Client> {
 
     pub fn retry_policy(&self) -> &Option<String> {
         &self.elem().retry_policy_id
+    }
+
+    pub fn span(&self) -> Option<&crate::Span> {
+        self.item.attributes.span.as_ref()
     }
 }
 
@@ -311,6 +328,10 @@ impl<'a> Walker<'a, &'a RetryPolicy> {
     pub fn strategy(&self) -> &RetryPolicyStrategy {
         &self.elem().strategy
     }
+
+    pub fn span(&self) -> Option<&crate::Span> {
+        self.item.attributes.span.as_ref()
+    }
 }
 
 impl<'a> Walker<'a, &'a TemplateString> {
@@ -328,6 +349,10 @@ impl<'a> Walker<'a, &'a TemplateString> {
 
     pub fn template(&self) -> &str {
         &self.elem().content
+    }
+
+    pub fn span(&self) -> Option<&crate::Span> {
+        self.item.attributes.span.as_ref()
     }
 }
 
@@ -350,5 +375,9 @@ impl<'a> Walker<'a, &'a Field> {
             |v| v.as_string_value(env_values),
         )?;
         Ok(vec![val])
+    }
+
+    pub fn span(&self) -> Option<&crate::Span> {
+        self.item.attributes.span.as_ref()
     }
 }
