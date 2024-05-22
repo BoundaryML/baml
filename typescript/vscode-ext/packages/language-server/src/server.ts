@@ -358,6 +358,7 @@ export function startServer(options?: LSOptions): void {
         return proj.handleDefinitionRequest(doc, params.position)
       }
     }
+    return undefined
   })
 
   // connection.onCompletion((params: CompletionParams) => {
@@ -373,7 +374,6 @@ export function startServer(options?: LSOptions): void {
   // })
 
   connection.onHover((params: HoverParams) => {
-    // return undefined
     const doc = getDocument(params.textDocument.uri)
     if (doc) {
       const proj = bamlProjectManager.getProjectById(URI.parse(doc.uri))

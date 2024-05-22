@@ -99,11 +99,7 @@ class Project {
   }
 
   get_file(file_path: string) {
-    // const filePath = this.files.files().find((f) => f.startsWith(file_path || ''));
-    // if (!filePath) {
-    //   return null;
-    // }
-    // console.log(`Filepath: ${filePath}`)
+
     // Read the file content
     const fileContent = readFileSync(file_path, 'utf8');
   
@@ -166,7 +162,7 @@ class Project {
     }
 
     const match = this.runtime().searchForSymbol(cleaned_word)
-    console.log("handle hover request")
+    
     //need to get the content of the range specified by match's start and end lines and characters
     if (match) {
       const hoverCont: { language: string; value: string }[] = []
@@ -401,11 +397,10 @@ class BamlProjectManager {
   }
 
   getProjectById(id: URI): Project {
-    console.log("Getting project by id")
-    console.log(`rebuild changed ${id.toString()} -> ${uriToRootPath(id)}`)
-    const project = this.get_project(uriToRootPath(id));
-    console.log("got project id")
-    return project;
+
+    
+    
+    return this.get_project(uriToRootPath(id));
   }
 
 

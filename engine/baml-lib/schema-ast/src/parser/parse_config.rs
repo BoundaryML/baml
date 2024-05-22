@@ -61,18 +61,11 @@ pub(crate) fn parse_config_block(
             _ => parsing_catch_all(&current, "client"),
         }
     }
-    log::info!("Rebuilt");
 
     let span = match kw {
-        Some(name) => {
-            log::info!("Name: {}", name);
-
-            log::info!("Length of name: {}", name.len());
-            diagnostics.span(pair_span)
-        }
+        Some(name) => diagnostics.span(pair_span),
         _ => unreachable!("Encountered impossible model declaration during parsing"),
     };
-    log::info!("Span: {:?}", span);
 
     match (kw, name, template_args) {
         (Some("printer"), _, None) => Err(DatamodelError::new_validation_error(
