@@ -1,4 +1,4 @@
-import { Input } from '@/components/ui/input'
+import { Input } from '../components/ui/input'
 import { selectedFunctionAtom } from '../baml_wasm_web/EventListener'
 import { useAtomValue } from 'jotai'
 import { Textarea } from '../components/ui/textarea'

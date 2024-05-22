@@ -706,7 +706,6 @@ test TestName {{
 
     #[wasm_bindgen]
     pub fn searchForSymbol(&self, symbol: &str) -> Option<SymbolLocation> {
-        log::info!("Searching for symbol: {}", symbol);
         let runtime = self.runtime.internal().ir();
 
         if let Ok(walker) = runtime.find_enum(symbol) {
@@ -723,6 +722,7 @@ test TestName {{
         }
         if let Ok(walker) = runtime.find_class(symbol) {
             let elem = walker.span().unwrap();
+
             let uri_str = elem.file.path().to_string(); // Store the String in a variable
             let ((s_line, s_character), (e_line, e_character)) = elem.line_and_column();
             return Some(SymbolLocation {
@@ -736,6 +736,7 @@ test TestName {{
 
         if let Ok(walker) = runtime.find_function(symbol) {
             let elem = walker.span().unwrap();
+
             let uri_str = elem.file.path().to_string(); // Store the String in a variable
             let ((s_line, s_character), (e_line, e_character)) = elem.line_and_column();
             return Some(SymbolLocation {
@@ -749,8 +750,10 @@ test TestName {{
 
         if let Ok(walker) = runtime.find_client(symbol) {
             let elem = walker.span().unwrap();
+
             let uri_str = elem.file.path().to_string(); // Store the String in a variable
             let ((s_line, s_character), (e_line, e_character)) = elem.line_and_column();
+
             return Some(SymbolLocation {
                 uri: elem.file.path().to_string(), // Use the variable here
                 start_line: s_line,
@@ -762,6 +765,7 @@ test TestName {{
 
         if let Ok(walker) = runtime.find_retry_policy(symbol) {
             let elem = walker.span().unwrap();
+
             let uri_str = elem.file.path().to_string(); // Store the String in a variable
             let ((s_line, s_character), (e_line, e_character)) = elem.line_and_column();
             return Some(SymbolLocation {
@@ -775,7 +779,6 @@ test TestName {{
 
         if let Ok(walker) = runtime.find_template_string(symbol) {
             let elem = walker.span().unwrap();
-            log::info!("Found template string: {:?}", elem);
             let uri_str = elem.file.path().to_string(); // Store the String in a variable
             let ((s_line, s_character), (e_line, e_character)) = elem.line_and_column();
             return Some(SymbolLocation {

@@ -1,10 +1,13 @@
 import BamlWasm, { type WasmDiagnosticError } from '@gloo-ai/baml-schema-wasm-node'
 import { readFile } from 'fs/promises'
-import { type Diagnostic, DiagnosticSeverity, Position, LocationLink } from 'vscode-languageserver'
+import { type Diagnostic, DiagnosticSeverity, Position, LocationLink, Hover } from 'vscode-languageserver'
 import { TextDocument } from 'vscode-languageserver-textdocument' 
+import { readFileSync } from 'fs';
+
 import type { URI } from 'vscode-uri'
 import { findTopLevelParent, gatherFiles } from '../file/fileUtils'
 import { getWordAtPosition, convertDocumentTextToTrimmedLineArray, trimLine } from './ast'
+
 
 
 type Notify = (
@@ -95,6 +98,17 @@ class Project {
     this.current_runtime = undefined
   }
 
+  get_file(file_path: string) {
+
+    // Read the file content
+    const fileContent = readFileSync(file_path, 'utf8');
+  
+    // Create a TextDocument
+    const doc = TextDocument.create(file_path, 'plaintext', 1, fileContent);
+  
+    return doc;
+  }
+
   upsert_file(file_path: string, content: string | undefined) {
     this.files.update_file(file_path, content)
     if (this.current_runtime) {
@@ -105,16 +119,11 @@ class Project {
   }
 
   handleDefinitionRequest(doc: TextDocument, position: Position): LocationLink[] {
-  
-  
-  
-    
+      
     const word = getWordAtPosition(doc, position)
     
     //clean non-alphanumeric characters besides underscores and periods
     const cleaned_word = trimLine(word)
-    
-
     if (cleaned_word === '') {
       
       return []
@@ -123,9 +132,6 @@ class Project {
     // Search for the symbol in the runtime
     const match = this.runtime().searchForSymbol(cleaned_word)
 
-    
-    
-    
     // If we found a match, return the location
     if (match) {
       return [
@@ -146,6 +152,42 @@ class Project {
     
     
     return [];
+  }
+
+  handleHoverRequest(doc: TextDocument, position: Position): Hover {
+    const word = getWordAtPosition(doc, position)
+    const cleaned_word = trimLine(word)
+    if (cleaned_word === '') {
+      return { contents: [] }
+    }
+
+    const match = this.runtime().searchForSymbol(cleaned_word)
+    
+    //need to get the content of the range specified by match's start and end lines and characters
+    if (match) {
+      const hoverCont: { language: string; value: string }[] = []
+
+      const range = {
+        start: { line: match.start_line, character: match.start_character },
+        end: { line: match.end_line, character: match.end_character }
+      }
+      
+      
+      const hoverDoc = this.get_file(match.uri)
+
+      if (hoverDoc) {
+
+
+        const hoverText = hoverDoc.getText(range)
+        
+        hoverCont.push({ language: 'baml', value: hoverText })
+      
+        return {contents: hoverCont}
+      }
+
+    }
+
+    return { contents: [] }
   }
 
   // list_functions(): BamlWasm.WasmFunction[] {
@@ -355,11 +397,10 @@ class BamlProjectManager {
   }
 
   getProjectById(id: URI): Project {
-    console.log("Getting project by id")
-    console.log(`rebuild changed ${id.toString()} -> ${uriToRootPath(id)}`)
-    const project = this.get_project(uriToRootPath(id));
-    console.log("got project id")
-    return project;
+
+    
+    
+    return this.get_project(uriToRootPath(id));
   }
 
 
