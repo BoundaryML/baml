@@ -176,15 +176,14 @@ class Project {
         end: { line: match.end_line, character: match.end_character }
       }
       
-      console.log(`Match URI: ${JSON.stringify(match.uri)}`)
+      
       const hoverDoc = this.get_file(match.uri)
 
       if (hoverDoc) {
-        console.log(`URI: ${hoverDoc.uri}`)
-        console.log(`Hover range: ${JSON.stringify(range)}`)
+
 
         const hoverText = hoverDoc.getText(range)
-        console.log(`Hover text: ${hoverText}`)
+        
         hoverCont.push({ language: 'baml', value: hoverText })
       
         return {contents: hoverCont}
