@@ -32,10 +32,12 @@ struct PartialPythonClass<'ir> {
     fields: Vec<(&'ir str, String)>,
 }
 
-impl<'ir> TryFrom<&'ir IntermediateRepr> for PythonTypes<'ir> {
+impl<'ir> TryFrom<(&'ir IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonTypes<'ir> {
     type Error = anyhow::Error;
 
-    fn try_from(ir: &'ir IntermediateRepr) -> Result<PythonTypes<'ir>> {
+    fn try_from(
+        (ir, _): (&'ir IntermediateRepr, &'_ crate::GeneratorArgs),
+    ) -> Result<PythonTypes<'ir>> {
         Ok(PythonTypes {
             enums: ir.walk_enums().map(PythonEnum::from).collect::<Vec<_>>(),
             classes: ir.walk_classes().map(PythonClass::from).collect::<Vec<_>>(),
@@ -73,10 +75,10 @@ impl<'ir> From<ClassWalker<'ir>> for PythonClass<'ir> {
     }
 }
 
-impl<'ir> TryFrom<&'ir IntermediateRepr> for PythonStreamTypes<'ir> {
+impl<'ir> TryFrom<(&'ir IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonStreamTypes<'ir> {
     type Error = anyhow::Error;
 
-    fn try_from(ir: &'ir IntermediateRepr) -> Result<Self> {
+    fn try_from((ir, _): (&'ir IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
         Ok(Self {
             partial_classes: ir
                 .walk_classes()

@@ -15,7 +15,6 @@ members = [
 default-members = [
   "baml-cli",
   "baml-lib/*",
-  "baml-core-ffi",
   "baml-fmt",
   "baml-runtime",
   # Disabled by default: --features no_wasm and --features wasm are mutually exclusive

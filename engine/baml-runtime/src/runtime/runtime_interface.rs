@@ -300,11 +300,12 @@ impl RuntimeInterface for InternalBamlRuntime {
         function_name: String,
         params: &BamlMap<String, BamlValue>,
         tracer: Arc<BamlTracer>,
+        ctx: RuntimeContext,
     ) -> Result<FunctionResultStream> {
-        let func = self.get_function(&function_name, &Default::default())?;
+        let func = self.get_function(&function_name, &ctx)?;
         let renderer = PromptRenderer::from_function(&func)?;
         let client_name = renderer.client_name().to_string();
-        let orchestrator = self.orchestration_graph(&client_name, &Default::default())?;
+        let orchestrator = self.orchestration_graph(&client_name, &ctx)?;
         let Some(baml_args) = self
             .ir
             .check_function_params(&func, &params)?

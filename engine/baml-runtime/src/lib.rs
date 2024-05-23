@@ -180,10 +180,14 @@ impl BamlRuntime {
         &self,
         function_name: String,
         params: &BamlMap<String, BamlValue>,
-        _ctx: &RuntimeContextManager,
+        ctx: &RuntimeContextManager,
     ) -> Result<FunctionResultStream> {
-        self.inner
-            .stream_function_impl(function_name, params, self.tracer.clone())
+        self.inner.stream_function_impl(
+            function_name,
+            params,
+            self.tracer.clone(),
+            ctx.create_ctx(),
+        )
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -211,7 +215,7 @@ impl BamlRuntime {
                     generator.output_type.clone(),
                     internal_baml_codegen::GeneratorArgs {
                         output_dir: generator.output_dir(),
-                        encoded_baml_files: None,
+                        rel_baml_src_path: generator.rel_baml_src_path(),
                     },
                 )
             })

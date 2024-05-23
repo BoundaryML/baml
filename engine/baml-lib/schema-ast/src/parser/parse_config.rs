@@ -63,7 +63,7 @@ pub(crate) fn parse_config_block(
     }
 
     let span = match kw {
-        Some(name) => diagnostics.span(pair_span),
+        Some(_) => diagnostics.span(pair_span),
         _ => unreachable!("Encountered impossible model declaration during parsing"),
     };
 

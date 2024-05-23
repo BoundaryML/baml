@@ -16,6 +16,13 @@ pub struct RuntimeContextManager {
 }
 
 impl RuntimeContextManager {
+    pub fn deep_clone(&self) -> Self {
+        Self {
+            context: Arc::new(Mutex::new(self.context.lock().unwrap().clone())),
+            env_vars: self.env_vars.clone(),
+        }
+    }
+
     pub fn new_from_env_vars(env_vars: HashMap<String, String>) -> Self {
         Self {
             context: Default::default(),

@@ -31,9 +31,8 @@ fn default_stage() -> String {
 
 fn default_host_name() -> String {
     #[cfg(target_arch = "wasm32")]
-    {
-        return "<browser>".to_string();
-    }
+    return "<browser>".to_string();
+
     #[cfg(not(target_arch = "wasm32"))]
     hostname::get()
         .map(|h| h.to_string_lossy().to_string())

@@ -1,4 +1,4 @@
-from .baml_py import FunctionResult, FunctionResultStream
+from .baml_py import FunctionResult, FunctionResultStream, RuntimeContextManagerPy
 from enum import Enum
 from typing import Callable, Generic, Optional, TypeVar, Union
 import asyncio
@@ -20,17 +20,19 @@ class CallbackOnTimer:
 PartialOutputType = TypeVar("PartialOutputType")
 FinalOutputType = TypeVar("FinalOutputType")
 
+
 class EventType(Enum):
-    EVENT = 'event'
-    DONE = 'done'
+    EVENT = "event"
+    DONE = "done"
 
 
 class BamlStream(Generic[PartialOutputType, FinalOutputType]):
     __ffi_stream: FunctionResultStream
     __partial_coerce: Callable[[FunctionResult], PartialOutputType]
     __final_coerce: Callable[[FunctionResult], FinalOutputType]
+    __ctx_manager: RuntimeContextManagerPy
 
-    __task: Optional[asyncio.Task] = None
+    __task: Optional[asyncio.Task[FunctionResult]] = None
     __event_queue: asyncio.Queue[Optional[FunctionResult]] = asyncio.Queue()
     __done_queue: asyncio.Queue[Union[FunctionResult, Exception]] = asyncio.Queue(1)
 
@@ -39,22 +41,24 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
         ffi_stream: FunctionResultStream,
         partial_coerce: Callable[[FunctionResult], PartialOutputType],
         final_coerce: Callable[[FunctionResult], FinalOutputType],
+        ctx_manager: RuntimeContextManagerPy,
     ):
         self.__ffi_stream = ffi_stream.on_event(self.__enqueue)
         self.__partial_coerce = partial_coerce
         self.__final_coerce = final_coerce
+        self.__ctx_manager = ctx_manager
 
     def __enqueue(self, data: FunctionResult) -> None:
         self.__event_queue.put_nowait(data)
 
-    async def __drive_to_completion(self) -> None:
+    async def __drive_to_completion(self) -> FunctionResult:
         try:
-            retval = await self.__ffi_stream.done()
+            retval = await self.__ffi_stream.done(self.__ctx_manager)
             return retval
         finally:
             self.__event_queue.put_nowait(None)
-      
-    def __drive_to_completion_in_bg(self) -> asyncio.Task:
+
+    def __drive_to_completion_in_bg(self) -> asyncio.Task[FunctionResult]:
         # Doing this without using a compare-and-swap or lock is safe,
         # because we don't cross an await point during it
         if self.__task is None:

@@ -47,6 +47,10 @@ impl Generator {
         )
     }
 
+    pub fn rel_baml_src_path(&self) -> PathBuf {
+        self.output_dir.join("..").join("baml_src")
+    }
+
     pub fn output_dir(&self) -> PathBuf {
         self.output_dir.join("baml_client")
     }

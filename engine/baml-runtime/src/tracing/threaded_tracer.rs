@@ -16,11 +16,18 @@ enum RxEventSignal {
 }
 
 async fn process_batch_async(api_config: &APIWrapper, batch: Vec<LogSchema>) {
+    log::info!("Processing batch of size: {}", batch.len());
     for work in batch {
         match api_config.log_schema(&work).await {
-            Ok(_) => {}
+            Ok(_) => {
+                log::debug!(
+                    "Successfully sent log schema: {} - {:?}",
+                    work.event_id,
+                    work.context.event_chain.last()
+                );
+            }
             Err(e) => {
-                log::debug!("Error sending log schema: {:?}", e);
+                log::warn!("Unable to emit BAML logs: {}", e);
             }
         }
     }
@@ -137,6 +144,7 @@ impl ThreadedTracer {
     }
 
     pub async fn submit(&self, event: LogSchema) -> Result<()> {
+        log::info!("Submitting work {}", event.event_id);
         let tx = self
             .tx
             .lock()

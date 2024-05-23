@@ -4,7 +4,6 @@ use anyhow::Result;
 
 mod filter;
 mod run_state;
-mod tracing_helper;
 
 use baml_runtime::{BamlRuntime, InternalRuntimeInterface};
 use filter::FilterArgs;

@@ -42,6 +42,7 @@ pub trait RuntimeInterface {
         function_name: String,
         params: &BamlMap<String, BamlValue>,
         tracer: Arc<BamlTracer>,
+        ctx: RuntimeContext,
     ) -> Result<FunctionResultStream>;
 }
 

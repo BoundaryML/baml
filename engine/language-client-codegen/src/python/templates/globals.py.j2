@@ -1,0 +1,11 @@
+import os
+
+from baml_py import BamlCtxManager, BamlRuntimeFfi
+from .client import BamlClient
+
+_DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME = BamlRuntimeFfi.from_directory(os.environ.get('BAML_SRC_PATH', "{{ rel_baml_src_path }}"), os.environ.copy())
+DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX = BamlCtxManager(_DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME)
+
+b = BamlClient(_DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX)
+
+__all__ = ['b']

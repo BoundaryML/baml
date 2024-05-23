@@ -31,7 +31,7 @@ impl GenerateArgs {
             &client_type,
             &internal_baml_codegen::GeneratorArgs {
                 output_dir: PathBuf::from(&self.to).join("baml_client"),
-                encoded_baml_files: None,
+                rel_baml_src_path: PathBuf::from(&self.from),
             },
         )?;
 

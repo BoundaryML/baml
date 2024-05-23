@@ -26,9 +26,17 @@ struct PythonFunction {
 
 #[derive(askama::Template)]
 #[template(path = "__init__.py.j2", escape = "none")]
-struct PythonInit {
-    encoded_baml_src: String,
+struct PythonInit {}
+
+#[derive(askama::Template)]
+#[template(path = "globals.py.j2", escape = "none")]
+struct PythonGlobals {
+    rel_baml_src_path: String,
 }
+
+#[derive(askama::Template)]
+#[template(path = "tracing.py.j2", escape = "none")]
+struct PythonTracing {}
 
 pub(crate) fn generate(
     ir: &IntermediateRepr,
@@ -36,29 +44,45 @@ pub(crate) fn generate(
 ) -> Result<IndexMap<PathBuf, String>> {
     let mut collector = FileCollector::<PythonLanguageFeatures>::new();
 
-    collector.add_template::<generate_types::PythonStreamTypes>("partial_types.py", ir)?;
-    collector.add_template::<generate_types::PythonTypes>("types.py", ir)?;
-    collector.add_template::<PythonClient>("client.py", ir)?;
+    collector
+        .add_template::<generate_types::PythonStreamTypes>("partial_types.py", (ir, generator))?;
+    collector.add_template::<generate_types::PythonTypes>("types.py", (ir, generator))?;
+    collector.add_template::<PythonClient>("client.py", (ir, generator))?;
+    collector.add_template::<PythonGlobals>("globals.py", (ir, generator))?;
+    collector.add_template::<PythonTracing>("tracing.py", (ir, generator))?;
 
     collector.add_file(
         "__init__.py",
-        PythonInit {
-            encoded_baml_src: generator
-                .encoded_baml_files
-                .clone()
-                .unwrap_or("".to_string()),
-        }
-        .render()
-        .map_err(|e| anyhow::Error::from(e).context("Error while rendering __init__.py"))?,
+        PythonInit {}
+            .render()
+            .map_err(|e| anyhow::Error::from(e).context("Error while rendering __init__.py"))?,
     );
 
     collector.commit(&generator.output_dir)
 }
 
-impl TryFrom<&IntermediateRepr> for PythonClient {
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonTracing {
     type Error = anyhow::Error;
 
-    fn try_from(ir: &IntermediateRepr) -> Result<Self> {
+    fn try_from(_: (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
+        Ok(PythonTracing {})
+    }
+}
+
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonGlobals {
+    type Error = anyhow::Error;
+
+    fn try_from((_, args): (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
+        Ok(PythonGlobals {
+            rel_baml_src_path: args.rel_baml_src_path.to_string_lossy().to_string(),
+        })
+    }
+}
+
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonClient {
+    type Error = anyhow::Error;
+
+    fn try_from((ir, _): (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
         let functions = ir
             .walk_functions()
             .map(|f| {

@@ -7,6 +7,8 @@ use std::path::PathBuf;
 use std::thread::sleep;
 use std::time::Duration;
 
+use crate::GeneratorArgs;
+
 // Add a trait per language that can be used to convert an Import into a string
 pub(super) trait LanguageFeatures {
     const CONTENT_PREFIX: &'static str;
@@ -76,13 +78,14 @@ impl<L: LanguageFeatures + Default> FileCollector<L> {
 
     pub(super) fn add_template<
         'ir,
-        V: TryFrom<&'ir IntermediateRepr, Error = anyhow::Error> + askama::Template,
+        V: TryFrom<(&'ir IntermediateRepr, &'ir GeneratorArgs), Error = anyhow::Error>
+            + askama::Template,
     >(
         &mut self,
         name: impl Into<PathBuf> + std::fmt::Display,
-        ir: &'ir IntermediateRepr,
+        args: (&'ir IntermediateRepr, &'ir GeneratorArgs),
     ) -> Result<()> {
-        let rendered = V::try_from(ir)
+        let rendered = V::try_from(args)
             .map_err(|e| e.context(format!("Error while building {}", name)))?
             .render()
             .map_err(|e| {

@@ -1,10 +1,10 @@
 use baml_runtime::tracing::TracingSpan;
-use baml_runtime::{BamlRuntime, RuntimeContext};
+use baml_runtime::BamlRuntime;
 use baml_types::BamlValue;
 use pyo3::prelude::{pyclass, pymethods, PyAnyMethods, PyModule, PyResult};
-use pyo3::types::{PyString, PyType};
+use pyo3::types::PyType;
 use pyo3::{Bound, Py, PyAny, PyObject, PyRefMut, Python, ToPyObject};
-use pythonize::{depythonize_bound, pythonize};
+use pythonize::pythonize;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -193,7 +193,6 @@ ret = get_schema()
 #[pyclass(name = "BamlSpan")]
 pub struct BamlSpanPy {
     span: Option<TracingSpan>,
-    ctx: RuntimeContext,
     rt: Arc<BamlRuntime>,
 }
 
@@ -215,12 +214,11 @@ impl BamlSpanPy {
             return Err(BamlError::new_err("Failed to parse args"));
         };
 
-        let (span, ctx) = runtime
+        let (span, _) = runtime
             .internal
             .start_span(function_name, &args_map, &ctx.inner);
         Ok(Self {
             span,
-            ctx,
             rt: runtime.internal.clone(),
         })
     }

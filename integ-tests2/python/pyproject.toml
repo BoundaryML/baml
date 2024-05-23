@@ -8,10 +8,11 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.10"
 pydantic = "^2.7.1"
+dotenv-cli = "^3.3.0"
 
 
 [tool.poetry.group.dev.dependencies]
-maturin = {extras = ["patchelf"], version = "^1.5.1"}
+maturin = { version = "^1.5.1" }
 
 [build-system]
 requires = ["poetry-core"]

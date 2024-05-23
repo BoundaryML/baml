@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use indexmap::IndexMap;
 use internal_baml_core::{configuration::GeneratorOutputType, ir::repr::IntermediateRepr};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 mod dir_writer;
 mod python;
@@ -12,8 +12,10 @@ mod typescript;
 
 #[derive(Deserialize)]
 pub struct GeneratorArgs {
+    /// Output directory for the generated client code
     pub output_dir: PathBuf,
-    pub encoded_baml_files: Option<String>,
+    /// Relative path to the BAML source directory from the output directory
+    pub rel_baml_src_path: PathBuf,
 }
 
 pub struct GenerateOutput {
