@@ -142,6 +142,7 @@ export async function loadExampleProjects(): Promise<BamlProjectsGroupings> {
       {
         id: 'symbol-tuning',
         name: 'Symbol Tuning',
+        filePath: '/prompt-engineering/symbol-tuning/',
         description: 'Use symbol tuning to remove biases on schema property names',
         files: [],
       },

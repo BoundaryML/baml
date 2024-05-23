@@ -257,6 +257,10 @@ const FilterButton: React.FC<{ selected: boolean; name: string; count: number; o
   count,
   onClick,
 }) => {
+  if (count === 0) {
+    return null
+  }
+
   return (
     <Badge
       className={`flex flex-row items-center gap-1 cursor-pointer bg-vscode-list-inactiveSelectionBackground ${
