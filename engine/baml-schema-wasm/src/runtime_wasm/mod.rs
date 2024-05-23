@@ -858,7 +858,7 @@ impl WasmRuntime {
             log::info!("Function name: {}", function.name);
             log::info!("Function span: start: {}, end: {}", span.start, span.end);
 
-            if (span.start..=span.end).contains(&cursorIdx) {
+            if ((span.start + 1)..=(span.end + 1)).contains(&cursorIdx) {
                 log::info!("Found function: {}", function.name);
 
                 return Some(function);
