@@ -1,4 +1,5 @@
 import 'react18-json-view/src/style.css'
+// import * as vscode from 'vscode'
 
 import { VSCodeButton } from '@vscode/webview-ui-toolkit/react'
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
@@ -138,36 +139,40 @@ export const selectedTestCaseAtom = atom(
   },
 )
 
-const updateCursorAtom = atom(null, (get, set, cursor: { fileText: string; line: number; column: number }) => {
-  const selectedProject = get(selectedProjectAtom)
-  if (selectedProject === null) {
-    return
-  }
-
-  const project = get(projectFamilyAtom(selectedProject))
-  const runtime = get(selectedRuntimeAtom)
-
-  if (runtime && project) {
-    //need logic to convert line and column to index value
-    let cursorIdx = 0
-    const fileContent = cursor.fileText
-    const lines = fileContent.split('\n')
-    let charCount = 0
-
-    for (let i = 0; i < cursor.line; i++) {
-      charCount += lines[i].length + 1 // +1 for the newline character
+const updateCursorAtom = atom(
+  null,
+  (get, set, cursor: { fileName: string; fileText: string; line: number; column: number }) => {
+    const selectedProject = get(selectedProjectAtom)
+    if (selectedProject === null) {
+      return
     }
 
-    charCount += cursor.column
-    cursorIdx = charCount
+    const project = get(projectFamilyAtom(selectedProject))
+    const runtime = get(selectedRuntimeAtom)
 
-    const selectedFunc = runtime.get_function_at_position(cursorIdx)
+    if (runtime && project) {
+      //need logic to convert line and column to index value
+      let cursorIdx = 0
+      const fileName = cursor.fileName
+      const fileContent = cursor.fileText
+      const lines = fileContent.split('\n')
+      let charCount = 0
 
-    if (selectedFunc) {
-      set(selectedFunctionAtom, selectedFunc.name)
+      for (let i = 0; i < cursor.line; i++) {
+        charCount += lines[i].length + 1 // +1 for the newline character
+      }
+
+      charCount += cursor.column
+      cursorIdx = charCount
+
+      const selectedFunc = runtime.get_function_at_position(fileName, cursorIdx)
+
+      if (selectedFunc) {
+        set(selectedFunctionAtom, selectedFunc.name)
+      }
     }
-  }
-})
+  },
+)
 
 const removeProjectAtom = atom(null, (get, set, root_path: string) => {
   set(projectFilesAtom(root_path), {})
@@ -503,7 +508,7 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
         | {
             command: 'update_cursor'
             content: {
-              cursor: { fileText: string; line: number; column: number }
+              cursor: { fileName: string; fileText: string; line: number; column: number }
             }
           }
       >,
