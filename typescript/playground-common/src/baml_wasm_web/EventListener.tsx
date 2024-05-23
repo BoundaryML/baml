@@ -231,9 +231,12 @@ export const updateFileAtom = atom(null, (get, set, params: WriteFileParams) => 
         project.update_file(file, undefined)
       }
     }
+    console.log('file root path', root_path)
     for (const [name, content] of filesToModify) {
       if (name.startsWith(root_path)) {
+        console.log('Updating file', name)
         project.update_file(name, content)
+        projFiles[name] = content
       }
     }
   } else {
@@ -269,6 +272,7 @@ export const updateFileAtom = atom(null, (get, set, params: WriteFileParams) => 
     set(availableProjectsAtom, [...availableProjects, root_path])
   }
 
+  console.log('projfiles', projFiles)
   set(projectFilesAtom(root_path), projFiles)
   set(projectFamilyAtom(root_path), project)
   set(runtimeFamilyAtom(root_path), (prev) => ({

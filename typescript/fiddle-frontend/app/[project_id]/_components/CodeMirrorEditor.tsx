@@ -151,7 +151,7 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
         effects: comparment.reconfigure([makeLinter()]),
       })
     }
-  }, [editorFiles])
+  }, [JSON.stringify(editorFiles)])
 
   const setUnsavedChanges = useSetAtom(unsavedChangesAtom)
 

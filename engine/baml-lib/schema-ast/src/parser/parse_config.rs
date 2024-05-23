@@ -44,7 +44,7 @@ pub(crate) fn parse_config_block(
                         Rule::comment_block => pending_field_comment = Some(item),
                         Rule::BLOCK_LEVEL_CATCH_ALL => {
                             diagnostics.push_error(DatamodelError::new_validation_error(
-                                "This line is not a valid field or attribute definition.",
+                                "This line is not a valid field or attribute definition. A valid property may look like: 'myProperty \"some value\"' for example, with no colons.",
                                 diagnostics.span(item.as_span()),
                             ))
                         }

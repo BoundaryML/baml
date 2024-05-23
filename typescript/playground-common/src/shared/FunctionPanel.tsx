@@ -116,7 +116,7 @@ enum Topic {
     >
       <TooltipProvider>
         <ResizablePanelGroup direction='vertical' className='h-full'>
-          <ResizablePanel id='top-panel' className='flex w-full px-2' defaultSize={50}>
+          <ResizablePanel id='top-panel' className='flex w-full px-1' defaultSize={50}>
             <div className='w-full'>
               <ResizablePanelGroup direction='horizontal' className='h-full'>
                 <div className='relative w-full h-full overflow-y-auto'>

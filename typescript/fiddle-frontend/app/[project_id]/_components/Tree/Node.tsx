@@ -5,7 +5,7 @@ import clsx from 'clsx'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { useAtomCallback } from 'jotai/utils'
 import { ArrowDown, ArrowRight, ChevronDown, ChevronRight, Edit, Edit2, File, Folder, X } from 'lucide-react'
-import { useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import type { NodeRendererProps } from 'react-arborist'
 import { SiPython, SiTypescript } from 'react-icons/si'
 import { PROJECT_ROOT, activeFileNameAtom, currentEditorFilesAtom, emptyDirsAtom } from '../../_atoms/atoms'
@@ -40,24 +40,29 @@ const Node = ({ node, style, dragHandle, tree }: NodeRendererProps<any>) => {
   const setActiveFile = useSetAtom(activeFileNameAtom)
   const updateFile = useSetAtom(updateFileAtom)
 
-  const hasErrorInChildren = useAtomCallback<boolean, string[]>((get, _set, nodeId: string) => {
-    const nodes = [tree.get(nodeId)] // Start with the current node
+  const hasErrorInChildren = useAtomCallback<boolean, string[]>(
+    useCallback(
+      (get, set, nodeId: string) => {
+        const nodes = [tree.get(nodeId)] // Start with the current node
 
-    const diagnosticErrors = get(diagnositicsAtom)
-    const errors = diagnosticErrors.filter((d) => d.type === 'error')
-    while (nodes.length > 0) {
-      const currentNode = nodes.pop()
-      if (currentNode?.children) {
-        currentNode.children.forEach((child) => {
-          nodes.push(tree.get(child.id))
-        })
-      }
-      if (errors.some((d) => d.file_path === currentNode?.id)) {
-        return true
-      }
-    }
-    return false
-  })
+        const diagnosticErrors = get(diagnositicsAtom)
+        const errors = diagnosticErrors.filter((d) => d.type === 'error')
+        while (nodes.length > 0) {
+          const currentNode = nodes.pop()
+          if (currentNode?.children) {
+            currentNode.children.forEach((child) => {
+              nodes.push(tree.get(child.id))
+            })
+          }
+          if (errors.some((d) => d.file_path === currentNode?.id)) {
+            return true
+          }
+        }
+        return false
+      },
+      [diagnositicsAtom, tree],
+    ),
+  )
 
   const setEmptyDirs = useSetAtom(emptyDirsAtom)
 
