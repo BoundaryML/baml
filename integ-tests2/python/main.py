@@ -5,7 +5,6 @@ import baml_client
 
 b = baml_client.BamlClient.from_directory("../baml_src", {})
 
-
 async def main2():
     # single = await b.ExtractResume(resume="Lee Hsien Loong[a] SPMJ DK (born 10 February 1952) is a Singaporean politician and former brigadier-general who has been serving as Senior Minister of Singapore since 2024, having previously served as Prime Minister of Singapore from 2004 to 2024. He has been the Member of Parliament (MP) for the Teck Ghee division of Ang Mo Kio GRC since 1991, and previously Teck Ghee SMC between 1984 and 1991, as well as Secretary-General of the People's Action Party (PAP) since 2004.")
     # print(single)

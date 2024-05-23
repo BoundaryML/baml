@@ -199,7 +199,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Add cursor movement listener
   vscode.window.onDidChangeTextEditorSelection((event) => {
     const position = event.selections[0].active
-    console.log(`Cursor moved to line ${position.line + 1}, character ${position.character}`)
+
     const editor = vscode.window.activeTextEditor
     if (editor) {
       const text = editor.document.getText()

@@ -373,16 +373,17 @@ const plugin: BamlVSCodePlugin = {
 
     // Options to control the language client
     const clientOptions: LanguageClientOptions = {
-      // Register the server for baml docs
+      // Register the server for baml docs and python
       documentSelector: [
         { scheme: 'file', language: 'baml' },
+        { scheme: 'file', language: 'python' },
         {
           language: 'json',
           pattern: '**/baml_src/**',
         },
       ],
       synchronize: {
-        fileEvents: workspace.createFileSystemWatcher('**/baml_src/**/*.{baml,json}'),
+        fileEvents: workspace.createFileSystemWatcher('**/baml_src/**/*.{baml,json,py}'),
       },
     }
 

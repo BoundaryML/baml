@@ -28,7 +28,7 @@ import { URI } from 'vscode-uri'
 import debounce from 'lodash/debounce'
 import { TextDocument } from 'vscode-languageserver-textdocument'
 import { IPCMessageReader, IPCMessageWriter, createConnection } from 'vscode-languageserver/node'
-
+import { getWordAtPosition, trimLine } from './lib/ast'
 // import { FileChangeType } from 'vscode'
 import fs from 'fs'
 // import { cliBuild, cliCheckForUpdates, cliVersion } from './baml-cli'
@@ -139,7 +139,7 @@ export function startServer(options?: LSOptions): void {
                 {
                   scheme: 'file',
                   pattern: {
-                    glob: '**/*.{baml, json}',
+                    glob: '**/*.{baml, json, py}',
                   },
                 },
               ],
@@ -149,7 +149,7 @@ export function startServer(options?: LSOptions): void {
                 {
                   scheme: 'file',
                   pattern: {
-                    glob: '**/*.{baml, json}',
+                    glob: '**/*.{baml, json, py}',
                   },
                 },
               ],
@@ -159,7 +159,7 @@ export function startServer(options?: LSOptions): void {
                 {
                   scheme: 'file',
                   pattern: {
-                    glob: '**/*.{baml, json}',
+                    glob: '**/*.{baml, json, py}',
                   },
                 },
               ],
@@ -345,14 +345,34 @@ export function startServer(options?: LSOptions): void {
   }
 
   connection.onDefinition((params: DeclarationParams) => {
-    const doc = getDocument(params.textDocument.uri)
+    console.log('onDefinition')
 
+    const doc = getDocument(params.textDocument.uri)
     if (doc) {
-      //accesses project from uri via bamlProjectManager
-      const proj = bamlProjectManager.getProjectById(URI.parse(doc.uri))
-      if (proj) {
-        //returns the definition of reference within the project
-        return proj.handleDefinitionRequest(doc, params.position)
+      const languageExtension = getLanguageExtension(doc.uri)
+
+      if (languageExtension === 'py') {
+        console.log('Python definition')
+        const funcName = getWordAtPosition(doc, params.position)
+        if (!funcName) {
+          console.log('No funcName')
+          return undefined
+        }
+
+        const proj = bamlProjectManager.get_project_from_py_call(funcName)
+        if (proj) {
+          console.log('Found project from python function call')
+          return proj.handleDefinitionRequest(doc, params.position)
+        } else {
+          console.log('No project found from python function call')
+        }
+      } else {
+        const proj = bamlProjectManager.getProjectById(URI.parse(doc.uri))
+        if (proj) {
+          const funcName = getWordAtPosition(doc, params.position)
+
+          return proj.handleDefinitionRequest(doc, params.position)
+        }
       }
     }
     return undefined
@@ -629,7 +649,6 @@ export function startServer(options?: LSOptions): void {
   })
 
   connection.onRequest('cliVersion', async () => {
-    console.log('Checking baml version at ' + config?.path)
     try {
       // const res = await new Promise<string>((resolve, reject) => {
       //   cliVersion(config?.path || 'baml', reject, (ver) => {

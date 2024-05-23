@@ -1,14 +1,12 @@
 import BamlWasm, { type WasmDiagnosticError } from '@gloo-ai/baml-schema-wasm-node'
 import { readFile } from 'fs/promises'
 import { type Diagnostic, DiagnosticSeverity, Position, LocationLink, Hover } from 'vscode-languageserver'
-import { TextDocument } from 'vscode-languageserver-textdocument' 
-import { readFileSync } from 'fs';
+import { TextDocument } from 'vscode-languageserver-textdocument'
+import { readFileSync } from 'fs'
 
 import type { URI } from 'vscode-uri'
 import { findTopLevelParent, gatherFiles } from '../file/fileUtils'
 import { getWordAtPosition, trimLine } from './ast'
-
-
 
 type Notify = (
   params:
@@ -98,14 +96,13 @@ class Project {
   }
 
   get_file(file_path: string) {
-
     // Read the file content
-    const fileContent = readFileSync(file_path, 'utf8');
-  
+    const fileContent = readFileSync(file_path, 'utf8')
+
     // Create a TextDocument
-    const doc = TextDocument.create(file_path, 'plaintext', 1, fileContent);
-  
-    return doc;
+    const doc = TextDocument.create(file_path, 'plaintext', 1, fileContent)
+
+    return doc
   }
 
   upsert_file(file_path: string, content: string | undefined) {
@@ -118,39 +115,41 @@ class Project {
   }
 
   handleDefinitionRequest(doc: TextDocument, position: Position): LocationLink[] {
-      
     const word = getWordAtPosition(doc, position)
-    
+
+    const splitWord = word.split('.')
+
     //clean non-alphanumeric characters besides underscores and periods
-    const cleaned_word = trimLine(word)
+    const cleaned_word = trimLine(splitWord[1])
     if (cleaned_word === '') {
-      
       return []
     }
 
+    console.log(`cleaned_word: ${cleaned_word}`)
     // Search for the symbol in the runtime
     const match = this.runtime().search_for_symbol(cleaned_word)
 
     // If we found a match, return the location
     if (match) {
+      console.log(`match found for ${cleaned_word}`)
       return [
         {
           targetUri: match.uri.toString(),
           //unused default values for now
           targetRange: {
             start: { line: 0, character: 0 },
-            end: { line: 0, character: 0 }
+            end: { line: 0, character: 0 },
           },
           targetSelectionRange: {
             start: { line: match.start_line, character: match.start_character },
-            end: { line: match.end_line, character: match.end_character }
-          }
-        }
-      ];
+            end: { line: match.end_line, character: match.end_character },
+          },
+        },
+      ]
     }
-    
-    
-    return [];
+    console.log(`no match found for ${cleaned_word}`)
+
+    return []
   }
 
   handleHoverRequest(doc: TextDocument, position: Position): Hover {
@@ -161,29 +160,25 @@ class Project {
     }
 
     const match = this.runtime().search_for_symbol(cleaned_word)
-    
+
     //need to get the content of the range specified by match's start and end lines and characters
     if (match) {
       const hoverCont: { language: string; value: string }[] = []
 
       const range = {
         start: { line: match.start_line, character: match.start_character },
-        end: { line: match.end_line, character: match.end_character }
+        end: { line: match.end_line, character: match.end_character },
       }
-      
-      
+
       const hoverDoc = this.get_file(match.uri)
 
       if (hoverDoc) {
-
-
         const hoverText = hoverDoc.getText(range)
-        
-        hoverCont.push({ language: 'baml', value: hoverText })
-      
-        return {contents: hoverCont}
-      }
 
+        hoverCont.push({ language: 'baml', value: hoverText })
+
+        return { contents: hoverCont }
+      }
     }
 
     return { contents: [] }
@@ -345,6 +340,23 @@ class BamlProjectManager {
     })
   }
 
+  get_project_from_py_call(funcName: string) {
+    const splitFuncName = funcName.split('.')
+    const finalFuncName = splitFuncName[1]
+    console.log(`finalFuncName: ${finalFuncName}`)
+    console.log(`num of projects: ${this.projects.size}`)
+    for (const project of this.projects.values()) {
+      console.log(`project: ${project}`)
+      const functions = project.list_functions()
+      for (const func of functions) {
+        console.log(`iterated func.name: ${func.name}`)
+        if (func.name === finalFuncName) {
+          return project
+        }
+      }
+    }
+  }
+
   async touch_project(path: URI) {
     await this.wrapAsync(async () => {
       const rootPath = uriToRootPath(path)
@@ -400,9 +412,8 @@ class BamlProjectManager {
   }
 
   getProjectById(id: URI): Project {
-    return this.get_project(uriToRootPath(id));
+    return this.get_project(uriToRootPath(id))
   }
-
 
   runGenerators() {
     for (const project of this.projects.values()) {
@@ -412,8 +423,6 @@ class BamlProjectManager {
       }
     }
   }
-
-  
 }
 
 export default BamlProjectManager
