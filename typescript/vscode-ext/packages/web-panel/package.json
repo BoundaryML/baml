@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "NODE_ENV=development vite",
-    "build": "tsc && vite build",
+    "build": "npx tsc --noEmit && vite build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "NODE_ENV=development vite preview",
     "watch": "NODE_ENV=development vite build --watch"
