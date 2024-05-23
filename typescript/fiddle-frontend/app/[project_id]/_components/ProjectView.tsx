@@ -83,7 +83,7 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
     <div className='relative flex flex-row w-full h-full bg-gray-800 main-panel overflow-x-clip overflow-y-clip'>
       {isMobile && (
         <div className='absolute bottom-0 left-0 right-0 text-zinc-900 font-semibold bg-zinc-400 border-t-zinc-600 border-t-[1px] w-full h-[100px] z-50 text-center p-8'>
-          Visit prompt fiddle on Desktop to see the full playground
+          Visit PromptFiddle on Desktop to get the best experience
         </div>
       )}
       <ResizablePanelGroup className='w-full h-full overflow-clip' direction='horizontal'>

@@ -41,6 +41,9 @@ export const BAMLLanguage = LRLanguage.define({
         'Decl/*/"{" Decl/*/"}"': t.brace,
         'ValueExpr/"{" ValueExpr/"}"': t.brace,
 
+        TestDecl: t.keyword,
+        'TestDecl/IdentifierDecl': t.typeName,
+
         EnumDecl: t.keyword,
         'EnumDecl/IdentifierDecl': t.typeName,
         'EnumDecl/EnumValueDecl/IdentifierDecl': t.propertyName,
