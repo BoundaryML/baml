@@ -18,7 +18,7 @@ use crate::{
 };
 
 pub(crate) trait RuntimeConstructor {
-    #[cfg(feature = "no_wasm")]
+    #[cfg(not(target = "wasm32"))]
     fn from_directory(dir: &std::path::PathBuf) -> Result<InternalBamlRuntime>;
 
     fn from_file_content<T: AsRef<str>>(
@@ -46,7 +46,7 @@ pub trait RuntimeInterface {
 }
 
 pub trait PublicInterface {
-    #[cfg(feature = "no_wasm")]
+    #[cfg(not(target = "wasm32"))]
     fn generate_client(
         &self,
         client_type: &internal_baml_codegen::LanguageClientType,

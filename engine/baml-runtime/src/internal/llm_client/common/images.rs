@@ -2,7 +2,7 @@ use anyhow::Result;
 use base64::prelude::*;
 use mime_guess::MimeGuess;
 
-#[cfg(feature = "no_wasm")]
+#[cfg(not(target = "wasm32"))]
 async fn fetch_image(url: &str) -> Result<Vec<u8>> {
     use reqwest;
     let response = reqwest::get(url).await?;
@@ -10,7 +10,7 @@ async fn fetch_image(url: &str) -> Result<Vec<u8>> {
     Ok(image_data)
 }
 
-#[cfg(not(feature = "no_wasm"))]
+#[cfg(target = "wasm32")]
 async fn fetch_image(url: &str) -> Result<Vec<u8>> {
     use wasm_bindgen::JsCast;
     use wasm_bindgen_futures::JsFuture;

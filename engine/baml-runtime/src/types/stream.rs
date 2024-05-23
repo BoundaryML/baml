@@ -37,10 +37,10 @@ pub struct FunctionResultStream {
     pub(crate) tracer: Arc<BamlTracer>,
 }
 
-#[cfg(feature = "wasm")]
+#[cfg(target = "wasm32")]
 // JsFuture is !Send, so when building for WASM, we have to drop that requirement from StreamCallback
 static_assertions::assert_impl_all!(FunctionResultStream: Send);
-#[cfg(not(feature = "wasm"))]
+#[cfg(not(target = "wasm32"))]
 static_assertions::assert_impl_all!(FunctionResultStream: Send, Sync);
 
 /*

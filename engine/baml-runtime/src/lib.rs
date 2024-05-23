@@ -11,7 +11,7 @@ pub mod internal;
 #[cfg(not(feature = "internal"))]
 pub(crate) mod internal;
 
-#[cfg(feature = "no_wasm")]
+#[cfg(not(target = "wasm32"))]
 mod cli;
 mod macros;
 mod request;
@@ -29,7 +29,7 @@ use baml_types::BamlMap;
 use baml_types::BamlValue;
 use runtime::InternalBamlRuntime;
 
-#[cfg(feature = "no_wasm")]
+#[cfg(not(target = "wasm32"))]
 pub use cli::CallerType;
 use runtime_interface::ExperimentalTracingInterface;
 pub use runtime_interface::PublicInterface;
@@ -65,7 +65,7 @@ impl BamlRuntime {
     }
 
     /// Load a runtime from a directory
-    #[cfg(feature = "no_wasm")]
+    #[cfg(not(target = "wasm32"))]
     pub fn from_directory<T: AsRef<str>>(
         path: &std::path::PathBuf,
         env_vars: HashMap<T, T>,
@@ -102,7 +102,7 @@ impl BamlRuntime {
         &self.inner
     }
 
-    #[cfg(feature = "no_wasm")]
+    #[cfg(not(target = "wasm32"))]
     pub fn run_cli(argv: Vec<String>, caller_type: cli::CallerType) -> Result<()> {
         cli::RuntimeCli::parse_from(argv.into_iter()).run(caller_type)
     }
@@ -186,7 +186,7 @@ impl PublicInterface for BamlRuntime {
             .stream_function_impl(function_name, params, self.tracer.clone())
     }
 
-    #[cfg(feature = "no_wasm")]
+    #[cfg(not(target = "wasm32"))]
     fn generate_client(
         &self,
         client_type: &internal_baml_codegen::LanguageClientType,
