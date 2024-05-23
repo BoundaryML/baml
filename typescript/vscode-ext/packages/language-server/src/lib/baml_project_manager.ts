@@ -130,7 +130,7 @@ class Project {
     }
 
     // Search for the symbol in the runtime
-    const match = this.runtime().searchForSymbol(cleaned_word)
+    const match = this.runtime().search_for_symbol(cleaned_word)
 
     // If we found a match, return the location
     if (match) {
@@ -193,13 +193,13 @@ class Project {
   list_functions(): BamlWasm.WasmFunction[] {
     let runtime = this.runtime()
 
-    return runtime.list_functions(this.ctx)
+    return runtime.list_functions()
   }
 
-  runGenerators(): BamlWasm.WasmGenerator[] {
+  runGenerators(): BamlWasm.WasmGeneratedFile[] {
     let runtime = this.runtime()
 
-    return runtime.run_generators(this.ctx)
+    return runtime.run_generators()
   }
 
   // render_prompt(function_name: string, params: Record<string, any>): BamlWasm.WasmPrompt {
