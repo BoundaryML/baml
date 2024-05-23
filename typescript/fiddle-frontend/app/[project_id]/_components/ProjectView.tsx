@@ -180,12 +180,12 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
                 <div className='flex h-full'>
                   <Link
                     href='https://discord.gg/BTNBeXGuaS'
-                    className='h-full pt-1 w-fit text-zinc-300 hover:text-zinc-50'
+                    className='h-full pt-0 w-fit text-zinc-300 hover:text-zinc-50'
                   >
                     <div className='flex flex-row items-center text-sm gap-x-4'>
                       <Image
                         src='/discord-icon.svg'
-                        className='hover:opacity-85'
+                        className='hover:opacity-100 opacity-60'
                         width={24}
                         height={24}
                         alt='Discord'
@@ -196,11 +196,11 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
                 <div className='flex h-full'>
                   <Link
                     href='https://docs.boundaryml.com/v3/home/installation'
-                    className='h-full pt-1 w-fit text-zinc-300 hover:text-zinc-50'
+                    className='h-full pt-0 w-fit text-zinc-300 hover:text-zinc-50'
                   >
-                    <div className='flex flex-row items-center text-xs 2xl:text-sm gap-x-4'>
+                    <div className='flex flex-row items-center text-xs 2xl:text-sm gap-x-4 grayscale hover:grayscale-0'>
                       <Image src='/vscode_logo.svg' width={18} height={18} alt='VSCode extension' />
-                      <div className='whitespace-nowrap'>VSCode extension</div>
+                      {/* <div className='whitespace-nowrap'></div> */}
                     </div>
                   </Link>
                 </div>

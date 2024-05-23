@@ -28,14 +28,14 @@ export const GithubStars = () => {
       >
         <Image
           src='/github-mark.svg'
-          className='text-white fill-slate-400 hover:fill-slate-50'
+          className='text-white fill-slate-400 hover:fill-slate-50 opacity-70 hover:opacity-100'
           width={18}
           height={18}
           alt='Github'
         />
         <span className='hidden whitespace-nowrap 2xl:block'>Star us on Github</span>
-        <Separator orientation='vertical' className=' border-zinc-100 w-[1px] h-[24px] bg-zinc-700' />
-        <Star className=' group-hover:fill-slate-50' size={16} />
+        <Separator orientation='vertical' className=' border-zinc-100 w-[1px] h-[24px] bg-zinc-700 hidden 2xl:block' />
+        <Star className='hidden group-hover:fill-slate-50 2xl:block' size={16} />
       </Link>
     </div>
   )
