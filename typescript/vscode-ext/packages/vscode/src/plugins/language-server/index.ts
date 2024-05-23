@@ -31,7 +31,7 @@ let config: BamlConfig | null = null
 let client: LanguageClient
 let serverModule: string
 let telemetry: TelemetryReporter
-const intervalTimers: NodeJS.Timer[] = []
+const intervalTimers: NodeJS.Timeout[] = []
 
 const isDebugMode = () => process.env.VSCODE_DEBUG_MODE === 'true'
 const isE2ETestOnPullRequest = () => process.env.PRISMA_USE_LOCAL_LS === 'true'
