@@ -6,7 +6,7 @@ import { readFileSync } from 'fs';
 
 import type { URI } from 'vscode-uri'
 import { findTopLevelParent, gatherFiles } from '../file/fileUtils'
-import { getWordAtPosition, convertDocumentTextToTrimmedLineArray, trimLine } from './ast'
+import { getWordAtPosition, trimLine } from './ast'
 
 
 

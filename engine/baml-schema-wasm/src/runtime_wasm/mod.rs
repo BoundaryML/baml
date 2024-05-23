@@ -14,7 +14,6 @@ use js_sys::JsString;
 use serde::Deserialize;
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
-
 //Run: wasm-pack test --firefox --headless  --features internal,wasm
 // but for browser we likely need to do         wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 // Node is run using: wasm-pack test --node --features internal,wasm
@@ -844,6 +843,26 @@ impl WasmRuntime {
                 end_line: e_line,
                 end_character: e_character,
             });
+        }
+
+        None
+    }
+
+    #[wasm_bindgen]
+    pub fn function_by_cursor(&self, cursorIdx: usize) -> Option<WasmFunction> {
+        let functions = self.list_functions();
+        log::info!("Searching for function at index: {}", cursorIdx);
+
+        for function in functions {
+            let span = function.span.clone(); // Clone the span
+            log::info!("Function name: {}", function.name);
+            log::info!("Function span: start: {}, end: {}", span.start, span.end);
+
+            if (span.start..=span.end).contains(&cursorIdx) {
+                log::info!("Found function: {}", function.name);
+
+                return Some(function);
+            }
         }
 
         None

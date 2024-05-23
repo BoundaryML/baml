@@ -1,7 +1,4 @@
-/* eslint-disable @typescript-eslint/no-var-requires */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import * as vscode from 'vscode'
-
 import axios from 'axios'
 import glooLens from './PythonToBamlCodeLensProvider'
 import { WebPanelView } from './panels/WebPanelView'
@@ -13,6 +10,10 @@ import httpProxy from 'http-proxy'
 import express from 'express'
 import cors from 'cors'
 import { createProxyMiddleware } from 'http-proxy-middleware'
+import { type LanguageClient, type ServerOptions, TransportKind } from 'vscode-languageclient/node'
+
+let client: LanguageClient
+
 const outputChannel = vscode.window.createOutputChannel('baml')
 const diagnosticsCollection = vscode.languages.createDiagnosticCollection('baml-diagnostics')
 const LANG_NAME = 'Baml'
@@ -26,9 +27,8 @@ function scheduleDiagnostics(): void {
   }
   timeout = setTimeout(() => {
     statusBarItem.show()
-
     runDiagnostics()
-  }, 1000) // 4 seconds after the last keystroke
+  }, 1000) // 1 second after the last keystroke
 }
 
 interface LintRequest {
@@ -143,7 +143,6 @@ async function runDiagnostics(): Promise<void> {
     vscode.window.showErrorMessage('Failed to run diagnostics')
   }
   statusBarItem.text = 'AI Linter Ready'
-
   statusBarItem.hide()
 }
 
@@ -152,9 +151,9 @@ export function activate(context: vscode.ExtensionContext) {
 
   vscode.workspace.getConfiguration('baml')
   // TODO: Reactivate linter.
-  // statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-  // statusBarItem.text = `AI Linter Ready`;
-  // statusBarItem.show();
+  statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100)
+  statusBarItem.text = `AI Linter Ready`
+  statusBarItem.show()
   context.subscriptions.push(statusBarItem)
 
   const provider = new DiagnosticCodeActionProvider()
@@ -197,12 +196,23 @@ export function activate(context: vscode.ExtensionContext) {
   )
   context.subscriptions.push(diagnosticsCollection)
 
-  // vscode.workspace.onDidChangeTextDocument((event) => {
-  //   if (vscode.window.activeTextEditor && event.document === vscode.window.activeTextEditor.document) {
-  //     scheduleDiagnostics();
+  // Add cursor movement listener
+  vscode.window.onDidChangeTextEditorSelection((event) => {
+    const position = event.selections[0].active
+    console.log(`Cursor moved to line ${position.line + 1}, character ${position.character}`)
+    const editor = vscode.window.activeTextEditor
+    if (editor) {
+      const text = editor.document.getText()
 
-  //   }
-  // }, null, context.subscriptions);
+      WebPanelView.currentPanel?.postMessage('update_cursor', {
+        cursor: {
+          fileText: text,
+          line: position.line + 1,
+          column: position.character,
+        },
+      })
+    }
+  })
 
   plugins.map(async (plugin) => {
     const enabled = await plugin.enabled()

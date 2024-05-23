@@ -136,6 +136,43 @@ export const selectedTestCaseAtom = atom(
   },
 )
 
+const updateCursorAtom = atom(null, (get, set, cursor: { fileText: string; line: number; column: number }) => {
+  const selectedProject = get(selectedProjectAtom)
+  if (selectedProject === null) {
+    return
+  }
+
+  const project = get(projectFamilyAtom(selectedProject))
+  const runtime = get(selectedRuntimeAtom)
+
+  if (runtime && project) {
+    console.log('found runtime and project')
+    console.log('cursor', cursor)
+
+    //need logic to convert line and column to index value
+    let cursorIdx = 0
+    const fileContent = cursor.fileText
+    const lines = fileContent.split('\n')
+    let charCount = 0
+
+    for (let i = 0; i < cursor.line; i++) {
+      charCount += lines[i].length + 1 // +1 for the newline character
+    }
+
+    charCount += cursor.column
+    cursorIdx = charCount
+
+    const selectedFunc = runtime.function_by_cursor(cursorIdx)
+
+    if (selectedFunc) {
+      console.log('found selected function', selectedFunc.toString())
+      set(selectedFunctionAtom, selectedFunc.toString())
+    } else {
+      console.log('did not find selected function')
+    }
+  }
+})
+
 const removeProjectAtom = atom(null, (get, set, root_path: string) => {
   set(projectFilesAtom(root_path), {})
   set(projectFamilyAtom(root_path), null)
@@ -398,6 +435,7 @@ const createRuntime = (
 // We don't use ASTContext.provider because we should the default value of the context
 export const EventListener: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const updateFile = useSetAtom(updateFileAtom)
+  const updateCursor = useSetAtom(updateCursorAtom)
   const removeProject = useSetAtom(removeProjectAtom)
   const availableProjects = useAtomValue(availableProjectsAtom)
   const [selectedProject, setSelectedProject] = useAtom(selectedProjectAtom)
@@ -462,6 +500,12 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
               function_name: string
             }
           }
+        | {
+            command: 'update_cursor'
+            content: {
+              cursor: { fileText: string; line: number; column: number }
+            }
+          }
       >,
     ) => {
       const { command, content } = event.data
@@ -483,12 +527,19 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
             replace_all: true,
           })
           break
+
         case 'select_function':
           console.log('Selecting function', content.function_name)
           setSelectedFunction(content.function_name)
+        case 'update_cursor':
+          if ('cursor' in content) {
+            console.log('update_cursor', content)
+            updateCursor(content.cursor)
+          }
           break
+
         case 'remove_project':
-          removeProject(content.root_path)
+          removeProject((content as { root_path: string }).root_path)
           break
       }
     }
