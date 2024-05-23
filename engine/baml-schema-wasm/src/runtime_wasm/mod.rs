@@ -849,12 +849,18 @@ impl WasmRuntime {
     }
 
     #[wasm_bindgen]
-    pub fn get_function_at_position(&self, cursorIdx: usize) -> Option<WasmFunction> {
+    pub fn get_function_at_position(
+        &self,
+        fileName: &str,
+        cursorIdx: usize,
+    ) -> Option<WasmFunction> {
         let functions = self.list_functions();
 
         for function in functions {
             let span = function.span.clone(); // Clone the span
-            if ((span.start + 1)..=(span.end + 1)).contains(&cursorIdx) {
+            if span.file_path == fileName
+                && ((span.start + 1)..=(span.end + 1)).contains(&cursorIdx)
+            {
                 return Some(function);
             }
         }

@@ -199,13 +199,15 @@ export function activate(context: vscode.ExtensionContext) {
   // Add cursor movement listener
   vscode.window.onDidChangeTextEditorSelection((event) => {
     const position = event.selections[0].active
-    console.log(`Cursor moved to line ${position.line + 1}, character ${position.character}`)
+
     const editor = vscode.window.activeTextEditor
     if (editor) {
+      const name = editor.document.fileName
       const text = editor.document.getText()
 
       WebPanelView.currentPanel?.postMessage('update_cursor', {
         cursor: {
+          fileName: name,
           fileText: text,
           line: position.line + 1,
           column: position.character,
