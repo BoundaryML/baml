@@ -165,8 +165,9 @@ const updateCursorAtom = atom(null, (get, set, cursor: { fileText: string; line:
     const selectedFunc = runtime.function_by_cursor(cursorIdx)
 
     if (selectedFunc) {
-      console.log('found selected function', selectedFunc.toString())
-      set(selectedFunctionAtom, selectedFunc.toString())
+      console.log('found selected function', selectedFunc.name)
+      set(selectedFunctionAtom, selectedFunc.name)
+      console.log(get(selectedFunctionAtom))
     } else {
       console.log('did not find selected function')
     }
