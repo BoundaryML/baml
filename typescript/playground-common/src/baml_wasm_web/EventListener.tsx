@@ -13,7 +13,8 @@ import type { WasmDiagnosticError, WasmParam, WasmRuntime } from '@gloo-ai/baml-
 // const wasm = await import("@gloo-ai/baml-schema-wasm-web/baml_schema_build");
 // const { WasmProject, WasmRuntime, WasmRuntimeContext, version: RuntimeVersion } = wasm;
 const defaultEnvKeyValues: [string, string][] = (() => {
-  if (typeof process !== 'undefined' && process.env.NEXT_PUBLIC) {
+  if ((window as any).next?.version) {
+    console.log('Running in nextjs')
     // Running in a Next.js environment, no default value
     return []
   } else {

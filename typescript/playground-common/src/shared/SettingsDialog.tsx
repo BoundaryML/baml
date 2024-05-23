@@ -37,7 +37,13 @@ export const showSettingsAtom = atom(false)
 const showEnvvarValuesAtom = atom(false)
 
 const tracingEnvVarsAtom = atom(['BOUNDARY_PROJECT_ID', 'BOUNDARY_SECRET'])
-const configEnvVarsAtom = atom(['BOUNDARY_ANTHROPIC_PROXY_URL'])
+const configEnvVarsAtom = atom(() => {
+  if ((window as any).next) {
+    return []
+  } else {
+    return ['BOUNDARY_ANTHROPIC_PROXY_URL']
+  }
+})
 
 const envvarsAtom = atom((get) => {
   const storedEnvvars = get(envKeyValuesAtom)
@@ -279,19 +285,22 @@ export const SettingsDialog: React.FC = () => {
               <PlusIcon size={14} /> <div>Add item</div>
             </Button>
           </div>
-          <div className='flex flex-col gap-1'>
-            <span className='text-sm text-vscode-foreground'>Internal vars</span>
-            <span className='text-xs text-vscode-descriptionForeground'>
-              Anthropic doesn't support client-side web calls, so we proxy the calls.
-            </span>
-            {envvars
-              .filter((t) => t.type === 'config')
-              .map((envvar) => (
-                <EnvvarInput key={envvar.index} envvar={envvar} />
-              ))}
-          </div>
+
+          {envvars.some((t) => t.type === 'config') && (
+            <div className='flex flex-col gap-1'>
+              <span className='text-sm text-vscode-foreground'>Internal vars</span>
+              <span className='text-xs text-vscode-descriptionForeground'>
+                Anthropic doesn't support client-side web calls, so we proxy the calls.
+              </span>
+              {envvars
+                .filter((t) => t.type === 'config')
+                .map((envvar) => (
+                  <EnvvarInput key={envvar.index} envvar={envvar} />
+                ))}
+            </div>
+          )}
         </div>
-        <DialogFooter>
+        <DialogFooter className='mt-auto'>
           <Button
             className='bg-vscode-button-hoverBackground text-vscode-button-foreground hover:bg-vscode-button-hoverBackground'
             onClick={() => setShowSettings(false)}
