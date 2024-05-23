@@ -849,7 +849,7 @@ impl WasmRuntime {
     }
 
     #[wasm_bindgen]
-    pub fn get_function_by_position(&self, cursorIdx: usize) -> Option<WasmFunction> {
+    pub fn get_function_at_position(&self, cursorIdx: usize) -> Option<WasmFunction> {
         let functions = self.list_functions();
 
         for function in functions {
