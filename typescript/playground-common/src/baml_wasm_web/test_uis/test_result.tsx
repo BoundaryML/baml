@@ -452,7 +452,7 @@ const TestCaseList: React.FC = () => {
 
   return (
     <div className='flex flex-col w-full h-full gap-2 px-2'>
-      <div className='flex flex-wrap items-start gap-2 h-fit'>
+      <div className='flex flex-wrap items-start items-center gap-2 h-fit'>
         <div className='flex flex-col'>
           <div className='flex flex-wrap items-center gap-2'>
             <Filter size={16} />
