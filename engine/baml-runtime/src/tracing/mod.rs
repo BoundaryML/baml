@@ -1,7 +1,7 @@
 mod api_wrapper;
-#[cfg(not(target = "wasm32"))]
+#[cfg(not(target_arch = "wasm32"))]
 mod threaded_tracer;
-#[cfg(target = "wasm32")]
+#[cfg(target_arch = "wasm32")]
 mod wasm_tracer;
 
 use anyhow::Result;
@@ -26,15 +26,15 @@ use self::api_wrapper::{
     },
     APIWrapper,
 };
-#[cfg(not(target = "wasm32"))]
+#[cfg(not(target_arch = "wasm32"))]
 use self::threaded_tracer::ThreadedTracer;
 
-#[cfg(target = "wasm32")]
+#[cfg(target_arch = "wasm32")]
 use self::wasm_tracer::NonThreadedTracer;
 
-#[cfg(not(target = "wasm32"))]
+#[cfg(not(target_arch = "wasm32"))]
 type TracerImpl = ThreadedTracer;
-#[cfg(target = "wasm32")]
+#[cfg(target_arch = "wasm32")]
 type TracerImpl = NonThreadedTracer;
 
 pub struct TracingSpan {

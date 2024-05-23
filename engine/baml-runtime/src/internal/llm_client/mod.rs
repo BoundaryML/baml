@@ -16,7 +16,7 @@ use serde::Serialize;
 
 use reqwest::StatusCode;
 
-#[cfg(target = "wasm32")]
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsValue;
 
 #[derive(Clone, Copy)]

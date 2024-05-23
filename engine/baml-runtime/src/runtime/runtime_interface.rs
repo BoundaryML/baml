@@ -219,7 +219,7 @@ impl RuntimeConstructor for InternalBamlRuntime {
         })
     }
 
-    #[cfg(not(target = "wasm32"))]
+    #[cfg(not(target_arch = "wasm32"))]
     fn from_directory(dir: &std::path::PathBuf) -> Result<InternalBamlRuntime> {
         static VALID_EXTENSIONS: [&str; 2] = ["baml", "json"];
 

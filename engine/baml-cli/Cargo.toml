@@ -11,7 +11,6 @@ license-file.workspace = true
 anyhow.workspace = true
 baml-runtime = { path = "../baml-runtime", features = [
   "internal",
-  "no_wasm",
 ], default-features = false }
 baml-lib = { path = "../baml-lib/baml" }
 base64.workspace = true

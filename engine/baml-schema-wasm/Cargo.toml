@@ -13,7 +13,6 @@ crate-type = ["cdylib", "rlib"]
 anyhow.workspace = true
 baml-fmt = { path = "../baml-fmt" }
 baml-runtime = { path = "../baml-runtime", features = [
-  "wasm",
   "internal",
 ], default-features = false }
 console_log = { version = "1", features = ["color"] }

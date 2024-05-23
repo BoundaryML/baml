@@ -84,14 +84,14 @@ impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for RoundRobinStrategy {
             Some(Ok(start)) => start % strategy.len(),
             Some(Err(e)) => return Err(e),
             None => {
-                #[cfg(not(target = "wasm32"))]
+                #[cfg(not(target_arch = "wasm32"))]
                 {
                     fastrand::usize(..strategy.len())
                 }
 
                 // For VSCode, we don't want a random start point,
                 // as it can make rendering inconsistent
-                #[cfg(target = "wasm32")]
+                #[cfg(target_arch = "wasm32")]
                 {
                     0
                 }

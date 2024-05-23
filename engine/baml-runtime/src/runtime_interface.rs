@@ -18,7 +18,7 @@ use crate::{
 };
 
 pub(crate) trait RuntimeConstructor {
-    #[cfg(not(target = "wasm32"))]
+    #[cfg(not(target_arch = "wasm32"))]
     fn from_directory(dir: &std::path::PathBuf) -> Result<InternalBamlRuntime>;
 
     fn from_file_content<T: AsRef<str>>(
