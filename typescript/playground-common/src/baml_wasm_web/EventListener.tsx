@@ -146,9 +146,6 @@ const updateCursorAtom = atom(null, (get, set, cursor: { fileText: string; line:
   const runtime = get(selectedRuntimeAtom)
 
   if (runtime && project) {
-    console.log('found runtime and project')
-    console.log('cursor', cursor)
-
     //need logic to convert line and column to index value
     let cursorIdx = 0
     const fileContent = cursor.fileText
@@ -165,11 +162,7 @@ const updateCursorAtom = atom(null, (get, set, cursor: { fileText: string; line:
     const selectedFunc = runtime.function_by_cursor(cursorIdx)
 
     if (selectedFunc) {
-      console.log('found selected function', selectedFunc.name)
       set(selectedFunctionAtom, selectedFunc.name)
-      console.log(get(selectedFunctionAtom))
-    } else {
-      console.log('did not find selected function')
     }
   }
 })
@@ -530,11 +523,9 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
           break
 
         case 'select_function':
-          console.log('Selecting function', content.function_name)
           setSelectedFunction(content.function_name)
         case 'update_cursor':
           if ('cursor' in content) {
-            console.log('update_cursor', content)
             updateCursor(content.cursor)
           }
           break

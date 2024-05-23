@@ -41,8 +41,6 @@ impl Span {
         let mut start = None;
         let mut end = None;
 
-        log::info!("Start: {}, End: {}", self.start, self.end);
-
         for (idx, c) in contents.chars().enumerate() {
             if idx == self.start {
                 start = Some((line, column));
