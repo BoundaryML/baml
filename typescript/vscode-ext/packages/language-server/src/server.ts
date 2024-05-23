@@ -654,6 +654,8 @@ export function startServer(options?: LSOptions): void {
 
   connection.onRequest('cliCheckForUpdates', async () => {
     console.log('Calling baml version --check using ' + config?.path)
+    //bamlProjectManager.runGenerators()
+
     try {
       // const res = await new Promise<string>((resolve, reject) => {
       //   cliCheckForUpdates(config?.path || 'baml', reject, (ver) => {

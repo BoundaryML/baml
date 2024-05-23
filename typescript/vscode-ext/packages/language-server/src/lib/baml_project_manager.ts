@@ -161,7 +161,7 @@ class Project {
       return { contents: [] }
     }
 
-    const match = this.runtime().searchForSymbol(cleaned_word)
+    const match = this.runtime().search_for_symbol(cleaned_word)
     
     //need to get the content of the range specified by match's start and end lines and characters
     if (match) {
@@ -194,6 +194,12 @@ class Project {
     let runtime = this.runtime()
 
     return runtime.list_functions(this.ctx)
+  }
+
+  runGenerators(): BamlWasm.WasmGenerator[] {
+    let runtime = this.runtime()
+
+    return runtime.run_generators(this.ctx)
   }
 
   // render_prompt(function_name: string, params: Record<string, any>): BamlWasm.WasmPrompt {
@@ -395,13 +401,18 @@ class BamlProjectManager {
   }
 
   getProjectById(id: URI): Project {
-
-    
-    
     return this.get_project(uriToRootPath(id));
   }
 
 
+  runGenerators() {
+    for (const project of this.projects.values()) {
+      const files = project.runGenerators()
+      for (const f of files) {
+        console.log(f.path, f.contents.length)
+      }
+    }
+  }
 
   
 }

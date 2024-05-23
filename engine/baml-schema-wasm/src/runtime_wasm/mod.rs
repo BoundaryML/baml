@@ -321,6 +321,14 @@ pub struct WasmLLMFailure {
     pub code: String,
 }
 
+#[wasm_bindgen(getter_with_clone, inspectable)]
+pub struct WasmGeneratedFile {
+    #[wasm_bindgen(readonly)]
+    pub path: String,
+    #[wasm_bindgen(readonly)]
+    pub contents: String,
+}
+
 #[wasm_bindgen]
 impl WasmLLMFailure {
     #[wasm_bindgen]
@@ -724,6 +732,24 @@ impl WasmRuntime {
     }
 
     #[wasm_bindgen]
+    pub fn run_generators(&self) -> Result<Vec<WasmGeneratedFile>, wasm_bindgen::JsError> {
+        Ok(self
+            .runtime
+            .run_generators()
+            .map_err(|e| JsError::new(e.to_string().as_str()))?
+            .into_iter()
+            .flat_map(|g| {
+                g.files
+                    .into_iter()
+                    .map(|(path, contents)| WasmGeneratedFile {
+                        path: path.display().to_string(),
+                        contents,
+                    })
+            })
+            .collect())
+    }
+
+    #[wasm_bindgen]
     pub fn required_env_vars(&self) -> Vec<String> {
         self.runtime
             .internal()
@@ -735,7 +761,7 @@ impl WasmRuntime {
     }
 
     #[wasm_bindgen]
-    pub fn searchForSymbol(&self, symbol: &str) -> Option<SymbolLocation> {
+    pub fn search_for_symbol(&self, symbol: &str) -> Option<SymbolLocation> {
         let runtime = self.runtime.internal().ir();
 
         if let Ok(walker) = runtime.find_enum(symbol) {

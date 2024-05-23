@@ -146,8 +146,6 @@ ehthumbs.db
 ehthumbs_vista.db
 jspm_packages/
 lerna-debug.log*
-lib-cov
-lib/
 logs
 logs/
 node_modules
