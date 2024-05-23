@@ -27,7 +27,7 @@ fn load_test_ir(file_content: &str) -> IntermediateRepr {
     );
     schema.diagnostics.to_result().unwrap();
 
-    IntermediateRepr::from_parser_database(&schema.db).unwrap()
+    IntermediateRepr::from_parser_database(&schema.db, schema.configuration).unwrap()
 }
 
 const EMPTY_FILE: &str = r#"

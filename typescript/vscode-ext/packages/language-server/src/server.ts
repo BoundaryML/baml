@@ -35,8 +35,6 @@ import fs from 'fs'
 import { type ParserDatabase, TestRequest } from '@baml/common'
 import { z } from 'zod'
 // import { getVersion, getEnginesVersion } from './lib/wasm/internals'
-import { BamlDirCache } from './file/fileCache'
-import * as MessageHandler from './lib/MessageHandler'
 import BamlProjectManager from './lib/baml_project_manager'
 import type { LSOptions, LSSettings } from './lib/types'
 ;(globalThis as any).crypto = require('node:crypto').webcrypto
@@ -104,7 +102,6 @@ export function startServer(options?: LSOptions): void {
   console.log('Starting Baml Language Server...')
 
   const documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument)
-  const bamlCache = new BamlDirCache()
 
   connection.onInitialize((params: InitializeParams) => {
     connection.console.info(
