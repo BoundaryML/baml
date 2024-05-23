@@ -1,14 +1,14 @@
 import BamlWasm, { type WasmDiagnosticError } from '@gloo-ai/baml-schema-wasm-node'
-import { readFile } from 'fs/promises'
+import { access, mkdir, open, readdir, readFile, rename, rm, writeFile } from 'fs/promises'
+import path from 'path'
 import { type Diagnostic, DiagnosticSeverity, Position, LocationLink, Hover } from 'vscode-languageserver'
-import { TextDocument } from 'vscode-languageserver-textdocument' 
-import { readFileSync } from 'fs';
+import { TextDocument } from 'vscode-languageserver-textdocument'
+import { existsSync, readFileSync } from 'fs'
 
 import type { URI } from 'vscode-uri'
 import { findTopLevelParent, gatherFiles } from '../file/fileUtils'
 import { getWordAtPosition, trimLine } from './ast'
-
-
+import { debounce } from 'lodash'
 
 type Notify = (
   params:
@@ -98,14 +98,13 @@ class Project {
   }
 
   get_file(file_path: string) {
-
     // Read the file content
-    const fileContent = readFileSync(file_path, 'utf8');
-  
+    const fileContent = readFileSync(file_path, 'utf8')
+
     // Create a TextDocument
-    const doc = TextDocument.create(file_path, 'plaintext', 1, fileContent);
-  
-    return doc;
+    const doc = TextDocument.create(file_path, 'plaintext', 1, fileContent)
+
+    return doc
   }
 
   upsert_file(file_path: string, content: string | undefined) {
@@ -118,13 +117,11 @@ class Project {
   }
 
   handleDefinitionRequest(doc: TextDocument, position: Position): LocationLink[] {
-      
     const word = getWordAtPosition(doc, position)
-    
+
     //clean non-alphanumeric characters besides underscores and periods
     const cleaned_word = trimLine(word)
     if (cleaned_word === '') {
-      
       return []
     }
 
@@ -139,18 +136,17 @@ class Project {
           //unused default values for now
           targetRange: {
             start: { line: 0, character: 0 },
-            end: { line: 0, character: 0 }
+            end: { line: 0, character: 0 },
           },
           targetSelectionRange: {
             start: { line: match.start_line, character: match.start_character },
-            end: { line: match.end_line, character: match.end_character }
-          }
-        }
-      ];
+            end: { line: match.end_line, character: match.end_character },
+          },
+        },
+      ]
     }
-    
-    
-    return [];
+
+    return []
   }
 
   handleHoverRequest(doc: TextDocument, position: Position): Hover {
@@ -161,29 +157,25 @@ class Project {
     }
 
     const match = this.runtime().search_for_symbol(cleaned_word)
-    
+
     //need to get the content of the range specified by match's start and end lines and characters
     if (match) {
       const hoverCont: { language: string; value: string }[] = []
 
       const range = {
         start: { line: match.start_line, character: match.start_character },
-        end: { line: match.end_line, character: match.end_character }
+        end: { line: match.end_line, character: match.end_character },
       }
-      
-      
+
       const hoverDoc = this.get_file(match.uri)
 
       if (hoverDoc) {
-
-
         const hoverText = hoverDoc.getText(range)
-        
-        hoverCont.push({ language: 'baml', value: hoverText })
-      
-        return {contents: hoverCont}
-      }
 
+        hoverCont.push({ language: 'baml', value: hoverText })
+
+        return { contents: hoverCont }
+      }
     }
 
     return { contents: [] }
@@ -195,11 +187,80 @@ class Project {
     return runtime.list_functions()
   }
 
-  runGenerators(): BamlWasm.WasmGeneratedFile[] {
-    let runtime = this.runtime()
+  // Not currently debounced - lodash debounce doesn't work for this, p-debounce doesn't support trailing edge
+  runGeneratorsWithoutDebounce = async ({
+    onSuccess,
+    onError,
+  }: { onSuccess: (message: string) => void; onError: (message: string) => void }) => {
+    const startMillis = performance.now()
+    try {
+      await Promise.all(
+        this.runtime()
+          .run_generators()
+          .map(async (g) => {
+            // Creating the tmpdir next to the output dir can cause some weird issues with vscode, if we recover
+            // from an error and delete the tmpdir - vscode's explorer UI will still show baml_client.tmp even
+            // though it doesn't exist anymore, and vscode has no good way of letting the user purge it from the UI
+            const tmpDir = path.join(path.dirname(g.output_dir), path.basename(g.output_dir) + '.tmp')
+            const backupDir = path.join(path.dirname(g.output_dir), path.basename(g.output_dir) + '.bak')
 
-    return runtime.run_generators()
+            await mkdir(tmpDir, { recursive: true })
+            await Promise.all(
+              g.files.map(async (f) => {
+                const fpath = path.join(tmpDir, f.path_in_output_dir)
+                await mkdir(path.dirname(fpath), { recursive: true })
+                await writeFile(fpath, f.contents)
+              }),
+            )
+
+            if (existsSync(backupDir)) {
+              await rm(backupDir, { recursive: true, force: true })
+            }
+            if (existsSync(g.output_dir)) {
+              const contents = await readdir(g.output_dir, { withFileTypes: true })
+              const contentsWithSafeToRemove = await Promise.all(
+                contents.map(async (c) => {
+                  if (c.isDirectory()) {
+                    return { path: c.name, safeToRemove: false }
+                  }
+
+                  const handle = await open(path.join(g.output_dir, c.name))
+                  try {
+                    const { bytesRead, buffer } = await handle.read(Buffer.alloc(1024), 0, 1024, 0)
+                    const firstNBytes = buffer.subarray(0, bytesRead).toString('utf8')
+
+                    return { path: c.name, safeToRemove: firstNBytes.includes('generated by BAML') }
+                  } finally {
+                    await handle.close()
+                  }
+                }),
+              )
+              const notSafeToRemove = contentsWithSafeToRemove.filter((c) => !c.safeToRemove).map((c) => c.path)
+              if (notSafeToRemove.length !== 0) {
+                throw new Error(
+                  `Output directory ${g.output_dir} contains files not generated by BAML: ${notSafeToRemove.join(
+                    ', ',
+                  )}`,
+                )
+              }
+              await rename(g.output_dir, backupDir)
+            }
+            await rename(tmpDir, g.output_dir)
+            await rm(backupDir, { recursive: true, force: true })
+
+            return g
+          }),
+      )
+      const endMillis = performance.now()
+
+      onSuccess(`BAML client generated! (took ${Math.round(endMillis - startMillis)}ms)`)
+    } catch (e) {
+      onError(`Failed to generate BAML client: ${e}`)
+    }
   }
+
+  //runGeneratorsWithDebounce = debounce(this.runGeneratorsWithoutDebounce, 1000)
+  runGeneratorsWithDebounce = this.runGeneratorsWithoutDebounce
 
   // render_prompt(function_name: string, params: Record<string, any>): BamlWasm.WasmPrompt {
   //   let rt = this.runtime();
@@ -400,20 +461,8 @@ class BamlProjectManager {
   }
 
   getProjectById(id: URI): Project {
-    return this.get_project(uriToRootPath(id));
+    return this.get_project(uriToRootPath(id))
   }
-
-
-  runGenerators() {
-    for (const project of this.projects.values()) {
-      const files = project.runGenerators()
-      for (const f of files) {
-        console.log(f.path, f.contents.length)
-      }
-    }
-  }
-
-  
 }
 
 export default BamlProjectManager

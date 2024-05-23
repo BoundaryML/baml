@@ -58,7 +58,7 @@ pub(crate) fn generate(
             .map_err(|e| anyhow::Error::from(e).context("Error while rendering __init__.py"))?,
     );
 
-    collector.commit(&generator.output_dir)
+    collector.commit(&generator.output_dir())
 }
 
 impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonTracing {

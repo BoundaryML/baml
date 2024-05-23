@@ -1,4 +1,4 @@
-use crate::{BamlRuntime, RuntimeContext};
+use crate::BamlRuntime;
 use anyhow::Result;
 use internal_baml_core::configuration::GeneratorOutputType;
 use std::path::PathBuf;
@@ -30,6 +30,7 @@ impl GenerateArgs {
         let generate_output = runtime.generate_client(
             &client_type,
             &internal_baml_codegen::GeneratorArgs {
+                baml_src_dir: PathBuf::from(&self.from),
                 output_dir: PathBuf::from(&self.to).join("baml_client"),
                 rel_baml_src_path: PathBuf::from(&self.from),
             },

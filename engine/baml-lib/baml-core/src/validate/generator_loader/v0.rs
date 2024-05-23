@@ -65,13 +65,14 @@ fn parse_optional_key<'a>(
 
 pub(crate) fn parse_generator(
     ast_generator: &ast::GeneratorConfig,
-    baml_src_path: &PathBuf,
+    baml_src: &PathBuf,
 ) -> Result<Generator, Vec<DatamodelError>> {
     let generator_name = ast_generator.name();
     let mut builder = GeneratorBuilder::default();
 
     builder
         .name(generator_name.into())
+        .baml_src(baml_src.clone())
         .span(ast_generator.span().clone());
 
     let mut errors = vec![];
@@ -130,7 +131,7 @@ pub(crate) fn parse_generator(
         Ok(Some(val)) => Some(val),
         Ok(None) => {
             // Check if there's a pyproject.toml
-            let pyproject_toml = baml_src_path.join("pyproject.toml");
+            let pyproject_toml = baml_src.join("pyproject.toml");
             if pyproject_toml.exists() {
                 Some("poetry")
             } else {
@@ -175,12 +176,12 @@ pub(crate) fn parse_generator(
         return Err(errors);
     }
 
-    let test_command = match command_prefix {
+    let _test_command = match command_prefix {
         Some(prefix) => format!("{} python -m pytest", prefix),
         None => "python -m pytest".into(),
     };
 
-    let install_command: String = match pkg_manager {
+    let _install_command: String = match pkg_manager {
         Some("poetry") => "poetry add baml@latest".into(),
         Some("pip3") => "pip3 install --upgrade baml".into(),
         Some("pip") => "pip install --upgrade baml".into(),
@@ -193,7 +194,7 @@ pub(crate) fn parse_generator(
         }
     };
 
-    let package_version_command: String = match pkg_manager {
+    let _package_version_command: String = match pkg_manager {
         Some("poetry") => "poetry show baml".into(),
         Some("pip3") => "pip3 show baml".into(),
         Some("pip") => "pip show baml".into(),

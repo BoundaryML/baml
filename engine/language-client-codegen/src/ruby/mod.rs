@@ -51,7 +51,7 @@ pub(crate) fn generate(
             .map_err(|e| anyhow::Error::from(e).context("Error while rendering client.rb"))?,
     );
 
-    collector.commit(&generator.output_dir)
+    collector.commit(&generator.output_dir())
 }
 
 impl TryFrom<&IntermediateRepr> for RubyClient {

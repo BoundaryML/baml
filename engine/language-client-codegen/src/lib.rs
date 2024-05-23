@@ -3,23 +3,26 @@ use std::path::PathBuf;
 use anyhow::Result;
 use indexmap::IndexMap;
 use internal_baml_core::{configuration::GeneratorOutputType, ir::repr::IntermediateRepr};
-use serde::Deserialize;
 
 mod dir_writer;
 mod python;
 mod ruby;
 mod typescript;
 
-#[derive(Deserialize)]
 pub struct GeneratorArgs {
-    /// Output directory for the generated client code
-    pub output_dir: PathBuf,
     /// Relative path to the BAML source directory from the output directory
     pub rel_baml_src_path: PathBuf,
 }
 
+impl GeneratorArgs {
+    pub(crate) fn output_dir(&self) -> PathBuf {
+        self.rel_baml_src_path.join(&self.output_dir)
+    }
+}
+
 pub struct GenerateOutput {
     pub client_type: GeneratorOutputType,
+    pub output_dir: PathBuf,
     pub files: IndexMap<PathBuf, String>,
 }
 
@@ -42,6 +45,7 @@ impl GenerateClient for GeneratorOutputType {
 
         Ok(GenerateOutput {
             client_type: self.clone(),
+            output_dir: gen.output_dir(),
             files,
         })
     }

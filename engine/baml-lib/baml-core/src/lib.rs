@@ -71,7 +71,7 @@ pub fn validate(root_path: &PathBuf, files: Vec<SourceFile>) -> ValidatedSchema 
         return ValidatedSchema {
             db,
             diagnostics,
-            configuration: Configuration::default(),
+            configuration: Configuration::new(),
         };
     }
 
@@ -79,7 +79,7 @@ pub fn validate(root_path: &PathBuf, files: Vec<SourceFile>) -> ValidatedSchema 
         return ValidatedSchema {
             db,
             diagnostics: d,
-            configuration: Configuration::default(),
+            configuration: Configuration::new(),
         };
     }
 

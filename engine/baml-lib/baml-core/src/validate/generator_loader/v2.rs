@@ -54,7 +54,7 @@ fn parse_optional_key<'a>(
 
 pub(crate) fn parse_generator(
     ast_generator: &ast::GeneratorConfig,
-    _baml_src_path: &PathBuf,
+    baml_src: &PathBuf,
 ) -> Result<Generator, Vec<DatamodelError>> {
     let generator_name = ast_generator.name();
 
@@ -62,6 +62,7 @@ pub(crate) fn parse_generator(
 
     builder
         .name(generator_name.into())
+        .baml_src(baml_src.clone())
         .span(ast_generator.span().clone());
 
     let mut errors = vec![];
