@@ -27,6 +27,7 @@ use anyhow::Result;
 
 use baml_types::BamlMap;
 use baml_types::BamlValue;
+use internal_baml_core::configuration::GeneratorOutputType;
 use runtime::InternalBamlRuntime;
 
 #[cfg(not(target = "wasm32"))]

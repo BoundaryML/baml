@@ -1,7 +1,7 @@
 mod parse_py_type;
 mod python_types;
 
-use baml_runtime::{BamlRuntime, PublicInterface};
+use baml_runtime::BamlRuntime;
 use baml_runtime::{RuntimeContext, RuntimeContextManager};
 use parse_py_type::parse_py_type;
 use pyo3::prelude::{pyclass, pyfunction, pymethods, pymodule, PyAnyMethods, PyModule, PyResult};
