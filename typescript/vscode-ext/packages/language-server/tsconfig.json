@@ -7,7 +7,7 @@
     "outDir": "out",
     "rootDir": "src",
     "noUnusedLocals": false,
-    "lib": ["es2020"],
+    "lib": ["es2020", "dom"],
     "sourceMap": true,
     "esModuleInterop": true,
     "strict": true,
