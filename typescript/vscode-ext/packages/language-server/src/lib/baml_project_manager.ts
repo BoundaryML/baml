@@ -117,10 +117,10 @@ class Project {
   handleDefinitionRequest(doc: TextDocument, position: Position): LocationLink[] {
     const word = getWordAtPosition(doc, position)
 
-    const splitWord = word.split('.')
+    // const splitWord = word.split('.')
 
     //clean non-alphanumeric characters besides underscores and periods
-    const cleaned_word = trimLine(splitWord[1])
+    const cleaned_word = trimLine(word)
     if (cleaned_word === '') {
       return []
     }

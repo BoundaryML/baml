@@ -344,40 +344,52 @@ export function startServer(options?: LSOptions): void {
     return documents.get(uri)
   }
 
+  // connection.onDefinition((params: DeclarationParams) => {
+  //   console.log('onDefinition')
+
+  //   const doc = getDocument(params.textDocument.uri)
+  //   if (doc) {
+  //     const languageExtension = getLanguageExtension(doc.uri)
+
+  //     // if (languageExtension === 'py') {
+  //     //   console.log('Python definition')
+  //     //   const funcName = getWordAtPosition(doc, params.position)
+  //     //   if (!funcName) {
+  //     //     console.log('No funcName')
+  //     //     return undefined
+  //     //   }
+
+  //     //   const proj = bamlProjectManager.get_project_from_py_call(funcName)
+  //     //   if (proj) {
+  //     //     console.log('Found project from python function call')
+  //     //     return proj.handleDefinitionRequest(doc, params.position)
+  //     //   } else {
+  //     //     console.log('No project found from python function call')
+  //     //   }
+  //     // } else {
+  //     const proj = bamlProjectManager.getProjectById(URI.parse(doc.uri))
+  //     if (proj) {
+  //       const funcName = getWordAtPosition(doc, params.position)
+
+  //       return proj.handleDefinitionRequest(doc, params.position)
+  //       // }
+  //     }
+  //   }
+  //   return undefined
+  // })
   connection.onDefinition((params: DeclarationParams) => {
-    console.log('onDefinition')
-
     const doc = getDocument(params.textDocument.uri)
+
     if (doc) {
-      const languageExtension = getLanguageExtension(doc.uri)
-
-      if (languageExtension === 'py') {
-        console.log('Python definition')
-        const funcName = getWordAtPosition(doc, params.position)
-        if (!funcName) {
-          console.log('No funcName')
-          return undefined
-        }
-
-        const proj = bamlProjectManager.get_project_from_py_call(funcName)
-        if (proj) {
-          console.log('Found project from python function call')
-          return proj.handleDefinitionRequest(doc, params.position)
-        } else {
-          console.log('No project found from python function call')
-        }
-      } else {
-        const proj = bamlProjectManager.getProjectById(URI.parse(doc.uri))
-        if (proj) {
-          const funcName = getWordAtPosition(doc, params.position)
-
-          return proj.handleDefinitionRequest(doc, params.position)
-        }
+      //accesses project from uri via bamlProjectManager
+      const proj = bamlProjectManager.getProjectById(URI.parse(doc.uri))
+      if (proj) {
+        //returns the definition of reference within the project
+        return proj.handleDefinitionRequest(doc, params.position)
       }
     }
     return undefined
   })
-
   // connection.onCompletion((params: CompletionParams) => {
   //   const doc = getDocument(params.textDocument.uri)
   //   if (doc) {
