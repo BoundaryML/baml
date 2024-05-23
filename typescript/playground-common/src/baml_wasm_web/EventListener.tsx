@@ -15,8 +15,9 @@ import type { WasmDiagnosticError, WasmParam, WasmRuntime } from '@gloo-ai/baml-
 const defaultEnvKeyValues: [string, string][] = (() => {
   if ((window as any).next?.version) {
     console.log('Running in nextjs')
-    // Running in a Next.js environment, no default value
-    return []
+    const domain = window?.location?.origin || ''
+    // Running in a Next.js environment, proxy to nextjs rewrite
+    return [['BOUNDARY_ANTHROPIC_PROXY_URL', domain + '/anthropic/']]
   } else {
     console.log('Not running in a Next.js environment, set default value')
     // Not running in a Next.js environment, set default value

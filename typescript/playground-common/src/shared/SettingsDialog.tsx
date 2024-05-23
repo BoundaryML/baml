@@ -39,7 +39,7 @@ const showEnvvarValuesAtom = atom(false)
 const tracingEnvVarsAtom = atom(['BOUNDARY_PROJECT_ID', 'BOUNDARY_SECRET'])
 const configEnvVarsAtom = atom(() => {
   if ((window as any).next) {
-    return []
+    return ['BOUNDARY_ANTHROPIC_PROXY_URL']
   } else {
     return ['BOUNDARY_ANTHROPIC_PROXY_URL']
   }
