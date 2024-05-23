@@ -1,13 +1,17 @@
+use baml_runtime::tracing::TracingSpan;
+use baml_runtime::{BamlRuntime, RuntimeContext};
 use baml_types::BamlValue;
 use pyo3::prelude::{pyclass, pymethods, PyAnyMethods, PyModule, PyResult};
-use pyo3::types::PyType;
+use pyo3::types::{PyString, PyType};
 use pyo3::{Bound, Py, PyAny, PyObject, PyRefMut, Python, ToPyObject};
-use pythonize::pythonize;
+use pythonize::{depythonize_bound, pythonize};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::BamlError;
+use crate::parse_py_type::parse_py_type;
+use crate::{BamlError, BamlRuntimeFfi, RuntimeContextManagerPy};
+use baml_runtime::runtime_interface::ExperimentalTracingInterface;
 
 #[pyclass]
 pub struct FunctionResult {
@@ -70,7 +74,7 @@ impl FunctionResultStream {
         slf
     }
 
-    fn done(&self, py: Python<'_>) -> PyResult<PyObject> {
+    fn done(&self, py: Python<'_>, ctx: &RuntimeContextManagerPy) -> PyResult<PyObject> {
         let inner = self.inner.clone();
 
         let on_event = self.on_event.as_ref().map(|cb| {
@@ -84,11 +88,12 @@ impl FunctionResultStream {
             }
         });
 
+        let ctx_mng = ctx.inner.clone();
+
         pyo3_asyncio::tokio::future_into_py(py, async move {
-            let ref mut locked = inner.lock().await;
-
-            let (res, _) = locked.run(on_event).await;
-
+            let ctx_mng = ctx_mng;
+            let mut locked = inner.lock().await;
+            let (res, _) = locked.run(on_event, &ctx_mng).await;
             res.map(FunctionResult::new).map_err(BamlError::from_anyhow)
         })
         .map(|f| f.into())
@@ -182,5 +187,68 @@ ret = get_schema()
 
     pub fn __eq__(&self, other: &Self) -> bool {
         self == other
+    }
+}
+
+#[pyclass(name = "BamlSpan")]
+pub struct BamlSpanPy {
+    span: Option<TracingSpan>,
+    ctx: RuntimeContext,
+    rt: Arc<BamlRuntime>,
+}
+
+#[pymethods]
+impl BamlSpanPy {
+    #[staticmethod]
+    fn new(
+        py: Python<'_>,
+        runtime: &BamlRuntimeFfi,
+        function_name: &str,
+        args: PyObject,
+        ctx: &RuntimeContextManagerPy,
+    ) -> PyResult<Self> {
+        let locals = pyo3_asyncio::tokio::get_current_locals(py)?;
+        locals.context(py);
+
+        let args = parse_py_type(args.into_bound(py).to_object(py))?;
+        let Some(args_map) = args.as_map() else {
+            return Err(BamlError::new_err("Failed to parse args"));
+        };
+
+        let (span, ctx) = runtime
+            .internal
+            .start_span(function_name, &args_map, &ctx.inner);
+        Ok(Self {
+            span,
+            ctx,
+            rt: runtime.internal.clone(),
+        })
+    }
+
+    // method to finish
+    fn finish(
+        &mut self,
+        py: Python<'_>,
+        result: PyObject,
+        ctx: &RuntimeContextManagerPy,
+    ) -> PyResult<PyObject> {
+        let result = parse_py_type(result.into_bound(py).to_object(py))?;
+
+        let span = self
+            .span
+            .take()
+            .ok_or_else(|| BamlError::new_err("Span already finished"))?;
+
+        let runtime = self.rt.clone();
+        let ctx = ctx.inner.clone();
+        pyo3_asyncio::tokio::future_into_py(py, async move {
+            let result = runtime
+                .finish_span(span, Some(result), &ctx)
+                .await
+                .map_err(BamlError::from_anyhow)
+                .map(|u| u.map(|id| id.to_string()))?;
+            Ok(result)
+        })
+        .map(|f| f.into())
     }
 }

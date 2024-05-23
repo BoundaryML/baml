@@ -1176,4 +1176,3 @@ class BamlStreamClient:
         BamlOutputWrapper[Optional[Union[partial_types.UnionTest_ReturnTypev2, Optional[types.DataType]]]].coerce,
         BamlOutputWrapper[Union[types.UnionTest_ReturnTypev2, types.DataType]].coerce,
       )
-    

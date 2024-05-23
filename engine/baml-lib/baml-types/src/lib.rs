@@ -93,6 +93,19 @@ impl BamlValue {
             BamlValue::Null => "null".into(),
         }
     }
+
+    pub fn as_map(&self) -> Option<&BamlMap<String, BamlValue>> {
+        match self {
+            BamlValue::Map(m) => Some(m),
+            _ => None,
+        }
+    }
+    pub fn as_map_owned(self) -> Option<BamlMap<String, BamlValue>> {
+        match self {
+            BamlValue::Map(m) => Some(m),
+            _ => None,
+        }
+    }
 }
 
 impl std::fmt::Display for BamlValue {

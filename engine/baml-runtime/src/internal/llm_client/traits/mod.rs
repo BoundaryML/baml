@@ -1,3 +1,5 @@
+use std::pin::Pin;
+
 use anyhow::Result;
 mod chat;
 mod completion;
@@ -12,21 +14,10 @@ pub use self::{
     completion::{WithCompletion, WithNoCompletion, WithStreamCompletion},
 };
 
-use super::{retry_policy::CallablePolicy, LLMResponse, LLMResponseStream, ModelFeatures};
+use super::{retry_policy::CallablePolicy, LLMResponse, ModelFeatures};
 
 pub trait WithRetryPolicy {
     fn retry_policy_name(&self) -> Option<&str>;
-}
-
-pub trait WithStreamable: Send {
-    /// Retries are not supported for streaming calls.
-    #[allow(async_fn_in_trait)]
-    async fn stream(
-        &self,
-        retry_policy: Option<CallablePolicy>,
-        ctx: &RuntimeContext,
-        prompt: &RenderedPrompt,
-    ) -> LLMResponseStream;
 }
 
 pub trait WithSingleCallable {
@@ -105,5 +96,47 @@ where
         }
 
         Ok(prompt)
+    }
+}
+
+// Stream related
+pub trait SseResponseTrait {
+    fn build_request_for_stream(
+        &self,
+        prompt: &Vec<internal_baml_jinja::RenderedChatMessage>,
+    ) -> Result<reqwest::RequestBuilder>;
+
+    fn response_stream(
+        &self,
+        resp: reqwest::Response,
+        prompt: &Vec<internal_baml_jinja::RenderedChatMessage>,
+        system_start: web_time::SystemTime,
+        instant_start: web_time::Instant,
+    ) -> StreamResponse;
+}
+
+#[cfg(target_arch = "wasm32")]
+pub type StreamResponse = Result<Pin<Box<dyn futures::Stream<Item = LLMResponse>>>, LLMResponse>;
+
+#[cfg(not(target_arch = "wasm32"))]
+pub type StreamResponse =
+    Result<Pin<Box<dyn futures::Stream<Item = LLMResponse> + Send + Sync>>, LLMResponse>;
+
+pub trait WithStreamable {
+    /// Retries are not supported for streaming calls.
+    #[allow(async_fn_in_trait)]
+    async fn stream(&self, ctx: &RuntimeContext, prompt: &RenderedPrompt) -> StreamResponse;
+}
+
+impl<T> WithStreamable for T
+where
+    T: WithStreamChat + WithStreamCompletion,
+{
+    #[allow(async_fn_in_trait)]
+    async fn stream(&self, ctx: &RuntimeContext, prompt: &RenderedPrompt) -> StreamResponse {
+        match prompt {
+            RenderedPrompt::Chat(p) => self.stream_chat(ctx, p).await,
+            RenderedPrompt::Completion(p) => self.stream_completion(ctx, p).await,
+        }
     }
 }

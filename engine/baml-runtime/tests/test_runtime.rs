@@ -89,15 +89,13 @@ mod internal_tests {
             "##,
         );
         log::info!("Files: {:?}", files);
-        let ctx = RuntimeContext::new().add_env("OPENAI_API_KEY".into(), "API_KEY".to_string());
-        log::info!("Context: {:?}", ctx);
 
-        let runtime = BamlRuntime::from_file_content("baml_src", &files, &ctx);
+        let runtime = BamlRuntime::from_file_content(
+            "baml_src",
+            &files,
+            [("OPENAI_API_KEY", "OPENAI_API_KEY")].into(),
+        )?;
         log::info!("Runtime:");
-
-        // Replace the OPENAI_API_KEY value with the actual key
-        let ctx =
-            RuntimeContext::new().add_env("OPENAI_API_KEY".into(), "OPENAI_API_KEY".to_string());
 
         let mut params = IndexMap::new();
 
@@ -106,8 +104,9 @@ mod internal_tests {
             baml_types::BamlValue::String("Attention Is All You Need. Mark. Hello.".into()),
         );
 
-        let (res, _) = runtime?
-            .call_function("GetOrderInfo".to_string(), params, ctx)
+        let ctx = runtime.create_ctx_manager();
+        let (res, _) = runtime
+            .call_function("GetOrderInfo".to_string(), &params, &ctx)
             .await;
 
         assert!(res.is_ok(), "Result: {:#?}", res.err());

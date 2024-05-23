@@ -20,13 +20,19 @@ fn assert_failed(test: &TestResponse) {
 #[test_log::test]
 fn test_graph_test() -> Result<()> {
     let directory = PathBuf::from("/Users/vbv/repos/gloo-lang/integ-tests/baml_src");
-    let runtime = InternalBamlRuntime::from_directory(&directory)?;
+    let runtime = BamlRuntime::from_directory(
+        &directory,
+        [
+            ("OPENAI_API_KEY", "API_KEY"),
+            ("ANTHROPIC_API_KEY", "API_KEY"),
+        ]
+        .into_iter()
+        .collect(),
+    )?;
 
-    let ctx = RuntimeContext::new()
-        .add_env("OPENAI_API_KEY".into(), "API_KEY".to_string())
-        .add_env("ANTHROPIC_API_KEY".into(), "API_KEY".to_string());
-
-    let graph = runtime.orchestration_graph("GPT4Turbo", &ctx)?;
+    let ctx = runtime.create_ctx_manager();
+    let ctx = ctx.create_ctx();
+    let graph = runtime.inner.orchestration_graph("GPT4Turbo", &ctx)?;
     for node in graph.iter() {
         log::info!("Node: {:#}", node);
     }
@@ -39,7 +45,7 @@ fn test_graph_test() -> Result<()> {
     .iter()
     {
         log::info!("Graph: {}", name);
-        let graph = runtime.orchestration_graph(name, &ctx)?;
+        let graph = runtime.inner.orchestration_graph(name, &ctx)?;
         for node in graph.iter() {
             log::info!("Node: {:#}", node);
         }
@@ -52,11 +58,15 @@ fn test_graph_test() -> Result<()> {
 #[tokio::test]
 async fn test_run_test() -> Result<()> {
     let directory = PathBuf::from("/Users/vbv/repos/gloo-lang/integ-tests/baml_src");
-    let ctx = RuntimeContext::new().add_env("OPENAI_API_KEY".into(), "API_KEY".to_string());
-    let runtime = BamlRuntime::from_directory(&directory, &ctx).unwrap();
-
+    // let ctx = RuntimeContext::new().add_env("OPENAI_API_KEY".into(), "API_KEY".to_string());
+    let runtime = BamlRuntime::from_directory(
+        &directory,
+        [("OPENAI_API_KEY", "API_KEY")].into_iter().collect(),
+    )
+    .unwrap();
+    let ctx = runtime.create_ctx_manager();
     let (res, _) = runtime
-        .run_test("ExtractNames", "pale_maroon", ctx, None)
+        .run_test("ExtractNames", "pale_maroon", &ctx, Some(|_| {}))
         .await;
     let res = res?;
 
@@ -67,10 +77,11 @@ async fn test_run_test() -> Result<()> {
 #[tokio::test]
 async fn test_call_function() -> Result<FunctionResult> {
     let directory = PathBuf::from("/Users/aaronvillalpando/Projects/baml/integ-tests/baml_src");
-    let runtime = InternalBamlRuntime::from_directory(&directory).unwrap();
-
-    // to actually run this you need to replace the OPENAI_API_KEY value with the actual key
-    let ctx = RuntimeContext::new().add_env("OPENAI_API_KEY".into(), "OPENAI_API_KEY".to_string());
+    let runtime = BamlRuntime::from_directory(
+        &directory,
+        [("OPENAI_API_KEY", "OPENAI_API_KEY")].into_iter().collect(),
+    )?;
+    let ctx = runtime.create_ctx_manager();
 
     let mut params = baml_types::BamlMap::new();
     params.insert(
@@ -78,9 +89,10 @@ async fn test_call_function() -> Result<FunctionResult> {
         BamlValue::String("Attention Is All You Need. Mark. Hello.".into()),
     );
 
-    let res = runtime
-        .call_function_impl("ExtractNames".to_string(), params, ctx)
-        .await?;
+    let (res, _) = runtime
+        .call_function("ExtractNames".to_string(), &params, &ctx)
+        .await;
+    let res = res?;
 
     log::info!("Result: {}", res);
 

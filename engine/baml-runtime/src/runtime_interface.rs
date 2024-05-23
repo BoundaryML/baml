@@ -9,6 +9,7 @@ use std::{collections::HashMap, sync::Arc};
 use crate::internal::llm_client::llm_provider::LLMProvider;
 use crate::internal::llm_client::orchestrator::{OrchestrationScope, OrchestratorNode};
 use crate::tracing::{BamlTracer, TracingSpan};
+use crate::RuntimeContextManager;
 use crate::{
     internal::{ir_features::IrFeatures, llm_client::retry_policy::CallablePolicy},
     runtime::InternalBamlRuntime,
@@ -32,15 +33,14 @@ pub trait RuntimeInterface {
     async fn call_function_impl(
         &self,
         function_name: String,
-        params: IndexMap<String, BamlValue>,
+        params: &BamlMap<String, BamlValue>,
         ctx: RuntimeContext,
     ) -> Result<FunctionResult>;
 
     fn stream_function_impl(
         &self,
         function_name: String,
-        params: IndexMap<String, BamlValue>,
-        ctx: RuntimeContext,
+        params: &BamlMap<String, BamlValue>,
         tracer: Arc<BamlTracer>,
     ) -> Result<FunctionResultStream>;
 }
@@ -58,7 +58,7 @@ pub trait PublicInterface {
         &self,
         function_name: &str,
         test_name: &str,
-        ctx: RuntimeContext,
+        ctx: &RuntimeContextManager,
         on_event: Option<F>,
     ) -> (Result<TestResponse>, Option<uuid::Uuid>)
     where
@@ -68,15 +68,15 @@ pub trait PublicInterface {
     async fn call_function(
         &self,
         function_name: String,
-        params: IndexMap<String, BamlValue>,
-        ctx: RuntimeContext,
+        params: &BamlMap<String, BamlValue>,
+        ctx: &RuntimeContextManager,
     ) -> (Result<FunctionResult>, Option<uuid::Uuid>);
 
     fn stream_function(
         &self,
         function_name: String,
-        params: IndexMap<String, BamlValue>,
-        ctx: RuntimeContext,
+        params: &BamlMap<String, BamlValue>,
+        ctx: &RuntimeContextManager,
     ) -> Result<FunctionResultStream>;
 }
 
@@ -88,8 +88,8 @@ pub trait ExperimentalTracingInterface {
     fn start_span(
         &self,
         function_name: &str,
-        ctx: RuntimeContext,
         params: &BamlMap<String, BamlValue>,
+        ctx: &RuntimeContextManager,
     ) -> (Option<TracingSpan>, RuntimeContext);
 
     #[allow(async_fn_in_trait)]
@@ -97,6 +97,7 @@ pub trait ExperimentalTracingInterface {
         &self,
         span: TracingSpan,
         result: &Result<FunctionResult>,
+        ctx: &RuntimeContextManager,
     ) -> Result<Option<uuid::Uuid>>;
 
     #[allow(async_fn_in_trait)]
@@ -104,6 +105,7 @@ pub trait ExperimentalTracingInterface {
         &self,
         span: TracingSpan,
         result: Option<BamlValue>,
+        ctx: &RuntimeContextManager,
     ) -> Result<Option<uuid::Uuid>>;
 
     fn flush(&self) -> Result<()>;

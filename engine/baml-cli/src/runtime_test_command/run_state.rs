@@ -10,7 +10,8 @@ use tokio::{
 };
 
 use baml_runtime::{
-    BamlRuntime, InternalRuntimeInterface, PublicInterface, RuntimeContext, TestResponse,
+    BamlRuntime, InternalRuntimeInterface, PublicInterface, RuntimeContext, RuntimeContextManager,
+    TestResponse,
 };
 
 use super::filter::FilterArgs;
@@ -254,15 +255,13 @@ impl TestCommand {
         &self,
         semaphore: Arc<Semaphore>,
         test: &TestCaseWalker,
-        ctx: &RuntimeContext,
         state: Arc<Mutex<TestRunState>>,
+        ctx: &RuntimeContextManager,
         progress_bar: TestRunBar,
     ) -> task::JoinHandle<()> {
         let function_name = test.function().name().to_string();
         let test_name = test.test_case().name.clone();
-
         let ctx = ctx.clone();
-
         let runtime = self.runtime.clone();
 
         tokio::task::spawn(async move {
@@ -284,7 +283,7 @@ impl TestCommand {
                 // println!("Updated state: {} {}", function_name, test_name);
 
                 let (res, _) = rt
-                    .run_test(&function_name, &test_name, ctx, Some(|_| ()))
+                    .run_test(&function_name, &test_name, &ctx, Some(|_| ()))
                     .await;
                 res
             };
@@ -311,11 +310,7 @@ impl TestCommand {
         })
     }
 
-    pub async fn run_parallel(
-        &self,
-        max_parallel: usize,
-        ctx: &baml_runtime::RuntimeContext,
-    ) -> Result<TestRunState> {
+    pub async fn run_parallel(&self, max_parallel: usize) -> Result<TestRunState> {
         // Start a thread pool with max_parallel threads
         // Each thread will take a test from the queue and run it
         let semaphore = Arc::new(Semaphore::new(max_parallel));
@@ -333,8 +328,8 @@ impl TestCommand {
             let sem_clone = semaphore.clone();
 
             let state_clone = locked_state.clone();
-
-            let handle = self.test_handler(sem_clone, &test, ctx, state_clone, bars.clone());
+            let ctx = runtime.create_ctx_manager();
+            let handle = self.test_handler(sem_clone, &test, state_clone, &ctx, bars.clone());
 
             handles.push(handle);
         }

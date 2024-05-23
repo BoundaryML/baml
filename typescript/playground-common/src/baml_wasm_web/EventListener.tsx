@@ -8,20 +8,13 @@ import { useCallback, useEffect } from 'react'
 import CustomErrorBoundary from '../utils/ErrorFallback'
 import { sessionStore, vscodeLocalStorageStore } from './JotaiProvider'
 import { availableProjectsAtom, projectFamilyAtom, projectFilesAtom, runtimeFamilyAtom } from './baseAtoms'
-import type BamlProjectManager from './project_manager'
-import type {
-  WasmDiagnosticError,
-  WasmParam,
-  WasmRuntime,
-  WasmRuntimeContext,
-} from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
+import type { WasmDiagnosticError, WasmParam, WasmRuntime } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 
 // const wasm = await import("@gloo-ai/baml-schema-wasm-web/baml_schema_build");
 // const { WasmProject, WasmRuntime, WasmRuntimeContext, version: RuntimeVersion } = wasm;
 const defaultEnvKeyValues: [string, string][] = (() => {
   if (typeof process !== 'undefined' && process.env.NEXT_PUBLIC) {
     // Running in a Next.js environment, no default value
-    console.log('Running in a Next.js environment, no default value')
     return []
   } else {
     console.log('Not running in a Next.js environment, set default value')
@@ -84,12 +77,6 @@ type Selection = {
   testCase?: string
 }
 
-type ASTContextType = {
-  projectMangager: BamlProjectManager
-  // Things associated with selection
-  selected: Selection
-}
-
 const wasmAtomAsync = atom(async () => {
   const wasm = await import('@gloo-ai/baml-schema-wasm-web/baml_schema_build')
   return wasm
@@ -97,25 +84,10 @@ const wasmAtomAsync = atom(async () => {
 
 const wasmAtom = unwrap(wasmAtomAsync)
 
-export const runtimeCtx = atom((get) => {
-  const loadedWasm = get(wasmAtom)
-
-  if (loadedWasm === undefined) {
-    return null
-  }
-
-  const ctx = new loadedWasm.WasmRuntimeContext()
-  console.log('Setting env key values', get(envKeyValuesAtom))
-  for (const [key, value] of get(envKeyValuesAtom)) {
-    if (value !== null) {
-      console.log('Setting env', key, value)
-      ctx.set_env(key, value)
-    }
-  }
-
-  return ctx
+export const envVarsAtom = atom((get) => {
+  const envKeyValues = get(envKeyValuesAtom)
+  return Object.fromEntries(envKeyValues.map(([k, v]) => [k, v]))
 })
-runtimeCtx.debugLabel = 'runtimeCtx'
 
 const selectedProjectAtom = atom(
   (get) => {
@@ -244,10 +216,10 @@ export const updateFileAtom = atom(null, (get, set, params: WriteFileParams) => 
   let rt: WasmRuntime | undefined = undefined
   let diag: WasmDiagnosticError | undefined = undefined
 
-  const ctx = get(runtimeCtx)
-  if (project && wasm && ctx) {
+  if (project && wasm) {
     try {
-      rt = project.runtime(ctx)
+      const envVars = get(envVarsAtom)
+      rt = project.runtime(envVars)
       diag = project.diagnostics(rt)
     } catch (e) {
       const WasmDiagnosticError = wasm.WasmDiagnosticError
@@ -321,20 +293,15 @@ export const availableFunctionsAtom = atom((get) => {
   if (!runtime) {
     return []
   }
-  const ctx = get(runtimeCtx)
-  if (!ctx) {
-    return []
-  }
-  return runtime.list_functions(ctx)
+  return runtime.list_functions()
 })
 
 export const renderPromptAtom = atom((get) => {
   const runtime = get(selectedRuntimeAtom)
   const func = get(selectedFunctionAtom)
   const test_case = get(selectedTestCaseAtom)
-  const ctx = get(runtimeCtx)
 
-  if (!runtime || !func || !test_case || !ctx) {
+  if (!runtime || !func || !test_case) {
     return null
   }
 
@@ -345,7 +312,7 @@ export const renderPromptAtom = atom((get) => {
   )
 
   try {
-    return func.render_prompt(runtime, ctx, params)
+    return func.render_prompt(runtime, params)
   } catch (e) {
     if (e instanceof Error) {
       return e.message
@@ -396,7 +363,7 @@ const ErrorCount: React.FC = () => {
 }
 const createRuntime = (
   wasm: typeof import('@gloo-ai/baml-schema-wasm-web'),
-  ctx: WasmRuntimeContext,
+  envVars: Record<string, string>,
   root_path: string,
   project_files: Record<string, string>,
 ) => {
@@ -408,7 +375,7 @@ const createRuntime = (
   let rt = undefined
   let diag = undefined
   try {
-    rt = project.runtime(ctx)
+    rt = project.runtime(envVars)
     diag = project.diagnostics(rt)
   } catch (e) {
     const WasmDiagnosticError = wasm.WasmDiagnosticError
@@ -437,18 +404,18 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
   // const setRuntimeCtx = useSetAtom(runtimeCtxRaw);
   const version = useAtomValue(versionAtom)
   const wasm = useAtomValue(wasmAtom)
-  const ctx = useAtomValue(runtimeCtx)
   const setSelectedFunction = useSetAtom(selectedFunctionAtom)
+  const envVars = useAtomValue(envVarsAtom)
 
   const createRuntimeCb = useAtomCallback(
-    (get, set, wasm: typeof import('@gloo-ai/baml-schema-wasm-web'), ctx: WasmRuntimeContext) => {
+    (get, set, wasm: typeof import('@gloo-ai/baml-schema-wasm-web'), envVars: Record<string, string>) => {
       const selectedProject = get(selectedProjectAtom)
       if (!selectedProject) {
         return
       }
 
       const project_files = get(projectFilesAtom(selectedProject))
-      const { project, runtime, diagnostics } = createRuntime(wasm, ctx, selectedProject, project_files)
+      const { project, runtime, diagnostics } = createRuntime(wasm, envVars, selectedProject, project_files)
       set(projectFamilyAtom(selectedProject), project)
       set(runtimeFamilyAtom(selectedProject), {
         last_successful_runtime: undefined,
@@ -459,10 +426,10 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
   )
 
   useEffect(() => {
-    if (wasm && ctx) {
-      createRuntimeCb(wasm, ctx)
+    if (wasm) {
+      createRuntimeCb(wasm, envVars)
     }
-  }, [wasm, ctx])
+  }, [wasm, envVars])
 
   useEffect(() => {
     const fn = (

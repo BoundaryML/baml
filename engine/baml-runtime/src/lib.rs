@@ -27,7 +27,6 @@ use anyhow::Result;
 
 use baml_types::BamlMap;
 use baml_types::BamlValue;
-use indexmap::IndexMap;
 use runtime::InternalBamlRuntime;
 
 #[cfg(feature = "no_wasm")]
@@ -57,26 +56,44 @@ pub use internal_baml_core::ir::{FieldType, IRHelper, TypeValue};
 pub struct BamlRuntime {
     inner: InternalBamlRuntime,
     tracer: Arc<BamlTracer>,
+    env_vars: HashMap<String, String>,
 }
 
 impl BamlRuntime {
+    pub fn env_vars(&self) -> &HashMap<String, String> {
+        &self.env_vars
+    }
+
     /// Load a runtime from a directory
     #[cfg(feature = "no_wasm")]
-    pub fn from_directory(path: &std::path::PathBuf, ctx: &RuntimeContext) -> Result<Self> {
+    pub fn from_directory<T: AsRef<str>>(
+        path: &std::path::PathBuf,
+        env_vars: HashMap<T, T>,
+    ) -> Result<Self> {
+        let copy = env_vars
+            .iter()
+            .map(|(k, v)| (k.as_ref().to_string(), v.as_ref().to_string()))
+            .collect();
         Ok(BamlRuntime {
             inner: InternalBamlRuntime::from_directory(path)?,
-            tracer: BamlTracer::new(None, ctx).into(),
+            tracer: BamlTracer::new(None, env_vars.into_iter()).into(),
+            env_vars: copy,
         })
     }
 
-    pub fn from_file_content<T: AsRef<str>>(
+    pub fn from_file_content<T: AsRef<str>, U: AsRef<str>>(
         root_path: &str,
         files: &HashMap<T, T>,
-        ctx: &RuntimeContext,
+        env_vars: HashMap<U, U>,
     ) -> Result<Self> {
+        let copy = env_vars
+            .iter()
+            .map(|(k, v)| (k.as_ref().to_string(), v.as_ref().to_string()))
+            .collect();
         Ok(BamlRuntime {
             inner: InternalBamlRuntime::from_file_content(root_path, files)?,
-            tracer: BamlTracer::new(None, ctx).into(),
+            tracer: BamlTracer::new(None, env_vars.into_iter()).into(),
+            env_vars: copy,
         })
     }
 
@@ -89,6 +106,10 @@ impl BamlRuntime {
     pub fn run_cli(argv: Vec<String>, caller_type: cli::CallerType) -> Result<()> {
         cli::RuntimeCli::parse_from(argv.into_iter()).run(caller_type)
     }
+
+    pub fn create_ctx_manager(&self) -> RuntimeContextManager {
+        RuntimeContextManager::new_from_env_vars(self.env_vars.clone())
+    }
 }
 
 impl PublicInterface for BamlRuntime {
@@ -96,20 +117,20 @@ impl PublicInterface for BamlRuntime {
         &self,
         function_name: &str,
         test_name: &str,
-        ctx: RuntimeContext,
+        ctx: &RuntimeContextManager,
         on_event: Option<F>,
     ) -> (Result<TestResponse>, Option<uuid::Uuid>)
     where
         F: Fn(FunctionResult) -> (),
     {
-        let (span, ctx) = self.tracer.start_span(test_name, ctx, &Default::default());
+        let (span, rctx) = self.tracer.start_span(test_name, ctx, &Default::default());
 
-        let params = self.inner.get_test_params(function_name, test_name, &ctx);
+        let params = self.inner.get_test_params(function_name, test_name, &rctx);
 
         let response = match params {
-            Ok(params) => match self.stream_function(function_name.into(), params.clone(), ctx) {
+            Ok(params) => match self.stream_function(function_name.into(), &params, ctx) {
                 Ok(mut stream) => {
-                    let (response, span) = stream.run(on_event).await;
+                    let (response, span) = stream.run(on_event, ctx).await;
                     let response = response.map(|res| TestResponse {
                         function_response: res,
                         function_span: span,
@@ -124,7 +145,7 @@ impl PublicInterface for BamlRuntime {
 
         let mut target_id = None;
         if let Some(span) = span {
-            match self.tracer.finish_span(span, None).await {
+            match self.tracer.finish_span(span, ctx, None).await {
                 Ok(id) => target_id = id,
                 Err(e) => log::debug!("Error during logging: {}", e),
             }
@@ -136,18 +157,18 @@ impl PublicInterface for BamlRuntime {
     async fn call_function(
         &self,
         function_name: String,
-        params: IndexMap<String, BamlValue>,
-        ctx: RuntimeContext,
+        params: &BamlMap<String, BamlValue>,
+        ctx: &RuntimeContextManager,
     ) -> (Result<FunctionResult>, Option<uuid::Uuid>) {
-        let (span, ctx) = self.tracer.start_span(&function_name, ctx, &params);
+        let (span, rctx) = self.tracer.start_span(&function_name, ctx, &params);
         let response = self
             .inner
-            .call_function_impl(function_name, params, ctx)
+            .call_function_impl(function_name, params, rctx)
             .await;
 
         let mut target_id = None;
         if let Some(span) = span {
-            match self.tracer.finish_baml_span(span, &response).await {
+            match self.tracer.finish_baml_span(span, ctx, &response).await {
                 Ok(id) => target_id = id,
                 Err(e) => log::debug!("Error during logging: {}", e),
             }
@@ -158,11 +179,11 @@ impl PublicInterface for BamlRuntime {
     fn stream_function(
         &self,
         function_name: String,
-        params: IndexMap<String, BamlValue>,
-        ctx: RuntimeContext,
+        params: &BamlMap<String, BamlValue>,
+        _ctx: &RuntimeContextManager,
     ) -> Result<FunctionResultStream> {
         self.inner
-            .stream_function_impl(function_name, params, ctx, self.tracer.clone())
+            .stream_function_impl(function_name, params, self.tracer.clone())
     }
 
     #[cfg(feature = "no_wasm")]
@@ -179,8 +200,8 @@ impl ExperimentalTracingInterface for BamlRuntime {
     fn start_span(
         &self,
         function_name: &str,
-        ctx: RuntimeContext,
         params: &BamlMap<String, BamlValue>,
+        ctx: &RuntimeContextManager,
     ) -> (Option<TracingSpan>, RuntimeContext) {
         self.tracer.start_span(function_name, ctx, params)
     }
@@ -189,16 +210,18 @@ impl ExperimentalTracingInterface for BamlRuntime {
         &self,
         span: TracingSpan,
         result: &Result<FunctionResult>,
+        ctx: &RuntimeContextManager,
     ) -> Result<Option<uuid::Uuid>> {
-        self.tracer.finish_baml_span(span, result).await
+        self.tracer.finish_baml_span(span, ctx, result).await
     }
 
     async fn finish_span(
         &self,
         span: TracingSpan,
         result: Option<BamlValue>,
+        ctx: &RuntimeContextManager,
     ) -> Result<Option<uuid::Uuid>> {
-        self.tracer.finish_span(span, result).await
+        self.tracer.finish_span(span, ctx, result).await
     }
 
     fn flush(&self) -> Result<()> {

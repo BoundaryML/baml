@@ -18,7 +18,7 @@ use super::{
     },
     retry_policy::CallablePolicy,
     traits::{WithPrompt, WithRetryPolicy, WithSingleCallable, WithStreamable},
-    LLMResponse, LLMResponseStream,
+    LLMResponse,
 };
 
 mod anthropic;
@@ -94,11 +94,13 @@ impl WithSingleCallable for LLMPrimitiveProvider {
 impl WithStreamable for LLMPrimitiveProvider {
     async fn stream(
         &self,
-        _retry_policy: Option<CallablePolicy>,
-        _ctx: &RuntimeContext,
-        _prompt: &internal_baml_jinja::RenderedPrompt,
-    ) -> LLMResponseStream {
-        todo!()
+        ctx: &RuntimeContext,
+        prompt: &internal_baml_jinja::RenderedPrompt,
+    ) -> super::traits::StreamResponse {
+        match self {
+            LLMPrimitiveProvider::OpenAI(client) => client.stream(ctx, prompt).await,
+            LLMPrimitiveProvider::Anthropic(client) => client.stream(ctx, prompt).await,
+        }
     }
 }
 

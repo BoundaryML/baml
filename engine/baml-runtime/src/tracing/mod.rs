@@ -7,7 +7,6 @@ mod wasm_tracer;
 use anyhow::Result;
 use baml_types::BamlValue;
 use indexmap::IndexMap;
-use internal_baml_core::ast::Span;
 use internal_baml_jinja::RenderedPrompt;
 use serde_json::json;
 use std::collections::HashMap;
@@ -16,7 +15,7 @@ use uuid::Uuid;
 
 use crate::{
     internal::llm_client::LLMResponse, tracing::api_wrapper::core_types::Role, FunctionResult,
-    RuntimeContext, SpanCtx, TestResponse,
+    RuntimeContext, RuntimeContextManager, SpanCtx, TestResponse,
 };
 
 use self::api_wrapper::{
@@ -40,11 +39,8 @@ type TracerImpl = NonThreadedTracer;
 
 pub struct TracingSpan {
     span_id: Uuid,
-    function_name: String,
     params: IndexMap<String, BamlValue>,
-    parent_ids: Option<Vec<(String, Uuid)>>,
     start_time: web_time::SystemTime,
-    tags: HashMap<String, serde_json::Value>,
 }
 
 pub struct BamlTracer {
@@ -54,8 +50,11 @@ pub struct BamlTracer {
 }
 
 impl BamlTracer {
-    pub fn new(options: Option<APIWrapper>, ctx: &RuntimeContext) -> Self {
-        let options = options.unwrap_or_else(|| ctx.into());
+    pub fn new<T: AsRef<str>>(
+        options: Option<APIWrapper>,
+        env_vars: impl Iterator<Item = (T, T)>,
+    ) -> Self {
+        let options = options.unwrap_or_else(|| APIWrapper::from_env_vars(env_vars));
 
         let tracer = BamlTracer {
             tracer: if options.enabled() {
@@ -83,62 +82,42 @@ impl BamlTracer {
     pub(crate) fn start_span(
         &self,
         function_name: &str,
-        ctx: RuntimeContext,
+        ctx: &RuntimeContextManager,
         params: &IndexMap<String, BamlValue>,
     ) -> (Option<TracingSpan>, RuntimeContext) {
+        let span_id = ctx.enter(function_name);
         if !self.enabled {
-            return (None, ctx);
+            return (None, ctx.create_ctx());
         }
-        log::debug!(
-            "Starting span: {} {} {:#?}",
-            function_name,
-            params.len(),
-            params,
-        );
         let span = TracingSpan {
-            span_id: Uuid::new_v4(),
-            function_name: function_name.to_string(),
+            span_id,
             params: params.clone(),
-            parent_ids: ctx.parent_thread.as_ref().map(|p| {
-                p.iter()
-                    .map(|p| (p.name.clone(), p.span_id))
-                    .collect::<Vec<_>>()
-            }),
             start_time: web_time::SystemTime::now(),
-            tags: ctx.tags.clone(),
         };
 
-        let mut new_ctx = ctx.clone();
-        match &mut new_ctx.parent_thread {
-            Some(parent_thread) => {
-                parent_thread.push(SpanCtx {
-                    span_id: span.span_id,
-                    name: function_name.to_string(),
-                });
-            }
-            None => {
-                new_ctx.parent_thread = Some(vec![SpanCtx {
-                    span_id: span.span_id,
-                    name: function_name.to_string(),
-                }]);
-            }
-        }
-
-        (Some(span), new_ctx)
+        (Some(span), ctx.create_ctx())
     }
 
     #[allow(dead_code)]
     pub(crate) async fn finish_span(
         &self,
         span: TracingSpan,
+        ctx: &RuntimeContextManager,
         response: Option<BamlValue>,
     ) -> Result<Option<uuid::Uuid>> {
-        let target = span.span_id;
+        let Some((span_id, event_chain, tags)) = ctx.exit() else {
+            anyhow::bail!("Attempting to finish a span without first starting one");
+        };
+
+        if span.span_id != span_id {
+            anyhow::bail!("Span ID mismatch: {} != {}", span.span_id, span_id);
+        }
+
         if let Some(tracer) = &self.tracer {
             tracer
-                .submit((&self.options, span, response).into())
+                .submit(response.to_log_schema(&self.options, event_chain, tags, span))
                 .await?;
-            Ok(Some(target))
+            Ok(Some(span_id))
         } else {
             Ok(None)
         }
@@ -147,14 +126,22 @@ impl BamlTracer {
     pub(crate) async fn finish_baml_span(
         &self,
         span: TracingSpan,
+        ctx: &RuntimeContextManager,
         response: &Result<FunctionResult>,
     ) -> Result<Option<uuid::Uuid>> {
-        let target = span.span_id;
+        let Some((span_id, event_chain, tags)) = ctx.exit() else {
+            anyhow::bail!("Attempting to finish a span without first starting one");
+        };
+
+        if span.span_id != span_id {
+            anyhow::bail!("Span ID mismatch: {} != {}", span.span_id, span_id);
+        }
+
         if let Some(tracer) = &self.tracer {
             tracer
-                .submit(response.to_log_schema(&self.options, span))
+                .submit(response.to_log_schema(&self.options, event_chain, tags, span))
                 .await?;
-            Ok(Some(target))
+            Ok(Some(span_id))
         } else {
             Ok(None)
         }
@@ -170,23 +157,29 @@ fn to_iso_string(web_time: &web_time::SystemTime) -> String {
         .to_rfc3339_opts(chrono::SecondsFormat::AutoSi, true)
 }
 
-impl From<(&APIWrapper, &TracingSpan)> for LogSchemaContext {
-    fn from((api, span): (&APIWrapper, &TracingSpan)) -> Self {
-        let parents = &span.parent_ids.as_ref();
-        let mut parent_chain = parents
-            .map(|p| {
-                p.iter()
-                    .map(|(name, id)| EventChain {
-                        function_name: name.clone(),
-                        variant_name: Some(id.to_string()),
-                    })
-                    .collect::<Vec<_>>()
+impl
+    From<(
+        &APIWrapper,
+        Vec<SpanCtx>,
+        HashMap<String, BamlValue>,
+        &TracingSpan,
+    )> for LogSchemaContext
+{
+    fn from(
+        (api, event_chain, tags, span): (
+            &APIWrapper,
+            Vec<SpanCtx>,
+            HashMap<String, BamlValue>,
+            &TracingSpan,
+        ),
+    ) -> Self {
+        let parent_chain = event_chain
+            .iter()
+            .map(|ctx| EventChain {
+                function_name: ctx.name.clone(),
+                variant_name: None,
             })
-            .unwrap_or_default();
-        parent_chain.push(EventChain {
-            function_name: span.function_name.clone(),
-            variant_name: None,
-        });
+            .collect::<Vec<_>>();
         LogSchemaContext {
             hostname: api.host_name().to_string(),
             stage: Some(api.stage().to_string()),
@@ -196,7 +189,10 @@ impl From<(&APIWrapper, &TracingSpan)> for LogSchemaContext {
                 .map(|d| d.as_millis() as i128)
                 .unwrap_or(0),
             process_id: api.session_id().to_string(),
-            tags: HashMap::new(),
+            tags: tags
+                .into_iter()
+                .map(|(k, v)| (k.clone(), v.to_string()))
+                .collect(),
             event_chain: parent_chain,
             start_time: to_iso_string(&span.start_time),
         }
@@ -242,29 +238,6 @@ impl From<&BamlValue> for IOValue {
     }
 }
 
-impl From<(&APIWrapper, TracingSpan, Option<BamlValue>)> for LogSchema {
-    fn from((api, span, result): (&APIWrapper, TracingSpan, Option<BamlValue>)) -> Self {
-        let parent_ids = &span.parent_ids.as_ref();
-        LogSchema {
-            project_id: api.project_id().map(|s| s.to_string()),
-            event_type: api_wrapper::core_types::EventType::FuncCode,
-            root_event_id: parent_ids
-                .and_then(|p| p.first().map(|(_, id)| *id))
-                .unwrap_or(span.span_id)
-                .to_string(),
-            event_id: span.span_id.to_string(),
-            parent_event_id: parent_ids.and_then(|p| p.last().map(|(_, id)| id.to_string())),
-            context: (api, &span).into(),
-            io: IO {
-                input: Some((&span.params).into()),
-                output: result.as_ref().map(|r| r.into()),
-            },
-            error: None,
-            metadata: None,
-        }
-    }
-}
-
 fn error_from_result(result: &FunctionResult) -> Option<api_wrapper::core_types::Error> {
     match result.parsed() {
         Some(Ok(_)) => None,
@@ -293,63 +266,108 @@ fn error_from_result(result: &FunctionResult) -> Option<api_wrapper::core_types:
 }
 
 trait ToLogSchema {
-    fn to_log_schema(&self, api: &APIWrapper, span: TracingSpan) -> LogSchema;
+    // Event_chain is guaranteed to have at least one element
+    fn to_log_schema(
+        &self,
+        api: &APIWrapper,
+        event_chain: Vec<SpanCtx>,
+        tags: HashMap<String, BamlValue>,
+        span: TracingSpan,
+    ) -> LogSchema;
 }
 
 impl<T: ToLogSchema> ToLogSchema for Result<T> {
-    fn to_log_schema(&self, api: &APIWrapper, span: TracingSpan) -> LogSchema {
+    fn to_log_schema(
+        &self,
+        api: &APIWrapper,
+        event_chain: Vec<SpanCtx>,
+        tags: HashMap<String, BamlValue>,
+        span: TracingSpan,
+    ) -> LogSchema {
         match self {
-            Ok(r) => r.to_log_schema(api, span),
-            Err(e) => {
-                log::info!("Logging a failure: {:#?}", e);
+            Ok(r) => r.to_log_schema(api, event_chain, tags, span),
+            Err(e) => LogSchema {
+                project_id: api.project_id().map(|s| s.to_string()),
+                event_type: api_wrapper::core_types::EventType::FuncCode,
+                root_event_id: event_chain.first().map(|s| s.span_id).unwrap().to_string(),
+                event_id: event_chain.last().map(|s| s.span_id).unwrap().to_string(),
+                parent_event_id: None,
+                context: (api, event_chain, tags, &span).into(),
+                io: IO {
+                    input: Some((&span.params).into()),
+                    output: None,
+                },
+                error: Some(api_wrapper::core_types::Error {
+                    code: 2,
+                    message: e.to_string(),
+                    traceback: None,
+                    r#override: None,
+                }),
+                metadata: None,
+            },
+        }
+    }
+}
 
-                LogSchema {
-                    project_id: api.project_id().map(|s| s.to_string()),
-                    event_type: api_wrapper::core_types::EventType::FuncCode,
-                    root_event_id: span.span_id.to_string(),
-                    event_id: span.span_id.to_string(),
-                    parent_event_id: None,
-                    context: (api, &span).into(),
-                    io: IO {
-                        input: Some((&span.params).into()),
-                        output: None,
-                    },
-                    error: Some(api_wrapper::core_types::Error {
-                        code: 2,
-                        message: e.to_string(),
-                        traceback: None,
-                        r#override: None,
-                    }),
-                    metadata: None,
-                }
-            }
+impl ToLogSchema for Option<BamlValue> {
+    // Event_chain is guaranteed to have at least one element
+    fn to_log_schema(
+        &self,
+        api: &APIWrapper,
+        event_chain: Vec<SpanCtx>,
+        tags: HashMap<String, BamlValue>,
+        span: TracingSpan,
+    ) -> LogSchema {
+        LogSchema {
+            project_id: api.project_id().map(|s| s.to_string()),
+            event_type: api_wrapper::core_types::EventType::FuncCode,
+            root_event_id: event_chain.first().map(|s| s.span_id).unwrap().to_string(),
+            event_id: event_chain.last().map(|s| s.span_id).unwrap().to_string(),
+            parent_event_id: event_chain
+                .get(event_chain.len() - 2)
+                .map(|s| s.span_id.to_string()),
+            context: (api, event_chain, tags, &span).into(),
+            io: IO {
+                input: Some((&span.params).into()),
+                output: self.as_ref().map(|r| r.into()),
+            },
+            error: None,
+            metadata: None,
         }
     }
 }
 
 impl ToLogSchema for TestResponse {
-    fn to_log_schema(&self, api: &APIWrapper, span: TracingSpan) -> LogSchema {
-        self.function_response.to_log_schema(api, span)
+    fn to_log_schema(
+        &self,
+        api: &APIWrapper,
+        event_chain: Vec<SpanCtx>,
+        tags: HashMap<String, BamlValue>,
+        span: TracingSpan,
+    ) -> LogSchema {
+        self.function_response
+            .to_log_schema(api, event_chain, tags, span)
     }
 }
 
 impl ToLogSchema for FunctionResult {
-    fn to_log_schema(&self, api: &APIWrapper, span: TracingSpan) -> LogSchema {
+    fn to_log_schema(
+        &self,
+        api: &APIWrapper,
+        event_chain: Vec<SpanCtx>,
+        tags: HashMap<String, BamlValue>,
+        span: TracingSpan,
+    ) -> LogSchema {
         LogSchema {
             project_id: api.project_id().map(|s| s.to_string()),
             event_type: api_wrapper::core_types::EventType::FuncLlm,
-            root_event_id: span
-                .parent_ids
-                .as_ref()
-                .and_then(|p| p.first().map(|(_, id)| *id))
-                .unwrap_or(span.span_id)
-                .to_string(),
-            event_id: span.span_id.to_string(),
-            parent_event_id: span
-                .parent_ids
-                .as_ref()
-                .and_then(|p| p.last().map(|(_, id)| id.to_string())),
-            context: (api, &span).into(),
+            root_event_id: event_chain.first().map(|s| s.span_id).unwrap().to_string(),
+            event_id: event_chain.last().map(|s| s.span_id).unwrap().to_string(),
+            // Second to last element in the event chain
+            parent_event_id: event_chain
+                .get(event_chain.len() - 2)
+                .map(|s| s.span_id.to_string()),
+            context: (api, event_chain, tags, &span).into(),
             io: IO {
                 input: Some((&span.params).into()),
                 output: self

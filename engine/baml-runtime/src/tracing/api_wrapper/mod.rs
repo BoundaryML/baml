@@ -1,10 +1,10 @@
 mod env_setup;
+use std::collections::HashMap;
+
 use anyhow::Result;
 pub(super) mod api_interface;
 pub(super) mod core_types;
 use serde_json::{json, Value};
-
-use crate::RuntimeContext;
 
 pub(super) use self::api_interface::{BoundaryAPI, BoundaryTestAPI};
 use self::core_types::{TestCaseStatus, UpdateTestCase};
@@ -12,34 +12,6 @@ use self::core_types::{TestCaseStatus, UpdateTestCase};
 #[derive(Debug, Clone)]
 pub struct APIWrapper {
     config: APIConfig,
-}
-
-impl From<&RuntimeContext> for APIWrapper {
-    fn from(value: &RuntimeContext) -> Self {
-        let config = env_setup::Config::from_ctx(value).unwrap();
-        match (&config.secret, &config.project_id) {
-            (Some(api_key), Some(project_id)) => Self {
-                config: APIConfig::Web(CompleteAPIConfig {
-                    base_url: config.base_url,
-                    api_key: api_key.to_string(),
-                    project_id: project_id.to_string(),
-                    stage: config.stage,
-                    sessions_id: config.sessions_id,
-                    host_name: config.host_name,
-                }),
-            },
-            _ => Self {
-                config: APIConfig::LocalOnly(PartialAPIConfig {
-                    base_url: config.base_url,
-                    api_key: config.secret,
-                    project_id: config.project_id,
-                    stage: config.stage,
-                    sessions_id: config.sessions_id,
-                    host_name: config.host_name,
-                }),
-            },
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -355,6 +327,32 @@ impl BoundaryTestAPI for APIWrapper {
 }
 
 impl APIWrapper {
+    pub fn from_env_vars<T: AsRef<str>>(value: impl Iterator<Item = (T, T)>) -> Self {
+        let config = env_setup::Config::from_env_vars(value).unwrap();
+        match (&config.secret, &config.project_id) {
+            (Some(api_key), Some(project_id)) => Self {
+                config: APIConfig::Web(CompleteAPIConfig {
+                    base_url: config.base_url,
+                    api_key: api_key.to_string(),
+                    project_id: project_id.to_string(),
+                    stage: config.stage,
+                    sessions_id: config.sessions_id,
+                    host_name: config.host_name,
+                }),
+            },
+            _ => Self {
+                config: APIConfig::LocalOnly(PartialAPIConfig {
+                    base_url: config.base_url,
+                    api_key: config.secret,
+                    project_id: config.project_id,
+                    stage: config.stage,
+                    sessions_id: config.sessions_id,
+                    host_name: config.host_name,
+                }),
+            },
+        }
+    }
+
     pub fn enabled(&self) -> bool {
         self.config.project_id().is_some() && self.config.secret().is_some()
     }

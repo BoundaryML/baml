@@ -16,8 +16,8 @@ pub struct GenerateArgs {
 
 impl GenerateArgs {
     pub fn run(&self, caller_type: super::CallerType) -> Result<()> {
-        let ctx = RuntimeContext::from_env();
-        let runtime = BamlRuntime::from_directory(&self.from.clone().into(), &ctx)?;
+        let runtime =
+            BamlRuntime::from_directory(&self.from.clone().into(), std::env::vars().collect())?;
 
         let client_type: internal_baml_codegen::LanguageClientType =
             match (self.client_type.as_ref(), caller_type) {

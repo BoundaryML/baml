@@ -2,7 +2,7 @@
 mod tests {
     use std::collections::HashMap;
 
-    use baml_schema_build::runtime_wasm::{WasmProject, WasmRuntime, WasmRuntimeContext};
+    use baml_schema_build::runtime_wasm::{WasmProject, WasmRuntime};
 
     use baml_runtime::{BamlRuntime, RuntimeContext};
     use serde_wasm_bindgen::to_value;
@@ -128,11 +128,13 @@ mod tests {
             .map_err(JsValue::from)
             .unwrap();
 
-        let wasm_runtime_ctx = WasmRuntimeContext::new();
-        let current_runtime = project
-            .runtime(&wasm_runtime_ctx)
-            .map_err(JsValue::from)
-            .unwrap();
+        let env_vars = [("OPENAI_API_KEY", "12345")]
+            .iter()
+            .cloned()
+            .collect::<HashMap<_, _>>();
+        let env_vars_js = to_value(&env_vars).unwrap();
+
+        let current_runtime = project.runtime(env_vars_js).map_err(JsValue::from).unwrap();
         let diagnostics = project.diagnostics(&current_runtime);
 
         assert!(diagnostics.errors().is_empty());

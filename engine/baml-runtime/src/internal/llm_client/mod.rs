@@ -163,20 +163,3 @@ impl std::fmt::Display for LLMCompleteResponse {
         write!(f, "{}", self.content.dimmed())
     }
 }
-
-pub type LLMResponseStream = futures::stream::LocalBoxStream<'static, anyhow::Result<LLMResponse>>;
-
-pub trait SseResponseTrait {
-    fn build_request_for_stream(
-        &self,
-        prompt: &internal_baml_jinja::RenderedPrompt,
-    ) -> Result<reqwest::RequestBuilder>;
-
-    fn response_stream(
-        &self,
-        resp: reqwest::Response,
-        prompt: &internal_baml_jinja::RenderedPrompt,
-        system_start: web_time::SystemTime,
-        instant_start: web_time::Instant,
-    ) -> impl futures::Stream<Item = Result<LLMResponse>>;
-}

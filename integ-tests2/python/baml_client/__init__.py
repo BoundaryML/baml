@@ -13,14 +13,14 @@
 # flake8: noqa: E501,F401
 # pylint: disable=unused-import,line-too-long
 # fmt: off
-import baml_py
-import pydantic
-
+import os
 from .client import BamlClient
 from . import types
 
+b = BamlClient.from_directory(os.environ.get('BAML_SRC_DIR', f"{__file__}/../baml_src"))
+
+
 __all__ = [
-  "BamlClient",
+  "b",
   "types",
 ]
-

@@ -1,9 +1,7 @@
-mod runtime_ctx;
 pub mod runtime_prompt;
 
 use std::collections::HashMap;
 
-pub use self::runtime_ctx::WasmRuntimeContext;
 use crate::runtime_wasm::runtime_prompt::WasmPrompt;
 use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
 use baml_runtime::runtime_interface::PublicInterface;
@@ -54,7 +52,6 @@ pub struct WasmDiagnosticError {
 }
 
 // use serde::Serialize;
-use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(getter_with_clone)]
 pub struct SymbolLocation {
@@ -205,11 +202,19 @@ impl WasmProject {
     }
 
     #[wasm_bindgen]
-    pub fn runtime(&self, ctx: &WasmRuntimeContext) -> Result<WasmRuntime, JsValue> {
+    pub fn runtime(&self, env_vars: JsValue) -> Result<WasmRuntime, JsValue> {
         let mut hm = self.files.iter().collect::<HashMap<_, _>>();
         hm.extend(self.unsaved_files.iter());
 
-        BamlRuntime::from_file_content(&self.root_dir_name, &hm, &ctx.ctx)
+        let env_vars: HashMap<String, String> =
+            serde_wasm_bindgen::from_value(env_vars).map_err(|e| {
+                JsValue::from_str(&format!(
+                    "Expected env_vars to be HashMap<string, string>. {}",
+                    e
+                ))
+            })?;
+
+        BamlRuntime::from_file_content(&self.root_dir_name, &hm, env_vars)
             .map(|r| WasmRuntime { runtime: r })
             .map_err(|e| match e.downcast::<DiagnosticsError>() {
                 Ok(e) => {
@@ -422,13 +427,13 @@ impl WasmTestResponse {
 
     #[wasm_bindgen]
     pub fn failure_message(&self) -> Option<String> {
-        self.test_response
-            .as_ref()
-            .ok()
-            .and_then(|r| match r.status() {
+        match self.test_response.as_ref() {
+            Ok(r) => match r.status() {
                 baml_runtime::TestStatus::Pass => None,
                 baml_runtime::TestStatus::Fail(r) => r.render_error(),
-            })
+            },
+            Err(e) => Some(e.to_string()),
+        }
     }
 }
 
@@ -611,7 +616,7 @@ fn get_dummy_field(indent: usize, name: &str, t: &baml_runtime::FieldType) -> Op
 #[wasm_bindgen]
 impl WasmRuntime {
     #[wasm_bindgen]
-    pub fn list_functions(&self, ctx: &WasmRuntimeContext) -> Vec<WasmFunction> {
+    pub fn list_functions(&self) -> Vec<WasmFunction> {
         self.runtime
             .internal()
             .ir()
@@ -659,7 +664,7 @@ impl WasmRuntime {
                     test_cases: f
                         .walk_tests()
                         .map(|tc| {
-                            let params = match tc.test_case_params(&ctx.ctx.env) {
+                            let params = match tc.test_case_params(&self.runtime.env_vars()) {
                                 Ok(params) => Ok(params
                                     .iter()
                                     .map(|(k, v)| {
@@ -825,21 +830,15 @@ impl WasmFunction {
     #[wasm_bindgen]
     pub fn render_prompt(
         &self,
-        rt: &mut WasmRuntime,
-        ctx: &runtime_ctx::WasmRuntimeContext,
+        rt: &WasmRuntime,
         params: JsValue,
     ) -> Result<WasmPrompt, wasm_bindgen::JsError> {
-        let mut params = serde_wasm_bindgen::from_value::<BamlMap<String, BamlValue>>(params)?;
-        let env_vars = rt.runtime.internal().ir().required_env_vars();
-
-        // For anything env vars that are not provided, fill with empty strings
-        let mut ctx = ctx.ctx.clone();
-
-        for var in env_vars {
-            if !ctx.env.contains_key(var) {
-                ctx.env.insert(var.into(), "".to_string());
-            }
-        }
+        let params = serde_wasm_bindgen::from_value::<BamlMap<String, BamlValue>>(params)?;
+        let missing_env_vars = rt.runtime.internal().ir().required_env_vars();
+        let ctx = rt
+            .runtime
+            .create_ctx_manager()
+            .create_ctx_with_default(missing_env_vars.iter());
 
         rt.runtime
             .internal()
@@ -853,7 +852,6 @@ impl WasmFunction {
     pub async fn run_test(
         &self,
         rt: &mut WasmRuntime,
-        ctx: &runtime_ctx::WasmRuntimeContext,
         test_name: String,
         cb: js_sys::Function,
     ) -> Result<WasmTestResponse, JsValue> {
@@ -869,8 +867,10 @@ impl WasmFunction {
             .into();
             cb.call1(&this, &res).unwrap();
         });
+
+        let ctx = rt.create_ctx_manager();
         let (test_response, span) = rt
-            .run_test(&function_name, &test_name, ctx.ctx.clone(), Some(cb))
+            .run_test(&function_name, &test_name, &ctx, Some(cb))
             .await;
 
         Ok(WasmTestResponse {

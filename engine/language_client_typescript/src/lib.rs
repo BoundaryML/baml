@@ -1,9 +1,8 @@
 mod parse_ts_types;
 mod ts_types;
 
-use baml_runtime::PublicInterface;
+use baml_runtime::{PublicInterface, RuntimeContextManager};
 use baml_types::{BamlMap, BamlValue};
-use futures::prelude::*;
 use indexmap::IndexMap;
 use napi::bindgen_prelude::*;
 
@@ -24,17 +23,30 @@ pub struct BamlRuntimeFfi {
 }
 
 #[napi]
+struct RuntimeContextManagerTs {
+    inner: RuntimeContextManager,
+}
+
+#[napi]
 impl BamlRuntimeFfi {
     #[napi]
-    pub fn from_directory(directory: String) -> Result<BamlRuntimeFfi> {
-        let ctx = baml_runtime::RuntimeContext::from_env();
-
+    pub fn from_directory(
+        directory: String,
+        env_vars: HashMap<String, String>,
+    ) -> Result<BamlRuntimeFfi> {
         Ok(BamlRuntimeFfi {
             internal: Arc::new(baml_runtime::BamlRuntime::from_directory(
                 &PathBuf::from(directory),
-                &ctx,
+                env_vars,
             )?),
         })
+    }
+
+    #[napi]
+    pub fn create_context_manager(&self) -> RuntimeContextManagerTs {
+        RuntimeContextManagerTs {
+            inner: self.internal.create_ctx_manager(),
+        }
     }
 
     #[napi(
@@ -44,6 +56,7 @@ impl BamlRuntimeFfi {
         &self,
         function_name: String,
         args: HashMap<String, serde_json::Value>,
+        ctx: &RuntimeContextManagerTs,
     ) -> Result<ts_types::FunctionResult> {
         // Convert each arg to a BamlValue
         let raw_args = args
@@ -65,13 +78,12 @@ impl BamlRuntimeFfi {
         }
 
         let rt = self.internal.clone();
-        let ctx = baml_runtime::RuntimeContext::from_env();
 
         let args = ok
             .into_iter()
             .map(|(k, v)| (k.clone(), v.unwrap().clone()))
             .collect::<BamlMap<_, _>>();
-        let (result, _) = rt.call_function(function_name, args, ctx).await;
+        let (result, _) = rt.call_function(function_name, &args, &ctx.inner).await;
 
         result.map(ts_types::FunctionResult::new).map_err(|e| {
             Error::new(

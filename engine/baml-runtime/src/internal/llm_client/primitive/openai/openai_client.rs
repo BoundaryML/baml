@@ -1,17 +1,14 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
 use baml_types::BamlImage;
 use internal_baml_core::ir::ClientWalker;
-use internal_baml_jinja::{
-    ChatMessagePart, RenderContext_Client, RenderedChatMessage, RenderedPrompt,
-};
+use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
 
 use serde_json::json;
 
+use crate::internal::llm_client::traits::{SseResponseTrait, StreamResponse, WithStreamChat};
 use crate::internal::llm_client::{
-    state::LlmClientState,
     traits::{WithChat, WithClient, WithNoCompletion, WithRetryPolicy},
     LLMResponse, ModelFeatures,
 };
@@ -19,7 +16,7 @@ use crate::internal::llm_client::{
 use crate::request::RequestError;
 use crate::{request, RuntimeContext};
 use eventsource_stream::Eventsource;
-use futures::{Stream, StreamExt};
+use futures::StreamExt;
 
 fn resolve_properties(
     client: &ClientWalker,
@@ -102,8 +99,6 @@ pub struct OpenAIClient {
     context: RenderContext_Client,
     features: ModelFeatures,
     properties: PostRequestProperities,
-
-    internal_state: Arc<Mutex<LlmClientState>>,
 }
 
 impl WithRetryPolicy for OpenAIClient {
@@ -259,7 +254,7 @@ impl WithChat for OpenAIClient {
 }
 
 use crate::internal::llm_client::{
-    ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, SseResponseTrait,
+    ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse,
 };
 
 use super::types::{
@@ -269,13 +264,8 @@ use super::types::{
 impl SseResponseTrait for OpenAIClient {
     fn build_request_for_stream(
         &self,
-        prompt: &internal_baml_jinja::RenderedPrompt,
+        prompt: &Vec<RenderedChatMessage>,
     ) -> Result<reqwest::RequestBuilder> {
-        log::info!("stream chat starting");
-        let RenderedPrompt::Chat(prompt) = prompt else {
-            anyhow::bail!("Expected a chat prompt, got: {:#?}", prompt);
-        };
-
         let mut body = json!(self.properties.properties);
         body.as_object_mut()
             .unwrap()
@@ -310,43 +300,34 @@ impl SseResponseTrait for OpenAIClient {
         for (key, value) in headers {
             request = request.header(key, value);
         }
-
-        match self.internal_state.clone().lock() {
-            Ok(mut state) => {
-                state.call_count += 1;
-            }
-            Err(e) => {
-                log::warn!(
-                    "Failed to increment call count for OpejkjknAIClient: {:#?}",
-                    e
-                );
-            }
-        }
-        log::info!("stream chat successfully built request");
         Ok(request)
     }
 
     fn response_stream(
         &self,
         resp: reqwest::Response,
-        prompt: &internal_baml_jinja::RenderedPrompt,
+        prompt: &Vec<RenderedChatMessage>,
         system_start: web_time::SystemTime,
         instant_start: web_time::Instant,
-    ) -> impl Stream<Item = Result<LLMResponse>> {
-        resp.bytes_stream()
-            .eventsource()
-            .take_while(|event| { std::future::ready(event.as_ref().is_ok_and(|e| e.data != "[DONE]"))})
-            .map(|event| -> Result<ChatCompletionResponseDelta> {
-                Ok(serde_json::from_str::<ChatCompletionResponseDelta>(
-                    &event?.data,
-                )?)
-            })
-            .inspect(|event| log::trace!("{:#?}", event))
-            .scan(
-                Ok(
-LLMCompleteResponse {
-                        client: self.context.name.to_string(),
-                        prompt: prompt.clone(),
+    ) -> StreamResponse {
+        let prompt = prompt.clone();
+        let client_name = self.context.name.clone();
+        Ok(Box::pin(
+            resp.bytes_stream()
+                .eventsource()
+                .take_while(|event| {
+                    std::future::ready(event.as_ref().is_ok_and(|e| e.data != "[DONE]"))
+                })
+                .map(|event| -> Result<ChatCompletionResponseDelta> {
+                    Ok(serde_json::from_str::<ChatCompletionResponseDelta>(
+                        &event?.data,
+                    )?)
+                })
+                .inspect(|event| log::trace!("{:#?}", event))
+                .scan(
+                    Ok(LLMCompleteResponse {
+                        client: client_name.clone(),
+                        prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
                         content: "".to_string(),
                         start_time: system_start,
                         latency: instant_start.elapsed(),
@@ -358,40 +339,105 @@ LLMCompleteResponse {
                             output_tokens: None,
                             total_tokens: None,
                         },
-                    }
-                ),
-                move |accumulated: &mut Result<LLMCompleteResponse>, event| {
-                    let Ok(ref mut inner) = accumulated else {
-                        // halt the stream: the last stream event failed to parse
-                        return std::future::ready(None);
-                    };
-                    let event = match event {
-                        Ok(event) => event,
-                        Err(e) => {
-                            *accumulated = Err(anyhow::anyhow!(
-                                "Failed to accumulate response (failed to parse previous event from EventSource)"
-                            ));
-                            return std::future::ready(Some(Err(e.context("Failed to parse event from EventSource"))));
-                        }
-                    };
-                    if let Some(choice) = event.choices.get(0) {
-                        if let Some(content) = choice.delta.content.as_ref() {
-                            inner.content += content.as_str();
-                        }
-                        inner.model = event.model;
-                        match choice.finish_reason.as_ref() {
-                            Some(FinishReason::Stop) => {
-                                inner.metadata.baml_is_complete = true;
-                                inner.metadata.finish_reason = Some(FinishReason::Stop.to_string());
+                    }),
+                    move |accumulated: &mut Result<LLMCompleteResponse>, event| {
+                        let Ok(ref mut inner) = accumulated else {
+                            // halt the stream: the last stream event failed to parse
+                            return std::future::ready(None);
+                        };
+                        let event = match event {
+                            Ok(event) => event,
+                            Err(e) => {
+                                return std::future::ready(Some(LLMResponse::LLMFailure(
+                                    LLMErrorResponse {
+                                        client: client_name.clone(),
+                                        model: if inner.model == "" {
+                                            None
+                                        } else {
+                                            Some(inner.model.clone())
+                                        },
+                                        prompt: internal_baml_jinja::RenderedPrompt::Chat(
+                                            prompt.clone(),
+                                        ),
+                                        start_time: system_start,
+                                        latency: instant_start.elapsed(),
+                                        message: format!("Failed to parse event: {:#?}", e),
+                                        code: ErrorCode::Other(2),
+                                    },
+                                )));
                             }
-                            _ => (),
+                        };
+                        if let Some(choice) = event.choices.get(0) {
+                            if let Some(content) = choice.delta.content.as_ref() {
+                                inner.content += content.as_str();
+                            }
+                            inner.model = event.model;
+                            match choice.finish_reason.as_ref() {
+                                Some(FinishReason::Stop) => {
+                                    inner.metadata.baml_is_complete = true;
+                                    inner.metadata.finish_reason =
+                                        Some(FinishReason::Stop.to_string());
+                                }
+                                _ => (),
+                            }
                         }
-                    }
-                    inner.latency = instant_start.elapsed();
+                        inner.latency = instant_start.elapsed();
 
-                    std::future::ready(Some(Ok(LLMResponse::Success(inner.clone()))))
-                },
-            )
+                        std::future::ready(Some(LLMResponse::Success(inner.clone())))
+                    },
+                ),
+        ))
+    }
+}
+
+impl WithStreamChat for OpenAIClient {
+    async fn stream_chat(
+        &self,
+        ctx: &RuntimeContext,
+        prompt: &Vec<RenderedChatMessage>,
+    ) -> StreamResponse {
+        match self.build_request_for_stream(prompt) {
+            Ok(req) => {
+                let system_start = web_time::SystemTime::now();
+                let instant_start = web_time::Instant::now();
+                let resp = req.send().await;
+                match resp {
+                    Ok(resp) => {
+                        let status = resp.status();
+                        if !status.is_success() {
+                            return Err(LLMResponse::LLMFailure(LLMErrorResponse {
+                                client: self.context.name.to_string(),
+                                model: None,
+                                prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
+                                start_time: system_start,
+                                latency: instant_start.elapsed(),
+                                message: resp.text().await.unwrap_or("<no response>".into()),
+                                code: ErrorCode::from_status(status),
+                            }));
+                        }
+                        self.response_stream(resp, prompt, system_start, instant_start)
+                    }
+                    Err(e) => Err(LLMResponse::LLMFailure(LLMErrorResponse {
+                        client: self.context.name.to_string(),
+                        model: None,
+                        prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
+                        start_time: system_start,
+                        latency: instant_start.elapsed(),
+                        message: format!("Failed to make request: {}", e),
+                        code: ErrorCode::Other(2),
+                    })),
+                }
+            }
+            Err(e) => Err(LLMResponse::LLMFailure(LLMErrorResponse {
+                client: self.context.name.to_string(),
+                model: None,
+                prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
+                start_time: web_time::SystemTime::now(),
+                latency: web_time::Instant::now().elapsed(),
+                message: format!("Failed to build request: {}", e),
+                code: ErrorCode::Other(1),
+            })),
+        }
     }
 }
 
@@ -414,7 +460,6 @@ impl OpenAIClient {
                 .retry_policy_id
                 .as_ref()
                 .map(|s| s.to_string()),
-            internal_state: Arc::new(Mutex::new(LlmClientState::new())),
         })
     }
 }

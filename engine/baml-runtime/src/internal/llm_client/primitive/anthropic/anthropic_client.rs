@@ -17,8 +17,12 @@ use crate::internal::llm_client::{
         AnthropicErrorResponse, AnthropicMessageResponse, MessageStartChunk, StopReason,
     },
     state::LlmClientState,
-    traits::{WithChat, WithClient, WithNoCompletion, WithRetryPolicy},
-    LLMCompleteResponse, LLMCompleteResponseMetadata, LLMResponse, ModelFeatures, SseResponseTrait,
+    traits::{
+        SseResponseTrait, StreamResponse, WithChat, WithClient, WithNoCompletion, WithRetryPolicy,
+        WithStreamChat,
+    },
+    ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
+    ModelFeatures,
 };
 use serde_json::{json, Value};
 
@@ -146,12 +150,9 @@ impl WithNoCompletion for AnthropicClient {}
 impl SseResponseTrait for AnthropicClient {
     fn build_request_for_stream(
         &self,
-        prompt: &internal_baml_jinja::RenderedPrompt,
+        prompt: &Vec<RenderedChatMessage>,
     ) -> Result<reqwest::RequestBuilder> {
         log::trace!("stream chat starting");
-        let RenderedPrompt::Chat(prompt) = prompt else {
-            anyhow::bail!("Expected a chat prompt, got: {:#?}", prompt);
-        };
 
         let mut body = json!(self.properties.properties);
         body.as_object_mut()
@@ -198,93 +199,184 @@ impl SseResponseTrait for AnthropicClient {
     fn response_stream(
         &self,
         resp: reqwest::Response,
-        prompt: &internal_baml_jinja::RenderedPrompt,
+        prompt: &Vec<RenderedChatMessage>,
         system_start: web_time::SystemTime,
         instant_start: web_time::Instant,
-    ) -> impl Stream<Item = Result<LLMResponse>> {
-        log::info!("response object {:#?}", resp);
-        resp.bytes_stream()
-            .inspect(|event| log::trace!("anthropic event bytes: {:#?}", event))
-            .eventsource()
-            .map(|event| -> Result<MessageChunk> { Ok(serde_json::from_str(&event?.data)?) })
-            .inspect(|event| log::trace!("anthropic eventsource: {:#?}", event))
-            .scan(
-                Ok(LLMCompleteResponse {
-                    client: self.context.name.to_string(),
-                    prompt: prompt.clone(),
-                    content: "".to_string(),
-                    start_time: system_start,
-                    latency: instant_start.elapsed(),
-                    model: "".to_string(),
-                    metadata: LLMCompleteResponseMetadata {
-                        baml_is_complete: false,
-                        finish_reason: None,
-                        prompt_tokens: None,
-                        output_tokens: None,
-                        total_tokens: None,
+    ) -> StreamResponse {
+        let prompt = prompt.clone();
+        let client_name = self.context.name.clone();
+        Ok(Box::pin(
+            resp.bytes_stream()
+                .inspect(|event| log::trace!("anthropic event bytes: {:#?}", event))
+                .eventsource()
+                .map(|event| -> Result<MessageChunk> { Ok(serde_json::from_str(&event?.data)?) })
+                .inspect(|event| log::trace!("anthropic eventsource: {:#?}", event))
+                .scan(
+                    Ok(LLMCompleteResponse {
+                        client: client_name.clone(),
+                        prompt: RenderedPrompt::Chat(prompt.clone()),
+                        content: "".to_string(),
+                        start_time: system_start,
+                        latency: instant_start.elapsed(),
+                        model: "".to_string(),
+                        metadata: LLMCompleteResponseMetadata {
+                            baml_is_complete: false,
+                            finish_reason: None,
+                            prompt_tokens: None,
+                            output_tokens: None,
+                            total_tokens: None,
+                        },
+                    }),
+                    move |accumulated: &mut Result<LLMCompleteResponse>, event| {
+                        let Ok(ref mut inner) = accumulated else {
+                            return std::future::ready(None);
+                        };
+                        let event = match event {
+                            Ok(event) => event,
+                            Err(e) => {
+                                return std::future::ready(Some(LLMResponse::LLMFailure(
+                                    LLMErrorResponse {
+                                        client: client_name.clone(),
+                                        model: if inner.model == "" {
+                                            None
+                                        } else {
+                                            Some(inner.model.clone())
+                                        },
+                                        prompt: internal_baml_jinja::RenderedPrompt::Chat(
+                                            prompt.clone(),
+                                        ),
+                                        start_time: system_start,
+                                        latency: instant_start.elapsed(),
+                                        message: format!("Failed to parse event: {:#?}", e),
+                                        code: ErrorCode::Other(2),
+                                    },
+                                )));
+                            }
+                        };
+                        match event {
+                            MessageChunk::MessageStart(chunk) => {
+                                let body = chunk.message;
+                                inner.model = body.model;
+                                let ref mut inner = inner.metadata;
+                                inner.baml_is_complete = match body.stop_reason {
+                                    Some(StopReason::StopSequence) | Some(StopReason::EndTurn) => {
+                                        true
+                                    }
+                                    _ => false,
+                                };
+                                inner.finish_reason =
+                                    body.stop_reason.as_ref().map(ToString::to_string);
+                                inner.prompt_tokens = Some(body.usage.input_tokens);
+                                inner.output_tokens = Some(body.usage.output_tokens);
+                                inner.total_tokens =
+                                    Some(body.usage.input_tokens + body.usage.output_tokens);
+                            }
+                            MessageChunk::ContentBlockDelta(event) => {
+                                inner.content += &event.delta.text;
+                            }
+                            MessageChunk::ContentBlockStart(_) => (),
+                            MessageChunk::ContentBlockStop(_) => (),
+                            MessageChunk::Ping => (),
+                            MessageChunk::MessageDelta(body) => {
+                                let ref mut inner = inner.metadata;
+
+                                inner.baml_is_complete = match body.delta.stop_reason {
+                                    Some(StopReason::StopSequence) | Some(StopReason::EndTurn) => {
+                                        true
+                                    }
+                                    _ => false,
+                                };
+                                inner.finish_reason = body
+                                    .delta
+                                    .stop_reason
+                                    .as_ref()
+                                    .map(|r| serde_json::to_string(r).unwrap_or("".into()));
+                                inner.output_tokens = Some(body.usage.output_tokens);
+                                inner.total_tokens = Some(
+                                    inner.prompt_tokens.unwrap_or(0) + body.usage.output_tokens,
+                                );
+                            }
+                            MessageChunk::MessageStop => (),
+                            MessageChunk::Error(err) => {
+                                return std::future::ready(Some(LLMResponse::LLMFailure(
+                                    LLMErrorResponse {
+                                        client: client_name.clone(),
+                                        model: if inner.model == "" {
+                                            None
+                                        } else {
+                                            Some(inner.model.clone())
+                                        },
+                                        prompt: internal_baml_jinja::RenderedPrompt::Chat(
+                                            prompt.clone(),
+                                        ),
+                                        start_time: system_start,
+                                        latency: instant_start.elapsed(),
+                                        message: err.message,
+                                        code: ErrorCode::Other(2),
+                                    },
+                                )));
+                            }
+                        };
+
+                        inner.latency = instant_start.elapsed();
+                        std::future::ready(Some(LLMResponse::Success(inner.clone())))
                     },
-                }),
-                move |accumulated: &mut Result<LLMCompleteResponse>, event| {
-                    let Ok(ref mut inner) = accumulated else {
-                        // halt the stream: the last stream event failed to parse
-                        return std::future::ready(None);
-                    };
-                    let event = match event {
-                        Ok(event) => event,
-                        Err(e) => {
-                            *accumulated = Err(anyhow::anyhow!(
-                                "Failed to accumulate response (failed to parse previous event from EventSource)"
-                            ));
-                            return std::future::ready(Some(Err(e.context("Failed to parse event from EventSource"))));
-                        }
-                    };
-                    match event {
-                        MessageChunk::MessageStart(chunk) => {
-                            let body = chunk.message;
-                            inner.model = body.model;
-                            let ref mut inner = inner.metadata;
-                            inner.baml_is_complete = match body.stop_reason {
-                                Some(StopReason::StopSequence) | Some(StopReason::EndTurn) => true,
-                                _ => false,
-                            };
-                            inner.finish_reason = body
-                                .stop_reason
-                                .as_ref()
-                                .map(ToString::to_string);
-                            inner.prompt_tokens = Some(body.usage.input_tokens);
-                            inner.output_tokens = Some(body.usage.output_tokens);
-                            inner.total_tokens = Some(body.usage.input_tokens + body.usage.output_tokens);
-                        },
-                        MessageChunk::ContentBlockDelta(event) => {
-                            inner.content += &event.delta.text;
-                        }
-                        MessageChunk::ContentBlockStart(_) => (),
-                        MessageChunk::ContentBlockStop(_) => (),
-                        MessageChunk::Ping => (),
-                        MessageChunk::MessageDelta(body) => {
-                            let ref mut inner = inner.metadata;
+                ),
+        ))
+    }
+}
 
-                            inner.baml_is_complete = match body.delta.stop_reason {
-                                Some(StopReason::StopSequence) | Some(StopReason::EndTurn) => true,
-                                _ => false,
-                            };
-                            inner.finish_reason = body.delta
-                                .stop_reason
-                                .as_ref()
-                                .map(|r| serde_json::to_string(r).unwrap_or("".into()));
-                            inner.output_tokens = Some(body.usage.output_tokens);
-                            inner.total_tokens = Some(inner.prompt_tokens.unwrap_or(0) + body.usage.output_tokens);
-                        },
-                        MessageChunk::MessageStop => (),
-                        MessageChunk::Error(err) => {
-                            return std::future::ready(Some(Err(anyhow::anyhow!("Anthropic API Error: {:#?}", err))));
+impl WithStreamChat for AnthropicClient {
+    async fn stream_chat(
+        &self,
+        ctx: &RuntimeContext,
+        prompt: &Vec<RenderedChatMessage>,
+    ) -> StreamResponse {
+        match self.build_request_for_stream(prompt) {
+            Ok(req) => {
+                let system_start = web_time::SystemTime::now();
+                let instant_start = web_time::Instant::now();
+                let resp = req.send().await;
+                match resp {
+                    Ok(resp) => {
+                        let status = resp.status();
+                        if !status.is_success() {
+                            return Err(LLMResponse::LLMFailure(LLMErrorResponse {
+                                client: self.context.name.to_string(),
+                                model: None,
+                                prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
+                                start_time: system_start,
+                                latency: instant_start.elapsed(),
+                                message: format!(
+                                    "Failed to make request: {}",
+                                    resp.text().await.unwrap_or("<no response>".into())
+                                ),
+                                code: ErrorCode::from_status(status),
+                            }));
                         }
-                    };
-                    inner.latency = instant_start.elapsed();
-
-                    std::future::ready(Some(Ok(LLMResponse::Success(inner.clone()))))
-                },
-            )
+                        self.response_stream(resp, prompt, system_start, instant_start)
+                    }
+                    Err(e) => Err(LLMResponse::LLMFailure(LLMErrorResponse {
+                        client: self.context.name.to_string(),
+                        model: None,
+                        prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
+                        start_time: system_start,
+                        latency: instant_start.elapsed(),
+                        message: format!("Failed to make request: {}", e),
+                        code: ErrorCode::Other(2),
+                    })),
+                }
+            }
+            Err(e) => Err(LLMResponse::LLMFailure(LLMErrorResponse {
+                client: self.context.name.to_string(),
+                model: None,
+                prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
+                start_time: web_time::SystemTime::now(),
+                latency: web_time::Instant::now().elapsed(),
+                message: format!("Failed to build request: {:#?}", e),
+                code: ErrorCode::Other(1),
+            })),
+        }
     }
 }
 

@@ -1,7 +1,7 @@
 import { atom, useAtomValue } from 'jotai'
 import { atomFamily, useAtomCallback } from 'jotai/utils'
 import React, { useCallback } from 'react'
-import { runtimeCtx, selectedFunctionAtom, selectedRuntimeAtom } from '../EventListener'
+import { selectedFunctionAtom, selectedRuntimeAtom } from '../EventListener'
 import type { WasmFunctionResponse, WasmTestResponse } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 
 const isRunningAtom = atom(false)
@@ -67,7 +67,6 @@ export const useRunHooks = () => {
         set(isRunningAtom, true)
         set(showTestsAtom, true)
 
-        const ctx = get(runtimeCtx)
         console.log('test baml getting runtime context')
         // First clear any previous test results
         testStatusAtom.setShouldRemove(() => true)
@@ -104,12 +103,12 @@ export const useRunHooks = () => {
                   queued: prev.queued - 1,
                 }
               })
-              if (!func || !runtime || !ctx) {
+              if (!func || !runtime) {
                 return Promise.reject(new Error('Code potentially modified while running tests'))
               }
               let now = new Date().getTime()
               return func
-                .run_test(runtime, ctx, testName, (intermediate: WasmFunctionResponse) => {
+                .run_test(runtime, testName, (intermediate: WasmFunctionResponse) => {
                   set(testStatusAtom(testName), {
                     status: 'running',
                     response: intermediate,
@@ -169,7 +168,7 @@ export const useRunHooks = () => {
 
         set(isRunningAtom, false)
       },
-      [[isRunningAtom, selectedRuntimeAtom, selectedFunctionAtom, runtimeCtx]],
+      [[isRunningAtom, selectedRuntimeAtom, selectedFunctionAtom]],
     ),
   )
 

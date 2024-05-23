@@ -26,41 +26,35 @@ class FunctionResultStream:
     """
 
     def __str__(self) -> str: ...
-    def on_event(self, on_event: Callable[[FunctionResult], None]) -> FunctionResultStream: ...
+    def on_event(
+        self, on_event: Callable[[FunctionResult], None]
+    ) -> FunctionResultStream: ...
     async def done(self) -> Any: ...
 
 class Image:
     def __init__(
         self, url: Optional[str] = None, base64: Optional[str] = None
     ) -> None: ...
-
     @property
     def url(self) -> Optional[str]: ...
-
     @url.setter
     def url(self, value: Optional[str]) -> None: ...
-
     @property
     def base64(self) -> Optional[str]: ...
-
     @base64.setter
     def base64(self, value: Optional[str]) -> None: ...
-
 
 class BamlRuntimeFfi:
     @staticmethod
     def from_directory(directory: str, ctx: Dict[str, Any] = {}) -> BamlRuntimeFfi: ...
-
     @staticmethod
     def from_encoded(encoded: str) -> BamlRuntimeFfi: ...
-
     async def call_function(
         self,
         function_name: str,
         args: Dict[str, Any],
         ctx: Dict[str, Any],
     ) -> FunctionResult: ...
-
     def stream_function(
         self,
         function_name: str,
@@ -68,5 +62,15 @@ class BamlRuntimeFfi:
         ctx: Dict[str, Any],
         on_event: Optional[Callable[[FunctionResult], None]] = None,
     ) -> FunctionResultStream: ...
+
+class BamlSpan:
+    @staticmethod
+    def new(
+        runtime: BamlRuntimeFfi,
+        function_name: str,
+        ctx: Dict[str, Any],
+        args: Dict[str, Any],
+    ) -> BamlSpan: ...
+    async def finish(self, result: Any) -> str | None: ...
 
 def invoke_runtime_cli() -> None: ...

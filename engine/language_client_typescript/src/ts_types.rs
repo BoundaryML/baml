@@ -2,39 +2,7 @@ use baml_types::BamlValue;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
-use std::collections::HashMap;
 use std::path::PathBuf;
-
-#[napi]
-pub struct NapiRuntimeContext {
-    inner: baml_runtime::RuntimeContext,
-}
-
-#[napi]
-impl NapiRuntimeContext {
-    #[napi(constructor)]
-    pub fn new() -> Self {
-        Self {
-            inner: baml_runtime::RuntimeContext::default(),
-        }
-    }
-
-    #[napi(getter)]
-    pub fn env(&self) -> Option<HashMap<String, String>> {
-        Some(self.inner.env.clone())
-    }
-
-    #[napi(getter)]
-    pub fn tags(&self) -> Option<HashMap<String, serde_json::Value>> {
-        Some(self.inner.tags.clone())
-    }
-}
-
-impl Into<baml_runtime::RuntimeContext> for NapiRuntimeContext {
-    fn into(self) -> baml_runtime::RuntimeContext {
-        self.inner.clone()
-    }
-}
 
 #[napi]
 pub struct FunctionResult {

@@ -6,7 +6,7 @@ use crate::{
         llm_client::{
             llm_provider::LLMProvider,
             orchestrator::{
-                orchestrate, IterOrchestrator, LLMPrimitiveProvider, OrchestrationScope,
+                orchestrate_call, IterOrchestrator, LLMPrimitiveProvider, OrchestrationScope,
                 OrchestratorNode,
             },
             retry_policy::CallablePolicy,
@@ -17,7 +17,7 @@ use crate::{
     runtime_interface::{InternalClientLookup, RuntimeConstructor},
     tracing::{BamlTracer, TracingSpan},
     FunctionResult, FunctionResultStream, InternalRuntimeInterface, RuntimeContext,
-    RuntimeInterface, TestResponse,
+    RuntimeContextManager, RuntimeInterface, TestResponse,
 };
 use anyhow::{Context, Result};
 use baml_types::{BamlMap, BamlValue};
@@ -277,7 +277,7 @@ impl RuntimeInterface for InternalBamlRuntime {
     async fn call_function_impl(
         &self,
         function_name: String,
-        params: IndexMap<String, BamlValue>,
+        params: &BamlMap<String, BamlValue>,
         ctx: RuntimeContext,
     ) -> Result<crate::FunctionResult> {
         let func = self.get_function(&function_name, &ctx)?;
@@ -288,7 +288,7 @@ impl RuntimeInterface for InternalBamlRuntime {
         let orchestrator = self.orchestration_graph(&client_name, &ctx)?;
 
         // Now actually execute the code.
-        let (history, _) = orchestrate(orchestrator, &ctx, &renderer, &baml_args, |s, ctx| {
+        let (history, _) = orchestrate_call(orchestrator, &ctx, &renderer, &baml_args, |s, ctx| {
             jsonish::from_str(self.ir(), &ctx.env, func.output(), s, false)
         })
         .await;
@@ -299,30 +299,27 @@ impl RuntimeInterface for InternalBamlRuntime {
     fn stream_function_impl(
         &self,
         function_name: String,
-        params: IndexMap<String, BamlValue>,
-        ctx: RuntimeContext,
+        params: &BamlMap<String, BamlValue>,
         tracer: Arc<BamlTracer>,
     ) -> Result<FunctionResultStream> {
-        let func = self.get_function(&function_name, &ctx)?;
-        let baml_args = self.ir().check_function_params(&func, &params)?;
-
+        let func = self.get_function(&function_name, &Default::default())?;
         let renderer = PromptRenderer::from_function(&func)?;
         let client_name = renderer.client_name().to_string();
-
-        let orchestrator = self.orchestration_graph(&client_name, &ctx)?;
-        let first = orchestrator.first().ok_or(anyhow::anyhow!(
-            "No orchestrator nodes found for client {}",
-            client_name
-        ))?;
-
+        let orchestrator = self.orchestration_graph(&client_name, &Default::default())?;
+        let Some(baml_args) = self
+            .ir
+            .check_function_params(&func, &params)?
+            .as_map_owned()
+        else {
+            anyhow::bail!("Expected parameters to be a map for: {}", function_name);
+        };
         Ok(FunctionResultStream {
-            provider: first.provider.clone(),
-            prompt: first.provider.render_prompt(&renderer, &ctx, &baml_args)?,
             function_name,
-            scope: first.scope.clone(),
             ir: self.ir.clone(),
-            ctx,
+            params: baml_args,
+            orchestrator,
             tracer,
+            renderer,
         })
     }
 }

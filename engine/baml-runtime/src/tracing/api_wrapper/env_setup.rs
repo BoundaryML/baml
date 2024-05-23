@@ -1,7 +1,7 @@
+use std::collections::HashMap;
+
 use anyhow::Result;
 use serde::Deserialize;
-
-use crate::RuntimeContext;
 
 #[derive(Deserialize, Debug)]
 pub struct Config {
@@ -41,9 +41,9 @@ fn default_host_name() -> String {
 }
 
 impl Config {
-    pub fn from_ctx(ctx: &RuntimeContext) -> Result<Self> {
+    pub fn from_env_vars<T: AsRef<str>>(env_vars: impl Iterator<Item = (T, T)>) -> Result<Self> {
         let config: Result<Config, envy::Error> = envy::prefixed("BOUNDARY_")
-            .from_iter(ctx.env.iter().map(|(k, v)| (k.to_string(), v.to_string())));
+            .from_iter(env_vars.map(|(k, v)| (k.as_ref().to_string(), v.as_ref().to_string())));
 
         match config {
             Ok(config) => Ok(config),
