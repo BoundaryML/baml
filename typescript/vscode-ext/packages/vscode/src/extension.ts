@@ -151,9 +151,9 @@ export function activate(context: vscode.ExtensionContext) {
 
   vscode.workspace.getConfiguration('baml')
   // TODO: Reactivate linter.
-  statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100)
-  statusBarItem.text = `AI Linter Ready`
-  statusBarItem.show()
+  // statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100)
+  // statusBarItem.text = `AI Linter Ready`
+  // statusBarItem.show()
   context.subscriptions.push(statusBarItem)
 
   const provider = new DiagnosticCodeActionProvider()

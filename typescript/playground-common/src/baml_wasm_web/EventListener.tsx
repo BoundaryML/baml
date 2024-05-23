@@ -159,7 +159,7 @@ const updateCursorAtom = atom(null, (get, set, cursor: { fileText: string; line:
     charCount += cursor.column
     cursorIdx = charCount
 
-    const selectedFunc = runtime.function_by_cursor(cursorIdx)
+    const selectedFunc = runtime.get_function_by_position(cursorIdx)
 
     if (selectedFunc) {
       set(selectedFunctionAtom, selectedFunc.name)

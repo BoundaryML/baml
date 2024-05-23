@@ -849,18 +849,12 @@ impl WasmRuntime {
     }
 
     #[wasm_bindgen]
-    pub fn function_by_cursor(&self, cursorIdx: usize) -> Option<WasmFunction> {
+    pub fn get_function_by_position(&self, cursorIdx: usize) -> Option<WasmFunction> {
         let functions = self.list_functions();
-        log::info!("Searching for function at index: {}", cursorIdx);
 
         for function in functions {
             let span = function.span.clone(); // Clone the span
-            log::info!("Function name: {}", function.name);
-            log::info!("Function span: start: {}, end: {}", span.start, span.end);
-
             if ((span.start + 1)..=(span.end + 1)).contains(&cursorIdx) {
-                log::info!("Found function: {}", function.name);
-
                 return Some(function);
             }
         }
