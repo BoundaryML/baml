@@ -397,7 +397,7 @@ export function startServer(options?: LSOptions): void {
               command: 'baml.openBamlPanel',
               arguments: [
                 {
-                  projectId: undefined,
+                  projectId: proj,
                   functionName: func.name,
                   showTests: true,
                 },

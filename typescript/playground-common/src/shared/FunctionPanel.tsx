@@ -10,8 +10,8 @@ import { Snippet } from './ImplPanel'
 import FunctionTestSnippet from './TestSnippet'
 
 const PromptPreview: React.FC = () => {
-  const propmtPreview = useAtomValue(renderPromptAtom)
-  if (!propmtPreview) {
+  const promptPreview = useAtomValue(renderPromptAtom)
+  if (!promptPreview) {
     return (
       <div className='flex flex-col items-center justify-center w-full h-full gap-2'>
         <span className='text-center'>No prompt preview available! Add a test to see it!</span>
@@ -20,10 +20,10 @@ const PromptPreview: React.FC = () => {
     )
   }
 
-  if (typeof propmtPreview === 'string')
+  if (typeof promptPreview === 'string')
     return (
       <Snippet
-        text={propmtPreview}
+        text={promptPreview}
         type='error'
         client={{
           identifier: {
@@ -40,7 +40,7 @@ const PromptPreview: React.FC = () => {
 
   return (
     <div className='flex flex-col w-full h-full gap-4 px-2'>
-      {propmtPreview.as_chat()?.map((chat, idx) => (
+      {promptPreview.as_chat()?.map((chat, idx) => (
         <div key={idx} className='flex flex-col'>
           <div className='flex flex-row'>{chat.role}</div>
           {chat.parts.map((part, idx) => {
@@ -54,7 +54,7 @@ const PromptPreview: React.FC = () => {
                       end: 0,
                       source_file: '',
                       start: 0,
-                      value: propmtPreview.client_name,
+                      value: promptPreview.client_name,
                     },
                     provider: 'baml-openai-chat',
                     model: 'gpt-4',
