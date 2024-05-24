@@ -130,7 +130,7 @@ enum Topic {
           <ResizableHandle withHandle={false} className='bg-vscode-panel-border' />
           <ResizablePanel
             minSize={10}
-            className='flex h-full px-0 py-2 mb-6 border-t border-vscode-textSeparator-foreground'
+            className='flex h-full px-0 py-2 mb-2 border-t border-vscode-textSeparator-foreground'
           >
             <TestResults />
           </ResizablePanel>
