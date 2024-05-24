@@ -32,23 +32,19 @@ impl GeneratorArgs {
             .normalize()
     }
 
+    /// Returns baml_src relative to the output_dir.
+    ///
+    /// We need this to be able to codegen a singleton client, so that our generated code can build
+    /// baml_src relative to the path of the file in which the singleton is defined. In Python this is
+    /// os.path.dirname(__file__) for globals.py; in TS this is __dirname for globals.ts.
     pub fn baml_src_relative_to_output_dir(&self) -> Result<PathBuf> {
-        let res = pathdiff::diff_paths(&self.baml_src_dir, &self.output_dir()).ok_or_else(|| {
+        pathdiff::diff_paths(&self.baml_src_dir, &self.output_dir()).ok_or_else(|| {
             anyhow::anyhow!(
                 "Failed to compute baml_src ({}) relative to output_dir ({})",
                 self.baml_src_dir.display(),
                 self.output_dir().display()
             )
-        });
-
-        log::info!(
-            "baml_src relative to output_dir\nbaml_src: {}\noutput_dir: {}\nrel_baml_src: {:#?}\n",
-            self.baml_src_dir.display(),
-            self.output_dir().display(),
-            res
-        );
-
-        res
+        })
     }
 }
 
