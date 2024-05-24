@@ -29,11 +29,10 @@ impl GenerateArgs {
 
         let generate_output = runtime.generate_client(
             &client_type,
-            &internal_baml_codegen::GeneratorArgs {
-                baml_src_dir: PathBuf::from(&self.from),
-                output_dir: PathBuf::from(&self.to).join("baml_client"),
-                rel_baml_src_path: PathBuf::from(&self.from),
-            },
+            &internal_baml_codegen::GeneratorArgs::new(
+                &self.from,
+                PathBuf::from(&self.to).join("baml_client"),
+            ),
         )?;
 
         println!(

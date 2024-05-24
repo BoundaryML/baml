@@ -727,7 +727,7 @@ impl WasmRuntime {
         Ok(self
             .runtime
             .run_generators()
-            .map_err(|e| JsError::new(e.to_string().as_str()))?
+            .map_err(|e| JsError::new(format!("{e:#}").as_str()))?
             .into_iter()
             .map(|g| g.into())
             .collect())

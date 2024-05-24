@@ -74,7 +74,10 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonGlobals
 
     fn try_from((_, args): (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
         Ok(PythonGlobals {
-            rel_baml_src_path: args.rel_baml_src_path.to_string_lossy().to_string(),
+            rel_baml_src_path: args
+                .baml_src_relative_to_output_dir()?
+                .to_string_lossy()
+                .to_string(),
         })
     }
 }

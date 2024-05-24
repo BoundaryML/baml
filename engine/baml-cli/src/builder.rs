@@ -41,7 +41,7 @@ pub fn build(baml_dir: &Option<String>) -> Result<(PathBuf, Configuration, Valid
     let ir = internal_baml_core::ir::repr::IntermediateRepr::from_parser_database(
         &parsed.db,
         // TODO(sam): this should really be parsed.configuration
-        Configuration::default(),
+        Configuration::new(),
     )
     .map_err(|e| e.context("Failed to build BAML (IR stage)"))?;
     if !config.generators.is_empty() {

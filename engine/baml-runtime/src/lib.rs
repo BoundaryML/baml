@@ -213,10 +213,10 @@ impl BamlRuntime {
             .map(|(generator, _)| {
                 (
                     generator.output_type.clone(),
-                    internal_baml_codegen::GeneratorArgs {
-                        output_dir: generator.output_dir(),
-                        rel_baml_src_path: generator.rel_baml_src_path(),
-                    },
+                    internal_baml_codegen::GeneratorArgs::new(
+                        generator.output_dir(),
+                        generator.baml_src.clone(),
+                    ),
                 )
             })
             .collect();

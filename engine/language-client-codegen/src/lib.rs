@@ -10,13 +10,45 @@ mod ruby;
 mod typescript;
 
 pub struct GeneratorArgs {
-    /// Relative path to the BAML source directory from the output directory
-    pub rel_baml_src_path: PathBuf,
+    /// Output directory for the generated client, relative to baml_src
+    output_dir_relative_to_baml_src: PathBuf,
+
+    /// Path to the BAML source directory
+    baml_src_dir: PathBuf,
 }
 
 impl GeneratorArgs {
-    pub(crate) fn output_dir(&self) -> PathBuf {
-        self.rel_baml_src_path.join(&self.output_dir)
+    pub fn new(output_dir: impl Into<PathBuf>, baml_src_dir: impl Into<PathBuf>) -> Self {
+        Self {
+            output_dir_relative_to_baml_src: output_dir.into(),
+            baml_src_dir: baml_src_dir.into(),
+        }
+    }
+
+    pub fn output_dir(&self) -> PathBuf {
+        use sugar_path::SugarPath;
+        self.baml_src_dir
+            .join(&self.output_dir_relative_to_baml_src)
+            .normalize()
+    }
+
+    pub fn baml_src_relative_to_output_dir(&self) -> Result<PathBuf> {
+        let res = pathdiff::diff_paths(&self.baml_src_dir, &self.output_dir()).ok_or_else(|| {
+            anyhow::anyhow!(
+                "Failed to compute baml_src ({}) relative to output_dir ({})",
+                self.baml_src_dir.display(),
+                self.output_dir().display()
+            )
+        });
+
+        log::info!(
+            "baml_src relative to output_dir\nbaml_src: {}\noutput_dir: {}\nrel_baml_src: {:#?}\n",
+            self.baml_src_dir.display(),
+            self.output_dir().display(),
+            res
+        );
+
+        res
     }
 }
 
