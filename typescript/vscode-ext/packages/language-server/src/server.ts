@@ -383,10 +383,16 @@ export function startServer(options?: LSOptions): void {
       console.log(`last term ${lastTerm}`)
       if (lastTerm === 'role(' || lastTerm === 'chat(') {
         console.log('handling role completion')
-        const res = bamlProjectManager.handleRoleCompletionRequest(doc, params.position)
+        const proj = bamlProjectManager.getProjectById(URI.parse(doc.uri))
+        console.log(`proj ${proj}`)
+        const res = proj.handleRoleCompletionRequest(doc, params.position)
+
         if (res.items.length === 0) {
+          console.log('no items')
           return undefined
         } else {
+          console.log('found items!')
+
           return res
         }
       }

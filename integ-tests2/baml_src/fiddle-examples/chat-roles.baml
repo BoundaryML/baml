@@ -10,6 +10,7 @@ enum Category2 {
 function ClassifyMessage2(input: string) -> Category {
   client GPT4
 
+  
   prompt #"
 
 

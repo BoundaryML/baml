@@ -48,7 +48,7 @@ impl PromptRenderer {
                         name: function.name().into(),
                         output_format: c.item.1.output_format.clone(),
                         prompt_template: c.item.1.prompt_template.clone(),
-                        prompt_span: c.item.1.prompt_span.clone(),
+
                         client_name: c.item.1.client.clone(),
                     });
                 }

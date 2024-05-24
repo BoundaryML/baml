@@ -189,6 +189,73 @@ class Project {
     return runtime.list_functions()
   }
 
+  handleRoleCompletionRequest(doc: TextDocument, position: Position): CompletionList {
+    //add check to see if its in {{}} or not
+    console.log('Handling role completion request')
+    const text = doc.getText()
+    const offset = doc.offsetAt(position)
+
+    let openBracesCount = 0
+    let closeBracesCount = 0
+
+    for (let i = 0; i < offset; i++) {
+      if (text[i] === '{' && text[i + 1] === '{') {
+        openBracesCount++
+        i++ // Skip the next character
+      } else if (text[i] === '}' && text[i + 1] === '}') {
+        closeBracesCount++
+        i++ // Skip the next character
+      }
+    }
+
+    let inBraces = openBracesCount > closeBracesCount
+    let inPrompt = false
+
+    //need logic to convert line and column to index value
+    let cursorIdx = 0
+    const fileContent = doc.getText()
+
+    const lines = fileContent.split('\n')
+    let charCount = 0
+
+    for (let i = 0; i < position.line; i++) {
+      charCount += lines[i].length + 1 // +1 for the newline character
+    }
+
+    charCount += position.character
+    cursorIdx = charCount
+
+    const funcOfPrompt = this.runtime().check_if_in_prompt(position.line)
+    if (funcOfPrompt) {
+      inPrompt = true
+    }
+    //need to confirm that we are in a prompt
+    console.log(`In braces: ${inBraces}, In prompt: ${inPrompt}`)
+    if (inBraces && inPrompt) {
+      return {
+        isIncomplete: false,
+        items: [
+          {
+            label: '"system"',
+          },
+          {
+            label: '"assistant"',
+          },
+          {
+            label: '"user"',
+          },
+        ],
+      }
+    } else {
+      console.log('Not in braces and prompt')
+      return {
+        isIncomplete: false,
+        items: [],
+        // }
+      }
+    }
+  }
+
   // Not currently debounced - lodash debounce doesn't work for this, p-debounce doesn't support trailing edge
   runGeneratorsWithoutDebounce = async ({
     onSuccess,
@@ -464,53 +531,6 @@ class BamlProjectManager {
 
   getProjectById(id: URI): Project {
     return this.get_project(uriToRootPath(id))
-  }
-
-  handleRoleCompletionRequest(doc: TextDocument, position: Position): CompletionList {
-    //add check to see if its in {{}} or not
-
-    const text = doc.getText()
-    const offset = doc.offsetAt(position)
-
-    let openBracesCount = 0
-    let closeBracesCount = 0
-
-    for (let i = 0; i < offset; i++) {
-      if (text[i] === '{' && text[i + 1] === '{') {
-        openBracesCount++
-        i++ // Skip the next character
-      } else if (text[i] === '}' && text[i + 1] === '}') {
-        closeBracesCount++
-        i++ // Skip the next character
-      }
-    }
-
-    let inPromptBraces = openBracesCount > closeBracesCount
-
-    //need to confirm that we are in a prompt
-
-    if (inPromptBraces) {
-      return {
-        isIncomplete: false,
-        items: [
-          {
-            label: '"system"',
-          },
-          {
-            label: '"assistant"',
-          },
-          {
-            label: '"user"',
-          },
-        ],
-      }
-    } else {
-      return {
-        isIncomplete: false,
-        items: [],
-        // }
-      }
-    }
   }
 }
 

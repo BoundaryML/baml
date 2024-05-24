@@ -787,6 +787,13 @@ impl Function {
             Function::V2(f) => &f.tests,
         }
     }
+
+    pub fn configs(&self) -> Option<&Vec<FunctionConfig>> {
+        match &self {
+            Function::V1(_) => None,
+            Function::V2(f) => Some(&f.configs),
+        }
+    }
 }
 
 #[derive(serde::Serialize, Debug)]
