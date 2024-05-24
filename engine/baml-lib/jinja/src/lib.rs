@@ -243,11 +243,35 @@ fn render_minijinja(
                         ));
                     }
                 };
-
+    
+                Ok(format!("{MAGIC_CHAT_ROLE_DELIMITER}:baml-start-baml:{role}:baml-end-baml:{MAGIC_CHAT_ROLE_DELIMITER}"))
+            }),
+            role => minijinja::Value::from_function(|role: Option<String>, kwargs: Kwargs| -> Result<String, minijinja::Error> {
+                let role = match (role, kwargs.get::<String>("role")) {
+                    (Some(b), Ok(a)) => {
+                        // If both are present, we should error
+                        return Err(minijinja::Error::new(
+                            ErrorKind::TooManyArguments,
+                            format!("role() called with two roles: '{}' and '{}'", a, b),
+                        ));
+                    },
+                    (Some(role), _) => role,
+                    (_, Ok(role)) => role,
+                    _ => {
+                        // If neither are present, we should error
+                        return Err(minijinja::Error::new(
+                            ErrorKind::MissingArgument,
+                            "role() called without role. Try role('role') or role(role='role').",
+                        ));
+                    }
+                };
+    
                 Ok(format!("{MAGIC_CHAT_ROLE_DELIMITER}:baml-start-baml:{role}:baml-end-baml:{MAGIC_CHAT_ROLE_DELIMITER}"))
             })
         },
     );
+
+
     let tmpl = env.get_template("prompt")?;
 
     let rendered = tmpl.render(args)?;
