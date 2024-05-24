@@ -236,13 +236,13 @@ class Project {
         isIncomplete: false,
         items: [
           {
-            label: '"system"',
+            label: 'role("system")',
           },
           {
-            label: '"assistant"',
+            label: 'role("assistant")',
           },
           {
-            label: '"user"',
+            label: 'role("user")',
           },
         ],
       }

@@ -125,7 +125,7 @@ export function startServer(options?: LSOptions): void {
         documentFormattingProvider: false,
         completionProvider: {
           resolveProvider: false,
-          triggerCharacters: ['@', '"', '.', '('],
+          triggerCharacters: ['@', '"', '.'],
         },
         hoverProvider: true,
         renameProvider: false,
@@ -378,10 +378,8 @@ export function startServer(options?: LSOptions): void {
     if (doc) {
       const completionWord = getWordAtPosition(doc, params.position)
       console.log(`completion word ${completionWord}`)
-      const splitCompletion = completionWord.split('.')
-      const lastTerm = splitCompletion[splitCompletion.length - 1]
-      console.log(`last term ${lastTerm}`)
-      if (lastTerm === 'role(' || lastTerm === 'chat(') {
+
+      if (completionWord === '{{_.' || completionWord === '_.') {
         console.log('handling role completion')
         const proj = bamlProjectManager.getProjectById(URI.parse(doc.uri))
         console.log(`proj ${proj}`)

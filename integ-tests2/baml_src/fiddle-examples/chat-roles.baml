@@ -12,8 +12,7 @@ function ClassifyMessage2(input: string) -> Category {
 
   
   prompt #"
-
-
+    
     // You can use _.chat("system") to indicate that this text should be a system message
 
     Classify the following INPUT into ONE
