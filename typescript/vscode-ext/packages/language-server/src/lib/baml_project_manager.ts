@@ -101,12 +101,6 @@ class Project {
     // Read the file content
     const fileContent = readFileSync(file_path, 'utf8')
 
-    const fileContent = readFileSync(file_path, 'utf8')
-
-    // Create a TextDocument
-    const doc = TextDocument.create(file_path, 'plaintext', 1, fileContent)
-
-    return doc
     const doc = TextDocument.create(file_path, 'plaintext', 1, fileContent)
 
     return doc
