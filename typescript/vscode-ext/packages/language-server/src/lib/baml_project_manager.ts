@@ -3,6 +3,8 @@ import { access, mkdir, open, readdir, readFile, rename, rm, writeFile } from 'f
 import path from 'path'
 import { type Diagnostic, DiagnosticSeverity, Position, LocationLink, Hover } from 'vscode-languageserver'
 import { TextDocument } from 'vscode-languageserver-textdocument'
+import { CompletionList, CompletionItem } from 'vscode-languageserver'
+
 import { existsSync, readFileSync } from 'fs'
 
 import type { URI } from 'vscode-uri'
@@ -462,6 +464,53 @@ class BamlProjectManager {
 
   getProjectById(id: URI): Project {
     return this.get_project(uriToRootPath(id))
+  }
+
+  handleRoleCompletionRequest(doc: TextDocument, position: Position): CompletionList {
+    //add check to see if its in {{}} or not
+
+    const text = doc.getText()
+    const offset = doc.offsetAt(position)
+
+    let openBracesCount = 0
+    let closeBracesCount = 0
+
+    for (let i = 0; i < offset; i++) {
+      if (text[i] === '{' && text[i + 1] === '{') {
+        openBracesCount++
+        i++ // Skip the next character
+      } else if (text[i] === '}' && text[i + 1] === '}') {
+        closeBracesCount++
+        i++ // Skip the next character
+      }
+    }
+
+    let inPromptBraces = openBracesCount > closeBracesCount
+
+    //need to confirm that we are in a prompt
+
+    if (inPromptBraces) {
+      return {
+        isIncomplete: false,
+        items: [
+          {
+            label: '"system"',
+          },
+          {
+            label: '"assistant"',
+          },
+          {
+            label: '"user"',
+          },
+        ],
+      }
+    } else {
+      return {
+        isIncomplete: false,
+        items: [],
+        // }
+      }
+    }
   }
 }
 

@@ -816,6 +816,8 @@ pub struct FunctionConfig {
     // and we should derive this each time.
     pub output_format: String,
     pub prompt_template: String,
+    #[serde(skip)]
+    pub prompt_span: ast::Span,
     pub client: ClientId,
 }
 
@@ -1054,6 +1056,7 @@ impl WithRepr<FunctionV2> for FunctionWalker<'_> {
                     .output_format(self.db, self.identifier().span())
                     .unwrap_or("{{{ Unable to generate ctx.output_format }}}".into()),
                 prompt_template: self.jinja_prompt().to_string(),
+                prompt_span: self.ast_function().span().clone(),
                 client: self
                     .client()
                     .context("Unable to generate ctx.client")?

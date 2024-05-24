@@ -10,7 +10,7 @@ use crate::RuntimeContext;
 pub struct PromptRenderer {
     template_macros: Vec<TemplateStringMacro>,
     pub name: String,
-    // TODO: We technically have alll the information given output type
+    // TODO: We technically have all the information given output type
     // and we should derive this each time.
     pub output_format: String,
     pub prompt_template: String,
@@ -48,6 +48,7 @@ impl PromptRenderer {
                         name: function.name().into(),
                         output_format: c.item.1.output_format.clone(),
                         prompt_template: c.item.1.prompt_template.clone(),
+                        prompt_span: c.item.1.prompt_span.clone(),
                         client_name: c.item.1.client.clone(),
                     });
                 }

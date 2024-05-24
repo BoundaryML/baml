@@ -37,6 +37,7 @@ import { z } from 'zod'
 // import { getVersion, getEnginesVersion } from './lib/wasm/internals'
 import BamlProjectManager from './lib/baml_project_manager'
 import type { LSOptions, LSSettings } from './lib/types'
+import { getWordAtPosition } from './lib/ast'
 ;(globalThis as any).crypto = require('node:crypto').webcrypto
 
 const packageJson = require('../../package.json') // eslint-disable-line
@@ -122,10 +123,10 @@ export function startServer(options?: LSOptions): void {
         textDocumentSync: TextDocumentSyncKind.Full,
         definitionProvider: true,
         documentFormattingProvider: false,
-        // completionProvider: {
-        //   resolveProvider: false,
-        //   triggerCharacters: ['@', '"', '.'],
-        // },
+        completionProvider: {
+          resolveProvider: false,
+          triggerCharacters: ['@', '"', '.', '('],
+        },
         hoverProvider: true,
         renameProvider: false,
         documentSymbolProvider: true,
@@ -299,7 +300,9 @@ export function startServer(options?: LSOptions): void {
 
   documents.onDidChangeContent(async (change: { document: TextDocument }) => {
     const textDocument = change.document
+
     await bamlProjectManager.upsert_file(URI.parse(textDocument.uri), textDocument.getText())
+
     // TODO: @hellovai Consider debouncing this
     // debounce(validateTextDocument, 800, {
     //   maxWait: 4000,
@@ -369,12 +372,30 @@ export function startServer(options?: LSOptions): void {
     return undefined
   })
 
-  // connection.onCompletion((params: CompletionParams) => {
-  //   const doc = getDocument(params.textDocument.uri)
-  //   if (doc) {
-  //     return MessageHandler.handleCompletionRequest(params, doc, showErrorToast)
-  //   }
-  // })
+  connection.onCompletion((params: CompletionParams) => {
+    // return undefined
+    const doc = getDocument(params.textDocument.uri)
+    if (doc) {
+      const completionWord = getWordAtPosition(doc, params.position)
+      console.log(`completion word ${completionWord}`)
+      const splitCompletion = completionWord.split('.')
+      const lastTerm = splitCompletion[splitCompletion.length - 1]
+      console.log(`last term ${lastTerm}`)
+      if (lastTerm === 'role(' || lastTerm === 'chat(') {
+        console.log('handling role completion')
+        const res = bamlProjectManager.handleRoleCompletionRequest(doc, params.position)
+        if (res.items.length === 0) {
+          return undefined
+        } else {
+          return res
+        }
+      }
+    }
+    if (doc) {
+      // return MessageHandler.handleCompletionRequest(params, doc, showErrorToast)
+    }
+    return undefined
+  })
 
   // This handler resolves additional information for the item selected in the completion list.
   // connection.onCompletionResolve((completionItem: CompletionItem) => {
