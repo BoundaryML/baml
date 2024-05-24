@@ -536,6 +536,7 @@ dependencies = [
  "getrandom",
  "indexmap 2.2.5",
  "indoc",
+ "internal-baml-codegen",
  "js-sys",
  "log",
  "serde",
@@ -1795,13 +1796,16 @@ dependencies = [
  "anyhow",
  "askama",
  "base64 0.22.1",
+ "cfg-if",
  "either",
  "env_logger",
  "indexmap 2.2.5",
  "internal-baml-core",
  "log",
+ "pathdiff",
  "serde",
  "serde_json",
+ "sugar_path",
  "walkdir",
 ]
 
@@ -2402,6 +2406,12 @@ dependencies = [
  "smallvec",
  "windows-targets 0.48.5",
 ]
+
+[[package]]
+name = "pathdiff"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a3bf70094d203e07844da868b634207e71bfab254fe713171fae9a6e751ccf31"
 
 [[package]]
 name = "percent-encoding"
@@ -3360,6 +3370,12 @@ dependencies = [
  "rustversion",
  "syn 2.0.52",
 ]
+
+[[package]]
+name = "sugar_path"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8230d5b8a65a6d4d4a7e5ee8dbdd9312ba447a8b8329689a390a0945d69b57ce"
 
 [[package]]
 name = "syn"

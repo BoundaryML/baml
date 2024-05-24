@@ -259,7 +259,7 @@ const activateClient = (
                 for (let i = 0; i < iterations; i++) {
                   const prog = (i / iterations) * 100
                   // Increment is summed up with the previous value
-                  progress.report({ increment: prog, message: `BAML Client generated!` })
+                  progress.report({ increment: prog, message: message.message })
                   await sleep(100)
                 }
 

@@ -83,7 +83,7 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
     <div className='relative flex flex-row w-full h-full bg-gray-800 main-panel overflow-x-clip overflow-y-clip'>
       {isMobile && (
         <div className='absolute bottom-0 left-0 right-0 text-zinc-900 font-semibold bg-zinc-400 border-t-zinc-600 border-t-[1px] w-full h-[100px] z-50 text-center p-8'>
-          Visit prompt fiddle on Desktop to see the full playground
+          Visit PromptFiddle on Desktop to get the best experience
         </div>
       )}
       <ResizablePanelGroup className='w-full h-full overflow-clip' direction='horizontal'>
@@ -368,7 +368,7 @@ const PlaygroundView = () => {
         <Suspense fallback={<div>Loading...</div>}>
           <EventListener>
             <SettingsDialog />
-            <div className='relative flex flex-col w-full gap-2 pr-2'>
+            <div className='relative flex flex-col w-full gap-2 pr-0'>
               <div className='relative flex flex-row gap-2'>
                 <FunctionSelector />
                 <div className='relative flex flex-row items-center justify-end gap-2 pr-1 grow'>

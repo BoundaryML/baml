@@ -25,9 +25,7 @@ struct TypescriptFunction {
 
 #[derive(askama::Template)]
 #[template(path = "index.ts.j2", escape = "none")]
-struct TypescriptInit {
-    encoded_baml_src: String,
-}
+struct TypescriptInit {}
 
 pub(crate) fn generate(
     ir: &IntermediateRepr,
@@ -53,17 +51,12 @@ pub(crate) fn generate(
 
     collector.add_file(
         "index.ts",
-        TypescriptInit {
-            encoded_baml_src: generator
-                .encoded_baml_files
-                .clone()
-                .unwrap_or("".to_string()),
-        }
-        .render()
-        .map_err(|e| anyhow::Error::from(e).context("Error while rendering index.ts"))?,
+        TypescriptInit {}
+            .render()
+            .map_err(|e| anyhow::Error::from(e).context("Error while rendering index.ts"))?,
     );
 
-    collector.commit(&generator.output_dir)
+    collector.commit(&generator.output_dir())
 }
 
 impl TryFrom<&IntermediateRepr> for TypescriptClient {

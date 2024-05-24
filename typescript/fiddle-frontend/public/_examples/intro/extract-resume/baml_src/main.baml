@@ -37,4 +37,22 @@ function ExtractResume(resume_text: string) -> Resume {
     JSON:
   "#
 }
-// Open main.py to see how to use this function
+
+test Test1 {
+  functions [ExtractResume]
+  args {
+    resume_text #"
+      John Doe
+
+      Education
+      - University of California, Berkeley
+        - B.S. in Computer Science
+        - 2020
+
+      Skills
+      - Python
+      - Java
+      - C++
+    "#
+  }
+}

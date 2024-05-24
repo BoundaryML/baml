@@ -79,21 +79,19 @@
 
 //   const lines = convertDocumentTextToTrimmedLineArray(document)
 //   let result = lines.join('\n');
-  
+
 //   const newDoc =  TextDocument.create(document.uri, document.languageId, document.version, result);
 //   const word = getWordAtPosition(newDoc, position)
-  
+
 //   if (word === '') {
-    
+
 //     return
 //   }
 //   console.log('word is not empty')
 
-
 //   // TODO: Do block level definitions
 //   const match = fileCache.define(word)
-  
-  
+
 //   if (match) {
 //     return [
 //       {

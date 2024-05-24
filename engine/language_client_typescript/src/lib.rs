@@ -23,7 +23,7 @@ pub struct BamlRuntimeFfi {
 }
 
 #[napi]
-struct RuntimeContextManagerTs {
+pub struct RuntimeContextManagerTs {
     inner: RuntimeContextManager,
 }
 

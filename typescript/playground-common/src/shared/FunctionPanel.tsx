@@ -116,7 +116,7 @@ enum Topic {
     >
       <TooltipProvider>
         <ResizablePanelGroup direction='vertical' className='h-full'>
-          <ResizablePanel id='top-panel' className='flex w-full px-2' defaultSize={50}>
+          <ResizablePanel id='top-panel' className='flex w-full px-1' defaultSize={50}>
             <div className='w-full'>
               <ResizablePanelGroup direction='horizontal' className='h-full'>
                 <div className='relative w-full h-full overflow-y-auto'>
@@ -130,7 +130,7 @@ enum Topic {
           <ResizableHandle withHandle={false} className='bg-vscode-panel-border' />
           <ResizablePanel
             minSize={10}
-            className='flex h-full px-0 py-2 mb-6 border-t border-vscode-textSeparator-foreground'
+            className='flex h-full px-0 py-2 mb-2 border-t border-vscode-textSeparator-foreground'
           >
             <TestResults />
           </ResizablePanel>

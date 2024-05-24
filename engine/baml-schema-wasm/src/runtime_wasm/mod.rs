@@ -1,3 +1,4 @@
+pub mod generator;
 pub mod runtime_prompt;
 
 use std::collections::HashMap;
@@ -8,11 +9,8 @@ use baml_runtime::InternalRuntimeInterface;
 use baml_runtime::{
     internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, IRHelper, RenderedPrompt,
 };
-use baml_types::BamlMap;
-use baml_types::BamlValue;
-use js_sys::JsString;
-use serde::Deserialize;
-use serde::Serialize;
+use baml_types::{BamlMap, BamlValue};
+use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 //Run: wasm-pack test --firefox --headless  --features internal,wasm
 // but for browser we likely need to do         wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
@@ -320,14 +318,6 @@ pub struct WasmLLMFailure {
     pub code: String,
 }
 
-#[wasm_bindgen(getter_with_clone, inspectable)]
-pub struct WasmGeneratedFile {
-    #[wasm_bindgen(readonly)]
-    pub path: String,
-    #[wasm_bindgen(readonly)]
-    pub contents: String,
-}
-
 #[wasm_bindgen]
 impl WasmLLMFailure {
     #[wasm_bindgen]
@@ -555,8 +545,8 @@ fn get_dummy_value(
 
             Some(dummy)
         }
-        baml_runtime::FieldType::Enum(EnumId) => None,
-        baml_runtime::FieldType::Class(ClassId) => None,
+        baml_runtime::FieldType::Enum(_) => None,
+        baml_runtime::FieldType::Class(_) => None,
         baml_runtime::FieldType::List(item) => {
             let dummy = get_dummy_value(indent + 1, allow_multiline, item);
             // Repeat it 2 times
@@ -731,20 +721,15 @@ impl WasmRuntime {
     }
 
     #[wasm_bindgen]
-    pub fn run_generators(&self) -> Result<Vec<WasmGeneratedFile>, wasm_bindgen::JsError> {
+    pub fn run_generators(
+        &self,
+    ) -> Result<Vec<generator::WasmGeneratorOutput>, wasm_bindgen::JsError> {
         Ok(self
             .runtime
             .run_generators()
-            .map_err(|e| JsError::new(e.to_string().as_str()))?
+            .map_err(|e| JsError::new(format!("{e:#}").as_str()))?
             .into_iter()
-            .flat_map(|g| {
-                g.files
-                    .into_iter()
-                    .map(|(path, contents)| WasmGeneratedFile {
-                        path: path.display().to_string(),
-                        contents,
-                    })
-            })
+            .map(|g| g.into())
             .collect())
     }
 
@@ -849,12 +834,18 @@ impl WasmRuntime {
     }
 
     #[wasm_bindgen]
-    pub fn get_function_at_position(&self, cursorIdx: usize) -> Option<WasmFunction> {
+    pub fn get_function_at_position(
+        &self,
+        fileName: &str,
+        cursorIdx: usize,
+    ) -> Option<WasmFunction> {
         let functions = self.list_functions();
 
         for function in functions {
             let span = function.span.clone(); // Clone the span
-            if ((span.start + 1)..=(span.end + 1)).contains(&cursorIdx) {
+            if span.file_path == fileName
+                && ((span.start + 1)..=(span.end + 1)).contains(&cursorIdx)
+            {
                 return Some(function);
             }
         }

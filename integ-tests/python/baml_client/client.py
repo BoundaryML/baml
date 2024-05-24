@@ -13,7 +13,7 @@
 # flake8: noqa: E501,F401
 # pylint: disable=unused-import,line-too-long
 # fmt: off
-from typing import Any, Generic, List, Optional, TypeVar, Union
+from typing import Any, Dict, Generic, List, Optional, Tuple, TypeVar, Union
 import pprint
 
 import baml_py
@@ -40,13 +40,15 @@ class BamlOutputWrapper(BaseModel, Generic[OutputType]):
 
 class BamlClient:
     __runtime: baml_py.BamlRuntimeFfi
-    __ctx_manager: baml_py.BamlCtxManager
     __stream_client: "BamlStreamClient"
 
-    def __init__(self, runtime: baml_py.BamlRuntimeFfi, ctx_manager: baml_py.BamlCtxManager):
+    @staticmethod
+    def from_directory(path: str, ctx: Dict[str, Any] = {}) -> "BamlClient":
+      return BamlClient(runtime=baml_py.BamlRuntimeFfi.from_directory(path, ctx))
+
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
       self.__runtime = runtime
-      self.__ctx_manager = ctx_manager
-      self.__stream_client = BamlStreamClient(self.__runtime, self.__ctx_manager)
+      self.__stream_client = BamlStreamClient(self.__runtime)
 
     @property
     def stream(self):
@@ -62,7 +64,7 @@ class BamlClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[types.Category].coerce(raw.parsed())
     
@@ -75,7 +77,7 @@ class BamlClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[types.Category].coerce(raw.parsed())
     
@@ -88,7 +90,7 @@ class BamlClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[types.Category].coerce(raw.parsed())
     
@@ -101,7 +103,7 @@ class BamlClient:
         {
           "img": img,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -114,7 +116,7 @@ class BamlClient:
         {
           "classWithImage": classWithImage,"img2": img2,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -127,7 +129,7 @@ class BamlClient:
         {
           "classWithImage": classWithImage,"img2": img2,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -140,7 +142,7 @@ class BamlClient:
         {
           "classWithImage": classWithImage,"img2": img2,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -153,7 +155,7 @@ class BamlClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[List[str]].coerce(raw.parsed())
     
@@ -166,7 +168,7 @@ class BamlClient:
         {
           "resume": resume,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[types.Resume].coerce(raw.parsed())
     
@@ -179,7 +181,7 @@ class BamlClient:
         {
           "resume": resume,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[types.Resume].coerce(raw.parsed())
     
@@ -192,7 +194,7 @@ class BamlClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[Optional[types.ClassOptionalOutput2v2]].coerce(raw.parsed())
     
@@ -205,7 +207,7 @@ class BamlClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[types.TestClassWithEnum2].coerce(raw.parsed())
     
@@ -218,7 +220,7 @@ class BamlClient:
         {
           "text": text,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[types.RaysData].coerce(raw.parsed())
     
@@ -231,7 +233,7 @@ class BamlClient:
         {
           "email": email,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[types.OrderInfo].coerce(raw.parsed())
     
@@ -244,7 +246,7 @@ class BamlClient:
         {
           "query": query,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[types.SearchParams].coerce(raw.parsed())
     
@@ -257,7 +259,7 @@ class BamlClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[List[Optional[types.OptionalTest_ReturnTypev2]]].coerce(raw.parsed())
     
@@ -270,7 +272,7 @@ class BamlClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -283,7 +285,7 @@ class BamlClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -296,7 +298,7 @@ class BamlClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[List[types.EnumOutput]].coerce(raw.parsed())
     
@@ -309,7 +311,7 @@ class BamlClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[types.EnumOutput2].coerce(raw.parsed())
     
@@ -322,7 +324,7 @@ class BamlClient:
         {
           "myString": myString,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -335,7 +337,7 @@ class BamlClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[bool].coerce(raw.parsed())
     
@@ -348,7 +350,7 @@ class BamlClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[types.TestOutputClass2].coerce(raw.parsed())
     
@@ -361,7 +363,7 @@ class BamlClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[List[types.TestOutputClass]].coerce(raw.parsed())
     
@@ -374,7 +376,7 @@ class BamlClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[List[str]].coerce(raw.parsed())
     
@@ -387,7 +389,7 @@ class BamlClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -400,7 +402,7 @@ class BamlClient:
         {
           "myArg": myArg,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -413,7 +415,7 @@ class BamlClient:
         {
           "myBool": myBool,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -426,7 +428,7 @@ class BamlClient:
         {
           "myArg": myArg,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -439,7 +441,7 @@ class BamlClient:
         {
           "myArg": myArg,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -452,7 +454,7 @@ class BamlClient:
         {
           "myFloat": myFloat,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -465,7 +467,7 @@ class BamlClient:
         {
           "myInt": myInt,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -478,7 +480,7 @@ class BamlClient:
         {
           "myString": myString,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -491,7 +493,7 @@ class BamlClient:
         {
           "myStringArray": myStringArray,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -504,7 +506,7 @@ class BamlClient:
         {
           "myArg": myArg,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -517,7 +519,7 @@ class BamlClient:
         {
           "var": var,"var_with_underscores": var_with_underscores,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -530,18 +532,16 @@ class BamlClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        ctx={}
       )
       return BamlOutputWrapper[Union[types.UnionTest_ReturnTypev2, types.DataType]].coerce(raw.parsed())
     
 
 class BamlStreamClient:
     __runtime: baml_py.BamlRuntimeFfi
-    __ctx_manager: baml_py.BamlCtxManager
 
-    def __init__(self, runtime: baml_py.BamlRuntimeFfi, ctx_manager: baml_py.BamlCtxManager):
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
       self.__runtime = runtime
-      self.__ctx_manager = ctx_manager
 
     
     def ClassifyMessage(
@@ -553,14 +553,12 @@ class BamlStreamClient:
         {
           "input": input,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[Optional[types.Category], types.Category](
         raw,
         BamlOutputWrapper[Optional[types.Category]].coerce,
         BamlOutputWrapper[types.Category].coerce,
-        self.__ctx_manager.get(),
       )
     
     def ClassifyMessage2(
@@ -572,14 +570,12 @@ class BamlStreamClient:
         {
           "input": input,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[Optional[types.Category], types.Category](
         raw,
         BamlOutputWrapper[Optional[types.Category]].coerce,
         BamlOutputWrapper[types.Category].coerce,
-        self.__ctx_manager.get(),
       )
     
     def ClassifyMessage3(
@@ -591,14 +587,12 @@ class BamlStreamClient:
         {
           "input": input,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[Optional[types.Category], types.Category](
         raw,
         BamlOutputWrapper[Optional[types.Category]].coerce,
         BamlOutputWrapper[types.Category].coerce,
-        self.__ctx_manager.get(),
       )
     
     def DescribeImage(
@@ -610,14 +604,12 @@ class BamlStreamClient:
         {
           "img": img,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
-        self.__ctx_manager.get(),
       )
     
     def DescribeImage2(
@@ -630,14 +622,12 @@ class BamlStreamClient:
           "classWithImage": classWithImage,
           "img2": img2,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
-        self.__ctx_manager.get(),
       )
     
     def DescribeImage3(
@@ -650,14 +640,12 @@ class BamlStreamClient:
           "classWithImage": classWithImage,
           "img2": img2,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
-        self.__ctx_manager.get(),
       )
     
     def DescribeImage4(
@@ -670,14 +658,12 @@ class BamlStreamClient:
           "classWithImage": classWithImage,
           "img2": img2,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
-        self.__ctx_manager.get(),
       )
     
     def ExtractNames(
@@ -689,14 +675,12 @@ class BamlStreamClient:
         {
           "input": input,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[List[Optional[str]], List[str]](
         raw,
         BamlOutputWrapper[List[Optional[str]]].coerce,
         BamlOutputWrapper[List[str]].coerce,
-        self.__ctx_manager.get(),
       )
     
     def ExtractResume(
@@ -708,14 +692,12 @@ class BamlStreamClient:
         {
           "resume": resume,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[partial_types.Resume, types.Resume](
         raw,
         BamlOutputWrapper[partial_types.Resume].coerce,
         BamlOutputWrapper[types.Resume].coerce,
-        self.__ctx_manager.get(),
       )
     
     def ExtractResume2(
@@ -727,14 +709,12 @@ class BamlStreamClient:
         {
           "resume": resume,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[partial_types.Resume, types.Resume](
         raw,
         BamlOutputWrapper[partial_types.Resume].coerce,
         BamlOutputWrapper[types.Resume].coerce,
-        self.__ctx_manager.get(),
       )
     
     def FnClassOptionalOutput2_V2(
@@ -746,14 +726,12 @@ class BamlStreamClient:
         {
           "input": input,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[partial_types.ClassOptionalOutput2v2, Optional[types.ClassOptionalOutput2v2]](
         raw,
         BamlOutputWrapper[partial_types.ClassOptionalOutput2v2].coerce,
         BamlOutputWrapper[Optional[types.ClassOptionalOutput2v2]].coerce,
-        self.__ctx_manager.get(),
       )
     
     def FnOutputClassWithEnum_V2(
@@ -765,14 +743,12 @@ class BamlStreamClient:
         {
           "input": input,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[partial_types.TestClassWithEnum2, types.TestClassWithEnum2](
         raw,
         BamlOutputWrapper[partial_types.TestClassWithEnum2].coerce,
         BamlOutputWrapper[types.TestClassWithEnum2].coerce,
-        self.__ctx_manager.get(),
       )
     
     def GetDataType(
@@ -784,14 +760,12 @@ class BamlStreamClient:
         {
           "text": text,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[partial_types.RaysData, types.RaysData](
         raw,
         BamlOutputWrapper[partial_types.RaysData].coerce,
         BamlOutputWrapper[types.RaysData].coerce,
-        self.__ctx_manager.get(),
       )
     
     def GetOrderInfo(
@@ -803,14 +777,12 @@ class BamlStreamClient:
         {
           "email": email,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[partial_types.OrderInfo, types.OrderInfo](
         raw,
         BamlOutputWrapper[partial_types.OrderInfo].coerce,
         BamlOutputWrapper[types.OrderInfo].coerce,
-        self.__ctx_manager.get(),
       )
     
     def GetQuery(
@@ -822,14 +794,12 @@ class BamlStreamClient:
         {
           "query": query,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[partial_types.SearchParams, types.SearchParams](
         raw,
         BamlOutputWrapper[partial_types.SearchParams].coerce,
         BamlOutputWrapper[types.SearchParams].coerce,
-        self.__ctx_manager.get(),
       )
     
     def OptionalTest_Function_V2(
@@ -841,14 +811,12 @@ class BamlStreamClient:
         {
           "input": input,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[List[partial_types.OptionalTest_ReturnTypev2], List[Optional[types.OptionalTest_ReturnTypev2]]](
         raw,
         BamlOutputWrapper[List[partial_types.OptionalTest_ReturnTypev2]].coerce,
         BamlOutputWrapper[List[Optional[types.OptionalTest_ReturnTypev2]]].coerce,
-        self.__ctx_manager.get(),
       )
     
     def V2_FnClassOptional(
@@ -860,14 +828,12 @@ class BamlStreamClient:
         {
           "input": input,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
-        self.__ctx_manager.get(),
       )
     
     def V2_FnClassOptional2(
@@ -879,14 +845,12 @@ class BamlStreamClient:
         {
           "input": input,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
-        self.__ctx_manager.get(),
       )
     
     def V2_FnEnumListOutput(
@@ -898,14 +862,12 @@ class BamlStreamClient:
         {
           "input": input,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[List[Optional[types.EnumOutput]], List[types.EnumOutput]](
         raw,
         BamlOutputWrapper[List[Optional[types.EnumOutput]]].coerce,
         BamlOutputWrapper[List[types.EnumOutput]].coerce,
-        self.__ctx_manager.get(),
       )
     
     def V2_FnEnumOutput(
@@ -917,14 +879,12 @@ class BamlStreamClient:
         {
           "input": input,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[Optional[types.EnumOutput2], types.EnumOutput2](
         raw,
         BamlOutputWrapper[Optional[types.EnumOutput2]].coerce,
         BamlOutputWrapper[types.EnumOutput2].coerce,
-        self.__ctx_manager.get(),
       )
     
     def V2_FnNamedArgsSingleStringOptional(
@@ -936,14 +896,12 @@ class BamlStreamClient:
         {
           "myString": myString,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
-        self.__ctx_manager.get(),
       )
     
     def V2_FnOutputBool(
@@ -955,14 +913,12 @@ class BamlStreamClient:
         {
           "input": input,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[Optional[bool], bool](
         raw,
         BamlOutputWrapper[Optional[bool]].coerce,
         BamlOutputWrapper[bool].coerce,
-        self.__ctx_manager.get(),
       )
     
     def V2_FnOutputClass(
@@ -974,14 +930,12 @@ class BamlStreamClient:
         {
           "input": input,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[partial_types.TestOutputClass2, types.TestOutputClass2](
         raw,
         BamlOutputWrapper[partial_types.TestOutputClass2].coerce,
         BamlOutputWrapper[types.TestOutputClass2].coerce,
-        self.__ctx_manager.get(),
       )
     
     def V2_FnOutputClassList(
@@ -993,14 +947,12 @@ class BamlStreamClient:
         {
           "input": input,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[List[partial_types.TestOutputClass], List[types.TestOutputClass]](
         raw,
         BamlOutputWrapper[List[partial_types.TestOutputClass]].coerce,
         BamlOutputWrapper[List[types.TestOutputClass]].coerce,
-        self.__ctx_manager.get(),
       )
     
     def V2_FnOutputStringList(
@@ -1012,14 +964,12 @@ class BamlStreamClient:
         {
           "input": input,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[List[Optional[str]], List[str]](
         raw,
         BamlOutputWrapper[List[Optional[str]]].coerce,
         BamlOutputWrapper[List[str]].coerce,
-        self.__ctx_manager.get(),
       )
     
     def V2_FnStringOptional(
@@ -1031,14 +981,12 @@ class BamlStreamClient:
         {
           "input": input,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
-        self.__ctx_manager.get(),
       )
     
     def V2_FnTestNamedArgsSingleEnum(
@@ -1050,14 +998,12 @@ class BamlStreamClient:
         {
           "myArg": myArg,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
-        self.__ctx_manager.get(),
       )
     
     def V2_TestFnNamedArgsSingleBool(
@@ -1069,14 +1015,12 @@ class BamlStreamClient:
         {
           "myBool": myBool,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
-        self.__ctx_manager.get(),
       )
     
     def V2_TestFnNamedArgsSingleClass(
@@ -1088,14 +1032,12 @@ class BamlStreamClient:
         {
           "myArg": myArg,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
-        self.__ctx_manager.get(),
       )
     
     def V2_TestFnNamedArgsSingleEnumList(
@@ -1107,14 +1049,12 @@ class BamlStreamClient:
         {
           "myArg": myArg,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
-        self.__ctx_manager.get(),
       )
     
     def V2_TestFnNamedArgsSingleFloat(
@@ -1126,14 +1066,12 @@ class BamlStreamClient:
         {
           "myFloat": myFloat,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
-        self.__ctx_manager.get(),
       )
     
     def V2_TestFnNamedArgsSingleInt(
@@ -1145,14 +1083,12 @@ class BamlStreamClient:
         {
           "myInt": myInt,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
-        self.__ctx_manager.get(),
       )
     
     def V2_TestFnNamedArgsSingleString(
@@ -1164,14 +1100,12 @@ class BamlStreamClient:
         {
           "myString": myString,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
-        self.__ctx_manager.get(),
       )
     
     def V2_TestFnNamedArgsSingleStringArray(
@@ -1183,14 +1117,12 @@ class BamlStreamClient:
         {
           "myStringArray": myStringArray,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
-        self.__ctx_manager.get(),
       )
     
     def V2_TestFnNamedArgsSingleStringList(
@@ -1202,14 +1134,12 @@ class BamlStreamClient:
         {
           "myArg": myArg,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
-        self.__ctx_manager.get(),
       )
     
     def V2_TestFnNamedArgsSyntax(
@@ -1222,14 +1152,12 @@ class BamlStreamClient:
           "var": var,
           "var_with_underscores": var_with_underscores,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
-        self.__ctx_manager.get(),
       )
     
     def V2_UnionTest_Function(
@@ -1241,13 +1169,11 @@ class BamlStreamClient:
         {
           "input": input,
         },
-        None,
-        self.__ctx_manager.get(),
+        ctx={},
       )
       return baml_py.BamlStream[Optional[Union[partial_types.UnionTest_ReturnTypev2, Optional[types.DataType]]], Union[types.UnionTest_ReturnTypev2, types.DataType]](
         raw,
         BamlOutputWrapper[Optional[Union[partial_types.UnionTest_ReturnTypev2, Optional[types.DataType]]]].coerce,
         BamlOutputWrapper[Union[types.UnionTest_ReturnTypev2, types.DataType]].coerce,
-        self.__ctx_manager.get(),
       )
     

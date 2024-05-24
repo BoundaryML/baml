@@ -7,6 +7,8 @@ use std::path::PathBuf;
 use std::thread::sleep;
 use std::time::Duration;
 
+use crate::GeneratorArgs;
+
 // Add a trait per language that can be used to convert an Import into a string
 pub(super) trait LanguageFeatures {
     const CONTENT_PREFIX: &'static str;
@@ -76,13 +78,14 @@ impl<L: LanguageFeatures + Default> FileCollector<L> {
 
     pub(super) fn add_template<
         'ir,
-        V: TryFrom<&'ir IntermediateRepr, Error = anyhow::Error> + askama::Template,
+        V: TryFrom<(&'ir IntermediateRepr, &'ir GeneratorArgs), Error = anyhow::Error>
+            + askama::Template,
     >(
         &mut self,
         name: impl Into<PathBuf> + std::fmt::Display,
-        ir: &'ir IntermediateRepr,
+        args: (&'ir IntermediateRepr, &'ir GeneratorArgs),
     ) -> Result<()> {
-        let rendered = V::try_from(ir)
+        let rendered = V::try_from(args)
             .map_err(|e| e.context(format!("Error while building {}", name)))?
             .render()
             .map_err(|e| {
@@ -181,31 +184,44 @@ impl<L: LanguageFeatures + Default> FileCollector<L> {
         Ok(())
     }
 
+    /// Commit the generated files to disk.
+    ///
+    /// Writes to the output path, and returns a map of the paths to the contents.
+    /// Ensures that we don't stomp on user files.
+    ///
+    /// `output_path` is the path to be written to, and the path that will be prepended
+    /// to the returned file entries
     pub(super) fn commit(&self, output_path: &Path) -> Result<IndexMap<PathBuf, String>> {
-        log::debug!("Writing files to {}", output_path.display());
+        cfg_if::cfg_if! {
+            if #[cfg(target_arch = "wasm32")] {
+                log::debug!("Committing generated files in wasm is a no-op (writing is the Nodejs caller's responsibility)");
+            } else {
+                log::debug!("Writing files to {}", output_path.display());
 
-        let temp_path = PathBuf::from(format!("{}.tmp", output_path.display()));
+                let temp_path = PathBuf::from(format!("{}.tmp", output_path.display()));
 
-        // if the .tmp dir exists, delete it so we can get back to a working state without user intervention.
-        try_delete_tmp_dir(temp_path.as_path())?;
+                // if the .tmp dir exists, delete it so we can get back to a working state without user intervention.
+                try_delete_tmp_dir(temp_path.as_path())?;
 
-        // Sort the files by path so that we always write to the same file
-        for (relative_file_path, contents) in self.files.iter() {
-            let full_file_path = temp_path.join(relative_file_path);
-            if let Some(parent) = full_file_path.parent() {
-                std::fs::create_dir_all(parent)?;
+                // Sort the files by path so that we always write to the same file
+                for (relative_file_path, contents) in self.files.iter() {
+                    let full_file_path = temp_path.join(relative_file_path);
+                    if let Some(parent) = full_file_path.parent() {
+                        std::fs::create_dir_all(parent)?;
+                    }
+                    std::fs::write(&full_file_path, contents)?;
+                }
+
+                self.remove_dir_safe(output_path)?;
+                std::fs::rename(&temp_path, output_path)?;
+
+                log::info!(
+                    "Wrote {} files to {}",
+                    self.files.len(),
+                    output_path.display()
+                );
             }
-            std::fs::write(&full_file_path, contents)?;
         }
-
-        self.remove_dir_safe(output_path)?;
-        std::fs::rename(&temp_path, output_path)?;
-
-        log::info!(
-            "Wrote {} files to {}",
-            self.files.len(),
-            output_path.display()
-        );
 
         Ok(self.files.clone())
     }

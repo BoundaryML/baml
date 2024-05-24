@@ -1,4 +1,4 @@
-from typing import Any, Dict, Generic, List, Optional, Tuple, TypeVar, Union
+from typing import Any, Generic, List, Optional, TypeVar, Union
 import pprint
 
 import baml_py
@@ -25,15 +25,13 @@ class BamlOutputWrapper(BaseModel, Generic[OutputType]):
 
 class BamlClient:
     __runtime: baml_py.BamlRuntimeFfi
+    __ctx_manager: baml_py.BamlCtxManager
     __stream_client: "BamlStreamClient"
 
-    @staticmethod
-    def from_directory(path: str, ctx: Dict[str, Any] = {}) -> "BamlClient":
-      return BamlClient(runtime=baml_py.BamlRuntimeFfi.from_directory(path, ctx))
-
-    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi, ctx_manager: baml_py.BamlCtxManager):
       self.__runtime = runtime
-      self.__stream_client = BamlStreamClient(self.__runtime)
+      self.__ctx_manager = ctx_manager
+      self.__stream_client = BamlStreamClient(self.__runtime, self.__ctx_manager)
 
     @property
     def stream(self):
@@ -53,16 +51,18 @@ class BamlClient:
           "{{name}}": {{name}},
           {%- endfor %}
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[{{ fn.return_type }}].coerce(raw.parsed())
     {% endfor %}
 
 class BamlStreamClient:
     __runtime: baml_py.BamlRuntimeFfi
+    __ctx_manager: baml_py.BamlCtxManager
 
-    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+    def __init__(self, runtime: baml_py.BamlRuntimeFfi, ctx_manager: baml_py.BamlCtxManager):
       self.__runtime = runtime
+      self.__ctx_manager = ctx_manager
 
     {% for fn in funcs %}
     def {{ fn.name }}(
@@ -78,11 +78,13 @@ class BamlStreamClient:
           "{{name}}": {{name}},
           {%- endfor %}
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[{{ fn.partial_return_type }}, {{ fn.return_type }}](
         raw,
         BamlOutputWrapper[{{ fn.partial_return_type }}].coerce,
         BamlOutputWrapper[{{ fn.return_type }}].coerce,
+        self.__ctx_manager.get(),
       )
     {% endfor %}

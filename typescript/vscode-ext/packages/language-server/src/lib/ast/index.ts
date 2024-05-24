@@ -10,5 +10,5 @@ export function convertDocumentTextToTrimmedLineArray(document: TextDocument): s
 }
 
 export function trimLine(line: string): string {
-  return line.trim().replace(/[^a-zA-Z0-9_.]/g, '');
+  return line.trim().replace(/[^a-zA-Z0-9_.]/g, '')
 }

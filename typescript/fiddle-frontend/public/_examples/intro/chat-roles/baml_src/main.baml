@@ -27,3 +27,10 @@ function ClassifyMessage(input: string) -> Category {
     Response:
   "#
 }
+
+test Test1 {
+  functions [ClassifyMessage]
+  args {
+    input "Can't access my account using my usual login credentials, and each attempt results in an error message stating 'Invalid username or password.' I have tried resetting my password using the 'Forgot Password' link, but I haven't received the promised password reset email."
+  }
+}

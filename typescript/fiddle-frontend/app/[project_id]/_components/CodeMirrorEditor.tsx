@@ -151,7 +151,7 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
         effects: comparment.reconfigure([makeLinter()]),
       })
     }
-  }, [editorFiles])
+  }, [JSON.stringify(editorFiles)])
 
   const setUnsavedChanges = useSetAtom(unsavedChangesAtom)
 
@@ -225,10 +225,10 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
             </div>
           )}
         </div>
-        <div className='absolute bottom-12 right-2 h-[20px] p-2'>
+        <div className='absolute -top-8 right-0 h-[20px] p-2'>
           {!activeFile?.endsWith('.baml') && (
-            <div className='p-1 text-xs bg-gray-500 rounded-md text-primary'>
-              This is an example read-only file. To modify tests, modify the .baml files.
+            <div className='p-1 text-xs bg-gray-500 rounded-sm text-primary'>
+              This is an example read-only file on how to use this in your code
             </div>
           )}
         </div>

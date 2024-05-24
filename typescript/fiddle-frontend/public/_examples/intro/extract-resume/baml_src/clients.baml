@@ -4,7 +4,7 @@
 
 client<llm> GPT4 {
   // Use one of the following: https://docs.boundaryml.com/v3/syntax/client/client#providers
-  provider baml-openai-chat
+  provider openai
   // You can pass in any parameters from the OpenAI Python documentation into the options block.
   options {
     model gpt-4
@@ -13,15 +13,15 @@ client<llm> GPT4 {
 } 
 
 client<llm> GPT4Turbo {
-  provider baml-openai-chat
+  provider openai
   options {
-    model gpt-4-1106-preview
+    model gpt-4-turbo
     api_key env.OPENAI_API_KEY
   }
 } 
 
 client<llm> GPT35 {
-  provider baml-openai-chat
+  provider openai
   options {
     model gpt-3.5-turbo
     api_key env.OPENAI_API_KEY
@@ -29,10 +29,11 @@ client<llm> GPT35 {
 }  
 
 client<llm> Claude {
-  provider baml-anthropic-chat
+  provider anthropic
   options {
     model claude-3-haiku-20240307
     api_key env.ANTHROPIC_API_KEY
     max_tokens 1000
+
   }
 }

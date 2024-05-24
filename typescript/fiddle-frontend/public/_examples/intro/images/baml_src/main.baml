@@ -57,3 +57,17 @@ function DescribeImage4(classWithImage: ClassWithImage, img2: image) -> string {
     {{ img2 }}
   "#
 }
+
+test Test1 {
+  functions [DescribeImage, DescribeImage2, DescribeImage3, DescribeImage4]
+  args {
+    classWithImage {
+      img {
+        url https://i.kym-cdn.com/entries/icons/original/000/033/100/eht0m1qg8dk21.jpg
+      }
+    }
+    img {
+      url https://i.kym-cdn.com/entries/icons/original/000/033/100/eht0m1qg8dk21.jpg
+    }
+  }
+}

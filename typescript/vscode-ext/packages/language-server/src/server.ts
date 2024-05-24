@@ -309,7 +309,18 @@ export function startServer(options?: LSOptions): void {
   })
 
   documents.onDidSave(async (change: { document: TextDocument }) => {
-    await bamlProjectManager.save_file(URI.parse(change.document.uri), change.document.getText())
+    const documentUri = URI.parse(change.document.uri)
+    await bamlProjectManager.save_file(documentUri, change.document.getText())
+
+    try {
+      await bamlProjectManager.getProjectById(documentUri)?.runGeneratorsWithDebounce({
+        onSuccess: (message: string) => connection.sendNotification('baml/message', { type: 'info', message }),
+        onError: (message: string) => connection.sendNotification('baml/message', { type: 'error', message }),
+      })
+    } catch (e) {
+      console.error(`Error occurred while generating BAML client code:\n${e}`)
+      showErrorToast(`Error occurred while generating BAML client code: ${e}`)
+    }
     // connection.sendNotification('baml/message', {
     //   type: 'info',
     //   message: 'Saved BAML client!',
@@ -682,7 +693,6 @@ export function startServer(options?: LSOptions): void {
 
   connection.onRequest('cliCheckForUpdates', async () => {
     console.log('Calling baml version --check using ' + config?.path)
-    //bamlProjectManager.runGenerators()
 
     try {
       // const res = await new Promise<string>((resolve, reject) => {

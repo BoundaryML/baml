@@ -192,6 +192,10 @@ impl
             tags: tags
                 .into_iter()
                 .map(|(k, v)| (k.clone(), v.to_string()))
+                .chain(std::iter::once((
+                    "baml.runtime".to_string(),
+                    env!("CARGO_PKG_VERSION").to_string(),
+                )))
                 .collect(),
             event_chain: parent_chain,
             start_time: to_iso_string(&span.start_time),
@@ -323,9 +327,13 @@ impl ToLogSchema for Option<BamlValue> {
             event_type: api_wrapper::core_types::EventType::FuncCode,
             root_event_id: event_chain.first().map(|s| s.span_id).unwrap().to_string(),
             event_id: event_chain.last().map(|s| s.span_id).unwrap().to_string(),
-            parent_event_id: event_chain
-                .get(event_chain.len() - 2)
-                .map(|s| s.span_id.to_string()),
+            parent_event_id: if event_chain.len() >= 2 {
+                event_chain
+                    .get(event_chain.len() - 2)
+                    .map(|s| s.span_id.to_string())
+            } else {
+                None
+            },
             context: (api, event_chain, tags, &span).into(),
             io: IO {
                 input: Some((&span.params).into()),

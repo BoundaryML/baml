@@ -202,10 +202,12 @@ export function activate(context: vscode.ExtensionContext) {
 
     const editor = vscode.window.activeTextEditor
     if (editor) {
+      const name = editor.document.fileName
       const text = editor.document.getText()
 
       WebPanelView.currentPanel?.postMessage('update_cursor', {
         cursor: {
+          fileName: name,
           fileText: text,
           line: position.line + 1,
           column: position.character,

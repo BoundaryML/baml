@@ -13,14 +13,13 @@
 # flake8: noqa: E501,F401
 # pylint: disable=unused-import,line-too-long
 # fmt: off
-import os
-from .client import BamlClient
+from .globals import b
 from . import types
-
-b = BamlClient.from_directory(os.environ.get('BAML_SRC_DIR', f"{__file__}/../baml_src"))
+from . import tracing
 
 
 __all__ = [
   "b",
+  "tracing",
   "types",
 ]

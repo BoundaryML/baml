@@ -59,13 +59,14 @@ fn parse_optional_key<'a>(
 
 pub(crate) fn parse_generator(
     ast_generator: &ast::GeneratorConfig,
-    _baml_src_path: &PathBuf,
+    baml_src: &PathBuf,
 ) -> Result<Generator, Vec<DatamodelError>> {
     let generator_name = ast_generator.name();
     let mut builder = GeneratorBuilder::default();
 
     builder
         .name(generator_name.into())
+        .baml_src(baml_src.clone())
         .span(ast_generator.span().clone());
 
     let mut errors = vec![];
@@ -163,8 +164,7 @@ pub(crate) fn parse_generator(
 
     builder.build().map_err(|e| {
         vec![DatamodelError::new_internal_error(
-            anyhow::Error::from(e)
-                .context("Internal error while parsing generator (v1 syntax)"),
+            anyhow::Error::from(e).context("Internal error while parsing generator (v1 syntax)"),
             ast_generator.span().clone(),
         )]
     })

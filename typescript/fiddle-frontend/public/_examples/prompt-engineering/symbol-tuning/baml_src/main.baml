@@ -36,3 +36,10 @@ function ClassifyMessage(input: string) -> Category {
     Response:
   "#
 }
+
+test Test1 {
+  functions [ClassifyMessage]
+  args {
+    input "I can't access my account using my login credentials. I havent received the promised reset password email. Please help."
+  }
+}

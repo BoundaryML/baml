@@ -53,7 +53,7 @@ impl IntermediateRepr {
             clients: vec![],
             retry_policies: vec![],
             template_strings: vec![],
-            configuration: Configuration::default(),
+            configuration: Configuration::new(),
         }
     }
 

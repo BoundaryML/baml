@@ -1,4 +1,5 @@
 import 'react18-json-view/src/style.css'
+// import * as vscode from 'vscode'
 
 import { VSCodeButton } from '@vscode/webview-ui-toolkit/react'
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
@@ -13,9 +14,11 @@ import type { WasmDiagnosticError, WasmParam, WasmRuntime } from '@gloo-ai/baml-
 // const wasm = await import("@gloo-ai/baml-schema-wasm-web/baml_schema_build");
 // const { WasmProject, WasmRuntime, WasmRuntimeContext, version: RuntimeVersion } = wasm;
 const defaultEnvKeyValues: [string, string][] = (() => {
-  if (typeof process !== 'undefined' && process.env.NEXT_PUBLIC) {
-    // Running in a Next.js environment, no default value
-    return []
+  if ((window as any).next?.version) {
+    console.log('Running in nextjs')
+    const domain = window?.location?.origin || ''
+    // Running in a Next.js environment, proxy to nextjs rewrite
+    return [['BOUNDARY_ANTHROPIC_PROXY_URL', domain + '/anthropic/']]
   } else {
     console.log('Not running in a Next.js environment, set default value')
     // Not running in a Next.js environment, set default value
@@ -136,36 +139,40 @@ export const selectedTestCaseAtom = atom(
   },
 )
 
-const updateCursorAtom = atom(null, (get, set, cursor: { fileText: string; line: number; column: number }) => {
-  const selectedProject = get(selectedProjectAtom)
-  if (selectedProject === null) {
-    return
-  }
-
-  const project = get(projectFamilyAtom(selectedProject))
-  const runtime = get(selectedRuntimeAtom)
-
-  if (runtime && project) {
-    //need logic to convert line and column to index value
-    let cursorIdx = 0
-    const fileContent = cursor.fileText
-    const lines = fileContent.split('\n')
-    let charCount = 0
-
-    for (let i = 0; i < cursor.line; i++) {
-      charCount += lines[i].length + 1 // +1 for the newline character
+const updateCursorAtom = atom(
+  null,
+  (get, set, cursor: { fileName: string; fileText: string; line: number; column: number }) => {
+    const selectedProject = get(selectedProjectAtom)
+    if (selectedProject === null) {
+      return
     }
 
-    charCount += cursor.column
-    cursorIdx = charCount
+    const project = get(projectFamilyAtom(selectedProject))
+    const runtime = get(selectedRuntimeAtom)
 
-    const selectedFunc = runtime.get_function_at_position(cursorIdx)
+    if (runtime && project) {
+      //need logic to convert line and column to index value
+      let cursorIdx = 0
+      const fileName = cursor.fileName
+      const fileContent = cursor.fileText
+      const lines = fileContent.split('\n')
+      let charCount = 0
 
-    if (selectedFunc) {
-      set(selectedFunctionAtom, selectedFunc.name)
+      for (let i = 0; i < cursor.line; i++) {
+        charCount += lines[i].length + 1 // +1 for the newline character
+      }
+
+      charCount += cursor.column
+      cursorIdx = charCount
+
+      const selectedFunc = runtime.get_function_at_position(fileName, cursorIdx)
+
+      if (selectedFunc) {
+        set(selectedFunctionAtom, selectedFunc.name)
+      }
     }
-  }
-})
+  },
+)
 
 const removeProjectAtom = atom(null, (get, set, root_path: string) => {
   set(projectFilesAtom(root_path), {})
@@ -231,9 +238,12 @@ export const updateFileAtom = atom(null, (get, set, params: WriteFileParams) => 
         project.update_file(file, undefined)
       }
     }
+    console.log('file root path', root_path)
     for (const [name, content] of filesToModify) {
       if (name.startsWith(root_path)) {
+        console.log('Updating file', name)
         project.update_file(name, content)
+        projFiles[name] = content
       }
     }
   } else {
@@ -269,6 +279,7 @@ export const updateFileAtom = atom(null, (get, set, params: WriteFileParams) => 
     set(availableProjectsAtom, [...availableProjects, root_path])
   }
 
+  console.log('projfiles', projFiles)
   set(projectFilesAtom(root_path), projFiles)
   set(projectFamilyAtom(root_path), project)
   set(runtimeFamilyAtom(root_path), (prev) => ({
@@ -497,7 +508,7 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
         | {
             command: 'update_cursor'
             content: {
-              cursor: { fileText: string; line: number; column: number }
+              cursor: { fileName: string; fileText: string; line: number; column: number }
             }
           }
       >,

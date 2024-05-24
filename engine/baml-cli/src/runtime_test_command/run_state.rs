@@ -192,7 +192,7 @@ impl std::fmt::Display for TestState {
 }
 
 impl TestState {
-    fn symbol(&self) -> &str {
+    fn _symbol(&self) -> &str {
         match self {
             TestState::Queued => "○",
             TestState::Running => "▶",

@@ -2,12 +2,16 @@ use crate::{lockfile::LockFileWrapper, PreviewFeature};
 use enumflags2::BitFlags;
 use std::path::PathBuf;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Configuration {
     pub generators: Vec<(Generator, LockFileWrapper)>,
 }
 
 impl Configuration {
+    pub fn new() -> Self {
+        Self { generators: vec![] }
+    }
+
     pub fn preview_features(&self) -> BitFlags<PreviewFeature> {
         self.generators
             .iter()
@@ -28,6 +32,7 @@ pub enum GeneratorOutputType {
 #[derive(derive_builder::Builder, Debug, Clone)]
 pub struct Generator {
     pub name: String,
+    pub baml_src: PathBuf,
     pub output_type: GeneratorOutputType,
     output_dir: PathBuf,
 

@@ -85,11 +85,17 @@ where
             // Do some more fixes.
             match &mut prompt {
                 RenderedPrompt::Chat(chat) => {
-                    chat.iter_mut().skip(1).for_each(|c| {
-                        if c.role == "system" {
-                            c.role = "assistant".into();
-                        }
-                    });
+                    if chat.len() == 1 && chat[0].role == "system" {
+                        // If there is only one message and it is a system message, change it to a user message, because anthropic always requires a user message.
+                        chat[0].role = "user".into();
+                    } else {
+                        // Otherwise, proceed with the existing logic for other messages.
+                        chat.iter_mut().skip(1).for_each(|c| {
+                            if c.role == "system" {
+                                c.role = "assistant".into();
+                            }
+                        });
+                    }
                 }
                 _ => {}
             }
