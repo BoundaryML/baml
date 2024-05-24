@@ -245,7 +245,7 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   )
 
-  server.listen(8003)
+  server.listen(8195)
   // TODO: Reactivate linter.
   // runDiagnostics();
 }
