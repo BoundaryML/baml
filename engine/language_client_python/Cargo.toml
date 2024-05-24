@@ -30,7 +30,7 @@ pyo3 = { version = "0.21.2", default-features = false, features = [
 # pyo3-asyncio head is still on 0.20.0; someone's done the work of updating it to 0.21 and Bound<>,
 # but that work hasn't been merged yet. it builds though, and looks good to me!
 # https://github.com/awestlake87/pyo3-asyncio/pull/121
-pyo3-asyncio = { git = "https://github.com/awestlake87/pyo3-asyncio.git", rev = "d1ec64076dd1b5c797db4b7b811f588466956d20", features = [
+pyo3-asyncio = { git = "https://github.com/BoundaryML/pyo3-asyncio.git", branch = "migration-pyo3-0.21", features = [
   "tokio-runtime",
 ] }
 #pyo3-asyncio = { version = "0.20.0", features = ["tokio-runtime"] }

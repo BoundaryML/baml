@@ -2615,7 +2615,7 @@ dependencies = [
 [[package]]
 name = "pyo3-asyncio"
 version = "0.21.0"
-source = "git+https://github.com/awestlake87/pyo3-asyncio.git?rev=d1ec64076dd1b5c797db4b7b811f588466956d20#d1ec64076dd1b5c797db4b7b811f588466956d20"
+source = "git+https://github.com/BoundaryML/pyo3-asyncio.git?branch=migration-pyo3-0.21#d1ec64076dd1b5c797db4b7b811f588466956d20"
 dependencies = [
  "futures",
  "once_cell",
