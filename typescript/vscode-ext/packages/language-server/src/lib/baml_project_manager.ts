@@ -189,7 +189,7 @@ class Project {
     return runtime.list_functions()
   }
 
-  handleCompletionRequest(doc: TextDocument, position: Position): boolean {
+  verifyCompletionRequest(doc: TextDocument, position: Position): boolean {
     //add check to see if its in {{}} or not
     console.log('Handling role completion request')
     const text = doc.getText()

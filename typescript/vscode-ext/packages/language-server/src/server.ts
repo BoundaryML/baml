@@ -376,16 +376,13 @@ export function startServer(options?: LSOptions): void {
     // return undefined
     const doc = getDocument(params.textDocument.uri)
     if (doc) {
-      const completionWord = getWordAtPosition(doc, params.position)
-      console.log(`completion word ${completionWord}`)
-
-      if (completionWord === '{{_.' || completionWord === '_.') {
-        console.log('handling role completion')
-        const proj = bamlProjectManager.getProjectById(URI.parse(doc.uri))
-        console.log(`proj ${proj}`)
-        const res = proj.handleCompletionRequest(doc, params.position)
-
-        if (res) {
+      let completionWord = getWordAtPosition(doc, params.position)
+      const splitWord = completionWord.split('{{')
+      completionWord = splitWord[splitWord.length - 1]
+      const proj = bamlProjectManager.getProjectById(URI.parse(doc.uri))
+      const res = proj.verifyCompletionRequest(doc, params.position)
+      if (res) {
+        if (completionWord === '_.') {
           return {
             isIncomplete: false,
             items: [
@@ -400,18 +397,7 @@ export function startServer(options?: LSOptions): void {
               },
             ],
           }
-        } else {
-          console.log('didnt find items!')
-
-          return undefined
-        }
-      } else if (completionWord === '{{ctx.' || completionWord === 'ctx.') {
-        console.log('handling context completion')
-        const proj = bamlProjectManager.getProjectById(URI.parse(doc.uri))
-        console.log(`proj ${proj}`)
-        const res = proj.handleCompletionRequest(doc, params.position)
-
-        if (res) {
+        } else if (completionWord === 'ctx.') {
           return {
             isIncomplete: false,
             items: [
@@ -423,18 +409,7 @@ export function startServer(options?: LSOptions): void {
               },
             ],
           }
-        } else {
-          console.log('didnt find items!')
-
-          return undefined
-        }
-      } else if (completionWord === '{{ctx.client.' || completionWord === 'ctx.client.') {
-        console.log('handling context completion')
-        const proj = bamlProjectManager.getProjectById(URI.parse(doc.uri))
-        console.log(`proj ${proj}`)
-        const res = proj.handleCompletionRequest(doc, params.position)
-
-        if (res) {
+        } else if (completionWord === 'ctx.client.') {
           return {
             isIncomplete: false,
             items: [
@@ -446,19 +421,11 @@ export function startServer(options?: LSOptions): void {
               },
             ],
           }
-        } else {
-          console.log('didnt find items!')
-
-          return undefined
         }
       }
     }
-    if (doc) {
-      // return MessageHandler.handleCompletionRequest(params, doc, showErrorToast)
-    }
     return undefined
   })
-
   // This handler resolves additional information for the item selected in the completion list.
   // connection.onCompletionResolve((completionItem: CompletionItem) => {
   //   return MessageHandler.handleCompletionResolveRequest(completionItem)
@@ -707,20 +674,29 @@ export function startServer(options?: LSOptions): void {
     },
   )
 
-  connection.onRequest('getDefinition', ({ sourceFile, name }: { sourceFile: string; name: string }) => {
-    return
-    // const fileCache = bamlCache.getCacheForUri(sourceFile)
-    // if (fileCache) {
-    //   let match = fileCache.define(name)
-    //   if (match) {
-    //     return {
-    //       targetUri: match.uri.toString(),
-    //       targetRange: match.range,
-    //       targetSelectionRange: match.range,
-    //     }
-    //   }
-    // }
-  })
+  connection.onRequest(
+    'getDefinition',
+    ({
+      sourceFile,
+      name,
+    }: {
+      sourceFile: string
+      name: string
+    }) => {
+      return
+      // const fileCache = bamlCache.getCacheForUri(sourceFile)
+      // if (fileCache) {
+      //   let match = fileCache.define(name)
+      //   if (match) {
+      //     return {
+      //       targetUri: match.uri.toString(),
+      //       targetRange: match.range,
+      //       targetSelectionRange: match.range,
+      //     }
+      //   }
+      // }
+    },
+  )
 
   connection.onRequest('cliVersion', async () => {
     console.log('Checking baml version at ' + config?.path)
