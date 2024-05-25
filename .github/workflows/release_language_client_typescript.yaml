@@ -1,4 +1,8 @@
 name: Release engine/language_client_typescript
+env:
+  DEBUG: napi:*
+  APP_NAME: baml
+  MACOSX_DEPLOYMENT_TARGET: "10.13"
 on:
   push:
     branches:
@@ -6,6 +10,9 @@ on:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+permissions:
+    contents: write
+    id-token: write
 defaults:
   run:
     working-directory: engine/language_client_typescript
@@ -206,9 +213,12 @@ jobs:
       contents: write
       id-token: write
     runs-on: ubuntu-latest
+    environment: release
     needs:
       - test-macOS-windows-binding
       - test-linux-binding
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - name: setup pnpm
@@ -239,7 +249,7 @@ jobs:
         shell: bash
       - name: Publish
         run: |
-          npm config set provenance true
+          # npm config set provenance true
           echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
           npm publish --access public
           # if git log -1 --pretty=%B | grep "^[0-9]\+\.[0-9]\+\.[0-9]\+$";
