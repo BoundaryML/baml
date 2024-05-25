@@ -190,8 +190,6 @@ class Project {
   }
 
   verifyCompletionRequest(doc: TextDocument, position: Position): boolean {
-    //add check to see if its in {{}} or not
-    console.log('Handling role completion request')
     const text = doc.getText()
     const offset = doc.offsetAt(position)
 
@@ -207,30 +205,27 @@ class Project {
         i++ // Skip the next character
       }
     }
+    if (openBracesCount > closeBracesCount) {
+      //need logic to convert line and column to index value
+      let cursorIdx = 0
+      const fileContent = doc.getText()
 
-    let inBraces = openBracesCount > closeBracesCount
-    let inPrompt = false
+      const lines = fileContent.split('\n')
+      let charCount = 0
 
-    //need logic to convert line and column to index value
-    let cursorIdx = 0
-    const fileContent = doc.getText()
+      for (let i = 0; i < position.line; i++) {
+        charCount += lines[i].length + 1 // +1 for the newline character
+      }
 
-    const lines = fileContent.split('\n')
-    let charCount = 0
+      charCount += position.character
+      cursorIdx = charCount
 
-    for (let i = 0; i < position.line; i++) {
-      charCount += lines[i].length + 1 // +1 for the newline character
+      const funcOfPrompt = this.runtime().check_if_in_prompt(position.line)
+      if (funcOfPrompt) {
+        return true
+      }
     }
-
-    charCount += position.character
-    cursorIdx = charCount
-
-    const funcOfPrompt = this.runtime().check_if_in_prompt(position.line)
-    if (funcOfPrompt) {
-      inPrompt = true
-    }
-
-    return inPrompt && inBraces
+    return false
   }
 
   // Not currently debounced - lodash debounce doesn't work for this, p-debounce doesn't support trailing edge
