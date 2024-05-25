@@ -14,7 +14,13 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
 
   private async driveToCompletion(): Promise<FunctionResultPy> {
     try {
-      this.ffiStream.onEvent((data) => this.eventQueue.push(data))
+      this.ffiStream.onEvent((err, data) => {
+        if (err) {
+          return
+        } else {
+          this.eventQueue.push(data)
+        }
+      })
       const retval = await this.ffiStream.done(this.ctxManager)
 
       return retval

@@ -7,7 +7,6 @@ export declare class BamlStream<PartialOutputType, FinalOutputType> {
     private task;
     private eventQueue;
     constructor(ffiStream: FunctionResultStreamPy, partialCoerce: (result: FunctionResultPy) => PartialOutputType, finalCoerce: (result: FunctionResultPy) => FinalOutputType, ctxManager: RuntimeContextManagerPy);
-    private enqueue;
     private driveToCompletion;
     private driveToCompletionInBg;
     [Symbol.asyncIterator](): AsyncIterableIterator<PartialOutputType>;

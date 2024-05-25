@@ -13,13 +13,17 @@ class BamlStream {
         this.partialCoerce = partialCoerce;
         this.finalCoerce = finalCoerce;
         this.ctxManager = ctxManager;
-        ffiStream.onEvent(this.enqueue.bind(this));
-    }
-    enqueue(data) {
-        this.eventQueue.push(data);
     }
     async driveToCompletion() {
         try {
+            this.ffiStream.onEvent((err, data) => {
+                if (err) {
+                    return;
+                }
+                else {
+                    this.eventQueue.push(data);
+                }
+            });
             const retval = await this.ffiStream.done(this.ctxManager);
             return retval;
         }

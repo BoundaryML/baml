@@ -13,7 +13,7 @@ export class BamlRuntimePy {
   static fromDirectory(directory: string, envVars: Record<string, string>): BamlRuntimePy
   createContextManager(): RuntimeContextManagerPy
   callFunction(functionName: string, args: any, ctx: RuntimeContextManagerPy): Promise<FunctionResultPy>
-  streamFunction(functionName: string, args: any, cb: (FunctionResultPy) => void, ctx: RuntimeContextManagerPy): FunctionResultStreamPy
+  streamFunction(functionName: string, args: any, cb: (err: any, param: FunctionResultPy) => void, ctx: RuntimeContextManagerPy): FunctionResultStreamPy
   flush(): void
 }
 
@@ -27,7 +27,7 @@ export class FunctionResultPy {
 }
 
 export class FunctionResultStreamPy {
-  onEvent(func: (FunctionResultPy) => void): void
+  onEvent(func: (err: any, param: FunctionResultPy) => void): void
   done(rctx: RuntimeContextManagerPy): Promise<FunctionResultPy>
 }
 

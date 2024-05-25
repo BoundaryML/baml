@@ -32,7 +32,7 @@ impl FunctionResultStreamPy {
     pub fn on_event(
         &mut self,
         env: Env,
-        #[napi(ts_arg_type = "(FunctionResultPy) => void")] func: JsFunction,
+        #[napi(ts_arg_type = "(err: any, param: FunctionResultPy) => void")] func: JsFunction,
     ) -> napi::Result<JsUndefined> {
         let cb = env.create_reference(func)?;
         self.cb = Some(cb);
@@ -54,8 +54,7 @@ impl FunctionResultStreamPy {
                     },
                 )?;
 
-                Some(move |event| {
-                    log::info!("Calling on_event callback");
+                Some(move |event: baml_runtime::FunctionResult| {
                     let res = tsfn.call(Ok(event), ThreadsafeFunctionCallMode::Blocking);
                     if res != napi::Status::Ok {
                         log::error!("Error calling on_event callback: {:?}", res);
