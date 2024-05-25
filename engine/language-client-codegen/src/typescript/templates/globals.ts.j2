@@ -3,7 +3,7 @@ import { BamlClient } from './client'
 
 
 const _DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME = BamlRuntimePy.fromDirectory(
-  process.env.BAML_SRC_PATH ?? "{{ rel_baml_src_path }}",
+  process.env.BAML_SRC_PATH ?? "./baml_src",
   process.env
 )
 export const DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX = new BamlCtxManager(_DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME)

@@ -1,6 +1,6 @@
 {
   "name": "@boundaryml/baml",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "BAML typescript bindings (package.json)",
   "repository": {
     "type": "git",
@@ -52,7 +52,7 @@
   "scripts": {
     "artifacts": "napi artifacts",
     "build": "pnpm build:debug --release",
-    "build:debug": "pnpm build:ts_build && napi build --output-dir dist --js ../native.js --dts ../native.d.ts --platform",
+    "build:debug": "pnpm build:ts_build && napi build --js ./native.js --dts ./native.d.ts --platform",
     "format": "run-p format:biome format:rs format:toml",
     "format:biome": "biome --write .",
     "format:rs": "cargo fmt",

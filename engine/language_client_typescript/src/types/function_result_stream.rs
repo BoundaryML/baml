@@ -55,6 +55,7 @@ impl FunctionResultStreamPy {
                 )?;
 
                 Some(move |event| {
+                    log::info!("Calling on_event callback");
                     let res = tsfn.call(Ok(event), ThreadsafeFunctionCallMode::Blocking);
                     if res != napi::Status::Ok {
                         log::error!("Error calling on_event callback: {:?}", res);

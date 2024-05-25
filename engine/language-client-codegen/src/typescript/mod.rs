@@ -4,7 +4,6 @@ mod typescript_language_features;
 use std::path::PathBuf;
 
 use anyhow::Result;
-use askama::Template;
 use either::Either;
 use indexmap::IndexMap;
 use internal_baml_core::ir::{repr::IntermediateRepr, FieldType};
@@ -16,6 +15,7 @@ use crate::dir_writer::FileCollector;
 #[template(path = "client.ts.j2", escape = "none")]
 struct TypescriptClient {
     funcs: Vec<TypescriptFunction>,
+    types: Vec<String>,
 }
 struct TypescriptFunction {
     name: String,
@@ -31,7 +31,7 @@ struct TypescriptInit {}
 #[derive(askama::Template)]
 #[template(path = "globals.ts.j2", escape = "none")]
 struct TypescriptGlobals {
-    rel_baml_src_path: String,
+    // In TS, we always have baml_src at ./baml_src
 }
 
 #[derive(askama::Template)]
@@ -84,20 +84,24 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for TypescriptCli
             .collect::<Result<Vec<Vec<TypescriptFunction>>>>()?
             .into_iter()
             .flatten().collect();
-        Ok(TypescriptClient { funcs: functions })
+
+        let types = ir
+            .walk_classes()
+            .map(|c| c.name().to_string())
+            .chain(ir.walk_enums().map(|e| e.name().to_string()))
+            .collect();
+        Ok(TypescriptClient {
+            funcs: functions,
+            types,
+        })
     }
 }
 
 impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for TypescriptGlobals {
     type Error = anyhow::Error;
 
-    fn try_from((_, args): (&IntermediateRepr, &crate::GeneratorArgs)) -> Result<Self> {
-        Ok(TypescriptGlobals {
-            rel_baml_src_path: args
-                .baml_src_relative_to_output_dir()?
-                .to_string_lossy()
-                .to_string(),
-        })
+    fn try_from((_, _): (&IntermediateRepr, &crate::GeneratorArgs)) -> Result<Self> {
+        Ok(TypescriptGlobals {})
     }
 }
 

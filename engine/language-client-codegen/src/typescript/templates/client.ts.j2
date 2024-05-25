@@ -1,5 +1,7 @@
 import { BamlRuntimePy, FunctionResult, BamlCtxManager, BamlStream } from "@boundaryml/baml"
-import types from "./types"
+import { 
+  {%- for t in types %}{{ t }}{% if !loop.last %}, {% endif %}{% endfor -%} 
+} from "./types"
 
 export class BamlClient {
   private stream_client: BamlStreamClient

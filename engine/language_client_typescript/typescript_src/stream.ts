@@ -1,4 +1,4 @@
-import { FunctionResultPy, FunctionResultStreamPy, RuntimeContextManagerPy } from './native'
+import { FunctionResultPy, FunctionResultStreamPy, RuntimeContextManagerPy } from '../native'
 
 export class BamlStream<PartialOutputType, FinalOutputType> {
   private task: Promise<FunctionResultPy> | null = null
@@ -10,16 +10,11 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
     private partialCoerce: (result: FunctionResultPy) => PartialOutputType,
     private finalCoerce: (result: FunctionResultPy) => FinalOutputType,
     private ctxManager: RuntimeContextManagerPy,
-  ) {
-    ffiStream.onEvent(this.enqueue.bind(this))
-  }
-
-  private enqueue(data: FunctionResultPy): void {
-    this.eventQueue.push(data)
-  }
+  ) {}
 
   private async driveToCompletion(): Promise<FunctionResultPy> {
     try {
+      this.ffiStream.onEvent((data) => this.eventQueue.push(data))
       const retval = await this.ffiStream.done(this.ctxManager)
 
       return retval
