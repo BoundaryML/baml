@@ -1,6 +1,6 @@
 from typing import Any, Callable, Dict, Optional
 
-class FunctionResult:
+class FunctionResultPy:
     """The result of a BAML function call.
 
     Represents any of:
@@ -17,7 +17,7 @@ class FunctionResult:
     def __str__(self) -> str: ...
     def parsed(self) -> Any: ...
 
-class FunctionResultStream:
+class FunctionResultStreamPy:
     """The result of a BAML function stream.
 
     Provides a callback interface to receive events from a BAML result stream.
@@ -27,11 +27,11 @@ class FunctionResultStream:
 
     def __str__(self) -> str: ...
     def on_event(
-        self, on_event: Callable[[FunctionResult], None]
-    ) -> FunctionResultStream: ...
-    async def done(self, ctx: RuntimeContextManagerPy) -> FunctionResult: ...
+        self, on_event: Callable[[FunctionResultPy], None]
+    ) -> FunctionResultStreamPy: ...
+    async def done(self, ctx: RuntimeContextManagerPy) -> FunctionResultPy: ...
 
-class Image:
+class BamlImagePy:
     def __init__(
         self, url: Optional[str] = None, base64: Optional[str] = None
     ) -> None: ...
@@ -48,33 +48,33 @@ class RuntimeContextManagerPy:
     def upsert_tags(self, tags: Dict[str, Any]) -> None: ...
     def deep_clone(self) -> RuntimeContextManagerPy: ...
 
-class BamlRuntimeFfi:
+class BamlRuntimePy:
     @staticmethod
-    def from_directory(directory: str, env_vars: Dict[str, str]) -> BamlRuntimeFfi: ...
+    def from_directory(directory: str, env_vars: Dict[str, str]) -> BamlRuntimePy: ...
     async def call_function(
         self,
         function_name: str,
         args: Dict[str, Any],
         ctx: RuntimeContextManagerPy,
-    ) -> FunctionResult: ...
+    ) -> FunctionResultPy: ...
     def stream_function(
         self,
         function_name: str,
         args: Dict[str, Any],
-        on_event: Optional[Callable[[FunctionResult], None]],
+        on_event: Optional[Callable[[FunctionResultPy], None]],
         ctx: RuntimeContextManagerPy,
-    ) -> FunctionResultStream: ...
+    ) -> FunctionResultStreamPy: ...
     def create_context_manager(self) -> RuntimeContextManagerPy: ...
     def flush(self) -> None: ...
 
-class BamlSpan:
+class BamlSpanPy:
     @staticmethod
     def new(
-        runtime: BamlRuntimeFfi,
+        runtime: BamlRuntimePy,
         function_name: str,
         args: Dict[str, Any],
         ctx: RuntimeContextManagerPy,
-    ) -> BamlSpan: ...
+    ) -> BamlSpanPy: ...
     async def finish(self, result: Any, ctx: RuntimeContextManagerPy) -> str | None: ...
 
 def invoke_runtime_cli() -> None: ...

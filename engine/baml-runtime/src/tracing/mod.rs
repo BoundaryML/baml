@@ -5,8 +5,7 @@ mod threaded_tracer;
 mod wasm_tracer;
 
 use anyhow::Result;
-use baml_types::BamlValue;
-use indexmap::IndexMap;
+use baml_types::{BamlMap, BamlValue};
 use internal_baml_jinja::RenderedPrompt;
 use serde_json::json;
 use std::collections::HashMap;
@@ -39,7 +38,7 @@ type TracerImpl = NonThreadedTracer;
 
 pub struct TracingSpan {
     span_id: Uuid,
-    params: IndexMap<String, BamlValue>,
+    params: BamlMap<String, BamlValue>,
     start_time: web_time::SystemTime,
 }
 
@@ -83,7 +82,7 @@ impl BamlTracer {
         &self,
         function_name: &str,
         ctx: &RuntimeContextManager,
-        params: &IndexMap<String, BamlValue>,
+        params: &BamlMap<String, BamlValue>,
     ) -> (Option<TracingSpan>, RuntimeContext) {
         let span_id = ctx.enter(function_name);
         if !self.enabled {
@@ -203,9 +202,9 @@ impl
     }
 }
 
-impl From<&IndexMap<String, BamlValue>> for IOValue {
-    fn from(items: &IndexMap<String, BamlValue>) -> Self {
-        log::info!("Converting IOValue from IndexMap: {:#?}", items);
+impl From<&BamlMap<String, BamlValue>> for IOValue {
+    fn from(items: &BamlMap<String, BamlValue>) -> Self {
+        log::info!("Converting IOValue from BamlMap: {:#?}", items);
         IOValue {
             r#type: TypeSchema {
                 name: api_wrapper::core_types::TypeSchemaName::Multi,

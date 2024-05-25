@@ -41,7 +41,6 @@ dependencies = [
 name = "baml-types"
 version = "0.20.0-canary.0"
 dependencies = [
- "indexmap 2.2.6",
  "minijinja",
  "serde",
  "serde_json",

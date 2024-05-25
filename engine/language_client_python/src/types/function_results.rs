@@ -1,0 +1,22 @@
+use baml_types::BamlValue;
+use pyo3::prelude::{pymethods, PyResult};
+use pyo3::{PyObject, Python};
+use pythonize::pythonize;
+
+crate::lang_wrapper!(FunctionResultPy, baml_runtime::FunctionResult);
+
+#[pymethods]
+impl FunctionResultPy {
+    fn __str__(&self) -> String {
+        format!("{:#}", self.inner)
+    }
+
+    fn parsed(&self, py: Python<'_>) -> PyResult<PyObject> {
+        let parsed = self
+            .inner
+            .parsed_content()
+            .map_err(crate::BamlError::from_anyhow)?;
+
+        Ok(pythonize(py, &BamlValue::from(parsed))?)
+    }
+}

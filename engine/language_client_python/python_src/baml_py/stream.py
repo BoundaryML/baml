@@ -1,46 +1,25 @@
-from .baml_py import FunctionResult, FunctionResultStream, RuntimeContextManagerPy
-from enum import Enum
-from typing import Callable, Generic, Optional, TypeVar, Union
+from .baml_py import FunctionResultPy, FunctionResultStreamPy, RuntimeContextManagerPy
+from typing import Callable, Generic, Optional, TypeVar
 import asyncio
-
-
-class CallbackOnTimer:
-    __callback: Callable[[int], None]
-
-    def __init__(self, cb: Callable[[int], None]):
-        self.__callback = cb
-
-    async def done(self) -> str:
-        for i in range(3):
-            self.__callback(i)
-            await asyncio.sleep(1)
-        return "final message"
-
 
 PartialOutputType = TypeVar("PartialOutputType")
 FinalOutputType = TypeVar("FinalOutputType")
 
 
-class EventType(Enum):
-    EVENT = "event"
-    DONE = "done"
-
-
 class BamlStream(Generic[PartialOutputType, FinalOutputType]):
-    __ffi_stream: FunctionResultStream
-    __partial_coerce: Callable[[FunctionResult], PartialOutputType]
-    __final_coerce: Callable[[FunctionResult], FinalOutputType]
+    __ffi_stream: FunctionResultStreamPy
+    __partial_coerce: Callable[[FunctionResultPy], PartialOutputType]
+    __final_coerce: Callable[[FunctionResultPy], FinalOutputType]
     __ctx_manager: RuntimeContextManagerPy
 
-    __task: Optional[asyncio.Task[FunctionResult]] = None
-    __event_queue: asyncio.Queue[Optional[FunctionResult]] = asyncio.Queue()
-    __done_queue: asyncio.Queue[Union[FunctionResult, Exception]] = asyncio.Queue(1)
+    __task: Optional[asyncio.Task[FunctionResultPy]] = None
+    __event_queue: asyncio.Queue[Optional[FunctionResultPy]] = asyncio.Queue()
 
     def __init__(
         self,
-        ffi_stream: FunctionResultStream,
-        partial_coerce: Callable[[FunctionResult], PartialOutputType],
-        final_coerce: Callable[[FunctionResult], FinalOutputType],
+        ffi_stream: FunctionResultStreamPy,
+        partial_coerce: Callable[[FunctionResultPy], PartialOutputType],
+        final_coerce: Callable[[FunctionResultPy], FinalOutputType],
         ctx_manager: RuntimeContextManagerPy,
     ):
         self.__ffi_stream = ffi_stream.on_event(self.__enqueue)
@@ -48,17 +27,17 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
         self.__final_coerce = final_coerce
         self.__ctx_manager = ctx_manager
 
-    def __enqueue(self, data: FunctionResult) -> None:
+    def __enqueue(self, data: FunctionResultPy) -> None:
         self.__event_queue.put_nowait(data)
 
-    async def __drive_to_completion(self) -> FunctionResult:
+    async def __drive_to_completion(self) -> FunctionResultPy:
         try:
             retval = await self.__ffi_stream.done(self.__ctx_manager)
             return retval
         finally:
             self.__event_queue.put_nowait(None)
 
-    def __drive_to_completion_in_bg(self) -> asyncio.Task[FunctionResult]:
+    def __drive_to_completion_in_bg(self) -> asyncio.Task[FunctionResultPy]:
         # Doing this without using a compare-and-swap or lock is safe,
         # because we don't cross an await point during it
         if self.__task is None:

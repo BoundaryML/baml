@@ -21,6 +21,16 @@ client<llm> GPT4 {
   }
 } 
 
+
+client<llm> GPT4o {
+  provider baml-openai-chat
+  options {
+    model gpt-4o
+    api_key env.OPENAI_API_KEY
+  }
+} 
+
+
 client<llm> GPT4Turbo {
   retry_policy Bar
   provider baml-openai-chat
@@ -50,7 +60,7 @@ client<llm> Claude {
 client<llm> Ollama {
   provider baml-ollama-chat
   options {
-    model llama2
+    model mistral
   }
 }
 

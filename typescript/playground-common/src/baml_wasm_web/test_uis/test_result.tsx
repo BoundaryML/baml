@@ -86,6 +86,23 @@ const checkFilter = (filter: Set<FilterValues>, status: TestStatusType, test_sta
   return filter.has(status)
 }
 
+const asSortedJson = (parsed: any): any => {
+  if (Array.isArray(parsed)) {
+    return parsed.map(asSortedJson)
+  }
+  if (typeof parsed !== 'object') {
+    return parsed
+  }
+
+  let sorted: Record<string, any> = {}
+  Object.keys(parsed)
+    .sort()
+    .forEach((key) => {
+      sorted[key] = parsed[key]
+    })
+  return sorted
+}
+
 const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStatusType; testLatency: number }> = ({
   test,
   doneStatus,
@@ -95,6 +112,7 @@ const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStat
   const llm_response = test.llm_response()
   const llm_failure = test.llm_failure()
   const parsed = test.parsed_response()
+  const sorted_parsed = parsed ? asSortedJson(JSON.parse(parsed)) : undefined
 
   const latencyMs = llm_response?.latency_ms ?? llm_failure?.latency_ms
   const client = llm_response?.client_name() ?? llm_failure?.client_name()
@@ -113,12 +131,12 @@ const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStat
             <b>{latencyMs?.toString()}ms</b> using <b>{client}</b> {model && <>(model: {model})</>}{' '}
             {latencyMs !== undefined && bamlOverheadLatency > 0 && <>(+ {bamlOverheadLatency}ms for BAML)</>}
           </div>
-          <div className='flex flex-row gap-2'>
+          <div className='grid grid-cols-2 gap-2'>
             <div className='flex flex-col'>
               Raw LLM Response:
               <div className='px-1 py-2'>
                 {llm_response && (
-                  <pre className='px-1 py-2 whitespace-pre-wrap rounded-sm bg-vscode-input-background'>
+                  <pre className='px-1 py-2 whitespace-pre-wrap rounded-sm bg-vscode-input-background max-h-[200px] overflow-y-auto'>
                     {llm_response.content}
                   </pre>
                 )}
@@ -143,7 +161,7 @@ const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStat
                       theme='a11y'
                       collapseStringsAfterLength={200}
                       matchesURL
-                      src={JSON.parse(parsed)}
+                      src={sorted_parsed}
                     />
                   )}
                 </div>
@@ -160,6 +178,7 @@ const LLMFunctionResult: React.FC<{ test: WasmFunctionResponse }> = ({ test }) =
   const llm_response = test.llm_response()
   const llm_failure = test.llm_failure()
   const parsed = test.parsed_response()
+  const sorted_parsed = parsed ? asSortedJson(JSON.parse(parsed)) : undefined
 
   const latencyMs = llm_response?.latency_ms ?? llm_failure?.latency_ms
   const client = llm_response?.client_name() ?? llm_failure?.client_name()
@@ -172,12 +191,12 @@ const LLMFunctionResult: React.FC<{ test: WasmFunctionResponse }> = ({ test }) =
           <div>
             <b>{latencyMs?.toString()}ms</b> using <b>{client}</b> {model && <>(model: {model})</>}{' '}
           </div>
-          <div className='flex flex-row gap-2'>
+          <div className='grid grid-cols-2 gap-2'>
             <div className='flex flex-col'>
               Raw LLM Response:
               <div className='px-1 py-2'>
                 {llm_response && (
-                  <pre className='px-1 py-2 whitespace-pre-wrap rounded-sm bg-vscode-input-background'>
+                  <pre className='px-1 py-2 whitespace-pre-wrap rounded-sm bg-vscode-input-background max-h-[200px] overflow-y-auto'>
                     {llm_response.content}
                   </pre>
                 )}
@@ -200,7 +219,7 @@ const LLMFunctionResult: React.FC<{ test: WasmFunctionResponse }> = ({ test }) =
                     theme='a11y'
                     collapseStringsAfterLength={200}
                     matchesURL
-                    src={JSON.parse(parsed)}
+                    src={sorted_parsed}
                   />
                 ) : (
                   <pre className='text-xs whitespace-pre-wrap text-vscode-errorForeground'>
@@ -257,10 +276,6 @@ const FilterButton: React.FC<{ selected: boolean; name: string; count: number; o
   count,
   onClick,
 }) => {
-  if (count === 0) {
-    return null
-  }
-
   return (
     <Badge
       className={`flex flex-row items-center gap-1 cursor-pointer bg-vscode-list-inactiveSelectionBackground ${

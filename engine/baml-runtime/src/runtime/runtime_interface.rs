@@ -22,7 +22,6 @@ use crate::{
 use anyhow::{Context, Result};
 use baml_types::{BamlMap, BamlValue};
 use dashmap::DashMap;
-use indexmap::IndexMap;
 
 use internal_baml_core::{
     internal_baml_diagnostics::SourceFile,
@@ -93,7 +92,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         &self,
         function_name: &str,
         ctx: &RuntimeContext,
-        params: &IndexMap<String, BamlValue>,
+        params: &BamlMap<String, BamlValue>,
         node_index: Option<usize>,
     ) -> Result<(RenderedPrompt, OrchestrationScope)> {
         let func = self.get_function(function_name, ctx)?;
@@ -157,7 +156,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         function_name: &str,
         test_name: &str,
         ctx: &RuntimeContext,
-    ) -> Result<IndexMap<String, BamlValue>> {
+    ) -> Result<BamlMap<String, BamlValue>> {
         let func = self.get_function(function_name, ctx)?;
         let test = self.ir().find_test(&func, test_name)?;
 

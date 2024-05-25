@@ -50,13 +50,7 @@ pub(crate) fn generate(
     collector.add_template::<PythonClient>("client.py", (ir, generator))?;
     collector.add_template::<PythonGlobals>("globals.py", (ir, generator))?;
     collector.add_template::<PythonTracing>("tracing.py", (ir, generator))?;
-
-    collector.add_file(
-        "__init__.py",
-        PythonInit {}
-            .render()
-            .map_err(|e| anyhow::Error::from(e).context("Error while rendering __init__.py"))?,
-    );
+    collector.add_template::<PythonInit>("__init__.py", (ir, generator))?;
 
     collector.commit(&generator.output_dir())
 }
@@ -66,6 +60,14 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonTracing
 
     fn try_from(_: (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
         Ok(PythonTracing {})
+    }
+}
+
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonInit {
+    type Error = anyhow::Error;
+
+    fn try_from(_: (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
+        Ok(PythonInit {})
     }
 }
 

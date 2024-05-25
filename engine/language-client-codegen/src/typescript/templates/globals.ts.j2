@@ -1,0 +1,10 @@
+import { BamlCtxManager, BamlRuntimePy } from '@boundaryml/baml'
+import { BamlClient } from './client'
+
+
+const _DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME = new BamlRuntime.from_directory(
+  process.env.BAML_SRC_PATH ?? "{{ rel_baml_src_path }}",
+  process.env
+)
+export const DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX = new BamlCtxManager(_DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME)
+export const b = new BamlClient(_DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX)

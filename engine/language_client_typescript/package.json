@@ -21,7 +21,13 @@
   "files": [
     "./cli.js",
     "./dist/index.d.ts",
-    "./dist/index.js"
+    "./dist/index.js",
+    "./dist/native.d.ts",
+    "./dist/native.js",
+    "./dist/async_context_vars.d.ts",
+    "./dist/async_context_vars.js",
+    "./dist/stream.d.ts",
+    "./dist/stream.js"
   ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -46,23 +52,24 @@
   "scripts": {
     "artifacts": "napi artifacts",
     "build": "pnpm build:debug --release",
-    "build:debug": "napi build --output-dir dist --platform",
+    "build:debug": "napi build --output-dir dist --js native.js --dts native.d.ts --platform",
     "format": "run-p format:biome format:rs format:toml",
     "format:biome": "biome --write .",
     "format:rs": "cargo fmt",
     "prepublishOnly": "napi prepublish -t npm",
     "test": "echo no tests implemented",
-    "version": "napi version"
+    "version": "napi version",
+    "build:ts_build": "tsc ./typescript_src/*.ts --outDir ./dist --module nodenext --module nodenext --allowJs --declaration true --declarationMap true"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.7.3",
     "@napi-rs/cli": "^3.0.0-alpha.54",
     "@types/node": "^20.12.11",
     "npm-run-all2": "^6.1.2",
-    "ts-node": "^10.9.2"
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
   },
   "packageManager": "pnpm@9.0.6",
-  
   "bugs": {
     "url": "https://github.com/BoundaryML/baml/issues"
   },

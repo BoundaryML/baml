@@ -2,6 +2,7 @@ mod error_utils;
 mod scope_diagnostics;
 mod to_baml_arg;
 
+use self::scope_diagnostics::ScopeStack;
 use crate::{
     error_not_found, error_unsupported,
     ir::{
@@ -11,9 +12,6 @@ use crate::{
 };
 use anyhow::Result;
 use baml_types::{BamlMap, BamlValue};
-use indexmap::IndexMap;
-
-use self::scope_diagnostics::ScopeStack;
 
 use super::repr;
 
@@ -42,7 +40,7 @@ pub trait IRHelper {
     fn check_function_params<'a>(
         &'a self,
         function: &'a FunctionWalker<'a>,
-        params: &IndexMap<String, BamlValue>,
+        params: &BamlMap<String, BamlValue>,
     ) -> Result<BamlValue>;
 }
 
@@ -164,7 +162,7 @@ impl IRHelper for IntermediateRepr {
     fn check_function_params<'a>(
         &'a self,
         function: &'a FunctionWalker<'a>,
-        params: &IndexMap<String, BamlValue>,
+        params: &BamlMap<String, BamlValue>,
     ) -> Result<BamlValue> {
         let function_params = match function.inputs() {
             either::Either::Left(_) => {

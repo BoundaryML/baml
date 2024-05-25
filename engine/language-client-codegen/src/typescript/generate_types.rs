@@ -1,6 +1,10 @@
 use anyhow::Result;
 
-use internal_baml_core::ir::{repr::IntermediateRepr, ClassWalker, EnumWalker, FieldType};
+use internal_baml_core::ir::{repr::IntermediateRepr, ClassWalker, EnumWalker};
+
+use crate::GeneratorArgs;
+
+use super::ToTypeReferenceInClientDefinition;
 
 #[derive(askama::Template)]
 #[template(path = "types.ts.j2", escape = "none")]
@@ -19,10 +23,12 @@ struct TypescriptClass<'ir> {
     fields: Vec<(&'ir str, String)>,
 }
 
-impl<'ir> TryFrom<&'ir IntermediateRepr> for TypescriptTypes<'ir> {
+impl<'ir> TryFrom<(&'ir IntermediateRepr, &'ir GeneratorArgs)> for TypescriptTypes<'ir> {
     type Error = anyhow::Error;
 
-    fn try_from(ir: &'ir IntermediateRepr) -> Result<TypescriptTypes<'ir>> {
+    fn try_from(
+        (ir, _): (&'ir IntermediateRepr, &'ir GeneratorArgs),
+    ) -> Result<TypescriptTypes<'ir>> {
         Ok(TypescriptTypes {
             enums: ir
                 .walk_enums()
@@ -60,18 +66,8 @@ impl<'ir> From<&ClassWalker<'ir>> for TypescriptClass<'ir> {
                 .elem
                 .static_fields
                 .iter()
-                .map(|f| (f.elem.name.as_str(), f.elem.r#type.elem.to_type_decl()))
+                .map(|f| (f.elem.name.as_str(), f.elem.r#type.elem.to_type_ref()))
                 .collect(),
         }
-    }
-}
-
-trait ToTypeDeclaration {
-    fn to_type_decl(&self) -> String;
-}
-
-impl ToTypeDeclaration for FieldType {
-    fn to_type_decl(&self) -> String {
-        super::ToTypeReference::to_type_reference(self)
     }
 }
