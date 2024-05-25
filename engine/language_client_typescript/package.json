@@ -1,6 +1,6 @@
 {
   "name": "@boundaryml/baml",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "BAML typescript bindings (package.json)",
   "repository": {
     "type": "git",
@@ -46,7 +46,7 @@
     "node": ">= 10"
   },
   "publishConfig": {
-    "registry": "https://registry.npmjs.org/", 
+    "registry": "https://registry.npmjs.org/",
     "access": "public"
   },
   "scripts": {
