@@ -189,7 +189,7 @@ class Project {
     return runtime.list_functions()
   }
 
-  handleRoleCompletionRequest(doc: TextDocument, position: Position): CompletionList {
+  handleCompletionRequest(doc: TextDocument, position: Position): boolean {
     //add check to see if its in {{}} or not
     console.log('Handling role completion request')
     const text = doc.getText()
@@ -229,31 +229,8 @@ class Project {
     if (funcOfPrompt) {
       inPrompt = true
     }
-    //need to confirm that we are in a prompt
-    console.log(`In braces: ${inBraces}, In prompt: ${inPrompt}`)
-    if (inBraces && inPrompt) {
-      return {
-        isIncomplete: false,
-        items: [
-          {
-            label: 'role("system")',
-          },
-          {
-            label: 'role("assistant")',
-          },
-          {
-            label: 'role("user")',
-          },
-        ],
-      }
-    } else {
-      console.log('Not in braces and prompt')
-      return {
-        isIncomplete: false,
-        items: [],
-        // }
-      }
-    }
+
+    return inPrompt && inBraces
   }
 
   // Not currently debounced - lodash debounce doesn't work for this, p-debounce doesn't support trailing edge

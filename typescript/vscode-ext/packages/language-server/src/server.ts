@@ -383,15 +383,73 @@ export function startServer(options?: LSOptions): void {
         console.log('handling role completion')
         const proj = bamlProjectManager.getProjectById(URI.parse(doc.uri))
         console.log(`proj ${proj}`)
-        const res = proj.handleRoleCompletionRequest(doc, params.position)
+        const res = proj.handleCompletionRequest(doc, params.position)
 
-        if (res.items.length === 0) {
-          console.log('no items')
-          return undefined
+        if (res) {
+          return {
+            isIncomplete: false,
+            items: [
+              {
+                label: 'role("system")',
+              },
+              {
+                label: 'role("assistant")',
+              },
+              {
+                label: 'role("user")',
+              },
+            ],
+          }
         } else {
-          console.log('found items!')
+          console.log('didnt find items!')
 
-          return res
+          return undefined
+        }
+      } else if (completionWord === '{{ctx.' || completionWord === 'ctx.') {
+        console.log('handling context completion')
+        const proj = bamlProjectManager.getProjectById(URI.parse(doc.uri))
+        console.log(`proj ${proj}`)
+        const res = proj.handleCompletionRequest(doc, params.position)
+
+        if (res) {
+          return {
+            isIncomplete: false,
+            items: [
+              {
+                label: 'output_format',
+              },
+              {
+                label: 'client',
+              },
+            ],
+          }
+        } else {
+          console.log('didnt find items!')
+
+          return undefined
+        }
+      } else if (completionWord === '{{ctx.client.' || completionWord === 'ctx.client.') {
+        console.log('handling context completion')
+        const proj = bamlProjectManager.getProjectById(URI.parse(doc.uri))
+        console.log(`proj ${proj}`)
+        const res = proj.handleCompletionRequest(doc, params.position)
+
+        if (res) {
+          return {
+            isIncomplete: false,
+            items: [
+              {
+                label: 'name',
+              },
+              {
+                label: 'provider',
+              },
+            ],
+          }
+        } else {
+          console.log('didnt find items!')
+
+          return undefined
         }
       }
     }
