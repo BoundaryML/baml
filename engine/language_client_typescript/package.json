@@ -20,17 +20,17 @@
   },
   "files": [
     "./cli.js",
-    "./dist/index.d.ts",
-    "./dist/index.js",
-    "./dist/native.d.ts",
-    "./dist/native.js",
-    "./dist/async_context_vars.d.ts",
-    "./dist/async_context_vars.js",
-    "./dist/stream.d.ts",
-    "./dist/stream.js"
+    "./index.d.ts",
+    "./index.js",
+    "./native.d.ts",
+    "./native.js",
+    "./async_context_vars.d.ts",
+    "./async_context_vars.js",
+    "./stream.d.ts",
+    "./stream.js"
   ],
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./index.js",
+  "types": "./index.d.ts",
   "napi": {
     "binaryName": "baml",
     "targets": [
