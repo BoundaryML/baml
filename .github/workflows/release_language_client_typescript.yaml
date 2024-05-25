@@ -223,6 +223,7 @@ jobs:
           node-version: 20
           cache: pnpm
           cache-dependency-path: engine/language_client_typescript/pnpm-lock.yaml
+          registry-url: "https://registry.npmjs.org"
       - name: Install dependencies
         run: pnpm install
       - name: Download all artifacts
