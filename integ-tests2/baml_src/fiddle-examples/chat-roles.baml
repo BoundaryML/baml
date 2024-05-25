@@ -10,15 +10,15 @@ enum Category2 {
 function ClassifyMessage2(input: string) -> Category {
   client GPT4
 
+  
   prompt #"
-    {{ _.chat("system") }}
+    
     // You can use _.chat("system") to indicate that this text should be a system message
 
     Classify the following INPUT into ONE
     of the following categories:
-
-    {{ ctx.output_format }}
-
+    
+    
     {{ _.chat("user") }}
     // And _.chat("user") to indicate that this text should be a user message
 

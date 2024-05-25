@@ -3,6 +3,8 @@ import { access, mkdir, open, readdir, readFile, rename, rm, writeFile } from 'f
 import path from 'path'
 import { type Diagnostic, DiagnosticSeverity, Position, LocationLink, Hover } from 'vscode-languageserver'
 import { TextDocument } from 'vscode-languageserver-textdocument'
+import { CompletionList, CompletionItem } from 'vscode-languageserver'
+
 import { existsSync, readFileSync } from 'fs'
 
 import type { URI } from 'vscode-uri'
@@ -185,6 +187,45 @@ class Project {
     let runtime = this.runtime()
 
     return runtime.list_functions()
+  }
+
+  verifyCompletionRequest(doc: TextDocument, position: Position): boolean {
+    const text = doc.getText()
+    const offset = doc.offsetAt(position)
+
+    let openBracesCount = 0
+    let closeBracesCount = 0
+
+    for (let i = 0; i < offset; i++) {
+      if (text[i] === '{' && text[i + 1] === '{') {
+        openBracesCount++
+        i++ // Skip the next character
+      } else if (text[i] === '}' && text[i + 1] === '}') {
+        closeBracesCount++
+        i++ // Skip the next character
+      }
+    }
+    if (openBracesCount > closeBracesCount) {
+      //need logic to convert line and column to index value
+      let cursorIdx = 0
+      const fileContent = doc.getText()
+
+      const lines = fileContent.split('\n')
+      let charCount = 0
+
+      for (let i = 0; i < position.line; i++) {
+        charCount += lines[i].length + 1 // +1 for the newline character
+      }
+
+      charCount += position.character
+      cursorIdx = charCount
+
+      const funcOfPrompt = this.runtime().check_if_in_prompt(position.line)
+      if (funcOfPrompt) {
+        return true
+      }
+    }
+    return false
   }
 
   // Not currently debounced - lodash debounce doesn't work for this, p-debounce doesn't support trailing edge

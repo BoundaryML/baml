@@ -37,6 +37,7 @@ import { z } from 'zod'
 // import { getVersion, getEnginesVersion } from './lib/wasm/internals'
 import BamlProjectManager from './lib/baml_project_manager'
 import type { LSOptions, LSSettings } from './lib/types'
+import { getWordAtPosition } from './lib/ast'
 ;(globalThis as any).crypto = require('node:crypto').webcrypto
 
 const packageJson = require('../../package.json') // eslint-disable-line
@@ -122,10 +123,10 @@ export function startServer(options?: LSOptions): void {
         textDocumentSync: TextDocumentSyncKind.Full,
         definitionProvider: true,
         documentFormattingProvider: false,
-        // completionProvider: {
-        //   resolveProvider: false,
-        //   triggerCharacters: ['@', '"', '.'],
-        // },
+        completionProvider: {
+          resolveProvider: false,
+          triggerCharacters: ['@', '"', '.'],
+        },
         hoverProvider: true,
         renameProvider: false,
         documentSymbolProvider: true,
@@ -299,7 +300,9 @@ export function startServer(options?: LSOptions): void {
 
   documents.onDidChangeContent(async (change: { document: TextDocument }) => {
     const textDocument = change.document
+
     await bamlProjectManager.upsert_file(URI.parse(textDocument.uri), textDocument.getText())
+
     // TODO: @hellovai Consider debouncing this
     // debounce(validateTextDocument, 800, {
     //   maxWait: 4000,
@@ -369,13 +372,60 @@ export function startServer(options?: LSOptions): void {
     return undefined
   })
 
-  // connection.onCompletion((params: CompletionParams) => {
-  //   const doc = getDocument(params.textDocument.uri)
-  //   if (doc) {
-  //     return MessageHandler.handleCompletionRequest(params, doc, showErrorToast)
-  //   }
-  // })
-
+  connection.onCompletion((params: CompletionParams) => {
+    // return undefined
+    const doc = getDocument(params.textDocument.uri)
+    if (doc) {
+      let completionWord = getWordAtPosition(doc, params.position)
+      const splitWord = completionWord.split('{{')
+      completionWord = splitWord[splitWord.length - 1]
+      const proj = bamlProjectManager.getProjectById(URI.parse(doc.uri))
+      const res = proj.verifyCompletionRequest(doc, params.position)
+      if (res) {
+        if (completionWord === '_.') {
+          return {
+            isIncomplete: false,
+            items: [
+              {
+                label: 'role("system")',
+              },
+              {
+                label: 'role("assistant")',
+              },
+              {
+                label: 'role("user")',
+              },
+            ],
+          }
+        } else if (completionWord === 'ctx.') {
+          return {
+            isIncomplete: false,
+            items: [
+              {
+                label: 'output_format',
+              },
+              {
+                label: 'client',
+              },
+            ],
+          }
+        } else if (completionWord === 'ctx.client.') {
+          return {
+            isIncomplete: false,
+            items: [
+              {
+                label: 'name',
+              },
+              {
+                label: 'provider',
+              },
+            ],
+          }
+        }
+      }
+    }
+    return undefined
+  })
   // This handler resolves additional information for the item selected in the completion list.
   // connection.onCompletionResolve((completionItem: CompletionItem) => {
   //   return MessageHandler.handleCompletionResolveRequest(completionItem)
@@ -624,20 +674,29 @@ export function startServer(options?: LSOptions): void {
     },
   )
 
-  connection.onRequest('getDefinition', ({ sourceFile, name }: { sourceFile: string; name: string }) => {
-    return
-    // const fileCache = bamlCache.getCacheForUri(sourceFile)
-    // if (fileCache) {
-    //   let match = fileCache.define(name)
-    //   if (match) {
-    //     return {
-    //       targetUri: match.uri.toString(),
-    //       targetRange: match.range,
-    //       targetSelectionRange: match.range,
-    //     }
-    //   }
-    // }
-  })
+  connection.onRequest(
+    'getDefinition',
+    ({
+      sourceFile,
+      name,
+    }: {
+      sourceFile: string
+      name: string
+    }) => {
+      return
+      // const fileCache = bamlCache.getCacheForUri(sourceFile)
+      // if (fileCache) {
+      //   let match = fileCache.define(name)
+      //   if (match) {
+      //     return {
+      //       targetUri: match.uri.toString(),
+      //       targetRange: match.range,
+      //       targetSelectionRange: match.range,
+      //     }
+      //   }
+      // }
+    },
+  )
 
   connection.onRequest('cliVersion', async () => {
     console.log('Checking baml version at ' + config?.path)

@@ -1,8 +1,6 @@
 pub mod generator;
 pub mod runtime_prompt;
 
-use std::collections::HashMap;
-
 use crate::runtime_wasm::runtime_prompt::WasmPrompt;
 use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
 use baml_runtime::InternalRuntimeInterface;
@@ -11,6 +9,7 @@ use baml_runtime::{
 };
 use baml_types::{BamlMap, BamlValue};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 //Run: wasm-pack test --firefox --headless  --features internal,wasm
 // but for browser we likely need to do         wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
@@ -611,6 +610,22 @@ fn get_dummy_field(indent: usize, name: &str, t: &baml_runtime::FieldType) -> Op
 
 #[wasm_bindgen]
 impl WasmRuntime {
+    #[wasm_bindgen]
+
+    pub fn check_if_in_prompt(&self, cursor_idx: usize) -> bool {
+        self.runtime
+            .internal()
+            .ir()
+            .walk_functions()
+            .any(|f| match f.as_v2() {
+                Some(func_v2) => func_v2.configs.iter().any(|config| {
+                    let span = &config.prompt_span;
+                    cursor_idx >= span.start && cursor_idx <= span.end
+                }),
+                None => false,
+            })
+    }
+
     #[wasm_bindgen]
     pub fn list_functions(&self) -> Vec<WasmFunction> {
         self.runtime
